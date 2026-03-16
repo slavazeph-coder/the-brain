@@ -1,0 +1,20 @@
+{
+  "folders": [
+    {
+      "name": "The Brain",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git": true
+    },
+    "editor.formatOnSave": true
+  },
+  "extensions": {
+    "recommendations": [
+      "yzhang.markdown-all-in-one",
+      "bierner.markdown-preview-github-styles"
+    ]
+  }
+}
