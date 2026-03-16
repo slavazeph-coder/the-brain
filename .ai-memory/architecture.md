@@ -1,30 +1,47 @@
 ---
 type: project
-description: The Brain — workspace structure and layout
+description: The Brain — workspace structure, OpenClaw setup, and submodules
 ---
 
 # Architecture
 
 ## Repo
-- GitHub: https://github.com/slavazeph-coder/the-brain
+- GitHub: https://github.com/slavazeph-coder/the-brain (private)
 - Local: /Users/slavaz/the-brain
-- Type: collaborative AI workspace — no fixed stack yet, grows with tasks
-
-## AI Wiring
-- Claude: reads `.claude/CLAUDE.md` → imports `.ai-memory/MEMORY.md`
-- Codex: reads `AGENTS.md` → imports `.ai-memory/MEMORY.md`
-- Both AIs share `.ai-memory/` as project context
-- VS Code tasks available globally (see `~/Library/Application Support/Code/User/tasks.json`)
+- VS Code: open `the-brain.code-workspace` for multi-root view
 
 ## Structure
 ```
 the-brain/
-├── .ai-memory/        ← shared AI context (tracked in git)
-│   ├── MEMORY.md      ← index
-│   ├── architecture.md
-│   └── conventions.md
-├── .claude/
-│   └── CLAUDE.md      ← wires Claude to .ai-memory/
-├── AGENTS.md          ← wires Codex to .ai-memory/
-└── README.md
+├── agents/
+│   ├── awesome-openclaw-agents/   ← 177 agent templates (SOUL.md format)
+│   │   └── agents.json            ← machine-readable catalog
+│   └── openclaw-agents/           ← 9-agent orchestration system
+│       ├── setup.sh               ← one-command install
+│       └── agents.yaml            ← routing + definitions
+├── ui/
+│   └── openclaw-office/           ← React 19 + Vite dashboard UI
+│       └── pnpm dev               ← starts dev server
+├── .ai-memory/                    ← shared AI context (tracked in git)
+├── .claude/CLAUDE.md              ← wires Claude to .ai-memory/
+├── AGENTS.md                      ← wires Codex to .ai-memory/
+└── the-brain.code-workspace       ← VS Code multi-root workspace
 ```
+
+## Submodules
+All three external repos are git submodules — update with:
+```bash
+git submodule update --remote
+```
+
+## OpenClaw
+- Binary: /opt/homebrew/bin/openclaw (v2026.3.11)
+- State: ~/.openclaw/
+- Config: ~/.openclaw/openclaw.json
+- Gateway: ws://127.0.0.1:18789 (launchd service)
+- Logs: ~/.openclaw/logs/gateway.log
+
+## AI Wiring
+- Claude: reads `.claude/CLAUDE.md` → `.ai-memory/MEMORY.md`
+- Codex: reads `AGENTS.md` → `.ai-memory/MEMORY.md`
+- VS Code tasks embedded in `the-brain.code-workspace` (OpenClaw + AI tasks)

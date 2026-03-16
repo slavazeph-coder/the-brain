@@ -1,0 +1,9 @@
+[submodule "agents/awesome-openclaw-agents"]
+	path = agents/awesome-openclaw-agents
+	url = https://github.com/mergisi/awesome-openclaw-agents
+[submodule "agents/openclaw-agents"]
+	path = agents/openclaw-agents
+	url = https://github.com/shenhao-stu/openclaw-agents
+[submodule "ui/openclaw-office"]
+	path = ui/openclaw-office
+	url = https://github.com/WW-AI-Lab/openclaw-office

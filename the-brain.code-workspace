@@ -1,20 +1,114 @@
 {
   "folders": [
     {
-      "name": "The Brain",
+      "name": "🧠 The Brain",
       "path": "."
+    },
+    {
+      "name": "⚡ awesome-openclaw-agents",
+      "path": "agents/awesome-openclaw-agents"
+    },
+    {
+      "name": "🤖 openclaw-agents",
+      "path": "agents/openclaw-agents"
+    },
+    {
+      "name": "🖥 openclaw-office (UI)",
+      "path": "ui/openclaw-office"
     }
   ],
   "settings": {
     "files.exclude": {
-      "**/.git": true
+      "**/.git": true,
+      "**/node_modules": true
     },
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "search.exclude": {
+      "**/node_modules": true
+    }
   },
   "extensions": {
     "recommendations": [
       "yzhang.markdown-all-in-one",
-      "bierner.markdown-preview-github-styles"
+      "bierner.markdown-preview-github-styles",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "bradlc.vscode-tailwindcss"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "OpenClaw: Start Gateway",
+        "type": "shell",
+        "command": "openclaw gateway start",
+        "presentation": { "reveal": "always", "panel": "new", "focus": true },
+        "problemMatcher": []
+      },
+      {
+        "label": "OpenClaw: Health Check",
+        "type": "shell",
+        "command": "openclaw health",
+        "presentation": { "reveal": "always", "panel": "shared" },
+        "problemMatcher": []
+      },
+      {
+        "label": "OpenClaw: Open Dashboard",
+        "type": "shell",
+        "command": "openclaw dashboard",
+        "presentation": { "reveal": "silent", "panel": "shared" },
+        "problemMatcher": []
+      },
+      {
+        "label": "OpenClaw: Install Agents (openclaw-agents setup)",
+        "type": "shell",
+        "command": "bash setup.sh",
+        "options": { "cwd": "${workspaceFolder:🤖 openclaw-agents}" },
+        "presentation": { "reveal": "always", "panel": "new", "focus": true },
+        "problemMatcher": []
+      },
+      {
+        "label": "OpenClaw Office: Install deps",
+        "type": "shell",
+        "command": "pnpm install",
+        "options": { "cwd": "${workspaceFolder:🖥 openclaw-office (UI)}" },
+        "presentation": { "reveal": "always", "panel": "new" },
+        "problemMatcher": []
+      },
+      {
+        "label": "OpenClaw Office: Dev server",
+        "type": "shell",
+        "command": "pnpm dev",
+        "options": { "cwd": "${workspaceFolder:🖥 openclaw-office (UI)}" },
+        "presentation": { "reveal": "always", "panel": "new", "focus": true },
+        "problemMatcher": []
+      },
+      {
+        "label": "AI: Init Memory for This Project",
+        "type": "shell",
+        "command": "claude",
+        "args": ["--print", "/init-memory"],
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "new", "focus": true },
+        "problemMatcher": []
+      },
+      {
+        "label": "AI: With Codex (collaborative task)",
+        "type": "shell",
+        "command": "claude",
+        "args": ["/with-codex ${input:codexTask}"],
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "new", "focus": true },
+        "problemMatcher": []
+      }
+    ],
+    "inputs": [
+      {
+        "id": "codexTask",
+        "type": "promptString",
+        "description": "Describe the task for Claude + Codex to split and tackle together"
+      }
     ]
   }
 }
