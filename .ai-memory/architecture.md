@@ -6,11 +6,14 @@ description: The Brain — workspace structure, OpenClaw setup, and submodules
 # Architecture
 
 ## Repo
+
 - GitHub: https://github.com/slavazeph-coder/the-brain (private)
-- Local: /Users/slavaz/the-brain
+- Local: /Users/slavaz/openclaw-workspace/the-brain
 - VS Code: open `the-brain.code-workspace` for multi-root view
+- Type: collaborative AI workspace — no fixed stack yet, grows with tasks
 
 ## Structure
+
 ```
 the-brain/
 ├── agents/
@@ -29,12 +32,15 @@ the-brain/
 ```
 
 ## Submodules
+
 All three external repos are git submodules — update with:
+
 ```bash
 git submodule update --remote
 ```
 
 ## OpenClaw
+
 - Binary: /opt/homebrew/bin/openclaw (v2026.3.11)
 - State: ~/.openclaw/
 - Config: ~/.openclaw/openclaw.json
@@ -42,6 +48,7 @@ git submodule update --remote
 - Logs: ~/.openclaw/logs/gateway.log
 
 ## AI Wiring
+
 - Claude: reads `.claude/CLAUDE.md` → `.ai-memory/MEMORY.md`
 - Codex: reads `AGENTS.md` → `.ai-memory/MEMORY.md`
 - VS Code tasks embedded in `the-brain.code-workspace` (OpenClaw + AI tasks)

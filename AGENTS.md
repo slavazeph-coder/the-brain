@@ -12,5 +12,5 @@ description: one-line description
 ```
 
 ## After updating memory
-Run `git add .ai-memory/ && git commit -m "memory: <what changed>" && git push`
-so the other AI can pull the latest context.
+Run `~/.ai-memory/memory-sync.sh --dir .ai-memory/ push` to commit and push.
+On session start, run `~/.ai-memory/memory-sync.sh --dir .ai-memory/ pull` to get latest.
