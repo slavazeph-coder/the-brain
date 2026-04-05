@@ -489,6 +489,87 @@ h1,h2,h3{
   margin-top:10px
 }
 
+.cognitive-firewall-panel{display:grid;gap:16px}
+
+.firewall-input{
+  width:100%;
+  min-height:120px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.08);
+  background:var(--surface-2);
+  color:var(--text);
+  padding:14px;
+  resize:vertical;
+  font:inherit
+}
+
+.firewall-result{display:grid;gap:16px;margin-top:4px}
+
+.firewall-overall{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:14px 16px;
+  border-radius:14px;
+  background:color-mix(in srgb, var(--risk) 14%, var(--surface-2));
+  border:1px solid color-mix(in srgb, var(--risk) 35%, transparent)
+}
+
+.firewall-overall strong{font-size:1.5rem;color:var(--risk)}
+
+.firewall-scores{display:grid;gap:14px}
+
+.firewall-score-row{
+  padding:12px 14px;
+  border-radius:14px;
+  background:var(--surface-2);
+  border:1px solid rgba(255,255,255,.05)
+}
+
+.firewall-score-head{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:4px
+}
+
+.firewall-score-row .muted{font-size:.85rem;margin-bottom:10px}
+
+.firewall-action{
+  padding:14px;
+  border-radius:14px;
+  background:var(--surface-2);
+  border:1px solid rgba(255,255,255,.05)
+}
+
+.firewall-evidence{
+  padding:14px;
+  border-radius:14px;
+  background:var(--surface-2);
+  border:1px solid rgba(255,255,255,.05)
+}
+
+.firewall-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px
+}
+
+.firewall-chip{
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:.8rem;
+  color:var(--muted)
+}
+
+.firewall-confidence{
+  text-align:right;
+  font-size:.85rem;
+  color:var(--muted)
+}
+
 @media (max-width: 1200px){
   .app-layout{grid-template-columns:1fr}
   .inspector{position:relative;top:0;height:auto}

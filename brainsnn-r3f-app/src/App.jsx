@@ -7,7 +7,9 @@ import EEGPanel from './components/EEGPanel';
 import TimelinePanel from './components/TimelinePanel';
 import ExportPanel from './components/ExportPanel';
 import TribePanel from './components/TribePanel';
+import CognitiveFirewallPanel from './components/CognitiveFirewallPanel';
 import { REGION_INFO } from './data/network';
+import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
 import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseMusePacket } from './utils/eeg';
 import { startCanvasRecording } from './utils/recording';
@@ -55,7 +57,7 @@ export default function App() {
         ...prev,
         regions,
         tick: prev.tick + 1,
-        scenario: 'TRIBE v2',
+        scenario: frame.scenario || 'TRIBE v2',
         history: [...prev.history.slice(-39), { mean, plasticity }],
         mean,
         plasticity
@@ -177,6 +179,12 @@ export default function App() {
             mode={mode}
             onApplyFrame={applyTribeFrame}
             onSetMode={setMode}
+          />
+
+          <CognitiveFirewallPanel
+            onApplyToNetwork={(tribeResult) => {
+              setState((s) => mapTRIBEToRegions(s, tribeResult));
+            }}
           />
 
           <ExportPanel
