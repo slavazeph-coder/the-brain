@@ -22,6 +22,11 @@ the-brain/
 │   └── openclaw-agents/           ← 9-agent orchestration system
 │       ├── setup.sh               ← one-command install
 │       └── agents.yaml            ← routing + definitions
+├── brainsnn-r3f-app/              ← 3D brain viewer + TRIBE v2
+│   ├── src/                       ← React 18 + R3F frontend
+│   │   └── components/brain/      ← Neural flow grid (shaders, FlowTube, PulseWave)
+│   ├── server/                    ← FastAPI + TRIBE v2 inference + region mapper
+│   └── package.json
 ├── ui/
 │   └── openclaw-office/           ← React 19 + Vite dashboard UI
 │       └── pnpm dev               ← starts dev server

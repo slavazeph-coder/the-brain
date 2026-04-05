@@ -1,7 +1,7 @@
 # The Brain — AI Memory
 
 > Shared by Claude Code and Codex. Keep under 200 lines.
-> Last updated: 2026-03-16
+> Last updated: 2026-04-05
 
 ## Purpose
 
@@ -49,3 +49,23 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 3. Content-reactive animations (sentiment → expressions, @mention reactions)
 4. Stripe keys + real payments
 5. Sound design (typing, victory jingle, crowd reactions)
+
+### BrainSNN + TRIBE v2 — Started 2026-04-05
+
+3D brain viewer with Meta's TRIBE v2 foundation model for real neural predictions.
+
+**What shipped:**
+
+- React Three Fiber 3D brain with 7 regions (CTX, HPC, THL, AMY, BG, PFC, CBL)
+- 3D neural flow grid: GPU-animated TubeGeometry pathways with custom GLSL shaders
+- Signal pulse waves radiate through the connectome web when regions fire
+- Secondary cross-links between adjacent pathways create mesh/web visual
+- Three data modes: Simulation (STDP), TRIBE v2 (real fMRI predictions), Live EEG
+- TRIBE v2 FastAPI server: maps fsaverage5 cortical mesh to 7 regions via Desikan-Killiany
+- Pre-computed scenario packs (sensory burst, memory replay, emotional salience, executive)
+- EEG input via Web Bluetooth (Muse) and Web Serial
+- WebM recording + GIF export via FFmpeg.wasm
+- Quality tiers: low/high/ultra with PerformanceMonitor auto-switching
+- Inspector panel with sparklines, pathway analysis, region details
+
+**Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2
