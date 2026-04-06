@@ -644,6 +644,186 @@ h1,h2,h3{
   color:#fdab43
 }
 
+/* ---------- Snapshot Panel ---------- */
+
+.snapshot-panel{
+  border:1px solid rgba(232,185,52,.1);
+  background:linear-gradient(135deg,rgba(30,25,12,.4),var(--surface))
+}
+
+.snap-save-row{
+  display:flex;
+  gap:10px;
+  margin-top:12px
+}
+
+.snap-name-input{
+  flex:1;
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--surface-2);
+  color:var(--text);
+  font-size:.9rem
+}
+
+.snap-name-input::placeholder{color:var(--faint)}
+
+.snap-message{
+  color:var(--ok);
+  font-size:.85rem;
+  margin-top:6px
+}
+
+.snap-list{
+  margin-top:14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height:320px;
+  overflow-y:auto
+}
+
+.snap-item{
+  padding:10px 12px;
+  border-radius:12px;
+  background:var(--surface-2);
+  border:1px solid var(--border)
+}
+
+.snap-item-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px
+}
+
+.snap-item-head strong{
+  font-size:.9rem;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:60%
+}
+
+.snap-time{font-size:.78rem}
+
+.snap-item-meta{
+  display:flex;
+  gap:6px;
+  margin-top:6px;
+  flex-wrap:wrap
+}
+
+.snap-chip{
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.06);
+  font-size:.75rem;
+  color:var(--muted)
+}
+
+.snap-item-actions{
+  display:flex;
+  gap:6px;
+  margin-top:8px;
+  flex-wrap:wrap
+}
+
+.btn-sm{
+  padding:3px 10px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  background:var(--surface-3);
+  color:var(--text);
+  font-size:.78rem;
+  cursor:pointer;
+  transition:background .15s
+}
+
+.btn-sm:hover{background:rgba(255,255,255,.08)}
+.btn-sm.danger{color:var(--danger);border-color:rgba(221,105,116,.2)}
+.btn-sm.danger:hover{background:rgba(221,105,116,.1)}
+
+.snap-compare-trigger{
+  margin-top:14px;
+  display:flex;
+  align-items:center;
+  gap:12px
+}
+
+.snap-comparison{
+  margin-top:16px;
+  padding:14px;
+  border-radius:14px;
+  background:rgba(232,185,52,.04);
+  border:1px solid rgba(232,185,52,.12)
+}
+
+.snap-compare-head{
+  display:flex;
+  justify-content:space-between;
+  font-size:.85rem;
+  margin-top:8px
+}
+
+.snap-compare-overall{
+  margin-top:10px;
+  font-size:.95rem
+}
+
+.snap-compare-grid{
+  margin-top:12px;
+  display:flex;
+  flex-direction:column;
+  gap:6px
+}
+
+.snap-compare-row{
+  display:grid;
+  grid-template-columns:40px 1fr 70px;
+  align-items:center;
+  gap:8px
+}
+
+.snap-region-label{
+  font-size:.8rem;
+  font-weight:600;
+  color:var(--muted)
+}
+
+.snap-compare-bars{
+  position:relative;
+  height:14px;
+  border-radius:7px;
+  background:rgba(255,255,255,.04)
+}
+
+.snap-bar-a,.snap-bar-b{
+  position:absolute;
+  top:0;
+  left:0;
+  height:7px;
+  border-radius:7px 7px 0 0;
+  min-width:2px
+}
+
+.snap-bar-a{background:rgba(79,168,179,.5)}
+.snap-bar-b{top:7px;border-radius:0 0 7px 7px;background:rgba(232,185,52,.5)}
+
+.snap-delta{
+  font-size:.8rem;
+  font-weight:600;
+  text-align:right
+}
+
+.snap-delta.up{color:var(--ok)}
+.snap-delta.down{color:var(--danger)}
+.snap-delta.neutral{color:var(--faint)}
+
+.snap-most-changed{margin-top:12px}
+
 @media (max-width: 1200px){
   .app-layout{grid-template-columns:1fr}
   .inspector{position:relative;top:0;height:auto}

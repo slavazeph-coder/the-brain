@@ -9,6 +9,7 @@ import ExportPanel from './components/ExportPanel';
 import TribePanel from './components/TribePanel';
 import CognitiveFirewallPanel from './components/CognitiveFirewallPanel';
 import GemmaAnalysisPanel from './components/GemmaAnalysisPanel';
+import SnapshotPanel from './components/SnapshotPanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
@@ -191,6 +192,20 @@ export default function App() {
           <GemmaAnalysisPanel
             onApplyToNetwork={(gemmaResult) => {
               setState((s) => mapTRIBEToRegions(s, gemmaResult));
+            }}
+          />
+
+          <SnapshotPanel
+            state={state}
+            onRestoreSnapshot={(snap) => {
+              setState((prev) => ({
+                ...prev,
+                regions: { ...prev.regions, ...snap.regions },
+                weights: { ...prev.weights, ...snap.weights },
+                selected: snap.selected || prev.selected,
+                scenario: `Restored: ${snap.name}`,
+                tick: prev.tick + 1
+              }));
             }}
           />
 
