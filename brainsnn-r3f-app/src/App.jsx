@@ -10,6 +10,7 @@ import TribePanel from './components/TribePanel';
 import CognitiveFirewallPanel from './components/CognitiveFirewallPanel';
 import GemmaAnalysisPanel from './components/GemmaAnalysisPanel';
 import SnapshotPanel from './components/SnapshotPanel';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
@@ -176,6 +177,8 @@ export default function App() {
           </section>
 
           <ActivityCharts state={state} />
+
+          <AnalyticsDashboard state={state} />
 
           <TribePanel
             mode={mode}
