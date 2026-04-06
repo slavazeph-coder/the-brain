@@ -570,6 +570,80 @@ h1,h2,h3{
   color:var(--muted)
 }
 
+/* ---------- Gemma 4 Panel ---------- */
+
+.gemma-panel{
+  border:1px solid rgba(100,180,255,.12);
+  background:linear-gradient(135deg,rgba(15,22,35,.6),var(--surface))
+}
+
+.gemma-eyebrow{
+  display:flex;
+  align-items:center;
+  gap:8px
+}
+
+.gemma-status-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  display:inline-block;
+  flex-shrink:0
+}
+
+.gemma-upload-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:10px
+}
+
+.gemma-file-name{
+  font-size:.85rem
+}
+
+.gemma-btn{
+  min-width:120px
+}
+
+.gemma-error{
+  color:var(--danger);
+  font-size:.85rem;
+  margin-top:8px
+}
+
+.gemma-reasoning{
+  margin-top:14px;
+  padding:12px;
+  border-radius:12px;
+  background:rgba(100,180,255,.06);
+  border:1px solid rgba(100,180,255,.1)
+}
+
+.gemma-reasoning p{
+  margin:6px 0 0;
+  font-size:.9rem;
+  color:var(--text);
+  line-height:1.5
+}
+
+.gemma-source-badge{
+  display:inline-block;
+  margin-left:10px;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:.75rem;
+  font-weight:600;
+  background:rgba(100,180,255,.15);
+  color:#7bb8f0;
+  vertical-align:middle
+}
+
+.gemma-source-badge.fallback{
+  background:rgba(253,171,67,.12);
+  color:#fdab43
+}
+
 @media (max-width: 1200px){
   .app-layout{grid-template-columns:1fr}
   .inspector{position:relative;top:0;height:auto}

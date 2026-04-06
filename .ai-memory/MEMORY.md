@@ -68,4 +68,11 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 - Quality tiers: low/high/ultra with PerformanceMonitor auto-switching
 - Inspector panel with sparklines, pathway analysis, region details
 
-**Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2
+- Cognitive Firewall: regex-based content manipulation scoring (4 dimensions + evidence)
+- Gemma 4 deep analysis engine: AI-powered manipulation detection via Google AI Studio or Ollama
+  - Multimodal support: text, images, video, audio
+  - Auto-routes through Gemma 4 when VITE_GEMMA_API_ENDPOINT is configured
+  - Falls back to regex scoring when API unavailable
+  - Supports Google AI Studio API and OpenAI-compatible endpoints (Ollama/vLLM)
+
+**Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4

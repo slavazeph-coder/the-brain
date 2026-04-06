@@ -8,6 +8,7 @@ import TimelinePanel from './components/TimelinePanel';
 import ExportPanel from './components/ExportPanel';
 import TribePanel from './components/TribePanel';
 import CognitiveFirewallPanel from './components/CognitiveFirewallPanel';
+import GemmaAnalysisPanel from './components/GemmaAnalysisPanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
@@ -184,6 +185,12 @@ export default function App() {
           <CognitiveFirewallPanel
             onApplyToNetwork={(tribeResult) => {
               setState((s) => mapTRIBEToRegions(s, tribeResult));
+            }}
+          />
+
+          <GemmaAnalysisPanel
+            onApplyToNetwork={(gemmaResult) => {
+              setState((s) => mapTRIBEToRegions(s, gemmaResult));
             }}
           />
 

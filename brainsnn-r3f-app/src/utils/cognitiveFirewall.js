@@ -93,6 +93,24 @@ export function scoreContent(text = '') {
   };
 }
 
+/**
+ * Smart scoring — uses Gemma 4 when configured, falls back to regex.
+ * Returns a promise that always resolves to a score object.
+ */
+export async function scoreContentSmart(text = '') {
+  // Lazy import to avoid circular deps
+  const { isGemmaConfigured, analyzeContentWithGemma } = await import('./gemmaEngine.js');
+  if (isGemmaConfigured() && text.trim().split(/\s+/).length >= 5) {
+    try {
+      return await analyzeContentWithGemma(text);
+    } catch (_err) {
+      // Fall back to deterministic scoring on API failure
+      return { ...scoreContent(text), source: 'regex_fallback' };
+    }
+  }
+  return { ...scoreContent(text), source: 'regex' };
+}
+
 export function mapTRIBEToRegions(state, tribe) {
   const { emotionalActivation, cognitiveSuppression, manipulationPressure } = tribe;
 

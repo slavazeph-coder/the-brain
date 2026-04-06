@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { scoreContent, SCORE_FIELDS } from '../utils/cognitiveFirewall';
+import { scoreContent, scoreContentSmart, SCORE_FIELDS } from '../utils/cognitiveFirewall';
+import { isGemmaConfigured } from '../utils/gemmaEngine';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -19,10 +20,19 @@ function ScoreRow({ label, desc, value, color }) {
 export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
   const [text, setText] = useState('');
   const [result, setResult] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const gemmaAvailable = isGemmaConfigured();
 
-  const handleScan = () => {
-    const score = scoreContent(text);
-    setResult(score);
+  const handleScan = async () => {
+    setScanning(true);
+    try {
+      const score = await scoreContentSmart(text);
+      setResult(score);
+    } catch (_) {
+      setResult(scoreContent(text));
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleApply = () => {
@@ -53,8 +63,8 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
       />
 
       <div className="control-actions" style={{ marginTop: 12 }}>
-        <button className="btn primary" onClick={handleScan} disabled={text.trim().length < 5}>
-          Scan content
+        <button className="btn primary" onClick={handleScan} disabled={text.trim().length < 5 || scanning}>
+          {scanning ? 'Scanning...' : gemmaAvailable ? 'Scan with Gemma 4' : 'Scan content'}
         </button>
         {result && (
           <button className="btn" onClick={handleApply}>
@@ -92,8 +102,17 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
             </div>
           )}
 
+          {result.reasoning && (
+            <div className="gemma-reasoning">
+              <span className="eyebrow">AI reasoning</span>
+              <p>{result.reasoning}</p>
+            </div>
+          )}
+
           <div className="firewall-confidence">
             Confidence: <strong>{result.confidence}</strong>
+            {result.source === 'gemma4' && <span className="gemma-source-badge">Gemma 4</span>}
+            {result.source === 'regex_fallback' && <span className="gemma-source-badge fallback">Regex fallback</span>}
           </div>
         </div>
       )}
