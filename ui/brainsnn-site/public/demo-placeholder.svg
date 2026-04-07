@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">
+  <rect width="960" height="540" fill="#11100f"/>
+  <circle cx="460" cy="280" r="52" fill="#5fb7c1" fill-opacity=".9"/>
+  <circle cx="280" cy="200" r="36" fill="#d8ab3a" fill-opacity=".85"/>
+  <circle cx="660" cy="190" r="32" fill="#a78ce5" fill-opacity=".85"/>
+  <circle cx="765" cy="315" r="32" fill="#5b92cf" fill-opacity=".85"/>
+  <circle cx="600" cy="395" r="30" fill="#d86e78" fill-opacity=".85"/>
+  <circle cx="330" cy="365" r="30" fill="#71b949" fill-opacity=".85"/>
+  <circle cx="170" cy="300" r="26" fill="#c69f31" fill-opacity=".85"/>
+  <g stroke="#5fb7c1" stroke-opacity=".45" stroke-width="3" fill="none">
+    <path d="M330 365 C360 330,400 300,460 280"/>
+    <path d="M460 280 C520 240,580 220,660 190"/>
+    <path d="M460 280 C545 325,570 360,600 395"/>
+    <path d="M600 395 C665 365,710 340,765 315"/>
+    <path d="M170 300 C245 300,325 295,460 280"/>
+  </g>
+  <text x="56" y="78" fill="#efe9e1" font-size="38" font-family="Arial, Helvetica, sans-serif">Replace this with an animated burst-mode GIF or MP4 poster frame.</text>
+  <text x="56" y="122" fill="#9f988f" font-size="24" font-family="Arial, Helvetica, sans-serif">The faster your visual proof, the higher your GitHub → star conversion.</text>
+</svg>

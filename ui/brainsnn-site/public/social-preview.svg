@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#0b0a09"/>
+  <defs>
+    <radialGradient id="g1" cx="30%" cy="30%" r="45%">
+      <stop offset="0%" stop-color="#5fb7c1" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#5fb7c1" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g2" cx="70%" cy="30%" r="40%">
+      <stop offset="0%" stop-color="#d8ab3a" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#d8ab3a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#g1)"/>
+  <rect width="1200" height="630" fill="url(#g2)"/>
+  <g stroke="#5fb7c1" stroke-opacity="0.34" stroke-width="4" fill="none">
+    <path d="M210 180 C 320 150, 410 200, 510 210"/>
+    <path d="M510 210 C 610 220, 700 160, 780 170"/>
+    <path d="M510 210 C 560 320, 680 340, 790 370"/>
+    <path d="M400 330 C 470 280, 560 250, 650 255"/>
+    <path d="M790 370 C 885 330, 960 260, 1020 210"/>
+  </g>
+  <g>
+    <circle cx="510" cy="210" r="34" fill="#5fb7c1"/>
+    <circle cx="400" cy="330" r="26" fill="#71b949"/>
+    <circle cx="790" cy="170" r="24" fill="#d8ab3a"/>
+    <circle cx="650" cy="255" r="22" fill="#a78ce5"/>
+    <circle cx="790" cy="370" r="22" fill="#d86e78"/>
+    <circle cx="1020" cy="210" r="20" fill="#5b92cf"/>
+  </g>
+  <text x="90" y="320" fill="#efe9e1" font-size="74" font-family="Arial, Helvetica, sans-serif" font-weight="700">Brain-Inspired AI</text>
+  <text x="90" y="385" fill="#efe9e1" font-size="74" font-family="Arial, Helvetica, sans-serif" font-weight="700">That Never Stops Learning</text>
+  <text x="90" y="420" fill="#b7b0a7" font-size="32" font-family="Arial, Helvetica, sans-serif">7 brain regions · 10 plastic pathways · live STDP learning</text>
+  <text x="90" y="472" fill="#b7b0a7" font-size="32" font-family="Arial, Helvetica, sans-serif">No backprop · No retraining · Browser-first neuromorphic demo</text>
+</svg>
