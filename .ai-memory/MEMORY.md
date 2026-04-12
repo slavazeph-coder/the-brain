@@ -1,7 +1,7 @@
 # The Brain — AI Memory
 
 > Shared by Claude Code and Codex. Keep under 200 lines.
-> Last updated: 2026-04-05
+> Last updated: 2026-04-12
 
 ## Purpose
 
@@ -75,4 +75,19 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
   - Falls back to regex scoring when API unavailable
   - Supports Google AI Studio API and OpenAI-compatible endpoints (Ollama/vLLM)
 
+- Session Intelligence: brain state snapshots with save/load/compare/export/import/report
+- Neural Analytics Dashboard: sparkline trends, Pearson correlation matrix, z-score anomaly detection, threshold alerts
+- Neural Narrative Engine: real-time human-readable brain activity narration
+- Toast notification system for alerts, exports, mode switches
+- Keyboard shortcuts (Space, b, r, 1-3, s, e, q, ?) with help modal
+- Share & Embed: shareable URLs with encoded brain state, iframe embed codes, JSON export
+- Onboarding walkthrough: 7-step guided tour for first-time users
+- Vercel deployment config + .env.example
+
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
+
+**12 Layers:**
+1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
+4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
+7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
+10. Keyboard Shortcuts  11. Share & Embed  12. Onboarding Walkthrough

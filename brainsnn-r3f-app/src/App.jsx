@@ -11,14 +11,39 @@ import CognitiveFirewallPanel from './components/CognitiveFirewallPanel';
 import GemmaAnalysisPanel from './components/GemmaAnalysisPanel';
 import SnapshotPanel from './components/SnapshotPanel';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
+import NarrativePanel from './components/NarrativePanel';
+import ToastContainer from './components/ToastContainer';
+import KeyboardHelp from './components/KeyboardHelp';
+import SharePanel from './components/SharePanel';
+import OnboardingWalkthrough from './components/OnboardingWalkthrough';
+import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
 import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseMusePacket } from './utils/eeg';
 import { startCanvasRecording } from './utils/recording';
+import { saveSnapshot } from './utils/snapshots';
+import { registerShortcuts } from './utils/shortcuts';
+import { trendDirection } from './utils/analytics';
+import { toastSuccess, toastInfo, toastWarning } from './utils/toastStore';
 
 export default function App() {
-  const [state, setState] = useState(() => createInitialState());
+  const [state, setState] = useState(() => {
+    // Check for shared state in URL hash
+    const shared = decodeStateFromHash();
+    if (shared) {
+      const initial = createInitialState();
+      return {
+        ...initial,
+        regions: { ...initial.regions, ...shared.regions },
+        weights: { ...initial.weights, ...(shared.weights || {}) },
+        scenario: shared.scenario || initial.scenario,
+        selected: shared.selected || initial.selected,
+        tick: shared.tick || 0
+      };
+    }
+    return createInitialState();
+  });
   const [mode, setMode] = useState('simulation');
   const [eegStatus, setEegStatus] = useState({ connected: false, label: 'No device connected' });
   const [timelineIndex, setTimelineIndex] = useState(0);
@@ -27,7 +52,66 @@ export default function App() {
   const [exportProgress, setExportProgress] = useState(0);
   const [quality, setQuality] = useState('high');
   const [gifOptions, setGifOptions] = useState({ trimStart: 0, trimDuration: 2.5, fps: 12, width: 720 });
+  const [showKbHelp, setShowKbHelp] = useState(false);
+  const [firewallResult, setFirewallResult] = useState(null);
   const recorderRef = useRef(null);
+  const historyRef = useRef([]);
+
+  // Track per-region history for analytics trends
+  useEffect(() => {
+    historyRef.current.push({ regions: { ...state.regions } });
+    if (historyRef.current.length > 60) historyRef.current.shift();
+  }, [state.tick]);
+
+  const trends = useMemo(() => {
+    const t = {};
+    for (const key of Object.keys(state.regions)) {
+      const values = historyRef.current.map((h) => h.regions?.[key] ?? 0);
+      t[key] = trendDirection(values);
+    }
+    return t;
+  }, [state.tick, state.regions]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const QUALITY_CYCLE = ['low', 'high', 'ultra'];
+    return registerShortcuts({
+      toggleRun: () => setState((s) => ({ ...s, running: !s.running })),
+      burst: () => { setState((s) => ({ ...s, burst: 20, scenario: 'Sensory Burst' })); toastInfo('Sensory burst triggered'); },
+      reset: () => { setState(resetState()); setMode('simulation'); toastInfo('Brain state reset'); },
+      modeSimulation: () => { setMode('simulation'); toastInfo('Switched to Simulation mode'); },
+      modeTribe: () => { setMode('tribe'); toastInfo('Switched to TRIBE v2 mode'); },
+      modeEeg: () => { setMode('eeg'); toastInfo('Switched to EEG mode'); },
+      snapshot: () => { saveSnapshot(state); toastSuccess('Snapshot saved'); },
+      record: () => {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) return;
+        if (!isRecording) {
+          try {
+            recorderRef.current = startCanvasRecording(canvas, { onStatus: setExportStatus, onProgress: setExportProgress });
+            setIsRecording(true);
+            toastInfo('Recording started');
+          } catch (err) { setExportStatus(err.message); }
+        } else if (recorderRef.current) {
+          recorderRef.current.stop();
+          recorderRef.current = null;
+          setIsRecording(false);
+          setExportStatus('WebM ready');
+          setExportProgress(100);
+          toastSuccess('Recording saved');
+        }
+      },
+      cycleQuality: () => {
+        setQuality((prev) => {
+          const idx = QUALITY_CYCLE.indexOf(prev);
+          const next = QUALITY_CYCLE[(idx + 1) % QUALITY_CYCLE.length];
+          toastInfo(`Quality: ${next}`);
+          return next;
+        });
+      },
+      showHelp: () => setShowKbHelp(true)
+    });
+  }, [state, isRecording]);
 
   // Simulation loop — only active in simulation mode
   useEffect(() => {
@@ -73,6 +157,12 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="backdrop" />
+
+      {/* Global overlays */}
+      <ToastContainer />
+      <KeyboardHelp open={showKbHelp} onClose={() => setShowKbHelp(false)} />
+      <OnboardingWalkthrough />
+
       <main className="app-layout">
         <section className="main-column">
           <ControlsBar
@@ -172,6 +262,7 @@ export default function App() {
               <p className="muted">{REGION_INFO[state.selected].role}</p>
               <p className="muted small-note">
                 Data source: {modeLabel}. Switch modes to toggle between synthetic simulation, TRIBE v2 neural predictions, and live EEG input.
+                Press <strong>?</strong> for keyboard shortcuts.
               </p>
             </div>
           </section>
@@ -180,6 +271,8 @@ export default function App() {
 
           <AnalyticsDashboard state={state} />
 
+          <NarrativePanel state={state} trends={trends} firewallResult={firewallResult} />
+
           <TribePanel
             mode={mode}
             onApplyFrame={applyTribeFrame}
@@ -187,14 +280,18 @@ export default function App() {
           />
 
           <CognitiveFirewallPanel
-            onApplyToNetwork={(tribeResult) => {
-              setState((s) => mapTRIBEToRegions(s, tribeResult));
+            onApplyToNetwork={(result) => {
+              setFirewallResult(result);
+              setState((s) => mapTRIBEToRegions(s, result));
+              toastWarning(`Firewall: ${result.recommendedAction.slice(0, 60)}...`);
             }}
           />
 
           <GemmaAnalysisPanel
             onApplyToNetwork={(gemmaResult) => {
+              setFirewallResult(gemmaResult);
               setState((s) => mapTRIBEToRegions(s, gemmaResult));
+              toastInfo('Gemma 4 analysis applied to brain');
             }}
           />
 
@@ -209,8 +306,11 @@ export default function App() {
                 scenario: `Restored: ${snap.name}`,
                 tick: prev.tick + 1
               }));
+              toastSuccess(`Restored: ${snap.name}`);
             }}
           />
+
+          <SharePanel state={state} />
 
           <ExportPanel
             {...gifOptions}
@@ -236,8 +336,10 @@ export default function App() {
                 const mockPacket = new DataView(new Uint8Array([1, 20, 0, 120, 0, 90, 0, 60]).buffer);
                 const parsed = parseMusePacket(mockPacket);
                 setState((s) => mapEEGToRegions(s, parsed));
+                toastSuccess('Muse EEG connected');
               } catch (err) {
                 setEegStatus({ connected: false, label: err.message });
+                toastWarning('EEG connection failed');
               }
             }}
             onConnectSerial={async () => {
@@ -245,6 +347,7 @@ export default function App() {
                 await connectSerialEEG();
                 setEegStatus({ connected: true, label: 'Serial EEG bridge connected' });
                 setMode('eeg');
+                toastSuccess('Serial EEG connected');
               } catch (err) {
                 setEegStatus({ connected: false, label: err.message });
               }
@@ -253,6 +356,7 @@ export default function App() {
               setState((s) => applyMockEEG(s));
               setEegStatus({ connected: true, label: 'Mock EEG injected into THL/PFC/HPC' });
               setMode('eeg');
+              toastInfo('Mock EEG data injected');
             }}
           />
 
