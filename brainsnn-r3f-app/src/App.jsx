@@ -16,6 +16,11 @@ import ToastContainer from './components/ToastContainer';
 import KeyboardHelp from './components/KeyboardHelp';
 import SharePanel from './components/SharePanel';
 import OnboardingWalkthrough from './components/OnboardingWalkthrough';
+import SplitBrainView from './components/SplitBrainView';
+import VoiceControl from './components/VoiceControl';
+import PluginPanel from './components/PluginPanel';
+import LiveSyncPanel from './components/LiveSyncPanel';
+import HeatmapTimeline from './components/HeatmapTimeline';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
@@ -307,6 +312,40 @@ export default function App() {
                 tick: prev.tick + 1
               }));
               toastSuccess(`Restored: ${snap.name}`);
+            }}
+          />
+
+          <HeatmapTimeline state={state} />
+
+          <SplitBrainView currentState={state} quality={quality} />
+
+          <VoiceControl state={state} trends={trends} firewallResult={firewallResult} />
+
+          <PluginPanel
+            onApplyResults={(combined) => {
+              // Map plugin scores to firewall-compatible format if available
+              const mapped = {
+                emotionalActivation: combined.negativity ?? combined.emotionalActivation ?? 0,
+                cognitiveSuppression: combined.complexity ?? combined.cognitiveSuppression ?? 0,
+                manipulationPressure: 1 - (combined.credibility ?? 0.5),
+                trustErosion: combined.negativity ?? combined.trustErosion ?? 0
+              };
+              setState((s) => mapTRIBEToRegions(s, mapped));
+              toastInfo('Plugin analysis applied to brain');
+            }}
+          />
+
+          <LiveSyncPanel
+            state={state}
+            onRemoteState={(remote) => {
+              if (remote?.regions) {
+                setState((prev) => ({
+                  ...prev,
+                  regions: { ...prev.regions, ...remote.regions },
+                  scenario: remote.scenario || 'Remote Sync',
+                  tick: prev.tick + 1
+                }));
+              }
             }}
           />
 

@@ -86,8 +86,13 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**12 Layers:**
+**17 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
 10. Keyboard Shortcuts  11. Share & Embed  12. Onboarding Walkthrough
+13. Split Brain View (side-by-side 3D comparison)
+14. AI Voice Narrator (Web Speech API)
+15. Analysis Plugin System (sentiment, readability, credibility)
+16. WebSocket Live Sync (multi-user rooms + chat)
+17. Activity Heatmap Timeline (canvas color matrix)
