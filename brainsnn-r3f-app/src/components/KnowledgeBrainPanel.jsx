@@ -4,6 +4,9 @@ import {
   parseFileInventory, parseJSONInventory, buildKnowledgeMap,
   detectGaps, generateLearningSuggestions
 } from '../utils/knowledgeScanner';
+import { parseTreeOutput, parseObsidianExport, generateScanCommand, summarizeScan } from '../utils/fileSystemScanner';
+import { downloadWikiBundle } from '../utils/wikiGenerator';
+import { isGemmaKnowledgeAvailable, analyzeGapsWithGemma, generateLearningPath } from '../utils/gemmaKnowledge';
 
 function DomainCard({ domainId, data }) {
   const domain = KNOWLEDGE_DOMAINS[domainId];
@@ -54,14 +57,18 @@ function GapCard({ gap }) {
 }
 
 export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
-  const [inputMode, setInputMode] = useState('text'); // text | json | manual
+  const [inputMode, setInputMode] = useState('text'); // text | json | tree | obsidian
   const [rawInput, setRawInput] = useState('');
   const [knowledgeMap, setKnowledgeMap] = useState(null);
   const [gaps, setGaps] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [scanResult, setScanResult] = useState(null);
   const [error, setError] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiInsights, setAiInsights] = useState(null);
+  const [learningGoals, setLearningGoals] = useState('');
   const fileRef = useRef(null);
+  const gemmaAvailable = isGemmaKnowledgeAvailable();
 
   const handleScan = () => {
     setError('');
@@ -69,6 +76,10 @@ export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
       let documents;
       if (inputMode === 'json') {
         documents = parseJSONInventory(rawInput);
+      } else if (inputMode === 'tree') {
+        documents = parseTreeOutput(rawInput);
+      } else if (inputMode === 'obsidian') {
+        documents = parseObsidianExport(rawInput);
       } else {
         documents = parseFileInventory(rawInput);
       }
@@ -82,9 +93,43 @@ export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
 
       const learnSuggestions = generateLearningSuggestions(detectedGaps, result.map);
       setSuggestions(learnSuggestions);
+      setAiInsights(null); // reset AI insights on new scan
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleAIAnalysis = async () => {
+    if (!knowledgeMap || !gemmaAvailable) return;
+    setAiLoading(true);
+    setError('');
+    try {
+      const insights = await analyzeGapsWithGemma(knowledgeMap);
+      setAiInsights(insights);
+    } catch (err) {
+      setError(`Gemma 4: ${err.message}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAILearningPath = async () => {
+    if (!knowledgeMap || !gemmaAvailable) return;
+    setAiLoading(true);
+    setError('');
+    try {
+      const path = await generateLearningPath(knowledgeMap, learningGoals);
+      setAiInsights((prev) => ({ ...(prev || {}), learningPath: path }));
+    } catch (err) {
+      setError(`Gemma 4: ${err.message}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleDownloadWiki = () => {
+    if (!knowledgeMap) return;
+    downloadWikiBundle(knowledgeMap, gaps);
   };
 
   const handleFileUpload = async (e) => {
@@ -147,20 +192,37 @@ tools/dev-workflow.md | Developer Workflow Guide | 2025-12-01`
         <button className={`btn-sm ${inputMode === 'json' ? 'active' : ''}`} onClick={() => setInputMode('json')}>
           JSON
         </button>
+        <button className={`btn-sm ${inputMode === 'tree' ? 'active' : ''}`} onClick={() => setInputMode('tree')}>
+          find/tree
+        </button>
+        <button className={`btn-sm ${inputMode === 'obsidian' ? 'active' : ''}`} onClick={() => setInputMode('obsidian')}>
+          Obsidian
+        </button>
         <button className="btn-sm" onClick={handleLoadExample}>
-          Load example
+          Example
         </button>
         <button className="btn-sm" onClick={() => fileRef.current?.click()}>
-          Upload file
+          Upload
         </button>
         <input ref={fileRef} type="file" accept=".json,.txt,.md,.csv" style={{ display: 'none' }} onChange={handleFileUpload} />
       </div>
 
+      {inputMode === 'tree' && (
+        <div className="kb-scan-hint">
+          <span className="eyebrow">Scan command</span>
+          <code className="kb-scan-cmd">{generateScanCommand()}</code>
+          <p className="muted">Run this in your terminal, paste the output below.</p>
+        </div>
+      )}
+
       <textarea
         className="firewall-input"
-        placeholder={inputMode === 'json'
-          ? '[{"path": "docs/ai.md", "title": "AI Notes", "tags": ["ai","ml"]}]'
-          : 'path/to/file.md | Document Title | 2026-04-10\npath/to/other.md | Other Doc'}
+        placeholder={
+          inputMode === 'json' ? '[{"path": "docs/ai.md", "title": "AI Notes", "tags": ["ai","ml"]}]'
+          : inputMode === 'tree' ? 'Paste output of find/tree command here...'
+          : inputMode === 'obsidian' ? 'Paste Obsidian vault export (JSON or file list)...'
+          : 'path/to/file.md | Document Title | 2026-04-10\npath/to/other.md | Other Doc'
+        }
         value={rawInput}
         onChange={(e) => setRawInput(e.target.value)}
         rows={6}
@@ -175,7 +237,33 @@ tools/dev-workflow.md | Developer Workflow Guide | 2025-12-01`
             Apply to 3D brain
           </button>
         )}
+        {knowledgeMap && (
+          <button className="btn" onClick={handleDownloadWiki}>
+            Export Wiki
+          </button>
+        )}
+        {knowledgeMap && gemmaAvailable && (
+          <button className="btn gemma-btn" onClick={handleAIAnalysis} disabled={aiLoading}>
+            {aiLoading ? 'Analysing...' : 'AI Gap Analysis'}
+          </button>
+        )}
       </div>
+
+      {/* AI Learning Path */}
+      {knowledgeMap && gemmaAvailable && (
+        <div className="kb-ai-path-row">
+          <input
+            className="snap-name-input"
+            type="text"
+            placeholder="Learning goals (optional)..."
+            value={learningGoals}
+            onChange={(e) => setLearningGoals(e.target.value)}
+          />
+          <button className="btn-sm" onClick={handleAILearningPath} disabled={aiLoading}>
+            Generate path
+          </button>
+        </div>
+      )}
 
       {error && <p className="gemma-error">{error}</p>}
 
@@ -243,6 +331,62 @@ tools/dev-workflow.md | Developer Workflow Guide | 2025-12-01`
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* AI Insights (Gemma 4) */}
+          {aiInsights && (
+            <div className="kb-ai-insights">
+              <div className="eyebrow gemma-eyebrow">
+                <span>Gemma 4 Intelligence</span>
+                <span className="gemma-source-badge">AI</span>
+              </div>
+
+              {aiInsights.synthesis && (
+                <div className="gemma-reasoning">
+                  <p>{aiInsights.synthesis}</p>
+                </div>
+              )}
+
+              {aiInsights.criticalGaps?.length > 0 && (
+                <div className="kb-ai-section">
+                  <strong>Critical gaps identified:</strong>
+                  {aiInsights.criticalGaps.map((g, i) => (
+                    <div key={i} className="kb-suggestion-item">
+                      <span className={`kb-priority kb-priority-${g.priority}`}>{g.priority}</span>
+                      <div>
+                        <p className="kb-suggestion-action">{g.gap}</p>
+                        <p className="muted">{KNOWLEDGE_DOMAINS[g.domain]?.name || g.domain}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {aiInsights.learningPath?.length > 0 && (
+                <div className="kb-ai-section">
+                  <strong>Learning path:</strong>
+                  <ol className="kb-learning-path">
+                    {aiInsights.learningPath.map((step, i) => (
+                      <li key={i}>
+                        <strong>{step.topic}</strong>
+                        <span className="muted"> — {step.reason}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {aiInsights.missingConnections?.length > 0 && (
+                <div className="kb-ai-section">
+                  <strong>Missing connections:</strong>
+                  {aiInsights.missingConnections.map((c, i) => (
+                    <p key={i} className="muted">
+                      {KNOWLEDGE_DOMAINS[c.from]?.name || c.from} → {KNOWLEDGE_DOMAINS[c.to]?.name || c.to}: {c.suggestion}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

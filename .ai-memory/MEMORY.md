@@ -97,3 +97,9 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 16. WebSocket Live Sync (multi-user rooms + chat)
 17. Activity Heatmap Timeline (canvas color matrix)
 18. Knowledge Brain — Second Brain system (LLM-Wiki framework, gap detection, self-learning)
+    - Real file system scanner (find/tree output, Obsidian vault import)
+    - LLM-Wiki markdown generator (auto-creates structured wiki from knowledge map)
+    - Gemma 4 knowledge intelligence (AI gap analysis, learning path generation)
+    - Knowledge mode in 3D viewer (regions relabeled as knowledge domains)
+    - Error boundaries around heavy panels
+    - Accessibility: focus-visible styles, prefers-reduced-motion, ARIA hints

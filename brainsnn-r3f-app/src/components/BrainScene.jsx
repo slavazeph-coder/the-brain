@@ -4,6 +4,7 @@ import { Environment, Html, Line, OrbitControls, PerformanceMonitor, Stars } fro
 import { EffectComposer, Outline, Selection, Select, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { LINKS, POSITIONS, REGION_INFO } from '../data/network';
+import { KNOWLEDGE_DOMAINS } from '../data/knowledgeGraph';
 import NeuralFlowGrid from './brain/NeuralFlowGrid';
 
 function FocusController({ selected }) {
@@ -25,7 +26,7 @@ function FocusController({ selected }) {
   return null;
 }
 
-function BrainNode({ id, activity, selected, onSelect, quality }) {
+function BrainNode({ id, activity, selected, onSelect, quality, knowledgeMode }) {
   const group = useRef();
   const glow = useRef();
   const [hovered, setHovered] = useState(false);
@@ -89,7 +90,7 @@ function BrainNode({ id, activity, selected, onSelect, quality }) {
                 whiteSpace: 'nowrap'
               }}
             >
-              {id}
+              {knowledgeMode ? KNOWLEDGE_DOMAINS[id]?.wikiSection?.toUpperCase() || id : id}
             </div>
           </Html>
         )}
@@ -107,8 +108,12 @@ function BrainNode({ id, activity, selected, onSelect, quality }) {
                 font: '500 12px Satoshi, sans-serif'
               }}
             >
-              <strong style={{ display: 'block', marginBottom: 4 }}>{REGION_INFO[id].name}</strong>
-              <span style={{ color: '#aaa', lineHeight: 1.5 }}>{REGION_INFO[id].role}</span>
+              <strong style={{ display: 'block', marginBottom: 4 }}>
+                {knowledgeMode ? KNOWLEDGE_DOMAINS[id]?.name : REGION_INFO[id].name}
+              </strong>
+              <span style={{ color: '#aaa', lineHeight: 1.5 }}>
+                {knowledgeMode ? KNOWLEDGE_DOMAINS[id]?.role : REGION_INFO[id].role}
+              </span>
             </div>
           </Html>
         )}
@@ -190,7 +195,7 @@ function SignalParticles({ regions, quality }) {
   );
 }
 
-export default function BrainScene({ regions, weights, selected, onSelect, quality, onQualityChange }) {
+export default function BrainScene({ regions, weights, selected, onSelect, quality, onQualityChange, knowledgeMode }) {
   const dpr = quality === 'ultra' ? [1, 2] : quality === 'high' ? [1, 1.5] : 1;
 
   return (
@@ -259,6 +264,7 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
             selected={selected === name}
             onSelect={onSelect}
             quality={quality}
+            knowledgeMode={knowledgeMode}
           />
         ))}
       </Selection>

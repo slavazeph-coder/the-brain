@@ -22,6 +22,7 @@ import PluginPanel from './components/PluginPanel';
 import LiveSyncPanel from './components/LiveSyncPanel';
 import HeatmapTimeline from './components/HeatmapTimeline';
 import KnowledgeBrainPanel from './components/KnowledgeBrainPanel';
+import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
@@ -60,6 +61,7 @@ export default function App() {
   const [gifOptions, setGifOptions] = useState({ trimStart: 0, trimDuration: 2.5, fps: 12, width: 720 });
   const [showKbHelp, setShowKbHelp] = useState(false);
   const [firewallResult, setFirewallResult] = useState(null);
+  const [knowledgeMode, setKnowledgeMode] = useState(false);
   const recorderRef = useRef(null);
   const historyRef = useRef([]);
 
@@ -248,6 +250,7 @@ export default function App() {
                 weights={state.weights}
                 selected={state.selected}
                 quality={quality}
+                knowledgeMode={knowledgeMode}
                 onQualityChange={setQuality}
                 onSelect={(id) => setState((s) => ({ ...s, selected: id || s.selected }))}
               />
@@ -275,7 +278,9 @@ export default function App() {
 
           <ActivityCharts state={state} />
 
-          <AnalyticsDashboard state={state} />
+          <ErrorBoundary name="Analytics Dashboard">
+            <AnalyticsDashboard state={state} />
+          </ErrorBoundary>
 
           <NarrativePanel state={state} trends={trends} firewallResult={firewallResult} />
 
@@ -293,13 +298,15 @@ export default function App() {
             }}
           />
 
-          <GemmaAnalysisPanel
-            onApplyToNetwork={(gemmaResult) => {
-              setFirewallResult(gemmaResult);
-              setState((s) => mapTRIBEToRegions(s, gemmaResult));
-              toastInfo('Gemma 4 analysis applied to brain');
-            }}
-          />
+          <ErrorBoundary name="Gemma Analysis">
+            <GemmaAnalysisPanel
+              onApplyToNetwork={(gemmaResult) => {
+                setFirewallResult(gemmaResult);
+                setState((s) => mapTRIBEToRegions(s, gemmaResult));
+                toastInfo('Gemma 4 analysis applied to brain');
+              }}
+            />
+          </ErrorBoundary>
 
           <SnapshotPanel
             state={state}
@@ -318,20 +325,25 @@ export default function App() {
 
           <HeatmapTimeline state={state} />
 
-          <KnowledgeBrainPanel
-            onApplyKnowledgeState={(kbState) => {
-              setState((prev) => ({
-                ...prev,
-                regions: { ...prev.regions, ...kbState.regions },
-                weights: { ...prev.weights, ...kbState.weights },
-                scenario: kbState.scenario || 'Knowledge Brain',
-                tick: prev.tick + 1
-              }));
-              toastSuccess('Knowledge map applied to 3D brain');
-            }}
-          />
+          <ErrorBoundary name="Knowledge Brain">
+            <KnowledgeBrainPanel
+              onApplyKnowledgeState={(kbState) => {
+                setState((prev) => ({
+                  ...prev,
+                  regions: { ...prev.regions, ...kbState.regions },
+                  weights: { ...prev.weights, ...kbState.weights },
+                  scenario: kbState.scenario || 'Knowledge Brain',
+                  tick: prev.tick + 1
+                }));
+                setKnowledgeMode(true);
+                toastSuccess('Knowledge map applied — 3D brain now shows knowledge domains');
+              }}
+            />
+          </ErrorBoundary>
 
-          <SplitBrainView currentState={state} quality={quality} />
+          <ErrorBoundary name="Split Brain View">
+            <SplitBrainView currentState={state} quality={quality} />
+          </ErrorBoundary>
 
           <VoiceControl state={state} trends={trends} firewallResult={firewallResult} />
 
