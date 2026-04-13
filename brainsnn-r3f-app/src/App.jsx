@@ -21,6 +21,7 @@ import VoiceControl from './components/VoiceControl';
 import PluginPanel from './components/PluginPanel';
 import LiveSyncPanel from './components/LiveSyncPanel';
 import HeatmapTimeline from './components/HeatmapTimeline';
+import KnowledgeBrainPanel from './components/KnowledgeBrainPanel';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
@@ -316,6 +317,19 @@ export default function App() {
           />
 
           <HeatmapTimeline state={state} />
+
+          <KnowledgeBrainPanel
+            onApplyKnowledgeState={(kbState) => {
+              setState((prev) => ({
+                ...prev,
+                regions: { ...prev.regions, ...kbState.regions },
+                weights: { ...prev.weights, ...kbState.weights },
+                scenario: kbState.scenario || 'Knowledge Brain',
+                tick: prev.tick + 1
+              }));
+              toastSuccess('Knowledge map applied to 3D brain');
+            }}
+          />
 
           <SplitBrainView currentState={state} quality={quality} />
 
