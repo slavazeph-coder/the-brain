@@ -2351,6 +2351,168 @@ h1,h2,h3{
   word-break:break-all
 }
 
+/* ---------- Layer 25 — Red Team Panel ---------- */
+.redteam-panel{display:flex;flex-direction:column;gap:14px}
+.redteam-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.redteam-threshold-picker{display:flex;align-items:center;gap:6px}
+.redteam-threshold-picker button.active{
+  background:rgba(125,216,127,.18);
+  border-color:rgba(125,216,127,.6);
+  color:#e8fbe9
+}
+.redteam-verdict{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 14px;border:1px solid rgba(255,255,255,.08);
+  border-left-width:4px;border-radius:8px;
+  background:rgba(0,0,0,.22)
+}
+.redteam-grade{
+  width:46px;height:46px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:22px;color:#1a1a1a;flex-shrink:0
+}
+.redteam-verdict-body{display:flex;flex-direction:column;gap:2px}
+.redteam-summary-row{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px
+}
+.redteam-summary-row .metric{
+  padding:10px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);border-radius:6px
+}
+.redteam-matrix-grid{
+  display:flex;flex-direction:column;gap:6px;
+  margin-top:6px
+}
+.redteam-cat-row{
+  display:grid;
+  grid-template-columns:90px 60px 1fr 50px 80px;
+  align-items:center;gap:10px;
+  padding:6px 10px;
+  background:rgba(255,255,255,.02);
+  border-radius:4px
+}
+.redteam-cat-name{
+  font-weight:600;text-transform:capitalize;font-size:13px
+}
+.redteam-cat-bar{
+  height:8px;background:rgba(255,255,255,.06);
+  border-radius:4px;overflow:hidden
+}
+.redteam-cat-fill{
+  height:100%;transition:width .3s ease
+}
+.redteam-cat-val{font-weight:700;text-align:right;font-size:13px}
+.redteam-failures{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  margin-top:4px
+}
+.redteam-failure-col{
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px;background:rgba(0,0,0,.18);
+  border-radius:6px;border:1px solid rgba(255,255,255,.04)
+}
+.redteam-failure-row{
+  display:grid;
+  grid-template-columns:70px 50px 1fr;
+  align-items:center;gap:8px;
+  font-size:12px;
+  padding:4px 0;
+  border-bottom:1px solid rgba(255,255,255,.04)
+}
+.redteam-failure-row:last-child{border-bottom:none}
+.redteam-tag{
+  padding:2px 6px;border-radius:3px;
+  font-size:10px;font-weight:700;text-transform:uppercase;
+  text-align:center;
+  background:rgba(255,255,255,.08)
+}
+.redteam-tag.tag-urgency{background:rgba(255,176,103,.2);color:#ffb067}
+.redteam-tag.tag-outrage{background:rgba(255,128,144,.2);color:#ff8090}
+.redteam-tag.tag-fear{background:rgba(245,200,136,.2);color:#f5c888}
+.redteam-tag.tag-certainty{background:rgba(167,139,250,.2);color:#a78bfa}
+.redteam-tag.tag-combo{background:rgba(255,64,108,.22);color:#ff6078}
+.redteam-tag.tag-benign{background:rgba(125,216,127,.2);color:#7dd87f}
+.redteam-pressure{font-weight:700;font-size:12px}
+.redteam-text{
+  overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+/* ---------- Layer 26 — Dream Mode Panel ---------- */
+.dream-panel{display:flex;flex-direction:column;gap:14px}
+.dream-hero{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;
+  background:rgba(0,0,0,.22);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:8px
+}
+.dream-phase-dot{
+  width:14px;height:14px;border-radius:50%;
+  flex-shrink:0;
+  box-shadow:0 0 10px currentColor;
+  animation:dream-pulse 2.2s ease-in-out infinite
+}
+@keyframes dream-pulse{
+  0%,100%{opacity:.6;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.15)}
+}
+.dream-phase-body{flex:1;display:flex;flex-direction:column;gap:2px}
+.dream-actions{display:flex;gap:6px}
+.dream-rules{display:flex;flex-direction:column;gap:6px}
+.dream-rules-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px
+}
+.dream-rule{display:flex;flex-direction:column;gap:4px}
+.dream-rule small{font-size:11px;color:rgba(255,255,255,.6)}
+.dream-rule select{
+  padding:6px 8px;
+  background:rgba(0,0,0,.28);
+  color:#e6e8ee;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:4px;
+  font-size:12px
+}
+.dream-replayed{display:flex;flex-direction:column;gap:6px}
+.dream-replay-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dream-chip{
+  padding:4px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:11px;
+  transition:all .25s ease
+}
+.dream-chip.active{
+  font-weight:700;
+  transform:scale(1.04)
+}
+.dream-log{
+  display:flex;flex-direction:column;gap:4px;
+  max-height:220px;overflow-y:auto
+}
+.dream-log-row{
+  display:grid;
+  grid-template-columns:80px 1fr 60px;
+  align-items:center;gap:8px;
+  padding:6px 8px;
+  background:rgba(255,255,255,.02);
+  border-radius:4px;
+  font-size:12px
+}
+.dream-log-row.kind-begin{border-left:2px solid #a78bfa}
+.dream-log-row.kind-replay{border-left:2px solid #7dd87f}
+.dream-log-row.kind-wake{border-left:2px solid #f5c888}
+.dream-log-row.kind-skip{border-left:2px solid #ff8090}
+.dream-log-row.kind-monitor{border-left:2px solid rgba(255,255,255,.2)}
+.dream-log-kind{
+  font-weight:700;text-transform:uppercase;font-size:10px;
+  color:rgba(255,255,255,.7)
+}
+.dream-log-text{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+
 @media (prefers-reduced-motion: reduce){
   *{
     animation-duration:0.01ms !important;
@@ -2375,6 +2537,11 @@ h1,h2,h3{
   .convo-summary-row{grid-template-columns:repeat(2,1fr)}
   .convo-drift-grid{grid-template-columns:repeat(4,1fr)}
   .immunity-breakdown{grid-template-columns:repeat(2,1fr)}
+  .redteam-summary-row{grid-template-columns:repeat(2,1fr)}
+  .redteam-failures{grid-template-columns:1fr}
+  .redteam-cat-row{grid-template-columns:80px 50px 1fr 50px}
+  .redteam-cat-avg{display:none}
+  .dream-rules-grid{grid-template-columns:repeat(2,1fr)}
 }
 
 @media (max-width: 760px){

@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**24 Layers:**
+**26 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -137,3 +137,17 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Upgrades bm25.hybridSearchSemantic with cosine similarity
     - CodeBrainPanel auto-uses embeddings when ready; falls back to trigram
     - EmbeddingsPanel: status indicator, enable button, test embed console
+25. Red Team Simulator — synthetic attack corpus vs the Cognitive Firewall
+    - 65 samples across 5 manipulation categories + benign controls
+    - Urgency / outrage / fear / certainty / combo + 15 benign
+    - Detection rate + false-positive rate at 3 thresholds (0.2/0.3/0.4)
+    - F1 score + A–F verdict grade with color
+    - Per-category matrix, missed attacks, false positives
+    - Proves whether the firewall actually works
+26. Dream Mode — idle-triggered replay consolidation (hippocampal analogue)
+    - Idle monitor: after N seconds (15s–2m) drifts into dream phase
+    - Replays recent snapshots in slow cycles (1.2s/2.4s/4s)
+    - STDP weight reinforcement on co-active region pairs
+    - Region-blend drift toward replayed states (consolidation)
+    - Brain self-consolidates like a sleeping cortex
+    - Any activity (button click, scan) wakes the brain

@@ -28,6 +28,8 @@ import BrainStewardPanel from './components/BrainStewardPanel';
 import ConversationBrainPanel from './components/ConversationBrainPanel';
 import ImmunityPanel from './components/ImmunityPanel';
 import EmbeddingsPanel from './components/EmbeddingsPanel';
+import RedTeamPanel from './components/RedTeamPanel';
+import DreamModePanel from './components/DreamModePanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
@@ -37,7 +39,8 @@ import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from './utils/immunity
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
 import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseMusePacket } from './utils/eeg';
 import { startCanvasRecording } from './utils/recording';
-import { saveSnapshot } from './utils/snapshots';
+import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
+import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
 import { registerShortcuts } from './utils/shortcuts';
 import { trendDirection } from './utils/analytics';
 import { toastSuccess, toastInfo, toastWarning } from './utils/toastStore';
@@ -92,6 +95,21 @@ export default function App() {
       resetBrain: () => setState(resetState()),
       onToolCall: (entry) => logToolCall(entry)
     });
+  }, []);
+
+  // Layer 26 — register dream providers + start monitor
+  useEffect(() => {
+    registerDreamProviders({
+      getSnapshots: () =>
+        listSnapshots()
+          .slice(0, 10)
+          .map((s) => loadSnapshot(s.id))
+          .filter(Boolean),
+      setState,
+      narrate: (text) => toastInfo(text)
+    });
+    startDreamMonitor();
+    return () => stopDreamMonitor();
   }, []);
 
   const trends = useMemo(() => {
@@ -204,10 +222,10 @@ export default function App() {
             mode={mode}
             onSetMode={setMode}
             onSetQuality={setQuality}
-            onToggleRun={() => setState((s) => ({ ...s, running: !s.running }))}
-            onBurst={() => setState((s) => ({ ...s, burst: 20, scenario: 'Sensory Burst' }))}
-            onReset={() => { setState(resetState()); setMode('simulation'); }}
-            onScenario={(key) => { setState((s) => applyScenario(s, key)); setMode('simulation'); }}
+            onToggleRun={() => { markActivity(); setState((s) => ({ ...s, running: !s.running })); }}
+            onBurst={() => { markActivity(); setState((s) => ({ ...s, burst: 20, scenario: 'Sensory Burst' })); }}
+            onReset={() => { markActivity(); setState(resetState()); setMode('simulation'); }}
+            onScenario={(key) => { markActivity(); setState((s) => applyScenario(s, key)); setMode('simulation'); }}
             onToggleRecording={() => {
               const canvas = document.querySelector('canvas');
               if (!canvas) return;
@@ -420,6 +438,14 @@ export default function App() {
 
           <ErrorBoundary name="Embeddings">
             <EmbeddingsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Red Team">
+            <RedTeamPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Dream Mode">
+            <DreamModePanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Split Brain View">
