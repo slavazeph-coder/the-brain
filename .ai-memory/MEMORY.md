@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**20 Layers:**
+**22 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -114,3 +114,13 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Pure-JS Louvain-lite community detection with modularity score
     - BM25 + trigram Jaccard hybrid search via Reciprocal Rank Fusion
     - Maps detected code communities onto brain regions as activation pattern
+21. Brain Steward — Agent Autopilot using the Layer 19 MCP tool catalog
+    - Configurable control loop (2/4/8/15s tick) with rules + activity feed
+    - Auto-snapshot on z-score anomalies (1.5–3σ threshold)
+    - Narrate on state change, optional TTS speech, scenario-shift detection
+    - Closes the feedback loop: brain observes itself through its own tools
+22. Conversation Brain — multi-turn transcript → per-turn cognitive drift
+    - Parses speaker-prefixed or JSON transcripts
+    - Each turn scored via Cognitive Firewall + applied to simulated brain
+    - Pressure-over-turns bar timeline, peak turn highlighted
+    - Final drift grid (per-region delta vs baseline) + "apply final state"

@@ -24,6 +24,8 @@ import HeatmapTimeline from './components/HeatmapTimeline';
 import KnowledgeBrainPanel from './components/KnowledgeBrainPanel';
 import MCPBridgePanel from './components/MCPBridgePanel';
 import CodeBrainPanel from './components/CodeBrainPanel';
+import BrainStewardPanel from './components/BrainStewardPanel';
+import ConversationBrainPanel from './components/ConversationBrainPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
@@ -373,6 +375,24 @@ export default function App() {
                   tick: prev.tick + 1
                 }));
                 toastSuccess('Code communities mapped onto brain');
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Brain Steward">
+            <BrainStewardPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Conversation Brain">
+            <ConversationBrainPanel
+              onApplyFinalState={(payload) => {
+                setState((prev) => ({
+                  ...prev,
+                  regions: { ...prev.regions, ...payload.regions },
+                  scenario: payload.scenario,
+                  tick: prev.tick + 1
+                }));
+                toastSuccess('Conversation final state applied to brain');
               }}
             />
           </ErrorBoundary>
