@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**28 Layers:**
+**29 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -165,3 +165,12 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Falls back to BM25 + trigram hybrid when embeddings unavailable
     - Maps retrieval onto brain: HPC = recall strength, CTX = breadth, PFC = focus
     - All processing in-browser, docs never leave the machine
+29. Affective Trigger Decoder — 12-affect taxonomy across 4 clusters
+    - threat (fear/anger/disgust), reward (joy/awe/pride),
+      social (belonging/nostalgia/shame), cognitive (curiosity/certainty/confusion)
+    - Russell's circumplex (valence × arousal) plot with quadrant detection
+    - Per-region glow color override on 3D brain — AMY glows red for fear,
+      pink for belonging, lavender for awe — same neural button, different finger
+    - Cross-category insight: when fear + shame + nostalgia all hit AMY,
+      labels the convergence ("same neural target, different route")
+    - Additive layer on top of Layer 4: tells you WHICH feeling is installed

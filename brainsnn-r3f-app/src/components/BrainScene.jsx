@@ -26,11 +26,19 @@ function FocusController({ selected }) {
   return null;
 }
 
-function BrainNode({ id, activity, selected, onSelect, quality, knowledgeMode }) {
+function BrainNode({ id, activity, selected, onSelect, quality, knowledgeMode, affectOverride }) {
   const group = useRef();
   const glow = useRef();
   const [hovered, setHovered] = useState(false);
-  const color = REGION_INFO[id].color;
+  const baseColor = REGION_INFO[id].color;
+  const override = affectOverride?.[id];
+  const color = useMemo(() => {
+    if (!override) return baseColor;
+    return '#' + new THREE.Color(baseColor)
+      .lerp(new THREE.Color(override.color), override.strength)
+      .getHexString();
+  }, [baseColor, override?.color, override?.strength]);
+  const emissiveBoost = override ? override.strength * 0.5 : 0;
   const position = POSITIONS[id];
 
   useFrame((state) => {
@@ -69,7 +77,7 @@ function BrainNode({ id, activity, selected, onSelect, quality, knowledgeMode })
           <meshPhysicalMaterial
             color={color}
             emissive={color}
-            emissiveIntensity={0.4 + activity * 0.9}
+            emissiveIntensity={0.4 + activity * 0.9 + emissiveBoost}
             roughness={0.24}
             metalness={0.08}
             clearcoat={0.8}
@@ -195,7 +203,7 @@ function SignalParticles({ regions, quality }) {
   );
 }
 
-export default function BrainScene({ regions, weights, selected, onSelect, quality, onQualityChange, knowledgeMode }) {
+export default function BrainScene({ regions, weights, selected, onSelect, quality, onQualityChange, knowledgeMode, affectOverride }) {
   const dpr = quality === 'ultra' ? [1, 2] : quality === 'high' ? [1, 1.5] : 1;
 
   return (
@@ -265,6 +273,7 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
             onSelect={onSelect}
             quality={quality}
             knowledgeMode={knowledgeMode}
+            affectOverride={affectOverride}
           />
         ))}
       </Selection>

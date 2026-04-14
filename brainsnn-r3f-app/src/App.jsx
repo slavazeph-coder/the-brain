@@ -32,6 +32,7 @@ import RedTeamPanel from './components/RedTeamPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
+import AffectiveDecoderPanel from './components/AffectiveDecoderPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
@@ -44,6 +45,7 @@ import { startCanvasRecording } from './utils/recording';
 import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
 import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
 import { mapRagToRegions } from './utils/neuroRag';
+import { applyAffectsToBrainState } from './utils/affectiveDecoder';
 import { registerShortcuts } from './utils/shortcuts';
 import { trendDirection } from './utils/analytics';
 import { toastSuccess, toastInfo, toastWarning } from './utils/toastStore';
@@ -76,6 +78,7 @@ export default function App() {
   const [showKbHelp, setShowKbHelp] = useState(false);
   const [firewallResult, setFirewallResult] = useState(null);
   const [knowledgeMode, setKnowledgeMode] = useState(false);
+  const [affectOverride, setAffectOverride] = useState(null);
   const recorderRef = useRef(null);
   const historyRef = useRef([]);
   const stateRef = useRef(state);
@@ -295,6 +298,7 @@ export default function App() {
                 selected={state.selected}
                 quality={quality}
                 knowledgeMode={knowledgeMode}
+                affectOverride={affectOverride}
                 onQualityChange={setQuality}
                 onSelect={(id) => setState((s) => ({ ...s, selected: id || s.selected }))}
               />
@@ -464,6 +468,28 @@ export default function App() {
                   name: `RAG: ${ragResult.results.length} hits · ${ragResult.mode}`
                 });
                 toastSuccess(`Retrieved ${ragResult.results.length} chunks · ${ragResult.mode}`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Affective Decoder">
+            <AffectiveDecoderPanel
+              onApplyToBrain={(map) => {
+                markActivity();
+                setAffectOverride(map);
+                if (map) {
+                  toastSuccess(`Affect colors applied to ${Object.keys(map).length} regions`);
+                } else {
+                  toastInfo('Affect colors cleared');
+                }
+              }}
+              onApplyActivation={(decoded) => {
+                markActivity();
+                setState((prev) => applyAffectsToBrainState(prev, decoded));
+                recordImmunity(IMMUNITY_EVENTS.AFFECT_DECODED, {
+                  name: `Affects: ${decoded.dominant.map((d) => d.label).join(', ') || 'neutral'}`
+                });
+                toastInfo('Affect activation nudged into brain state');
               }}
             />
           </ErrorBoundary>

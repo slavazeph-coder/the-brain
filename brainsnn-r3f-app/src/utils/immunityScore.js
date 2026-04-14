@@ -28,7 +28,8 @@ export const IMMUNITY_EVENTS = {
   STEWARD_RUN: 'steward_run',
   GEMMA_SCAN: 'gemma_scan',
   CODE_ANALYZED: 'code_analyzed',
-  KNOWLEDGE_SCANNED: 'knowledge_scanned'
+  KNOWLEDGE_SCANNED: 'knowledge_scanned',
+  AFFECT_DECODED: 'affect_decoded'
 };
 
 // ---------- storage ----------

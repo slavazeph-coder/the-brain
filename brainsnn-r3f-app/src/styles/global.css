@@ -2639,6 +2639,101 @@ h1,h2,h3{
   padding:1px 3px;border-radius:2px
 }
 
+/* ---------- Layer 29 · Affective Trigger Decoder ---------- */
+.affect-panel{display:flex;flex-direction:column;gap:12px}
+.affect-examples{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+}
+.affect-input{
+  width:100%;min-height:110px;padding:10px 12px;
+  border-radius:10px;border:1px solid rgba(255,255,255,.08);
+  background:#0b0b0d;color:#eee;font:500 13px/1.5 'Inter',sans-serif;
+  resize:vertical;
+}
+.affect-input:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.affect-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.affect-clusters{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+}
+.affect-cluster-card{
+  padding:8px 10px;border-radius:10px;
+  background:rgba(18,18,22,.7);
+  border:1px solid rgba(255,255,255,.08);
+  border-left-width:3px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.affect-cluster-head{
+  display:flex;align-items:center;gap:6px;
+  font:600 12px 'Satoshi',sans-serif;
+}
+.affect-cluster-head > span:nth-child(2){flex:1}
+.affect-cluster-dot{
+  width:10px;height:10px;border-radius:50%;display:inline-block;
+}
+.affect-cluster-bar{
+  height:4px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;
+}
+.affect-cluster-fill{height:100%;transition:width 320ms ease}
+.affect-twocol{
+  display:grid;grid-template-columns:240px 1fr;gap:16px;
+  align-items:flex-start;
+}
+.affect-circumplex{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:8px;border-radius:12px;
+  background:rgba(11,11,13,.6);
+  border:1px solid rgba(255,255,255,.06);
+}
+.affect-circumplex svg{display:block;width:100%;max-width:240px;height:auto}
+.affect-circumplex-caption{font-family:'JetBrains Mono',monospace}
+.affect-dominant{display:flex;flex-direction:column;gap:8px}
+.affect-chip{
+  display:flex;gap:10px;align-items:flex-start;
+  padding:8px 10px;border-radius:10px;
+  background:rgba(18,18,22,.7);
+  border:1px solid rgba(255,255,255,.06);
+}
+.affect-chip-swatch{
+  width:14px;height:14px;border-radius:4px;margin-top:3px;
+  box-shadow:0 0 10px currentColor;flex-shrink:0;
+}
+.affect-chip-body{flex:1;display:flex;flex-direction:column;gap:2px}
+.affect-chip-head{
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+}
+.affect-chip-meta{text-transform:capitalize}
+.affect-chip-examples{
+  display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;
+}
+.affect-chip-example{
+  padding:1px 6px;border-radius:6px;
+  background:rgba(255,255,255,.04);
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+}
+.affect-region-block{display:flex;flex-direction:column;gap:6px}
+.affect-region-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:6px;
+}
+.affect-region-cell{
+  padding:8px 6px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.08);
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  text-align:center;
+  transition:opacity 200ms ease;
+}
+.affect-region-label{font:700 13px 'Satoshi',sans-serif;letter-spacing:.5px}
+.affect-region-affect{text-transform:capitalize;font-size:10px}
+.affect-region-strength{font-family:'JetBrains Mono',monospace;font-size:10px}
+.affect-insight{
+  padding:10px 12px;border-radius:10px;
+  background:rgba(167,139,250,.08);
+  border-left:3px solid #a78bfa;
+  display:flex;flex-direction:column;gap:6px;
+}
+.affect-insight strong{font:600 12px 'Satoshi',sans-serif;color:#cfc0ff}
+.affect-insight p{margin:0;font-size:12px;line-height:1.55;font-style:italic;color:#d8d4e8}
+
 @media (prefers-reduced-motion: reduce){
   *{
     animation-duration:0.01ms !important;
@@ -2670,6 +2765,9 @@ h1,h2,h3{
   .dream-rules-grid{grid-template-columns:repeat(2,1fr)}
   .adv-delta-row{grid-template-columns:1fr}
   .rag-status-row{grid-template-columns:repeat(2,1fr)}
+  .affect-clusters{grid-template-columns:repeat(2,1fr)}
+  .affect-twocol{grid-template-columns:1fr}
+  .affect-region-grid{grid-template-columns:repeat(4,1fr)}
 }
 
 @media (max-width: 760px){
