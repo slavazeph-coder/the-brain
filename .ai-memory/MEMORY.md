@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**18 Layers:**
+**20 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -103,3 +103,14 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Knowledge mode in 3D viewer (regions relabeled as knowledge domains)
     - Error boundaries around heavy panels
     - Accessibility: focus-visible styles, prefers-reduced-motion, ARIA hints
+19. MCP Brain Bridge — 14 tools exposed via JSON-RPC (cannibalized from GitNexus)
+    - In-browser tool catalog + tester + audit log + config snippet UI
+    - Standalone Node stdio MCP server (`mcp-server/`) with WebSocket relay
+    - Tools: get_brain_state, list/save/compare snapshots, scan_content,
+      apply_scenario, get_correlations, detect_anomaly, classify_knowledge,
+      narrate_state, impact_analysis (blast radius through connectome)
+20. Code-Aware Knowledge Brain — code → graph → communities → hybrid search
+    - Regex parser for JS/TS/Python/Go/Rust (functions, classes, imports, exports)
+    - Pure-JS Louvain-lite community detection with modularity score
+    - BM25 + trigram Jaccard hybrid search via Reciprocal Rank Fusion
+    - Maps detected code communities onto brain regions as activation pattern

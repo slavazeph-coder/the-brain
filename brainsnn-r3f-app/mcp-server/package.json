@@ -1,0 +1,14 @@
+{
+  "name": "brainsnn-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP stdio server bridging AI agents to a running BrainSNN browser session",
+  "type": "module",
+  "main": "server.js",
+  "bin": { "brainsnn-mcp": "./server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -22,10 +22,13 @@ import PluginPanel from './components/PluginPanel';
 import LiveSyncPanel from './components/LiveSyncPanel';
 import HeatmapTimeline from './components/HeatmapTimeline';
 import KnowledgeBrainPanel from './components/KnowledgeBrainPanel';
+import MCPBridgePanel from './components/MCPBridgePanel';
+import CodeBrainPanel from './components/CodeBrainPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
+import { registerBridgeContext, logToolCall } from './utils/mcpBridge';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
 import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseMusePacket } from './utils/eeg';
 import { startCanvasRecording } from './utils/recording';
@@ -64,12 +67,27 @@ export default function App() {
   const [knowledgeMode, setKnowledgeMode] = useState(false);
   const recorderRef = useRef(null);
   const historyRef = useRef([]);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   // Track per-region history for analytics trends
   useEffect(() => {
     historyRef.current.push({ regions: { ...state.regions } });
     if (historyRef.current.length > 60) historyRef.current.shift();
   }, [state.tick]);
+
+  // Layer 19 — register MCP bridge context once
+  useEffect(() => {
+    registerBridgeContext({
+      getState: () => stateRef.current,
+      setState,
+      getHistory: () => historyRef.current,
+      applyScenarioKey: (key) => setState((s) => applyScenario(s, key)),
+      triggerBurst: () => setState((s) => ({ ...s, burst: 20, scenario: 'MCP Sensory Burst' })),
+      resetBrain: () => setState(resetState()),
+      onToolCall: (entry) => logToolCall(entry)
+    });
+  }, []);
 
   const trends = useMemo(() => {
     const t = {};
@@ -337,6 +355,24 @@ export default function App() {
                 }));
                 setKnowledgeMode(true);
                 toastSuccess('Knowledge map applied — 3D brain now shows knowledge domains');
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="MCP Bridge">
+            <MCPBridgePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Code Brain">
+            <CodeBrainPanel
+              onApplyToNetwork={(payload) => {
+                setState((prev) => ({
+                  ...prev,
+                  regions: { ...prev.regions, ...payload.regions },
+                  scenario: payload.scenario,
+                  tick: prev.tick + 1
+                }));
+                toastSuccess('Code communities mapped onto brain');
               }}
             />
           </ErrorBoundary>
