@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**26 Layers:**
+**28 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -151,3 +151,17 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Region-blend drift toward replayed states (consolidation)
     - Brain self-consolidates like a sleeping cortex
     - Any activity (button click, scan) wakes the brain
+27. Adversarial Training — self-improving firewall via n-gram lift mining
+    - Closes the loop on Layer 25 — learns from missed attacks
+    - Mines discriminative bigrams/trigrams (lift ≥ 3, min 2 attack hits)
+    - Laplace-smoothed P(n-gram|attack) / P(n-gram|benign) ranking
+    - Persists learned patterns in localStorage (cap 40, highest-lift kept)
+    - scoreWithLearned() augments base scoring by pattern match count × avg lift
+    - Shows before/after detection rate + FPR + F1 delta after each train run
+28. Neuro-RAG — semantic retrieval over pasted documents
+    - Parse `=== Title ===` delimited docs → 180-word chunks w/ 40-word overlap
+    - Embeds each chunk via Layer 24 transformers.js (when ready)
+    - Cosine similarity retrieval with top-k citations + highlight
+    - Falls back to BM25 + trigram hybrid when embeddings unavailable
+    - Maps retrieval onto brain: HPC = recall strength, CTX = breadth, PFC = focus
+    - All processing in-browser, docs never leave the machine

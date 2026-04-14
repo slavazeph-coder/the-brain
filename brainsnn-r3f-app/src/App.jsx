@@ -30,6 +30,8 @@ import ImmunityPanel from './components/ImmunityPanel';
 import EmbeddingsPanel from './components/EmbeddingsPanel';
 import RedTeamPanel from './components/RedTeamPanel';
 import DreamModePanel from './components/DreamModePanel';
+import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
+import NeuroRagPanel from './components/NeuroRagPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
@@ -41,6 +43,7 @@ import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseM
 import { startCanvasRecording } from './utils/recording';
 import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
 import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
+import { mapRagToRegions } from './utils/neuroRag';
 import { registerShortcuts } from './utils/shortcuts';
 import { trendDirection } from './utils/analytics';
 import { toastSuccess, toastInfo, toastWarning } from './utils/toastStore';
@@ -446,6 +449,23 @@ export default function App() {
 
           <ErrorBoundary name="Dream Mode">
             <DreamModePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Adversarial Training">
+            <AdversarialTrainingPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Neuro-RAG">
+            <NeuroRagPanel
+              onApplyToBrain={(ragResult) => {
+                markActivity();
+                setState((prev) => mapRagToRegions(prev, ragResult));
+                recordImmunity(IMMUNITY_EVENTS.KNOWLEDGE_SCANNED, {
+                  name: `RAG: ${ragResult.results.length} hits · ${ragResult.mode}`
+                });
+                toastSuccess(`Retrieved ${ragResult.results.length} chunks · ${ragResult.mode}`);
+              }}
+            />
           </ErrorBoundary>
 
           <ErrorBoundary name="Split Brain View">

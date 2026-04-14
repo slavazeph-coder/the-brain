@@ -2513,6 +2513,132 @@ h1,h2,h3{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap
 }
 
+/* ---------- Layer 27 — Adversarial Training ---------- */
+.adv-panel{display:flex;flex-direction:column;gap:14px}
+.adv-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.adv-delta-row{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:10px
+}
+.adv-delta-card{
+  padding:12px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:6px;
+  display:flex;flex-direction:column;gap:6px
+}
+.adv-delta-card small{
+  color:rgba(255,255,255,.6);font-size:11px;
+  text-transform:uppercase;letter-spacing:.04em
+}
+.adv-delta-numbers{
+  display:flex;align-items:center;gap:8px;
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:14px
+}
+.adv-before{color:rgba(255,255,255,.55)}
+.adv-arrow{color:rgba(255,255,255,.35)}
+.adv-after{color:#e6e8ee;font-weight:700}
+.adv-delta{font-size:18px;letter-spacing:.01em}
+.adv-delta.up{color:#7dd87f}
+.adv-delta.down{color:#ff8090}
+.adv-delta.flat{color:rgba(255,255,255,.5)}
+.adv-training-stats{
+  padding:8px 10px;background:rgba(0,0,0,.22);
+  border-radius:4px;border-left:2px solid #a78bfa
+}
+.adv-learned{display:flex;flex-direction:column;gap:8px}
+.adv-pattern-grid{
+  display:flex;flex-wrap:wrap;gap:6px
+}
+.adv-pattern-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 10px;
+  background:rgba(167,139,250,.1);
+  border:1px solid rgba(167,139,250,.25);
+  border-radius:4px;
+  font-size:12px
+}
+.adv-pattern-ngram{
+  font-family:'JetBrains Mono', ui-monospace, monospace
+}
+.adv-pattern-lift{
+  color:#a78bfa;font-weight:700;font-size:11px
+}
+
+/* ---------- Layer 28 — Neuro-RAG ---------- */
+.rag-panel{display:flex;flex-direction:column;gap:12px}
+.rag-status-row{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:10px
+}
+.rag-status-row .metric{
+  padding:10px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);border-radius:6px
+}
+.rag-docs-input{
+  width:100%;min-height:130px;resize:vertical;
+  padding:10px;font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:12px;line-height:1.5;
+  background:rgba(0,0,0,.28);
+  color:#e6e8ee;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:6px
+}
+.rag-docs-input:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.rag-actions{display:flex;gap:10px;align-items:center}
+.rag-query-row{display:flex;gap:8px}
+.rag-query-input{
+  flex:1;padding:10px 12px;
+  background:rgba(0,0,0,.28);
+  color:#e6e8ee;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:6px;
+  font-size:13px
+}
+.rag-query-input:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.rag-error{
+  padding:10px;
+  background:rgba(255,128,144,.12);
+  border:1px solid rgba(255,128,144,.3);
+  border-radius:4px;
+  color:#ff8090
+}
+.rag-results{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.rag-results-head{
+  display:flex;justify-content:space-between;align-items:center
+}
+.rag-result-card{
+  padding:10px 12px;
+  background:rgba(0,0,0,.22);
+  border:1px solid rgba(255,255,255,.06);
+  border-left:3px solid rgba(125,216,127,.5);
+  border-radius:6px;
+  display:flex;flex-direction:column;gap:6px
+}
+.rag-result-head{
+  display:flex;align-items:center;gap:10px;
+  font-size:12px
+}
+.rag-result-rank{
+  font-weight:700;color:rgba(255,255,255,.8);
+  font-family:'JetBrains Mono', ui-monospace, monospace
+}
+.rag-result-doc{font-weight:600;color:#e6e8ee}
+.rag-result-chunk{margin-left:4px}
+.rag-result-score{
+  margin-left:auto;font-weight:700;
+  font-family:'JetBrains Mono', ui-monospace, monospace
+}
+.rag-result-text{
+  font-size:13px;line-height:1.5;
+  color:rgba(230,232,238,.85);
+  margin:0
+}
+.rag-highlight{
+  background:rgba(167,139,250,.28);
+  color:#e6e8ee;
+  padding:1px 3px;border-radius:2px
+}
+
 @media (prefers-reduced-motion: reduce){
   *{
     animation-duration:0.01ms !important;
@@ -2542,6 +2668,8 @@ h1,h2,h3{
   .redteam-cat-row{grid-template-columns:80px 50px 1fr 50px}
   .redteam-cat-avg{display:none}
   .dream-rules-grid{grid-template-columns:repeat(2,1fr)}
+  .adv-delta-row{grid-template-columns:1fr}
+  .rag-status-row{grid-template-columns:repeat(2,1fr)}
 }
 
 @media (max-width: 760px){
