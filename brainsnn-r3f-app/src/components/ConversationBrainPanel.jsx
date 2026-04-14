@@ -28,7 +28,9 @@ export default function ConversationBrainPanel({ onApplyFinalState }) {
     if (!analysis?.summary?.finalRegions) return;
     onApplyFinalState?.({
       regions: analysis.summary.finalRegions,
-      scenario: `Conversation · ${analysis.summary.totalTurns} turns · drift ${analysis.drift.level}`
+      scenario: `Conversation · ${analysis.summary.totalTurns} turns · drift ${analysis.drift.level}`,
+      pressureAvg: analysis.summary.averagePressure,
+      turns: analysis.summary.totalTurns
     });
   }
 

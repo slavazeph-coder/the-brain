@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { parseFiles } from '../utils/codeParser';
-import { buildBM25Index, hybridSearch } from '../utils/bm25';
+import { buildBM25Index, hybridSearch, hybridSearchSemantic } from '../utils/bm25';
 import { detectCommunities } from '../utils/communities';
+import { isReady as embeddingsReady, embed, cosineSimilarity } from '../utils/embeddings';
 
 /**
  * Layer 20 — Code-Aware Knowledge Brain
@@ -38,10 +39,18 @@ export default function CodeBrainPanel({ onApplyToNetwork }) {
     setResults([]);
   }
 
-  function handleSearch() {
+  async function handleSearch() {
     if (!parsed?.index || !query.trim()) return;
-    const ranked = hybridSearch(query, parsed.index, { topK: 8 });
-    setResults(ranked);
+    if (embeddingsReady()) {
+      const { results: ranked } = await hybridSearchSemantic(query, parsed.index, {
+        topK: 8,
+        embedFn: embed,
+        cosineFn: cosineSimilarity
+      });
+      setResults(ranked);
+    } else {
+      setResults(hybridSearch(query, parsed.index, { topK: 8 }));
+    }
   }
 
   function applyToBrain() {
@@ -130,7 +139,7 @@ export default function CodeBrainPanel({ onApplyToNetwork }) {
                     <span className="code-brain-name">{r.doc.meta.label}</span>
                     <span className="code-brain-path muted small-note">{r.doc.meta.path || ''}</span>
                     <span className="code-brain-scores muted small-note">
-                      bm25 {r.bm25.toFixed(2)} · sem {r.semantic.toFixed(2)}
+                      bm25 {r.bm25.toFixed(2)} · {r.backend === 'embedding' ? 'embed' : 'tri'} {r.semantic.toFixed(2)}
                     </span>
                   </div>
                 ))}

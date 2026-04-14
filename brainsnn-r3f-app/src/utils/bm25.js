@@ -79,6 +79,53 @@ export function hybridSearch(query, index, { topK = 10, k = 60 } = {}) {
     .map((doc) => ({ id: doc.id, score: jaccard(qTri, doc.tri), doc }))
     .sort((a, b) => b.score - a.score);
 
+  return fuseRanked(bm25Ranked, semanticRanked, index.docs, topK, k, 'trigram');
+}
+
+/**
+ * Layer 24 upgrade — hybrid search that uses real embeddings when available.
+ * Falls back to trigram Jaccard if embeddings aren't loaded.
+ * Requires async because embedding lookup is async.
+ */
+export async function hybridSearchSemantic(query, index, {
+  topK = 10,
+  k = 60,
+  embedFn = null,    // async (text) => Float32Array
+  cosineFn = null    // (a, b) => number
+} = {}) {
+  const bm25Ranked = bm25Score(query, index);
+
+  let semanticRanked;
+  let backend = 'trigram';
+
+  if (embedFn && cosineFn) {
+    try {
+      const qVec = await embedFn(query);
+      // Embed each doc (cache layer inside embedFn handles repeats)
+      const docVecs = await Promise.all(index.docs.map((d) => embedFn(d.text || '')));
+      semanticRanked = index.docs
+        .map((doc, i) => ({ id: doc.id, score: cosineFn(qVec, docVecs[i]), doc }))
+        .sort((a, b) => b.score - a.score);
+      backend = 'embedding';
+    } catch {
+      // Fall back to trigram on any failure
+      const qTri = trigrams(query);
+      semanticRanked = index.docs
+        .map((doc) => ({ id: doc.id, score: jaccard(qTri, doc.tri), doc }))
+        .sort((a, b) => b.score - a.score);
+    }
+  } else {
+    const qTri = trigrams(query);
+    semanticRanked = index.docs
+      .map((doc) => ({ id: doc.id, score: jaccard(qTri, doc.tri), doc }))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  const fused = fuseRanked(bm25Ranked, semanticRanked, index.docs, topK, k, backend);
+  return { results: fused, backend };
+}
+
+function fuseRanked(bm25Ranked, semanticRanked, docs, topK, k, backendLabel) {
   // Reciprocal Rank Fusion
   const ranks = new Map();
   bm25Ranked.forEach((r, i) => {
@@ -88,14 +135,15 @@ export function hybridSearch(query, index, { topK = 10, k = 60 } = {}) {
     ranks.set(r.id, (ranks.get(r.id) || 0) + 1 / (k + i + 1));
   });
 
-  const byId = new Map(index.docs.map((d) => [d.id, d]));
+  const byId = new Map(docs.map((d) => [d.id, d]));
   return Array.from(ranks.entries())
     .map(([id, score]) => ({
       id,
       score,
       doc: byId.get(id),
       bm25: bm25Ranked.find((r) => r.id === id)?.score ?? 0,
-      semantic: semanticRanked.find((r) => r.id === id)?.score ?? 0
+      semantic: semanticRanked.find((r) => r.id === id)?.score ?? 0,
+      backend: backendLabel
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);

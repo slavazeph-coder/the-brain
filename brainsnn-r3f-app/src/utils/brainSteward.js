@@ -9,6 +9,7 @@
  */
 
 import { handleToolCall } from './mcpBridge';
+import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from './immunityScore';
 
 export const DEFAULT_RULES = {
   checkIntervalMs: 4000,
@@ -131,6 +132,7 @@ async function runTick() {
           `${high.length} region${high.length > 1 ? 's' : ''} firing >${rules.anomalyThreshold}σ`,
           { anomalies: high }
         );
+        recordImmunity(IMMUNITY_EVENTS.ANOMALY_DETECTED, { anomalyCount: high.length });
 
         if (rules.autoSnapshotOnAnomaly) {
           const snapRes = await handleToolCall('save_snapshot', {

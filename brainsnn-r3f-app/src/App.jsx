@@ -26,11 +26,14 @@ import MCPBridgePanel from './components/MCPBridgePanel';
 import CodeBrainPanel from './components/CodeBrainPanel';
 import BrainStewardPanel from './components/BrainStewardPanel';
 import ConversationBrainPanel from './components/ConversationBrainPanel';
+import ImmunityPanel from './components/ImmunityPanel';
+import EmbeddingsPanel from './components/EmbeddingsPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
 import { registerBridgeContext, logToolCall } from './utils/mcpBridge';
+import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from './utils/immunityScore';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
 import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseMusePacket } from './utils/eeg';
 import { startCanvasRecording } from './utils/recording';
@@ -314,6 +317,10 @@ export default function App() {
             onApplyToNetwork={(result) => {
               setFirewallResult(result);
               setState((s) => mapTRIBEToRegions(s, result));
+              recordImmunity(IMMUNITY_EVENTS.FIREWALL_SCAN, {
+                pressure: result.manipulationPressure,
+                confidence: result.confidence
+              });
               toastWarning(`Firewall: ${result.recommendedAction.slice(0, 60)}...`);
             }}
           />
@@ -323,6 +330,9 @@ export default function App() {
               onApplyToNetwork={(gemmaResult) => {
                 setFirewallResult(gemmaResult);
                 setState((s) => mapTRIBEToRegions(s, gemmaResult));
+                recordImmunity(IMMUNITY_EVENTS.GEMMA_SCAN, {
+                  pressure: gemmaResult.manipulationPressure
+                });
                 toastInfo('Gemma 4 analysis applied to brain');
               }}
             />
@@ -339,6 +349,7 @@ export default function App() {
                 scenario: `Restored: ${snap.name}`,
                 tick: prev.tick + 1
               }));
+              recordImmunity(IMMUNITY_EVENTS.SNAPSHOT_SAVED, { name: snap.name });
               toastSuccess(`Restored: ${snap.name}`);
             }}
           />
@@ -356,6 +367,7 @@ export default function App() {
                   tick: prev.tick + 1
                 }));
                 setKnowledgeMode(true);
+                recordImmunity(IMMUNITY_EVENTS.KNOWLEDGE_SCANNED, {});
                 toastSuccess('Knowledge map applied — 3D brain now shows knowledge domains');
               }}
             />
@@ -374,6 +386,7 @@ export default function App() {
                   scenario: payload.scenario,
                   tick: prev.tick + 1
                 }));
+                recordImmunity(IMMUNITY_EVENTS.CODE_ANALYZED, {});
                 toastSuccess('Code communities mapped onto brain');
               }}
             />
@@ -392,9 +405,21 @@ export default function App() {
                   scenario: payload.scenario,
                   tick: prev.tick + 1
                 }));
+                recordImmunity(IMMUNITY_EVENTS.CONVERSATION_ANALYZED, {
+                  pressureAvg: payload.pressureAvg,
+                  turns: payload.turns
+                });
                 toastSuccess('Conversation final state applied to brain');
               }}
             />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Immunity Score">
+            <ImmunityPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Embeddings">
+            <EmbeddingsPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Split Brain View">

@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**22 Layers:**
+**24 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -124,3 +124,16 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Each turn scored via Cognitive Firewall + applied to simulated brain
     - Pressure-over-turns bar timeline, peak turn highlighted
     - Final drift grid (per-region delta vs baseline) + "apply final state"
+23. Cognitive Immunity Score — persistent 0–100 resilience metric
+    - 4 dimensions: awareness, resilience, depth, consistency
+    - Daily streak-based consistency multiplier
+    - Events feed from firewall/convo/steward/snapshots/gemma/code/knowledge
+    - Dial + breakdown bars + sparkline + event log UI
+    - Storage key: `brainsnn_immunity_v1`, localStorage-backed
+24. Real Embeddings — transformers.js via esm.run CDN (no build dep)
+    - Model: Xenova/all-MiniLM-L6-v2 (384-dim, quantized, ~25MB)
+    - Lazy-loaded on demand, client-side inference only
+    - Cache: in-memory Map + localStorage (cap 500 vectors)
+    - Upgrades bm25.hybridSearchSemantic with cosine similarity
+    - CodeBrainPanel auto-uses embeddings when ready; falls back to trigram
+    - EmbeddingsPanel: status indicator, enable button, test embed console
