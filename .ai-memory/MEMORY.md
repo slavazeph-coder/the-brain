@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**31 Layers:**
+**32 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -199,3 +199,18 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Refactor: added DEFAULT_RULES + scoreContentWithRules +
       getActiveRules/setActiveRules/resetActiveRules + serialize/deserialize
       so rules are mutable JSON-safe objects that can be evolved
+32. Attack Evolve — co-evolution counterpart to Layer 31
+    - Evolves attack strings to DODGE the current active firewall
+    - String-level mutations: inject-benign (wrap in "just FYI..." framing),
+      soften-synonyms (urgent→time-sensitive, scandal→incident, etc),
+      letter-split (u-r-g-e-n-t breaks \b boundaries), reorder sentences,
+      drop-trigger, crossover-attacks
+    - Fitness = evasion × continuity: child must still resemble an attack
+      (≥25% shared content words with parent) — prevents trivial "replace
+      with benign text" solutions
+    - "Promote to red team corpus" injects evolved attack into Layer 25
+      corpus — next Layer 31 evolution round must catch it
+    - Seeds from selected categories (combo/urgency/outrage/fear/certainty)
+    - Closes the arms race: Layer 31 defense ↔ Layer 32 offense
+    - Refactor: ATTACK_CORPUS now mutable + addCustomAttack +
+      resetAttackCorpus; _ATTACK_CORPUS_DEFAULTS preserved as source of truth

@@ -35,6 +35,7 @@ import NeuroRagPanel from './components/NeuroRagPanel';
 import AffectiveDecoderPanel from './components/AffectiveDecoderPanel';
 import NeurochemistryPanel from './components/NeurochemistryPanel';
 import BrainEvolvePanel from './components/BrainEvolvePanel';
+import AttackEvolvePanel from './components/AttackEvolvePanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
@@ -527,6 +528,23 @@ export default function App() {
                   name: `Evolve promoted: F1 ${f1.toFixed(3)}`
                 });
                 toastSuccess(`Evolved firewall promoted (F1 ${f1.toFixed(3)})`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Attack Evolve">
+            <AttackEvolvePanel
+              onAttackPromoted={(node, category) => {
+                markActivity();
+                if (!node) {
+                  toastInfo('Red team corpus reset to defaults');
+                  return;
+                }
+                const evasion = ((1 - (node.detection || 0)) * 100).toFixed(0);
+                recordImmunity(IMMUNITY_EVENTS.KNOWLEDGE_SCANNED, {
+                  name: `Attack promoted (${category}): ${evasion}% evasion`
+                });
+                toastSuccess(`Evolved attack added to "${category}" — ${evasion}% evasion`);
               }}
             />
           </ErrorBoundary>

@@ -17,11 +17,31 @@ export function getAttackCorpus() {
   return ATTACK_CORPUS;
 }
 
+/**
+ * Layer 32 — Attack Evolve hook. Appends an evolved attack into the live
+ * corpus under `category`. Changes are session-scoped; `resetAttackCorpus`
+ * restores the built-in defaults.
+ */
+export function addCustomAttack(text, category = 'combo') {
+  if (!text || typeof text !== 'string') return false;
+  if (!ATTACK_CORPUS[category]) ATTACK_CORPUS[category] = [];
+  // Prevent duplicate injection
+  if (ATTACK_CORPUS[category].includes(text)) return false;
+  ATTACK_CORPUS[category].push(text);
+  return true;
+}
+
+export function resetAttackCorpus() {
+  for (const cat of Object.keys(ATTACK_CORPUS)) {
+    ATTACK_CORPUS[cat] = [..._ATTACK_CORPUS_DEFAULTS[cat]];
+  }
+}
+
 // ---------- attack corpus ----------
 
 export const ATTACK_CATEGORIES = ['urgency', 'outrage', 'fear', 'certainty', 'combo', 'benign'];
 
-const ATTACK_CORPUS = {
+const _ATTACK_CORPUS_DEFAULTS = {
   urgency: [
     'Act now before this opportunity is gone forever! Limited time only!',
     'Breaking alert: you must respond immediately or lose access permanently!!',
@@ -100,6 +120,12 @@ const ATTACK_CORPUS = {
     'Our research found that moderate exercise correlates with better cognitive performance.'
   ]
 };
+
+// Live mutable corpus — starts as a deep clone of defaults. Layer 32 appends
+// evolved attacks here; `resetAttackCorpus()` rewinds to the built-in set.
+const ATTACK_CORPUS = Object.fromEntries(
+  Object.entries(_ATTACK_CORPUS_DEFAULTS).map(([k, v]) => [k, [...v]])
+);
 
 // ---------- detection ----------
 
