@@ -34,10 +34,11 @@ import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
 import AffectiveDecoderPanel from './components/AffectiveDecoderPanel';
 import NeurochemistryPanel from './components/NeurochemistryPanel';
+import BrainEvolvePanel from './components/BrainEvolvePanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
-import { mapTRIBEToRegions } from './utils/cognitiveFirewall';
+import { mapTRIBEToRegions, setActiveRules, resetActiveRules, deserializeRules } from './utils/cognitiveFirewall';
 import { registerBridgeContext, logToolCall } from './utils/mcpBridge';
 import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from './utils/immunityScore';
 import { applyScenario, createInitialState, resetState, simulateStep } from './utils/sim';
@@ -506,6 +507,26 @@ export default function App() {
                 markActivity();
                 setState((prev) => applyNTBath(prev, levels, opts));
                 toastSuccess(`Applied ${opts?.label ?? 'NT bath'} to brain`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Brain Evolve">
+            <BrainEvolvePanel
+              onPromote={(node) => {
+                markActivity();
+                if (!node?.ruleSet) {
+                  resetActiveRules();
+                  toastInfo('Firewall reset to default rules');
+                  return;
+                }
+                const rules = deserializeRules(node.ruleSet);
+                setActiveRules(rules);
+                const f1 = node.results?.summary?.thresholds?.[0.3]?.f1 ?? 0;
+                recordImmunity(IMMUNITY_EVENTS.KNOWLEDGE_SCANNED, {
+                  name: `Evolve promoted: F1 ${f1.toFixed(3)}`
+                });
+                toastSuccess(`Evolved firewall promoted (F1 ${f1.toFixed(3)})`);
               }}
             />
           </ErrorBoundary>

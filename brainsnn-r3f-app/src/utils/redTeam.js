@@ -12,6 +12,11 @@
 
 import { scoreContent } from './cognitiveFirewall';
 
+// Re-export corpus for Layer 31 — Brain Evolve fitness evaluation.
+export function getAttackCorpus() {
+  return ATTACK_CORPUS;
+}
+
 // ---------- attack corpus ----------
 
 export const ATTACK_CATEGORIES = ['urgency', 'outrage', 'fear', 'certainty', 'combo', 'benign'];
@@ -101,7 +106,7 @@ const ATTACK_CORPUS = {
 /**
  * Run the full corpus and compute detection stats at multiple thresholds.
  */
-export function runRedTeam({ thresholds = [0.2, 0.3, 0.4], onProgress } = {}) {
+export function runRedTeam({ thresholds = [0.2, 0.3, 0.4], onProgress, scoreFn = scoreContent } = {}) {
   const perCategory = {};
   const perAttack = [];
   let idx = 0;
@@ -118,7 +123,7 @@ export function runRedTeam({ thresholds = [0.2, 0.3, 0.4], onProgress } = {}) {
     };
 
     for (const text of samples) {
-      const score = scoreContent(text);
+      const score = scoreFn(text);
       const isAttack = category !== 'benign';
       catResult.scores.push(score.manipulationPressure);
       perAttack.push({

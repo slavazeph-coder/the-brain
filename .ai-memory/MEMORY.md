@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**30 Layers:**
+**31 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -183,3 +183,19 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - "Match from last decode" derives NT signature from Layer 29 affect
       fingerprint — lets you see the chemistry beneath the feeling
     - Region impact preview shows real-time bars per region (green=+/red=−)
+31. Brain Evolve — evolutionary search over firewall rulesets
+    - Cannibalized from GAIR-NLP/ASI-Evolve: UCB1 bandit + Island + MAP-Elites
+      samplers ported from Python to ~250 LOC JS
+    - Learn → Design → Experiment → Analyze loop: mines n-gram lift from
+      red team corpus (Layer 25), mutates rulesets (add/drop/widen/narrow
+      /swap-category/crossover), scores each candidate's F1 against the
+      corpus, distills a short lesson per round
+    - Feature bins for MAP-Elites: FPR tier × pattern-count tier — keeps
+      diversity (stops the search from just piling on patterns)
+    - localStorage persistence — pause + resume an evolution run
+    - "Promote winner to active firewall" swaps the live Layer 4 regex set
+      with the evolved ruleset; all callers (scoreContent, mcpBridge,
+      conversation, adversarial training) pick it up automatically
+    - Refactor: added DEFAULT_RULES + scoreContentWithRules +
+      getActiveRules/setActiveRules/resetActiveRules + serialize/deserialize
+      so rules are mutable JSON-safe objects that can be evolved

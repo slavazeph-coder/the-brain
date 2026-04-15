@@ -20,6 +20,49 @@ const FEAR_PATTERNS = [
   /\bvirus\b|\bpandemic\b|\battack\b|\bwar\b|\bcrash\b|\bcollapse\b/gi
 ];
 
+/**
+ * Default ruleset — exposed so Layer 31 (Brain Evolve) can clone, mutate,
+ * and evolve firewall patterns without editing this file.
+ */
+export const DEFAULT_RULES = {
+  urgency: URGENCY_PATTERNS,
+  outrage: OUTRAGE_PATTERNS,
+  certainty: CERTAINTY_THEATER,
+  fear: FEAR_PATTERNS
+};
+
+/**
+ * Serialize a ruleset to a JSON-safe shape — each category becomes
+ * `[{ source, flags }]`. Used by the evolve engine for snapshots + persistence.
+ */
+export function serializeRules(rules = DEFAULT_RULES) {
+  const out = {};
+  for (const [cat, patterns] of Object.entries(rules)) {
+    out[cat] = patterns.map((re) => ({ source: re.source, flags: re.flags }));
+  }
+  return out;
+}
+
+/**
+ * Inverse of serializeRules — rehydrates a JSON ruleset into RegExp objects.
+ * Invalid patterns are silently dropped (evolution may produce broken regex).
+ */
+export function deserializeRules(serialized) {
+  const out = {};
+  for (const [cat, items] of Object.entries(serialized || {})) {
+    out[cat] = (items || [])
+      .map((it) => {
+        try {
+          return new RegExp(it.source, it.flags || 'gi');
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+  }
+  return out;
+}
+
 function countMatches(text, patterns) {
   return patterns.reduce((total, re) => {
     const matches = text.match(re);
@@ -42,7 +85,13 @@ export const SCORE_FIELDS = [
   { key: 'trustErosion', label: 'Trust erosion risk', desc: 'Sensationalism / coercive framing', color: '#5591c7', regions: 'composite' }
 ];
 
-export function scoreContent(text = '') {
+/**
+ * Score content against an arbitrary ruleset. This is the hot path used by
+ * Layer 31 (Brain Evolve) when benchmarking candidate rulesets against the
+ * red team corpus. Results are deterministic when `deterministic: true`.
+ */
+export function scoreContentWithRules(text = '', rules = DEFAULT_RULES, opts = {}) {
+  const { deterministic = false } = opts;
   const words = text.trim().split(/\s+/).length;
   if (words < 5) {
     return {
@@ -56,18 +105,24 @@ export function scoreContent(text = '') {
     };
   }
 
-  const urgency = countMatches(text, URGENCY_PATTERNS);
-  const outrage = countMatches(text, OUTRAGE_PATTERNS);
-  const certainty = countMatches(text, CERTAINTY_THEATER);
-  const fear = countMatches(text, FEAR_PATTERNS);
+  const urgencyPatterns = rules.urgency || [];
+  const outragePatterns = rules.outrage || [];
+  const certaintyPatterns = rules.certainty || [];
+  const fearPatterns = rules.fear || [];
 
-  const emotionalActivation = clamp(normalize(fear + outrage, 4) * 0.85 + Math.random() * 0.04);
-  const cognitiveSuppression = clamp(normalize(urgency + certainty, 4) * 0.80 + Math.random() * 0.04);
+  const urgency = countMatches(text, urgencyPatterns);
+  const outrage = countMatches(text, outragePatterns);
+  const certainty = countMatches(text, certaintyPatterns);
+  const fear = countMatches(text, fearPatterns);
+
+  const jitter = deterministic ? 0 : Math.random() * 0.04;
+  const emotionalActivation = clamp(normalize(fear + outrage, 4) * 0.85 + jitter);
+  const cognitiveSuppression = clamp(normalize(urgency + certainty, 4) * 0.80 + (deterministic ? 0 : Math.random() * 0.04));
   const manipulationPressure = clamp((emotionalActivation * 0.55 + cognitiveSuppression * 0.45));
-  const trustErosion = clamp(normalize(outrage + certainty, 5) * 0.78 + Math.random() * 0.04);
+  const trustErosion = clamp(normalize(outrage + certainty, 5) * 0.78 + (deterministic ? 0 : Math.random() * 0.04));
 
   const evidence = [];
-  [...URGENCY_PATTERNS, ...OUTRAGE_PATTERNS, ...CERTAINTY_THEATER, ...FEAR_PATTERNS].forEach((re) => {
+  [...urgencyPatterns, ...outragePatterns, ...certaintyPatterns, ...fearPatterns].forEach((re) => {
     const matches = text.match(re);
     if (matches) matches.forEach((m) => evidence.push(m.toLowerCase()));
   });
@@ -91,6 +146,27 @@ export function scoreContent(text = '') {
     confidence,
     recommendedAction
   };
+}
+
+// ---------- active ruleset (Layer 31 hook) ----------
+// Starts as a reference to DEFAULT_RULES. Layer 31's "Promote winner" replaces
+// this with an evolved set; callers of scoreContent() automatically pick it up.
+let _activeRules = DEFAULT_RULES;
+
+export function getActiveRules() {
+  return _activeRules;
+}
+
+export function setActiveRules(rules) {
+  _activeRules = rules || DEFAULT_RULES;
+}
+
+export function resetActiveRules() {
+  _activeRules = DEFAULT_RULES;
+}
+
+export function scoreContent(text = '') {
+  return scoreContentWithRules(text, _activeRules);
 }
 
 /**
