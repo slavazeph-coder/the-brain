@@ -2734,6 +2734,101 @@ h1,h2,h3{
 .affect-insight strong{font:600 12px 'Satoshi',sans-serif;color:#cfc0ff}
 .affect-insight p{margin:0;font-size:12px;line-height:1.55;font-style:italic;color:#d8d4e8}
 
+/* ---------- Layer 30 · Neurochemistry Sandbox ---------- */
+.nt-panel{display:flex;flex-direction:column;gap:12px}
+.nt-presets{
+  display:flex;flex-wrap:wrap;gap:6px;
+}
+.nt-preset{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;border-radius:10px;
+  background:rgba(18,18,22,.7);
+  border:1px solid rgba(255,255,255,.08);
+  color:#ddd;font:500 12px 'Inter',sans-serif;
+  cursor:pointer;transition:all 160ms ease;
+}
+.nt-preset:hover{border-color:rgba(255,255,255,.25);transform:translateY(-1px)}
+.nt-preset.active{
+  border-color:var(--primary);
+  background:rgba(79,168,179,.12);
+  color:#fff;
+}
+.nt-preset-icon{font-size:14px}
+.nt-sliders{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:10px;
+}
+.nt-slider-row{
+  display:flex;flex-direction:column;gap:4px;
+  padding:10px 12px;border-radius:10px;
+  background:rgba(18,18,22,.7);
+  border:1px solid rgba(255,255,255,.06);
+}
+.nt-slider-head{
+  display:flex;align-items:center;gap:6px;
+  font:600 13px 'Satoshi',sans-serif;
+}
+.nt-slider-head strong{flex:1}
+.nt-slider-dot{
+  width:10px;height:10px;border-radius:50%;
+  box-shadow:0 0 8px currentColor;
+}
+.nt-slider-dev{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11px;
+  min-width:70px;text-align:right;
+}
+.nt-slider-wrap{position:relative;padding-top:2px}
+.nt-slider-wrap input[type="range"]{width:100%;margin:0}
+.nt-slider-tick{
+  position:absolute;left:50%;top:10px;
+  width:1px;height:10px;background:rgba(255,255,255,.25);
+  pointer-events:none;transform:translateX(-50%);
+}
+.nt-slider-blurb{font-size:11px;line-height:1.4}
+.nt-status{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:8px 12px;border-radius:8px;
+  background:rgba(79,168,179,.07);
+  border-left:3px solid var(--primary);
+}
+.nt-status-text{
+  font-family:'JetBrains Mono',monospace;
+  font-size:12px;color:#cfeaf0;
+}
+.nt-region-preview{display:flex;flex-direction:column;gap:6px}
+.nt-region-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:6px;
+}
+.nt-region-cell{
+  padding:6px;border-radius:8px;
+  background:rgba(18,18,22,.7);
+  border:1px solid rgba(255,255,255,.06);
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+.nt-region-label{
+  font:700 12px 'Satoshi',sans-serif;letter-spacing:.5px;
+}
+.nt-region-bar-wrap{
+  position:relative;width:100%;height:4px;
+  background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;
+}
+.nt-region-bar-wrap::before{
+  content:'';position:absolute;left:50%;top:0;bottom:0;
+  width:1px;background:rgba(255,255,255,.2);
+}
+.nt-region-bar{height:100%;transition:width 260ms ease, margin-left 260ms ease}
+.nt-region-val{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;
+}
+.nt-gain-row{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:8px 0;
+}
+.nt-gain-row label{display:flex;align-items:center;gap:10px;flex:1;min-width:240px}
+.nt-gain-row input[type="range"]{flex:1;accent-color:var(--primary)}
+.nt-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
 @media (prefers-reduced-motion: reduce){
   *{
     animation-duration:0.01ms !important;
@@ -2768,6 +2863,8 @@ h1,h2,h3{
   .affect-clusters{grid-template-columns:repeat(2,1fr)}
   .affect-twocol{grid-template-columns:1fr}
   .affect-region-grid{grid-template-columns:repeat(4,1fr)}
+  .nt-sliders{grid-template-columns:1fr}
+  .nt-region-grid{grid-template-columns:repeat(4,1fr)}
 }
 
 @media (max-width: 760px){

@@ -22,7 +22,7 @@ const EXAMPLE_TEXTS = {
  * region glow override: AMY glows red for fear vs. soft pink for belonging —
  * same neural button, different finger.
  */
-export default function AffectiveDecoderPanel({ onApplyToBrain, onApplyActivation }) {
+export default function AffectiveDecoderPanel({ onApplyToBrain, onApplyActivation, onDecode }) {
   const [text, setText] = useState(EXAMPLE_TEXTS.mixed);
   const [decoded, setDecoded] = useState(null);
   const [applied, setApplied] = useState(false);
@@ -33,6 +33,7 @@ export default function AffectiveDecoderPanel({ onApplyToBrain, onApplyActivatio
     const result = decodeAffects(text);
     setDecoded(result);
     setApplied(false);
+    onDecode?.(result);
   }
 
   function handleApplyColors() {

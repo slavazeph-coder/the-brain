@@ -33,6 +33,7 @@ import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
 import AffectiveDecoderPanel from './components/AffectiveDecoderPanel';
+import NeurochemistryPanel from './components/NeurochemistryPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
 import { REGION_INFO } from './data/network';
@@ -46,6 +47,7 @@ import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
 import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
 import { mapRagToRegions } from './utils/neuroRag';
 import { applyAffectsToBrainState } from './utils/affectiveDecoder';
+import { applyNTBath } from './utils/neurochemistry';
 import { registerShortcuts } from './utils/shortcuts';
 import { trendDirection } from './utils/analytics';
 import { toastSuccess, toastInfo, toastWarning } from './utils/toastStore';
@@ -79,6 +81,7 @@ export default function App() {
   const [firewallResult, setFirewallResult] = useState(null);
   const [knowledgeMode, setKnowledgeMode] = useState(false);
   const [affectOverride, setAffectOverride] = useState(null);
+  const [lastAffectDecode, setLastAffectDecode] = useState(null);
   const recorderRef = useRef(null);
   const historyRef = useRef([]);
   const stateRef = useRef(state);
@@ -485,11 +488,24 @@ export default function App() {
               }}
               onApplyActivation={(decoded) => {
                 markActivity();
+                setLastAffectDecode(decoded);
                 setState((prev) => applyAffectsToBrainState(prev, decoded));
                 recordImmunity(IMMUNITY_EVENTS.AFFECT_DECODED, {
                   name: `Affects: ${decoded.dominant.map((d) => d.label).join(', ') || 'neutral'}`
                 });
                 toastInfo('Affect activation nudged into brain state');
+              }}
+              onDecode={(decoded) => setLastAffectDecode(decoded)}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Neurochemistry">
+            <NeurochemistryPanel
+              lastAffectDecode={lastAffectDecode}
+              onApplyBath={(levels, opts) => {
+                markActivity();
+                setState((prev) => applyNTBath(prev, levels, opts));
+                toastSuccess(`Applied ${opts?.label ?? 'NT bath'} to brain`);
               }}
             />
           </ErrorBoundary>

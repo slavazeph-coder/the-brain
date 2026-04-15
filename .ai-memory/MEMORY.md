@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**29 Layers:**
+**30 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -174,3 +174,12 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Cross-category insight: when fear + shame + nostalgia all hit AMY,
       labels the convergence ("same neural target, different route")
     - Additive layer on top of Layer 4: tells you WHICH feeling is installed
+30. Neurochemistry Sandbox — 6 NT sliders with real region-effect profiles
+    - dopamine (BG+PFC), serotonin (PFC−AMY), cortisol (AMY↑ HPC↓),
+      oxytocin (AMY↓ PFC↑), norepinephrine (THL+AMY), acetylcholine (CTX+HPC)
+    - 9 presets: baseline, caffeine, meditation, acute stress, SSRI (4wk),
+      flow state, sleep deprivation, panic attack, MDMA phase II
+    - Gain slider controls how strongly NT deviation translates to region change
+    - "Match from last decode" derives NT signature from Layer 29 affect
+      fingerprint — lets you see the chemistry beneath the feeling
+    - Region impact preview shows real-time bars per region (green=+/red=−)
