@@ -32,6 +32,7 @@ import RedTeamPanel from './components/RedTeamPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
+import MultimodalRagPanel from './components/MultimodalRagPanel';
 import AffectiveDecoderPanel from './components/AffectiveDecoderPanel';
 import NeurochemistryPanel from './components/NeurochemistryPanel';
 import BrainEvolvePanel from './components/BrainEvolvePanel';
@@ -48,6 +49,7 @@ import { startCanvasRecording } from './utils/recording';
 import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
 import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
 import { mapRagToRegions } from './utils/neuroRag';
+import { mapMultimodalToRegions } from './utils/multimodalRag';
 import { applyAffectsToBrainState } from './utils/affectiveDecoder';
 import { applyNTBath } from './utils/neurochemistry';
 import { registerShortcuts } from './utils/shortcuts';
@@ -473,6 +475,21 @@ export default function App() {
                   name: `RAG: ${ragResult.results.length} hits · ${ragResult.mode}`
                 });
                 toastSuccess(`Retrieved ${ragResult.results.length} chunks · ${ragResult.mode}`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Multimodal RAG">
+            <MultimodalRagPanel
+              onApplyToBrain={(mmResult) => {
+                markActivity();
+                setState((prev) => mapMultimodalToRegions(prev, mmResult));
+                const histLabel = Object.entries(mmResult.byModality || {})
+                  .map(([k, v]) => `${k}:${v}`).join(' ');
+                recordImmunity(IMMUNITY_EVENTS.KNOWLEDGE_SCANNED, {
+                  name: `Multimodal RAG: ${mmResult.results.length} hits · ${histLabel}`
+                });
+                toastSuccess(`Retrieved ${mmResult.results.length} items · ${mmResult.mode}`);
               }}
             />
           </ErrorBoundary>
