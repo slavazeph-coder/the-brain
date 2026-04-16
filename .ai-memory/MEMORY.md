@@ -86,7 +86,7 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
 
 **Stack:** React 18, Vite, React Three Fiber, Three.js, postprocessing, FastAPI, TRIBE v2, Gemma 4
 
-**32 Layers:**
+**35 Layers:**
 1. 3D Brain Viewer (R3F)  2. Neural Flow Grid (GLSL)  3. TRIBE v2 (Meta fMRI)
 4. Cognitive Firewall (regex)  5. Gemma 4 (AI deep analysis)  6. Snapshots
 7. Analytics Dashboard  8. Narrative Engine  9. Toast Notifications
@@ -214,3 +214,27 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Closes the arms race: Layer 31 defense ↔ Layer 32 offense
     - Refactor: ATTACK_CORPUS now mutable + addCustomAttack +
       resetAttackCorpus; _ATTACK_CORPUS_DEFAULTS preserved as source of truth
+33. Multimodal RAG Router — cannibalized from HKUDS/RAG-Anything
+    - Content-type classification: text / image / table / equation / code
+    - Per-modality handlers render each item into embeddable text
+    - Image → Gemma 4 vision caption (Layer 5), Table → row-level sentences,
+      Equation → symbol set + LaTeX, Code → identifiers + comments
+    - belongs_to hierarchy edges (doc → section → block) for Layer 34
+    - Modality-weighted cosine retrieval, BM25 fallback
+    - Direct content insertion API (insertContentList) accepts pre-parsed JSON
+    - Brain mapping: CTX rises with images, PFC with tables/equations/code
+    - All in-browser, no LightRAG / MinerU / LibreOffice
+34. Vector-Graph Fusion — reranks Layer 33 with graph coherence
+    - Builds lightweight graph from belongs_to hierarchy + sequence adjacency
+    - Runs Layer 20 Louvain community detection over item graph
+    - For each cosine hit, pulls in siblings (same doc/section),
+      sequence neighbors, and Louvain community members
+    - RRF-style weighted fusion: (1−w)×vectorScore + w×graphScore
+    - Graph weight slider (0–80%) in panel; default 35%
+    - Brain mapping: BG lights up on structured recall (graph pulls)
+35. Direct Content Insertion — JSON paste for external parsers
+    - Accepts [{ type, docTitle, section?, ...payload }] arrays
+    - Validates schema client-side before insert
+    - Appends to existing Layer 33 index or creates a new one
+    - Schema reference for MinerU / Docling / Obsidian / MCP tool output
+    - No markdown parsing needed — structured JSON straight in

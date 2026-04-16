@@ -33,6 +33,8 @@ import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
 import MultimodalRagPanel from './components/MultimodalRagPanel';
+import VectorGraphFusionPanel from './components/VectorGraphFusionPanel';
+import DirectInsertPanel from './components/DirectInsertPanel';
 import AffectiveDecoderPanel from './components/AffectiveDecoderPanel';
 import NeurochemistryPanel from './components/NeurochemistryPanel';
 import BrainEvolvePanel from './components/BrainEvolvePanel';
@@ -50,6 +52,7 @@ import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
 import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
 import { mapRagToRegions } from './utils/neuroRag';
 import { mapMultimodalToRegions } from './utils/multimodalRag';
+import { mapFusedToRegions } from './utils/vectorGraphFusion';
 import { applyAffectsToBrainState } from './utils/affectiveDecoder';
 import { applyNTBath } from './utils/neurochemistry';
 import { registerShortcuts } from './utils/shortcuts';
@@ -492,6 +495,24 @@ export default function App() {
                 toastSuccess(`Retrieved ${mmResult.results.length} items · ${mmResult.mode}`);
               }}
             />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Vector-Graph Fusion">
+            <VectorGraphFusionPanel
+              onApplyToBrain={(fusedResult) => {
+                markActivity();
+                setState((prev) => mapFusedToRegions(prev, fusedResult));
+                const stats = fusedResult.fusionStats || {};
+                recordImmunity(IMMUNITY_EVENTS.KNOWLEDGE_SCANNED, {
+                  name: `Fused RAG: ${fusedResult.results.length} hits · ${stats.siblingPulls || 0} siblings`
+                });
+                toastSuccess(`Fused ${fusedResult.results.length} items · ${fusedResult.mode}`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Direct Insert">
+            <DirectInsertPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Affective Decoder">
