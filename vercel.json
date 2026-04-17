@@ -1,8 +1,0 @@
-{
-  "buildCommand": "cd brainsnn-r3f-app && npm install && npm run build",
-  "outputDirectory": "brainsnn-r3f-app/dist",
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}

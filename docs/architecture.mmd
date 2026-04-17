@@ -1,0 +1,33 @@
+flowchart LR
+    classDef browser  fill:#0b1224,stroke:#5ad4ff,stroke-width:2px,color:#e6f1ff
+    classDef optional fill:#1a1f2e,stroke:#7c8aa1,stroke-dasharray:5 5,color:#cbd5e1
+    classDef external fill:#13231a,stroke:#5ee69a,color:#dcfce7
+
+    subgraph Browser["Browser (zero-install)"]
+        direction TB
+        ui[React 18 + Vite UI<br/>46 panels]
+        r3f[React Three Fiber<br/>3D brain + neural flow]
+        layers["35 cognitive layers<br/>Firewall · Evolve · RAG · Dream · etc"]
+        embed[transformers.js<br/>MiniLM-L6 in-browser embeddings]
+        mcp[MCP Bridge<br/>14 JSON-RPC tools]
+
+        ui --> r3f
+        ui --> layers
+        layers --> embed
+        layers --> mcp
+    end
+
+    tribe["FastAPI + TRIBE v2<br/>(real fMRI predictions)<br/>Fly.io / Railway"]
+    gemma["Gemma 4 endpoint<br/>(deep multimodal analysis)<br/>Google AI Studio / Ollama / vLLM"]
+    sync["WebSocket relay<br/>(multi-user live sync)"]
+    agents["Claude Code / Codex agents<br/>via stdio MCP server"]
+
+    layers -. VITE_TRIBE_API .-> tribe
+    layers -. VITE_GEMMA_API_ENDPOINT .-> gemma
+    layers -. VITE_SYNC_WS_URL .-> sync
+    mcp <-. WebSocket relay .-> agents
+
+    class Browser browser
+    class ui,r3f,layers,embed,mcp browser
+    class tribe,gemma,sync optional
+    class agents external
