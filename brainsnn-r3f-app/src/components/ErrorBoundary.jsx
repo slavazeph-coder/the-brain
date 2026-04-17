@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 /**
  * Error Boundary — catches render errors in child components
@@ -15,7 +15,13 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error(`[BrainSNN] Error in ${this.props.name || 'component'}:`, error, info);
+    if (import.meta.env.DEV) {
+      console.error(
+        `[BrainSNN] Error in ${this.props.name || "component"}:`,
+        error,
+        info,
+      );
+    }
   }
 
   render() {
@@ -25,8 +31,12 @@ export default class ErrorBoundary extends React.Component {
           <div className="error-boundary-content">
             <span className="error-boundary-icon">!</span>
             <div>
-              <strong>{this.props.name || 'Component'} encountered an error</strong>
-              <p className="muted">{this.state.error?.message || 'Something went wrong.'}</p>
+              <strong>
+                {this.props.name || "Component"} encountered an error
+              </strong>
+              <p className="muted">
+                {this.state.error?.message || "Something went wrong."}
+              </p>
               <button
                 className="btn-sm"
                 onClick={() => this.setState({ hasError: false, error: null })}

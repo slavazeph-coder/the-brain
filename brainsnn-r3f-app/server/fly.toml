@@ -1,0 +1,31 @@
+# Fly.io config for BrainSNN TRIBE v2 server.
+# Deploy:  flyctl launch --no-deploy --copy-config --name <your-app>
+#          flyctl deploy
+#
+# TRIBE v2 holds ~2GB of model weights in memory after first inference,
+# so the smallest sensible VM is 4GB. Drop to 2GB if you only ever hit
+# /scenarios (pre-computed) and never /predict.
+
+app = "brainsnn-tribe"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8642
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "get"
+  path = "/health"
+
+[[vm]]
+  size = "performance-2x"
+  memory = "4gb"
