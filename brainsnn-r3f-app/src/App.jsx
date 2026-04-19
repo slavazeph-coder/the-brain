@@ -29,6 +29,8 @@ import ConversationBrainPanel from './components/ConversationBrainPanel';
 import ImmunityPanel from './components/ImmunityPanel';
 import EmbeddingsPanel from './components/EmbeddingsPanel';
 import RedTeamPanel from './components/RedTeamPanel';
+import QuizPanel from './components/QuizPanel';
+import BypassSubmitPanel from './components/BypassSubmitPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -41,6 +43,8 @@ import BrainEvolvePanel from './components/BrainEvolvePanel';
 import AttackEvolvePanel from './components/AttackEvolvePanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import { decodeStateFromHash } from './components/SharePanel';
+import DemoTiles from './components/DemoTiles';
+import { decodeReaction } from './utils/reactionCard';
 import { REGION_INFO } from './data/network';
 import { mapTRIBEToRegions, setActiveRules, resetActiveRules, deserializeRules } from './utils/cognitiveFirewall';
 import { registerBridgeContext, logToolCall } from './utils/mcpBridge';
@@ -86,6 +90,36 @@ export default function App() {
   const [gifOptions, setGifOptions] = useState({ trimStart: 0, trimDuration: 2.5, fps: 12, width: 720 });
   const [showKbHelp, setShowKbHelp] = useState(false);
   const [firewallResult, setFirewallResult] = useState(null);
+  const [incomingImmunityCard] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('i') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [initialFirewallScan, setInitialFirewallScan] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const hash = params.get('r');
+      if (!hash) return null;
+      const reaction = decodeReaction(hash);
+      if (!reaction || !reaction.text) return null;
+      const score = {
+        emotionalActivation: reaction.emotionalActivation,
+        cognitiveSuppression: reaction.cognitiveSuppression,
+        manipulationPressure: reaction.manipulationPressure,
+        trustErosion: reaction.trustErosion,
+        evidence: [],
+        confidence: 'shared',
+        recommendedAction: 'Rehydrated from shared reaction link.',
+        source: 'shared-link'
+      };
+      return { text: reaction.text, result: score, autoApply: true };
+    } catch {
+      return null;
+    }
+  });
   const [knowledgeMode, setKnowledgeMode] = useState(false);
   const [affectOverride, setAffectOverride] = useState(null);
   const [lastAffectDecode, setLastAffectDecode] = useState(null);
@@ -291,6 +325,19 @@ export default function App() {
             }}
           />
 
+          <DemoTiles
+            onPlay={({ text, result }) => {
+              setFirewallResult(result);
+              setState((s) => mapTRIBEToRegions(s, result));
+              setInitialFirewallScan({ text, result, autoApply: false });
+              recordImmunity(IMMUNITY_EVENTS.FIREWALL_SCAN, {
+                pressure: result.manipulationPressure,
+                confidence: result.confidence
+              });
+              toastInfo('Demo scan applied — watch the brain react');
+            }}
+          />
+
           <section className="viewer-panel panel">
             <div className="viewer-overlay">
               <span className="viewer-chip">Tick {state.tick}</span>
@@ -348,7 +395,10 @@ export default function App() {
             onSetMode={setMode}
           />
 
+          <QuizPanel />
+
           <CognitiveFirewallPanel
+            initialScan={initialFirewallScan}
             onApplyToNetwork={(result) => {
               setFirewallResult(result);
               setState((s) => mapTRIBEToRegions(s, result));
@@ -450,7 +500,7 @@ export default function App() {
           </ErrorBoundary>
 
           <ErrorBoundary name="Immunity Score">
-            <ImmunityPanel />
+            <ImmunityPanel incomingCard={incomingImmunityCard} />
           </ErrorBoundary>
 
           <ErrorBoundary name="Embeddings">
@@ -459,6 +509,10 @@ export default function App() {
 
           <ErrorBoundary name="Red Team">
             <RedTeamPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Bypass Submit">
+            <BypassSubmitPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

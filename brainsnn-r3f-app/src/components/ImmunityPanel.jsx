@@ -2,32 +2,172 @@ import React, { useEffect, useState } from 'react';
 import {
   getImmunityState, subscribe, immunityLevel, resetImmunity, clearEvents, IMMUNITY_EVENTS
 } from '../utils/immunityScore';
+import {
+  buildImmunityPayload, encodeImmunity, immunityUrl, sanitizeHandle, decodeImmunity
+} from '../utils/immunityCard';
+
+const HANDLE_KEY = 'brainsnn_handle_v1';
+
+function readHandle() {
+  try {
+    return localStorage.getItem(HANDLE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeHandle(h) {
+  try {
+    localStorage.setItem(HANDLE_KEY, h);
+  } catch { /* quota */ }
+}
 
 /**
  * Layer 23 — Cognitive Immunity Score Panel
  *
- * Persistent resilience dashboard. Shows the rolled-up immunity score,
- * per-dimension breakdown, streak, sparkline of score over time, and
- * recent events that contributed to the score.
+ * Persistent resilience dashboard + weekly leaderboard share loop.
+ * Local metric becomes a social flex via /i/<hash> cards.
  */
-export default function ImmunityPanel() {
+export default function ImmunityPanel({ incomingCard = null }) {
   const [state, setState] = useState(getImmunityState());
+  const [handle, setHandle] = useState(readHandle());
+  const [copied, setCopied] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
+  const [board, setBoard] = useState(null);
+  const [boardLoading, setBoardLoading] = useState(false);
+  const [boardError, setBoardError] = useState('');
 
   useEffect(() => subscribe(setState), []);
+  useEffect(() => { writeHandle(handle); }, [handle]);
+
+  useEffect(() => {
+    // Fetch leaderboard on mount
+    loadBoard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const current = state.history[0]?.breakdown || { awareness: 0, resilience: 50, depth: 0, consistency: 0 };
   const level = immunityLevel(state.score);
   const recentEvents = state.events.slice(0, 6);
 
+  async function loadBoard() {
+    setBoardLoading(true);
+    setBoardError('');
+    try {
+      const r = await fetch('/api/leaderboard');
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setBoard(await r.json());
+    } catch (err) {
+      setBoardError(err.message || 'load failed');
+    } finally {
+      setBoardLoading(false);
+    }
+  }
+
+  function buildPayload({ rank = null, total = null, week = null } = {}) {
+    return buildImmunityPayload({
+      handle: sanitizeHandle(handle || 'anon'),
+      score: state.score,
+      breakdown: current,
+      streak: state.streak,
+      events: state.events.length,
+      rank,
+      total,
+      week,
+    });
+  }
+
+  async function handleShare() {
+    const payload = buildPayload({
+      rank: submitResult?.rank,
+      total: submitResult?.total,
+      week: submitResult?.week,
+    });
+    const url = immunityUrl(window.location.origin, payload);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt('Copy your immunity card URL:', url);
+    }
+  }
+
+  function handleTweet() {
+    const payload = buildPayload({
+      rank: submitResult?.rank,
+      total: submitResult?.total,
+    });
+    const url = immunityUrl(window.location.origin, payload);
+    const rankBit = submitResult?.rank && submitResult?.total
+      ? ` — rank ${submitResult.rank} of ${submitResult.total} this week`
+      : '';
+    const tweet = `My Cognitive Immunity: ${state.score}/100 · ${level.label}${rankBit}. ${state.streak}-day streak. Scan yours: ${url}`;
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`,
+      '_blank',
+      'noopener'
+    );
+  }
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const r = await fetch('/api/leaderboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handle: sanitizeHandle(handle || 'anon'),
+          score: state.score,
+          streak: state.streak,
+          events: state.events.length,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        setSubmitResult({ error: data.error || `HTTP ${r.status}` });
+        return;
+      }
+      setSubmitResult(data);
+      loadBoard();
+    } catch (err) {
+      setSubmitResult({ error: err.message || 'submit failed' });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Show incoming card flex banner if the user arrived via /i/<hash>
+  const incoming = incomingCard && decodeImmunity(incomingCard);
+
   return (
     <section className="panel panel-pad immunity-panel">
-      <div className="eyebrow">Layer 23</div>
+      <div className="eyebrow">Layer 23 · weekly leaderboard</div>
       <h2>Cognitive Immunity Score</h2>
       <p className="muted">
-        Persistent resilience metric rolled up from all protective layers —
-        firewall scans, conversation analyses, anomalies, steward runs, depth
-        of usage. Daily streak-based consistency multiplier.
+        Persistent resilience metric from firewall scans, conversations, anomalies,
+        and depth of usage. Daily streak · shareable card · weekly leaderboard.
       </p>
+
+      {incoming && (
+        <div
+          className="immunity-incoming"
+          style={{
+            marginBottom: 12,
+            padding: '10px 14px',
+            borderLeft: '3px solid #5ad4ff',
+            background: 'rgba(90,212,255,0.05)',
+            borderRadius: 6,
+          }}
+        >
+          <strong>{incoming.handle}</strong> shared their immunity card:
+          {' '}<strong style={{ color: level.color }}>{incoming.score}</strong> /100
+          {incoming.rank ? ` · rank ${incoming.rank}${incoming.total ? ` of ${incoming.total}` : ''}` : ''}
+          · {incoming.streak}-day streak. <span className="muted">Beat it below.</span>
+        </div>
+      )}
 
       <div className="immunity-hero">
         <div className="immunity-dial">
@@ -59,6 +199,14 @@ export default function ImmunityPanel() {
             <small>Baseline</small>
             <strong>{state.baseline}</strong>
           </div>
+          {submitResult?.rank && (
+            <div className="immunity-streak">
+              <small>Weekly rank</small>
+              <strong style={{ color: level.color }}>
+                {submitResult.rank}{submitResult.total ? ` / ${submitResult.total}` : ''}
+              </strong>
+            </div>
+          )}
         </div>
       </div>
 
@@ -76,9 +224,96 @@ export default function ImmunityPanel() {
         ))}
       </div>
 
+      <div className="immunity-share" style={{ marginTop: 14 }}>
+        <label className="share-label" htmlFor="immunity-handle">Handle (shown on share card + leaderboard)</label>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <input
+            id="immunity-handle"
+            className="share-input"
+            placeholder="anon"
+            value={handle}
+            onChange={(e) => setHandle(sanitizeHandle(e.target.value))}
+            maxLength={24}
+            style={{ flex: 1 }}
+          />
+          <button className="btn" onClick={handleShare} disabled={state.events.length === 0}>
+            {copied ? 'Link copied ✓' : 'Share card'}
+          </button>
+          <button className="btn" onClick={handleTweet} disabled={state.events.length === 0}>
+            Tweet
+          </button>
+          <button
+            className="btn primary"
+            onClick={handleSubmit}
+            disabled={submitting || state.events.length === 0}
+          >
+            {submitting ? 'Submitting…' : 'Submit to weekly board'}
+          </button>
+        </div>
+        {submitResult?.error && (
+          <p className="muted" style={{ color: '#dd6974', marginTop: 6 }}>
+            {submitResult.error}
+          </p>
+        )}
+        {submitResult?.ok && (
+          <p className="muted" style={{ marginTop: 6 }}>
+            Submitted — you're rank <strong>{submitResult.rank}</strong> of {submitResult.total} this week.
+          </p>
+        )}
+        {state.events.length === 0 && (
+          <p className="muted small-note" style={{ marginTop: 6 }}>
+            Run a firewall scan first — handles with zero events can't submit.
+          </p>
+        )}
+      </div>
+
       <div className="immunity-sparkline">
         <label className="muted small-note">Score trend ({state.history.length} points)</label>
         <Sparkline history={state.history} color={level.color} />
+      </div>
+
+      <div className="immunity-leaderboard" style={{ marginTop: 14 }}>
+        <div className="immunity-events-head">
+          <strong>Weekly top 10{board?.week ? ` · ${board.week}` : ''}</strong>
+          <div className="immunity-events-actions">
+            <button className="ghost small" onClick={loadBoard} disabled={boardLoading}>
+              {boardLoading ? 'Loading…' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+        {boardError && (
+          <p className="muted small-note" style={{ color: '#dd6974' }}>
+            Leaderboard error: {boardError}
+          </p>
+        )}
+        {board?.top?.length ? (
+          <ol style={{ margin: 0, paddingLeft: 18 }}>
+            {board.top.slice(0, 10).map((row, i) => (
+              <li
+                key={`${row.handle}-${row.ts}`}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '4px 0',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span>{row.handle}</span>
+                <span style={{ color: immunityLevel(row.score).color }}>
+                  <strong>{row.score}</strong>
+                  <span className="muted small-note"> / 100</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : !boardLoading && !boardError ? (
+          <p className="muted small-note">No entries yet this week — submit yours to seed it.</p>
+        ) : null}
+        {board?.backend === 'memory' && (
+          <p className="muted small-note">
+            (Leaderboard is running in ephemeral mode — set UPSTASH_REDIS_REST_URL to persist.)
+          </p>
+        )}
       </div>
 
       <div className="immunity-events">
