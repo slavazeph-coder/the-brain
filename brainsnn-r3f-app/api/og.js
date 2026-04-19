@@ -102,11 +102,140 @@ function Bar({ label, value, color }) {
   };
 }
 
+function levelFor(score) {
+  if (score >= 85) return { label: 'Fortified', color: '#5ee69a' };
+  if (score >= 70) return { label: 'Resilient', color: '#77dbe4' };
+  if (score >= 55) return { label: 'Steady', color: '#fdab43' };
+  if (score >= 35) return { label: 'Exposed', color: '#e57b40' };
+  return { label: 'At risk', color: '#dd6974' };
+}
+
+function renderImmunityCard(hash) {
+  const raw = (() => {
+    try {
+      const pad = '='.repeat((4 - (hash.length % 4)) % 4);
+      const base = hash.replace(/-/g, '+').replace(/_/g, '/') + pad;
+      return JSON.parse(atob(base));
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!raw) return null;
+  const score = raw.s || 0;
+  const lvl = levelFor(score);
+  const handle = raw.n || 'anon';
+  const streak = raw.st || 0;
+  const dims = [
+    { k: 'Awareness', v: raw.a || 0 },
+    { k: 'Resilience', v: raw.r || 0 },
+    { k: 'Depth', v: raw.d || 0 },
+    { k: 'Consistency', v: raw.c || 0 },
+  ];
+
+  return new ImageResponse(
+    {
+      type: 'div',
+      props: {
+        style: {
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          background: `linear-gradient(135deg, #0b1224 0%, ${lvl.color}22 100%)`,
+          color: '#e6f1ff',
+          padding: 56,
+          fontFamily: 'sans-serif',
+        },
+        children: [
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+              children: [
+                { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 700 }, children: 'BrainSNN · Immunity' } },
+                { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: lvl.color, color: '#0b1224', fontSize: 22, fontWeight: 700 }, children: lvl.label } },
+              ],
+            },
+          },
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', flex: 1, gap: 48 },
+              children: [
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start' },
+                    children: [
+                      { type: 'div', props: { style: { fontSize: 28, color: '#cbd5e1' }, children: handle } },
+                      { type: 'div', props: { style: { fontSize: 180, fontWeight: 800, color: lvl.color, lineHeight: 1 }, children: `${score}` } },
+                      { type: 'div', props: { style: { fontSize: 22, color: '#94a3b8', marginTop: -4 }, children: `/ 100 · ${streak}-day streak${raw.rk ? ` · rank ${raw.rk}${raw.tt ? ` of ${raw.tt}` : ''}` : ''}` } },
+                    ],
+                  },
+                },
+                {
+                  type: 'div',
+                  props: {
+                    style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' },
+                    children: dims.map((d) => ({
+                      type: 'div',
+                      props: {
+                        style: { display: 'flex', flexDirection: 'column', gap: 6, width: '100%' },
+                        children: [
+                          {
+                            type: 'div',
+                            props: {
+                              style: { display: 'flex', justifyContent: 'space-between', fontSize: 20, color: '#cbd5e1', fontWeight: 500 },
+                              children: [
+                                { type: 'span', props: { children: d.k } },
+                                { type: 'span', props: { style: { color: lvl.color }, children: `${d.v}` } },
+                              ],
+                            },
+                          },
+                          {
+                            type: 'div',
+                            props: {
+                              style: { width: '100%', height: 10, background: '#1a1f2e', borderRadius: 999, display: 'flex' },
+                              children: [{ type: 'div', props: { style: { width: `${Math.max(0, Math.min(100, d.v))}%`, height: '100%', background: lvl.color, borderRadius: 999 } } }],
+                            },
+                          },
+                        ],
+                      },
+                    })),
+                  },
+                },
+              ],
+            },
+          },
+          {
+            type: 'div',
+            props: {
+              style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
+              children: [
+                { type: 'span', props: { children: 'scan yours → brainsnn.com' } },
+                { type: 'span', props: { children: 'cognitive immunity · 35 layers' } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    { width: 1200, height: 630 }
+  );
+}
+
 export default async function handler(req) {
   const { searchParams } = new URL(req.url);
+  const type = searchParams.get('type') || 'reaction';
   const hash = searchParams.get('h');
   const fallbackTitle = searchParams.get('title') || 'BrainSNN';
   const fallbackSub = searchParams.get('subtitle') || 'Paste any tweet. See which feeling it installs.';
+
+  if (type === 'immunity' && hash) {
+    const card = renderImmunityCard(hash);
+    if (card) return card;
+  }
 
   let payload = hash ? decodeReaction(hash) : null;
 

@@ -4,7 +4,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/r/:hash", "destination": "/api/r?h=:hash" }
+    { "source": "/r/:hash", "destination": "/api/r?h=:hash" },
+    { "source": "/i/:hash", "destination": "/api/i?h=:hash" }
   ],
   "headers": [
     {

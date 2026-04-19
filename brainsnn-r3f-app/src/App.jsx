@@ -88,6 +88,14 @@ export default function App() {
   const [gifOptions, setGifOptions] = useState({ trimStart: 0, trimDuration: 2.5, fps: 12, width: 720 });
   const [showKbHelp, setShowKbHelp] = useState(false);
   const [firewallResult, setFirewallResult] = useState(null);
+  const [incomingImmunityCard] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('i') || null;
+    } catch {
+      return null;
+    }
+  });
   const [initialFirewallScan, setInitialFirewallScan] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -488,7 +496,7 @@ export default function App() {
           </ErrorBoundary>
 
           <ErrorBoundary name="Immunity Score">
-            <ImmunityPanel />
+            <ImmunityPanel incomingCard={incomingImmunityCard} />
           </ErrorBoundary>
 
           <ErrorBoundary name="Embeddings">
