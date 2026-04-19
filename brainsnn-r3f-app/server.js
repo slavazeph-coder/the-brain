@@ -21,7 +21,8 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { renderOg } from './viral/og.js';
-import { handleReactionCard, handleImmunityCard } from './viral/cards.js';
+import { handleReactionCard, handleImmunityCard, handleQuizCard } from './viral/cards.js';
+import { handleAttackSubmit, handleAttacksGet } from './viral/attacks.js';
 import { handleFetchUrl } from './viral/fetch-url.js';
 import { handleLeaderboardGet, handleLeaderboardPost } from './viral/leaderboard.js';
 
@@ -82,9 +83,20 @@ app.post('/api/leaderboard', async (req, res) => {
   }
 });
 
+// --- Attack bypass submissions (Layer 25 extension) ------------------------
+app.get('/api/attacks', async (req, res) => {
+  try { await handleAttacksGet(req, res); }
+  catch (err) { console.error('[attacks:get]', err); res.status(500).json({ error: 'attacks get failed' }); }
+});
+app.post('/api/attacks', async (req, res) => {
+  try { await handleAttackSubmit(req, res); }
+  catch (err) { console.error('[attacks:post]', err); res.status(500).json({ error: 'attacks post failed' }); }
+});
+
 // --- Share card HTML shells -------------------------------------------------
 app.get('/r/:hash', handleReactionCard);
 app.get('/i/:hash', handleImmunityCard);
+app.get('/q/:hash', handleQuizCard);
 
 // --- Static SPA -------------------------------------------------------------
 if (!existsSync(DIST)) {

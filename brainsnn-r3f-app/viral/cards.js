@@ -117,6 +117,36 @@ export function handleReactionCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleQuizCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Spot the Manipulation';
+  let description = 'A 10-item quiz that grades how well you spot manipulation without a scanner.';
+
+  if (payload) {
+    const handle = payload.n || 'anon';
+    const accuracy = payload.a || 0;
+    const correct = payload.k || 0;
+    const total = payload.t || 10;
+    title = `${handle} spotted ${correct}/${total} · ${accuracy}% — BrainSNN Quiz`;
+    description = `I got ${accuracy}% on Spot the Manipulation (${correct}/${total} within 20 points of the Firewall). Can you beat it?`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/q/${hash}`,
+    imageUrl: `${origin}/api/og?type=quiz&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?q=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleImmunityCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);

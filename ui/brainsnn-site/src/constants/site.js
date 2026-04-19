@@ -340,164 +340,160 @@ export const SOCIAL_PREVIEW_COPY = {
 };
 
 export const VIRAL_CONTENT = {
-  twitterThread: `1/12
-I built a 3D brain network that keeps learning while you watch.
+  twitterThread: `1/
+Paste any tweet into a 3D brain. Watch which feeling it installs in you.
 
-No backprop.
-No retraining.
-No server.
+BrainSNN is a browser-native 3D brain with 35 cognitive layers — a Cognitive Firewall, an Affective Decoder, a Neurochemistry sandbox, a Dream Mode.
 
-Just 7 brain regions, 10 plastic pathways, and STDP changing synapses in real time.
+Live: ${SITE.demoUrl}
 
-2/12
-Most neural-network demos show a frozen architecture or a prerecorded animation.
-I wanted a browser demo that feels alive — something you can orbit, click, and stress with a thalamic burst.
+2/
+The Firewall scores any text for manipulation pressure across 4 dimensions:
+• emotional activation
+• cognitive suppression
+• manipulation pressure
+• trust erosion
 
-3/12
-BrainSNN models:
-CTX = Cortex
-HPC = Hippocampus
-THL = Thalamus
-AMY = Amygdala
-BG = Basal Ganglia
-PFC = Prefrontal Cortex
-CBL = Cerebellum
+You see the bars, the evidence words, AND a 3D brain reacting in real time.
 
-4/12
-The structure is not random:
-THL relays sensory input.
-BG inhibits / gates thalamic output.
-HPC ↔ CTX models memory replay.
-PFC shapes control signals.
-CBL smooths timing back into cortex.
+3/
+Each scan produces a share card.
+AMY glowing red = fear cascade.
+PFC dampened = certainty theater.
+Click "Share this reaction" and you get a /r/<hash> URL that renders a 1200×630 OG card anywhere it's pasted.
 
-5/12
-The learning rule is STDP:
-pre fires before post → synapse strengthens
-post fires before pre → synapse weakens
+4/
+There's a Spot-the-Manipulation quiz. 10 short messages. Slide toward "calm" or "manipulative." The Firewall already knows the truth. How close can you get?
 
-Local updates only.
-No gradients.
-No retraining loop.
+Your Spot Accuracy becomes a shareable card. Leaderboard included.
 
-6/12
-I built the scene with React Three Fiber + Drei + Three.js.
+5/
+There's a Dream Mode that runs while you're idle. The brain replays recent states, reinforces co-active regions via STDP, and wakes on any activity.
 
-Each region is a component.
-Each edge has weight-driven width and opacity.
-Particles move across pathways based on source activity.
+Yes — your 3D brain will consolidate its weights if you walk away.
 
-7/12
-You can pause, burst, reset, click a region, and focus the camera.
+6/
+There's an MCP bridge. 14 tools — get_brain_state, scan_content, apply_scenario, narrate_state, impact_analysis.
 
-So instead of staring at a static diagram, you can actually inspect how the graph behaves under load.
+Your Claude Code / Codex agent can read and steer this brain over a websocket. Tool results come back live in the 3D view.
 
-8/12
-The default demo is browser-first.
-That matters for open source.
+7/
+There's a Brain Evolve loop that mutates the Firewall ruleset via UCB1 + MAP-Elites, scores each candidate against a red team corpus, and promotes the winner.
 
-The easier it is to open and understand, the easier it is to star, share, and fork.
+The Firewall literally evolves new rules to catch attacks it missed.
 
-9/12
-Why I think this matters:
-brain-inspired systems are still underexplored in frontend developer culture.
-Most people never get a tactile mental model for STDP or gating loops.
+8/
+There's an adversarial feed — submit a bypass attempt, the Firewall scores it, anything under 40% pressure gets published on the weekly leaderboard for Brain Evolve to catch next round.
 
-10/12
-This project is intentionally hackable:
-add a region
-add a pathway
-swap the update rule
-wire in EEG
-replace the simplified simulator
+Offense ↔ defense, public.
 
-11/12
-If you build with:
-- ML / computational neuroscience
-- React Three Fiber / Three.js
-- interactive data viz
-- open-source dev tools
+9/
+Everything runs in your browser.
+No install.
+No signup.
+No server for the main demo.
 
-this repo should be interesting.
+TRIBE v2 (real fMRI), Gemma 4 (deep multimodal), WebSocket sync — each is an optional upgrade behind one env var.
 
-12/12
-BrainSNN:
-open-source 3D neuromorphic visualizer
-MIT licensed
-designed to be forked
+10/
+Open source, MIT licensed. 35 layers of code you can fork and break.
 
+Try a tweet, paste your inbox, stress-test your feed.
+
+→ ${SITE.demoUrl}
 Repo: ${SITE.repoUrl}
-Demo: ${SITE.demoUrl}
 
-If this is interesting, drop a star and share it.`,
+If this moves the needle on how you read your timeline, star it.`,
   hackerNewsTitle:
-    "Show HN: BrainSNN — a 3D neuromorphic brain visualizer with live STDP learning",
+    "Show HN: BrainSNN — paste any tweet, see which feeling it installs in your brain",
   hackerNewsBody: `Hey HN,
 
-I built BrainSNN, a browser-based 3D visualization of a spiking-style brain graph that updates synaptic weights continuously using a simplified STDP rule.
+BrainSNN is a browser-native 3D brain with 35 cognitive layers on top. The core demo: paste any text (or URL), a regex + Gemma 4 Cognitive Firewall scores it across 4 manipulation dimensions, and the 3D brain reacts — AMY glows on fear, PFC dampens on certainty theater, BG rises on manipulation pressure.
 
-The thing I wanted to make was not “a neural net explainer page,” but something you could actually orbit and poke at while the graph changes in front of you.
-
-Current version:
-- 7 brain regions
-- 10 plastic pathways
-- Thalamus as sensory relay
-- Basal Ganglia gating thalamic output
-- Hippocampus ↔ Cortex replay loop
-- Live weight updates, edge particles, click-to-focus, pause / burst / reset
-
-The rendering layer is React Three Fiber + Drei + Three.js.
-The simulation is intentionally lightweight so the demo can stay browser-first.
-
-A few goals:
-- make STDP legible to people who know the term but have never watched it
-- make the repo attractive to frontend / graphics builders as well as ML / neuroscience people
-- keep the architecture modular enough that someone could swap in a more serious simulator later
-
-Repo: ${SITE.repoUrl}
-
-Happy to answer questions about the topology choices, the simplified learning rule, or how the scene is structured.`,
-  redditML: `[P] BrainSNN: open-source 3D neuromorphic network visualizer with live STDP updates
-
-I built a browser-first demo of a simplified spiking / neuromorphic graph with 7 brain regions and 10 plastic pathways. It visualizes STDP-like updates in real time instead of using an offline training step.
-
-Topology includes:
-- THL as sensory relay
-- BG inhibiting / gating THL
-- HPC ↔ CTX replay loop
-- PFC and CBL feedback into cortical dynamics
-
-The frontend is React Three Fiber + Drei + Three.js. The simulator is intentionally lightweight so people can fork and extend it easily.
-
-Repo: ${SITE.repoUrl}
 Demo: ${SITE.demoUrl}
-
-Would love feedback on the biological framing and on how to turn this into a more rigorous benchmark.`,
-  redditR3F: `Built a premium open-source landing page + live 3D brain network in React Three Fiber
-
-Each region is a reusable component.
-Edges animate weight with width + opacity.
-Particles move along 10 pathways.
-Clicking a node focuses the camera.
-There is a lightweight STDP-style simulation driving the scene.
-
-I wanted it to feel more like a cinematic lab demo than a SaaS homepage.
-
 Repo: ${SITE.repoUrl}
-Demo: ${SITE.demoUrl}`,
-  launchPlan: `Pre-launch:
-- polish GIF / screenshots
-- set social preview image
-- seed good first issues
-- deploy the demo
-- line up your first 20–30 stars
 
-Launch day:
-- Show HN first
-- X thread next
-- niche community drop after that
-- reply fast for 2 hours
-- track star velocity, not just totals`,
+What's different vs. the usual "vibes detector" approach:
+
+- Every scan produces a share card. /r/<hash> → a 1200×630 OG image with your excerpt + 4 score bars + affect label. Each share drags new viewers into the same loop.
+- There's a Spot-the-Manipulation quiz: 10 items, you slide 0–100, your accuracy vs the Firewall is a score you can share.
+- A Cognitive Immunity score persists across sessions (4 dimensions, streak multiplier). Weekly leaderboard ranks are submittable.
+- A Red Team Simulator runs a 65-sample attack corpus through the Firewall and reports detection rate, FPR, F1, and an A–F verdict.
+- A Brain Evolve loop (cannibalized from ASI-Evolve — UCB1, Island, MAP-Elites) mutates firewall rulesets against the red team corpus and promotes winners.
+- A Dream Mode triggers after idle and replays recent states with STDP reinforcement between co-active regions. Any activity wakes the brain.
+- An MCP bridge exposes 14 tools via JSON-RPC so Claude Code / Codex agents can read and steer the brain over a WebSocket.
+
+The main demo runs pure frontend — no backend, no keys. TRIBE v2 (Meta's fMRI foundation model), Gemma 4, and WebSocket sync are each optional upgrades behind one env var.
+
+Stack: React 18, Vite, React Three Fiber, Three.js, transformers.js (MiniLM in-browser embeddings), FFmpeg.wasm, Express + satori on the server side for OG image generation + the leaderboard.
+
+Happy to dig into the firewall's regex → Gemma fallback chain, the Brain Evolve MAP-Elites bins, or the MCP tool design.`,
+  redditML: `[P] BrainSNN: browser-native 3D brain with 35 cognitive layers + a Cognitive Firewall
+
+I built a 3D brain viewer (React Three Fiber) and stacked 35 layers on top:
+
+- Cognitive Firewall: regex + Gemma 4 scoring across 4 manipulation dimensions
+- Affective Decoder: 12-affect taxonomy on Russell's valence × arousal circumplex
+- Brain Evolve: UCB1 + Island + MAP-Elites evolution over firewall rulesets, cannibalized from GAIR-NLP/ASI-Evolve (~250 LOC JS port)
+- Attack Evolve: co-evolutionary counterpart — string mutations (inject-benign, letter-split, synonym-soften) evaluated by evasion × continuity fitness
+- Red Team Simulator: 65-sample synthetic attack corpus vs the firewall, reports F1 + A–F verdict
+- Multimodal RAG + Vector-Graph Fusion (ported from HKUDS/RAG-Anything)
+- In-browser embeddings via transformers.js (MiniLM, ~25MB quantized)
+- Dream Mode: idle-triggered replay-consolidation with STDP weight updates
+- MCP bridge: 14 tools so Claude/Codex agents can steer the brain
+
+Everything runs in the browser. Optional TRIBE v2 backend (Meta fMRI foundation model) + Gemma 4 multimodal analysis behind one env var each.
+
+Live: ${SITE.demoUrl}
+Repo: ${SITE.repoUrl}
+
+Would love feedback on the MAP-Elites bin design for firewall evolution and on the red team corpus — if you can break the scanner, submission UI is live and anything that scores under 40% gets published on a weekly feed.`,
+  redditR3F: `Built a 3D neuromorphic brain viewer with 46 panels — React Three Fiber + postprocessing + FFmpeg.wasm
+
+Live: ${SITE.demoUrl}
+
+- 7 anatomical regions, 10 plastic pathways
+- GPU-animated TubeGeometry pathways with custom GLSL shaders
+- Signal pulse waves radiate through the connectome when regions fire
+- Quality tiers (low/high/ultra) with PerformanceMonitor auto-switching
+- WebM recording + GIF export via FFmpeg.wasm in-browser
+- Each panel is a modular React component — 46 of them, lazy-rendered on demand
+
+On top: a Cognitive Firewall that scores any text for manipulation and lights up the brain accordingly, a Dream Mode that consolidates weights while idle, an MCP bridge so AI agents can steer the brain over a WebSocket.
+
+All MIT. Easy to fork — add a region, swap a pathway, wire a new scenario.
+
+Repo: ${SITE.repoUrl}`,
+  launchPlan: `Pre-launch:
+- brainsnn.com pointed at the Railway app
+- Upstash env vars set (leaderboard + attack feed)
+- 6 reaction cards pre-generated + pinned to X
+- 3 quiz share cards pre-generated (one for each verdict tier)
+- GitHub social preview image uploaded
+- 8–10 good first issues seeded
+
+Launch day (Tue 08:00 PT):
+- Show HN with the "paste any tweet" framing
+- X thread (10 tweets) with 3 reaction cards embedded
+- r/MachineLearning post focused on Brain Evolve + MAP-Elites
+- r/reactjs post focused on 46 panels + FFmpeg.wasm
+- Drop in neuromorphic + MCP Discords
+- Monitor star velocity; reply within 10 min for first 2 hours
+
+Day 2–3:
+- Spot the Manipulation quiz thread with 3 public quiz results
+- Weekly bypass leaderboard thread on Twitter
+- Post in r/privacy + r/cybersecurity focused on Cognitive Firewall`,
+};
+
+export const SHARE_ROUTES = {
+  reactionCard: "/r/<hash>",
+  immunityCard: "/i/<hash>",
+  quizCard: "/q/<hash>",
+  ogImage: "/api/og?type=reaction|immunity|quiz&h=<hash>",
+  urlFetcher: "/api/fetch-url?u=<url>",
+  leaderboard: "/api/leaderboard",
+  attacks: "/api/attacks",
 };
 
 export const README_MD = `# 🧠 BrainSNN

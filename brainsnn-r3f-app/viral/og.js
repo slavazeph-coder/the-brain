@@ -70,6 +70,14 @@ function levelFor(score) {
   return { label: 'At risk', color: '#dd6974' };
 }
 
+function quizLevelFor(score) {
+  if (score >= 90) return { label: 'Firewall-grade', color: '#5ee69a' };
+  if (score >= 75) return { label: 'Sharp', color: '#77dbe4' };
+  if (score >= 60) return { label: 'Reasonable', color: '#fdab43' };
+  if (score >= 40) return { label: 'Susceptible', color: '#e57b40' };
+  return { label: 'Vulnerable', color: '#dd6974' };
+}
+
 function bar(label, value, color) {
   const pct = Math.max(0, Math.min(1, value || 0));
   return {
@@ -271,6 +279,114 @@ function immunityCardNode(payload) {
   };
 }
 
+function quizCardNode(payload) {
+  const accuracy = payload.a || 0;
+  const lvl = quizLevelFor(accuracy);
+  const handle = payload.n || 'anon';
+  const correct = payload.k || 0;
+  const total = payload.t || 10;
+  const seconds = payload.s || 0;
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${lvl.color}22 100%)`,
+        color: '#e6f1ff',
+        padding: 56,
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: 'BrainSNN · Spot the Manipulation' } },
+              { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: lvl.color, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: lvl.label } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flex: 1, gap: 48 },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start' },
+                  children: [
+                    { type: 'div', props: { style: { fontSize: 28, color: '#cbd5e1' }, children: handle } },
+                    { type: 'div', props: { style: { fontSize: 180, fontWeight: 800, color: lvl.color, lineHeight: 1 }, children: `${accuracy}%` } },
+                    { type: 'div', props: { style: { fontSize: 22, color: '#94a3b8', marginTop: -4 }, children: 'spot accuracy' } },
+                  ],
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' },
+                  children: [
+                    {
+                      type: 'div',
+                      props: {
+                        style: { display: 'flex', justifyContent: 'space-between', fontSize: 24, color: '#cbd5e1' },
+                        children: [
+                          { type: 'span', props: { children: 'Correct' } },
+                          { type: 'span', props: { style: { color: lvl.color, fontWeight: 700 }, children: `${correct} / ${total}` } },
+                        ],
+                      },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: { display: 'flex', justifyContent: 'space-between', fontSize: 24, color: '#cbd5e1' },
+                        children: [
+                          { type: 'span', props: { children: 'Time' } },
+                          { type: 'span', props: { style: { fontWeight: 700 }, children: `${seconds}s` } },
+                        ],
+                      },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: {
+                          display: 'flex',
+                          marginTop: 20,
+                          padding: 16,
+                          borderRadius: 10,
+                          background: 'rgba(90,212,255,0.08)',
+                          border: '1px solid rgba(90,212,255,0.2)',
+                        },
+                        children: { type: 'div', props: { style: { fontSize: 20, color: '#cbd5e1', lineHeight: 1.4 }, children: 'Can you beat me? Take the same 10-item quiz.' } },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
+            children: [
+              { type: 'span', props: { children: 'try the quiz → brainsnn.com' } },
+              { type: 'span', props: { children: 'cognitive firewall · 35 layers' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
 function fallbackNode(title, subtitle) {
   return {
     type: 'div',
@@ -311,6 +427,11 @@ export async function renderOg(query) {
   if (type === 'immunity' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(immunityCardNode(payload));
+  }
+
+  if (type === 'quiz' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(quizCardNode(payload));
   }
 
   if (hash) {

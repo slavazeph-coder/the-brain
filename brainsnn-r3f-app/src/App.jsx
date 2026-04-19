@@ -29,6 +29,8 @@ import ConversationBrainPanel from './components/ConversationBrainPanel';
 import ImmunityPanel from './components/ImmunityPanel';
 import EmbeddingsPanel from './components/EmbeddingsPanel';
 import RedTeamPanel from './components/RedTeamPanel';
+import QuizPanel from './components/QuizPanel';
+import BypassSubmitPanel from './components/BypassSubmitPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -393,6 +395,8 @@ export default function App() {
             onSetMode={setMode}
           />
 
+          <QuizPanel />
+
           <CognitiveFirewallPanel
             initialScan={initialFirewallScan}
             onApplyToNetwork={(result) => {
@@ -505,6 +509,10 @@ export default function App() {
 
           <ErrorBoundary name="Red Team">
             <RedTeamPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Bypass Submit">
+            <BypassSubmitPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
