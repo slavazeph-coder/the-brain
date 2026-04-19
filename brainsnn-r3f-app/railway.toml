@@ -1,0 +1,30 @@
+# Railway config for the BrainSNN viral app (Vite SPA + Express).
+#
+# Deploy:
+#   railway login
+#   railway link               # attach this dir to a Railway project
+#   railway up                 # builds from Dockerfile, ships to the service
+#
+# Custom domain:
+#   railway domain brainsnn.com
+#   Then add the CNAME Railway prints at your DNS registrar.
+#
+# Env vars to set in the Railway dashboard (Project → Variables):
+#   UPSTASH_REDIS_REST_URL   (Upstash Redis REST URL — enables persistent leaderboard)
+#   UPSTASH_REDIS_REST_TOKEN (Upstash Redis REST token)
+# Optional:
+#   VITE_TRIBE_API           (URL of the TRIBE v2 FastAPI server)
+#   VITE_GEMMA_API_ENDPOINT  (Gemma 4 endpoint — Google AI Studio / Ollama / vLLM)
+#   VITE_GEMMA_API_KEY       (auth for the Gemma endpoint)
+#   VITE_SYNC_WS_URL         (WebSocket relay for multi-user Live Sync)
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30

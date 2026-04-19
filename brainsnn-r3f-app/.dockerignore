@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+.env.*
+.DS_Store
+npm-debug.log*
+*.log
+server/*.pkl
+server/scenarios
+coverage
+.vscode
+.idea

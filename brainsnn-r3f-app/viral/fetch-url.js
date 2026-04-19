@@ -1,32 +1,11 @@
 /**
  * /api/fetch-url?u=<url> → { text, title, source, url }
- *
- * Lightweight reader for the Cognitive Firewall. Fetches a URL, strips
- * scripts/styles/tags, collapses whitespace, and returns up to ~8k chars
- * of visible text. Deliberately dependency-free — the regex reader is
- * good enough for headlines / tweets / article snippets which is the
- * firewall's input shape anyway.
- *
- * Runs on Edge for low latency. No API keys. Not a crawler: single-page
- * fetch, 8s timeout, size-capped.
+ * Lightweight reader for the Cognitive Firewall. HTML strip, 8KB cap.
  */
 
-export const config = { runtime: 'edge' };
-
-const MAX_BYTES = 512 * 1024; // 512KB cap on fetched HTML
+const MAX_BYTES = 512 * 1024;
 const MAX_TEXT = 8000;
 const TIMEOUT_MS = 8000;
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600',
-    },
-  });
-}
 
 function stripHtml(html) {
   const noScripts = html
@@ -64,7 +43,6 @@ function validateUrl(raw) {
     return null;
   }
   if (!['http:', 'https:'].includes(u.protocol)) return null;
-  // Block obvious private targets
   const host = u.hostname.toLowerCase();
   if (
     host === 'localhost' ||
@@ -81,40 +59,46 @@ function validateUrl(raw) {
   return u.toString();
 }
 
-export default async function handler(req) {
-  const { searchParams } = new URL(req.url);
-  const raw = searchParams.get('u') || '';
+export async function handleFetchUrl(req, res) {
+  const raw = (req.query && req.query.u) || '';
   const url = validateUrl(raw);
-  if (!url) return json({ error: 'invalid or disallowed URL' }, 400);
+  if (!url) {
+    res.status(400).json({ error: 'invalid or disallowed URL' });
+    return;
+  }
 
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
-  let res;
+  let upstream;
   try {
-    res = await fetch(url, {
+    upstream = await fetch(url, {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; BrainsnnReader/1.0; +https://brainsnn.com)',
+        'User-Agent': 'Mozilla/5.0 (compatible; BrainsnnReader/1.0; +https://brainsnn.com)',
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
     });
   } catch (err) {
     clearTimeout(t);
-    return json({ error: `fetch failed: ${err.message || err}` }, 502);
+    res.status(502).json({ error: `fetch failed: ${err.message || err}` });
+    return;
   }
   clearTimeout(t);
 
-  if (!res.ok) return json({ error: `upstream ${res.status}` }, 502);
-
-  const ct = res.headers.get('content-type') || '';
-  if (!/text\/html|application\/xhtml|text\/plain/.test(ct)) {
-    return json({ error: `unsupported content-type: ${ct}` }, 415);
+  if (!upstream.ok) {
+    res.status(502).json({ error: `upstream ${upstream.status}` });
+    return;
   }
 
-  const buf = await res.arrayBuffer();
+  const ct = upstream.headers.get('content-type') || '';
+  if (!/text\/html|application\/xhtml|text\/plain/.test(ct)) {
+    res.status(415).json({ error: `unsupported content-type: ${ct}` });
+    return;
+  }
+
+  const buf = await upstream.arrayBuffer();
   const bytes = buf.byteLength > MAX_BYTES ? buf.slice(0, MAX_BYTES) : buf;
   const html = new TextDecoder('utf-8').decode(bytes);
 
@@ -122,7 +106,8 @@ export default async function handler(req) {
   const ogDesc = extractOgDescription(html);
   const text = stripHtml(html).slice(0, MAX_TEXT);
 
-  return json({
+  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=3600');
+  res.json({
     url,
     title,
     description: ogDesc,
