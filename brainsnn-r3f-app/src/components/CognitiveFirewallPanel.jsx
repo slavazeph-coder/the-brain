@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { scoreContent, scoreContentSmart, SCORE_FIELDS } from '../utils/cognitiveFirewall';
 import { isGemmaConfigured } from '../utils/gemmaEngine';
+import { buildReactionPayload, reactionUrl, AFFECT_LABELS } from '../utils/reactionCard';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -17,11 +18,22 @@ function ScoreRow({ label, desc, value, color }) {
   );
 }
 
-export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
-  const [text, setText] = useState('');
-  const [result, setResult] = useState(null);
+export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan = null }) {
+  const [text, setText] = useState(initialScan?.text || '');
+  const [url, setUrl] = useState('');
+  const [result, setResult] = useState(initialScan?.result || null);
   const [scanning, setScanning] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const [shareCopied, setShareCopied] = useState(false);
   const gemmaAvailable = isGemmaConfigured();
+
+  // Auto-apply pre-seeded scans (used by demo tiles + /r/<hash> rehydration)
+  useEffect(() => {
+    if (initialScan?.autoApply && initialScan?.result && onApplyToNetwork) {
+      onApplyToNetwork(initialScan.result);
+    }
+  }, [initialScan?.autoApply]);
 
   const handleScan = async () => {
     setScanning(true);
@@ -35,12 +47,59 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
     }
   };
 
+  const handleFetchUrl = async () => {
+    if (!url.trim()) return;
+    setFetching(true);
+    setFetchError('');
+    try {
+      const resp = await fetch(`/api/fetch-url?u=${encodeURIComponent(url.trim())}`);
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        setFetchError(data.error || `HTTP ${resp.status}`);
+        return;
+      }
+      setText(data.text || '');
+      setResult(null);
+    } catch (err) {
+      setFetchError(err.message || 'fetch failed');
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const handleApply = () => {
     if (result && onApplyToNetwork) onApplyToNetwork(result);
   };
 
+  const handleShare = async () => {
+    if (!result) return;
+    const payload = buildReactionPayload(text, result);
+    const url = reactionUrl(window.location.origin, payload);
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
+    } catch {
+      window.prompt('Copy this reaction URL:', url);
+    }
+  };
+
+  const handleTweet = () => {
+    if (!result) return;
+    const payload = buildReactionPayload(text, result);
+    const reaction = reactionUrl(window.location.origin, payload);
+    const affect = AFFECT_LABELS[payload.a]?.label || 'signal';
+    const pct = Math.round(((payload.e + payload.c + payload.m) / 3) * 100);
+    const tweet = `BrainSNN reading: ${pct}% pressure · ${affect}. What's it read in your feed? ${reaction}`;
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`,
+      '_blank',
+      'noopener'
+    );
+  };
+
   const overall = result
-    ? ((result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3)
+    ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
 
   const riskColor = !overall ? '#4fa8b3' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
@@ -50,9 +109,35 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
       <div className="eyebrow">TRIBE V2</div>
       <h2>Cognitive Firewall</h2>
       <p className="muted">
-        Paste any content below. The engine scores likely manipulation signatures —
-        not literal mind reading, but pattern-based cognitive risk indicators.
+        Paste any content — or drop a URL — and the engine scores likely manipulation signatures.
+        Share the reaction back with anyone.
       </p>
+
+      <div className="firewall-url-row" style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <input
+          type="url"
+          className="share-input"
+          placeholder="Paste a tweet / article URL…"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleFetchUrl();
+          }}
+          style={{ flex: 1 }}
+        />
+        <button
+          className="btn-sm"
+          onClick={handleFetchUrl}
+          disabled={fetching || !url.trim()}
+        >
+          {fetching ? 'Fetching…' : 'Fetch text'}
+        </button>
+      </div>
+      {fetchError && (
+        <p className="muted" style={{ color: '#dd6974', marginTop: 0 }}>
+          Fetch failed: {fetchError}. Paste the text manually instead.
+        </p>
+      )}
 
       <textarea
         className="firewall-input"
@@ -69,6 +154,16 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork }) {
         {result && (
           <button className="btn" onClick={handleApply}>
             Apply to brain
+          </button>
+        )}
+        {result && (
+          <button className="btn" onClick={handleShare}>
+            {shareCopied ? 'Link copied ✓' : 'Share this reaction'}
+          </button>
+        )}
+        {result && (
+          <button className="btn" onClick={handleTweet}>
+            Tweet this
           </button>
         )}
       </div>

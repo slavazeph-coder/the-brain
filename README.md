@@ -4,6 +4,8 @@
 
 **A 3D brain that sees, learns, defends, and dreams — 35 cognitive layers, zero backprop, browser-native.**
 
+### Live: [brainsnn.com](https://brainsnn.com) — paste any tweet, see which feeling it installs.
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 [![React 18](https://img.shields.io/badge/react-18-149eca.svg)](https://react.dev)
 [![Vite](https://img.shields.io/badge/vite-5-646cff.svg)](https://vitejs.dev)

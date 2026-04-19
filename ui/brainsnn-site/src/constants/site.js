@@ -1,12 +1,12 @@
 export const SITE = {
   name: "BrainSNN",
   repoUrl: "https://github.com/slavazeph-coder/the-brain",
-  demoUrl: "https://slavazeph-coder.github.io/the-brain/",
+  demoUrl: "https://brainsnn.com",
   issuesUrl: "https://github.com/slavazeph-coder/the-brain/issues",
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "Brain-Inspired AI That Never Stops Learning",
+  tagline: "Paste any tweet. See which feeling it installs in your brain.",
   badge: "Open Source · MIT License · React Three Fiber",
 };
 
