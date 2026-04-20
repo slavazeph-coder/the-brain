@@ -31,6 +31,7 @@ import EmbeddingsPanel from './components/EmbeddingsPanel';
 import RedTeamPanel from './components/RedTeamPanel';
 import QuizPanel from './components/QuizPanel';
 import BypassSubmitPanel from './components/BypassSubmitPanel';
+import AutopsyPanel from './components/AutopsyPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -94,6 +95,14 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       return params.get('i') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [incomingAutopsyHash] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('a') || null;
     } catch {
       return null;
     }
@@ -513,6 +522,10 @@ export default function App() {
 
           <ErrorBoundary name="Bypass Submit">
             <BypassSubmitPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Autopsy">
+            <AutopsyPanel initialHash={incomingAutopsyHash} />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

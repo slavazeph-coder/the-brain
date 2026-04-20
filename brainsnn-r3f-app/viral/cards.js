@@ -147,6 +147,37 @@ export function handleQuizCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleAutopsyCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Chat Autopsy';
+  let description = 'Per-speaker cognitive profile of a transcript, scored by the Cognitive Firewall.';
+
+  if (payload) {
+    const t = payload.ttl || 'Chat autopsy';
+    const pct = Math.round(((payload.p || 0) * 100));
+    const turns = payload.t || 0;
+    const top = (payload.s || [])[0];
+    const lead = top ? `${top.n} leading at ${Math.round((top.p || 0) * 100)}% pressure` : 'steady overall';
+    title = `${t} · ${pct}% overall — BrainSNN Autopsy`;
+    description = `${turns} turns · ${(payload.s || []).length} speakers. ${lead}. Paste yours at brainsnn.com.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/a/${hash}`,
+    imageUrl: `${origin}/api/og?type=autopsy&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?a=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleImmunityCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);

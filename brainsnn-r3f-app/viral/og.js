@@ -387,6 +387,105 @@ function quizCardNode(payload) {
   };
 }
 
+function autopsyLevelFor(pressure) {
+  if (pressure >= 0.65) return { label: 'Hostile', color: '#dd6974' };
+  if (pressure >= 0.45) return { label: 'Heavy', color: '#e57b40' };
+  if (pressure >= 0.28) return { label: 'Tilted', color: '#fdab43' };
+  return { label: 'Steady', color: '#6daa45' };
+}
+
+function autopsyCardNode(payload) {
+  const pressure = payload.p || 0;
+  const lvl = autopsyLevelFor(pressure);
+  const title = (payload.ttl || 'Chat autopsy').slice(0, 48);
+  const turns = payload.t || 0;
+  const speakers = (payload.s || []).slice(0, 5);
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${lvl.color}22 100%)`,
+        color: '#e6f1ff',
+        padding: 52,
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: 'BrainSNN · Autopsy' } },
+              { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: lvl.color, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: lvl.label } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', marginBottom: 14 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 36, fontWeight: 800, color: '#f1ece5', lineHeight: 1.1 }, children: title } },
+              { type: 'div', props: { style: { display: 'flex', gap: 18, marginTop: 6, fontSize: 18, color: '#94a3b8' }, children: [
+                { type: 'span', props: { children: `${turns} turns` } },
+                { type: 'span', props: { children: `${speakers.length} speakers` } },
+                { type: 'span', props: { style: { color: lvl.color, fontWeight: 700 }, children: `overall ${Math.round(pressure * 100)}%` } },
+              ] } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', flex: 1, gap: 8 },
+            children: speakers.map((s) => {
+              const slvl = autopsyLevelFor(s.p || 0);
+              const barPct = Math.max(0, Math.min(1, s.p || 0));
+              return {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16,
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.03)',
+                    borderLeft: `3px solid ${slvl.color}`,
+                  },
+                  children: [
+                    { type: 'div', props: { style: { display: 'flex', width: 180, fontSize: 22, fontWeight: 700, color: '#f1ece5' }, children: String(s.n || '?').slice(0, 18) } },
+                    { type: 'div', props: { style: { display: 'flex', flex: 1, height: 12, background: '#1a1f2e', borderRadius: 999 }, children: [
+                      { type: 'div', props: { style: { width: `${barPct * 100}%`, height: '100%', background: slvl.color, borderRadius: 999 } } },
+                    ] } },
+                    { type: 'div', props: { style: { display: 'flex', width: 120, justifyContent: 'flex-end', fontSize: 20, fontWeight: 700, color: slvl.color }, children: `${Math.round(barPct * 100)}%` } },
+                    { type: 'div', props: { style: { display: 'flex', width: 140, justifyContent: 'flex-end', fontSize: 16, color: '#94a3b8', textTransform: 'capitalize' }, children: `${s.a || 'neutral'} · ${s.t || 0}t` } },
+                  ],
+                },
+              };
+            }),
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, fontSize: 18, color: '#94a3b8' },
+            children: [
+              { type: 'span', props: { children: 'paste your chat → brainsnn.com' } },
+              { type: 'span', props: { children: 'autopsy · 36 cognitive layers' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
 function fallbackNode(title, subtitle) {
   return {
     type: 'div',
@@ -432,6 +531,11 @@ export async function renderOg(query) {
   if (type === 'quiz' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(quizCardNode(payload));
+  }
+
+  if (type === 'autopsy' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(autopsyCardNode(payload));
   }
 
   if (hash) {

@@ -238,3 +238,13 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Appends to existing Layer 33 index or creates a new one
     - Schema reference for MinerU / Docling / Obsidian / MCP tool output
     - No markdown parsing needed — structured JSON straight in
+36. Autopsy Mode — per-speaker cognitive profile from any transcript
+    - Reuses Layer 22 parser (Speaker: text / JSON / blank-block formats)
+    - Each message scored via Cognitive Firewall, rolled up per speaker
+    - Output: avg pressure, peak quote, dominant affect (fear/outrage/
+      urgency/certainty/belonging/shame/awe/neutral), turn count
+    - URL fetcher pre-fills from article/thread links
+    - Shareable /a/<hash> card with title + 5 top speakers as bars +
+      overall pressure tier (Steady / Tilted / Heavy / Hostile)
+    - Answers "which speaker installed which feelings in whom"
+    - localStorage handle shared with immunity + quiz + bypass loops
