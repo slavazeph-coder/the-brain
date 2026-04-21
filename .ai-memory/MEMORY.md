@@ -454,3 +454,33 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Each item scored for/against the hypothesis; aggregate
       confidence tiers to Supported / Mixed / Weak / Refuted
     - Turns the tool from diagnosis into structured belief testing
+63. Context Memory — persistent per-entity scan tracking
+    - Tag a scan with an entity name ("boss", "@handle", "Slack:john")
+    - recordScan() appends to a flat rolling log (cap 500), with
+      entity, ts, pressure, templates, and excerpt
+    - ContextMemoryPanel shows per-entity rollup: mean pressure,
+      peak, top templates, sparkline of pressure over time
+    - Same Firewall scan that handles a single message now builds a
+      long-term profile of the source
+64. Debate Mode — two-speaker momentum + winner
+    - analyzeDebate() picks the top-2 speakers by turn count, scores
+      each turn, tracks cumulative per-speaker averages
+    - Declares the "manipulation race winner" = speaker with the
+      LOWER mean pressure
+    - DebatePanel shows per-speaker header cards + cumulative-average
+      line graph + peak-pressure turn callout
+65. Firewall Replay — record / export / import scan sessions
+    - pushStep(kind, ...) adds events from Firewall / Counter-Draft /
+      Autopsy / sharing. startRecording/stopRecording/reset control
+      the session. Cap 200 steps, localStorage-persisted.
+    - exportReplay → 'brainsnn-replay-v1' JSON with title + steps.
+      parseReplay validates version and surfaces steps in the panel.
+    - Useful for demos ("here's me breaking the firewall"), bug
+      reports, and rule-dev walkthroughs.
+66. Coverage Heatmap — which pattern caught which word
+    - coverageFor(text) walks every active regex, records all match
+      spans + per-pattern hit count
+    - tokenizeWithSpans() collapses overlaps into display tokens
+    - CoveragePanel shows inline color-coded highlights (urgency/
+      outrage/certainty/fear tints) + sorted list of fired patterns
+    - Completes the rule-dev loop with Layer 55 + 61 + 60

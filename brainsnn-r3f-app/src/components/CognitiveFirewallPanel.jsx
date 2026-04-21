@@ -14,6 +14,8 @@ import { issueReceipt, storeReceipt } from '../utils/receipt';
 import { isReady as embeddingsReady } from '../utils/embeddings';
 import { detectArchetypes } from '../utils/adTransparency';
 import { markPolyglotSeen } from '../utils/badges';
+import { recordScan as recordContextScan } from '../utils/contextMemory';
+import { pushStep as pushReplayStep } from '../utils/replay';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -38,6 +40,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [entity, setEntity] = useState('');
   const [draft, setDraft] = useState(null);
   const [drafting, setDrafting] = useState(false);
   const [draftCopied, setDraftCopied] = useState(false);
@@ -105,6 +108,15 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       if (score?.language && score.language !== 'en') {
         try { markPolyglotSeen(); } catch { /* noop */ }
       }
+      // Layer 63 — optional per-entity tracking
+      if (entity.trim()) {
+        try { recordContextScan({ entity, text, score }); } catch { /* noop */ }
+      }
+      // Layer 65 — replay recorder
+      try {
+        const p = (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
+        pushReplayStep({ kind: 'scan', text: text.slice(0, 200), pressure: p, entity: entity || null });
+      } catch { /* noop */ }
       // Layer 45 — add semantic template hits (async, non-blocking for UI)
       setSemanticHits([]);
       if (embReady && text.trim().length >= 12) {
@@ -238,6 +250,15 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleFetchUrl();
           }}
+          style={{ flex: 2 }}
+        />
+        <input
+          type="text"
+          className="share-input"
+          placeholder="Tag this scan (optional) — Layer 63"
+          value={entity}
+          onChange={(e) => setEntity(e.target.value.slice(0, 48))}
+          maxLength={48}
           style={{ flex: 1 }}
         />
         <button
