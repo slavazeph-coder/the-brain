@@ -273,3 +273,26 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - detectTemplates(text) returns [{id,label,desc,hits}]
     - Extends scoreContent() output with .templates — surfaces as
       chips in the Cognitive Firewall panel beneath Evidence traces
+40. Sentence Heatmap — per-sentence pressure annotation
+    - Splits text into sentences (terminator-aware), scores each
+    - pressureBand() tiers into Calm/Low/Tilted/Heavy/High with color
+    - Inline heatmap view in the Firewall panel — toggle to reveal
+    - Shows mean, peak, and count of high-pressure sentences
+    - Answers "which exact sentence is doing the damage"
+41. Refutation Library — counter-response per propaganda template
+    - 15 refutations (core stance + copy-ready script + meta-stance)
+      keyed to Layer 39 template IDs
+    - Template chips in the Firewall panel become clickable; opening
+      one reveals the refutation with a Copy-response button
+    - Shifts the tool from "diagnosis" to "diagnosis + prescription"
+42. Counter-Draft — neutralize manipulative text with before/after
+    - Local substitution path: ~40 regex rules rewrite urgency,
+      outrage, certainty, fear, CAPS-LOCK vocabulary to neutral
+      equivalents
+    - Gemma path (when VITE_GEMMA_API_ENDPOINT configured): asks the
+      model for a neutral rewrite; falls back to local on any error
+    - Before/after scored through the Firewall, reduction reported
+      as -N pts
+    - Shareable /x/<hash> card with before / after quote blocks and
+      5-tier verdict (Stubborn / Nudged / Softened / Dampened /
+      Fully neutralized)
