@@ -363,3 +363,34 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       counts, mean pressure, daily-play stats
     - Shareable /w/<hash> card with 6 stat tiles + handle + delta
       badge. Private data stays private unless user taps Share
+51. Style Fingerprint — stylometric signature + author-match
+    - 12-dim vector per text: sentence-length distribution, function-
+      word frequency, commas/sentence, semicolons/1k, caps runs,
+      exclamations, ellipsis, em-dash, avg word length, hedging rate
+    - compareFingerprints() → cosine similarity; verdict tiers
+      Distinct / Weak / Plausible / Likely / Very likely same author
+    - FingerprintPanel shows per-feature bar comparison so the user
+      can see WHY two texts match or differ
+52. Multi-lingual Firewall — Spanish + French pattern packs
+    - LANGUAGE_PACKS { es, fr } mirror the 4 DEFAULT_RULES dimensions
+    - detectLanguage(text) uses character-frequency + stopword
+      heuristics to route between en / es / fr for short inputs
+    - scoreContent() auto-selects the right pack when user hasn't
+      manually set activeRules; falls back to English otherwise
+    - Result object now carries .language + .languageLabel; shown as
+      a badge next to the Gemma / Regex-fallback source tag
+53. Echo Detector — coordinated-campaign signature finder
+    - 5-word shingle Jaccard similarity → pairwise edges ≥ 0.35
+    - Union-find clusters items into "script groups"
+    - echoRisk() tier: Organic / Scattered / Partial / Coordinated
+    - EchoPanel takes --- delimited messages, shows per-cluster
+      exemplar quote + members
+54. Public Scoring API — POST /api/score
+    - Node-side Firewall (en/es/fr) + template detection + receipt
+      generation, independent of the SPA bundle
+    - 20 req/min/IP rate-limit (in-memory with bucketed counter)
+    - Optional auth: BRAINSNN_PUBLIC_API_KEYS env accepts comma-list;
+      default demo key 'demo-public-launch-key' for the landing
+    - OpenAPI spec at /api/openapi.json
+    - ApiDocsPanel in-app surface: key input + live "Try it" button
+      that POSTs from the browser + cURL snippet for dev docs

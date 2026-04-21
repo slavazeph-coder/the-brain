@@ -1,4 +1,5 @@
 import { detectTemplates } from './propagandaTemplates.js';
+import { detectLanguage, patternsFor, labelFor as languageLabel } from './firewallI18n.js';
 
 const URGENCY_PATTERNS = [
   /\bnow\b|\bimmediately\b|\burgent\b|\bbreaking\b|\balert\b/gi,
@@ -168,9 +169,21 @@ export function resetActiveRules() {
 }
 
 export function scoreContent(text = '') {
-  const base = scoreContentWithRules(text, _activeRules);
+  // Layer 52 — route to a language-specific pack when the active rules
+  // are the default English set. Manual promotion via setActiveRules
+  // always wins (user intent > auto-detection).
+  const lang = detectLanguage(text);
+  let rules = _activeRules;
+  if (_activeRules === DEFAULT_RULES) {
+    const packed = patternsFor(lang);
+    if (packed) rules = packed;
+  }
+  const base = scoreContentWithRules(text, rules);
   // Layer 39 — decorate with named propaganda templates.
   base.templates = detectTemplates(text);
+  // Layer 52 — record which language pack was used
+  base.language = lang;
+  base.languageLabel = languageLabel(lang);
   return base;
 }
 

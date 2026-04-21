@@ -38,6 +38,9 @@ import InboxPanel from './components/InboxPanel';
 import DiffPanel from './components/DiffPanel';
 import ScanAnywherePanel from './components/ScanAnywherePanel';
 import WeeklyRecapPanel from './components/WeeklyRecapPanel';
+import FingerprintPanel from './components/FingerprintPanel';
+import EchoPanel from './components/EchoPanel';
+import ApiDocsPanel from './components/ApiDocsPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -562,6 +565,18 @@ export default function App() {
 
           <ErrorBoundary name="Weekly Recap">
             <WeeklyRecapPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Fingerprint">
+            <FingerprintPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Echo">
+            <EchoPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="API Docs">
+            <ApiDocsPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
