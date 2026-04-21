@@ -53,6 +53,9 @@ import ContextMemoryPanel from './components/ContextMemoryPanel';
 import DebatePanel from './components/DebatePanel';
 import ReplayPanel from './components/ReplayPanel';
 import CoveragePanel from './components/CoveragePanel';
+import CalendarHeatmapPanel from './components/CalendarHeatmapPanel';
+import ToneShifterPanel from './components/ToneShifterPanel';
+import SimilaritySearchPanel from './components/SimilaritySearchPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -637,6 +640,18 @@ export default function App() {
 
           <ErrorBoundary name="Coverage">
             <CoveragePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Calendar Heatmap">
+            <CalendarHeatmapPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Tone Shifter">
+            <ToneShifterPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Similarity Search">
+            <SimilaritySearchPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
