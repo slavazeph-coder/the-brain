@@ -56,6 +56,10 @@ import CoveragePanel from './components/CoveragePanel';
 import CalendarHeatmapPanel from './components/CalendarHeatmapPanel';
 import ToneShifterPanel from './components/ToneShifterPanel';
 import SimilaritySearchPanel from './components/SimilaritySearchPanel';
+import OscillationsPanel from './components/OscillationsPanel';
+import LayerExplorerPanel from './components/LayerExplorerPanel';
+import TextAdventurePanel from './components/TextAdventurePanel';
+import ComparatorPanel from './components/ComparatorPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -652,6 +656,22 @@ export default function App() {
 
           <ErrorBoundary name="Similarity Search">
             <SimilaritySearchPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Oscillations">
+            <OscillationsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Layer Explorer">
+            <LayerExplorerPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Text Adventure">
+            <TextAdventurePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Comparator">
+            <ComparatorPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
