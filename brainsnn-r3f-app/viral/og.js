@@ -595,6 +595,82 @@ function inboxCardNode(payload) {
   };
 }
 
+const BADGE_TIER_COLORS = { bronze: '#b57d3c', silver: '#c5cbd3', gold: '#f6c344' };
+// Mirror of BADGE_CATALOG from src/utils/badges.js (labels + tiers only).
+const BADGE_META = {
+  'first-scan': { t: 'bronze', l: 'First Scan' },
+  'ten-scans': { t: 'silver', l: 'Ten Scans' },
+  'hundred-scans': { t: 'gold', l: 'Hundred Scans' },
+  'streak-3': { t: 'bronze', l: 'Warming Up' },
+  'streak-7': { t: 'silver', l: 'One Week' },
+  'streak-30': { t: 'gold', l: 'Thirty-Day Brain' },
+  'immunity-55': { t: 'bronze', l: 'Steady' },
+  'immunity-70': { t: 'silver', l: 'Resilient' },
+  'immunity-85': { t: 'gold', l: 'Fortified' },
+  'high-pressure': { t: 'silver', l: 'Caught One' },
+  'custom-rule': { t: 'silver', l: 'Rule Writer' },
+  'polyglot': { t: 'silver', l: 'Polyglot' },
+  'red-team': { t: 'gold', l: 'Red Team' },
+};
+
+function badgeCardNode(payload) {
+  const handle = payload.n || 'anon';
+  const earnedIds = payload.e || [];
+  const total = payload.total || Object.keys(BADGE_META).length;
+  const pct = Math.round((earnedIds.length / Math.max(1, total)) * 100);
+  const tone = pct >= 80 ? '#f6c344' : pct >= 50 ? '#c5cbd3' : '#b57d3c';
+  const earnedSet = new Set(earnedIds);
+  const allIds = Object.keys(BADGE_META);
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${tone}22 100%)`,
+        color: '#e6f1ff', padding: 52, fontFamily: 'Inter',
+      },
+      children: [
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, children: [
+          { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: `BrainSNN · Badges · ${handle}` } },
+          { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: tone, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: `${earnedIds.length}/${total}` } },
+        ] } },
+        { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', marginBottom: 14, gap: 6 }, children: [
+          { type: 'div', props: { style: { display: 'flex', fontSize: 22, color: '#94a3b8' }, children: `Immunity ${payload.im || 0} · Streak ${payload.st || 0} d · ${payload.sc || 0} scans` } },
+        ] } },
+        { type: 'div', props: { style: { display: 'flex', flexWrap: 'wrap', gap: 8, flex: 1, alignContent: 'flex-start' }, children: allIds.map((id) => {
+          const meta = BADGE_META[id];
+          const earned = earnedSet.has(id);
+          const color = BADGE_TIER_COLORS[meta.t] || '#888';
+          return {
+            type: 'div',
+            props: {
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                borderRadius: 999,
+                background: earned ? `${color}22` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${earned ? color : 'rgba(255,255,255,0.08)'}`,
+                opacity: earned ? 1 : 0.35,
+                fontSize: 20,
+                color: earned ? color : '#94a3b8',
+                fontWeight: 700,
+              },
+              children: meta.l,
+            },
+          };
+        }) } },
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 20, color: '#94a3b8' }, children: [
+          { type: 'span', props: { children: 'earn yours → brainsnn.com' } },
+          { type: 'span', props: { children: `${pct}% · 58 cognitive layers` } },
+        ] } },
+      ],
+    },
+  };
+}
+
 function diffVerdictFor(absDelta) {
   if (absDelta < 0.05) return { label: 'Tied', color: '#77dbe4' };
   if (absDelta < 0.15) return { label: 'Edge', color: '#fdab43' };
@@ -1078,6 +1154,11 @@ export async function renderOg(query) {
   if (type === 'recap' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(recapCardNode(payload));
+  }
+
+  if (type === 'badges' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(badgeCardNode(payload));
   }
 
   if (hash) {

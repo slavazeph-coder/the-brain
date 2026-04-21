@@ -265,6 +265,35 @@ export function handleRecapCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleBadgesCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Badges';
+  let description = 'Progression earned on the Cognitive Firewall.';
+
+  if (payload) {
+    const handle = payload.n || 'anon';
+    const earned = Array.isArray(payload.e) ? payload.e.length : 0;
+    const total = payload.total || 13;
+    title = `${handle} · ${earned}/${total} badges — BrainSNN`;
+    description = `${handle} has earned ${earned} of ${total} BrainSNN badges. Immunity ${payload.im || 0}, ${payload.st || 0}-day streak, ${payload.sc || 0} scans.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/b/${hash}`,
+    imageUrl: `${origin}/api/og?type=badges&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?b=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleCounterDraftCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);

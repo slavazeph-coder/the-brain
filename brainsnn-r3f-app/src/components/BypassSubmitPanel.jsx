@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { markBypassSubmitted } from '../utils/badges';
 
 const HANDLE_KEY = 'brainsnn_handle_v1';
 
@@ -59,6 +60,7 @@ export default function BypassSubmitPanel() {
         return;
       }
       setResult(data);
+      try { markBypassSubmitted(); } catch { /* noop */ }
       loadFeed();
     } catch (e) {
       setResult({ error: e.message || 'submit failed' });

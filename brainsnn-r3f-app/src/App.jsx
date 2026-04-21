@@ -41,6 +41,10 @@ import WeeklyRecapPanel from './components/WeeklyRecapPanel';
 import FingerprintPanel from './components/FingerprintPanel';
 import EchoPanel from './components/EchoPanel';
 import ApiDocsPanel from './components/ApiDocsPanel';
+import CustomRulesPanel from './components/CustomRulesPanel';
+import BadgesPanel from './components/BadgesPanel';
+import PortabilityPanel from './components/PortabilityPanel';
+import OcrPanel from './components/OcrPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -577,6 +581,22 @@ export default function App() {
 
           <ErrorBoundary name="API Docs">
             <ApiDocsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Custom Rules">
+            <CustomRulesPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Badges">
+            <BadgesPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Portability">
+            <PortabilityPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="OCR">
+            <OcrPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
