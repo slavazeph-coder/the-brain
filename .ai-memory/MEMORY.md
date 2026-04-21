@@ -509,3 +509,29 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       summary + archetype match + language-pack note
     - Surfaces as a cyan callout inside the Firewall panel so every
       scan arrives with an auditable "here's why" paragraph
+71. Neural Oscillations — delta / theta / alpha / beta / gamma
+    - 5 bands with canonical frequency ranges + region-affinity weights
+    - User toggles bands; gain slider sets modulation strength
+    - BrainFragments reads state each frame and adds per-region sine
+      offsets on top of raw region activity — bands visible as
+      "breathing" patterns in the 3D scene
+    - State persists to brainsnn_osc_v1 localStorage
+72. Layer Explorer — searchable index of every shipped layer
+    - LAYER_CATALOG with {id, name, group, blurb} for all 74 layers
+    - Groups: view / firewall / share / data / backend / progression
+    - Free-text + group filter; shows counts per group; acts as a
+      map of the product now that it's too big for one scroll
+73. Text Adventure Training — choose-your-reply scenarios
+    - Tree-of-nodes manipulation playbooks (phishing-1, gaslighting-1
+      ship first); each choice has a score delta + feedback note
+    - Final verdict tier (Hooked / Wobbled / Sharp / Resilient) +
+      move-by-move feedback walkthrough
+    - Records an Immunity event per playthrough so the trainer also
+      nudges the long-term score
+74. Firewall Comparator — defaults vs active side-by-side
+    - compareRulesets(text, a, b) scores the same text under two
+      different rulesets and returns pressure delta + evidence diff
+      (only-A / shared / only-B chip lists)
+    - Default pair: DEFAULT_RULES vs getActiveRules() (defaults ∪
+      custom or evolved). Answers "did my rule changes actually
+      catch anything new?"

@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { POSITIONS, REGION_INFO } from '../../data/network';
+import { getOscillationState, sampleModulation } from '../../utils/oscillations';
 
 /**
  * Layer 37 — Cognitive Fragments
@@ -171,10 +172,15 @@ export default function BrainFragments({ regions, quality }) {
     if (!meshRef.current) return;
     const t = state.clock.elapsedTime;
 
+    // Layer 71 — oscillation modulation (read once per frame)
+    const oscState = getOscillationState();
+    const oscOffsets = sampleModulation(oscState, t);
+
     // Update each fragment instance
     for (let i = 0; i < fragments.length; i++) {
       const f = fragments[i];
-      const activity = regions[f.regionId] ?? 0.1;
+      const rawActivity = regions[f.regionId] ?? 0.1;
+      const activity = Math.max(0, Math.min(1, rawActivity + (oscOffsets[f.regionId] || 0)));
       const pulse = 0.8 + 0.2 * Math.sin(t * 1.4 + f.phase);
       const scale = f.baseScale * (0.6 + activity * 3.4) * pulse;
 
