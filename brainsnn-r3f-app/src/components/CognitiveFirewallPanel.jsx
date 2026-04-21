@@ -506,6 +506,11 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             Confidence: <strong>{result.confidence}</strong>
             {result.source === 'gemma4' && <span className="gemma-source-badge">Gemma 4</span>}
             {result.source === 'regex_fallback' && <span className="gemma-source-badge fallback">Regex fallback</span>}
+            {result.languageLabel && result.language && result.language !== 'en' && (
+              <span className="gemma-source-badge" title={`Language pack: ${result.languageLabel} (Layer 52)`}>
+                {result.languageLabel}
+              </span>
+            )}
           </div>
 
           {/* Layer 46 — Firewall receipt */}

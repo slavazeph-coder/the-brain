@@ -27,6 +27,7 @@ import {
   handleDiffCard, handleRecapCard,
 } from './viral/cards.js';
 import { handleAttackSubmit, handleAttacksGet } from './viral/attacks.js';
+import { handleScore, handleOpenApi } from './viral/api-score.js';
 import { handleFetchUrl } from './viral/fetch-url.js';
 import { handleLeaderboardGet, handleLeaderboardPost } from './viral/leaderboard.js';
 
@@ -96,6 +97,13 @@ app.post('/api/attacks', async (req, res) => {
   try { await handleAttackSubmit(req, res); }
   catch (err) { console.error('[attacks:post]', err); res.status(500).json({ error: 'attacks post failed' }); }
 });
+
+// --- Layer 54 — Public Score API -----------------------------------------
+app.post('/api/score', async (req, res) => {
+  try { await handleScore(req, res); }
+  catch (err) { console.error('[score]', err); res.status(500).json({ error: 'score failed' }); }
+});
+app.get('/api/openapi.json', handleOpenApi);
 
 // --- Share card HTML shells -------------------------------------------------
 app.get('/r/:hash', handleReactionCard);
