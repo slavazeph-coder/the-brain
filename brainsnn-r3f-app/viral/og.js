@@ -394,6 +394,105 @@ function autopsyLevelFor(pressure) {
   return { label: 'Steady', color: '#6daa45' };
 }
 
+function dailyLevelFor(accuracy) {
+  if (accuracy >= 90) return { label: 'Clean sweep', color: '#5ee69a' };
+  if (accuracy >= 75) return { label: 'Sharp eye', color: '#77dbe4' };
+  if (accuracy >= 55) return { label: 'Solid', color: '#fdab43' };
+  if (accuracy >= 30) return { label: 'Warm-up', color: '#e57b40' };
+  return { label: 'Off day', color: '#dd6974' };
+}
+
+function dailyCardNode(payload) {
+  const accuracy = payload.a || 0;
+  const lvl = dailyLevelFor(accuracy);
+  const handle = payload.n || 'anon';
+  const date = payload.d || '';
+  const correct = payload.k || 0;
+  const streak = payload.st || 0;
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${lvl.color}22 100%)`,
+        color: '#e6f1ff',
+        padding: 56,
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: `BrainSNN · Daily · ${date}` } },
+              { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: lvl.color, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: lvl.label } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flex: 1, gap: 48 },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start' },
+                  children: [
+                    { type: 'div', props: { style: { fontSize: 28, color: '#cbd5e1' }, children: handle } },
+                    { type: 'div', props: { style: { fontSize: 180, fontWeight: 800, color: lvl.color, lineHeight: 1 }, children: `${correct}/3` } },
+                    { type: 'div', props: { style: { fontSize: 22, color: '#94a3b8', marginTop: -4 }, children: `${accuracy}% accuracy · ${streak}-day streak` } },
+                  ],
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'center' },
+                  children: [
+                    {
+                      type: 'div',
+                      props: {
+                        style: { display: 'flex', padding: 16, borderRadius: 10, background: 'rgba(90,212,255,0.08)', border: '1px solid rgba(90,212,255,0.2)' },
+                        children: { type: 'div', props: { style: { fontSize: 22, color: '#cbd5e1', lineHeight: 1.35 }, children: 'Same 3 items as every player today. Come back tomorrow for three fresh picks — streaks stack.' } },
+                      },
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: { display: 'flex', justifyContent: 'space-between', fontSize: 22, color: '#cbd5e1' },
+                        children: [
+                          { type: 'span', props: { children: 'Playing today' } },
+                          { type: 'span', props: { style: { color: lvl.color, fontWeight: 700 }, children: 'brainsnn.com' } },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
+            children: [
+              { type: 'span', props: { children: 'play today → brainsnn.com' } },
+              { type: 'span', props: { children: 'daily challenge · 39 cognitive layers' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
 function autopsyCardNode(payload) {
   const pressure = payload.p || 0;
   const lvl = autopsyLevelFor(pressure);
@@ -536,6 +635,11 @@ export async function renderOg(query) {
   if (type === 'autopsy' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(autopsyCardNode(payload));
+  }
+
+  if (type === 'daily' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(dailyCardNode(payload));
   }
 
   if (hash) {

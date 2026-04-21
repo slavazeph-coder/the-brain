@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { renderOg } from './viral/og.js';
-import { handleReactionCard, handleImmunityCard, handleQuizCard, handleAutopsyCard } from './viral/cards.js';
+import { handleReactionCard, handleImmunityCard, handleQuizCard, handleAutopsyCard, handleDailyCard } from './viral/cards.js';
 import { handleAttackSubmit, handleAttacksGet } from './viral/attacks.js';
 import { handleFetchUrl } from './viral/fetch-url.js';
 import { handleLeaderboardGet, handleLeaderboardPost } from './viral/leaderboard.js';
@@ -98,6 +98,7 @@ app.get('/r/:hash', handleReactionCard);
 app.get('/i/:hash', handleImmunityCard);
 app.get('/q/:hash', handleQuizCard);
 app.get('/a/:hash', handleAutopsyCard);
+app.get('/d/:hash', handleDailyCard);
 
 // --- Static SPA -------------------------------------------------------------
 if (!existsSync(DIST)) {
