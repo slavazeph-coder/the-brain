@@ -16,6 +16,7 @@ import { detectArchetypes } from '../utils/adTransparency';
 import { markPolyglotSeen } from '../utils/badges';
 import { recordScan as recordContextScan } from '../utils/contextMemory';
 import { pushStep as pushReplayStep } from '../utils/replay';
+import { explain } from '../utils/explanation';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -68,6 +69,12 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const archetypes = useMemo(
     () => (mergedTemplates.length ? detectArchetypes(mergedTemplates) : []),
     [mergedTemplates],
+  );
+
+  // Layer 70 — plain-English explanation
+  const explanation = useMemo(
+    () => (result ? explain(text, result, { templates: mergedTemplates, archetypes }) : null),
+    [result, mergedTemplates, archetypes, text],
   );
 
   // Layer 41 — refutations for detected templates
@@ -379,6 +386,32 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                     {arch.label}
                   </span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {explanation?.bullets?.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div className="eyebrow">Explanation · Layer 70</div>
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'rgba(90,212,255,0.04)',
+                  borderLeft: '3px solid #5ad4ff',
+                }}
+              >
+                <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 600 }}>
+                  {explanation.bullets[0].text}
+                </p>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {explanation.bullets.slice(1).map((b, i) => (
+                    <li key={i} style={{ marginTop: 4, fontSize: 13, lineHeight: 1.4 }} className="muted">
+                      {b.text}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}

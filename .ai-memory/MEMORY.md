@@ -484,3 +484,28 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - CoveragePanel shows inline color-coded highlights (urgency/
       outrage/certainty/fear tints) + sorted list of fired patterns
     - Completes the rule-dev loop with Layer 55 + 61 + 60
+67. Calendar Heatmap — GitHub-style scan-activity grid
+    - buildDailyBuckets() rolls receipt log + context entries into
+      per-day {count, meanPressure, peak}
+    - 53-week × 7-day grid with green / orange / red cell tinting
+      based on mean pressure + scan count
+    - Instant visual answer to "how much manipulative content hit
+      me this quarter?"
+68. Tone Shifter — adversarial training companion to Counter-Draft
+    - SHIFT_STYLES: urgency / outrage / certainty / fear / guilt-trip
+    - shiftTone(text, styleId) injects style-specific substitutions
+      + prefix/suffix framing; reports before/after pressure delta
+    - Defensive framing: helps users see "what would my writing look
+      like if it drifted into this style" for self-audit + red-team
+69. Similarity Search — "have I seen this before?"
+    - Searches recentReceipts() + context entries
+    - Prefers MiniLM embeddings (Layer 24) when warm; trigram
+      Jaccard fallback otherwise
+    - Returns top-K matches with score + source tag (receipt /
+      context) + excerpt + pressure
+70. Explanation Mode — plain-English narration
+    - explain(text, score, { templates, archetypes }) builds a
+      headline + per-dimension blurbs + evidence summary + template
+      summary + archetype match + language-pack note
+    - Surfaces as a cyan callout inside the Firewall panel so every
+      scan arrives with an auditable "here's why" paragraph
