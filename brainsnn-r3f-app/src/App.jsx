@@ -45,6 +45,10 @@ import CustomRulesPanel from './components/CustomRulesPanel';
 import BadgesPanel from './components/BadgesPanel';
 import PortabilityPanel from './components/PortabilityPanel';
 import OcrPanel from './components/OcrPanel';
+import AudioPanel from './components/AudioPanel';
+import MacrosPanel from './components/MacrosPanel';
+import DiagnosticPanel from './components/DiagnosticPanel';
+import HypothesisPanel from './components/HypothesisPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -597,6 +601,22 @@ export default function App() {
 
           <ErrorBoundary name="OCR">
             <OcrPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Audio">
+            <AudioPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Macros">
+            <MacrosPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Diagnostic">
+            <DiagnosticPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Hypothesis">
+            <HypothesisPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
