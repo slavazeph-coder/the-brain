@@ -35,6 +35,9 @@ import BypassSubmitPanel from './components/BypassSubmitPanel';
 import AutopsyPanel from './components/AutopsyPanel';
 import TimeSeriesPanel from './components/TimeSeriesPanel';
 import InboxPanel from './components/InboxPanel';
+import DiffPanel from './components/DiffPanel';
+import ScanAnywherePanel from './components/ScanAnywherePanel';
+import WeeklyRecapPanel from './components/WeeklyRecapPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -547,6 +550,18 @@ export default function App() {
 
           <ErrorBoundary name="Inbox">
             <InboxPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Diff">
+            <DiffPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Scan Anywhere">
+            <ScanAnywherePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Weekly Recap">
+            <WeeklyRecapPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

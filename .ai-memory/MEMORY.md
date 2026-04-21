@@ -331,3 +331,35 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - verifyReceipt() re-hashes and returns {ok, expected, got}
     - Last 20 receipts stored in localStorage for a rolling log
     - Surfaces inline under every scan in the Firewall panel
+47. Diff Mode — side-by-side comparison of two texts
+    - runDiff({labelA,textA,labelB,textB}) scores both, reports delta,
+      picks a "cleaner" winner (lower pressure)
+    - diffVerdict(absDelta) tiers Tied / Edge / Clear / Landslide
+    - Shareable /v/<hash> card with 2-column quote blocks, verdict
+      chip, and Δ-pts badge
+    - Perfect for candidate statements, pre/post-edit diffs, quoted-
+      vs-summary framings
+48. Ad Transparency — archetype combo detection
+    - 7 archetypes: growth-hacker ad / phishing / political-attack /
+      conspiracy-hook / cult recruitment / abusive-gaslighting /
+      FOMO launch pitch
+    - Each archetype = required templates + bonus templates + min
+      match count. detectArchetypes(mergedTemplates) returns hits
+      sorted by score
+    - Surfaces as red-tinted chips in the Firewall panel beneath
+      the template + semantic chips
+    - Shifts "you have these templates" → "this reads like X genre"
+49. Scan Anywhere — bookmarklet + deep-link contract
+    - One-line JS bookmarklet grabs selection (or title+URL fallback)
+      and opens /?scan=<text> in a new tab
+    - Firewall panel accepts ?scan=<text> and ?scan-url=<url> on
+      mount to pre-fill the textarea / URL input
+    - ScanAnywherePanel in-app documents the full deep-link contract
+      (every /?<letter>=<hash> rehydration is listed)
+    - Turns any page on the web into a Firewall input
+50. Weekly Recap — local-only stats rolled into a share card
+    - computeWeeklyRecap() reads Immunity + DailyChallenge + Receipts
+      localStorage, computes delta vs 7-day-ago baseline, event
+      counts, mean pressure, daily-play stats
+    - Shareable /w/<hash> card with 6 stat tiles + handle + delta
+      badge. Private data stays private unless user taps Share

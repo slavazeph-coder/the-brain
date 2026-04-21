@@ -595,6 +595,121 @@ function inboxCardNode(payload) {
   };
 }
 
+function diffVerdictFor(absDelta) {
+  if (absDelta < 0.05) return { label: 'Tied', color: '#77dbe4' };
+  if (absDelta < 0.15) return { label: 'Edge', color: '#fdab43' };
+  if (absDelta < 0.30) return { label: 'Clear', color: '#e57b40' };
+  return { label: 'Landslide', color: '#dd6974' };
+}
+
+function diffCardNode(payload) {
+  const ap = payload.ap || 0;
+  const bp = payload.bp || 0;
+  const absDelta = Math.abs(ap - bp);
+  const verdict = diffVerdictFor(absDelta);
+  const winner = payload.w || (ap < bp ? 'A' : bp < ap ? 'B' : '');
+
+  const sideBlock = (label, body, pressure, isWinner) => ({
+    type: 'div',
+    props: {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        padding: 20,
+        borderRadius: 12,
+        borderLeft: `4px solid ${isWinner ? '#5ee69a' : pressure > 0.5 ? '#dd6974' : '#fdab43'}`,
+        background: isWinner ? 'rgba(94,230,154,0.08)' : 'rgba(255,255,255,0.03)',
+      },
+      children: [
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 8 }, children: [
+          { type: 'span', props: { style: { fontSize: 18, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2, fontWeight: 700 }, children: label } },
+          { type: 'span', props: { style: { fontSize: 28, fontWeight: 800, color: isWinner ? '#5ee69a' : pressure > 0.5 ? '#dd6974' : '#fdab43' }, children: `${Math.round(pressure * 100)}%` } },
+        ] } },
+        { type: 'div', props: { style: { fontSize: 20, color: '#f1ece5', lineHeight: 1.35 }, children: `"${(body || '').slice(0, 160)}"` } },
+      ],
+    },
+  });
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${verdict.color}22 100%)`,
+        color: '#e6f1ff', padding: 48, fontFamily: 'Inter',
+      },
+      children: [
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }, children: [
+          { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: 'BrainSNN · Diff' } },
+          { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: verdict.color, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: `${verdict.label} · Δ${Math.round(absDelta * 100)}pts` } },
+        ] } },
+        { type: 'div', props: { style: { display: 'flex', flex: 1, gap: 18 }, children: [
+          sideBlock(payload.al || 'A', payload.at || '', ap, winner === 'A'),
+          sideBlock(payload.bl || 'B', payload.bt || '', bp, winner === 'B'),
+        ] } },
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, fontSize: 20, color: '#94a3b8' }, children: [
+          { type: 'span', props: { children: 'compare yours → brainsnn.com' } },
+          { type: 'span', props: { children: 'diff mode · 50 cognitive layers' } },
+        ] } },
+      ],
+    },
+  };
+}
+
+function recapCardNode(payload) {
+  const delta = payload.d || 0;
+  const deltaColor = delta > 0 ? '#5ee69a' : delta < 0 ? '#dd6974' : '#fdab43';
+  const handle = payload.n || 'anon';
+  const stats = [
+    { k: 'Immunity', v: `${payload.s || 0}/100` },
+    { k: 'Streak', v: `${payload.st || 0} d` },
+    { k: 'Scans', v: String(payload.sc || 0) },
+    { k: 'Events', v: String(payload.ev || 0) },
+    { k: 'Mean pressure', v: `${Math.round((payload.mp || 0) * 100)}%` },
+    { k: 'Daily played', v: `${payload.pl || 0}/7` },
+  ];
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${deltaColor}22 100%)`,
+        color: '#e6f1ff', padding: 52, fontFamily: 'Inter',
+      },
+      children: [
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }, children: [
+          { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: `BrainSNN · Weekly Recap · ${handle}` } },
+          { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: deltaColor, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: `${delta >= 0 ? '+' : ''}${delta} pts` } },
+        ] } },
+        { type: 'div', props: { style: { display: 'flex', flex: 1, flexWrap: 'wrap', gap: 14, alignContent: 'flex-start' }, children: stats.map((s) => ({
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              width: 330,
+              padding: '16px 20px',
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.04)',
+              gap: 4,
+            },
+            children: [
+              { type: 'div', props: { style: { fontSize: 18, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2 }, children: s.k } },
+              { type: 'div', props: { style: { fontSize: 44, fontWeight: 800, color: '#f1ece5', lineHeight: 1 }, children: s.v } },
+            ],
+          },
+        })) } },
+        { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 20, color: '#94a3b8' }, children: [
+          { type: 'span', props: { children: 'your week → brainsnn.com' } },
+          { type: 'span', props: { children: 'weekly recap · 50 cognitive layers' } },
+        ] } },
+      ],
+    },
+  };
+}
+
 function draftLevelFor(reduction) {
   if (reduction >= 0.35) return { label: 'Fully neutralized', color: '#5ee69a' };
   if (reduction >= 0.20) return { label: 'Dampened', color: '#77dbe4' };
@@ -953,6 +1068,16 @@ export async function renderOg(query) {
   if (type === 'inbox' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(inboxCardNode(payload));
+  }
+
+  if (type === 'diff' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(diffCardNode(payload));
+  }
+
+  if (type === 'recap' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(recapCardNode(payload));
   }
 
   if (hash) {
