@@ -49,6 +49,10 @@ import AudioPanel from './components/AudioPanel';
 import MacrosPanel from './components/MacrosPanel';
 import DiagnosticPanel from './components/DiagnosticPanel';
 import HypothesisPanel from './components/HypothesisPanel';
+import ContextMemoryPanel from './components/ContextMemoryPanel';
+import DebatePanel from './components/DebatePanel';
+import ReplayPanel from './components/ReplayPanel';
+import CoveragePanel from './components/CoveragePanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -617,6 +621,22 @@ export default function App() {
 
           <ErrorBoundary name="Hypothesis">
             <HypothesisPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Context Memory">
+            <ContextMemoryPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Debate">
+            <DebatePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Replay">
+            <ReplayPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Coverage">
+            <CoveragePanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
