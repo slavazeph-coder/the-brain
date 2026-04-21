@@ -422,3 +422,35 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       bar tracks OCR; extracted text editable before handoff
     - "Scan in Firewall →" deep-links via /?scan=<text>
     - All in-browser — images never leave the device
+59. Audio Firewall — Web Speech API live transcribe → scan
+    - isSpeechSupported() + createSpeechSession() wrapper around
+      SpeechRecognition (Chrome/Edge/Safari)
+    - 7 language options (en-US/GB, es, fr, de, it, pt-BR)
+    - Rolling Firewall score on the live transcript as it grows;
+      "Scan in Firewall →" hands the final transcript to /?scan=
+    - Graceful no-op in unsupported browsers (Firefox)
+60. Firewall Macros — named preset scan suites
+    - Each macro: name + array of sample texts + expected tier
+      (auto/low/mid/high) + optional notes
+    - runMacro() batch-scores against the active ruleset, reports
+      per-sample pressure + mean + peak + "matches expectation"
+      check
+    - 3 seed macros on first run (Phishing suite / Wellness benign
+      / Political attack) so users see the shape immediately
+    - Pairs with Layer 55 for tweak-and-verify rule development
+61. Firewall Diagnostic — self-audit the active ruleset
+    - Runs every pattern against the red-team corpus + benigns
+    - Reports F1 / detection rate / FPR / A-F grade at a chosen
+      threshold, plus dead patterns (zero hits) and FP contributors
+      (patterns that fire on benigns)
+    - One-click audit for any ruleset — defaults, evolved, or the
+      user's custom set — so you can see whether your tweaks
+      helped or broke things
+62. Hypothesis Mode — structured inquiry over evidence
+    - State a suspicion (8 canned hypotheses: gaslighting, DARVO,
+      love-bombing, guilt-trip, phishing, cult recruitment,
+      political attack, high-pressure overall)
+    - Paste evidence items separated by --- or blank lines
+    - Each item scored for/against the hypothesis; aggregate
+      confidence tiers to Supported / Mixed / Weak / Refuted
+    - Turns the tool from diagnosis into structured belief testing
