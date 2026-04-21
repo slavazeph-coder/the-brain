@@ -394,6 +394,103 @@ function autopsyLevelFor(pressure) {
   return { label: 'Steady', color: '#6daa45' };
 }
 
+function draftLevelFor(reduction) {
+  if (reduction >= 0.35) return { label: 'Fully neutralized', color: '#5ee69a' };
+  if (reduction >= 0.20) return { label: 'Dampened', color: '#77dbe4' };
+  if (reduction >= 0.10) return { label: 'Softened', color: '#fdab43' };
+  if (reduction >= 0.03) return { label: 'Nudged', color: '#e57b40' };
+  return { label: 'Stubborn', color: '#dd6974' };
+}
+
+function counterDraftCardNode(payload) {
+  const bp = payload.bp || 0;
+  const ap = payload.ap || 0;
+  const reduction = Math.max(0, bp - ap);
+  const lvl = draftLevelFor(reduction);
+  const engine = payload.e || 'local';
+
+  const before = (payload.b || '').slice(0, 180);
+  const after = (payload.a || '').slice(0, 180);
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${lvl.color}22 100%)`,
+        color: '#e6f1ff',
+        padding: 52,
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: 'BrainSNN · Counter-Draft' } },
+              { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: lvl.color, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: lvl.label } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flex: 1, flexDirection: 'column', gap: 14 },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', padding: 18, borderRadius: 10, borderLeft: '4px solid #dd6974', background: 'rgba(221,105,116,0.08)' },
+                  children: {
+                    type: 'div',
+                    props: {
+                      style: { display: 'flex', flexDirection: 'column', gap: 6 },
+                      children: [
+                        { type: 'div', props: { style: { fontSize: 16, letterSpacing: 2, color: '#dd6974', textTransform: 'uppercase', fontWeight: 700 }, children: `Before · ${Math.round(bp * 100)}% pressure` } },
+                        { type: 'div', props: { style: { fontSize: 24, color: '#f1ece5', lineHeight: 1.35 }, children: `"${before}"` } },
+                      ],
+                    },
+                  },
+                },
+              },
+              {
+                type: 'div',
+                props: {
+                  style: { display: 'flex', padding: 18, borderRadius: 10, borderLeft: `4px solid ${lvl.color}`, background: `${lvl.color}14` },
+                  children: {
+                    type: 'div',
+                    props: {
+                      style: { display: 'flex', flexDirection: 'column', gap: 6 },
+                      children: [
+                        { type: 'div', props: { style: { fontSize: 16, letterSpacing: 2, color: lvl.color, textTransform: 'uppercase', fontWeight: 700 }, children: `After · ${Math.round(ap * 100)}% pressure (${engine})` } },
+                        { type: 'div', props: { style: { fontSize: 24, color: '#f1ece5', lineHeight: 1.35 }, children: `"${after}"` } },
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 20, color: '#94a3b8' },
+            children: [
+              { type: 'span', props: { children: `−${Math.round(reduction * 100)} pts · brainsnn.com` } },
+              { type: 'span', props: { children: 'counter-draft · 42 cognitive layers' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
 function dailyLevelFor(accuracy) {
   if (accuracy >= 90) return { label: 'Clean sweep', color: '#5ee69a' };
   if (accuracy >= 75) return { label: 'Sharp eye', color: '#77dbe4' };
@@ -640,6 +737,11 @@ export async function renderOg(query) {
   if (type === 'daily' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(dailyCardNode(payload));
+  }
+
+  if (type === 'counter' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(counterDraftCardNode(payload));
   }
 
   if (hash) {

@@ -147,6 +147,37 @@ export function handleQuizCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleCounterDraftCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Counter-Draft';
+  let description = 'Same information, manipulation signatures stripped.';
+
+  if (payload) {
+    const bp = Math.round((payload.bp || 0) * 100);
+    const ap = Math.round((payload.ap || 0) * 100);
+    title = `Neutralized ${bp}% → ${ap}% — BrainSNN Counter-Draft`;
+    const snippet = (payload.a || '').slice(0, 140);
+    description = snippet
+      ? `Pressure ${bp}% → ${ap}%. Rewrite: "${snippet}${snippet.length >= 140 ? '…' : ''}"`
+      : description;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/x/${hash}`,
+    imageUrl: `${origin}/api/og?type=counter&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?x=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleDailyCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);
