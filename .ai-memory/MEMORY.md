@@ -296,3 +296,38 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Shareable /x/<hash> card with before / after quote blocks and
       5-tier verdict (Stubborn / Nudged / Softened / Dampened /
       Fully neutralized)
+43. Time-Series Autopsy — manipulation pressure over time
+    - Date-aware line parser accepts ISO, slash-date, and "Mon DD YYYY"
+      formats; undated lines fall into implicit order
+    - Linear-regression slope → Escalating / Rising / Stable / Cooling
+      / De-escalating trend label
+    - Escalation detector flags any 3-window rolling spike > +25 pts
+    - Shareable /t/<hash> card with bar-sparkline, trend tier, peak
+      date, and escalation count
+44. Inbox Mode — bulk message triage
+    - Splits on ---/=== lines or From:/Subject: headers (or blank-
+      line blocks as last resort)
+    - Scores each message, sorts by pressure desc, extracts sender +
+      subject + templates
+    - inboxSummary(items) → {count, meanPressure, high, worst}
+    - Shareable /n/<hash> anonymized card (localparts redacted,
+      domains kept), top 5 messages + pressure tier
+45. Semantic Templates — embedding-based manipulation detection
+    - Re-uses Layer 24's MiniLM pipeline (transformers.js)
+    - 2-3 canonical seed phrases per Layer 39 template, averaged and
+      normalized into a single reference vector per technique
+    - matchSemanticTemplates(text, 0.42) returns top-5 template hits
+      by cosine similarity above the threshold
+    - mergeTemplateResults(regex, semantic) unions the two, regex
+      preferred when both fire for the same template
+    - Catches paraphrases regex misses ("you're making it up" →
+      gaslighting); semantic chips are outlined in cyan to
+      distinguish from regex-purple
+46. Firewall Receipts — deterministic, verifiable scan stamp
+    - receiptCanonical({text, score, ts}) normalizes text + rounds
+      scores + buckets timestamp to UTC day → stable canonical string
+    - SHA-256 via SubtleCrypto (falls back to FNV-1a when Subtle is
+      unavailable); rendered as R-XXXX-XXXX for copy-paste
+    - verifyReceipt() re-hashes and returns {ok, expected, got}
+    - Last 20 receipts stored in localStorage for a rolling log
+    - Surfaces inline under every scan in the Firewall panel

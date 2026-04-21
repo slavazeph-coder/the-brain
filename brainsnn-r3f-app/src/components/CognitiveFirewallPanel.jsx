@@ -9,6 +9,9 @@ import {
   buildCounterDraftPayload,
   counterDraftUrl,
 } from '../utils/counterDraft';
+import { matchSemanticTemplates, mergeTemplateResults } from '../utils/semanticTemplates';
+import { issueReceipt, storeReceipt } from '../utils/receipt';
+import { isReady as embeddingsReady } from '../utils/embeddings';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -38,7 +41,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const [draftCopied, setDraftCopied] = useState(false);
   const [openRefutation, setOpenRefutation] = useState(null);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
+  const [semanticHits, setSemanticHits] = useState([]);
+  const [receipt, setReceipt] = useState(null);
   const gemmaAvailable = isGemmaConfigured();
+  const embReady = embeddingsReady();
 
   // Layer 40 — sentence heatmap (computed lazily when user opens it)
   const heatmap = useMemo(() => {
@@ -47,10 +53,16 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   }, [heatmapOpen, text]);
   const heatmapStats = useMemo(() => heatmap ? heatmapSummary(heatmap) : null, [heatmap]);
 
+  // Merge regex + semantic template hits for display (Layer 45)
+  const mergedTemplates = useMemo(() => {
+    if (!result?.templates) return [];
+    return mergeTemplateResults(result.templates, semanticHits);
+  }, [result?.templates, semanticHits]);
+
   // Layer 41 — refutations for detected templates
   const refutations = useMemo(
-    () => (result?.templates?.length ? refutationsFor(result.templates) : []),
-    [result?.templates],
+    () => (mergedTemplates.length ? refutationsFor(mergedTemplates) : []),
+    [mergedTemplates],
   );
 
   // Auto-apply pre-seeded scans (used by demo tiles + /r/<hash> rehydration)
@@ -65,6 +77,19 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     try {
       const score = await scoreContentSmart(text);
       setResult(score);
+      // Layer 45 — add semantic template hits (async, non-blocking for UI)
+      setSemanticHits([]);
+      if (embReady && text.trim().length >= 12) {
+        matchSemanticTemplates(text).then(setSemanticHits).catch(() => setSemanticHits([]));
+      }
+      // Layer 46 — issue + store a receipt for this scan
+      try {
+        const r = await issueReceipt({ text, score });
+        setReceipt(r);
+        const pressure =
+          (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
+        storeReceipt({ id: r.id, ts: r.ts, pressure, excerpt: text.slice(0, 80) });
+      } catch { /* receipts are nice-to-have */ }
     } catch (_) {
       setResult(scoreContent(text));
     } finally {
@@ -259,24 +284,32 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             </div>
           )}
 
-          {result.templates?.length > 0 && (
+          {mergedTemplates.length > 0 && (
             <div className="firewall-templates">
-              <span className="eyebrow">Propaganda templates · Layer 39</span>
+              <span className="eyebrow">
+                Propaganda templates · Layer 39
+                {semanticHits.length > 0 && (
+                  <span className="muted small-note" style={{ marginLeft: 8 }}>
+                    + {semanticHits.length} semantic · Layer 45
+                  </span>
+                )}
+              </span>
               <div className="firewall-chips" style={{ marginTop: 6 }}>
-                {result.templates.map((tpl) => (
+                {mergedTemplates.map((tpl) => (
                   <button
                     key={tpl.id}
                     className="firewall-chip"
                     onClick={() => setOpenRefutation(openRefutation === tpl.id ? null : tpl.id)}
-                    title={`${tpl.desc} — click for the counter-response`}
+                    title={`${tpl.desc} — click for the counter-response${tpl.source === 'semantic' ? ' (semantic match)' : ''}`}
                     style={{
                       background: openRefutation === tpl.id ? 'rgba(168,111,223,0.28)' : 'rgba(168,111,223,0.12)',
-                      borderColor: '#a86fdf',
+                      borderColor: tpl.source === 'semantic' ? '#5ad4ff' : '#a86fdf',
                       color: '#e2d3ff',
                       cursor: 'pointer',
                     }}
                   >
-                    {tpl.label} · {tpl.hits}×
+                    {tpl.label}
+                    {tpl.hits ? ` · ${tpl.hits}×` : tpl.similarity ? ` · ~${Math.round(tpl.similarity * 100)}%` : ''}
                   </button>
                 ))}
               </div>
@@ -433,6 +466,39 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             {result.source === 'gemma4' && <span className="gemma-source-badge">Gemma 4</span>}
             {result.source === 'regex_fallback' && <span className="gemma-source-badge fallback">Regex fallback</span>}
           </div>
+
+          {/* Layer 46 — Firewall receipt */}
+          {receipt && (
+            <div
+              style={{
+                marginTop: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                borderRadius: 6,
+                background: 'rgba(90,212,255,0.06)',
+                borderLeft: '3px solid #5ad4ff',
+                fontFamily: 'monospace',
+                fontSize: 13,
+              }}
+              title="Deterministic scan receipt — same text + scores regenerate this ID."
+            >
+              <span>
+                <span className="muted">Receipt</span>{' '}
+                <strong>{receipt.id}</strong>
+                <span className="muted small-note" style={{ marginLeft: 8 }}>
+                  {receipt.dayStart}
+                </span>
+              </span>
+              <button
+                className="btn-sm"
+                onClick={() => navigator.clipboard?.writeText(receipt.id).catch(() => {})}
+              >
+                Copy
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

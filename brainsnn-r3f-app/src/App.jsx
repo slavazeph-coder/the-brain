@@ -33,6 +33,8 @@ import QuizPanel from './components/QuizPanel';
 import DailyChallengePanel from './components/DailyChallengePanel';
 import BypassSubmitPanel from './components/BypassSubmitPanel';
 import AutopsyPanel from './components/AutopsyPanel';
+import TimeSeriesPanel from './components/TimeSeriesPanel';
+import InboxPanel from './components/InboxPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -537,6 +539,14 @@ export default function App() {
 
           <ErrorBoundary name="Autopsy">
             <AutopsyPanel initialHash={incomingAutopsyHash} />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Time-Series">
+            <TimeSeriesPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Inbox">
+            <InboxPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
