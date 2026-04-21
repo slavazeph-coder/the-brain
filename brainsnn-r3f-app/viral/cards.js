@@ -206,6 +206,65 @@ export function handleInboxCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleDiffCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Diff';
+  let description = 'Two texts compared for manipulation pressure.';
+
+  if (payload) {
+    const ap = Math.round((payload.ap || 0) * 100);
+    const bp = Math.round((payload.bp || 0) * 100);
+    const winner = payload.w || (ap < bp ? 'A' : bp < ap ? 'B' : '');
+    const winLabel = winner ? (winner === 'A' ? payload.al : payload.bl) : 'tied';
+    title = `${payload.al || 'A'} ${ap}% vs ${payload.bl || 'B'} ${bp}% — BrainSNN Diff`;
+    description = `Cleaner: ${winLabel}. Δ${Math.abs(ap - bp)} pts between the two.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/v/${hash}`,
+    imageUrl: `${origin}/api/og?type=diff&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?v=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
+export function handleRecapCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Weekly Recap';
+  let description = 'A weekly roll-up of immunity + streak + scans, rendered from local state.';
+
+  if (payload) {
+    const handle = payload.n || 'anon';
+    const s = payload.s || 0;
+    const d = payload.d || 0;
+    title = `${handle} · Immunity ${s} (${d >= 0 ? '+' : ''}${d}) — BrainSNN Weekly`;
+    description = `${handle}'s week: immunity ${s}/100 (${d >= 0 ? '+' : ''}${d} pts), streak ${payload.st || 0}, ${payload.sc || 0} scans.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/w/${hash}`,
+    imageUrl: `${origin}/api/og?type=recap&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?w=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleCounterDraftCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);

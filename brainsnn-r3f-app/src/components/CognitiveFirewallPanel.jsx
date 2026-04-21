@@ -12,6 +12,7 @@ import {
 import { matchSemanticTemplates, mergeTemplateResults } from '../utils/semanticTemplates';
 import { issueReceipt, storeReceipt } from '../utils/receipt';
 import { isReady as embeddingsReady } from '../utils/embeddings';
+import { detectArchetypes } from '../utils/adTransparency';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -59,6 +60,12 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     return mergeTemplateResults(result.templates, semanticHits);
   }, [result?.templates, semanticHits]);
 
+  // Layer 48 — archetype detection
+  const archetypes = useMemo(
+    () => (mergedTemplates.length ? detectArchetypes(mergedTemplates) : []),
+    [mergedTemplates],
+  );
+
   // Layer 41 — refutations for detected templates
   const refutations = useMemo(
     () => (mergedTemplates.length ? refutationsFor(mergedTemplates) : []),
@@ -71,6 +78,22 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       onApplyToNetwork(initialScan.result);
     }
   }, [initialScan?.autoApply]);
+
+  // Layer 49 — Scan Anywhere: accept ?scan=<text> and ?scan-url=<url>
+  // on initial mount, pre-fill the textarea, optionally auto-scan.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const scan = params.get('scan');
+      const scanUrl = params.get('scan-url');
+      if (scan && !text) {
+        setText(scan.slice(0, 6000));
+      } else if (scanUrl && !url) {
+        setUrl(scanUrl.slice(0, 500));
+      }
+    } catch { /* SSR / bad URL — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleScan = async () => {
     setScanning(true);
@@ -311,6 +334,24 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                     {tpl.label}
                     {tpl.hits ? ` · ${tpl.hits}×` : tpl.similarity ? ` · ~${Math.round(tpl.similarity * 100)}%` : ''}
                   </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {archetypes.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div className="eyebrow">Archetype match · Layer 48</div>
+              <div className="firewall-chips" style={{ marginTop: 6 }}>
+                {archetypes.map((arch) => (
+                  <span
+                    key={arch.id}
+                    className="firewall-chip"
+                    title={`${arch.desc} (matched: ${arch.matched.join(', ')})`}
+                    style={{ background: 'rgba(221,105,116,0.10)', borderColor: '#dd6974', color: '#ffd6da' }}
+                  >
+                    {arch.label}
+                  </span>
                 ))}
               </div>
             </div>
