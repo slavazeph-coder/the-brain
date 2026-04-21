@@ -147,6 +147,37 @@ export function handleQuizCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleDailyCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Daily Firewall Challenge';
+  let description = 'Three items every UTC day. Same three for everyone. Streak keeps going as long as you play.';
+
+  if (payload) {
+    const handle = payload.n || 'anon';
+    const date = payload.d || '';
+    const acc = payload.a || 0;
+    const correct = payload.k || 0;
+    const streak = payload.st || 0;
+    title = `${handle} · Daily ${date} · ${correct}/3 (${acc}%)`;
+    description = `${correct}/3 correct — ${acc}% accuracy. ${streak}-day streak. Same 3 items everyone else got today.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/d/${hash}`,
+    imageUrl: `${origin}/api/og?type=daily&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?d=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleAutopsyCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);

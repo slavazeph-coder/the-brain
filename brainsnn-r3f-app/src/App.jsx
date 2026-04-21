@@ -30,6 +30,7 @@ import ImmunityPanel from './components/ImmunityPanel';
 import EmbeddingsPanel from './components/EmbeddingsPanel';
 import RedTeamPanel from './components/RedTeamPanel';
 import QuizPanel from './components/QuizPanel';
+import DailyChallengePanel from './components/DailyChallengePanel';
 import BypassSubmitPanel from './components/BypassSubmitPanel';
 import AutopsyPanel from './components/AutopsyPanel';
 import DreamModePanel from './components/DreamModePanel';
@@ -103,6 +104,14 @@ export default function App() {
     try {
       const params = new URLSearchParams(window.location.search);
       return params.get('a') || null;
+    } catch {
+      return null;
+    }
+  });
+  const [incomingDailyHash] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('d') || null;
     } catch {
       return null;
     }
@@ -403,6 +412,8 @@ export default function App() {
             onApplyFrame={applyTribeFrame}
             onSetMode={setMode}
           />
+
+          <DailyChallengePanel initialHash={incomingDailyHash} />
 
           <QuizPanel />
 

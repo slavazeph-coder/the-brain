@@ -197,6 +197,24 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             </div>
           )}
 
+          {result.templates?.length > 0 && (
+            <div className="firewall-templates">
+              <span className="eyebrow">Propaganda templates · Layer 39</span>
+              <div className="firewall-chips" style={{ marginTop: 6 }}>
+                {result.templates.map((tpl) => (
+                  <span
+                    key={tpl.id}
+                    className="firewall-chip"
+                    title={tpl.desc}
+                    style={{ background: 'rgba(168,111,223,0.12)', borderColor: '#a86fdf', color: '#e2d3ff' }}
+                  >
+                    {tpl.label} · {tpl.hits}×
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {result.reasoning && (
             <div className="gemma-reasoning">
               <span className="eyebrow">AI reasoning</span>

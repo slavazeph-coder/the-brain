@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { LINKS, POSITIONS, REGION_INFO } from '../data/network';
 import { KNOWLEDGE_DOMAINS } from '../data/knowledgeGraph';
 import NeuralFlowGrid from './brain/NeuralFlowGrid';
+import BrainFragments from './brain/BrainFragments';
 
 function FocusController({ selected }) {
   const { camera } = useThree();
@@ -261,6 +262,8 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
         {quality === 'low' && <BrainEdges weights={weights} quality={quality} />}
 
         <NeuralFlowGrid regions={regions} weights={weights} quality={quality} />
+
+        <BrainFragments regions={regions} quality={quality} />
 
         <SignalParticles regions={regions} quality={quality} />
 

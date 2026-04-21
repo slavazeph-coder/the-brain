@@ -248,3 +248,28 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       overall pressure tier (Steady / Tilted / Heavy / Hostile)
     - Answers "which speaker installed which feelings in whom"
     - localStorage handle shared with immunity + quiz + bypass loops
+37. Cognitive Fragments — Obsidian-style dense 3D micro-neuron cloud
+    - ~240 fragments across 7 regions (CTX densest), gaussian-clustered
+    - Intra-region nearest-neighbor edges (each fragment → 2 siblings)
+    - Sparse cross-region threads between nearby region centers
+    - Single InstancedMesh draw call + single LineSegments geometry,
+      positions breathe each frame, scale + color modulate with region
+      activity
+    - Quality tiers: ultra/high full density, low skipped entirely
+38. Daily Firewall Challenge — 3 items per UTC day, global leaderboard
+    - 40-item corpus rotates via day-of-year; everyone sees the same
+      three items on any given UTC day
+    - Slider 0-100 per item; correct = within ±20 of truth score
+    - Streak stored in localStorage (brainsnn_daily_streak_v1)
+    - Shareable /d/<hash> card with date + handle + correct/3 +
+      accuracy + streak; tier = Off day / Warm-up / Solid / Sharp
+      eye / Clean sweep
+    - Duolingo-style daily return loop
+39. Propaganda Templates — named manipulation technique detection
+    - 15 templates: gaslighting, DARVO, love bombing, scarcity, social
+      proof, authority name-drop, loaded question, straw man, whatabout-
+      ism, false dichotomy, fear appeal, hidden-truth conspiracy, moral
+      outrage bait, purity test, guilt trip
+    - detectTemplates(text) returns [{id,label,desc,hits}]
+    - Extends scoreContent() output with .templates — surfaces as
+      chips in the Cognitive Firewall panel beneath Evidence traces

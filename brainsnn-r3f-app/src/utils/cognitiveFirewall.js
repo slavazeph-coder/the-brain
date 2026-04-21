@@ -1,3 +1,5 @@
+import { detectTemplates } from './propagandaTemplates.js';
+
 const URGENCY_PATTERNS = [
   /\bnow\b|\bimmediately\b|\burgent\b|\bbreaking\b|\balert\b/gi,
   /\blimited time\b|\bdon't miss\b|\blast chance\b|\bact(?:s)? fast\b/gi,
@@ -166,7 +168,10 @@ export function resetActiveRules() {
 }
 
 export function scoreContent(text = '') {
-  return scoreContentWithRules(text, _activeRules);
+  const base = scoreContentWithRules(text, _activeRules);
+  // Layer 39 — decorate with named propaganda templates.
+  base.templates = detectTemplates(text);
+  return base;
 }
 
 /**
