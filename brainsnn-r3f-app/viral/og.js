@@ -394,6 +394,207 @@ function autopsyLevelFor(pressure) {
   return { label: 'Steady', color: '#6daa45' };
 }
 
+function timelineTrendColor(label) {
+  if (label === 'Escalating') return '#dd6974';
+  if (label === 'Rising') return '#e57b40';
+  if (label === 'De-escalating') return '#5ee69a';
+  if (label === 'Cooling') return '#77dbe4';
+  return '#fdab43';
+}
+
+function timelineSparklineNode(series, color) {
+  // Build a simple polyline as text via <svg> won't render in satori;
+  // instead, emit a row of vertical bars whose heights encode pressure.
+  if (!series || !series.length) return null;
+  return {
+    type: 'div',
+    props: {
+      style: {
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: 4,
+        height: 140,
+        width: '100%',
+        padding: '12px 6px',
+        borderRadius: 10,
+        background: 'rgba(255,255,255,0.03)',
+      },
+      children: series.map((v) => {
+        const pct = Math.max(3, Math.min(100, Math.round(v * 100)));
+        return {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              flex: 1,
+              height: `${pct}%`,
+              minWidth: 6,
+              background: v >= 0.55 ? '#dd6974' : v >= 0.3 ? color : '#5ad4ff',
+              borderRadius: 3,
+              opacity: v < 0.1 ? 0.35 : 1,
+            },
+          },
+        };
+      }),
+    },
+  };
+}
+
+function timelineCardNode(payload) {
+  const tone = timelineTrendColor(payload.tr);
+  const title = (payload.ttl || 'Manipulation over time').slice(0, 48);
+  const n = payload.n || 0;
+  const mp = payload.mp || 0;
+  const peak = payload.pk || 0;
+  const peakDate = payload.pd || '';
+  const escalations = payload.es || 0;
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${tone}22 100%)`,
+        color: '#e6f1ff',
+        padding: 52,
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: 'BrainSNN · Time-Series' } },
+              { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: tone, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: payload.tr || 'Stable' } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', marginBottom: 14 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 36, fontWeight: 800, color: '#f1ece5', lineHeight: 1.1 }, children: title } },
+              { type: 'div', props: { style: { display: 'flex', gap: 18, marginTop: 6, fontSize: 18, color: '#94a3b8' }, children: [
+                { type: 'span', props: { children: `${n} points` } },
+                { type: 'span', props: { children: `mean ${Math.round(mp * 100)}%` } },
+                { type: 'span', props: { style: { color: tone, fontWeight: 700 }, children: `peak ${Math.round(peak * 100)}%${peakDate ? ` · ${peakDate}` : ''}` } },
+                { type: 'span', props: { children: `${escalations} escalation${escalations === 1 ? '' : 's'}` } },
+              ] } },
+            ],
+          },
+        },
+        timelineSparklineNode(payload.series || [], tone) || { type: 'div', props: { children: ' ' } },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, fontSize: 20, color: '#94a3b8' },
+            children: [
+              { type: 'span', props: { children: 'paste yours → brainsnn.com' } },
+              { type: 'span', props: { children: 'time-series · 46 cognitive layers' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+function inboxCardNode(payload) {
+  const title = (payload.ttl || 'Inbox triage').slice(0, 48);
+  const n = payload.n || 0;
+  const mp = payload.mp || 0;
+  const high = payload.hi || 0;
+  const top = (payload.top || []).slice(0, 5);
+  const tone = high >= 3 ? '#dd6974' : high >= 1 ? '#fdab43' : '#6daa45';
+  const lvl = high >= 3 ? 'Heavy' : high >= 1 ? 'Tilted' : 'Clean';
+
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: `linear-gradient(135deg, #0b1224 0%, ${tone}22 100%)`,
+        color: '#e6f1ff',
+        padding: 52,
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 22, letterSpacing: 6, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800 }, children: 'BrainSNN · Inbox Triage' } },
+              { type: 'div', props: { style: { padding: '8px 18px', borderRadius: 999, background: tone, color: '#0b1224', fontSize: 22, fontWeight: 800 }, children: lvl } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', marginBottom: 14 },
+            children: [
+              { type: 'div', props: { style: { fontSize: 32, fontWeight: 800, color: '#f1ece5', lineHeight: 1.1 }, children: title } },
+              { type: 'div', props: { style: { display: 'flex', gap: 18, marginTop: 6, fontSize: 18, color: '#94a3b8' }, children: [
+                { type: 'span', props: { children: `${n} messages` } },
+                { type: 'span', props: { children: `mean ${Math.round(mp * 100)}%` } },
+                { type: 'span', props: { style: { color: tone, fontWeight: 700 }, children: `${high} high-pressure` } },
+              ] } },
+            ],
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', flexDirection: 'column', flex: 1, gap: 8 },
+            children: top.map((row) => {
+              const p = row.p || 0;
+              const rowTone = p >= 0.55 ? '#dd6974' : p >= 0.3 ? '#fdab43' : '#6daa45';
+              return {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.03)',
+                    borderLeft: `3px solid ${rowTone}`,
+                  },
+                  children: [
+                    { type: 'div', props: { style: { display: 'flex', width: 190, fontSize: 18, color: '#cbd5e1' }, children: row.f || '***' } },
+                    { type: 'div', props: { style: { display: 'flex', flex: 1, fontSize: 20, fontWeight: 700, color: '#f1ece5' }, children: row.s || '(no subject)' } },
+                    { type: 'div', props: { style: { display: 'flex', width: 90, justifyContent: 'flex-end', fontSize: 20, fontWeight: 700, color: rowTone }, children: `${Math.round(p * 100)}%` } },
+                  ],
+                },
+              };
+            }),
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, fontSize: 18, color: '#94a3b8' },
+            children: [
+              { type: 'span', props: { children: 'paste yours → brainsnn.com' } },
+              { type: 'span', props: { children: 'inbox mode · 46 cognitive layers' } },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
 function draftLevelFor(reduction) {
   if (reduction >= 0.35) return { label: 'Fully neutralized', color: '#5ee69a' };
   if (reduction >= 0.20) return { label: 'Dampened', color: '#77dbe4' };
@@ -742,6 +943,16 @@ export async function renderOg(query) {
   if (type === 'counter' && hash) {
     const payload = decodeHash(hash);
     if (payload) return renderNode(counterDraftCardNode(payload));
+  }
+
+  if (type === 'timeline' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(timelineCardNode(payload));
+  }
+
+  if (type === 'inbox' && hash) {
+    const payload = decodeHash(hash);
+    if (payload) return renderNode(inboxCardNode(payload));
   }
 
   if (hash) {

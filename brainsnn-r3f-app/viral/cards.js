@@ -147,6 +147,65 @@ export function handleQuizCard(req, res) {
   res.status(200).send(html);
 }
 
+export function handleTimelineCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Manipulation over Time';
+  let description = 'Pressure trend across a message stream, scored by the Cognitive Firewall.';
+
+  if (payload) {
+    const t = payload.ttl || 'Manipulation over time';
+    const n = payload.n || 0;
+    const peak = Math.round((payload.pk || 0) * 100);
+    const tr = payload.tr || 'Stable';
+    title = `${t} · ${tr} · peak ${peak}% — BrainSNN Timeline`;
+    description = `${n} points, trend ${tr}, peak ${peak}%${payload.pd ? ` on ${payload.pd}` : ''}.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/t/${hash}`,
+    imageUrl: `${origin}/api/og?type=timeline&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?t=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
+export function handleInboxCard(req, res) {
+  const hash = req.params.hash || '';
+  const origin = originFrom(req);
+  const payload = decodeHash(hash);
+
+  let title = 'BrainSNN — Inbox Triage';
+  let description = 'Anonymized pressure-ranked summary of a message batch.';
+
+  if (payload) {
+    const t = payload.ttl || 'Inbox triage';
+    const n = payload.n || 0;
+    const hi = payload.hi || 0;
+    title = `${t} · ${n} messages · ${hi} high-pressure — BrainSNN Inbox`;
+    description = `${hi} of ${n} messages scored above 55% pressure.`;
+  }
+
+  const html = htmlShell({
+    title,
+    description,
+    ogUrl: `${origin}/n/${hash}`,
+    imageUrl: `${origin}/api/og?type=inbox&h=${encodeURIComponent(hash)}`,
+    redirectTo: hash ? `/?n=${encodeURIComponent(hash)}` : '/',
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(html);
+}
+
 export function handleCounterDraftCard(req, res) {
   const hash = req.params.hash || '';
   const origin = originFrom(req);
