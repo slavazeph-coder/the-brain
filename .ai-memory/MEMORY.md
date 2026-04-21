@@ -394,3 +394,31 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - OpenAPI spec at /api/openapi.json
     - ApiDocsPanel in-app surface: key input + live "Try it" button
       that POSTs from the browser + cURL snippet for dev docs
+55. Custom Rules Editor — user-defined Firewall regex
+    - Add/remove/import/export rules per category
+      (urgency/outrage/certainty/fear), persisted in localStorage
+      (brainsnn_custom_rules_v1)
+    - applyMergedRules() unions DEFAULT_RULES with user rules and
+      promotes the combined set via setActiveRules() — every scan,
+      quiz, autopsy, conversation, and adversarial round picks it up
+    - Export as 'custom-rules-v1' JSON, portable between devices
+56. Badge System — retroactive, deterministic progression
+    - 13 badges across bronze/silver/gold tiers; computed from
+      existing signals (immunity, streak, scan count, peak pressure,
+      custom rules, polyglot, bypass submit) — no extra bookkeeping
+    - Shareable /b/<hash> card with handle + earned/total ratio +
+      badge-chip rack (earned tinted, locked grayed)
+    - Duolingo-style progression without the annoying nags
+57. Data Portability — export/import/wipe all BrainSNN localStorage
+    - Scans every brainsnn_* key into a 'brainsnn-bundle-v1' JSON
+      envelope. Download button + clipboard export + file-import
+      + overwrite-existing toggle + wipe-all with confirm
+    - Lets power users move state between devices and feel safe
+      experimenting
+58. Image OCR Firewall — screenshot → text → Firewall
+    - tesseract.js loaded lazily from esm.sh CDN on first use so
+      the main bundle stays slim
+    - Paste (⌘V), drop, or pick a file; preview renders; progress
+      bar tracks OCR; extracted text editable before handoff
+    - "Scan in Firewall →" deep-links via /?scan=<text>
+    - All in-browser — images never leave the device

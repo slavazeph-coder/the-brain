@@ -13,6 +13,7 @@ import { matchSemanticTemplates, mergeTemplateResults } from '../utils/semanticT
 import { issueReceipt, storeReceipt } from '../utils/receipt';
 import { isReady as embeddingsReady } from '../utils/embeddings';
 import { detectArchetypes } from '../utils/adTransparency';
+import { markPolyglotSeen } from '../utils/badges';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -100,6 +101,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     try {
       const score = await scoreContentSmart(text);
       setResult(score);
+      // Layer 52/56 — if a non-English pack fired, record the badge signal
+      if (score?.language && score.language !== 'en') {
+        try { markPolyglotSeen(); } catch { /* noop */ }
+      }
       // Layer 45 — add semantic template hits (async, non-blocking for UI)
       setSemanticHits([]);
       if (embReady && text.trim().length >= 12) {

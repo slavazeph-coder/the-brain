@@ -24,7 +24,7 @@ import { renderOg } from './viral/og.js';
 import {
   handleReactionCard, handleImmunityCard, handleQuizCard, handleAutopsyCard,
   handleDailyCard, handleCounterDraftCard, handleTimelineCard, handleInboxCard,
-  handleDiffCard, handleRecapCard,
+  handleDiffCard, handleRecapCard, handleBadgesCard,
 } from './viral/cards.js';
 import { handleAttackSubmit, handleAttacksGet } from './viral/attacks.js';
 import { handleScore, handleOpenApi } from './viral/api-score.js';
@@ -116,6 +116,7 @@ app.get('/t/:hash', handleTimelineCard);
 app.get('/n/:hash', handleInboxCard);
 app.get('/v/:hash', handleDiffCard);
 app.get('/w/:hash', handleRecapCard);
+app.get('/b/:hash', handleBadgesCard);
 
 // --- Static SPA -------------------------------------------------------------
 if (!existsSync(DIST)) {
