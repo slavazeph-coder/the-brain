@@ -535,3 +535,32 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - Default pair: DEFAULT_RULES vs getActiveRules() (defaults ∪
       custom or evolved). Answers "did my rule changes actually
       catch anything new?"
+75. Region Drill-Down — camera zoom + fragment boost
+    - Module-level store (drilldown.js) with subscribe listeners so
+      the 3D scene reads state synchronously each frame
+    - FocusController pulls camera in to ~2.6 units (from 5.4) when
+      drilled, with tighter lerp
+    - BrainFragments adds a per-frame focusBoost (sin-pulsed) to the
+      focused region's fragments so they stand out
+    - DrillDownPanel: 7 region pills + Exit button + per-region
+      metadata card (role / oscillation bias / firewall tie)
+76. Streaming Scoring API — POST /api/score/stream (SSE)
+    - Sequentially emits "dim" events per dimension, "tpl" per
+      detected template, and a final "final" event with the
+      complete score + receipt
+    - 20 req/min/IP rate-limit. Wired into ApiDocsPanel with a live
+      event-log viewer so devs can see the stream shape inline
+77. Session Rooms — private head-to-head challenge rooms
+    - POST /api/rooms + GET /api/rooms/:room. Upstash-backed (LPUSH
+      + LTRIM + 7-day EXPIRE); in-memory fallback when env missing
+    - Each entry: {handle, source, score, streak, ts, meta}. Sources
+      supported: daily / immunity / streak
+    - SessionRoomsPanel creates/joins a room, submits the user's
+      current score, renders a sorted mini-leaderboard. Share link
+      is just the origin + ?room=<id>
+78. Vertical Card Variants — 1080×1920 OG for TikTok/Reels/Stories
+    - viral/og.js renderNode now accepts size='vertical' → wraps the
+      standard horizontal card in a padded flex-column with a bold
+      BRAINSNN wordmark and the viral tagline
+    - /api/og?size=vertical&type=<type>&h=<hash> returns 1080×1920
+      PNG, opening TikTok/Reels/Stories as a native share surface

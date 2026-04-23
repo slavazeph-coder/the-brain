@@ -28,6 +28,8 @@ import {
 } from './viral/cards.js';
 import { handleAttackSubmit, handleAttacksGet } from './viral/attacks.js';
 import { handleScore, handleOpenApi } from './viral/api-score.js';
+import { handleScoreStream } from './viral/api-stream.js';
+import { handleRoomPost, handleRoomGet } from './viral/api-rooms.js';
 import { handleFetchUrl } from './viral/fetch-url.js';
 import { handleLeaderboardGet, handleLeaderboardPost } from './viral/leaderboard.js';
 
@@ -104,6 +106,22 @@ app.post('/api/score', async (req, res) => {
   catch (err) { console.error('[score]', err); res.status(500).json({ error: 'score failed' }); }
 });
 app.get('/api/openapi.json', handleOpenApi);
+
+// --- Layer 76 — Streaming scoring (SSE) ---
+app.post('/api/score/stream', async (req, res) => {
+  try { await handleScoreStream(req, res); }
+  catch (err) { console.error('[stream]', err); if (!res.headersSent) res.status(500).json({ error: 'stream failed' }); }
+});
+
+// --- Layer 77 — Session Rooms ---
+app.post('/api/rooms', async (req, res) => {
+  try { await handleRoomPost(req, res); }
+  catch (err) { console.error('[rooms:post]', err); res.status(500).json({ error: 'rooms post failed' }); }
+});
+app.get('/api/rooms/:room', async (req, res) => {
+  try { await handleRoomGet(req, res); }
+  catch (err) { console.error('[rooms:get]', err); res.status(500).json({ error: 'rooms get failed' }); }
+});
 
 // --- Share card HTML shells -------------------------------------------------
 app.get('/r/:hash', handleReactionCard);
