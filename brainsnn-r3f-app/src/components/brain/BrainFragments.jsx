@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { POSITIONS, REGION_INFO } from '../../data/network';
 import { getOscillationState, sampleModulation } from '../../utils/oscillations';
+import { getDrillDown } from '../../utils/drilldown';
 
 /**
  * Layer 37 — Cognitive Fragments
@@ -176,11 +177,17 @@ export default function BrainFragments({ regions, quality }) {
     const oscState = getOscillationState();
     const oscOffsets = sampleModulation(oscState, t);
 
+    // Layer 75 — drill-down focus boost
+    const drill = getDrillDown();
+    const focusRegion = drill.active ? drill.region : null;
+
     // Update each fragment instance
     for (let i = 0; i < fragments.length; i++) {
       const f = fragments[i];
       const rawActivity = regions[f.regionId] ?? 0.1;
-      const activity = Math.max(0, Math.min(1, rawActivity + (oscOffsets[f.regionId] || 0)));
+      const isFocused = focusRegion && f.regionId === focusRegion;
+      const focusBoost = isFocused ? 0.25 + 0.15 * Math.sin(t * 2.2 + f.phase) : 0;
+      const activity = Math.max(0, Math.min(1, rawActivity + (oscOffsets[f.regionId] || 0) + focusBoost));
       const pulse = 0.8 + 0.2 * Math.sin(t * 1.4 + f.phase);
       const scale = f.baseScale * (0.6 + activity * 3.4) * pulse;
 

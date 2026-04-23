@@ -7,6 +7,7 @@ import { LINKS, POSITIONS, REGION_INFO } from '../data/network';
 import { KNOWLEDGE_DOMAINS } from '../data/knowledgeGraph';
 import NeuralFlowGrid from './brain/NeuralFlowGrid';
 import BrainFragments from './brain/BrainFragments';
+import { getDrillDown, subscribeDrillDown } from '../utils/drilldown';
 
 function FocusController({ selected }) {
   const { camera } = useThree();
@@ -14,11 +15,16 @@ function FocusController({ selected }) {
   const desired = useRef(new THREE.Vector3(0, 1.5, 9));
 
   useFrame(() => {
-    const focus = selected ? POSITIONS[selected] : [0, 0, 0];
+    const drill = getDrillDown();
+    const focusRegion = drill.active && drill.region ? drill.region : selected;
+    const focus = focusRegion ? POSITIONS[focusRegion] : [0, 0, 0];
     target.current.lerp(new THREE.Vector3(...focus), 0.08);
+    const zoom = drill.active ? 2.6 : 5.4;
+    const sideScale = drill.active ? 0.35 : 0.55;
+    const lift = drill.active ? 0.7 : 1.3;
     desired.current.lerp(
-      new THREE.Vector3(focus[0] * 0.55, focus[1] + 1.3, focus[2] + 5.4),
-      0.08
+      new THREE.Vector3(focus[0] * sideScale, focus[1] + lift, focus[2] + zoom),
+      drill.active ? 0.1 : 0.08
     );
     camera.position.lerp(desired.current, 0.08);
     camera.lookAt(target.current);

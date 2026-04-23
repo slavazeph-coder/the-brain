@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 /**
  * Layer 54 — Public API docs panel.
@@ -13,6 +13,8 @@ export default function ApiDocsPanel() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [streamEvents, setStreamEvents] = useState([]);
+  const [streaming, setStreaming] = useState(false);
 
   async function tryIt() {
     setLoading(true); setErr(''); setResult(null);
@@ -34,6 +36,49 @@ export default function ApiDocsPanel() {
       setLoading(false);
     }
   }
+
+  async function tryStream() {
+    setStreaming(true); setStreamEvents([]); setErr('');
+    try {
+      const r = await fetch('/api/score/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!r.ok || !r.body) {
+        setErr(`HTTP ${r.status}`);
+        return;
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const chunks = buf.split('\n\n');
+        buf = chunks.pop() || '';
+        for (const chunk of chunks) {
+          const lines = chunk.split('\n');
+          let event = 'message';
+          let data = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) event = line.slice(7);
+            else if (line.startsWith('data: ')) data += line.slice(6);
+          }
+          try {
+            setStreamEvents((prev) => [...prev, { event, data: JSON.parse(data || '{}') }]);
+          } catch { /* skip */ }
+        }
+      }
+    } catch (e) {
+      setErr(e.message || 'stream failed');
+    } finally {
+      setStreaming(false);
+    }
+  }
+
+  const verticalUrl = `/api/og?size=vertical&h=eyJ0IjoiVVJHRU5UOiBzaG9ja2luZyBzY2FuZGFsISIsImUiOjAuNzIsImMiOjAuNjQsIm0iOjAuNjgsInUiOjAuNTEsImEiOiJvdXRyYWdlIiwidHMiOjF9`;
 
   const curl = `curl -X POST https://brainsnn.com/api/score \\
   -H "Content-Type: application/json" \\
@@ -72,7 +117,34 @@ export default function ApiDocsPanel() {
         <button className="btn primary" onClick={tryIt} disabled={loading || text.trim().length < 5}>
           {loading ? 'Scoring…' : 'Try it live'}
         </button>
+        <button className="btn" onClick={tryStream} disabled={streaming || text.trim().length < 5}>
+          {streaming ? 'Streaming…' : 'Stream (SSE · L76)'}
+        </button>
+        <a className="btn" href={verticalUrl} target="_blank" rel="noreferrer">
+          Vertical card (L78)
+        </a>
       </div>
+
+      {streamEvents.length > 0 && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '10px 12px',
+            borderRadius: 8,
+            background: 'rgba(90,212,255,0.06)',
+            borderLeft: '3px solid #5ad4ff',
+            fontFamily: 'monospace',
+            fontSize: 12,
+          }}
+        >
+          {streamEvents.map((ev, i) => (
+            <div key={i} style={{ padding: '2px 0', color: ev.event === 'final' ? '#5ee69a' : '#cbd5e1' }}>
+              <strong style={{ color: '#5ad4ff' }}>{ev.event}</strong>{' '}
+              <span>{JSON.stringify(ev.data)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {err && <p className="muted" style={{ color: '#dd6974', marginTop: 8 }}>Error: {err}</p>}
 

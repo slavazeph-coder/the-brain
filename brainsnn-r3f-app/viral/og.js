@@ -1099,8 +1099,69 @@ function fallbackNode(title, subtitle) {
   };
 }
 
-async function renderNode(node) {
-  const svg = await satori(node, { width: 1200, height: 630, fonts: FONTS });
+// Layer 78 — vertical mode wraps the horizontal card in a flex column
+// so TikTok / Reels / Stories share-sheets get a 1080×1920 crop without
+// re-laying out every card node.
+function verticalWrap(innerNode) {
+  return {
+    type: 'div',
+    props: {
+      style: {
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 80,
+        background: '#0b1224',
+        fontFamily: 'Inter',
+      },
+      children: [
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', fontSize: 36, letterSpacing: 10, color: '#5ad4ff', textTransform: 'uppercase', fontWeight: 800, marginBottom: 28 },
+            children: 'BRAINSNN',
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: {
+              display: 'flex',
+              width: 920,
+              height: 482,
+              borderRadius: 24,
+              overflow: 'hidden',
+              boxShadow: '0 40px 80px rgba(0,0,0,0.5)',
+            },
+            children: innerNode,
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', fontSize: 32, color: '#cbd5e1', marginTop: 36, fontWeight: 600 },
+            children: 'brainsnn.com',
+          },
+        },
+        {
+          type: 'div',
+          props: {
+            style: { display: 'flex', fontSize: 22, color: '#94a3b8', marginTop: 10 },
+            children: 'Paste any tweet. See which feeling it installs.',
+          },
+        },
+      ],
+    },
+  };
+}
+
+async function renderNode(node, size = 'horizontal') {
+  const [w, h] = size === 'vertical' ? [1080, 1920] : [1200, 630];
+  const finalNode = size === 'vertical' ? verticalWrap(node) : node;
+  const svg = await satori(finalNode, { width: w, height: h, fonts: FONTS });
   const png = new Resvg(svg).render().asPng();
   return png;
 }
@@ -1108,63 +1169,64 @@ async function renderNode(node) {
 export async function renderOg(query) {
   const type = query.type || 'reaction';
   const hash = query.h || '';
+  const size = query.size === 'vertical' ? 'vertical' : 'horizontal';
   const fallbackTitle = query.title || 'BrainSNN';
   const fallbackSub = query.subtitle || 'Paste any tweet. See which feeling it installs.';
 
   if (type === 'immunity' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(immunityCardNode(payload));
+    if (payload) return renderNode(immunityCardNode(payload), size);
   }
 
   if (type === 'quiz' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(quizCardNode(payload));
+    if (payload) return renderNode(quizCardNode(payload), size);
   }
 
   if (type === 'autopsy' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(autopsyCardNode(payload));
+    if (payload) return renderNode(autopsyCardNode(payload), size);
   }
 
   if (type === 'daily' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(dailyCardNode(payload));
+    if (payload) return renderNode(dailyCardNode(payload), size);
   }
 
   if (type === 'counter' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(counterDraftCardNode(payload));
+    if (payload) return renderNode(counterDraftCardNode(payload), size);
   }
 
   if (type === 'timeline' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(timelineCardNode(payload));
+    if (payload) return renderNode(timelineCardNode(payload), size);
   }
 
   if (type === 'inbox' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(inboxCardNode(payload));
+    if (payload) return renderNode(inboxCardNode(payload), size);
   }
 
   if (type === 'diff' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(diffCardNode(payload));
+    if (payload) return renderNode(diffCardNode(payload), size);
   }
 
   if (type === 'recap' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(recapCardNode(payload));
+    if (payload) return renderNode(recapCardNode(payload), size);
   }
 
   if (type === 'badges' && hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(badgeCardNode(payload));
+    if (payload) return renderNode(badgeCardNode(payload), size);
   }
 
   if (hash) {
     const payload = decodeHash(hash);
-    if (payload) return renderNode(reactionCardNode(payload));
+    if (payload) return renderNode(reactionCardNode(payload), size);
   }
 
-  return renderNode(fallbackNode(fallbackTitle, fallbackSub));
+  return renderNode(fallbackNode(fallbackTitle, fallbackSub), size);
 }

@@ -60,6 +60,8 @@ import OscillationsPanel from './components/OscillationsPanel';
 import LayerExplorerPanel from './components/LayerExplorerPanel';
 import TextAdventurePanel from './components/TextAdventurePanel';
 import ComparatorPanel from './components/ComparatorPanel';
+import DrillDownPanel from './components/DrillDownPanel';
+import SessionRoomsPanel from './components/SessionRoomsPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -672,6 +674,14 @@ export default function App() {
 
           <ErrorBoundary name="Comparator">
             <ComparatorPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Drill-Down">
+            <DrillDownPanel regions={state.regions} />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Session Rooms">
+            <SessionRoomsPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
