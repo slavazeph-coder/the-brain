@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ocrImage, imageFromClipboard } from '../utils/ocr';
+import { annotateMatches, paintAnnotations, BOX_COLORS } from '../utils/imageAnnotation';
 
 /**
  * Layer 58 — Image OCR Firewall panel.
@@ -14,8 +15,11 @@ export default function OcrPanel() {
   const [status, setStatus] = useState('');
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
+  const [boxes, setBoxes] = useState([]);
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
+  const canvasRef = useRef(null);
+  const imgRef = useRef(null);
 
   useEffect(() => {
     function onPaste(e) {
@@ -39,11 +43,16 @@ export default function OcrPanel() {
       });
       setPreview(dataUrl);
       setStatus('OCR running…');
-      const { text: ocrText, confidence } = await ocrImage(file, {
+      const { text: ocrText, confidence, words, imageSize } = await ocrImage(file, {
         onProgress: (p) => setProgress(Math.round(p * 100)),
       });
       setText(ocrText);
-      setStatus(`OCR done — confidence ${Math.round(confidence)}%`);
+      // Layer 95 — annotation
+      try {
+        const { boxes: found } = annotateMatches({ words, imageSize });
+        setBoxes(found);
+      } catch { setBoxes([]); }
+      setStatus(`OCR done — confidence ${Math.round(confidence)}% · ${words.length} words · ${boxes.length} annotations`);
     } catch (e) {
       setErr(e.message || 'OCR failed');
       setStatus('');
@@ -107,12 +116,43 @@ export default function OcrPanel() {
       </div>
 
       {preview && (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}>
           <img
             src={preview}
+            ref={imgRef}
             alt="pasted"
-            style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}
+            onLoad={() => {
+              const img = imgRef.current; const cnv = canvasRef.current;
+              if (!img || !cnv) return;
+              cnv.width = img.naturalWidth;
+              cnv.height = img.naturalHeight;
+              cnv.style.width = img.clientWidth + 'px';
+              cnv.style.height = img.clientHeight + 'px';
+              const ctx = cnv.getContext('2d');
+              ctx.clearRect(0, 0, cnv.width, cnv.height);
+              paintAnnotations(ctx, boxes);
+            }}
+            style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)', display: 'block' }}
           />
+          <canvas
+            ref={canvasRef}
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+          />
+        </div>
+      )}
+      {boxes.length > 0 && (
+        <div className="muted small-note" style={{ marginTop: 6 }}>
+          Annotations · Layer 95:
+          {' '}
+          {Object.keys(BOX_COLORS).map((cat) => {
+            const n = boxes.filter((b) => b.category === cat).length;
+            if (!n) return null;
+            return (
+              <span key={cat} style={{ color: BOX_COLORS[cat], marginRight: 8 }}>
+                {cat} × {n}
+              </span>
+            );
+          })}
         </div>
       )}
 

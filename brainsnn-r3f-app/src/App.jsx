@@ -76,7 +76,13 @@ import PwaInstallPanel from './components/PwaInstallPanel';
 import CommandPalette from './components/CommandPalette';
 import FeedbackPanel from './components/FeedbackPanel';
 import RoleTourPanel from './components/RoleTourPanel';
+import SyncPanel from './components/SyncPanel';
+import HotkeyMap from './components/HotkeyMap';
+import ThemePanel from './components/ThemePanel';
+import CommunityPackPanel from './components/CommunityPackPanel';
+import MilestonePanel from './components/MilestonePanel';
 import { registerServiceWorker } from './utils/pwa';
+import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -197,7 +203,8 @@ export default function App() {
   }, [state.tick]);
 
   // Layer 91 — register service worker once on mount
-  useEffect(() => { registerServiceWorker(); }, []);
+  // Layer 98 — apply theme + a11y prefs
+  useEffect(() => { registerServiceWorker(); registerTheme(); }, []);
 
   // Layer 19 — register MCP bridge context once
   useEffect(() => {
@@ -327,6 +334,7 @@ export default function App() {
       <KeyboardHelp open={showKbHelp} onClose={() => setShowKbHelp(false)} />
       <OnboardingWalkthrough />
       <CommandPalette />
+      <HotkeyMap />
 
       <main className="app-layout">
         <section className="main-column">
@@ -753,6 +761,22 @@ export default function App() {
 
           <ErrorBoundary name="Role Tour">
             <RoleTourPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Sync">
+            <SyncPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Theme">
+            <ThemePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Community Pack">
+            <CommunityPackPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Milestone">
+            <MilestonePanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

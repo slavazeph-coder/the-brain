@@ -30,6 +30,8 @@ import { handleAttackSubmit, handleAttacksGet } from './viral/attacks.js';
 import { handleScore, handleOpenApi } from './viral/api-score.js';
 import { handleScoreStream } from './viral/api-stream.js';
 import { handleRoomPost, handleRoomGet } from './viral/api-rooms.js';
+import { handleSyncPost, handleSyncGet } from './viral/api-sync.js';
+import { handleCommunityPack, handleCommunityList } from './viral/api-community.js';
 import { handleFetchUrl } from './viral/fetch-url.js';
 import { handleLeaderboardGet, handleLeaderboardPost } from './viral/leaderboard.js';
 
@@ -122,6 +124,20 @@ app.get('/api/rooms/:room', async (req, res) => {
   try { await handleRoomGet(req, res); }
   catch (err) { console.error('[rooms:get]', err); res.status(500).json({ error: 'rooms get failed' }); }
 });
+
+// --- Layer 96 — Cross-device Sync ---
+app.post('/api/sync', async (req, res) => {
+  try { await handleSyncPost(req, res); }
+  catch (err) { console.error('[sync:post]', err); res.status(500).json({ error: 'sync post failed' }); }
+});
+app.get('/api/sync/:code', async (req, res) => {
+  try { await handleSyncGet(req, res); }
+  catch (err) { console.error('[sync:get]', err); res.status(500).json({ error: 'sync get failed' }); }
+});
+
+// --- Layer 99 — Community Pack feed ---
+app.get('/api/community-pack', handleCommunityPack);
+app.get('/api/community-packs', handleCommunityList);
 
 // --- Share card HTML shells -------------------------------------------------
 app.get('/r/:hash', handleReactionCard);

@@ -667,3 +667,33 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - "Jump" button uses the same flash-panel helper as the command
       palette to scroll + highlight.
     - Answers "what do I actually do with 90+ panels?"
+95. Image Bbox Annotation — draw Firewall matches on the screenshot
+    - src/utils/ocr.js upgraded to return per-word bounding boxes
+      via tesseract's data.words; src/utils/imageAnnotation.js maps
+      matched regex spans back to merged word bboxes
+    - OcrPanel overlays a canvas above the image and strokes a
+      category-colored rectangle for every match
+96. Cross-device Sync — 6-char code, 10-min TTL
+    - viral/api-sync.js POST /api/sync + GET /api/sync/:code.
+      Upstash SETEX; in-memory Map fallback; rate-limited 6/min/IP
+    - SyncPanel generates a code, uploads the Layer 57 bundle on
+      Send, fetches + imports on Receive
+97. Hotkey Map — Shift-? cheat sheet + 2-letter jumps
+    - src/utils/hotkeys.js curates ~45 2-letter codes over
+      LAYER_CATALOG. Typing two letters (outside form fields) flashes
+      the target panel. Shift-? opens a modal cheat-sheet.
+98. Theme + Accessibility — dark/light/auto + high-contrast
+    - src/utils/theme.js writes data-theme / data-high-contrast /
+      data-reduce-motion onto <html> + a --bsnn-font-scale custom
+      property. Honors prefers-color-scheme and prefers-reduced-motion
+    - ThemePanel exposes the four axes with instant persistence
+99. Federated Community Firewall — weekly rotated pack
+    - viral/api-community.js GET /api/community-pack returns the
+      pack-of-the-UTC-week from a rotation of curated packs
+    - CommunityPackPanel installs via Layer 83 tagging so the
+      community pack uninstalls cleanly without touching user rules
+100. Milestone Dashboard — 100 layers shipped
+    - MilestonePanel synthesizes LAYER_CATALOG by group, surfaces
+      per-user immunity / streak / scan-count / receipt stats, and
+      lists the four ways to navigate (⌘K / Shift-? / Role Tour /
+      Layer Explorer). The "you made it here" panel.

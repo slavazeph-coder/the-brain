@@ -101,6 +101,12 @@ export const LAYER_CATALOG = [
   { id: 92, name: 'Command Palette', group: 'view', blurb: '⌘K fuzzy-search jump to any layer.' },
   { id: 93, name: 'Feedback Calibration', group: 'firewall', blurb: 'Per-user accuracy vs bias → adjusted pressure.' },
   { id: 94, name: 'Role Tour', group: 'view', blurb: 'Role-based 6-step walkthrough (writer/parent/dev/...).' },
+  { id: 95, name: 'Image Bbox Annotation', group: 'firewall', blurb: 'Draw Firewall matches directly on the OCR\'d image.' },
+  { id: 96, name: 'Cross-device Sync', group: 'data', blurb: '6-char code → transfer state between devices in 10 min.' },
+  { id: 97, name: 'Hotkey Map', group: 'view', blurb: 'Shift-? cheat sheet + type two letters to jump.' },
+  { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
+  { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
+  { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
 ];
 
 export const LAYER_GROUPS = {
