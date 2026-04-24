@@ -564,3 +564,33 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       BRAINSNN wordmark and the viral tagline
     - /api/og?size=vertical&type=<type>&h=<hash> returns 1080×1920
       PNG, opening TikTok/Reels/Stories as a native share surface
+79. Compliment Detector — grounded praise vs love-bombing
+    - scoreCompliment(text) returns {genuineness, loveBombingRisk,
+      specificityHits, maximalistHits, hedgingHits, verdict}
+    - Grounded = specific + observed + bounded; love-bombing =
+      superlative + unconditional + premature
+    - Inverse of the Firewall; completes the "real vs manufactured
+      closeness" story
+80. Decoy / Sarcasm Detector — FPR reducer
+    - analyzeDecoy(text) returns sarcasm + callout scores + a
+      suggestedAdjustment multiplier (0.15-1.0)
+    - CognitiveFirewallPanel shows an inline attenuated pressure
+      ("adj × 0.35 → 12%") when markers fire so callers see both
+      the raw and adjusted score
+    - Catches cases where the user is describing manipulation
+      rather than performing it ("classic phishing", scare-quotes,
+      "supposedly", reported speech)
+81. Browser Extension Generator — installable MV3 extension
+    - src/utils/extensionSource.js emits manifest.json + background.js
+      + README.md strings for a minimal Chromium Manifest V3 extension
+      that adds "Scan with BrainSNN" to the right-click menu
+    - ExtensionPanel: inline preview + download-each-file buttons
+    - Zero server round-trips; users drop the files in a folder and
+      Load Unpacked takes 30 seconds
+82. MCP Tool Expansion — layer 19 catalog upgraded
+    - Adds 11 tools to BRAIN_TOOLS: run_autopsy, counter_draft,
+      run_diff, detect_archetypes, compare_rulesets, get_immunity,
+      test_hypothesis, explain_scan, todays_daily, analyze_time_series,
+      issue_receipt
+    - Claude Code / Codex agents can now drive the full post-L19
+      layer surface over the existing JSON-RPC bridge

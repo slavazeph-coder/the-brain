@@ -17,6 +17,7 @@ import { markPolyglotSeen } from '../utils/badges';
 import { recordScan as recordContextScan } from '../utils/contextMemory';
 import { pushStep as pushReplayStep } from '../utils/replay';
 import { explain } from '../utils/explanation';
+import { analyzeDecoy, verdictFor as decoyVerdict } from '../utils/sarcasm';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -76,6 +77,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     () => (result ? explain(text, result, { templates: mergedTemplates, archetypes }) : null),
     [result, mergedTemplates, archetypes, text],
   );
+
+  // Layer 80 — decoy / sarcasm attenuation
+  const decoy = useMemo(() => (text.trim() ? analyzeDecoy(text) : null), [text]);
+  const decoyLabel = decoy ? decoyVerdict(decoy) : null;
 
   // Layer 41 — refutations for detected templates
   const refutations = useMemo(
@@ -317,6 +322,34 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             <span>Overall risk</span>
             <strong>{(overall * 100).toFixed(0)}%</strong>
           </div>
+
+          {decoy && decoyLabel && decoy.suggestedAdjustment < 0.95 && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '8px 12px',
+                borderRadius: 6,
+                borderLeft: `3px solid ${decoyLabel.color}`,
+                background: `${decoyLabel.color}12`,
+              }}
+              title="Layer 80 attenuates scores on content that reads like sarcasm, quoted speech, or an explicit callout of manipulation."
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>
+                  <strong>Decoy filter · Layer 80</strong>
+                  <span className="muted small-note" style={{ marginLeft: 6 }}>{decoyLabel.label}</span>
+                </span>
+                <strong style={{ color: decoyLabel.color, fontFamily: 'monospace' }}>
+                  adj × {decoy.suggestedAdjustment.toFixed(2)} → {Math.round(overall * decoy.suggestedAdjustment * 100)}%
+                </strong>
+              </div>
+              {decoy.markers.length > 0 && (
+                <div className="muted small-note" style={{ marginTop: 4 }}>
+                  markers: {decoy.markers.join(', ')}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="firewall-scores">
             {SCORE_FIELDS.map((f) => (
