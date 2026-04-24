@@ -84,7 +84,8 @@ function htmlShell({ title, description, ogUrl, imageUrl, redirectTo }) {
 
 function originFrom(req) {
   const host = req.headers.host || 'brainsnn.com';
-  const proto = req.headers['x-forwarded-proto'] || (host.includes('localhost') ? 'http' : 'https');
+  const isLocal = host.includes('localhost') || host.startsWith('127.') || host.includes(':8099') || host.includes(':8080') || host.includes(':4173') || host.includes(':5173');
+  const proto = req.headers['x-forwarded-proto'] || (isLocal ? 'http' : 'https');
   return `${proto}://${host}`;
 }
 

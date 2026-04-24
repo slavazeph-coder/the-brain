@@ -618,3 +618,27 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       layer that wrote it, reports bytes + quota percentage
     - Per-key delete + refresh controls; full-wipe via Layer 57
     - Makes data-practices legible at a glance
+87. Genre Classifier — what kind of text is this?
+    - 9 genres (news-headline, ad-copy, political-speech, personal-
+      message, customer-support, academic, dating-profile, legalese,
+      corporate-allhands) each with ~4 regex patterns
+    - classifyGenre(text) returns ranked list + primary + signal
+      strength. Feeds the rest of the pipeline with a reading tag
+88. Persona Simulator — 4-lens reader
+    - simulatePersonas(text) reweights Firewall dimensions per
+      persona (Skeptic / Ally / Target / Observer) and emits a one-
+      line interpretation per lens
+    - The delta between lenses is where manipulation lives — forces
+      the user to rotate perspectives
+89. Refutation Composer — scaffolded reply drafts
+    - composeReply(text, {tone}) stitches Opening + per-template
+      refutation.script + Close from detected templates
+    - Three tones: direct / soft / firm. Output is a draft to edit,
+      not a finished message
+90. Personal Dictionary — your own manipulation phrases
+    - addEntry({phrase, note, weight, tag}) stores up to 120 entries
+      in brainsnn_personal_dict_v1
+    - scanPersonal(text) returns matched entries + personalPressure
+      contribution; hits track per-entry firing count
+    - Complements Layer 55 custom rules — regex for patterns vs
+      literal strings for specific remembered moments
