@@ -16,6 +16,19 @@ import { correlationMatrix, detectAnomalies, buildRegionTimeseries } from './ana
 import { classifyContent } from '../data/knowledgeGraph';
 import { generateNarrative } from './narrative';
 import { REGION_INFO } from '../data/network';
+// Layer 82 — tools surfacing the post-L19 layer surface
+import { runAutopsy } from './autopsy';
+import { counterDraft } from './counterDraft';
+import { runDiff } from './diffMode';
+import { detectArchetypes } from './adTransparency';
+import { compareRulesets } from './comparator';
+import { getImmunityState } from './immunityScore';
+import { testHypothesis } from './hypothesis';
+import { explain as explainScore } from './explanation';
+import { mergeTemplateResults } from './semanticTemplates';
+import { pickTodaysChallenge } from './dailyChallenge';
+import { analyzeTimeSeries } from './timeSeries';
+import { issueReceipt } from './receipt';
 
 // ---------- tool catalog ----------
 
@@ -120,6 +133,104 @@ export const BRAIN_TOOLS = [
       type: 'object',
       properties: { region: { type: 'string' } },
       required: ['region']
+    }
+  },
+  // ---------- Layer 82 — expose post-L19 layer surface ----------
+  {
+    name: 'run_autopsy',
+    description: 'Layer 36 — per-speaker cognitive profile from a multi-speaker transcript.',
+    inputSchema: {
+      type: 'object',
+      properties: { transcript: { type: 'string' } },
+      required: ['transcript']
+    }
+  },
+  {
+    name: 'counter_draft',
+    description: 'Layer 42 — rewrite manipulative text as neutral while preserving information. Uses Gemma when configured, local substitution otherwise.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text']
+    }
+  },
+  {
+    name: 'run_diff',
+    description: 'Layer 47 — compare two texts (A vs B) for manipulation pressure; returns per-side scores + delta.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        textA: { type: 'string' }, textB: { type: 'string' },
+        labelA: { type: 'string' }, labelB: { type: 'string' }
+      },
+      required: ['textA', 'textB']
+    }
+  },
+  {
+    name: 'detect_archetypes',
+    description: 'Layer 48 — return matched propaganda archetypes (phishing, cult, FOMO, etc.) for a text.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text']
+    }
+  },
+  {
+    name: 'compare_rulesets',
+    description: 'Layer 74 — run the same text through the current DEFAULT_RULES and activeRules; returns pressure delta + evidence diff.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text']
+    }
+  },
+  {
+    name: 'get_immunity',
+    description: 'Layer 23 — return the user\'s Cognitive Immunity score, streak, and recent event log.',
+    inputSchema: { type: 'object', properties: {}, required: [] }
+  },
+  {
+    name: 'test_hypothesis',
+    description: 'Layer 62 — score evidence for/against a named hypothesis (gaslighting, DARVO, phishing, cult, etc.).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Hypothesis id — gaslighting / darvo / love-bombing / guilt-trip / phishing / cult-recruitment / political-attack / high-pressure' },
+        evidenceText: { type: 'string' }
+      },
+      required: ['type', 'evidenceText']
+    }
+  },
+  {
+    name: 'explain_scan',
+    description: 'Layer 70 — plain-English narrative of why a scan scored how it did. Returns a paragraph + bullets.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text']
+    }
+  },
+  {
+    name: 'todays_daily',
+    description: 'Layer 38 — return the 3 items for today\'s Daily Firewall Challenge (same for everyone worldwide on UTC day).',
+    inputSchema: { type: 'object', properties: {}, required: [] }
+  },
+  {
+    name: 'analyze_time_series',
+    description: 'Layer 43 — chronological manipulation-pressure trend. Input: newline-separated dated messages. Returns slope, trend tier, peak, escalations.',
+    inputSchema: {
+      type: 'object',
+      properties: { raw: { type: 'string' } },
+      required: ['raw']
+    }
+  },
+  {
+    name: 'issue_receipt',
+    description: 'Layer 46 — generate a deterministic, verifiable scan receipt for a piece of text.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text']
     }
   }
 ];
@@ -251,6 +362,74 @@ async function dispatch(name, args) {
 
     case 'impact_analysis':
       return impactAnalysis(args.region, state);
+
+    // ---------- Layer 82 tools ----------
+
+    case 'run_autopsy': {
+      if (!args.transcript) throw new Error('transcript required');
+      const autopsy = runAutopsy(args.transcript);
+      return {
+        speakers: autopsy.speakers,
+        meta: autopsy.meta,
+        turnCount: autopsy.turns.length,
+      };
+    }
+
+    case 'counter_draft': {
+      if (!args.text) throw new Error('text required');
+      return await counterDraft(args.text);
+    }
+
+    case 'run_diff': {
+      if (!args.textA || !args.textB) throw new Error('textA and textB required');
+      return runDiff({
+        labelA: args.labelA || 'A',
+        labelB: args.labelB || 'B',
+        textA: args.textA,
+        textB: args.textB,
+      });
+    }
+
+    case 'detect_archetypes': {
+      if (!args.text) throw new Error('text required');
+      const s = scoreContent(args.text);
+      return { archetypes: detectArchetypes(s.templates || []) };
+    }
+
+    case 'compare_rulesets': {
+      if (!args.text) throw new Error('text required');
+      return compareRulesets(args.text);
+    }
+
+    case 'get_immunity':
+      return getImmunityState();
+
+    case 'test_hypothesis': {
+      if (!args.type || !args.evidenceText) throw new Error('type and evidenceText required');
+      return testHypothesis({ type: args.type, evidenceText: args.evidenceText });
+    }
+
+    case 'explain_scan': {
+      if (!args.text) throw new Error('text required');
+      const s = scoreContent(args.text);
+      const merged = mergeTemplateResults(s.templates || [], []);
+      const archs = detectArchetypes(merged);
+      return explainScore(args.text, s, { templates: merged, archetypes: archs });
+    }
+
+    case 'todays_daily':
+      return { items: pickTodaysChallenge() };
+
+    case 'analyze_time_series': {
+      if (!args.raw) throw new Error('raw transcript required');
+      return analyzeTimeSeries(args.raw);
+    }
+
+    case 'issue_receipt': {
+      if (!args.text) throw new Error('text required');
+      const s = scoreContent(args.text);
+      return await issueReceipt({ text: args.text, score: s });
+    }
 
     default:
       throw new Error(`Unknown tool: ${name}`);

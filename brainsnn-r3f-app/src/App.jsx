@@ -62,6 +62,8 @@ import TextAdventurePanel from './components/TextAdventurePanel';
 import ComparatorPanel from './components/ComparatorPanel';
 import DrillDownPanel from './components/DrillDownPanel';
 import SessionRoomsPanel from './components/SessionRoomsPanel';
+import ComplimentPanel from './components/ComplimentPanel';
+import ExtensionPanel from './components/ExtensionPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -682,6 +684,14 @@ export default function App() {
 
           <ErrorBoundary name="Session Rooms">
             <SessionRoomsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Compliment">
+            <ComplimentPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Extension">
+            <ExtensionPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
