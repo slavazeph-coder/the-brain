@@ -68,6 +68,10 @@ import RulePacksPanel from './components/RulePacksPanel';
 import ScanArchivePanel from './components/ScanArchivePanel';
 import JournalismPanel from './components/JournalismPanel';
 import PrivacyBudgetPanel from './components/PrivacyBudgetPanel';
+import GenrePanel from './components/GenrePanel';
+import PersonaPanel from './components/PersonaPanel';
+import ComposerPanel from './components/ComposerPanel';
+import PersonalDictionaryPanel from './components/PersonalDictionaryPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -712,6 +716,22 @@ export default function App() {
 
           <ErrorBoundary name="Privacy Budget">
             <PrivacyBudgetPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Genre">
+            <GenrePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Persona Simulator">
+            <PersonaPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Reply Composer">
+            <ComposerPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Personal Dictionary">
+            <PersonalDictionaryPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
