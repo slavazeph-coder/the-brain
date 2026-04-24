@@ -642,3 +642,28 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       contribution; hits track per-entry firing count
     - Complements Layer 55 custom rules — regex for patterns vs
       literal strings for specific remembered moments
+91. PWA Install — manifest + service worker + install prompt
+    - public/manifest.webmanifest + public/sw.js
+    - SW: cache-first for hashed assets, network-first for /api + /r,
+      SPA shell fallback for offline navigations. Version bumped on
+      releases to invalidate old shells.
+    - Captures beforeinstallprompt; PwaInstallPanel triggers it.
+    - iOS covered by apple-mobile-web-app-* meta tags + "Add to Home
+      Screen" fallback.
+92. Command Palette — ⌘K fuzzy-search jump
+    - Global ⌘K / Ctrl-K listener mounts a centered overlay with
+      fuzzy subsequence scoring across LAYER_CATALOG
+    - ↑↓ navigate, ↵ select — scrolls the target panel into view and
+      briefly rings it in cyan
+93. Feedback Calibration — per-user running calibration
+    - Firewall result panel gains ⬇ too cold / ✓ accurate / ⬆ too hot
+      buttons. Each rating lands in brainsnn_feedback_v1.
+    - calibrationReport() computes bias + a suggestedMul (0.6-1.4)
+      that shows up inline as "calibrated → X%"
+    - FeedbackPanel exposes totals + history + a Clear control
+94. Role Tour — role-based guided walkthrough
+    - 5 roles (writer / parent / developer / security / researcher)
+      with 6 steps each. Every step is a {layer, tip} pair.
+    - "Jump" button uses the same flash-panel helper as the command
+      palette to scroll + highlight.
+    - Answers "what do I actually do with 90+ panels?"

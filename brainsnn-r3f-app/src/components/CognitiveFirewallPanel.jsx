@@ -19,6 +19,7 @@ import { pushStep as pushReplayStep } from '../utils/replay';
 import { explain } from '../utils/explanation';
 import { analyzeDecoy, verdictFor as decoyVerdict } from '../utils/sarcasm';
 import { archiveScan } from '../utils/scanArchive';
+import { recordFeedback, calibrationReport } from '../utils/feedback';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -615,6 +616,51 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               ★ Star
             </button>
           </div>
+
+          {/* Layer 93 — Feedback calibration buttons + calibrated pressure */}
+          {(() => {
+            const cal = calibrationReport();
+            const calibrated = overall != null ? Math.max(0, Math.min(1, overall * cal.suggestedMul)) : null;
+            return (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  background: 'rgba(255,255,255,0.04)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                }}
+                title={`Layer 93 — ${cal.total} ratings, multiplier ${cal.suggestedMul.toFixed(2)}`}
+              >
+                <span>
+                  <strong>Feedback · Layer 93</strong>
+                  {cal.total > 0 && (
+                    <span className="muted small-note" style={{ marginLeft: 8 }}>
+                      calibrated → <strong>{calibrated != null ? Math.round(calibrated * 100) : '—'}%</strong> (×{cal.suggestedMul.toFixed(2)})
+                    </span>
+                  )}
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {['too_cold', 'accurate', 'too_hot'].map((v) => (
+                    <button
+                      key={v}
+                      className="btn-sm"
+                      onClick={() => {
+                        if (overall == null) return;
+                        recordFeedback({ pressure: overall, verdict: v, receiptId: receipt?.id, excerpt: text });
+                      }}
+                      title={`Rate this scan as ${v.replace('_', ' ')}`}
+                    >
+                      {v === 'too_cold' ? '⬇ too cold' : v === 'too_hot' ? '⬆ too hot' : '✓ accurate'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Layer 46 — Firewall receipt */}
           {receipt && (

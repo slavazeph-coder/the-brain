@@ -72,6 +72,11 @@ import GenrePanel from './components/GenrePanel';
 import PersonaPanel from './components/PersonaPanel';
 import ComposerPanel from './components/ComposerPanel';
 import PersonalDictionaryPanel from './components/PersonalDictionaryPanel';
+import PwaInstallPanel from './components/PwaInstallPanel';
+import CommandPalette from './components/CommandPalette';
+import FeedbackPanel from './components/FeedbackPanel';
+import RoleTourPanel from './components/RoleTourPanel';
+import { registerServiceWorker } from './utils/pwa';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -190,6 +195,9 @@ export default function App() {
     historyRef.current.push({ regions: { ...state.regions } });
     if (historyRef.current.length > 60) historyRef.current.shift();
   }, [state.tick]);
+
+  // Layer 91 — register service worker once on mount
+  useEffect(() => { registerServiceWorker(); }, []);
 
   // Layer 19 — register MCP bridge context once
   useEffect(() => {
@@ -318,6 +326,7 @@ export default function App() {
       <ToastContainer />
       <KeyboardHelp open={showKbHelp} onClose={() => setShowKbHelp(false)} />
       <OnboardingWalkthrough />
+      <CommandPalette />
 
       <main className="app-layout">
         <section className="main-column">
@@ -732,6 +741,18 @@ export default function App() {
 
           <ErrorBoundary name="Personal Dictionary">
             <PersonalDictionaryPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="PWA Install">
+            <PwaInstallPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Feedback">
+            <FeedbackPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Role Tour">
+            <RoleTourPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
