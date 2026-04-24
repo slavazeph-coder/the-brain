@@ -64,6 +64,10 @@ import DrillDownPanel from './components/DrillDownPanel';
 import SessionRoomsPanel from './components/SessionRoomsPanel';
 import ComplimentPanel from './components/ComplimentPanel';
 import ExtensionPanel from './components/ExtensionPanel';
+import RulePacksPanel from './components/RulePacksPanel';
+import ScanArchivePanel from './components/ScanArchivePanel';
+import JournalismPanel from './components/JournalismPanel';
+import PrivacyBudgetPanel from './components/PrivacyBudgetPanel';
 import DreamModePanel from './components/DreamModePanel';
 import AdversarialTrainingPanel from './components/AdversarialTrainingPanel';
 import NeuroRagPanel from './components/NeuroRagPanel';
@@ -692,6 +696,22 @@ export default function App() {
 
           <ErrorBoundary name="Extension">
             <ExtensionPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Rule Packs">
+            <RulePacksPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Scan Archive">
+            <ScanArchivePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Journalism">
+            <JournalismPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Privacy Budget">
+            <PrivacyBudgetPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

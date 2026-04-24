@@ -594,3 +594,27 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       issue_receipt
     - Claude Code / Codex agents can now drive the full post-L19
       layer surface over the existing JSON-RPC bridge
+83. Rule Pack Library — curated named regex bundles
+    - 7 seeded packs: workplace-gaslighting, dating-scams, crypto-rug,
+      news-bias, political-persuasion, hustle-culture, recruitment
+    - Install / uninstall at the pack level; pack rules are tagged so
+      user handwritten rules are never touched by pack ops
+    - Installation rehydrates via Layer 55 applyMergedRules()
+84. Scan Archive — starred long-term scans
+    - Up to 200 entries with full 400-char excerpts + pressure +
+      templates + language + entity + tags
+    - searchArchive() filters across every indexed field
+    - Firewall panel gains a "★ Star" button next to Confidence
+    - Export as JSON or CSV
+85. Journalism Bulk Mode — CSV / JSON → enriched scores
+    - parseInput() auto-detects CSV vs JSON, finds the text column
+      from conventional headers (text / content / body / message /
+      tweet / post / status)
+    - analyzeBatch() scores every row + tallies aggregate stats
+    - exportEnriched() re-emits the original data with bsnn_* score
+      columns appended for reporter-style batch workflows
+86. Privacy Budget — what BrainSNN stores about you
+    - snapshotBudget() walks localStorage, tags each key with the
+      layer that wrote it, reports bytes + quota percentage
+    - Per-key delete + refresh controls; full-wipe via Layer 57
+    - Makes data-practices legible at a glance

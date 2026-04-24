@@ -18,6 +18,7 @@ import { recordScan as recordContextScan } from '../utils/contextMemory';
 import { pushStep as pushReplayStep } from '../utils/replay';
 import { explain } from '../utils/explanation';
 import { analyzeDecoy, verdictFor as decoyVerdict } from '../utils/sarcasm';
+import { archiveScan } from '../utils/scanArchive';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -603,6 +604,16 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                 {result.languageLabel}
               </span>
             )}
+            <button
+              className="btn-sm"
+              onClick={() => {
+                archiveScan({ text, score: result, receipt, entity });
+              }}
+              style={{ marginLeft: 8 }}
+              title="Layer 84 — star this scan to the archive"
+            >
+              ★ Star
+            </button>
           </div>
 
           {/* Layer 46 — Firewall receipt */}
