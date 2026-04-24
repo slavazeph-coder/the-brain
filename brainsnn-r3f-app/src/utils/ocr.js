@@ -38,9 +38,17 @@ async function ensureWorker(onProgress) {
 export async function ocrImage(source, { onProgress } = {}) {
   const worker = await ensureWorker(onProgress);
   const result = await worker.recognize(source);
+  const data = result?.data || {};
   return {
-    text: (result?.data?.text || '').trim(),
-    confidence: result?.data?.confidence || 0,
+    text: (data.text || '').trim(),
+    confidence: data.confidence || 0,
+    // Layer 95 — per-word bounding boxes for bbox-annotation overlay
+    words: (data.words || []).map((w) => ({
+      text: w.text || '',
+      confidence: w.confidence || 0,
+      bbox: w.bbox || null, // { x0, y0, x1, y1 } in image pixels
+    })),
+    imageSize: { width: data.width || 0, height: data.height || 0 },
   };
 }
 
