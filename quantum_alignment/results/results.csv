@@ -1,0 +1,17 @@
+experiment,backend_label,mode,label,parameter,shots,p0,p1,expected_p0,error,notes
+phase_alignment,aer-noisy(generic_backend_5q),noisy,0,0.0,4096,0.99658203125,0.00341796875,1.0,0.00341796875,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi/8,0.39269908169872414,4096,0.95654296875,0.04345703125,0.9619397662556434,0.005396797505643369,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi/4,0.7853981633974483,4096,0.859130859375,0.140869140625,0.8535533905932737,0.005577468781726269,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi/2,1.5707963267948966,4096,0.4990234375,0.5009765625,0.5000000000000001,0.000976562500000111,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,3pi/4,2.356194490192345,4096,0.151123046875,0.848876953125,0.1464466094067263,0.004676437468273703,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi,3.141592653589793,4096,0.003662109375,0.996337890625,3.749399456654644e-33,0.003662109375,
+observation,aer-noisy(generic_backend_5q),noisy,A_no_mid_measure,0,4096,0.995361328125,0.004638671875,1.0,0.004638671875,"H then H -> identity, expect p(0)=1"
+observation,aer-noisy(generic_backend_5q),noisy,B_mid_measure,0,4096,0.499755859375,0.500244140625,0.5,0.000244140625,Mid-circuit measurement collapses the state; expect ~50/50
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=0,0,4096,0.997314453125,0.002685546875,1.0,0.002685546875,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=1,1,4096,0.99560546875,0.00439453125,1.0,0.00439453125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=2,2,4096,0.99609375,0.00390625,1.0,0.00390625,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=4,4,4096,0.993408203125,0.006591796875,1.0,0.006591796875,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=8,8,4096,0.9951171875,0.0048828125,1.0,0.0048828125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=16,16,4096,0.989990234375,0.010009765625,1.0,0.010009765625,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=32,32,4096,0.98828125,0.01171875,1.0,0.01171875,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=64,64,4096,0.979736328125,0.020263671875,1.0,0.020263671875,
