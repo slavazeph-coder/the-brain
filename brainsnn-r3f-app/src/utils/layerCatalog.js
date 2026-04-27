@@ -107,6 +107,7 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 101, name: 'Quantum Coherence Lab', group: 'experimental', blurb: 'In-browser single-qubit phase / interference / decoherence sandbox.' },
 ];
 
 export const LAYER_GROUPS = {
@@ -116,6 +117,7 @@ export const LAYER_GROUPS = {
   data: { label: 'Data & State', color: '#5ee69a' },
   backend: { label: 'Backend & Agents', color: '#77dbe4' },
   progression: { label: 'Progression', color: '#e57b40' },
+  experimental: { label: 'Experimental Simulation', color: '#5ad4ff' },
 };
 
 export function searchLayers(query = '') {

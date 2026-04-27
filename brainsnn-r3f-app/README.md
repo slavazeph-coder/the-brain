@@ -71,6 +71,35 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | 33    | Multimodal RAG Router             | [MultimodalRagPanel.jsx](src/components/MultimodalRagPanel.jsx) + [utils/multimodalRag.js](src/utils/multimodalRag.js)                 |
 | 34    | Vector-Graph Fusion               | [VectorGraphFusionPanel.jsx](src/components/VectorGraphFusionPanel.jsx)                                                                |
 | 35    | Direct Content Insertion (JSON)   | [DirectInsertPanel.jsx](src/components/DirectInsertPanel.jsx)                                                                          |
+| 101   | Quantum Coherence Lab             | [QuantumCoherencePanel.jsx](src/components/QuantumCoherencePanel.jsx) + [utils/quantumCoherence.js](src/utils/quantumCoherence.js)     |
+
+## Quantum Coherence Lab
+
+**Layer 101 — Quantum Coherence Lab.** A pure-JavaScript, in-browser simulation
+of a single qubit running through `|0⟩ → H → RZ(θ) → H → M`. Slide the phase
+θ to watch interference move probability between |0⟩ and |1⟩. Add noise to
+damp the fringe. Toggle a mid-circuit observation to collapse superposition.
+Stack X·X pairs (algebraically identity) to watch decoherence eat depth.
+
+**What this is.** A teaching sandbox for the *mechanism* behind the word
+"alignment": phase coherence steers outcomes; noise and observation kill it.
+A **Scientific / Metaphor** mode toggle reframes the same numbers in
+plain English alongside the math.
+
+**What this is not.** This does **not** prove literal multiverse theory,
+consciousness collapse, Planck foam, or spiritual portals. Those are framing
+metaphors when the toggle is on, not physics claims.
+
+**Future backend.** The function surface (`runPhaseExperiment`,
+`runDecoherenceExperiment`, etc.) is intentionally compatible with a
+hardware-backed run — a future version can swap the local simulator for
+IBM Quantum or OriginQ. **No vendor API keys are added to the frontend.**
+
+Run the unit tests directly with Node (no extra dev deps):
+
+```bash
+npm run test:quantum
+```
 
 ## Keyboard shortcuts
 
