@@ -11,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server.js",
-    "start:dev": "npm run build && node server.js"
+    "start:dev": "npm run build && node server.js",
+    "test:quantum": "node --test src/utils/quantumCoherence.test.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
