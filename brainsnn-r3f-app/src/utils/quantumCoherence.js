@@ -139,11 +139,17 @@ function dephase(state, factor) {
   ];
 }
 
-/** Bit-flip channel: with probability p, swap |0⟩ ↔ |1⟩. */
-function bitFlip(state, p) {
-  if (p <= 0) return state;
-  if (Math.random() < p) return applyX(state);
-  return state;
+/**
+ * Mix the ideal [P(0), P(1)] distribution with the uniform [0.5, 0.5] by
+ * weight `noise`. This is a depolarizing-style channel applied at the
+ * distribution level, which keeps tests deterministic in expectation —
+ * unlike a sampled bit-flip, which produces a single ±1 trajectory.
+ */
+function depolarizeDistribution(distribution, noise) {
+  const n = Math.max(0, Math.min(1, noise));
+  if (n <= 0) return distribution;
+  const [p0, p1] = distribution;
+  return [(1 - n) * p0 + n * 0.5, (1 - n) * p1 + n * 0.5];
 }
 
 // ---------- experiments -----------------------------------------------------
@@ -166,13 +172,11 @@ export function runPhaseExperiment({ theta = 0, shots = 1024, noise = 0 } = {}) 
   let state = [complex(1, 0), complex(0, 0)];
   state = applyH(state);
   state = applyRZ(state, theta);
-  // Single-step dephasing between RZ and final H, parameterized by noise.
-  const dephaseFactor = Math.max(0, 1 - noise);
-  state = dephase(state, dephaseFactor);
+  // Dephasing between RZ and final H damps the interference fringe.
+  state = dephase(state, Math.max(0, 1 - noise));
   state = applyH(state);
-  // Bit-flip readout error scales with noise.
-  state = bitFlip(state, noise * 0.25);
-  const distribution = measureDistribution(state);
+  // Mix in uniform at the distribution level so noise=1 → 50/50 deterministically.
+  const distribution = depolarizeDistribution(measureDistribution(state), noise);
   const counts = sampleShots(distribution, shots);
   return {
     kind: 'phase',
@@ -217,9 +221,8 @@ export function runObservationExperiment({
   }
 
   state = applyH(state);
-  state = bitFlip(state, noise * 0.25);
 
-  const distribution = measureDistribution(state);
+  const distribution = depolarizeDistribution(measureDistribution(state), noise);
   const counts = sampleShots(distribution, shots);
   return {
     kind: 'observation',
@@ -245,15 +248,14 @@ export function runDecoherenceExperiment({
   noise = 0,
 } = {}) {
   const pairs = Math.max(0, Math.floor(xxPairs) || 0);
-  let state = [complex(1, 0), complex(0, 0)];
-  for (let i = 0; i < pairs; i += 1) {
-    state = applyX(state);
-    state = bitFlip(state, noise * 0.5);
-    state = applyX(state);
-    state = bitFlip(state, noise * 0.5);
-    state = dephase(state, Math.max(0, 1 - noise * 0.4));
-  }
-  const distribution = measureDistribution(state);
+  // Pure-state algebra: X·X = I, so the ideal distribution is always [1, 0].
+  // Effective depolarization compounds per pair: 1 - (1 - noise)^pairs.
+  // This keeps the result deterministic in expectation while still showing
+  // depth-driven decoherence growth.
+  const ideal = [1, 0];
+  const perPair = Math.max(0, Math.min(1, noise));
+  const effective = pairs === 0 ? perPair : 1 - Math.pow(1 - perPair, pairs);
+  const distribution = depolarizeDistribution(ideal, effective);
   const counts = sampleShots(distribution, shots);
   return {
     kind: 'decoherence',
@@ -262,7 +264,6 @@ export function runDecoherenceExperiment({
     noise,
     distribution,
     counts,
-    finalState: state,
   };
 }
 
