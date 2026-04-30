@@ -76,6 +76,9 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | 103   | Quantum Sweep                     | [QuantumSweepPanel.jsx](src/components/QuantumSweepPanel.jsx) + [utils/quantumSweep.js](src/utils/quantumSweep.js)                     |
 | 104   | Quantum Glossary                  | [QuantumGlossaryPanel.jsx](src/components/QuantumGlossaryPanel.jsx) + [utils/quantumGlossary.js](src/utils/quantumGlossary.js)         |
 | 105   | Universal Primitive Lab           | [UniversalPrimitivePanel.jsx](src/components/UniversalPrimitivePanel.jsx) + [utils/eml.js](src/utils/eml.js)                          |
+| 106   | NAND Lab                          | [NandLabPanel.jsx](src/components/NandLabPanel.jsx) + [utils/nand.js](src/utils/nand.js)                                              |
+| 107   | GHZ Lab                           | [GhzLabPanel.jsx](src/components/GhzLabPanel.jsx) + [utils/ghzState.js](src/utils/ghzState.js)                                        |
+| 108   | Solovay-Kitaev Mini               | [SolovayKitaevPanel.jsx](src/components/SolovayKitaevPanel.jsx) + [utils/solovayKitaev.js](src/utils/solovayKitaev.js)                |
 
 ## Quantum Coherence Lab
 
@@ -107,6 +110,9 @@ read from `IBM_QUANTUM_TOKEN` at runtime only.
 - **Layer 103 — Quantum Sweep.** Auto-sweeps θ / noise / X·X-depth, plots P(0) and P(1) against the closed-form ideal, and exports a CSV with the same column shape as `quantum_alignment/results/results.csv` so browser-sim curves can be compared directly with the Qiskit ideal/noisy/real curves.
 - **Layer 104 — Quantum Glossary.** Searchable reference card for every term used in L101–L103 — plain language, the math, and a metaphor column explicitly framed as a teaching aid.
 - **Layer 105 — Universal Primitive Lab.** Implements `eml(x, y) = exp(x) − ln(y)` from Odrzywołek (arXiv:2603.21852): a single binary operator that, with the constant `1`, generates the elementary library (`exp`, `ln`, `+`, `−`, `·`, `sin`, `cos`, `√`, `e`, `π`, …). Sits next to the quantum cluster because the same "one primitive, all the math" idea links **NAND** (Boolean) ↔ **eml** (continuous) ↔ **`{H, CNOT, T}`** (quantum). Every derivation is independently checked against `Math.*` to ~1e-9 precision in `eml.test.mjs`.
+- **Layer 106 — NAND Lab.** The classical-Boolean side of the same bridge. Derives `NOT`, `AND`, `OR`, `NOR`, `XOR`, `XNOR`, `MUX` using only nested `NAND` calls and the constants `0` / `1`. Truth tables pinned against JS native logic in `nand.test.mjs`.
+- **Layer 107 — GHZ Lab.** Extends L102 from 2 qubits to 3: `|000⟩ → H ⊗ I ⊗ I → CNOT(0,1) → CNOT(0,2) = (|000⟩ + |111⟩) / √2`. Renders the 8-bin joint distribution + parity metric `P(000) + P(111)` (1.0 ideal, 1/4 fully randomised). Apply-to-brain wired.
+- **Layer 108 — Solovay-Kitaev mini-demo.** Brute-force *basic-approximation* step over `{H, T, T†}`: pick a target `RZ(θ)`, search every sequence up to length 8, plot best-distance vs length. Teaches the convergence rate that the recursive SK algorithm then accelerates exponentially.
 
 Run the unit tests directly with Node (no extra dev deps):
 

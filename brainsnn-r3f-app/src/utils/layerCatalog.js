@@ -112,6 +112,9 @@ export const LAYER_CATALOG = [
   { id: 103, name: 'Quantum Sweep', group: 'experimental', blurb: 'Auto-sweep θ / noise / depth, plot vs ideal, download CSV.' },
   { id: 104, name: 'Quantum Glossary', group: 'experimental', blurb: 'Searchable glossary of every quantum term used in L101–L103.' },
   { id: 105, name: 'Universal Primitive Lab', group: 'experimental', blurb: 'eml(x,y)=exp(x)−ln(y): one operator generates the elementary library (Odrzywołek 2603.21852).' },
+  { id: 106, name: 'NAND Lab', group: 'experimental', blurb: 'Boolean side of the universality bridge — derive NOT/AND/OR/XOR/MUX from NAND alone.' },
+  { id: 107, name: 'GHZ Lab', group: 'experimental', blurb: '3-qubit |000⟩+|111⟩ entanglement with depolarizing noise + parity metric.' },
+  { id: 108, name: 'Solovay-Kitaev Mini', group: 'experimental', blurb: 'Approximate any RZ(θ) with brute-force {H,T,T†} sequences; convergence chart.' },
 ];
 
 export const LAYER_GROUPS = {

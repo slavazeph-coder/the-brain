@@ -1,0 +1,106 @@
+name: Quantum cluster tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'brainsnn-r3f-app/src/utils/quantum*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/bellPair*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/eml*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/nand*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/ghzState*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/solovayKitaev*.{js,mjs}'
+      - 'brainsnn-r3f-app/package.json'
+      - 'brainsnn-r3f-app/package-lock.json'
+      - 'quantum_alignment/**'
+      - '.github/workflows/quantum-tests.yml'
+  pull_request:
+    paths:
+      - 'brainsnn-r3f-app/src/utils/quantum*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/bellPair*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/eml*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/nand*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/ghzState*.{js,mjs}'
+      - 'brainsnn-r3f-app/src/utils/solovayKitaev*.{js,mjs}'
+      - 'brainsnn-r3f-app/package.json'
+      - 'brainsnn-r3f-app/package-lock.json'
+      - 'quantum_alignment/**'
+      - '.github/workflows/quantum-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  js:
+    name: JS quantum + eml + nand + ghz + sk tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Run quantum tests (8 test files)
+        run: npm run test:quantum
+
+      - name: Build (smoke check that L101–L108 wire up cleanly)
+        run: npm run build
+
+  python-fast:
+    name: Python pytest (fast lane, no AerSimulator round-trip)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantum_alignment
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned deps
+        run: pip install -r requirements.lock
+
+      - name: Run pytest (fast lane)
+        run: python -m pytest -q
+
+  python-slow:
+    name: Python pytest (slow lane — ideal AerSimulator e2e)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantum_alignment
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pinned deps + jsonschema (for results-schema validation)
+        run: |
+          pip install -r requirements.lock
+          pip install jsonschema
+
+      - name: Run pytest (slow + schema validation)
+        run: python -m pytest -q -m slow && python -m pytest -q test_results_schema.py

@@ -86,6 +86,9 @@ import BellPairPanel from './components/BellPairPanel';
 import QuantumSweepPanel from './components/QuantumSweepPanel';
 import QuantumGlossaryPanel from './components/QuantumGlossaryPanel';
 import UniversalPrimitivePanel from './components/UniversalPrimitivePanel';
+import NandLabPanel from './components/NandLabPanel';
+import GhzLabPanel from './components/GhzLabPanel';
+import SolovayKitaevPanel from './components/SolovayKitaevPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -856,6 +859,36 @@ export default function App() {
 
           <ErrorBoundary name="Universal Primitive Lab">
             <UniversalPrimitivePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="NAND Lab">
+            <NandLabPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="GHZ Lab">
+            <GhzLabPanel
+              onApplyToBrain={({ result, deltas }) => {
+                markActivity();
+                setState((prev) => {
+                  const regions = { ...prev.regions };
+                  for (const [region, delta] of Object.entries(deltas)) {
+                    if (regions[region] === undefined) continue;
+                    regions[region] = Math.max(0.04, Math.min(0.95, regions[region] + delta * 0.3));
+                  }
+                  return {
+                    ...prev,
+                    regions,
+                    tick: (prev.tick ?? 0) + 1,
+                    scenario: `GHZ (parity ${result.parity.toFixed(2)})`,
+                  };
+                });
+                toastSuccess(`GHZ parity ${result.parity.toFixed(2)} mapped to brain`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Solovay-Kitaev Mini">
+            <SolovayKitaevPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
