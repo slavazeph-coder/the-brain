@@ -85,6 +85,7 @@ import QuantumCoherencePanel from './components/QuantumCoherencePanel';
 import BellPairPanel from './components/BellPairPanel';
 import QuantumSweepPanel from './components/QuantumSweepPanel';
 import QuantumGlossaryPanel from './components/QuantumGlossaryPanel';
+import UniversalPrimitivePanel from './components/UniversalPrimitivePanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -828,11 +829,33 @@ export default function App() {
           </ErrorBoundary>
 
           <ErrorBoundary name="Quantum Sweep">
-            <QuantumSweepPanel />
+            <QuantumSweepPanel
+              onApplyToBrain={({ summary, deltas, kind }) => {
+                markActivity();
+                setState((prev) => {
+                  const regions = { ...prev.regions };
+                  for (const [region, delta] of Object.entries(deltas)) {
+                    if (regions[region] === undefined) continue;
+                    regions[region] = Math.max(0.04, Math.min(0.95, regions[region] + delta * 0.3));
+                  }
+                  return {
+                    ...prev,
+                    regions,
+                    tick: (prev.tick ?? 0) + 1,
+                    scenario: `Quantum Sweep (${kind}, avg err ${summary.avgError.toFixed(3)})`,
+                  };
+                });
+                toastSuccess(`Quantum sweep ${kind} mapped to brain · ${summary.n} rows`);
+              }}
+            />
           </ErrorBoundary>
 
           <ErrorBoundary name="Quantum Glossary">
             <QuantumGlossaryPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Universal Primitive Lab">
+            <UniversalPrimitivePanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

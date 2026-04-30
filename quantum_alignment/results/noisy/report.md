@@ -16,14 +16,14 @@ Circuit: `|0> - H - RZ(theta) - H - Measure`. The first H spreads |0> into an eq
 
 | theta | p(0) measured | p(1) measured | p(0) ideal | |error| |
 |---|---|---|---|---|
-| 0 | 0.997 | 0.003 | 1.000 | 0.003 |
-| pi/8 | 0.957 | 0.043 | 0.962 | 0.005 |
-| pi/4 | 0.859 | 0.141 | 0.854 | 0.006 |
-| pi/2 | 0.499 | 0.501 | 0.500 | 0.001 |
-| 3pi/4 | 0.151 | 0.849 | 0.146 | 0.005 |
-| pi | 0.004 | 0.996 | 0.000 | 0.004 |
+| 0 | 0.994 | 0.006 | 1.000 | 0.006 |
+| pi/8 | 0.959 | 0.041 | 0.962 | 0.002 |
+| pi/4 | 0.849 | 0.151 | 0.854 | 0.004 |
+| pi/2 | 0.497 | 0.503 | 0.500 | 0.003 |
+| 3pi/4 | 0.157 | 0.843 | 0.146 | 0.011 |
+| pi | 0.003 | 0.997 | 0.000 | 0.003 |
 
-Maximum deviation from the ideal interference pattern: **0.006**. On the ideal simulator this should be at the level of shot noise (~1/sqrt(shots) ~= 0.016). On a noisy or real backend it grows because gate errors and readout errors smear the interference fringes.
+Maximum deviation from the ideal interference pattern: **0.011**. On the ideal simulator this should be at the level of shot noise (~1/sqrt(shots) ~= 0.016). On a noisy or real backend it grows because gate errors and readout errors smear the interference fringes.
 
 ## Experiment 2 -- Observation collapse
 
@@ -31,8 +31,8 @@ Two circuits are compared. **A** applies H then H with no measurement in between
 
 | variant | p(0) | p(1) | expected p(0) | |error| | notes |
 |---|---|---|---|---|---|
-| A_no_mid_measure | 0.995 | 0.005 | 1.000 | 0.005 | H then H -> identity, expect p(0)=1 |
-| B_mid_measure | 0.500 | 0.500 | 0.500 | 0.000 | Mid-circuit measurement collapses the state; expect ~50/50 |
+| A_no_mid_measure | 0.996 | 0.004 | 1.000 | 0.004 | H then H -> identity, expect p(0)=1 |
+| B_mid_measure | 0.483 | 0.517 | 0.500 | 0.017 | Mid-circuit measurement collapses the state; expect ~50/50 |
 
 ## Experiment 3 -- Decoherence / noise accumulation
 
@@ -40,16 +40,28 @@ Circuit: `|0> - H - (X X)^n - H - Measure`. Each `X X` pair is the identity, so 
 
 | X-X pairs | p(0) | p(1) | error = 1-p(0) |
 |---|---|---|---|
-| 0 | 0.997 | 0.003 | 0.003 |
-| 1 | 0.996 | 0.004 | 0.004 |
+| 0 | 0.996 | 0.004 | 0.004 |
+| 1 | 0.997 | 0.003 | 0.003 |
 | 2 | 0.996 | 0.004 | 0.004 |
-| 4 | 0.993 | 0.007 | 0.007 |
+| 4 | 0.995 | 0.005 | 0.005 |
 | 8 | 0.995 | 0.005 | 0.005 |
-| 16 | 0.990 | 0.010 | 0.010 |
+| 16 | 0.993 | 0.007 | 0.007 |
 | 32 | 0.988 | 0.012 | 0.012 |
-| 64 | 0.980 | 0.020 | 0.020 |
+| 64 | 0.981 | 0.019 | 0.019 |
 
-At depth 64 X-X pairs, p(0) is **0.980** vs the ideal **1.0** (error **0.020**). The further this number is from 1.0, the more decoherence the device has accumulated over the run.
+At depth 64 X-X pairs, p(0) is **0.981** vs the ideal **1.0** (error **0.019**). The further this number is from 1.0, the more decoherence the device has accumulated over the run.
+
+## Experiment 4 -- Bell-pair correlation sweep
+
+Two qubits prepared as `|00> -> H ⊗ I -> CNOT(0,1)` form the maximally entangled Bell state |Φ+⟩ = (|00> + |11>) / √2. An additional RY(theta) on qubit 0 rotates the joint distribution; the signed correlation E(theta) = (P00+P11) - (P01+P10) traces the closed-form ideal `cos(theta)`. This is the L102 browser-native panel's hardware-grade sibling.
+
+| theta | correlation measured | ideal cos(theta) | |error| | notes |
+|---|---|---|---|---|
+| 0 | 0.992 | 1.000 | 0.008 | entanglement is statistical correlation, not signaling |
+| pi/4 | 0.677 | 0.707 | 0.030 | entanglement is statistical correlation, not signaling |
+| pi/2 | -0.000 | 0.000 | 0.000 | entanglement is statistical correlation, not signaling |
+| 3pi/4 | -0.709 | -0.707 | 0.002 | entanglement is statistical correlation, not signaling |
+| pi | -0.987 | -1.000 | 0.013 | entanglement is statistical correlation, not signaling |
 
 ## What this is NOT
 

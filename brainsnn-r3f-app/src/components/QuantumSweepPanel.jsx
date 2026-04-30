@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { runSweep, rowsToCsv, sweepSummary } from '../utils/quantumSweep';
+import { runSweep, rowsToCsv, sweepSummary, sweepBrainDeltas } from '../utils/quantumSweep';
 
 /**
  * Layer 103 — Quantum Sweep panel.
@@ -89,7 +89,7 @@ function SweepChart({ rows }) {
   );
 }
 
-export default function QuantumSweepPanel() {
+export default function QuantumSweepPanel({ onApplyToBrain }) {
   const [kind, setKind] = useState('phase');
   const [shots, setShots] = useState(1024);
   const [steps, setSteps] = useState(9);
@@ -128,6 +128,18 @@ export default function QuantumSweepPanel() {
         <button className="btn primary" onClick={() => csvDownload(rows, kind)} disabled={!rows.length}>
           Download CSV
         </button>
+        {onApplyToBrain && (
+          <button
+            className="btn"
+            disabled={!summary}
+            onClick={() => {
+              const deltas = sweepBrainDeltas(summary);
+              if (deltas) onApplyToBrain({ summary, deltas, kind });
+            }}
+          >
+            Apply to brain
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>

@@ -1,0 +1,42 @@
+experiment,backend_label,mode,label,parameter,shots,p0,p1,expected_p0,error,notes
+phase_alignment,aer-ideal,ideal,0,0.0,4096,1.0,0.0,1.0,0.0,
+phase_alignment,aer-ideal,ideal,pi/8,0.39269908169872414,4096,0.9599609375,0.0400390625,0.9619397662556434,0.0019788287556433692,
+phase_alignment,aer-ideal,ideal,pi/4,0.7853981633974483,4096,0.857177734375,0.142822265625,0.8535533905932737,0.003624343781726269,
+phase_alignment,aer-ideal,ideal,pi/2,1.5707963267948966,4096,0.49951171875,0.50048828125,0.5000000000000001,0.000488281250000111,
+phase_alignment,aer-ideal,ideal,3pi/4,2.356194490192345,4096,0.136474609375,0.863525390625,0.1464466094067263,0.009972000031726297,
+phase_alignment,aer-ideal,ideal,pi,3.141592653589793,4096,0.0,1.0,3.749399456654644e-33,3.749399456654644e-33,
+observation,aer-ideal,ideal,A_no_mid_measure,0,4096,1.0,0.0,1.0,0.0,"H then H -> identity, expect p(0)=1"
+observation,aer-ideal,ideal,B_mid_measure,0,4096,0.48486328125,0.51513671875,0.5,0.01513671875,Mid-circuit measurement collapses the state; expect ~50/50
+noise_depth,aer-ideal,ideal,xx_pairs=0,0,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=1,1,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=2,2,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=4,4,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=8,8,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=16,16,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=32,32,4096,1.0,0.0,1.0,0.0,
+noise_depth,aer-ideal,ideal,xx_pairs=64,64,4096,1.0,0.0,1.0,0.0,
+bell,aer-ideal,ideal,0|00,0.0,4096,0.51318359375,0.48681640625,nan,nan,joint outcome 00
+bell,aer-ideal,ideal,0|01,0.0,4096,0.0,1.0,nan,nan,joint outcome 01
+bell,aer-ideal,ideal,0|10,0.0,4096,0.0,1.0,nan,nan,joint outcome 10
+bell,aer-ideal,ideal,0|11,0.0,4096,0.48681640625,0.51318359375,nan,nan,joint outcome 11
+bell,aer-ideal,ideal,0|corr,0.0,4096,1.0,nan,1.0,0.0,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-ideal,ideal,pi/4|00,0.7853981633974483,4096,0.4365234375,0.5634765625,nan,nan,joint outcome 00
+bell,aer-ideal,ideal,pi/4|01,0.7853981633974483,4096,0.068115234375,0.931884765625,nan,nan,joint outcome 01
+bell,aer-ideal,ideal,pi/4|10,0.7853981633974483,4096,0.07958984375,0.92041015625,nan,nan,joint outcome 10
+bell,aer-ideal,ideal,pi/4|11,0.7853981633974483,4096,0.415771484375,0.584228515625,nan,nan,joint outcome 11
+bell,aer-ideal,ideal,pi/4|corr,0.7853981633974483,4096,0.70458984375,nan,0.7071067811865476,0.0025169374365475727,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-ideal,ideal,pi/2|00,1.5707963267948966,4096,0.259765625,0.740234375,nan,nan,joint outcome 00
+bell,aer-ideal,ideal,pi/2|01,1.5707963267948966,4096,0.239013671875,0.760986328125,nan,nan,joint outcome 01
+bell,aer-ideal,ideal,pi/2|10,1.5707963267948966,4096,0.2421875,0.7578125,nan,nan,joint outcome 10
+bell,aer-ideal,ideal,pi/2|11,1.5707963267948966,4096,0.259033203125,0.740966796875,nan,nan,joint outcome 11
+bell,aer-ideal,ideal,pi/2|corr,1.5707963267948966,4096,0.03759765625,nan,6.123233995736766e-17,0.03759765624999994,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-ideal,ideal,3pi/4|00,2.356194490192345,4096,0.0673828125,0.9326171875,nan,nan,joint outcome 00
+bell,aer-ideal,ideal,3pi/4|01,2.356194490192345,4096,0.443359375,0.556640625,nan,nan,joint outcome 01
+bell,aer-ideal,ideal,3pi/4|10,2.356194490192345,4096,0.422119140625,0.577880859375,nan,nan,joint outcome 10
+bell,aer-ideal,ideal,3pi/4|11,2.356194490192345,4096,0.067138671875,0.932861328125,nan,nan,joint outcome 11
+bell,aer-ideal,ideal,3pi/4|corr,2.356194490192345,4096,-0.73095703125,nan,-0.7071067811865475,0.02385025006345254,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-ideal,ideal,pi|00,3.141592653589793,4096,0.0,1.0,nan,nan,joint outcome 00
+bell,aer-ideal,ideal,pi|01,3.141592653589793,4096,0.495849609375,0.504150390625,nan,nan,joint outcome 01
+bell,aer-ideal,ideal,pi|10,3.141592653589793,4096,0.504150390625,0.495849609375,nan,nan,joint outcome 10
+bell,aer-ideal,ideal,pi|11,3.141592653589793,4096,0.0,1.0,nan,nan,joint outcome 11
+bell,aer-ideal,ideal,pi|corr,3.141592653589793,4096,-1.0,nan,-1.0,0.0,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)

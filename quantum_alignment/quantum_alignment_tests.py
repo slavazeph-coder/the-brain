@@ -181,6 +181,26 @@ def observation_circuit_b() -> QuantumCircuit:
     return qc
 
 
+def bell_circuit(theta: float = 0.0) -> QuantumCircuit:
+    """|00> -> H ⊗ I -> CNOT(0,1) -> RY(theta) on qubit 0 -> measure both.
+
+    With theta=0 this is the standard Bell-pair preparation; the joint
+    distribution is 50/50 across {|00>, |11>} and 0 across {|01>, |10>}, so
+    the signed correlation (P00+P11) - (P01+P10) is +1 modulo noise.
+    Sweeping theta rotates the correlation: theta=π/2 yields ~0 correlation,
+    theta=π yields -1 (anti-mirrored).
+    """
+
+    qc = QuantumCircuit(2, 2, name=f"bell_theta={theta:.4f}")
+    qc.h(0)
+    qc.cx(0, 1)
+    if theta != 0.0:
+        qc.ry(theta, 0)
+    qc.measure(0, 0)
+    qc.measure(1, 1)
+    return qc
+
+
 def noise_depth_circuit(num_xx_pairs: int) -> QuantumCircuit:
     """|0> -> H -> (X X) * n -> H -> Measure.
 
@@ -238,6 +258,23 @@ def _first_bit_counts(counts: dict[str, int]) -> tuple[int, int]:
     return zeros, ones
 
 
+def _joint_2bit_counts(counts: dict[str, int]) -> dict[str, int]:
+    """Aggregate two-bit Qiskit counts (little-endian) into '00' / '01' / '10' / '11'.
+
+    Keys are bit-strings printed by Qiskit, e.g. "01" meaning bit 1 = 0,
+    bit 0 = 1. We normalise to the same little-endian convention.
+    """
+
+    out = {"00": 0, "01": 0, "10": 0, "11": 0}
+    for bitstring, count in counts.items():
+        stripped = bitstring.replace(" ", "")
+        # Take the rightmost two characters, padded.
+        b = stripped[-2:].rjust(2, "0")
+        if b in out:
+            out[b] += count
+    return out
+
+
 def probabilities(zeros: int, ones: int) -> tuple[float, float]:
     total = zeros + ones
     if total == 0:
@@ -260,6 +297,14 @@ THETAS: list[tuple[str, float]] = [
 ]
 
 NOISE_DEPTHS: list[int] = [0, 1, 2, 4, 8, 16, 32, 64]
+
+BELL_THETAS: list[tuple[str, float]] = [
+    ("0", 0.0),
+    ("pi/4", math.pi / 4),
+    ("pi/2", math.pi / 2),
+    ("3pi/4", 3 * math.pi / 4),
+    ("pi", math.pi),
+]
 
 
 @dataclass
@@ -363,6 +408,60 @@ def run_observation_experiment(backend: Backend, shots: int) -> list[Row]:
             notes="Mid-circuit measurement collapses the state; expect ~50/50",
         )
     )
+    return rows
+
+
+def run_bell_experiment(backend: Backend, shots: int) -> list[Row]:
+    """Bell-pair sweep. For each theta, returns one Row per joint outcome
+    (00 / 01 / 10 / 11) so the CSV stays flat, plus a 'correlation' row
+    summarising signed correlation (P00+P11) - (P01+P10).
+
+    Ideal correlation as a function of theta:
+        E(theta) = cos(theta).
+    """
+
+    rows: list[Row] = []
+    for name, theta in BELL_THETAS:
+        counts = backend.run(bell_circuit(theta), shots)
+        joint = _joint_2bit_counts(counts)
+        total = sum(joint.values()) or 1
+        p00 = joint["00"] / total
+        p01 = joint["01"] / total
+        p10 = joint["10"] / total
+        p11 = joint["11"] / total
+        for outcome, p in (("00", p00), ("01", p01), ("10", p10), ("11", p11)):
+            rows.append(
+                Row(
+                    experiment="bell",
+                    backend_label=backend.label,
+                    mode=backend.mode,
+                    label=f"{name}|{outcome}",
+                    parameter=theta,
+                    shots=shots,
+                    p0=p,
+                    p1=1 - p,
+                    expected_p0=float("nan"),
+                    error=float("nan"),
+                    notes=f"joint outcome {outcome}",
+                )
+            )
+        correlation = (p00 + p11) - (p01 + p10)
+        ideal_corr = math.cos(theta)
+        rows.append(
+            Row(
+                experiment="bell",
+                backend_label=backend.label,
+                mode=backend.mode,
+                label=f"{name}|corr",
+                parameter=theta,
+                shots=shots,
+                p0=correlation,
+                p1=float("nan"),
+                expected_p0=ideal_corr,
+                error=abs(correlation - ideal_corr),
+                notes="signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)",
+            )
+        )
     return rows
 
 
@@ -476,6 +575,7 @@ def write_report(rows: list[Row], path: str, backend: Backend, shots: int) -> No
     phase_rows = [r for r in rows if r.experiment == "phase_alignment"]
     obs_rows = [r for r in rows if r.experiment == "observation"]
     depth_rows = [r for r in rows if r.experiment == "noise_depth"]
+    bell_rows = [r for r in rows if r.experiment == "bell"]
 
     def fmt(p: float) -> str:
         if p != p:  # NaN
@@ -591,6 +691,30 @@ def write_report(rows: list[Row], path: str, backend: Backend, shots: int) -> No
         )
     lines.append("")
 
+    # Experiment 4 -- Bell-pair correlation sweep
+    if bell_rows:
+        corr_rows = [r for r in bell_rows if r.label.endswith("|corr")]
+        lines.append("## Experiment 4 -- Bell-pair correlation sweep")
+        lines.append("")
+        lines.append(
+            "Two qubits prepared as `|00> -> H ⊗ I -> CNOT(0,1)` form the "
+            "maximally entangled Bell state |Φ+⟩ = (|00> + |11>) / √2. An "
+            "additional RY(theta) on qubit 0 rotates the joint distribution; "
+            "the signed correlation E(theta) = (P00+P11) - (P01+P10) traces "
+            "the closed-form ideal `cos(theta)`. This is the L102 "
+            "browser-native panel's hardware-grade sibling."
+        )
+        lines.append("")
+        lines.append("| theta | correlation measured | ideal cos(theta) | |error| | notes |")
+        lines.append("|---|---|---|---|---|")
+        for r in corr_rows:
+            theta_label = r.label.split("|")[0]
+            lines.append(
+                f"| {theta_label} | {fmt(r.p0)} | {fmt(r.expected_p0)} | "
+                f"{fmt(r.error)} | entanglement is statistical correlation, not signaling |"
+            )
+        lines.append("")
+
     # Scope / disclaimer
     lines.append("## What this is NOT")
     lines.append("")
@@ -664,6 +788,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Skip Experiment 2 entirely (e.g., on a backend with no mid-circuit measurement support).",
     )
+    p.add_argument(
+        "--skip-bell",
+        action="store_true",
+        help="Skip Experiment 4 (Bell-pair correlation sweep).",
+    )
     return p.parse_args(argv)
 
 
@@ -686,6 +815,11 @@ def main(argv: list[str] | None = None) -> int:
         rows.extend(run_observation_experiment(backend, args.shots))
     print("[quantum_alignment] running Experiment 3: noise vs depth...")
     rows.extend(run_noise_depth_experiment(backend, args.shots))
+    if args.skip_bell:
+        print("[quantum_alignment] skipping Experiment 4 (per --skip-bell)")
+    else:
+        print("[quantum_alignment] running Experiment 4: Bell-pair correlation...")
+        rows.extend(run_bell_experiment(backend, args.shots))
 
     csv_path = os.path.join(args.out, "results.csv")
     phase_plot = os.path.join(args.out, "phase_alignment_plot.png")

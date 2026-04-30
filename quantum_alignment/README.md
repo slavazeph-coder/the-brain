@@ -17,6 +17,25 @@ Quantum hardware.
 | 1 | Phase alignment / interference | `|0> → H → RZ(θ) → H → Measure`. Sweeps θ ∈ {0, π/8, π/4, π/2, 3π/4, π}. Ideal `p(0) = cos²(θ/2)`. |
 | 2 | Observation collapse | Compares `H · H` (no mid-circuit measurement) against `H · Measure · H · Measure`. Mid-circuit measurement should destroy interference and push the final readout toward 50/50. |
 | 3 | Decoherence vs. depth | `|0> → H → (X X)ⁿ → H → Measure` with n ∈ {0, 1, 2, 4, 8, 16, 32, 64}. Each `X X` is logical identity, so the ideal output is `p(0) = 1` for all n; any drift is gate noise + decoherence. |
+| 4 | Bell-pair correlation | `|00> → H ⊗ I → CNOT(0,1) → RY(θ) on q0 → measure both`. Sweeps θ ∈ {0, π/4, π/2, 3π/4, π}. Ideal signed correlation `E(θ) = (P00+P11) − (P01+P10) = cos(θ)`. Hardware-grade sibling of the L102 browser-native Bell Pair Lab. |
+
+## eml — universal continuous primitive
+
+`eml.py` and `test_eml.py` ship Odrzywołek's single binary operator
+`eml(x, y) = exp(x) − ln(y)` (arXiv:2603.21852). With the constant `1` it
+generates the elementary library (`exp`, `ln`, `+`, `−`, `·`, `sin`,
+`cos`, `√`, `e`, `π`, …). It sits next to the Qiskit suite because the
+same "one primitive, all the math" idea links three universality stories:
+
+| layer       | primitive                       | derives                            |
+|-------------|---------------------------------|------------------------------------|
+| classical   | `NAND(a, b)`                    | full Boolean logic                 |
+| continuous  | `eml(x, y) = exp(x) − ln(y)`    | scientific calculator              |
+| quantum     | `{H, CNOT, T}`                  | any unitary on n qubits (Solovay–Kitaev) |
+
+The browser-native Layer 105 panel renders the same content as a live
+calculator side-by-side with `Math.*`, with the eml composition tree
+visible.
 
 ## Setup
 
@@ -36,17 +55,29 @@ ideal and noisy modes only need `qiskit`, `qiskit-aer`, `matplotlib`, and
 
 ## Running
 
-All three modes write the same artifacts to `./results/`:
+All three modes write the same four artifacts to `./results/<mode>/`:
 
 - `results.csv` — one row per (experiment, parameter) with raw probabilities and error
 - `phase_alignment_plot.png` — Experiment 1 plot
 - `noise_depth_plot.png` — Experiment 3 plot
-- `report.md` — plain-English explanation of what the data shows
+- `report.md` — plain-English explanation of what the data shows (now includes Experiment 4)
+
+Pre-generated artifacts checked in for both `--mode ideal` (`results/ideal/`)
+and `--mode noisy` (`results/noisy/`). `--mode real` is run by the user
+against a live IBM account; nothing from a real-hardware run is checked
+in.
 
 ### Ideal local simulator (no token required)
 
 ```bash
-python quantum_alignment_tests.py --mode ideal --shots 4096
+python quantum_alignment_tests.py --mode ideal --shots 4096 --out results/ideal
+```
+
+### Tests
+
+```bash
+python -m pytest -q                # fast lane (~3s, no AerSimulator round-trip)
+python -m pytest -q -m slow        # slow lane: end-to-end ideal smoke
 ```
 
 ### Noisy simulator (no token required)
@@ -101,6 +132,7 @@ mid-measure circuit it could not execute.
 --seed N                    deterministic seed for noisy mode (default: 42)
 --out PATH                  output directory (default: ./results)
 --skip-observation          skip Experiment 2 (for backends with no mid-circuit measure)
+--skip-bell                 skip Experiment 4 (Bell-pair sweep)
 ```
 
 ## What this is **not**
@@ -127,6 +159,6 @@ mid-measure circuit it could not execute.
 - The token is **only** read from `IBM_QUANTUM_TOKEN` at runtime. The script
   does not log it, does not write it to disk, and does not include it in any
   output file or plot.
-- `requirements.txt` pins minimum versions but does not freeze; in a
-  production setting you should `pip freeze > requirements.lock` and check the
-  lock file in.
+- `requirements.txt` pins minimum versions for development convenience.
+  For reproducible CI / hardware runs, `pip install -r requirements.lock`
+  uses a frozen 2026-04-30 snapshot.

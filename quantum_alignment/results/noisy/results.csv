@@ -1,0 +1,42 @@
+experiment,backend_label,mode,label,parameter,shots,p0,p1,expected_p0,error,notes
+phase_alignment,aer-noisy(generic_backend_5q),noisy,0,0.0,4096,0.994140625,0.005859375,1.0,0.005859375,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi/8,0.39269908169872414,4096,0.95947265625,0.04052734375,0.9619397662556434,0.0024671100056433692,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi/4,0.7853981633974483,4096,0.84912109375,0.15087890625,0.8535533905932737,0.004432296843273731,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi/2,1.5707963267948966,4096,0.497314453125,0.502685546875,0.5000000000000001,0.002685546875000111,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,3pi/4,2.356194490192345,4096,0.156982421875,0.843017578125,0.1464466094067263,0.010535812468273703,
+phase_alignment,aer-noisy(generic_backend_5q),noisy,pi,3.141592653589793,4096,0.003173828125,0.996826171875,3.749399456654644e-33,0.003173828125,
+observation,aer-noisy(generic_backend_5q),noisy,A_no_mid_measure,0,4096,0.99609375,0.00390625,1.0,0.00390625,"H then H -> identity, expect p(0)=1"
+observation,aer-noisy(generic_backend_5q),noisy,B_mid_measure,0,4096,0.482666015625,0.517333984375,0.5,0.017333984375,Mid-circuit measurement collapses the state; expect ~50/50
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=0,0,4096,0.995849609375,0.004150390625,1.0,0.004150390625,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=1,1,4096,0.996826171875,0.003173828125,1.0,0.003173828125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=2,2,4096,0.99560546875,0.00439453125,1.0,0.00439453125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=4,4,4096,0.994873046875,0.005126953125,1.0,0.005126953125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=8,8,4096,0.994873046875,0.005126953125,1.0,0.005126953125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=16,16,4096,0.99267578125,0.00732421875,1.0,0.00732421875,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=32,32,4096,0.98779296875,0.01220703125,1.0,0.01220703125,
+noise_depth,aer-noisy(generic_backend_5q),noisy,xx_pairs=64,64,4096,0.980712890625,0.019287109375,1.0,0.019287109375,
+bell,aer-noisy(generic_backend_5q),noisy,0|00,0.0,4096,0.51416015625,0.48583984375,nan,nan,joint outcome 00
+bell,aer-noisy(generic_backend_5q),noisy,0|01,0.0,4096,0.001708984375,0.998291015625,nan,nan,joint outcome 01
+bell,aer-noisy(generic_backend_5q),noisy,0|10,0.0,4096,0.00244140625,0.99755859375,nan,nan,joint outcome 10
+bell,aer-noisy(generic_backend_5q),noisy,0|11,0.0,4096,0.481689453125,0.518310546875,nan,nan,joint outcome 11
+bell,aer-noisy(generic_backend_5q),noisy,0|corr,0.0,4096,0.99169921875,nan,1.0,0.00830078125,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-noisy(generic_backend_5q),noisy,pi/4|00,0.7853981633974483,4096,0.423095703125,0.576904296875,nan,nan,joint outcome 00
+bell,aer-noisy(generic_backend_5q),noisy,pi/4|01,0.7853981633974483,4096,0.0830078125,0.9169921875,nan,nan,joint outcome 01
+bell,aer-noisy(generic_backend_5q),noisy,pi/4|10,0.7853981633974483,4096,0.078369140625,0.921630859375,nan,nan,joint outcome 10
+bell,aer-noisy(generic_backend_5q),noisy,pi/4|11,0.7853981633974483,4096,0.41552734375,0.58447265625,nan,nan,joint outcome 11
+bell,aer-noisy(generic_backend_5q),noisy,pi/4|corr,0.7853981633974483,4096,0.67724609375,nan,0.7071067811865476,0.029860687436547573,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-noisy(generic_backend_5q),noisy,pi/2|00,1.5707963267948966,4096,0.251708984375,0.748291015625,nan,nan,joint outcome 00
+bell,aer-noisy(generic_backend_5q),noisy,pi/2|01,1.5707963267948966,4096,0.253662109375,0.746337890625,nan,nan,joint outcome 01
+bell,aer-noisy(generic_backend_5q),noisy,pi/2|10,1.5707963267948966,4096,0.24658203125,0.75341796875,nan,nan,joint outcome 10
+bell,aer-noisy(generic_backend_5q),noisy,pi/2|11,1.5707963267948966,4096,0.248046875,0.751953125,nan,nan,joint outcome 11
+bell,aer-noisy(generic_backend_5q),noisy,pi/2|corr,1.5707963267948966,4096,-0.00048828125,nan,6.123233995736766e-17,0.0004882812500000613,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-noisy(generic_backend_5q),noisy,3pi/4|00,2.356194490192345,4096,0.075927734375,0.924072265625,nan,nan,joint outcome 00
+bell,aer-noisy(generic_backend_5q),noisy,3pi/4|01,2.356194490192345,4096,0.42724609375,0.57275390625,nan,nan,joint outcome 01
+bell,aer-noisy(generic_backend_5q),noisy,3pi/4|10,2.356194490192345,4096,0.42724609375,0.57275390625,nan,nan,joint outcome 10
+bell,aer-noisy(generic_backend_5q),noisy,3pi/4|11,2.356194490192345,4096,0.069580078125,0.930419921875,nan,nan,joint outcome 11
+bell,aer-noisy(generic_backend_5q),noisy,3pi/4|corr,2.356194490192345,4096,-0.708984375,nan,-0.7071067811865475,0.0018775938134525383,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)
+bell,aer-noisy(generic_backend_5q),noisy,pi|00,3.141592653589793,4096,0.003173828125,0.996826171875,nan,nan,joint outcome 00
+bell,aer-noisy(generic_backend_5q),noisy,pi|01,3.141592653589793,4096,0.51318359375,0.48681640625,nan,nan,joint outcome 01
+bell,aer-noisy(generic_backend_5q),noisy,pi|10,3.141592653589793,4096,0.480224609375,0.519775390625,nan,nan,joint outcome 10
+bell,aer-noisy(generic_backend_5q),noisy,pi|11,3.141592653589793,4096,0.00341796875,0.99658203125,nan,nan,joint outcome 11
+bell,aer-noisy(generic_backend_5q),noisy,pi|corr,3.141592653589793,4096,-0.98681640625,nan,-1.0,0.01318359375,signed correlation = (P00+P11)-(P01+P10); ideal = cos(theta)

@@ -176,6 +176,35 @@ export function rowsToCsv(rows) {
 
 // ---------- summary stats ---------------------------------------------------
 
+/**
+ * Map a sweep summary to brain region deltas (for the L103 Apply-to-brain
+ * button). The mapping is intentionally analogous to L101 / L102:
+ *
+ *   PFC  ↑ avgCoherence  (focus / planning rises with quantum-ness)
+ *   AMY  ↑ maxError      (alarm rises with how off-ideal the curve is)
+ *   THL  ↑ rangeP0       (sensory routing rises with parameter sensitivity)
+ *   HPC  ↑ avgError      (memory / consolidation tied to overall fidelity)
+ *   BG   ↑ rangeP0 again (action-selection sharpness)
+ *   CBL  ↑ maxError      (correction load)
+ *   CTX  ↑ n / 33        (cortical area scales with sweep resolution)
+ *
+ * All deltas land in [-0.5, +0.5] before App.jsx applies its 0.3 scaling
+ * factor.
+ */
+export function sweepBrainDeltas(summary) {
+  if (!summary) return null;
+  const clamp = (v) => Math.max(-0.5, Math.min(0.5, v));
+  return {
+    PFC: clamp((summary.avgCoherence / 100) * 0.5),
+    AMY: clamp(summary.maxError),
+    THL: clamp(summary.rangeP0 * 0.5),
+    HPC: clamp(summary.avgError),
+    BG: clamp(summary.rangeP0 * 0.4),
+    CBL: clamp(summary.maxError * 0.8),
+    CTX: clamp((summary.n / 33) * 0.4),
+  };
+}
+
 export function sweepSummary(rows) {
   if (!rows.length) return null;
   let maxError = 0;

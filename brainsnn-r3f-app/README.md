@@ -74,7 +74,8 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | 101   | Quantum Coherence Lab             | [QuantumCoherencePanel.jsx](src/components/QuantumCoherencePanel.jsx) + [utils/quantumCoherence.js](src/utils/quantumCoherence.js)     |
 | 102   | Bell Pair Lab                     | [BellPairPanel.jsx](src/components/BellPairPanel.jsx) + [utils/bellPair.js](src/utils/bellPair.js)                                     |
 | 103   | Quantum Sweep                     | [QuantumSweepPanel.jsx](src/components/QuantumSweepPanel.jsx) + [utils/quantumSweep.js](src/utils/quantumSweep.js)                     |
-| 104   | Quantum Glossary                  | [QuantumGlossaryPanel.jsx](src/components/QuantumGlossaryPanel.jsx)                                                                    |
+| 104   | Quantum Glossary                  | [QuantumGlossaryPanel.jsx](src/components/QuantumGlossaryPanel.jsx) + [utils/quantumGlossary.js](src/utils/quantumGlossary.js)         |
+| 105   | Universal Primitive Lab           | [UniversalPrimitivePanel.jsx](src/components/UniversalPrimitivePanel.jsx) + [utils/eml.js](src/utils/eml.js)                          |
 
 ## Quantum Coherence Lab
 
@@ -105,6 +106,7 @@ read from `IBM_QUANTUM_TOKEN` at runtime only.
 - **Layer 102 — Bell Pair Lab.** Two qubits run through `H ⊗ I → CNOT` to build the Bell state `|Φ+⟩ = (|00⟩ + |11⟩) / √2`. RY(θ) on qubit 0 lets you watch correlation slide from +1 (mirrored) to 0 (decohered) to −1 (anti-mirrored). Important framing: this is statistical correlation, *not* information transfer.
 - **Layer 103 — Quantum Sweep.** Auto-sweeps θ / noise / X·X-depth, plots P(0) and P(1) against the closed-form ideal, and exports a CSV with the same column shape as `quantum_alignment/results/results.csv` so browser-sim curves can be compared directly with the Qiskit ideal/noisy/real curves.
 - **Layer 104 — Quantum Glossary.** Searchable reference card for every term used in L101–L103 — plain language, the math, and a metaphor column explicitly framed as a teaching aid.
+- **Layer 105 — Universal Primitive Lab.** Implements `eml(x, y) = exp(x) − ln(y)` from Odrzywołek (arXiv:2603.21852): a single binary operator that, with the constant `1`, generates the elementary library (`exp`, `ln`, `+`, `−`, `·`, `sin`, `cos`, `√`, `e`, `π`, …). Sits next to the quantum cluster because the same "one primitive, all the math" idea links **NAND** (Boolean) ↔ **eml** (continuous) ↔ **`{H, CNOT, T}`** (quantum). Every derivation is independently checked against `Math.*` to ~1e-9 precision in `eml.test.mjs`.
 
 Run the unit tests directly with Node (no extra dev deps):
 

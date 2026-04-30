@@ -4,6 +4,7 @@ import {
   runSweep,
   rowsToCsv,
   sweepSummary,
+  sweepBrainDeltas,
   SWEEP_CSV_COLUMNS,
 } from './quantumSweep.js';
 
@@ -83,4 +84,19 @@ test('sweepSummary returns null on empty input', () => {
 
 test('unknown sweep kind throws', () => {
   assert.throws(() => runSweep({ kind: 'mystery', steps: 3 }));
+});
+
+test('sweepBrainDeltas returns null on null summary', () => {
+  assert.equal(sweepBrainDeltas(null), null);
+});
+
+test('sweepBrainDeltas returns 7 named regions in [-0.5, 0.5]', () => {
+  const rows = runSweep({ kind: 'phase', shots: 1024, steps: 5, noise: 0.1 });
+  const s = sweepSummary(rows);
+  const d = sweepBrainDeltas(s);
+  const expected = ['PFC', 'AMY', 'THL', 'HPC', 'BG', 'CBL', 'CTX'];
+  for (const k of expected) {
+    assert.ok(k in d, `missing region ${k}`);
+    assert.ok(d[k] >= -0.5 && d[k] <= 0.5, `${k} out of range: ${d[k]}`);
+  }
 });
