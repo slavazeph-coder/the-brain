@@ -115,6 +115,9 @@ export const LAYER_CATALOG = [
   { id: 106, name: 'NAND Lab', group: 'experimental', blurb: 'Boolean side of the universality bridge — derive NOT/AND/OR/XOR/MUX from NAND alone.' },
   { id: 107, name: 'GHZ Lab', group: 'experimental', blurb: '3-qubit |000⟩+|111⟩ entanglement with depolarizing noise + parity metric.' },
   { id: 108, name: 'Solovay-Kitaev Mini', group: 'experimental', blurb: 'Approximate any RZ(θ) with brute-force {H,T,T†} sequences; convergence chart.' },
+  { id: 109, name: 'Vault', group: 'data', blurb: 'Local-first markdown vault — bidirectional [[wikilinks]], backlinks, tags, fuzzy search, daily notes, firewall on every save.' },
+  { id: 110, name: 'Vault Graph', group: 'data', blurb: '2D force-directed graph of the L109 vault — Obsidian-style link map.' },
+  { id: 111, name: 'Daily Notes', group: 'data', blurb: 'One-button today\'s note (ISO date title, template) inside L109 Vault.' },
 ];
 
 export const LAYER_GROUPS = {

@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "start": "node server.js",
     "start:dev": "npm run build && node server.js",
-    "test:quantum": "node --test src/utils/quantumCoherence.test.mjs src/utils/bellPair.test.mjs src/utils/quantumSweep.test.mjs src/utils/quantumGlossary.test.mjs src/utils/eml.test.mjs src/utils/nand.test.mjs src/utils/ghzState.test.mjs src/utils/solovayKitaev.test.mjs"
+    "test:quantum": "node --test src/utils/quantumCoherence.test.mjs src/utils/bellPair.test.mjs src/utils/quantumSweep.test.mjs src/utils/quantumGlossary.test.mjs src/utils/eml.test.mjs src/utils/nand.test.mjs src/utils/ghzState.test.mjs src/utils/solovayKitaev.test.mjs",
+    "test:vault": "node --test src/utils/vault.test.mjs src/utils/vaultMarkdown.test.mjs src/utils/vaultGraph.test.mjs src/utils/vaultSearch.test.mjs src/utils/vaultDaily.test.mjs",
+    "test:all": "npm run test:quantum && npm run test:vault"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

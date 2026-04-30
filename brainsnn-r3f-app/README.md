@@ -79,6 +79,9 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | 106   | NAND Lab                          | [NandLabPanel.jsx](src/components/NandLabPanel.jsx) + [utils/nand.js](src/utils/nand.js)                                              |
 | 107   | GHZ Lab                           | [GhzLabPanel.jsx](src/components/GhzLabPanel.jsx) + [utils/ghzState.js](src/utils/ghzState.js)                                        |
 | 108   | Solovay-Kitaev Mini               | [SolovayKitaevPanel.jsx](src/components/SolovayKitaevPanel.jsx) + [utils/solovayKitaev.js](src/utils/solovayKitaev.js)                |
+| 109   | Vault                             | [VaultPanel.jsx](src/components/VaultPanel.jsx) + [utils/vault.js](src/utils/vault.js) + [utils/vaultMarkdown.js](src/utils/vaultMarkdown.js) + [utils/vaultGraph.js](src/utils/vaultGraph.js) + [utils/vaultSearch.js](src/utils/vaultSearch.js) |
+| 110   | Vault Graph                       | [VaultGraphPanel.jsx](src/components/VaultGraphPanel.jsx) (uses utils/vaultGraph.js)                                                  |
+| 111   | Daily Notes                       | "Today’s note" button inside [VaultPanel.jsx](src/components/VaultPanel.jsx) + [utils/vaultDaily.js](src/utils/vaultDaily.js)         |
 
 ## Quantum Coherence Lab
 

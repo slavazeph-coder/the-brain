@@ -89,6 +89,8 @@ import UniversalPrimitivePanel from './components/UniversalPrimitivePanel';
 import NandLabPanel from './components/NandLabPanel';
 import GhzLabPanel from './components/GhzLabPanel';
 import SolovayKitaevPanel from './components/SolovayKitaevPanel';
+import VaultPanel from './components/VaultPanel';
+import VaultGraphPanel from './components/VaultGraphPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -889,6 +891,14 @@ export default function App() {
 
           <ErrorBoundary name="Solovay-Kitaev Mini">
             <SolovayKitaevPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Vault">
+            <VaultPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Vault Graph">
+            <VaultGraphPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
