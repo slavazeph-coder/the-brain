@@ -2017,6 +2017,24 @@ h1,h2,h3{
 }
 .code-brain-name{font-family:'JetBrains Mono', ui-monospace, monospace}
 .code-brain-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.code-brain-question-list{
+  list-style:none;padding:0;margin:0;
+  display:flex;flex-direction:column;gap:6px
+}
+.code-brain-question-list li{
+  display:flex;gap:10px;align-items:flex-start;
+  padding:8px 10px;
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.05);
+  border-radius:6px;
+  font-size:.8rem
+}
+.code-brain-archetype{
+  font-family:'JetBrains Mono', ui-monospace, monospace;
+  font-size:.7rem;opacity:.7;
+  text-transform:uppercase;letter-spacing:.04em;
+  flex-shrink:0;min-width:110px
+}
 
 /* ---------- Layer 21: Brain Steward ---------- */
 

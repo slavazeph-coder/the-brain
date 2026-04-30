@@ -6,7 +6,22 @@
  * JS/TS/Python/Go/Rust function + class + import + export extraction.
  * Returns symbols that can be fed into BM25 index + community detection
  * to build a code-aware knowledge graph.
+ *
+ * Edges carry provenance tags borrowed from safishamsi/graphify so
+ * downstream consumers (Layer 101 Graph Insights) can reason about
+ * confidence:
+ *   EXTRACTED — directly observable in source (file→symbol contains,
+ *               resolved imports). Weight 1.0.
+ *   INFERRED  — derived from heuristics (sibling adjacency,
+ *               basename-fuzzy import). Weight 0.8.
+ *   AMBIGUOUS — uncertain (unresolved external imports). Weight 0.5.
  */
+
+export const PROVENANCE = {
+  EXTRACTED: { tag: 'EXTRACTED', confidence: 1.0 },
+  INFERRED: { tag: 'INFERRED', confidence: 0.8 },
+  AMBIGUOUS: { tag: 'AMBIGUOUS', confidence: 0.5 }
+};
 
 const LANG_PATTERNS = {
   js: {
@@ -148,9 +163,10 @@ export function parseFiles(files) {
   }
 
   // Build edges:
-  //  - file → symbol (contains)
-  //  - file → file (via import resolution — best-effort by basename)
-  //  - symbol → symbol (sibling within file, weak)
+  //  - file → symbol            (contains)        EXTRACTED, weight 1
+  //  - file → file              (import resolved) EXTRACTED, weight 2
+  //  - file → external module   (import unresolved) AMBIGUOUS, weight 0.5
+  //  - symbol → symbol          (sibling in file) INFERRED, weight 0.3
   const edges = [];
   const fileByBasename = new Map();
   for (const f of parsed) {
@@ -158,24 +174,69 @@ export function parseFiles(files) {
     fileByBasename.set(base, f.path);
   }
 
+  const externalModules = new Map(); // name → node id
+
   for (const f of parsed) {
     const fileId = `file:${f.path}`;
     for (const sym of f.symbols) {
-      edges.push({ source: fileId, target: `${sym.kind}:${f.path}:${sym.name}`, weight: 1 });
+      edges.push({
+        source: fileId,
+        target: `${sym.kind}:${f.path}:${sym.name}`,
+        weight: 1,
+        kind: 'contains',
+        provenance: PROVENANCE.EXTRACTED.tag,
+        confidence: PROVENANCE.EXTRACTED.confidence
+      });
     }
-    // Imports (best-effort resolution)
+    // Imports — resolve to file when possible, otherwise tag AMBIGUOUS
     for (const imp of f.imports) {
       const base = imp.split('/').pop().replace(/\.[^.]+$/, '');
       const resolved = fileByBasename.get(base);
       if (resolved && resolved !== f.path) {
-        edges.push({ source: fileId, target: `file:${resolved}`, weight: 2 });
+        edges.push({
+          source: fileId,
+          target: `file:${resolved}`,
+          weight: 2,
+          kind: 'imports',
+          provenance: PROVENANCE.EXTRACTED.tag,
+          confidence: PROVENANCE.EXTRACTED.confidence
+        });
+      } else {
+        // External / unresolved — surface as a placeholder node with an
+        // AMBIGUOUS edge so Layer 101 can ask "what is this?"
+        const extId = `external:${imp}`;
+        if (!externalModules.has(imp)) {
+          externalModules.set(imp, extId);
+          nodes.push({
+            id: extId,
+            kind: 'external',
+            label: imp,
+            external: true
+          });
+          nodeIds.add(extId);
+        }
+        edges.push({
+          source: fileId,
+          target: extId,
+          weight: 0.5,
+          kind: 'imports',
+          provenance: PROVENANCE.AMBIGUOUS.tag,
+          confidence: PROVENANCE.AMBIGUOUS.confidence
+        });
       }
     }
-    // Sibling symbols within same file
+    // Sibling symbols within same file — proximity is a weak signal
     for (let i = 0; i < f.symbols.length - 1; i++) {
       const a = `${f.symbols[i].kind}:${f.path}:${f.symbols[i].name}`;
       const b = `${f.symbols[i + 1].kind}:${f.path}:${f.symbols[i + 1].name}`;
-      edges.push({ source: a, target: b, weight: 0.3 });
+      edges.push({
+        source: a,
+        target: b,
+        weight: 0.3,
+        kind: 'sibling',
+        provenance: PROVENANCE.INFERRED.tag,
+        confidence: PROVENANCE.INFERRED.confidence
+      });
     }
   }
 
@@ -186,9 +247,16 @@ export function parseFiles(files) {
     meta: n
   }));
 
+  const provenance = edges.reduce((acc, e) => {
+    const tag = e.provenance || 'EXTRACTED';
+    acc[tag] = (acc[tag] || 0) + 1;
+    return acc;
+  }, {});
+
   const stats = {
     totalFiles: parsed.length,
-    totalSymbols: nodes.filter((n) => n.kind !== 'file').length,
+    totalSymbols: nodes.filter((n) => n.kind !== 'file' && n.kind !== 'external').length,
+    totalExternals: nodes.filter((n) => n.kind === 'external').length,
     byKind: nodes.reduce((acc, n) => {
       acc[n.kind] = (acc[n.kind] || 0) + 1;
       return acc;
@@ -196,7 +264,8 @@ export function parseFiles(files) {
     byLang: parsed.reduce((acc, f) => {
       acc[f.lang] = (acc[f.lang] || 0) + 1;
       return acc;
-    }, {})
+    }, {}),
+    provenance
   };
 
   return { nodes, edges, docs, files: parsed, stats };

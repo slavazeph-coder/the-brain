@@ -24,6 +24,7 @@ import HeatmapTimeline from './components/HeatmapTimeline';
 import KnowledgeBrainPanel from './components/KnowledgeBrainPanel';
 import MCPBridgePanel from './components/MCPBridgePanel';
 import CodeBrainPanel from './components/CodeBrainPanel';
+import GraphInsightsPanel from './components/GraphInsightsPanel';
 import BrainStewardPanel from './components/BrainStewardPanel';
 import ConversationBrainPanel from './components/ConversationBrainPanel';
 import ImmunityPanel from './components/ImmunityPanel';
@@ -549,6 +550,21 @@ export default function App() {
                 }));
                 recordImmunity(IMMUNITY_EVENTS.CODE_ANALYZED, {});
                 toastSuccess('Code communities mapped onto brain');
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Graph Insights">
+            <GraphInsightsPanel
+              onApplyToNetwork={(payload) => {
+                setState((prev) => ({
+                  ...prev,
+                  regions: { ...prev.regions, ...payload.regions },
+                  scenario: payload.scenario,
+                  tick: prev.tick + 1
+                }));
+                recordImmunity(IMMUNITY_EVENTS.CODE_ANALYZED, {});
+                toastSuccess('Graph insights mapped onto brain');
               }}
             />
           </ErrorBoundary>
