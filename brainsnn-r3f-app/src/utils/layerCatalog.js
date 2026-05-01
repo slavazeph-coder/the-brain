@@ -107,6 +107,17 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 101, name: 'Quantum Coherence Lab', group: 'experimental', blurb: 'In-browser single-qubit phase / interference / decoherence sandbox.' },
+  { id: 102, name: 'Bell Pair Lab', group: 'experimental', blurb: 'Two-qubit |Φ+⟩ entanglement + RY rotation + correlation strength.' },
+  { id: 103, name: 'Quantum Sweep', group: 'experimental', blurb: 'Auto-sweep θ / noise / depth, plot vs ideal, download CSV.' },
+  { id: 104, name: 'Quantum Glossary', group: 'experimental', blurb: 'Searchable glossary of every quantum term used in L101–L103.' },
+  { id: 105, name: 'Universal Primitive Lab', group: 'experimental', blurb: 'eml(x,y)=exp(x)−ln(y): one operator generates the elementary library (Odrzywołek 2603.21852).' },
+  { id: 106, name: 'NAND Lab', group: 'experimental', blurb: 'Boolean side of the universality bridge — derive NOT/AND/OR/XOR/MUX from NAND alone.' },
+  { id: 107, name: 'GHZ Lab', group: 'experimental', blurb: '3-qubit |000⟩+|111⟩ entanglement with depolarizing noise + parity metric.' },
+  { id: 108, name: 'Solovay-Kitaev Mini', group: 'experimental', blurb: 'Approximate any RZ(θ) with brute-force {H,T,T†} sequences; convergence chart.' },
+  { id: 109, name: 'Vault', group: 'data', blurb: 'Local-first markdown vault — bidirectional [[wikilinks]], backlinks, tags, fuzzy search, daily notes, firewall on every save.' },
+  { id: 110, name: 'Vault Graph', group: 'data', blurb: '2D force-directed graph of the L109 vault — Obsidian-style link map.' },
+  { id: 111, name: 'Daily Notes', group: 'data', blurb: 'One-button today\'s note (ISO date title, template) inside L109 Vault.' },
 ];
 
 export const LAYER_GROUPS = {
@@ -116,6 +127,7 @@ export const LAYER_GROUPS = {
   data: { label: 'Data & State', color: '#5ee69a' },
   backend: { label: 'Backend & Agents', color: '#77dbe4' },
   progression: { label: 'Progression', color: '#e57b40' },
+  experimental: { label: 'Experimental Simulation', color: '#5ad4ff' },
 };
 
 export function searchLayers(query = '') {

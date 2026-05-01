@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/slavazeph-coder/the-brain/blob/main/quantum_alignment/results_schema.json",
+  "title": "Quantum Alignment results.csv schema",
+  "description": "Schema for the per-row records produced by quantum_alignment_tests.py and exported as results.csv. Downstream tooling (the L103 Quantum Sweep CSV importer, dashboards, notebooks) should validate against this contract before parsing.",
+  "type": "object",
+  "required": [
+    "experiment",
+    "backend_label",
+    "mode",
+    "label",
+    "parameter",
+    "shots",
+    "p0",
+    "p1",
+    "expected_p0",
+    "error",
+    "notes"
+  ],
+  "properties": {
+    "experiment": {
+      "type": "string",
+      "enum": ["phase_alignment", "observation", "noise_depth", "bell"],
+      "description": "Which of the four experiments produced this row."
+    },
+    "backend_label": {
+      "type": "string",
+      "description": "Human-readable backend label, e.g. 'aer-ideal', 'aer-noisy(generic_backend_5q)', 'ibm_brisbane'.",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["ideal", "noisy", "real"],
+      "description": "Execution mode. 'ideal' = AerSimulator, 'noisy' = AerSimulator with fake-backend noise, 'real' = IBM Quantum hardware via qiskit-ibm-runtime."
+    },
+    "label": {
+      "type": "string",
+      "description": "Row label specific to the experiment. For phase: 'pi/4' etc. For observation: 'A_no_mid_measure' / 'B_mid_measure'. For noise_depth: 'xx_pairs=8'. For bell: 'pi/4|00' etc., or 'pi/4|corr' for the correlation summary row."
+    },
+    "parameter": {
+      "type": "number",
+      "description": "Numeric value of the swept parameter (radians for theta; integer pair-count for noise_depth)."
+    },
+    "shots": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total measurement shots."
+    },
+    "p0": {
+      "type": ["number", "string"],
+      "description": "Empirical probability of the 'zero' outcome — or, for bell|corr rows, the signed correlation E(theta) = (P00+P11) - (P01+P10) which can be negative. NaN allowed for Skipped rows."
+    },
+    "p1": {
+      "type": ["number", "string"],
+      "description": "Empirical probability of the 'one' outcome. NaN allowed for bell|corr summary rows and Skipped rows."
+    },
+    "expected_p0": {
+      "type": ["number", "string"],
+      "description": "Closed-form ideal probability for the row's parameter, where one is well-defined (NaN otherwise)."
+    },
+    "error": {
+      "type": ["number", "string"],
+      "description": "|p0 - expected_p0|. NaN where expected_p0 is NaN."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-form note. Skipped rows include the reason here ('Skipped: selected backend does not support mid-circuit measurement.')."
+    }
+  },
+  "additionalProperties": false
+}

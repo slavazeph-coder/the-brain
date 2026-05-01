@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { APP_HOST } from '../utils/appHost';
 
 /**
  * Layer 54 — Public API docs panel.
@@ -80,7 +81,7 @@ export default function ApiDocsPanel() {
 
   const verticalUrl = `/api/og?size=vertical&h=eyJ0IjoiVVJHRU5UOiBzaG9ja2luZyBzY2FuZGFsISIsImUiOjAuNzIsImMiOjAuNjQsIm0iOjAuNjgsInUiOjAuNTEsImEiOiJvdXRyYWdlIiwidHMiOjF9`;
 
-  const curl = `curl -X POST https://brainsnn.com/api/score \\
+  const curl = `curl -X POST ${APP_HOST}/api/score \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: ${apiKey || '<your-key>'}" \\
   -d '${JSON.stringify({ text }).replace(/'/g, "'\"'\"'")}'`;

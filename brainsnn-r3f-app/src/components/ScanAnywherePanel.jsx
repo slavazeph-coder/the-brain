@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
+import { APP_HOST } from '../utils/appHost';
 
 /**
  * Layer 49 — Scan Anywhere
  *
  * One-line JS bookmarklet that grabs the selected text (or page
- * title+URL if nothing is selected) and opens brainsnn.com with a
+ * title+URL if nothing is selected) and opens app.brainsnn.com with a
  * pre-filled scan target via the ?scan= query param.
  *
  * Also exposes the ?scan=<text> and ?scan-url=<url> contract so any
  * external link / share-sheet / launcher can deep-link straight
  * into the Firewall.
  */
-const BOOKMARKLET_SRC = `javascript:(function(){var s=window.getSelection?window.getSelection().toString():'';var t=s||(document.title+'. '+(window.location.href||''));var u='https://brainsnn.com/?scan='+encodeURIComponent(t.slice(0,3000));window.open(u,'_blank','noopener');})();`;
+const BOOKMARKLET_SRC = `javascript:(function(){var s=window.getSelection?window.getSelection().toString():'';var t=s||(document.title+'. '+(window.location.href||''));var u='${APP_HOST}/?scan='+encodeURIComponent(t.slice(0,3000));window.open(u,'_blank','noopener');})();`;
 
 export default function ScanAnywherePanel() {
   const [copied, setCopied] = useState(false);

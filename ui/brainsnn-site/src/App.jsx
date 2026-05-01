@@ -394,11 +394,12 @@ export default function App() {
             <div className="hero-copy">
               <div className="eyebrow">{SITE.badge}</div>
               <h1>{SITE.tagline}</h1>
+              <p className="hero-text">{SITE.subtagline}</p>
               <p className="hero-text">
-                {SITE.name} is an open-source 3D neuromorphic network visualizer built with React Three Fiber. It models 7 brain regions, 10 plastic pathways, and live STDP learning in the browser. No backprop. No retraining. No server required for the core demo.
+                {SITE.name} is a local-first knowledge tool — markdown notes with bidirectional <code>[[wikilinks]]</code>, backlinks, tag pane, fuzzy search, daily notes, force-directed graph view, and the 110+-layer cognitive instrumentation suite (firewall, propaganda detection, sentence heatmap, quantum coherence lab) running on a 3D neuromorphic brain. No backend, no accounts, no telemetry.
               </p>
               <div className="hero-actions">
-                <a href="#demo" className="button button-primary">Live Demo</a>
+                <a href={SITE.appUrl} className="button button-primary">Open the app →</a>
                 <a href={SITE.repoUrl} target="_blank" rel="noreferrer" className="button button-secondary">Star on GitHub</a>
               </div>
               <dl className="stats-row" aria-label="Project stats">

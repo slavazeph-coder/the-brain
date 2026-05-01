@@ -71,6 +71,57 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | 33    | Multimodal RAG Router             | [MultimodalRagPanel.jsx](src/components/MultimodalRagPanel.jsx) + [utils/multimodalRag.js](src/utils/multimodalRag.js)                 |
 | 34    | Vector-Graph Fusion               | [VectorGraphFusionPanel.jsx](src/components/VectorGraphFusionPanel.jsx)                                                                |
 | 35    | Direct Content Insertion (JSON)   | [DirectInsertPanel.jsx](src/components/DirectInsertPanel.jsx)                                                                          |
+| 101   | Quantum Coherence Lab             | [QuantumCoherencePanel.jsx](src/components/QuantumCoherencePanel.jsx) + [utils/quantumCoherence.js](src/utils/quantumCoherence.js)     |
+| 102   | Bell Pair Lab                     | [BellPairPanel.jsx](src/components/BellPairPanel.jsx) + [utils/bellPair.js](src/utils/bellPair.js)                                     |
+| 103   | Quantum Sweep                     | [QuantumSweepPanel.jsx](src/components/QuantumSweepPanel.jsx) + [utils/quantumSweep.js](src/utils/quantumSweep.js)                     |
+| 104   | Quantum Glossary                  | [QuantumGlossaryPanel.jsx](src/components/QuantumGlossaryPanel.jsx) + [utils/quantumGlossary.js](src/utils/quantumGlossary.js)         |
+| 105   | Universal Primitive Lab           | [UniversalPrimitivePanel.jsx](src/components/UniversalPrimitivePanel.jsx) + [utils/eml.js](src/utils/eml.js)                          |
+| 106   | NAND Lab                          | [NandLabPanel.jsx](src/components/NandLabPanel.jsx) + [utils/nand.js](src/utils/nand.js)                                              |
+| 107   | GHZ Lab                           | [GhzLabPanel.jsx](src/components/GhzLabPanel.jsx) + [utils/ghzState.js](src/utils/ghzState.js)                                        |
+| 108   | Solovay-Kitaev Mini               | [SolovayKitaevPanel.jsx](src/components/SolovayKitaevPanel.jsx) + [utils/solovayKitaev.js](src/utils/solovayKitaev.js)                |
+| 109   | Vault                             | [VaultPanel.jsx](src/components/VaultPanel.jsx) + [VaultEditor.jsx](src/components/VaultEditor.jsx) (CodeMirror 6, lazy-loaded) + [utils/vault.js](src/utils/vault.js) + [utils/vaultMarkdown.js](src/utils/vaultMarkdown.js) + [utils/vaultGraph.js](src/utils/vaultGraph.js) + [utils/vaultSearch.js](src/utils/vaultSearch.js) |
+| 110   | Vault Graph                       | [VaultGraphPanel.jsx](src/components/VaultGraphPanel.jsx) (uses utils/vaultGraph.js)                                                  |
+| 111   | Daily Notes                       | "Today’s note" button inside [VaultPanel.jsx](src/components/VaultPanel.jsx) + [utils/vaultDaily.js](src/utils/vaultDaily.js)         |
+
+## Quantum Coherence Lab
+
+**Layer 101 — Quantum Coherence Lab.** A pure-JavaScript, in-browser simulation
+of a single qubit running through `|0⟩ → H → RZ(θ) → H → M`. Slide the phase
+θ to watch interference move probability between |0⟩ and |1⟩. Add noise to
+damp the fringe. Toggle a mid-circuit observation to collapse superposition.
+Stack X·X pairs (algebraically identity) to watch decoherence eat depth.
+
+**What this is.** A teaching sandbox for the *mechanism* behind the word
+"alignment": phase coherence steers outcomes; noise and observation kill it.
+A **Scientific / Metaphor** mode toggle reframes the same numbers in
+plain English alongside the math.
+
+**What this is not.** This does **not** prove literal multiverse theory,
+consciousness collapse, Planck foam, or spiritual portals. Those are framing
+metaphors when the toggle is on, not physics claims.
+
+**Future backend.** The function surface (`runPhaseExperiment`,
+`runDecoherenceExperiment`, etc.) is intentionally compatible with the
+hardware-grade Qiskit suite at [`quantum_alignment/`](../quantum_alignment/),
+which runs the same three experiments on ideal Aer, noisy Aer, or real IBM
+Quantum hardware (and is shaped to swap in OriginQ later). **No vendor API
+keys are added to the frontend** — IBM tokens stay in the Python suite,
+read from `IBM_QUANTUM_TOKEN` at runtime only.
+
+**Cluster siblings.** Three follow-on layers extend L101 into a coherent quantum module:
+- **Layer 102 — Bell Pair Lab.** Two qubits run through `H ⊗ I → CNOT` to build the Bell state `|Φ+⟩ = (|00⟩ + |11⟩) / √2`. RY(θ) on qubit 0 lets you watch correlation slide from +1 (mirrored) to 0 (decohered) to −1 (anti-mirrored). Important framing: this is statistical correlation, *not* information transfer.
+- **Layer 103 — Quantum Sweep.** Auto-sweeps θ / noise / X·X-depth, plots P(0) and P(1) against the closed-form ideal, and exports a CSV with the same column shape as `quantum_alignment/results/results.csv` so browser-sim curves can be compared directly with the Qiskit ideal/noisy/real curves.
+- **Layer 104 — Quantum Glossary.** Searchable reference card for every term used in L101–L103 — plain language, the math, and a metaphor column explicitly framed as a teaching aid.
+- **Layer 105 — Universal Primitive Lab.** Implements `eml(x, y) = exp(x) − ln(y)` from Odrzywołek (arXiv:2603.21852): a single binary operator that, with the constant `1`, generates the elementary library (`exp`, `ln`, `+`, `−`, `·`, `sin`, `cos`, `√`, `e`, `π`, …). Sits next to the quantum cluster because the same "one primitive, all the math" idea links **NAND** (Boolean) ↔ **eml** (continuous) ↔ **`{H, CNOT, T}`** (quantum). Every derivation is independently checked against `Math.*` to ~1e-9 precision in `eml.test.mjs`.
+- **Layer 106 — NAND Lab.** The classical-Boolean side of the same bridge. Derives `NOT`, `AND`, `OR`, `NOR`, `XOR`, `XNOR`, `MUX` using only nested `NAND` calls and the constants `0` / `1`. Truth tables pinned against JS native logic in `nand.test.mjs`.
+- **Layer 107 — GHZ Lab.** Extends L102 from 2 qubits to 3: `|000⟩ → H ⊗ I ⊗ I → CNOT(0,1) → CNOT(0,2) = (|000⟩ + |111⟩) / √2`. Renders the 8-bin joint distribution + parity metric `P(000) + P(111)` (1.0 ideal, 1/4 fully randomised). Apply-to-brain wired.
+- **Layer 108 — Solovay-Kitaev mini-demo.** Brute-force *basic-approximation* step over `{H, T, T†}`: pick a target `RZ(θ)`, search every sequence up to length 8, plot best-distance vs length. Teaches the convergence rate that the recursive SK algorithm then accelerates exponentially.
+
+Run the unit tests directly with Node (no extra dev deps):
+
+```bash
+npm run test:quantum
+```
 
 ## Keyboard shortcuts
 

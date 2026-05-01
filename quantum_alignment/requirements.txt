@@ -1,0 +1,9 @@
+# Core
+qiskit>=1.0
+qiskit-aer>=0.13
+matplotlib>=3.7
+numpy>=1.24
+
+# Only needed for --mode real (real IBM hardware execution).
+# Pulled in lazily; ideal/noisy modes work without it.
+qiskit-ibm-runtime>=0.20

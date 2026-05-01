@@ -2,12 +2,14 @@ export const SITE = {
   name: "BrainSNN",
   repoUrl: "https://github.com/slavazeph-coder/the-brain",
   demoUrl: "https://brainsnn.com",
+  appUrl: "https://app.brainsnn.com",
   issuesUrl: "https://github.com/slavazeph-coder/the-brain/issues",
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "Paste any tweet. See which feeling it installs in your brain.",
-  badge: "Open Source · MIT License · React Three Fiber",
+  tagline: "Local-first knowledge vault with a cognitive firewall on every note.",
+  subtagline: "Obsidian audits your folders. BrainSNN audits your thinking — emotional, suppression, pressure, and trust scores live as you type.",
+  badge: "Open Source · MIT · 110+ layers · Local-first · No accounts",
 };
 
 export const REGION_LONG_NAMES = {
@@ -195,6 +197,24 @@ export const PATHWAYS = [
 ];
 
 export const WHY_CARDS = [
+  {
+    title: "Cognitive firewall on every note",
+    icon: "🛡️",
+    body:
+      "Every note you write is scored on four axes — emotional activation, cognitive suppression, manipulation pressure, trust erosion — live as you type. The 4-bar card sits under the editor, not in a sidebar.",
+  },
+  {
+    title: "Local-first vault, no accounts",
+    icon: "🔒",
+    body:
+      "Notes live in your browser's localStorage with bidirectional [[wikilinks]], backlinks, tags, and fuzzy search. Export to a single JSON bundle any time. No servers, no sync auth, no telemetry.",
+  },
+  {
+    title: "Three-way universality bridge",
+    icon: "♾️",
+    body:
+      "L105–L108 teach the same idea in three universes: NAND for Boolean, eml(x,y)=exp(x)−ln(y) for continuous (Odrzywołek 2603.21852), and {H, CNOT, T} for quantum. One primitive, all the math.",
+  },
   {
     title: "STDP continuous learning",
     icon: "⚡",
