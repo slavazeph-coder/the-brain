@@ -4,12 +4,14 @@
  * Returns the file contents of a minimal Chrome/Edge MV3 extension that
  * adds a "Scan with BrainSNN" right-click menu and a popup button.
  * On click, the selected text (or the page title + URL if nothing is
- * selected) opens `brainsnn.com/?scan=<text>` in a new tab.
+ * selected) opens `app.brainsnn.com/?scan=<text>` in a new tab.
  *
  * We return the source strings rather than zipping in-browser so the
  * bundle stays small and users can manually drop the files into a
  * folder for Load Unpacked.
  */
+
+import { APP_HOST } from './appHost';
 
 const MANIFEST = {
   manifest_version: 3,
@@ -30,7 +32,7 @@ const MANIFEST = {
 
 const BACKGROUND = `// Layer 81 — BrainSNN extension worker
 const MENU_ID = 'brainsnn-scan';
-const BASE = 'https://brainsnn.com';
+const BASE = '${APP_HOST}';
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -71,7 +73,7 @@ const README = `# Scan with BrainSNN — browser extension
 
 A minimal Manifest V3 extension that adds a right-click menu item
 "Scan with BrainSNN" to selected text or the current page. Clicking
-opens https://brainsnn.com with the text pre-loaded into the
+opens ${APP_HOST} with the text pre-loaded into the
 Cognitive Firewall.
 
 ## Install (Chrome / Edge / Brave — Load Unpacked)
@@ -91,7 +93,7 @@ Cognitive Firewall.
 - Select any text on any page → right-click → "Scan with BrainSNN"
 - Or click the toolbar icon to scan the current selection / page
 
-Everything still runs in brainsnn.com — the extension is just a
+Everything still runs in ${APP_HOST} — the extension is just a
 launcher.
 `;
 
