@@ -53,6 +53,26 @@ export function parseJSONInventory(jsonStr) {
   }));
 }
 
+// ---------- Adapt L109 Vault notes into the document shape -----------------
+
+/**
+ * Convert a list of vault notes into the { title, content, path, tags }
+ * shape that classifyDocuments / buildKnowledgeMap consume. This is the
+ * bridge between L109 (Vault) and L18 (Knowledge Brain): with this
+ * adapter, L18 stops requiring a hand-pasted file inventory and instead
+ * audits the user's own notes for domain coverage and gaps.
+ */
+export function vaultNotesToDocuments(notes = []) {
+  return notes.map((n) => ({
+    title: n.title,
+    content: n.body || '',
+    path: `vault://${n.id}`,
+    tags: n.tags || [],
+    modifiedAt: n.modifiedAt,
+    source: 'vault',
+  }));
+}
+
 // ---------- Classify documents into domains ----------
 
 export function classifyDocuments(documents) {

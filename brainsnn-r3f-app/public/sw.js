@@ -8,8 +8,11 @@
  * old shells without needing a separate cache-busting scheme.
  */
 
-const CACHE_VERSION = 'brainsnn-v1';
-const SHELL_URLS = ['/', '/index.html'];
+// Bumped from v1 → v2 with the L109 vault launch. Old shells are
+// evicted on activate so users get the new app + service worker on
+// first navigation after deploy.
+const CACHE_VERSION = 'brainsnn-v2';
+const SHELL_URLS = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

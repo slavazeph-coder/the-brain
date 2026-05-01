@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createVault, localStorageBackend, memoryBackend } from '../utils/vault';
+import { sharedVault, subscribeVaultChanges } from '../utils/vault';
 import { buildLinkGraph, layoutGraph } from '../utils/vaultGraph';
 
 /**
@@ -14,8 +14,7 @@ import { buildLinkGraph, layoutGraph } from '../utils/vaultGraph';
  * note in VaultPanel, this graph picks it up on the next refresh.
  */
 
-const STORAGE_BACKEND = localStorageBackend() ?? memoryBackend();
-const VAULT = createVault({ backend: STORAGE_BACKEND });
+const VAULT = sharedVault;
 
 const W = 480;
 const H = 320;
@@ -36,12 +35,7 @@ export default function VaultGraphPanel() {
     return layoutGraph(g, { iterations });
   }, [notes, iterations]);
 
-  useEffect(() => {
-    // Refresh on focus so a note added in VaultPanel becomes visible.
-    function onFocus() { setTick((t) => t + 1); }
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, []);
+  useEffect(() => subscribeVaultChanges(() => setTick((t) => t + 1)), []);
 
   const maxOut = Math.max(1, ...laid.nodes.map((n) => n.out));
   const maxIn = Math.max(1, ...laid.nodes.map((n) => n.in));

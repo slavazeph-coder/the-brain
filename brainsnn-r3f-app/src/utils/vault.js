@@ -281,3 +281,47 @@ export function createVault({ backend = (localStorageBackend() ?? memoryBackend(
     stats,
   };
 }
+
+// ---------- shared singleton -----------------------------------------------
+
+/**
+ * Default vault for browser callers. All panels (VaultPanel, VaultGraphPanel,
+ * KnowledgeBrainPanel, …) share this instance so changes in one immediately
+ * read out of the others when they re-render. Tests should use createVault
+ * with an explicit memoryBackend instead.
+ */
+export const sharedVault = createVault();
+
+// ---------- cross-panel notification ---------------------------------------
+
+const VAULT_CHANGED_EVENT = 'brainsnn:vault-changed';
+const _listeners = new Set();
+
+/**
+ * Subscribe to vault-mutation events. Callers like the Vault Graph panel
+ * use this to refresh on a save in the editor without polling.
+ */
+export function subscribeVaultChanges(cb) {
+  _listeners.add(cb);
+  if (typeof window !== 'undefined') {
+    const handler = () => cb();
+    window.addEventListener(VAULT_CHANGED_EVENT, handler);
+    return () => {
+      _listeners.delete(cb);
+      window.removeEventListener(VAULT_CHANGED_EVENT, handler);
+    };
+  }
+  return () => _listeners.delete(cb);
+}
+
+/**
+ * Fire a "vault changed" event. Editors call this after create/update/remove.
+ */
+export function notifyVaultChanged() {
+  for (const cb of _listeners) {
+    try { cb(); } catch { /* noop */ }
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(VAULT_CHANGED_EVENT));
+  }
+}

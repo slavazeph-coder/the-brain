@@ -2,11 +2,12 @@ import React, { useRef, useState } from 'react';
 import { KNOWLEDGE_DOMAINS, knowledgeToBrainState } from '../data/knowledgeGraph';
 import {
   parseFileInventory, parseJSONInventory, buildKnowledgeMap,
-  detectGaps, generateLearningSuggestions
+  detectGaps, generateLearningSuggestions, vaultNotesToDocuments,
 } from '../utils/knowledgeScanner';
 import { parseTreeOutput, parseObsidianExport, generateScanCommand, summarizeScan } from '../utils/fileSystemScanner';
 import { downloadWikiBundle } from '../utils/wikiGenerator';
 import { isGemmaKnowledgeAvailable, analyzeGapsWithGemma, generateLearningPath } from '../utils/gemmaKnowledge';
+import { sharedVault, subscribeVaultChanges } from '../utils/vault';
 
 function DomainCard({ domainId, data }) {
   const domain = KNOWLEDGE_DOMAINS[domainId];
@@ -70,6 +71,29 @@ export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
   const fileRef = useRef(null);
   const gemmaAvailable = isGemmaKnowledgeAvailable();
 
+  const [vaultNoteCount, setVaultNoteCount] = React.useState(() => sharedVault.list().length);
+  React.useEffect(
+    () => subscribeVaultChanges(() => setVaultNoteCount(sharedVault.list().length)),
+    [],
+  );
+
+  const runScanWithDocuments = (documents, label) => {
+    setError('');
+    try {
+      const result = buildKnowledgeMap(documents);
+      setKnowledgeMap(result.map);
+      setScanResult(result);
+      const detectedGaps = detectGaps(result.map);
+      setGaps(detectedGaps);
+      const learnSuggestions = generateLearningSuggestions(detectedGaps, result.map);
+      setSuggestions(learnSuggestions);
+      setAiInsights(null);
+      if (label) setRawInput(`# ${documents.length} ${label}`);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleScan = () => {
     setError('');
     try {
@@ -83,20 +107,20 @@ export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
       } else {
         documents = parseFileInventory(rawInput);
       }
-
-      const result = buildKnowledgeMap(documents);
-      setKnowledgeMap(result.map);
-      setScanResult(result);
-
-      const detectedGaps = detectGaps(result.map);
-      setGaps(detectedGaps);
-
-      const learnSuggestions = generateLearningSuggestions(detectedGaps, result.map);
-      setSuggestions(learnSuggestions);
-      setAiInsights(null); // reset AI insights on new scan
+      runScanWithDocuments(documents);
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleScanVault = () => {
+    const notes = sharedVault.list().map((entry) => sharedVault.get(entry.id)).filter(Boolean);
+    if (!notes.length) {
+      setError('Vault is empty — create a few notes in L109 first.');
+      return;
+    }
+    const documents = vaultNotesToDocuments(notes);
+    runScanWithDocuments(documents, `notes from your L109 vault`);
   };
 
   const handleAIAnalysis = async () => {
@@ -231,6 +255,14 @@ tools/dev-workflow.md | Developer Workflow Guide | 2025-12-01`
       <div className="control-actions" style={{ marginTop: 12 }}>
         <button className="btn primary" onClick={handleScan} disabled={!rawInput.trim()}>
           Scan knowledge
+        </button>
+        <button
+          className="btn"
+          onClick={handleScanVault}
+          disabled={vaultNoteCount === 0}
+          title={vaultNoteCount === 0 ? 'No notes in L109 vault yet' : `Classify ${vaultNoteCount} vault notes`}
+        >
+          Scan vault ({vaultNoteCount})
         </button>
         {knowledgeMap && (
           <button className="btn" onClick={handleApplyToBrain}>

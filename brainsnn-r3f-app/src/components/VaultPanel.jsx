@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import {
-  createVault,
-  localStorageBackend,
-  memoryBackend,
+  sharedVault,
+  notifyVaultChanged,
+  subscribeVaultChanges,
 } from '../utils/vault';
 import {
   renderMarkdown,
@@ -10,9 +10,13 @@ import {
   wordCount,
 } from '../utils/vaultMarkdown';
 import { buildLinkGraph, backlinksFor } from '../utils/vaultGraph';
-import { autocompleteTitles, searchVault } from '../utils/vaultSearch';
+import { searchVault } from '../utils/vaultSearch';
 import { ensureDailyNote } from '../utils/vaultDaily';
 import { scoreContent } from '../utils/cognitiveFirewall';
+// Lazy-load the CodeMirror editor: ~200KB gzipped. The vault panel
+// renders without it on first paint; we only pull it down once the
+// user actually has a note open.
+const VaultEditor = lazy(() => import('./VaultEditor'));
 
 /**
  * Layer 109 — Vault.
@@ -25,8 +29,7 @@ import { scoreContent } from '../utils/cognitiveFirewall';
  * Data Portability layer continues to round-trip the entire workspace.
  */
 
-const STORAGE_BACKEND = localStorageBackend() ?? memoryBackend();
-const VAULT = createVault({ backend: STORAGE_BACKEND });
+const VAULT = sharedVault;
 
 function fmtMs(ms) {
   if (!ms) return '';
@@ -83,8 +86,6 @@ export default function VaultPanel() {
   const [editingTagsRaw, setEditingTagsRaw] = useState('');
   const [search, setSearch] = useState('');
   const [showPreview, setShowPreview] = useState(true);
-  const [autocomplete, setAutocomplete] = useState({ open: false, items: [], anchor: 0 });
-  const editorRef = useRef(null);
 
   const notes = useMemo(() => {
     void tick;
@@ -139,7 +140,32 @@ export default function VaultPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, editingBody, linkGraph]);
 
-  function bump() { setTick((t) => t + 1); }
+  function bump() {
+    setTick((t) => t + 1);
+    notifyVaultChanged();
+  }
+
+  useEffect(() => subscribeVaultChanges(() => setTick((t) => t + 1)), []);
+
+  // PWA shortcut routing — `?vault=today` opens today's note,
+  // `?vault=new` creates a fresh untitled note. The shortcuts ship in
+  // manifest.webmanifest so installed-app users can long-press the icon
+  // and land directly in the vault.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const intent = params.get('vault');
+    if (intent === 'today') {
+      const note = ensureDailyNote(VAULT);
+      setActiveId(note.id);
+      bump();
+    } else if (intent === 'new') {
+      const note = VAULT.create({ title: 'Untitled', body: '' });
+      setActiveId(note.id);
+      bump();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleNew() {
     const note = VAULT.create({ title: 'Untitled', body: '' });
@@ -199,51 +225,6 @@ export default function VaultPanel() {
     }
     VAULT.importBundle(bundle);
     bump();
-  }
-
-  function handleEditorKeyDown(e) {
-    // wikilink autocomplete trigger: typing '[[' opens the picker
-    if (e.key === 'Enter' && autocomplete.open && autocomplete.items.length) {
-      e.preventDefault();
-      insertWikilink(autocomplete.items[0].title);
-      return;
-    }
-    if (e.key === 'Escape' && autocomplete.open) {
-      setAutocomplete({ open: false, items: [], anchor: 0 });
-    }
-  }
-
-  function handleEditorChange(e) {
-    const next = e.target.value;
-    setEditingBody(next);
-    const cursor = e.target.selectionStart;
-    const upto = next.slice(0, cursor);
-    const m = /\[\[([^\][\n]*)$/.exec(upto);
-    if (m) {
-      const items = autocompleteTitles(notes, m[1]);
-      setAutocomplete({ open: items.length > 0, items, anchor: cursor - m[1].length });
-    } else {
-      setAutocomplete({ open: false, items: [], anchor: 0 });
-    }
-  }
-
-  function insertWikilink(title) {
-    const ed = editorRef.current;
-    if (!ed) return;
-    const cursor = ed.selectionStart;
-    const upto = editingBody.slice(0, cursor);
-    const after = editingBody.slice(cursor);
-    const m = /\[\[([^\][\n]*)$/.exec(upto);
-    if (!m) return;
-    const start = cursor - m[1].length;
-    const next = `${editingBody.slice(0, start)}${title}]]${after}`;
-    setEditingBody(next);
-    setAutocomplete({ open: false, items: [], anchor: 0 });
-    requestAnimationFrame(() => {
-      ed.focus();
-      const pos = start + title.length + 2;
-      ed.setSelectionRange(pos, pos);
-    });
   }
 
   function handlePreviewClick(e) {
@@ -381,63 +362,19 @@ export default function VaultPanel() {
               />
 
               <div style={{ display: 'grid', gridTemplateColumns: showPreview ? '1fr 1fr' : '1fr', gap: 10, marginTop: 10 }}>
-                <div style={{ position: 'relative' }}>
-                  <textarea
-                    ref={editorRef}
+                <Suspense fallback={
+                  <div className="muted small-note" style={{ padding: 20, textAlign: 'center' }}>
+                    Loading editor…
+                  </div>
+                }>
+                  <VaultEditor
+                    noteId={activeId}
                     value={editingBody}
-                    onChange={handleEditorChange}
-                    onKeyDown={handleEditorKeyDown}
+                    onChange={setEditingBody}
                     onBlur={handleSave}
-                    placeholder="Write markdown. Use [[Title]] to link."
-                    style={{
-                      width: '100%',
-                      minHeight: 300,
-                      background: 'rgba(255,255,255,0.025)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: 4,
-                      padding: 8,
-                      color: '#e2e8f0',
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                      resize: 'vertical',
-                    }}
+                    getNoteTitles={() => notes.map((n) => n.title)}
                   />
-                  {autocomplete.open && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        bottom: 8,
-                        left: 8,
-                        background: '#1e293b',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 4,
-                        padding: 4,
-                        zIndex: 10,
-                      }}
-                    >
-                      {autocomplete.items.map((it) => (
-                        <button
-                          key={it.id}
-                          onClick={() => insertWikilink(it.title)}
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '4px 8px',
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#cbd5e1',
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {it.title}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                </Suspense>
                 {showPreview && (
                   <div
                     onClick={handlePreviewClick}

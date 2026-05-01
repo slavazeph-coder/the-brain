@@ -1,7 +1,7 @@
 {
   "name": "BrainSNN",
   "short_name": "BrainSNN",
-  "description": "A 3D brain that reads manipulation in real time. 90+ cognitive layers, browser-native.",
+  "description": "Local-first knowledge vault with a cognitive firewall on every note. 110+ layers, browser-native, no servers.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b1224",
@@ -23,8 +23,10 @@
     }
   ],
   "shortcuts": [
+    { "name": "Today's note", "short_name": "Daily", "url": "/?vault=today", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "New note", "short_name": "Note", "url": "/?vault=new", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
     { "name": "Scan", "short_name": "Scan", "url": "/?scan=", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
-    { "name": "Daily Challenge", "short_name": "Daily", "url": "/?tab=daily", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+    { "name": "Daily Challenge", "short_name": "Challenge", "url": "/?tab=daily", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ],
   "categories": ["productivity", "utilities", "education"]
 }
