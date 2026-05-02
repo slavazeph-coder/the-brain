@@ -95,6 +95,9 @@ import SpanDistributionPanel from './components/SpanDistributionPanel';
 import TraceSearchPanel from './components/TraceSearchPanel';
 import DiagnosticSnapshotsPanel from './components/DiagnosticSnapshotsPanel';
 import McpToolUsagePanel from './components/McpToolUsagePanel';
+import HomeDeck from './components/HomeDeck';
+import FocusedScanDeck from './components/FocusedScanDeck';
+import FocusedDiagnoseDeck from './components/FocusedDiagnoseDeck';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -479,17 +482,31 @@ export default function App() {
           <ViewModeTabs value={viewMode} onChange={setViewMode} />
 
           {viewMode === 'home' && (
-            <HomeQuickActions
-              onScan={() => setViewMode('all')}
-              onJumpExplorer={() => {
-                setViewMode('all');
-                setTimeout(() => {
-                  const el = document.querySelector('.layer-explorer-panel') || document.querySelector('section.panel');
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 50);
+            <HomeDeck
+              onScan={() => setViewMode('scan')}
+              onDiagnose={() => setViewMode('diagnose')}
+              onAll={() => setViewMode('all')}
+            />
+          )}
+
+          {viewMode === 'scan' && (
+            <FocusedScanDeck
+              firewallProps={{
+                initialScan: initialFirewallScan,
+                onApplyToNetwork: (result) => {
+                  setFirewallResult(result);
+                  setState((s) => mapTRIBEToRegions(s, result));
+                  recordImmunity(IMMUNITY_EVENTS.FIREWALL_SCAN, {
+                    pressure: result.manipulationPressure,
+                    confidence: result.confidence,
+                  });
+                  toastWarning(`Firewall: ${result.recommendedAction.slice(0, 60)}...`);
+                },
               }}
             />
           )}
+
+          {viewMode === 'diagnose' && <FocusedDiagnoseDeck />}
 
           {viewMode === 'all' && (<>
           <ActivityCharts state={state} />
@@ -1102,8 +1119,10 @@ export default function App() {
 
 function ViewModeTabs({ value, onChange }) {
   const tabs = [
-    { id: 'home', label: 'Home', hint: 'Just the brain' },
-    { id: 'all', label: 'All panels', hint: '110+ layers, full power' },
+    { id: 'home', label: 'Home', hint: 'Brain + quick scan' },
+    { id: 'scan', label: 'Scan', hint: 'Firewall + Coverage + Tone + Archive' },
+    { id: 'diagnose', label: 'Diagnose', hint: 'Harness diagnostic stack (L102–114)' },
+    { id: 'all', label: 'All panels', hint: 'Every layer, full power' },
   ];
   return (
     <nav className="view-mode-tabs" role="tablist" aria-label="View mode">
@@ -1120,33 +1139,8 @@ function ViewModeTabs({ value, onChange }) {
         </button>
       ))}
       <span className="view-mode-hint">
-        Press <kbd>⌘K</kbd> (or <kbd>Ctrl-K</kbd>) to jump to any layer
+        <kbd>⌘K</kbd> jumps to any layer
       </span>
     </nav>
-  );
-}
-
-function HomeQuickActions({ onScan, onJumpExplorer }) {
-  return (
-    <section className="panel panel-pad home-quick-actions">
-      <div className="eyebrow">Home · the simple view</div>
-      <h2>Watch the brain. Scan when curious.</h2>
-      <p className="muted">
-        The 3D viewer above is the whole point. Drop into <em>All panels</em>{' '}
-        when you want to scan content, run the harness diagnostic, evolve
-        the firewall, or browse all 110+ layers.
-      </p>
-      <div className="home-action-row">
-        <button className="btn primary" onClick={onScan}>
-          Open the Cognitive Firewall
-        </button>
-        <button className="btn" onClick={onJumpExplorer}>
-          Browse all layers
-        </button>
-      </div>
-      <p className="muted small-note" style={{ marginTop: 10 }}>
-        Anywhere, hit <kbd>⌘K</kbd> for fuzzy-search jump. Hit <kbd>?</kbd> for keyboard shortcuts.
-      </p>
-    </section>
   );
 }
