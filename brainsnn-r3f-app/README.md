@@ -71,6 +71,46 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | 33    | Multimodal RAG Router             | [MultimodalRagPanel.jsx](src/components/MultimodalRagPanel.jsx) + [utils/multimodalRag.js](src/utils/multimodalRag.js)                 |
 | 34    | Vector-Graph Fusion               | [VectorGraphFusionPanel.jsx](src/components/VectorGraphFusionPanel.jsx)                                                                |
 | 35    | Direct Content Insertion (JSON)   | [DirectInsertPanel.jsx](src/components/DirectInsertPanel.jsx)                                                                          |
+| 101   | Quantum Coherence Lab             | [QuantumCoherencePanel.jsx](src/components/QuantumCoherencePanel.jsx) + [utils/quantumCoherence.js](src/utils/quantumCoherence.js)     |
+| 102   | Bell Pair Lab                     | [BellPairPanel.jsx](src/components/BellPairPanel.jsx) + [utils/bellPair.js](src/utils/bellPair.js)                                     |
+| 103   | Quantum Sweep                     | [QuantumSweepPanel.jsx](src/components/QuantumSweepPanel.jsx) + [utils/quantumSweep.js](src/utils/quantumSweep.js)                     |
+| 104   | Quantum Glossary                  | [QuantumGlossaryPanel.jsx](src/components/QuantumGlossaryPanel.jsx)                                                                    |
+
+## Quantum Coherence Lab
+
+**Layer 101 — Quantum Coherence Lab.** A pure-JavaScript, in-browser simulation
+of a single qubit running through `|0⟩ → H → RZ(θ) → H → M`. Slide the phase
+θ to watch interference move probability between |0⟩ and |1⟩. Add noise to
+damp the fringe. Toggle a mid-circuit observation to collapse superposition.
+Stack X·X pairs (algebraically identity) to watch decoherence eat depth.
+
+**What this is.** A teaching sandbox for the *mechanism* behind the word
+"alignment": phase coherence steers outcomes; noise and observation kill it.
+A **Scientific / Metaphor** mode toggle reframes the same numbers in
+plain English alongside the math.
+
+**What this is not.** This does **not** prove literal multiverse theory,
+consciousness collapse, Planck foam, or spiritual portals. Those are framing
+metaphors when the toggle is on, not physics claims.
+
+**Future backend.** The function surface (`runPhaseExperiment`,
+`runDecoherenceExperiment`, etc.) is intentionally compatible with the
+hardware-grade Qiskit suite at [`quantum_alignment/`](../quantum_alignment/),
+which runs the same three experiments on ideal Aer, noisy Aer, or real IBM
+Quantum hardware (and is shaped to swap in OriginQ later). **No vendor API
+keys are added to the frontend** — IBM tokens stay in the Python suite,
+read from `IBM_QUANTUM_TOKEN` at runtime only.
+
+**Cluster siblings.** Three follow-on layers extend L101 into a coherent quantum module:
+- **Layer 102 — Bell Pair Lab.** Two qubits run through `H ⊗ I → CNOT` to build the Bell state `|Φ+⟩ = (|00⟩ + |11⟩) / √2`. RY(θ) on qubit 0 lets you watch correlation slide from +1 (mirrored) to 0 (decohered) to −1 (anti-mirrored). Important framing: this is statistical correlation, *not* information transfer.
+- **Layer 103 — Quantum Sweep.** Auto-sweeps θ / noise / X·X-depth, plots P(0) and P(1) against the closed-form ideal, and exports a CSV with the same column shape as `quantum_alignment/results/results.csv` so browser-sim curves can be compared directly with the Qiskit ideal/noisy/real curves.
+- **Layer 104 — Quantum Glossary.** Searchable reference card for every term used in L101–L103 — plain language, the math, and a metaphor column explicitly framed as a teaching aid.
+
+Run the unit tests directly with Node (no extra dev deps):
+
+```bash
+npm run test:quantum
+```
 
 ## Keyboard shortcuts
 

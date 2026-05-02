@@ -81,6 +81,10 @@ import HotkeyMap from './components/HotkeyMap';
 import ThemePanel from './components/ThemePanel';
 import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
+import QuantumCoherencePanel from './components/QuantumCoherencePanel';
+import BellPairPanel from './components/BellPairPanel';
+import QuantumSweepPanel from './components/QuantumSweepPanel';
+import QuantumGlossaryPanel from './components/QuantumGlossaryPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -777,6 +781,58 @@ export default function App() {
 
           <ErrorBoundary name="Milestone">
             <MilestonePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Quantum Coherence Lab">
+            <QuantumCoherencePanel
+              onApplyToBrain={({ result, deltas, score }) => {
+                markActivity();
+                setState((prev) => {
+                  const regions = { ...prev.regions };
+                  for (const [region, delta] of Object.entries(deltas)) {
+                    if (regions[region] === undefined) continue;
+                    regions[region] = Math.max(0.04, Math.min(0.95, regions[region] + delta * 0.3));
+                  }
+                  return {
+                    ...prev,
+                    regions,
+                    tick: (prev.tick ?? 0) + 1,
+                    scenario: `Quantum Coherence (${score}/100)`,
+                  };
+                });
+                toastSuccess(`Quantum coherence ${score}/100 mapped to brain · ${result.kind}`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Bell Pair Lab">
+            <BellPairPanel
+              onApplyToBrain={({ result, deltas }) => {
+                markActivity();
+                setState((prev) => {
+                  const regions = { ...prev.regions };
+                  for (const [region, delta] of Object.entries(deltas)) {
+                    if (regions[region] === undefined) continue;
+                    regions[region] = Math.max(0.04, Math.min(0.95, regions[region] + delta * 0.3));
+                  }
+                  return {
+                    ...prev,
+                    regions,
+                    tick: (prev.tick ?? 0) + 1,
+                    scenario: `Bell Pair (corr ${result.correlation.toFixed(2)})`,
+                  };
+                });
+                toastSuccess(`Bell correlation ${result.correlation.toFixed(2)} mapped to brain`);
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Quantum Sweep">
+            <QuantumSweepPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Quantum Glossary">
+            <QuantumGlossaryPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
