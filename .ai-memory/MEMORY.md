@@ -779,6 +779,44 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       play / pause / step / reset, current-frame inspector, per-name
       cumulative ladder. "Show me what the harness was doing at
       14:32" without re-running the brain
+107. OTLP Exporter — push spans to a real collector
+    - otlpExporter.js: maps internal span schema → OTel ResourceSpans
+      payload (traceId/spanId hex padding, ms→ns timestamps, attribute
+      typeAttrValue, kind enum, status code map). exportSpansOnce()
+      POSTs the batch to the configured endpoint with optional
+      Authorization header. Dry-run mode renders the payload locally
+      without sending. Always pipes through Layer 108 sanitizer
+      before egress
+    - OtlpExporterPanel: endpoint + auth header + service.name +
+      batchSize fields, enabled checkbox, Push / Dry run / Clear
+      buttons, recent-results log with status / error
+108. Telemetry Sanitizer — PII redaction before egress
+    - telemetrySanitizer.js: 6 STANDARD_PATTERNS (email / phone /
+      IPv4 / SSN-like / credit-card / bearer-token). Custom patterns
+      add/remove with regex compile validation. sanitizeSpan() walks
+      attributes + events.attributes + status.message and replaces
+      every match with [REDACTED:label]. piiAuditSummary() counts
+      matches across the buffer for the panel's status banner
+    - SanitizerPanel: live PII audit banner, standard pattern list,
+      custom pattern editor, used by Layer 107 on every export
+109. Harness Alerts — toast on tier shifts
+    - harnessAlerts.js: subscribes to telemetry pub/sub. On span
+      activity, debounces (default 4s), runs runDiagnostic, compares
+      tier + finding-id set to last snapshot. New findings → toast
+      severity-tinted; tier shift → red on regression, info on
+      recovery. Off by default; start()/stop() arm/disarm
+    - HarnessAlertsPanel: armed/idle indicator with last-tier +
+      last-findings, arm / disarm buttons, three config toggles
+      (toast on new finding / on tier shift / debounce ms)
+110. Trace-Driven Tour — personalized from usage
+    - traceDrivenTour.js: deriveTour() reads the live aggregate-by-
+      name buckets, derives error rate + top ops + per-name totals,
+      walks a 7-step recipe library (each step's `when` predicate
+      checks the usage context) and emits a tour-v1 envelope with
+      summary + steps[] linking back to LAYER_CATALOG entries
+    - TraceDrivenTourPanel: usage summary banner + per-step card
+      with group-tinted left border. Replaces Layer 94's static
+      role tour with one derived from what you actually do
 101. Content Verification System — sign humanity, verify chain of custody
     - ECDSA P-256 keypair via Web Crypto, stored locally, exportable
       via Layer 57. Manifest format `brainsnn-prov/1` carries the pub

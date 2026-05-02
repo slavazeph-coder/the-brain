@@ -87,6 +87,10 @@ import AutoStewardPanel from './components/AutoStewardPanel';
 import HarnessComparatorPanel from './components/HarnessComparatorPanel';
 import SpanAnnotationPanel from './components/SpanAnnotationPanel';
 import TraceReplayPanel from './components/TraceReplayPanel';
+import OtlpExporterPanel from './components/OtlpExporterPanel';
+import SanitizerPanel from './components/SanitizerPanel';
+import HarnessAlertsPanel from './components/HarnessAlertsPanel';
+import TraceDrivenTourPanel from './components/TraceDrivenTourPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -807,6 +811,22 @@ export default function App() {
 
           <ErrorBoundary name="Trace Replay">
             <TraceReplayPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="OTLP Exporter">
+            <OtlpExporterPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Telemetry Sanitizer">
+            <SanitizerPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Harness Alerts">
+            <HarnessAlertsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Trace-Driven Tour">
+            <TraceDrivenTourPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

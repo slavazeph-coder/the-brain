@@ -113,6 +113,10 @@ export const LAYER_CATALOG = [
   { id: 104, name: 'Harness Comparator', group: 'backend', blurb: 'Snapshot + diff two harness reports — improved/regressed.' },
   { id: 105, name: 'Span Annotation', group: 'backend', blurb: 'Operator labels (false-positive / real-bug) feed the diagnostic.' },
   { id: 106, name: 'Trace Replay', group: 'backend', blurb: 'Scrub the telemetry buffer like a recording.' },
+  { id: 107, name: 'OTLP Exporter', group: 'backend', blurb: 'Push spans to any OTLP-HTTP collector (Honeycomb / Tempo / Datadog).' },
+  { id: 108, name: 'Telemetry Sanitizer', group: 'data', blurb: 'PII redaction (email/phone/IP/SSN/card/token + custom regex).' },
+  { id: 109, name: 'Harness Alerts', group: 'backend', blurb: 'Toast on tier shifts + new findings, debounced.' },
+  { id: 110, name: 'Trace-Driven Tour', group: 'view', blurb: 'Personalized next-step tour derived from your live usage.' },
 ];
 
 export const LAYER_GROUPS = {
