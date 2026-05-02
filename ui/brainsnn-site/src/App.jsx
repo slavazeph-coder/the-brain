@@ -4,22 +4,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   BRAIN_REGIONS,
-  COMMUNITY_CHANNELS,
-  GALLERY_ITEMS,
-  GOOD_FIRST_ISSUES,
-  LAUNCH_DAY_CHECKLIST,
+  IMPACT_SIGNALS,
   PATHWAYS,
-  PRE_LAUNCH_CHECKLIST,
-  README_MD,
+  PILOT_CHECKLIST,
+  PRODUCT_WORKFLOW,
   REGION_LONG_NAMES,
+  ROADMAP_CARDS,
   SITE,
   SOCIAL_PREVIEW_COPY,
-  VIRAL_CONTENT,
-  WHY_CARDS,
+  TRUST_CARDS,
+  USE_CASES,
 } from "./constants/site";
 import { useBrainSimulation } from "./hooks/useBrainSimulation";
 import { getQuadraticPoint, pathwayCenter } from "./lib/brainMath";
-import { copyToClipboard, parseGitHubRepo } from "./lib/copy";
+import { parseGitHubRepo } from "./lib/copy";
 
 const regionMap = Object.fromEntries(BRAIN_REGIONS.map((region) => [region.code, region]));
 
@@ -51,22 +49,6 @@ function useGitHubStars(repoUrl) {
   return stars;
 }
 
-function CopyButton({ value, className = "" }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    await copyToClipboard(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  }
-
-  return (
-    <button type="button" className={`copy-button ${className}`.trim()} onClick={handleCopy}>
-      {copied ? "Copied" : "Copy"}
-    </button>
-  );
-}
-
 function SectionIntro({ eyebrow, title, body, centered = false }) {
   return (
     <div className={`section-intro ${centered ? "centered" : ""}`}>
@@ -94,15 +76,6 @@ function ActivityMiniChart({ history = [] }) {
     <svg className="mini-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Recent mean firing history">
       <path d={path} />
     </svg>
-  );
-}
-
-function CodeBlock({ code, label }) {
-  return (
-    <div className="code-block-wrap">
-      {label ? <div className="code-label">{label}</div> : null}
-      <pre className="code-block"><code>{code}</code></pre>
-    </div>
   );
 }
 
@@ -306,22 +279,43 @@ function BrainScene({ simulation, onClearSelection }) {
   );
 }
 
-function Checklist({ title, items }) {
-  const [checked, setChecked] = useState(() => items.map(() => false));
+function SignalCard({ label, value, detail }) {
+  return (
+    <div className="stat-card">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+      <p style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: ".88rem" }}>{detail}</p>
+    </div>
+  );
+}
+
+function WorkflowSteps() {
+  return (
+    <div className="timeline">
+      {PRODUCT_WORKFLOW.map(([title, body], index) => (
+        <article className="timeline-item" key={title}>
+          <div className="timeline-index">{index + 1}</div>
+          <div>
+            <h3>{title}</h3>
+            <p>{body}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function PilotCard() {
   return (
     <div className="checklist-card">
-      <h3>{title}</h3>
+      <h3>Pilot offer</h3>
+      <p className="hero-text" style={{ marginBottom: 18 }}>
+        For brands, agencies, creators, and communications teams that want to test content before it shapes attention in the wrong direction.
+      </p>
       <ul className="checklist">
-        {items.map((item, index) => (
+        {PILOT_CHECKLIST.map((item) => (
           <li key={item}>
-            <button
-              type="button"
-              className={`checkbox ${checked[index] ? "checked" : ""}`}
-              onClick={() => setChecked((previous) => previous.map((value, i) => (i === index ? !value : value)))}
-              aria-pressed={checked[index]}
-            >
-              ✓
-            </button>
+            <span className="checkbox checked" aria-hidden="true">✓</span>
             <span>{item}</span>
           </li>
         ))}
@@ -333,39 +327,7 @@ function Checklist({ title, items }) {
 export default function App() {
   const { state, controls } = useBrainSimulation();
   const stars = useGitHubStars(SITE.repoUrl);
-  const [activeTab, setActiveTab] = useState("twitter");
   const selectedRegionName = state.selectedRegion ? REGION_LONG_NAMES[state.selectedRegion] : "None";
-
-  const toolkit = {
-    twitter: {
-      label: "Twitter / X thread",
-      title: "12-part X thread",
-      body: "Lead with the visual. Explain STDP simply. Leave the GitHub link for the last post so the thread can travel before the link suppresses reach.",
-      value: VIRAL_CONTENT.twitterThread,
-    },
-    hn: {
-      label: "Hacker News",
-      title: VIRAL_CONTENT.hackerNewsTitle,
-      body: "Keep the tone direct and technical. Show what you built, what choices were intentional, and what kinds of contributors you want.",
-      value: `${VIRAL_CONTENT.hackerNewsTitle}\n\n${VIRAL_CONTENT.hackerNewsBody}`,
-    },
-    reddit: {
-      label: "Reddit",
-      title: "Subreddit-specific versions",
-      body: "Use one version for r/MachineLearning and another for r/threejs or r/reactjs. Same project. Different angle. Better response.",
-      value: `r/MachineLearning\n\n${VIRAL_CONTENT.redditML}\n\n---\n\nr/threejs / r/reactjs\n\n${VIRAL_CONTENT.redditR3F}`,
-    },
-    launch: {
-      label: "Launch day plan",
-      title: "Coordinate the first velocity spike",
-      body: "Trending depends on stars per day more than total stars. A single coordinated push is more powerful than two weeks of drip posting.",
-      value: VIRAL_CONTENT.launchPlan,
-    },
-  };
-
-  const installCode = `git clone ${SITE.repoUrl}\ncd the-brain\ncd ui/brainsnn-site\nnpm install\nnpm run dev`;
-  const extendCode = `BRAIN_REGIONS.push({\n  code: "OFC",\n  name: "Orbitofrontal Cortex",\n  position: [2.7, 2.25, 1.0],\n  color: "#f59e0b",\n  baseActivity: 0.18,\n  description: "Reward and valuation signals."\n});\n\nPATHWAYS.push({\n  id: "PFC-OFC",\n  from: "PFC",\n  to: "OFC",\n  initialWeight: 0.28,\n  plastic: true,\n  inhibitory: false,\n  curveOffset: [0.2, 0.35, 0.2],\n  label: "valuation route"\n});`;
-  const active = toolkit[activeTab];
 
   return (
     <div className="app-shell">
@@ -376,12 +338,11 @@ export default function App() {
             <span>{SITE.name}</span>
           </a>
           <nav className="nav-links" aria-label="Primary">
+            <a href="#product">Product</a>
             <a href="#demo">Demo</a>
-            <a href="#why">Why it matters</a>
-            <a href="#quick-start">Quick start</a>
-            <a href="#viral-toolkit">Viral toolkit</a>
-            <a href="#community">Community</a>
-            <a className="button button-primary button-small" href={SITE.repoUrl} target="_blank" rel="noreferrer">Star on GitHub</a>
+            <a href="#use-cases">Use cases</a>
+            <a href="#pilot">Pilot</a>
+            <a className="button button-primary button-small" href={SITE.demoUrl} target="_blank" rel="noreferrer">Try demo</a>
           </nav>
         </div>
       </header>
@@ -394,40 +355,63 @@ export default function App() {
             <div className="hero-copy">
               <div className="eyebrow">{SITE.badge}</div>
               <h1>{SITE.tagline}</h1>
-              <p className="hero-text">
-                {SITE.name} is an open-source 3D neuromorphic network visualizer built with React Three Fiber. It models 7 brain regions, 10 plastic pathways, and live STDP learning in the browser. No backprop. No retraining. No server required for the core demo.
-              </p>
+              <p className="hero-text">{SITE.mission}</p>
               <div className="hero-actions">
-                <a href="#demo" className="button button-primary">Live Demo</a>
-                <a href={SITE.repoUrl} target="_blank" rel="noreferrer" className="button button-secondary">Star on GitHub</a>
+                <a href={SITE.demoUrl} target="_blank" rel="noreferrer" className="button button-primary">Analyze content</a>
+                <a href="#pilot" className="button button-secondary">Join pilot</a>
+                <a href={SITE.repoUrl} target="_blank" rel="noreferrer" className="button button-secondary">GitHub</a>
               </div>
-              <dl className="stats-row" aria-label="Project stats">
-                <div className="stat-card"><dt>GitHub Stars</dt><dd>{stars ?? "—"}</dd></div>
-                <div className="stat-card"><dt>Brain Regions</dt><dd>7</dd></div>
-                <div className="stat-card"><dt>Plastic Pathways</dt><dd>10</dd></div>
-                <div className="stat-card"><dt>License</dt><dd>{SITE.license}</dd></div>
+              <dl className="stats-row" aria-label="Product signals">
+                <SignalCard label="Content" value="Any post" detail="Tweets, ads, emails, scripts, articles, and replies." />
+                <SignalCard label="Payload" value="Affect" detail="Fear, trust, urgency, shame, desire, belonging, and status." />
+                <SignalCard label="Risk" value="Before" detail="Preflight content before it becomes public perception." />
+                <SignalCard label="Repo" value={stars ?? "—"} detail="Open-source foundation with a product-grade surface." />
               </dl>
             </div>
             <div className="hero-side">
               <div className="hero-panel">
-                <div className="hero-panel-header"><span>Why this works as a launch asset</span></div>
+                <div className="hero-panel-header"><span>What BrainSNN detects</span></div>
                 <ul className="signal-list">
-                  <li>It shows the system moving before people read a line of copy.</li>
-                  <li>It makes STDP legible to developers and researchers fast.</li>
-                  <li>It gives X, HN, Reddit, and GitHub a single visual core asset.</li>
+                  {IMPACT_SIGNALS.map((signal) => <li key={signal}>{signal}</li>)}
                 </ul>
-                <div className="mini-quote">“The repo should feel like a living lab demo, not a brochure.”</div>
+                <div className="mini-quote">“{SOCIAL_PREVIEW_COPY.hook}”</div>
                 <div className="badge-row" style={{ marginTop: 16 }}>
-                  <span className="mini-badge">{SOCIAL_PREVIEW_COPY.hook}</span>
+                  <span className="mini-badge">Brand safety</span>
+                  <span className="mini-badge">Persuasion patterns</span>
+                  <span className="mini-badge">Public perception</span>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="section" id="demo">
+        <section className="section" id="product">
           <div className="shell">
-            <SectionIntro eyebrow="Live 3D demo" title="An interactive brain graph that stays alive" body="Orbit the scene, click a region, trigger a thalamic burst, and watch pathway weights shift as the graph keeps learning." centered />
+            <SectionIntro
+              eyebrow="Product thesis"
+              title="Content should be reviewed for what it does to people — not only what it says."
+              body="BrainSNN turns invisible emotional pressure into a readable product layer: payload, evidence, risk, behavior pressure, and safer rewrite direction."
+            />
+            <div className="card-grid six-up">
+              {TRUST_CARDS.map((card) => (
+                <article className="info-card" key={card.title}>
+                  <span className="card-icon" aria-hidden="true">{card.icon}</span>
+                  <h3>{card.title}</h3>
+                  <p>{card.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section section-surface" id="demo">
+          <div className="shell">
+            <SectionIntro
+              eyebrow="Live intelligence layer"
+              title="A brain-like interface for emotional payload analysis."
+              body="Orbit the model, trigger a burst, and watch the affective system stay alive while the product frames content risk in human language."
+              centered
+            />
             <div className="demo-shell">
               <div className="demo-hud top">
                 <span className="hud-chip">Tick {state.tick}</span>
@@ -439,22 +423,57 @@ export default function App() {
                 <BrainScene simulation={{ ...state, selectRegion: controls.selectRegion }} onClearSelection={controls.clearSelection} />
               </div>
               <div className="demo-hud bottom">
-                <div className="chart-chip"><span>Activity</span><ActivityMiniChart history={state.history} /></div>
+                <div className="chart-chip"><span>Signal</span><ActivityMiniChart history={state.history} /></div>
                 <div className="demo-actions" role="group" aria-label="Simulation controls">
                   <button type="button" className={`button button-hud ${state.running ? "active" : ""}`} onClick={controls.toggleRunning}>{state.running ? "Pause" : "Resume"}</button>
-                  <button type="button" className="button button-hud" onClick={controls.triggerBurst}>Burst</button>
+                  <button type="button" className="button button-hud" onClick={controls.triggerBurst}>Trigger affect burst</button>
                   <button type="button" className="button button-hud" onClick={controls.reset}>Reset</button>
+                  <a className="button button-primary" href={SITE.demoUrl} target="_blank" rel="noreferrer">Open scanner</a>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="section" id="why">
+        <section className="section" id="workflow">
           <div className="shell">
-            <SectionIntro eyebrow="Why it matters" title="A better open-source artifact for builders" body="The goal is not vague AI branding. The goal is to give developers and researchers something concrete, inspectable, and worth starring." />
+            <SectionIntro
+              eyebrow="Workflow"
+              title="From raw content to risk-aware rewrite."
+              body="The first wedge stays simple enough to sell: paste content, decode the payload, show the evidence, and give teams a safer way to publish."
+            />
+            <div className="two-column">
+              <WorkflowSteps />
+              <div className="readme-preview-card">
+                <div className="toolkit-head">
+                  <div>
+                    <h3>Example output</h3>
+                    <p>Designed to become a saved report, share card, or approval artifact.</p>
+                  </div>
+                </div>
+                <table className="feature-table">
+                  <tbody>
+                    <tr><td>Primary affect</td><td>Threat + urgency</td></tr>
+                    <tr><td>Behavior pressure</td><td>Share before verifying</td></tr>
+                    <tr><td>Trust risk</td><td>Authority claim with missing context</td></tr>
+                    <tr><td>Rewrite direction</td><td>Lower certainty, add source, preserve useful warning</td></tr>
+                  </tbody>
+                </table>
+                <div className="velocity-note"><strong>Investor-ready category:</strong> emotional payload intelligence for the AI-generated internet.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="section section-surface" id="use-cases">
+          <div className="shell">
+            <SectionIntro
+              eyebrow="Use cases"
+              title="Built for teams that cannot afford emotional misfires."
+              body="The same engine can serve creators, agencies, brand teams, compliance workflows, and public-perception monitoring without changing the core product promise."
+            />
             <div className="card-grid six-up">
-              {WHY_CARDS.map((card) => (
+              {USE_CASES.map((card) => (
                 <article className="info-card" key={card.title}>
                   <span className="card-icon" aria-hidden="true">{card.icon}</span>
                   <h3>{card.title}</h3>
@@ -465,140 +484,27 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section section-surface" id="quick-start">
+        <section className="section" id="pilot">
           <div className="shell">
-            <SectionIntro eyebrow="How it works" title="Easy to fork. Easy to modify. Easy to launch." body="The page is a single React app with centralized constants, a lightweight simulator, and copy assets you can use on day one." />
+            <SectionIntro
+              eyebrow="Pilot path"
+              title="Turn the demo into paid validation."
+              body="The homepage now points toward a fundable wedge: a focused pilot for people who publish, approve, or monitor emotionally loaded content."
+            />
             <div className="two-column">
-              <div className="timeline">
-                {[
-                  ["Clone the repo", "Everything important lives in a readable Vite + React app. The top-level constants make URLs, regions, pathways, and launch copy easy to swap."],
-                  ["Open the demo and stress it", "Run the app, orbit the brain, click a region, and trigger burst mode. The scene needs to feel good before it needs to feel academic."],
-                  ["Customize the biological story", "Change the region list, pathway map, labels, and README copy so the repo matches the exact framing you want to launch with."],
-                  ["Ship and coordinate the launch", "Deploy the static build, update your repo and demo URLs, then use the copy baked into the page for a single strong push day."],
-                ].map(([title, body], index) => (
-                  <article className="timeline-item" key={title}>
-                    <div className="timeline-index">{index + 1}</div>
-                    <div><h3>{title}</h3><p>{body}</p></div>
+              <PilotCard />
+              <div className="stack">
+                {ROADMAP_CARDS.map((item) => (
+                  <article className="gallery-card" key={item.title}>
+                    <h3>{item.title}</h3>
+                    <p>{item.body}</p>
                   </article>
                 ))}
-              </div>
-              <div className="stack">
-                <CodeBlock label="Clone / run" code={installCode} />
-                <CodeBlock label="Add a region and pathway" code={extendCode} />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section" id="viral-toolkit">
-          <div className="shell">
-            <SectionIntro eyebrow="Viral toolkit" title="Launch copy already built into the page" body="This section turns the site into a practical launch console. Use it for X, Show HN, Reddit, and your coordinated push day." />
-            <div className="toolkit-shell">
-              <div className="tab-row" role="tablist" aria-label="Launch toolkit tabs">
-                {Object.entries(toolkit).map(([id, tab]) => (
-                  <button key={id} type="button" role="tab" aria-selected={activeTab === id} className={`tab-button ${activeTab === id ? "active" : ""}`} onClick={() => setActiveTab(id)}>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <article className="toolkit-panel">
-                <div className="toolkit-head">
-                  <div><h3>{active.title}</h3><p>{active.body}</p></div>
-                  <CopyButton value={active.value} />
-                </div>
-                <textarea className="toolkit-textarea" value={active.value} readOnly aria-label={`${active.title} copy`} />
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="section section-surface" id="readme">
-          <div className="shell">
-            <SectionIntro eyebrow="README preview" title="A repo front page that converts visitors into stars" body="The landing page should make the repo look serious. The README should close the loop and make people want to star, fork, or contribute." />
-            <div className="readme-shell">
-              <div className="readme-preview-card">
-                <div className="readme-toolbar">
-                  <div className="dot-row" aria-hidden="true"><span /><span /><span /></div>
-                  <CopyButton value={README_MD} />
-                </div>
-                <div className="readme-preview-body">
-                  <h3>🧠 BrainSNN</h3>
-                  <div className="badge-row">
-                    <span className="mini-badge">MIT</span>
-                    <span className="mini-badge">React Three Fiber</span>
-                    <span className="mini-badge">Three.js</span>
-                    <span className="mini-badge">Open Source</span>
-                  </div>
-                  <p>A 3D browser-based neuromorphic network visualizer with live STDP updates, 7 brain regions, and 10 plastic pathways.</p>
-                  <div className="media-placeholder"><img src="/demo-placeholder.svg" alt="Placeholder for BrainSNN animated GIF or video poster frame" /></div>
-                  <table className="feature-table">
-                    <thead><tr><th>Feature</th><th>Detail</th></tr></thead>
-                    <tbody>
-                      <tr><td>7 regions</td><td>CTX, HPC, THL, AMY, BG, PFC, CBL</td></tr>
-                      <tr><td>10 pathways</td><td>Weight-driven lines and particle motion</td></tr>
-                      <tr><td>STDP rule</td><td>Local potentiation / depression over time</td></tr>
-                      <tr><td>Browser-first</td><td>No backend required for the core experience</td></tr>
-                    </tbody>
-                  </table>
-                  <pre className="code-block"><code>{installCode}</code></pre>
+                <div className="hero-actions" style={{ marginTop: 4 }}>
+                  <a href={SITE.demoUrl} target="_blank" rel="noreferrer" className="button button-primary">Try working demo</a>
+                  <a href={`mailto:hello@brainsnn.com?subject=BrainSNN pilot`} className="button button-secondary">Request pilot</a>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section" id="gallery">
-          <div className="shell">
-            <SectionIntro eyebrow="Visual assets" title="Screenshots and GIF slots for launch-day proof" body="The repo should not rely on text alone. Replace these placeholders with one GIF, one short video, and a few high-contrast screenshots." />
-            <div className="gallery-grid">
-              {GALLERY_ITEMS.map((item) => (
-                <article className="gallery-card" key={item.title}>
-                  <div className="gallery-thumb"><img src="/demo-placeholder.svg" alt={`${item.title} placeholder`} /></div>
-                  <h3>{item.title}</h3>
-                  <p>{item.body}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="section" id="community">
-          <div className="shell">
-            <SectionIntro eyebrow="Community / distribution" title="Where this project should travel" body="Different channels care about different things. The page helps you tell the right version of the story to each one." />
-            <div className="card-grid six-up">
-              {COMMUNITY_CHANNELS.map((channel) => (
-                <article className="info-card" key={channel.title}>
-                  <span className="card-icon" aria-hidden="true">{channel.emoji}</span>
-                  <h3>{channel.title}</h3>
-                  <p>{channel.body}</p>
-                  <a href={channel.href} target="_blank" rel="noreferrer" className="inline-link">{channel.cta}</a>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="section section-surface" id="launch-checklist">
-          <div className="shell">
-            <SectionIntro eyebrow="Launch checklist" title="The launch page quietly teaches the growth strategy" body="The visuals get attention. The checklist makes sure the attention compounds into stars, contributors, and social proof." />
-            <div className="two-column">
-              <Checklist title="Before launch" items={PRE_LAUNCH_CHECKLIST} />
-              <Checklist title="Launch day" items={LAUNCH_DAY_CHECKLIST} />
-            </div>
-            <div className="velocity-note"><strong>Star velocity matters.</strong> GitHub Trending reacts to recent stars per day more than lifetime totals. The point of this page is to compress interest into one concentrated window.</div>
-            <div className="readme-preview-card" style={{ marginTop: 24 }}>
-              <div className="toolkit-head">
-                <div>
-                  <h3>Good first issue ideas</h3>
-                  <p>Seed contributor activity before launch so the repo feels open to contribution the moment people land on it.</p>
-                </div>
-                <CopyButton value={GOOD_FIRST_ISSUES.map((item, index) => `${index + 1}. ${item}`).join("\n")} />
-              </div>
-              <ul className="checklist">
-                {GOOD_FIRST_ISSUES.slice(0, 5).map((item) => (
-                  <li key={item}><span style={{ marginLeft: 8 }}>{item}</span></li>
-                ))}
-              </ul>
             </div>
           </div>
         </section>
@@ -608,13 +514,13 @@ export default function App() {
         <div className="shell footer-inner">
           <div>
             <strong>{SITE.name}</strong>
-            <p>Browser-first neuromorphic visualization built to impress developers, researchers, and open-source contributors.</p>
+            <p>{SITE.mission}</p>
           </div>
           <div className="footer-links">
+            <a href={SITE.domainUrl} target="_blank" rel="noreferrer">brainsnn.com</a>
+            <a href={SITE.demoUrl} target="_blank" rel="noreferrer">Demo</a>
             <a href={SITE.repoUrl} target="_blank" rel="noreferrer">GitHub</a>
-            <a href={SITE.demoUrl} target="_blank" rel="noreferrer">Live demo</a>
-            <a href="#viral-toolkit">Viral toolkit</a>
-            <a href="#launch-checklist">Launch checklist</a>
+            <a href="mailto:hello@brainsnn.com?subject=BrainSNN pilot">Pilot</a>
           </div>
         </div>
       </footer>
