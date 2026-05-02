@@ -10,6 +10,7 @@
 
 import { handleToolCall } from './mcpBridge';
 import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from './immunityScore';
+import { startSpan, addEvent, endSpan } from './telemetry.js';
 
 export const DEFAULT_RULES = {
   checkIntervalMs: 4000,
@@ -118,6 +119,11 @@ export function clearLog() {
 async function runTick() {
   stewardState.runCount++;
   const rules = stewardState.rules;
+  // Layer 102 — every tick is a telemetry span; sub-actions become events
+  const span = startSpan('steward.tick', {
+    attributes: { runCount: stewardState.runCount, intervalMs: rules.checkIntervalMs },
+  });
+  let tickStatus = { code: 'ok' };
 
   // 1. Check anomalies
   try {
@@ -127,6 +133,7 @@ async function runTick() {
       stewardState.lastAnomalies = anomalies;
       const high = anomalies.filter((a) => Math.abs(a.zScore ?? 0) >= rules.anomalyThreshold);
       if (high.length) {
+        addEvent(span, 'anomaly', { count: high.length, threshold: rules.anomalyThreshold });
         pushAction(
           ACTION_TYPES.ANOMALY_DETECTED,
           `${high.length} region${high.length > 1 ? 's' : ''} firing >${rules.anomalyThreshold}σ`,
@@ -150,6 +157,8 @@ async function runTick() {
     }
   } catch (err) {
     pushAction('error', `Anomaly check failed: ${err.message}`);
+    addEvent(span, 'error', { phase: 'anomaly', message: err.message });
+    tickStatus = { code: 'error', message: err.message };
   }
 
   // 2. Narrate + detect scenario change
@@ -174,6 +183,8 @@ async function runTick() {
       }
     } catch (err) {
       pushAction('error', `Narration failed: ${err.message}`);
+      addEvent(span, 'error', { phase: 'narration', message: err.message });
+      tickStatus = { code: 'error', message: err.message };
     }
   }
 
@@ -193,5 +204,6 @@ async function runTick() {
     }
   } catch { /* ignore */ }
 
+  endSpan(span, { status: tickStatus });
   emit();
 }

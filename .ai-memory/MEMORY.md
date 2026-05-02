@@ -716,10 +716,22 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
         Each returns { id, label, severity, count, examples, hint }.
         runDiagnostic() yields a harness-report-v1 JSON envelope and
         renderReportText() flattens it for paste-into-coding-agent
-    - cognitiveFirewall.scoreContent() now emits a `firewall.scan`
-      span on every call (lang, ruleset, pressure, evidence count,
-      template count, text length) — first instrumented call site;
-      the rest of the harness wires up incrementally
+      - `harnessProposer.js` — translates a report into a
+        rule-diff-v1 envelope: additions[] (suggested Layer 55
+        custom rules from manipulation-vocab lift candidates) +
+        followUps[] (which layer to run next: L31 evolve, L61
+        diagnostic, L66 coverage, L19 inspect, L21 pause)
+    - Instrumented call sites:
+      - cognitiveFirewall.scoreContent() emits `firewall.scan` spans
+      - mcpBridge.handleToolCall() emits `mcp.tool` spans (ok/error)
+      - brainSteward.runTick() emits `steward.tick` spans with
+        anomaly / narration / scenario events
+    - New MCP tools (Layer 19 expansion):
+      - get_harness_report({ format: 'json'|'text' }) — pulls the
+        live diagnostic over the bridge so Claude Code / Codex can
+        read it autonomously
+      - propose_rule_diff({ topK }) — derives a candidate rule diff
+        the agent can apply via setActiveRules()
     - HarnessDiagnosticPanel: live-reads spans via subscribe(),
       shows the report tier (healthy / warn / critical), per-finding
       hints, top operations p50, error-correlated features (lift),
