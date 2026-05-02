@@ -107,6 +107,7 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 101, name: 'Content Verification', group: 'share', blurb: 'ECDSA P-256 sign + chain-of-custody + humanity score.' },
 ];
 
 export const LAYER_GROUPS = {

@@ -697,3 +697,26 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       per-user immunity / streak / scan-count / receipt stats, and
       lists the four ways to navigate (⌘K / Shift-? / Role Tour /
       Layer Explorer). The "you made it here" panel.
+101. Content Verification System — sign humanity, verify chain of custody
+    - ECDSA P-256 keypair via Web Crypto, stored locally, exportable
+      via Layer 57. Manifest format `brainsnn-prov/1` carries the pub
+      key + handle + a hash-linked chain of signed steps (origin → edit
+      → edit). Each step canonicalizes its fields, SHA-256s them, and
+      signs that with the creator's private key
+    - signContent() creates an origin step with optional device /
+      location / note context. appendEdit() adds a chained edit step
+      whose prevHash references the previous step's hash — a
+      lite-C2PA chain of custody for caption / photo updates
+    - verifyManifest({ manifest, payload }) walks every step, re-derives
+      its hash, verifies the signature against the manifest's pub key,
+      checks prevHash linkage, and confirms the latest payloadHash
+      matches the supplied payload. Returns
+      { ok, reason, fingerprint, handle, steps }
+    - humanityScore(text) — heuristic 0-100 over five axes (cadence
+      variance, candid markers, contractions, irregularities, AI
+      boilerplate). Tier ladder: AI-perfect / leans polished / mixed
+      signals / reads human / unmistakably human. Per-axis evidence
+      so creators see WHY a draft reads polished
+    - ContentProvenancePanel: Sign / Verify / Humanity / Log tabs.
+      Identity card with handle + fingerprint. Manifest copy-to-clipboard
+      for sharing. Recent-manifest log capped at 25 in localStorage
