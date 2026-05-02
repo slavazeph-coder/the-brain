@@ -2,19 +2,18 @@ import React from 'react';
 import { scoreContent } from '../utils/cognitiveFirewall';
 
 /**
- * Six pre-seeded "wow moment" starting points. First-time visitors
- * should never see a blank textarea — they should be one click from a
- * visible brain reaction.
+ * Pre-seeded emotional-payload examples. First-time visitors should never see
+ * a blank textarea — they should be one click from a visible brain reaction.
  *
- * Each tile scores locally (no network) and applies the result to
- * the brain so the 3D scene lights up immediately.
+ * Each tile scores locally (no network) and applies the result to the brain so
+ * the 3D scene shows how content pushes attention, trust, urgency, and behavior.
  */
 const TILES = [
   {
     id: 'outrage',
     label: 'Outrage headline',
     emoji: '🔥',
-    hint: 'watch AMY spike',
+    hint: 'fear + anger payload',
     text:
       "BREAKING: Shocking betrayal! Everyone is furious. This is the most disgusting scandal they covered up — and you won't believe what they did next.",
   },
@@ -22,7 +21,7 @@ const TILES = [
     id: 'fear',
     label: 'Fear cascade',
     emoji: '⚠️',
-    hint: 'AMY + THL surge',
+    hint: 'threat + urgency pressure',
     text:
       "WARNING: a deadly new virus is spreading fast. Experts say collapse is imminent. If you don't act now, it may already be too late to protect your family.",
   },
@@ -30,31 +29,31 @@ const TILES = [
     id: 'urgency-ad',
     label: 'Urgency ad copy',
     emoji: '⏳',
-    hint: 'PFC dampens',
+    hint: 'scarcity + behavior push',
     text:
       "ACT FAST — last chance! This limited-time offer ends in minutes. Don't miss it. Guaranteed results. 100% proven. Everyone is switching — clearly you should too.",
   },
   {
     id: 'phishing',
-    label: 'AI phishing email',
+    label: 'Trust attack email',
     emoji: '🎣',
-    hint: 'manipulation pressure',
+    hint: 'authority hijack',
     text:
       "URGENT: unauthorized login detected on your account. Immediate action required. Click here now to verify your identity or your account will be terminated within the hour.",
   },
   {
-    id: 'meditation',
-    label: 'Meditation prompt',
+    id: 'calm',
+    label: 'Calm rewrite',
     emoji: '🌿',
-    hint: 'quiet baseline',
+    hint: 'low-pressure baseline',
     text:
       "Take a slow breath. Notice the weight of your body. There is nothing you have to do right now — just this breath, and the next one, arriving gently.",
   },
   {
-    id: 'political-ad',
-    label: 'Political attack ad',
-    emoji: '🗳️',
-    hint: 'outrage + certainty',
+    id: 'public-risk',
+    label: 'Public perception risk',
+    emoji: '🧭',
+    hint: 'certainty + group pressure',
     text:
       "Obviously they betrayed us. Everyone knows the truth. It is an undeniable fact — a scandal they don't want you to see. We must act immediately before it's too late.",
   },
@@ -64,9 +63,9 @@ export default function DemoTiles({ onPlay }) {
   return (
     <section className="demo-tiles panel panel-pad">
       <div className="eyebrow">Try it now</div>
-      <h3 style={{ margin: '6px 0 4px' }}>Paste any tweet — or tap a preset</h3>
+      <h3 style={{ margin: '6px 0 4px' }}>Analyze emotional payload — or tap a preset</h3>
       <p className="muted" style={{ marginTop: 0 }}>
-        One click feeds the Cognitive Firewall and lights up the 3D brain.
+        BrainSNN scores what content does to attention, trust, urgency, and behavior — then lights up the 3D brain.
       </p>
       <div
         className="demo-tile-grid"
