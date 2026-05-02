@@ -19,10 +19,10 @@ export default function ControlsBar({
   return (
     <section className="panel panel-pad controls-bar">
       <div>
-        <div className="eyebrow">Control Center</div>
+        <div className="eyebrow">Emotional Payload Intelligence</div>
         <h1>BrainSNN</h1>
         <p className="muted">
-          3D neuromorphic network viewer with STDP learning, TRIBE v2 predictions, inspector analytics, recording export, and adaptive quality modes.
+          An affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.
         </p>
       </div>
 
@@ -30,7 +30,7 @@ export default function ControlsBar({
         <button className={`btn ${state.running ? 'primary' : ''}`} onClick={onToggleRun}>
           {state.running ? 'Pause' : 'Resume'}
         </button>
-        <button className="btn" onClick={onBurst}>Trigger burst</button>
+        <button className="btn" onClick={onBurst}>Trigger affect burst</button>
         <button className="btn" onClick={onReset}>Reset</button>
         <button className={`btn ${isRecording ? 'recording' : ''}`} onClick={onToggleRecording}>
           {isRecording ? 'Stop WebM' : 'Record WebM'}
@@ -51,6 +51,7 @@ export default function ControlsBar({
       </div>
 
       <div className="status-row">
+        <span className="status-badge">Payload: fear · urgency · trust erosion · behavior pressure</span>
         <span className="status-badge">Export: {exportStatus}</span>
         <div className="quality-group">
           {['low', 'high', 'ultra'].map((q) => (
