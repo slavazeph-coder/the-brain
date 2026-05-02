@@ -6,8 +6,12 @@ export const SITE = {
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "Paste any tweet. See which feeling it installs in your brain.",
-  badge: "Open Source · MIT License · React Three Fiber",
+  positioning:
+    "An affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.",
+  tagline: "See the emotional payload of any post — before it moves the room.",
+  badge: "Affective-Intelligence Engine · Open Source · MIT",
+  heroLead:
+    "BrainSNN scores any text, screenshot, or thread for manipulation pressure across four affective dimensions, then renders the response inside a live 3D brain. Read the feeling a piece of content installs — fear, certainty, urgency, outrage — and see it before it travels.",
 };
 
 export const REGION_LONG_NAMES = {
@@ -196,106 +200,108 @@ export const PATHWAYS = [
 
 export const WHY_CARDS = [
   {
-    title: "STDP continuous learning",
-    icon: "⚡",
+    title: "Attention",
+    icon: "👁",
     body:
-      "Synapses change from spike timing itself. Pre before post strengthens. Post before pre weakens. You can see the rule move the network live.",
+      "Engagement is downstream of feeling. Surface the urgency, awe, or fear a piece of content is engineered to install — before it earns its first thousand impressions.",
   },
   {
-    title: "No backprop required",
-    icon: "∇",
+    title: "Behavior",
+    icon: "⇢",
     body:
-      "No loss function. No training epochs. No offline retraining loop. The brain graph adapts in-place as signals move through it.",
+      "Manipulation pressure tells you whether a message is asking for a thoughtful read or a reflex. See the push before the click, the share, or the reply.",
   },
   {
-    title: "React Three Fiber architecture",
-    icon: "🧩",
+    title: "Brand risk",
+    icon: "◈",
     body:
-      "Brain regions, edges, particles, overlays, and controls are all modular React components. Easy to fork. Easy to extend.",
+      "Score every inbound mention, ad creative, or AI-generated draft for outrage, gaslighting, and false certainty. Catch the line your brand should not stand next to.",
   },
   {
-    title: "Biologically inspired structure",
-    icon: "🧠",
+    title: "Public perception",
+    icon: "◐",
     body:
-      "Thalamus relays input. Basal Ganglia gates the relay. Hippocampus and cortex replay memory together. The topology is grounded, not decorative.",
+      "Run a thread, an inbox, or a press cycle through the engine and watch the affective trajectory. Cooling, escalating, hostile — labeled, plotted, and shareable.",
   },
   {
-    title: "Browser-first demo",
-    icon: "🌐",
+    title: "Auditable scoring",
+    icon: "✓",
     body:
-      "The default demo does not need a server to prove the core idea. It loads fast, shares easily, and gives people something they can orbit immediately.",
+      "Every scan returns evidence: the exact words that fired, the templates matched, a deterministic receipt hash. Not a vibes detector — an inspectable one.",
   },
   {
-    title: "Modular extensibility",
-    icon: "🔧",
+    title: "Open and local-first",
+    icon: "⌬",
     body:
-      "Add regions, swap pathways, wire in EEG streams, or replace the simplified simulation with a more rigorous model without rewriting the UI shell.",
+      "MIT-licensed. The core engine runs in the browser. No content leaves the device for the default scan path — useful when the input is sensitive.",
   },
 ];
 
-export const COMMUNITY_CHANNELS = [
+export const AUDIENCE_CARDS = [
   {
-    title: "Hacker News",
-    emoji: "🟠",
+    title: "Brand & marketing teams",
+    emoji: "◈",
     body:
-      "Strongest technical discovery engine for independent open-source launches. A solid Show HN can create the first real wave of stars and contributors.",
-    href: "https://news.ycombinator.com/submit",
-    cta: "Submit Show HN",
+      "Vet creative, partner posts, and AI-drafted copy before launch. Catch the line that reads as outrage, gaslighting, or false certainty in the eyes of a critical audience.",
+    cta: "Try the firewall",
+    href: "#demo",
   },
   {
-    title: "Open neuromorphic communities",
-    emoji: "🧠",
+    title: "Comms, PR, and public affairs",
+    emoji: "◐",
     body:
-      "Your highest-fit audience. This is where the builders who already care about SNNs, Loihi, SpiNNaker, and computational neuroscience will actually engage.",
-    href: "https://github.com/open-neuromorphic/open-neuromorphic",
-    cta: "Reach the niche",
+      "Run an inbound thread, a press release, or a crisis chain through the engine. See the affective trajectory rise, cool, or escalate — with a shareable card per scan.",
+    cta: "Score a thread",
+    href: "#demo",
   },
   {
-    title: "Reddit",
-    emoji: "👀",
+    title: "Trust & safety / moderation",
+    emoji: "✓",
     body:
-      "Use r/MachineLearning for the learning rule and r/threejs / r/reactjs for the rendering build. Tailor the post to each audience instead of cross-posting identical copy.",
-    href: "https://reddit.com/r/MachineLearning",
-    cta: "Open Reddit",
+      "Auditable per-rule evidence and a deterministic receipt for every scan. Plug the public scoring API into review queues without sending content to a third-party model.",
+    cta: "Read the API",
+    href: "#quick-start",
   },
   {
-    title: "GitHub Trending",
-    emoji: "⭐",
+    title: "Researchers & journalists",
+    emoji: "✶",
     body:
-      "Trending is driven by recent star velocity, not lifetime stars. Your launch page exists to compress demand into one coordinated push window.",
-    href: "https://github.com/trending/javascript",
-    cta: "Study Trending",
+      "Bulk-score CSV / JSON of posts, name the manipulation templates that fire, export the enriched table. Built to make the analysis legible to a reader, not just a model.",
+    cta: "Bulk mode",
+    href: "#demo",
   },
   {
-    title: "Product Hunt",
-    emoji: "🚀",
+    title: "Security teams",
+    emoji: "▣",
     body:
-      "Not the first channel, but useful once the visuals and repo look polished. Great for a second-wave discovery event after GitHub and X start moving.",
-    href: "https://www.producthunt.com/",
-    cta: "Plan Product Hunt",
+      "Phishing, social engineering, and AI-generated lures all carry affective signatures. Score email bodies and DMs with the same engine that catches outrage and urgency.",
+    cta: "Hook into the API",
+    href: "#quick-start",
   },
   {
-    title: "Dev.to / Hashnode",
-    emoji: "✍️",
+    title: "Builders & open source",
+    emoji: "⌬",
     body:
-      "A technical write-up compounds. It catches people after launch day and gives you a durable link to share whenever someone asks how it works.",
-    href: "https://dev.to/",
-    cta: "Write the deep dive",
+      "MIT-licensed, browser-first, fork-friendly. Add a region, write a custom rule pack, swap the scoring model — the React + R3F shell stays out of your way.",
+    cta: "Star on GitHub",
+    href: "https://github.com/slavazeph-coder/the-brain",
   },
 ];
+
+export const COMMUNITY_CHANNELS = AUDIENCE_CARDS;
 
 export const GALLERY_ITEMS = [
   {
-    title: "Burst mode frame",
-    body: "A thalamic spike wave pushing plasticity through the graph.",
+    title: "Fear cascade",
+    body: "AMY glows red as a high-urgency post fires across the threat dimension. Evidence words highlighted inline.",
   },
   {
-    title: "Selected-region focus",
-    body: "Camera punched in on HPC ↔ CTX replay dynamics.",
+    title: "Certainty theater",
+    body: "PFC dampened, BG rising — a confident, unhedged claim that the engine flags as false-certainty pressure.",
   },
   {
-    title: "Weight heat state",
-    body: "Edge width and glow after a few minutes of continuous learning.",
+    title: "Affective trajectory",
+    body: "A 30-message inbox plotted as pressure-over-turns. Cooling, escalating, hostile — labeled in one glance.",
   },
 ];
 
@@ -333,10 +339,10 @@ export const GOOD_FIRST_ISSUES = [
 ];
 
 export const SOCIAL_PREVIEW_COPY = {
-  hook: "I built a 3D brain network that learns continuously in the browser.",
+  hook: "An affective-intelligence engine for the open web.",
   sub:
-    "7 brain regions. 10 plastic pathways. Live STDP updates. No backprop. No retraining.",
-  cta: "Star the repo, fork it, and break it.",
+    "Score the emotional payload of any post — fear, urgency, certainty, outrage — with auditable evidence and a live 3D brain.",
+  cta: "Try the demo. Fork the engine. Star the repo.",
 };
 
 export const VIRAL_CONTENT = {
@@ -502,27 +508,30 @@ export const README_MD = `# 🧠 BrainSNN
 ![React Three Fiber](https://img.shields.io/badge/React%20Three%20Fiber-R3F-black)
 ![Three.js](https://img.shields.io/badge/Three.js-3D-informational)
 
-**Brain-inspired AI that never stops learning.**
+**An affective-intelligence engine for the open web.**
 
-BrainSNN is an open-source 3D neuromorphic brain network visualizer built with React Three Fiber. It models **7 brain regions**, **10 plastic pathways**, and a simplified **STDP continuous learning rule** in real time.
+BrainSNN detects the emotional payload inside online content — text, screenshots, threads — *before* it shapes attention, behavior, brand risk, or public perception. Every scan returns four-dimensional pressure scores, named manipulation templates, evidence words, and a deterministic receipt.
 
-No backprop.  
-No retraining.  
-No server required for the main demo.  
+The engine renders inside a live 3D brain (React Three Fiber, 7 regions, 10 plastic pathways) so the response is visible, not hidden behind a single number.
 
-## Why this project exists
+No backprop.
+No retraining.
+No server required for the default scan path.
 
-Most neural network demos are static. BrainSNN is built to feel alive.
+## What it surfaces
 
-- **THL** acts as a sensory relay
-- **BG** inhibits and gates thalamic output
-- **HPC ↔ CTX** models memory replay
-- **STDP** updates pathway weights locally from spike timing
+- **Attention** — urgency, awe, and curiosity loads engineered to win the first impression
+- **Behavior** — manipulation pressure that pushes toward reflex over thought
+- **Brand risk** — outrage, gaslighting, and false certainty in copy your brand may be near
+- **Public perception** — affective trajectories across a thread, an inbox, or a press cycle
 
-This project is designed for:
-- developers who love React Three Fiber and Three.js
-- ML and computational neuroscience people
-- open-source contributors who want a visually compelling repo to fork
+## Who it's for
+
+- Brand & marketing teams vetting creative and AI-drafted copy
+- Comms, PR, and public-affairs teams reading inbound and outbound at speed
+- Trust & safety, moderation, and security teams plugging the API into review queues
+- Researchers and journalists scoring posts in bulk with auditable evidence
+- Open-source builders forking the engine, the rule packs, or the 3D shell
 
 ## Live demo
 
@@ -533,14 +542,14 @@ This project is designed for:
 
 ## Features
 
-| Feature | Detail |
+| Layer | What it does |
 | --- | --- |
-| 3D brain scene | 7 labeled regions arranged in a brain-like spatial layout |
-| Plastic pathways | 10 animated connections with weight-driven width and opacity |
-| STDP-like updates | Simplified continuous plasticity rule based on local spike timing |
-| Interactive controls | Pause, burst, reset, click-to-focus camera |
-| Browser-first | No backend required for the core experience |
-| Modular code | Easy to add regions, pathways, new content, and launch assets |
+| Cognitive Firewall | Scores text across 4 affective dimensions with per-rule evidence |
+| Manipulation templates | Names the technique that fired (gaslighting, DARVO, FOMO, scarcity, …) |
+| 3D brain feedback | Live R3F scene reacts as regions absorb the affective payload |
+| Public scoring API | \`POST /api/score\` and an SSE streaming variant — bring your own pipeline |
+| Receipts | Deterministic SHA-256 stamp per scan for audit trails |
+| Browser-first | Default scan path runs entirely in the browser; nothing leaves the device |
 
 ## Quick start
 

@@ -364,7 +364,7 @@ export default function App() {
   };
 
   const installCode = `git clone ${SITE.repoUrl}\ncd the-brain\ncd ui/brainsnn-site\nnpm install\nnpm run dev`;
-  const extendCode = `BRAIN_REGIONS.push({\n  code: "OFC",\n  name: "Orbitofrontal Cortex",\n  position: [2.7, 2.25, 1.0],\n  color: "#f59e0b",\n  baseActivity: 0.18,\n  description: "Reward and valuation signals."\n});\n\nPATHWAYS.push({\n  id: "PFC-OFC",\n  from: "PFC",\n  to: "OFC",\n  initialWeight: 0.28,\n  plastic: true,\n  inhibitory: false,\n  curveOffset: [0.2, 0.35, 0.2],\n  label: "valuation route"\n});`;
+  const extendCode = `// Score any text against the engine\nconst response = await fetch("/api/score", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ text: "Act now or you'll miss this forever." }),\n});\nconst { score, dimensions, templates, receipt } = await response.json();\n\n// dimensions: { urgency, outrage, certainty, fear }\n// templates : [{ id: "fomo", label: "FOMO appeal", hits: 2 }, ...]\n// receipt   : "R-7F2A-9B81"  (deterministic SHA-256, audit-ready)`;
   const active = toolkit[activeTab];
 
   return (
@@ -378,9 +378,9 @@ export default function App() {
           <nav className="nav-links" aria-label="Primary">
             <a href="#demo">Demo</a>
             <a href="#why">Why it matters</a>
-            <a href="#quick-start">Quick start</a>
-            <a href="#viral-toolkit">Viral toolkit</a>
-            <a href="#community">Community</a>
+            <a href="#quick-start">How it works</a>
+            <a href="#audience">Who uses it</a>
+            <a href="#viral-toolkit">Launch kit</a>
             <a className="button button-primary button-small" href={SITE.repoUrl} target="_blank" rel="noreferrer">Star on GitHub</a>
           </nav>
         </div>
@@ -394,29 +394,28 @@ export default function App() {
             <div className="hero-copy">
               <div className="eyebrow">{SITE.badge}</div>
               <h1>{SITE.tagline}</h1>
-              <p className="hero-text">
-                {SITE.name} is an open-source 3D neuromorphic network visualizer built with React Three Fiber. It models 7 brain regions, 10 plastic pathways, and live STDP learning in the browser. No backprop. No retraining. No server required for the core demo.
-              </p>
+              <p className="hero-text">{SITE.heroLead}</p>
               <div className="hero-actions">
-                <a href="#demo" className="button button-primary">Live Demo</a>
+                <a href="#demo" className="button button-primary">Try the live demo</a>
                 <a href={SITE.repoUrl} target="_blank" rel="noreferrer" className="button button-secondary">Star on GitHub</a>
               </div>
-              <dl className="stats-row" aria-label="Project stats">
+              <dl className="stats-row" aria-label="Engine stats">
                 <div className="stat-card"><dt>GitHub Stars</dt><dd>{stars ?? "—"}</dd></div>
-                <div className="stat-card"><dt>Brain Regions</dt><dd>7</dd></div>
-                <div className="stat-card"><dt>Plastic Pathways</dt><dd>10</dd></div>
+                <div className="stat-card"><dt>Affective Dimensions</dt><dd>4</dd></div>
+                <div className="stat-card"><dt>Manipulation Templates</dt><dd>15</dd></div>
                 <div className="stat-card"><dt>License</dt><dd>{SITE.license}</dd></div>
               </dl>
             </div>
             <div className="hero-side">
               <div className="hero-panel">
-                <div className="hero-panel-header"><span>Why this works as a launch asset</span></div>
+                <div className="hero-panel-header"><span>What the engine does</span></div>
                 <ul className="signal-list">
-                  <li>It shows the system moving before people read a line of copy.</li>
-                  <li>It makes STDP legible to developers and researchers fast.</li>
-                  <li>It gives X, HN, Reddit, and GitHub a single visual core asset.</li>
+                  <li>Scores any text across <strong>urgency, outrage, false certainty, and fear</strong> with per-rule evidence.</li>
+                  <li>Names the manipulation <strong>template</strong> that fired — gaslighting, DARVO, FOMO, scarcity, and more.</li>
+                  <li>Renders the response inside a <strong>live 3D brain</strong> — feeling becomes visible, not hidden behind a number.</li>
+                  <li>Returns a <strong>deterministic receipt</strong> per scan — auditable trail, no black-box vibes.</li>
                 </ul>
-                <div className="mini-quote">“The repo should feel like a living lab demo, not a brochure.”</div>
+                <div className="mini-quote">“{SITE.positioning}”</div>
                 <div className="badge-row" style={{ marginTop: 16 }}>
                   <span className="mini-badge">{SOCIAL_PREVIEW_COPY.hook}</span>
                 </div>
@@ -427,7 +426,7 @@ export default function App() {
 
         <section className="section" id="demo">
           <div className="shell">
-            <SectionIntro eyebrow="Live 3D demo" title="An interactive brain graph that stays alive" body="Orbit the scene, click a region, trigger a thalamic burst, and watch pathway weights shift as the graph keeps learning." centered />
+            <SectionIntro eyebrow="Live demo" title="Watch a brain react to whatever you paste" body="Orbit the brain. Click a region. Trigger a burst. The same engine that animates this scene scores any text you feed it across four affective dimensions — and lights up the regions that absorb the payload." centered />
             <div className="demo-shell">
               <div className="demo-hud top">
                 <span className="hud-chip">Tick {state.tick}</span>
@@ -452,7 +451,7 @@ export default function App() {
 
         <section className="section" id="why">
           <div className="shell">
-            <SectionIntro eyebrow="Why it matters" title="A better open-source artifact for builders" body="The goal is not vague AI branding. The goal is to give developers and researchers something concrete, inspectable, and worth starring." />
+            <SectionIntro eyebrow="Why it matters" title="Four places emotional payload moves the room" body="Engagement is downstream of feeling. Brand, behavior, attention, and public perception all bend around the affective load of a single post — long before anyone reads carefully." />
             <div className="card-grid six-up">
               {WHY_CARDS.map((card) => (
                 <article className="info-card" key={card.title}>
@@ -467,14 +466,14 @@ export default function App() {
 
         <section className="section section-surface" id="quick-start">
           <div className="shell">
-            <SectionIntro eyebrow="How it works" title="Easy to fork. Easy to modify. Easy to launch." body="The page is a single React app with centralized constants, a lightweight simulator, and copy assets you can use on day one." />
+            <SectionIntro eyebrow="How it works" title="Affective intelligence in four lenses, plus a brain that shows the answer" body="Every input flows through the same pipeline: tokenize, score across four affective dimensions, name the templates that fired, render the response inside the 3D brain, and stamp the result with a deterministic receipt." />
             <div className="two-column">
               <div className="timeline">
                 {[
-                  ["Clone the repo", "Everything important lives in a readable Vite + React app. The top-level constants make URLs, regions, pathways, and launch copy easy to swap."],
-                  ["Open the demo and stress it", "Run the app, orbit the brain, click a region, and trigger burst mode. The scene needs to feel good before it needs to feel academic."],
-                  ["Customize the biological story", "Change the region list, pathway map, labels, and README copy so the repo matches the exact framing you want to launch with."],
-                  ["Ship and coordinate the launch", "Deploy the static build, update your repo and demo URLs, then use the copy baked into the page for a single strong push day."],
+                  ["1. Score the payload", "The Cognitive Firewall walks the text against four rule families — urgency, outrage, false certainty, and fear. Per-rule evidence and language detection (en / es / fr) ride along."],
+                  ["2. Name the technique", "15 manipulation templates — gaslighting, DARVO, FOMO, scarcity, false dichotomy, moral outrage bait, and more — surface as chips, each with a copy-ready refutation."],
+                  ["3. Render the response", "The 3D brain absorbs the scores: AMY for fear, BG for manipulation pressure, PFC for certainty theater. The visual is the explanation, not a decoration."],
+                  ["4. Receipt and share", "Every scan returns a SHA-256 receipt for audit trails plus an OG share card at /r/<hash>. Built for review queues, briefings, and threads."],
                 ].map(([title, body], index) => (
                   <article className="timeline-item" key={title}>
                     <div className="timeline-index">{index + 1}</div>
@@ -484,7 +483,7 @@ export default function App() {
               </div>
               <div className="stack">
                 <CodeBlock label="Clone / run" code={installCode} />
-                <CodeBlock label="Add a region and pathway" code={extendCode} />
+                <CodeBlock label="Score from the public API" code={extendCode} />
               </div>
             </div>
           </div>
@@ -492,7 +491,7 @@ export default function App() {
 
         <section className="section" id="viral-toolkit">
           <div className="shell">
-            <SectionIntro eyebrow="Viral toolkit" title="Launch copy already built into the page" body="This section turns the site into a practical launch console. Use it for X, Show HN, Reddit, and your coordinated push day." />
+            <SectionIntro eyebrow="Launch kit" title="Open-source launch copy, ready to ship" body="This is a public launch surface for the engine. The tabs below give you the X thread, Show HN post, subreddit-tuned variants, and the coordinated push plan — copy ready, no rewrites needed." />
             <div className="toolkit-shell">
               <div className="tab-row" role="tablist" aria-label="Launch toolkit tabs">
                 {Object.entries(toolkit).map(([id, tab]) => (
@@ -514,7 +513,7 @@ export default function App() {
 
         <section className="section section-surface" id="readme">
           <div className="shell">
-            <SectionIntro eyebrow="README preview" title="A repo front page that converts visitors into stars" body="The landing page should make the repo look serious. The README should close the loop and make people want to star, fork, or contribute." />
+            <SectionIntro eyebrow="README preview" title="A repo front page that explains what the engine actually does" body="The landing page makes the engine legible. The README closes the loop — what it scores, who it's for, and how to plug it into a pipeline." />
             <div className="readme-shell">
               <div className="readme-preview-card">
                 <div className="readme-toolbar">
@@ -525,19 +524,20 @@ export default function App() {
                   <h3>🧠 BrainSNN</h3>
                   <div className="badge-row">
                     <span className="mini-badge">MIT</span>
-                    <span className="mini-badge">React Three Fiber</span>
-                    <span className="mini-badge">Three.js</span>
-                    <span className="mini-badge">Open Source</span>
+                    <span className="mini-badge">Affective intelligence</span>
+                    <span className="mini-badge">Browser-first</span>
+                    <span className="mini-badge">Auditable</span>
                   </div>
-                  <p>A 3D browser-based neuromorphic network visualizer with live STDP updates, 7 brain regions, and 10 plastic pathways.</p>
+                  <p>An affective-intelligence engine that detects the emotional payload inside online content — text, screenshots, threads — before it shapes attention, behavior, brand risk, or public perception.</p>
                   <div className="media-placeholder"><img src="/demo-placeholder.svg" alt="Placeholder for BrainSNN animated GIF or video poster frame" /></div>
                   <table className="feature-table">
-                    <thead><tr><th>Feature</th><th>Detail</th></tr></thead>
+                    <thead><tr><th>Layer</th><th>What it does</th></tr></thead>
                     <tbody>
-                      <tr><td>7 regions</td><td>CTX, HPC, THL, AMY, BG, PFC, CBL</td></tr>
-                      <tr><td>10 pathways</td><td>Weight-driven lines and particle motion</td></tr>
-                      <tr><td>STDP rule</td><td>Local potentiation / depression over time</td></tr>
-                      <tr><td>Browser-first</td><td>No backend required for the core experience</td></tr>
+                      <tr><td>Cognitive Firewall</td><td>Scores text across 4 affective dimensions with per-rule evidence</td></tr>
+                      <tr><td>Templates</td><td>Names the technique that fired (gaslighting, DARVO, FOMO, …)</td></tr>
+                      <tr><td>3D brain feedback</td><td>Live R3F scene reacts as regions absorb the affective payload</td></tr>
+                      <tr><td>Public scoring API</td><td>POST /api/score and SSE streaming for review pipelines</td></tr>
+                      <tr><td>Receipts</td><td>Deterministic SHA-256 stamp per scan for audit trails</td></tr>
                     </tbody>
                   </table>
                   <pre className="code-block"><code>{installCode}</code></pre>
@@ -549,7 +549,7 @@ export default function App() {
 
         <section className="section" id="gallery">
           <div className="shell">
-            <SectionIntro eyebrow="Visual assets" title="Screenshots and GIF slots for launch-day proof" body="The repo should not rely on text alone. Replace these placeholders with one GIF, one short video, and a few high-contrast screenshots." />
+            <SectionIntro eyebrow="What a scan looks like" title="Three ways the engine surfaces an emotional payload" body="A single scan returns a four-dimensional pressure score, named templates, evidence words, and a brain frame. Bulk runs return trajectories — cooling, escalating, hostile — labeled in one glance." />
             <div className="gallery-grid">
               {GALLERY_ITEMS.map((item) => (
                 <article className="gallery-card" key={item.title}>
@@ -562,16 +562,16 @@ export default function App() {
           </div>
         </section>
 
-        <section className="section" id="community">
+        <section className="section" id="audience">
           <div className="shell">
-            <SectionIntro eyebrow="Community / distribution" title="Where this project should travel" body="Different channels care about different things. The page helps you tell the right version of the story to each one." />
+            <SectionIntro eyebrow="Who uses it" title="Built for the teams that read at speed" body="The same scoring engine fits a brand-safety review, a press-cycle audit, a moderation queue, and a security inbox. The interface — 3D brain, share card, or API call — changes per audience." />
             <div className="card-grid six-up">
               {COMMUNITY_CHANNELS.map((channel) => (
                 <article className="info-card" key={channel.title}>
                   <span className="card-icon" aria-hidden="true">{channel.emoji}</span>
                   <h3>{channel.title}</h3>
                   <p>{channel.body}</p>
-                  <a href={channel.href} target="_blank" rel="noreferrer" className="inline-link">{channel.cta}</a>
+                  <a href={channel.href} target={channel.href.startsWith("#") ? undefined : "_blank"} rel={channel.href.startsWith("#") ? undefined : "noreferrer"} className="inline-link">{channel.cta}</a>
                 </article>
               ))}
             </div>
@@ -580,7 +580,7 @@ export default function App() {
 
         <section className="section section-surface" id="launch-checklist">
           <div className="shell">
-            <SectionIntro eyebrow="Launch checklist" title="The launch page quietly teaches the growth strategy" body="The visuals get attention. The checklist makes sure the attention compounds into stars, contributors, and social proof." />
+            <SectionIntro eyebrow="Launch checklist" title="Compound the attention into stars, signups, and contributors" body="The hero earns the click. This checklist turns the click into a star, a fork, an issue, or an inbound request — across the first 72 hours of public attention." />
             <div className="two-column">
               <Checklist title="Before launch" items={PRE_LAUNCH_CHECKLIST} />
               <Checklist title="Launch day" items={LAUNCH_DAY_CHECKLIST} />
@@ -608,13 +608,13 @@ export default function App() {
         <div className="shell footer-inner">
           <div>
             <strong>{SITE.name}</strong>
-            <p>Browser-first neuromorphic visualization built to impress developers, researchers, and open-source contributors.</p>
+            <p>{SITE.positioning}</p>
           </div>
           <div className="footer-links">
             <a href={SITE.repoUrl} target="_blank" rel="noreferrer">GitHub</a>
             <a href={SITE.demoUrl} target="_blank" rel="noreferrer">Live demo</a>
-            <a href="#viral-toolkit">Viral toolkit</a>
-            <a href="#launch-checklist">Launch checklist</a>
+            <a href="#audience">Who uses it</a>
+            <a href="#viral-toolkit">Launch kit</a>
           </div>
         </div>
       </footer>
