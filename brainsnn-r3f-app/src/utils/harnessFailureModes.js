@@ -18,6 +18,7 @@
 
 import { aggregateByName, recentSpans } from './telemetry.js';
 import { mineSpansByOutcome } from './harnessLift.js';
+import { decorateSpansWithAnnotations } from './spanAnnotation.js';
 
 const SLOW_SCAN_MS = 250;
 const HUNG_MCP_MS = 4000;
@@ -116,6 +117,21 @@ export function detectFpHeavyScans(spans) {
   };
 }
 
+export function detectAnnotatedFalsePositives(spans) {
+  // Layer 105 — operators flagging spans as false-positive is a strong
+  // direct signal that the active ruleset is mis-firing
+  const fps = spans.filter((s) => s.attributes?._annotation === 'false-positive');
+  if (fps.length < 2) return null;
+  return {
+    id: 'annotated-fp',
+    label: 'Operator-flagged false positives',
+    severity: fps.length >= 5 ? 'critical' : 'warn',
+    count: fps.length,
+    examples: pickExamples(fps, 3),
+    hint: 'Operators marked these spans as over-firing. Inspect the attributes — likely a single regex pattern catching benign text. Run Layer 66 Coverage Heatmap.',
+  };
+}
+
 export function detectRefusalLoop(spans) {
   // Three consecutive same-name error spans within 30s = loop
   if (spans.length < 3) return null;
@@ -153,6 +169,7 @@ const ALL_DETECTORS = [
   detectSlowScans,
   detectDeadPatterns,
   detectFpHeavyScans,
+  detectAnnotatedFalsePositives,
 ];
 
 /**
@@ -164,13 +181,17 @@ export function runDiagnostic({
   spans = recentSpans(500),
   liftAttributes = ['name', 'tool'],
 } = {}) {
+  // Layer 105 — fold operator annotations into span attributes so
+  // detectors and the lift miner can see them
+  const decorated = decorateSpansWithAnnotations(spans);
   const findings = [];
   for (const fn of ALL_DETECTORS) {
     try {
-      const f = fn(spans);
+      const f = fn(decorated);
       if (f) findings.push(f);
     } catch { /* a single broken detector mustn't take down the report */ }
   }
+  spans = decorated;
 
   const byName = aggregateByName(spans);
   const errorLift = mineSpansByOutcome(spans, {

@@ -109,6 +109,10 @@ export const LAYER_CATALOG = [
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
   { id: 101, name: 'Content Verification', group: 'share', blurb: 'ECDSA P-256 sign + chain-of-custody + humanity score.' },
   { id: 102, name: 'Harness Diagnostic', group: 'backend', blurb: 'OTel-shape spans + lift mining + failure-mode detectors.' },
+  { id: 103, name: 'Auto-Apply Rule Steward', group: 'backend', blurb: 'Self-driving Layer 102 loop with kill-switch + quota.' },
+  { id: 104, name: 'Harness Comparator', group: 'backend', blurb: 'Snapshot + diff two harness reports — improved/regressed.' },
+  { id: 105, name: 'Span Annotation', group: 'backend', blurb: 'Operator labels (false-positive / real-bug) feed the diagnostic.' },
+  { id: 106, name: 'Trace Replay', group: 'backend', blurb: 'Scrub the telemetry buffer like a recording.' },
 ];
 
 export const LAYER_GROUPS = {

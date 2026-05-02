@@ -736,6 +736,49 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       shows the report tier (healthy / warn / critical), per-finding
       hints, top operations p50, error-correlated features (lift),
       copy-as-text and copy-as-JSON for handoff to Cursor / Claude Code
+103. Auto-Apply Rule Steward — self-driving Layer 102 loop
+    - autoSteward.js polls runDiagnostic() + proposeRuleDiff() each
+      cycle, filters additions to "low-risk" (lift ≥ minLift, length ≥
+      minPatternChars, ≤ maxPerCycle, ≤ quotaPerHour), applies via
+      Layer 55 addCustomRule(), logs every application
+    - Kill switches: dryRun (default true), enabled (default false),
+      quota throttle. Defaults to manual + dry-run so nothing happens
+      until the operator explicitly arms it
+    - Each cycle emits an `auto-steward.cycle` span (cycle / tier /
+      candidates / applied / dryRun) so Layer 102 sees its own work
+    - revertApplied(ruleId) → removes the rule + marks the log entry
+      reverted. Suggested follow-ups (L31 evolve / L66 coverage /
+      L21 pause) are surfaced as text, never auto-executed
+104. Harness Comparator — before/after a rule change
+    - harnessComparator.js: compareReports(baseline, current) →
+      harness-diff-v1 envelope. Findings split into added /
+      removed / shifted (severity or count change). Aggregates ranked
+      by absolute errorRate delta. Tier shift labelled
+      improved / regressed / unchanged
+    - Snapshot store keyed by id, capped at 20, persisted in
+      localStorage. saveSnapshot({ label, report }) /
+      listSnapshots() / deleteSnapshot()
+    - HarnessComparatorPanel: snapshot button, A/B picker, diff
+      pane with red/green/orange per category, copy-diff for
+      handoff
+105. Span Annotation — operator feedback into the loop
+    - spanAnnotation.js: annotate({ spanId, label, note }) → keyed
+      store cap 200. Standard labels: false-positive, false-negative,
+      real-bug, benign, investigate
+    - decorateSpansWithAnnotations(spans) folds labels into
+      attributes._annotation so the existing lift miner picks them
+      up as features. New detector detectAnnotatedFalsePositives
+      surfaces operator-marked FPs as a first-class finding
+    - SpanAnnotationPanel: label picker chips, span filter input,
+      live span list with "Tag" / "Remove" buttons, totals roll-up
+106. Trace Replay — scrub the telemetry buffer
+    - traceReplay.js: buildFrames({ spans, frameMs }) buckets the
+      buffer into chronological frames. rollForward(frames, idx)
+      computes cumulative per-name totals up to a cursor index
+    - TraceReplayPanel: frame-size + speed picker, range scrubber,
+      play / pause / step / reset, current-frame inspector, per-name
+      cumulative ladder. "Show me what the harness was doing at
+      14:32" without re-running the brain
 101. Content Verification System — sign humanity, verify chain of custody
     - ECDSA P-256 keypair via Web Crypto, stored locally, exportable
       via Layer 57. Manifest format `brainsnn-prov/1` carries the pub

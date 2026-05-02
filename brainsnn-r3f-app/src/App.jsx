@@ -83,6 +83,10 @@ import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
 import ContentProvenancePanel from './components/ContentProvenancePanel';
 import HarnessDiagnosticPanel from './components/HarnessDiagnosticPanel';
+import AutoStewardPanel from './components/AutoStewardPanel';
+import HarnessComparatorPanel from './components/HarnessComparatorPanel';
+import SpanAnnotationPanel from './components/SpanAnnotationPanel';
+import TraceReplayPanel from './components/TraceReplayPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -787,6 +791,22 @@ export default function App() {
 
           <ErrorBoundary name="Harness Diagnostic">
             <HarnessDiagnosticPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Auto Steward">
+            <AutoStewardPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Harness Comparator">
+            <HarnessComparatorPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Span Annotation">
+            <SpanAnnotationPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Trace Replay">
+            <TraceReplayPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
