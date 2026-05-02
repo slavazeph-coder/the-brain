@@ -107,6 +107,20 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 101, name: 'Content Verification', group: 'share', blurb: 'ECDSA P-256 sign + chain-of-custody + humanity score.' },
+  { id: 102, name: 'Harness Diagnostic', group: 'backend', blurb: 'OTel-shape spans + lift mining + failure-mode detectors.' },
+  { id: 103, name: 'Auto-Apply Rule Steward', group: 'backend', blurb: 'Self-driving Layer 102 loop with kill-switch + quota.' },
+  { id: 104, name: 'Harness Comparator', group: 'backend', blurb: 'Snapshot + diff two harness reports — improved/regressed.' },
+  { id: 105, name: 'Span Annotation', group: 'backend', blurb: 'Operator labels (false-positive / real-bug) feed the diagnostic.' },
+  { id: 106, name: 'Trace Replay', group: 'backend', blurb: 'Scrub the telemetry buffer like a recording.' },
+  { id: 107, name: 'OTLP Exporter', group: 'backend', blurb: 'Push spans to any OTLP-HTTP collector (Honeycomb / Tempo / Datadog).' },
+  { id: 108, name: 'Telemetry Sanitizer', group: 'data', blurb: 'PII redaction (email/phone/IP/SSN/card/token + custom regex).' },
+  { id: 109, name: 'Harness Alerts', group: 'backend', blurb: 'Toast on tier shifts + new findings, debounced.' },
+  { id: 110, name: 'Trace-Driven Tour', group: 'view', blurb: 'Personalized next-step tour derived from your live usage.' },
+  { id: 111, name: 'Span Distribution', group: 'backend', blurb: 'Per-name duration histogram + p50/p90/p95/p99.' },
+  { id: 112, name: 'Trace Search', group: 'backend', blurb: 'Mini query language over the span buffer (=, !=, >, <).' },
+  { id: 113, name: 'Diagnostic Snapshots', group: 'backend', blurb: 'Auto-snap a Layer 104 entry on every tier shift.' },
+  { id: 114, name: 'MCP Tool Usage', group: 'backend', blurb: 'Hot / slow / flaky / dead detector across BRAIN_TOOLS.' },
 ];
 
 export const LAYER_GROUPS = {

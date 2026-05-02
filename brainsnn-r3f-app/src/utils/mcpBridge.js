@@ -29,6 +29,9 @@ import { mergeTemplateResults } from './semanticTemplates';
 import { pickTodaysChallenge } from './dailyChallenge';
 import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
+import { recordSpan } from './telemetry.js';
+import { runDiagnostic, renderReportText } from './harnessFailureModes.js';
+import { proposeRuleDiff } from './harnessProposer.js';
 
 // ---------- tool catalog ----------
 
@@ -232,6 +235,24 @@ export const BRAIN_TOOLS = [
       properties: { text: { type: 'string' } },
       required: ['text']
     }
+  },
+  {
+    name: 'get_harness_report',
+    description: 'Layer 102 — return the harness diagnostic report (failure modes, lift candidates, top ops). Use format="text" to get a copy-paste-into-coding-agent block.',
+    inputSchema: {
+      type: 'object',
+      properties: { format: { type: 'string', enum: ['json', 'text'], default: 'json' } },
+      required: []
+    }
+  },
+  {
+    name: 'propose_rule_diff',
+    description: 'Layer 102 — derive a candidate Layer 55 custom-rule diff from the current harness report. Returns suggested patterns + categories an agent can apply via setActiveRules().',
+    inputSchema: {
+      type: 'object',
+      properties: { topK: { type: 'integer', minimum: 1, maximum: 20, default: 6 } },
+      required: []
+    }
   }
 ];
 
@@ -270,12 +291,27 @@ export async function handleToolCall(name, args = {}) {
     if (bridgeContext.onToolCall) {
       bridgeContext.onToolCall({ name, args, result, ms: Date.now() - t0, ok: true });
     }
+    // Layer 102 — telemetry: every MCP tool call is a span
+    recordSpan({
+      name: 'mcp.tool',
+      kind: 'server',
+      start_time: t0,
+      attributes: { tool: name, argKeys: Object.keys(args || {}).join(',') },
+      status: { code: 'ok' },
+    });
     return { ok: true, result };
   } catch (err) {
     const payload = { ok: false, error: err.message || String(err) };
     if (bridgeContext.onToolCall) {
       bridgeContext.onToolCall({ name, args, result: payload, ms: Date.now() - t0, ok: false });
     }
+    recordSpan({
+      name: 'mcp.tool',
+      kind: 'server',
+      start_time: t0,
+      attributes: { tool: name, argKeys: Object.keys(args || {}).join(',') },
+      status: { code: 'error', message: err.message || String(err) },
+    });
     return payload;
   }
 }
@@ -429,6 +465,17 @@ async function dispatch(name, args) {
       if (!args.text) throw new Error('text required');
       const s = scoreContent(args.text);
       return await issueReceipt({ text: args.text, score: s });
+    }
+
+    case 'get_harness_report': {
+      const report = runDiagnostic();
+      if (args.format === 'text') return { text: renderReportText(report) };
+      return report;
+    }
+
+    case 'propose_rule_diff': {
+      const report = runDiagnostic();
+      return proposeRuleDiff(report, { topK: args.topK || 6 });
     }
 
     default:

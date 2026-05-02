@@ -1,5 +1,6 @@
 import { detectTemplates } from './propagandaTemplates.js';
 import { detectLanguage, patternsFor, labelFor as languageLabel } from './firewallI18n.js';
+import { recordSpan } from './telemetry.js';
 
 const URGENCY_PATTERNS = [
   /\bnow\b|\bimmediately\b|\burgent\b|\bbreaking\b|\balert\b/gi,
@@ -169,6 +170,7 @@ export function resetActiveRules() {
 }
 
 export function scoreContent(text = '') {
+  const t0 = Date.now();
   // Layer 52 — route to a language-specific pack when the active rules
   // are the default English set. Manual promotion via setActiveRules
   // always wins (user intent > auto-detection).
@@ -184,6 +186,23 @@ export function scoreContent(text = '') {
   // Layer 52 — record which language pack was used
   base.language = lang;
   base.languageLabel = languageLabel(lang);
+
+  // Layer 102 — emit a telemetry span so the harness diagnostic can
+  // see scan volume, latency, and per-language outcome distribution.
+  recordSpan({
+    name: 'firewall.scan',
+    kind: 'internal',
+    start_time: t0,
+    attributes: {
+      lang,
+      ruleset: _activeRules === DEFAULT_RULES ? 'default' : 'custom',
+      pressure: Number((base.manipulationPressure || 0).toFixed(3)),
+      evidenceCount: (base.evidence || []).length,
+      templateCount: (base.templates || []).length,
+      textLength: (text || '').length,
+    },
+  });
+
   return base;
 }
 

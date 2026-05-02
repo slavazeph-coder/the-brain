@@ -81,6 +81,23 @@ import HotkeyMap from './components/HotkeyMap';
 import ThemePanel from './components/ThemePanel';
 import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
+import ContentProvenancePanel from './components/ContentProvenancePanel';
+import HarnessDiagnosticPanel from './components/HarnessDiagnosticPanel';
+import AutoStewardPanel from './components/AutoStewardPanel';
+import HarnessComparatorPanel from './components/HarnessComparatorPanel';
+import SpanAnnotationPanel from './components/SpanAnnotationPanel';
+import TraceReplayPanel from './components/TraceReplayPanel';
+import OtlpExporterPanel from './components/OtlpExporterPanel';
+import SanitizerPanel from './components/SanitizerPanel';
+import HarnessAlertsPanel from './components/HarnessAlertsPanel';
+import TraceDrivenTourPanel from './components/TraceDrivenTourPanel';
+import SpanDistributionPanel from './components/SpanDistributionPanel';
+import TraceSearchPanel from './components/TraceSearchPanel';
+import DiagnosticSnapshotsPanel from './components/DiagnosticSnapshotsPanel';
+import McpToolUsagePanel from './components/McpToolUsagePanel';
+import HomeDeck from './components/HomeDeck';
+import FocusedScanDeck from './components/FocusedScanDeck';
+import FocusedDiagnoseDeck from './components/FocusedDiagnoseDeck';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -133,6 +150,13 @@ export default function App() {
     return createInitialState();
   });
   const [mode, setMode] = useState('simulation');
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('brainsnn_view_mode_v1') || 'home'; }
+    catch { return 'home'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('brainsnn_view_mode_v1', viewMode); } catch { /* noop */ }
+  }, [viewMode]);
   const [eegStatus, setEegStatus] = useState({ connected: false, label: 'No device connected' });
   const [timelineIndex, setTimelineIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
@@ -455,6 +479,36 @@ export default function App() {
             </div>
           </section>
 
+          <ViewModeTabs value={viewMode} onChange={setViewMode} />
+
+          {viewMode === 'home' && (
+            <HomeDeck
+              onScan={() => setViewMode('scan')}
+              onDiagnose={() => setViewMode('diagnose')}
+              onAll={() => setViewMode('all')}
+            />
+          )}
+
+          {viewMode === 'scan' && (
+            <FocusedScanDeck
+              firewallProps={{
+                initialScan: initialFirewallScan,
+                onApplyToNetwork: (result) => {
+                  setFirewallResult(result);
+                  setState((s) => mapTRIBEToRegions(s, result));
+                  recordImmunity(IMMUNITY_EVENTS.FIREWALL_SCAN, {
+                    pressure: result.manipulationPressure,
+                    confidence: result.confidence,
+                  });
+                  toastWarning(`Firewall: ${result.recommendedAction.slice(0, 60)}...`);
+                },
+              }}
+            />
+          )}
+
+          {viewMode === 'diagnose' && <FocusedDiagnoseDeck />}
+
+          {viewMode === 'all' && (<>
           <ActivityCharts state={state} />
 
           <ErrorBoundary name="Analytics Dashboard">
@@ -779,6 +833,62 @@ export default function App() {
             <MilestonePanel />
           </ErrorBoundary>
 
+          <ErrorBoundary name="Content Verification">
+            <ContentProvenancePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Harness Diagnostic">
+            <HarnessDiagnosticPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Auto Steward">
+            <AutoStewardPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Harness Comparator">
+            <HarnessComparatorPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Span Annotation">
+            <SpanAnnotationPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Trace Replay">
+            <TraceReplayPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="OTLP Exporter">
+            <OtlpExporterPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Telemetry Sanitizer">
+            <SanitizerPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Harness Alerts">
+            <HarnessAlertsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Trace-Driven Tour">
+            <TraceDrivenTourPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Span Distribution">
+            <SpanDistributionPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Trace Search">
+            <TraceSearchPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Diagnostic Snapshots">
+            <DiagnosticSnapshotsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="MCP Tool Usage">
+            <McpToolUsagePanel />
+          </ErrorBoundary>
+
           <ErrorBoundary name="Dream Mode">
             <DreamModePanel />
           </ErrorBoundary>
@@ -994,6 +1104,7 @@ export default function App() {
             <h2>Ready for GitHub Pages and Vercel</h2>
             <p className="muted">This project includes deployment configs plus browser-side export helpers for shareable demos.</p>
           </section>
+          </>)}
         </section>
 
         <InspectorPanel
@@ -1003,5 +1114,33 @@ export default function App() {
         />
       </main>
     </div>
+  );
+}
+
+function ViewModeTabs({ value, onChange }) {
+  const tabs = [
+    { id: 'home', label: 'Home', hint: 'Brain + quick scan' },
+    { id: 'scan', label: 'Scan', hint: 'Firewall + Coverage + Tone + Archive' },
+    { id: 'diagnose', label: 'Diagnose', hint: 'Harness diagnostic stack (L102–114)' },
+    { id: 'all', label: 'All panels', hint: 'Every layer, full power' },
+  ];
+  return (
+    <nav className="view-mode-tabs" role="tablist" aria-label="View mode">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={value === t.id}
+          className={`view-mode-tab${value === t.id ? ' is-active' : ''}`}
+          onClick={() => onChange(t.id)}
+          title={t.hint}
+        >
+          {t.label}
+        </button>
+      ))}
+      <span className="view-mode-hint">
+        <kbd>⌘K</kbd> jumps to any layer
+      </span>
+    </nav>
   );
 }
