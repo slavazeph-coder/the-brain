@@ -117,6 +117,10 @@ export const LAYER_CATALOG = [
   { id: 108, name: 'Telemetry Sanitizer', group: 'data', blurb: 'PII redaction (email/phone/IP/SSN/card/token + custom regex).' },
   { id: 109, name: 'Harness Alerts', group: 'backend', blurb: 'Toast on tier shifts + new findings, debounced.' },
   { id: 110, name: 'Trace-Driven Tour', group: 'view', blurb: 'Personalized next-step tour derived from your live usage.' },
+  { id: 111, name: 'Span Distribution', group: 'backend', blurb: 'Per-name duration histogram + p50/p90/p95/p99.' },
+  { id: 112, name: 'Trace Search', group: 'backend', blurb: 'Mini query language over the span buffer (=, !=, >, <).' },
+  { id: 113, name: 'Diagnostic Snapshots', group: 'backend', blurb: 'Auto-snap a Layer 104 entry on every tier shift.' },
+  { id: 114, name: 'MCP Tool Usage', group: 'backend', blurb: 'Hot / slow / flaky / dead detector across BRAIN_TOOLS.' },
 ];
 
 export const LAYER_GROUPS = {

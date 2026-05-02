@@ -126,8 +126,8 @@ export function recordSpan(span) {
   if (!_enabled || !span) return;
   if (!span.trace_id) span.trace_id = newTraceId();
   if (!span.span_id) span.span_id = newSpanId();
-  if (span.end_time == null) {
-    span.end_time = Date.now();
+  if (span.end_time == null) span.end_time = Date.now();
+  if (span.duration_ms == null) {
     span.duration_ms = span.end_time - (span.start_time || span.end_time);
   }
   if (!span.status) span.status = { code: 'ok' };

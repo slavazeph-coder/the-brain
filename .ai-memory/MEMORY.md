@@ -817,6 +817,39 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
     - TraceDrivenTourPanel: usage summary banner + per-step card
       with group-tinted left border. Replaces Layer 94's static
       role tour with one derived from what you actually do
+111. Span Distribution — tail-latency histograms
+    - spanDistribution.js: distributionFor(spans, { bounds, name })
+      returns { count, min, max, mean, p50, p90, p95, p99, buckets,
+      labels }. Default log-scale buckets 1/5/10/50/100/500/1000/5000.
+      distributionsByName sorts top-K by call count
+    - SpanDistributionPanel: per-name 9-bucket inline histogram
+      with p50/p95/p99/max alongside. Catches the slow-tail outliers
+      that aggregate p50 + p95 alone hide
+112. Trace Search — query language over the buffer
+    - traceSearch.js: parseQuery tokenizes `name=foo status=error
+      duration>200`, supports =/!=/>/<,>=/<= operators and bare-word
+      free-text matching against name + JSON-stringified attributes.
+      searchSpans applies a clause list and returns matching spans
+    - TraceSearchPanel: query input, parsed-clause echo, hit list
+      with status-tinted left border + JSON attribute footer
+113. Diagnostic Snapshots — auto-snap on tier shift
+    - diagnosticSnapshots.js: subscribes to telemetry, debounces
+      (default 5s), runs runDiagnostic, compares tier to last
+      snapshot, calls Layer 104 saveSnapshot with `auto · A→B` label
+      on every change. Maintains a local timeline of tier shifts
+      with snapshotId + findingIds
+    - DiagnosticSnapshotsPanel: WATCHING / IDLE state banner, start /
+      stop, debounce slider, tier-shift timeline, prune-auto button
+      that wipes auto-tagged snapshots without touching manual ones
+114. MCP Tool Usage — hot / slow / flaky / dead
+    - mcpToolUsage.js: computeUsage cross-references BRAIN_TOOLS
+      against mcp.tool spans. Returns hot (top 6 by count), slow
+      (top 5 by p95), flaky (top 5 by errorRate), and dead
+      (registered but never called)
+    - McpToolUsagePanel: totals banner + four sectioned tool lists
+      (hot/slow/flaky/dead) with per-tool count / p50 / p95 / error
+      rate. Pairs with Layer 102 dead-pattern detector — this is
+      its MCP-side cousin
 101. Content Verification System — sign humanity, verify chain of custody
     - ECDSA P-256 keypair via Web Crypto, stored locally, exportable
       via Layer 57. Manifest format `brainsnn-prov/1` carries the pub

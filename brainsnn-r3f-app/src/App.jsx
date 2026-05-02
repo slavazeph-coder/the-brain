@@ -91,6 +91,10 @@ import OtlpExporterPanel from './components/OtlpExporterPanel';
 import SanitizerPanel from './components/SanitizerPanel';
 import HarnessAlertsPanel from './components/HarnessAlertsPanel';
 import TraceDrivenTourPanel from './components/TraceDrivenTourPanel';
+import SpanDistributionPanel from './components/SpanDistributionPanel';
+import TraceSearchPanel from './components/TraceSearchPanel';
+import DiagnosticSnapshotsPanel from './components/DiagnosticSnapshotsPanel';
+import McpToolUsagePanel from './components/McpToolUsagePanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -827,6 +831,22 @@ export default function App() {
 
           <ErrorBoundary name="Trace-Driven Tour">
             <TraceDrivenTourPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Span Distribution">
+            <SpanDistributionPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Trace Search">
+            <TraceSearchPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Diagnostic Snapshots">
+            <DiagnosticSnapshotsPanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="MCP Tool Usage">
+            <McpToolUsagePanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
