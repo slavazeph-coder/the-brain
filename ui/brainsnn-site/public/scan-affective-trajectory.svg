@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" role="img" aria-label="Affective trajectory across an inbox — pressure-over-turns line chart with escalation markers">
+  <defs>
+    <linearGradient id="bgat" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1715"/>
+      <stop offset="1" stop-color="#0c0a09"/>
+    </linearGradient>
+    <linearGradient id="trajFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d86e78" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#d86e78" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="360" fill="url(#bgat)"/>
+  <text x="28" y="44" fill="#a49d95" font-family="Inter, system-ui, sans-serif" font-size="11" letter-spacing="3" font-weight="600">AFFECTIVE TRAJECTORY · INBOX</text>
+  <text x="28" y="78" fill="#f1ece5" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="700">Trend: Escalating · 30 messages</text>
+
+  <!-- Axes -->
+  <g stroke="rgba(255,255,255,0.08)" stroke-width="1">
+    <line x1="60" y1="120" x2="60" y2="280"/>
+    <line x1="60" y1="280" x2="560" y2="280"/>
+  </g>
+  <g font-family="Inter, system-ui, sans-serif" font-size="10" fill="#a49d95">
+    <text x="28" y="124">100%</text>
+    <text x="28" y="204">50%</text>
+    <text x="28" y="284">0%</text>
+    <text x="60" y="298">msg 1</text>
+    <text x="540" y="298" text-anchor="end">msg 30</text>
+  </g>
+
+  <!-- Tier bands -->
+  <rect x="60" y="120" width="500" height="40" fill="rgba(216,110,120,0.06)"/>
+  <rect x="60" y="160" width="500" height="40" fill="rgba(253,171,67,0.05)"/>
+
+  <!-- Trajectory area + line -->
+  <path d="M60 256 L78 252 L98 248 L118 240 L138 232 L158 220 L178 212 L198 200 L218 196 L238 184 L258 176 L278 168 L298 160 L318 154 L338 144 L358 142 L378 134 L398 130 L418 124 L438 122 L458 130 L478 128 L498 134 L518 130 L538 126 L558 124 L558 280 L60 280 Z" fill="url(#trajFill)"/>
+  <path d="M60 256 L78 252 L98 248 L118 240 L138 232 L158 220 L178 212 L198 200 L218 196 L238 184 L258 176 L278 168 L298 160 L318 154 L338 144 L358 142 L378 134 L398 130 L418 124 L438 122 L458 130 L478 128 L498 134 L518 130 L538 126 L558 124"
+        fill="none" stroke="#d86e78" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Escalation markers -->
+  <g>
+    <circle cx="358" cy="142" r="5" fill="#fdab43"/>
+    <text x="368" y="138" fill="#fdab43" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="700">spike +28</text>
+    <circle cx="438" cy="122" r="5" fill="#d86e78"/>
+    <text x="448" y="118" fill="#d86e78" font-family="Inter, system-ui, sans-serif" font-size="10" font-weight="700">peak 92%</text>
+  </g>
+
+  <!-- Footer chips -->
+  <g font-family="Inter, system-ui, sans-serif" font-size="10" fill="#f1ece5">
+    <rect x="28" y="310" width="120" height="22" rx="11" fill="rgba(216,110,120,0.18)" stroke="rgba(216,110,120,0.55)"/>
+    <text x="88" y="325" text-anchor="middle">Hostile band: 9</text>
+    <rect x="156" y="310" width="118" height="22" rx="11" fill="rgba(253,171,67,0.18)" stroke="rgba(253,171,67,0.55)"/>
+    <text x="215" y="325" text-anchor="middle">Heavy band: 12</text>
+    <rect x="282" y="310" width="100" height="22" rx="11" fill="rgba(95,183,193,0.14)" stroke="rgba(95,183,193,0.4)"/>
+    <text x="332" y="325" text-anchor="middle">Slope +1.4</text>
+    <rect x="390" y="310" width="170" height="22" rx="11" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)"/>
+    <text x="475" y="325" text-anchor="middle">Receipt R-7F2A-9B81</text>
+  </g>
+</svg>

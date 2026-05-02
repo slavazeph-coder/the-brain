@@ -553,7 +553,7 @@ export default function App() {
             <div className="gallery-grid">
               {GALLERY_ITEMS.map((item) => (
                 <article className="gallery-card" key={item.title}>
-                  <div className="gallery-thumb"><img src="/demo-placeholder.svg" alt={`${item.title} placeholder`} /></div>
+                  <div className="gallery-thumb"><img src={item.image || "/demo-placeholder.svg"} alt={`${item.title} — example BrainSNN scan`} /></div>
                   <h3>{item.title}</h3>
                   <p>{item.body}</p>
                 </article>

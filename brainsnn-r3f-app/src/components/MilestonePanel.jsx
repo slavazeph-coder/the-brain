@@ -34,10 +34,12 @@ export default function MilestonePanel() {
         <span className="muted" style={{ marginLeft: 10 }}>cognitive layers shipped</span>
       </h2>
       <p className="muted" style={{ maxWidth: 720 }}>
-        BrainSNN started as a 3D brain viewer. It grew into a Cognitive
-        Firewall, then a multimodal analysis suite, then a progression
-        system, then a multi-device share surface, then an extensible API.
-        Every layer is still one scroll away.
+        BrainSNN is an affective-intelligence engine that detects the emotional
+        payload inside online content before it shapes attention, behavior,
+        brand risk, or public perception. It started as a 3D brain viewer,
+        grew into a Cognitive Firewall, a multimodal analysis suite, a
+        progression system, a share surface, and a public API. Every layer
+        is still one scroll away.
       </p>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 16 }}>

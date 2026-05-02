@@ -81,6 +81,7 @@ import HotkeyMap from './components/HotkeyMap';
 import ThemePanel from './components/ThemePanel';
 import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
+import BrandRiskPanel from './components/BrandRiskPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -777,6 +778,10 @@ export default function App() {
 
           <ErrorBoundary name="Milestone">
             <MilestonePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Brand Risk Scorecard">
+            <BrandRiskPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" role="img" aria-label="Certainty theater scan archetype — PFC dampened, BG rising on false confidence">
+  <defs>
+    <linearGradient id="bgct" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1715"/>
+      <stop offset="1" stop-color="#0c0a09"/>
+    </linearGradient>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#5b92cf" stop-opacity="0.85"/>
+      <stop offset="0.55" stop-color="#5b92cf" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#5b92cf" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="360" fill="url(#bgct)"/>
+  <text x="28" y="44" fill="#a49d95" font-family="Inter, system-ui, sans-serif" font-size="11" letter-spacing="3" font-weight="600">CERTAINTY THEATER · SCAN</text>
+  <text x="28" y="78" fill="#f1ece5" font-family="Inter, system-ui, sans-serif" font-size="20" font-weight="700">PFC dampened · BG rising</text>
+
+  <g font-family="Inter, system-ui, sans-serif" font-size="11" fill="#a49d95">
+    <text x="28" y="118">EMOTIONAL ACTIVATION</text>
+    <rect x="28" y="124" width="240" height="8" fill="rgba(255,255,255,0.08)" rx="4"/>
+    <rect x="28" y="124" width="96" height="8" fill="#d86e78" rx="4"/>
+    <text x="280" y="132" fill="#f1ece5">40%</text>
+
+    <text x="28" y="158">COGNITIVE SUPPRESSION</text>
+    <rect x="28" y="164" width="240" height="8" fill="rgba(255,255,255,0.08)" rx="4"/>
+    <rect x="28" y="164" width="216" height="8" fill="#a78ce5" rx="4"/>
+    <text x="280" y="172" fill="#f1ece5">90%</text>
+
+    <text x="28" y="198">MANIPULATION PRESSURE</text>
+    <rect x="28" y="204" width="240" height="8" fill="rgba(255,255,255,0.08)" rx="4"/>
+    <rect x="28" y="204" width="180" height="8" fill="#fdab43" rx="4"/>
+    <text x="280" y="212" fill="#f1ece5">75%</text>
+
+    <text x="28" y="238">TRUST EROSION</text>
+    <rect x="28" y="244" width="240" height="8" fill="rgba(255,255,255,0.08)" rx="4"/>
+    <rect x="28" y="244" width="192" height="8" fill="#5fb7c1" rx="4"/>
+    <text x="280" y="252" fill="#f1ece5">80%</text>
+  </g>
+
+  <g transform="translate(440 180)">
+    <ellipse cx="0" cy="0" rx="120" ry="120" fill="url(#bgGlow)"/>
+    <circle cx="-22" cy="-30" r="22" fill="#5fb7c1" opacity="0.4"/>
+    <text x="-22" y="-26" text-anchor="middle" fill="#f1ece5" font-family="Inter, system-ui" font-size="10" font-weight="700">CTX</text>
+    <!-- PFC dampened -->
+    <circle cx="32" cy="-24" r="14" fill="#a78ce5" opacity="0.18"/>
+    <text x="32" y="-20" text-anchor="middle" fill="#f1ece5" font-family="Inter, system-ui" font-size="9" font-weight="700" opacity="0.5">PFC</text>
+    <circle cx="0" cy="32" r="18" fill="#d86e78" opacity="0.5"/>
+    <text x="0" y="36" text-anchor="middle" fill="#f1ece5" font-family="Inter, system-ui" font-size="9" font-weight="700">AMY</text>
+    <!-- BG glowing -->
+    <circle cx="-44" cy="22" r="34" fill="#5b92cf" opacity="0.95"/>
+    <text x="-44" y="26" text-anchor="middle" fill="#f1ece5" font-family="Inter, system-ui" font-size="11" font-weight="800">BG</text>
+    <circle cx="38" cy="32" r="14" fill="#d8ab3a" opacity="0.4"/>
+    <text x="38" y="36" text-anchor="middle" fill="#f1ece5" font-family="Inter, system-ui" font-size="9" font-weight="700">HPC</text>
+  </g>
+
+  <g font-family="Inter, system-ui, sans-serif" font-size="10" fill="#f1ece5">
+    <rect x="28" y="290" width="92" height="22" rx="11" fill="rgba(168,140,229,0.18)" stroke="rgba(168,140,229,0.55)"/>
+    <text x="74" y="305" text-anchor="middle">obviously</text>
+    <rect x="128" y="290" width="116" height="22" rx="11" fill="rgba(168,140,229,0.18)" stroke="rgba(168,140,229,0.55)"/>
+    <text x="186" y="305" text-anchor="middle">undeniable fact</text>
+    <rect x="252" y="290" width="98" height="22" rx="11" fill="rgba(95,183,193,0.14)" stroke="rgba(95,183,193,0.4)"/>
+    <text x="301" y="305" text-anchor="middle">straw-man</text>
+    <rect x="358" y="290" width="84" height="22" rx="11" fill="rgba(95,183,193,0.14)" stroke="rgba(95,183,193,0.4)"/>
+    <text x="400" y="305" text-anchor="middle">DARVO</text>
+  </g>
+</svg>

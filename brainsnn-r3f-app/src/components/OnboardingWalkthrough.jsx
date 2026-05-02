@@ -3,37 +3,37 @@ import React, { useEffect, useState } from 'react';
 const STEPS = [
   {
     title: 'Welcome to BrainSNN',
-    body: 'A neuromorphic brain visualiser powered by React Three Fiber, Meta TRIBE v2, and Google Gemma 4. Let\'s take a quick tour.',
+    body: 'An affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception. Quick tour:',
     target: null
   },
   {
-    title: '3D Brain Viewer',
-    body: 'The main canvas renders 7 brain regions connected by 10 neural pathways with GPU-animated signal flow. Click any region to inspect it.',
+    title: '3D brain — the visualization layer',
+    body: 'The brain is the readout, not the headline. 7 regions and 10 pathways react in real time as the engine absorbs whatever you feed it. Click a region to inspect it.',
     target: '.viewer-panel'
   },
   {
-    title: 'Control Bar',
-    body: 'Play/pause the simulation, trigger bursts, switch scenarios, toggle quality tiers, and choose your data mode — Simulation, TRIBE v2, or Live EEG.',
-    target: '.controls-bar'
-  },
-  {
-    title: 'Neural Analytics',
-    body: 'Real-time sparklines, correlation matrix, anomaly detection, and threshold alerts. Expand for the full mission-control view.',
-    target: '.analytics-dashboard'
-  },
-  {
-    title: 'Cognitive Firewall',
-    body: 'Paste any content to score manipulation patterns. When Gemma 4 is configured, analysis upgrades from regex to AI-powered deep scanning.',
+    title: 'Cognitive Firewall — the engine',
+    body: 'Paste a tweet, an inbox, or a press release. The engine scores it across four affective dimensions, names the manipulation templates that fire, and returns evidence words plus a deterministic receipt.',
     target: '.cognitive-firewall-panel'
   },
   {
-    title: 'Snapshots & Sharing',
-    body: 'Save brain states, compare them side-by-side, generate reports, and share via URL or embed code.',
+    title: 'Brand Risk Scorecard',
+    body: 'Working with mention streams, ad copy, or a review pile? Layer 106 rolls many items into one 0–100 brand risk score with a tier and a copy-ready brief.',
+    target: '.brand-risk-panel'
+  },
+  {
+    title: 'Controls & data modes',
+    body: 'Play/pause the brain, trigger bursts, switch scenarios, toggle quality tiers, and pick your data mode — Simulation, TRIBE v2 fMRI, or Live EEG.',
+    target: '.controls-bar'
+  },
+  {
+    title: 'Snapshots, share, audit',
+    body: 'Save brain states, compare them side-by-side, export receipts, and share scans via /r/<hash> URLs or iframe embeds.',
     target: '.snapshot-panel'
   },
   {
-    title: 'You\'re Ready!',
-    body: 'Press ? anytime for keyboard shortcuts. Explore the brain, scan content, and see your neural network come alive.',
+    title: 'You\'re ready',
+    body: 'Press ? for keyboard shortcuts, ⌘K to jump to any layer. Try the Firewall first, then the Brand Risk Scorecard.',
     target: null
   }
 ];

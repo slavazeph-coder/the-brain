@@ -294,14 +294,17 @@ export const GALLERY_ITEMS = [
   {
     title: "Fear cascade",
     body: "AMY glows red as a high-urgency post fires across the threat dimension. Evidence words highlighted inline.",
+    image: "/scan-fear-cascade.svg",
   },
   {
     title: "Certainty theater",
     body: "PFC dampened, BG rising — a confident, unhedged claim that the engine flags as false-certainty pressure.",
+    image: "/scan-certainty-theater.svg",
   },
   {
     title: "Affective trajectory",
     body: "A 30-message inbox plotted as pressure-over-turns. Cooling, escalating, hostile — labeled in one glance.",
+    image: "/scan-affective-trajectory.svg",
   },
 ];
 

@@ -107,6 +107,7 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 106, name: 'Brand Risk Scorecard', group: 'firewall', blurb: 'Per-brand 0–100 risk score across mention streams + ad copy.' },
 ];
 
 export const LAYER_GROUPS = {
