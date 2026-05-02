@@ -1,13 +1,16 @@
 export const SITE = {
   name: "BrainSNN",
   repoUrl: "https://github.com/slavazeph-coder/the-brain",
-  demoUrl: "https://brainsnn.com",
+  domainUrl: "https://brainsnn.com",
+  demoUrl: "https://the-brain-production.up.railway.app",
   issuesUrl: "https://github.com/slavazeph-coder/the-brain/issues",
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "Paste any tweet. See which feeling it installs in your brain.",
-  badge: "Open Source · MIT License · React Three Fiber",
+  tagline: "Affective intelligence for the AI internet.",
+  mission:
+    "An affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.",
+  badge: "Emotional Payload Intelligence · Brand Risk · Public Perception",
 };
 
 export const REGION_LONG_NAMES = {
@@ -39,7 +42,7 @@ export const BRAIN_REGIONS = [
     position: [0, 0.1, 0],
     color: "#71b949",
     baseActivity: 0.56,
-    description: "Sensory relay driving cortical input.",
+    description: "The intake gate: what content makes the nervous system notice first.",
   },
   {
     code: "CTX",
@@ -47,7 +50,7 @@ export const BRAIN_REGIONS = [
     position: [2.45, 0.65, -0.15],
     color: "#5fb7c1",
     baseActivity: 0.26,
-    description: "Primary cortical workspace for integration.",
+    description: "Meaning assembly: how claims, frames, and context become interpretation.",
   },
   {
     code: "HPC",
@@ -55,7 +58,7 @@ export const BRAIN_REGIONS = [
     position: [1.25, -1.6, 1.35],
     color: "#d8ab3a",
     baseActivity: 0.18,
-    description: "Memory replay loop with cortex.",
+    description: "Memory linkage: what the message connects to past beliefs and stories.",
   },
   {
     code: "PFC",
@@ -63,7 +66,7 @@ export const BRAIN_REGIONS = [
     position: [3.45, 1.9, 0.75],
     color: "#a78ce5",
     baseActivity: 0.2,
-    description: "Executive planning and top-down control.",
+    description: "Executive control: whether a reader can stay reflective instead of reactive.",
   },
   {
     code: "AMY",
@@ -71,7 +74,7 @@ export const BRAIN_REGIONS = [
     position: [1.85, -0.95, -2.15],
     color: "#d86e78",
     baseActivity: 0.13,
-    description: "Emotion-linked salience and alerting.",
+    description: "Threat and salience: fear, outrage, urgency, shame, and protective attention.",
   },
   {
     code: "BG",
@@ -79,7 +82,7 @@ export const BRAIN_REGIONS = [
     position: [-1.9, -0.55, -1.25],
     color: "#5b92cf",
     baseActivity: 0.14,
-    description: "Inhibitory gating of thalamic output.",
+    description: "Behavioral gating: what the message pressures the reader to do next.",
   },
   {
     code: "CBL",
@@ -87,7 +90,7 @@ export const BRAIN_REGIONS = [
     position: [-3.1, 1.2, 1.6],
     color: "#c69f31",
     baseActivity: 0.17,
-    description: "Coordination, timing, and adaptive smoothing.",
+    description: "Pattern calibration: timing, repetition, and subtle emotional conditioning.",
   },
 ];
 
@@ -100,7 +103,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.25, 1.45, 0.2],
-    label: "sensory relay",
+    label: "attention to meaning",
   },
   {
     id: "CTX-HPC",
@@ -110,7 +113,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.45, 0.15, 0.55],
-    label: "memory write",
+    label: "context to memory",
   },
   {
     id: "HPC-CTX",
@@ -120,7 +123,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.1, -0.25, -0.2],
-    label: "memory replay",
+    label: "memory to interpretation",
   },
   {
     id: "CTX-PFC",
@@ -130,7 +133,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.35, 0.65, 0.35],
-    label: "planning feedforward",
+    label: "interpretation to judgment",
   },
   {
     id: "PFC-CTX",
@@ -140,7 +143,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [-0.2, 0.25, -0.35],
-    label: "top-down control",
+    label: "reflection to meaning",
   },
   {
     id: "CTX-AMY",
@@ -150,7 +153,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.4, -0.2, -0.7],
-    label: "salience routing",
+    label: "meaning to salience",
   },
   {
     id: "AMY-BG",
@@ -160,7 +163,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [-0.35, -0.05, 0.1],
-    label: "affect-driven gating",
+    label: "emotion to action pressure",
   },
   {
     id: "BG-THL",
@@ -170,7 +173,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: true,
     curveOffset: [-0.25, 0.15, -0.2],
-    label: "inhibitory gate",
+    label: "behavioral gate",
   },
   {
     id: "CBL-CTX",
@@ -180,7 +183,7 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.15, -0.35, -0.3],
-    label: "timing correction",
+    label: "pattern calibration",
   },
   {
     id: "PFC-HPC",
@@ -190,300 +193,220 @@ export const PATHWAYS = [
     plastic: true,
     inhibitory: false,
     curveOffset: [0.55, 0.05, 0.55],
-    label: "working memory cue",
+    label: "judgment to memory",
   },
 ];
 
-export const WHY_CARDS = [
+export const IMPACT_SIGNALS = [
+  "Fear, threat, urgency, and outrage pressure",
+  "Trust erosion, certainty theatre, and authority hijacking",
+  "Shame, status, belonging, desire, and identity activation",
+  "Behavioral push: click, share, comply, attack, withdraw, or buy",
+];
+
+export const USE_CASES = [
   {
-    title: "STDP continuous learning",
-    icon: "⚡",
+    title: "Brands and agencies",
+    icon: "◎",
     body:
-      "Synapses change from spike timing itself. Pre before post strengthens. Post before pre weakens. You can see the rule move the network live.",
+      "Preflight posts, ads, landing pages, and crisis replies before they trigger the wrong emotion or damage trust.",
   },
   {
-    title: "No backprop required",
-    icon: "∇",
+    title: "Public perception teams",
+    icon: "◐",
     body:
-      "No loss function. No training epochs. No offline retraining loop. The brain graph adapts in-place as signals move through it.",
+      "Map how narratives move attention, what feeling they install, and where reputational risk starts to compound.",
   },
   {
-    title: "React Three Fiber architecture",
-    icon: "🧩",
+    title: "Creators and media operators",
+    icon: "✦",
     body:
-      "Brain regions, edges, particles, overlays, and controls are all modular React components. Easy to fork. Easy to extend.",
+      "Understand why a hook works, whether it crosses into manipulation, and how to rewrite it without killing the signal.",
   },
   {
-    title: "Biologically inspired structure",
-    icon: "🧠",
+    title: "Compliance and comms review",
+    icon: "⌁",
     body:
-      "Thalamus relays input. Basal Ganglia gates the relay. Hippocampus and cortex replay memory together. The topology is grounded, not decorative.",
+      "Flag emotional overreach, implied pressure, missing context, and claims that could create brand, legal, or trust exposure.",
   },
   {
-    title: "Browser-first demo",
-    icon: "🌐",
+    title: "Research and red teams",
+    icon: "◇",
     body:
-      "The default demo does not need a server to prove the core idea. It loads fast, shares easily, and gives people something they can orbit immediately.",
+      "Stress-test persuasion patterns, cognitive vulnerabilities, and adversarial content with repeatable scoring and evidence trails.",
   },
   {
-    title: "Modular extensibility",
-    icon: "🔧",
+    title: "AI-generated content pipelines",
+    icon: "▣",
     body:
-      "Add regions, swap pathways, wire in EEG streams, or replace the simplified simulation with a more rigorous model without rewriting the UI shell.",
+      "Add an emotional-risk layer between generation and publication so AI output is reviewed for human impact, not only grammar.",
   },
 ];
+
+export const PRODUCT_WORKFLOW = [
+  ["Paste or connect content", "Drop in a tweet, ad, email, script, article, campaign concept, or public narrative."],
+  ["Decode the payload", "BrainSNN scores affect, persuasion pressure, trust erosion, behavioral push, and public-perception risk."],
+  ["See the brain reaction", "The 3D model makes the invisible visible: salience, memory linkage, action pressure, and executive override."],
+  ["Rewrite with control", "Get safer, sharper alternatives that keep persuasion ethical and protect brand trust."],
+];
+
+export const TRUST_CARDS = [
+  {
+    title: "Emotional payload detection",
+    icon: "⚡",
+    body:
+      "The product is built around what content does to attention and behavior, not only what the words literally say.",
+  },
+  {
+    title: "Evidence-first scoring",
+    icon: "⌕",
+    body:
+      "Each result should expose the exact phrases, frames, and signals that triggered fear, urgency, trust loss, or manipulation risk.",
+  },
+  {
+    title: "Affective decoder",
+    icon: "◉",
+    body:
+      "Classifies content across threat, reward, social, and cognitive affect clusters so teams can understand the feeling being installed.",
+  },
+  {
+    title: "Brand-risk layer",
+    icon: "🛡",
+    body:
+      "Useful for reputation, comms, marketing, compliance, and public-response workflows where emotional misfire is expensive.",
+  },
+  {
+    title: "Human-readable interface",
+    icon: "▧",
+    body:
+      "The 3D brain is not decoration. It turns invisible cognitive pressure into a visual system that non-technical users can read quickly.",
+  },
+  {
+    title: "Research-ready architecture",
+    icon: "🧠",
+    body:
+      "Neuromorphic, SNN, affective-computing, and red-team modules can evolve behind the same product surface without confusing first-time users.",
+  },
+];
+
+export const ROADMAP_CARDS = [
+  {
+    title: "Pilot dashboard",
+    body: "Team workspace for saved scans, evidence trails, rewrite history, and approval-ready reports.",
+  },
+  {
+    title: "Public narrative monitor",
+    body: "Track how emotional patterns shift across posts, comments, articles, and campaign waves.",
+  },
+  {
+    title: "API and integrations",
+    body: "Plug emotional-risk scanning into Slack, Docs, CMS tools, ad workflows, and agent pipelines.",
+  },
+];
+
+export const PILOT_CHECKLIST = [
+  "Analyze 50–100 posts, ads, emails, or public replies from one real team.",
+  "Return emotional payload, manipulation pressure, risk evidence, and safer rewrites.",
+  "Create a weekly emotional-risk report with the top patterns and recommended fixes.",
+  "Use pilot feedback to tune categories, thresholds, dashboard language, and export format.",
+];
+
+export const WHY_CARDS = TRUST_CARDS;
 
 export const COMMUNITY_CHANNELS = [
   {
-    title: "Hacker News",
-    emoji: "🟠",
-    body:
-      "Strongest technical discovery engine for independent open-source launches. A solid Show HN can create the first real wave of stars and contributors.",
-    href: "https://news.ycombinator.com/submit",
-    cta: "Submit Show HN",
+    title: "Agencies",
+    emoji: "◎",
+    body: "Best first customer profile: they already manage content risk and can test the tool across multiple accounts.",
+    href: SITE.demoUrl,
+    cta: "Open demo",
   },
   {
-    title: "Open neuromorphic communities",
+    title: "Brand teams",
+    emoji: "◐",
+    body: "Position BrainSNN as preflight review for campaigns, replies, landing pages, and crisis communications.",
+    href: SITE.domainUrl,
+    cta: "Visit domain",
+  },
+  {
+    title: "Compliance",
+    emoji: "⌁",
+    body: "Frame it around pressure, implied claims, missing context, and reputational exposure in public-facing language.",
+    href: SITE.repoUrl,
+    cta: "View repo",
+  },
+  {
+    title: "Researchers",
     emoji: "🧠",
-    body:
-      "Your highest-fit audience. This is where the builders who already care about SNNs, Loihi, SpiNNaker, and computational neuroscience will actually engage.",
-    href: "https://github.com/open-neuromorphic/open-neuromorphic",
-    cta: "Reach the niche",
+    body: "Affective computing, persuasion detection, neuromorphic AI, and red-team benchmarks can become the technical moat.",
+    href: SITE.issuesUrl,
+    cta: "Open issues",
   },
   {
-    title: "Reddit",
-    emoji: "👀",
-    body:
-      "Use r/MachineLearning for the learning rule and r/threejs / r/reactjs for the rendering build. Tailor the post to each audience instead of cross-posting identical copy.",
-    href: "https://reddit.com/r/MachineLearning",
-    cta: "Open Reddit",
+    title: "Creators",
+    emoji: "✦",
+    body: "A simple viral wedge: paste a post, see what feeling it installs, then rewrite it with less manipulation and more clarity.",
+    href: SITE.demoUrl,
+    cta: "Try scan",
   },
   {
-    title: "GitHub Trending",
-    emoji: "⭐",
-    body:
-      "Trending is driven by recent star velocity, not lifetime stars. Your launch page exists to compress demand into one coordinated push window.",
-    href: "https://github.com/trending/javascript",
-    cta: "Study Trending",
-  },
-  {
-    title: "Product Hunt",
-    emoji: "🚀",
-    body:
-      "Not the first channel, but useful once the visuals and repo look polished. Great for a second-wave discovery event after GitHub and X start moving.",
-    href: "https://www.producthunt.com/",
-    cta: "Plan Product Hunt",
-  },
-  {
-    title: "Dev.to / Hashnode",
-    emoji: "✍️",
-    body:
-      "A technical write-up compounds. It catches people after launch day and gives you a durable link to share whenever someone asks how it works.",
-    href: "https://dev.to/",
-    cta: "Write the deep dive",
+    title: "Investors",
+    emoji: "▣",
+    body: "The fundable category is emotional payload intelligence for the AI-generated internet, not a vague brain demo.",
+    href: SITE.repoUrl,
+    cta: "Review code",
   },
 ];
 
-export const GALLERY_ITEMS = [
-  {
-    title: "Burst mode frame",
-    body: "A thalamic spike wave pushing plasticity through the graph.",
-  },
-  {
-    title: "Selected-region focus",
-    body: "Camera punched in on HPC ↔ CTX replay dynamics.",
-  },
-  {
-    title: "Weight heat state",
-    body: "Edge width and glow after a few minutes of continuous learning.",
-  },
-];
+export const GALLERY_ITEMS = ROADMAP_CARDS;
 
 export const PRE_LAUNCH_CHECKLIST = [
-  "Polish the README with a real GIF or MP4 poster frame from burst mode.",
-  "Set the GitHub social preview image before launch.",
-  "Seed 5–10 good first issues so contributors know where to start.",
-  "Deploy the static demo to Vercel or GitHub Pages.",
-  "Prepare one short screen recording for X and one square crop for socials.",
-  "Test the repo clone flow on a fresh machine.",
-  "Line up 20–30 developers or researchers to star and share on launch day.",
+  "Replace placeholder copy with the emotional-payload intelligence thesis.",
+  "Point the main CTA to the working Railway demo.",
+  "Add a pilot signup path for brands, agencies, creators, and comms teams.",
+  "Record a 60-second demo showing paste → scan → evidence → rewrite.",
+  "Update GitHub README and social preview to match the same positioning.",
+  "Collect 3–5 real content examples and turn them into sanitized case studies.",
+  "Ask 10 potential users what report format would make them pay for this weekly.",
 ];
 
 export const LAUNCH_DAY_CHECKLIST = [
-  "Post Show HN early and link to the repo, not the landing page.",
-  "Post the X thread with the GitHub link only at the end.",
-  "Reply fast for the first 2 hours on every channel.",
-  "Drop the project into niche neuromorphic communities after the main posts go live.",
-  "Watch star velocity, not just vanity metrics.",
-  "Update the README with fresh GIFs or screenshots if people ask similar questions.",
-  "Turn notable feedback into issues before the traffic wave cools off.",
+  "Post the product thesis: content has an emotional payload before it has business impact.",
+  "Lead with one screenshot or clip of a real scan, not abstract architecture.",
+  "Invite agencies and brand teams into a paid pilot instead of only asking for stars.",
+  "Capture every objection as a homepage, pricing, or product language improvement.",
+  "Track demo scans, pilot requests, replies, and repeat usage — not vanity traffic alone.",
+  "Turn the best 5 scans into a public examples library.",
+  "Follow up with every serious user within 24 hours.",
 ];
 
 export const GOOD_FIRST_ISSUES = [
-  "Add long-form tooltips for each region with keyboard and touch support.",
-  "Create a screenshot export button for the live 3D scene.",
-  "Improve the mini activity chart with per-region toggles.",
-  "Add a WebGPU simulation mode behind a feature flag.",
-  "Write unit tests for the simplified STDP update rule.",
-  "Add reduced-motion support for people who prefer less animation.",
-  "Create alternate topology presets for memory replay and gating.",
-  "Improve mobile camera controls and gesture affordances.",
-  "Add a proper benchmark panel for pathway weights and firing activity.",
-  "Replace placeholder media with an automated demo capture workflow.",
+  "Add a pilot signup form wired to email or a lightweight backend.",
+  "Create sample scans for brands, agencies, creators, and crisis comms.",
+  "Add exportable PDF/PNG emotional-risk reports.",
+  "Improve mobile readability for the hero and demo sections.",
+  "Add tests for scoring categories and rewrite recommendations.",
+  "Create a privacy note explaining what is and is not stored.",
+  "Add a public examples page with sanitized content analyses.",
+  "Add integrations for Slack, Google Docs, and Notion review workflows.",
+  "Add benchmark examples for benign, persuasive, manipulative, and high-risk copy.",
+  "Replace placeholder media with a polished product walkthrough video.",
 ];
 
 export const SOCIAL_PREVIEW_COPY = {
-  hook: "I built a 3D brain network that learns continuously in the browser.",
+  hook: "BrainSNN detects the emotional payload inside online content before it moves people.",
   sub:
-    "7 brain regions. 10 plastic pathways. Live STDP updates. No backprop. No retraining.",
-  cta: "Star the repo, fork it, and break it.",
+    "Paste any post, ad, email, or narrative. See fear, trust erosion, urgency, desire, shame, belonging, and behavior pressure.",
+  cta: "Try the demo or join the pilot.",
 };
 
 export const VIRAL_CONTENT = {
-  twitterThread: `1/
-Paste any tweet into a 3D brain. Watch which feeling it installs in you.
-
-BrainSNN is a browser-native 3D brain with 35 cognitive layers — a Cognitive Firewall, an Affective Decoder, a Neurochemistry sandbox, a Dream Mode.
-
-Live: ${SITE.demoUrl}
-
-2/
-The Firewall scores any text for manipulation pressure across 4 dimensions:
-• emotional activation
-• cognitive suppression
-• manipulation pressure
-• trust erosion
-
-You see the bars, the evidence words, AND a 3D brain reacting in real time.
-
-3/
-Each scan produces a share card.
-AMY glowing red = fear cascade.
-PFC dampened = certainty theater.
-Click "Share this reaction" and you get a /r/<hash> URL that renders a 1200×630 OG card anywhere it's pasted.
-
-4/
-There's a Spot-the-Manipulation quiz. 10 short messages. Slide toward "calm" or "manipulative." The Firewall already knows the truth. How close can you get?
-
-Your Spot Accuracy becomes a shareable card. Leaderboard included.
-
-5/
-There's a Dream Mode that runs while you're idle. The brain replays recent states, reinforces co-active regions via STDP, and wakes on any activity.
-
-Yes — your 3D brain will consolidate its weights if you walk away.
-
-6/
-There's an MCP bridge. 14 tools — get_brain_state, scan_content, apply_scenario, narrate_state, impact_analysis.
-
-Your Claude Code / Codex agent can read and steer this brain over a websocket. Tool results come back live in the 3D view.
-
-7/
-There's a Brain Evolve loop that mutates the Firewall ruleset via UCB1 + MAP-Elites, scores each candidate against a red team corpus, and promotes the winner.
-
-The Firewall literally evolves new rules to catch attacks it missed.
-
-8/
-There's an adversarial feed — submit a bypass attempt, the Firewall scores it, anything under 40% pressure gets published on the weekly leaderboard for Brain Evolve to catch next round.
-
-Offense ↔ defense, public.
-
-9/
-Everything runs in your browser.
-No install.
-No signup.
-No server for the main demo.
-
-TRIBE v2 (real fMRI), Gemma 4 (deep multimodal), WebSocket sync — each is an optional upgrade behind one env var.
-
-10/
-Open source, MIT licensed. 35 layers of code you can fork and break.
-
-Try a tweet, paste your inbox, stress-test your feed.
-
-→ ${SITE.demoUrl}
-Repo: ${SITE.repoUrl}
-
-If this moves the needle on how you read your timeline, star it.`,
-  hackerNewsTitle:
-    "Show HN: BrainSNN — paste any tweet, see which feeling it installs in your brain",
-  hackerNewsBody: `Hey HN,
-
-BrainSNN is a browser-native 3D brain with 35 cognitive layers on top. The core demo: paste any text (or URL), a regex + Gemma 4 Cognitive Firewall scores it across 4 manipulation dimensions, and the 3D brain reacts — AMY glows on fear, PFC dampens on certainty theater, BG rises on manipulation pressure.
-
-Demo: ${SITE.demoUrl}
-Repo: ${SITE.repoUrl}
-
-What's different vs. the usual "vibes detector" approach:
-
-- Every scan produces a share card. /r/<hash> → a 1200×630 OG image with your excerpt + 4 score bars + affect label. Each share drags new viewers into the same loop.
-- There's a Spot-the-Manipulation quiz: 10 items, you slide 0–100, your accuracy vs the Firewall is a score you can share.
-- A Cognitive Immunity score persists across sessions (4 dimensions, streak multiplier). Weekly leaderboard ranks are submittable.
-- A Red Team Simulator runs a 65-sample attack corpus through the Firewall and reports detection rate, FPR, F1, and an A–F verdict.
-- A Brain Evolve loop (cannibalized from ASI-Evolve — UCB1, Island, MAP-Elites) mutates firewall rulesets against the red team corpus and promotes winners.
-- A Dream Mode triggers after idle and replays recent states with STDP reinforcement between co-active regions. Any activity wakes the brain.
-- An MCP bridge exposes 14 tools via JSON-RPC so Claude Code / Codex agents can read and steer the brain over a WebSocket.
-
-The main demo runs pure frontend — no backend, no keys. TRIBE v2 (Meta's fMRI foundation model), Gemma 4, and WebSocket sync are each optional upgrades behind one env var.
-
-Stack: React 18, Vite, React Three Fiber, Three.js, transformers.js (MiniLM in-browser embeddings), FFmpeg.wasm, Express + satori on the server side for OG image generation + the leaderboard.
-
-Happy to dig into the firewall's regex → Gemma fallback chain, the Brain Evolve MAP-Elites bins, or the MCP tool design.`,
-  redditML: `[P] BrainSNN: browser-native 3D brain with 35 cognitive layers + a Cognitive Firewall
-
-I built a 3D brain viewer (React Three Fiber) and stacked 35 layers on top:
-
-- Cognitive Firewall: regex + Gemma 4 scoring across 4 manipulation dimensions
-- Affective Decoder: 12-affect taxonomy on Russell's valence × arousal circumplex
-- Brain Evolve: UCB1 + Island + MAP-Elites evolution over firewall rulesets, cannibalized from GAIR-NLP/ASI-Evolve (~250 LOC JS port)
-- Attack Evolve: co-evolutionary counterpart — string mutations (inject-benign, letter-split, synonym-soften) evaluated by evasion × continuity fitness
-- Red Team Simulator: 65-sample synthetic attack corpus vs the firewall, reports F1 + A–F verdict
-- Multimodal RAG + Vector-Graph Fusion (ported from HKUDS/RAG-Anything)
-- In-browser embeddings via transformers.js (MiniLM, ~25MB quantized)
-- Dream Mode: idle-triggered replay-consolidation with STDP weight updates
-- MCP bridge: 14 tools so Claude/Codex agents can steer the brain
-
-Everything runs in the browser. Optional TRIBE v2 backend (Meta fMRI foundation model) + Gemma 4 multimodal analysis behind one env var each.
-
-Live: ${SITE.demoUrl}
-Repo: ${SITE.repoUrl}
-
-Would love feedback on the MAP-Elites bin design for firewall evolution and on the red team corpus — if you can break the scanner, submission UI is live and anything that scores under 40% gets published on a weekly feed.`,
-  redditR3F: `Built a 3D neuromorphic brain viewer with 46 panels — React Three Fiber + postprocessing + FFmpeg.wasm
-
-Live: ${SITE.demoUrl}
-
-- 7 anatomical regions, 10 plastic pathways
-- GPU-animated TubeGeometry pathways with custom GLSL shaders
-- Signal pulse waves radiate through the connectome when regions fire
-- Quality tiers (low/high/ultra) with PerformanceMonitor auto-switching
-- WebM recording + GIF export via FFmpeg.wasm in-browser
-- Each panel is a modular React component — 46 of them, lazy-rendered on demand
-
-On top: a Cognitive Firewall that scores any text for manipulation and lights up the brain accordingly, a Dream Mode that consolidates weights while idle, an MCP bridge so AI agents can steer the brain over a WebSocket.
-
-All MIT. Easy to fork — add a region, swap a pathway, wire a new scenario.
-
-Repo: ${SITE.repoUrl}`,
-  launchPlan: `Pre-launch:
-- brainsnn.com pointed at the Railway app
-- Upstash env vars set (leaderboard + attack feed)
-- 6 reaction cards pre-generated + pinned to X
-- 3 quiz share cards pre-generated (one for each verdict tier)
-- GitHub social preview image uploaded
-- 8–10 good first issues seeded
-
-Launch day (Tue 08:00 PT):
-- Show HN with the "paste any tweet" framing
-- X thread (10 tweets) with 3 reaction cards embedded
-- r/MachineLearning post focused on Brain Evolve + MAP-Elites
-- r/reactjs post focused on 46 panels + FFmpeg.wasm
-- Drop in neuromorphic + MCP Discords
-- Monitor star velocity; reply within 10 min for first 2 hours
-
-Day 2–3:
-- Spot the Manipulation quiz thread with 3 public quiz results
-- Weekly bypass leaderboard thread on Twitter
-- Post in r/privacy + r/cybersecurity focused on Cognitive Firewall`,
+  twitterThread: `BrainSNN is an affective-intelligence engine for the AI-generated internet.\n\nPaste a post, ad, email, or script. It detects the emotional payload before it shapes attention, behavior, brand risk, or public perception.\n\nDemo: ${SITE.demoUrl}`,
+  hackerNewsTitle: "Show HN: BrainSNN — emotional payload intelligence for online content",
+  hackerNewsBody: `BrainSNN analyzes posts, ads, scripts, and messages for emotional payload, persuasion pressure, trust erosion, and public-perception risk.\n\nThe product direction is simple: content should be reviewed for what it does to people, not only what it says.\n\nDemo: ${SITE.demoUrl}\nRepo: ${SITE.repoUrl}`,
+  redditML: `BrainSNN: affective-intelligence layer for online content. It maps emotional payloads, persuasion patterns, and brand-risk signals before publication. Demo: ${SITE.demoUrl}`,
+  redditR3F: `BrainSNN uses a 3D brain interface to make emotional payload analysis visible to non-technical users. Demo: ${SITE.demoUrl}`,
+  launchPlan: `Launch around one clear claim: online content has an emotional payload. BrainSNN detects it before it shapes attention, behavior, brand risk, or public perception.`,
 };
 
 export const SHARE_ROUTES = {
@@ -496,87 +419,33 @@ export const SHARE_ROUTES = {
   attacks: "/api/attacks",
 };
 
-export const README_MD = `# 🧠 BrainSNN
+export const README_MD = `# BrainSNN
 
-![MIT License](https://img.shields.io/badge/license-MIT-green)
-![React Three Fiber](https://img.shields.io/badge/React%20Three%20Fiber-R3F-black)
-![Three.js](https://img.shields.io/badge/Three.js-3D-informational)
+**Affective intelligence for the AI internet.**
 
-**Brain-inspired AI that never stops learning.**
+BrainSNN is an affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.
 
-BrainSNN is an open-source 3D neuromorphic brain network visualizer built with React Three Fiber. It models **7 brain regions**, **10 plastic pathways**, and a simplified **STDP continuous learning rule** in real time.
+## What it does
 
-No backprop.  
-No retraining.  
-No server required for the main demo.  
+- Analyzes posts, ads, emails, scripts, articles, and public narratives
+- Detects fear, urgency, outrage, shame, belonging, desire, trust erosion, and manipulation pressure
+- Shows evidence behind each score
+- Visualizes the reaction through a 3D brain interface
+- Produces safer rewrite options and report-ready outputs
 
-## Why this project exists
+## Live links
 
-Most neural network demos are static. BrainSNN is built to feel alive.
-
-- **THL** acts as a sensory relay
-- **BG** inhibits and gates thalamic output
-- **HPC ↔ CTX** models memory replay
-- **STDP** updates pathway weights locally from spike timing
-
-This project is designed for:
-- developers who love React Three Fiber and Three.js
-- ML and computational neuroscience people
-- open-source contributors who want a visually compelling repo to fork
-
-## Live demo
-
+- Product domain: ${SITE.domainUrl}
+- Working demo: ${SITE.demoUrl}
 - Repo: ${SITE.repoUrl}
-- Demo: ${SITE.demoUrl}
-
-> Replace \`${SITE.demoUrl}\` in \`src/constants/site.js\` once you deploy.
-
-## Features
-
-| Feature | Detail |
-| --- | --- |
-| 3D brain scene | 7 labeled regions arranged in a brain-like spatial layout |
-| Plastic pathways | 10 animated connections with weight-driven width and opacity |
-| STDP-like updates | Simplified continuous plasticity rule based on local spike timing |
-| Interactive controls | Pause, burst, reset, click-to-focus camera |
-| Browser-first | No backend required for the core experience |
-| Modular code | Easy to add regions, pathways, new content, and launch assets |
 
 ## Quick start
 
 \`\`\`bash
 git clone ${SITE.repoUrl}
-cd the-brain
-cd ui/brainsnn-site
+cd the-brain/ui/brainsnn-site
 npm install
 npm run dev
-\`\`\`
-
-Build for production:
-
-\`\`\`bash
-npm run build
-npm run preview
-\`\`\`
-
-## Add a new brain region
-
-1. Add the region to \`BRAIN_REGIONS\` in \`src/constants/site.js\`
-2. Give it a position, color, and baseline activity
-3. Add new pathways to \`PATHWAYS\`
-4. Update the copy if the region changes the biological story
-
-Example:
-
-\`\`\`js
-{
-  code: "OFC",
-  name: "Orbitofrontal Cortex",
-  position: [2.6, 2.2, 1.1],
-  color: "#f59e0b",
-  baseActivity: 0.18,
-  description: "Reward and valuation signals."
-}
 \`\`\`
 
 ## License
