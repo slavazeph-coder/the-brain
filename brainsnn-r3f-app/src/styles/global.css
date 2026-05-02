@@ -3075,3 +3075,51 @@ h1,h2,h3{
   .lower-grid,.metric-grid,.inspector-grid,.export-panel .export-grid{grid-template-columns:1fr}
   .inline-bar{width:70px}
 }
+
+/* ---------- Layer 102.5 — View Mode Tabs (Home / All panels) ---------- */
+.view-mode-tabs{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin:14px 0 4px;
+  padding:6px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:12px;
+}
+.view-mode-tab{
+  appearance:none;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--muted);
+  padding:7px 14px;
+  border-radius:8px;
+  font:inherit;
+  font-weight:600;
+  font-size:.85rem;
+  cursor:pointer;
+  letter-spacing:.01em;
+  transition:background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.view-mode-tab:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.view-mode-tab.is-active{
+  background:rgba(122,143,231,.18);
+  color:var(--text);
+  border-color:rgba(122,143,231,.4);
+}
+.view-mode-hint{margin-left:auto;color:var(--muted);font-size:.78rem}
+.view-mode-hint kbd,.home-quick-actions kbd{
+  font-family:monospace;
+  background:rgba(255,255,255,.06);
+  padding:1px 6px;
+  border-radius:4px;
+  font-size:.72rem;
+  border:1px solid rgba(255,255,255,.08);
+}
+@media (max-width: 560px){.view-mode-hint{display:none}}
+.home-quick-actions{
+  background:linear-gradient(135deg, rgba(122,143,231,.08), rgba(94,230,154,.04));
+  border:1px solid rgba(122,143,231,.18);
+}
+.home-quick-actions h2{margin:6px 0 10px}
+.home-action-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}

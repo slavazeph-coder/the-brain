@@ -147,6 +147,13 @@ export default function App() {
     return createInitialState();
   });
   const [mode, setMode] = useState('simulation');
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('brainsnn_view_mode_v1') || 'home'; }
+    catch { return 'home'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('brainsnn_view_mode_v1', viewMode); } catch { /* noop */ }
+  }, [viewMode]);
   const [eegStatus, setEegStatus] = useState({ connected: false, label: 'No device connected' });
   const [timelineIndex, setTimelineIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
@@ -469,6 +476,22 @@ export default function App() {
             </div>
           </section>
 
+          <ViewModeTabs value={viewMode} onChange={setViewMode} />
+
+          {viewMode === 'home' && (
+            <HomeQuickActions
+              onScan={() => setViewMode('all')}
+              onJumpExplorer={() => {
+                setViewMode('all');
+                setTimeout(() => {
+                  const el = document.querySelector('.layer-explorer-panel') || document.querySelector('section.panel');
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 50);
+              }}
+            />
+          )}
+
+          {viewMode === 'all' && (<>
           <ActivityCharts state={state} />
 
           <ErrorBoundary name="Analytics Dashboard">
@@ -1064,6 +1087,7 @@ export default function App() {
             <h2>Ready for GitHub Pages and Vercel</h2>
             <p className="muted">This project includes deployment configs plus browser-side export helpers for shareable demos.</p>
           </section>
+          </>)}
         </section>
 
         <InspectorPanel
@@ -1073,5 +1097,56 @@ export default function App() {
         />
       </main>
     </div>
+  );
+}
+
+function ViewModeTabs({ value, onChange }) {
+  const tabs = [
+    { id: 'home', label: 'Home', hint: 'Just the brain' },
+    { id: 'all', label: 'All panels', hint: '110+ layers, full power' },
+  ];
+  return (
+    <nav className="view-mode-tabs" role="tablist" aria-label="View mode">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={value === t.id}
+          className={`view-mode-tab${value === t.id ? ' is-active' : ''}`}
+          onClick={() => onChange(t.id)}
+          title={t.hint}
+        >
+          {t.label}
+        </button>
+      ))}
+      <span className="view-mode-hint">
+        Press <kbd>⌘K</kbd> (or <kbd>Ctrl-K</kbd>) to jump to any layer
+      </span>
+    </nav>
+  );
+}
+
+function HomeQuickActions({ onScan, onJumpExplorer }) {
+  return (
+    <section className="panel panel-pad home-quick-actions">
+      <div className="eyebrow">Home · the simple view</div>
+      <h2>Watch the brain. Scan when curious.</h2>
+      <p className="muted">
+        The 3D viewer above is the whole point. Drop into <em>All panels</em>{' '}
+        when you want to scan content, run the harness diagnostic, evolve
+        the firewall, or browse all 110+ layers.
+      </p>
+      <div className="home-action-row">
+        <button className="btn primary" onClick={onScan}>
+          Open the Cognitive Firewall
+        </button>
+        <button className="btn" onClick={onJumpExplorer}>
+          Browse all layers
+        </button>
+      </div>
+      <p className="muted small-note" style={{ marginTop: 10 }}>
+        Anywhere, hit <kbd>⌘K</kbd> for fuzzy-search jump. Hit <kbd>?</kbd> for keyboard shortcuts.
+      </p>
+    </section>
   );
 }
