@@ -697,6 +697,33 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       per-user immunity / streak / scan-count / receipt stats, and
       lists the four ways to navigate (⌘K / Shift-? / Role Tour /
       Layer Explorer). The "you made it here" panel.
+102. Harness Diagnostic — self-watch the brain via OTel-shaped spans
+    - Cannibalized loop pattern from `context-labs/halo`. Three new
+      utils:
+      - `telemetry.js` — unified span buffer (cap 500). OpenTelemetry
+        schema (trace_id / span_id / parent_span_id / name / kind /
+        start_time / end_time / status / attributes / events). Ring
+        buffer in memory with debounced localStorage mirror, pub/sub
+        subscribers for live UI updates, withSpan() helper for
+        try/catch instrumentation
+      - `harnessLift.js` — generalized Layer 27 lift miner. Operates
+        on any labelled records via { features, isPositive } callbacks.
+        mineSpansByOutcome() is the OTel-aware wrapper that derives
+        feature tokens from span name + status + chosen attribute keys
+      - `harnessFailureModes.js` — named detectors codify The Brain's
+        equivalent of HALO's failure-mode taxonomy: error-burst /
+        slow-scan / hung-mcp / dead-patterns / fp-heavy / refusal-loop.
+        Each returns { id, label, severity, count, examples, hint }.
+        runDiagnostic() yields a harness-report-v1 JSON envelope and
+        renderReportText() flattens it for paste-into-coding-agent
+    - cognitiveFirewall.scoreContent() now emits a `firewall.scan`
+      span on every call (lang, ruleset, pressure, evidence count,
+      template count, text length) — first instrumented call site;
+      the rest of the harness wires up incrementally
+    - HarnessDiagnosticPanel: live-reads spans via subscribe(),
+      shows the report tier (healthy / warn / critical), per-finding
+      hints, top operations p50, error-correlated features (lift),
+      copy-as-text and copy-as-JSON for handoff to Cursor / Claude Code
 101. Content Verification System — sign humanity, verify chain of custody
     - ECDSA P-256 keypair via Web Crypto, stored locally, exportable
       via Layer 57. Manifest format `brainsnn-prov/1` carries the pub

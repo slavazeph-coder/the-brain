@@ -108,6 +108,7 @@ export const LAYER_CATALOG = [
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
   { id: 101, name: 'Content Verification', group: 'share', blurb: 'ECDSA P-256 sign + chain-of-custody + humanity score.' },
+  { id: 102, name: 'Harness Diagnostic', group: 'backend', blurb: 'OTel-shape spans + lift mining + failure-mode detectors.' },
 ];
 
 export const LAYER_GROUPS = {

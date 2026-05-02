@@ -82,6 +82,7 @@ import ThemePanel from './components/ThemePanel';
 import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
 import ContentProvenancePanel from './components/ContentProvenancePanel';
+import HarnessDiagnosticPanel from './components/HarnessDiagnosticPanel';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -782,6 +783,10 @@ export default function App() {
 
           <ErrorBoundary name="Content Verification">
             <ContentProvenancePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Harness Diagnostic">
+            <HarnessDiagnosticPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">
