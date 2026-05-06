@@ -14,6 +14,7 @@ RUN npm ci --no-audit --no-fund
 
 # Copy the deployable app and build the Vite bundle served by server.js.
 COPY brainsnn-r3f-app/ ./
+COPY hackathon/cache/intent-scores.json ./hackathon/cache/intent-scores.json
 RUN npm run build
 
 ENV NODE_ENV=production

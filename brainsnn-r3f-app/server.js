@@ -19,8 +19,10 @@ import compression from 'compression';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 import { renderOg } from './viral/og.js';
+import { classifyIntent } from './src/utils/firewallIntent.js';
 import {
   handleReactionCard, handleImmunityCard, handleQuizCard, handleAutopsyCard,
   handleDailyCard, handleCounterDraftCard, handleTimelineCard, handleInboxCard,
@@ -38,6 +40,10 @@ import { handleLeaderboardGet, handleLeaderboardPost } from './viral/leaderboard
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, 'dist');
 const PORT = Number(process.env.PORT) || 8080;
+const INTENT_CACHE_PATHS = [
+  join(__dirname, 'hackathon/cache/intent-scores.json'),
+  join(__dirname, '../hackathon/cache/intent-scores.json'),
+];
 
 const app = express();
 app.disable('x-powered-by');
@@ -47,6 +53,40 @@ app.use(express.json({ limit: '64kb' }));
 // --- Liveness ---------------------------------------------------------------
 app.get('/healthz', (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
+});
+
+// --- TechEx intent classifier ----------------------------------------------
+app.get('/api/intent-cache', async (_req, res) => {
+  for (const path of INTENT_CACHE_PATHS) {
+    try {
+      const raw = await readFile(path, 'utf8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.type('application/json').send(raw);
+      return;
+    } catch {
+      // Try the next candidate path.
+    }
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({});
+});
+
+app.post('/api/intent-classify', async (req, res) => {
+  try {
+    const text = String(req.body?.text || '').slice(0, 12000);
+    const model = String(
+      req.body?.model || process.env.TRIBE_GEMMA_MODEL || 'gemini-2.5-flash',
+    );
+    const result = await classifyIntent(text, {
+      model,
+      cache: false,
+      timeout_ms: 4500,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('[intent-classify]', err);
+    res.status(500).json({ error: 'intent classify failed' });
+  }
 });
 
 // --- OG image ---------------------------------------------------------------

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { scoreContent, scoreContentSmart, SCORE_FIELDS } from '../utils/cognitiveFirewall';
 import { isGemmaConfigured } from '../utils/gemmaEngine';
+import { isIntentClassifierAvailable } from '../utils/firewallIntent';
 import { buildReactionPayload, reactionUrl, AFFECT_LABELS } from '../utils/reactionCard';
 import { scoreSentences, pressureBand, heatmapSummary } from '../utils/heatmap';
 import { refutationsFor } from '../utils/refutations';
@@ -20,6 +21,8 @@ import { explain } from '../utils/explanation';
 import { analyzeDecoy, verdictFor as decoyVerdict } from '../utils/sarcasm';
 import { archiveScan } from '../utils/scanArchive';
 import { recordFeedback, calibrationReport } from '../utils/feedback';
+
+const INTENT_TOGGLE_KEY = 'brainsnn_firewall_intent_enabled';
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -52,8 +55,22 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [semanticHits, setSemanticHits] = useState([]);
   const [receipt, setReceipt] = useState(null);
+  const [intentEnabled, setIntentEnabled] = useState(() => {
+    try {
+      return window.localStorage?.getItem(INTENT_TOGGLE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const gemmaAvailable = isGemmaConfigured();
+  const intentAvailable = isIntentClassifierAvailable();
   const embReady = embeddingsReady();
+
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem(INTENT_TOGGLE_KEY, intentEnabled ? '1' : '0');
+    } catch { /* storage optional */ }
+  }, [intentEnabled]);
 
   // Layer 40 — sentence heatmap (computed lazily when user opens it)
   const heatmap = useMemo(() => {
@@ -116,7 +133,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const handleScan = async () => {
     setScanning(true);
     try {
-      const score = await scoreContentSmart(text);
+      const score = await scoreContentSmart(text, { intent: intentEnabled });
       setResult(score);
       // Layer 52/56 — if a non-English pack fired, record the badge signal
       if (score?.language && score.language !== 'en') {
@@ -299,8 +316,21 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
       <div className="control-actions" style={{ marginTop: 12 }}>
         <button className="btn primary" onClick={handleScan} disabled={text.trim().length < 5 || scanning}>
-          {scanning ? 'Scanning...' : gemmaAvailable ? 'Scan with Gemma 4' : 'Scan content'}
+          {scanning ? 'Scanning...' : intentEnabled ? 'Scan with intent' : gemmaAvailable ? 'Scan with Gemma 4' : 'Scan content'}
         </button>
+        <label
+          className="btn"
+          title="Use the LLM intent layer on this scan"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        >
+          <input
+            type="checkbox"
+            checked={intentEnabled}
+            disabled={!intentAvailable}
+            onChange={(e) => setIntentEnabled(e.target.checked)}
+          />
+          Intent classifier
+        </label>
         {result && (
           <button className="btn" onClick={handleApply}>
             Apply to brain
@@ -370,6 +400,30 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               <div className="firewall-chips">
                 {result.evidence.map((e, i) => (
                   <span key={i} className="firewall-chip">{e}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.intentLabels?.length > 0 && (
+            <div className="firewall-evidence" style={{ marginTop: 10 }}>
+              <span className="eyebrow">
+                Intent labels
+                {result.baseManipulationPressure != null && (
+                  <span className="muted small-note" style={{ marginLeft: 8 }}>
+                    {Math.round(result.baseManipulationPressure * 100)}% → {Math.round(result.manipulationPressure * 100)}%
+                  </span>
+                )}
+              </span>
+              <div className="firewall-chips">
+                {result.intentLabels.map((label) => (
+                  <span
+                    key={`${label.id}-${label.evidence}`}
+                    className="firewall-chip"
+                    title={`${Math.round(label.confidence * 100)}% · ${label.evidence}`}
+                  >
+                    {label.id}
+                  </span>
                 ))}
               </div>
             </div>
@@ -598,6 +652,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
           <div className="firewall-confidence">
             Confidence: <strong>{result.confidence}</strong>
+            {result.source === 'hybrid' && <span className="gemma-source-badge">Intent classifier</span>}
             {result.source === 'gemma4' && <span className="gemma-source-badge">Gemma 4</span>}
             {result.source === 'regex_fallback' && <span className="gemma-source-badge fallback">Regex fallback</span>}
             {result.languageLabel && result.language && result.language !== 'en' && (

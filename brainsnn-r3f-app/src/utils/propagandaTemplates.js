@@ -126,7 +126,7 @@ export const TEMPLATES = [
     patterns: [
       /\bthey don\'?t want you to know\b/i,
       /\b(?:what|the truth) (?:they|the media|the government) (?:is hiding|doesn\'?t want|covered up)\b/i,
-      /\bwake up\b|\bopen your eyes\b/i,
+      /(?:^|[.!?]\s*)wake up(?:[,!]|$)|\bwake up,?\s+(?:people|sheeple|america|world)\b|\bopen your eyes\b/i,
     ],
   },
   {

@@ -740,3 +740,20 @@ existing layers in track-focused demos.
 
 **Sync ritual**: pull --rebase on `hackathon-techex` before each session;
 append a dated entry under this heading; push at end of session.
+
+**2026-05-06 Codex landed**:
+- Implemented `brainsnn-r3f-app/src/utils/firewallIntent.js` with Gemini
+  2.5 Flash default, Pro escalation, strict JSON/taxonomy sanitization,
+  browser/server cache support, and Railway `TRIBE_API_KEY` proxy route.
+- Wired the Cognitive Firewall panel toggle (`localStorage` persisted)
+  into `scoreContentSmart(text, { intent })`; hybrid scores now lift the
+  existing manipulation/trust fields so Apply-to-brain uses the intent delta.
+- Added Vitest scaffold + generated cache fixtures; `npm test` passes 25/25
+  against cached expected outputs and `npm run build` is green.
+- Fixed the `hidden-truth` false positive on the medical pre-op briefing by
+  narrowing the `wake up` template; direct score now reports no templates.
+- Railway project linked; `TRIBE_GEMMA_MODEL=gemini-2.5-flash` and
+  `TRIBE_FALLBACK_MODEL=gemini-2.5-pro` are set. `TRIBE_API_KEY` is still
+  missing, so `hackathon/cache/intent-scores.json` contains 19 hand-authored
+  expected demo entries plus 3 unavailable intel-corpus entries until the key
+  is added and precompute is rerun with live quota.

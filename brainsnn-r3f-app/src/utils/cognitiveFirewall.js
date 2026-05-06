@@ -191,18 +191,40 @@ export function scoreContent(text = '') {
  * Smart scoring — uses Gemma 4 when configured, falls back to regex.
  * Returns a promise that always resolves to a score object.
  */
-export async function scoreContentSmart(text = '') {
+export async function scoreContentSmart(text = '', opts = {}) {
+  const { intent = false, intentOptions = {} } = opts;
+  const canAnalyze = text.trim().split(/\s+/).filter(Boolean).length >= 5;
+  const deterministic = scoreContent(text);
+
+  const withIntent = async (score) => {
+    if (!intent || !canAnalyze) return score;
+    try {
+      const { classifyIntent, mergeIntentIntoScore } = await import('./firewallIntent.js');
+      const intentResult = await classifyIntent(text, intentOptions);
+      return mergeIntentIntoScore(score, intentResult);
+    } catch (_err) {
+      return score;
+    }
+  };
+
   // Lazy import to avoid circular deps
   const { isGemmaConfigured, analyzeContentWithGemma } = await import('./gemmaEngine.js');
-  if (isGemmaConfigured() && text.trim().split(/\s+/).length >= 5) {
+  if (isGemmaConfigured() && canAnalyze) {
     try {
-      return await analyzeContentWithGemma(text);
+      const gemmaScore = await analyzeContentWithGemma(text);
+      return withIntent({
+        ...deterministic,
+        ...gemmaScore,
+        templates: deterministic.templates,
+        language: deterministic.language,
+        languageLabel: deterministic.languageLabel,
+      });
     } catch (_err) {
       // Fall back to deterministic scoring on API failure
-      return { ...scoreContent(text), source: 'regex_fallback' };
+      return withIntent({ ...deterministic, source: 'regex_fallback' });
     }
   }
-  return { ...scoreContent(text), source: 'regex' };
+  return withIntent({ ...deterministic, source: 'regex' });
 }
 
 export function mapTRIBEToRegions(state, tribe) {
