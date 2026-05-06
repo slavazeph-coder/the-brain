@@ -23,7 +23,8 @@
 import { isGemmaConfigured } from "./gemmaEngine.js";
 
 const DEFAULT_TIMEOUT_MS = 4000;
-const DEFAULT_MODEL = "gemma-4-31b-it";
+const DEFAULT_MODEL = "gemini-2.5-flash";
+const ESCALATION_MODEL = "gemini-2.5-pro"; // used when Flash returns low-confidence labels only
 const DEFAULT_CACHE_KEY = "brainsnn-firewall-intent-cache-v1";
 
 // In-memory cache for the current session. Populated lazily from
@@ -110,7 +111,7 @@ export function preloadIntentCache(cacheObject = {}) {
  *
  * @param {string} text
  * @param {object} [opts]
- * @param {string} [opts.model='gemma-4-31b-it']
+ * @param {string} [opts.model='gemini-2.5-flash']
  * @param {boolean} [opts.cache=true]
  * @param {number} [opts.timeout_ms=4000]
  * @returns {Promise<IntentResult>}

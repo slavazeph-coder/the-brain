@@ -82,7 +82,7 @@ export function isIntentClassifierAvailable(): boolean;
 
 ```ts
 type ClassifyOpts = {
-  model?: "gemma-4-31b-it" | "gemini-2.5-flash"; // default: gemma-4-31b-it
+  model?: "gemini-2.5-flash" | "gemini-2.5-pro" | "gemma-4-31b-it"; // default: gemini-2.5-flash (Agentic Workflows track requires Gemini); -pro is the escalation model when Flash returns low-confidence labels
   cache?: boolean; // default: true
   timeout_ms?: number; // default: 4000
 };

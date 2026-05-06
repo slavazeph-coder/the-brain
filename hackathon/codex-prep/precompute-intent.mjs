@@ -31,7 +31,7 @@ const CATEGORIES = [
   "business-scenarios",
   "intel-corpus",
 ];
-const DEFAULT_MODEL = "gemma-4-31b-it";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 // Codex: replace this with a real import once firewallIntent.js
 // lands in brainsnn-r3f-app/src/utils/. Until then, this script
