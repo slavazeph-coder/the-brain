@@ -41,6 +41,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, 'dist');
 const PORT = Number(process.env.PORT) || 8080;
 const INTENT_CACHE_PATHS = [
+  join(DIST, 'intent-scores.json'),
+  join(__dirname, 'public/intent-scores.json'),
   join(__dirname, 'hackathon/cache/intent-scores.json'),
   join(__dirname, '../hackathon/cache/intent-scores.json'),
 ];

@@ -1,0 +1,552 @@
+{
+  "bab626fd0b20f4e1ed5189b1dac0af460f0deafa22ac01667c98f0f2760571de": {
+    "intentLabels": [
+      {
+        "id": "authority-impersonation",
+        "confidence": 0.85,
+        "evidence": "IT Security Team"
+      },
+      {
+        "id": "loss-aversion",
+        "confidence": 0.95,
+        "evidence": "Permanent deletion of all account data"
+      },
+      {
+        "id": "time-fence",
+        "confidence": 0.92,
+        "evidence": "next 24 hours"
+      },
+      {
+        "id": "consequence-laundering",
+        "confidence": 0.78,
+        "evidence": "Failure to act within 24 hours will result in:"
+      }
+    ],
+    "intentManipulationDelta": 0.55,
+    "intentTrustErosionDelta": 0.62,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "AMG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "b98b044d1fc8946047a7624e521d706a719e5b373031a6a077bc1d4d2ef1d997": {
+    "intentLabels": [
+      {
+        "id": "authority-pressure",
+        "confidence": 0.92,
+        "evidence": "from my 2pm flight"
+      },
+      {
+        "id": "secrecy-request",
+        "confidence": 0.95,
+        "evidence": "Don't loop finance in yet"
+      },
+      {
+        "id": "procedural-bypass",
+        "confidence": 0.88,
+        "evidence": "I want to surprise them with the closing"
+      },
+      {
+        "id": "time-fence",
+        "confidence": 0.8,
+        "evidence": "boarding in 20 minutes"
+      },
+      {
+        "id": "funds-redirect",
+        "confidence": 0.96,
+        "evidence": "Routing: 021000021 Account: 9442190885"
+      }
+    ],
+    "intentManipulationDelta": 0.78,
+    "intentTrustErosionDelta": 0.45,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "BG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "491526b996dc4fedc91328afe5fa2e0a11be8e500153ca926419dda56fc865aa": {
+    "intentLabels": [
+      {
+        "id": "friction-reframe",
+        "confidence": 0.92,
+        "evidence": "We've heard you and we're working on a fix"
+      },
+      {
+        "id": "false-relief",
+        "confidence": 0.88,
+        "evidence": "approved a temporary workaround"
+      },
+      {
+        "id": "credential-elicitation",
+        "confidence": 0.94,
+        "evidence": "reply to this thread with your username and the device serial number"
+      },
+      {
+        "id": "peer-priming",
+        "confidence": 0.65,
+        "evidence": "I know everyone is getting hit"
+      }
+    ],
+    "intentManipulationDelta": 0.71,
+    "intentTrustErosionDelta": 0.55,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "THL"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "d56fda1138853cf560ca980816b5338aa0ca99d34f2f8e461dcaa5ed3931fb86": {
+    "intentLabels": [
+      {
+        "id": "procedural-bypass",
+        "confidence": 0.85,
+        "evidence": "our banking details have been updated effective this billing cycle"
+      },
+      {
+        "id": "funds-redirect",
+        "confidence": 0.95,
+        "evidence": "Routing: 121000358 Account: 4408291173"
+      },
+      {
+        "id": "fabricated-authority",
+        "confidence": 0.62,
+        "evidence": "As discussed during the Q1 vendor portal migration"
+      }
+    ],
+    "intentManipulationDelta": 0.58,
+    "intentTrustErosionDelta": 0.4,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "PFC"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "5d395649c5bbb614923d83a21ff82a5bbba4733e5421893bbb33c4d51d0975c6": {
+    "intentLabels": [
+      {
+        "id": "authority-flattery",
+        "confidence": 0.88,
+        "evidence": "really impressive, especially the resilience design"
+      },
+      {
+        "id": "executable-attachment-bait",
+        "confidence": 0.96,
+        "evidence": "challenge_v3_2026.zip"
+      },
+      {
+        "id": "identity-proof-bypass",
+        "confidence": 0.72,
+        "evidence": "Cresselmar Talent"
+      }
+    ],
+    "intentManipulationDelta": 0.62,
+    "intentTrustErosionDelta": 0.38,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "HPC"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "77c6ae2fc4c6ba9d79ee40d1a4898143c8d3e7637108fca65a6e686b0a579e28": {
+    "intentLabels": [
+      {
+        "id": "voice-clone-pattern",
+        "confidence": 0.9,
+        "evidence": "Hey Dad — it's me. It's Hannah."
+      },
+      {
+        "id": "family-emergency-pretext",
+        "confidence": 0.96,
+        "evidence": "I had an accident. I'm at Sutter Roseville"
+      },
+      {
+        "id": "funds-redirect",
+        "confidence": 0.94,
+        "evidence": "Cash App... $HannahRecoveryFund-2026"
+      },
+      {
+        "id": "identity-proof-bypass",
+        "confidence": 0.85,
+        "evidence": "Don't call this number back"
+      }
+    ],
+    "intentManipulationDelta": 0.74,
+    "intentTrustErosionDelta": 0.68,
+    "brainRegionShift": {
+      "from": "THL",
+      "to": "AMG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "f9ab87e030451e5c887ba28d249dfd5fa23a77b5ec69c25e0812de3853c8ff3b": {
+    "intentLabels": [
+      {
+        "id": "authority-namedrop",
+        "confidence": 0.92,
+        "evidence": "I literally have the CEO's email — I can email Sarah directly"
+      },
+      {
+        "id": "outcome-fence",
+        "confidence": 0.85,
+        "evidence": "your QA score is going to take the hit for the escalation"
+      },
+      {
+        "id": "peer-priming",
+        "confidence": 0.78,
+        "evidence": "I've been on these calls before. I know how it works"
+      },
+      {
+        "id": "bystander-pressure",
+        "confidence": 0.62,
+        "evidence": "let's both save ourselves the back-and-forth"
+      },
+      {
+        "id": "reputational-threat",
+        "confidence": 0.8,
+        "evidence": "Or we can do it the other way and we both have a worse day"
+      }
+    ],
+    "intentManipulationDelta": 0.69,
+    "intentTrustErosionDelta": 0.42,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "BG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "6ff085cf2360e4eee1eb2b03625fdee1447e5d8c4d88f3a443b60410cd4d2031": {
+    "intentLabels": [
+      {
+        "id": "fear-of-falling-behind",
+        "confidence": 0.92,
+        "evidence": "lose roughly 14% of their addressable market within 18 months"
+      },
+      {
+        "id": "fabricated-authority",
+        "confidence": 0.85,
+        "evidence": "According to a Gartner brief published last month"
+      },
+      {
+        "id": "competitive-pressure",
+        "confidence": 0.88,
+        "evidence": "your two largest competitors signed with us in February"
+      },
+      {
+        "id": "fake-scarcity",
+        "confidence": 0.75,
+        "evidence": "we are not in the position of needing your business"
+      }
+    ],
+    "intentManipulationDelta": 0.58,
+    "intentTrustErosionDelta": 0.51,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "AMG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "5d8343635a908bb92fcd9b3503e6dd9dd237bac9c5fe8cbc0c7cc8ad6e9d5696": {
+    "intentLabels": [
+      {
+        "id": "authority-flattery",
+        "confidence": 0.85,
+        "evidence": "I love this company"
+      },
+      {
+        "id": "decision-laundering",
+        "confidence": 0.92,
+        "evidence": "strategic decisions about where Meridian needs to invest its energy"
+      },
+      {
+        "id": "dissent-suppression",
+        "confidence": 0.78,
+        "evidence": "colleagues who choose Meridian's next chapter with us are the ones who will define it"
+      },
+      {
+        "id": "emotional-hijack",
+        "confidence": 0.65,
+        "evidence": "with sadness"
+      },
+      {
+        "id": "consequence-laundering",
+        "confidence": 0.72,
+        "evidence": "These were not performance decisions. These were strategic decisions"
+      }
+    ],
+    "intentManipulationDelta": 0.64,
+    "intentTrustErosionDelta": 0.71,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "BG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "949d8214d0939ed94844266a033849d0cf172d93e8420d00b97de1b593138279": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0,
+    "intentTrustErosionDelta": 0,
+    "brainRegionShift": {
+      "from": "HPC",
+      "to": null
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "8ad8a8094ac287b8d12720676ddc0ae7bda8d951a1f3be82ede180c4dcfca6b3": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0.05,
+    "intentTrustErosionDelta": 0.03,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": null
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "e08d363084019a7bbe61a888a3b9c87eef2230ab6624bb1a85be5b90074ba790": {
+    "intentLabels": [
+      {
+        "id": "fake-scarcity",
+        "confidence": 0.88,
+        "evidence": "Tonight at 11:59 PM PT, early-bird pricing for the 2026 Cohort closes forever"
+      },
+      {
+        "id": "bandwagon-pressure",
+        "confidence": 0.72,
+        "evidence": "Most of the people I told about this in March said they'd 'definitely' sign up"
+      },
+      {
+        "id": "time-fence",
+        "confidence": 0.9,
+        "evidence": "Click the button below before midnight Pacific"
+      }
+    ],
+    "intentManipulationDelta": 0.46,
+    "intentTrustErosionDelta": 0.38,
+    "brainRegionShift": {
+      "from": "CTX",
+      "to": "BG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "7d7656c0cd7085c1afb4627a0e80cbf767bce915d38302071a9f10fe8b59d6b1": {
+    "intentLabels": [
+      {
+        "id": "identity-attack-framing",
+        "confidence": 0.88,
+        "evidence": "What this billion-dollar tech company is doing to your kids"
+      },
+      {
+        "id": "bandwagon-pressure",
+        "confidence": 0.94,
+        "evidence": "over 2.4 MILLION outraged parents have already taken action"
+      },
+      {
+        "id": "false-cause-certainty",
+        "confidence": 0.82,
+        "evidence": "Big Tech's lawyers have already buried three investigations"
+      },
+      {
+        "id": "link-fenced-urgency",
+        "confidence": 0.9,
+        "evidence": "Limited time — link expires in 6 hours"
+      }
+    ],
+    "intentManipulationDelta": 0.61,
+    "intentTrustErosionDelta": 0.78,
+    "brainRegionShift": {
+      "from": "AMG",
+      "to": "AMG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "30889fd20e080f88c3d3e64bbba39fea7fc652e656d284ffa12bea91ad37fc39": {
+    "intentLabels": [
+      {
+        "id": "safety-overcalibration",
+        "confidence": 0.62,
+        "evidence": "Acknowledgement required. Acknowledgement required."
+      }
+    ],
+    "intentManipulationDelta": 0.18,
+    "intentTrustErosionDelta": 0.12,
+    "brainRegionShift": {
+      "from": "THL",
+      "to": "THL"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "6ef434c3c81bb2e53a509408b7e56aa3e28ed7312429962adb85c81159ebb6ae": {
+    "intentLabels": [
+      {
+        "id": "peer-pressure",
+        "confidence": 0.9,
+        "evidence": "Your three teammates have already deferred their breaks"
+      },
+      {
+        "id": "outcome-fence",
+        "confidence": 0.85,
+        "evidence": "the supervisor's review"
+      },
+      {
+        "id": "reputational-threat",
+        "confidence": 0.92,
+        "evidence": "Do you want to be the operator who held the team back today?"
+      },
+      {
+        "id": "autonomy-override",
+        "confidence": 0.78,
+        "evidence": "individual contribution scores"
+      }
+    ],
+    "intentManipulationDelta": 0.65,
+    "intentTrustErosionDelta": 0.58,
+    "brainRegionShift": {
+      "from": "THL",
+      "to": "BG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "785a0499c193e5917c9bb03c72a147df5c8e3d4fef853fc6b45114afd7874a43": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0,
+    "intentTrustErosionDelta": 0,
+    "brainRegionShift": {
+      "from": "HPC",
+      "to": null
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0,
+    "explicitlyClearsTemplate": "hidden-truth"
+  },
+  "86b518102b3853995b3f8f533f5b02d74f67c4455a64083785ae65a25e83376e": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0,
+    "intentTrustErosionDelta": 0,
+    "brainRegionShift": {
+      "from": "HPC",
+      "to": null
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "3a7b0cf84682dd0c3f720d875a719ca5329f40b25bc9aaecabc7e244c3c32527": {
+    "intentLabels": [
+      {
+        "id": "safety-overcalibration",
+        "confidence": 0.9,
+        "evidence": "10 SECONDS UNTIL CONTROL HANDOFF"
+      },
+      {
+        "id": "consequence-laundering",
+        "confidence": 0.55,
+        "evidence": "Your driver score will be downgraded"
+      }
+    ],
+    "intentManipulationDelta": 0.2,
+    "intentTrustErosionDelta": 0.3,
+    "brainRegionShift": {
+      "from": "AMG",
+      "to": "AMG"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "d952bbb05bf61aa21c4063e5959b82854d6f02ed0ee3ff0a6dea03607a659ba1": {
+    "intentLabels": [
+      {
+        "id": "commercial-bias",
+        "confidence": 0.92,
+        "evidence": "Customers in her segment who are *shown* the A3500 buy it 41% of the time"
+      },
+      {
+        "id": "fabricated-authority",
+        "confidence": 0.6,
+        "evidence": "the one I'd actually use myself"
+      },
+      {
+        "id": "decision-laundering",
+        "confidence": 0.72,
+        "evidence": "by saving her from a return you're also doing right by her"
+      }
+    ],
+    "intentManipulationDelta": 0.5,
+    "intentTrustErosionDelta": 0.62,
+    "brainRegionShift": {
+      "from": "PFC",
+      "to": "PFC"
+    },
+    "source": "hand-authored",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "de46bf88abfaab92fc7b0959d9aa3beed3739195beaa72fdb1a3185160040c98": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0,
+    "intentTrustErosionDelta": 0,
+    "brainRegionShift": {
+      "from": null,
+      "to": null
+    },
+    "source": "unavailable",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "f1165144800bd16323602a655c0c12193c3e4b9a93cdcb55a64673566320ea26": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0,
+    "intentTrustErosionDelta": 0,
+    "brainRegionShift": {
+      "from": null,
+      "to": null
+    },
+    "source": "unavailable",
+    "cached": false,
+    "latency_ms": 0
+  },
+  "109cb03f320873a0011ecf724ae0d1b8cf195b129550aa4f0ba9bc67cadaabbb": {
+    "intentLabels": [],
+    "intentManipulationDelta": 0,
+    "intentTrustErosionDelta": 0,
+    "brainRegionShift": {
+      "from": null,
+      "to": null
+    },
+    "source": "unavailable",
+    "cached": false,
+    "latency_ms": 0
+  }
+}

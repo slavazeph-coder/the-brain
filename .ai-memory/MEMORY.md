@@ -757,3 +757,7 @@ append a dated entry under this heading; push at end of session.
   missing, so `hackathon/cache/intent-scores.json` contains 19 hand-authored
   expected demo entries plus 3 unavailable intel-corpus entries until the key
   is added and precompute is rerun with live quota.
+- Deployed once to Railway; live app is on `https://www.brainsnn.com`
+  (`https://brainsnn.com` redirects there). Railway builds from
+  `brainsnn-r3f-app/`, so the production intent cache must also live in
+  `brainsnn-r3f-app/public/intent-scores.json` for `/api/intent-cache`.
