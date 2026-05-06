@@ -761,3 +761,7 @@ append a dated entry under this heading; push at end of session.
   (`https://brainsnn.com` redirects there). Railway builds from
   `brainsnn-r3f-app/`, so the production intent cache must also live in
   `brainsnn-r3f-app/public/intent-scores.json` for `/api/intent-cache`.
+- Live UI smoke found CEO-wire rendered all five labels but only 28%
+  headline risk because the panel averaged raw axes. Added hybrid
+  `overallRisk` so cached CEO-wire now displays 69% while keeping the
+  individual score bars readable.

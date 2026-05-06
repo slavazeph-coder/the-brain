@@ -145,7 +145,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       }
       // Layer 65 — replay recorder
       try {
-        const p = (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
+        const p = score.overallRisk ?? (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
         pushReplayStep({ kind: 'scan', text: text.slice(0, 200), pressure: p, entity: entity || null });
       } catch { /* noop */ }
       // Layer 45 — add semantic template hits (async, non-blocking for UI)
@@ -158,7 +158,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
         const r = await issueReceipt({ text, score });
         setReceipt(r);
         const pressure =
-          (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
+          score.overallRisk ?? (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
         storeReceipt({ id: r.id, ts: r.ts, pressure, excerpt: text.slice(0, 80) });
       } catch { /* receipts are nice-to-have */ }
     } catch (_) {
@@ -256,9 +256,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     }
   };
 
-  const overall = result
+  const axisOverall = result
     ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
+  const overall = result ? result.overallRisk ?? axisOverall : null;
 
   const riskColor = !overall ? '#4fa8b3' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
 

@@ -283,6 +283,15 @@ export function mergeIntentIntoScore(score, intent) {
     1,
     Math.max(baseTrust, baseTrust + (intent.intentTrustErosionDelta || 0)),
   );
+  const baseOverall =
+    ((score.emotionalActivation || 0) +
+      (score.cognitiveSuppression || 0) +
+      baseManip) /
+    3;
+  const overallRisk = Math.min(
+    1,
+    Math.max(baseOverall, combinedManip * 0.86, combinedTrust * 0.72),
+  );
 
   return {
     ...score,
@@ -293,6 +302,7 @@ export function mergeIntentIntoScore(score, intent) {
     intentLabels: intent.intentLabels,
     combinedManipulationPressure: combinedManip,
     combinedTrustErosion: combinedTrust,
+    overallRisk,
     brainRegionShift: intent.brainRegionShift || { from: null, to: null },
     source: "hybrid",
   };

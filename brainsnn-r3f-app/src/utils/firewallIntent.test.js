@@ -190,6 +190,9 @@ describe("firewallIntent — mergeIntentIntoScore", () => {
     expect(merged.source).toBe("hybrid");
     expect(merged.intentLabels.length).toBe(1);
     expect(merged.brainRegionShift).toEqual({ from: "CTX", to: "BG" });
+    expect(merged.overallRisk).toBeGreaterThanOrEqual(
+      merged.combinedManipulationPressure * 0.86,
+    );
   });
 });
 
