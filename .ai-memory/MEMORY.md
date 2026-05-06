@@ -697,3 +697,46 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       per-user immunity / streak / scan-count / receipt stats, and
       lists the four ways to navigate (⌘K / Shift-? / Role Tour /
       Layer Explorer). The "you made it here" panel.
+
+### TechEx Hackathon — Started 2026-05-06 (Claude lane)
+
+Online-only submission to lablab.ai "Transforming Enterprise Through AI"
+hackathon (May 11–19, 2026, $10K, San Jose). Plan: spread one canonical
+BrainSNN submission across all 5 tracks (Enterprise Problem-Solving,
+Security, Agentic Workflows, Physical AI, Data Intelligence) by wrapping
+existing layers in track-focused demos.
+
+**Branch**: `hackathon-techex` (cut from `f55053d`, pushed to origin).
+
+**Lane split**:
+- **Claude** (UI / scenarios / collateral): owns `hackathon/`, will add
+  `brainsnn-r3f-app/src/components/LiveMicCapture.jsx` for Physical AI.
+- **Codex** (deploy / extensions): owns `brainsnn-r3f-app/server/` (Fly.io
+  TRIBE v2 deploy), would add `brainsnn-r3f-app/src/utils/firewallIntent.js`
+  for the LLM-powered intent classifier upgrade, plus infra hardening.
+
+**Day 1 Claude landed**:
+- Plan rewritten against canonical state (35–100 layers, Railway-hosted
+  brainsnn.com, Python TRIBE v2, MCP bridge, XIO-Evolve) at
+  `/Users/slavaz/.claude/plans/lets-condense-the-plan-scalable-teacup.md`.
+- `hackathon/` folder skeleton + README with lane contract.
+- `hackathon/demo-corpus/` schema + 3 phishing samples (account
+  suspension, CEO wire BEC, MFA fatigue) + 1 robot prompt (warehouse).
+- Build gate green for all 3 UI surfaces (`brainsnn-r3f-app`,
+  `ui/brainsnn-viewer`, `ui/brainsnn-site`).
+- `brainsnn.com` confirmed live on Railway (us-east4), serving
+  brainsnn-r3f-app under "Affective Intelligence for Online Content"
+  framing.
+
+**Day 1 Codex pickup (suggested)**:
+- Verify Railway service env vars + cold-start latency on `brainsnn.com`.
+- Decide whether to deploy `brainsnn-r3f-app/server/` (TRIBE v2 FastAPI)
+  to Fly.io for the hackathon, or keep it as in-browser STDP only.
+- Confirm Gemini/Gemma API quota tier is high enough for build-time
+  iteration + judge replays (May 19+).
+- If picking up the firewall intent classifier upgrade, scaffold
+  `brainsnn-r3f-app/src/utils/firewallIntent.js` and append a Day 1
+  Codex entry below.
+
+**Sync ritual**: pull --rebase on `hackathon-techex` before each session;
+append a dated entry under this heading; push at end of session.
