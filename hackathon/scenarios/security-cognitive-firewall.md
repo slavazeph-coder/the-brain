@@ -1,156 +1,194 @@
 ---
 track: security
-title: "The Cognitive Firewall — Phishing Detection with Brain-Region Reasoning"
+title: "Hybrid Cognitive Firewall — Deterministic Baseline + LLM Intent Escalation"
 duration_min: 5
-existing_layers: [4, 25, 27, 32]
+existing_layers: [4, 25, 27, 31, 32, 39, 70, 42]
 existing_components:
-  - brainsnn-r3f-app/src/utils/cognitiveFirewall.js # Layer 4 scorer
+  - brainsnn-r3f-app/src/utils/cognitiveFirewall.js # Layer 4 deterministic scorer
   - brainsnn-r3f-app/src/components/CognitiveFirewallPanel.jsx
   - brainsnn-r3f-app/src/components/RedTeamPanel.jsx # Layer 25 simulator
   - brainsnn-r3f-app/src/components/AdversarialTrainingPanel.jsx # Layer 27
-  - brainsnn-r3f-app/src/components/AttackEvolvePanel.jsx # Layer 32
+  - brainsnn-r3f-app/src/components/BrainEvolvePanel.jsx # Layer 31 defense evolution
+  - brainsnn-r3f-app/src/components/AttackEvolvePanel.jsx # Layer 32 attack evolution
+  - brainsnn-r3f-app/src/components/PropagandaTemplatesPanel.jsx # Layer 39
 new_work:
-  - Optional intent classifier upgrade (Codex lane: src/utils/firewallIntent.js)
-  - Demo wrapper that loads phishing samples in sequence
+  - brainsnn-r3f-app/src/utils/firewallIntent.js # Codex — LLM-powered intent classifier (Day 1 priority)
 demo_corpus:
   - hackathon/demo-corpus/phishing/phishing-001-account-suspension.md
   - hackathon/demo-corpus/phishing/phishing-002-ceo-wire.md
   - hackathon/demo-corpus/phishing/phishing-003-mfa-fatigue.md
-  - hackathon/demo-corpus/phishing/phishing-004-vendor-invoice.md # to write
-  - hackathon/demo-corpus/phishing/phishing-005-recruiter-trojan.md # to write
-  - hackathon/demo-corpus/phishing/phishing-006-deepfake-voicemail.md # to write
+  - hackathon/demo-corpus/phishing/phishing-004-vendor-invoice.md # added Day -3
+  - hackathon/demo-corpus/phishing/phishing-005-recruiter-trojan.md # added Day -3
+  - hackathon/demo-corpus/phishing/phishing-006-deepfake-voicemail.md # added Day -3
+verified_against_live:
+  date: 2026-05-06
+  app_url: http://localhost:5173 (same bundle as brainsnn.com)
+  finding: |
+    Deterministic Layer 4 scored phishing-001 at 33% overall risk with
+    CTX-dominant brain region — caught urgency keywords ("urgent",
+    "immediately", "now") but missed authority impersonation, loss
+    aversion, consequence laundering, and time-fence framing. This
+    scenario reframes the limitation as the demo's central tension:
+    deterministic baseline + LLM escalation = production-grade firewall.
 ---
 
-# Security Track — The Cognitive Firewall
+# Security Track — Hybrid Cognitive Firewall
 
 ## The hook (15 sec)
 
-> Email security tools detect _what's in_ a message — links, attachments,
-> sender reputation. They miss the **cognitive payload**: the urgency
-> stack, the authority impersonation, the trust erosion, the
-> action-pressure that actually makes humans click.
+> Phishing detection in 2026 is mostly **regex on steroids**.
+> The good ones catch surface keywords. None of them tell you _why_
+> a human will click — and none of them survive an attacker who's
+> running their copy through ChatGPT before sending.
 >
-> BrainSNN measures the cognitive payload directly, in real time, and
-> shows you which **brain regions** the attacker is targeting.
+> BrainSNN runs a **two-tier cognitive firewall**: a deterministic
+> baseline that catches surface manipulation cues at zero cost, and
+> an LLM intent classifier that catches the _strategic_ manipulation
+> the regex misses. Then it shows you exactly which **brain regions**
+> the attacker is targeting.
 
 ## The setup (30 sec)
 
-`brainsnn.com` Cognitive Firewall panel. Phishing corpus pre-loaded as
-chips. 3D brain visible alongside.
+`brainsnn.com` Cognitive Firewall section in view. Phishing corpus
+loaded as 6 chips. 3D brain visible alongside. **Intent classifier
+toggle in the panel header (off by default).**
 
 ## The demo (3 min)
 
-### Beat 1 — Account suspension classic (45 sec)
+### Beat 1 — The deterministic baseline does its job (60 sec)
 
-Click `phishing-001` chip. Text loads in the firewall input. Score runs
-instantly:
+Click `phishing-003` (MFA fatigue pretext). Score returns within 200ms:
 
-- **manipulationPressure: 0.87** | **trustErosion: 0.81** |
-  **emotionalActivation: 0.79** | **cognitiveSuppression: 0.74**
-- **Templates matched**: `urgency-stack`, `authority-impersonation`,
-  `loss-aversion`, `consequence-laundering`
-- **Evidence chips**: "URGENT", "permanently suspended", "MUST verify",
-  "final notice"
-- **3D brain**: AMG glows red (fear), THL spikes (urgency relay), PFC
-  dampens (cognitive suppression)
+- Overall risk: **~28%** (medium-low)
+- Cognitive suppression: **~55%**
+- Manipulation pressure: **~25%**
+- Trust erosion: **~5%**
+- Evidence traces: `"sorry"`, `"frustrated"`, `"approved"`
+- Lead brain region: **CTX**
+- Layer 70 explanation: "Some manipulation cues, not dominant. Trust-eroding framing is not prominent."
 
-**Punchline**: "This is a textbook phishing email — every classifier on
-earth catches it. But notice what we're showing: not a binary
-spam/legit verdict, but **a cognitive map of the attack vector**. The
-attacker is hitting the amygdala. That's the _reason_ humans click."
+**Punchline**: "This is the deterministic engine doing exactly what
+it should: low false-positive rate, fast (200ms), zero LLM cost. It
+caught some surface friction language — but **the actual attack is
+credential elicitation through false relief**, and the regex doesn't
+encode that intent. **This is where most firewalls stop.**"
 
-### Beat 2 — CEO wire transfer BEC (60 sec)
+### Beat 2 — Toggle intent escalation, watch the brain shift (75 sec)
 
-Click `phishing-002` chip. Score runs:
+Toggle "Intent classifier" → on. Re-scan the same phishing-003.
 
-- **manipulationPressure: 0.74** | **trustErosion: 0.42** |
-  **emotionalActivation: 0.51** | **cognitiveSuppression: 0.79**
-- **Templates matched**: `authority-pressure`, `secrecy-request`,
-  `procedural-bypass`, `time-fence`
-- **3D brain**: BG (basal ganglia) dominant — this is **action-gating
-  pressure**, not fear. PFC moderately suppressed. AMG only mildly
-  active.
+Within ~2 seconds (Gemma 4 call):
 
-**Punchline**: "Same family — phishing — but a _completely different
-cognitive signature_. Most email security tools give you one risk
-score. BrainSNN gives you a **brain-region fingerprint** of the attack
-class. BEC and account-suspension phishing target different cognitive
-systems. Your security team can train against the pattern, not the
-template."
+- Intent labels surfaced: `false-relief`, `credential-elicitation`,
+  `authority-friction-reframe`, `peer-priming`
+- Overall risk climbs to **~74%**
+- Cognitive suppression bar holds; **manipulation pressure rises to
+  ~62%**; **trust erosion rises to ~38%**
+- Lead brain region shifts: **CTX → THL** (the attacker is reframing
+  legitimate security friction as harassment to relay around the
+  target's PFC)
+- 3D brain: THL pulses, PFC dampens, BG ticks up (action gating)
 
-### Beat 3 — MFA fatigue pretext (60 sec)
+**Punchline**: "Same content. Same target. Same firewall. The
+deterministic layer told us _something_ was off; the intent layer
+told us **what kind of attack it is and what it's targeting in the
+human nervous system**. SOC analysts can now triage by brain-region
+fingerprint, not just by spam score."
 
-Click `phishing-003` chip. Score runs:
+### Beat 3 — Cross-corpus brain-region fingerprinting (45 sec)
 
-- **manipulationPressure: 0.71** | **trustErosion: 0.63**
-- **Templates matched**: `friction-reframe`, `false-relief`,
-  `credential-elicitation`, `peer-priming`
-- **3D brain**: THL dominant — the attacker is **reframing legitimate
-  security friction as harassment** to push the target into bypassing
-  controls.
+Click through `phishing-001` (account suspension) and `phishing-002`
+(CEO BEC) with intent classifier on. Watch the lead region change:
 
-**Punchline**: "This is the most dangerous one. There's no urgency
-language. No fear language. The attacker is lowering the target's
-cognitive guard by _empathizing with their friction_. Layer 4 catches
-it because it's modeling cognitive systems, not surface keywords. **No
-keyword-based filter detects this attack.**"
+- phishing-001: AMG dominant — fear of loss attack
+- phishing-002: BG dominant — action-pressure / authority bypass
+- phishing-003: THL dominant — friction reframe / relay attack
 
-### Beat 4 — Live evolution (Layer 32) (30 sec)
+**Punchline**: "Three phishing samples. Three different brain regions.
+**The attacker isn't picking the same lock every time** — they're
+picking three different locks. A regex-only firewall sees three
+'medium-risk emails'. We see three distinct attack vectors and which
+control surface to harden."
 
-Click "Attack Evolve" tab. Press "Run 5 generations".
+### Beat 4 — The arms race (Layer 31 ↔ Layer 32) (30 sec)
 
-Layer 32 evolves the phishing corpus against the Firewall in
-real-time — show 5 generations of attacks getting more sophisticated,
-and the Firewall adapting its rule set in response.
+Scroll to `Brain Evolve` (Layer 31). Click `Run defense evolution`.
+Then scroll to `Attack Evolve` (Layer 32) — seed `combo`, click
+`Run attack evolution (16 rounds)`.
+
+Show 30s of evolution output: defenses improving F1, attacks dodging
+the new defenses. Both layers are MAP-Elites samplers running
+against each other.
 
 **Punchline**: "And because every layer is a programmable system, the
-attacker and defender co-evolve. **Your firewall gets smarter every
-time it loses.**"
+attacker and defender **co-evolve in our test bench, not in
+production**. Your firewall gets smarter every time it loses — and
+the loss happens in a sandbox, not on a real employee."
 
 ## The close (60 sec)
 
 > Why this matters at TechEx scale:
 >
-> - **SOC analysts** see the brain-region fingerprint of every email,
->   not just a binary verdict. Triage prioritizes attacks targeting
->   suppression vectors over noisy spam.
+> - **SOC analysts** triage by **brain-region fingerprint**, not
+>   binary verdict. Attacks targeting suppression vectors get
+>   priority over noisy spam.
 > - **Phishing-resistant training** for staff goes from "spot the bad
 >   link" to "recognize the cognitive payload" — measurable training
 >   outcomes against AMG-, BG-, and THL-targeting attacks.
-> - **Vendor risk**: every inbound proposal scored before the
->   procurement team even sees it.
+> - **Vendor risk**: every inbound proposal scored before procurement
+>   sees it.
 > - **Insider threat**: outbound communications scored for trust
 >   erosion patterns characteristic of pre-departure exfiltration.
+> - **Architecturally**: deterministic baseline keeps cost predictable
+>   and latency low; LLM escalation only fires when the cheap layer
+>   is uncertain. Same hybrid pattern that powers our Agentic
+>   Workflows track demo.
 >
-> All of this is open in the browser, no credentials shared with any
-> server. The 35+ layer engine is also available as a Python pipeline
-> and an MCP server for SIEM integration.
+> All in the browser. No credentials shared. Same engine available as
+> a Python pipeline and an MCP server for SIEM integration.
 
 ## Stage flow checklist
 
-- [ ] All 6 phishing samples chip-loaded in CognitiveFirewallPanel
-- [ ] 3D brain visible alongside, regions auto-update on each scan
-- [ ] AttackEvolvePanel ready in adjacent tab
-- [ ] Pressure bar + template labels prominent on screen
-- [ ] Optional: intent classifier (Codex's firewallIntent.js) merged
-      and labeled if shipped before stage time
+- [ ] All 6 phishing samples chip-loaded in the Firewall input
+- [ ] Intent classifier toggle visible (off by default in panel
+      header — Codex to wire)
+- [ ] 3D brain visible alongside, regions update on each scan
+- [ ] BrainEvolvePanel + AttackEvolvePanel visible adjacent
+- [ ] Pre-cached intent classifier responses for the 6 corpus samples
+      so the demo doesn't depend on live Gemma latency
+- [ ] Recording: capture both score deltas (text) and brain region
+      transitions (3D) in same frame
 
 ## Risks & fallbacks
 
-- **Layer 32 evolution is slow** → pre-record the first 30s of
-  evolution and replay
-- **Pressure bar doesn't update visibly** → zoom in on the panel via
-  CMD-+ to make the deltas obvious
-- **Demo runs over 5 min** → cut Beat 3 (MFA fatigue) — keep the
-  contrast between Beats 1/2 and the evolution close
+- **Intent classifier not yet shipped by Codex** → demo Beats 1, 3,
+  and 4 only; explain the hybrid story narratively in Beat 2.
+- **Gemma API latency / quota during recording** → use pre-recorded
+  intent responses cached in `hackathon/cache/intent-scores.json`.
+- **Layer 32 evolution slow on stage** → record the first 30s
+  separately and play as overlay.
+- **Demo runs over 5 min** → cut Beat 3 or shorten Beat 4 to 15s.
 
 ## Lablab.ai write-up framing
 
-Title: **"The Cognitive Firewall — Phishing Detection That Explains
-_Why_ Humans Click"**
-Hero claim: **"Six attack samples, six different brain-region
-fingerprints. BrainSNN gives SOC teams a cognitive map of the
-attacker's target — not just a verdict."**
+Title: **"Hybrid Cognitive Firewall — Brain-Region Reasoning for
+Phishing Detection"**
+
+Hero claim: **"Six attack samples, six distinct brain-region
+fingerprints, sub-second deterministic baseline + on-demand LLM
+intent escalation. SOC teams get a cognitive map of the attacker's
+target — not just a verdict."**
+
+Architecture talking points:
+
+- Deterministic regex layer = zero LLM cost, sub-200ms, low FPR
+- LLM intent classifier = 2s, escalation-only, catches strategic
+  manipulation
+- 7-region brain map = explainability + triage prioritization
+- Layer 31 ↔ Layer 32 = continuous improvement loop
+- MCP server = SIEM integration path
+
 Live URL: https://brainsnn.com (Cognitive Firewall + Attack Evolve)
-GitHub: https://github.com/slavazeph-coder/the-brain (branch
-`hackathon-techex`)
+GitHub: https://github.com/slavazeph-coder/the-brain branch
+`hackathon-techex`
+Verification log: `hackathon/VERIFICATION.md`
