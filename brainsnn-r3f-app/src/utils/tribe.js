@@ -1,6 +1,11 @@
-const API_BASE = 'http://localhost:8642';
+const API_BASE = (import.meta.env.VITE_TRIBE_API || '').replace(/\/$/, '');
+
+export function hasTribeServerConfigured() {
+  return API_BASE.length > 0;
+}
 
 export async function checkServerHealth() {
+  if (!hasTribeServerConfigured()) return { online: false };
   try {
     const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return { online: false };
@@ -12,6 +17,9 @@ export async function checkServerHealth() {
 }
 
 export async function fetchTribePrediction(file, modality = 'video') {
+  if (!hasTribeServerConfigured()) {
+    throw new Error('TRIBE v2 server is not configured');
+  }
   const formData = new FormData();
   formData.append('file', file);
 
@@ -29,6 +37,7 @@ export async function fetchTribePrediction(file, modality = 'video') {
 }
 
 export async function fetchScenarioList() {
+  if (!hasTribeServerConfigured()) return { scenarios: [] };
   const res = await fetch(`${API_BASE}/scenarios`);
   if (!res.ok) throw new Error('Failed to fetch scenarios');
   return res.json();
@@ -36,13 +45,15 @@ export async function fetchScenarioList() {
 
 export async function fetchPrecomputedScenario(name) {
   // Try server first
-  try {
-    const res = await fetch(`${API_BASE}/scenarios/${name}`, {
-      signal: AbortSignal.timeout(3000)
-    });
-    if (res.ok) return res.json();
-  } catch {
-    // Server offline, try local fallback
+  if (hasTribeServerConfigured()) {
+    try {
+      const res = await fetch(`${API_BASE}/scenarios/${name}`, {
+        signal: AbortSignal.timeout(3000)
+      });
+      if (res.ok) return res.json();
+    } catch {
+      // Server offline, try local fallback
+    }
   }
 
   // Fallback: load from public/scenarios/ directory

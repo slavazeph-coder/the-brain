@@ -111,6 +111,7 @@ import { mapMultimodalToRegions } from './utils/multimodalRag';
 import { mapFusedToRegions } from './utils/vectorGraphFusion';
 import { applyAffectsToBrainState } from './utils/affectiveDecoder';
 import { applyNTBath } from './utils/neurochemistry';
+import { hasTribeServerConfigured } from './utils/tribe';
 import { registerShortcuts } from './utils/shortcuts';
 import { trendDirection } from './utils/analytics';
 import { toastSuccess, toastInfo, toastWarning } from './utils/toastStore';
@@ -141,6 +142,13 @@ export default function App() {
   const [quality, setQuality] = useState('high');
   const [gifOptions, setGifOptions] = useState({ trimStart: 0, trimDuration: 2.5, fps: 12, width: 720 });
   const [showKbHelp, setShowKbHelp] = useState(false);
+  const requestMode = useCallback((nextMode) => {
+    if (nextMode === 'tribe' && !hasTribeServerConfigured()) {
+      toastInfo('TRIBE v2 live server is offline; use pre-computed scenarios below.');
+      return;
+    }
+    setMode(nextMode);
+  }, []);
   const [firewallResult, setFirewallResult] = useState(null);
   const [incomingImmunityCard] = useState(() => {
     try {
@@ -251,7 +259,7 @@ export default function App() {
       burst: () => { setState((s) => ({ ...s, burst: 20, scenario: 'Sensory Burst' })); toastInfo('Sensory burst triggered'); },
       reset: () => { setState(resetState()); setMode('simulation'); toastInfo('Brain state reset'); },
       modeSimulation: () => { setMode('simulation'); toastInfo('Switched to Simulation mode'); },
-      modeTribe: () => { setMode('tribe'); toastInfo('Switched to TRIBE v2 mode'); },
+      modeTribe: () => { requestMode('tribe'); },
       modeEeg: () => { setMode('eeg'); toastInfo('Switched to EEG mode'); },
       snapshot: () => { saveSnapshot(state); toastSuccess('Snapshot saved'); },
       record: () => {
@@ -282,7 +290,7 @@ export default function App() {
       },
       showHelp: () => setShowKbHelp(true)
     });
-  }, [state, isRecording]);
+  }, [state, isRecording, requestMode]);
 
   // Simulation loop — only active in simulation mode
   useEffect(() => {
@@ -344,7 +352,7 @@ export default function App() {
             exportStatus={exportStatus}
             quality={quality}
             mode={mode}
-            onSetMode={setMode}
+            onSetMode={requestMode}
             onSetQuality={setQuality}
             onToggleRun={() => { markActivity(); setState((s) => ({ ...s, running: !s.running })); }}
             onBurst={() => { markActivity(); setState((s) => ({ ...s, burst: 20, scenario: 'Sensory Burst' })); }}

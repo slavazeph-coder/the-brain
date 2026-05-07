@@ -1,5 +1,6 @@
 import React from 'react';
 import { SCENARIOS } from '../data/network';
+import { hasTribeServerConfigured } from '../utils/tribe';
 
 export default function ControlsBar({
   state,
@@ -16,6 +17,10 @@ export default function ControlsBar({
   mode,
   onSetMode
 }) {
+  const modes = hasTribeServerConfigured() || mode === 'tribe'
+    ? ['simulation', 'tribe', 'eeg']
+    : ['simulation', 'eeg'];
+
   return (
     <section className="panel panel-pad controls-bar">
       <div>
@@ -65,7 +70,7 @@ export default function ControlsBar({
           ))}
         </div>
         <div className="quality-group">
-          {['simulation', 'tribe', 'eeg'].map((m) => (
+          {modes.map((m) => (
             <button
               key={m}
               className={`chip-btn ${mode === m ? 'active' : ''}`}

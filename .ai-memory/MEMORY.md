@@ -765,3 +765,8 @@ append a dated entry under this heading; push at end of session.
   headline risk because the panel averaged raw axes. Added hybrid
   `overallRisk` so cached CEO-wire now displays 69% while keeping the
   individual score bars readable.
+- TRIBE v2 production fallback hardened: frontend now honors
+  `VITE_TRIBE_API` instead of hard-coded localhost, hides the top TRIBE
+  mode switch when no live server is configured, and ships static
+  precomputed scenario JSON so the TRIBE panel still plays reliable
+  15-frame scenarios while the backend is offline.
