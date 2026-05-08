@@ -235,6 +235,28 @@ export function togglePinned(id) {
   return true;
 }
 
+/**
+ * Replace a capture's text and re-run the route pipeline so its
+ * classification, affect, regions, urls, mentions, hash, and pii
+ * summary stay consistent. Used by the panel's redact-PII action.
+ */
+export function rewriteCapture(id, newText) {
+  const cap = getCaptureById(id);
+  if (!cap) return null;
+  const safe = String(newText || '').trim().slice(0, MAX_CAPTURE_CHARS);
+  if (!safe) return null;
+  const reRouted = routeCapture(safe, { title: cap.title });
+  if (!reRouted) return null;
+  // Preserve identity + lifecycle metadata; replace everything routing produced.
+  Object.assign(cap, reRouted);
+  cap.editedAt = Date.now();
+  saveCaptures();
+  // Embedding is now stale — drop it so the next sim/retrieval re-embeds.
+  loadEmbeddings().delete(reRouted.hash);
+  emit();
+  return cap;
+}
+
 export function clearAllCaptures() {
   memCaptures = [];
   saveCaptures();

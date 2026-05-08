@@ -12,9 +12,11 @@ import {
   exportEpisodicBundle,
   importEpisodicBundle,
   findSimilar,
-  findBacklinks
+  findBacklinks,
+  rewriteCapture
 } from '../utils/episodicMemory';
 import { captureToBrainState } from '../utils/episodicRouter';
+import { redactPII } from '../utils/episodicPII';
 import { dailyBrief, weeklySynthesis } from '../utils/episodicSynthesis';
 import {
   EPISODIC_CATEGORIES,
@@ -92,7 +94,7 @@ function CategoryChip({ id, score, isPrimary }) {
   );
 }
 
-function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
+function CaptureCard({ capture, onApply, onDelete, onPin, onFocus, onRedact }) {
   const cat = EPISODIC_CATEGORIES[capture.primary];
   const fwPct = Math.round((capture.firewall?.pressure || 0) * 100);
   const affChip = capture.affects?.dominant?.[0];
@@ -177,6 +179,16 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
         <button className="ghost small" onClick={toggleSimilar} title="Find captures most similar to this one (cosine via MiniLM, lexical fallback)">
           ≈ similar
         </button>
+        {capture.pii?.total > 0 && (
+          <button
+            className="ghost small"
+            onClick={() => onRedact?.(capture)}
+            title={`Replace ${capture.pii.total} PII / secret match${capture.pii.total === 1 ? '' : 'es'} with typed placeholders`}
+            style={{ color: '#ff8a96' }}
+          >
+            ✂ redact
+          </button>
+        )}
         <button className="ghost small" onClick={() => onPin?.(capture)}>
           {capture.pinned ? '★ pinned' : '☆ pin'}
         </button>
@@ -445,6 +457,13 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
 
   function handlePin(capture) {
     togglePinned(capture.id);
+  }
+
+  function handleRedact(capture) {
+    if (!capture?.id || !(capture.pii?.total > 0)) return;
+    if (!confirm(`Replace ${capture.pii.total} PII / secret match${capture.pii.total === 1 ? '' : 'es'} in "${capture.title}" with typed placeholders? Original text will be lost.`)) return;
+    const redacted = redactPII(capture.text);
+    rewriteCapture(capture.id, redacted);
   }
 
   function loadExample(i) {
@@ -876,6 +895,7 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
               onDelete={handleDelete}
               onPin={handlePin}
               onFocus={focusCapture}
+              onRedact={handleRedact}
             />
           </div>
         ))
