@@ -404,7 +404,10 @@ async function callGemmaJson(systemPrompt, userPrompt) {
     });
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body });
+  // Hard 30s timeout — synthesis prompts are large; budget extra time but
+  // never let a hung request stall the panel forever.
+  const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(30_000) : undefined;
+  const res = await fetch(url, { method: 'POST', headers, body, signal });
   if (!res.ok) throw new Error(`Gemma ${res.status}`);
   const json = await res.json();
   let raw;

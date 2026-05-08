@@ -163,7 +163,8 @@ async function callGemmaAnswer(question, hits) {
     });
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body });
+  const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(20_000) : undefined;
+  const res = await fetch(url, { method: 'POST', headers, body, signal });
   if (!res.ok) throw new Error(`Gemma ${res.status}`);
   const json = await res.json();
   if (json.candidates?.[0]?.content?.parts?.[0]?.text) return json.candidates[0].content.parts[0].text.trim();

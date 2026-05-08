@@ -16,7 +16,9 @@ import {
   EPISODIC_CATEGORIES,
   EPISODIC_IDS,
   EPISODIC_CLUSTERS,
-  categoryColor
+  categoryColor,
+  clusterFor,
+  DEFAULT_REGIONS
 } from '../src/data/episodicTaxonomy.js';
 
 describe('episodicTaxonomy', () => {
@@ -58,6 +60,31 @@ describe('episodicTaxonomy', () => {
 
   it('categoryColor falls back to grey for unknown ids', () => {
     assert.equal(categoryColor('does-not-exist'), '#7c8aa1');
+  });
+
+  it('clusterFor returns the right cluster for each category', () => {
+    assert.equal(clusterFor('decision').label, 'From you');
+    assert.equal(clusterFor('insight').label, 'From you');
+    assert.equal(clusterFor('artifact').label, 'From the world');
+    assert.equal(clusterFor('person').label, 'About people');
+    assert.equal(clusterFor('incident').label, 'Pivots & shocks');
+  });
+
+  it('clusterFor falls back to external for unknown ids', () => {
+    assert.equal(clusterFor('nope').label, 'From the world');
+  });
+
+  it('DEFAULT_REGIONS sums to a reasonable diffuse activation', () => {
+    const sum = Object.values(DEFAULT_REGIONS).reduce((s, v) => s + v, 0);
+    assert.ok(sum > 0.5 && sum < 1.5, `default regions sum is ${sum}`);
+  });
+
+  it('every category cluster id is a known cluster', () => {
+    const clusterIds = new Set(Object.keys(EPISODIC_CLUSTERS));
+    for (const id of EPISODIC_IDS) {
+      const cat = EPISODIC_CATEGORIES[id];
+      assert.ok(clusterIds.has(cat.cluster), `${id} cluster ${cat.cluster} is known`);
+    }
   });
 });
 
