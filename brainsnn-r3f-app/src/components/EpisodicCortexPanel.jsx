@@ -10,7 +10,8 @@ import {
   subscribeEpisodic,
   captureStats,
   exportEpisodicBundle,
-  importEpisodicBundle
+  importEpisodicBundle,
+  findSimilar
 } from '../utils/episodicMemory';
 import { captureToBrainState } from '../utils/episodicRouter';
 import { dailyBrief, weeklySynthesis } from '../utils/episodicSynthesis';
@@ -90,10 +91,17 @@ function CategoryChip({ id, score, isPrimary }) {
   );
 }
 
-function CaptureCard({ capture, onApply, onDelete, onPin }) {
+function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
   const cat = EPISODIC_CATEGORIES[capture.primary];
   const fwPct = Math.round((capture.firewall?.pressure || 0) * 100);
   const affChip = capture.affects?.dominant?.[0];
+  const [similar, setSimilar] = useState(null);
+
+  function toggleSimilar() {
+    if (similar !== null) { setSimilar(null); return; }
+    const hits = findSimilar(capture.id, { k: 3, minScore: 0.30 });
+    setSimilar(hits);
+  }
 
   return (
     <div
@@ -141,9 +149,12 @@ function CaptureCard({ capture, onApply, onDelete, onPin }) {
       <p className="muted small-note" style={{ margin: '6px 0 0 0', lineHeight: 1.45 }}>
         {capture.text.slice(0, 220)}{capture.text.length > 220 ? '…' : ''}
       </p>
-      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+      <div className="episodic-card-actions">
         <button className="ghost small" onClick={() => onApply?.(capture)} title="Push this capture's region activation to the 3D brain">
           → Brain
+        </button>
+        <button className="ghost small" onClick={toggleSimilar} title="Find captures most similar to this one (cosine via MiniLM, lexical fallback)">
+          ≈ similar
         </button>
         <button className="ghost small" onClick={() => onPin?.(capture)}>
           {capture.pinned ? '★ pinned' : '☆ pin'}
@@ -152,6 +163,24 @@ function CaptureCard({ capture, onApply, onDelete, onPin }) {
           delete
         </button>
       </div>
+      {similar && (
+        <div style={{ marginTop: 6 }}>
+          {similar.length === 0 && (
+            <p className="muted small-note" style={{ margin: 0 }}>No similar captures (try Warm embeddings to enable cosine).</p>
+          )}
+          {similar.map((s) => (
+            <button
+              key={s.id}
+              className="ghost small"
+              onClick={() => onFocus?.(s.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 4, padding: '4px 8px', fontSize: 11 }}
+            >
+              <span className="muted">{s.score.toFixed(2)}</span>{' '}
+              <strong>{s.capture.title.slice(0, 70)}</strong>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -794,6 +823,7 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
               onApply={handleApply}
               onDelete={handleDelete}
               onPin={handlePin}
+              onFocus={focusCapture}
             />
           </div>
         ))
