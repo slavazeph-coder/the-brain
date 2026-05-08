@@ -99,6 +99,9 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus, onRedact }) {
   const fwPct = Math.round((capture.firewall?.pressure || 0) * 100);
   const affChip = capture.affects?.dominant?.[0];
   const [similar, setSimilar] = useState(null);
+  const primaryScore = capture.classification?.scores?.[capture.primary]?.score || 0;
+  const weak = (capture.classification?.dominant?.length || 0) === 0
+    || (capture.primary === 'artifact' && primaryScore < 0.18);
 
   function toggleSimilar() {
     if (similar !== null) { setSimilar(null); return; }
@@ -172,6 +175,11 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus, onRedact }) {
       <p className="muted small-note" style={{ margin: '6px 0 0 0', lineHeight: 1.45 }}>
         {capture.text.slice(0, 220)}{capture.text.length > 220 ? '…' : ''}
       </p>
+      {weak && (
+        <p className="muted small-note" style={{ margin: '4px 0 0 0', fontStyle: 'italic', opacity: 0.7 }}>
+          Weak signal — no triggers fired. Add a verb (decided / regret / wondering / shipped) or an @mention to help the brain place this note.
+        </p>
+      )}
       <div className="episodic-card-actions">
         <button className="ghost small" onClick={() => onApply?.(capture)} title="Push this capture's region activation to the 3D brain">
           → Brain
@@ -362,6 +370,22 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
   useEffect(() => () => {
     try { voiceSessionRef.current?.stop(); } catch { /* ignore */ }
   }, []);
+
+  // Quietly warm MiniLM embeddings ~12 seconds after the panel mounts IF
+  // the user already has captures and is in a fast environment (best-
+  // effort — failures are silent; the lexical fallback always works).
+  useEffect(() => {
+    if (embedReady) return;
+    const stats0 = captureStats();
+    if (stats0.total < 5) return;
+    const t = setTimeout(() => {
+      initEmbeddings()
+        .then(() => ensureAllEmbeddings())
+        .then(() => setEmbedReady(true))
+        .catch(() => { /* graceful — fall back to lexical */ });
+    }, 12_000);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const unsub = subscribeEpisodic(() => setTick((x) => x + 1));
