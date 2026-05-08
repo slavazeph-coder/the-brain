@@ -556,7 +556,8 @@ async function dispatch(name, args) {
           dominantAffect: c.affects?.dominant?.[0]?.label || null,
           urls: c.urls,
           tags: c.tags,
-          mentions: c.mentions
+          mentions: c.mentions,
+          piiFlags: c.pii?.total > 0 ? c.pii.kinds : []
         }))
       };
     }

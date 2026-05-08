@@ -152,6 +152,15 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
             ⚠ {fwPct}%
           </span>
         )}
+        {capture.pii?.total > 0 && (
+          <span
+            className="firewall-chip"
+            style={{ borderColor: '#ff8a96', color: '#ff8a96' }}
+            title={`Detected ${capture.pii.total} PII / secret match${capture.pii.total === 1 ? '' : 'es'}: ${capture.pii.kinds?.join(', ')}`}
+          >
+            🔒 PII: {capture.pii.first}
+          </span>
+        )}
         {capture.urls?.[0] && (
           <a className="firewall-chip" href={capture.urls[0]} target="_blank" rel="noopener noreferrer" style={{ color: '#5ad4ff' }}>
             ↗ link
@@ -805,6 +814,11 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
         <span className="muted small-note">
           {stats.total} total · {stats.last24h} last 24h · {stats.last7d} this week · mean pressure {Math.round(stats.meanPressure * 100)}%
           {stats.dreamConsolidated > 0 && ` · ${stats.dreamConsolidated} dream-reinforced`}
+          {stats.withPII > 0 && (
+            <span style={{ color: '#ff8a96', marginLeft: 6 }} title="Captures containing email / phone / API key / SSN / IP">
+              · 🔒 {stats.withPII} flagged for PII
+            </span>
+          )}
         </span>
       </div>
 

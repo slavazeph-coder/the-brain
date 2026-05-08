@@ -3148,6 +3148,18 @@ h1,h2,h3{
   border-left:3px solid #ff8080;
 }
 .episodic-drift-card strong{color:#ffaaaa}
+.episodic-cortex-panel button:focus-visible,
+.episodic-cortex-panel input:focus-visible,
+.episodic-cortex-panel textarea:focus-visible,
+.episodic-cortex-panel a:focus-visible{
+  outline:2px solid #5ad4ff;outline-offset:2px;border-radius:6px;
+}
+.episodic-cortex-panel [role="tab"][aria-selected="true"]{
+  font-weight:700;
+}
+@media (prefers-reduced-motion: reduce){
+  .episodic-card{transition:none}
+}
 @media (max-width: 760px){
   .episodic-stats{flex-direction:column;align-items:flex-start;gap:4px}
   .episodic-graph-host{height:110px}

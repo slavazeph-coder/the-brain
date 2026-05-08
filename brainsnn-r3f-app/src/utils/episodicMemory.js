@@ -265,6 +265,7 @@ export function captureStats() {
   let last24h = 0;
   let last7d = 0;
   let dreamConsolidated = 0;
+  let withPII = 0;
   for (const c of list) {
     byCategory[c.primary] = (byCategory[c.primary] || 0) + 1;
     if (c.firewall?.pressure != null) {
@@ -274,6 +275,7 @@ export function captureStats() {
     if (now - c.ts <= day) last24h++;
     if (now - c.ts <= week) last7d++;
     if (c.consolidatedAt) dreamConsolidated++;
+    if (c.pii?.total > 0) withPII++;
   }
 
   return {
@@ -282,7 +284,8 @@ export function captureStats() {
     last7d,
     meanPressure: pressureN > 0 ? pressureSum / pressureN : 0,
     byCategory,
-    dreamConsolidated
+    dreamConsolidated,
+    withPII
   };
 }
 

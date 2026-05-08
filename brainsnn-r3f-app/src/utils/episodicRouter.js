@@ -26,6 +26,7 @@ import {
 import { scoreContent } from './cognitiveFirewall';
 import { decodeAffects } from './affectiveDecoder';
 import { classifyGenre } from './genreClassifier';
+import { detectPII } from './episodicPII';
 
 const URL_RE = /\bhttps?:\/\/[^\s)<>\]]+/gi;
 const HASHTAG_RE = /(?:^|\s)#([A-Za-z][\w-]{1,32})\b/g;
@@ -231,6 +232,7 @@ export function routeCapture(text, opts = {}) {
   const firewall = scoreContent(normalized);
   const affects = decodeAffects(normalized);
   const genre = classifyGenre(normalized);
+  const pii = detectPII(normalized);
 
   const urls = Array.from(new Set(normalized.match(URL_RE) || []));
   const tags = Array.from(new Set(extractAll(HASHTAG_RE, normalized, 1)));
@@ -274,6 +276,7 @@ export function routeCapture(text, opts = {}) {
     urls,
     tags,
     mentions,
+    pii: { total: pii.total, first: pii.first, kinds: Object.keys(pii.kinds) },
     hash: fnvHash(normalized.slice(0, 1024))
   };
 }
