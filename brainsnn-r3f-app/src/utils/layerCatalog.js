@@ -107,6 +107,7 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 101, name: 'Episodic Cortex', group: 'data', blurb: 'Vault that talks back — captures classified across 8 episodic categories, embedded, dream-consolidated, briefed daily.' },
 ];
 
 export const LAYER_GROUPS = {

@@ -81,6 +81,8 @@ import HotkeyMap from './components/HotkeyMap';
 import ThemePanel from './components/ThemePanel';
 import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
+import EpisodicCortexPanel from './components/EpisodicCortexPanel';
+import { captureToBrainState } from './utils/episodicRouter';
 import { registerServiceWorker } from './utils/pwa';
 import { registerTheme } from './utils/theme';
 import DreamModePanel from './components/DreamModePanel';
@@ -106,6 +108,7 @@ import { applyMockEEG, connectMuseEEG, connectSerialEEG, mapEEGToRegions, parseM
 import { startCanvasRecording } from './utils/recording';
 import { listSnapshots, loadSnapshot, saveSnapshot } from './utils/snapshots';
 import { registerDreamProviders, startDreamMonitor, stopDreamMonitor, markActivity } from './utils/dreamMode';
+import { mountEpisodicDream, unmountEpisodicDream } from './utils/episodicDream';
 import { mapRagToRegions } from './utils/neuroRag';
 import { mapMultimodalToRegions } from './utils/multimodalRag';
 import { mapFusedToRegions } from './utils/vectorGraphFusion';
@@ -231,7 +234,11 @@ export default function App() {
       narrate: (text) => toastInfo(text)
     });
     startDreamMonitor();
-    return () => stopDreamMonitor();
+    mountEpisodicDream(setState);
+    return () => {
+      stopDreamMonitor();
+      unmountEpisodicDream();
+    };
   }, []);
 
   const trends = useMemo(() => {
@@ -777,6 +784,16 @@ export default function App() {
 
           <ErrorBoundary name="Milestone">
             <MilestonePanel />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Episodic Cortex">
+            <EpisodicCortexPanel
+              onApplyEpisodic={(capture) => {
+                markActivity();
+                setState((prev) => captureToBrainState(prev, capture, { additive: true }));
+                toastSuccess(`Episodic · ${capture.title.slice(0, 36)}${capture.title.length > 36 ? '…' : ''}`);
+              }}
+            />
           </ErrorBoundary>
 
           <ErrorBoundary name="Dream Mode">

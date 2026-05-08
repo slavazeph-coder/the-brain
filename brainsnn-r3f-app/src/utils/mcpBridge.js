@@ -29,6 +29,13 @@ import { mergeTemplateResults } from './semanticTemplates';
 import { pickTodaysChallenge } from './dailyChallenge';
 import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
+// Layer 101 — Episodic Cortex
+import { addCapture, getCaptures, captureStats, ensureAllEmbeddings } from './episodicMemory';
+import { dailyBrief, weeklySynthesis, consolidationPass } from './episodicSynthesis';
+import { askTheVault } from './episodicAsk';
+import { detectDecisionDrifts, formatDrift } from './episodicDrift';
+import { applyEpisodicSTDP } from './episodicDream';
+import { initEmbeddings, isReady as embeddingsReady } from './embeddings';
 
 // ---------- tool catalog ----------
 
@@ -232,6 +239,77 @@ export const BRAIN_TOOLS = [
       properties: { text: { type: 'string' } },
       required: ['text']
     }
+  },
+  {
+    name: 'episodic_capture',
+    description: 'Layer 101 — capture a note into the Episodic Cortex. Auto-classifies into 8 categories (decision/insight/question/artifact/win/project/person/incident), runs the firewall + affect decoder, lights up the 3D brain, and persists locally.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string' },
+        title: { type: 'string' },
+        source: { type: 'string', description: 'Optional capture source tag (e.g. agent, telegram, readwise)' }
+      },
+      required: ['text']
+    }
+  },
+  {
+    name: 'episodic_brief',
+    description: 'Layer 101 — daily brief over recent captures. Returns connections / pattern / question. Uses Gemma when configured, deterministic local synthesis otherwise.',
+    inputSchema: {
+      type: 'object',
+      properties: { windowDays: { type: 'number', description: 'Window in days (default 7)' } }
+    }
+  },
+  {
+    name: 'episodic_synthesis',
+    description: 'Layer 101 — weekly synthesis. Returns emerging thesis / contradictions / knowledge gaps / one action.',
+    inputSchema: {
+      type: 'object',
+      properties: { windowDays: { type: 'number', description: 'Window in days (default 7)' } }
+    }
+  },
+  {
+    name: 'episodic_list',
+    description: 'Layer 101 — list recent episodic captures with their classification, affect, and pressure signals.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Optional category filter' },
+        sinceDays: { type: 'number', description: 'Only return captures within the last N days' },
+        limit: { type: 'number', description: 'Max results (default 20)' }
+      }
+    }
+  },
+  {
+    name: 'episodic_ask',
+    description: 'Layer 101 — natural-language Q&A over the Episodic Cortex. Embeds the question, runs cosine retrieval over captures, returns hits + grounded answer (Gemma-augmented when configured).',
+    inputSchema: {
+      type: 'object',
+      properties: { question: { type: 'string' } },
+      required: ['question']
+    }
+  },
+  {
+    name: 'episodic_drift',
+    description: 'Layer 101 — surface decision drifts: older `decision` captures that newer notes contradict (valence flip or incident shadow). Returns ranked drifts with similarity and days-apart.',
+    inputSchema: {
+      type: 'object',
+      properties: { topK: { type: 'number', description: 'Max drifts (default 3)' } }
+    }
+  },
+  {
+    name: 'episodic_consolidate',
+    description: 'Layer 101 — explicitly run the consolidation pass over the last 30 days of captures. STDP-reinforces brain weights along clustered regions immediately, without waiting for Dream Mode.',
+    inputSchema: {
+      type: 'object',
+      properties: { topK: { type: 'number', description: 'Max clusters to consolidate (default 3)' } }
+    }
+  },
+  {
+    name: 'episodic_warm',
+    description: 'Layer 101 — initialize MiniLM embeddings (Layer 24) and embed every capture in the vault. Returns when the cache is warm. No-op if already ready.',
+    inputSchema: { type: 'object', properties: {} }
   }
 ];
 
@@ -429,6 +507,118 @@ async function dispatch(name, args) {
       if (!args.text) throw new Error('text required');
       const s = scoreContent(args.text);
       return await issueReceipt({ text: args.text, score: s });
+    }
+
+    case 'episodic_capture': {
+      if (!args.text) throw new Error('text required');
+      const cap = addCapture(args.text, { title: args.title, source: args.source || 'mcp' });
+      if (!cap) throw new Error('capture rejected');
+      // Push into the brain so the agent's contribution is visible.
+      bridgeContext.setState?.((prev) => {
+        if (!prev?.regions) return prev;
+        const regions = { ...prev.regions };
+        for (const [r, v] of Object.entries(cap.regions || {})) {
+          if (regions[r] != null) regions[r] = Math.min(0.95, Math.max(0.02, regions[r] * 0.6 + v * 0.6));
+        }
+        return { ...prev, regions, scenario: `Episodic · ${cap.title.slice(0, 32)}`, burst: Math.max(prev.burst || 0, 3), tick: (prev.tick || 0) + 1 };
+      });
+      return {
+        id: cap.id,
+        title: cap.title,
+        primary: cap.primary,
+        secondary: cap.secondary,
+        firewallPressure: cap.firewall?.pressure,
+        dominantAffect: cap.affects?.dominant?.[0]?.label || null,
+        regions: cap.regions
+      };
+    }
+
+    case 'episodic_brief': {
+      const all = getCaptures();
+      return await dailyBrief(all, { windowDays: args.windowDays || 7 });
+    }
+
+    case 'episodic_synthesis': {
+      const all = getCaptures();
+      return await weeklySynthesis(all, { windowDays: args.windowDays || 7 });
+    }
+
+    case 'episodic_list': {
+      const filter = {};
+      if (args.category) filter.category = args.category;
+      if (args.sinceDays) filter.since = Date.now() - args.sinceDays * 24 * 60 * 60 * 1000;
+      const list = getCaptures(filter).slice(0, args.limit || 20);
+      const stats = captureStats();
+      return {
+        count: list.length,
+        totalInVault: stats.total,
+        captures: list.map((c) => ({
+          id: c.id,
+          ts: c.ts,
+          title: c.title,
+          primary: c.primary,
+          secondary: c.secondary,
+          pressure: c.firewall?.pressure,
+          dominantAffect: c.affects?.dominant?.[0]?.label || null,
+          urls: c.urls,
+          tags: c.tags,
+          mentions: c.mentions,
+          piiFlags: c.pii?.total > 0 ? c.pii.kinds : []
+        }))
+      };
+    }
+
+    case 'episodic_ask': {
+      if (!args.question) throw new Error('question required');
+      const ans = await askTheVault(args.question);
+      return {
+        ok: ans.ok,
+        answer: ans.answer || null,
+        source: ans.source || null,
+        mode: ans.mode || null,
+        hits: (ans.hits || []).map((h) => ({
+          id: h.capture.id,
+          title: h.capture.title,
+          score: h.score,
+          primary: h.capture.primary,
+          ts: h.capture.ts
+        }))
+      };
+    }
+
+    case 'episodic_drift': {
+      const all = getCaptures();
+      const drifts = detectDecisionDrifts(all, { topK: args.topK || 3 });
+      return {
+        count: drifts.length,
+        drifts: drifts.map((d) => ({ ...d, ...formatDrift(d) }))
+      };
+    }
+
+    case 'episodic_consolidate': {
+      const all = getCaptures({ since: Date.now() - 30 * 24 * 60 * 60 * 1000 });
+      const pairs = consolidationPass(all, { topK: args.topK || 3, threshold: 0.42 });
+      if (pairs.length) {
+        bridgeContext.setState?.((prev) => applyEpisodicSTDP(prev, pairs));
+      }
+      return {
+        clustersConsolidated: pairs.length,
+        pairs: pairs.map((p) => ({ regionKey: p.regionKey, members: p.memberIds.length, reason: p.reason }))
+      };
+    }
+
+    case 'episodic_warm': {
+      const wasReady = embeddingsReady();
+      if (!wasReady) await initEmbeddings();
+      const res = await ensureAllEmbeddings();
+      return {
+        wasReady,
+        readyNow: embeddingsReady(),
+        ok: res.ok,
+        done: res.done || 0,
+        total: res.total || 0,
+        reason: res.reason || null
+      };
     }
 
     default:

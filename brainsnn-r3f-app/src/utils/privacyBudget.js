@@ -23,6 +23,11 @@ const KEY_LABELS = {
   'brainsnn_last_room_v1':       { label: 'Last session room',    layer: 77 },
   'brainsnn_bypass_submitted_v1':{ label: 'Bypass-submit badge flag', layer: 56 },
   'brainsnn_polyglot_seen_v1':   { label: 'Polyglot badge flag',  layer: 56 },
+  'brainsnn_episodic_v1':        { label: 'Episodic Cortex captures', layer: 101 },
+  'brainsnn_episodic_emb_v1':    { label: 'Episodic embeddings cache', layer: 101 },
+  'brainsnn_episodic_auto_v1':   { label: 'Auto-brief schedule + history', layer: 101 },
+  'brainsnn_episodic_streak_v1': { label: 'Episodic capture streak', layer: 101 },
+  'brainsnn_episodic_autorun_v1':{ label: 'Episodic auto-run toggle', layer: 101 },
 };
 
 const DYNAMIC_PREFIXES = [

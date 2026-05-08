@@ -697,3 +697,120 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       per-user immunity / streak / scan-count / receipt stats, and
       lists the four ways to navigate (⌘K / Shift-? / Role Tour /
       Layer Explorer). The "you made it here" panel.
+101. Episodic Cortex — vault that talks back (cannibalized from
+     breferrari/obsidian-mind + @cyrilxbt's "second brain" guide)
+    - 8-category episodic taxonomy: decision / insight / question /
+      artifact / win / project / person / incident, each with regex
+      triggers + brain-region affinity vector. data/episodicTaxonomy.js
+    - routeCapture(text) orchestrates the full pipeline per note:
+      Layer 4 firewall + Layer 29 affect decoder + Layer 87 genre
+      classifier + episodic taxonomy → merged region heatmap that
+      drives the 3D brain. utils/episodicRouter.js
+    - episodicMemory.js: persistent log (brainsnn_episodic_v1, cap
+      800), MiniLM embeddings (separate brainsnn_episodic_emb_v1
+      slot), findSimilar / mineClusters via cosine + union-find,
+      addCapture / addInsight / deleteCapture / togglePinned /
+      export+import bundle. Synthesis insights are saved back as
+      first-class captures (kind: 'insight') — the vault literally
+      talks to itself.
+    - episodicSynthesis.js: dailyBrief() returns connections /
+      pattern / question; weeklySynthesis() returns emerging
+      thesis / contradictions / knowledge gaps / one action. Local
+      path uses cluster mining + valence pairs + open-question
+      detection; Gemma path adds a system prompt that forces the
+      LLM to reference the pre-computed BrainSNN signals. Falls
+      back to local on Gemma error.
+    - episodicDream.js subscribes to Layer 26 dream phase and every
+      4 cycles runs consolidationPass over captures from the last
+      30d. Dominant region of each cluster STDP-reinforces every
+      connectome edge that touches it. markConsolidated() decorates
+      participating captures so the timeline shows ◐N counters.
+    - EpisodicCortexPanel: capture form + 4 example seeds + 8
+      category filter pills + search + recent timeline + Daily
+      Brief / Weekly Synthesis cards + warm-embeddings + export /
+      import / wipe. Dropping any capture into the panel pushes a
+      blended region overlay into the live brain via setState.
+    - MCP tools (Layer 19): episodic_capture, episodic_brief,
+      episodic_synthesis, episodic_list — agents on the WebSocket
+      relay can now feed captures into and synthesize from the
+      Episodic Cortex.
+    - Why this is deeper than Obsidian: every capture is
+      semantically embedded out of the box, manipulation-pressure-
+      scored before it pollutes the vault, affect-tagged, region-
+      mapped onto a 3D cortex, and STDP-rehearsed during idle Dream
+      Mode. Connections aren't a graph plugin — they are the
+      physics of the brain.
+    - Round 2 — capture-anywhere + vault-talks-back loop:
+      - episodicAutoBrief.js: persisted scheduler (`brainsnn_
+        episodic_auto_v1`). Daily Brief unlocks at >20h since last
+        + ≥3 fresh captures; Weekly Synthesis unlocks every 6.5d
+        with ≥4 captures in trailing 7d. Banner surfaces in the
+        panel when ready; recordBrief / recordSynthesis persist
+        result snapshots (cap 12). nextBriefRelative() and
+        nextSynthesisRelative() drive the schedule footer.
+      - episodicStreak.js: pure computeStreak(captures) walks UTC
+        day keys, persists longest + totalDays in
+        `brainsnn_episodic_streak_v1`. Renders inline as a streak
+        chip ("🔥 12-day streak · 3 today") next to the Timeline
+        header.
+      - episodicDrift.js: detectDecisionDrifts() scans every
+        `decision` capture older than 3 days and finds newer
+        captures with cosine ≥ 0.34 AND either valence-flip
+        ≥ 0.45 or `incident` shadow. Returns ranked drifts; panel
+        merges them into the Synthesis card under
+        Contradictions with a distinct red "drift" treatment.
+      - episodicDeepLink.js: ?capture=<text>, ?capture-url=<url>,
+        ?capture-title=<title>. consumeDeepLinkCapture() runs on
+        panel mount, fires onApplyEpisodic, then strips the params
+        from the URL bar. Powers the bookmarklet + any external
+        integration. bookmarkletSource(origin) returns drag-able
+        javascript: source.
+      - EpisodicGraph.jsx: canvas-rendered connection graph mini-
+        viz. Cluster wheels along the top arc (radius scales with
+        cluster size), singletons row along the bottom. Hover
+        → highlighted node + tooltip. ResizeObserver on the host
+        keeps it responsive. Renders inline in the panel above
+        the timeline.
+      - Voice capture: 🎙 button uses Layer 59's createSpeech
+        Session and pipes interim+final transcripts straight into
+        the draft. Tap-to-stop turns the button red. No-op on
+        Firefox.
+      - OCR capture: ◳ button uses Layer 58's ocrImage(); progress
+        % renders inline; extracted text appends to the draft and
+        the file basename auto-fills the title if blank.
+      - styles/global.css: full Episodic Cortex theme block —
+        gradient header, pill row, streak tile, autobrief banner,
+        graph host, drift card. Honors prefers-reduced-motion via
+        the global rule.
+    - Round 3 — Ask the Vault + agent surface parity:
+      - episodicAsk.js: askTheVault(question) embeds the question
+        (MiniLM, fall back to trigram Jaccard), runs cosine
+        retrieval over the capture log, composes a deterministic
+        local answer from the hits' categories+pressure+top hit,
+        optionally upgrades through Gemma with a prompt that
+        forces grounding in the retrieved captures. Returns
+        consistent shape across local + Gemma paths.
+      - Panel: "Ask the vault" card after the synth card —
+        question input + answer + ranked hits (clickable, scroll
+        to corresponding capture card). Uses the same focusCapture
+        helper that the connection graph uses for click-to-
+        navigate.
+      - Pin sort: pinned captures float to the top of the timeline
+        regardless of recency. CaptureCard already supported
+        togglePinned; the sort rule lives in the panel's `captures`
+        useMemo.
+      - EpisodicGraph: onNodeClick prop wired through; canvas
+        cursor flips to pointer over a node; clicking a node
+        scrolls the matching capture card into view + flashes a
+        cyan ring.
+      - Background auto-run: panel-level opt-in toggle persisted
+        in `brainsnn_episodic_autorun_v1`. When on AND a brief or
+        synthesis becomes ready, a 45–60s timer fires the run
+        silently. The banner shows "auto-run on" while active.
+      - MCP tools: episodic_ask, episodic_drift, episodic_consol-
+        idate. The consolidate tool reuses the Layer 26 dream
+        coupling's applyEpisodicSTDP() so an agent can
+        consolidate the episodic graph into the brain weights on
+        demand without waiting for idle Dream Mode.
+      - hotkeys.js: 'ep' chord jumps to Layer 101 Episodic Cortex.
+        Reachable via Shift-? cheat sheet + ⌘K Command Palette.
