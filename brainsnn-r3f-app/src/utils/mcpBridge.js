@@ -30,11 +30,12 @@ import { pickTodaysChallenge } from './dailyChallenge';
 import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
 // Layer 101 — Episodic Cortex
-import { addCapture, getCaptures, captureStats } from './episodicMemory';
+import { addCapture, getCaptures, captureStats, ensureAllEmbeddings } from './episodicMemory';
 import { dailyBrief, weeklySynthesis, consolidationPass } from './episodicSynthesis';
 import { askTheVault } from './episodicAsk';
 import { detectDecisionDrifts, formatDrift } from './episodicDrift';
 import { applyEpisodicSTDP } from './episodicDream';
+import { initEmbeddings, isReady as embeddingsReady } from './embeddings';
 
 // ---------- tool catalog ----------
 
@@ -304,6 +305,11 @@ export const BRAIN_TOOLS = [
       type: 'object',
       properties: { topK: { type: 'number', description: 'Max clusters to consolidate (default 3)' } }
     }
+  },
+  {
+    name: 'episodic_warm',
+    description: 'Layer 101 — initialize MiniLM embeddings (Layer 24) and embed every capture in the vault. Returns when the cache is warm. No-op if already ready.',
+    inputSchema: { type: 'object', properties: {} }
   }
 ];
 
@@ -598,6 +604,20 @@ async function dispatch(name, args) {
       return {
         clustersConsolidated: pairs.length,
         pairs: pairs.map((p) => ({ regionKey: p.regionKey, members: p.memberIds.length, reason: p.reason }))
+      };
+    }
+
+    case 'episodic_warm': {
+      const wasReady = embeddingsReady();
+      if (!wasReady) await initEmbeddings();
+      const res = await ensureAllEmbeddings();
+      return {
+        wasReady,
+        readyNow: embeddingsReady(),
+        ok: res.ok,
+        done: res.done || 0,
+        total: res.total || 0,
+        reason: res.reason || null
       };
     }
 

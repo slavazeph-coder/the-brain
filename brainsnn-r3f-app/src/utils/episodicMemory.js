@@ -239,6 +239,10 @@ export function togglePinned(id) {
  * Replace a capture's text and re-run the route pipeline so its
  * classification, affect, regions, urls, mentions, hash, and pii
  * summary stay consistent. Used by the panel's redact-PII action.
+ *
+ * Keeps the last 2 prior texts in `priorTexts` so a rewrite can be
+ * inspected (or eventually undone). The original ts is preserved;
+ * `editedAt` records when the rewrite happened.
  */
 export function rewriteCapture(id, newText) {
   const cap = getCaptureById(id);
@@ -247,12 +251,21 @@ export function rewriteCapture(id, newText) {
   if (!safe) return null;
   const reRouted = routeCapture(safe, { title: cap.title });
   if (!reRouted) return null;
-  // Preserve identity + lifecycle metadata; replace everything routing produced.
+
+  // Preserve audit history before mutating.
+  const priorText = cap.text;
+  const prior = Array.isArray(cap.priorTexts) ? cap.priorTexts.slice(0, 2) : [];
+  const oldHash = cap.hash;
   Object.assign(cap, reRouted);
   cap.editedAt = Date.now();
+  cap.priorTexts = priorText ? [{ text: priorText, ts: cap.editedAt }, ...prior].slice(0, 2) : prior;
   saveCaptures();
-  // Embedding is now stale — drop it so the next sim/retrieval re-embeds.
-  loadEmbeddings().delete(reRouted.hash);
+
+  // Embedding for the previous hash is now orphaned; drop it so the cache
+  // doesn't accumulate dead vectors as captures are rewritten.
+  const cache = loadEmbeddings();
+  if (oldHash && cache.has(oldHash) && oldHash !== reRouted.hash) cache.delete(oldHash);
+  cache.delete(reRouted.hash); // drop any stale entry for the new hash too
   emit();
   return cap;
 }
