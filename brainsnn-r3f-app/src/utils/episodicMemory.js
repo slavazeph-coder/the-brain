@@ -401,6 +401,40 @@ function dominantCategories(captures) {
 }
 
 /**
+ * Find captures linked to the target by shared @mentions or URLs.
+ * Pure lexical — does not depend on embeddings — so it surfaces the
+ * graph structure even before MiniLM is warm. Mirrors the wikilink
+ * backlinks Obsidian users expect, but derived automatically from
+ * the routed capture's mentions/urls fields.
+ */
+export function findBacklinks(captureId, { k = 5 } = {}) {
+  const list = loadCaptures();
+  const target = list.find((c) => c.id === captureId);
+  if (!target) return [];
+  const targetMentions = new Set((target.mentions || []).map((m) => m.toLowerCase()));
+  const targetUrls = new Set(target.urls || []);
+  if (!targetMentions.size && !targetUrls.size) return [];
+
+  const scored = [];
+  for (const c of list) {
+    if (c.id === target.id) continue;
+    const sharedMentions = (c.mentions || []).filter((m) => targetMentions.has(m.toLowerCase()));
+    const sharedUrls = (c.urls || []).filter((u) => targetUrls.has(u));
+    if (!sharedMentions.length && !sharedUrls.length) continue;
+    const score = sharedMentions.length * 0.6 + sharedUrls.length * 0.8;
+    scored.push({
+      id: c.id,
+      score,
+      capture: c,
+      via: sharedMentions.length ? 'mention' : 'url',
+      shared: [...sharedMentions.map((m) => `@${m}`), ...sharedUrls]
+    });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, k);
+}
+
+/**
  * Mark a capture as having been visited by Dream Mode consolidation.
  * Used to surface "the brain reinforced this in idle" in the UI.
  */

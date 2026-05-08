@@ -11,7 +11,8 @@ import {
   captureStats,
   exportEpisodicBundle,
   importEpisodicBundle,
-  findSimilar
+  findSimilar,
+  findBacklinks
 } from '../utils/episodicMemory';
 import { captureToBrainState } from '../utils/episodicRouter';
 import { dailyBrief, weeklySynthesis } from '../utils/episodicSynthesis';
@@ -99,8 +100,19 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
 
   function toggleSimilar() {
     if (similar !== null) { setSimilar(null); return; }
-    const hits = findSimilar(capture.id, { k: 3, minScore: 0.30 });
-    setSimilar(hits);
+    const cosineHits = findSimilar(capture.id, { k: 3, minScore: 0.30 })
+      .map((h) => ({ ...h, kind: 'cosine' }));
+    const linkHits = findBacklinks(capture.id, { k: 3 })
+      .map((h) => ({ ...h, kind: 'link' }));
+    // Merge, dedup by id, prefer cosine.
+    const seen = new Set();
+    const merged = [];
+    for (const h of [...cosineHits, ...linkHits]) {
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      merged.push(h);
+    }
+    setSimilar(merged.slice(0, 6));
   }
 
   return (
@@ -166,7 +178,9 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
       {similar && (
         <div style={{ marginTop: 6 }}>
           {similar.length === 0 && (
-            <p className="muted small-note" style={{ margin: 0 }}>No similar captures (try Warm embeddings to enable cosine).</p>
+            <p className="muted small-note" style={{ margin: 0 }}>
+              No related captures yet (try Warm embeddings, or capture more notes that mention the same person / link).
+            </p>
           )}
           {similar.map((s) => (
             <button
@@ -174,9 +188,13 @@ function CaptureCard({ capture, onApply, onDelete, onPin, onFocus }) {
               className="ghost small"
               onClick={() => onFocus?.(s.id)}
               style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 4, padding: '4px 8px', fontSize: 11 }}
+              title={s.kind === 'link' ? `Linked via ${s.shared?.join(', ')}` : 'Cosine similarity'}
             >
-              <span className="muted">{s.score.toFixed(2)}</span>{' '}
-              <strong>{s.capture.title.slice(0, 70)}</strong>
+              <span className="muted">{s.kind === 'link' ? '↔' : '≈'} {s.score.toFixed(2)}</span>{' '}
+              <strong>{s.capture.title.slice(0, 65)}</strong>
+              {s.kind === 'link' && s.shared && (
+                <span className="muted" style={{ marginLeft: 6 }}>· {s.shared.slice(0, 2).join(' ')}</span>
+              )}
             </button>
           ))}
         </div>
