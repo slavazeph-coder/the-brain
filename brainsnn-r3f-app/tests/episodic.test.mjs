@@ -147,4 +147,34 @@ describe('episodicPII', () => {
     assert.equal(piiLabel('email'), 'email');
     assert.equal(piiLabel('apiKey'), 'API key');
   });
+
+  it('detects a GitHub PAT', () => {
+    const pii = detectPII('GIT_TOKEN=ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa rest');
+    assert.equal((pii.kinds.apiKey || []).length, 1);
+  });
+
+  it('detects an AWS access key', () => {
+    const pii = detectPII('AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE for testing');
+    assert.equal((pii.kinds.apiKey || []).length, 1);
+  });
+
+  it('detects a Stripe live-prefixed secret shape', () => {
+    // Synthetic — high-entropy real Stripe keys are flagged by the
+    // remote secret scanner; this string is a flat repeat that still
+    // matches the 20+ alnum body of the prefix regex.
+    const fake = 'sk_live_' + 'X'.repeat(28);
+    const pii = detectPII(`use ${fake} now`);
+    assert.equal((pii.kinds.apiKey || []).length, 1);
+  });
+
+  it('phone hits include common North American formats', () => {
+    const pii = detectPII('Call me at (555) 123-4567 or 555-987-6543');
+    assert.equal((pii.kinds.phone || []).length >= 1, true);
+  });
+
+  it('total counts across multiple kinds', () => {
+    const pii = detectPII('email a@b.com and SSN 111-22-3333 in one note');
+    assert.ok(pii.total >= 2);
+    assert.ok(Object.keys(pii.kinds).length >= 2);
+  });
 });

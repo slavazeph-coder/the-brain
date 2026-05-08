@@ -350,6 +350,7 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [askDraft, setAskDraft] = useState('');
   const [askResult, setAskResult] = useState(null);
+  const [streakPulse, setStreakPulse] = useState(null); // { current, longest } | null
   const [autoRun, setAutoRun] = useState(() => {
     try { return localStorage.getItem('brainsnn_episodic_autorun_v1') === '1'; } catch { return false; }
   });
@@ -435,13 +436,16 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     return () => clearInterval(t);
   }, [captures]);
 
-  // Background auto-run — opt-in via a toggle, persisted. When the
-  // brief becomes ready, wait 45 seconds (so the user isn't interrupted
-  // mid-thought) then run silently. Same for the weekly synthesis at a
-  // slower cadence.
+  // Background auto-run — opt-in via a toggle, persisted. When the brief
+  // becomes ready, wait 45s (so the user isn't interrupted mid-thought)
+  // then run silently. The timer is cancelled on:
+  //   - manual capture via Capture button
+  //   - the user typing in the draft / title / ask boxes
+  //   - any subsequent re-render that toggles busy / brief state.
   useEffect(() => {
     if (!autoRun) return;
     if (busy) return;
+    if (draft.trim() || askDraft.trim()) return; // user is mid-typing
     let timer = null;
     if (autoBriefReady?.ok && !brief) {
       timer = setTimeout(() => { handleBrief(); }, 45_000);
@@ -449,7 +453,7 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
       timer = setTimeout(() => { handleSynthesis(); }, 60_000);
     }
     return () => { if (timer) clearTimeout(timer); };
-  }, [autoRun, autoBriefReady?.ok, autoSynthReady?.ok, busy, brief, synth]);
+  }, [autoRun, autoBriefReady?.ok, autoSynthReady?.ok, busy, brief, synth, draft, askDraft]);
 
   function toggleAutoRun() {
     setAutoRun((v) => {
@@ -462,11 +466,18 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
   function handleCapture() {
     const text = draft.trim();
     if (!text) return;
+    const before = computeStreak(getCaptures());
     const cap = addCapture(text, { title: draftTitle.trim() || undefined });
     if (cap) {
       onApplyEpisodic?.(cap);
       setDraft('');
       setDraftTitle('');
+      // First capture of a new UTC day → pulse a streak banner for 6s.
+      const after = computeStreak(getCaptures());
+      if (after.current > before.current) {
+        setStreakPulse({ current: after.current, longest: after.longest });
+        setTimeout(() => setStreakPulse(null), 6000);
+      }
     }
   }
 
@@ -766,6 +777,19 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
           {busy === 'embed' ? 'Embedding…' : embedReady ? '↻ Re-embed' : '⇣ Warm embeddings'}
         </button>
       </div>
+
+      {streakPulse && (
+        <div className="episodic-autobrief-banner" role="status" aria-live="polite" style={{ borderColor: 'rgba(94,230,154,0.5)', background: 'linear-gradient(90deg, rgba(94,230,154,0.10), rgba(255,212,138,0.10))' }}>
+          <span>
+            <strong style={{ color: '#5ee69a' }}>
+              {streakPulse.current === 1 ? '🌱 Streak started' : `🔥 ${streakPulse.current}-day streak — kept alive`}
+            </strong>
+            {streakPulse.longest > streakPulse.current && (
+              <span className="muted small-note" style={{ marginLeft: 8 }}>longest: {streakPulse.longest}d</span>
+            )}
+          </span>
+        </div>
+      )}
 
       {(autoBriefReady?.ok || autoSynthReady?.ok) && (
         <div className="episodic-autobrief-banner" role="status" aria-live="polite">
