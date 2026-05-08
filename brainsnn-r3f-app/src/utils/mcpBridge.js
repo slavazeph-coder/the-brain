@@ -31,7 +31,10 @@ import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
 // Layer 101 — Episodic Cortex
 import { addCapture, getCaptures, captureStats } from './episodicMemory';
-import { dailyBrief, weeklySynthesis } from './episodicSynthesis';
+import { dailyBrief, weeklySynthesis, consolidationPass } from './episodicSynthesis';
+import { askTheVault } from './episodicAsk';
+import { detectDecisionDrifts, formatDrift } from './episodicDrift';
+import { applyEpisodicSTDP } from './episodicDream';
 
 // ---------- tool catalog ----------
 
@@ -275,6 +278,31 @@ export const BRAIN_TOOLS = [
         sinceDays: { type: 'number', description: 'Only return captures within the last N days' },
         limit: { type: 'number', description: 'Max results (default 20)' }
       }
+    }
+  },
+  {
+    name: 'episodic_ask',
+    description: 'Layer 101 — natural-language Q&A over the Episodic Cortex. Embeds the question, runs cosine retrieval over captures, returns hits + grounded answer (Gemma-augmented when configured).',
+    inputSchema: {
+      type: 'object',
+      properties: { question: { type: 'string' } },
+      required: ['question']
+    }
+  },
+  {
+    name: 'episodic_drift',
+    description: 'Layer 101 — surface decision drifts: older `decision` captures that newer notes contradict (valence flip or incident shadow). Returns ranked drifts with similarity and days-apart.',
+    inputSchema: {
+      type: 'object',
+      properties: { topK: { type: 'number', description: 'Max drifts (default 3)' } }
+    }
+  },
+  {
+    name: 'episodic_consolidate',
+    description: 'Layer 101 — explicitly run the consolidation pass over the last 30 days of captures. STDP-reinforces brain weights along clustered regions immediately, without waiting for Dream Mode.',
+    inputSchema: {
+      type: 'object',
+      properties: { topK: { type: 'number', description: 'Max clusters to consolidate (default 3)' } }
     }
   }
 ];
@@ -530,6 +558,45 @@ async function dispatch(name, args) {
           tags: c.tags,
           mentions: c.mentions
         }))
+      };
+    }
+
+    case 'episodic_ask': {
+      if (!args.question) throw new Error('question required');
+      const ans = await askTheVault(args.question);
+      return {
+        ok: ans.ok,
+        answer: ans.answer || null,
+        source: ans.source || null,
+        mode: ans.mode || null,
+        hits: (ans.hits || []).map((h) => ({
+          id: h.capture.id,
+          title: h.capture.title,
+          score: h.score,
+          primary: h.capture.primary,
+          ts: h.capture.ts
+        }))
+      };
+    }
+
+    case 'episodic_drift': {
+      const all = getCaptures();
+      const drifts = detectDecisionDrifts(all, { topK: args.topK || 3 });
+      return {
+        count: drifts.length,
+        drifts: drifts.map((d) => ({ ...d, ...formatDrift(d) }))
+      };
+    }
+
+    case 'episodic_consolidate': {
+      const all = getCaptures({ since: Date.now() - 30 * 24 * 60 * 60 * 1000 });
+      const pairs = consolidationPass(all, { topK: args.topK || 3, threshold: 0.42 });
+      if (pairs.length) {
+        bridgeContext.setState?.((prev) => applyEpisodicSTDP(prev, pairs));
+      }
+      return {
+        clustersConsolidated: pairs.length,
+        pairs: pairs.map((p) => ({ regionKey: p.regionKey, members: p.memberIds.length, reason: p.reason }))
       };
     }
 

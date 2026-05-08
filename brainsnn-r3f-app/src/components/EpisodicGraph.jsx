@@ -19,7 +19,7 @@ const HIGHLIGHT_RADIUS = 9;
  *
  * Pure presentational — the parent owns the captures array.
  */
-export default function EpisodicGraph({ captures, height = 140 }) {
+export default function EpisodicGraph({ captures, height = 140, onNodeClick }) {
   const canvasRef = useRef(null);
   const [hoverIdx, setHoverIdx] = useState(-1);
   const [size, setSize] = useState({ w: 600, h: height });
@@ -48,6 +48,12 @@ export default function EpisodicGraph({ captures, height = 140 }) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawGraph(ctx, layout, size, hoverIdx);
   }, [layout, size, hoverIdx]);
+
+  function handleClick() {
+    if (hoverIdx < 0 || !onNodeClick) return;
+    const node = layout.nodes[hoverIdx];
+    if (node?.id) onNodeClick(node.id);
+  }
 
   function handleMove(e) {
     const canvas = canvasRef.current;
@@ -83,9 +89,10 @@ export default function EpisodicGraph({ captures, height = 140 }) {
     <div className="episodic-graph-host" aria-label="Capture connection graph">
       <canvas
         ref={canvasRef}
-        style={{ width: '100%', height: size.h }}
+        style={{ width: '100%', height: size.h, cursor: hoverIdx >= 0 ? 'pointer' : 'default' }}
         onMouseMove={handleMove}
         onMouseLeave={() => setHoverIdx(-1)}
+        onClick={handleClick}
       />
       {hovered && (
         <div

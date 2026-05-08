@@ -782,3 +782,35 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
         gradient header, pill row, streak tile, autobrief banner,
         graph host, drift card. Honors prefers-reduced-motion via
         the global rule.
+    - Round 3 — Ask the Vault + agent surface parity:
+      - episodicAsk.js: askTheVault(question) embeds the question
+        (MiniLM, fall back to trigram Jaccard), runs cosine
+        retrieval over the capture log, composes a deterministic
+        local answer from the hits' categories+pressure+top hit,
+        optionally upgrades through Gemma with a prompt that
+        forces grounding in the retrieved captures. Returns
+        consistent shape across local + Gemma paths.
+      - Panel: "Ask the vault" card after the synth card —
+        question input + answer + ranked hits (clickable, scroll
+        to corresponding capture card). Uses the same focusCapture
+        helper that the connection graph uses for click-to-
+        navigate.
+      - Pin sort: pinned captures float to the top of the timeline
+        regardless of recency. CaptureCard already supported
+        togglePinned; the sort rule lives in the panel's `captures`
+        useMemo.
+      - EpisodicGraph: onNodeClick prop wired through; canvas
+        cursor flips to pointer over a node; clicking a node
+        scrolls the matching capture card into view + flashes a
+        cyan ring.
+      - Background auto-run: panel-level opt-in toggle persisted
+        in `brainsnn_episodic_autorun_v1`. When on AND a brief or
+        synthesis becomes ready, a 45–60s timer fires the run
+        silently. The banner shows "auto-run on" while active.
+      - MCP tools: episodic_ask, episodic_drift, episodic_consol-
+        idate. The consolidate tool reuses the Layer 26 dream
+        coupling's applyEpisodicSTDP() so an agent can
+        consolidate the episodic graph into the brain weights on
+        demand without waiting for idle Dream Mode.
+      - hotkeys.js: 'ep' chord jumps to Layer 101 Episodic Cortex.
+        Reachable via Shift-? cheat sheet + ⌘K Command Palette.

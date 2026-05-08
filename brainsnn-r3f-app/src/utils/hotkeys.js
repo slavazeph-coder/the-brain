@@ -58,6 +58,7 @@ const HOTKEYS = {
   be: 31,   // brain Evolve
   ae: 32,   // Attack evolve
   rt2: 25,  // red team (fallback via palette)
+  ep: 101,  // EPisodic Cortex
 };
 
 export function listHotkeys() {

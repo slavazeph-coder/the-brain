@@ -34,6 +34,7 @@ import { detectDecisionDrifts, formatDrift } from '../utils/episodicDrift';
 import { consumeDeepLinkCapture, bookmarkletSource } from '../utils/episodicDeepLink';
 import { isSpeechSupported, createSpeechSession } from '../utils/speech';
 import { ocrImage } from '../utils/ocr';
+import { askTheVault } from '../utils/episodicAsk';
 import EpisodicGraph from './EpisodicGraph';
 
 const EXAMPLE_CAPTURES = [
@@ -271,8 +272,14 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
   const [bookmarkletOpen, setBookmarkletOpen] = useState(false);
   const [voiceState, setVoiceState] = useState('idle'); // 'idle' | 'listening'
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [askDraft, setAskDraft] = useState('');
+  const [askResult, setAskResult] = useState(null);
+  const [autoRun, setAutoRun] = useState(() => {
+    try { return localStorage.getItem('brainsnn_episodic_autorun_v1') === '1'; } catch { return false; }
+  });
   const voiceSessionRef = useRef(null);
   const ocrInputRef = useRef(null);
+  const cardRefs = useRef(new Map());
 
   // Consume any deep-link capture on mount (one-shot — params get cleaned up).
   useEffect(() => {
@@ -303,7 +310,13 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     const opts = {};
     if (filter !== 'all') opts.category = filter;
     if (search.trim()) opts.search = search.trim();
-    return getCaptures(opts).slice(0, 30);
+    const list = getCaptures(opts);
+    // Pinned float to the top, then chronological desc.
+    list.sort((a, b) => {
+      if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+      return b.ts - a.ts;
+    });
+    return list.slice(0, 30);
   }, [filter, search]);
 
   const allCapturesForGraph = useMemo(() => getCaptures().slice(0, 60), [captures]);
@@ -316,6 +329,30 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     setAutoBriefReady(shouldRunBrief(all));
     setAutoSynthReady(shouldRunSynthesis(all));
   }, [captures]);
+
+  // Background auto-run — opt-in via a toggle, persisted. When the
+  // brief becomes ready, wait 45 seconds (so the user isn't interrupted
+  // mid-thought) then run silently. Same for the weekly synthesis at a
+  // slower cadence.
+  useEffect(() => {
+    if (!autoRun) return;
+    if (busy) return;
+    let timer = null;
+    if (autoBriefReady?.ok && !brief) {
+      timer = setTimeout(() => { handleBrief(); }, 45_000);
+    } else if (autoSynthReady?.ok && !synth) {
+      timer = setTimeout(() => { handleSynthesis(); }, 60_000);
+    }
+    return () => { if (timer) clearTimeout(timer); };
+  }, [autoRun, autoBriefReady?.ok, autoSynthReady?.ok, busy, brief, synth]);
+
+  function toggleAutoRun() {
+    setAutoRun((v) => {
+      const next = !v;
+      try { localStorage.setItem('brainsnn_episodic_autorun_v1', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   function handleCapture() {
     const text = draft.trim();
@@ -345,6 +382,26 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     const ex = EXAMPLE_CAPTURES[i];
     setDraftTitle(ex.title);
     setDraft(ex.text);
+  }
+
+  async function handleAsk() {
+    const q = askDraft.trim();
+    if (!q) return;
+    setBusy('ask');
+    try {
+      const res = await askTheVault(q);
+      setAskResult(res);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function focusCapture(id) {
+    const el = cardRefs.current.get(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.boxShadow = '0 0 0 2px #5ad4ff';
+    setTimeout(() => { if (el) el.style.boxShadow = ''; }, 1400);
   }
 
   async function handleOcrPick(e) {
@@ -602,8 +659,13 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
             <strong>The vault is ready to talk back.</strong>{' '}
             {autoBriefReady?.ok && <>Daily brief unlocked ({autoBriefReady.freshCount} fresh captures). </>}
             {autoSynthReady?.ok && <>Weekly synthesis unlocked ({autoSynthReady.weeklyCount} this week). </>}
+            {autoRun && <em>· auto-run on</em>}
           </span>
-          <span style={{ display: 'flex', gap: 6 }}>
+          <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }} title="Run brief / synthesis automatically 45s after they unlock">
+              <input type="checkbox" checked={autoRun} onChange={toggleAutoRun} />
+              auto-run
+            </label>
             {autoBriefReady?.ok && (
               <button className="btn" onClick={handleBrief} disabled={busy === 'brief'}>
                 Run brief
@@ -621,6 +683,56 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
       <BriefCard brief={brief} onUseInsight={handleSaveBriefAsInsight} />
       <SynthesisCard synth={synth} onUseInsight={handleSaveSynthAsInsight} />
 
+      <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 8, background: 'rgba(255,212,138,0.06)', border: '1px solid rgba(255,212,138,0.22)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+          <strong style={{ color: '#ffd48a' }}>Ask the vault</strong>
+          <span className="muted small-note">RAG over your captures · {embedReady ? 'cosine' : 'lexical fallback'}{isGemmaConfigured() ? ' + Gemma' : ''}</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            className="share-input"
+            placeholder='What did I think about Postgres last week? · Why am I saving fear-coded posts? · Decisions I have not committed to'
+            value={askDraft}
+            onChange={(e) => setAskDraft(e.target.value.slice(0, 240))}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAsk(); }}
+            style={{ flex: 1 }}
+          />
+          <button className="btn primary" onClick={handleAsk} disabled={busy === 'ask' || !askDraft.trim()}>
+            {busy === 'ask' ? 'Searching…' : 'Ask →'}
+          </button>
+        </div>
+        {askResult?.ok && (
+          <div style={{ marginTop: 10 }}>
+            <p style={{ margin: 0 }}>{askResult.answer}</p>
+            {askResult.hits?.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <strong className="muted small-note">Top {askResult.hits.length} hits</strong>
+                {askResult.hits.map((h, i) => (
+                  <button
+                    key={h.capture.id}
+                    className="ghost small"
+                    onClick={() => focusCapture(h.capture.id)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', marginTop: 4, padding: '6px 8px', background: 'rgba(255,255,255,0.03)' }}
+                  >
+                    <span className="muted" style={{ fontSize: 11 }}>{i + 1}.</span>{' '}
+                    <strong>{h.capture.title.slice(0, 70)}</strong>{' '}
+                    <span className="muted small-note">— {h.score.toFixed(2)} · {EPISODIC_CATEGORIES[h.capture.primary]?.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {askResult && !askResult.ok && (
+          <p className="muted small-note" style={{ marginTop: 8 }}>
+            {askResult.reason === 'empty-vault' ? 'Capture some notes first — the vault is empty.'
+              : askResult.reason === 'question-too-short' ? 'Type a longer question.'
+              : `No match: ${askResult.reason}`}
+          </p>
+        )}
+      </div>
+
       <div className="episodic-stats">
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <strong>Timeline</strong>
@@ -634,7 +746,11 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
         </span>
       </div>
 
-      <EpisodicGraph captures={allCapturesForGraph} height={150} />
+      <EpisodicGraph
+        captures={allCapturesForGraph}
+        height={150}
+        onNodeClick={focusCapture}
+      />
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         <button
@@ -672,13 +788,14 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
 
       {captures.length > 0 ? (
         captures.map((c) => (
-          <CaptureCard
-            key={c.id}
-            capture={c}
-            onApply={handleApply}
-            onDelete={handleDelete}
-            onPin={handlePin}
-          />
+          <div key={c.id} ref={(el) => { if (el) cardRefs.current.set(c.id, el); else cardRefs.current.delete(c.id); }}>
+            <CaptureCard
+              capture={c}
+              onApply={handleApply}
+              onDelete={handleDelete}
+              onPin={handlePin}
+            />
+          </div>
         ))
       ) : (
         <p className="muted small-note">No captures match the current filter. Drop one above to feed the vault.</p>
