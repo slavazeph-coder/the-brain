@@ -740,3 +740,45 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       mapped onto a 3D cortex, and STDP-rehearsed during idle Dream
       Mode. Connections aren't a graph plugin — they are the
       physics of the brain.
+    - Round 2 — capture-anywhere + vault-talks-back loop:
+      - episodicAutoBrief.js: persisted scheduler (`brainsnn_
+        episodic_auto_v1`). Daily Brief unlocks at >20h since last
+        + ≥3 fresh captures; Weekly Synthesis unlocks every 6.5d
+        with ≥4 captures in trailing 7d. Banner surfaces in the
+        panel when ready; recordBrief / recordSynthesis persist
+        result snapshots (cap 12). nextBriefRelative() and
+        nextSynthesisRelative() drive the schedule footer.
+      - episodicStreak.js: pure computeStreak(captures) walks UTC
+        day keys, persists longest + totalDays in
+        `brainsnn_episodic_streak_v1`. Renders inline as a streak
+        chip ("🔥 12-day streak · 3 today") next to the Timeline
+        header.
+      - episodicDrift.js: detectDecisionDrifts() scans every
+        `decision` capture older than 3 days and finds newer
+        captures with cosine ≥ 0.34 AND either valence-flip
+        ≥ 0.45 or `incident` shadow. Returns ranked drifts; panel
+        merges them into the Synthesis card under
+        Contradictions with a distinct red "drift" treatment.
+      - episodicDeepLink.js: ?capture=<text>, ?capture-url=<url>,
+        ?capture-title=<title>. consumeDeepLinkCapture() runs on
+        panel mount, fires onApplyEpisodic, then strips the params
+        from the URL bar. Powers the bookmarklet + any external
+        integration. bookmarkletSource(origin) returns drag-able
+        javascript: source.
+      - EpisodicGraph.jsx: canvas-rendered connection graph mini-
+        viz. Cluster wheels along the top arc (radius scales with
+        cluster size), singletons row along the bottom. Hover
+        → highlighted node + tooltip. ResizeObserver on the host
+        keeps it responsive. Renders inline in the panel above
+        the timeline.
+      - Voice capture: 🎙 button uses Layer 59's createSpeech
+        Session and pipes interim+final transcripts straight into
+        the draft. Tap-to-stop turns the button red. No-op on
+        Firefox.
+      - OCR capture: ◳ button uses Layer 58's ocrImage(); progress
+        % renders inline; extracted text appends to the draft and
+        the file basename auto-fills the title if blank.
+      - styles/global.css: full Episodic Cortex theme block —
+        gradient header, pill row, streak tile, autobrief banner,
+        graph host, drift card. Honors prefers-reduced-motion via
+        the global rule.

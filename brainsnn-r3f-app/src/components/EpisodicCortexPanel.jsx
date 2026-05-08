@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addCapture,
   addInsight,
@@ -16,11 +16,25 @@ import { captureToBrainState } from '../utils/episodicRouter';
 import { dailyBrief, weeklySynthesis } from '../utils/episodicSynthesis';
 import {
   EPISODIC_CATEGORIES,
-  EPISODIC_IDS,
-  categoryColor
+  EPISODIC_IDS
 } from '../data/episodicTaxonomy';
 import { initEmbeddings, isReady as embeddingsReady } from '../utils/embeddings';
 import { isGemmaConfigured } from '../utils/gemmaEngine';
+import {
+  shouldRunBrief,
+  shouldRunSynthesis,
+  recordBrief,
+  recordSynthesis,
+  nextBriefRelative,
+  nextSynthesisRelative,
+  getAutoBriefState
+} from '../utils/episodicAutoBrief';
+import { computeStreak, streakLabel } from '../utils/episodicStreak';
+import { detectDecisionDrifts, formatDrift } from '../utils/episodicDrift';
+import { consumeDeepLinkCapture, bookmarkletSource } from '../utils/episodicDeepLink';
+import { isSpeechSupported, createSpeechSession } from '../utils/speech';
+import { ocrImage } from '../utils/ocr';
+import EpisodicGraph from './EpisodicGraph';
 
 const EXAMPLE_CAPTURES = [
   {
@@ -144,7 +158,7 @@ function CaptureCard({ capture, onApply, onDelete, onPin }) {
 function BriefCard({ brief, onUseInsight }) {
   if (!brief) return null;
   return (
-    <div style={{ padding: '14px 16px', borderRadius: 8, background: 'rgba(90, 212, 255, 0.06)', border: '1px solid rgba(90,212,255,0.25)', marginTop: 14 }}>
+    <div className="episodic-brief-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
         <strong style={{ color: '#5ad4ff' }}>Daily Brief</strong>
         <span className="muted small-note">
@@ -183,10 +197,14 @@ function BriefCard({ brief, onUseInsight }) {
 
 function SynthesisCard({ synth, onUseInsight }) {
   if (!synth) return null;
+  const driftCount = synth.drifts?.length || 0;
   return (
-    <div style={{ padding: '14px 16px', borderRadius: 8, background: 'rgba(168, 111, 223, 0.06)', border: '1px solid rgba(168,111,223,0.3)', marginTop: 14 }}>
+    <div className="episodic-synth-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <strong style={{ color: '#a86fdf' }}>Weekly Synthesis</strong>
+        <strong style={{ color: '#a86fdf' }}>
+          Weekly Synthesis
+          {driftCount > 0 && <span style={{ marginLeft: 8, color: '#ffaaaa', fontSize: 12 }}>· {driftCount} decision drift{driftCount === 1 ? '' : 's'}</span>}
+        </strong>
         <span className="muted small-note">{synth.count} captures · {synth.source}</span>
       </div>
 
@@ -196,9 +214,9 @@ function SynthesisCard({ synth, onUseInsight }) {
       </div>
 
       <div style={{ marginTop: 10 }}>
-        <strong className="muted small-note">Contradictions</strong>
+        <strong className="muted small-note">Contradictions & decision drifts</strong>
         {synth.contradictions?.length ? synth.contradictions.map((c, i) => (
-          <div key={i} style={{ padding: '6px 8px', marginTop: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
+          <div key={i} className={c.kind === 'drift' ? 'episodic-drift-card' : ''} style={c.kind === 'drift' ? {} : { padding: '6px 8px', marginTop: 4, background: 'rgba(255,255,255,0.03)', borderRadius: 4 }}>
             <div><strong>{c.headline}</strong></div>
             <div className="muted small-note">{c.detail}</div>
           </div>
@@ -248,6 +266,21 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
   const [synth, setSynth] = useState(null);
   const [busy, setBusy] = useState(null); // 'embed' | 'brief' | 'synth' | null
   const [embedReady, setEmbedReady] = useState(embeddingsReady());
+  const [autoBriefReady, setAutoBriefReady] = useState(null); // {ok, freshCount} | null
+  const [autoSynthReady, setAutoSynthReady] = useState(null);
+  const [bookmarkletOpen, setBookmarkletOpen] = useState(false);
+  const [voiceState, setVoiceState] = useState('idle'); // 'idle' | 'listening'
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const voiceSessionRef = useRef(null);
+  const ocrInputRef = useRef(null);
+
+  // Consume any deep-link capture on mount (one-shot — params get cleaned up).
+  useEffect(() => {
+    const cap = consumeDeepLinkCapture();
+    if (cap) {
+      onApplyEpisodic?.(cap);
+    }
+  }, []);
 
   useEffect(() => {
     const unsub = subscribeEpisodic(() => setTick((x) => x + 1));
@@ -273,7 +306,16 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     return getCaptures(opts).slice(0, 30);
   }, [filter, search]);
 
+  const allCapturesForGraph = useMemo(() => getCaptures().slice(0, 60), [captures]);
   const stats = useMemo(() => captureStats(), [captures]);
+  const streak = useMemo(() => computeStreak(getCaptures()), [captures]);
+
+  // Re-evaluate auto-brief readiness when captures change.
+  useEffect(() => {
+    const all = getCaptures();
+    setAutoBriefReady(shouldRunBrief(all));
+    setAutoSynthReady(shouldRunSynthesis(all));
+  }, [captures]);
 
   function handleCapture() {
     const text = draft.trim();
@@ -305,6 +347,59 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     setDraft(ex.text);
   }
 
+  async function handleOcrPick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy('ocr');
+    setOcrProgress(0);
+    try {
+      const out = await ocrImage(file, { onProgress: (p) => setOcrProgress(p) });
+      if (!out.text) {
+        alert('OCR found no text in this image.');
+        return;
+      }
+      const title = (file.name || 'screenshot').replace(/\.[a-zA-Z0-9]{2,5}$/, '').slice(0, 80);
+      setDraftTitle((t) => t || title);
+      setDraft((d) => (d ? `${d}\n\n${out.text}` : out.text));
+    } catch (err) {
+      alert(`OCR error: ${err.message || err}`);
+    } finally {
+      setBusy(null);
+      setOcrProgress(0);
+      if (ocrInputRef.current) ocrInputRef.current.value = '';
+    }
+  }
+
+  function handleVoiceToggle() {
+    if (voiceState === 'listening') {
+      voiceSessionRef.current?.stop();
+      return;
+    }
+    const session = createSpeechSession({ lang: 'en-US', continuous: true });
+    if (!session.supported) {
+      alert('Web Speech API not supported in this browser. Try Chrome / Edge / Safari.');
+      return;
+    }
+    voiceSessionRef.current = session;
+    setVoiceState('listening');
+    session.start((evt) => {
+      if (evt.error) {
+        setVoiceState('idle');
+        alert(`Voice capture error: ${evt.error}`);
+        return;
+      }
+      if (evt.state === 'stopped') {
+        setVoiceState('idle');
+        // session.stop already gives us the final transcript via evt.final
+        if (evt.final) setDraft((d) => (d ? `${d} ${evt.final}` : evt.final));
+        return;
+      }
+      if (evt.final || evt.interim) {
+        setDraft(((evt.final || '') + (evt.interim ? ` ${evt.interim}` : '')).trim());
+      }
+    });
+  }
+
   async function handleWarmEmbed() {
     setBusy('embed');
     try {
@@ -325,6 +420,8 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
       const all = getCaptures();
       const result = await dailyBrief(all);
       setBrief(result);
+      recordBrief(result, all.length);
+      setAutoBriefReady(shouldRunBrief(all));
     } finally {
       setBusy(null);
     }
@@ -335,7 +432,17 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     try {
       const all = getCaptures();
       const result = await weeklySynthesis(all);
-      setSynth(result);
+      // Augment with decision-drift detector before rendering.
+      const drifts = detectDecisionDrifts(all, { topK: 3 });
+      const driftCards = drifts.map(formatDrift).filter(Boolean);
+      const enriched = {
+        ...result,
+        contradictions: [...(result.contradictions || []), ...driftCards].slice(0, 5),
+        drifts
+      };
+      setSynth(enriched);
+      recordSynthesis(enriched);
+      setAutoSynthReady(shouldRunSynthesis(all));
     } finally {
       setBusy(null);
     }
@@ -458,6 +565,27 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
         <button className="btn" onClick={handleSynthesis} disabled={busy === 'synth' || stats.total < 3}>
           {busy === 'synth' ? 'Synthesizing…' : 'Weekly Synthesis'}
         </button>
+        {isSpeechSupported() && (
+          <button
+            className={voiceState === 'listening' ? 'btn primary' : 'ghost small'}
+            onClick={handleVoiceToggle}
+            title="Web Speech API live transcription into the capture draft"
+            style={voiceState === 'listening' ? { background: '#ff4066', color: '#fff' } : {}}
+          >
+            {voiceState === 'listening' ? '● Stop voice' : '🎙 Voice capture'}
+          </button>
+        )}
+        <label className="ghost small" style={{ cursor: 'pointer' }} title="Tesseract.js OCR — paste a screenshot text into the draft">
+          {busy === 'ocr' ? `OCR ${Math.round(ocrProgress * 100)}%` : '◳ OCR image'}
+          <input
+            ref={ocrInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleOcrPick}
+            style={{ display: 'none' }}
+            disabled={busy === 'ocr'}
+          />
+        </label>
         <button
           className="ghost small"
           onClick={handleWarmEmbed}
@@ -468,16 +596,45 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
         </button>
       </div>
 
+      {(autoBriefReady?.ok || autoSynthReady?.ok) && (
+        <div className="episodic-autobrief-banner">
+          <span>
+            <strong>The vault is ready to talk back.</strong>{' '}
+            {autoBriefReady?.ok && <>Daily brief unlocked ({autoBriefReady.freshCount} fresh captures). </>}
+            {autoSynthReady?.ok && <>Weekly synthesis unlocked ({autoSynthReady.weeklyCount} this week). </>}
+          </span>
+          <span style={{ display: 'flex', gap: 6 }}>
+            {autoBriefReady?.ok && (
+              <button className="btn" onClick={handleBrief} disabled={busy === 'brief'}>
+                Run brief
+              </button>
+            )}
+            {autoSynthReady?.ok && (
+              <button className="btn" onClick={handleSynthesis} disabled={busy === 'synth'}>
+                Run synthesis
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
       <BriefCard brief={brief} onUseInsight={handleSaveBriefAsInsight} />
       <SynthesisCard synth={synth} onUseInsight={handleSaveSynthAsInsight} />
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 18, marginBottom: 6 }}>
-        <strong>Timeline</strong>
+      <div className="episodic-stats">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <strong>Timeline</strong>
+          <span className={`episodic-streak-tile${streak.current ? '' : ' cold'}`} title={`Longest: ${streak.longest}d · ${streak.totalDays} active days total`}>
+            {streakLabel(streak)}{streak.todayCaptures ? ` · ${streak.todayCaptures} today` : ''}
+          </span>
+        </div>
         <span className="muted small-note">
           {stats.total} total · {stats.last24h} last 24h · {stats.last7d} this week · mean pressure {Math.round(stats.meanPressure * 100)}%
           {stats.dreamConsolidated > 0 && ` · ${stats.dreamConsolidated} dream-reinforced`}
         </span>
       </div>
+
+      <EpisodicGraph captures={allCapturesForGraph} height={150} />
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         <button
@@ -527,17 +684,57 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
         <p className="muted small-note">No captures match the current filter. Drop one above to feed the vault.</p>
       )}
 
-      <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <button className="ghost small" onClick={handleExport} disabled={!stats.total}>
-          Export bundle
-        </button>
-        <label className="ghost small" style={{ cursor: 'pointer' }}>
-          Import bundle
-          <input type="file" accept="application/json" onChange={handleImport} style={{ display: 'none' }} />
-        </label>
-        <button className="ghost small" onClick={handleWipe} disabled={!stats.total} style={{ marginLeft: 'auto', color: '#ff8a96' }}>
-          Wipe all
-        </button>
+      <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 8 }}>
+          <strong style={{ fontSize: 12 }}>Auto-brief schedule</strong>
+          <span className="muted small-note">
+            next brief in <strong>{nextBriefRelative()}</strong> · next synthesis in <strong>{nextSynthesisRelative()}</strong>
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="ghost small" onClick={() => setBookmarkletOpen((v) => !v)}>
+            {bookmarkletOpen ? '× Hide bookmarklet' : '↗ Capture bookmarklet'}
+          </button>
+          <button className="ghost small" onClick={handleExport} disabled={!stats.total}>
+            Export bundle
+          </button>
+          <label className="ghost small" style={{ cursor: 'pointer' }}>
+            Import bundle
+            <input type="file" accept="application/json" onChange={handleImport} style={{ display: 'none' }} />
+          </label>
+          <button className="ghost small" onClick={handleWipe} disabled={!stats.total} style={{ marginLeft: 'auto', color: '#ff8a96' }}>
+            Wipe all
+          </button>
+        </div>
+
+        {bookmarkletOpen && (
+          <div style={{ marginTop: 10, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+            <p className="muted small-note" style={{ marginTop: 0 }}>
+              Drag the link below into your bookmarks bar. Selecting any text on any
+              page and clicking the bookmarklet opens BrainSNN with the selection
+              pre-captured into the Episodic Cortex.
+            </p>
+            <a
+              href={bookmarkletSource(typeof window !== 'undefined' ? window.location.origin : '')}
+              draggable="true"
+              onClick={(e) => e.preventDefault()}
+              style={{
+                display: 'inline-block', padding: '6px 12px', borderRadius: 6,
+                background: 'linear-gradient(90deg,#5ad4ff,#a86fdf)',
+                color: '#0c0e16', fontWeight: 600, textDecoration: 'none', cursor: 'grab'
+              }}
+            >
+              ↗ Capture to BrainSNN
+            </a>
+            <p className="muted small-note" style={{ marginBottom: 0, marginTop: 8 }}>
+              Deep-link contract: <code>?capture=&lt;text&gt;</code>{' '}
+              <code>?capture-url=&lt;url&gt;</code>{' '}
+              <code>?capture-title=&lt;title&gt;</code>.
+              Used by the bookmarklet, the MCP relay, and any external integration.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
