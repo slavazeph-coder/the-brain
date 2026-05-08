@@ -75,7 +75,7 @@ export default function EpisodicGraph({ captures, height = 140, onNodeClick }) {
 
   if (!captures?.length) {
     return (
-      <div className="episodic-graph-host" aria-label="Empty connection graph">
+      <div className="episodic-graph-host" role="img" aria-label="Empty connection graph — capture two or more notes to see clusters">
         <div className="episodic-graph-empty">
           Connection graph will render once you have ≥2 captures.
         </div>
@@ -84,9 +84,15 @@ export default function EpisodicGraph({ captures, height = 140, onNodeClick }) {
   }
 
   const hovered = hoverIdx >= 0 ? layout.nodes[hoverIdx] : null;
+  const clusterCount = layout.nodes.filter((n) => n.clusterIdx >= 0).length;
+  const singletonCount = layout.nodes.length - clusterCount;
 
   return (
-    <div className="episodic-graph-host" aria-label="Capture connection graph">
+    <div
+      className="episodic-graph-host"
+      role="img"
+      aria-label={`Capture connection graph: ${clusterCount} clustered nodes, ${singletonCount} singletons. Click a node to scroll to its capture.`}
+    >
       <canvas
         ref={canvasRef}
         style={{ width: '100%', height: size.h, cursor: hoverIdx >= 0 ? 'pointer' : 'default' }}

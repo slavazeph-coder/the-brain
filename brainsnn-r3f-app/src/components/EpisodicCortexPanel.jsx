@@ -336,6 +336,12 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
     }
   }, []);
 
+  // Cleanup voice session on unmount so the mic doesn't stay hot if the
+  // panel unmounts (route change, error boundary recover) while listening.
+  useEffect(() => () => {
+    try { voiceSessionRef.current?.stop(); } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     const unsub = subscribeEpisodic(() => setTick((x) => x + 1));
     return () => unsub();
@@ -370,11 +376,18 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
   const stats = useMemo(() => captureStats(), [captures]);
   const streak = useMemo(() => computeStreak(getCaptures()), [captures]);
 
-  // Re-evaluate auto-brief readiness when captures change.
+  // Re-evaluate auto-brief readiness when captures change AND on a slow
+  // interval so a panel left open across midnight (or after the cooldown
+  // window expires) catches up without waiting for the next capture.
   useEffect(() => {
-    const all = getCaptures();
-    setAutoBriefReady(shouldRunBrief(all));
-    setAutoSynthReady(shouldRunSynthesis(all));
+    const refresh = () => {
+      const all = getCaptures();
+      setAutoBriefReady(shouldRunBrief(all));
+      setAutoSynthReady(shouldRunSynthesis(all));
+    };
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    return () => clearInterval(t);
   }, [captures]);
 
   // Background auto-run — opt-in via a toggle, persisted. When the
@@ -674,6 +687,8 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
             className={voiceState === 'listening' ? 'btn primary' : 'ghost small'}
             onClick={handleVoiceToggle}
             title="Web Speech API live transcription into the capture draft"
+            aria-pressed={voiceState === 'listening'}
+            aria-label={voiceState === 'listening' ? 'Stop voice capture' : 'Start voice capture'}
             style={voiceState === 'listening' ? { background: '#ff4066', color: '#fff' } : {}}
           >
             {voiceState === 'listening' ? '● Stop voice' : '🎙 Voice capture'}
@@ -701,7 +716,7 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
       </div>
 
       {(autoBriefReady?.ok || autoSynthReady?.ok) && (
-        <div className="episodic-autobrief-banner">
+        <div className="episodic-autobrief-banner" role="status" aria-live="polite">
           <span>
             <strong>The vault is ready to talk back.</strong>{' '}
             {autoBriefReady?.ok && <>Daily brief unlocked ({autoBriefReady.freshCount} fresh captures). </>}
@@ -799,8 +814,10 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
         onNodeClick={focusCapture}
       />
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+      <div className="episodic-pill-row" role="tablist" aria-label="Filter captures by episodic category">
         <button
+          role="tab"
+          aria-selected={filter === 'all'}
           className={`ghost small ${filter === 'all' ? 'active' : ''}`}
           onClick={() => setFilter('all')}
           style={filter === 'all' ? { borderColor: '#5ad4ff', color: '#5ad4ff' } : {}}
@@ -813,10 +830,13 @@ export default function EpisodicCortexPanel({ onApplyEpisodic }) {
           return (
             <button
               key={id}
+              role="tab"
+              aria-selected={filter === id}
               className="ghost small"
               onClick={() => setFilter(id)}
               style={filter === id ? { borderColor: cat.color, color: cat.color } : { color: 'inherit', opacity: n ? 1 : 0.5 }}
               title={cat.description}
+              aria-label={`Filter by ${cat.label}, ${n} captures`}
             >
               {cat.icon} {cat.label} ({n})
             </button>

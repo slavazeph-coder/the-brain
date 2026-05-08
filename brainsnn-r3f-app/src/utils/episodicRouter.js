@@ -68,9 +68,13 @@ function extractAll(re, text, group = 0) {
   const out = [];
   const rx = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
   let m;
+  let safety = 0;
   while ((m = rx.exec(text)) !== null) {
     out.push(m[group]);
     if (out.length > 30) break; // sanity
+    // Guard against zero-width matches that would never advance.
+    if (m.index === rx.lastIndex) rx.lastIndex++;
+    if (++safety > 1000) break;
   }
   return out;
 }
@@ -147,12 +151,16 @@ function collectEvidence(text, patterns) {
     const flags = rx.flags.includes('g') ? rx.flags : rx.flags + 'g';
     const re = new RegExp(rx.source, flags);
     let m;
+    let safety = 0;
     while ((m = re.exec(text)) !== null) {
       const snippet = m[0].trim();
       if (snippet.length >= 2 && snippet.length <= 60) {
         out.add(snippet.toLowerCase());
       }
       if (out.size >= 3) break;
+      // Guard against zero-width matches.
+      if (m.index === re.lastIndex) re.lastIndex++;
+      if (++safety > 500) break;
     }
     if (out.size >= 3) break;
   }

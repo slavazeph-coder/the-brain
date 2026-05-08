@@ -291,9 +291,14 @@ function localKnowledgeGaps(captures) {
     });
   }
 
-  // Orphan high-pressure captures with no neighbors — high signal, low context
-  const orphans = list.filter((c) => {
-    if ((c.firewall?.pressure || 0) < 0.4) return false;
+  // Orphan high-pressure captures with no neighbors — high signal, low context.
+  // Bound the work: take the top 8 highest-pressure candidates first so we
+  // don't run findSimilar over the entire list when the corpus is large.
+  const candidates = list
+    .filter((c) => (c.firewall?.pressure || 0) >= 0.4)
+    .sort((a, b) => (b.firewall?.pressure || 0) - (a.firewall?.pressure || 0))
+    .slice(0, 8);
+  const orphans = candidates.filter((c) => {
     const sims = findSimilar(c.id, { k: 1, minScore: 0.36 });
     return sims.length === 0;
   });
@@ -425,9 +430,14 @@ export async function dailyBrief(captures, opts = {}) {
   const { useGemma = isGemmaConfigured(), windowDays = 7 } = opts;
   const list = normalizeBucket(captures).filter((c) => Date.now() - c.ts <= windowDays * DAY_MS);
 
-  const connections = localConnections(list, { k: 3 });
-  const pattern = localPattern(list);
-  const question = localQuestion(list);
+  // Each section is wrapped so a single bad regex or malformed capture
+  // can't tank the whole brief — render whatever sections we can.
+  let connections = [];
+  let pattern = '';
+  let question = '';
+  try { connections = localConnections(list, { k: 3 }); } catch (e) { console.warn('[episodicSynthesis] connections failed:', e?.message); }
+  try { pattern = localPattern(list); } catch (e) { console.warn('[episodicSynthesis] pattern failed:', e?.message); pattern = 'Pattern unavailable.'; }
+  try { question = localQuestion(list); } catch (e) { console.warn('[episodicSynthesis] question failed:', e?.message); question = 'What is one thing you have not written down yet?'; }
   const local = { connections, pattern, question, source: 'local', count: list.length };
 
   if (!useGemma || list.length < 3) return local;
@@ -456,10 +466,14 @@ export async function weeklySynthesis(captures, opts = {}) {
   const { useGemma = isGemmaConfigured(), windowDays = 7 } = opts;
   const list = normalizeBucket(captures).filter((c) => Date.now() - c.ts <= windowDays * DAY_MS);
 
-  const emergingThesis = localEmergingThesis(list);
-  const contradictions = localContradictions(list);
-  const knowledgeGaps = localKnowledgeGaps(list);
-  const oneAction = localOneAction(list);
+  let emergingThesis = '';
+  let contradictions = [];
+  let knowledgeGaps = [];
+  let oneAction = '';
+  try { emergingThesis = localEmergingThesis(list); } catch (e) { console.warn('[episodicSynthesis] thesis failed:', e?.message); emergingThesis = 'Thesis unavailable for this window.'; }
+  try { contradictions = localContradictions(list); } catch (e) { console.warn('[episodicSynthesis] contradictions failed:', e?.message); }
+  try { knowledgeGaps = localKnowledgeGaps(list); } catch (e) { console.warn('[episodicSynthesis] gaps failed:', e?.message); }
+  try { oneAction = localOneAction(list); } catch (e) { console.warn('[episodicSynthesis] action failed:', e?.message); oneAction = 'Re-read one capture from this week.'; }
   const local = { emergingThesis, contradictions, knowledgeGaps, oneAction, source: 'local', count: list.length };
 
   if (!useGemma || list.length < 4) return local;

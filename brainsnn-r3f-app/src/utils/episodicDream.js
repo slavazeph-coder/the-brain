@@ -40,22 +40,34 @@ export function mountEpisodicDream(setState) {
   if (unsubscribe) return unsubscribe;
 
   unsubscribe = subscribeDream((dreamSnap) => {
-    if (!dreamSnap || dreamSnap.phase !== 'dreaming') return;
-    if (dreamSnap.cycleCount === lastCycleSeen) return;
-    lastCycleSeen = dreamSnap.cycleCount;
+    try {
+      if (!dreamSnap || dreamSnap.phase !== 'dreaming') return;
+      if (dreamSnap.cycleCount === lastCycleSeen) return;
+      lastCycleSeen = dreamSnap.cycleCount;
 
-    if (dreamSnap.cycleCount === 0 || dreamSnap.cycleCount % CYCLE_INTERVAL !== 0) return;
+      if (dreamSnap.cycleCount === 0 || dreamSnap.cycleCount % CYCLE_INTERVAL !== 0) return;
 
-    const recent = getCaptures({ since: Date.now() - 30 * 24 * 60 * 60 * 1000 });
-    if (recent.length < 2) return;
+      const recent = getCaptures({ since: Date.now() - 30 * 24 * 60 * 60 * 1000 });
+      if (recent.length < 2) return;
 
-    const pairs = consolidationPass(recent, { topK: MAX_PAIRS_PER_PASS, threshold: 0.45 });
-    if (!pairs.length) return;
+      const pairs = consolidationPass(recent, { topK: MAX_PAIRS_PER_PASS, threshold: 0.45 });
+      if (!pairs.length) return;
 
-    setState?.((prev) => applyEpisodicSTDP(prev, pairs));
+      if (typeof setState === 'function') {
+        setState((prev) => {
+          try { return applyEpisodicSTDP(prev, pairs); }
+          catch { return prev; }
+        });
+      }
 
-    for (const p of pairs) {
-      for (const id of p.memberIds || []) markConsolidated(id);
+      for (const p of pairs) {
+        for (const id of (p.memberIds || [])) {
+          try { markConsolidated(id); } catch { /* ignore */ }
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[episodicDream] consolidation cycle failed:', err?.message || err);
     }
   });
 

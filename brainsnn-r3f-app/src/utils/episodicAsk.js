@@ -23,9 +23,10 @@ const MIN_COSINE = 0.32;
 
 function fmtDate(ts) { return new Date(ts).toISOString().slice(0, 10); }
 
+const TRIGRAM_CAP = 4096;
 function trigrams(s) {
   const out = new Set();
-  const t = String(s || '').toLowerCase().replace(/\s+/g, ' ');
+  const t = String(s || '').slice(0, TRIGRAM_CAP).toLowerCase().replace(/\s+/g, ' ');
   for (let i = 0; i < t.length - 2; i++) out.add(t.slice(i, i + 3));
   return out;
 }
@@ -47,7 +48,10 @@ export async function askTheVault(question, opts = {}) {
   // 1) embed the question if possible
   let qVec = null;
   if (embeddingsReady()) {
-    try { qVec = await embed(q); } catch { /* fall through */ }
+    try { qVec = await embed(q); } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[episodicAsk] question embed failed, falling back to lexical:', err?.message);
+    }
   }
 
   // 2) score every capture

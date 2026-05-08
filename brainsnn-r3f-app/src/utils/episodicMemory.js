@@ -30,6 +30,11 @@ const STORE_KEY = 'brainsnn_episodic_v1';
 const EMB_KEY = 'brainsnn_episodic_emb_v1';
 const MAX_CAPTURES = 800;
 const MAX_EMBED_CACHE = 800;
+const MAX_CAPTURE_CHARS = 50_000;     // hard cap per capture text
+const MAX_TITLE_CHARS = 200;          // hard cap per inferred or supplied title
+const EMB_SAVE_INTERVAL_MS = 8_000;   // debounce embeddings save
+let _embSaveTimer = null;
+let _quotaWarnedAt = 0;
 
 let memCaptures = null; // null = not yet loaded
 let memEmbeddings = null;
@@ -52,7 +57,18 @@ function loadCaptures() {
 function saveCaptures() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(memCaptures || []));
-  } catch { /* quota — ignore */ }
+  } catch (err) {
+    warnQuota('episodic captures', err);
+  }
+}
+
+function warnQuota(label, err) {
+  // Throttle to once per 30s — quota errors can fire on every save attempt.
+  const now = Date.now();
+  if (now - _quotaWarnedAt < 30_000) return;
+  _quotaWarnedAt = now;
+  // eslint-disable-next-line no-console
+  console.warn(`[episodicMemory] localStorage quota exceeded for ${label}: ${err?.message || err}. Wipe or export from the panel.`);
 }
 
 function loadEmbeddings() {
@@ -71,15 +87,22 @@ function loadEmbeddings() {
 }
 
 function saveEmbeddings() {
-  try {
-    const obj = {};
-    let n = 0;
-    for (const [hash, vec] of memEmbeddings) {
-      if (n++ >= MAX_EMBED_CACHE) break;
-      obj[hash] = Array.from(vec);
+  // Debounce: a batch of addCaptures shouldn't trigger a serialize per call.
+  if (_embSaveTimer) return;
+  _embSaveTimer = setTimeout(() => {
+    _embSaveTimer = null;
+    try {
+      const obj = {};
+      let n = 0;
+      for (const [hash, vec] of memEmbeddings) {
+        if (n++ >= MAX_EMBED_CACHE) break;
+        obj[hash] = Array.from(vec);
+      }
+      localStorage.setItem(EMB_KEY, JSON.stringify(obj));
+    } catch (err) {
+      warnQuota('episodic embeddings cache', err);
     }
-    localStorage.setItem(EMB_KEY, JSON.stringify(obj));
-  } catch { /* quota — ignore */ }
+  }, EMB_SAVE_INTERVAL_MS);
 }
 
 // ---------- subscribe ----------
@@ -100,10 +123,24 @@ function emit() {
 /**
  * Capture a new note. Returns the routed record immediately.
  * Embeddings happen asynchronously when MiniLM is warm.
+ *
+ * Defensive caps:
+ *   - text trimmed to MAX_CAPTURE_CHARS (50KB) before routing
+ *   - title trimmed to MAX_TITLE_CHARS (200)
+ *   - opts.source / opts.kind validated against an allowlist
  */
 export function addCapture(text, opts = {}) {
-  const routed = routeCapture(text, opts);
+  const safeText = String(text || '').trim().slice(0, MAX_CAPTURE_CHARS);
+  if (safeText.length < 1) return null;
+  const safeOpts = {
+    ...opts,
+    title: opts.title ? String(opts.title).trim().slice(0, MAX_TITLE_CHARS) : undefined
+  };
+  const routed = routeCapture(safeText, safeOpts);
   if (!routed) return null;
+  if (routed.title && routed.title.length > MAX_TITLE_CHARS) {
+    routed.title = routed.title.slice(0, MAX_TITLE_CHARS);
+  }
   const list = loadCaptures();
 
   // Dedup: if the same hash already exists in the last hour, bump ts
@@ -117,12 +154,17 @@ export function addCapture(text, opts = {}) {
     return recent;
   }
 
+  const ALLOWED_KINDS = new Set(['capture', 'insight', 'brief', 'synthesis']);
+  const ALLOWED_SOURCES = new Set(['manual', 'paste', 'url', 'voice', 'import', 'dream', 'mcp', 'deeplink', 'deeplink-url', 'synthesis', 'agent']);
+  const kind = ALLOWED_KINDS.has(safeOpts.kind) ? safeOpts.kind : 'capture';
+  const source = ALLOWED_SOURCES.has(safeOpts.source) ? safeOpts.source : 'manual';
+
   const record = {
     id: `cap_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     ts: Date.now(),
-    kind: opts.kind || 'capture',         // 'capture' | 'insight' | 'brief' | 'synthesis'
-    source: opts.source || 'manual',       // 'manual' | 'paste' | 'url' | 'voice' | 'import' | 'dream'
-    pinned: !!opts.pinned,
+    kind,
+    source,
+    pinned: !!safeOpts.pinned,
     ...routed
   };
 
@@ -197,7 +239,10 @@ export function clearAllCaptures() {
   memCaptures = [];
   saveCaptures();
   memEmbeddings?.clear();
-  saveEmbeddings();
+  // Wipe embeddings synchronously — saveEmbeddings is debounced, and the
+  // user explicitly asked for an immediate wipe.
+  if (_embSaveTimer) { clearTimeout(_embSaveTimer); _embSaveTimer = null; }
+  try { localStorage.removeItem(EMB_KEY); } catch { /* ignore */ }
   emit();
 }
 
@@ -316,15 +361,24 @@ export function findSimilar(captureId, { k = 5, minScore = 0.32 } = {}) {
   return scored.slice(0, k);
 }
 
+const LEX_TRIGRAM_CAP = 4096;
+const _lexCache = new WeakMap();
+
+function lexTrigrams(s) {
+  const text = String(s || '').slice(0, LEX_TRIGRAM_CAP);
+  if (typeof s === 'object' && s !== null) {
+    const cached = _lexCache.get(s);
+    if (cached) return cached;
+  }
+  const out = new Set();
+  const t = text.toLowerCase().replace(/\s+/g, ' ');
+  for (let i = 0; i < t.length - 2; i++) out.add(t.slice(i, i + 3));
+  return out;
+}
+
 function lexicalJaccard(a, b) {
-  const trigrams = (s) => {
-    const out = new Set();
-    const t = s.toLowerCase().replace(/\s+/g, ' ');
-    for (let i = 0; i < t.length - 2; i++) out.add(t.slice(i, i + 3));
-    return out;
-  };
-  const A = trigrams(a);
-  const B = trigrams(b);
+  const A = lexTrigrams(a);
+  const B = lexTrigrams(b);
   if (!A.size || !B.size) return 0;
   let inter = 0;
   for (const x of A) if (B.has(x)) inter++;
@@ -458,8 +512,27 @@ export function exportEpisodicBundle() {
 }
 
 export function importEpisodicBundle(bundle, { merge = true } = {}) {
-  if (!bundle || !Array.isArray(bundle.captures)) return { ok: false, reason: 'bad-bundle' };
-  const incoming = bundle.captures.filter(Boolean);
+  if (!bundle || typeof bundle !== 'object') return { ok: false, reason: 'bad-bundle' };
+  if (bundle.version && bundle.version !== 'brainsnn-episodic-v1') {
+    return { ok: false, reason: `unsupported-version: ${bundle.version}` };
+  }
+  if (!Array.isArray(bundle.captures)) return { ok: false, reason: 'missing-captures-array' };
+
+  const incoming = [];
+  let rejected = 0;
+  for (const c of bundle.captures) {
+    if (!c || typeof c !== 'object') { rejected++; continue; }
+    if (typeof c.text !== 'string' || !c.text.trim()) { rejected++; continue; }
+    if (typeof c.ts !== 'number' || !isFinite(c.ts) || c.ts <= 0) { rejected++; continue; }
+    if (typeof c.id !== 'string' || !c.id) { rejected++; continue; }
+    if (typeof c.hash !== 'string' || !c.hash) { rejected++; continue; }
+    // Soft cap on imported text length so a malicious bundle can't blow up
+    // the local store with a single 100MB capture.
+    if (c.text.length > MAX_CAPTURE_CHARS) c.text = c.text.slice(0, MAX_CAPTURE_CHARS);
+    if (c.title && c.title.length > MAX_TITLE_CHARS) c.title = c.title.slice(0, MAX_TITLE_CHARS);
+    incoming.push(c);
+  }
+
   if (!merge) {
     memCaptures = incoming.slice(0, MAX_CAPTURES);
   } else {
@@ -477,5 +550,5 @@ export function importEpisodicBundle(bundle, { merge = true } = {}) {
   }
   saveCaptures();
   emit();
-  return { ok: true, count: memCaptures.length };
+  return { ok: true, count: memCaptures.length, imported: incoming.length, rejected };
 }
