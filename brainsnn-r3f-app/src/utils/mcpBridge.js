@@ -29,6 +29,9 @@ import { mergeTemplateResults } from './semanticTemplates';
 import { pickTodaysChallenge } from './dailyChallenge';
 import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
+// Layer 101 — Episodic Cortex
+import { addCapture, getCaptures, captureStats } from './episodicMemory';
+import { dailyBrief, weeklySynthesis } from './episodicSynthesis';
 
 // ---------- tool catalog ----------
 
@@ -232,6 +235,47 @@ export const BRAIN_TOOLS = [
       properties: { text: { type: 'string' } },
       required: ['text']
     }
+  },
+  {
+    name: 'episodic_capture',
+    description: 'Layer 101 — capture a note into the Episodic Cortex. Auto-classifies into 8 categories (decision/insight/question/artifact/win/project/person/incident), runs the firewall + affect decoder, lights up the 3D brain, and persists locally.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string' },
+        title: { type: 'string' },
+        source: { type: 'string', description: 'Optional capture source tag (e.g. agent, telegram, readwise)' }
+      },
+      required: ['text']
+    }
+  },
+  {
+    name: 'episodic_brief',
+    description: 'Layer 101 — daily brief over recent captures. Returns connections / pattern / question. Uses Gemma when configured, deterministic local synthesis otherwise.',
+    inputSchema: {
+      type: 'object',
+      properties: { windowDays: { type: 'number', description: 'Window in days (default 7)' } }
+    }
+  },
+  {
+    name: 'episodic_synthesis',
+    description: 'Layer 101 — weekly synthesis. Returns emerging thesis / contradictions / knowledge gaps / one action.',
+    inputSchema: {
+      type: 'object',
+      properties: { windowDays: { type: 'number', description: 'Window in days (default 7)' } }
+    }
+  },
+  {
+    name: 'episodic_list',
+    description: 'Layer 101 — list recent episodic captures with their classification, affect, and pressure signals.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Optional category filter' },
+        sinceDays: { type: 'number', description: 'Only return captures within the last N days' },
+        limit: { type: 'number', description: 'Max results (default 20)' }
+      }
+    }
   }
 ];
 
@@ -429,6 +473,64 @@ async function dispatch(name, args) {
       if (!args.text) throw new Error('text required');
       const s = scoreContent(args.text);
       return await issueReceipt({ text: args.text, score: s });
+    }
+
+    case 'episodic_capture': {
+      if (!args.text) throw new Error('text required');
+      const cap = addCapture(args.text, { title: args.title, source: args.source || 'mcp' });
+      if (!cap) throw new Error('capture rejected');
+      // Push into the brain so the agent's contribution is visible.
+      bridgeContext.setState?.((prev) => {
+        if (!prev?.regions) return prev;
+        const regions = { ...prev.regions };
+        for (const [r, v] of Object.entries(cap.regions || {})) {
+          if (regions[r] != null) regions[r] = Math.min(0.95, Math.max(0.02, regions[r] * 0.6 + v * 0.6));
+        }
+        return { ...prev, regions, scenario: `Episodic · ${cap.title.slice(0, 32)}`, burst: Math.max(prev.burst || 0, 3), tick: (prev.tick || 0) + 1 };
+      });
+      return {
+        id: cap.id,
+        title: cap.title,
+        primary: cap.primary,
+        secondary: cap.secondary,
+        firewallPressure: cap.firewall?.pressure,
+        dominantAffect: cap.affects?.dominant?.[0]?.label || null,
+        regions: cap.regions
+      };
+    }
+
+    case 'episodic_brief': {
+      const all = getCaptures();
+      return await dailyBrief(all, { windowDays: args.windowDays || 7 });
+    }
+
+    case 'episodic_synthesis': {
+      const all = getCaptures();
+      return await weeklySynthesis(all, { windowDays: args.windowDays || 7 });
+    }
+
+    case 'episodic_list': {
+      const filter = {};
+      if (args.category) filter.category = args.category;
+      if (args.sinceDays) filter.since = Date.now() - args.sinceDays * 24 * 60 * 60 * 1000;
+      const list = getCaptures(filter).slice(0, args.limit || 20);
+      const stats = captureStats();
+      return {
+        count: list.length,
+        totalInVault: stats.total,
+        captures: list.map((c) => ({
+          id: c.id,
+          ts: c.ts,
+          title: c.title,
+          primary: c.primary,
+          secondary: c.secondary,
+          pressure: c.firewall?.pressure,
+          dominantAffect: c.affects?.dominant?.[0]?.label || null,
+          urls: c.urls,
+          tags: c.tags,
+          mentions: c.mentions
+        }))
+      };
     }
 
     default:

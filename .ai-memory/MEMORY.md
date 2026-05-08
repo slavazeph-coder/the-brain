@@ -697,3 +697,46 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       per-user immunity / streak / scan-count / receipt stats, and
       lists the four ways to navigate (⌘K / Shift-? / Role Tour /
       Layer Explorer). The "you made it here" panel.
+101. Episodic Cortex — vault that talks back (cannibalized from
+     breferrari/obsidian-mind + @cyrilxbt's "second brain" guide)
+    - 8-category episodic taxonomy: decision / insight / question /
+      artifact / win / project / person / incident, each with regex
+      triggers + brain-region affinity vector. data/episodicTaxonomy.js
+    - routeCapture(text) orchestrates the full pipeline per note:
+      Layer 4 firewall + Layer 29 affect decoder + Layer 87 genre
+      classifier + episodic taxonomy → merged region heatmap that
+      drives the 3D brain. utils/episodicRouter.js
+    - episodicMemory.js: persistent log (brainsnn_episodic_v1, cap
+      800), MiniLM embeddings (separate brainsnn_episodic_emb_v1
+      slot), findSimilar / mineClusters via cosine + union-find,
+      addCapture / addInsight / deleteCapture / togglePinned /
+      export+import bundle. Synthesis insights are saved back as
+      first-class captures (kind: 'insight') — the vault literally
+      talks to itself.
+    - episodicSynthesis.js: dailyBrief() returns connections /
+      pattern / question; weeklySynthesis() returns emerging
+      thesis / contradictions / knowledge gaps / one action. Local
+      path uses cluster mining + valence pairs + open-question
+      detection; Gemma path adds a system prompt that forces the
+      LLM to reference the pre-computed BrainSNN signals. Falls
+      back to local on Gemma error.
+    - episodicDream.js subscribes to Layer 26 dream phase and every
+      4 cycles runs consolidationPass over captures from the last
+      30d. Dominant region of each cluster STDP-reinforces every
+      connectome edge that touches it. markConsolidated() decorates
+      participating captures so the timeline shows ◐N counters.
+    - EpisodicCortexPanel: capture form + 4 example seeds + 8
+      category filter pills + search + recent timeline + Daily
+      Brief / Weekly Synthesis cards + warm-embeddings + export /
+      import / wipe. Dropping any capture into the panel pushes a
+      blended region overlay into the live brain via setState.
+    - MCP tools (Layer 19): episodic_capture, episodic_brief,
+      episodic_synthesis, episodic_list — agents on the WebSocket
+      relay can now feed captures into and synthesize from the
+      Episodic Cortex.
+    - Why this is deeper than Obsidian: every capture is
+      semantically embedded out of the box, manipulation-pressure-
+      scored before it pollutes the vault, affect-tagged, region-
+      mapped onto a 3D cortex, and STDP-rehearsed during idle Dream
+      Mode. Connections aren't a graph plugin — they are the
+      physics of the brain.
