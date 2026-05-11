@@ -2,7 +2,7 @@
 
 # The Brain
 
-**A 3D brain that sees, learns, defends, and dreams — 35 cognitive layers, zero backprop, browser-native.**
+**A 3D brain that sees, learns, defends, and dreams — 100 cognitive layers, zero backprop, browser-native.**
 
 ### Live: [brainsnn.com](https://brainsnn.com) — paste any tweet, see which feeling it installs.
 
@@ -28,7 +28,7 @@
 
 ## What this is
 
-**BrainSNN** is a 3D neuromorphic brain viewer that runs entirely in your browser. Seven anatomical regions, ten plastic pathways, and 35 layered cognitive features stacked on top — a Cognitive Firewall, a self-evolving rule engine, multimodal RAG, an affective decoder, a neurochemistry sandbox, an idle Dream Mode, an MCP bridge to your AI agents, and more.
+**BrainSNN** is a 3D neuromorphic brain viewer that runs entirely in your browser. Seven anatomical regions, ten plastic pathways, and 100 layered cognitive features stacked on top — a Cognitive Firewall, a self-evolving rule engine, multimodal RAG, an affective decoder, a neurochemistry sandbox, an idle Dream Mode, an MCP bridge to your AI agents, and more.
 
 Drop a paragraph in. Watch the amygdala glow. Slide cortisol up. Watch the hippocampus drop. Open Brain Evolve. Watch the firewall grow new rules to catch the manipulation it just missed. Open Dream Mode. Walk away. Come back to a brain that's been consolidating its weights while idle.
 
@@ -39,9 +39,9 @@ No backprop. No retraining. No server required for the main demo — TRIBE v2, G
 - **Frontend:** runs entirely in your browser. `npm install && npm run dev` — done. See [Run it locally](#run-it-locally) for the production preview path.
 - **TRIBE v2 backend:** optional. Local: `cd brainsnn-r3f-app/server && uvicorn api:app --reload`. Cloud configs (Fly.io / Railway / Docker) are checked in for when you want to host it remotely — see [brainsnn-r3f-app/server/README.md](brainsnn-r3f-app/server/README.md).
 
-## The 35 layers
+## The 100 layers
 
-The full feature catalog lives in [.ai-memory/MEMORY.md](.ai-memory/MEMORY.md). A curated tour:
+The full feature catalog lives in [.ai-memory/MEMORY.md](.ai-memory/MEMORY.md). A curated tour of representative layers:
 
 | Hero shot                                                            | What it does                                                                                                                                                                                                                                            |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,7 +53,7 @@ The full feature catalog lives in [.ai-memory/MEMORY.md](.ai-memory/MEMORY.md). 
 | <img src="docs/screenshots/07-vector-graph-fusion.png" width="380"/> | **Layer 34 — Vector-Graph Fusion.** Reranks Layer 33 hits with graph coherence (Louvain communities + sequence neighbors + sibling pulls). Slider controls the vector ↔ graph weight.                                                                   |
 | <img src="docs/screenshots/08-dream-mode.png" width="380"/>          | **Layer 26 — Dream Mode.** Idle monitor drifts the brain into replay-consolidation after N seconds. Co-active region pairs gain weight (STDP). Any activity wakes the brain.                                                                            |
 | <img src="docs/screenshots/09-red-team.png" width="380"/>            | **Layer 25 — Red Team Simulator.** 65-sample synthetic attack corpus across 5 manipulation categories + benign controls. Outputs detection rate, FPR, F1, and an A–F verdict grade.                                                                     |
-| <img src="docs/screenshots/10-knowledge-brain.png" width="380"/>     | **Layer 18 — Knowledge Brain.** Second-brain system with file scanner (find/tree, Obsidian import), LLM-Wiki markdown generator, and Gemini / Gemma-powered gap analysis.                                                                              |
+| <img src="docs/screenshots/10-knowledge-brain.png" width="380"/>     | **Layer 18 — Knowledge Brain.** Second-brain system with file scanner (find/tree, Obsidian import), LLM-Wiki markdown generator, and Gemini / Gemma-powered gap analysis.                                                                               |
 | <img src="docs/screenshots/11-mcp-bridge.png" width="380"/>          | **Layer 19 — MCP Brain Bridge.** 14 tools exposed via JSON-RPC. Standalone Node stdio server + WebSocket relay so Claude Code / Codex agents can read and steer the brain.                                                                              |
 | <img src="docs/screenshots/12-analytics.png" width="380"/>           | **Layer 7 — Analytics Dashboard.** Sparkline trends, Pearson correlation matrix across regions, z-score anomaly detection with threshold alerts.                                                                                                        |
 
@@ -69,7 +69,7 @@ flowchart LR
         direction TB
         ui[React 18 + Vite UI<br/>46 panels]
         r3f[React Three Fiber<br/>3D brain + neural flow]
-        layers["35 cognitive layers<br/>Firewall · Evolve · RAG · Dream · etc"]
+        layers["100 cognitive layers<br/>Firewall · Evolve · RAG · Dream · etc"]
         embed[transformers.js<br/>MiniLM-L6 in-browser embeddings]
         mcp[MCP Bridge<br/>14 JSON-RPC tools]
 
@@ -114,16 +114,16 @@ That's it. The 3D brain renders, the simulation loop ticks, all 35 layers are wi
 
 All variables are **optional**. The app runs in pure-frontend mode without any of them set.
 
-| Variable                  | What it unlocks                                               | Where to get it                                                                                                   |
-| ------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `VITE_TRIBE_API`          | TRIBE v2 fMRI predictions instead of STDP simulation          | Run [brainsnn-r3f-app/server/](brainsnn-r3f-app/server/) locally or deploy to Fly.io                              |
-| `VITE_GEMINI_API_KEY`     | Google Gemini 2.5 deep multimodal analysis (default LLM)      | [Google AI Studio](https://aistudio.google.com/app/apikey)                                                       |
-| `VITE_GEMINI_MODEL`       | Gemini model id (default `gemini-2.5-flash`; or `-pro`)       | n/a                                                                                                              |
-| `VITE_GEMMA_API_ENDPOINT` | Gemma 4 deep multimodal analysis (Gemini fallback)            | [Google AI Studio](https://aistudio.google.com), Ollama, or any OpenAI-compatible endpoint                        |
-| `VITE_GEMMA_API_KEY`      | Auth for the Gemma endpoint above                             | Same as above                                                                                                     |
-| `VITE_LOBSTER_TRAP_URL`   | Optional Veea Lobster Trap remote inspection endpoint         | Veea-issued; local heuristics run by default with zero network                                                   |
-| `VITE_LOBSTER_TRAP_KEY`   | Auth for the Lobster Trap endpoint above                      | Same as above                                                                                                    |
-| `VITE_SYNC_WS_URL`        | Multi-user live sync over WebSocket                           | Run any WebSocket relay; example schema in [LiveSyncPanel.jsx](brainsnn-r3f-app/src/components/LiveSyncPanel.jsx) |
+| Variable                  | What it unlocks                                          | Where to get it                                                                                                   |
+| ------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `VITE_TRIBE_API`          | TRIBE v2 fMRI predictions instead of STDP simulation     | Run [brainsnn-r3f-app/server/](brainsnn-r3f-app/server/) locally or deploy to Fly.io                              |
+| `VITE_GEMINI_API_KEY`     | Google Gemini 2.5 deep multimodal analysis (default LLM) | [Google AI Studio](https://aistudio.google.com/app/apikey)                                                        |
+| `VITE_GEMINI_MODEL`       | Gemini model id (default `gemini-2.5-flash`; or `-pro`)  | n/a                                                                                                               |
+| `VITE_GEMMA_API_ENDPOINT` | Gemma 4 deep multimodal analysis (Gemini fallback)       | [Google AI Studio](https://aistudio.google.com), Ollama, or any OpenAI-compatible endpoint                        |
+| `VITE_GEMMA_API_KEY`      | Auth for the Gemma endpoint above                        | Same as above                                                                                                     |
+| `VITE_LOBSTER_TRAP_URL`   | Optional Veea Lobster Trap remote inspection endpoint    | Veea-issued; local heuristics run by default with zero network                                                    |
+| `VITE_LOBSTER_TRAP_KEY`   | Auth for the Lobster Trap endpoint above                 | Same as above                                                                                                     |
+| `VITE_SYNC_WS_URL`        | Multi-user live sync over WebSocket                      | Run any WebSocket relay; example schema in [LiveSyncPanel.jsx](brainsnn-r3f-app/src/components/LiveSyncPanel.jsx) |
 
 See [brainsnn-r3f-app/.env.example](brainsnn-r3f-app/.env.example) for the copyable template.
 
