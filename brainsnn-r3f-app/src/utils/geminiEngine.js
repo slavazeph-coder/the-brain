@@ -63,7 +63,7 @@ async function callGemini(parts, systemPrompt, opts = {}) {
     contents: [{ parts }],
     generationConfig: {
       temperature: opts.temperature ?? 0.2,
-      maxOutputTokens: opts.maxOutputTokens ?? 1024,
+      maxOutputTokens: opts.maxOutputTokens ?? 2048,
       responseMimeType: 'application/json'
     }
   });
