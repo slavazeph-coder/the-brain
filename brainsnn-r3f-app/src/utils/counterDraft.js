@@ -15,6 +15,8 @@
  */
 
 import { scoreContent } from './cognitiveFirewall';
+import { isGeminiConfigured, rewriteWithGemini } from './geminiEngine';
+import { inspectPrompt } from './lobsterTrap';
 
 // ---------- local rewrite ------------------------------------------------
 
@@ -146,14 +148,33 @@ export async function counterDraft(text = '') {
 
   let output = localCounterDraft(input);
   let engine = 'local';
-  try {
-    const gemma = await rewriteViaGemma(input);
-    if (gemma && gemma.length >= 10) {
-      output = gemma;
-      engine = 'gemma';
+
+  const trap = inspectPrompt({ prompt: input, surface: 'counterDraft' });
+  const safeInput = trap.action === 'redact' && trap.redacted ? trap.redacted : input;
+
+  if (trap.action !== 'block') {
+    if (isGeminiConfigured()) {
+      try {
+        const gemini = await rewriteWithGemini(safeInput);
+        if (gemini && gemini.length >= 10) {
+          output = gemini;
+          engine = 'gemini';
+        }
+      } catch {
+        // fall through to Gemma
+      }
     }
-  } catch {
-    // keep local rewrite
+    if (engine === 'local') {
+      try {
+        const gemma = await rewriteViaGemma(safeInput);
+        if (gemma && gemma.length >= 10) {
+          output = gemma;
+          engine = 'gemma';
+        }
+      } catch {
+        // keep local rewrite
+      }
+    }
   }
 
   const afterScore = scoreContent(output);

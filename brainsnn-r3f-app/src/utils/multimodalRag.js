@@ -33,6 +33,7 @@
 import { embed, cosineSimilarity, isReady as embeddingsReady } from './embeddings';
 import { buildBM25Index, hybridSearch } from './bm25';
 import { analyzeMultimodalWithGemma, isGemmaConfigured } from './gemmaEngine';
+import { analyzeMultimodalWithGemini, isGeminiConfigured } from './geminiEngine';
 
 export const MODALITIES = ['text', 'image', 'table', 'equation', 'code'];
 
@@ -243,12 +244,21 @@ const HANDLERS = {
   image: async (item, { useGemma } = {}) => {
     let caption = item.caption || item.alt || '';
     let gemmaUsed = false;
-    if (useGemma && item.file && isGemmaConfigured()) {
-      try {
-        const gem = await analyzeMultimodalWithGemma(item.file);
-        caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
-        gemmaUsed = true;
-      } catch { /* keep fallback caption */ }
+    if (useGemma && item.file) {
+      if (isGeminiConfigured()) {
+        try {
+          const gem = await analyzeMultimodalWithGemini(item.file);
+          caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
+          gemmaUsed = true;
+        } catch { /* fall through to Gemma */ }
+      }
+      if (!gemmaUsed && isGemmaConfigured()) {
+        try {
+          const gem = await analyzeMultimodalWithGemma(item.file);
+          caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
+          gemmaUsed = true;
+        } catch { /* keep fallback caption */ }
+      }
     }
     const src = item.src ? ` [${item.src}]` : '';
     const rendered = `Image${src} alt="${item.alt || ''}" caption: ${caption || '(no caption)'}`;

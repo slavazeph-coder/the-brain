@@ -9,6 +9,7 @@
  */
 
 import { isGemmaConfigured, analyzeContentWithGemma } from './gemmaEngine';
+import { isGeminiConfigured, callGeminiJson } from './geminiEngine';
 import { KNOWLEDGE_DOMAINS } from '../data/knowledgeGraph';
 
 const GAP_ANALYSIS_PROMPT = `You are a knowledge gap analysis engine for a second-brain system called BrainSNN.
@@ -37,8 +38,8 @@ Return ONLY valid JSON: {"primary": "DOMAIN_ID", "secondary": "DOMAIN_ID_OR_NULL
 // ---------- AI Gap Analysis ----------
 
 export async function analyzeGapsWithGemma(knowledgeMap) {
-  if (!isGemmaConfigured()) {
-    throw new Error('Gemma API not configured');
+  if (!isGemmaConfigured() && !isGeminiConfigured()) {
+    throw new Error('No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)');
   }
 
   const domainSummary = Object.entries(knowledgeMap).map(([id, data]) => {
@@ -56,7 +57,7 @@ export async function analyzeGapsWithGemma(knowledgeMap) {
 // ---------- AI Document Classification ----------
 
 export async function classifyWithGemma(title, contentSnippet = '') {
-  if (!isGemmaConfigured()) return null;
+  if (!isGemmaConfigured() && !isGeminiConfigured()) return null;
 
   const prompt = `${CLASSIFY_PROMPT}\n\nDocument: "${title}"\nContent: "${contentSnippet.slice(0, 500)}"`;
   return callGemmaRaw(prompt);
@@ -65,8 +66,8 @@ export async function classifyWithGemma(title, contentSnippet = '') {
 // ---------- Learning Path Generation ----------
 
 export async function generateLearningPath(knowledgeMap, goals = '') {
-  if (!isGemmaConfigured()) {
-    throw new Error('Gemma API not configured');
+  if (!isGemmaConfigured() && !isGeminiConfigured()) {
+    throw new Error('No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)');
   }
 
   const domainSummary = Object.entries(knowledgeMap).map(([id, data]) => {
@@ -86,10 +87,13 @@ Generate a 5-step learning path. Return ONLY valid JSON:
 // ---------- Internal helper ----------
 
 async function callGemmaRaw(prompt) {
-  // Use the existing Gemma engine infrastructure
-  const { analyzeContentWithGemma: analyze } = await import('./gemmaEngine');
-  // We're repurposing the text analysis endpoint with a custom prompt
-  // The engine will send this as the user message
+  if (isGeminiConfigured()) {
+    try {
+      return await callGeminiJson(prompt);
+    } catch {
+      // fall through to Gemma
+    }
+  }
   const ENDPOINT = import.meta.env.VITE_GEMMA_API_ENDPOINT || '';
   const API_KEY = import.meta.env.VITE_GEMMA_API_KEY || '';
   const isGoogleAI = ENDPOINT.includes('generativelanguage.googleapis.com');
@@ -132,5 +136,5 @@ async function callGemmaRaw(prompt) {
 // ---------- Availability check ----------
 
 export function isGemmaKnowledgeAvailable() {
-  return isGemmaConfigured();
+  return isGemmaConfigured() || isGeminiConfigured();
 }
