@@ -9,6 +9,7 @@ import {
 } from '../utils/multimodalRag';
 import { isReady as embeddingsReady } from '../utils/embeddings';
 import { isGemmaConfigured } from '../utils/gemmaEngine';
+import { isGeminiConfigured } from '../utils/geminiEngine';
 
 /**
  * Layer 33 — Multimodal RAG Router Panel
@@ -33,7 +34,10 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
   useEffect(() => subscribeMultimodalRag(setStatus), []);
 
   const embedsOn = embeddingsReady();
+  const geminiOn = isGeminiConfigured();
   const gemmaOn = isGemmaConfigured();
+  const llmOn = geminiOn || gemmaOn;
+  const enrichEngineLabel = geminiOn ? 'Gemini' : gemmaOn ? 'Gemma 4' : 'Gemini / Gemma 4';
 
   const modalityBadges = useMemo(() => {
     return MODALITIES.map((m) => ({
@@ -50,7 +54,7 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
     try {
       const res = await indexMultimodal({
         rawText: raw,
-        useGemma: useGemma && gemmaOn,
+        useGemma: useGemma && llmOn,
         onProgress: (p) => setIndexProgress(p)
       });
       setResult({ justIndexed: res });
@@ -162,10 +166,10 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
             type="checkbox"
             checked={useGemma}
             onChange={(e) => setUseGemma(e.target.checked)}
-            disabled={!gemmaOn}
+            disabled={!llmOn}
           />
-          <span style={{ color: gemmaOn ? undefined : '#8a8f99' }}>
-            Enrich images via Gemma 4 {gemmaOn ? '' : '(not configured)'}
+          <span style={{ color: llmOn ? undefined : '#8a8f99' }}>
+            Enrich images via {enrichEngineLabel} {llmOn ? '' : '(not configured)'}
           </span>
         </label>
       </div>
