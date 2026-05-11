@@ -745,3 +745,7 @@ canon: /HACKATHON.md.
 - E2E Test 9 exposed an MCP stdio bug: `mcp-server/server.js` imported
   invalid `node:ws` and pure Lobster Trap / hypothesis tools could not
   run without a browser relay. Fix branch: claude/e2e-fix-test-9.
+- E2E Test 2 exposed the Railway Docker/Vite build-time-env footgun:
+  service variables are not visible to `RUN npm run build` unless the
+  Dockerfile declares them as `ARG`; otherwise the production bundle
+  bakes empty `import.meta.env.VITE_*` values.
