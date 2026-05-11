@@ -107,7 +107,7 @@ export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
       const insights = await analyzeGapsWithGemma(knowledgeMap);
       setAiInsights(insights);
     } catch (err) {
-      setError(`Gemma 4: ${err.message}`);
+      setError(`AI analysis: ${err.message}`);
     } finally {
       setAiLoading(false);
     }
@@ -121,7 +121,7 @@ export default function KnowledgeBrainPanel({ onApplyKnowledgeState }) {
       const path = await generateLearningPath(knowledgeMap, learningGoals);
       setAiInsights((prev) => ({ ...(prev || {}), learningPath: path }));
     } catch (err) {
-      setError(`Gemma 4: ${err.message}`);
+      setError(`AI analysis: ${err.message}`);
     } finally {
       setAiLoading(false);
     }
@@ -334,11 +334,11 @@ tools/dev-workflow.md | Developer Workflow Guide | 2025-12-01`
             </div>
           )}
 
-          {/* AI Insights (Gemma 4) */}
+          {/* AI Insights (Gemini / Gemma) */}
           {aiInsights && (
             <div className="kb-ai-insights">
               <div className="eyebrow gemma-eyebrow">
-                <span>Gemma 4 Intelligence</span>
+                <span>Gemini / Gemma Intelligence</span>
                 <span className="gemma-source-badge">AI</span>
               </div>
 

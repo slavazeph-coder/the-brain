@@ -32,7 +32,7 @@
 
 Drop a paragraph in. Watch the amygdala glow. Slide cortisol up. Watch the hippocampus drop. Open Brain Evolve. Watch the firewall grow new rules to catch the manipulation it just missed. Open Dream Mode. Walk away. Come back to a brain that's been consolidating its weights while idle.
 
-No backprop. No retraining. No server required for the main demo — TRIBE v2, Gemma 4, and the WebSocket sync are _optional_ upgrades, each behind one env var.
+No backprop. No retraining. No server required for the main demo — TRIBE v2, Google Gemini 2.5 (or Gemma 4 as a fallback), Veea Lobster Trap, and the WebSocket sync are _optional_ upgrades, each behind one env var.
 
 ## Run it
 
@@ -53,7 +53,7 @@ The full feature catalog lives in [.ai-memory/MEMORY.md](.ai-memory/MEMORY.md). 
 | <img src="docs/screenshots/07-vector-graph-fusion.png" width="380"/> | **Layer 34 — Vector-Graph Fusion.** Reranks Layer 33 hits with graph coherence (Louvain communities + sequence neighbors + sibling pulls). Slider controls the vector ↔ graph weight.                                                                   |
 | <img src="docs/screenshots/08-dream-mode.png" width="380"/>          | **Layer 26 — Dream Mode.** Idle monitor drifts the brain into replay-consolidation after N seconds. Co-active region pairs gain weight (STDP). Any activity wakes the brain.                                                                            |
 | <img src="docs/screenshots/09-red-team.png" width="380"/>            | **Layer 25 — Red Team Simulator.** 65-sample synthetic attack corpus across 5 manipulation categories + benign controls. Outputs detection rate, FPR, F1, and an A–F verdict grade.                                                                     |
-| <img src="docs/screenshots/10-knowledge-brain.png" width="380"/>     | **Layer 18 — Knowledge Brain.** Second-brain system with file scanner (find/tree, Obsidian import), LLM-Wiki markdown generator, and Gemma-powered gap analysis.                                                                                        |
+| <img src="docs/screenshots/10-knowledge-brain.png" width="380"/>     | **Layer 18 — Knowledge Brain.** Second-brain system with file scanner (find/tree, Obsidian import), LLM-Wiki markdown generator, and Gemini / Gemma-powered gap analysis.                                                                              |
 | <img src="docs/screenshots/11-mcp-bridge.png" width="380"/>          | **Layer 19 — MCP Brain Bridge.** 14 tools exposed via JSON-RPC. Standalone Node stdio server + WebSocket relay so Claude Code / Codex agents can read and steer the brain.                                                                              |
 | <img src="docs/screenshots/12-analytics.png" width="380"/>           | **Layer 7 — Analytics Dashboard.** Sparkline trends, Pearson correlation matrix across regions, z-score anomaly detection with threshold alerts.                                                                                                        |
 
@@ -80,22 +80,24 @@ flowchart LR
     end
 
     tribe["FastAPI + TRIBE v2<br/>(real fMRI predictions)<br/>Fly.io / Railway"]
-    gemma["Gemma 4 endpoint<br/>(deep multimodal analysis)<br/>Google AI Studio / Ollama / vLLM"]
+    gemini["Gemini 2.5 (default) or Gemma 4<br/>(deep multimodal analysis)<br/>Google AI Studio / Ollama / vLLM"]
+    lobster["Veea Lobster Trap<br/>(prompt-injection / PII / policy)<br/>local + optional remote"]
     sync["WebSocket relay<br/>(multi-user live sync)"]
     agents["Claude Code / Codex agents<br/>via stdio MCP server"]
 
     layers -. VITE_TRIBE_API .-> tribe
-    layers -. VITE_GEMMA_API_ENDPOINT .-> gemma
+    layers -. VITE_GEMINI_API_KEY / VITE_GEMMA_API_ENDPOINT .-> gemini
+    layers -. VITE_LOBSTER_TRAP_URL .-> lobster
     layers -. VITE_SYNC_WS_URL .-> sync
     mcp <-. WebSocket relay .-> agents
 
     class Browser browser
     class ui,r3f,layers,embed,mcp browser
-    class tribe,gemma,sync optional
+    class tribe,gemini,lobster,sync optional
     class agents external
 ```
 
-The browser column ships everything in the box. Every external arrow is gated by an env var — leave them blank and the corresponding layer falls back gracefully (TRIBE → STDP simulation, Gemma → regex scoring, sync → solo mode).
+The browser column ships everything in the box. Every external arrow is gated by an env var — leave them blank and the corresponding layer falls back gracefully (TRIBE → STDP simulation, Gemini/Gemma → regex scoring, Lobster Trap → local heuristics, sync → solo mode).
 
 ## Quickstart
 
@@ -115,8 +117,12 @@ All variables are **optional**. The app runs in pure-frontend mode without any o
 | Variable                  | What it unlocks                                               | Where to get it                                                                                                   |
 | ------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `VITE_TRIBE_API`          | TRIBE v2 fMRI predictions instead of STDP simulation          | Run [brainsnn-r3f-app/server/](brainsnn-r3f-app/server/) locally or deploy to Fly.io                              |
-| `VITE_GEMMA_API_ENDPOINT` | Gemma 4 deep multimodal analysis (text, images, video, audio) | [Google AI Studio](https://aistudio.google.com), Ollama, or any OpenAI-compatible endpoint                        |
+| `VITE_GEMINI_API_KEY`     | Google Gemini 2.5 deep multimodal analysis (default LLM)      | [Google AI Studio](https://aistudio.google.com/app/apikey)                                                       |
+| `VITE_GEMINI_MODEL`       | Gemini model id (default `gemini-2.5-flash`; or `-pro`)       | n/a                                                                                                              |
+| `VITE_GEMMA_API_ENDPOINT` | Gemma 4 deep multimodal analysis (Gemini fallback)            | [Google AI Studio](https://aistudio.google.com), Ollama, or any OpenAI-compatible endpoint                        |
 | `VITE_GEMMA_API_KEY`      | Auth for the Gemma endpoint above                             | Same as above                                                                                                     |
+| `VITE_LOBSTER_TRAP_URL`   | Optional Veea Lobster Trap remote inspection endpoint         | Veea-issued; local heuristics run by default with zero network                                                   |
+| `VITE_LOBSTER_TRAP_KEY`   | Auth for the Lobster Trap endpoint above                      | Same as above                                                                                                    |
 | `VITE_SYNC_WS_URL`        | Multi-user live sync over WebSocket                           | Run any WebSocket relay; example schema in [LiveSyncPanel.jsx](brainsnn-r3f-app/src/components/LiveSyncPanel.jsx) |
 
 See [brainsnn-r3f-app/.env.example](brainsnn-r3f-app/.env.example) for the copyable template.
