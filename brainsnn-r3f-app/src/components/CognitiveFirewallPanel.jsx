@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { scoreContent, scoreContentSmart, SCORE_FIELDS } from '../utils/cognitiveFirewall';
 import { isGemmaConfigured } from '../utils/gemmaEngine';
+import { isGeminiConfigured } from '../utils/geminiEngine';
 import { buildReactionPayload, reactionUrl, AFFECT_LABELS } from '../utils/reactionCard';
 import { scoreSentences, pressureBand, heatmapSummary } from '../utils/heatmap';
 import { refutationsFor } from '../utils/refutations';
@@ -52,7 +53,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [semanticHits, setSemanticHits] = useState([]);
   const [receipt, setReceipt] = useState(null);
+  const geminiAvailable = isGeminiConfigured();
   const gemmaAvailable = isGemmaConfigured();
+  const llmAvailable = geminiAvailable || gemmaAvailable;
+  const llmLabel = geminiAvailable ? 'Gemini' : gemmaAvailable ? 'Gemma 4' : 'AI';
   const embReady = embeddingsReady();
 
   // Layer 40 — sentence heatmap (computed lazily when user opens it)
@@ -299,7 +303,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
       <div className="control-actions" style={{ marginTop: 12 }}>
         <button className="btn primary" onClick={handleScan} disabled={text.trim().length < 5 || scanning}>
-          {scanning ? 'Scanning...' : gemmaAvailable ? 'Scan with Gemma 4' : 'Scan content'}
+          {scanning ? 'Scanning...' : llmAvailable ? `Scan with ${llmLabel}` : 'Scan content'}
         </button>
         {result && (
           <button className="btn" onClick={handleApply}>
@@ -598,6 +602,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
           <div className="firewall-confidence">
             Confidence: <strong>{result.confidence}</strong>
+            {typeof result.source === 'string' && result.source.startsWith('gemini') && <span className="gemma-source-badge">{result.source.replace('gemini:', 'Gemini ').trim()}</span>}
             {result.source === 'gemma4' && <span className="gemma-source-badge">Gemma 4</span>}
             {result.source === 'regex_fallback' && <span className="gemma-source-badge fallback">Regex fallback</span>}
             {result.languageLabel && result.language && result.language !== 'en' && (

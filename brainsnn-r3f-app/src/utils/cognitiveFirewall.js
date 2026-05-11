@@ -188,17 +188,27 @@ export function scoreContent(text = '') {
 }
 
 /**
- * Smart scoring — uses Gemma 4 when configured, falls back to regex.
+ * Smart scoring — prefers Gemini, then Gemma, then regex.
  * Returns a promise that always resolves to a score object.
  */
 export async function scoreContentSmart(text = '') {
-  // Lazy import to avoid circular deps
+  const wordCount = text.trim().split(/\s+/).length;
+  if (wordCount < 5) return { ...scoreContent(text), source: 'regex' };
+
+  const { isGeminiConfigured, analyzeContentWithGemini } = await import('./geminiEngine.js');
+  if (isGeminiConfigured()) {
+    try {
+      return await analyzeContentWithGemini(text);
+    } catch (_err) {
+      // fall through to Gemma
+    }
+  }
+
   const { isGemmaConfigured, analyzeContentWithGemma } = await import('./gemmaEngine.js');
-  if (isGemmaConfigured() && text.trim().split(/\s+/).length >= 5) {
+  if (isGemmaConfigured()) {
     try {
       return await analyzeContentWithGemma(text);
     } catch (_err) {
-      // Fall back to deterministic scoring on API failure
       return { ...scoreContent(text), source: 'regex_fallback' };
     }
   }
