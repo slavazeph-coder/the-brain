@@ -136,6 +136,16 @@ export async function rewriteWithGemini(text) {
   return JSON.parse(cleaned).rewrite || '';
 }
 
+/**
+ * Generic JSON-mode prompt — for use by knowledge gap analysis, classifiers,
+ * and any caller that wants Gemini to return arbitrary structured JSON.
+ */
+export async function callGeminiJson(prompt, { temperature = 0.3, maxOutputTokens = 2048 } = {}) {
+  const raw = await callGemini([{ text: prompt }], 'Return ONLY valid JSON, no markdown fences.', { temperature, maxOutputTokens });
+  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+  return JSON.parse(cleaned);
+}
+
 export async function checkGeminiHealth() {
   if (!isGeminiConfigured()) return { ok: false, reason: 'not_configured' };
   try {

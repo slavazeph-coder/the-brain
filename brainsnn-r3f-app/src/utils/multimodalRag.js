@@ -33,6 +33,7 @@
 import { embed, cosineSimilarity, isReady as embeddingsReady } from './embeddings';
 import { buildBM25Index, hybridSearch } from './bm25';
 import { analyzeMultimodalWithGemma, isGemmaConfigured } from './gemmaEngine';
+import { analyzeMultimodalWithGemini, isGeminiConfigured } from './geminiEngine';
 
 export const MODALITIES = ['text', 'image', 'table', 'equation', 'code'];
 
@@ -242,17 +243,31 @@ const HANDLERS = {
 
   image: async (item, { useGemma } = {}) => {
     let caption = item.caption || item.alt || '';
-    let gemmaUsed = false;
-    if (useGemma && item.file && isGemmaConfigured()) {
-      try {
-        const gem = await analyzeMultimodalWithGemma(item.file);
-        caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
-        gemmaUsed = true;
-      } catch { /* keep fallback caption */ }
+    let provider = null;
+    if (useGemma && item.file) {
+      if (isGeminiConfigured()) {
+        try {
+          const gem = await analyzeMultimodalWithGemini(item.file);
+          caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
+          provider = 'gemini';
+        } catch { /* fall through to Gemma */ }
+      }
+      if (!provider && isGemmaConfigured()) {
+        try {
+          const gem = await analyzeMultimodalWithGemma(item.file);
+          caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
+          provider = 'gemma';
+        } catch { /* keep fallback caption */ }
+      }
     }
     const src = item.src ? ` [${item.src}]` : '';
     const rendered = `Image${src} alt="${item.alt || ''}" caption: ${caption || '(no caption)'}`;
-    return { renderedText: rendered, summary: caption || item.alt || item.src || 'Image', gemmaUsed };
+    return {
+      renderedText: rendered,
+      summary: caption || item.alt || item.src || 'Image',
+      provider,
+      gemmaUsed: provider === 'gemma'
+    };
   },
 
   table: (item) => {
@@ -334,6 +349,7 @@ export async function indexMultimodal({
       renderedText: rendered.renderedText,
       summary: rendered.summary,
       payload: raw,
+      provider: rendered.provider || null,
       gemmaUsed: rendered.gemmaUsed || false
     };
     normalized.push(entry);
@@ -448,6 +464,7 @@ function projectResult(item) {
     summary: item.summary,
     renderedText: item.renderedText,
     payload: item.payload,
+    provider: item.provider || null,
     gemmaUsed: item.gemmaUsed
   };
 }
@@ -488,6 +505,7 @@ export async function insertContentList(contentList, { useGemma = false } = {}) 
       renderedText: rendered.renderedText,
       summary: rendered.summary,
       payload: raw,
+      provider: rendered.provider || null,
       gemmaUsed: rendered.gemmaUsed || false
     };
     if (useEmbed) {

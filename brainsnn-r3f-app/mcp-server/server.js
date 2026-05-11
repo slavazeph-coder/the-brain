@@ -46,7 +46,21 @@ const TOOLS = [
   { name: 'detect_anomaly', description: 'Z-score anomaly detection on recent activity.', inputSchema: { type: 'object', properties: {} } },
   { name: 'classify_knowledge', description: 'Classify text into 7 knowledge domains.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
   { name: 'narrate_state', description: 'Human-readable narration of current brain activity.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'impact_analysis', description: 'Blast-radius analysis for a region through the connectome.', inputSchema: { type: 'object', properties: { region: { type: 'string' } }, required: ['region'] } }
+  { name: 'impact_analysis', description: 'Blast-radius analysis for a region through the connectome.', inputSchema: { type: 'object', properties: { region: { type: 'string' } }, required: ['region'] } },
+  { name: 'run_autopsy', description: 'Layer 36 — per-speaker cognitive autopsy of a transcript.', inputSchema: { type: 'object', properties: { transcript: { type: 'string' } }, required: ['transcript'] } },
+  { name: 'counter_draft', description: 'Layer 42 — neutralize manipulative text (prefers Gemini, falls back to Gemma, then local).', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'run_diff', description: 'Layer 47 — side-by-side pressure delta for two texts.', inputSchema: { type: 'object', properties: { labelA: { type: 'string' }, textA: { type: 'string' }, labelB: { type: 'string' }, textB: { type: 'string' } }, required: ['textA', 'textB'] } },
+  { name: 'detect_archetypes', description: 'Layer 48 — ad / political / cult / phishing archetype detection.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'compare_rulesets', description: 'Layer 74 — score text under defaults vs active rules; report evidence delta.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'get_immunity', description: 'Layer 23 — current Cognitive Immunity score + breakdown.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'test_hypothesis', description: 'Layer 62 — structured belief testing across evidence items.', inputSchema: { type: 'object', properties: { type: { type: 'string', description: 'Hypothesis id — gaslighting / darvo / love-bombing / guilt-trip / phishing / cult-recruitment / political-attack / high-pressure' }, evidenceText: { type: 'string' } }, required: ['type', 'evidenceText'] } },
+  { name: 'explain_scan', description: 'Layer 70 — plain-English narration of a Firewall score.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'todays_daily', description: 'Layer 38 — today\'s Daily Firewall Challenge items.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'analyze_time_series', description: 'Layer 43 — manipulation-pressure trend over dated messages.', inputSchema: { type: 'object', properties: { raw: { type: 'string' } }, required: ['raw'] } },
+  { name: 'issue_receipt', description: 'Layer 46 — deterministic SHA-256 scan receipt.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } },
+  { name: 'lobster_trap_inspect', description: 'Layer 102 — Veea Lobster Trap prompt inspection (injection / secrets / PII). Returns allow / redact / block.', inputSchema: { type: 'object', properties: { prompt: { type: 'string' }, surface: { type: 'string' } }, required: ['prompt'] } },
+  { name: 'lobster_trap_log', description: 'Layer 102 — return rolling Lobster Trap audit log (most recent first).', inputSchema: { type: 'object', properties: { limit: { type: 'number' }, action: { type: 'string' } } } },
+  { name: 'lobster_trap_policy', description: 'Layer 102 — read or update Lobster Trap enforcement policy.', inputSchema: { type: 'object', properties: { blockOnPromptInjection: { type: 'boolean' }, blockOnSecrets: { type: 'boolean' }, redactPII: { type: 'boolean' }, allowToolDestructive: { type: 'boolean' }, remoteEnabled: { type: 'boolean' } } } }
 ];
 
 // ---------- WebSocket relay ----------
