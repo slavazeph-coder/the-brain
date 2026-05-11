@@ -266,7 +266,8 @@ function ResultBody({ r }) {
       <div>
         <p className="rag-result-text"><strong>Caption:</strong> {r.payload.caption || r.payload.alt || '(no caption)'}</p>
         {r.payload.src && <p className="rag-result-text muted small-note">src: <code>{r.payload.src}</code></p>}
-        {r.gemmaUsed && <p className="rag-result-text small-note" style={{ color: '#7dd87f' }}>Enriched via Gemma 4</p>}
+        {r.provider === 'gemini' && <p className="rag-result-text small-note" style={{ color: '#7dd87f' }}>Enriched via Gemini</p>}
+        {r.provider === 'gemma' && <p className="rag-result-text small-note" style={{ color: '#7dd87f' }}>Enriched via Gemma 4</p>}
       </div>
     );
   }

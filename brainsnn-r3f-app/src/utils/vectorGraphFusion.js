@@ -240,6 +240,7 @@ function projectFromSnap(item) {
     summary: item.summary,
     renderedText: item.renderedText,
     payload: item.payload,
+    provider: item.provider || null,
     gemmaUsed: item.gemmaUsed || false
   };
 }
