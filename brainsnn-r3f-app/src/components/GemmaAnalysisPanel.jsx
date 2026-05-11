@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { isGemmaConfigured, analyzeContentWithGemma, analyzeMultimodalWithGemma, checkGemmaHealth } from '../utils/gemmaEngine';
+import { isGemmaConfigured, analyzeContentWithGemma, analyzeMultimodalWithGemma, checkGemmaHealth, getGemmaModel } from '../utils/gemmaEngine';
 import { SCORE_FIELDS } from '../utils/cognitiveFirewall';
 
 function ScoreRow({ label, desc, value, color }) {
@@ -76,22 +76,23 @@ export default function GemmaAnalysisPanel({ onApplyToNetwork }) {
 
   const riskColor = !overall ? 'var(--primary)' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
   const statusColor = status === 'online' ? 'var(--ok)' : status === 'offline' ? 'var(--danger)' : 'var(--muted)';
+  const modelName = getGemmaModel() || 'Gemma';
 
   return (
     <section className="panel panel-pad gemma-panel">
       <div className="eyebrow gemma-eyebrow">
-        <span>GEMMA 4 — Deep Analysis</span>
+        <span>GEMMA — Deep Analysis ({modelName})</span>
         <span className="gemma-status-dot" style={{ background: statusColor }} title={status} />
       </div>
       <h2>AI-Powered Content Scanner</h2>
       <p className="muted">
         {status === 'unconfigured'
-          ? 'Set VITE_GEMMA_API_ENDPOINT and VITE_GEMMA_API_KEY to enable Gemma 4 deep analysis. Supports text, images, video, and audio.'
+          ? `Set VITE_GEMMA_API_ENDPOINT and VITE_GEMMA_API_KEY to enable ${modelName} deep analysis. Supports text, images, video, and audio.`
           : status === 'online'
-          ? 'Gemma 4 online — paste text or upload media for AI-driven manipulation analysis beyond regex patterns.'
+          ? `${modelName} online — paste text or upload media for AI-driven manipulation analysis beyond regex patterns.`
           : status === 'offline'
-          ? 'Gemma 4 endpoint unreachable — check your configuration.'
-          : 'Checking Gemma 4 availability...'}
+          ? `${modelName} endpoint unreachable — check your configuration.`
+          : `Checking ${modelName} availability...`}
       </p>
 
       {status !== 'unconfigured' && (

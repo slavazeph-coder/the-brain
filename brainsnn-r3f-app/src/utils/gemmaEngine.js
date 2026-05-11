@@ -16,11 +16,16 @@
 
 const ENDPOINT = import.meta.env.VITE_GEMMA_API_ENDPOINT || '';
 const API_KEY = import.meta.env.VITE_GEMMA_API_KEY || '';
+const MODEL = import.meta.env.VITE_GEMMA_MODEL || 'gemma-2-27b-it';
 
 // ---------- helpers ----------
 
 export function isGemmaConfigured() {
   return ENDPOINT.length > 0;
+}
+
+export function getGemmaModel() {
+  return MODEL;
 }
 
 function isGoogleAIStudio() {
@@ -84,7 +89,7 @@ async function callGemma(parts, systemPrompt) {
       contents: [{ parts }],
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
         responseMimeType: 'application/json'
       }
     });
@@ -96,13 +101,13 @@ async function callGemma(parts, systemPrompt) {
       return { type: 'text', text: '[unsupported media]' };
     });
     body = JSON.stringify({
-      model: 'gemma4',
+      model: MODEL,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent.length === 1 && userContent[0].type === 'text' ? userContent[0].text : userContent }
       ],
       temperature: 0.2,
-      max_tokens: 1024
+      max_tokens: 2048
     });
   }
 
@@ -145,7 +150,7 @@ function parseGemmaResponse(raw) {
     reasoning: parsed.reasoning || '',
     confidence: ['low', 'medium', 'high'].includes(parsed.confidence) ? parsed.confidence : 'medium',
     recommendedAction: parsed.recommendedAction || '',
-    source: 'gemma4'
+    source: `gemma:${MODEL}`
   };
 }
 
@@ -190,7 +195,7 @@ export async function checkGemmaHealth() {
   if (!isGemmaConfigured()) return { ok: false, reason: 'not_configured' };
   try {
     const result = await analyzeContentWithGemma('This is a neutral test sentence with no manipulation.');
-    return { ok: true, model: 'gemma4', latency: 0, result };
+    return { ok: true, model: MODEL, latency: 0, result };
   } catch (err) {
     return { ok: false, reason: err.message };
   }

@@ -114,7 +114,7 @@ async function callGemmaRaw(prompt) {
     });
   } else {
     body = JSON.stringify({
-      model: 'gemma4',
+      model: import.meta.env.VITE_GEMMA_MODEL || 'gemma-2-27b-it',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3, max_tokens: 2048
     });

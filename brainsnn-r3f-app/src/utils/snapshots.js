@@ -195,8 +195,8 @@ export function generateReport(snapshot, firewallResult = null, llmResult = null
   if (aiResult) {
     const engineLabel = typeof aiResult.source === 'string' && aiResult.source.startsWith('gemini')
       ? `Gemini (${aiResult.source.replace('gemini:', '').trim() || 'gemini-2.5-flash'})`
-      : aiResult.source === 'gemma4'
-      ? 'Gemma 4'
+      : typeof aiResult.source === 'string' && aiResult.source.startsWith('gemma')
+      ? `Gemma (${aiResult.source.replace('gemma:', '').trim() || 'gemma-2-27b-it'})`
       : 'AI';
     lines.push(
       ``,
