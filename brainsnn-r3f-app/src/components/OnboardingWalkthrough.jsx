@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 const STEPS = [
   {
     title: 'Welcome to BrainSNN',
-    body: 'A neuromorphic brain visualiser powered by React Three Fiber, Meta TRIBE v2, and Google Gemma 4. Let\'s take a quick tour.',
+    body: 'A neuromorphic brain visualiser powered by React Three Fiber, Meta TRIBE v2, and Google Gemini 2.5 (with Gemma 4 as a fallback). Let\'s take a quick tour.',
     target: null
   },
   {
@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     title: 'Cognitive Firewall',
-    body: 'Paste any content to score manipulation patterns. When Gemma 4 is configured, analysis upgrades from regex to AI-powered deep scanning.',
+    body: 'Paste any content to score manipulation patterns. When Gemini or Gemma is configured, analysis upgrades from regex to AI-powered deep scanning. Every prompt is screened by Veea Lobster Trap before send.',
     target: '.cognitive-firewall-panel'
   },
   {

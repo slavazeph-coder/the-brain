@@ -157,7 +157,9 @@ export function importSnapshotsJSON(jsonString) {
 
 // ---------- report generation ----------
 
-export function generateReport(snapshot, firewallResult = null, gemmaResult = null) {
+export function generateReport(snapshot, firewallResult = null, llmResult = null) {
+  // Back-compat alias for callers using the old name.
+  const aiResult = llmResult;
   const lines = [
     `# BrainSNN State Report`,
     ``,
@@ -190,17 +192,22 @@ export function generateReport(snapshot, firewallResult = null, gemmaResult = nu
     );
   }
 
-  if (gemmaResult) {
+  if (aiResult) {
+    const engineLabel = typeof aiResult.source === 'string' && aiResult.source.startsWith('gemini')
+      ? `Gemini (${aiResult.source.replace('gemini:', '').trim() || 'gemini-2.5-flash'})`
+      : aiResult.source === 'gemma4'
+      ? 'Gemma 4'
+      : 'AI';
     lines.push(
       ``,
-      `## Gemma 4 Deep Analysis`,
+      `## ${engineLabel} Deep Analysis`,
       ``,
-      `- Emotional activation: ${(gemmaResult.emotionalActivation * 100).toFixed(0)}%`,
-      `- Cognitive suppression: ${(gemmaResult.cognitiveSuppression * 100).toFixed(0)}%`,
-      `- Manipulation pressure: ${(gemmaResult.manipulationPressure * 100).toFixed(0)}%`,
-      `- Trust erosion: ${(gemmaResult.trustErosion * 100).toFixed(0)}%`,
-      gemmaResult.reasoning ? `- **AI Reasoning:** ${gemmaResult.reasoning}` : '',
-      `- **Recommendation:** ${gemmaResult.recommendedAction}`
+      `- Emotional activation: ${(aiResult.emotionalActivation * 100).toFixed(0)}%`,
+      `- Cognitive suppression: ${(aiResult.cognitiveSuppression * 100).toFixed(0)}%`,
+      `- Manipulation pressure: ${(aiResult.manipulationPressure * 100).toFixed(0)}%`,
+      `- Trust erosion: ${(aiResult.trustErosion * 100).toFixed(0)}%`,
+      aiResult.reasoning ? `- **AI Reasoning:** ${aiResult.reasoning}` : '',
+      `- **Recommendation:** ${aiResult.recommendedAction}`
     );
   }
 
