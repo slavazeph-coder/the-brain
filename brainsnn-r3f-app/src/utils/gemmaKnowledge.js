@@ -90,9 +90,13 @@ async function callGemmaRaw(prompt) {
   if (isGeminiConfigured()) {
     try {
       return await callGeminiJson(prompt);
-    } catch {
-      // fall through to Gemma
+    } catch (err) {
+      if (!isGemmaConfigured()) throw err;
+      // Gemma is configured — fall through to it
     }
+  }
+  if (!isGemmaConfigured()) {
+    throw new Error('No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)');
   }
   const ENDPOINT = import.meta.env.VITE_GEMMA_API_ENDPOINT || '';
   const API_KEY = import.meta.env.VITE_GEMMA_API_KEY || '';
