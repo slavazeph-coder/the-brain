@@ -6,6 +6,8 @@
 
 ### Live: [brainsnn.com](https://brainsnn.com) — paste any tweet, see which feeling it installs.
 
+**🏆 [TechEx Intelligent Enterprise Solutions Hackathon](https://lablab.ai/ai-hackathons/techex-intelligent-enterprise-solutions-hackathon) submission — May 11-19, 2026. Targeting Best Gemini + Best Veea (Lobster Trap) + Security & Trust + Data & Intelligence. Full pitch in [HACKATHON.md](HACKATHON.md).**
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 [![React 18](https://img.shields.io/badge/react-18-149eca.svg)](https://react.dev)
 [![Vite](https://img.shields.io/badge/vite-5-646cff.svg)](https://vitejs.dev)

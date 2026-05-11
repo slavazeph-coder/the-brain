@@ -9,6 +9,8 @@ import ExportPanel from './components/ExportPanel';
 import TribePanel from './components/TribePanel';
 import CognitiveFirewallPanel from './components/CognitiveFirewallPanel';
 import GemmaAnalysisPanel from './components/GemmaAnalysisPanel';
+import GeminiAnalysisPanel from './components/GeminiAnalysisPanel';
+import LobsterTrapPanel from './components/LobsterTrapPanel';
 import SnapshotPanel from './components/SnapshotPanel';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import NarrativePanel from './components/NarrativePanel';
@@ -497,6 +499,23 @@ export default function App() {
                 toastInfo('Gemma 4 analysis applied to brain');
               }}
             />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Gemini Analysis">
+            <GeminiAnalysisPanel
+              onApplyToNetwork={(geminiResult) => {
+                setFirewallResult(geminiResult);
+                setState((s) => mapTRIBEToRegions(s, geminiResult));
+                recordImmunity(IMMUNITY_EVENTS.GEMMA_SCAN, {
+                  pressure: geminiResult.manipulationPressure
+                });
+                toastInfo('Gemini analysis applied to brain');
+              }}
+            />
+          </ErrorBoundary>
+
+          <ErrorBoundary name="Lobster Trap">
+            <LobsterTrapPanel />
           </ErrorBoundary>
 
           <SnapshotPanel

@@ -29,6 +29,7 @@ import { mergeTemplateResults } from './semanticTemplates';
 import { pickTodaysChallenge } from './dailyChallenge';
 import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
+import { inspectToolCall, inspectPrompt, loadLog as loadLobsterLog, loadPolicy as loadLobsterPolicy, savePolicy as saveLobsterPolicy } from './lobsterTrap';
 
 // ---------- tool catalog ----------
 
@@ -232,6 +233,45 @@ export const BRAIN_TOOLS = [
       properties: { text: { type: 'string' } },
       required: ['text']
     }
+  },
+  {
+    name: 'lobster_trap_inspect',
+    description: 'Layer 102 — Veea Lobster Trap deep prompt inspection. Detects prompt injection, secret leakage, and PII. Returns allow / redact / block decision with reasons.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string' },
+        surface: { type: 'string', description: 'Optional label for the audit log (e.g. "agent.preflight").' }
+      },
+      required: ['prompt']
+    }
+  },
+  {
+    name: 'lobster_trap_log',
+    description: 'Layer 102 — return the rolling audit log of Lobster Trap inspections (most recent first). Cap 200.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Max entries to return (default 50).' },
+        action: { type: 'string', enum: ['allow', 'redact', 'block'], description: 'Filter by decision.' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'lobster_trap_policy',
+    description: 'Layer 102 — read or update the Lobster Trap policy. Pass updates to enable/disable enforcement categories; omit them to read the current policy.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        blockOnPromptInjection: { type: 'boolean' },
+        blockOnSecrets: { type: 'boolean' },
+        redactPII: { type: 'boolean' },
+        allowToolDestructive: { type: 'boolean' },
+        remoteEnabled: { type: 'boolean' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -265,16 +305,25 @@ export function registerBridgeContext(ctx) {
 
 export async function handleToolCall(name, args = {}) {
   const t0 = Date.now();
-  try {
-    const result = await dispatch(name, args);
-    if (bridgeContext.onToolCall) {
-      bridgeContext.onToolCall({ name, args, result, ms: Date.now() - t0, ok: true });
-    }
-    return { ok: true, result };
-  } catch (err) {
-    const payload = { ok: false, error: err.message || String(err) };
+  const trap = inspectToolCall({ name, args });
+  if (trap.action === 'block') {
+    const payload = { ok: false, error: `Lobster Trap blocked: ${trap.reasons.join('; ')}`, trap };
     if (bridgeContext.onToolCall) {
       bridgeContext.onToolCall({ name, args, result: payload, ms: Date.now() - t0, ok: false });
+    }
+    return payload;
+  }
+  const effectiveArgs = trap.action === 'redact' && trap.redactedArgs ? trap.redactedArgs : args;
+  try {
+    const result = await dispatch(name, effectiveArgs);
+    if (bridgeContext.onToolCall) {
+      bridgeContext.onToolCall({ name, args: effectiveArgs, result, ms: Date.now() - t0, ok: true, trap });
+    }
+    return { ok: true, result, trap: trap.action === 'allow' ? undefined : trap };
+  } catch (err) {
+    const payload = { ok: false, error: err.message || String(err), trap: trap.action === 'allow' ? undefined : trap };
+    if (bridgeContext.onToolCall) {
+      bridgeContext.onToolCall({ name, args: effectiveArgs, result: payload, ms: Date.now() - t0, ok: false, trap });
     }
     return payload;
   }
@@ -429,6 +478,30 @@ async function dispatch(name, args) {
       if (!args.text) throw new Error('text required');
       const s = scoreContent(args.text);
       return await issueReceipt({ text: args.text, score: s });
+    }
+
+    case 'lobster_trap_inspect': {
+      if (!args.prompt) throw new Error('prompt required');
+      return inspectPrompt({ prompt: args.prompt, surface: args.surface || 'mcp.preflight' });
+    }
+
+    case 'lobster_trap_log': {
+      const limit = Math.max(1, Math.min(200, Number(args.limit) || 50));
+      const log = loadLobsterLog();
+      const filtered = args.action ? log.filter((e) => e.action === args.action) : log;
+      return { entries: filtered.slice(0, limit), total: log.length };
+    }
+
+    case 'lobster_trap_policy': {
+      const current = loadLobsterPolicy();
+      const patch = {};
+      for (const key of ['blockOnPromptInjection', 'blockOnSecrets', 'redactPII', 'allowToolDestructive', 'remoteEnabled']) {
+        if (typeof args[key] === 'boolean') patch[key] = args[key];
+      }
+      if (Object.keys(patch).length === 0) return { policy: current, updated: false };
+      const next = { ...current, ...patch };
+      saveLobsterPolicy(next);
+      return { policy: next, updated: true, changed: Object.keys(patch) };
     }
 
     default:
