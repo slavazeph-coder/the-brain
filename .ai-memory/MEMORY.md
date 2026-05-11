@@ -697,3 +697,41 @@ Club Penguin-style AI debate arena live at https://penguinwalk.co
       per-user immunity / streak / scan-count / receipt stats, and
       lists the four ways to navigate (⌘K / Shift-? / Role Tour /
       Layer Explorer). The "you made it here" panel.
+
+### TechEx hackathon push (May 11-19, 2026)
+
+Targeting lablab.ai's Transforming Enterprise Through AI hackathon —
+all four reachable prize/track categories: Best Gemini, Best Veea
+(Lobster Trap), Security & Trust, Data & Intelligence. Submission
+canon: /HACKATHON.md.
+
+101. Gemini Deep Analysis — Google Gemini 2.5 adapter
+    - src/utils/geminiEngine.js: direct call to
+      generativelanguage.googleapis.com with model switching
+      (gemini-2.5-flash default, gemini-2.5-pro opt-in)
+    - Exports analyzeContentWithGemini, analyzeMultimodalWithGemini,
+      captionWithGemini, rewriteWithGemini, checkGeminiHealth
+    - Return shape identical to gemmaEngine so every downstream
+      layer (Multimodal RAG captioning, Counter-Draft, manipulation
+      analysis) is engine-agnostic
+    - GeminiAnalysisPanel pre-screens every prompt via Lobster Trap
+      before send; multimodal upload supported
+    - Env: VITE_GEMINI_API_KEY, VITE_GEMINI_MODEL,
+      VITE_GEMINI_API_BASE (optional override)
+102. Veea Lobster Trap — deep prompt inspection + policy enforcement
+    - src/utils/lobsterTrap.js: inspectPrompt() + inspectToolCall()
+      + inspectPromptRemote() (Veea endpoint when configured)
+    - Detects 12 prompt-injection families, 8 secret patterns
+      (AWS/Google/OpenAI/Anthropic/GitHub/Slack/PEM), 4 PII classes
+      with inline redaction
+    - Wired into mcpBridge.handleToolCall so every MCP tool dispatch
+      is inspected; destructive tools (reset_brain, apply_scenario,
+      trigger_burst) gated by allowToolDestructive policy flag
+    - Audit log persisted to brainsnn_lobster_log_v1 (cap 200)
+    - LobsterTrapPanel: live allow/redact/block stats + policy
+      editor + try-it tester + rolling audit log
+    - 3 new MCP tools: lobster_trap_inspect, lobster_trap_log,
+      lobster_trap_policy — agents can observe and steer the policy
+      layer from outside the browser
+    - Env: VITE_LOBSTER_TRAP_URL, VITE_LOBSTER_TRAP_KEY (optional;
+      local heuristics run zero-network when unset)

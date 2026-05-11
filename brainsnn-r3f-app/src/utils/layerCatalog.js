@@ -107,6 +107,8 @@ export const LAYER_CATALOG = [
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
   { id: 99, name: 'Federated Community Firewall', group: 'firewall', blurb: 'Weekly-rotated community rule pack.' },
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
+  { id: 101, name: 'Gemini Deep Analysis', group: 'backend', blurb: 'Google Gemini 2.5 manipulation analysis + RAG captioning + counter-draft rewrite.' },
+  { id: 102, name: 'Veea Lobster Trap', group: 'backend', blurb: 'Prompt injection / secret / PII inspection; gates every Gemini call + MCP tool dispatch.' },
 ];
 
 export const LAYER_GROUPS = {
