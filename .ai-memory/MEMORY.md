@@ -735,3 +735,13 @@ canon: /HACKATHON.md.
       layer from outside the browser
     - Env: VITE_LOBSTER_TRAP_URL, VITE_LOBSTER_TRAP_KEY (optional;
       local heuristics run zero-network when unset)
+
+### Final submission verification — 2026-05-11
+
+- PRs #29, #30, #31 are merged into main as of commit 568a445.
+- Railway production service `wonderful-charisma/the-brain` has
+  VITE_GEMINI_API_KEY and VITE_GEMINI_MODEL=gemini-2.5-flash set; the
+  2026-05-11 redeploy `9fcd0c88` succeeded.
+- E2E Test 9 exposed an MCP stdio bug: `mcp-server/server.js` imported
+  invalid `node:ws` and pure Lobster Trap / hypothesis tools could not
+  run without a browser relay. Fix branch: claude/e2e-fix-test-9.

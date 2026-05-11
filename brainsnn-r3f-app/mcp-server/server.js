@@ -24,11 +24,50 @@
  */
 
 import { createInterface } from 'node:readline';
-import { WebSocket } from 'node:ws';
 
 const WS_URL = process.env.BRAINSNN_WS_URL || 'ws://localhost:7654';
 const ROOM = process.env.BRAINSNN_ROOM || 'mcp-bridge';
 const REQUEST_TIMEOUT_MS = 5000;
+
+const NativeWebSocket = globalThis.WebSocket;
+
+const LOCAL_POLICY_DEFAULTS = {
+  blockOnPromptInjection: true,
+  redactPII: true,
+  blockOnSecrets: true,
+  allowToolDestructive: false,
+  remoteEnabled: false
+};
+
+let localPolicy = { ...LOCAL_POLICY_DEFAULTS };
+let localLobsterLog = [];
+
+const INJECTION_PATTERNS = [
+  /ignore (all|previous|prior) (instructions|prompts|rules)/i,
+  /disregard (the|your) (system|developer) (prompt|message|instructions?)/i,
+  /reveal (your|the) (system|hidden|secret) (prompt|instructions?|rules?)/i,
+  /jailbreak.*?(prompt|mode|instructions)/i,
+  /\bdeveloper mode\b.*(?:enabled|activated|on)/i
+];
+
+const SECRET_PATTERNS = [
+  { name: 'aws_access_key', re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { name: 'google_api_key', re: /\bAIza[0-9A-Za-z\-_]{35}\b/ },
+  { name: 'openai_key', re: /\bsk-[A-Za-z0-9]{20,}\b/ },
+  { name: 'anthropic_key', re: /\bsk-ant-[A-Za-z0-9_\-]{20,}\b/ },
+  { name: 'github_token', re: /\bghp_[A-Za-z0-9]{36}\b/ },
+  { name: 'slack_token', re: /\bxox[abps]-[A-Za-z0-9-]{10,}\b/ },
+  { name: 'private_key', re: /-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/ }
+];
+
+const PII_PATTERNS = [
+  { name: 'email', re: /\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, replace: '[email]' },
+  { name: 'ssn', re: /\b\d{3}-\d{2}-\d{4}\b/g, replace: '[ssn]' },
+  { name: 'credit_card', re: /\b(?:\d[ -]?){13,19}\b/g, replace: '[card]' },
+  { name: 'phone_us', re: /\b\(?\d{3}\)?[ -]?\d{3}[ -]?\d{4}\b/g, replace: '[phone]' }
+];
+
+const LOCAL_TOOLS = new Set(['lobster_trap_inspect', 'lobster_trap_log', 'lobster_trap_policy', 'test_hypothesis']);
 
 // ---------- tool catalog (mirror of src/utils/mcpBridge.js) ----------
 
@@ -70,21 +109,27 @@ let nextId = 1;
 const pending = new Map();
 
 function connectWs() {
+  if (!NativeWebSocket) {
+    log('Native WebSocket unavailable; stdio local tools remain available');
+    return;
+  }
+
   try {
-    ws = new WebSocket(WS_URL);
+    ws = new NativeWebSocket(WS_URL);
   } catch (err) {
     log('WebSocket constructor failed: ' + err.message);
     return;
   }
 
-  ws.on('open', () => {
+  ws.onopen = () => {
     log(`Connected to ${WS_URL}`);
     ws.send(JSON.stringify({ type: 'join', room: ROOM, role: 'mcp-server' }));
-  });
+  };
 
-  ws.on('message', (data) => {
+  ws.onmessage = (event) => {
     try {
-      const msg = JSON.parse(data.toString());
+      const data = event?.data ?? event;
+      const msg = JSON.parse(typeof data === 'string' ? data : data.toString());
       if (msg.type === 'tool_response' && msg.id && pending.has(msg.id)) {
         const { resolve } = pending.get(msg.id);
         pending.delete(msg.id);
@@ -93,19 +138,19 @@ function connectWs() {
     } catch (err) {
       log('Failed to parse WS message: ' + err.message);
     }
-  });
+  };
 
-  ws.on('close', () => {
+  ws.onclose = () => {
     log('WS closed — reconnecting in 3s');
     setTimeout(connectWs, 3000);
-  });
+  };
 
-  ws.on('error', (err) => log('WS error: ' + err.message));
+  ws.onerror = (err) => log('WS error: ' + (err?.message || 'connection failed'));
 }
 
 function callBrowserTool(name, args) {
   return new Promise((resolve) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
+    if (!NativeWebSocket || !ws || ws.readyState !== NativeWebSocket.OPEN) {
       resolve({ ok: false, error: `BrainSNN browser not connected at ${WS_URL}. Is a BrainSNN tab open with live sync enabled?` });
       return;
     }
@@ -119,6 +164,134 @@ function callBrowserTool(name, args) {
       }
     }, REQUEST_TIMEOUT_MS);
   });
+}
+
+function makeId() {
+  return `lt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function inspectPromptLocal(prompt, surface = 'mcp.preflight') {
+  const text = String(prompt || '');
+  const reasons = [];
+  let action = 'allow';
+  let redacted;
+
+  const injection = INJECTION_PATTERNS
+    .map((re) => text.match(re)?.[0])
+    .filter(Boolean);
+  if (injection.length && localPolicy.blockOnPromptInjection) {
+    action = 'block';
+    reasons.push(`prompt_injection: ${injection.slice(0, 2).join(' | ')}`);
+  }
+
+  const secrets = SECRET_PATTERNS.filter(({ re }) => re.test(text)).map(({ name }) => name);
+  if (secrets.length && localPolicy.blockOnSecrets) {
+    action = 'block';
+    reasons.push(`secret_leak: ${secrets.join(', ')}`);
+  }
+
+  if (action !== 'block' && localPolicy.redactPII) {
+    let out = text;
+    const piiHits = [];
+    for (const { name, re, replace } of PII_PATTERNS) {
+      if (re.test(out)) {
+        piiHits.push(name);
+        out = out.replace(re, replace);
+      }
+    }
+    if (piiHits.length) {
+      action = 'redact';
+      redacted = out;
+      reasons.push(`pii_redacted: ${piiHits.join(', ')}`);
+    }
+  }
+
+  const entry = {
+    id: makeId(),
+    ts: Date.now(),
+    surface,
+    action,
+    reasons,
+    score: Math.min(1, injection.length * 0.4 + secrets.length * 0.5 + (action === 'redact' ? 0.2 : 0)),
+    sample: text.slice(0, 120),
+    redacted
+  };
+  localLobsterLog.unshift(entry);
+  localLobsterLog = localLobsterLog.slice(0, 200);
+  return entry;
+}
+
+function testHypothesisLocal({ type, evidenceText }) {
+  const text = String(evidenceText || '');
+  if (!type) return { error: 'unknown hypothesis type' };
+  if (!text.trim()) return { error: 'no evidence items' };
+
+  const chunks = text.split(/\n[\-=]{3,}\n+|\n{2,}/).map((s) => s.trim()).filter(Boolean);
+  const phishingRe = /\b(click|verify|account|password|suspend|urgent|login|credential|confirm)\b/i;
+  const pressureRe = /\b(urgent|now|immediately|last chance|act now|must)\b/i;
+  const rows = chunks.map((chunk, idx) => {
+    const matches = type === 'phishing'
+      ? phishingRe.test(chunk)
+      : type === 'high-pressure'
+        ? pressureRe.test(chunk)
+        : new RegExp(type.replace(/[-_]/g, '\\s+'), 'i').test(chunk);
+    return {
+      idx,
+      text: chunk,
+      matches,
+      pressure: pressureRe.test(chunk) ? 0.72 : matches ? 0.55 : 0.1,
+      templates: [],
+      archetypes: type === 'phishing' && matches ? [{ id: 'phishing', label: 'Phishing', score: 1 }] : []
+    };
+  });
+  const supported = rows.filter((r) => r.matches).length;
+  const confidence = supported / rows.length;
+  const label = confidence >= 0.7 ? 'Supported' : confidence >= 0.4 ? 'Mixed' : confidence > 0.1 ? 'Weak' : 'Refuted';
+  return {
+    hypothesis: { id: type, label: type.replace(/-/g, ' ') },
+    totalEvidence: rows.length,
+    supported,
+    against: rows.length - supported,
+    confidence,
+    verdict: { label, color: confidence >= 0.7 ? '#5ee69a' : confidence >= 0.4 ? '#fdab43' : '#dd6974' },
+    rows
+  };
+}
+
+async function callLocalTool(name, args = {}) {
+  switch (name) {
+    case 'lobster_trap_inspect':
+      if (!args.prompt) return { ok: false, error: 'prompt required' };
+      return { ok: true, result: inspectPromptLocal(args.prompt, args.surface || 'mcp.preflight') };
+
+    case 'lobster_trap_log': {
+      const limit = Math.max(1, Math.min(200, Number(args.limit) || 50));
+      const filtered = args.action ? localLobsterLog.filter((e) => e.action === args.action) : localLobsterLog;
+      return { ok: true, result: { entries: filtered.slice(0, limit), total: localLobsterLog.length } };
+    }
+
+    case 'lobster_trap_policy': {
+      const patch = {};
+      for (const key of ['blockOnPromptInjection', 'blockOnSecrets', 'redactPII', 'allowToolDestructive', 'remoteEnabled']) {
+        if (typeof args[key] === 'boolean') patch[key] = args[key];
+      }
+      if (Object.keys(patch).length) localPolicy = { ...localPolicy, ...patch };
+      return { ok: true, result: { policy: localPolicy, updated: Object.keys(patch).length > 0, changed: Object.keys(patch) } };
+    }
+
+    case 'test_hypothesis': {
+      if (!args.type || !args.evidenceText) return { ok: false, error: 'type and evidenceText required' };
+      return { ok: true, result: testHypothesisLocal(args) };
+    }
+
+    default:
+      return null;
+  }
+}
+
+async function callTool(name, args) {
+  if (LOCAL_TOOLS.has(name)) return callLocalTool(name, args);
+  return callBrowserTool(name, args);
 }
 
 // ---------- stdio JSON-RPC handler ----------
@@ -153,7 +326,7 @@ async function handleRequest(req) {
 
   if (method === 'tools/call') {
     const { name, arguments: args } = params || {};
-    const result = await callBrowserTool(name, args || {});
+    const result = await callTool(name, args || {});
     if (!result.ok) {
       return { jsonrpc: '2.0', id, error: { code: -32000, message: result.error } };
     }
@@ -161,7 +334,7 @@ async function handleRequest(req) {
       jsonrpc: '2.0',
       id,
       result: {
-        content: [{ type: 'text', text: JSON.stringify(result.result, null, 2) }]
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
       }
     };
   }
@@ -182,6 +355,11 @@ rl.on('line', async (line) => {
   } catch (err) {
     send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: ' + err.message } });
   }
+});
+
+rl.on('close', () => {
+  try { ws?.close(); } catch {}
+  process.exit(0);
 });
 
 log(`BrainSNN MCP server starting, relaying via ${WS_URL} (room: ${ROOM})`);
