@@ -9,6 +9,16 @@ function readHandle() { try { return localStorage.getItem(HANDLE_KEY) || ''; } c
 function writeHandle(h) { try { localStorage.setItem(HANDLE_KEY, h); } catch { /* noop */ } }
 function readLastRoom() { try { return localStorage.getItem(ROOM_KEY) || ''; } catch { return ''; } }
 function writeLastRoom(r) { try { localStorage.setItem(ROOM_KEY, r); } catch { /* noop */ } }
+function sanitizeRoom(raw) {
+  return String(raw || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
+}
+function readRoomFromUrl() {
+  try {
+    return sanitizeRoom(new URLSearchParams(window.location.search).get('room') || '');
+  } catch {
+    return '';
+  }
+}
 
 function newRoomId() {
   const rnd = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -21,7 +31,7 @@ function newRoomId() {
  * your daily / immunity / quiz score, compare side-by-side.
  */
 export default function SessionRoomsPanel() {
-  const [room, setRoom] = useState(readLastRoom());
+  const [room, setRoom] = useState(() => readRoomFromUrl() || readLastRoom());
   const [handle, setHandle] = useState(readHandle());
   const [entries, setEntries] = useState([]);
   const [source, setSource] = useState('daily');
@@ -30,6 +40,13 @@ export default function SessionRoomsPanel() {
 
   useEffect(() => { writeHandle(handle); }, [handle]);
   useEffect(() => { if (room) writeLastRoom(room); }, [room]);
+  useEffect(() => {
+    const sharedRoom = readRoomFromUrl();
+    if (sharedRoom) {
+      setRoom(sharedRoom);
+      fetchRoom(sharedRoom);
+    }
+  }, []);
 
   async function fetchRoom(id) {
     if (!id) return;
@@ -102,7 +119,7 @@ export default function SessionRoomsPanel() {
           className="share-input"
           placeholder="Room ID (4+ alphanumerics)"
           value={room}
-          onChange={(e) => setRoom(e.target.value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32))}
+          onChange={(e) => setRoom(sanitizeRoom(e.target.value))}
           style={{ flex: 1, minWidth: 220, fontFamily: 'monospace' }}
         />
         <button className="btn" onClick={create}>New room</button>

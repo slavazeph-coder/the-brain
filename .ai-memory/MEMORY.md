@@ -749,3 +749,6 @@ canon: /HACKATHON.md.
   service variables are not visible to `RUN npm run build` unless the
   Dockerfile declares them as `ARG`; otherwise the production bundle
   bakes empty `import.meta.env.VITE_*` values.
+- E2E Test 10 exposed that Session Rooms created share URLs but did not
+  consume `?room=<code>` on load; shared room links must prefill and
+  fetch the room leaderboard immediately.
