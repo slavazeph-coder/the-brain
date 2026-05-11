@@ -195,10 +195,20 @@ export async function scoreContentSmart(text = '') {
   const wordCount = text.trim().split(/\s+/).length;
   if (wordCount < 5) return { ...scoreContent(text), source: 'regex' };
 
+  // Pre-screen every AI scan with Lobster Trap. Blocks prompt-injection
+  // and secret leaks before they leave the browser; redacts PII inline.
+  const { inspectPrompt } = await import('./lobsterTrap.js');
+  const trap = inspectPrompt({ prompt: text, surface: 'firewall.smart' });
+  if (trap.action === 'block') {
+    return { ...scoreContent(text), source: 'regex_lobster_blocked', lobsterTrap: trap };
+  }
+  const safeText = trap.action === 'redact' && trap.redacted ? trap.redacted : text;
+
   const { isGeminiConfigured, analyzeContentWithGemini } = await import('./geminiEngine.js');
   if (isGeminiConfigured()) {
     try {
-      return await analyzeContentWithGemini(text);
+      const result = await analyzeContentWithGemini(safeText);
+      return { ...result, lobsterTrap: trap };
     } catch (_err) {
       // fall through to Gemma
     }
@@ -207,9 +217,10 @@ export async function scoreContentSmart(text = '') {
   const { isGemmaConfigured, analyzeContentWithGemma } = await import('./gemmaEngine.js');
   if (isGemmaConfigured()) {
     try {
-      return await analyzeContentWithGemma(text);
+      const result = await analyzeContentWithGemma(safeText);
+      return { ...result, lobsterTrap: trap };
     } catch (_err) {
-      return { ...scoreContent(text), source: 'regex_fallback' };
+      return { ...scoreContent(text), source: 'regex_fallback', lobsterTrap: trap };
     }
   }
   return { ...scoreContent(text), source: 'regex' };
