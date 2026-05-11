@@ -752,3 +752,6 @@ canon: /HACKATHON.md.
 - E2E Test 10 exposed that Session Rooms created share URLs but did not
   consume `?room=<code>` on load; shared room links must prefill and
   fetch the room leaderboard immediately.
+- E2E Test 2 also exposed Gemini JSON truncation: 1024 output tokens can
+  cut off `recommendedAction` and yield invalid JSON on the golden prompt;
+  Gemini analysis needs at least 2048 output tokens.
