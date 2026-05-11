@@ -29,6 +29,7 @@ import { mergeTemplateResults } from './semanticTemplates';
 import { pickTodaysChallenge } from './dailyChallenge';
 import { analyzeTimeSeries } from './timeSeries';
 import { issueReceipt } from './receipt';
+import { inspectToolCall } from './lobsterTrap';
 
 // ---------- tool catalog ----------
 
@@ -265,16 +266,25 @@ export function registerBridgeContext(ctx) {
 
 export async function handleToolCall(name, args = {}) {
   const t0 = Date.now();
-  try {
-    const result = await dispatch(name, args);
-    if (bridgeContext.onToolCall) {
-      bridgeContext.onToolCall({ name, args, result, ms: Date.now() - t0, ok: true });
-    }
-    return { ok: true, result };
-  } catch (err) {
-    const payload = { ok: false, error: err.message || String(err) };
+  const trap = inspectToolCall({ name, args });
+  if (trap.action === 'block') {
+    const payload = { ok: false, error: `Lobster Trap blocked: ${trap.reasons.join('; ')}`, trap };
     if (bridgeContext.onToolCall) {
       bridgeContext.onToolCall({ name, args, result: payload, ms: Date.now() - t0, ok: false });
+    }
+    return payload;
+  }
+  const effectiveArgs = trap.action === 'redact' && trap.redactedArgs ? trap.redactedArgs : args;
+  try {
+    const result = await dispatch(name, effectiveArgs);
+    if (bridgeContext.onToolCall) {
+      bridgeContext.onToolCall({ name, args: effectiveArgs, result, ms: Date.now() - t0, ok: true, trap });
+    }
+    return { ok: true, result, trap: trap.action === 'allow' ? undefined : trap };
+  } catch (err) {
+    const payload = { ok: false, error: err.message || String(err), trap: trap.action === 'allow' ? undefined : trap };
+    if (bridgeContext.onToolCall) {
+      bridgeContext.onToolCall({ name, args: effectiveArgs, result: payload, ms: Date.now() - t0, ok: false, trap });
     }
     return payload;
   }
