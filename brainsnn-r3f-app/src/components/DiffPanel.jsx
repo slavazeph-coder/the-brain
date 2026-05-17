@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { bus } from '../shell/bus';
 import { runDiff, diffVerdict, buildDiffPayload, diffUrl, DIFF_EXAMPLE } from '../utils/diffMode';
 
 /**
@@ -11,6 +12,12 @@ export default function DiffPanel() {
   const [labelB, setLabelB] = useState('B');
   const [textB, setTextB] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Composer 'diff' mode drops the text into A; B stays empty for
+  // the user to paste the variant.
+  useEffect(() => bus.on('shell:compose', ({ text, mode }) => {
+    if (mode === 'diff' && text) setTextA(text);
+  }), []);
 
   const diff = useMemo(() => {
     if (!textA.trim() || !textB.trim()) return null;
