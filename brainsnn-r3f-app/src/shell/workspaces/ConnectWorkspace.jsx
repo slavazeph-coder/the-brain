@@ -23,6 +23,7 @@ const CommunityPackPanel = lazy(() => import('../../components/CommunityPackPane
 const PwaInstallPanel = lazy(() => import('../../components/PwaInstallPanel'));
 const TimelinePanel = lazy(() => import('../../components/TimelinePanel'));
 const ThemePanel = lazy(() => import('../../components/ThemePanel'));
+const CapabilitiesPanel = lazy(() => import('../../components/CapabilitiesPanel'));
 const RoleTourPanel = lazy(() => import('../../components/RoleTourPanel'));
 const MilestonePanel = lazy(() => import('../../components/MilestonePanel'));
 
@@ -103,6 +104,7 @@ export default function ConnectWorkspace({ session }) {
             <ErrorBoundary name="Privacy Budget"><PrivacyBudgetPanel /></ErrorBoundary>
             <ErrorBoundary name="PWA Install"><PwaInstallPanel /></ErrorBoundary>
             <ErrorBoundary name="Theme"><ThemePanel /></ErrorBoundary>
+            <ErrorBoundary name="Capabilities"><CapabilitiesPanel /></ErrorBoundary>
           </>
         )}
 
