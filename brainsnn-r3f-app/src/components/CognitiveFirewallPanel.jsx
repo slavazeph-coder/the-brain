@@ -13,6 +13,7 @@ import {
 import { matchSemanticTemplates, mergeTemplateResults } from '../utils/semanticTemplates';
 import { issueReceipt, storeReceipt } from '../utils/receipt';
 import { isReady as embeddingsReady } from '../utils/embeddings';
+import { bus } from '../shell/bus';
 import { detectArchetypes } from '../utils/adTransparency';
 import { markPolyglotSeen } from '../utils/badges';
 import { recordScan as recordContextScan } from '../utils/contextMemory';
@@ -100,6 +101,23 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       onApplyToNetwork(initialScan.result);
     }
   }, [initialScan?.autoApply]);
+
+  // AppShell composer: when the user types in the persistent top bar
+  // and submits with mode='scan', drop the text in here and trigger
+  // the same scan flow as if they'd typed it in the panel. AppShell
+  // emits `shell:goto` first so this panel is mounted before the
+  // composer event reaches us.
+  useEffect(() => bus.on('shell:compose', ({ text: composed, mode }) => {
+    if (mode !== 'scan' || !composed) return;
+    setText(composed);
+    // Defer the actual scan one tick so React commits the new text
+    // first; users see the textarea populate, then results animate in.
+    setTimeout(() => {
+      const out = scoreContent(composed);
+      setResult(out);
+      if (onApplyToNetwork) onApplyToNetwork(out);
+    }, 0);
+  }), [onApplyToNetwork]);
 
   // Layer 49 — Scan Anywhere: accept ?scan=<text> and ?scan-url=<url>
   // on initial mount, pre-fill the textarea, optionally auto-scan.

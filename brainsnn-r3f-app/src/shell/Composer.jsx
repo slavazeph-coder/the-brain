@@ -13,10 +13,22 @@ export default function Composer() {
   const [text, setText] = useState('');
   const [mode, setMode] = useState('scan');
 
+  // Each mode routes to the workspace that knows how to handle it.
+  const MODE_WORKSPACE = {
+    scan: 'defend',
+    autopsy: 'defend',
+    diff: 'connect',
+    rag: 'knowledge'
+  };
+
   const submit = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    bus.emit('shell:compose', { text: trimmed, mode });
+    const ws = MODE_WORKSPACE[mode];
+    if (ws) bus.emit('shell:goto', { workspace: ws });
+    // requestAnimationFrame so the target workspace mounts before
+    // the compose event arrives at its subscribers.
+    requestAnimationFrame(() => bus.emit('shell:compose', { text: trimmed, mode }));
     // Don't clear — let the user iterate.
   };
 
