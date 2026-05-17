@@ -1,4 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { bus } from '../shell/bus';
+
+// New-shell anchor → workspace map. Legacy shell ignores this because
+// the bus has no shell:goto subscriber when AppShell isn't mounted.
+const ANCHOR_WORKSPACE = {
+  '.viewer-panel': 'home',
+  '.controls-bar': 'home',
+  '.analytics-dashboard': 'analyze',
+  '.cognitive-firewall-panel': 'defend',
+  '.snapshot-panel': 'brain'
+};
 
 const STEPS = [
   {
@@ -73,17 +84,31 @@ export default function OnboardingWalkthrough() {
     localStorage.setItem(STORAGE_KEY, 'true');
   };
 
-  // Highlight target element
+  // Highlight target element. When the new shell is active and the
+  // target lives in a different workspace, dispatch shell:goto first
+  // and wait one frame for that workspace to mount before querying
+  // the DOM.
   useEffect(() => {
     if (step < 0 || step >= STEPS.length) return;
     const target = STEPS[step].target;
     if (!target) return;
-    const el = document.querySelector(target);
-    if (el) {
+    const ws = ANCHOR_WORKSPACE[target];
+    if (ws) bus.emit('shell:goto', { workspace: ws });
+    let cleanup = () => {};
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector(target);
+      if (!el) {
+        if (typeof console !== 'undefined') console.warn('[onboarding] target missing:', target);
+        return;
+      }
       el.classList.add('onboard-highlight');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return () => el.classList.remove('onboard-highlight');
-    }
+      cleanup = () => el.classList.remove('onboard-highlight');
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      cleanup();
+    };
   }, [step]);
 
   if (!visible || step < 0) return null;
