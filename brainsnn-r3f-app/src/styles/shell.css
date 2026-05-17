@@ -322,6 +322,52 @@
   transition: box-shadow 0.3s;
 }
 
+/* ---------- accessibility ---------- */
+
+/* Skip-to-content — visible only on focus. */
+.shell-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: var(--accent);
+  color: white;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 600;
+  z-index: 100;
+  transition: top 0.15s;
+}
+.shell-skip-link:focus {
+  top: 12px;
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+/* Consistent focus ring across shell controls. Browsers handle
+   :focus-visible so mouse clicks don't trigger the ring; only
+   keyboard navigation does. */
+.shell-tab:focus-visible,
+.shell-icon-btn:focus-visible,
+.shell-composer-input:focus-visible,
+.shell-composer-mode:focus-visible,
+.shell-composer-send:focus-visible,
+.shell-subtab:focus-visible,
+.shell-workspace-header h1:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* The heading isn't a control, so its focus state shouldn't look
+   identical to a button. Soften it. */
+.shell-workspace-header h1:focus {
+  outline: none;
+}
+.shell-workspace-header h1:focus-visible {
+  outline: 2px dashed var(--accent-line);
+  outline-offset: 4px;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 1280px) {
   .shell-main { grid-template-columns: 180px minmax(0, 1fr) 300px; gap: 16px; padding: 16px; }

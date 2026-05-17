@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Topbar from './Topbar';
 import WorkspaceTabs, { WORKSPACES } from './WorkspaceTabs';
 import BrainViewport from './BrainViewport';
@@ -100,9 +100,26 @@ export default function AppShell({ session, modeLabel }) {
   const activeMeta = WORKSPACES.find((w) => w.id === workspace) || WORKSPACES[0];
   const Workspace = WORKSPACE_COMPONENT[workspace] || HomeWorkspace;
   const promoted = workspace === 'brain';
+  const workspaceHostRef = useRef(null);
+
+  // Move focus to the workspace heading on every change. Screen-reader
+  // users hear the new workspace title; sighted keyboard users get a
+  // visible focus ring at the top of the body so further Tab presses
+  // walk into the workspace, not back into the tab rail.
+  // Skips the initial mount so the page doesn't steal focus.
+  const didMount = useRef(false);
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return; }
+    const heading = workspaceHostRef.current?.querySelector('.shell-workspace-header h1');
+    if (heading) {
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: false });
+    }
+  }, [workspace]);
 
   return (
     <div className="shell-root">
+      <a href="#shell-workspace-host" className="shell-skip-link">Skip to workspace content</a>
       <Topbar
         workspace={activeMeta.label}
         firewallResult={session.firewallResult}
@@ -127,7 +144,14 @@ export default function AppShell({ session, modeLabel }) {
 
           <Composer />
 
-          <div className="shell-workspace-host">
+          <div
+            id="shell-workspace-host"
+            ref={workspaceHostRef}
+            className="shell-workspace-host"
+            role="tabpanel"
+            aria-labelledby={`shell-tab-${workspace}`}
+            tabIndex={-1}
+          >
             <Workspace session={session} />
           </div>
         </div>
