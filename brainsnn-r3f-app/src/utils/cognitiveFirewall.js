@@ -246,10 +246,15 @@ function ensurePool() {
   try {
     _firewallPool = createPool(
       () => new Worker(new URL('../workers/firewall.worker.js', import.meta.url), { type: 'module' }),
-      { size: 1, fallback: (type, payload) => {
-        if (type === 'score') return scoreContent(payload?.text || '');
-        return null;
-      } }
+      {
+        // size omitted → defaults to min(4, cores-1). Red Team batch scans
+        // and parallel inbox triage benefit from real parallelism here.
+        fallback: (type, payload) => {
+          if (type === 'score') return scoreContent(payload?.text || '');
+          if (type === 'scoreWithRules') return scoreContentWithRules(payload?.text || '', payload?.rules || DEFAULT_RULES);
+          return null;
+        }
+      }
     );
     return _firewallPool;
   } catch {
@@ -262,7 +267,19 @@ export async function scoreContentAsync(text = '') {
   const pool = ensurePool();
   if (!pool || pool.degraded) return scoreContent(text);
   try {
-    return await pool.call('score', { text });
+    // Workers carry their own module-level state, so the main-thread
+    // active ruleset (custom rules, evolved firewall, rule packs) does
+    // NOT propagate automatically. When the user has promoted a non-
+    // default ruleset, send it along with each score call so the worker
+    // mirrors the same behavior as scoreContent on the main thread.
+    const rules = getActiveRules();
+    if (rules === DEFAULT_RULES) {
+      return await pool.call('score', { text });
+    }
+    return await pool.call('scoreWithRules', {
+      text,
+      rules: serializeRules(rules)
+    });
   } catch {
     return scoreContent(text);
   }

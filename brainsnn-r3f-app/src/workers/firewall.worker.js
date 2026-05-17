@@ -15,22 +15,28 @@
 import { handleRequests } from '../utils/workerPool.js';
 import {
   scoreContent,
-  scoreContentWithRules,
-  DEFAULT_RULES,
   deserializeRules,
-  setActiveRules
+  setActiveRules,
+  getActiveRules
 } from '../utils/cognitiveFirewall.js';
 
 handleRequests({
   score: async ({ text }) => scoreContent(text || ''),
 
-  scoreWithRules: async ({ text, rules, opts }) => {
-    const rs = rules && typeof rules === 'object' && !Array.isArray(rules)
-      ? (rules.urgency instanceof RegExp || !rules.urgency
-        ? rules
-        : deserializeRules(rules))
-      : DEFAULT_RULES;
-    return scoreContentWithRules(text || '', rs, opts || {});
+  // Full pipeline equivalent to scoreContent on the main thread, using
+  // a caller-supplied ruleset. Workers process one message at a time, so
+  // temporarily swapping active rules around the call is safe (no race).
+  // Restore the previous ruleset on exit so callers don't have to track
+  // worker state.
+  scoreWithRules: async ({ text, rules }) => {
+    const rs = rules ? deserializeRules(rules) : null;
+    const prev = getActiveRules();
+    if (rs) setActiveRules(rs);
+    try {
+      return scoreContent(text || '');
+    } finally {
+      setActiveRules(prev);
+    }
   },
 
   setRules: async ({ rules }) => {

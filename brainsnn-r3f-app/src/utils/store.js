@@ -37,6 +37,17 @@ function idbAvailable() {
   }
 }
 
+// Any DB handle we hand out must release itself when another tab triggers
+// a version bump — otherwise the upgrade blocks forever and writes hang
+// across tabs.
+function attachVersionChange(db) {
+  db.onversionchange = () => {
+    try { db.close(); } catch { /* noop */ }
+    dbPromise = null;
+  };
+  return db;
+}
+
 function openDb(neededCollections) {
   return new Promise((resolve, reject) => {
     // Bump version when a collection is missing; otherwise keep current.
@@ -44,7 +55,7 @@ function openDb(neededCollections) {
     probe.onsuccess = () => {
       const db = probe.result;
       const haveAll = neededCollections.every((c) => db.objectStoreNames.contains(c));
-      if (haveAll) { resolve(db); return; }
+      if (haveAll) { resolve(attachVersionChange(db)); return; }
       const nextVersion = db.version + 1;
       db.close();
       const upgrade = indexedDB.open(DB_NAME, nextVersion);
@@ -56,8 +67,11 @@ function openDb(neededCollections) {
           }
         }
       };
-      upgrade.onsuccess = () => resolve(upgrade.result);
+      upgrade.onsuccess = () => resolve(attachVersionChange(upgrade.result));
       upgrade.onerror = () => reject(upgrade.error);
+      // Another tab holding an older handle didn't release in time. Re-open
+      // path will retry once that tab closes its connection.
+      upgrade.onblocked = () => reject(new Error('IDB upgrade blocked'));
     };
     probe.onerror = () => reject(probe.error);
   });
