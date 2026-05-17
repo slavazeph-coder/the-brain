@@ -78,7 +78,7 @@ export default function AudioPanel() {
   }
 
   const pct = Math.round(pressure * 100);
-  const tone = pct >= 65 ? '#dd6974' : pct >= 35 ? '#fdab43' : '#6daa45';
+  const tone = pct >= 65 ? 'var(--danger)' : pct >= 35 ? '#fdab43' : 'var(--ok)';
 
   return (
     <section className="panel panel-pad audio-panel">
@@ -113,7 +113,7 @@ export default function AudioPanel() {
         )}
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 8 }}>Error: {err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 8 }}>Error: {err}</p>}
 
       {(finals || interim) && (
         <div style={{ marginTop: 12 }}>

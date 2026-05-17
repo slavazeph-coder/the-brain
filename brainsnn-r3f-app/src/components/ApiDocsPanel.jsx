@@ -146,7 +146,7 @@ export default function ApiDocsPanel() {
         </div>
       )}
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 8 }}>Error: {err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 8 }}>Error: {err}</p>}
 
       {result && (
         <div

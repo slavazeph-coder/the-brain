@@ -48,7 +48,7 @@ export default function WeeklyRecapPanel() {
 
   if (!recap) return null;
 
-  const deltaColor = recap.immunityDelta > 0 ? '#5ee69a' : recap.immunityDelta < 0 ? '#dd6974' : '#fdab43';
+  const deltaColor = recap.immunityDelta > 0 ? '#5ee69a' : recap.immunityDelta < 0 ? 'var(--danger)' : '#fdab43';
 
   return (
     <section className="panel panel-pad weekly-recap-panel">

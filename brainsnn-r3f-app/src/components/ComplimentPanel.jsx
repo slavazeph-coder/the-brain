@@ -52,7 +52,7 @@ export default function ComplimentPanel() {
             <span>
               Genuine <strong>{Math.round(result.genuineness * 100)}%</strong> ·{' '}
               Love-bombing risk{' '}
-              <strong style={{ color: result.loveBombingRisk >= 0.5 ? '#dd6974' : '#cbd5e1' }}>
+              <strong style={{ color: result.loveBombingRisk >= 0.5 ? 'var(--danger)' : '#cbd5e1' }}>
                 {Math.round(result.loveBombingRisk * 100)}%
               </strong>
             </span>
@@ -70,7 +70,7 @@ export default function ComplimentPanel() {
             }}
           >
             <Stat label="Specific markers" value={result.specificityHits} />
-            <Stat label="Maximalist markers" value={result.maximalistHits} tone="#dd6974" />
+            <Stat label="Maximalist markers" value={result.maximalistHits} tone="var(--danger)" />
             <Stat label="Hedging markers" value={result.hedgingHits} tone="#77dbe4" />
           </div>
         </div>

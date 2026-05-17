@@ -73,9 +73,9 @@ export default function CalendarHeatmapPanel() {
       <div style={{ marginTop: 10, display: 'flex', gap: 14, alignItems: 'center', fontSize: 12 }}>
         <span className="muted">Less</span>
         <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(255,255,255,0.04)' }} />
-        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(109,170,69,0.6)' }} />
+        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'color-mix(in srgb, var(--ok) 60%, transparent)' }} />
         <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(253,171,67,0.6)' }} />
-        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(221,105,116,0.7)' }} />
+        <div style={{ width: 10, height: 10, borderRadius: 2, background: 'color-mix(in srgb, var(--danger) 70%, transparent)' }} />
         <span className="muted">More / higher-pressure</span>
       </div>
     </section>

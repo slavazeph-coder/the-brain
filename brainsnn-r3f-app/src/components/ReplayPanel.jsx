@@ -78,7 +78,7 @@ export default function ReplayPanel() {
         ) : (
           <button className="btn" onClick={stop}>■ Stop</button>
         )}
-        <button className="btn" onClick={reset} disabled={!steps.length && !recording} style={{ color: '#dd6974' }}>
+        <button className="btn" onClick={reset} disabled={!steps.length && !recording} style={{ color: 'var(--danger)' }}>
           Reset
         </button>
         <button className="btn" onClick={() => addNote(window.prompt('Note:') || '')} disabled={!recording}>
@@ -134,7 +134,7 @@ export default function ReplayPanel() {
         <div className="control-actions" style={{ marginTop: 6 }}>
           <button className="btn" onClick={doImport} disabled={!importText.trim()}>Parse</button>
         </div>
-        {err && <p className="muted" style={{ color: '#dd6974' }}>{err}</p>}
+        {err && <p className="muted" style={{ color: 'var(--danger)' }}>{err}</p>}
       </div>
 
       {imported && (

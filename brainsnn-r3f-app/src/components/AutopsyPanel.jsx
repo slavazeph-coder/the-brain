@@ -141,7 +141,7 @@ export default function AutopsyPanel({ initialHash = null }) {
         </button>
       </div>
       {fetchError && (
-        <p className="muted" style={{ color: '#dd6974', marginTop: 0 }}>
+        <p className="muted" style={{ color: 'var(--danger)', marginTop: 0 }}>
           Fetch failed: {fetchError}.
         </p>
       )}

@@ -109,7 +109,7 @@ export default function HypothesisPanel() {
         </div>
       )}
 
-      {report?.error && <p className="muted" style={{ color: '#dd6974' }}>{report.error}</p>}
+      {report?.error && <p className="muted" style={{ color: 'var(--danger)' }}>{report.error}</p>}
     </section>
   );
 }

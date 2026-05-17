@@ -4,12 +4,14 @@ import { LINKS, POSITIONS, REGION_INFO } from '../../data/network';
 import { findCrossLinks, getEdgeActivity, getCrossLinkActivity } from './flowGridUtils';
 import FlowTube from './FlowTube';
 import PulseWave from './PulseWave';
+import { useThreeTokens } from '../../utils/threeTokens';
 
 const PULSE_THRESHOLD = 0.6;
 const MAX_PULSES = 3;
 
 export default function NeuralFlowGrid({ regions, weights, quality }) {
   const [pulses, setPulses] = useState([]);
+  const tokens = useThreeTokens();
   const prevRegionsRef = useRef({});
   const pulseIdRef = useRef(0);
 
@@ -74,7 +76,7 @@ export default function NeuralFlowGrid({ regions, weights, quality }) {
         const key = `${fromId}\u2192${toId}`;
         const edgeActivity = getEdgeActivity(fromId, toId, regions, weights);
         const w = weights[key] ?? 0.2;
-        const color = REGION_INFO[fromId]?.color || '#4fa8b3';
+        const color = REGION_INFO[fromId]?.color || tokens.accent;
         const colorArr = hexToRgbNorm(color);
 
         const isPulsing = pulsingRegions.has(fromId);

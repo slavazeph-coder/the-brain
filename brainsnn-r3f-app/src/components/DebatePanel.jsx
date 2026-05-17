@@ -58,12 +58,12 @@ export default function DebatePanel() {
                 style={{
                   padding: '10px 12px',
                   borderRadius: 6,
-                  borderLeft: '3px solid #dd6974',
-                  background: 'rgba(221,105,116,0.06)',
+                  borderLeft: '3px solid var(--danger)',
+                  background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
                 }}
               >
                 <strong>{report.peak.speaker}</strong>{' '}
-                <span style={{ color: '#dd6974' }}>{Math.round(report.peak.pressure * 100)}%</span>
+                <span style={{ color: 'var(--danger)' }}>{Math.round(report.peak.pressure * 100)}%</span>
                 <p className="muted" style={{ margin: '4px 0 0', fontStyle: 'italic' }}>
                   "{report.peak.text.slice(0, 200)}"
                 </p>
@@ -77,7 +77,7 @@ export default function DebatePanel() {
 }
 
 function SpeakerCard({ name, mean, count, winner }) {
-  const tone = mean >= 0.55 ? '#dd6974' : mean >= 0.25 ? '#fdab43' : '#6daa45';
+  const tone = mean >= 0.55 ? 'var(--danger)' : mean >= 0.25 ? '#fdab43' : 'var(--ok)';
   return (
     <div
       style={{

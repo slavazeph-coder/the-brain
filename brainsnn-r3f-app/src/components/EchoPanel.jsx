@@ -78,8 +78,8 @@ export default function EchoPanel() {
                   marginTop: 10,
                   padding: '10px 12px',
                   borderRadius: 8,
-                  borderLeft: '3px solid #dd6974',
-                  background: 'rgba(221,105,116,0.06)',
+                  borderLeft: '3px solid var(--danger)',
+                  background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>

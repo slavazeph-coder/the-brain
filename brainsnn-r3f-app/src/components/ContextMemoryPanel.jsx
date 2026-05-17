@@ -44,7 +44,7 @@ export default function ContextMemoryPanel() {
 
       <div className="control-actions" style={{ marginTop: 10 }}>
         <button className="btn" onClick={refresh}>Refresh</button>
-        <button className="btn" onClick={wipe} style={{ color: '#dd6974' }}>Wipe all</button>
+        <button className="btn" onClick={wipe} style={{ color: 'var(--danger)' }}>Wipe all</button>
       </div>
 
       {entities.length === 0 ? (
@@ -57,7 +57,7 @@ export default function ContextMemoryPanel() {
           <div>
             <div className="eyebrow">Entities ({entities.length})</div>
             {entities.map((e) => {
-              const tone = e.meanPressure >= 0.55 ? '#dd6974' : e.meanPressure >= 0.25 ? '#fdab43' : '#6daa45';
+              const tone = e.meanPressure >= 0.55 ? 'var(--danger)' : e.meanPressure >= 0.25 ? '#fdab43' : 'var(--ok)';
               return (
                 <div
                   key={e.entity}
@@ -118,7 +118,7 @@ export default function ContextMemoryPanel() {
                 <Timeline points={summary.timeline} />
 
                 <div style={{ marginTop: 10 }}>
-                  <button className="ghost small" onClick={() => remove(summary.entity)} style={{ color: '#dd6974' }}>
+                  <button className="ghost small" onClick={() => remove(summary.entity)} style={{ color: 'var(--danger)' }}>
                     Remove entity
                   </button>
                 </div>
@@ -150,7 +150,7 @@ function Timeline({ points }) {
           cx={xs[i]}
           cy={ys[i]}
           r={p.pressure > 0.55 ? 3 : 1.8}
-          fill={p.pressure > 0.55 ? '#dd6974' : '#5ad4ff'}
+          fill={p.pressure > 0.55 ? 'var(--danger)' : '#5ad4ff'}
         />
       ))}
     </svg>

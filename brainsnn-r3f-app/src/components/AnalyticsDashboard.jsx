@@ -7,7 +7,7 @@ import { REGION_INFO } from '../data/network';
 
 // ---------- Mini sparkline (canvas) ----------
 
-function Sparkline({ data, width = 120, height = 32, color = '#4fa8b3' }) {
+function Sparkline({ data, width = 120, height = 32, color = 'var(--accent)' }) {
   const ref = useRef(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -118,7 +118,7 @@ export default function AnalyticsDashboard({ state }) {
             <span className="analytics-region-label" style={{ color: REGION_INFO[key]?.color || '#fff' }}>
               {key}
             </span>
-            <Sparkline data={timeseries[key] || []} color={REGION_INFO[key]?.color || '#4fa8b3'} />
+            <Sparkline data={timeseries[key] || []} color={REGION_INFO[key]?.color || 'var(--accent)'} />
             <div className="analytics-trend-footer">
               <span>{((state.regions[key] || 0) * 100).toFixed(0)}%</span>
               <TrendArrow direction={trendDirection(timeseries[key] || [])} />

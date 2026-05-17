@@ -92,7 +92,7 @@ export default function CustomRulesPanel() {
         </button>
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 6 }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 6 }}>{err}</p>}
       {info && <p className="muted" style={{ color: '#5ee69a', marginTop: 6 }}>{info}</p>}
 
       {rules.length > 0 && (

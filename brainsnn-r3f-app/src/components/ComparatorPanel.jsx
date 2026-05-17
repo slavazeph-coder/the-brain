@@ -52,7 +52,7 @@ export default function ComparatorPanel() {
             }}
           >
             <span>Pressure delta (B - A)</span>
-            <strong style={{ color: report.delta > 0 ? '#5ee69a' : report.delta < 0 ? '#dd6974' : '#94a3b8', fontFamily: 'monospace' }}>
+            <strong style={{ color: report.delta > 0 ? '#5ee69a' : report.delta < 0 ? 'var(--danger)' : '#94a3b8', fontFamily: 'monospace' }}>
               {report.delta > 0 ? '+' : ''}{Math.round(report.delta * 100)} pts
             </strong>
           </div>

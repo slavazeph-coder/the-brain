@@ -88,7 +88,7 @@ export default function CommunityPackPanel() {
         <button className="btn" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974' }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)' }}>{err}</p>}
 
       {pack && (
         <div

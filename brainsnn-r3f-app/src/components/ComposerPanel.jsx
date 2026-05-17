@@ -80,7 +80,7 @@ export default function ComposerPanel() {
         </div>
       )}
 
-      {result?.error && <p className="muted" style={{ color: '#dd6974' }}>{result.error}</p>}
+      {result?.error && <p className="muted" style={{ color: 'var(--danger)' }}>{result.error}</p>}
     </section>
   );
 }

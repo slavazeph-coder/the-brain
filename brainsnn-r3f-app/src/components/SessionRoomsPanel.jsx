@@ -159,7 +159,7 @@ export default function SessionRoomsPanel() {
         </button>
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 8 }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 8 }}>{err}</p>}
 
       {entries.length > 0 && (
         <div style={{ marginTop: 14 }}>

@@ -126,7 +126,7 @@ export default function DiffPanel() {
                 style={{
                   padding: '10px 12px',
                   borderRadius: 6,
-                  borderLeft: `3px solid ${side.pressure > 0.5 ? '#dd6974' : side.pressure > 0.25 ? '#fdab43' : '#6daa45'}`,
+                  borderLeft: `3px solid ${side.pressure > 0.5 ? 'var(--danger)' : side.pressure > 0.25 ? '#fdab43' : 'var(--ok)'}`,
                   background: 'rgba(255,255,255,0.03)',
                 }}
               >

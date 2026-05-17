@@ -247,7 +247,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
 
-  const riskColor = !overall ? '#4fa8b3' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
+  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? '#fdab43' : 'var(--ok)';
 
   return (
     <section className="panel panel-pad cognitive-firewall-panel">
@@ -288,7 +288,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
         </button>
       </div>
       {fetchError && (
-        <p className="muted" style={{ color: '#dd6974', marginTop: 0 }}>
+        <p className="muted" style={{ color: 'var(--danger)', marginTop: 0 }}>
           Fetch failed: {fetchError}. Paste the text manually instead.
         </p>
       )}
@@ -420,7 +420,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                     key={arch.id}
                     className="firewall-chip"
                     title={`${arch.desc} (matched: ${arch.matched.join(', ')})`}
-                    style={{ background: 'rgba(221,105,116,0.10)', borderColor: '#dd6974', color: '#ffd6da' }}
+                    style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', borderColor: 'var(--danger)', color: '#ffd6da' }}
                   >
                     {arch.label}
                   </span>

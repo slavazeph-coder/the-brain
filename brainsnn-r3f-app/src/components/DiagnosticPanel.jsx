@@ -82,13 +82,13 @@ export default function DiagnosticPanel() {
                   style={{
                     padding: '4px 8px',
                     borderRadius: 4,
-                    background: 'rgba(221,105,116,0.06)',
+                    background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
                     marginTop: 4,
                     fontFamily: 'monospace',
                     fontSize: 11,
                   }}
                 >
-                  <strong style={{ color: '#dd6974' }}>{p.category}</strong>{' '}
+                  <strong style={{ color: 'var(--danger)' }}>{p.category}</strong>{' '}
                   /{p.source.slice(0, 80)}/
                 </div>
               ))}

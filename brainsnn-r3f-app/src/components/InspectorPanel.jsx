@@ -21,7 +21,7 @@ function Sparkline({ history }) {
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="sparkline" role="img" aria-label="Mean firing trend">
-      <polyline fill="none" stroke="#4fa8b3" strokeWidth="3" points={points} />
+      <polyline fill="none" stroke="var(--accent)" strokeWidth="3" points={points} />
     </svg>
   );
 }

@@ -69,7 +69,7 @@ export default function PortabilityPanel() {
       <div className="control-actions" style={{ marginTop: 10 }}>
         <button className="btn primary" onClick={handleDownload}>Download JSON</button>
         <button className="btn" onClick={copyExport}>Copy to clipboard</button>
-        <button className="btn" onClick={doWipe} style={{ color: '#dd6974' }}>Wipe all</button>
+        <button className="btn" onClick={doWipe} style={{ color: 'var(--danger)' }}>Wipe all</button>
       </div>
 
       <div style={{ marginTop: 14 }}>
@@ -95,7 +95,7 @@ export default function PortabilityPanel() {
         </div>
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 8 }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 8 }}>{err}</p>}
       {info && <p className="muted" style={{ color: '#5ee69a', marginTop: 8 }}>{info}</p>}
     </section>
   );

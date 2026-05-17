@@ -82,7 +82,7 @@ export default function SyncPanel() {
       )}
 
       {status && <p className="muted small-note" style={{ marginTop: 6 }}>{status}</p>}
-      {err && <p className="muted" style={{ color: '#dd6974' }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)' }}>{err}</p>}
     </section>
   );
 }

@@ -31,13 +31,6 @@
   --warn:         #c9a14b;
   --danger:       #c46666;
 
-  /* migration aliases — keep legacy --primary / --gold pointing to new
-   * tokens until the inline-hex sweep PR removes every raw reference.
-   * After that sweep, these two aliases will be deleted and CI will
-   * grep-fail on any remaining --primary / --gold use. */
-  --primary:      var(--accent);
-  --gold:         var(--warn);
-
   /* typography — Inter for UI, Source Serif 4 for headlines */
   --font-display: 'Source Serif 4', ui-serif, Georgia, serif;
   --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;

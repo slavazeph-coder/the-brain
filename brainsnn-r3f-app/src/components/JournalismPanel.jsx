@@ -79,7 +79,7 @@ export default function JournalismPanel() {
           <strong>{parsed.headers.length}</strong> columns
         </p>
       )}
-      {err && <p className="muted" style={{ color: '#dd6974' }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)' }}>{err}</p>}
 
       <div className="control-actions" style={{ marginTop: 8 }}>
         <button className="btn primary" onClick={run} disabled={running || !parsed || parsed.error || !parsed.rows?.length}>
@@ -105,7 +105,7 @@ export default function JournalismPanel() {
 
 function Summary({ analysis }) {
   const p = analysis.meanPressure;
-  const tone = p >= 0.55 ? '#dd6974' : p >= 0.25 ? '#fdab43' : '#6daa45';
+  const tone = p >= 0.55 ? 'var(--danger)' : p >= 0.25 ? '#fdab43' : 'var(--ok)';
   return (
     <div
       style={{
@@ -136,7 +136,7 @@ function Preview({ analysis }) {
     <div style={{ marginTop: 10 }}>
       <div className="eyebrow">Top 8 by pressure</div>
       {top.map((r) => {
-        const tone = r.pressure >= 0.55 ? '#dd6974' : r.pressure >= 0.25 ? '#fdab43' : '#6daa45';
+        const tone = r.pressure >= 0.55 ? 'var(--danger)' : r.pressure >= 0.25 ? '#fdab43' : 'var(--ok)';
         return (
           <div
             key={r.idx}

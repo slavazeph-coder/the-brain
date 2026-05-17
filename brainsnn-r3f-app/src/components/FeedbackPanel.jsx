@@ -43,15 +43,15 @@ export default function FeedbackPanel() {
       <div style={{ display: 'flex', gap: 10, marginTop: 10, fontSize: 13, color: '#cbd5e1' }}>
         <span><strong style={{ color: '#77dbe4' }}>too cold</strong> {report.tooCold}</span>
         <span><strong style={{ color: '#5ee69a' }}>accurate</strong> {report.accurate}</span>
-        <span><strong style={{ color: '#dd6974' }}>too hot</strong> {report.tooHot}</span>
-        <button className="ghost small" onClick={wipe} style={{ marginLeft: 'auto', color: '#dd6974' }}>Clear</button>
+        <span><strong style={{ color: 'var(--danger)' }}>too hot</strong> {report.tooHot}</span>
+        <button className="ghost small" onClick={wipe} style={{ marginLeft: 'auto', color: 'var(--danger)' }}>Clear</button>
       </div>
 
       {rows.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <div className="eyebrow">Recent ratings</div>
           {rows.slice(-10).reverse().map((r, i) => {
-            const color = r.verdict === 'too_hot' ? '#dd6974' : r.verdict === 'too_cold' ? '#77dbe4' : '#5ee69a';
+            const color = r.verdict === 'too_hot' ? 'var(--danger)' : r.verdict === 'too_cold' ? '#77dbe4' : '#5ee69a';
             return (
               <div
                 key={i}
