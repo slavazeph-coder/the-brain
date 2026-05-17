@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { exportBundle, importBundle } from '../utils/portability';
+import { fetchOrQueue, onOnlineChange, isOffline } from '../utils/offlineQueue';
 
 function generateCode() {
   // 6-char uppercase code, easy to read out loud
@@ -15,18 +16,35 @@ export default function SyncPanel() {
   const [status, setStatus] = useState('');
   const [err, setErr] = useState('');
   const [overwrite, setOverwrite] = useState(false);
+  const [offline, setOffline] = useState(isOffline());
+
+  useEffect(() => onOnlineChange(({ online }) => setOffline(!online)), []);
 
   async function send() {
     setErr(''); setStatus('uploading…');
     try {
       const bundle = exportBundle();
-      const r = await fetch('/api/sync', {
+      const result = await fetchOrQueue('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, bundle }),
       });
-      const data = await r.json();
-      if (!r.ok) { setErr(data.error || `HTTP ${r.status}`); setStatus(''); return; }
+      if (result.queued) {
+        setStatus(`Queued · will sync when online (code: ${code})`);
+        return;
+      }
+      if (!result.ok) {
+        const r = result.response;
+        if (r) {
+          const data = await r.json().catch(() => ({}));
+          setErr(data.error || `HTTP ${r.status}`);
+        } else {
+          setErr(result.reason || 'upload failed');
+        }
+        setStatus('');
+        return;
+      }
+      const data = await result.response.json();
       setStatus(`Uploaded · ${data.bytes.toLocaleString()} bytes · expires in ${Math.round(data.ttlSec / 60)} min`);
     } catch (e) { setErr(e.message || 'upload failed'); setStatus(''); }
   }
@@ -53,9 +71,14 @@ export default function SyncPanel() {
         auto-expires. Payload is your Layer 57 export — we don't read it.
       </p>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
         <button className={`btn${mode === 'send' ? ' primary' : ''}`} onClick={() => setMode('send')}>Send</button>
         <button className={`btn${mode === 'receive' ? ' primary' : ''}`} onClick={() => setMode('receive')}>Receive</button>
+        {offline && (
+          <span style={{ color: 'var(--severity-mid)', fontSize: '0.85rem', marginLeft: 'auto' }}>
+            ● offline — uploads will queue
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>

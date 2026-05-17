@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getImmunityState } from '../utils/immunityScore';
 import { getStreak } from '../utils/dailyChallenge';
+import { fetchOrQueue, onOnlineChange, isOffline } from '../utils/offlineQueue';
 
 const HANDLE_KEY = 'brainsnn_handle_v1';
 const ROOM_KEY = 'brainsnn_last_room_v1';
@@ -37,9 +38,11 @@ export default function SessionRoomsPanel() {
   const [source, setSource] = useState('daily');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+  const [offline, setOffline] = useState(isOffline());
 
   useEffect(() => { writeHandle(handle); }, [handle]);
   useEffect(() => { if (room) writeLastRoom(room); }, [room]);
+  useEffect(() => onOnlineChange(({ online }) => setOffline(!online)), []);
   useEffect(() => {
     const sharedRoom = readRoomFromUrl();
     if (sharedRoom) {
@@ -92,13 +95,30 @@ export default function SessionRoomsPanel() {
       meta = { rawStreak: streak.streak };
     }
     try {
-      const r = await fetch('/api/rooms', {
+      const result = await fetchOrQueue('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ room, handle: handle || 'anon', source, score, streak: streak.streak, meta }),
       });
-      const data = await r.json();
-      if (!r.ok) { setErr(data.error || `HTTP ${r.status}`); return; }
+      if (result.queued) {
+        setErr('');
+        setEntries((prev) => [
+          ...prev,
+          { handle: handle || 'anon', source, score, streak: streak.streak, ts: Date.now(), queued: true }
+        ]);
+        return;
+      }
+      if (!result.ok) {
+        const r = result.response;
+        if (r) {
+          const data = await r.json().catch(() => ({}));
+          setErr(data.error || `HTTP ${r.status}`);
+        } else {
+          setErr(result.reason || 'submit failed');
+        }
+        return;
+      }
+      const data = await result.response.json();
       setEntries(data.entries || []);
     } catch (e) { setErr(e.message || 'submit failed'); }
   }
@@ -113,6 +133,11 @@ export default function SessionRoomsPanel() {
         higher immunity", or "whose streak is longer". Upstash-backed when
         the env is set, in-memory fallback otherwise.
       </p>
+      {offline && (
+        <p className="muted small-note" style={{ color: 'var(--severity-mid)', marginTop: 4 }}>
+          ● offline — submissions will queue and replay when you're back online
+        </p>
+      )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
         <input
