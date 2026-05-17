@@ -1,0 +1,89 @@
+/**
+ * Design tokens — Claude dark, quieter.
+ *
+ * Imported FIRST from main.jsx (before global.css) so every selector
+ * resolves against these vars. Light-mode + high-contrast overrides
+ * live in this file too so theme.js continues to work end-to-end.
+ */
+
+:root {
+  /* surfaces — warm dark gray, slightly lifted from inky black */
+  --bg:           #1a1815;
+  --surface:      #211e1a;
+  --surface-2:    #2a2620;
+  --surface-3:    #353029;
+  --bg-3d:        #0f0e0c;
+  --border:       rgba(255, 255, 255, 0.06);
+
+  /* text */
+  --text:         #f0ede6;
+  --muted:        #a39d92;
+  --faint:        #5c5853;
+
+  /* single accent — Claude rust */
+  --accent:       #c96442;
+  --accent-soft:  rgba(201, 100, 66, 0.14);
+  --accent-line:  rgba(201, 100, 66, 0.32);
+  --accent-bright: #e08868;
+
+  /* semantic feedback — never used for branding */
+  --ok:           #7a9c5f;
+  --warn:         #c9a14b;
+  --danger:       #c46666;
+
+  /* migration aliases — keep legacy --primary / --gold pointing to new
+   * tokens until the inline-hex sweep PR removes every raw reference.
+   * After that sweep, these two aliases will be deleted and CI will
+   * grep-fail on any remaining --primary / --gold use. */
+  --primary:      var(--accent);
+  --gold:         var(--warn);
+
+  /* typography — Inter for UI, Source Serif 4 for headlines */
+  --font-display: 'Source Serif 4', ui-serif, Georgia, serif;
+  --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* layout — quieter than before */
+  --radius:       12px;
+  --radius-sm:    8px;
+
+  /* no drop shadows — hairlines instead. Existing references to
+   * var(--shadow) at global.css:63, 1076, 1115, 1207 cascade to "none". */
+  --shadow:       none;
+  --hairline:     1px solid var(--border);
+}
+
+/* Light mode — framework already wired via utils/theme.js (data-theme="light"),
+ * just dormant until tokens are defined. */
+html[data-theme="light"] {
+  --bg:           #faf9f7;
+  --surface:      #ffffff;
+  --surface-2:    #f4f1ec;
+  --surface-3:    #e8e3da;
+  --bg-3d:        #f2efe9;
+  --border:       rgba(0, 0, 0, 0.08);
+
+  --text:         #1a1815;
+  --muted:        #5c5853;
+  --faint:        #a39d92;
+
+  --accent-soft:  rgba(201, 100, 66, 0.10);
+  --accent-line:  rgba(201, 100, 66, 0.28);
+}
+
+/* High contrast — boost edges, fully opaque borders */
+html[data-high-contrast="true"] {
+  --border:       rgba(255, 255, 255, 0.22);
+  --muted:        #cfcabf;
+  --hairline:     1px solid var(--border);
+}
+
+html[data-theme="light"][data-high-contrast="true"] {
+  --border:       rgba(0, 0, 0, 0.32);
+  --muted:        #2a2620;
+}
+
+/* Reduced motion — theme.js sets --bsnn-anim-duration: 0ms; reinforce here. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --bsnn-anim-duration: 0ms; }
+}
