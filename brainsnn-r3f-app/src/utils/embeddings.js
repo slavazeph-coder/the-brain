@@ -1,77 +1,140 @@
 /**
- * Layer 24 — Real embeddings via transformers.js (CDN-loaded)
+ * Layer 24 — Real embeddings via transformers.js.
  *
- * Provider pattern: trigram Jaccard fallback by default, opt-in to real
- * semantic embeddings via @xenova/transformers loaded dynamically from
- * esm.run CDN. No build-time dep — first call fetches the library +
- * `Xenova/all-MiniLM-L6-v2` model (~25MB).
+ * Facade over the embeddings worker (workers/embeddings.worker.js)
+ * and the IDB cache (utils/embeddingsStore.js). Public API matches
+ * the original synchronous-style contract so every caller keeps
+ * working without changes:
  *
- * Cached embeddings live in memory and are persisted to localStorage
- * (scoped by text hash) so repeat queries are instant.
+ *   await initEmbeddings()
+ *   await embed(text) -> Float32Array
+ *   await embedBatch(texts) -> Float32Array[]
+ *   isReady() -> boolean
+ *   subscribeStatus(cb)
+ *   getEmbeddingStatus()
+ *   clearEmbeddingCache()
+ *
+ * Heavy work runs in the worker; cache reads/writes happen on the main
+ * thread against IDB. Falls back to inline (main-thread) loading if
+ * Workers aren't available (SSR, test env, ancient browsers).
  */
+
+import { createPool } from './workerPool';
+import { getCached, setCached, clearCache, cacheSize } from './embeddingsStore';
 
 const CDN_URL = 'https://esm.run/@xenova/transformers@2.17.2';
 const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';
-const CACHE_KEY = 'brainsnn_embeddings_v1';
-const CACHE_MAX = 500;
 
-let pipelinePromise = null;
-let pipelineInstance = null;
-let status = { state: 'idle', error: null, modelId: MODEL_ID, cdn: CDN_URL };
-const subscribers = new Set();
-const memCache = new Map(); // textHash → Float32Array
+let _pool = null;
+let _statusPollTimer = null;
+let _status = { state: 'idle', error: null, modelId: MODEL_ID, cdn: CDN_URL };
+const _subs = new Set();
 
-// ---------- status broadcast ----------
-
-function setStatus(patch) {
-  status = { ...status, ...patch };
-  for (const cb of subscribers) {
-    try { cb(status); } catch { /* ignore */ }
+function broadcast(patch) {
+  _status = { ..._status, ...patch };
+  for (const cb of _subs) {
+    try { cb(_status); } catch { /* noop */ }
   }
 }
 
+function ensurePool() {
+  if (_pool) return _pool;
+  if (typeof window === 'undefined') return null;
+  try {
+    _pool = createPool(
+      () => new Worker(new URL('../workers/embeddings.worker.js', import.meta.url), { type: 'module' }),
+      {
+        size: 1, // single model instance is fine; embeds are sequential per worker
+        fallback: null  // inline path is handled separately in initInline()
+      }
+    );
+    return _pool;
+  } catch {
+    return null;
+  }
+}
+
+// ---------- inline fallback (if Worker unavailable) ----------
+
+let _inlinePromise = null;
+let _inlineInstance = null;
+
+async function inlinePipeline() {
+  if (_inlineInstance) return _inlineInstance;
+  if (_inlinePromise) return _inlinePromise;
+  broadcast({ state: 'loading' });
+  _inlinePromise = (async () => {
+    try {
+      const mod = await import(/* @vite-ignore */ CDN_URL);
+      broadcast({ state: 'model-loading' });
+      _inlineInstance = await mod.pipeline('feature-extraction', MODEL_ID, { quantized: true });
+      broadcast({ state: 'ready', error: null });
+      return _inlineInstance;
+    } catch (err) {
+      broadcast({ state: 'error', error: err.message || String(err) });
+      _inlinePromise = null;
+      throw err;
+    }
+  })();
+  return _inlinePromise;
+}
+
+// ---------- status polling (worker path) ----------
+
+function startStatusPolling() {
+  if (_statusPollTimer) return;
+  _statusPollTimer = setInterval(async () => {
+    const pool = ensurePool();
+    if (!pool || pool.degraded) return;
+    try {
+      const s = await pool.call('getStatus', {});
+      broadcast({ state: s.state, error: s.error });
+      if (s.state === 'ready' || s.state === 'error') stopStatusPolling();
+    } catch {
+      stopStatusPolling();
+    }
+  }, 600);
+}
+
+function stopStatusPolling() {
+  if (_statusPollTimer) {
+    clearInterval(_statusPollTimer);
+    _statusPollTimer = null;
+  }
+}
+
+// ---------- public API ----------
+
 export function subscribeStatus(cb) {
-  subscribers.add(cb);
-  cb(status);
-  return () => subscribers.delete(cb);
+  _subs.add(cb);
+  cb(_status);
+  return () => _subs.delete(cb);
 }
 
 export function getEmbeddingStatus() {
-  return { ...status, cacheSize: memCache.size };
+  return { ..._status };
 }
 
-// ---------- cache ----------
+export function isReady() {
+  return _status.state === 'ready';
+}
 
-function loadCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    for (const [hash, arr] of Object.entries(parsed)) {
-      memCache.set(hash, Float32Array.from(arr));
+export async function initEmbeddings() {
+  const pool = ensurePool();
+  if (pool && !pool.degraded) {
+    broadcast({ state: 'loading' });
+    startStatusPolling();
+    try {
+      await pool.call('warmup', {});
+    } catch (err) {
+      broadcast({ state: 'error', error: err.message || String(err) });
     }
-  } catch { /* ignore */ }
+    return;
+  }
+  // Worker unavailable → load on main thread.
+  await inlinePipeline();
 }
 
-function saveCache() {
-  try {
-    const obj = {};
-    let count = 0;
-    for (const [hash, vec] of memCache) {
-      if (count++ >= CACHE_MAX) break;
-      obj[hash] = Array.from(vec);
-    }
-    localStorage.setItem(CACHE_KEY, JSON.stringify(obj));
-  } catch { /* quota — ignore */ }
-}
-
-export function clearEmbeddingCache() {
-  memCache.clear();
-  try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
-  setStatus({});
-}
-
-// Fast non-crypto hash for cache keys
 function hashText(text) {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) {
@@ -81,84 +144,116 @@ function hashText(text) {
   return (h >>> 0).toString(36);
 }
 
-// ---------- model loading ----------
-
-/**
- * Load transformers.js from CDN + the embedding model.
- * Idempotent — safe to call multiple times.
- */
-export async function initEmbeddings() {
-  if (pipelineInstance) return pipelineInstance;
-  if (pipelinePromise) return pipelinePromise;
-
-  loadCache();
-  setStatus({ state: 'loading', error: null });
-
-  pipelinePromise = (async () => {
-    try {
-      const mod = await import(/* @vite-ignore */ CDN_URL);
-      setStatus({ state: 'model-loading' });
-      pipelineInstance = await mod.pipeline('feature-extraction', MODEL_ID, {
-        quantized: true
-      });
-      setStatus({ state: 'ready', error: null });
-      return pipelineInstance;
-    } catch (err) {
-      setStatus({ state: 'error', error: err.message || String(err) });
-      pipelinePromise = null;
-      throw err;
-    }
-  })();
-
-  return pipelinePromise;
+async function embedInline(text) {
+  const pipe = await inlinePipeline();
+  const output = await pipe(text, { pooling: 'mean', normalize: true });
+  return new Float32Array(output.data);
 }
 
-export function isReady() {
-  return status.state === 'ready' && pipelineInstance !== null;
+async function embedViaWorker(text) {
+  const pool = ensurePool();
+  const { vec } = await pool.call('embed', { text });
+  return Float32Array.from(vec);
 }
 
-// ---------- embedding API ----------
-
-/**
- * Return a Float32Array embedding for the given text.
- * Uses cache, falls back to error if not initialized.
- */
 export async function embed(text) {
   if (!text || typeof text !== 'string') throw new Error('embed: text required');
   const hash = hashText(text);
-  if (memCache.has(hash)) return memCache.get(hash);
 
-  if (!pipelineInstance) await initEmbeddings();
-  if (!pipelineInstance) throw new Error('Embeddings not ready');
+  // Cache hit (IDB)
+  const cached = await getCached(hash);
+  if (cached) return cached;
 
-  const output = await pipelineInstance(text, { pooling: 'mean', normalize: true });
-  // transformers.js returns a Tensor; .data is a Float32Array
-  const vec = new Float32Array(output.data);
-  memCache.set(hash, vec);
-  if (memCache.size % 10 === 0) saveCache();
+  const pool = ensurePool();
+  let vec;
+  if (pool && !pool.degraded) {
+    if (_status.state !== 'ready') {
+      // First call against an un-warmed pool — initialize and wait.
+      await initEmbeddings();
+      // Worker reports ready via polling; wait briefly for the next tick.
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    vec = await embedViaWorker(text);
+  } else {
+    vec = await embedInline(text);
+  }
+
+  await setCached(hash, vec);
   return vec;
 }
 
-/**
- * Batch embed — returns array of Float32Array in order of input.
- * Serializes calls for pipeline safety but with cache short-circuits.
- */
 export async function embedBatch(texts) {
-  const out = [];
-  for (const t of texts) {
-    out.push(await embed(t));
+  // Cache short-circuit per text + batched worker call for misses.
+  const results = new Array(texts.length);
+  const missIdx = [];
+  const missTexts = [];
+
+  for (let i = 0; i < texts.length; i++) {
+    const hash = hashText(texts[i]);
+    const cached = await getCached(hash);
+    if (cached) {
+      results[i] = cached;
+    } else {
+      missIdx.push(i);
+      missTexts.push(texts[i]);
+    }
   }
-  saveCache();
-  return out;
+
+  if (missTexts.length === 0) return results;
+
+  const pool = ensurePool();
+  if (pool && !pool.degraded) {
+    if (_status.state !== 'ready') await initEmbeddings();
+    const { vecs } = await pool.call('embedBatch', { texts: missTexts });
+    for (let j = 0; j < missIdx.length; j++) {
+      const v = Float32Array.from(vecs[j]);
+      results[missIdx[j]] = v;
+      await setCached(hashText(missTexts[j]), v);
+    }
+  } else {
+    for (let j = 0; j < missIdx.length; j++) {
+      const v = await embedInline(missTexts[j]);
+      results[missIdx[j]] = v;
+      await setCached(hashText(missTexts[j]), v);
+    }
+  }
+
+  return results;
 }
 
-// ---------- similarity ----------
+export async function clearEmbeddingCache() {
+  await clearCache();
+  broadcast({});
+}
+
+export { cacheSize };
 
 export function cosineSimilarity(a, b) {
   if (!a || !b || a.length !== b.length) return 0;
   let dot = 0;
-  // Vectors are already L2-normalized (normalize: true in pooling),
-  // so dot product == cosine similarity
   for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
   return dot;
+}
+
+// ---------- idle prefetch (warm the model after first paint if seen before) ----------
+
+if (typeof window !== 'undefined') {
+  try {
+    const SEEN_KEY = 'brainsnn_embeddings_seen_v1';
+    if (localStorage.getItem(SEEN_KEY)) {
+      // Returning user — prefetch on idle so the first scan that needs
+      // embeddings doesn't pay the ~2-3s cold-load cost.
+      const warm = () => initEmbeddings().catch(() => { /* swallow */ });
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(warm, { timeout: 8000 });
+      } else {
+        setTimeout(warm, 4000);
+      }
+    } else {
+      // Mark as seen so next visit prefetches.
+      subscribeStatus((s) => {
+        if (s.state === 'ready') localStorage.setItem(SEEN_KEY, '1');
+      });
+    }
+  } catch { /* noop */ }
 }
