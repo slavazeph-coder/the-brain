@@ -78,7 +78,7 @@ export default function AudioPanel() {
   }
 
   const pct = Math.round(pressure * 100);
-  const tone = pct >= 65 ? 'var(--danger)' : pct >= 35 ? '#fdab43' : 'var(--ok)';
+  const tone = pct >= 65 ? 'var(--danger)' : pct >= 35 ? 'var(--severity-mid)' : 'var(--ok)';
 
   return (
     <section className="panel panel-pad audio-panel">

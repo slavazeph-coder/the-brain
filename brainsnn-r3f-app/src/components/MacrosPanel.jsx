@@ -89,7 +89,7 @@ export default function MacrosPanel() {
           {macros.map((m) => {
             const result = results[m.id];
             const mean = result ? result.meanPressure : 0;
-            const tone = mean >= 0.55 ? 'var(--danger)' : mean >= 0.25 ? '#fdab43' : 'var(--ok)';
+            const tone = mean >= 0.55 ? 'var(--danger)' : mean >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
             return (
               <div
                 key={m.id}
@@ -128,13 +128,13 @@ export default function MacrosPanel() {
                         Mean pressure <strong style={{ color: tone }}>{Math.round(result.meanPressure * 100)}%</strong> · peak{' '}
                         <strong>{Math.round(result.peak.pressure * 100)}%</strong>
                       </span>
-                      <strong style={{ color: result.expectedOk === null ? '#94a3b8' : result.expectedOk ? '#5ee69a' : 'var(--danger)' }}>
+                      <strong style={{ color: result.expectedOk === null ? '#94a3b8' : result.expectedOk ? 'var(--severity-ok)' : 'var(--danger)' }}>
                         {result.expectedOk === null ? 'no expectation' : result.expectedOk ? '✓ matches expectation' : '✗ off expectation'}
                       </strong>
                     </div>
                     <div style={{ marginTop: 6 }}>
                       {result.results.map((r) => {
-                        const rowTone = r.pressure >= 0.55 ? 'var(--danger)' : r.pressure >= 0.25 ? '#fdab43' : 'var(--ok)';
+                        const rowTone = r.pressure >= 0.55 ? 'var(--danger)' : r.pressure >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
                         return (
                           <div
                             key={r.idx}

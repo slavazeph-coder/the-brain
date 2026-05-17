@@ -16,7 +16,7 @@ export default function PrivacyBudgetPanel() {
 
   const quota = approximateQuota();
   const pct = Math.min(100, (budget.totalBytes / quota) * 100);
-  const tone = pct > 70 ? 'var(--danger)' : pct > 40 ? '#fdab43' : '#5ee69a';
+  const tone = pct > 70 ? 'var(--danger)' : pct > 40 ? 'var(--severity-mid)' : 'var(--severity-ok)';
 
   return (
     <section className="panel panel-pad privacy-budget-panel">

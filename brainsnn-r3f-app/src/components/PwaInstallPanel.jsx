@@ -60,12 +60,12 @@ function StateTile({ label, ok }) {
       style={{
         padding: '10px 12px',
         borderRadius: 8,
-        borderLeft: `3px solid ${ok ? '#5ee69a' : 'rgba(255,255,255,0.1)'}`,
+        borderLeft: `3px solid ${ok ? 'var(--severity-ok)' : 'rgba(255,255,255,0.1)'}`,
         background: ok ? 'rgba(94,230,154,0.06)' : 'rgba(255,255,255,0.03)',
       }}
     >
       <div className="muted small-note">{label}</div>
-      <strong style={{ color: ok ? '#5ee69a' : '#94a3b8' }}>
+      <strong style={{ color: ok ? 'var(--severity-ok)' : '#94a3b8' }}>
         {ok ? 'available' : 'not yet'}
       </strong>
     </div>

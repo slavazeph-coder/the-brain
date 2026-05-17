@@ -79,7 +79,7 @@ export default function ScanArchivePanel() {
             after any scan to save it here.
           </p>
         ) : items.map((e) => {
-          const tone = e.pressure >= 0.55 ? 'var(--danger)' : e.pressure >= 0.25 ? '#fdab43' : 'var(--ok)';
+          const tone = e.pressure >= 0.55 ? 'var(--danger)' : e.pressure >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
           return (
             <div
               key={e.id}

@@ -71,7 +71,7 @@ export default function ComplimentPanel() {
           >
             <Stat label="Specific markers" value={result.specificityHits} />
             <Stat label="Maximalist markers" value={result.maximalistHits} tone="var(--danger)" />
-            <Stat label="Hedging markers" value={result.hedgingHits} tone="#77dbe4" />
+            <Stat label="Hedging markers" value={result.hedgingHits} tone="var(--severity-info)" />
           </div>
         </div>
       )}
@@ -79,7 +79,7 @@ export default function ComplimentPanel() {
   );
 }
 
-function Stat({ label, value, tone = '#5ee69a' }) {
+function Stat({ label, value, tone = 'var(--severity-ok)' }) {
   return (
     <div style={{ padding: '8px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.04)' }}>
       <div className="muted small-note">{label}</div>

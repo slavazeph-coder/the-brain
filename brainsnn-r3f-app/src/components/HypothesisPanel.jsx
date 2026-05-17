@@ -82,13 +82,13 @@ export default function HypothesisPanel() {
                 style={{
                   padding: '8px 12px',
                   borderRadius: 6,
-                  borderLeft: `3px solid ${r.matches ? '#5ee69a' : '#94a3b8'}`,
+                  borderLeft: `3px solid ${r.matches ? 'var(--severity-ok)' : '#94a3b8'}`,
                   background: r.matches ? 'rgba(94,230,154,0.05)' : 'rgba(255,255,255,0.02)',
                   marginTop: 6,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <strong style={{ color: r.matches ? '#5ee69a' : '#94a3b8' }}>
+                  <strong style={{ color: r.matches ? 'var(--severity-ok)' : '#94a3b8' }}>
                     {r.matches ? '✓ supports' : '– against'}
                   </strong>
                   <span className="muted small-note">

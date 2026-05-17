@@ -57,7 +57,7 @@ export default function ContextMemoryPanel() {
           <div>
             <div className="eyebrow">Entities ({entities.length})</div>
             {entities.map((e) => {
-              const tone = e.meanPressure >= 0.55 ? 'var(--danger)' : e.meanPressure >= 0.25 ? '#fdab43' : 'var(--ok)';
+              const tone = e.meanPressure >= 0.55 ? 'var(--danger)' : e.meanPressure >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
               return (
                 <div
                   key={e.entity}

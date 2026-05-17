@@ -12,7 +12,7 @@ function DomainCard({ domainId, data }) {
   const domain = KNOWLEDGE_DOMAINS[domainId];
   if (!domain) return null;
   const depthPct = ((data?.depth || 0) * 100).toFixed(0);
-  const barColor = data?.depth > 0.6 ? 'var(--ok)' : data?.depth > 0.3 ? '#fdab43' : 'var(--danger)';
+  const barColor = data?.depth > 0.6 ? 'var(--ok)' : data?.depth > 0.3 ? 'var(--severity-mid)' : 'var(--danger)';
 
   return (
     <div className="kb-domain-card">
@@ -41,7 +41,7 @@ function DomainCard({ domainId, data }) {
 }
 
 function GapCard({ gap }) {
-  const sevColor = gap.severity === 'critical' ? 'var(--danger)' : '#fdab43';
+  const sevColor = gap.severity === 'critical' ? 'var(--danger)' : 'var(--severity-mid)';
   return (
     <div className="kb-gap-card">
       <div className="kb-gap-head">
@@ -278,13 +278,13 @@ tools/dev-workflow.md | Developer Workflow Guide | 2025-12-01`
             </div>
             <div className="kb-overview-stat">
               <small>Overall depth</small>
-              <strong style={{ color: overallDepth > 0.5 ? 'var(--ok)' : overallDepth > 0.25 ? '#fdab43' : 'var(--danger)' }}>
+              <strong style={{ color: overallDepth > 0.5 ? 'var(--ok)' : overallDepth > 0.25 ? 'var(--severity-mid)' : 'var(--danger)' }}>
                 {(overallDepth * 100).toFixed(0)}%
               </strong>
             </div>
             <div className="kb-overview-stat">
               <small>Knowledge gaps</small>
-              <strong style={{ color: gaps.length > 3 ? 'var(--danger)' : gaps.length > 0 ? '#fdab43' : 'var(--ok)' }}>
+              <strong style={{ color: gaps.length > 3 ? 'var(--danger)' : gaps.length > 0 ? 'var(--severity-mid)' : 'var(--ok)' }}>
                 {gaps.length}
               </strong>
             </div>

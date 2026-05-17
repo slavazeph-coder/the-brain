@@ -83,9 +83,9 @@ function normalize(count, baseline = 3) {
 }
 
 export const SCORE_FIELDS = [
-  { key: 'emotionalActivation', label: 'Emotional activation', desc: 'Fear / outrage / panic optimization', color: '#dd6974', regions: 'AMY + THL' },
-  { key: 'cognitiveSuppression', label: 'Cognitive suppression', desc: 'Urgency / certainty theater / overload', color: '#fdab43', regions: 'PFC dampens' },
-  { key: 'manipulationPressure', label: 'Manipulation pressure', desc: 'Steering reaction over understanding', color: '#a86fdf', regions: 'BG rises' },
+  { key: 'emotionalActivation', label: 'Emotional activation', desc: 'Fear / outrage / panic optimization', color: 'var(--danger)', regions: 'AMY + THL' },
+  { key: 'cognitiveSuppression', label: 'Cognitive suppression', desc: 'Urgency / certainty theater / overload', color: 'var(--severity-mid)', regions: 'PFC dampens' },
+  { key: 'manipulationPressure', label: 'Manipulation pressure', desc: 'Steering reaction over understanding', color: 'var(--severity-purple)', regions: 'BG rises' },
   { key: 'trustErosion', label: 'Trust erosion risk', desc: 'Sensationalism / coercive framing', color: '#5591c7', regions: 'composite' }
 ];
 

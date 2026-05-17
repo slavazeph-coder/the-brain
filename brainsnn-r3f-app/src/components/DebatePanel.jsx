@@ -77,13 +77,13 @@ export default function DebatePanel() {
 }
 
 function SpeakerCard({ name, mean, count, winner }) {
-  const tone = mean >= 0.55 ? 'var(--danger)' : mean >= 0.25 ? '#fdab43' : 'var(--ok)';
+  const tone = mean >= 0.55 ? 'var(--danger)' : mean >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
   return (
     <div
       style={{
         padding: '12px 14px',
         borderRadius: 8,
-        borderLeft: `3px solid ${winner ? '#5ee69a' : tone}`,
+        borderLeft: `3px solid ${winner ? 'var(--severity-ok)' : tone}`,
         background: winner ? 'rgba(94,230,154,0.08)' : 'rgba(255,255,255,0.03)',
       }}
     >
@@ -113,10 +113,10 @@ function CumulativeGraph({ report }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none">
       <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
-      <path d={dA} stroke="#77dbe4" strokeWidth={2} fill="none" />
-      <path d={dB} stroke="#fdab43" strokeWidth={2} fill="none" />
-      <text x={8} y={14} fill="#77dbe4" fontSize={12} fontFamily="monospace">{report.aName}</text>
-      <text x={8} y={H - 6} fill="#fdab43" fontSize={12} fontFamily="monospace">{report.bName}</text>
+      <path d={dA} stroke="var(--severity-info)" strokeWidth={2} fill="none" />
+      <path d={dB} stroke="var(--severity-mid)" strokeWidth={2} fill="none" />
+      <text x={8} y={14} fill="var(--severity-info)" fontSize={12} fontFamily="monospace">{report.aName}</text>
+      <text x={8} y={H - 6} fill="var(--severity-mid)" fontSize={12} fontFamily="monospace">{report.bName}</text>
     </svg>
   );
 }

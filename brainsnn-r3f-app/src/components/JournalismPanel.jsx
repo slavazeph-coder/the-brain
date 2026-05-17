@@ -105,7 +105,7 @@ export default function JournalismPanel() {
 
 function Summary({ analysis }) {
   const p = analysis.meanPressure;
-  const tone = p >= 0.55 ? 'var(--danger)' : p >= 0.25 ? '#fdab43' : 'var(--ok)';
+  const tone = p >= 0.55 ? 'var(--danger)' : p >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
   return (
     <div
       style={{
@@ -136,7 +136,7 @@ function Preview({ analysis }) {
     <div style={{ marginTop: 10 }}>
       <div className="eyebrow">Top 8 by pressure</div>
       {top.map((r) => {
-        const tone = r.pressure >= 0.55 ? 'var(--danger)' : r.pressure >= 0.25 ? '#fdab43' : 'var(--ok)';
+        const tone = r.pressure >= 0.55 ? 'var(--danger)' : r.pressure >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
         return (
           <div
             key={r.idx}

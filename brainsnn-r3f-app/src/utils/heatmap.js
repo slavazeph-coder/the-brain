@@ -54,10 +54,10 @@ export function scoreSentences(text = '') {
  * like a highlighter explosion.
  */
 export function pressureBand(pressure) {
-  if (pressure >= 0.65) return { bg: 'rgba(221,105,116,0.22)', border: '#dd6974', label: 'High' };
+  if (pressure >= 0.65) return { bg: 'rgba(221,105,116,0.22)', border: 'var(--danger)', label: 'High' };
   if (pressure >= 0.45) return { bg: 'rgba(229,123,64,0.18)', border: '#e57b40', label: 'Heavy' };
-  if (pressure >= 0.28) return { bg: 'rgba(253,171,67,0.14)', border: '#fdab43', label: 'Tilted' };
-  if (pressure >= 0.12) return { bg: 'rgba(109,170,69,0.10)', border: '#6daa45', label: 'Low' };
+  if (pressure >= 0.28) return { bg: 'rgba(253,171,67,0.14)', border: 'var(--severity-mid)', label: 'Tilted' };
+  if (pressure >= 0.12) return { bg: 'rgba(109,170,69,0.10)', border: 'var(--ok)', label: 'Low' };
   return { bg: 'transparent', border: 'rgba(255,255,255,0.04)', label: 'Calm' };
 }
 

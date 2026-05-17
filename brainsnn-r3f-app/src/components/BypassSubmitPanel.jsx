@@ -133,7 +133,7 @@ export default function BypassSubmitPanel() {
         <p className="muted" style={{ color: 'var(--danger)', marginTop: 6 }}>{result.error}</p>
       )}
       {result?.ok && (
-        <p style={{ marginTop: 10, color: result.bypass ? '#5ee69a' : '#fdab43' }}>
+        <p style={{ marginTop: 10, color: result.bypass ? 'var(--severity-ok)' : 'var(--severity-mid)' }}>
           {result.message}
         </p>
       )}

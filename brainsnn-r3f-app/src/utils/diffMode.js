@@ -31,10 +31,10 @@ export function runDiff({ labelA = 'A', labelB = 'B', textA = '', textB = '' }) 
 }
 
 export function diffVerdict(absDelta) {
-  if (absDelta < 0.05) return { label: 'Tied', color: '#77dbe4' };
-  if (absDelta < 0.15) return { label: 'Edge', color: '#fdab43' };
+  if (absDelta < 0.05) return { label: 'Tied', color: 'var(--severity-info)' };
+  if (absDelta < 0.15) return { label: 'Edge', color: 'var(--severity-mid)' };
   if (absDelta < 0.30) return { label: 'Clear', color: '#e57b40' };
-  return { label: 'Landslide', color: '#dd6974' };
+  return { label: 'Landslide', color: 'var(--danger)' };
 }
 
 // ---------- share (Layer 47 /v/<hash>) ----------

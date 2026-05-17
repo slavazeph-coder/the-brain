@@ -114,7 +114,7 @@ export default function DiagnosticPanel() {
                       fontSize: 11,
                     }}
                   >
-                    <strong style={{ color: '#fdab43' }}>{p.category}</strong>{' '}
+                    <strong style={{ color: 'var(--severity-mid)' }}>{p.category}</strong>{' '}
                     <span className="muted small-note">({p.benignHits} benign hits)</span>{' '}
                     /{p.source.slice(0, 80)}/
                   </div>

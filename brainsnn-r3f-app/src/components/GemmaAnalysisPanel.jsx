@@ -74,7 +74,7 @@ export default function GemmaAnalysisPanel({ onApplyToNetwork }) {
     ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
 
-  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? '#fdab43' : 'var(--ok)';
+  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? 'var(--severity-mid)' : 'var(--ok)';
   const statusColor = status === 'online' ? 'var(--ok)' : status === 'offline' ? 'var(--danger)' : 'var(--muted)';
   const modelName = getGemmaModel() || 'Gemma';
 

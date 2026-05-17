@@ -247,7 +247,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
 
-  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? '#fdab43' : 'var(--ok)';
+  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? 'var(--severity-mid)' : 'var(--ok)';
 
   return (
     <section className="panel panel-pad cognitive-firewall-panel">
@@ -398,7 +398,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                     title={`${tpl.desc} — click for the counter-response${tpl.source === 'semantic' ? ' (semantic match)' : ''}`}
                     style={{
                       background: openRefutation === tpl.id ? 'rgba(168,111,223,0.28)' : 'rgba(168,111,223,0.12)',
-                      borderColor: tpl.source === 'semantic' ? '#5ad4ff' : '#a86fdf',
+                      borderColor: tpl.source === 'semantic' ? '#5ad4ff' : 'var(--severity-purple)',
                       color: '#e2d3ff',
                       cursor: 'pointer',
                     }}
@@ -582,7 +582,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                   <span className="muted small-note">
                     engine: <strong>{draft.engine}</strong> · pressure{' '}
                     <strong>{Math.round(draft.beforePressure * 100)}%</strong> →{' '}
-                    <strong style={{ color: '#5ee69a' }}>{Math.round(draft.afterPressure * 100)}%</strong>
+                    <strong style={{ color: 'var(--severity-ok)' }}>{Math.round(draft.afterPressure * 100)}%</strong>
                   </span>
                   <span className="muted small-note">
                     −{Math.round(draft.reduction * 100)} pts

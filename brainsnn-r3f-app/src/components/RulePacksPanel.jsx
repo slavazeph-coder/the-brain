@@ -46,7 +46,7 @@ export default function RulePacksPanel() {
               style={{
                 padding: '12px 14px',
                 borderRadius: 8,
-                borderLeft: `3px solid ${on ? '#5ee69a' : 'rgba(255,255,255,0.1)'}`,
+                borderLeft: `3px solid ${on ? 'var(--severity-ok)' : 'rgba(255,255,255,0.1)'}`,
                 background: on ? 'rgba(94,230,154,0.06)' : 'rgba(255,255,255,0.02)',
               }}
             >

@@ -133,11 +133,11 @@ export function compareFingerprints(a, b) {
 }
 
 export function similarityVerdict(sim) {
-  if (sim >= 0.97) return { label: 'Very likely same author', color: '#5ee69a' };
-  if (sim >= 0.90) return { label: 'Likely same author', color: '#77dbe4' };
-  if (sim >= 0.78) return { label: 'Plausible overlap', color: '#fdab43' };
+  if (sim >= 0.97) return { label: 'Very likely same author', color: 'var(--severity-ok)' };
+  if (sim >= 0.90) return { label: 'Likely same author', color: 'var(--severity-info)' };
+  if (sim >= 0.78) return { label: 'Plausible overlap', color: 'var(--severity-mid)' };
   if (sim >= 0.60) return { label: 'Weak overlap', color: '#e57b40' };
-  return { label: 'Distinct styles', color: '#dd6974' };
+  return { label: 'Distinct styles', color: 'var(--danger)' };
 }
 
 // Labels for the 12 features, used by the panel's bar display

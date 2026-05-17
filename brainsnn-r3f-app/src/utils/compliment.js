@@ -76,13 +76,13 @@ export function scoreCompliment(text = '') {
   let color;
   if (loveBombingRisk >= 0.5) {
     verdict = 'Love-bombing risk';
-    color = '#dd6974';
+    color = 'var(--danger)';
   } else if (genuineness >= 0.7) {
     verdict = 'Grounded appreciation';
-    color = '#5ee69a';
+    color = 'var(--severity-ok)';
   } else if (genuineness >= 0.45) {
     verdict = 'Warm but generic';
-    color = '#77dbe4';
+    color = 'var(--severity-info)';
   } else {
     verdict = 'Flat';
     color = '#94a3b8';

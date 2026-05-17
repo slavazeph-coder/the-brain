@@ -37,8 +37,8 @@ export default function ComparatorPanel() {
       {report && (
         <div style={{ marginTop: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <SideCard label="Defaults (A)" score={report.a} tone="#77dbe4" />
-            <SideCard label="Active (B)" score={report.b} tone="#fdab43" />
+            <SideCard label="Defaults (A)" score={report.a} tone="var(--severity-info)" />
+            <SideCard label="Active (B)" score={report.b} tone="var(--severity-mid)" />
           </div>
 
           <div
@@ -52,15 +52,15 @@ export default function ComparatorPanel() {
             }}
           >
             <span>Pressure delta (B - A)</span>
-            <strong style={{ color: report.delta > 0 ? '#5ee69a' : report.delta < 0 ? 'var(--danger)' : '#94a3b8', fontFamily: 'monospace' }}>
+            <strong style={{ color: report.delta > 0 ? 'var(--severity-ok)' : report.delta < 0 ? 'var(--danger)' : '#94a3b8', fontFamily: 'monospace' }}>
               {report.delta > 0 ? '+' : ''}{Math.round(report.delta * 100)} pts
             </strong>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginTop: 10 }}>
-            <EvidenceList label={`Only A (${report.onlyA.length})`} items={report.onlyA} color="#77dbe4" />
+            <EvidenceList label={`Only A (${report.onlyA.length})`} items={report.onlyA} color="var(--severity-info)" />
             <EvidenceList label={`Shared (${report.shared.length})`} items={report.shared} color="#cbd5e1" />
-            <EvidenceList label={`Only B (${report.onlyB.length})`} items={report.onlyB} color="#fdab43" />
+            <EvidenceList label={`Only B (${report.onlyB.length})`} items={report.onlyB} color="var(--severity-mid)" />
           </div>
         </div>
       )}

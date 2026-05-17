@@ -17,7 +17,7 @@ export const PERSONAS = [
   {
     id: 'skeptic',
     label: 'Skeptic',
-    color: '#77dbe4',
+    color: 'var(--severity-info)',
     // Weights tilt toward cognitive-suppression detection
     weights: { emo: 0.7, cog: 1.3, man: 1.2, trust: 1.0 },
     interpret: (score, p) => {
@@ -32,7 +32,7 @@ export const PERSONAS = [
   {
     id: 'ally',
     label: 'Ally',
-    color: '#5ee69a',
+    color: 'var(--severity-ok)',
     // Weights emphasize concrete specifics; attenuate generic urgency
     weights: { emo: 0.9, cog: 0.8, man: 0.85, trust: 1.0 },
     interpret: (score, p) => {
@@ -46,7 +46,7 @@ export const PERSONAS = [
   {
     id: 'target',
     label: 'Target',
-    color: '#dd6974',
+    color: 'var(--danger)',
     // Weights amplify what a manipulator would expect the target to feel
     weights: { emo: 1.3, cog: 1.2, man: 1.1, trust: 0.9 },
     interpret: (score, p) => {
@@ -65,7 +65,7 @@ export const PERSONAS = [
   {
     id: 'observer',
     label: 'Observer',
-    color: '#fdab43',
+    color: 'var(--severity-mid)',
     // Weights are flat — outside read
     weights: { emo: 1.0, cog: 1.0, man: 1.0, trust: 1.0 },
     interpret: (score, p) => {

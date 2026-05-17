@@ -96,7 +96,7 @@ export default function PortabilityPanel() {
       </div>
 
       {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 8 }}>{err}</p>}
-      {info && <p className="muted" style={{ color: '#5ee69a', marginTop: 8 }}>{info}</p>}
+      {info && <p className="muted" style={{ color: 'var(--severity-ok)', marginTop: 8 }}>{info}</p>}
     </section>
   );
 }

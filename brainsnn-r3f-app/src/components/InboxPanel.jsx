@@ -103,7 +103,7 @@ export default function InboxPanel() {
               key={it.idx}
               style={{
                 padding: '10px 12px',
-                borderLeft: `3px solid ${it.pressure > 0.55 ? 'var(--danger)' : it.pressure > 0.3 ? '#fdab43' : 'var(--ok)'}`,
+                borderLeft: `3px solid ${it.pressure > 0.55 ? 'var(--danger)' : it.pressure > 0.3 ? 'var(--severity-mid)' : 'var(--ok)'}`,
                 background: 'rgba(255,255,255,0.03)',
                 borderRadius: 6,
                 marginTop: 8,

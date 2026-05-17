@@ -31,6 +31,16 @@
   --warn:         #c9a14b;
   --danger:       #c46666;
 
+  /* secondary severity palette — fills the brighter end of the
+     ok/warn/danger ladder. Used by 3-tier severity tables in
+     utils/* (heatmap, diagnostic, hypothesis, etc.) where the
+     UI shows danger/middle/ok bars or borders. */
+  --severity-mid:     #fdab43;   /* bright orange — "Tilted" tier */
+  --severity-ok:      #5ee69a;   /* bright mint — "Resilient" tier */
+  --severity-info:    #77dbe4;   /* cyan — "Steady" / neutral tier */
+  --severity-purple:  #a86fdf;   /* certainty / authority */
+  --severity-pink:    #ec87b5;   /* belonging / social */
+
   /* typography — Inter for UI, Source Serif 4 for headlines */
   --font-display: 'Source Serif 4', ui-serif, Georgia, serif;
   --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -62,6 +72,13 @@ html[data-theme="light"] {
 
   --accent-soft:  rgba(201, 100, 66, 0.10);
   --accent-line:  rgba(201, 100, 66, 0.28);
+
+  /* Severity palette tuned slightly darker for light backgrounds. */
+  --severity-mid:     #d97a1f;
+  --severity-ok:      #2f9a52;
+  --severity-info:    #2b8a9e;
+  --severity-purple:  #7c4ec0;
+  --severity-pink:    #c25d92;
 }
 
 /* High contrast — boost edges, fully opaque borders */

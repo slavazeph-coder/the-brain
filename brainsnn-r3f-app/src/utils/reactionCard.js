@@ -10,14 +10,14 @@
 const MAX_EXCERPT = 280;
 
 export const AFFECT_LABELS = {
-  fear: { label: 'Fear', color: '#dd6974' },
+  fear: { label: 'Fear', color: 'var(--danger)' },
   outrage: { label: 'Outrage', color: '#e57b40' },
-  urgency: { label: 'Urgency', color: '#fdab43' },
-  certainty: { label: 'Certainty theater', color: '#a86fdf' },
+  urgency: { label: 'Urgency', color: 'var(--severity-mid)' },
+  certainty: { label: 'Certainty theater', color: 'var(--severity-purple)' },
   awe: { label: 'Awe', color: '#5591c7' },
-  belonging: { label: 'Belonging', color: '#ec87b5' },
+  belonging: { label: 'Belonging', color: 'var(--severity-pink)' },
   curiosity: { label: 'Curiosity', color: '#5fb7c1' },
-  neutral: { label: 'Low-signal', color: '#6daa45' },
+  neutral: { label: 'Low-signal', color: 'var(--ok)' },
 };
 
 function pickAffect(score) {

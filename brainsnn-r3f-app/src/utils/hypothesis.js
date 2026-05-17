@@ -100,10 +100,10 @@ export function testHypothesis({ type, evidenceText }) {
 
 function verdictFor(conf, n) {
   if (n === 0) return { label: 'No evidence', color: '#94a3b8' };
-  if (conf >= 0.70) return { label: 'Supported', color: '#5ee69a' };
-  if (conf >= 0.40) return { label: 'Mixed', color: '#fdab43' };
+  if (conf >= 0.70) return { label: 'Supported', color: 'var(--severity-ok)' };
+  if (conf >= 0.40) return { label: 'Mixed', color: 'var(--severity-mid)' };
   if (conf > 0.10) return { label: 'Weak', color: '#e57b40' };
-  return { label: 'Refuted', color: '#dd6974' };
+  return { label: 'Refuted', color: 'var(--danger)' };
 }
 
 export const HYPOTHESIS_EXAMPLE = {

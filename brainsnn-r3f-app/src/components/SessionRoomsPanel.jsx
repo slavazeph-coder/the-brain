@@ -168,7 +168,7 @@ export default function SessionRoomsPanel() {
             .slice()
             .sort((a, b) => b.score - a.score)
             .map((e, i) => {
-              const tone = i === 0 ? '#5ee69a' : i === 1 ? '#77dbe4' : '#fdab43';
+              const tone = i === 0 ? 'var(--severity-ok)' : i === 1 ? 'var(--severity-info)' : 'var(--severity-mid)';
               return (
                 <div
                   key={`${e.handle}-${e.ts}`}

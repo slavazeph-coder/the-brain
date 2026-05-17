@@ -96,7 +96,7 @@ export default function CommunityPackPanel() {
             marginTop: 12,
             padding: '14px 16px',
             borderRadius: 10,
-            borderLeft: `3px solid ${isOn ? '#5ee69a' : '#5ad4ff'}`,
+            borderLeft: `3px solid ${isOn ? 'var(--severity-ok)' : '#5ad4ff'}`,
             background: isOn ? 'rgba(94,230,154,0.06)' : 'rgba(90,212,255,0.04)',
           }}
         >
@@ -119,7 +119,7 @@ export default function CommunityPackPanel() {
                   fontSize: 11,
                 }}
               >
-                <strong style={{ color: '#a86fdf' }}>{r.category}</strong>{' '}
+                <strong style={{ color: 'var(--severity-purple)' }}>{r.category}</strong>{' '}
                 /{r.pattern}/
                 {r.label && <span className="muted small-note" style={{ marginLeft: 6 }}>— {r.label}</span>}
               </div>
@@ -136,7 +136,7 @@ export default function CommunityPackPanel() {
         </div>
       )}
 
-      {info && <p className="muted small-note" style={{ color: '#5ee69a', marginTop: 6 }}>{info}</p>}
+      {info && <p className="muted small-note" style={{ color: 'var(--severity-ok)', marginTop: 6 }}>{info}</p>}
     </section>
   );
 }
