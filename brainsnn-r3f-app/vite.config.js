@@ -28,11 +28,6 @@ export default defineConfig({
             return undefined;
           }
 
-          // The legacy scroll shell + every panel it eagerly imports.
-          // Putting App.jsx itself in the same chunk keeps the boundary
-          // tight: ?shell=new never fetches it.
-          if (id.endsWith('/src/App.jsx')) return 'legacy-app';
-
           // Workspace chunks. Each workspace JSX + the panels it
           // lazy-imports land in the same chunk for one-round-trip load.
           const m = id.match(/\/src\/shell\/workspaces\/(\w+)Workspace\.jsx$/);

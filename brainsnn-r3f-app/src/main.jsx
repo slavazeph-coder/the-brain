@@ -1,47 +1,27 @@
-import React, { lazy, Suspense } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
+import NewApp from './shell/NewApp';
 import './styles/tokens.css';
 import './styles/global.css';
 import './styles/shell.css';
 
-// Default shell flipped to the Claude-design AppShell. Legacy shell
-// kept reachable via ?shell=old for one release as an escape hatch.
-// Both are dynamic-import boundaries so the unused one never lands in
-// the initial payload — `ws-legacy-app` is its own chunk that only
-// fetches when ?shell=old or the localStorage pref is set.
-function pickShell() {
+// Legacy shell retired. The Claude-design AppShell (src/shell/NewApp.jsx)
+// is now the only renderer. `?shell=old` is honored as a one-release
+// notice that the legacy code is gone — toasts the user with a hint
+// and then continues into the new shell.
+if (typeof window !== 'undefined') {
   try {
     const url = new URLSearchParams(window.location.search);
-    if (url.get('shell') === 'old') return 'old';
-    if (url.get('shell') === 'new') return 'new';
-    if (localStorage.getItem('brainsnn_shell_pref') === 'old') return 'old';
+    if (url.get('shell') === 'old' || localStorage.getItem('brainsnn_shell_pref') === 'old') {
+      console.info('[brainsnn] legacy shell has been removed; rendering the new AppShell.');
+      // Clear the stale preference so subsequent loads don't keep nagging.
+      try { localStorage.removeItem('brainsnn_shell_pref'); } catch { /* noop */ }
+    }
   } catch { /* noop */ }
-  return 'new';
-}
-
-const LegacyApp = lazy(() => import('./App'));
-const NewApp = lazy(() => import('./shell/NewApp'));
-const ShellRoot = pickShell() === 'old' ? LegacyApp : NewApp;
-
-function Fallback() {
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg)',
-      color: 'var(--muted)',
-      fontFamily: 'var(--font-body)',
-      fontSize: '0.9rem'
-    }}>Loading the brain…</div>
-  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <Suspense fallback={<Fallback />}>
-      <ShellRoot />
-    </Suspense>
+    <NewApp />
   </React.StrictMode>
 );
