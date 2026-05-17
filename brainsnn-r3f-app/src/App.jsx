@@ -59,7 +59,6 @@ import CalendarHeatmapPanel from './components/CalendarHeatmapPanel';
 import ToneShifterPanel from './components/ToneShifterPanel';
 import SimilaritySearchPanel from './components/SimilaritySearchPanel';
 import OscillationsPanel from './components/OscillationsPanel';
-import LayerExplorerPanel from './components/LayerExplorerPanel';
 import TextAdventurePanel from './components/TextAdventurePanel';
 import ComparatorPanel from './components/ComparatorPanel';
 import DrillDownPanel from './components/DrillDownPanel';
@@ -79,7 +78,6 @@ import CommandPalette from './components/CommandPalette';
 import FeedbackPanel from './components/FeedbackPanel';
 import RoleTourPanel from './components/RoleTourPanel';
 import SyncPanel from './components/SyncPanel';
-import HotkeyMap from './components/HotkeyMap';
 import ThemePanel from './components/ThemePanel';
 import CommunityPackPanel from './components/CommunityPackPanel';
 import MilestonePanel from './components/MilestonePanel';
@@ -336,7 +334,6 @@ export default function App() {
       <KeyboardHelp open={showKbHelp} onClose={() => setShowKbHelp(false)} />
       <OnboardingWalkthrough />
       <CommandPalette />
-      <HotkeyMap />
 
       <main className="app-layout">
         <section className="main-column">
@@ -708,10 +705,6 @@ export default function App() {
 
           <ErrorBoundary name="Oscillations">
             <OscillationsPanel />
-          </ErrorBoundary>
-
-          <ErrorBoundary name="Layer Explorer">
-            <LayerExplorerPanel />
           </ErrorBoundary>
 
           <ErrorBoundary name="Text Adventure">
