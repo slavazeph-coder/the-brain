@@ -4,9 +4,19 @@
  * Stores named snapshots of the full brain state in localStorage.
  * Supports export/import as JSON, side-by-side comparison, and
  * generating shareable report summaries.
+ *
+ * Cross-tab safety: mutations run under a Web Locks key
+ * ('snapshots:write') so two tabs saving simultaneously can't clobber
+ * each other's appends. Each mutation also broadcasts on the
+ * 'snapshot:changed' channel so a list view in another tab refreshes
+ * without manual reload.
  */
 
+import { withLock } from './atomicWrites';
+import { publish } from './multiTab';
+
 const STORAGE_KEY = 'brainsnn_snapshots';
+const LOCK_KEY = 'snapshots:write';
 
 // ---------- storage ----------
 
@@ -31,7 +41,6 @@ export function listSnapshots() {
 }
 
 export function saveSnapshot(state, name = '') {
-  const snapshots = readStore();
   const regions = { ...state.regions };
   const weights = { ...state.weights };
   const mean = Object.values(regions).reduce((a, v) => a + v, 0) / Object.keys(regions).length;
@@ -57,10 +66,16 @@ export function saveSnapshot(state, name = '') {
     }
   };
 
-  snapshots.unshift(snapshot);
-  // Keep max 50 snapshots
-  if (snapshots.length > 50) snapshots.length = 50;
-  writeStore(snapshots);
+  // Public API stays synchronous-looking for callers; the lock runs
+  // in the background. Web Locks queue requests so callers within the
+  // same tab/across tabs don't race on the localStorage list.
+  withLock(LOCK_KEY, () => {
+    const snapshots = readStore();
+    snapshots.unshift(snapshot);
+    if (snapshots.length > 50) snapshots.length = 50;
+    writeStore(snapshots);
+    publish('snapshot:changed', { kind: 'save', id: snapshot.id });
+  });
   return snapshot;
 }
 
@@ -70,12 +85,18 @@ export function loadSnapshot(id) {
 }
 
 export function deleteSnapshot(id) {
-  const snapshots = readStore().filter((s) => s.id !== id);
-  writeStore(snapshots);
+  withLock(LOCK_KEY, () => {
+    const snapshots = readStore().filter((s) => s.id !== id);
+    writeStore(snapshots);
+    publish('snapshot:changed', { kind: 'delete', id });
+  });
 }
 
 export function clearAllSnapshots() {
-  writeStore([]);
+  withLock(LOCK_KEY, () => {
+    writeStore([]);
+    publish('snapshot:changed', { kind: 'clear' });
+  });
 }
 
 // ---------- comparison ----------
