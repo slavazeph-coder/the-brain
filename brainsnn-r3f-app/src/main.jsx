@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import NewApp from './shell/NewApp';
 import './styles/tokens.css';
 import './styles/global.css';
 import './styles/shell.css';
 
 // Default shell flipped to the Claude-design AppShell. Legacy shell
-// kept reachable via ?shell=old for one release as an escape hatch
-// while users adjust; will be removed in a follow-up PR.
+// kept reachable via ?shell=old for one release as an escape hatch.
+// Both are dynamic-import boundaries so the unused one never lands in
+// the initial payload — `ws-legacy-app` is its own chunk that only
+// fetches when ?shell=old or the localStorage pref is set.
 function pickShell() {
   try {
     const url = new URLSearchParams(window.location.search);
@@ -19,10 +19,29 @@ function pickShell() {
   return 'new';
 }
 
-const ShellRoot = pickShell() === 'old' ? App : NewApp;
+const LegacyApp = lazy(() => import('./App'));
+const NewApp = lazy(() => import('./shell/NewApp'));
+const ShellRoot = pickShell() === 'old' ? LegacyApp : NewApp;
+
+function Fallback() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg)',
+      color: 'var(--muted)',
+      fontFamily: 'var(--font-body)',
+      fontSize: '0.9rem'
+    }}>Loading the brain…</div>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ShellRoot />
+    <Suspense fallback={<Fallback />}>
+      <ShellRoot />
+    </Suspense>
   </React.StrictMode>
 );
