@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { bus } from './bus';
+import { getTheme, setTheme } from '../utils/theme';
 
 const THEME_CYCLE = ['auto', 'dark', 'light'];
 
@@ -9,17 +10,26 @@ const THEME_CYCLE = ['auto', 'dark', 'light'];
  * Right: theme toggle, ⌘K hint, keyboard help.
  */
 export default function Topbar({ workspace, firewallResult, immunity, onShowHelp }) {
-  const [theme, setTheme] = useState(() => {
-    if (typeof document === 'undefined') return 'auto';
-    return document.documentElement.dataset.theme || 'auto';
-  });
+  // Mirror the canonical theme state (theme.js owns persistence under
+  // brainsnn_theme_v1 + applies CSS vars + broadcasts cross-tab).
+  // Subscribing to BroadcastChannel via theme.js's registerTheme()
+  // handler isn't necessary here — we just re-read on mount and on
+  // every cycle. Cross-tab updates land via dataset mutations which
+  // we observe via getTheme() lazily.
+  const [theme, setLocalTheme] = useState(() => getTheme().theme);
+
+  // Re-read in case another tab flipped the theme since mount.
+  useEffect(() => {
+    const handler = () => setLocalTheme(getTheme().theme);
+    window.addEventListener('focus', handler);
+    return () => window.removeEventListener('focus', handler);
+  }, []);
 
   const cycleTheme = () => {
     const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem('brainsnn_theme', next); } catch { /* noop */ }
-    setTheme(next);
-    bus.emit('shell:theme', { theme: next });
+    const current = getTheme();
+    setTheme({ ...current, theme: next });  // applies CSS + broadcasts cross-tab
+    setLocalTheme(next);
   };
 
   const openPalette = () => bus.emit('shell:palette-open');

@@ -26,11 +26,37 @@ const WORKSPACE_COMPONENT = {
 const VALID = new Set(Object.keys(WORKSPACE_COMPONENT));
 const STORAGE_KEY = 'brainsnn_shell_workspace';
 
+// Deep-link → workspace. Each URL param is consumed by a panel that
+// lives in exactly one workspace; if the user lands on a different
+// workspace, only one workspace component mounts at a time and the
+// target panel never runs its rehydration logic.
+const PARAM_WORKSPACE = {
+  scan: 'defend',           // CognitiveFirewallPanel
+  'scan-url': 'defend',
+  r: 'defend',              // reaction share
+  i: 'defend',              // ImmunityPanel
+  a: 'defend',              // AutopsyPanel
+  q: 'training',            // QuizPanel
+  d: 'training',            // DailyChallengePanel
+  x: 'training',            // ComposerPanel / counter-draft
+  t: 'analyze',             // TimeSeriesPanel
+  n: 'connect',             // InboxPanel
+  v: 'connect',             // DiffPanel
+  room: 'connect'           // SessionRoomsPanel
+  // #state= applies brain state globally; doesn't dictate a workspace.
+};
+
 function initialWorkspace() {
   if (typeof window === 'undefined') return 'home';
   try {
-    const url = new URLSearchParams(window.location.search).get('w');
-    if (url && VALID.has(url)) return url;
+    const params = new URLSearchParams(window.location.search);
+    // Explicit ?w= wins (lets the user override deep-link routing).
+    const explicit = params.get('w');
+    if (explicit && VALID.has(explicit)) return explicit;
+    // Otherwise resolve the first matching deep-link param.
+    for (const [param, ws] of Object.entries(PARAM_WORKSPACE)) {
+      if (params.has(param)) return ws;
+    }
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && VALID.has(stored)) return stored;
   } catch { /* noop */ }
