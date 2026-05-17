@@ -11,8 +11,12 @@
  * because users think in examples, not in regex.
  */
 
+import { withLock } from './atomicWrites';
+import { publish } from './multiTab';
+
 const STORAGE_KEY = 'brainsnn_personal_dict_v1';
 const MAX_ENTRIES = 120;
+const LOCK_KEY = 'personalDict:write';
 
 function read() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
@@ -35,26 +39,38 @@ export function addEntry({ phrase, note = '', weight = 0.5, tag = '' }) {
     ts: Date.now(),
     hits: 0,
   };
-  const list = read();
-  write([entry, ...list]);
+  withLock(LOCK_KEY, () => {
+    const list = read();
+    write([entry, ...list]);
+    publish('personalDict:changed', { kind: 'add', id: entry.id });
+  });
   return entry;
 }
 
 export function removeEntry(id) {
-  const list = read().filter((e) => e.id !== id);
-  write(list);
+  withLock(LOCK_KEY, () => {
+    write(read().filter((e) => e.id !== id));
+    publish('personalDict:changed', { kind: 'remove', id });
+  });
 }
 
 export function clearAll() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  withLock(LOCK_KEY, () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+    publish('personalDict:changed', { kind: 'clear' });
+  });
 }
 
 export function bumpHit(id) {
-  const list = read();
-  const idx = list.findIndex((e) => e.id === id);
-  if (idx < 0) return;
-  list[idx] = { ...list[idx], hits: (list[idx].hits || 0) + 1 };
-  write(list);
+  // Hit-count increments are racy by nature (two tabs scanning at the
+  // same time double-bump the same entry). Lock prevents lost updates.
+  withLock(LOCK_KEY, () => {
+    const list = read();
+    const idx = list.findIndex((e) => e.id === id);
+    if (idx < 0) return;
+    list[idx] = { ...list[idx], hits: (list[idx].hits || 0) + 1 };
+    write(list);
+  });
 }
 
 /**

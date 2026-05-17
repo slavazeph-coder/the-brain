@@ -7,8 +7,12 @@
  * pressure as an "adjusted (calibrated)" readout.
  */
 
+import { withLock } from './atomicWrites';
+import { publish } from './multiTab';
+
 const STORAGE_KEY = 'brainsnn_feedback_v1';
 const MAX_ENTRIES = 200;
+const LOCK_KEY = 'feedback:write';
 
 function read() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
@@ -28,14 +32,20 @@ export function recordFeedback({ pressure, verdict, receiptId = null, excerpt = 
     receiptId,
     excerpt: String(excerpt || '').slice(0, 120),
   };
-  write([...read(), entry]);
+  withLock(LOCK_KEY, () => {
+    write([...read(), entry]);
+    publish('feedback:changed', { kind: 'add' });
+  });
   return entry;
 }
 
 export function listFeedback() { return read(); }
 
 export function clearFeedback() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  withLock(LOCK_KEY, () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+    publish('feedback:changed', { kind: 'clear' });
+  });
 }
 
 /**
