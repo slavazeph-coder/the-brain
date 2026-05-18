@@ -7,7 +7,7 @@ Social Post Autopsy turns Instagram / TikTok / X / LinkedIn posts into a BrainSN
 - Detect platform, handle, viral mechanics, propaganda templates, and dominant affect.
 - Produce a “viewer install” sentence: the feeling the post is trying to install and the mechanic carrying it.
 - Map pressure by slide so the user can see where the carousel spikes.
-- Copy the report, archive the scan, or send the combined text to the Cognitive Firewall.
+- Copy the report, archive the scan, send the combined text to the Cognitive Firewall, or generate a public share card.
 
 ## Why this layer exists
 
@@ -34,6 +34,19 @@ The report includes:
 - Propaganda templates from Layer 39.
 - Per-slide pressure map.
 - Recommended verification checks.
+- Share card URLs for public previews and vertical social image export.
+
+## Share cards
+
+Layer 103 adds a dedicated viral card flow:
+
+| Route | Purpose |
+| --- | --- |
+| `/s/<hash>` | Public HTML shell with OG/Twitter metadata for a Social Post Autopsy result. Redirects back into the app with `?s=<hash>`. |
+| `/api/social-og?h=<hash>` | 1200×630 PNG image card for link previews. |
+| `/api/social-og?h=<hash>&size=vertical` | 1080×1920 vertical card for TikTok/Reels/Stories share surfaces. |
+
+The share payload is intentionally compact and does not expose the full post text. It includes the platform label, handle, pressure, core score dimensions, dominant affect, viewer-install sentence, top viral mechanics, a short caption excerpt, and up to five slide pressure values.
 
 ## Integration
 
@@ -41,5 +54,11 @@ The panel is mounted under the existing OCR panel so social screenshots naturall
 
 - `brainsnn-r3f-app/src/utils/socialPostAutopsy.js`
 - `brainsnn-r3f-app/src/components/SocialPostAutopsyPanel.jsx`
+- `brainsnn-r3f-app/viral/social-card.js`
+
+The Node server wires:
+
+- `GET /s/:hash`
+- `GET /api/social-og`
 
 Layer Explorer includes Layer 103, so it can be found by searching `social`, `Instagram`, `carousel`, `TikTok`, or `103`.
