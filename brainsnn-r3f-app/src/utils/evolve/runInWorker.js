@@ -15,15 +15,16 @@ import { runAttackEvolution as runInlineAttackEvolution } from './attackLoop.js'
 const workerAvailable = typeof Worker !== 'undefined' && typeof URL !== 'undefined';
 
 /**
- * Shared streaming-worker dispatcher. `workerFactory` returns a fresh
- * Worker; `inlineFn` is the synchronous fallback used when Worker
- * isn't available. Both produce the same { pool, best, sampler }
- * shape and forward `round` events to the supplied onRound callback.
+ * Shared dispatcher. Caller passes an already-constructed Worker
+ * (the `new URL(...)` call MUST live at the call site so Vite's
+ * static analyzer can trace it and bundle the worker source) plus
+ * the inline fallback. Both emit the same { pool, best, sampler }
+ * shape and forward `round` events to onRound.
  */
-function runInWorker(workerFactory, inlineFn, opts = {}) {
+function dispatch(worker, inlineFn, opts = {}) {
   const { onRound, ...passThrough } = opts;
 
-  if (!workerAvailable) {
+  if (!worker) {
     const cancelRef = { stopped: false };
     const promise = inlineFn({
       ...opts,
@@ -33,9 +34,7 @@ function runInWorker(workerFactory, inlineFn, opts = {}) {
     return promise;
   }
 
-  const worker = workerFactory();
   let settled = false;
-
   const promise = new Promise((resolve, reject) => {
     worker.onmessage = (e) => {
       const { type, payload } = e.data || {};
@@ -74,17 +73,16 @@ function runInWorker(workerFactory, inlineFn, opts = {}) {
 }
 
 export function runEvolutionAsync(opts = {}) {
-  return runInWorker(
-    () => new Worker(new URL('../../workers/evolve.worker.js', import.meta.url), { type: 'module' }),
-    runInlineEvolution,
-    opts
-  );
+  // new URL inline so Vite picks up the worker source for bundling.
+  const worker = workerAvailable
+    ? new Worker(new URL('../../workers/evolve.worker.js', import.meta.url), { type: 'module' })
+    : null;
+  return dispatch(worker, runInlineEvolution, opts);
 }
 
 export function runAttackEvolutionAsync(opts = {}) {
-  return runInWorker(
-    () => new Worker(new URL('../../workers/attackEvolve.worker.js', import.meta.url), { type: 'module' }),
-    runInlineAttackEvolution,
-    opts
-  );
+  const worker = workerAvailable
+    ? new Worker(new URL('../../workers/attackEvolve.worker.js', import.meta.url), { type: 'module' })
+    : null;
+  return dispatch(worker, runInlineAttackEvolution, opts);
 }
