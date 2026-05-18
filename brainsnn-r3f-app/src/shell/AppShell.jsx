@@ -124,19 +124,31 @@ export default function AppShell({ session, modeLabel }) {
   }, []);
 
   const activeMeta = WORKSPACES.find((w) => w.id === workspace) || WORKSPACES[0];
-  const Workspace = WORKSPACE_COMPONENT[workspace] || HomeWorkspace;
   const promoted = workspace === 'brain';
   const workspaceHostRef = useRef(null);
 
-  // Move focus to the workspace heading on every change. Screen-reader
-  // users hear the new workspace title; sighted keyboard users get a
-  // visible focus ring at the top of the body so further Tab presses
-  // walk into the workspace, not back into the tab rail.
-  // Skips the initial mount so the page doesn't steal focus.
+  // Keep-alive: once a workspace is visited, keep it mounted so its
+  // panels retain their internal state (textareas, selected tabs,
+  // scroll, embeddings warmup, etc). Tab switch toggles visibility
+  // via CSS. Trades a small memory footprint (~50 KB per workspace)
+  // for the user expectation that tabs preserve work-in-progress.
+  // Lazy-loading is unaffected — each workspace's React.lazy chunk
+  // only fetches on first activation.
+  const [visited, setVisited] = useState(() => new Set([workspace]));
+  useEffect(() => {
+    setVisited((prev) => prev.has(workspace) ? prev : new Set([...prev, workspace]));
+  }, [workspace]);
+
+  // Move focus to the active workspace heading on every change.
+  // Skips initial mount.
   const didMount = useRef(false);
   useEffect(() => {
     if (!didMount.current) { didMount.current = true; return; }
-    const heading = workspaceHostRef.current?.querySelector('.shell-workspace-header h1');
+    const host = workspaceHostRef.current;
+    if (!host) return;
+    // Scope the heading lookup to the currently-visible workspace
+    // (others are display:none but still in the DOM).
+    const heading = host.querySelector(`[data-workspace="${workspace}"] .shell-workspace-header h1`);
     if (heading) {
       heading.setAttribute('tabindex', '-1');
       heading.focus({ preventScroll: false });
@@ -178,7 +190,20 @@ export default function AppShell({ session, modeLabel }) {
             aria-labelledby={`shell-tab-${workspace}`}
             tabIndex={-1}
           >
-            <Workspace session={session} />
+            {Array.from(visited).map((ws) => {
+              const Workspace = WORKSPACE_COMPONENT[ws] || HomeWorkspace;
+              const isActive = ws === workspace;
+              return (
+                <div
+                  key={ws}
+                  data-workspace={ws}
+                  hidden={!isActive}
+                  aria-hidden={!isActive}
+                >
+                  <Workspace session={session} />
+                </div>
+              );
+            })}
           </div>
         </div>
 
