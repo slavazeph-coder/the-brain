@@ -116,6 +116,28 @@ function countPatternHits(text, patterns) {
   return { hits, examples: [...examples].slice(0, 3) };
 }
 
+function b64urlEncode(str) {
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    return window.btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  return Buffer.from(str, 'utf-8').toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64urlDecode(str = '') {
+  const pad = '='.repeat((4 - (str.length % 4)) % 4);
+  const base = str.replace(/-/g, '+').replace(/_/g, '/') + pad;
+  if (typeof window !== 'undefined' && typeof window.atob === 'function') {
+    return decodeURIComponent(escape(window.atob(base)));
+  }
+  return Buffer.from(base, 'base64').toString('utf-8');
+}
+
+function trim(s, max) {
+  const t = String(s || '').trim();
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
 export function detectPlatform(url = '') {
   const raw = String(url || '').trim();
   if (!raw) return PLATFORM_HINTS.at(-1);
@@ -264,6 +286,45 @@ export function analyzeSocialPost({ url = '', caption = '', slidesText = '' } = 
   report.viewerInstall = inferIntent(report);
   report.recommendations = buildRecommendations(report);
   return report;
+}
+
+export function buildSocialPostSharePayload(report) {
+  if (!report) return null;
+  const dominant = report.affect?.dominant?.[0];
+  return {
+    pl: report.platform?.label || 'Social post',
+    hd: trim(report.handle || '', 28),
+    p: +(+report.pressure || 0).toFixed(3),
+    e: +(+report.firewall?.emotionalActivation || 0).toFixed(3),
+    c: +(+report.firewall?.cognitiveSuppression || 0).toFixed(3),
+    m: +(+report.firewall?.manipulationPressure || 0).toFixed(3),
+    af: dominant?.label || 'Attention',
+    vi: trim(report.viewerInstall, 180),
+    vm: (report.mechanics || []).slice(0, 5).map((x) => trim(x.label, 28)),
+    sl: (report.slides || []).slice(0, 5).map((s) => ({ i: s.index, p: +(+s.pressure || 0).toFixed(3) })),
+    tx: trim(report.caption || report.combinedText, 220),
+    ts: Date.now()
+  };
+}
+
+export function encodeSocialPostShare(payload) {
+  try { return b64urlEncode(JSON.stringify(payload)); } catch { return ''; }
+}
+
+export function decodeSocialPostShare(hash) {
+  try {
+    const p = JSON.parse(b64urlDecode(hash));
+    return p && typeof p === 'object' ? p : null;
+  } catch { return null; }
+}
+
+export function socialPostShareUrl(origin, payload) {
+  return `${origin}/s/${encodeSocialPostShare(payload)}`;
+}
+
+export function socialPostOgUrl(origin, payload, { vertical = false } = {}) {
+  const size = vertical ? '&size=vertical' : '';
+  return `${origin}/api/social-og?h=${encodeURIComponent(encodeSocialPostShare(payload))}${size}`;
 }
 
 export function buildSocialPostReport(report) {
