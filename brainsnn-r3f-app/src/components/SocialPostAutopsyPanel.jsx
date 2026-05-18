@@ -5,6 +5,9 @@ import {
   SAMPLE_SOCIAL_POST,
   analyzeSocialPost,
   buildSocialPostReport,
+  buildSocialPostSharePayload,
+  socialPostShareUrl,
+  socialPostOgUrl,
 } from '../utils/socialPostAutopsy';
 
 /**
@@ -27,6 +30,16 @@ export default function SocialPostAutopsyPanel() {
   const canAnalyze = useMemo(
     () => Boolean(url.trim() || caption.trim() || slidesText.trim()),
     [url, caption, slidesText],
+  );
+
+  const sharePayload = useMemo(() => buildSocialPostSharePayload(report), [report]);
+  const shareUrl = useMemo(
+    () => (sharePayload ? socialPostShareUrl(window.location.origin, sharePayload) : ''),
+    [sharePayload],
+  );
+  const verticalOgUrl = useMemo(
+    () => (sharePayload ? socialPostOgUrl(window.location.origin, sharePayload, { vertical: true }) : ''),
+    [sharePayload],
   );
 
   function runAnalysis() {
@@ -72,16 +85,28 @@ export default function SocialPostAutopsyPanel() {
     }
   }
 
-  function copyReport() {
-    const text = buildSocialPostReport(report);
+  function copyText(text, okLabel) {
+    if (!text) return;
     if (!navigator.clipboard?.writeText) {
-      setStatus('Copy failed — browser blocked clipboard access');
+      window.prompt('Copy:', text);
       return;
     }
     navigator.clipboard.writeText(text).then(
-      () => setStatus('Report copied'),
-      () => setStatus('Copy failed — browser blocked clipboard access'),
+      () => setStatus(okLabel),
+      () => window.prompt('Copy:', text),
     );
+  }
+
+  function copyReport() {
+    copyText(buildSocialPostReport(report), 'Report copied');
+  }
+
+  function copyShareCard() {
+    copyText(shareUrl, 'Share card link copied');
+  }
+
+  function copyVerticalImage() {
+    copyText(verticalOgUrl, 'Vertical image URL copied');
   }
 
   function scanInFirewall() {
@@ -247,6 +272,16 @@ export default function SocialPostAutopsyPanel() {
             </div>
           )}
 
+          {shareUrl && (
+            <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, background: 'rgba(90,212,255,0.04)', border: '1px solid rgba(90,212,255,0.12)' }}>
+              <div className="eyebrow">Share artifact</div>
+              <p className="muted small-note" style={{ margin: '4px 0 0' }}>
+                Public card route: <code>/s/&lt;hash&gt;</code>. Vertical image: <code>/api/social-og?size=vertical</code>.
+              </p>
+              <input className="share-input" value={shareUrl} readOnly style={{ marginTop: 6 }} onFocus={(e) => e.target.select()} />
+            </div>
+          )}
+
           <div style={{ marginTop: 12 }}>
             <div className="eyebrow">Recommended checks</div>
             <ul className="muted" style={{ marginTop: 4, paddingLeft: 20 }}>
@@ -256,6 +291,8 @@ export default function SocialPostAutopsyPanel() {
 
           <div className="control-actions" style={{ marginTop: 10 }}>
             <button className="btn primary" onClick={scanInFirewall}>Scan combined text in Firewall →</button>
+            <button className="btn" onClick={copyShareCard}>Copy share card</button>
+            <button className="btn" onClick={copyVerticalImage}>Copy vertical image</button>
             <button className="btn" onClick={saveToArchive}>Archive autopsy</button>
             <button className="btn" onClick={copyReport}>Copy report</button>
           </div>
