@@ -5,6 +5,7 @@ import KeyboardHelp from '../components/KeyboardHelp';
 import OnboardingWalkthrough from '../components/OnboardingWalkthrough';
 import CommandPalette from '../components/CommandPalette';
 import ErrorBoundary from '../components/ErrorBoundary';
+import UpdateBanner from './UpdateBanner';
 
 import { decodeStateFromHash } from '../components/SharePanel';
 import { decodeReaction } from '../utils/reactionCard';
@@ -556,6 +557,7 @@ export default function NewApp() {
       <KeyboardHelp open={showKbHelp} onClose={() => setShowKbHelp(false)} />
       <OnboardingWalkthrough />
       <ErrorBoundary name="Command Palette"><CommandPalette /></ErrorBoundary>
+      <UpdateBanner />
 
       <AppShell session={session} modeLabel={modeLabel} />
     </div>
