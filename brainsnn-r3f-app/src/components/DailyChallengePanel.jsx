@@ -229,7 +229,7 @@ export default function DailyChallengePanel({ initialHash = null }) {
                 key={it.id}
                 style={{
                   padding: '10px 12px',
-                  borderLeft: `3px solid ${ok ? '#5ee69a' : '#dd6974'}`,
+                  borderLeft: `3px solid ${ok ? 'var(--severity-ok)' : 'var(--danger)'}`,
                   background: 'rgba(255,255,255,0.03)',
                   borderRadius: 6,
                   marginTop: 8,
@@ -237,7 +237,7 @@ export default function DailyChallengePanel({ initialHash = null }) {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <strong>{it.label}</strong>
-                  <span style={{ color: ok ? '#5ee69a' : '#dd6974', fontFamily: 'monospace' }}>
+                  <span style={{ color: ok ? 'var(--severity-ok)' : 'var(--danger)', fontFamily: 'monospace' }}>
                     truth {it.truth} · you {g ?? '–'} {ok ? '✓' : '✗'}
                   </span>
                 </div>

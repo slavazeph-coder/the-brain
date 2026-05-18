@@ -77,7 +77,7 @@ export default function OscillationsPanel() {
               <div className="muted small-note" style={{ marginTop: 4 }}>
                 regions: {Object.entries(b.regions).map(([r, w]) => `${r} ${Math.round(w * 100)}%`).join(' · ')}
               </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: on ? '#5ee69a' : '#94a3b8' }}>
+              <div style={{ marginTop: 6, fontSize: 12, color: on ? 'var(--severity-ok)' : '#94a3b8' }}>
                 {on ? '● on' : '○ off'}
               </div>
             </button>

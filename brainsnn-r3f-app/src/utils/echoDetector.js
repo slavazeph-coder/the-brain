@@ -94,10 +94,10 @@ export function analyzeEchoes(items = [], { threshold = 0.35, k = 5 } = {}) {
 }
 
 export function echoRisk(result) {
-  if (!result || !result.total) return { label: 'No data', color: '#77dbe4' };
+  if (!result || !result.total) return { label: 'No data', color: 'var(--severity-info)' };
   const ratio = result.echoed / result.total;
-  if (ratio >= 0.5) return { label: 'Coordinated campaign', color: '#dd6974' };
+  if (ratio >= 0.5) return { label: 'Coordinated campaign', color: 'var(--danger)' };
   if (ratio >= 0.25) return { label: 'Partial amplification', color: '#e57b40' };
-  if (ratio > 0) return { label: 'Scattered overlap', color: '#fdab43' };
-  return { label: 'Organic', color: '#6daa45' };
+  if (ratio > 0) return { label: 'Scattered overlap', color: 'var(--severity-mid)' };
+  return { label: 'Organic', color: 'var(--ok)' };
 }

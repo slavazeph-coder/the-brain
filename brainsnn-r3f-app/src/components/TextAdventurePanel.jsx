@@ -69,8 +69,8 @@ export default function TextAdventurePanel() {
             style={{
               padding: '12px 14px',
               borderRadius: 8,
-              borderLeft: '3px solid #dd6974',
-              background: 'rgba(221,105,116,0.06)',
+              borderLeft: '3px solid var(--danger)',
+              background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
             }}
           >
             <div className="muted small-note" style={{ marginBottom: 4 }}>from <strong>{node.from}</strong></div>

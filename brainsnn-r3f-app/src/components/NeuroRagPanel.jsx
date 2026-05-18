@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { bus } from '../shell/bus';
 import {
   indexDocuments, queryRag, clearIndex, getRagStatus, subscribeRag,
   mapRagToRegions, highlightMatches
@@ -23,6 +24,11 @@ export default function NeuroRagPanel({ onApplyToBrain }) {
   const [error, setError] = useState(null);
 
   useEffect(() => subscribeRag(setStatus), []);
+
+  // Composer 'ask' mode pipes the question text in.
+  useEffect(() => bus.on('shell:compose', ({ text, mode }) => {
+    if (mode === 'rag' && text) setQuestion(text);
+  }), []);
 
   async function handleIndex() {
     setIndexing(true);

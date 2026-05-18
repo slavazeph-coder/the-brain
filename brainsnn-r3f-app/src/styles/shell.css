@@ -1,0 +1,443 @@
+/**
+ * Shell-only styles — the Claude-design workspace layout.
+ *
+ * Loaded only when ?shell=new is active. Coexists with the legacy
+ * global.css; the legacy app uses .app-layout, the new shell uses
+ * .shell-root / .shell-main / .shell-column.
+ */
+
+.shell-host {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-root {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 1640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ---------- topbar ---------- */
+.shell-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: var(--hairline);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.shell-topbar-left { display: flex; align-items: center; gap: 12px; }
+.shell-topbar-right { display: flex; align-items: center; gap: 8px; }
+
+.shell-wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.2rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.shell-breadcrumb-sep { color: var(--faint); }
+.shell-breadcrumb {
+  color: var(--muted);
+  font-size: 0.92rem;
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+.shell-icon-btn {
+  appearance: none;
+  background: transparent;
+  border: var(--hairline);
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+  width: 36px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.shell-icon-btn:hover { border-color: var(--accent-line); color: var(--text); background: var(--accent-soft); }
+.shell-kbd {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
+.shell-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: var(--hairline);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: var(--surface);
+}
+.shell-stat-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* ---------- main grid ---------- */
+.shell-main {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) 340px;
+  gap: 24px;
+  padding: 20px 24px 40px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- tabs (left rail) ---------- */
+.shell-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 78px;
+  align-self: start;
+  padding-top: 4px;
+}
+.shell-tab {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--muted);
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.94rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.shell-tab:hover { color: var(--text); border-color: var(--border); background: var(--surface); }
+.shell-tab.is-active {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.shell-tab-glyph { color: var(--accent); font-size: 1rem; }
+.shell-tab-chord {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ---------- workspace column ---------- */
+.shell-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ---------- viewport ---------- */
+.shell-viewport.is-strip {
+  position: sticky;
+  top: 78px;
+  z-index: 5;
+  max-height: 240px;
+  overflow: hidden;
+}
+.shell-viewport.is-strip .viewer-canvas-wrap { height: 200px; }
+.shell-viewport.is-promoted .viewer-canvas-wrap { height: 68vh; }
+
+/* ---------- composer ---------- */
+.shell-composer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  position: sticky;
+  top: calc(78px + 260px);
+  z-index: 4;
+}
+.shell-composer-mode {
+  background: var(--surface-2);
+  color: var(--text);
+  border: var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+}
+.shell-composer-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-family: var(--font-body);
+  padding: 8px 4px;
+  outline: none;
+}
+.shell-composer-input::placeholder { color: var(--faint); }
+.shell-composer-send {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.shell-composer-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.shell-composer-send:hover:not(:disabled) { background: var(--accent-bright); }
+
+/* ---------- workspace body ---------- */
+.shell-workspace-host { min-height: 0; }
+.shell-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.shell-workspace-header {
+  padding: 8px 4px 16px;
+  border-bottom: var(--hairline);
+  margin-bottom: 8px;
+}
+.shell-workspace-header h1 {
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  font-weight: 600;
+  margin: 4px 0 6px;
+  letter-spacing: -0.01em;
+}
+.shell-workspace-header .muted {
+  font-size: 0.95rem;
+  max-width: 60ch;
+}
+
+/* sub-tabs (Connect workspace) */
+.shell-subtabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius-sm);
+}
+.shell-subtab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+.shell-subtab:hover { color: var(--text); }
+.shell-subtab.is-active {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* drawer (collapsible workspace section) */
+.shell-drawer {
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: 4px 14px;
+}
+.shell-drawer summary {
+  cursor: pointer;
+  padding: 12px 6px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--muted);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shell-drawer summary::before {
+  content: '▸';
+  color: var(--faint);
+  transition: transform 0.15s;
+}
+.shell-drawer[open] summary::before { transform: rotate(90deg); }
+.shell-drawer[open] {
+  padding-bottom: 14px;
+}
+.shell-drawer > *:not(summary) { margin-top: 12px; }
+
+/* ---------- sidebar ---------- */
+.shell-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 78px;
+  align-self: start;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.shell-side-section {
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: 4px 14px;
+}
+.shell-side-section summary {
+  cursor: pointer;
+  padding: 12px 6px;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+/* ---------- flash highlight ---------- */
+.shell-flash {
+  box-shadow: 0 0 0 3px var(--accent-line), 0 0 24px var(--accent-soft);
+  transition: box-shadow 0.3s;
+}
+
+/* ---------- update banner ---------- */
+.shell-update-banner {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 50;
+  font-size: 0.88rem;
+  color: var(--text);
+  animation: shell-update-banner-in 0.3s ease-out;
+}
+@keyframes shell-update-banner-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.shell-update-banner-msg { color: var(--muted); }
+.shell-update-banner-action {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.shell-update-banner-action:hover { background: var(--accent-bright); }
+.shell-update-banner-dismiss {
+  background: transparent;
+  color: var(--faint);
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.shell-update-banner-dismiss:hover { color: var(--text); }
+
+/* ---------- accessibility ---------- */
+
+/* Skip-to-content — visible only on focus. */
+.shell-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: var(--accent);
+  color: white;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-weight: 600;
+  z-index: 100;
+  transition: top 0.15s;
+}
+.shell-skip-link:focus {
+  top: 12px;
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+
+/* Consistent focus ring across shell controls. Browsers handle
+   :focus-visible so mouse clicks don't trigger the ring; only
+   keyboard navigation does. */
+.shell-tab:focus-visible,
+.shell-icon-btn:focus-visible,
+.shell-composer-input:focus-visible,
+.shell-composer-mode:focus-visible,
+.shell-composer-send:focus-visible,
+.shell-subtab:focus-visible,
+.shell-workspace-header h1:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* The heading isn't a control, so its focus state shouldn't look
+   identical to a button. Soften it. */
+.shell-workspace-header h1:focus {
+  outline: none;
+}
+.shell-workspace-header h1:focus-visible {
+  outline: 2px dashed var(--accent-line);
+  outline-offset: 4px;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1280px) {
+  .shell-main { grid-template-columns: 180px minmax(0, 1fr) 300px; gap: 16px; padding: 16px; }
+}
+@media (max-width: 1050px) {
+  .shell-main { grid-template-columns: 64px minmax(0, 1fr); }
+  .shell-sidebar { display: none; }
+  .shell-tab-label, .shell-tab-chord { display: none; }
+}
+@media (max-width: 760px) {
+  .shell-main {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+  .shell-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+    padding: 4px;
+    background: var(--surface);
+    border: var(--hairline);
+    border-radius: var(--radius);
+  }
+  .shell-tab { grid-template-columns: 18px 1fr; padding: 8px 10px; }
+  .shell-tab-label { display: inline; }
+}

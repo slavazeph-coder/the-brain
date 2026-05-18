@@ -92,8 +92,8 @@ export default function CustomRulesPanel() {
         </button>
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 6 }}>{err}</p>}
-      {info && <p className="muted" style={{ color: '#5ee69a', marginTop: 6 }}>{info}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 6 }}>{err}</p>}
+      {info && <p className="muted" style={{ color: 'var(--severity-ok)', marginTop: 6 }}>{info}</p>}
 
       {rules.length > 0 && (
         <div style={{ marginTop: 12 }}>
@@ -114,7 +114,7 @@ export default function CustomRulesPanel() {
               }}
             >
               <span>
-                <strong style={{ color: '#a86fdf' }}>{r.category}</strong>
+                <strong style={{ color: 'var(--severity-purple)' }}>{r.category}</strong>
                 {' '}· /{r.pattern}/{r.flags}
                 {r.label && <span className="muted small-note" style={{ marginLeft: 8 }}>— {r.label}</span>}
               </span>

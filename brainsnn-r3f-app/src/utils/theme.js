@@ -8,8 +8,12 @@
  *   - reduceMotion: boolean
  *   - fontScale: 0.9 | 1 | 1.15 | 1.3
  *
- * Persisted to brainsnn_theme_v1. Auto-applies on load.
+ * Persisted to brainsnn_theme_v1. Auto-applies on load. Theme changes
+ * broadcast on the multiTab channel so two tabs stay visually in sync
+ * when the user toggles in one.
  */
+
+import { publish, subscribe } from './multiTab';
 
 const STORAGE_KEY = 'brainsnn_theme_v1';
 
@@ -31,6 +35,7 @@ export function getTheme() {
 export function setTheme(next) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
   applyTheme(next);
+  publish('theme:changed', next);
 }
 
 function effectiveTheme(settings) {
@@ -74,4 +79,12 @@ export function registerTheme() {
     const mq = window.matchMedia('(prefers-color-scheme: light)');
     if (mq.addEventListener) mq.addEventListener('change', () => applyTheme(getTheme()));
   }
+  // Apply theme changes broadcast from other tabs — but only the
+  // visual side. Don't re-persist (the originating tab already did
+  // that) and don't re-broadcast (would echo forever).
+  subscribe('theme:changed', (next) => {
+    if (!next) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+    applyTheme(next);
+  });
 }

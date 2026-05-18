@@ -18,13 +18,13 @@ export default function ActivityCharts({ state }) {
     <section className="panel panel-pad charts-panel">
       <div className="chart-block">
         <div className="subhead-row"><h3>Region activity</h3><span className="muted">Live values</span></div>
-        <Bars values={activityValues} color="linear-gradient(180deg,#4fa8b3,#74d8e2)" />
+        <Bars values={activityValues} color="linear-gradient(180deg,var(--accent),var(--accent-bright))" />
         <div className="chart-labels">{Object.keys(state.regions).map((k) => <span key={k}>{k}</span>)}</div>
       </div>
 
       <div className="chart-block">
         <div className="subhead-row"><h3>Pathway plasticity</h3><span className="muted">Current weights</span></div>
-        <Bars values={plasticityValues} color="linear-gradient(180deg,#e8b934,#ffd97a)" />
+        <Bars values={plasticityValues} color="linear-gradient(180deg,var(--warn),#ffd97a)" />
         <div className="chart-labels small">{Object.keys(state.weights).map((k) => <span key={k}>{k}</span>)}</div>
       </div>
     </section>

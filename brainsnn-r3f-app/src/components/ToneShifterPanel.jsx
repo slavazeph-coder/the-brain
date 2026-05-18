@@ -55,13 +55,13 @@ export default function ToneShifterPanel() {
             style={{
               padding: '10px 14px',
               borderRadius: 8,
-              borderLeft: '3px solid #dd6974',
-              background: 'rgba(221,105,116,0.08)',
+              borderLeft: '3px solid var(--danger)',
+              background: 'color-mix(in srgb, var(--danger) 8%, transparent)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <strong>{result.style.label} drift</strong>
-              <span style={{ color: '#dd6974', fontFamily: 'monospace' }}>
+              <span style={{ color: 'var(--danger)', fontFamily: 'monospace' }}>
                 {Math.round(result.beforePressure * 100)}% → {Math.round(result.afterPressure * 100)}% · +{Math.round(result.increase * 100)} pts
               </span>
             </div>
@@ -80,7 +80,7 @@ export default function ToneShifterPanel() {
           </div>
         </div>
       )}
-      {result?.error && <p className="muted" style={{ color: '#dd6974' }}>{result.error}</p>}
+      {result?.error && <p className="muted" style={{ color: 'var(--danger)' }}>{result.error}</p>}
     </section>
   );
 }

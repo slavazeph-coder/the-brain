@@ -68,10 +68,10 @@ export default function FingerprintPanel() {
               <div key={label} style={{ display: 'grid', gridTemplateColumns: '170px 1fr 1fr', gap: 6, alignItems: 'center', marginTop: 6 }}>
                 <span className="muted small-note">{label}</span>
                 <div style={{ width: '100%', height: 8, background: '#1a1f2e', borderRadius: 999 }}>
-                  <div style={{ width: `${fpA.vector[i] * 100}%`, height: '100%', background: '#77dbe4', borderRadius: 999 }} />
+                  <div style={{ width: `${fpA.vector[i] * 100}%`, height: '100%', background: 'var(--severity-info)', borderRadius: 999 }} />
                 </div>
                 <div style={{ width: '100%', height: 8, background: '#1a1f2e', borderRadius: 999 }}>
-                  <div style={{ width: `${fpB.vector[i] * 100}%`, height: '100%', background: '#fdab43', borderRadius: 999 }} />
+                  <div style={{ width: `${fpB.vector[i] * 100}%`, height: '100%', background: 'var(--severity-mid)', borderRadius: 999 }} />
                 </div>
               </div>
             ))}

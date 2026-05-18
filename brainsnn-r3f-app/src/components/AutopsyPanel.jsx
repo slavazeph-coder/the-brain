@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { bus } from '../shell/bus';
 import { runAutopsy, summarizeAutopsy, AUTOPSY_EXAMPLE } from '../utils/autopsy';
 import {
   buildAutopsyPayload, autopsyUrl, autopsyLevelFor, decodeAutopsy
@@ -20,6 +21,11 @@ export default function AutopsyPanel({ initialHash = null }) {
   const [copied, setCopied] = useState(false);
   const [recorded, setRecorded] = useState(false);
   const [incoming] = useState(() => initialHash ? decodeAutopsy(initialHash) : null);
+
+  // AppShell composer 'autopsy' mode pipes transcript text in.
+  useEffect(() => bus.on('shell:compose', ({ text, mode }) => {
+    if (mode === 'autopsy' && text) setRaw(text);
+  }), []);
 
   const autopsy = useMemo(() => raw.trim() ? runAutopsy(raw) : null, [raw]);
   const summary = useMemo(() => autopsy ? summarizeAutopsy(autopsy) : null, [autopsy]);
@@ -141,7 +147,7 @@ export default function AutopsyPanel({ initialHash = null }) {
         </button>
       </div>
       {fetchError && (
-        <p className="muted" style={{ color: '#dd6974', marginTop: 0 }}>
+        <p className="muted" style={{ color: 'var(--danger)', marginTop: 0 }}>
           Fetch failed: {fetchError}.
         </p>
       )}

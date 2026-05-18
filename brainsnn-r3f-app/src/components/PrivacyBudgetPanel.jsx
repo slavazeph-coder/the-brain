@@ -16,7 +16,7 @@ export default function PrivacyBudgetPanel() {
 
   const quota = approximateQuota();
   const pct = Math.min(100, (budget.totalBytes / quota) * 100);
-  const tone = pct > 70 ? '#dd6974' : pct > 40 ? '#fdab43' : '#5ee69a';
+  const tone = pct > 70 ? 'var(--danger)' : pct > 40 ? 'var(--severity-mid)' : 'var(--severity-ok)';
 
   return (
     <section className="panel panel-pad privacy-budget-panel">
@@ -81,7 +81,7 @@ export default function PrivacyBudgetPanel() {
             </div>
             <span className="muted small-note">L{e.layer}</span>
             <span>{humanBytes(e.bytes)}</span>
-            <button className="ghost small" onClick={() => wipeOne(e.key)} style={{ color: '#dd6974' }}>
+            <button className="ghost small" onClick={() => wipeOne(e.key)} style={{ color: 'var(--danger)' }}>
               Delete
             </button>
           </div>

@@ -75,8 +75,8 @@ export function analyzeDecoy(text = '') {
 }
 
 export function verdictFor({ suggestedAdjustment }) {
-  if (suggestedAdjustment < 0.4) return { label: 'Likely callout / sarcasm — heavy attenuation', color: '#5ee69a' };
-  if (suggestedAdjustment < 0.75) return { label: 'Some irony markers — moderate attenuation', color: '#77dbe4' };
-  if (suggestedAdjustment < 0.95) return { label: 'Mild ironic framing', color: '#fdab43' };
+  if (suggestedAdjustment < 0.4) return { label: 'Likely callout / sarcasm — heavy attenuation', color: 'var(--severity-ok)' };
+  if (suggestedAdjustment < 0.75) return { label: 'Some irony markers — moderate attenuation', color: 'var(--severity-info)' };
+  if (suggestedAdjustment < 0.95) return { label: 'Mild ironic framing', color: 'var(--severity-mid)' };
   return { label: 'No decoy markers — raw score stands', color: '#94a3b8' };
 }

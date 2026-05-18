@@ -63,10 +63,10 @@ export function coverageFor(text = '') {
 }
 
 export const CATEGORY_COLORS = {
-  urgency: '#fdab43',
+  urgency: 'var(--severity-mid)',
   outrage: '#e57b40',
-  certainty: '#a86fdf',
-  fear: '#dd6974',
+  certainty: 'var(--severity-purple)',
+  fear: 'var(--danger)',
 };
 
 /**

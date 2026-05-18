@@ -7,11 +7,11 @@
  */
 
 export const IMMUNITY_LEVELS = [
-  { min: 85, label: 'Fortified', color: '#5ee69a' },
-  { min: 70, label: 'Resilient', color: '#77dbe4' },
-  { min: 55, label: 'Steady', color: '#fdab43' },
+  { min: 85, label: 'Fortified', color: 'var(--severity-ok)' },
+  { min: 70, label: 'Resilient', color: 'var(--severity-info)' },
+  { min: 55, label: 'Steady', color: 'var(--severity-mid)' },
   { min: 35, label: 'Exposed', color: '#e57b40' },
-  { min: 0, label: 'At risk', color: '#dd6974' },
+  { min: 0, label: 'At risk', color: 'var(--danger)' },
 ];
 
 export function levelFor(score) {

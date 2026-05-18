@@ -130,14 +130,14 @@ export default function BypassSubmitPanel() {
       </div>
 
       {result?.error && (
-        <p className="muted" style={{ color: '#dd6974', marginTop: 6 }}>{result.error}</p>
+        <p className="muted" style={{ color: 'var(--danger)', marginTop: 6 }}>{result.error}</p>
       )}
       {result?.ok && (
-        <p style={{ marginTop: 10, color: result.bypass ? '#5ee69a' : '#fdab43' }}>
+        <p style={{ marginTop: 10, color: result.bypass ? 'var(--severity-ok)' : 'var(--severity-mid)' }}>
           {result.message}
         </p>
       )}
-      {err && <p className="muted small-note" style={{ color: '#dd6974' }}>Feed error: {err}</p>}
+      {err && <p className="muted small-note" style={{ color: 'var(--danger)' }}>Feed error: {err}</p>}
 
       {feed && (
         <div className="bypass-feed" style={{ marginTop: 14 }}>

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { LAYER_CATALOG, LAYER_GROUPS } from '../utils/layerCatalog';
+import { bus } from '../shell/bus';
 
 /**
  * Layer 92 — Command Palette
@@ -65,6 +66,10 @@ export default function CommandPalette() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // AppShell's Topbar ⌘K button (and anything else that wants to
+  // surface the palette) emits `shell:palette-open` on the bus.
+  useEffect(() => bus.on('shell:palette-open', () => setOpen((v) => !v)), []);
 
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 0); }, [open]);
   useEffect(() => { setIdx(0); }, [q, open]);

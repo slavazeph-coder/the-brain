@@ -8,6 +8,7 @@ import { KNOWLEDGE_DOMAINS } from '../data/knowledgeGraph';
 import NeuralFlowGrid from './brain/NeuralFlowGrid';
 import BrainFragments from './brain/BrainFragments';
 import { getDrillDown, subscribeDrillDown } from '../utils/drilldown';
+import { useThreeTokens } from '../utils/threeTokens';
 
 function FocusController({ selected }) {
   const { camera } = useThree();
@@ -138,10 +139,11 @@ function BrainNode({ id, activity, selected, onSelect, quality, knowledgeMode, a
 }
 
 function BrainEdges({ weights, quality }) {
+  const tokens = useThreeTokens();
   return LINKS.map(([a, b]) => {
     const key = `${a}\u2192${b}`;
     const w = weights[key] ?? 0.2;
-    const color = key === 'BG\u2192THL' ? '#dd6974' : '#4fa8b3';
+    const color = key === 'BG\u2192THL' ? tokens.danger : tokens.accent;
 
     return (
       <Line
@@ -158,6 +160,7 @@ function BrainEdges({ weights, quality }) {
 
 function SignalParticles({ regions, quality }) {
   const ref = useRef();
+  const tokens = useThreeTokens();
   const tempStart = useMemo(() => new THREE.Vector3(), []);
   const tempEnd = useMemo(() => new THREE.Vector3(), []);
   const density = quality === 'ultra' ? 4 : quality === 'high' ? 3 : 2;
@@ -203,7 +206,7 @@ function SignalParticles({ regions, quality }) {
       {particles.map((p) => (
         <mesh key={p.i} frustumCulled>
           <sphereGeometry args={[0.05, segments, segments]} />
-          <meshBasicMaterial color="#c5f3ff" transparent opacity={0.78} />
+          <meshBasicMaterial color={tokens.signal} transparent opacity={0.78} />
         </mesh>
       ))}
     </group>
@@ -212,6 +215,7 @@ function SignalParticles({ regions, quality }) {
 
 export default function BrainScene({ regions, weights, selected, onSelect, quality, onQualityChange, knowledgeMode, affectOverride }) {
   const dpr = quality === 'ultra' ? [1, 2] : quality === 'high' ? [1, 1.5] : 1;
+  const tokens = useThreeTokens();
 
   return (
     <Canvas
@@ -225,11 +229,11 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
         onIncline={() => onQualityChange((q) => (q === 'low' ? 'high' : q))}
       />
 
-      <color attach="background" args={['#050607']} />
-      <fog attach="fog" args={['#050607', 10, 22]} />
+      <color attach="background" args={[tokens.bg3d]} />
+      <fog attach="fog" args={[tokens.bg3d, 10, 22]} />
       <ambientLight intensity={0.8} />
       <directionalLight position={[4, 6, 5]} intensity={quality === 'low' ? 1 : 1.2} />
-      <pointLight position={[-5, 3, 4]} intensity={quality === 'low' ? 0.7 : 0.9} color="#4fa8b3" />
+      <pointLight position={[-5, 3, 4]} intensity={quality === 'low' ? 0.7 : 0.9} color={tokens.accent} />
 
       {quality !== 'low' && (
         <Stars
@@ -250,7 +254,7 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
           <EffectComposer multisampling={quality === 'ultra' ? 8 : 4} autoClear={false}>
             <Outline
               blur
-              visibleEdgeColor="#c5f3ff"
+              visibleEdgeColor={tokens.signal}
               edgeStrength={quality === 'ultra' ? 4 : 3}
               width={quality === 'ultra' ? 700 : 500}
             />
@@ -289,7 +293,7 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3.1, 0]} frustumCulled>
         <circleGeometry args={[5.2, quality === 'low' ? 24 : 40]} />
-        <meshBasicMaterial color="#113036" transparent opacity={0.12} />
+        <meshBasicMaterial color={tokens.floorTint} transparent opacity={0.12} />
       </mesh>
 
       <OrbitControls enableDamping minDistance={4.5} maxDistance={16} />

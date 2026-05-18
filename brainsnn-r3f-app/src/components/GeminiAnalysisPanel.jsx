@@ -88,7 +88,7 @@ export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
   const overall = result
     ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
-  const riskColor = !overall ? 'var(--primary)' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
+  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? 'var(--severity-mid)' : 'var(--ok)';
   const statusColor = status === 'online' ? 'var(--ok)' : status === 'offline' ? 'var(--danger)' : 'var(--muted)';
 
   return (

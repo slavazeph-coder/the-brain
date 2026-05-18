@@ -8,10 +8,10 @@
  */
 
 export const AUTOPSY_LEVELS = [
-  { min: 0.65, label: 'Hostile', color: '#dd6974' },
+  { min: 0.65, label: 'Hostile', color: 'var(--danger)' },
   { min: 0.45, label: 'Heavy', color: '#e57b40' },
-  { min: 0.28, label: 'Tilted', color: '#fdab43' },
-  { min: 0.0, label: 'Steady', color: '#6daa45' },
+  { min: 0.28, label: 'Tilted', color: 'var(--severity-mid)' },
+  { min: 0.0, label: 'Steady', color: 'var(--ok)' },
 ];
 
 export function autopsyLevelFor(pressure) {

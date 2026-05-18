@@ -13,6 +13,7 @@ import {
 import { matchSemanticTemplates, mergeTemplateResults } from '../utils/semanticTemplates';
 import { issueReceipt, storeReceipt } from '../utils/receipt';
 import { isReady as embeddingsReady } from '../utils/embeddings';
+import { bus } from '../shell/bus';
 import { detectArchetypes } from '../utils/adTransparency';
 import { markPolyglotSeen } from '../utils/badges';
 import { recordScan as recordContextScan } from '../utils/contextMemory';
@@ -100,6 +101,23 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       onApplyToNetwork(initialScan.result);
     }
   }, [initialScan?.autoApply]);
+
+  // AppShell composer: when the user types in the persistent top bar
+  // and submits with mode='scan', drop the text in here and trigger
+  // the same scan flow as if they'd typed it in the panel. AppShell
+  // emits `shell:goto` first so this panel is mounted before the
+  // composer event reaches us.
+  useEffect(() => bus.on('shell:compose', ({ text: composed, mode }) => {
+    if (mode !== 'scan' || !composed) return;
+    setText(composed);
+    // Defer the actual scan one tick so React commits the new text
+    // first; users see the textarea populate, then results animate in.
+    setTimeout(() => {
+      const out = scoreContent(composed);
+      setResult(out);
+      if (onApplyToNetwork) onApplyToNetwork(out);
+    }, 0);
+  }), [onApplyToNetwork]);
 
   // Layer 49 — Scan Anywhere: accept ?scan=<text> and ?scan-url=<url>
   // on initial mount, pre-fill the textarea, optionally auto-scan.
@@ -247,7 +265,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
     : null;
 
-  const riskColor = !overall ? '#4fa8b3' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
+  const riskColor = !overall ? 'var(--accent)' : overall > 0.65 ? 'var(--danger)' : overall > 0.35 ? 'var(--severity-mid)' : 'var(--ok)';
 
   return (
     <section className="panel panel-pad cognitive-firewall-panel">
@@ -288,7 +306,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
         </button>
       </div>
       {fetchError && (
-        <p className="muted" style={{ color: '#dd6974', marginTop: 0 }}>
+        <p className="muted" style={{ color: 'var(--danger)', marginTop: 0 }}>
           Fetch failed: {fetchError}. Paste the text manually instead.
         </p>
       )}
@@ -398,7 +416,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                     title={`${tpl.desc} — click for the counter-response${tpl.source === 'semantic' ? ' (semantic match)' : ''}`}
                     style={{
                       background: openRefutation === tpl.id ? 'rgba(168,111,223,0.28)' : 'rgba(168,111,223,0.12)',
-                      borderColor: tpl.source === 'semantic' ? '#5ad4ff' : '#a86fdf',
+                      borderColor: tpl.source === 'semantic' ? '#5ad4ff' : 'var(--severity-purple)',
                       color: '#e2d3ff',
                       cursor: 'pointer',
                     }}
@@ -420,7 +438,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                     key={arch.id}
                     className="firewall-chip"
                     title={`${arch.desc} (matched: ${arch.matched.join(', ')})`}
-                    style={{ background: 'rgba(221,105,116,0.10)', borderColor: '#dd6974', color: '#ffd6da' }}
+                    style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', borderColor: 'var(--danger)', color: '#ffd6da' }}
                   >
                     {arch.label}
                   </span>
@@ -582,7 +600,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                   <span className="muted small-note">
                     engine: <strong>{draft.engine}</strong> · pressure{' '}
                     <strong>{Math.round(draft.beforePressure * 100)}%</strong> →{' '}
-                    <strong style={{ color: '#5ee69a' }}>{Math.round(draft.afterPressure * 100)}%</strong>
+                    <strong style={{ color: 'var(--severity-ok)' }}>{Math.round(draft.afterPressure * 100)}%</strong>
                   </span>
                   <span className="muted small-note">
                     −{Math.round(draft.reduction * 100)} pts

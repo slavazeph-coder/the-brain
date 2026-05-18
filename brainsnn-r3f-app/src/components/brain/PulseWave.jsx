@@ -2,12 +2,14 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { POSITIONS, REGION_INFO } from '../../data/network';
+import { useThreeTokens } from '../../utils/threeTokens';
 
 export default function PulseWave({ regionId, onComplete }) {
   const meshRef = useRef();
   const progressRef = useRef(0);
+  const tokens = useThreeTokens();
   const position = POSITIONS[regionId];
-  const color = REGION_INFO[regionId]?.color || '#4fa8b3';
+  const color = REGION_INFO[regionId]?.color || tokens.accent;
 
   useFrame((_, delta) => {
     if (!meshRef.current) return;

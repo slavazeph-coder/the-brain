@@ -1,17 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { calibrationReport, listFeedback, clearFeedback } from '../utils/feedback';
+import { subscribe as subscribeMultiTab } from '../utils/multiTab';
 
 export default function FeedbackPanel() {
   const [report, setReport] = useState(() => calibrationReport());
   const [rows, setRows] = useState(() => listFeedback());
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setReport(calibrationReport());
-      setRows(listFeedback());
-    }, 3000);
-    return () => clearInterval(id);
+  const refresh = useCallback(() => {
+    setReport(calibrationReport());
+    setRows(listFeedback());
   }, []);
+
+  useEffect(() => {
+    const id = setInterval(refresh, 3000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  // feedback.js publishes 'feedback:changed' on each recordFeedback /
+  // clearFeedback. Locked writes are async, so this subscription
+  // patches the UI right after the write commits (no 3s wait).
+  useEffect(() => subscribeMultiTab('feedback:changed', refresh), [refresh]);
 
   function wipe() {
     if (!window.confirm('Clear all calibration feedback?')) return;
@@ -20,7 +28,7 @@ export default function FeedbackPanel() {
     setRows(listFeedback());
   }
 
-  const tone = report.suggestedMul > 1.05 ? '#fdab43' : report.suggestedMul < 0.95 ? '#77dbe4' : '#5ee69a';
+  const tone = report.suggestedMul > 1.05 ? 'var(--severity-mid)' : report.suggestedMul < 0.95 ? 'var(--severity-info)' : 'var(--severity-ok)';
 
   return (
     <section className="panel panel-pad feedback-panel">
@@ -41,17 +49,17 @@ export default function FeedbackPanel() {
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginTop: 10, fontSize: 13, color: '#cbd5e1' }}>
-        <span><strong style={{ color: '#77dbe4' }}>too cold</strong> {report.tooCold}</span>
-        <span><strong style={{ color: '#5ee69a' }}>accurate</strong> {report.accurate}</span>
-        <span><strong style={{ color: '#dd6974' }}>too hot</strong> {report.tooHot}</span>
-        <button className="ghost small" onClick={wipe} style={{ marginLeft: 'auto', color: '#dd6974' }}>Clear</button>
+        <span><strong style={{ color: 'var(--severity-info)' }}>too cold</strong> {report.tooCold}</span>
+        <span><strong style={{ color: 'var(--severity-ok)' }}>accurate</strong> {report.accurate}</span>
+        <span><strong style={{ color: 'var(--danger)' }}>too hot</strong> {report.tooHot}</span>
+        <button className="ghost small" onClick={wipe} style={{ marginLeft: 'auto', color: 'var(--danger)' }}>Clear</button>
       </div>
 
       {rows.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <div className="eyebrow">Recent ratings</div>
           {rows.slice(-10).reverse().map((r, i) => {
-            const color = r.verdict === 'too_hot' ? '#dd6974' : r.verdict === 'too_cold' ? '#77dbe4' : '#5ee69a';
+            const color = r.verdict === 'too_hot' ? 'var(--danger)' : r.verdict === 'too_cold' ? 'var(--severity-info)' : 'var(--severity-ok)';
             return (
               <div
                 key={i}

@@ -5,10 +5,17 @@
  * log (which caps at 20 and evicts). Archive entries hold the full
  * excerpt + the key score fields so they can be browsed, searched,
  * and exported without touching Context Memory.
+ *
+ * Cross-tab safety: mutations run under a Web Lock so two tabs adding
+ * to the archive simultaneously can't clobber each other.
  */
+
+import { withLock } from './atomicWrites';
+import { publish } from './multiTab';
 
 const STORAGE_KEY = 'brainsnn_archive_v1';
 const MAX_ENTRIES = 200;
+const LOCK_KEY = 'archive:write';
 
 function read() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
@@ -20,7 +27,6 @@ function write(list) {
 export function listArchive() { return read(); }
 
 export function archiveScan({ text, score, receipt, tags = [], entity = '' }) {
-  const existing = read();
   const excerpt = String(text || '').slice(0, 400);
   const pressure =
     (((score?.emotionalActivation || 0) + (score?.cognitiveSuppression || 0) + (score?.manipulationPressure || 0)) / 3);
@@ -34,16 +40,26 @@ export function archiveScan({ text, score, receipt, tags = [], entity = '' }) {
     tags: (tags || []).filter(Boolean).slice(0, 6),
     entity: String(entity || '').slice(0, 48),
   };
-  write([entry, ...existing.filter((e) => e.id !== entry.id)]);
+  withLock(LOCK_KEY, () => {
+    const existing = read();
+    write([entry, ...existing.filter((e) => e.id !== entry.id)]);
+    publish('archive:changed', { kind: 'add', id: entry.id });
+  });
   return entry;
 }
 
 export function removeFromArchive(id) {
-  write(read().filter((e) => e.id !== id));
+  withLock(LOCK_KEY, () => {
+    write(read().filter((e) => e.id !== id));
+    publish('archive:changed', { kind: 'remove', id });
+  });
 }
 
 export function clearArchive() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  withLock(LOCK_KEY, () => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+    publish('archive:changed', { kind: 'clear' });
+  });
 }
 
 export function searchArchive(query = '') {

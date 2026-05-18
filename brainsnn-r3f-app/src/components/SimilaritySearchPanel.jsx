@@ -57,7 +57,7 @@ export default function SimilaritySearchPanel() {
         <div style={{ marginTop: 10 }}>
           {results.map((r) => {
             const pct = Math.round(r.score * 100);
-            const tone = pct >= 60 ? '#5ee69a' : pct >= 30 ? '#77dbe4' : '#fdab43';
+            const tone = pct >= 60 ? 'var(--severity-ok)' : pct >= 30 ? 'var(--severity-info)' : 'var(--severity-mid)';
             return (
               <div
                 key={r.id}

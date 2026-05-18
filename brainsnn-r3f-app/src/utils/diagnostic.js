@@ -103,9 +103,9 @@ export function runDiagnostic({ threshold = 0.3 } = {}) {
 }
 
 function gradeFor(f1, fpr) {
-  if (f1 >= 0.85 && fpr <= 0.1) return { letter: 'A', color: '#5ee69a' };
-  if (f1 >= 0.75 && fpr <= 0.2) return { letter: 'B', color: '#77dbe4' };
-  if (f1 >= 0.60) return { letter: 'C', color: '#fdab43' };
+  if (f1 >= 0.85 && fpr <= 0.1) return { letter: 'A', color: 'var(--severity-ok)' };
+  if (f1 >= 0.75 && fpr <= 0.2) return { letter: 'B', color: 'var(--severity-info)' };
+  if (f1 >= 0.60) return { letter: 'C', color: 'var(--severity-mid)' };
   if (f1 >= 0.45) return { letter: 'D', color: '#e57b40' };
-  return { letter: 'F', color: '#dd6974' };
+  return { letter: 'F', color: 'var(--danger)' };
 }

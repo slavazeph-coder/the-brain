@@ -1,5 +1,6 @@
 import { detectTemplates } from './propagandaTemplates.js';
 import { detectLanguage, patternsFor, labelFor as languageLabel } from './firewallI18n.js';
+import { createPool } from './workerPool.js';
 
 const URGENCY_PATTERNS = [
   /\bnow\b|\bimmediately\b|\burgent\b|\bbreaking\b|\balert\b/gi,
@@ -82,9 +83,9 @@ function normalize(count, baseline = 3) {
 }
 
 export const SCORE_FIELDS = [
-  { key: 'emotionalActivation', label: 'Emotional activation', desc: 'Fear / outrage / panic optimization', color: '#dd6974', regions: 'AMY + THL' },
-  { key: 'cognitiveSuppression', label: 'Cognitive suppression', desc: 'Urgency / certainty theater / overload', color: '#fdab43', regions: 'PFC dampens' },
-  { key: 'manipulationPressure', label: 'Manipulation pressure', desc: 'Steering reaction over understanding', color: '#a86fdf', regions: 'BG rises' },
+  { key: 'emotionalActivation', label: 'Emotional activation', desc: 'Fear / outrage / panic optimization', color: 'var(--danger)', regions: 'AMY + THL' },
+  { key: 'cognitiveSuppression', label: 'Cognitive suppression', desc: 'Urgency / certainty theater / overload', color: 'var(--severity-mid)', regions: 'PFC dampens' },
+  { key: 'manipulationPressure', label: 'Manipulation pressure', desc: 'Steering reaction over understanding', color: 'var(--severity-purple)', regions: 'BG rises' },
   { key: 'trustErosion', label: 'Trust erosion risk', desc: 'Sensationalism / coercive framing', color: '#5591c7', regions: 'composite' }
 ];
 
@@ -224,6 +225,64 @@ export async function scoreContentSmart(text = '') {
     }
   }
   return { ...scoreContent(text), source: 'regex' };
+}
+
+/**
+ * Async scoring — offloads regex sweep to the firewall worker when text is
+ * long enough that the spin-up overhead pays back. Falls back to sync
+ * scoreContent on any failure (or when running inside the worker itself,
+ * to avoid recursive spawning).
+ *
+ * Threshold: 500 chars. Below that the sync path completes in <2ms; the
+ * postMessage round-trip costs more than the work itself.
+ */
+const ASYNC_THRESHOLD = 500;
+let _firewallPool = null;
+
+function ensurePool() {
+  if (_firewallPool) return _firewallPool;
+  // Inside a worker, window is undefined — never instantiate another pool.
+  if (typeof window === 'undefined') return null;
+  try {
+    _firewallPool = createPool(
+      () => new Worker(new URL('../workers/firewall.worker.js', import.meta.url), { type: 'module' }),
+      {
+        // size omitted → defaults to min(4, cores-1). Red Team batch scans
+        // and parallel inbox triage benefit from real parallelism here.
+        fallback: (type, payload) => {
+          if (type === 'score') return scoreContent(payload?.text || '');
+          if (type === 'scoreWithRules') return scoreContentWithRules(payload?.text || '', payload?.rules || DEFAULT_RULES);
+          return null;
+        }
+      }
+    );
+    return _firewallPool;
+  } catch {
+    return null;
+  }
+}
+
+export async function scoreContentAsync(text = '') {
+  if (!text || text.length < ASYNC_THRESHOLD) return scoreContent(text);
+  const pool = ensurePool();
+  if (!pool || pool.degraded) return scoreContent(text);
+  try {
+    // Workers carry their own module-level state, so the main-thread
+    // active ruleset (custom rules, evolved firewall, rule packs) does
+    // NOT propagate automatically. When the user has promoted a non-
+    // default ruleset, send it along with each score call so the worker
+    // mirrors the same behavior as scoreContent on the main thread.
+    const rules = getActiveRules();
+    if (rules === DEFAULT_RULES) {
+      return await pool.call('score', { text });
+    }
+    return await pool.call('scoreWithRules', {
+      text,
+      rules: serializeRules(rules)
+    });
+  } catch {
+    return scoreContent(text);
+  }
 }
 
 export function mapTRIBEToRegions(state, tribe) {

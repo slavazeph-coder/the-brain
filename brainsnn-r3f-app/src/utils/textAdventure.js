@@ -176,10 +176,10 @@ export function currentNode(run) {
 export function runSummary(run) {
   const node = currentNode(run);
   const terminal = !!node?.terminal;
-  const verdict = !terminal ? { label: 'In progress', color: '#77dbe4' }
-    : run.score >= 3 ? { label: 'Resilient', color: '#5ee69a' }
-    : run.score >= 1 ? { label: 'Sharp', color: '#77dbe4' }
-    : run.score >= -1 ? { label: 'Wobbled', color: '#fdab43' }
-    : { label: 'Hooked', color: '#dd6974' };
+  const verdict = !terminal ? { label: 'In progress', color: 'var(--severity-info)' }
+    : run.score >= 3 ? { label: 'Resilient', color: 'var(--severity-ok)' }
+    : run.score >= 1 ? { label: 'Sharp', color: 'var(--severity-info)' }
+    : run.score >= -1 ? { label: 'Wobbled', color: 'var(--severity-mid)' }
+    : { label: 'Hooked', color: 'var(--danger)' };
   return { terminal, verdict };
 }

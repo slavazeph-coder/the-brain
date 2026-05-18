@@ -61,7 +61,7 @@ export default function LiveSyncPanel({ state, onRemoteState }) {
     setChatInput('');
   };
 
-  const statusColor = status === 'connected' ? 'var(--ok)' : status === 'connecting' ? '#fdab43' : 'var(--faint)';
+  const statusColor = status === 'connected' ? 'var(--ok)' : status === 'connecting' ? 'var(--severity-mid)' : 'var(--faint)';
 
   return (
     <section className="panel panel-pad live-sync-panel">

@@ -251,7 +251,7 @@ export default function ImmunityPanel({ incomingCard = null }) {
           </button>
         </div>
         {submitResult?.error && (
-          <p className="muted" style={{ color: '#dd6974', marginTop: 6 }}>
+          <p className="muted" style={{ color: 'var(--danger)', marginTop: 6 }}>
             {submitResult.error}
           </p>
         )}
@@ -282,7 +282,7 @@ export default function ImmunityPanel({ incomingCard = null }) {
           </div>
         </div>
         {boardError && (
-          <p className="muted small-note" style={{ color: '#dd6974' }}>
+          <p className="muted small-note" style={{ color: 'var(--danger)' }}>
             Leaderboard error: {boardError}
           </p>
         )}

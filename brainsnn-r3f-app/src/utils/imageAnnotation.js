@@ -53,10 +53,10 @@ function indexWords(words) {
 }
 
 export const BOX_COLORS = {
-  urgency: '#fdab43',
+  urgency: 'var(--severity-mid)',
   outrage: '#e57b40',
-  certainty: '#a86fdf',
-  fear: '#dd6974',
+  certainty: 'var(--severity-purple)',
+  fear: 'var(--danger)',
 };
 
 /**
@@ -111,7 +111,7 @@ export function paintAnnotations(ctx, boxes, { scale = 1 } = {}) {
   ctx.lineWidth = 2;
   ctx.font = '12px monospace';
   for (const b of boxes) {
-    const color = BOX_COLORS[b.category] || '#77dbe4';
+    const color = BOX_COLORS[b.category] || 'var(--severity-info)';
     ctx.strokeStyle = color;
     ctx.fillStyle = color + '30';
     ctx.fillRect(b.x * scale, b.y * scale, b.w * scale, b.h * scale);

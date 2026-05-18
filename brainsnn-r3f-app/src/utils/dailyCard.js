@@ -33,11 +33,11 @@ export function sanitizeHandle(raw) {
 }
 
 export function dailyLevelFor(accuracy) {
-  if (accuracy >= 90) return { label: 'Clean sweep', color: '#5ee69a' };
-  if (accuracy >= 75) return { label: 'Sharp eye', color: '#77dbe4' };
-  if (accuracy >= 55) return { label: 'Solid', color: '#fdab43' };
+  if (accuracy >= 90) return { label: 'Clean sweep', color: 'var(--severity-ok)' };
+  if (accuracy >= 75) return { label: 'Sharp eye', color: 'var(--severity-info)' };
+  if (accuracy >= 55) return { label: 'Solid', color: 'var(--severity-mid)' };
   if (accuracy >= 30) return { label: 'Warm-up', color: '#e57b40' };
-  return { label: 'Off day', color: '#dd6974' };
+  return { label: 'Off day', color: 'var(--danger)' };
 }
 
 export function buildDailyPayload({ handle, date, accuracy, correct, streak }) {

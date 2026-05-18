@@ -116,15 +116,15 @@ export default function TimeSeriesPanel() {
                   key={e.idx}
                   style={{
                     padding: '8px 12px',
-                    borderLeft: '3px solid #dd6974',
-                    background: 'rgba(221,105,116,0.06)',
+                    borderLeft: '3px solid var(--danger)',
+                    background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
                     borderRadius: 6,
                     marginTop: 6,
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <strong>{e.point.date}</strong>
-                    <span style={{ color: '#dd6974' }}>
+                    <span style={{ color: 'var(--danger)' }}>
                       +{Math.round(e.delta * 100)} pts spike
                     </span>
                   </div>
@@ -158,7 +158,7 @@ function Sparkline({ points }) {
           cx={xs[i]}
           cy={ys[i]}
           r={p.pressure > 0.55 ? 3.2 : 2}
-          fill={p.pressure > 0.55 ? '#dd6974' : '#5ad4ff'}
+          fill={p.pressure > 0.55 ? 'var(--danger)' : '#5ad4ff'}
         />
       ))}
     </svg>

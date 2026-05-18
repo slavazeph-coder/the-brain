@@ -87,7 +87,7 @@ export default function PluginPanel({ onApplyResults }) {
                     <div key={k} className="plugin-score-row">
                       <span>{k}</span>
                       <div className="weight-bar">
-                        <span style={{ width: `${Math.abs(v) * 100}%`, background: v >= 0 ? 'var(--primary)' : 'var(--danger)' }} />
+                        <span style={{ width: `${Math.abs(v) * 100}%`, background: v >= 0 ? 'var(--accent)' : 'var(--danger)' }} />
                       </div>
                       <span className="muted">{typeof v === 'number' ? v.toFixed(3) : v}</span>
                     </div>

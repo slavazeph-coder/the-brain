@@ -4,6 +4,7 @@ import {
   compareSnapshots, exportSnapshotJSON, exportAllSnapshotsJSON,
   importSnapshotsJSON, generateReport
 } from '../utils/snapshots';
+import { subscribe as subscribeMultiTab } from '../utils/multiTab';
 
 function DeltaChip({ value }) {
   if (value === 0) return <span className="snap-delta neutral">0</span>;
@@ -27,6 +28,10 @@ export default function SnapshotPanel({ state, onRestoreSnapshot }) {
   const refresh = useCallback(() => setSnapshots(listSnapshots()), []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Cross-tab sync: snapshots.js publishes 'snapshot:changed' on every
+  // mutation so a second tab can refresh its list without polling.
+  useEffect(() => subscribeMultiTab('snapshot:changed', () => refresh()), [refresh]);
 
   const handleSave = () => {
     saveSnapshot(state, name);

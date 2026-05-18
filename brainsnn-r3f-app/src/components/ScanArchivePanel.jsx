@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   listArchive, searchArchive, removeFromArchive, clearArchive,
   exportArchiveJson, exportArchiveCsv,
 } from '../utils/scanArchive';
+import { subscribe as subscribeMultiTab } from '../utils/multiTab';
 
 /**
  * Layer 84 — Scan Archive panel.
@@ -11,9 +12,18 @@ export default function ScanArchivePanel() {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState(() => listArchive());
 
-  useEffect(() => { setItems(query ? searchArchive(query) : listArchive()); }, [query]);
+  const refresh = useCallback(
+    () => setItems(query ? searchArchive(query) : listArchive()),
+    [query]
+  );
 
-  function refresh() { setItems(query ? searchArchive(query) : listArchive()); }
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // archiveScan/removeFromArchive run their writes through withLock,
+  // so synchronous reads right after a mutation miss the new state.
+  // This subscription patches the list once the write commits + keeps
+  // a second tab in sync.
+  useEffect(() => subscribeMultiTab('archive:changed', refresh), [refresh]);
 
   function remove(id) {
     removeFromArchive(id);
@@ -69,7 +79,7 @@ export default function ScanArchivePanel() {
         />
         <button className="btn" onClick={downloadJson} disabled={items.length === 0}>Export JSON</button>
         <button className="btn" onClick={downloadCsv} disabled={items.length === 0}>Export CSV</button>
-        <button className="btn" onClick={wipe} disabled={items.length === 0} style={{ color: '#dd6974' }}>Wipe</button>
+        <button className="btn" onClick={wipe} disabled={items.length === 0} style={{ color: 'var(--danger)' }}>Wipe</button>
       </div>
 
       <div style={{ marginTop: 12 }}>
@@ -79,7 +89,7 @@ export default function ScanArchivePanel() {
             after any scan to save it here.
           </p>
         ) : items.map((e) => {
-          const tone = e.pressure >= 0.55 ? '#dd6974' : e.pressure >= 0.25 ? '#fdab43' : '#6daa45';
+          const tone = e.pressure >= 0.55 ? 'var(--danger)' : e.pressure >= 0.25 ? 'var(--severity-mid)' : 'var(--ok)';
           return (
             <div
               key={e.id}
@@ -112,7 +122,7 @@ export default function ScanArchivePanel() {
                   {e.tags.length > 0 && <> · tags: {e.tags.join(', ')}</>}
                 </div>
               )}
-              <button className="ghost small" onClick={() => remove(e.id)} style={{ marginTop: 4, color: '#dd6974' }}>
+              <button className="ghost small" onClick={() => remove(e.id)} style={{ marginTop: 4, color: 'var(--danger)' }}>
                 Remove
               </button>
             </div>

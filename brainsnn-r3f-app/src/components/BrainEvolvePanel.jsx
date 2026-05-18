@@ -1,8 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import {
-  runEvolution,
-  seedNode
-} from '../utils/evolve/loop';
+import { seedNode } from '../utils/evolve/loop';
+import { runEvolutionAsync as runEvolution } from '../utils/evolve/runInWorker';
 import {
   SAMPLER_KEYS,
   SAMPLER_LABELS,

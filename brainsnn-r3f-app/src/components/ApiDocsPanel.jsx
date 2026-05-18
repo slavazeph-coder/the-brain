@@ -138,7 +138,7 @@ export default function ApiDocsPanel() {
           }}
         >
           {streamEvents.map((ev, i) => (
-            <div key={i} style={{ padding: '2px 0', color: ev.event === 'final' ? '#5ee69a' : '#cbd5e1' }}>
+            <div key={i} style={{ padding: '2px 0', color: ev.event === 'final' ? 'var(--severity-ok)' : '#cbd5e1' }}>
               <strong style={{ color: '#5ad4ff' }}>{ev.event}</strong>{' '}
               <span>{JSON.stringify(ev.data)}</span>
             </div>
@@ -146,7 +146,7 @@ export default function ApiDocsPanel() {
         </div>
       )}
 
-      {err && <p className="muted" style={{ color: '#dd6974', marginTop: 8 }}>Error: {err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)', marginTop: 8 }}>Error: {err}</p>}
 
       {result && (
         <div

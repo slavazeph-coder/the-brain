@@ -5,11 +5,11 @@
  */
 
 export const QUIZ_LEVELS = [
-  { min: 90, label: 'Firewall-grade', color: '#5ee69a' },
-  { min: 75, label: 'Sharp', color: '#77dbe4' },
-  { min: 60, label: 'Reasonable', color: '#fdab43' },
+  { min: 90, label: 'Firewall-grade', color: 'var(--severity-ok)' },
+  { min: 75, label: 'Sharp', color: 'var(--severity-info)' },
+  { min: 60, label: 'Reasonable', color: 'var(--severity-mid)' },
   { min: 40, label: 'Susceptible', color: '#e57b40' },
-  { min: 0, label: 'Vulnerable', color: '#dd6974' },
+  { min: 0, label: 'Vulnerable', color: 'var(--danger)' },
 ];
 
 export function quizLevelFor(accuracy) {

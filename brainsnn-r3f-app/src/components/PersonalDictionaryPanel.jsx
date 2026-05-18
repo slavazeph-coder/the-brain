@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   listEntries, addEntry, removeEntry, clearAll, scanPersonal,
 } from '../utils/personalDictionary';
+import { subscribe as subscribeMultiTab } from '../utils/multiTab';
 
 export default function PersonalDictionaryPanel() {
   const [entries, setEntries] = useState(() => listEntries());
@@ -12,7 +13,16 @@ export default function PersonalDictionaryPanel() {
   const [testText, setTestText] = useState('');
   const [err, setErr] = useState('');
 
-  useEffect(() => { setEntries(listEntries()); }, []);
+  const refresh = useCallback(() => setEntries(listEntries()), []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // personalDictionary.js publishes 'personalDict:changed' on every
+  // mutation. Locked writes run in a microtask, so the synchronous
+  // setEntries(listEntries()) right after addEntry/removeEntry sees
+  // stale data; this subscription patches the list once the write
+  // commits. Also keeps a second tab in sync.
+  useEffect(() => subscribeMultiTab('personalDict:changed', refresh), [refresh]);
 
   function add() {
     setErr('');
@@ -72,7 +82,7 @@ export default function PersonalDictionaryPanel() {
         <button className="btn primary" onClick={add} disabled={!phrase.trim()}>Add</button>
       </div>
 
-      {err && <p className="muted" style={{ color: '#dd6974' }}>{err}</p>}
+      {err && <p className="muted" style={{ color: 'var(--danger)' }}>{err}</p>}
 
       {entries.length === 0 ? (
         <p className="muted small-note" style={{ marginTop: 8 }}>Empty — add your first phrase above.</p>
@@ -99,11 +109,11 @@ export default function PersonalDictionaryPanel() {
               </div>
               <span className="muted small-note">{e.tag || '—'}</span>
               <span className="muted small-note" style={{ fontFamily: 'monospace' }}>w {e.weight.toFixed(2)} · {e.hits}×</span>
-              <button className="ghost small" onClick={() => remove(e.id)} style={{ color: '#dd6974' }}>Remove</button>
+              <button className="ghost small" onClick={() => remove(e.id)} style={{ color: 'var(--danger)' }}>Remove</button>
             </div>
           ))}
           <div style={{ marginTop: 6 }}>
-            <button className="ghost small" onClick={wipe} style={{ color: '#dd6974' }}>Wipe all</button>
+            <button className="ghost small" onClick={wipe} style={{ color: 'var(--danger)' }}>Wipe all</button>
           </div>
         </div>
       )}
@@ -129,8 +139,8 @@ export default function PersonalDictionaryPanel() {
                 key={m.id}
                 style={{
                   padding: '4px 10px',
-                  borderLeft: '3px solid #dd6974',
-                  background: 'rgba(221,105,116,0.06)',
+                  borderLeft: '3px solid var(--danger)',
+                  background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
                   borderRadius: 4,
                   marginTop: 4,
                   fontSize: 12,

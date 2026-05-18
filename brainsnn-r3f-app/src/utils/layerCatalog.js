@@ -113,10 +113,10 @@ export const LAYER_CATALOG = [
 
 export const LAYER_GROUPS = {
   view: { label: '3D & UX', color: '#5ad4ff' },
-  firewall: { label: 'Cognitive Firewall', color: '#a86fdf' },
-  share: { label: 'Share & Cards', color: '#fdab43' },
-  data: { label: 'Data & State', color: '#5ee69a' },
-  backend: { label: 'Backend & Agents', color: '#77dbe4' },
+  firewall: { label: 'Cognitive Firewall', color: 'var(--severity-purple)' },
+  share: { label: 'Share & Cards', color: 'var(--severity-mid)' },
+  data: { label: 'Data & State', color: 'var(--severity-ok)' },
+  backend: { label: 'Backend & Agents', color: 'var(--severity-info)' },
   progression: { label: 'Progression', color: '#e57b40' },
 };
 

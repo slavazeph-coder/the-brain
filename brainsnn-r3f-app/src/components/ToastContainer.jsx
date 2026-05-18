@@ -7,9 +7,17 @@ function Toast({ toast, onDismiss }) {
     return () => clearTimeout(timer);
   }, [toast, onDismiss]);
 
+  // Errors + warnings interrupt assistive-tech reading. Info /
+  // success are polite — they announce when the reader is idle.
+  const live = toast.type === 'error' || toast.type === 'warning' ? 'assertive' : 'polite';
   return (
-    <div className={`toast toast-${toast.type}`} onClick={() => onDismiss(toast.id)}>
-      <span className="toast-icon">
+    <div
+      className={`toast toast-${toast.type}`}
+      role={live === 'assertive' ? 'alert' : 'status'}
+      aria-live={live}
+      onClick={() => onDismiss(toast.id)}
+    >
+      <span className="toast-icon" aria-hidden>
         {toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : toast.type === 'warning' ? '⚠' : 'ℹ'}
       </span>
       <span className="toast-message">{toast.message}</span>
@@ -33,7 +41,7 @@ export default function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="toast-container">
+    <div className="toast-container" aria-label="Notifications">
       {toasts.map((t) => (
         <Toast key={t.id} toast={t} onDismiss={dismiss} />
       ))}
