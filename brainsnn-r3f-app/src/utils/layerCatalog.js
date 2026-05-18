@@ -2,8 +2,8 @@
  * Layer 72 — Layer Explorer data
  *
  * Static catalog of every shipped BrainSNN layer + a searchable blurb.
- * Read from MEMORY.md's top-of-file list by hand. Updated layer-by-
- * layer as new ones ship.
+ * Read from MEMORY.md's top-of-file list by hand. Updated layer-by-layer as
+ * new ones ship.
  */
 
 export const LAYER_CATALOG = [
@@ -101,7 +101,7 @@ export const LAYER_CATALOG = [
   { id: 92, name: 'Command Palette', group: 'view', blurb: '⌘K fuzzy-search jump to any layer.' },
   { id: 93, name: 'Feedback Calibration', group: 'firewall', blurb: 'Per-user accuracy vs bias → adjusted pressure.' },
   { id: 94, name: 'Role Tour', group: 'view', blurb: 'Role-based 6-step walkthrough (writer/parent/dev/...).' },
-  { id: 95, name: 'Image Bbox Annotation', group: 'firewall', blurb: 'Draw Firewall matches directly on the OCR\'d image.' },
+  { id: 95, name: 'Image Bbox Annotation', group: 'firewall', blurb: "Draw Firewall matches directly on the OCR'd image." },
   { id: 96, name: 'Cross-device Sync', group: 'data', blurb: '6-char code → transfer state between devices in 10 min.' },
   { id: 97, name: 'Hotkey Map', group: 'view', blurb: 'Shift-? cheat sheet + type two letters to jump.' },
   { id: 98, name: 'Theme + A11y', group: 'view', blurb: 'Dark/light, high-contrast, reduced-motion, font scale.' },
@@ -109,6 +109,7 @@ export const LAYER_CATALOG = [
   { id: 100, name: 'Milestone Dashboard', group: 'view', blurb: '100 layers shipped — synthesis + personal stats.' },
   { id: 101, name: 'Gemini Deep Analysis', group: 'backend', blurb: 'Google Gemini 2.5 manipulation analysis + RAG captioning + counter-draft rewrite.' },
   { id: 102, name: 'Veea Lobster Trap', group: 'backend', blurb: 'Prompt injection / secret / PII inspection; gates every Gemini call + MCP tool dispatch.' },
+  { id: 103, name: 'Social Post Autopsy', group: 'firewall', blurb: 'Instagram/TikTok/X carousel scanner: OCR slides, detect viral mechanics, affect, pressure, and viewer install.' },
 ];
 
 export const LAYER_GROUPS = {
