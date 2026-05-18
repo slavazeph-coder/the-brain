@@ -9,17 +9,23 @@
  * message and the worker honors it between rounds.
  */
 
-import { runEvolution as runInline } from './loop.js';
+import { runEvolution as runInlineEvolution } from './loop.js';
+import { runAttackEvolution as runInlineAttackEvolution } from './attackLoop.js';
 
 const workerAvailable = typeof Worker !== 'undefined' && typeof URL !== 'undefined';
 
-export function runEvolutionAsync(opts = {}) {
+/**
+ * Shared streaming-worker dispatcher. `workerFactory` returns a fresh
+ * Worker; `inlineFn` is the synchronous fallback used when Worker
+ * isn't available. Both produce the same { pool, best, sampler }
+ * shape and forward `round` events to the supplied onRound callback.
+ */
+function runInWorker(workerFactory, inlineFn, opts = {}) {
   const { onRound, ...passThrough } = opts;
 
   if (!workerAvailable) {
-    // Inline path — pure delegation. Returns a Promise + a no-op cancel.
     const cancelRef = { stopped: false };
-    const promise = runInline({
+    const promise = inlineFn({
       ...opts,
       shouldStop: () => cancelRef.stopped
     });
@@ -27,18 +33,15 @@ export function runEvolutionAsync(opts = {}) {
     return promise;
   }
 
-  const worker = new Worker(
-    new URL('../../workers/evolve.worker.js', import.meta.url),
-    { type: 'module' }
-  );
-
+  const worker = workerFactory();
   let settled = false;
+
   const promise = new Promise((resolve, reject) => {
     worker.onmessage = (e) => {
       const { type, payload } = e.data || {};
       if (type === 'round') {
         if (onRound) {
-          try { onRound(payload); } catch { /* swallow — UI errors aren't worker errors */ }
+          try { onRound(payload); } catch { /* UI errors aren't worker errors */ }
         }
         return;
       }
@@ -66,9 +69,22 @@ export function runEvolutionAsync(opts = {}) {
   promise.cancel = () => {
     if (settled) return;
     try { worker.postMessage({ type: 'stop' }); } catch { /* noop */ }
-    // Worker exits cleanly via shouldStop between rounds; if we
-    // really need an instant kill, the caller can terminate() the
-    // worker, but that risks losing the final done message.
   };
   return promise;
+}
+
+export function runEvolutionAsync(opts = {}) {
+  return runInWorker(
+    () => new Worker(new URL('../../workers/evolve.worker.js', import.meta.url), { type: 'module' }),
+    runInlineEvolution,
+    opts
+  );
+}
+
+export function runAttackEvolutionAsync(opts = {}) {
+  return runInWorker(
+    () => new Worker(new URL('../../workers/attackEvolve.worker.js', import.meta.url), { type: 'module' }),
+    runInlineAttackEvolution,
+    opts
+  );
 }

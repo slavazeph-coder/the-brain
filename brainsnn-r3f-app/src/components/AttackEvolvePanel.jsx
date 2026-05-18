@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { runAttackEvolution, seedAttackPool } from '../utils/evolve/attackLoop';
+import { seedAttackPool } from '../utils/evolve/attackLoop';
+import { runAttackEvolutionAsync as runAttackEvolution } from '../utils/evolve/runInWorker';
 import {
   SAMPLER_KEYS,
   SAMPLER_LABELS,
