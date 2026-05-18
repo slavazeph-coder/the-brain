@@ -74,7 +74,11 @@ export default function SocialPostAutopsyPanel() {
 
   function copyReport() {
     const text = buildSocialPostReport(report);
-    navigator.clipboard?.writeText(text).then(
+    if (!navigator.clipboard?.writeText) {
+      setStatus('Copy failed — browser blocked clipboard access');
+      return;
+    }
+    navigator.clipboard.writeText(text).then(
       () => setStatus('Report copied'),
       () => setStatus('Copy failed — browser blocked clipboard access'),
     );
