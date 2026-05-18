@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   listEntries, addEntry, removeEntry, clearAll, scanPersonal,
 } from '../utils/personalDictionary';
+import { subscribe as subscribeMultiTab } from '../utils/multiTab';
 
 export default function PersonalDictionaryPanel() {
   const [entries, setEntries] = useState(() => listEntries());
@@ -12,7 +13,16 @@ export default function PersonalDictionaryPanel() {
   const [testText, setTestText] = useState('');
   const [err, setErr] = useState('');
 
-  useEffect(() => { setEntries(listEntries()); }, []);
+  const refresh = useCallback(() => setEntries(listEntries()), []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // personalDictionary.js publishes 'personalDict:changed' on every
+  // mutation. Locked writes run in a microtask, so the synchronous
+  // setEntries(listEntries()) right after addEntry/removeEntry sees
+  // stale data; this subscription patches the list once the write
+  // commits. Also keeps a second tab in sync.
+  useEffect(() => subscribeMultiTab('personalDict:changed', refresh), [refresh]);
 
   function add() {
     setErr('');

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   listArchive, searchArchive, removeFromArchive, clearArchive,
   exportArchiveJson, exportArchiveCsv,
 } from '../utils/scanArchive';
+import { subscribe as subscribeMultiTab } from '../utils/multiTab';
 
 /**
  * Layer 84 — Scan Archive panel.
@@ -11,9 +12,18 @@ export default function ScanArchivePanel() {
   const [query, setQuery] = useState('');
   const [items, setItems] = useState(() => listArchive());
 
-  useEffect(() => { setItems(query ? searchArchive(query) : listArchive()); }, [query]);
+  const refresh = useCallback(
+    () => setItems(query ? searchArchive(query) : listArchive()),
+    [query]
+  );
 
-  function refresh() { setItems(query ? searchArchive(query) : listArchive()); }
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // archiveScan/removeFromArchive run their writes through withLock,
+  // so synchronous reads right after a mutation miss the new state.
+  // This subscription patches the list once the write commits + keeps
+  // a second tab in sync.
+  useEffect(() => subscribeMultiTab('archive:changed', refresh), [refresh]);
 
   function remove(id) {
     removeFromArchive(id);

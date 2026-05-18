@@ -43,6 +43,21 @@ function ensureChannel() {
 }
 
 export function publish(kind, payload) {
+  // Local fan-out FIRST. BroadcastChannel deliberately does not echo
+  // a message back to its sender (per spec), so same-tab subscribers
+  // would never see their own publishes otherwise. That broke the
+  // common pattern where a util function writes + broadcasts, and
+  // the same tab's panel relies on the broadcast to refresh.
+  const subs = _subs.get(kind);
+  if (subs) {
+    const envelope = { kind, payload, origin: ORIGIN, ts: Date.now() };
+    for (const cb of Array.from(subs)) {
+      try { cb(payload, envelope); } catch (err) {
+        console.warn(`[multiTab] subscriber for "${kind}" threw:`, err);
+      }
+    }
+  }
+  // Cross-tab fan-out.
   const ch = ensureChannel();
   if (!ch) return;
   try {
