@@ -30,6 +30,11 @@ function broadcast(patch) {
 
 function track(reg) {
   _registration = reg;
+  // True once we've actually observed an update transition. Guards
+  // against `controllerchange` firing on first-time install (no prior
+  // controller → a fresh user would otherwise see "new version
+  // ready" before they've done anything).
+  let sawUpdate = false;
 
   // Already waiting on page load — happens when a SW updated while
   // the tab was closed.
@@ -43,6 +48,10 @@ function track(reg) {
   reg.addEventListener('updatefound', () => {
     const installing = reg.installing;
     if (!installing) return;
+    // Only flag this as an actual update if there was already a
+    // controller before — otherwise this is the first-install path
+    // and the user doesn't need a reload prompt.
+    if (navigator.serviceWorker.controller) sawUpdate = true;
     broadcast({ status: 'pending' });
     installing.addEventListener('statechange', () => {
       if (installing.state === 'installed') {
@@ -50,6 +59,7 @@ function track(reg) {
         // waiting. If not, it's a first-install and goes straight to
         // active — no need to nudge the user.
         if (navigator.serviceWorker.controller) {
+          sawUpdate = true;
           broadcast({ status: 'waiting' });
         } else {
           broadcast({ status: 'active' });
@@ -63,11 +73,16 @@ function track(reg) {
   });
 
   // Worker took over — reload anything stale at the next nav.
+  // controllerchange ALSO fires on the very first SW install (no
+  // previous controller → a fresh controller). Gate the 'waiting'
+  // emit so we only surface the reload banner when an actual update
+  // has been observed (sawUpdate) OR a worker is currently waiting.
   if (navigator.serviceWorker) {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      // Don't auto-reload — the user might be mid-edit. Surface
-      // 'waiting' so the toast offers a manual reload.
-      broadcast({ status: 'waiting' });
+      const reallyWaiting = sawUpdate || !!_registration?.waiting;
+      if (reallyWaiting) {
+        broadcast({ status: 'waiting' });
+      }
     });
   }
 }
