@@ -5,7 +5,9 @@
  *   GET  /                    → Vite SPA (dist/index.html)
  *   GET  /r/:hash             → SSR HTML shell for Reaction share cards
  *   GET  /i/:hash             → SSR HTML shell for Immunity share cards
+ *   GET  /s/:hash             → SSR HTML shell for Social Post Autopsy cards
  *   GET  /api/og              → 1200×630 PNG (?h=, ?type=immunity|reaction)
+ *   GET  /api/social-og       → Social Post Autopsy PNG (?h=, ?size=vertical)
  *   GET  /api/fetch-url       → HTML-strip reader (?u=)
  *   GET  /api/leaderboard     → weekly top-N + total
  *   POST /api/leaderboard     → submit a score
@@ -21,6 +23,7 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { renderOg } from './viral/og.js';
+import { renderSocialOg, handleSocialPostCard } from './viral/social-card.js';
 import {
   handleReactionCard, handleImmunityCard, handleQuizCard, handleAutopsyCard,
   handleDailyCard, handleCounterDraftCard, handleTimelineCard, handleInboxCard,
@@ -60,6 +63,18 @@ app.get('/api/og', async (req, res) => {
     // Log and return a small error image-ish response — OG crawlers prefer 200
     console.error('[og] render failed:', err);
     res.status(500).json({ error: 'og render failed' });
+  }
+});
+
+app.get('/api/social-og', async (req, res) => {
+  try {
+    const png = await renderSocialOg(req.query || {});
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    res.status(200).send(png);
+  } catch (err) {
+    console.error('[social-og] render failed:', err);
+    res.status(500).json({ error: 'social og render failed' });
   }
 });
 
@@ -151,6 +166,7 @@ app.get('/n/:hash', handleInboxCard);
 app.get('/v/:hash', handleDiffCard);
 app.get('/w/:hash', handleRecapCard);
 app.get('/b/:hash', handleBadgesCard);
+app.get('/s/:hash', handleSocialPostCard);
 
 // --- Static SPA -------------------------------------------------------------
 if (!existsSync(DIST)) {
