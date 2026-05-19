@@ -83,6 +83,18 @@ function extractCandidates(text) {
  * that the current firewall failed to catch at the given threshold.
  * Returns a new learned-pattern list (not yet persisted — caller decides).
  */
+/**
+ * Async sibling. Offloads the n-gram lift mining to the firewall
+ * worker; falls back inline. Pure-data input + output, no rule
+ * state needed.
+ */
+export async function trainFromRedTeamAsync(report, opts = {}) {
+  const { callFirewallWorker } = await import('./cognitiveFirewall.js');
+  const result = await callFirewallWorker('trainFromRedTeam', { report, opts });
+  if (result) return result;
+  return trainFromRedTeam(report, opts);
+}
+
 export function trainFromRedTeam(report, { threshold = 0.3, topK = 20, minLift = 3, minAttackCount = 2 } = {}) {
   if (!report?.perAttack) return { learned: [], stats: null };
 

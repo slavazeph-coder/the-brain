@@ -19,6 +19,8 @@ import {
   setActiveRules,
   getActiveRules
 } from '../utils/cognitiveFirewall.js';
+import { runRedTeam } from '../utils/redTeam.js';
+import { trainFromRedTeam } from '../utils/adversarialTraining.js';
 
 handleRequests({
   score: async ({ text }) => scoreContent(text || ''),
@@ -42,5 +44,25 @@ handleRequests({
   setRules: async ({ rules }) => {
     setActiveRules(rules ? deserializeRules(rules) : null);
     return { ok: true };
-  }
+  },
+
+  // Run the full 65-sample red-team corpus + compute per-threshold
+  // F1 / detection / FPR. Heavy: ~150 ms per ruleset on default
+  // hardware. Worker variant uses ITS active rules (set via setRules
+  // beforehand or supplied inline), not the main thread's.
+  runRedTeam: async ({ thresholds, rules } = {}) => {
+    const prev = rules ? getActiveRules() : null;
+    if (rules) setActiveRules(deserializeRules(rules));
+    try {
+      // Strip onProgress — postMessage can't carry functions, and
+      // panel-side progress is overkill at <200ms total.
+      return runRedTeam({ thresholds });
+    } finally {
+      if (rules) setActiveRules(prev);
+    }
+  },
+
+  // n-gram lift mining over a runRedTeam report. Pure compute on
+  // serializable data; no rule state needed.
+  trainFromRedTeam: async ({ report, opts }) => trainFromRedTeam(report, opts || {})
 });

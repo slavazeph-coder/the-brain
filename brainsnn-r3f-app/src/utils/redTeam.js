@@ -132,6 +132,28 @@ const ATTACK_CORPUS = Object.fromEntries(
 /**
  * Run the full corpus and compute detection stats at multiple thresholds.
  */
+/**
+ * Async sibling of runRedTeam — same shape, runs the corpus through
+ * the shared firewall worker so the 3D viewer keeps rendering during
+ * the ~150 ms scoring pass. Falls back to the inline sync version
+ * when no worker is available (SSR, custom scoreFn, etc).
+ *
+ * Note: the worker uses its own active rules (synced via setRules
+ * beforehand, or supplied inline through opts.rules — serialized).
+ * Callers that pass a custom scoreFn skip the worker path.
+ */
+export async function runRedTeamAsync(opts = {}) {
+  if (opts.scoreFn) return runRedTeam(opts);
+  const { serializeRules, getActiveRules, callFirewallWorker } = await import('./cognitiveFirewall.js');
+  const rules = serializeRules(getActiveRules());
+  const result = await callFirewallWorker('runRedTeam', {
+    thresholds: opts.thresholds,
+    rules
+  });
+  if (result) return result;
+  return runRedTeam(opts);
+}
+
 export function runRedTeam({ thresholds = [0.2, 0.3, 0.4], onProgress, scoreFn = scoreContent } = {}) {
   const perCategory = {};
   const perAttack = [];

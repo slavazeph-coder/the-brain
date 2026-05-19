@@ -262,6 +262,22 @@ function ensurePool() {
   }
 }
 
+/**
+ * Generic worker dispatch for sister modules (redTeam, adversarial-
+ * Training) that want to share the firewall pool without re-spawning
+ * their own workers. Returns the worker result on success, or null
+ * on fallback / no-pool — caller decides whether to run inline.
+ */
+export async function callFirewallWorker(type, payload, transferList) {
+  const pool = ensurePool();
+  if (!pool || pool.degraded) return null;
+  try {
+    return await pool.call(type, payload, transferList);
+  } catch {
+    return null;
+  }
+}
+
 export async function scoreContentAsync(text = '') {
   if (!text || text.length < ASYNC_THRESHOLD) return scoreContent(text);
   const pool = ensurePool();

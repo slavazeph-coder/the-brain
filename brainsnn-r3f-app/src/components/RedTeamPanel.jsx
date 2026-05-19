@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { runRedTeam, verdict, corpusSize, ATTACK_CATEGORIES } from '../utils/redTeam';
+import { runRedTeamAsync, verdict, corpusSize, ATTACK_CATEGORIES } from '../utils/redTeam';
 import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from '../utils/immunityScore';
 
 /**
@@ -22,11 +22,11 @@ export default function RedTeamPanel() {
     setRunning(true);
     setReport(null);
     setProgress(0);
-    // Yield to the browser so the button re-renders before the sync work
-    await new Promise((r) => setTimeout(r, 20));
-    const result = runRedTeam({
-      onProgress: (done) => setProgress(done)
-    });
+    // Worker variant — main thread stays free, brain keeps rendering.
+    // onProgress isn't supported across postMessage; the bar jumps
+    // from 0 to total when the report lands (still <300 ms on default
+    // hardware so the snap is barely perceptible).
+    const result = await runRedTeamAsync();
     setReport(result);
     setRunning(false);
     setProgress(total);

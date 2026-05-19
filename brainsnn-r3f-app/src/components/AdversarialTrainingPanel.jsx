@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import {
   getLearnedPatterns, saveLearnedPatterns, clearLearnedPatterns,
-  trainFromRedTeam, evaluateWithLearned
+  trainFromRedTeamAsync, evaluateWithLearned
 } from '../utils/adversarialTraining';
-import { runRedTeam } from '../utils/redTeam';
+import { runRedTeamAsync } from '../utils/redTeam';
 import { recordEvent as recordImmunity, IMMUNITY_EVENTS } from '../utils/immunityScore';
 
 /**
@@ -21,9 +21,10 @@ export default function AdversarialTrainingPanel() {
   async function handleTrain() {
     setTraining(true);
     setResult(null);
-    await new Promise((r) => setTimeout(r, 20)); // let UI update
-    const baseline = runRedTeam();
-    const { learned: newLearned, stats } = trainFromRedTeam(baseline);
+    // Both red team + n-gram mining run in the firewall worker so
+    // the brain keeps rendering during the training pass.
+    const baseline = await runRedTeamAsync();
+    const { learned: newLearned, stats } = await trainFromRedTeamAsync(baseline);
     saveLearnedPatterns(newLearned);
     setLearned(newLearned);
     const after = evaluateWithLearned();
