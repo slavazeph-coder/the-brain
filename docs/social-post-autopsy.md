@@ -8,6 +8,7 @@ Social Post Autopsy turns Instagram / TikTok / X / LinkedIn posts into a BrainSN
 - Produce a “viewer install” sentence: the feeling the post is trying to install and the mechanic carrying it.
 - Map pressure by slide so the user can see where the carousel spikes.
 - Copy the report, archive the scan, send the combined text to the Cognitive Firewall, or generate a public share card.
+- Open a shared card and rehydrate the compact proof summary back inside the Social Post Autopsy panel.
 
 ## Why this layer exists
 
@@ -43,6 +44,7 @@ Layer 103 adds a dedicated viral card flow:
 | Route | Purpose |
 | --- | --- |
 | `/s/<hash>` | Public HTML shell with OG/Twitter metadata for a Social Post Autopsy result. Redirects back into the app with `?s=<hash>`. |
+| `/?s=<hash>` | App rehydration route. The Social Post Autopsy panel shows the shared proof summary and lets the viewer copy the card or vertical image. |
 | `/api/social-og?h=<hash>` | 1200×630 PNG image card for link previews. |
 | `/api/social-og?h=<hash>&size=vertical` | 1080×1920 vertical card for TikTok/Reels/Stories share surfaces. |
 
