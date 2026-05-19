@@ -6,9 +6,19 @@ import {
   analyzeSocialPost,
   buildSocialPostReport,
   buildSocialPostSharePayload,
+  decodeSocialPostShare,
   socialPostShareUrl,
   socialPostOgUrl,
 } from '../utils/socialPostAutopsy';
+
+function readSharedSocialPost() {
+  try {
+    const hash = new URLSearchParams(window.location.search).get('s');
+    return hash ? decodeSocialPostShare(hash) : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Layer 103 — Social Post Autopsy panel.
@@ -22,8 +32,9 @@ export default function SocialPostAutopsyPanel() {
   const [caption, setCaption] = useState('');
   const [slidesText, setSlidesText] = useState('');
   const [report, setReport] = useState(null);
+  const [sharedPayload, setSharedPayload] = useState(() => readSharedSocialPost());
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState(() => (readSharedSocialPost() ? 'Loaded shared Social Post Autopsy card' : ''));
   const [err, setErr] = useState('');
   const fileInputRef = useRef(null);
 
@@ -41,16 +52,26 @@ export default function SocialPostAutopsyPanel() {
     () => (sharePayload ? socialPostOgUrl(window.location.origin, sharePayload, { vertical: true }) : ''),
     [sharePayload],
   );
+  const sharedVerticalOgUrl = useMemo(
+    () => (sharedPayload ? socialPostOgUrl(window.location.origin, sharedPayload, { vertical: true }) : ''),
+    [sharedPayload],
+  );
+  const sharedShareUrl = useMemo(
+    () => (sharedPayload ? socialPostShareUrl(window.location.origin, sharedPayload) : ''),
+    [sharedPayload],
+  );
 
   function runAnalysis() {
     if (!canAnalyze) return;
     setErr('');
+    setSharedPayload(null);
     const next = analyzeSocialPost({ url, caption, slidesText });
     setReport(next);
     setStatus(`Analyzed ${next.platform.label} post · ${Math.round(next.pressure * 100)}% pressure`);
   }
 
   function loadSample() {
+    setSharedPayload(null);
     setUrl(SAMPLE_SOCIAL_POST.url);
     setCaption(SAMPLE_SOCIAL_POST.caption);
     setSlidesText(SAMPLE_SOCIAL_POST.slidesText);
@@ -61,6 +82,7 @@ export default function SocialPostAutopsyPanel() {
   async function handleFiles(files) {
     const list = Array.from(files || []).filter((f) => f.type.startsWith('image/'));
     if (!list.length) return;
+    setSharedPayload(null);
     setBusy(true);
     setErr('');
     setStatus(`OCR running on ${list.length} screenshot${list.length === 1 ? '' : 's'}…`);
@@ -109,6 +131,14 @@ export default function SocialPostAutopsyPanel() {
     copyText(verticalOgUrl, 'Vertical image URL copied');
   }
 
+  function copySharedShareCard() {
+    copyText(sharedShareUrl, 'Shared card link copied');
+  }
+
+  function copySharedVerticalImage() {
+    copyText(sharedVerticalOgUrl, 'Shared vertical image URL copied');
+  }
+
   function scanInFirewall() {
     const text = report?.combinedText || [caption, slidesText].filter(Boolean).join('\n\n');
     if (!text.trim()) return;
@@ -141,6 +171,18 @@ export default function SocialPostAutopsyPanel() {
         and BrainSNN will OCR the slides locally, then detect the viewer install:
         the affect, viral mechanics, pressure spike, and share-risk pattern.
       </p>
+
+      {sharedPayload && (
+        <SharedSocialPostCard
+          payload={sharedPayload}
+          onCopyShare={copySharedShareCard}
+          onCopyVertical={copySharedVerticalImage}
+          onNewScan={() => {
+            setSharedPayload(null);
+            setStatus('Ready for a new Social Post Autopsy');
+          }}
+        />
+      )}
 
       <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
         <input
@@ -299,6 +341,67 @@ export default function SocialPostAutopsyPanel() {
         </div>
       )}
     </section>
+  );
+}
+
+function SharedSocialPostCard({ payload, onCopyShare, onCopyVertical, onNewScan }) {
+  const tone = payload.p >= 0.72 ? '#dd6974' : payload.p >= 0.45 ? '#fdab43' : payload.p >= 0.22 ? '#d7c54f' : '#6daa45';
+  const mechanics = Array.isArray(payload.vm) ? payload.vm : [];
+  const slides = Array.isArray(payload.sl) ? payload.sl : [];
+
+  return (
+    <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, background: 'rgba(90,212,255,0.045)', border: `1px solid ${tone}55`, borderLeft: `4px solid ${tone}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div className="eyebrow">Shared Social Post Autopsy · {payload.pl || 'Social post'}{payload.hd ? ` · ${payload.hd}` : ''}</div>
+          <h3 style={{ margin: '2px 0 4px' }}>{Math.round((payload.p || 0) * 100)}% pressure · {payload.af || 'Attention'}</h3>
+          <p className="muted" style={{ margin: 0 }}>{payload.vi || 'Shared BrainSNN social-post scan.'}</p>
+        </div>
+        <strong style={{ color: tone, fontSize: 28, lineHeight: 1 }}>
+          {Math.round((payload.p || 0) * 100)}%
+        </strong>
+      </div>
+
+      {mechanics.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+          {mechanics.map((m) => <Chip key={m} label={m} />)}
+        </div>
+      )}
+
+      {payload.tx && (
+        <p className="muted" style={{ marginTop: 10, fontStyle: 'italic' }}>
+          “{payload.tx}”
+        </p>
+      )}
+
+      {slides.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div className="eyebrow">Shared slide pressure</div>
+          {slides.map((slide, idx) => {
+            const p = slide.p || 0;
+            const sc = p >= 0.55 ? '#dd6974' : p >= 0.28 ? '#fdab43' : '#6daa45';
+            return (
+              <div key={`${slide.i || idx}-${p}`} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 56px', gap: 8, alignItems: 'center', marginTop: 5 }}>
+                <span className="muted small-note">Slide {slide.i || idx + 1}</span>
+                <div style={{ width: '100%', height: 7, background: '#1a1f2e', borderRadius: 999 }}>
+                  <div style={{ width: `${Math.round(p * 100)}%`, height: '100%', background: sc, borderRadius: 999 }} />
+                </div>
+                <span style={{ color: sc, fontFamily: 'monospace', textAlign: 'right' }}>{Math.round(p * 100)}%</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="muted small-note" style={{ marginTop: 10 }}>
+        Shared cards carry a compact proof summary, not the full post text.
+      </p>
+      <div className="control-actions" style={{ marginTop: 10 }}>
+        <button className="btn primary" onClick={onNewScan}>Run new autopsy</button>
+        <button className="btn" onClick={onCopyShare}>Copy shared card</button>
+        <button className="btn" onClick={onCopyVertical}>Copy vertical image</button>
+      </div>
+    </div>
   );
 }
 
