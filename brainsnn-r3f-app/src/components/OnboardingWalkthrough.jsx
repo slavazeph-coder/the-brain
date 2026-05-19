@@ -85,28 +85,49 @@ export default function OnboardingWalkthrough() {
   };
 
   // Highlight target element. When the new shell is active and the
-  // target lives in a different workspace, dispatch shell:goto first
-  // and wait one frame for that workspace to mount before querying
-  // the DOM.
+  // target lives in a different workspace, dispatch shell:goto first.
+  // Then poll for the target — the destination panel is lazy-loaded
+  // inside the workspace chunk, so a single rAF is too early on
+  // cold first navigation (the chunk fetch takes 100s of ms). Retry
+  // every 50ms up to 2s before giving up.
   useEffect(() => {
     if (step < 0 || step >= STEPS.length) return;
     const target = STEPS[step].target;
     if (!target) return;
     const ws = ANCHOR_WORKSPACE[target];
     if (ws) bus.emit('shell:goto', { workspace: ws });
+
     let cleanup = () => {};
-    const raf = requestAnimationFrame(() => {
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 40; // 40 × 50ms = 2 s
+    let timer = null;
+
+    const tryLand = () => {
+      if (cancelled) return;
       const el = document.querySelector(target);
-      if (!el) {
-        if (typeof console !== 'undefined') console.warn('[onboarding] target missing:', target);
+      if (el) {
+        el.classList.add('onboard-highlight');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        cleanup = () => el.classList.remove('onboard-highlight');
         return;
       }
-      el.classList.add('onboard-highlight');
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      cleanup = () => el.classList.remove('onboard-highlight');
-    });
+      attempts += 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        if (typeof console !== 'undefined') console.warn('[onboarding] target missing after retries:', target);
+        return;
+      }
+      timer = setTimeout(tryLand, 50);
+    };
+
+    // Start on the next rAF so the workspace switch from shell:goto
+    // has a chance to settle before the first lookup.
+    const raf = requestAnimationFrame(tryLand);
+
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
+      if (timer) clearTimeout(timer);
       cleanup();
     };
   }, [step]);

@@ -75,17 +75,40 @@ async function pruneIfNeeded() {
   } catch { /* noop */ }
 }
 
+/**
+ * Reconstruct a Float32Array from whatever shape store.get returned.
+ *   - Float32Array: pass through (IDB structured-clone preserves it)
+ *   - Array: cheap typed reconstruction
+ *   - Object: localStorage fallback path — JSON.stringify turns
+ *     Float32Array into { "0": x, "1": y, ... }, and Float32Array.from
+ *     on a plain object returns an empty array because the object has
+ *     no .length. Rebuild by reading numeric keys in order.
+ */
+function normalizeVec(v) {
+  if (v == null) return null;
+  if (v instanceof Float32Array) return v;
+  if (Array.isArray(v)) return Float32Array.from(v);
+  if (typeof v === 'object') {
+    const keys = Object.keys(v).filter((k) => /^\d+$/.test(k));
+    if (!keys.length) return null;
+    keys.sort((a, b) => Number(a) - Number(b));
+    return Float32Array.from(keys, (k) => v[k]);
+  }
+  return null;
+}
+
 export async function getCached(hash) {
   await migrateLegacy();
   try {
     const row = await store().get(hash);
     if (!row || !row.vec) return null;
+    const vec = normalizeVec(row.vec);
+    if (!vec || !vec.length) return null;
     // Refresh lastAccessed in the background; don't block the read.
-    const refreshed = { vec: row.vec, t: Date.now() };
-    store().set(hash, refreshed).catch(() => { /* noop */ });
-    // IDB returns plain typed arrays directly; if a structured-clone
-    // path ever boxes it, restore the Float32Array view.
-    return row.vec instanceof Float32Array ? row.vec : Float32Array.from(row.vec);
+    // Re-write as plain Array so the next read on a localStorage-fallback
+    // engine round-trips through JSON correctly.
+    store().set(hash, { vec: Array.from(vec), t: Date.now() }).catch(() => { /* noop */ });
+    return vec;
   } catch {
     return null;
   }
@@ -93,7 +116,12 @@ export async function getCached(hash) {
 
 export async function setCached(hash, vec) {
   try {
-    await store().set(hash, { vec, t: Date.now() });
+    // Always serialize as a plain Array. IDB stores it fine (structured
+    // clone) and the localStorage fallback path needs JSON-safe shape —
+    // a raw Float32Array there serializes to a numerically-indexed
+    // object that won't round-trip back.
+    const safe = vec instanceof Float32Array ? Array.from(vec) : vec;
+    await store().set(hash, { vec: safe, t: Date.now() });
     _writeCount++;
     // Amortized prune — every ~100 writes check size.
     if (_writeCount % 100 === 0) pruneIfNeeded();
