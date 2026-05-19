@@ -11,14 +11,11 @@ export default function FeedbackPanel() {
     setRows(listFeedback());
   }, []);
 
-  useEffect(() => {
-    const id = setInterval(refresh, 3000);
-    return () => clearInterval(id);
-  }, [refresh]);
-
   // feedback.js publishes 'feedback:changed' on each recordFeedback /
   // clearFeedback. Locked writes are async, so this subscription
-  // patches the UI right after the write commits (no 3s wait).
+  // patches the UI right after the write commits. Replaces the
+  // previous 3s polling interval — live updates make polling
+  // redundant (saves a setInterval on every panel mount).
   useEffect(() => subscribeMultiTab('feedback:changed', refresh), [refresh]);
 
   function wipe() {
