@@ -8,8 +8,11 @@ import { bus } from './bus';
  *
  * Designed as a single-line ambient input — for the heavy stuff users
  * still go into the relevant panel's own textarea.
+ *
+ * Takes no props so re-renders are entirely state-internal — memoize
+ * the export so AppShell's simulation-tick re-renders skip past it.
  */
-export default function Composer() {
+function ComposerImpl() {
   const [text, setText] = useState('');
   const [mode, setMode] = useState('scan');
 
@@ -61,3 +64,5 @@ export default function Composer() {
     </div>
   );
 }
+
+export default React.memo(ComposerImpl);

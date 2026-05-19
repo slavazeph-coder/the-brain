@@ -9,7 +9,7 @@ const THEME_CYCLE = ['auto', 'dark', 'light'];
  * Left: wordmark + active workspace breadcrumb.
  * Right: theme toggle, ⌘K hint, keyboard help.
  */
-export default function Topbar({ workspace, firewallResult, immunity, onShowHelp }) {
+function TopbarImpl({ workspace, firewallResult, immunity, onShowHelp }) {
   // Mirror the canonical theme state (theme.js owns persistence under
   // brainsnn_theme_v1 + applies CSS vars + broadcasts cross-tab).
   // Subscribing to BroadcastChannel via theme.js's registerTheme()
@@ -70,3 +70,9 @@ export default function Topbar({ workspace, firewallResult, immunity, onShowHelp
     </header>
   );
 }
+
+// Topbar's props change only when the user runs a scan (firewallResult),
+// switches workspace (label), or earns immunity — not every simulation
+// tick. React.memo gates out the cascade. onShowHelp is the only
+// inline lambda; if it gets de-stabilized later, memoize at the caller.
+export default React.memo(TopbarImpl);

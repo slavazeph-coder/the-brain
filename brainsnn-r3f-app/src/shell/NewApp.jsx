@@ -518,6 +518,10 @@ export default function NewApp() {
     setState((s) => ({ ...s, burst: 20, tick: 0, scenario: 'Replay Burst' }));
   }, []);
 
+  // Stable identity so React.memo'd Topbar can short-circuit re-renders
+  // on every simulation tick.
+  const onShowHelp = useCallback(() => setShowKbHelp(true), []);
+
   const modeLabel = mode === 'tribe' ? 'TRIBE v2' : mode === 'eeg' ? 'Live EEG' : 'Simulation';
 
   const session = {
@@ -530,7 +534,7 @@ export default function NewApp() {
     // setters used directly
     onScrubTimeline: setTimelineIndex,
     onSelectRegion,
-    onShowHelp: () => setShowKbHelp(true),
+    onShowHelp,
     onGifChange,
     onReplayBurst,
     // bundles

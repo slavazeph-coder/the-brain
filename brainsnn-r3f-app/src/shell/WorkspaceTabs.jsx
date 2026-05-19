@@ -10,7 +10,7 @@ export const WORKSPACES = [
   { id: 'connect',   label: 'Connect',   chord: 'gc', glyph: '◓' }
 ];
 
-export default function WorkspaceTabs({ active, onChange }) {
+function WorkspaceTabsImpl({ active, onChange }) {
   const ref = useRef(null);
   const activeIdx = WORKSPACES.findIndex((w) => w.id === active);
 
@@ -63,3 +63,7 @@ export default function WorkspaceTabs({ active, onChange }) {
     </nav>
   );
 }
+
+// Tabs depend only on { active, onChange }. AppShell re-renders every
+// 180ms (simulation tick) but neither of these change with it.
+export default React.memo(WorkspaceTabsImpl);
