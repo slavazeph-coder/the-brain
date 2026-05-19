@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { parseFiles } from '../utils/codeParser';
-import { buildBM25Index, hybridSearch, hybridSearchSemantic } from '../utils/bm25';
-import { detectCommunities } from '../utils/communities';
+import React, { useState } from 'react';
+import { hybridSearchSemantic } from '../utils/bm25';
+import { analyzeCodeAsync, hybridSearchAsync } from '../utils/searchWorker';
 import { isReady as embeddingsReady, embed, cosineSimilarity } from '../utils/embeddings';
 
 /**
@@ -17,31 +16,36 @@ import { isReady as embeddingsReady, embed, cosineSimilarity } from '../utils/em
  */
 export default function CodeBrainPanel({ onApplyToNetwork }) {
   const [input, setInput] = useState(EXAMPLE_INPUT);
-  const [graph, setGraph] = useState(null);
+  // `parsed` now holds the FULL analyzed shape (graph + communities + index)
+  // since the worker computes them in one round trip — no need for a
+  // separate useMemo over the graph.
+  const [parsed, setParsed] = useState(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [analyzing, setAnalyzing] = useState(false);
 
-  const parsed = useMemo(() => {
-    if (!graph) return null;
-    const communities = detectCommunities({ nodes: graph.nodes, edges: graph.edges });
-    const index = buildBM25Index(graph.docs);
-    return { ...graph, communities, index };
-  }, [graph]);
-
-  function handleAnalyze() {
+  async function handleAnalyze() {
     const files = parseInput(input);
     if (!files.length) {
-      setGraph(null);
+      setParsed(null);
       return;
     }
-    const result = parseFiles(files);
-    setGraph(result);
-    setResults([]);
+    setAnalyzing(true);
+    try {
+      const result = await analyzeCodeAsync(files);
+      setParsed(result);
+      setResults([]);
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   async function handleSearch() {
     if (!parsed?.index || !query.trim()) return;
     if (embeddingsReady()) {
+      // Semantic path still runs inline — it needs embed() which
+      // marshals through its own worker; double-hopping a function
+      // across two postMessage boundaries is more cost than benefit.
       const { results: ranked } = await hybridSearchSemantic(query, parsed.index, {
         topK: 8,
         embedFn: embed,
@@ -49,7 +53,7 @@ export default function CodeBrainPanel({ onApplyToNetwork }) {
       });
       setResults(ranked);
     } else {
-      setResults(hybridSearch(query, parsed.index, { topK: 8 }));
+      setResults(await hybridSearchAsync(query, parsed.index, { topK: 8 }));
     }
   }
 
