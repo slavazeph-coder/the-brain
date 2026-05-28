@@ -26,22 +26,30 @@ export default function ControlsBar({
           inside online content before it shapes attention, behavior, brand
           risk, or public perception.
         </p>
-        <a
-          href="/research"
-          className="research-link"
+        <div
+          className="showcase-links"
           style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "16px",
+            marginTop: "6px",
             fontSize: ".8rem",
             fontWeight: 700,
-            color: "var(--primary)",
-            textDecoration: "none",
-            marginTop: "4px",
           }}
         >
-          GaugeGap Research ↗
-        </a>
+          <a
+            href="/research"
+            style={{ color: "var(--primary)", textDecoration: "none" }}
+          >
+            GaugeGap Research ↗
+          </a>
+          <a
+            href="/crumb-llm"
+            style={{ color: "var(--primary)", textDecoration: "none" }}
+          >
+            Crumb LLM ↗
+          </a>
+        </div>
       </div>
 
       <div className="control-actions">

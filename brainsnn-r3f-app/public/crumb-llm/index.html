@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crumb LLM — Physics-based language model (O(N log N))</title>
+    <meta
+      name="description"
+      content="A physics-based language model. Wave-equation mixing replaces quadratic attention: O(N log N) cost, fixed field-cache, structure-aware. Research preview from XIO AI Solutions."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header>
+        <a href="/" class="back">&larr; Back to BrainSNN</a>
+        <h1><span>Crumb</span> LLM</h1>
+        <p class="tagline">
+          A new kind of language model. Physics-based. O(N&nbsp;log&nbsp;N).
+          Structure-aware.
+        </p>
+      </header>
+
+      <!-- Hero -->
+      <section>
+        <p class="hero-q">What if attention was a wave?</p>
+        <p class="lead">
+          Traditional transformers compare every token to every other token —
+          O(N²) cost, O(N²) memory. Double the context, quadruple the price.
+          <strong>Crumb LLM replaces all of that with a wave equation.</strong>
+          Each token deposits information onto a continuous field; a
+          damped-cosine kernel propagates it via FFT in O(N&nbsp;log&nbsp;N);
+          tokens read back from the field at their positions. No quadratic
+          attention matrix. No KV-cache that grows with history. Just physics.
+        </p>
+      </section>
+
+      <!-- Cost comparison -->
+      <section>
+        <h2>The cost difference</h2>
+        <p class="section-sub">
+          Where a transformer's memory grows with context length, Crumb LLM's
+          field-cache is fixed.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Traditional Transformer</th>
+                <th class="col-primary">Crumb LLM</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Mixing</strong></td>
+                <td>Every token × every token</td>
+                <td class="col-primary">Scatter → FFT → Gather</td>
+              </tr>
+              <tr>
+                <td><strong>Per-layer cost</strong></td>
+                <td>O(N²)</td>
+                <td class="col-primary">O(F log F)</td>
+              </tr>
+              <tr>
+                <td><strong>Cache</strong></td>
+                <td>KV-cache grows with N</td>
+                <td class="col-primary">Field-cache is fixed</td>
+              </tr>
+              <tr>
+                <td><strong>32K context</strong></td>
+                <td>~35 GB</td>
+                <td class="col-primary">6.7 GB</td>
+              </tr>
+              <tr>
+                <td><strong>128K context</strong></td>
+                <td>OOM</td>
+                <td class="col-primary">26.7 GB</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Three physics parameters -->
+      <section>
+        <h2>Three physics parameters per head</h2>
+        <p class="section-sub">
+          A standard transformer head spends 2d² parameters on Q/K projections
+          alone — 32,768 at d=128. Crumb LLM V1 routes information with three
+          learnable physics values.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Parameter</th>
+                <th>Symbol</th>
+                <th>What it controls</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Damping</strong></td>
+                <td>α</td>
+                <td>
+                  How far information travels. High α = local head, low α =
+                  global head.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Frequency</strong></td>
+                <td>ω</td>
+                <td>
+                  Which spatial patterns the head is sensitive to. Like tuning a
+                  radio.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Phase</strong></td>
+                <td>φ</td>
+                <td>
+                  Where in the oscillation cycle the kernel starts. Shifts the
+                  head's viewpoint.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top: 16px; color: var(--muted); font-size: 0.92rem">
+          The kernel:
+        </p>
+        <div class="kernel">k(t) = exp(−α|t|) · cos(ωt + φ)</div>
+        <p style="color: var(--muted); font-size: 0.9rem; margin-top: 8px">
+          V2 blocks add learned components (smooth causal masking, learned
+          scatter/gather, query-conditioned frequency gating, RoPE, short
+          convolution) and remain O(N&nbsp;log&nbsp;N). V2 is the SOTA variant;
+          V1 is the minimal, fast one.
+        </p>
+      </section>
+
+      <!-- Benchmark -->
+      <section>
+        <h2>What we found</h2>
+        <p class="section-sub">
+          Identical-shape models (same dim, depth, FFN) trained on a structured
+          CRUMB corpus.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th class="col-primary">Crumb LLM</th>
+                <th>Transformer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Perplexity</strong></td>
+                <td class="win">1.16</td>
+                <td>11.56</td>
+              </tr>
+              <tr>
+                <td><strong>Bits/char</strong></td>
+                <td class="win">0.21</td>
+                <td>3.53</td>
+              </tr>
+              <tr>
+                <td><strong>Parameters</strong></td>
+                <td class="col-primary">231,492</td>
+                <td>299,040</td>
+              </tr>
+              <tr>
+                <td><strong>Training time</strong></td>
+                <td>87s</td>
+                <td>41s</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="findings">
+          <div class="finding">
+            <h3>
+              <span class="num">1</span>Wave-field mixing exploits structure
+            </h3>
+            <p>
+              CRUMB documents have repetitive structure (section headers,
+              keywords, patterns) that maps naturally onto spectral components.
+              The FFT kernel captures these in one O(F&nbsp;log&nbsp;F)
+              operation where attention needs O(N²) pairwise comparisons to
+              notice the same regularities.
+            </p>
+          </div>
+          <div class="finding">
+            <h3>
+              <span class="num">2</span>Context pulling via spectral matching
+            </h3>
+            <p>
+              The spectral fingerprint of a section acts like an embedding —
+              computed from the same physics as the model itself, not a separate
+              encoder. Querying 110 indexed sections returns the right one in
+              under 2ms. The model and the retriever speak the same language.
+            </p>
+          </div>
+          <div class="finding">
+            <h3>
+              <span class="num">3</span>O(1) generation via field-state cache
+            </h3>
+            <p>
+              Because convolution is linear, the convolved field is cached and
+              each new token only adds its own contribution. Cost per generated
+              token is O(F&nbsp;log&nbsp;F), independent of history length. A
+              transformer's KV-cache costs O(N) per token and grows without
+              bound.
+            </p>
+          </div>
+          <div class="finding">
+            <h3>
+              <span class="num">4</span>Information decays, it doesn't
+              cliff-drop
+            </h3>
+            <p>
+              In sliding-window attention, a token that scrolls past the window
+              is gone. In Crumb LLM's sliding field, old tokens leave residual
+              wave energy that decays gracefully by the damping coefficient α —
+              a token 10,000 positions back still has non-zero influence if its
+              α was small enough.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture sketch -->
+      <section>
+        <h2>Architecture at a glance</h2>
+        <pre>
+Input tokens
+    │
+    ▼
+Embedding (byte- or char-level)
+    │
+    ▼
+Wave-Field Block  (× N layers)
+    RMSNorm → scatter → FFT → kernel(α,ω,φ) → iFFT → gather → FFN
+    │
+    ▼
+Output logits</pre
+        >
+      </section>
+
+      <!-- Honest deployment note -->
+      <div class="note">
+        <div class="icon">&#9881;</div>
+        <p>
+          <strong>Research preview.</strong> This page documents the Crumb LLM
+          architecture and benchmark results on structured CRUMB text with small
+          models. The production multi-tenant inference server
+          (<code>crumb_llm.serve</code>) targets GPU hosting and is deployed
+          separately from this site — it is not served from brainsnn.com. The
+          reference implementation ships inside the open-source
+          <code>crumb-format</code> package.
+        </p>
+      </div>
+
+      <!-- CTA -->
+      <section>
+        <h2>Explore the code</h2>
+        <p class="section-sub">
+          Crumb LLM ships inside the open-source crumb-format package (MIT).
+        </p>
+        <div class="cta-row">
+          <a
+            class="btn primary"
+            href="https://github.com/XioAISolutions/crumb-format"
+            target="_blank"
+            rel="noopener"
+            >View on GitHub ↗</a
+          >
+          <a
+            class="btn ghost"
+            href="https://github.com/XioAISolutions/crumb-format/blob/main/CRUMB_LLM.md"
+            target="_blank"
+            rel="noopener"
+            >Read the full write-up ↗</a
+          >
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Crumb LLM &middot; part of
+          <a href="https://github.com/XioAISolutions/crumb-format"
+            >crumb-format</a
+          >
+          &middot; <a href="https://brainsnn.com">BrainSNN</a> &middot;
+          <a href="https://xioai.co">XIO AI Solutions</a>
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
