@@ -1,5 +1,5 @@
-import React from 'react';
-import { SCENARIOS } from '../data/network';
+import React from "react";
+import { SCENARIOS } from "../data/network";
 
 export default function ControlsBar({
   state,
@@ -14,7 +14,7 @@ export default function ControlsBar({
   quality,
   onSetQuality,
   mode,
-  onSetMode
+  onSetMode,
 }) {
   return (
     <section className="panel panel-pad controls-bar">
@@ -22,27 +22,57 @@ export default function ControlsBar({
         <div className="eyebrow">Emotional Payload Intelligence</div>
         <h1>BrainSNN</h1>
         <p className="muted">
-          An affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.
+          An affective-intelligence engine that detects the emotional payload
+          inside online content before it shapes attention, behavior, brand
+          risk, or public perception.
         </p>
+        <a
+          href="/research"
+          className="research-link"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: ".8rem",
+            fontWeight: 700,
+            color: "var(--primary)",
+            textDecoration: "none",
+            marginTop: "4px",
+          }}
+        >
+          GaugeGap Research ↗
+        </a>
       </div>
 
       <div className="control-actions">
-        <button className={`btn ${state.running ? 'primary' : ''}`} onClick={onToggleRun}>
-          {state.running ? 'Pause' : 'Resume'}
+        <button
+          className={`btn ${state.running ? "primary" : ""}`}
+          onClick={onToggleRun}
+        >
+          {state.running ? "Pause" : "Resume"}
         </button>
-        <button className="btn" onClick={onBurst}>Trigger affect burst</button>
-        <button className="btn" onClick={onReset}>Reset</button>
-        <button className={`btn ${isRecording ? 'recording' : ''}`} onClick={onToggleRecording}>
-          {isRecording ? 'Stop WebM' : 'Record WebM'}
+        <button className="btn" onClick={onBurst}>
+          Trigger affect burst
         </button>
-        <button className="btn" onClick={onExportGif}>Export GIF</button>
+        <button className="btn" onClick={onReset}>
+          Reset
+        </button>
+        <button
+          className={`btn ${isRecording ? "recording" : ""}`}
+          onClick={onToggleRecording}
+        >
+          {isRecording ? "Stop WebM" : "Record WebM"}
+        </button>
+        <button className="btn" onClick={onExportGif}>
+          Export GIF
+        </button>
       </div>
 
       <div className="scenario-row">
         {Object.entries(SCENARIOS).map(([key, value]) => (
           <button
             key={key}
-            className={`chip-btn ${state.scenario === value.label ? 'active' : ''}`}
+            className={`chip-btn ${state.scenario === value.label ? "active" : ""}`}
             onClick={() => onScenario(key)}
           >
             {value.label}
@@ -51,13 +81,15 @@ export default function ControlsBar({
       </div>
 
       <div className="status-row">
-        <span className="status-badge">Payload: fear · urgency · trust erosion · behavior pressure</span>
+        <span className="status-badge">
+          Payload: fear · urgency · trust erosion · behavior pressure
+        </span>
         <span className="status-badge">Export: {exportStatus}</span>
         <div className="quality-group">
-          {['low', 'high', 'ultra'].map((q) => (
+          {["low", "high", "ultra"].map((q) => (
             <button
               key={q}
-              className={`chip-btn ${quality === q ? 'active' : ''}`}
+              className={`chip-btn ${quality === q ? "active" : ""}`}
               onClick={() => onSetQuality(q)}
             >
               {q}
@@ -65,13 +97,17 @@ export default function ControlsBar({
           ))}
         </div>
         <div className="quality-group">
-          {['simulation', 'tribe', 'eeg'].map((m) => (
+          {["simulation", "tribe", "eeg"].map((m) => (
             <button
               key={m}
-              className={`chip-btn ${mode === m ? 'active' : ''}`}
+              className={`chip-btn ${mode === m ? "active" : ""}`}
               onClick={() => onSetMode(m)}
             >
-              {m === 'tribe' ? 'TRIBE v2' : m === 'eeg' ? 'Live EEG' : 'Simulation'}
+              {m === "tribe"
+                ? "TRIBE v2"
+                : m === "eeg"
+                  ? "Live EEG"
+                  : "Simulation"}
             </button>
           ))}
         </div>
