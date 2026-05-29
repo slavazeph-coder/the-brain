@@ -73,6 +73,16 @@ header .subtitle {
   font-size: 1.05rem;
   max-width: 640px;
 }
+header .plain {
+  color: var(--muted);
+  margin-top: 12px;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  max-width: 640px;
+}
+header .plain strong {
+  color: var(--text);
+}
 
 /* --- Claim boundary --- */
 .boundary {

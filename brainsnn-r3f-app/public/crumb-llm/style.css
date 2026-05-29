@@ -75,6 +75,16 @@ header .tagline {
   font-size: 1.1rem;
   font-weight: 500;
 }
+header .plain {
+  color: var(--muted);
+  margin-top: 12px;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  max-width: 60ch;
+}
+header .plain strong {
+  color: var(--text);
+}
 
 /* --- Hero claim --- */
 .hero-q {

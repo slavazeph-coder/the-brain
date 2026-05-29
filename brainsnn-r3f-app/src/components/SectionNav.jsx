@@ -32,6 +32,9 @@ export default function SectionNav({ sections, active, onChange }) {
         <a className="section-lab-link" href="/crumb-llm">
           Crumb LLM ↗
         </a>
+        <a className="section-lab-link" href="/crumb-llm/playground">
+          Kernel Explorer ↗
+        </a>
       </div>
     </nav>
   );
