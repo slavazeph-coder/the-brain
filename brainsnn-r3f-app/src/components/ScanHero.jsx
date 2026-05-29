@@ -66,6 +66,7 @@ export default function ScanHero({ onResult }) {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={PLACEHOLDER}
+        aria-label="Content to analyze for emotional payload"
         rows={4}
       />
 

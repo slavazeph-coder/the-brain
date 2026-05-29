@@ -22,7 +22,12 @@ const CRUMB_LLM_URL = (import.meta.env.VITE_CRUMB_LLM_URL || "").replace(
   /\/$/,
   "",
 );
+// SECURITY: VITE_* vars are inlined into the public client bundle. Do NOT put a
+// privileged/billable Crumb LLM token here — it would be visible in page source.
+// Use a short-lived/per-origin token, or (preferred) proxy through the BrainSNN
+// server so the real key never reaches the browser.
 const CRUMB_LLM_KEY = import.meta.env.VITE_CRUMB_LLM_KEY || "";
+const CRUMB_LLM_TIMEOUT_MS = 12000;
 
 export function activeBackendLabel() {
   if (CRUMB_LLM_URL) return "Crumb LLM";
@@ -40,6 +45,7 @@ const clamp = (v) => Math.max(0, Math.min(1, Number(v) || 0));
 
 /** Normalize any backend payload into the canonical brain-score shape. */
 function normalize(raw, source) {
+  raw = raw || {};
   return {
     emotionalActivation: clamp(raw.emotionalActivation),
     cognitiveSuppression: clamp(raw.cognitiveSuppression),
@@ -56,17 +62,23 @@ function normalize(raw, source) {
 }
 
 async function analyzeWithCrumbLlm(text) {
-  const res = await fetch(`${CRUMB_LLM_URL}/analyze`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(CRUMB_LLM_KEY ? { Authorization: `Bearer ${CRUMB_LLM_KEY}` } : {}),
-    },
-    body: JSON.stringify({ text }),
-  });
-  if (!res.ok) throw new Error(`Crumb LLM ${res.status}`);
-  const json = await res.json();
-  return normalize(json, "crumb-llm");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CRUMB_LLM_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${CRUMB_LLM_URL}/analyze`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(CRUMB_LLM_KEY ? { Authorization: `Bearer ${CRUMB_LLM_KEY}` } : {}),
+      },
+      body: JSON.stringify({ text }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`Crumb LLM ${res.status}`);
+    return normalize(await res.json(), "crumb-llm");
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -79,9 +91,27 @@ export async function analyzeForBrain(text = "") {
 
   if (CRUMB_LLM_URL) {
     try {
-      return await analyzeWithCrumbLlm(trimmed);
+      // Mirror the safety pre-screen scoreContentSmart applies before any
+      // remote call: block prompt-injection / secret leakage and redact PII
+      // BEFORE the content leaves the browser for the Crumb LLM endpoint.
+      const { inspectPrompt } = await import("./lobsterTrap.js");
+      const trap = inspectPrompt({
+        prompt: trimmed,
+        surface: "brainllm.crumb",
+      });
+      if (trap.action === "block") {
+        return {
+          ...scoreContent(trimmed),
+          source: "regex_lobster_blocked",
+          lobsterTrap: trap,
+        };
+      }
+      const safeText =
+        trap.action === "redact" && trap.redacted ? trap.redacted : trimmed;
+      const result = await analyzeWithCrumbLlm(safeText);
+      return { ...result, lobsterTrap: trap };
     } catch (_err) {
-      // Crumb LLM endpoint unreachable — fall back to the smart chain.
+      // Endpoint unreachable / slow / aborted — fall back to the smart chain.
     }
   }
 
