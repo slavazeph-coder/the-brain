@@ -4598,3 +4598,17 @@ h3 {
     flex-direction: column;
   }
 }
+
+/* Respect the OS "reduce motion" setting — calm all CSS animation/transition
+   for motion-sensitive users. (The 3D brain's gentle ambient motion is the
+   product itself and is left intact.) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
