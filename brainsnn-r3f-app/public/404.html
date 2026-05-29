@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Page not found — BrainSNN</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #0a0908;
+        --surface: #131210;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #e8e6e3;
+        --muted: #908d89;
+        --faint: #4b4946;
+        --primary: #4fa8b3;
+        --gold: #e8b934;
+        --font: "Satoshi", "Inter", "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.5;
+      }
+      .card {
+        max-width: 560px;
+        text-align: center;
+      }
+      .code {
+        font-size: 0.8rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--primary);
+      }
+      h1 {
+        font-size: clamp(2rem, 5vw, 3rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin-top: 10px;
+      }
+      p {
+        color: var(--muted);
+        margin-top: 14px;
+        font-size: 1.05rem;
+      }
+      .links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        justify-content: center;
+        margin-top: 26px;
+      }
+      .links a {
+        font-weight: 600;
+        font-size: 0.95rem;
+        padding: 10px 18px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        color: var(--text);
+        text-decoration: none;
+        transition: 0.15s;
+        background: var(--surface);
+      }
+      .links a:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+      .links a.primary {
+        background: var(--primary);
+        color: #06231f;
+        border-color: var(--primary);
+      }
+      .foot {
+        margin-top: 30px;
+        color: var(--faint);
+        font-size: 0.82rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="code">404 · page not found</div>
+      <h1>This page wandered off.</h1>
+      <p>
+        The link may be old or mistyped — but there's plenty to explore. Here's
+        where to go next:
+      </p>
+      <div class="links">
+        <a class="primary" href="/">← Back to BrainSNN</a>
+        <a href="/crumb-llm">Crumb LLM</a>
+        <a href="/crumb-llm/playground">Kernel Explorer</a>
+        <a href="/research">Research</a>
+      </div>
+      <p class="foot">BrainSNN · affective intelligence for online content</p>
+    </div>
+  </body>
+</html>
