@@ -16,8 +16,7 @@ const SCORES = [
   { key: "trustErosion", label: "Trust erosion", accent: "var(--danger)" },
 ];
 
-const PLACEHOLDER =
-  "Paste a headline, email, post, or message — the brain reads its emotional payload and reacts in real time.";
+const PLACEHOLDER = "Paste a headline, email, or post here…";
 
 /**
  * The main-page centerpiece. Sends content through the swappable backend LLM
@@ -52,13 +51,33 @@ export default function ScanHero({ onResult }) {
     <section className="panel panel-pad scan-hero">
       <div className="scan-hero-head">
         <div>
-          <div className="eyebrow">Affective scan</div>
-          <h2>Read the emotional payload of any content</h2>
+          <div className="eyebrow">Feel what you read</div>
+          <h2>See the hidden feelings in anything you read</h2>
+          <p className="scan-subcopy">
+            Paste a headline, email, or post — BrainSNN shows you the emotional
+            pull behind the words, in real time.
+          </p>
         </div>
         <span className="scan-backend" title="Active analysis backend">
           ● {backend}
         </span>
       </div>
+
+      {!result && (
+        <div className="scan-steps" aria-hidden="true">
+          <span className="scan-step">
+            <b>1</b> Paste
+          </span>
+          <span className="scan-step-arrow">→</span>
+          <span className="scan-step">
+            <b>2</b> Analyze
+          </span>
+          <span className="scan-step-arrow">→</span>
+          <span className="scan-step">
+            <b>3</b> Watch the brain react
+          </span>
+        </div>
+      )}
 
       <textarea
         className="scan-input"

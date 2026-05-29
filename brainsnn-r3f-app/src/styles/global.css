@@ -4358,6 +4358,44 @@ h3 {
   font-size: clamp(1.2rem, 1rem + 0.8vw, 1.7rem);
   margin: 0;
 }
+.scan-subcopy {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 56ch;
+}
+.scan-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.scan-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 12px;
+}
+.scan-step b {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--bg);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.scan-step-arrow {
+  color: var(--faint);
+}
 .scan-backend {
   font-size: 0.72rem;
   font-weight: 700;

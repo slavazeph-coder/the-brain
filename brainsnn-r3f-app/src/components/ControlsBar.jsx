@@ -19,12 +19,12 @@ export default function ControlsBar({
   return (
     <section className="panel panel-pad controls-bar">
       <div>
-        <div className="eyebrow">Emotional Payload Intelligence</div>
+        <div className="eyebrow">Affective intelligence</div>
         <h1>BrainSNN</h1>
         <p className="muted">
-          An affective-intelligence engine that detects the emotional payload
-          inside online content before it shapes attention, behavior, brand
-          risk, or public perception.
+          BrainSNN reads the feelings hidden in everyday content — headlines,
+          emails, posts — and shows you, live, how they light up a brain. Paste
+          something below to see it work.
         </p>
         <div
           className="showcase-links"
