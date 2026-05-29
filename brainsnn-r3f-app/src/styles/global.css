@@ -168,6 +168,37 @@ h3 {
 .viewer-canvas-wrap {
   height: 720px;
 }
+/* Placeholder shown while the lazy-loaded 3D scene chunk streams in —
+   fills the canvas area so there is no layout shift. */
+.viewer-loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.viewer-loading-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 12px var(--primary);
+  animation: viewer-pulse 1.1s ease-in-out infinite;
+}
+@keyframes viewer-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
 
 .viewer-overlay {
   position: absolute;

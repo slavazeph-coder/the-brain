@@ -4,8 +4,13 @@ import React, {
   useMemo,
   useRef,
   useState,
+  lazy,
+  Suspense,
 } from "react";
-import BrainScene from "./components/BrainScene";
+// Code-split the WebGL scene: lazy-loading BrainScene (and SplitBrainView,
+// which also pulls it in) keeps the ~300KB-gzip three.js stack out of the
+// initial bundle, so the hero + controls paint immediately. See line ~below.
+const BrainScene = lazy(() => import("./components/BrainScene"));
 import ControlsBar from "./components/ControlsBar";
 import InspectorPanel from "./components/InspectorPanel";
 import ActivityCharts from "./components/ActivityCharts";
@@ -24,7 +29,7 @@ import ToastContainer from "./components/ToastContainer";
 import KeyboardHelp from "./components/KeyboardHelp";
 import SharePanel from "./components/SharePanel";
 import OnboardingWalkthrough from "./components/OnboardingWalkthrough";
-import SplitBrainView from "./components/SplitBrainView";
+const SplitBrainView = lazy(() => import("./components/SplitBrainView"));
 import VoiceControl from "./components/VoiceControl";
 import PluginPanel from "./components/PluginPanel";
 import LiveSyncPanel from "./components/LiveSyncPanel";
@@ -550,18 +555,27 @@ export default function App() {
             </div>
 
             <div className="viewer-canvas-wrap">
-              <BrainScene
-                regions={state.regions}
-                weights={state.weights}
-                selected={state.selected}
-                quality={quality}
-                knowledgeMode={knowledgeMode}
-                affectOverride={affectOverride}
-                onQualityChange={setQuality}
-                onSelect={(id) =>
-                  setState((s) => ({ ...s, selected: id || s.selected }))
+              <Suspense
+                fallback={
+                  <div className="viewer-loading" role="status">
+                    <span className="viewer-loading-dot" />
+                    Loading the brain…
+                  </div>
                 }
-              />
+              >
+                <BrainScene
+                  regions={state.regions}
+                  weights={state.weights}
+                  selected={state.selected}
+                  quality={quality}
+                  knowledgeMode={knowledgeMode}
+                  affectOverride={affectOverride}
+                  onQualityChange={setQuality}
+                  onSelect={(id) =>
+                    setState((s) => ({ ...s, selected: id || s.selected }))
+                  }
+                />
+              </Suspense>
             </div>
           </section>
 
@@ -1126,7 +1140,9 @@ export default function App() {
             </ErrorBoundary>
 
             <ErrorBoundary name="Split Brain View">
-              <SplitBrainView currentState={state} quality={quality} />
+              <Suspense fallback={null}>
+                <SplitBrainView currentState={state} quality={quality} />
+              </Suspense>
             </ErrorBoundary>
           </div>
 
