@@ -288,6 +288,23 @@ footer {
 footer a {
   color: var(--muted);
 }
+footer .explore {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+footer .explore a {
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+footer .explore a.here {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
 
 @media (max-width: 640px) {
   header h1 {
