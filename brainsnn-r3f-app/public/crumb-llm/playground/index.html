@@ -1,0 +1,965 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crumb LLM — Wave-Field Kernel Explorer</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      :root {
+        --bg: #0a0908;
+        --surface: #131210;
+        --surface-2: #181614;
+        --surface-3: #1d1b18;
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #e8e6e3;
+        --muted: #908d89;
+        --faint: #4b4946;
+        --primary: #4fa8b3;
+        --gold: #e8b934;
+        --danger: #dd6974;
+        --ok: #6daa45;
+        --mono: "SF Mono", "Fira Code", ui-monospace, monospace;
+        --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        padding: 20px;
+        min-height: 100vh;
+      }
+      a {
+        color: var(--primary);
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      header {
+        margin-bottom: 18px;
+      }
+      header h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+      header h1 span {
+        color: var(--primary);
+      }
+      header p {
+        color: var(--muted);
+        font-size: 0.92rem;
+        margin-top: 4px;
+        max-width: 680px;
+      }
+      .kernel-eq {
+        font-family: var(--mono);
+        color: var(--gold);
+        font-size: 0.95rem;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 6px 12px;
+        display: inline-block;
+        margin-top: 10px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+
+      /* Controls */
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+      }
+      .panel h2 {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--primary);
+        font-weight: 800;
+        margin-bottom: 14px;
+      }
+      .ctrl {
+        margin-bottom: 18px;
+      }
+      .ctrl:last-child {
+        margin-bottom: 0;
+      }
+      .ctrl-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 7px;
+      }
+      .ctrl-label {
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      .ctrl-sym {
+        font-family: var(--mono);
+        color: var(--gold);
+        margin-left: 5px;
+      }
+      .ctrl-val {
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        color: var(--text);
+        background: var(--surface-3);
+        padding: 2px 8px;
+        border-radius: 7px;
+      }
+      .ctrl-desc {
+        font-size: 0.74rem;
+        color: var(--faint);
+        margin-top: 5px;
+      }
+      input[type="range"] {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--surface-3);
+        outline: none;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+        box-shadow: 0 0 0 1px var(--primary);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary);
+        cursor: pointer;
+        border: 2px solid var(--bg);
+      }
+      select {
+        width: 100%;
+        background: var(--surface-3);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        padding: 8px 10px;
+        font-family: var(--mono);
+        font-size: 0.82rem;
+      }
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .toggle {
+        width: 38px;
+        height: 22px;
+        border-radius: 999px;
+        background: var(--surface-3);
+        border: 1px solid var(--border);
+        position: relative;
+        transition: background 0.15s;
+        flex-shrink: 0;
+      }
+      .toggle.on {
+        background: var(--primary);
+      }
+      .toggle::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--text);
+        transition: transform 0.15s;
+      }
+      .toggle.on::after {
+        transform: translateX(16px);
+        background: var(--bg);
+      }
+
+      .presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+      .preset {
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 7px 11px;
+        border-radius: 9px;
+        border: 1px solid var(--border);
+        background: var(--surface-3);
+        color: var(--text);
+        cursor: pointer;
+        transition: all 0.12s;
+      }
+      .preset:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      /* Preview */
+      .preview {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .viz {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 14px 16px;
+      }
+      .viz-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 8px;
+      }
+      .viz-title {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .viz-sub {
+        font-size: 0.72rem;
+        color: var(--faint);
+      }
+      canvas {
+        width: 100%;
+        display: block;
+        border-radius: 8px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+      }
+      .stat {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 11px 13px;
+      }
+      .stat small {
+        display: block;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--faint);
+        margin-bottom: 3px;
+      }
+      .stat strong {
+        font-size: 1.05rem;
+        font-family: var(--mono);
+        color: var(--text);
+      }
+      .stat strong em {
+        font-style: normal;
+        color: var(--primary);
+      }
+      .stat.win strong {
+        color: var(--ok);
+      }
+
+      .char-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 2px;
+      }
+      .badge {
+        font-size: 0.74rem;
+        font-weight: 700;
+        padding: 4px 11px;
+        border-radius: 999px;
+      }
+      .badge.reach {
+        background: rgba(79, 168, 179, 0.15);
+        color: var(--primary);
+      }
+      .badge.rhythm {
+        background: rgba(232, 185, 52, 0.15);
+        color: var(--gold);
+      }
+      .badge.use {
+        background: rgba(109, 170, 69, 0.15);
+        color: var(--ok);
+      }
+
+      /* Prompt */
+      .prompt-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px 18px;
+        margin-top: 18px;
+      }
+      .prompt-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .prompt-head h2 {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--primary);
+        font-weight: 800;
+      }
+      .copy-btn {
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 8px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--primary);
+        background: var(--primary);
+        color: #06231f;
+        cursor: pointer;
+        transition: all 0.12s;
+      }
+      .copy-btn:hover {
+        filter: brightness(1.08);
+      }
+      .copy-btn.done {
+        background: var(--ok);
+        border-color: var(--ok);
+      }
+      #prompt {
+        font-size: 0.9rem;
+        color: var(--text);
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+      #prompt code {
+        font-family: var(--mono);
+        color: var(--gold);
+        font-size: 0.85em;
+      }
+
+      footer {
+        margin-top: 18px;
+        text-align: center;
+        color: var(--faint);
+        font-size: 0.78rem;
+      }
+
+      @media (max-width: 780px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <a
+          href="/crumb-llm"
+          style="
+            display: inline-block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--muted);
+            text-decoration: none;
+            margin-bottom: 12px;
+          "
+          >&larr; Back to Crumb LLM</a
+        >
+        <h1><span>Crumb LLM</span> — Wave-Field Kernel Explorer</h1>
+        <p>
+          Each attention head is replaced by a damped-cosine kernel with three
+          learnable physics parameters. Tune them and watch how a token's
+          information propagates across the field — the mechanism that turns
+          O(N²) attention into O(N&nbsp;log&nbsp;N).
+        </p>
+        <div class="kernel-eq">k(t) = exp(−α|t|) · cos(ωt + φ)</div>
+      </header>
+
+      <div class="grid">
+        <!-- Controls -->
+        <div class="panel">
+          <h2>Head parameters</h2>
+
+          <div class="ctrl">
+            <div class="ctrl-top">
+              <span class="ctrl-label"
+                >Damping<span class="ctrl-sym">α</span></span
+              >
+              <span class="ctrl-val" id="val-alpha">0.40</span>
+            </div>
+            <input
+              type="range"
+              id="alpha"
+              min="0.04"
+              max="2"
+              step="0.01"
+              value="0.4"
+            />
+            <div class="ctrl-desc">
+              How far information travels. High α = local head, low α = global
+              head.
+            </div>
+          </div>
+
+          <div class="ctrl">
+            <div class="ctrl-top">
+              <span class="ctrl-label"
+                >Frequency<span class="ctrl-sym">ω</span></span
+              >
+              <span class="ctrl-val" id="val-omega">1.00</span>
+            </div>
+            <input
+              type="range"
+              id="omega"
+              min="0"
+              max="6.28"
+              step="0.01"
+              value="1.0"
+            />
+            <div class="ctrl-desc">
+              Which spatial patterns the head is tuned to. Like tuning a radio
+              dial.
+            </div>
+          </div>
+
+          <div class="ctrl">
+            <div class="ctrl-top">
+              <span class="ctrl-label"
+                >Phase<span class="ctrl-sym">φ</span></span
+              >
+              <span class="ctrl-val" id="val-phi">0.00</span>
+            </div>
+            <input
+              type="range"
+              id="phi"
+              min="-3.14"
+              max="3.14"
+              step="0.01"
+              value="0"
+            />
+            <div class="ctrl-desc">
+              Where in the oscillation cycle the kernel starts. Shifts the
+              head's viewpoint.
+            </div>
+          </div>
+
+          <div class="ctrl">
+            <div class="ctrl-top">
+              <span class="ctrl-label"
+                >Context length<span class="ctrl-sym">N</span></span
+              >
+              <span class="ctrl-val" id="val-n">32,768</span>
+            </div>
+            <select id="nctx">
+              <option value="1024">1K tokens</option>
+              <option value="4096">4K tokens</option>
+              <option value="8192">8K tokens</option>
+              <option value="32768" selected>32K tokens</option>
+              <option value="131072">128K tokens</option>
+              <option value="1048576">1M tokens</option>
+            </select>
+            <div class="ctrl-desc">
+              Drives the cost comparison vs O(N²) attention.
+            </div>
+          </div>
+
+          <div class="ctrl">
+            <div class="toggle-row" id="t-envelope">
+              <div class="toggle on"></div>
+              <span class="ctrl-label">Show decay envelope</span>
+            </div>
+          </div>
+          <div class="ctrl">
+            <div class="toggle-row" id="t-attn">
+              <div class="toggle"></div>
+              <span class="ctrl-label">Overlay O(N²) attention</span>
+            </div>
+          </div>
+
+          <h2 style="margin-top: 22px">Presets</h2>
+          <div class="presets" id="presets"></div>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview">
+          <div class="viz">
+            <div class="viz-head">
+              <span class="viz-title"
+                >Kernel — how one token influences its neighbors</span
+              >
+              <span class="viz-sub" id="kernel-sub"></span>
+            </div>
+            <canvas id="kernel" height="260"></canvas>
+          </div>
+
+          <div class="viz">
+            <div class="viz-head">
+              <span class="viz-title"
+                >Field — three tokens scattered onto the continuous field</span
+              >
+              <span class="viz-sub"
+                >information superposes as waves; tokens read back at their
+                positions</span
+              >
+            </div>
+            <canvas id="field" height="170"></canvas>
+          </div>
+
+          <div class="stats" id="stats"></div>
+          <div class="char-badges" id="badges"></div>
+        </div>
+      </div>
+
+      <!-- Prompt -->
+      <div class="prompt-box">
+        <div class="prompt-head">
+          <h2>Prompt</h2>
+          <button class="copy-btn" id="copy">Copy prompt</button>
+        </div>
+        <div id="prompt"></div>
+      </div>
+
+      <footer>
+        Crumb LLM is part of the open-source
+        <a
+          href="https://github.com/XioAISolutions/crumb-format"
+          target="_blank"
+          rel="noopener"
+          >crumb-format</a
+        >
+        package · physics-based, O(N&nbsp;log&nbsp;N), structure-aware.
+      </footer>
+    </div>
+
+    <script>
+      const DEFAULTS = {
+        alpha: 0.4,
+        omega: 1.0,
+        phi: 0.0,
+        nctx: 32768,
+        envelope: true,
+        attn: false,
+      };
+      const state = { ...DEFAULTS };
+
+      const PRESETS = {
+        "Balanced (V1)": { alpha: 0.4, omega: 1.0, phi: 0.0 },
+        "Local head": { alpha: 1.3, omega: 0.3, phi: 0.0 },
+        "Global head": { alpha: 0.08, omega: 0.5, phi: 0.0 },
+        Oscillatory: { alpha: 0.35, omega: 3.1, phi: 0.0 },
+        "Summary propagator": { alpha: 0.05, omega: 0.8, phi: 1.57 },
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const fmt = (n) => n.toLocaleString("en-US");
+      function bigOps(n) {
+        if (n >= 1e12) return (n / 1e12).toFixed(1) + "T";
+        if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
+        if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+        if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+        return String(Math.round(n));
+      }
+
+      function kernel(t) {
+        return (
+          Math.exp(-state.alpha * Math.abs(t)) *
+          Math.cos(state.omega * t + state.phi)
+        );
+      }
+      function envelope(t) {
+        return Math.exp(-state.alpha * Math.abs(t));
+      }
+      function reachTokens() {
+        return Math.log(20) / state.alpha;
+      } // env ~ 0.05
+      function wavelength() {
+        return state.omega > 0.01 ? (2 * Math.PI) / state.omega : Infinity;
+      }
+
+      /* ---------- Canvas helpers ---------- */
+      function setupCanvas(cv) {
+        const dpr = window.devicePixelRatio || 1;
+        const w = cv.clientWidth,
+          h = cv.height;
+        cv.width = w * dpr;
+        cv.height = h * dpr;
+        const ctx = cv.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { ctx, w, h };
+      }
+
+      function renderKernel() {
+        const cv = $("kernel");
+        const { ctx, w, h } = setupCanvas(cv);
+        ctx.clearRect(0, 0, w, h);
+        const R = Math.min(Math.max(reachTokens() * 1.25, 8), 260); // x-range in tokens
+        const midY = h / 2,
+          padX = 8;
+        const X = (t) => padX + ((t + R) / (2 * R)) * (w - 2 * padX);
+        const Y = (v) => midY - v * (midY - 14);
+
+        // grid + zero axes
+        ctx.strokeStyle = "rgba(255,255,255,.05)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 8; i++) {
+          const x = padX + (i * (w - 2 * padX)) / 8;
+          ctx.beginPath();
+          ctx.moveTo(x, 8);
+          ctx.lineTo(x, h - 8);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = "rgba(255,255,255,.14)";
+        ctx.beginPath();
+        ctx.moveTo(padX, midY);
+        ctx.lineTo(w - padX, midY);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(X(0), 8);
+        ctx.lineTo(X(0), h - 8);
+        ctx.stroke();
+
+        // O(N^2) attention overlay: uniform weight to every token
+        if (state.attn) {
+          ctx.strokeStyle = "rgba(221,105,116,.55)";
+          ctx.setLineDash([5, 4]);
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(padX, Y(0.5));
+          ctx.lineTo(w - padX, Y(0.5));
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "rgba(221,105,116,.85)";
+          ctx.font = "11px ui-monospace,monospace";
+          ctx.fillText(
+            "attention: every token weighted equally — O(N²)",
+            padX + 6,
+            Y(0.5) - 6,
+          );
+        }
+
+        // envelope
+        if (state.envelope) {
+          ctx.strokeStyle = "rgba(232,185,52,.5)";
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1.25;
+          for (const sgn of [1, -1]) {
+            ctx.beginPath();
+            for (let px = 0; px <= w; px += 2) {
+              const t = (px / w) * (2 * R) - R;
+              const y = Y(sgn * envelope(t));
+              px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+            }
+            ctx.stroke();
+          }
+          ctx.setLineDash([]);
+        }
+
+        // kernel fill + line
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += 1) {
+          const t = (px / w) * (2 * R) - R;
+          const y = Y(kernel(t));
+          px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+        }
+        ctx.lineTo(w - padX, midY);
+        ctx.lineTo(padX, midY);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(79,168,179,.12)";
+        ctx.fill();
+
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += 1) {
+          const t = (px / w) * (2 * R) - R;
+          const y = Y(kernel(t));
+          px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+        }
+        ctx.strokeStyle = "var(--primary)";
+        ctx.strokeStyle = "#4fa8b3";
+        ctx.lineWidth = 2.4;
+        ctx.stroke();
+
+        // token-at-origin marker
+        ctx.fillStyle = "#e8e6e3";
+        ctx.beginPath();
+        ctx.arc(X(0), Y(Math.cos(state.phi)), 4, 0, 7);
+        ctx.fill();
+
+        // axis labels
+        ctx.fillStyle = "#4b4946";
+        ctx.font = "10px ui-monospace,monospace";
+        ctx.fillText("−" + Math.round(R) + " tokens", padX + 2, h - 4);
+        ctx.fillText("+" + Math.round(R), w - padX - 54, h - 4);
+        ctx.fillText("this token", X(0) + 6, 18);
+
+        $("kernel-sub").textContent =
+          `reach ≈ ${reachTokens().toFixed(1)} tokens · ${state.omega > 0.01 ? "wavelength ≈ " + wavelength().toFixed(1) + " tokens" : "no oscillation"}`;
+      }
+
+      function renderField() {
+        const cv = $("field");
+        const { ctx, w, h } = setupCanvas(cv);
+        ctx.clearRect(0, 0, w, h);
+        const padX = 8,
+          midY = h * 0.58;
+        const tokens = [0.18, 0.46, 0.74]; // relative positions
+        const amps = [1.0, 0.7, 0.9];
+        const span = 90; // token-units across canvas
+        const X = (u) => padX + (u / span) * (w - 2 * padX);
+        const Y = (v) => midY - v * (midY - 16);
+
+        // baseline
+        ctx.strokeStyle = "rgba(255,255,255,.10)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padX, midY);
+        ctx.lineTo(w - padX, midY);
+        ctx.stroke();
+
+        const posU = tokens.map((t) => t * span);
+
+        // individual contributions (faint)
+        ctx.lineWidth = 1.25;
+        ctx.strokeStyle = "rgba(144,141,137,.45)";
+        posU.forEach((p, i) => {
+          ctx.beginPath();
+          for (let px = 0; px <= w; px += 2) {
+            const u = (px / w) * span;
+            const v = amps[i] * kernel(u - p);
+            const y = Y(v);
+            px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+          }
+          ctx.stroke();
+        });
+
+        // summed field (bold, filled)
+        const sumAt = (u) =>
+          posU.reduce((s, p, i) => s + amps[i] * kernel(u - p), 0);
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += 1) {
+          const u = (px / w) * span;
+          const y = Y(sumAt(u) / 1.6);
+          px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+        }
+        ctx.lineTo(w - padX, midY);
+        ctx.lineTo(padX, midY);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(79,168,179,.14)";
+        ctx.fill();
+        ctx.beginPath();
+        for (let px = 0; px <= w; px += 1) {
+          const u = (px / w) * span;
+          const y = Y(sumAt(u) / 1.6);
+          px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+        }
+        ctx.strokeStyle = "#4fa8b3";
+        ctx.lineWidth = 2.4;
+        ctx.stroke();
+
+        // token markers
+        posU.forEach((p, i) => {
+          const x = X(p);
+          ctx.strokeStyle = "rgba(232,185,52,.35)";
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(x, 12);
+          ctx.lineTo(x, h - 14);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#e8b934";
+          ctx.beginPath();
+          ctx.arc(x, midY, 4.5, 0, 7);
+          ctx.fill();
+          ctx.fillStyle = "#908d89";
+          ctx.font = "10px ui-monospace,monospace";
+          ctx.fillText("tok" + (i + 1), x - 12, h - 3);
+        });
+      }
+
+      function describeReach() {
+        const r = reachTokens();
+        if (r < 5) return ["Local", "adjacency & nearby phrasing"];
+        if (r > 40)
+          return ["Global", "long-range summary & document-level structure"];
+        return ["Mid-range", "sentence- to paragraph-level structure"];
+      }
+      function describeRhythm() {
+        const o = state.omega;
+        if (o < 0.4) return ["Smooth", "low-frequency / slowly-varying signal"];
+        if (o > 2.5)
+          return ["Oscillatory", "fine periodic / repetitive structure"];
+        return ["Medium rhythm", "balanced periodic structure"];
+      }
+
+      function renderStats() {
+        const N = state.nctx,
+          logN = Math.log2(N);
+        const opsAttn = N * N,
+          opsCrumb = N * logN,
+          ratio = opsAttn / opsCrumb;
+        const [reachLbl] = describeReach();
+        const [rhythmLbl] = describeRhythm();
+        $("stats").innerHTML = `
+    <div class="stat"><small>Effective reach</small><strong><em>${reachTokens().toFixed(1)}</em> tok</strong></div>
+    <div class="stat"><small>Wavelength</small><strong>${state.omega > 0.01 ? wavelength().toFixed(1) + " tok" : "—"}</strong></div>
+    <div class="stat"><small>Routing params</small><strong><em>3</em> / head</strong></div>
+    <div class="stat"><small>Compute @ ${bigOps(N)}</small><strong>O(N·logN)</strong></div>
+    <div class="stat win"><small>vs O(N²) attention</small><strong>${bigOps(ratio)}× fewer</strong></div>
+    <div class="stat"><small>KV-cache</small><strong>fixed field</strong></div>`;
+        const [rl, rd] = describeReach();
+        const [yl, yd] = describeRhythm();
+        let use = "adjacency";
+        const r = reachTokens();
+        if (r > 40) use = "fold:summary long-range mode";
+        else if (r < 5) use = "token-adjacency mixing";
+        else use = "sentence/paragraph structure";
+        $("badges").innerHTML =
+          `<span class="badge reach">${rl} head</span><span class="badge rhythm">${yl}</span><span class="badge use">suits: ${use}</span>`;
+      }
+
+      function updatePrompt() {
+        const N = state.nctx,
+          logN = Math.log2(N),
+          ratio = (N * N) / (N * logN);
+        const [reachLbl, reachUse] = describeReach();
+        const [rhythmLbl, rhythmDesc] = describeRhythm();
+        const a = state.alpha.toFixed(2),
+          o = state.omega.toFixed(2),
+          p = state.phi.toFixed(2);
+        const reach = reachTokens().toFixed(0);
+        const wl =
+          state.omega > 0.01
+            ? `~${wavelength().toFixed(0)} tokens`
+            : "none (no oscillation)";
+
+        let s = `Configure a Crumb LLM attention head with damping α=${a}, frequency ω=${o}, phase φ=${p}. `;
+        s += `The damped-cosine kernel k(t)=exp(−α|t|)·cos(ωt+φ) makes this a ${reachLbl.toLowerCase()}, ${rhythmLbl.toLowerCase()} head: `;
+        s += `a token's influence stays meaningful out to ~${reach} tokens (the exp(−α|t|) envelope), modulated at a wavelength of ${wl} (the cos term — ${rhythmDesc}). `;
+        s += `It routes context with 3 learnable scalars per head instead of a transformer head's ~2d² Q/K projection parameters, and propagates information by FFT in O(N·logN). `;
+        s += `At a context length of ${fmt(N)} tokens that is roughly ${bigOps(ratio)}× fewer operations than O(N²) attention, with a fixed field-cache instead of a KV-cache that grows with sequence length. `;
+        s += `Tune this head toward ${reachUse}.`;
+
+        if (state.phi !== DEFAULTS.phi && Math.abs(state.phi) > 1.3) {
+          s += ` The large phase shift gives it an odd/antisymmetric profile — useful as a directional or edge-detecting head.`;
+        }
+        if (state.attn) {
+          s += `\n\n(Comparison shown: standard attention weights every token equally at O(N²) — the flat line — whereas this kernel concentrates capacity where it matters.)`;
+        }
+
+        $("prompt").innerHTML = s
+          .replace(
+            /k\(t\)=exp\(−α\|t\|\)·cos\(ωt\+φ\)/g,
+            "<code>k(t)=exp(−α|t|)·cos(ωt+φ)</code>",
+          )
+          .replace(/O\(N·logN\)/g, "<code>O(N·logN)</code>")
+          .replace(/O\(N²\)/g, "<code>O(N²)</code>");
+      }
+
+      function updateAll() {
+        $("val-alpha").textContent = state.alpha.toFixed(2);
+        $("val-omega").textContent = state.omega.toFixed(2);
+        $("val-phi").textContent = state.phi.toFixed(2);
+        $("val-n").textContent = fmt(state.nctx);
+        renderKernel();
+        renderField();
+        renderStats();
+        updatePrompt();
+      }
+
+      /* ---------- Wiring ---------- */
+      $("alpha").addEventListener("input", (e) => {
+        state.alpha = +e.target.value;
+        updateAll();
+      });
+      $("omega").addEventListener("input", (e) => {
+        state.omega = +e.target.value;
+        updateAll();
+      });
+      $("phi").addEventListener("input", (e) => {
+        state.phi = +e.target.value;
+        updateAll();
+      });
+      $("nctx").addEventListener("change", (e) => {
+        state.nctx = +e.target.value;
+        updateAll();
+      });
+
+      function bindToggle(id, key) {
+        $(id).addEventListener("click", () => {
+          state[key] = !state[key];
+          $(id).querySelector(".toggle").classList.toggle("on", state[key]);
+          updateAll();
+        });
+      }
+      bindToggle("t-envelope", "envelope");
+      bindToggle("t-attn", "attn");
+
+      const presetWrap = $("presets");
+      Object.keys(PRESETS).forEach((name) => {
+        const b = document.createElement("button");
+        b.className = "preset";
+        b.textContent = name;
+        b.addEventListener("click", () => {
+          Object.assign(state, PRESETS[name]);
+          $("alpha").value = state.alpha;
+          $("omega").value = state.omega;
+          $("phi").value = state.phi;
+          updateAll();
+        });
+        presetWrap.appendChild(b);
+      });
+
+      $("copy").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText($("prompt").textContent);
+        } catch (_e) {
+          const r = document.createRange();
+          r.selectNode($("prompt"));
+          getSelection().removeAllRanges();
+          getSelection().addRange(r);
+          document.execCommand("copy");
+          getSelection().removeAllRanges();
+        }
+        const btn = $("copy");
+        btn.textContent = "Copied!";
+        btn.classList.add("done");
+        setTimeout(() => {
+          btn.textContent = "Copy prompt";
+          btn.classList.remove("done");
+        }, 1400);
+      });
+
+      window.addEventListener("resize", () => {
+        renderKernel();
+        renderField();
+      });
+      updateAll();
+    </script>
+  </body>
+</html>
