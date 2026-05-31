@@ -1,26 +1,37 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { scoreContent, scoreContentSmart, SCORE_FIELDS } from '../utils/cognitiveFirewall';
-import { isGemmaConfigured } from '../utils/gemmaEngine';
-import { isGeminiConfigured } from '../utils/geminiEngine';
-import { buildReactionPayload, reactionUrl, AFFECT_LABELS } from '../utils/reactionCard';
-import { scoreSentences, pressureBand, heatmapSummary } from '../utils/heatmap';
-import { refutationsFor } from '../utils/refutations';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  scoreContent,
+  scoreContentSmart,
+  SCORE_FIELDS,
+} from "../utils/cognitiveFirewall";
+import { isGemmaConfigured } from "../utils/gemmaEngine";
+import { isGeminiConfigured } from "../utils/geminiConfig";
+import {
+  buildReactionPayload,
+  reactionUrl,
+  AFFECT_LABELS,
+} from "../utils/reactionCard";
+import { scoreSentences, pressureBand, heatmapSummary } from "../utils/heatmap";
+import { refutationsFor } from "../utils/refutations";
 import {
   counterDraft,
   buildCounterDraftPayload,
   counterDraftUrl,
-} from '../utils/counterDraft';
-import { matchSemanticTemplates, mergeTemplateResults } from '../utils/semanticTemplates';
-import { issueReceipt, storeReceipt } from '../utils/receipt';
-import { isReady as embeddingsReady } from '../utils/embeddings';
-import { detectArchetypes } from '../utils/adTransparency';
-import { markPolyglotSeen } from '../utils/badges';
-import { recordScan as recordContextScan } from '../utils/contextMemory';
-import { pushStep as pushReplayStep } from '../utils/replay';
-import { explain } from '../utils/explanation';
-import { analyzeDecoy, verdictFor as decoyVerdict } from '../utils/sarcasm';
-import { archiveScan } from '../utils/scanArchive';
-import { recordFeedback, calibrationReport } from '../utils/feedback';
+} from "../utils/counterDraft";
+import {
+  matchSemanticTemplates,
+  mergeTemplateResults,
+} from "../utils/semanticTemplates";
+import { issueReceipt, storeReceipt } from "../utils/receipt";
+import { isReady as embeddingsReady } from "../utils/embeddings";
+import { detectArchetypes } from "../utils/adTransparency";
+import { markPolyglotSeen } from "../utils/badges";
+import { recordScan as recordContextScan } from "../utils/contextMemory";
+import { pushStep as pushReplayStep } from "../utils/replay";
+import { explain } from "../utils/explanation";
+import { analyzeDecoy, verdictFor as decoyVerdict } from "../utils/sarcasm";
+import { archiveScan } from "../utils/scanArchive";
+import { recordFeedback, calibrationReport } from "../utils/feedback";
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -37,15 +48,18 @@ function ScoreRow({ label, desc, value, color }) {
   );
 }
 
-export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan = null }) {
-  const [text, setText] = useState(initialScan?.text || '');
-  const [url, setUrl] = useState('');
+export default function CognitiveFirewallPanel({
+  onApplyToNetwork,
+  initialScan = null,
+}) {
+  const [text, setText] = useState(initialScan?.text || "");
+  const [url, setUrl] = useState("");
   const [result, setResult] = useState(initialScan?.result || null);
   const [scanning, setScanning] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [fetchError, setFetchError] = useState('');
+  const [fetchError, setFetchError] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
-  const [entity, setEntity] = useState('');
+  const [entity, setEntity] = useState("");
   const [draft, setDraft] = useState(null);
   const [drafting, setDrafting] = useState(false);
   const [draftCopied, setDraftCopied] = useState(false);
@@ -56,7 +70,11 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const geminiAvailable = isGeminiConfigured();
   const gemmaAvailable = isGemmaConfigured();
   const llmAvailable = geminiAvailable || gemmaAvailable;
-  const llmLabel = geminiAvailable ? 'Gemini' : gemmaAvailable ? 'Gemma 4' : 'AI';
+  const llmLabel = geminiAvailable
+    ? "Gemini"
+    : gemmaAvailable
+      ? "Gemma 4"
+      : "AI";
   const embReady = embeddingsReady();
 
   // Layer 40 — sentence heatmap (computed lazily when user opens it)
@@ -64,7 +82,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     if (!heatmapOpen || !text.trim()) return null;
     return scoreSentences(text);
   }, [heatmapOpen, text]);
-  const heatmapStats = useMemo(() => heatmap ? heatmapSummary(heatmap) : null, [heatmap]);
+  const heatmapStats = useMemo(
+    () => (heatmap ? heatmapSummary(heatmap) : null),
+    [heatmap],
+  );
 
   // Merge regex + semantic template hits for display (Layer 45)
   const mergedTemplates = useMemo(() => {
@@ -80,12 +101,18 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
   // Layer 70 — plain-English explanation
   const explanation = useMemo(
-    () => (result ? explain(text, result, { templates: mergedTemplates, archetypes }) : null),
+    () =>
+      result
+        ? explain(text, result, { templates: mergedTemplates, archetypes })
+        : null,
     [result, mergedTemplates, archetypes, text],
   );
 
   // Layer 80 — decoy / sarcasm attenuation
-  const decoy = useMemo(() => (text.trim() ? analyzeDecoy(text) : null), [text]);
+  const decoy = useMemo(
+    () => (text.trim() ? analyzeDecoy(text) : null),
+    [text],
+  );
   const decoyLabel = decoy ? decoyVerdict(decoy) : null;
 
   // Layer 41 — refutations for detected templates
@@ -106,14 +133,16 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const scan = params.get('scan');
-      const scanUrl = params.get('scan-url');
+      const scan = params.get("scan");
+      const scanUrl = params.get("scan-url");
       if (scan && !text) {
         setText(scan.slice(0, 6000));
       } else if (scanUrl && !url) {
         setUrl(scanUrl.slice(0, 500));
       }
-    } catch { /* SSR / bad URL — ignore */ }
+    } catch {
+      /* SSR / bad URL — ignore */
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -123,31 +152,62 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       const score = await scoreContentSmart(text);
       setResult(score);
       // Layer 52/56 — if a non-English pack fired, record the badge signal
-      if (score?.language && score.language !== 'en') {
-        try { markPolyglotSeen(); } catch { /* noop */ }
+      if (score?.language && score.language !== "en") {
+        try {
+          markPolyglotSeen();
+        } catch {
+          /* noop */
+        }
       }
       // Layer 63 — optional per-entity tracking
       if (entity.trim()) {
-        try { recordContextScan({ entity, text, score }); } catch { /* noop */ }
+        try {
+          recordContextScan({ entity, text, score });
+        } catch {
+          /* noop */
+        }
       }
       // Layer 65 — replay recorder
       try {
-        const p = (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
-        pushReplayStep({ kind: 'scan', text: text.slice(0, 200), pressure: p, entity: entity || null });
-      } catch { /* noop */ }
+        const p =
+          (score.emotionalActivation +
+            score.cognitiveSuppression +
+            score.manipulationPressure) /
+          3;
+        pushReplayStep({
+          kind: "scan",
+          text: text.slice(0, 200),
+          pressure: p,
+          entity: entity || null,
+        });
+      } catch {
+        /* noop */
+      }
       // Layer 45 — add semantic template hits (async, non-blocking for UI)
       setSemanticHits([]);
       if (embReady && text.trim().length >= 12) {
-        matchSemanticTemplates(text).then(setSemanticHits).catch(() => setSemanticHits([]));
+        matchSemanticTemplates(text)
+          .then(setSemanticHits)
+          .catch(() => setSemanticHits([]));
       }
       // Layer 46 — issue + store a receipt for this scan
       try {
         const r = await issueReceipt({ text, score });
         setReceipt(r);
         const pressure =
-          (score.emotionalActivation + score.cognitiveSuppression + score.manipulationPressure) / 3;
-        storeReceipt({ id: r.id, ts: r.ts, pressure, excerpt: text.slice(0, 80) });
-      } catch { /* receipts are nice-to-have */ }
+          (score.emotionalActivation +
+            score.cognitiveSuppression +
+            score.manipulationPressure) /
+          3;
+        storeReceipt({
+          id: r.id,
+          ts: r.ts,
+          pressure,
+          excerpt: text.slice(0, 80),
+        });
+      } catch {
+        /* receipts are nice-to-have */
+      }
     } catch (_) {
       setResult(scoreContent(text));
     } finally {
@@ -158,18 +218,20 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
   const handleFetchUrl = async () => {
     if (!url.trim()) return;
     setFetching(true);
-    setFetchError('');
+    setFetchError("");
     try {
-      const resp = await fetch(`/api/fetch-url?u=${encodeURIComponent(url.trim())}`);
+      const resp = await fetch(
+        `/api/fetch-url?u=${encodeURIComponent(url.trim())}`,
+      );
       const data = await resp.json();
       if (!resp.ok || data.error) {
         setFetchError(data.error || `HTTP ${resp.status}`);
         return;
       }
-      setText(data.text || '');
+      setText(data.text || "");
       setResult(null);
     } catch (err) {
-      setFetchError(err.message || 'fetch failed');
+      setFetchError(err.message || "fetch failed");
     } finally {
       setFetching(false);
     }
@@ -188,7 +250,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       setShareCopied(true);
       setTimeout(() => setShareCopied(false), 2500);
     } catch {
-      window.prompt('Copy this reaction URL:', url);
+      window.prompt("Copy this reaction URL:", url);
     }
   };
 
@@ -196,13 +258,13 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
     if (!result) return;
     const payload = buildReactionPayload(text, result);
     const reaction = reactionUrl(window.location.origin, payload);
-    const affect = AFFECT_LABELS[payload.a]?.label || 'signal';
+    const affect = AFFECT_LABELS[payload.a]?.label || "signal";
     const pct = Math.round(((payload.e + payload.c + payload.m) / 3) * 100);
     const tweet = `BrainSNN reading: ${pct}% pressure · ${affect}. What's it read in your feed? ${reaction}`;
     window.open(
       `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}`,
-      '_blank',
-      'noopener'
+      "_blank",
+      "noopener",
     );
   };
 
@@ -226,7 +288,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       setDraftCopied(true);
       setTimeout(() => setDraftCopied(false), 2500);
     } catch {
-      window.prompt('Copy neutralized text:', draft.after);
+      window.prompt("Copy neutralized text:", draft.after);
     }
   };
 
@@ -239,26 +301,38 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       setDraftCopied(true);
       setTimeout(() => setDraftCopied(false), 2500);
     } catch {
-      window.prompt('Copy counter-draft URL:', url);
+      window.prompt("Copy counter-draft URL:", url);
     }
   };
 
   const overall = result
-    ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
+    ? (result.emotionalActivation +
+        result.cognitiveSuppression +
+        result.manipulationPressure) /
+      3
     : null;
 
-  const riskColor = !overall ? '#4fa8b3' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
+  const riskColor = !overall
+    ? "#4fa8b3"
+    : overall > 0.65
+      ? "#dd6974"
+      : overall > 0.35
+        ? "#fdab43"
+        : "#6daa45";
 
   return (
     <section className="panel panel-pad cognitive-firewall-panel">
       <div className="eyebrow">TRIBE V2</div>
       <h2>Cognitive Firewall</h2>
       <p className="muted">
-        Paste any content — or drop a URL — and the engine scores likely manipulation signatures.
-        Share the reaction back with anyone.
+        Paste any content — or drop a URL — and the engine scores likely
+        manipulation signatures. Share the reaction back with anyone.
       </p>
 
-      <div className="firewall-url-row" style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+      <div
+        className="firewall-url-row"
+        style={{ display: "flex", gap: 8, marginBottom: 10 }}
+      >
         <input
           type="url"
           className="share-input"
@@ -266,7 +340,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleFetchUrl();
+            if (e.key === "Enter") handleFetchUrl();
           }}
           style={{ flex: 2 }}
         />
@@ -284,11 +358,11 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
           onClick={handleFetchUrl}
           disabled={fetching || !url.trim()}
         >
-          {fetching ? 'Fetching…' : 'Fetch text'}
+          {fetching ? "Fetching…" : "Fetch text"}
         </button>
       </div>
       {fetchError && (
-        <p className="muted" style={{ color: '#dd6974', marginTop: 0 }}>
+        <p className="muted" style={{ color: "#dd6974", marginTop: 0 }}>
           Fetch failed: {fetchError}. Paste the text manually instead.
         </p>
       )}
@@ -302,8 +376,16 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
       />
 
       <div className="control-actions" style={{ marginTop: 12 }}>
-        <button className="btn primary" onClick={handleScan} disabled={text.trim().length < 5 || scanning}>
-          {scanning ? 'Scanning...' : llmAvailable ? `Scan with ${llmLabel}` : 'Scan content'}
+        <button
+          className="btn primary"
+          onClick={handleScan}
+          disabled={text.trim().length < 5 || scanning}
+        >
+          {scanning
+            ? "Scanning..."
+            : llmAvailable
+              ? `Scan with ${llmLabel}`
+              : "Scan content"}
         </button>
         {result && (
           <button className="btn" onClick={handleApply}>
@@ -312,7 +394,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
         )}
         {result && (
           <button className="btn" onClick={handleShare}>
-            {shareCopied ? 'Link copied ✓' : 'Share this reaction'}
+            {shareCopied ? "Link copied ✓" : "Share this reaction"}
           </button>
         )}
         {result && (
@@ -324,7 +406,7 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
       {result && (
         <div className="firewall-result">
-          <div className="firewall-overall" style={{ '--risk': riskColor }}>
+          <div className="firewall-overall" style={{ "--risk": riskColor }}>
             <span>Overall risk</span>
             <strong>{(overall * 100).toFixed(0)}%</strong>
           </div>
@@ -333,25 +415,30 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             <div
               style={{
                 marginTop: 8,
-                padding: '8px 12px',
+                padding: "8px 12px",
                 borderRadius: 6,
                 borderLeft: `3px solid ${decoyLabel.color}`,
                 background: `${decoyLabel.color}12`,
               }}
               title="Layer 80 attenuates scores on content that reads like sarcasm, quoted speech, or an explicit callout of manipulation."
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>
                   <strong>Decoy filter · Layer 80</strong>
-                  <span className="muted small-note" style={{ marginLeft: 6 }}>{decoyLabel.label}</span>
+                  <span className="muted small-note" style={{ marginLeft: 6 }}>
+                    {decoyLabel.label}
+                  </span>
                 </span>
-                <strong style={{ color: decoyLabel.color, fontFamily: 'monospace' }}>
-                  adj × {decoy.suggestedAdjustment.toFixed(2)} → {Math.round(overall * decoy.suggestedAdjustment * 100)}%
+                <strong
+                  style={{ color: decoyLabel.color, fontFamily: "monospace" }}
+                >
+                  adj × {decoy.suggestedAdjustment.toFixed(2)} →{" "}
+                  {Math.round(overall * decoy.suggestedAdjustment * 100)}%
                 </strong>
               </div>
               {decoy.markers.length > 0 && (
                 <div className="muted small-note" style={{ marginTop: 4 }}>
-                  markers: {decoy.markers.join(', ')}
+                  markers: {decoy.markers.join(", ")}
                 </div>
               )}
             </div>
@@ -373,7 +460,9 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               <span className="eyebrow">Evidence traces</span>
               <div className="firewall-chips">
                 {result.evidence.map((e, i) => (
-                  <span key={i} className="firewall-chip">{e}</span>
+                  <span key={i} className="firewall-chip">
+                    {e}
+                  </span>
                 ))}
               </div>
             </div>
@@ -394,17 +483,29 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                   <button
                     key={tpl.id}
                     className="firewall-chip"
-                    onClick={() => setOpenRefutation(openRefutation === tpl.id ? null : tpl.id)}
-                    title={`${tpl.desc} — click for the counter-response${tpl.source === 'semantic' ? ' (semantic match)' : ''}`}
+                    onClick={() =>
+                      setOpenRefutation(
+                        openRefutation === tpl.id ? null : tpl.id,
+                      )
+                    }
+                    title={`${tpl.desc} — click for the counter-response${tpl.source === "semantic" ? " (semantic match)" : ""}`}
                     style={{
-                      background: openRefutation === tpl.id ? 'rgba(168,111,223,0.28)' : 'rgba(168,111,223,0.12)',
-                      borderColor: tpl.source === 'semantic' ? '#5ad4ff' : '#a86fdf',
-                      color: '#e2d3ff',
-                      cursor: 'pointer',
+                      background:
+                        openRefutation === tpl.id
+                          ? "rgba(168,111,223,0.28)"
+                          : "rgba(168,111,223,0.12)",
+                      borderColor:
+                        tpl.source === "semantic" ? "#5ad4ff" : "#a86fdf",
+                      color: "#e2d3ff",
+                      cursor: "pointer",
                     }}
                   >
                     {tpl.label}
-                    {tpl.hits ? ` · ${tpl.hits}×` : tpl.similarity ? ` · ~${Math.round(tpl.similarity * 100)}%` : ''}
+                    {tpl.hits
+                      ? ` · ${tpl.hits}×`
+                      : tpl.similarity
+                        ? ` · ~${Math.round(tpl.similarity * 100)}%`
+                        : ""}
                   </button>
                 ))}
               </div>
@@ -419,8 +520,12 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                   <span
                     key={arch.id}
                     className="firewall-chip"
-                    title={`${arch.desc} (matched: ${arch.matched.join(', ')})`}
-                    style={{ background: 'rgba(221,105,116,0.10)', borderColor: '#dd6974', color: '#ffd6da' }}
+                    title={`${arch.desc} (matched: ${arch.matched.join(", ")})`}
+                    style={{
+                      background: "rgba(221,105,116,0.10)",
+                      borderColor: "#dd6974",
+                      color: "#ffd6da",
+                    }}
                   >
                     {arch.label}
                   </span>
@@ -435,10 +540,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               <div
                 style={{
                   marginTop: 6,
-                  padding: '10px 14px',
+                  padding: "10px 14px",
                   borderRadius: 8,
-                  background: 'rgba(90,212,255,0.04)',
-                  borderLeft: '3px solid #5ad4ff',
+                  background: "rgba(90,212,255,0.04)",
+                  borderLeft: "3px solid #5ad4ff",
                 }}
               >
                 <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 600 }}>
@@ -446,7 +551,11 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                 </p>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {explanation.bullets.slice(1).map((b, i) => (
-                    <li key={i} style={{ marginTop: 4, fontSize: 13, lineHeight: 1.4 }} className="muted">
+                    <li
+                      key={i}
+                      style={{ marginTop: 4, fontSize: 13, lineHeight: 1.4 }}
+                      className="muted"
+                    >
                       {b.text}
                     </li>
                   ))}
@@ -456,56 +565,65 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
           )}
 
           {/* Layer 41 — Refutation for the open template */}
-          {openRefutation && refutations.length > 0 && (() => {
-            const match = refutations.find((r) => r.id === openRefutation);
-            if (!match) return null;
-            return (
-              <div
-                style={{
-                  marginTop: 12,
-                  padding: '12px 14px',
-                  borderLeft: '3px solid #a86fdf',
-                  background: 'rgba(168,111,223,0.08)',
-                  borderRadius: 6,
-                }}
-              >
-                <div className="eyebrow" style={{ marginBottom: 4 }}>
-                  Counter-response · {match.label}
-                </div>
-                <p style={{ margin: '6px 0', fontWeight: 600 }}>{match.refutation.core}</p>
-                <blockquote
+          {openRefutation &&
+            refutations.length > 0 &&
+            (() => {
+              const match = refutations.find((r) => r.id === openRefutation);
+              if (!match) return null;
+              return (
+                <div
                   style={{
-                    margin: '8px 0',
-                    padding: '6px 10px',
-                    fontStyle: 'italic',
-                    borderLeft: '2px solid rgba(255,255,255,0.1)',
-                    background: 'rgba(0,0,0,0.12)',
-                    borderRadius: 4,
+                    marginTop: 12,
+                    padding: "12px 14px",
+                    borderLeft: "3px solid #a86fdf",
+                    background: "rgba(168,111,223,0.08)",
+                    borderRadius: 6,
                   }}
                 >
-                  "{match.refutation.script}"
-                </blockquote>
-                <p className="muted small-note" style={{ margin: 0 }}>
-                  {match.refutation.stance}
-                </p>
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    className="btn-sm"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(match.refutation.script).catch(() => {});
+                  <div className="eyebrow" style={{ marginBottom: 4 }}>
+                    Counter-response · {match.label}
+                  </div>
+                  <p style={{ margin: "6px 0", fontWeight: 600 }}>
+                    {match.refutation.core}
+                  </p>
+                  <blockquote
+                    style={{
+                      margin: "8px 0",
+                      padding: "6px 10px",
+                      fontStyle: "italic",
+                      borderLeft: "2px solid rgba(255,255,255,0.1)",
+                      background: "rgba(0,0,0,0.12)",
+                      borderRadius: 4,
                     }}
                   >
-                    Copy response
-                  </button>
+                    "{match.refutation.script}"
+                  </blockquote>
+                  <p className="muted small-note" style={{ margin: 0 }}>
+                    {match.refutation.stance}
+                  </p>
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      className="btn-sm"
+                      onClick={() => {
+                        navigator.clipboard
+                          ?.writeText(match.refutation.script)
+                          .catch(() => {});
+                      }}
+                    >
+                      Copy response
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
           {/* Layer 40 — Heatmap toggle + rendering */}
           <div style={{ marginTop: 12 }}>
-            <button className="btn-sm" onClick={() => setHeatmapOpen(!heatmapOpen)}>
-              {heatmapOpen ? 'Hide sentence heatmap' : 'Show sentence heatmap'}
+            <button
+              className="btn-sm"
+              onClick={() => setHeatmapOpen(!heatmapOpen)}
+            >
+              {heatmapOpen ? "Hide sentence heatmap" : "Show sentence heatmap"}
             </button>
           </div>
           {heatmapOpen && heatmap && (
@@ -515,19 +633,21 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               </div>
               {heatmapStats && (
                 <p className="muted small-note" style={{ marginTop: 0 }}>
-                  {heatmapStats.count} sentence{heatmapStats.count === 1 ? '' : 's'} ·{' '}
-                  mean {Math.round(heatmapStats.mean * 100)}% · peak {Math.round(heatmapStats.peak * 100)}% ·{' '}
-                  {heatmapStats.high} high-pressure
+                  {heatmapStats.count} sentence
+                  {heatmapStats.count === 1 ? "" : "s"} · mean{" "}
+                  {Math.round(heatmapStats.mean * 100)}% · peak{" "}
+                  {Math.round(heatmapStats.peak * 100)}% · {heatmapStats.high}{" "}
+                  high-pressure
                 </p>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {heatmap.map((row) => {
                   const band = pressureBand(row.pressure);
                   return (
                     <div
                       key={row.idx}
                       style={{
-                        padding: '8px 10px',
+                        padding: "8px 10px",
                         borderRadius: 6,
                         borderLeft: `3px solid ${band.border}`,
                         background: band.bg,
@@ -536,7 +656,10 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                       title={`${Math.round(row.pressure * 100)}% pressure · ${band.label}`}
                     >
                       <span>{row.text}</span>
-                      <span className="muted small-note" style={{ marginLeft: 8 }}>
+                      <span
+                        className="muted small-note"
+                        style={{ marginLeft: 8 }}
+                      >
                         {Math.round(row.pressure * 100)}%
                       </span>
                     </div>
@@ -550,17 +673,25 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
           <div style={{ marginTop: 14 }}>
             <div className="eyebrow">Counter-draft · Layer 42</div>
             <p className="muted small-note" style={{ marginTop: 2 }}>
-              Rewrite the same information without manipulation signatures.
-              Uses Gemma when configured, falls back to local substitution.
+              Rewrite the same information without manipulation signatures. Uses
+              Gemma when configured, falls back to local substitution.
             </p>
             <div className="control-actions" style={{ marginTop: 8 }}>
-              <button className="btn" onClick={handleNeutralize} disabled={drafting || text.trim().length < 5}>
-                {drafting ? 'Neutralizing…' : draft ? 'Re-run neutralize' : 'Neutralize this'}
+              <button
+                className="btn"
+                onClick={handleNeutralize}
+                disabled={drafting || text.trim().length < 5}
+              >
+                {drafting
+                  ? "Neutralizing…"
+                  : draft
+                    ? "Re-run neutralize"
+                    : "Neutralize this"}
               </button>
               {draft?.ok && (
                 <>
                   <button className="btn" onClick={handleCopyDraft}>
-                    {draftCopied ? 'Copied ✓' : 'Copy neutral text'}
+                    {draftCopied ? "Copied ✓" : "Copy neutral text"}
                   </button>
                   <button className="btn" onClick={handleShareDraft}>
                     Share before/after
@@ -572,23 +703,33 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               <div
                 style={{
                   marginTop: 10,
-                  padding: '10px 12px',
-                  borderLeft: '3px solid #5ee69a',
-                  background: 'rgba(94,230,154,0.05)',
+                  padding: "10px 12px",
+                  borderLeft: "3px solid #5ee69a",
+                  background: "rgba(94,230,154,0.05)",
                   borderRadius: 6,
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                  }}
+                >
                   <span className="muted small-note">
-                    engine: <strong>{draft.engine}</strong> · pressure{' '}
-                    <strong>{Math.round(draft.beforePressure * 100)}%</strong> →{' '}
-                    <strong style={{ color: '#5ee69a' }}>{Math.round(draft.afterPressure * 100)}%</strong>
+                    engine: <strong>{draft.engine}</strong> · pressure{" "}
+                    <strong>{Math.round(draft.beforePressure * 100)}%</strong> →{" "}
+                    <strong style={{ color: "#5ee69a" }}>
+                      {Math.round(draft.afterPressure * 100)}%
+                    </strong>
                   </span>
                   <span className="muted small-note">
                     −{Math.round(draft.reduction * 100)} pts
                   </span>
                 </div>
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>"{draft.after}"</p>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
+                  "{draft.after}"
+                </p>
               </div>
             )}
           </div>
@@ -602,14 +743,33 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
 
           <div className="firewall-confidence">
             Confidence: <strong>{result.confidence}</strong>
-            {typeof result.source === 'string' && result.source.startsWith('gemini') && <span className="gemma-source-badge">{result.source.replace('gemini:', 'Gemini ').trim()}</span>}
-            {typeof result.source === 'string' && result.source.startsWith('gemma') && <span className="gemma-source-badge">{result.source.replace('gemma:', 'Gemma ').trim()}</span>}
-            {result.source === 'regex_fallback' && <span className="gemma-source-badge fallback">Regex fallback</span>}
-            {result.languageLabel && result.language && result.language !== 'en' && (
-              <span className="gemma-source-badge" title={`Language pack: ${result.languageLabel} (Layer 52)`}>
-                {result.languageLabel}
+            {typeof result.source === "string" &&
+              result.source.startsWith("gemini") && (
+                <span className="gemma-source-badge">
+                  {result.source.replace("gemini:", "Gemini ").trim()}
+                </span>
+              )}
+            {typeof result.source === "string" &&
+              result.source.startsWith("gemma") && (
+                <span className="gemma-source-badge">
+                  {result.source.replace("gemma:", "Gemma ").trim()}
+                </span>
+              )}
+            {result.source === "regex_fallback" && (
+              <span className="gemma-source-badge fallback">
+                Regex fallback
               </span>
             )}
+            {result.languageLabel &&
+              result.language &&
+              result.language !== "en" && (
+                <span
+                  className="gemma-source-badge"
+                  title={`Language pack: ${result.languageLabel} (Layer 52)`}
+                >
+                  {result.languageLabel}
+                </span>
+              )}
             <button
               className="btn-sm"
               onClick={() => {
@@ -625,17 +785,20 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
           {/* Layer 93 — Feedback calibration buttons + calibrated pressure */}
           {(() => {
             const cal = calibrationReport();
-            const calibrated = overall != null ? Math.max(0, Math.min(1, overall * cal.suggestedMul)) : null;
+            const calibrated =
+              overall != null
+                ? Math.max(0, Math.min(1, overall * cal.suggestedMul))
+                : null;
             return (
               <div
                 style={{
                   marginTop: 10,
-                  padding: '8px 12px',
+                  padding: "8px 12px",
                   borderRadius: 6,
-                  background: 'rgba(255,255,255,0.04)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
+                  background: "rgba(255,255,255,0.04)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   gap: 12,
                 }}
                 title={`Layer 93 — ${cal.total} ratings, multiplier ${cal.suggestedMul.toFixed(2)}`}
@@ -643,23 +806,42 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
                 <span>
                   <strong>Feedback · Layer 93</strong>
                   {cal.total > 0 && (
-                    <span className="muted small-note" style={{ marginLeft: 8 }}>
-                      calibrated → <strong>{calibrated != null ? Math.round(calibrated * 100) : '—'}%</strong> (×{cal.suggestedMul.toFixed(2)})
+                    <span
+                      className="muted small-note"
+                      style={{ marginLeft: 8 }}
+                    >
+                      calibrated →{" "}
+                      <strong>
+                        {calibrated != null
+                          ? Math.round(calibrated * 100)
+                          : "—"}
+                        %
+                      </strong>{" "}
+                      (×{cal.suggestedMul.toFixed(2)})
                     </span>
                   )}
                 </span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {['too_cold', 'accurate', 'too_hot'].map((v) => (
+                <div style={{ display: "flex", gap: 6 }}>
+                  {["too_cold", "accurate", "too_hot"].map((v) => (
                     <button
                       key={v}
                       className="btn-sm"
                       onClick={() => {
                         if (overall == null) return;
-                        recordFeedback({ pressure: overall, verdict: v, receiptId: receipt?.id, excerpt: text });
+                        recordFeedback({
+                          pressure: overall,
+                          verdict: v,
+                          receiptId: receipt?.id,
+                          excerpt: text,
+                        });
                       }}
-                      title={`Rate this scan as ${v.replace('_', ' ')}`}
+                      title={`Rate this scan as ${v.replace("_", " ")}`}
                     >
-                      {v === 'too_cold' ? '⬇ too cold' : v === 'too_hot' ? '⬆ too hot' : '✓ accurate'}
+                      {v === "too_cold"
+                        ? "⬇ too cold"
+                        : v === "too_hot"
+                          ? "⬆ too hot"
+                          : "✓ accurate"}
                     </button>
                   ))}
                 </div>
@@ -672,20 +854,20 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
             <div
               style={{
                 marginTop: 10,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 12px',
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
                 borderRadius: 6,
-                background: 'rgba(90,212,255,0.06)',
-                borderLeft: '3px solid #5ad4ff',
-                fontFamily: 'monospace',
+                background: "rgba(90,212,255,0.06)",
+                borderLeft: "3px solid #5ad4ff",
+                fontFamily: "monospace",
                 fontSize: 13,
               }}
               title="Deterministic scan receipt — same text + scores regenerate this ID."
             >
               <span>
-                <span className="muted">Receipt</span>{' '}
+                <span className="muted">Receipt</span>{" "}
                 <strong>{receipt.id}</strong>
                 <span className="muted small-note" style={{ marginLeft: 8 }}>
                   {receipt.dayStart}
@@ -693,7 +875,9 @@ export default function CognitiveFirewallPanel({ onApplyToNetwork, initialScan =
               </span>
               <button
                 className="btn-sm"
-                onClick={() => navigator.clipboard?.writeText(receipt.id).catch(() => {})}
+                onClick={() =>
+                  navigator.clipboard?.writeText(receipt.id).catch(() => {})
+                }
               >
                 Copy
               </button>

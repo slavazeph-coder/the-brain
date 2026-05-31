@@ -8,9 +8,9 @@
  * - Knowledge synthesis from document clusters
  */
 
-import { isGemmaConfigured, analyzeContentWithGemma } from './gemmaEngine';
-import { isGeminiConfigured, callGeminiJson } from './geminiEngine';
-import { KNOWLEDGE_DOMAINS } from '../data/knowledgeGraph';
+import { isGemmaConfigured, analyzeContentWithGemma } from "./gemmaEngine";
+import { isGeminiConfigured } from "./geminiConfig";
+import { KNOWLEDGE_DOMAINS } from "../data/knowledgeGraph";
 
 const GAP_ANALYSIS_PROMPT = `You are a knowledge gap analysis engine for a second-brain system called BrainSNN.
 
@@ -31,7 +31,9 @@ Return ONLY valid JSON with this structure:
 const CLASSIFY_PROMPT = `You are a document classifier for a knowledge management system.
 
 Given a document title and content snippet, classify it into one or more of these domains:
-${Object.entries(KNOWLEDGE_DOMAINS).map(([id, d]) => `- ${id}: ${d.name} (${d.role})`).join('\n')}
+${Object.entries(KNOWLEDGE_DOMAINS)
+  .map(([id, d]) => `- ${id}: ${d.name} (${d.role})`)
+  .join("\n")}
 
 Return ONLY valid JSON: {"primary": "DOMAIN_ID", "secondary": "DOMAIN_ID_OR_NULL", "confidence": 0.0-1.0, "topics": ["extracted", "topics"]}`;
 
@@ -39,13 +41,17 @@ Return ONLY valid JSON: {"primary": "DOMAIN_ID", "secondary": "DOMAIN_ID_OR_NULL
 
 export async function analyzeGapsWithGemma(knowledgeMap) {
   if (!isGemmaConfigured() && !isGeminiConfigured()) {
-    throw new Error('No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)');
+    throw new Error(
+      "No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)",
+    );
   }
 
-  const domainSummary = Object.entries(knowledgeMap).map(([id, data]) => {
-    const domain = KNOWLEDGE_DOMAINS[id];
-    return `${id} (${domain?.name}): depth=${(data.depth * 100).toFixed(0)}%, docs=${data.count}, topics=[${(data.topics || []).slice(0, 8).join(', ')}]`;
-  }).join('\n');
+  const domainSummary = Object.entries(knowledgeMap)
+    .map(([id, data]) => {
+      const domain = KNOWLEDGE_DOMAINS[id];
+      return `${id} (${domain?.name}): depth=${(data.depth * 100).toFixed(0)}%, docs=${data.count}, topics=[${(data.topics || []).slice(0, 8).join(", ")}]`;
+    })
+    .join("\n");
 
   const prompt = `${GAP_ANALYSIS_PROMPT}\n\nCurrent knowledge map:\n${domainSummary}`;
 
@@ -56,7 +62,7 @@ export async function analyzeGapsWithGemma(knowledgeMap) {
 
 // ---------- AI Document Classification ----------
 
-export async function classifyWithGemma(title, contentSnippet = '') {
+export async function classifyWithGemma(title, contentSnippet = "") {
   if (!isGemmaConfigured() && !isGeminiConfigured()) return null;
 
   const prompt = `${CLASSIFY_PROMPT}\n\nDocument: "${title}"\nContent: "${contentSnippet.slice(0, 500)}"`;
@@ -65,18 +71,22 @@ export async function classifyWithGemma(title, contentSnippet = '') {
 
 // ---------- Learning Path Generation ----------
 
-export async function generateLearningPath(knowledgeMap, goals = '') {
+export async function generateLearningPath(knowledgeMap, goals = "") {
   if (!isGemmaConfigured() && !isGeminiConfigured()) {
-    throw new Error('No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)');
+    throw new Error(
+      "No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)",
+    );
   }
 
-  const domainSummary = Object.entries(knowledgeMap).map(([id, data]) => {
-    const domain = KNOWLEDGE_DOMAINS[id];
-    return `${id} (${domain?.name}): depth=${(data.depth * 100).toFixed(0)}%`;
-  }).join(', ');
+  const domainSummary = Object.entries(knowledgeMap)
+    .map(([id, data]) => {
+      const domain = KNOWLEDGE_DOMAINS[id];
+      return `${id} (${domain?.name}): depth=${(data.depth * 100).toFixed(0)}%`;
+    })
+    .join(", ");
 
   const prompt = `Given this knowledge map: ${domainSummary}
-${goals ? `User's learning goals: ${goals}` : 'No specific goals — optimize for balanced growth.'}
+${goals ? `User's learning goals: ${goals}` : "No specific goals — optimize for balanced growth."}
 
 Generate a 5-step learning path. Return ONLY valid JSON:
 [{"step": 1, "topic": "...", "domain": "DOMAIN_ID", "reason": "...", "resources": ["suggested resource type"]}]`;
@@ -89,6 +99,7 @@ Generate a 5-step learning path. Return ONLY valid JSON:
 async function callGemmaRaw(prompt) {
   if (isGeminiConfigured()) {
     try {
+      const { callGeminiJson } = await import("./geminiEngine");
       return await callGeminiJson(prompt);
     } catch (err) {
       if (!isGemmaConfigured()) throw err;
@@ -96,31 +107,40 @@ async function callGemmaRaw(prompt) {
     }
   }
   if (!isGemmaConfigured()) {
-    throw new Error('No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)');
+    throw new Error(
+      "No LLM configured (set VITE_GEMINI_API_KEY or VITE_GEMMA_API_ENDPOINT)",
+    );
   }
-  const ENDPOINT = import.meta.env.VITE_GEMMA_API_ENDPOINT || '';
-  const API_KEY = import.meta.env.VITE_GEMMA_API_KEY || '';
-  const isGoogleAI = ENDPOINT.includes('generativelanguage.googleapis.com');
+  const ENDPOINT = import.meta.env.VITE_GEMMA_API_ENDPOINT || "";
+  const API_KEY = import.meta.env.VITE_GEMMA_API_KEY || "";
+  const isGoogleAI = ENDPOINT.includes("generativelanguage.googleapis.com");
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (API_KEY && !isGoogleAI) headers['Authorization'] = `Bearer ${API_KEY}`;
-  const url = isGoogleAI ? `${ENDPOINT}${ENDPOINT.includes('?') ? '&' : '?'}key=${API_KEY}` : ENDPOINT;
+  const headers = { "Content-Type": "application/json" };
+  if (API_KEY && !isGoogleAI) headers["Authorization"] = `Bearer ${API_KEY}`;
+  const url = isGoogleAI
+    ? `${ENDPOINT}${ENDPOINT.includes("?") ? "&" : "?"}key=${API_KEY}`
+    : ENDPOINT;
 
   let body;
   if (isGoogleAI) {
     body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2048, responseMimeType: 'application/json' }
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
+      },
     });
   } else {
     body = JSON.stringify({
-      model: import.meta.env.VITE_GEMMA_MODEL || 'gemma-2-27b-it',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3, max_tokens: 2048
+      model: import.meta.env.VITE_GEMMA_MODEL || "gemma-2-27b-it",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 2048,
     });
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body });
+  const res = await fetch(url, { method: "POST", headers, body });
   if (!res.ok) throw new Error(`Gemma API ${res.status}`);
   const json = await res.json();
 
@@ -130,10 +150,13 @@ async function callGemmaRaw(prompt) {
   } else if (json.choices?.[0]?.message?.content) {
     raw = json.choices[0].message.content;
   } else {
-    throw new Error('Unexpected Gemma response');
+    throw new Error("Unexpected Gemma response");
   }
 
-  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+  const cleaned = raw
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/gi, "")
+    .trim();
   return JSON.parse(cleaned);
 }
 

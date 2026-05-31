@@ -1,15 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
   indexMultimodal,
   queryMultimodal,
   clearMultimodalIndex,
   getMultimodalStatus,
   subscribeMultimodalRag,
-  MODALITIES
-} from '../utils/multimodalRag';
-import { isReady as embeddingsReady } from '../utils/embeddings';
-import { isGemmaConfigured } from '../utils/gemmaEngine';
-import { isGeminiConfigured } from '../utils/geminiEngine';
+  MODALITIES,
+} from "../utils/multimodalRag";
+import { isReady as embeddingsReady } from "../utils/embeddings";
+import { isGemmaConfigured } from "../utils/gemmaEngine";
+import { isGeminiConfigured } from "../utils/geminiConfig";
 
 /**
  * Layer 33 — Multimodal RAG Router Panel
@@ -21,7 +21,9 @@ import { isGeminiConfigured } from '../utils/geminiEngine';
  */
 export default function MultimodalRagPanel({ onApplyToBrain }) {
   const [raw, setRaw] = useState(EXAMPLE_DOCS);
-  const [question, setQuestion] = useState('What firewall dimensions exist and which table row shows combo?');
+  const [question, setQuestion] = useState(
+    "What firewall dimensions exist and which table row shows combo?",
+  );
   const [status, setStatus] = useState(getMultimodalStatus());
   const [filterTypes, setFilterTypes] = useState(new Set(MODALITIES));
   const [useGemma, setUseGemma] = useState(false);
@@ -37,12 +39,16 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
   const geminiOn = isGeminiConfigured();
   const gemmaOn = isGemmaConfigured();
   const llmOn = geminiOn || gemmaOn;
-  const enrichEngineLabel = geminiOn ? 'Gemini' : gemmaOn ? 'Gemma 4' : 'Gemini / Gemma 4';
+  const enrichEngineLabel = geminiOn
+    ? "Gemini"
+    : gemmaOn
+      ? "Gemma 4"
+      : "Gemini / Gemma 4";
 
   const modalityBadges = useMemo(() => {
     return MODALITIES.map((m) => ({
       key: m,
-      count: status.stats.byModality?.[m] || 0
+      count: status.stats.byModality?.[m] || 0,
     }));
   }, [status]);
 
@@ -55,7 +61,7 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
       const res = await indexMultimodal({
         rawText: raw,
         useGemma: useGemma && llmOn,
-        onProgress: (p) => setIndexProgress(p)
+        onProgress: (p) => setIndexProgress(p),
       });
       setResult({ justIndexed: res });
     } catch (err) {
@@ -71,8 +77,12 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
     setQuerying(true);
     setError(null);
     try {
-      const filterArr = filterTypes.size === MODALITIES.length ? null : [...filterTypes];
-      const res = await queryMultimodal(question, { topK: 5, filterTypes: filterArr });
+      const filterArr =
+        filterTypes.size === MODALITIES.length ? null : [...filterTypes];
+      const res = await queryMultimodal(question, {
+        topK: 5,
+        filterTypes: filterArr,
+      });
       setResult(res);
     } catch (err) {
       setError(err.message);
@@ -89,8 +99,9 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
 
   function toggleType(t) {
     const next = new Set(filterTypes);
-    if (next.has(t)) next.delete(t); else next.add(t);
-    if (!next.size) next.add('text'); // never let the filter be empty
+    if (next.has(t)) next.delete(t);
+    else next.add(t);
+    if (!next.size) next.add("text"); // never let the filter be empty
     setFilterTypes(next);
   }
 
@@ -104,11 +115,11 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
       <div className="eyebrow">Layer 33</div>
       <h2>Multimodal RAG · Router</h2>
       <p className="muted">
-        Paste markdown with fenced blocks (<code>```image</code>, <code>```table</code>,
-        <code>```equation</code>, <code>```code</code>). Each item routes through a
-        per-modality handler, renders to embeddable text, and joins the same
-        retrieval pool. Cannibalized from <em>HKUDS/RAG-Anything</em> — no
-        LightRAG, no MinerU, no LibreOffice.
+        Paste markdown with fenced blocks (<code>```image</code>,{" "}
+        <code>```table</code>,<code>```equation</code>, <code>```code</code>).
+        Each item routes through a per-modality handler, renders to embeddable
+        text, and joins the same retrieval pool. Cannibalized from{" "}
+        <em>HKUDS/RAG-Anything</em> — no LightRAG, no MinerU, no LibreOffice.
       </p>
 
       <div className="rag-status-row">
@@ -126,28 +137,42 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
         </div>
         <div className="metric">
           <small>Mode</small>
-          <strong style={{ color: status.usingEmbeddings ? '#7dd87f' : '#f5c888' }}>
-            {status.usingEmbeddings ? 'Embeddings' : embedsOn ? 'Ready to embed' : 'BM25 fallback'}
+          <strong
+            style={{ color: status.usingEmbeddings ? "#7dd87f" : "#f5c888" }}
+          >
+            {status.usingEmbeddings
+              ? "Embeddings"
+              : embedsOn
+                ? "Ready to embed"
+                : "BM25 fallback"}
           </strong>
         </div>
       </div>
 
       <div className="rag-status-row" style={{ marginTop: 8 }}>
         {modalityBadges.map((b) => (
-          <div key={b.key} className="metric" style={{ opacity: b.count ? 1 : 0.45 }}>
+          <div
+            key={b.key}
+            className="metric"
+            style={{ opacity: b.count ? 1 : 0.45 }}
+          >
             <small>{b.key}</small>
             <strong>{b.count}</strong>
           </div>
         ))}
       </div>
 
-      <label className="muted small-note">Content (markdown with fenced blocks)</label>
+      <label className="muted small-note">
+        Content (markdown with fenced blocks)
+      </label>
       <textarea
         className="rag-docs-input"
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
         rows={14}
-        placeholder={'=== Title ===\n\nParagraph text.\n\n```image { "src": "...", "alt": "...", "caption": "..." }```\n\n```table\nH1 | H2\na  | b\n```'}
+        placeholder={
+          '=== Title ===\n\nParagraph text.\n\n```image { "src": "...", "alt": "...", "caption": "..." }```\n\n```table\nH1 | H2\na  | b\n```'
+        }
       />
 
       <div className="rag-actions">
@@ -155,33 +180,48 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
           {indexing
             ? indexProgress
               ? `${indexProgress.phase}… ${indexProgress.done}/${indexProgress.total}`
-              : 'Indexing…'
-            : status.indexed ? 'Re-index' : 'Index content'}
+              : "Indexing…"
+            : status.indexed
+              ? "Re-index"
+              : "Index content"}
         </button>
         {status.indexed && (
-          <button className="ghost small" onClick={handleClear}>Clear index</button>
+          <button className="ghost small" onClick={handleClear}>
+            Clear index
+          </button>
         )}
-        <label className="small-note" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label
+          className="small-note"
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
           <input
             type="checkbox"
             checked={useGemma}
             onChange={(e) => setUseGemma(e.target.checked)}
             disabled={!llmOn}
           />
-          <span style={{ color: llmOn ? undefined : '#8a8f99' }}>
-            Enrich images via {enrichEngineLabel} {llmOn ? '' : '(not configured)'}
+          <span style={{ color: llmOn ? undefined : "#8a8f99" }}>
+            Enrich images via {enrichEngineLabel}{" "}
+            {llmOn ? "" : "(not configured)"}
           </span>
         </label>
       </div>
 
       {status.indexed && (
         <>
-          <label className="muted small-note" style={{ marginTop: 10 }}>Filter modalities</label>
-          <div className="rag-actions" style={{ flexWrap: 'wrap', gap: 6 }}>
+          <label className="muted small-note" style={{ marginTop: 10 }}>
+            Filter modalities
+          </label>
+          <div className="rag-actions" style={{ flexWrap: "wrap", gap: 6 }}>
             {MODALITIES.map((t) => (
               <button
                 key={t}
-                className={filterTypes.has(t) ? 'primary small' : 'ghost small'}
+                className={filterTypes.has(t) ? "primary small" : "ghost small"}
                 onClick={() => toggleType(t)}
               >
                 {t}
@@ -189,17 +229,23 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
             ))}
           </div>
 
-          <label className="muted small-note" style={{ marginTop: 10 }}>Ask a question</label>
+          <label className="muted small-note" style={{ marginTop: 10 }}>
+            Ask a question
+          </label>
           <div className="rag-query-row">
             <input
               className="rag-query-input"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
+              onKeyDown={(e) => e.key === "Enter" && handleAsk()}
               placeholder="Ask anything about the indexed content…"
             />
-            <button className="primary small" onClick={handleAsk} disabled={querying}>
-              {querying ? 'Searching…' : 'Ask'}
+            <button
+              className="primary small"
+              onClick={handleAsk}
+              disabled={querying}
+            >
+              {querying ? "Searching…" : "Ask"}
             </button>
           </div>
         </>
@@ -214,7 +260,9 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
               Top {result.results.length} · {result.mode}
               {result.byModality && (
                 <span className="muted" style={{ marginLeft: 8 }}>
-                  {Object.entries(result.byModality).map(([k, v]) => `${k}:${v}`).join('  ')}
+                  {Object.entries(result.byModality)
+                    .map(([k, v]) => `${k}:${v}`)
+                    .join("  ")}
                 </span>
               )}
             </strong>
@@ -233,7 +281,10 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
                   {r.type}
                 </span>
                 <span className="rag-result-doc">{r.docTitle}</span>
-                <span className="rag-result-score" style={{ color: scoreColor(r.score, result.mode) }}>
+                <span
+                  className="rag-result-score"
+                  style={{ color: scoreColor(r.score, result.mode) }}
+                >
                   {scoreLabel(r.score, result.mode)}
                 </span>
               </div>
@@ -245,59 +296,108 @@ export default function MultimodalRagPanel({ onApplyToBrain }) {
 
       {result?.justIndexed && !result.results && (
         <p className="muted small-note">
-          Indexed {result.justIndexed.items} items across{' '}
-          {result.justIndexed.docs} document{result.justIndexed.docs === 1 ? '' : 's'}.
-          Mode: <strong>{result.justIndexed.usingEmbeddings ? 'embeddings' : 'BM25'}</strong>.
-          Modalities:{' '}
+          Indexed {result.justIndexed.items} items across{" "}
+          {result.justIndexed.docs} document
+          {result.justIndexed.docs === 1 ? "" : "s"}. Mode:{" "}
+          <strong>
+            {result.justIndexed.usingEmbeddings ? "embeddings" : "BM25"}
+          </strong>
+          . Modalities:{" "}
           {Object.entries(result.justIndexed.byModality)
             .map(([k, v]) => `${k}:${v}`)
-            .join('  ')}
+            .join("  ")}
         </p>
       )}
 
       <p className="muted small-note">
-        Images → Gemma 4 captions (when configured). Tables → row-level sentences.
-        Equations → symbol set. Code → identifiers + comments. All items share the
-        same vector space so a single query retrieves across modalities.
+        Images → Gemma 4 captions (when configured). Tables → row-level
+        sentences. Equations → symbol set. Code → identifiers + comments. All
+        items share the same vector space so a single query retrieves across
+        modalities.
       </p>
     </section>
   );
 }
 
 function ResultBody({ r }) {
-  if (r.type === 'image') {
+  if (r.type === "image") {
     return (
       <div>
-        <p className="rag-result-text"><strong>Caption:</strong> {r.payload.caption || r.payload.alt || '(no caption)'}</p>
-        {r.payload.src && <p className="rag-result-text muted small-note">src: <code>{r.payload.src}</code></p>}
-        {r.provider === 'gemini' && <p className="rag-result-text small-note" style={{ color: '#7dd87f' }}>Enriched via Gemini</p>}
-        {r.provider === 'gemma' && <p className="rag-result-text small-note" style={{ color: '#7dd87f' }}>Enriched via Gemma 4</p>}
+        <p className="rag-result-text">
+          <strong>Caption:</strong>{" "}
+          {r.payload.caption || r.payload.alt || "(no caption)"}
+        </p>
+        {r.payload.src && (
+          <p className="rag-result-text muted small-note">
+            src: <code>{r.payload.src}</code>
+          </p>
+        )}
+        {r.provider === "gemini" && (
+          <p
+            className="rag-result-text small-note"
+            style={{ color: "#7dd87f" }}
+          >
+            Enriched via Gemini
+          </p>
+        )}
+        {r.provider === "gemma" && (
+          <p
+            className="rag-result-text small-note"
+            style={{ color: "#7dd87f" }}
+          >
+            Enriched via Gemma 4
+          </p>
+        )}
       </div>
     );
   }
-  if (r.type === 'table') {
+  if (r.type === "table") {
     return (
-      <div style={{ overflowX: 'auto' }}>
+      <div style={{ overflowX: "auto" }}>
         <table className="mm-table">
           <thead>
-            <tr>{(r.payload.headers || []).map((h, i) => <th key={i}>{h}</th>)}</tr>
+            <tr>
+              {(r.payload.headers || []).map((h, i) => (
+                <th key={i}>{h}</th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {(r.payload.rows || []).slice(0, 8).map((row, i) => (
-              <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>
+              <tr key={i}>
+                {row.map((cell, j) => (
+                  <td key={j}>{cell}</td>
+                ))}
+              </tr>
             ))}
           </tbody>
         </table>
-        {r.payload.caption && <p className="rag-result-text muted small-note">{r.payload.caption}</p>}
+        {r.payload.caption && (
+          <p className="rag-result-text muted small-note">
+            {r.payload.caption}
+          </p>
+        )}
       </div>
     );
   }
-  if (r.type === 'equation') {
-    return <p className="rag-result-text"><code>{r.payload.latex}</code></p>;
-  }
-  if (r.type === 'code') {
+  if (r.type === "equation") {
     return (
-      <pre className="rag-result-text" style={{ background: '#0f1218', padding: 8, borderRadius: 4, overflowX: 'auto' }}>
+      <p className="rag-result-text">
+        <code>{r.payload.latex}</code>
+      </p>
+    );
+  }
+  if (r.type === "code") {
+    return (
+      <pre
+        className="rag-result-text"
+        style={{
+          background: "#0f1218",
+          padding: 8,
+          borderRadius: 4,
+          overflowX: "auto",
+        }}
+      >
         <code>{r.payload.code}</code>
       </pre>
     );
@@ -306,30 +406,32 @@ function ResultBody({ r }) {
 }
 
 function typeColor(t) {
-  return {
-    text: '#c0c4cc',
-    heading: '#e6d28a',
-    image: '#8fd3ff',
-    table: '#ffb56b',
-    equation: '#b78cff',
-    code: '#a3e3a0'
-  }[t] || '#c0c4cc';
+  return (
+    {
+      text: "#c0c4cc",
+      heading: "#e6d28a",
+      image: "#8fd3ff",
+      table: "#ffb56b",
+      equation: "#b78cff",
+      code: "#a3e3a0",
+    }[t] || "#c0c4cc"
+  );
 }
 
 function scoreColor(score, mode) {
-  if (mode === 'embeddings') {
-    if (score > 0.6) return '#7dd87f';
-    if (score > 0.4) return '#a3d9a5';
-    if (score > 0.25) return '#f5c888';
-    return '#ff8090';
+  if (mode === "embeddings") {
+    if (score > 0.6) return "#7dd87f";
+    if (score > 0.4) return "#a3d9a5";
+    if (score > 0.25) return "#f5c888";
+    return "#ff8090";
   }
-  if (score > 0.04) return '#7dd87f';
-  if (score > 0.02) return '#f5c888';
-  return '#8a8f99';
+  if (score > 0.04) return "#7dd87f";
+  if (score > 0.02) return "#f5c888";
+  return "#8a8f99";
 }
 
 function scoreLabel(score, mode) {
-  if (mode === 'embeddings') return `${(score * 100).toFixed(0)}%`;
+  if (mode === "embeddings") return `${(score * 100).toFixed(0)}%`;
   return score.toFixed(3);
 }
 

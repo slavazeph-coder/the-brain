@@ -1,13 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  isGeminiConfigured,
-  analyzeContentWithGemini,
-  analyzeMultimodalWithGemini,
-  checkGeminiHealth,
-  getGeminiModel
-} from '../utils/geminiEngine';
-import { SCORE_FIELDS } from '../utils/cognitiveFirewall';
-import { inspectPrompt } from '../utils/lobsterTrap';
+import React, { useEffect, useRef, useState } from "react";
+import { isGeminiConfigured, getGeminiModel } from "../utils/geminiConfig";
+import { SCORE_FIELDS } from "../utils/cognitiveFirewall";
+// The heavy Gemini engine + lobster-trap inspector are imported dynamically at
+// their (async) call sites below, so this panel's chunk never statically pulls
+// them in and they stay purely dynamically imported.
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -25,39 +21,49 @@ function ScoreRow({ label, desc, value, color }) {
 }
 
 export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
-  const [status, setStatus] = useState('checking');
-  const [text, setText] = useState('');
+  const [status, setStatus] = useState("checking");
+  const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [trap, setTrap] = useState(null);
   const fileRef = useRef(null);
   const model = getGeminiModel();
 
   useEffect(() => {
     if (!isGeminiConfigured()) {
-      setStatus('unconfigured');
+      setStatus("unconfigured");
       return;
     }
     let cancelled = false;
-    checkGeminiHealth().then((h) => {
-      if (!cancelled) setStatus(h.ok ? 'online' : 'offline');
-    });
-    return () => { cancelled = true; };
+    import("../utils/geminiEngine")
+      .then(({ checkGeminiHealth }) => checkGeminiHealth())
+      .then((h) => {
+        if (!cancelled) setStatus(h.ok ? "online" : "offline");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleAnalyzeText = async () => {
     setLoading(true);
-    setError('');
+    setError("");
     setTrap(null);
     try {
-      const decision = inspectPrompt({ prompt: text, surface: 'gemini.analyze' });
+      const { inspectPrompt } = await import("../utils/lobsterTrap");
+      const decision = inspectPrompt({
+        prompt: text,
+        surface: "gemini.analyze",
+      });
       setTrap(decision);
-      if (decision.action === 'block') {
-        throw new Error(`Lobster Trap blocked: ${decision.reasons.join(', ')}`);
+      if (decision.action === "block") {
+        throw new Error(`Lobster Trap blocked: ${decision.reasons.join(", ")}`);
       }
-      const payload = decision.action === 'redact' ? decision.redacted : text;
+      const payload = decision.action === "redact" ? decision.redacted : text;
+      const { analyzeContentWithGemini } =
+        await import("../utils/geminiEngine");
       const res = await analyzeContentWithGemini(payload);
       setResult(res);
     } catch (err) {
@@ -70,8 +76,10 @@ export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
   const handleAnalyzeMedia = async () => {
     if (!file) return;
     setLoading(true);
-    setError('');
+    setError("");
     try {
+      const { analyzeMultimodalWithGemini } =
+        await import("../utils/geminiEngine");
       const res = await analyzeMultimodalWithGemini(file);
       setResult(res);
     } catch (err) {
@@ -86,29 +94,47 @@ export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
   };
 
   const overall = result
-    ? (result.emotionalActivation + result.cognitiveSuppression + result.manipulationPressure) / 3
+    ? (result.emotionalActivation +
+        result.cognitiveSuppression +
+        result.manipulationPressure) /
+      3
     : null;
-  const riskColor = !overall ? 'var(--primary)' : overall > 0.65 ? '#dd6974' : overall > 0.35 ? '#fdab43' : '#6daa45';
-  const statusColor = status === 'online' ? 'var(--ok)' : status === 'offline' ? 'var(--danger)' : 'var(--muted)';
+  const riskColor = !overall
+    ? "var(--primary)"
+    : overall > 0.65
+      ? "#dd6974"
+      : overall > 0.35
+        ? "#fdab43"
+        : "#6daa45";
+  const statusColor =
+    status === "online"
+      ? "var(--ok)"
+      : status === "offline"
+        ? "var(--danger)"
+        : "var(--muted)";
 
   return (
     <section className="panel panel-pad gemma-panel">
       <div className="eyebrow gemma-eyebrow">
         <span>GEMINI — Deep Analysis ({model})</span>
-        <span className="gemma-status-dot" style={{ background: statusColor }} title={status} />
+        <span
+          className="gemma-status-dot"
+          style={{ background: statusColor }}
+          title={status}
+        />
       </div>
       <h2>Gemini-Powered Manipulation Scanner</h2>
       <p className="muted">
-        {status === 'unconfigured'
-          ? 'Set VITE_GEMINI_API_KEY (Google AI Studio) to enable Gemini deep analysis. Supports text, images, video, audio. Every prompt is pre-screened by Lobster Trap.'
-          : status === 'online'
-          ? `${model} online — every prompt is pre-screened by Lobster Trap before it leaves the browser.`
-          : status === 'offline'
-          ? 'Gemini endpoint unreachable — check VITE_GEMINI_API_KEY.'
-          : 'Checking Gemini availability...'}
+        {status === "unconfigured"
+          ? "Set VITE_GEMINI_API_KEY (Google AI Studio) to enable Gemini deep analysis. Supports text, images, video, audio. Every prompt is pre-screened by Lobster Trap."
+          : status === "online"
+            ? `${model} online — every prompt is pre-screened by Lobster Trap before it leaves the browser.`
+            : status === "offline"
+              ? "Gemini endpoint unreachable — check VITE_GEMINI_API_KEY."
+              : "Checking Gemini availability..."}
       </p>
 
-      {status !== 'unconfigured' && (
+      {status !== "unconfigured" && (
         <>
           <textarea
             className="firewall-input"
@@ -123,36 +149,47 @@ export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
               ref={fileRef}
               type="file"
               accept="image/*,video/*,audio/*"
-              style={{ display: 'none' }}
+              style={{ display: "none" }}
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
-            <button className="btn" onClick={() => fileRef.current?.click()}>Upload media</button>
-            {file && <span className="muted gemma-file-name">{file.name} ({(file.size / 1024).toFixed(0)} KB)</span>}
+            <button className="btn" onClick={() => fileRef.current?.click()}>
+              Upload media
+            </button>
+            {file && (
+              <span className="muted gemma-file-name">
+                {file.name} ({(file.size / 1024).toFixed(0)} KB)
+              </span>
+            )}
           </div>
 
           <div className="control-actions" style={{ marginTop: 12 }}>
             <button
               className="btn primary gemma-btn"
               onClick={handleAnalyzeText}
-              disabled={loading || text.trim().length < 5 || status !== 'online'}
+              disabled={
+                loading || text.trim().length < 5 || status !== "online"
+              }
             >
-              {loading ? 'Analysing...' : 'Analyse text'}
+              {loading ? "Analysing..." : "Analyse text"}
             </button>
             <button
               className="btn gemma-btn"
               onClick={handleAnalyzeMedia}
-              disabled={loading || !file || status !== 'online'}
+              disabled={loading || !file || status !== "online"}
             >
-              {loading ? 'Analysing...' : 'Analyse media'}
+              {loading ? "Analysing..." : "Analyse media"}
             </button>
             {result && (
-              <button className="btn" onClick={handleApply}>Apply to brain</button>
+              <button className="btn" onClick={handleApply}>
+                Apply to brain
+              </button>
             )}
           </div>
 
-          {trap && trap.action !== 'allow' && (
+          {trap && trap.action !== "allow" && (
             <p className="muted" style={{ marginTop: 8 }}>
-              Lobster Trap: <strong>{trap.action.toUpperCase()}</strong> — {trap.reasons.join('; ')}
+              Lobster Trap: <strong>{trap.action.toUpperCase()}</strong> —{" "}
+              {trap.reasons.join("; ")}
             </p>
           )}
 
@@ -162,7 +199,7 @@ export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
 
       {result && (
         <div className="firewall-result gemma-result">
-          <div className="firewall-overall" style={{ '--risk': riskColor }}>
+          <div className="firewall-overall" style={{ "--risk": riskColor }}>
             <span>Overall risk (Gemini)</span>
             <strong>{(overall * 100).toFixed(0)}%</strong>
           </div>
@@ -190,7 +227,9 @@ export default function GeminiAnalysisPanel({ onApplyToNetwork }) {
               <span className="eyebrow">Evidence traces</span>
               <div className="firewall-chips">
                 {result.evidence.map((e, i) => (
-                  <span key={i} className="firewall-chip">{e}</span>
+                  <span key={i} className="firewall-chip">
+                    {e}
+                  </span>
                 ))}
               </div>
             </div>

@@ -30,12 +30,16 @@
  * Docling, Obsidian exports, MCP tools) can emit the content list directly.
  */
 
-import { embed, cosineSimilarity, isReady as embeddingsReady } from './embeddings';
-import { buildBM25Index, hybridSearch } from './bm25';
-import { analyzeMultimodalWithGemma, isGemmaConfigured } from './gemmaEngine';
-import { analyzeMultimodalWithGemini, isGeminiConfigured } from './geminiEngine';
+import {
+  embed,
+  cosineSimilarity,
+  isReady as embeddingsReady,
+} from "./embeddings";
+import { buildBM25Index, hybridSearch } from "./bm25";
+import { analyzeMultimodalWithGemma, isGemmaConfigured } from "./gemmaEngine";
+import { isGeminiConfigured } from "./geminiConfig";
 
-export const MODALITIES = ['text', 'image', 'table', 'equation', 'code'];
+export const MODALITIES = ["text", "image", "table", "equation", "code"];
 
 const MODALITY_WEIGHTS = {
   // Applied at query time — keeps text first-class but lets a query that
@@ -44,25 +48,31 @@ const MODALITY_WEIGHTS = {
   image: 0.95,
   table: 0.95,
   equation: 0.9,
-  code: 0.95
+  code: 0.95,
 };
 
 // ---------- in-memory index ----------
 
 let mmIndex = {
-  items: [],           // normalized { id, type, docTitle, section, renderedText, payload, embedding? }
-  bm25: null,          // fallback index over renderedText
-  hierarchy: [],       // belongs_to edges [{ from, to, kind }]
+  items: [], // normalized { id, type, docTitle, section, renderedText, payload, embedding? }
+  bm25: null, // fallback index over renderedText
+  hierarchy: [], // belongs_to edges [{ from, to, kind }]
   createdAt: null,
   usingEmbeddings: false,
-  stats: { docs: 0, items: 0, byModality: {} }
+  stats: { docs: 0, items: 0, byModality: {} },
 };
 
 const subscribers = new Set();
 
 function emit() {
   const snap = getMultimodalStatus();
-  for (const cb of subscribers) { try { cb(snap); } catch { /* ignore */ } }
+  for (const cb of subscribers) {
+    try {
+      cb(snap);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function subscribeMultimodalRag(cb) {
@@ -77,7 +87,7 @@ export function getMultimodalStatus() {
     usingEmbeddings: mmIndex.usingEmbeddings,
     stats: { ...mmIndex.stats, byModality: { ...mmIndex.stats.byModality } },
     createdAt: mmIndex.createdAt,
-    hierarchySize: mmIndex.hierarchy.length
+    hierarchySize: mmIndex.hierarchy.length,
   };
 }
 
@@ -88,14 +98,15 @@ export function clearMultimodalIndex() {
     hierarchy: [],
     createdAt: null,
     usingEmbeddings: false,
-    stats: { docs: 0, items: 0, byModality: {} }
+    stats: { docs: 0, items: 0, byModality: {} },
   };
   emit();
 }
 
 // ---------- content parsing ----------
 
-const BLOCK_FENCE = /```(image|table|equation|code)(?:\s+([^\n`]*))?\n([\s\S]*?)```/g;
+const BLOCK_FENCE =
+  /```(image|table|equation|code)(?:\s+([^\n`]*))?\n([\s\S]*?)```/g;
 const DOC_DELIM = /^\s*===\s*(.+?)\s*===\s*$/gm;
 
 /**
@@ -103,13 +114,13 @@ const DOC_DELIM = /^\s*===\s*(.+?)\s*===\s*$/gm;
  * multimodal blocks. Returns [{ type, docTitle, section?, ...payload }].
  */
 export function parseMultimodalDocs(raw) {
-  if (!raw || typeof raw !== 'string') return [];
+  if (!raw || typeof raw !== "string") return [];
 
   // Split into docs first
   const docMatches = [...raw.matchAll(DOC_DELIM)];
   const docs = [];
   if (!docMatches.length) {
-    docs.push({ title: 'Document', body: raw });
+    docs.push({ title: "Document", body: raw });
   } else {
     for (let i = 0; i < docMatches.length; i++) {
       const m = docMatches[i];
@@ -129,14 +140,14 @@ export function parseMultimodalDocs(raw) {
     // Detect fenced blocks first, keeping intervening text as paragraphs
     const fences = [];
     let fm;
-    const re = new RegExp(BLOCK_FENCE.source, 'g');
+    const re = new RegExp(BLOCK_FENCE.source, "g");
     while ((fm = re.exec(body)) !== null) {
       fences.push({
         kind: fm[1],
-        meta: (fm[2] || '').trim(),
+        meta: (fm[2] || "").trim(),
         content: fm[3].trim(),
         start: fm.index,
-        end: fm.index + fm[0].length
+        end: fm.index + fm[0].length,
       });
     }
 
@@ -160,62 +171,79 @@ function addTextParagraphs(out, docTitle, section, chunk) {
   if (!trimmed) return;
   // Split on blank lines — each paragraph is its own indexable unit so
   // retrieval can pull the tightest relevant text.
-  const paragraphs = trimmed.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const paragraphs = trimmed
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   for (const p of paragraphs) {
     // Section heading detection (`## Heading` or `# Heading`)
     const heading = p.match(/^#{1,3}\s+(.+)$/);
     if (heading) {
-      out.push({ type: 'heading', docTitle, section, text: heading[1].trim() });
+      out.push({ type: "heading", docTitle, section, text: heading[1].trim() });
       continue;
     }
-    out.push({ type: 'text', docTitle, section, text: p });
+    out.push({ type: "text", docTitle, section, text: p });
   }
 }
 
 function buildFencedItem(docTitle, section, f) {
-  if (f.kind === 'image') {
+  if (f.kind === "image") {
     // meta is JSON-ish: { "src": "...", "alt": "...", "caption": "..." }
     let payload = {};
-    try { payload = f.meta ? JSON.parse(f.meta) : {}; } catch { payload = { alt: f.meta }; }
+    try {
+      payload = f.meta ? JSON.parse(f.meta) : {};
+    } catch {
+      payload = { alt: f.meta };
+    }
     return {
-      type: 'image',
+      type: "image",
       docTitle,
       section,
       src: payload.src || null,
-      alt: payload.alt || '',
-      caption: payload.caption || f.content || ''
+      alt: payload.alt || "",
+      caption: payload.caption || f.content || "",
     };
   }
-  if (f.kind === 'table') {
-    const lines = f.content.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  if (f.kind === "table") {
+    const lines = f.content
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .filter(Boolean);
     const [headerLine, ...rowLines] = lines;
-    const headers = (headerLine || '').split(/\s*\|\s*/).filter(Boolean);
+    const headers = (headerLine || "").split(/\s*\|\s*/).filter(Boolean);
     const rows = rowLines
-      .filter((l) => !/^[-|\s]+$/.test(l))   // skip markdown separator lines
+      .filter((l) => !/^[-|\s]+$/.test(l)) // skip markdown separator lines
       .map((l) => l.split(/\s*\|\s*/).filter(Boolean));
-    return { type: 'table', docTitle, section, headers, rows, caption: parseMetaCaption(f.meta) };
-  }
-  if (f.kind === 'equation') {
     return {
-      type: 'equation',
+      type: "table",
+      docTitle,
+      section,
+      headers,
+      rows,
+      caption: parseMetaCaption(f.meta),
+    };
+  }
+  if (f.kind === "equation") {
+    return {
+      type: "equation",
       docTitle,
       section,
       latex: f.content,
-      caption: parseMetaCaption(f.meta)
+      caption: parseMetaCaption(f.meta),
     };
   }
-  if (f.kind === 'code') {
-    const lang = (f.meta.match(/lang=(\S+)/) || [])[1] || 'text';
-    return { type: 'code', docTitle, section, lang, code: f.content };
+  if (f.kind === "code") {
+    const lang = (f.meta.match(/lang=(\S+)/) || [])[1] || "text";
+    return { type: "code", docTitle, section, lang, code: f.content };
   }
-  return { type: 'text', docTitle, section, text: f.content };
+  return { type: "text", docTitle, section, text: f.content };
 }
 
 function parseMetaCaption(meta) {
-  if (!meta) return '';
+  if (!meta) return "";
   try {
     const parsed = JSON.parse(meta);
-    return parsed.caption || parsed.alt || '';
+    return parsed.caption || parsed.alt || "";
   } catch {
     return meta;
   }
@@ -233,40 +261,50 @@ function parseMetaCaption(meta) {
 const HANDLERS = {
   text: (item) => ({
     renderedText: item.text,
-    summary: item.text.slice(0, 120)
+    summary: item.text.slice(0, 120),
   }),
 
   heading: (item) => ({
     renderedText: `Section: ${item.text}`,
-    summary: item.text
+    summary: item.text,
   }),
 
   image: async (item, { useGemma } = {}) => {
-    let caption = item.caption || item.alt || '';
+    let caption = item.caption || item.alt || "";
     let provider = null;
     if (useGemma && item.file) {
       if (isGeminiConfigured()) {
         try {
+          const { analyzeMultimodalWithGemini } =
+            await import("./geminiEngine");
           const gem = await analyzeMultimodalWithGemini(item.file);
-          caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
-          provider = 'gemini';
-        } catch { /* fall through to Gemma */ }
+          caption = [caption, gem.reasoning, gem.evidence?.join("; ")]
+            .filter(Boolean)
+            .join(" · ");
+          provider = "gemini";
+        } catch {
+          /* fall through to Gemma */
+        }
       }
       if (!provider && isGemmaConfigured()) {
         try {
           const gem = await analyzeMultimodalWithGemma(item.file);
-          caption = [caption, gem.reasoning, gem.evidence?.join('; ')].filter(Boolean).join(' · ');
-          provider = 'gemma';
-        } catch { /* keep fallback caption */ }
+          caption = [caption, gem.reasoning, gem.evidence?.join("; ")]
+            .filter(Boolean)
+            .join(" · ");
+          provider = "gemma";
+        } catch {
+          /* keep fallback caption */
+        }
       }
     }
-    const src = item.src ? ` [${item.src}]` : '';
-    const rendered = `Image${src} alt="${item.alt || ''}" caption: ${caption || '(no caption)'}`;
+    const src = item.src ? ` [${item.src}]` : "";
+    const rendered = `Image${src} alt="${item.alt || ""}" caption: ${caption || "(no caption)"}`;
     return {
       renderedText: rendered,
-      summary: caption || item.alt || item.src || 'Image',
+      summary: caption || item.alt || item.src || "Image",
       provider,
-      gemmaUsed: provider === 'gemma'
+      gemmaUsed: provider === "gemma",
     };
   },
 
@@ -278,34 +316,46 @@ const HANDLERS = {
     const headers = item.headers || [];
     const rowSentences = (item.rows || []).map((row) =>
       headers.length
-        ? headers.map((h, i) => `${h}: ${row[i] ?? ''}`).join(', ')
-        : row.join(', ')
+        ? headers.map((h, i) => `${h}: ${row[i] ?? ""}`).join(", ")
+        : row.join(", "),
     );
     const rendered = [
-      `Table (${item.rows?.length ?? 0} rows × ${headers.length} cols)${item.caption ? `: ${item.caption}` : ''}`,
-      headers.length ? `Columns: ${headers.join(', ')}.` : '',
-      rowSentences.join(' | ')
-    ].filter(Boolean).join(' ');
-    return { renderedText: rendered, summary: item.caption || `Table · ${headers.join(' / ')}` };
+      `Table (${item.rows?.length ?? 0} rows × ${headers.length} cols)${item.caption ? `: ${item.caption}` : ""}`,
+      headers.length ? `Columns: ${headers.join(", ")}.` : "",
+      rowSentences.join(" | "),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return {
+      renderedText: rendered,
+      summary: item.caption || `Table · ${headers.join(" / ")}`,
+    };
   },
 
   equation: (item) => {
     // Simple LaTeX → natural language: strip common operators to reveal
     // the variables/constants that matter for lexical retrieval.
-    const vars = (item.latex || '').match(/[A-Za-z_][A-Za-z_0-9]*/g) || [];
-    const uniqVars = [...new Set(vars)].slice(0, 8).join(', ');
-    const rendered = `Equation: ${item.latex}. Symbols: ${uniqVars}.${item.caption ? ` Caption: ${item.caption}.` : ''}`;
+    const vars = (item.latex || "").match(/[A-Za-z_][A-Za-z_0-9]*/g) || [];
+    const uniqVars = [...new Set(vars)].slice(0, 8).join(", ");
+    const rendered = `Equation: ${item.latex}. Symbols: ${uniqVars}.${item.caption ? ` Caption: ${item.caption}.` : ""}`;
     return { renderedText: rendered, summary: item.latex.slice(0, 80) };
   },
 
   code: (item) => {
     // Surface identifiers + comments so BM25 + trigrams hit. Full code
     // stays in the payload for the panel to display.
-    const identifiers = (item.code.match(/[A-Za-z_][A-Za-z_0-9]*/g) || []).slice(0, 40);
-    const comments = (item.code.match(/(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)/g) || []).join(' ');
-    const rendered = `Code (${item.lang}): ${comments} Identifiers: ${[...new Set(identifiers)].join(' ')}`;
-    return { renderedText: rendered, summary: `${item.lang} · ${(identifiers[0] || '(snippet)')}` };
-  }
+    const identifiers = (
+      item.code.match(/[A-Za-z_][A-Za-z_0-9]*/g) || []
+    ).slice(0, 40);
+    const comments = (
+      item.code.match(/(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)/g) || []
+    ).join(" ");
+    const rendered = `Code (${item.lang}): ${comments} Identifiers: ${[...new Set(identifiers)].join(" ")}`;
+    return {
+      renderedText: rendered,
+      summary: `${item.lang} · ${identifiers[0] || "(snippet)"}`,
+    };
+  },
 };
 
 async function renderItem(item, options) {
@@ -324,13 +374,14 @@ export async function indexMultimodal({
   rawText = null,
   contentList = null,
   useGemma = false,
-  onProgress = null
+  onProgress = null,
 } = {}) {
-  const items = contentList && contentList.length
-    ? contentList.slice()
-    : parseMultimodalDocs(rawText || '');
+  const items =
+    contentList && contentList.length
+      ? contentList.slice()
+      : parseMultimodalDocs(rawText || "");
 
-  if (!items.length) throw new Error('No content found to index.');
+  if (!items.length) throw new Error("No content found to index.");
 
   const normalized = [];
   const hierarchy = [];
@@ -340,26 +391,31 @@ export async function indexMultimodal({
   for (let i = 0; i < items.length; i++) {
     const raw = items[i];
     const rendered = await renderItem(raw, { useGemma });
-    const id = `${raw.docTitle || 'doc'}-${i}`;
+    const id = `${raw.docTitle || "doc"}-${i}`;
     const entry = {
       id,
       type: raw.type,
-      docTitle: raw.docTitle || 'Document',
+      docTitle: raw.docTitle || "Document",
       section: raw.section || null,
       renderedText: rendered.renderedText,
       summary: rendered.summary,
       payload: raw,
       provider: rendered.provider || null,
-      gemmaUsed: rendered.gemmaUsed || false
+      gemmaUsed: rendered.gemmaUsed || false,
     };
     normalized.push(entry);
 
     // belongs_to: item → doc (and → section when tracked)
-    hierarchy.push({ from: id, to: `doc::${entry.docTitle}`, kind: 'belongs_to' });
+    hierarchy.push({
+      from: id,
+      to: `doc::${entry.docTitle}`,
+      kind: "belongs_to",
+    });
     byDoc.set(entry.docTitle, (byDoc.get(entry.docTitle) || 0) + 1);
     byModality[entry.type] = (byModality[entry.type] || 0) + 1;
 
-    if (onProgress) onProgress({ phase: 'parse', done: i + 1, total: items.length });
+    if (onProgress)
+      onProgress({ phase: "parse", done: i + 1, total: items.length });
   }
 
   // Embed rendered text via Layer 24
@@ -369,14 +425,19 @@ export async function indexMultimodal({
       try {
         normalized[i].embedding = await embed(normalized[i].renderedText);
       } catch {
-        break;    // fall through to BM25 for the rest
+        break; // fall through to BM25 for the rest
       }
-      if (onProgress) onProgress({ phase: 'embed', done: i + 1, total: normalized.length });
+      if (onProgress)
+        onProgress({ phase: "embed", done: i + 1, total: normalized.length });
     }
   }
 
   // BM25 fallback over the rendered text (same corpus for fused retrieval)
-  const bm25Docs = normalized.map((n, idx) => ({ id: n.id, text: n.renderedText, index: idx }));
+  const bm25Docs = normalized.map((n, idx) => ({
+    id: n.id,
+    text: n.renderedText,
+    index: idx,
+  }));
   const bm25Index = buildBM25Index(bm25Docs);
 
   mmIndex = {
@@ -388,8 +449,8 @@ export async function indexMultimodal({
     stats: {
       docs: byDoc.size,
       items: normalized.length,
-      byModality
-    }
+      byModality,
+    },
   };
 
   emit();
@@ -397,7 +458,7 @@ export async function indexMultimodal({
     docs: byDoc.size,
     items: normalized.length,
     byModality,
-    usingEmbeddings: mmIndex.usingEmbeddings
+    usingEmbeddings: mmIndex.usingEmbeddings,
   };
 }
 
@@ -408,13 +469,17 @@ export async function indexMultimodal({
  * subset of modalities. Modality-weighted cosine when embeddings are
  * active, BM25+trigram hybrid otherwise.
  */
-export async function queryMultimodal(question, {
-  topK = 5,
-  filterTypes = null,
-  modalityBias = null   // e.g. { image: 1.3 } to boost a modality for this query
-} = {}) {
-  if (!mmIndex.items.length) throw new Error('Index empty. Index content first.');
-  if (!question?.trim()) return { results: [], mode: 'empty' };
+export async function queryMultimodal(
+  question,
+  {
+    topK = 5,
+    filterTypes = null,
+    modalityBias = null, // e.g. { image: 1.3 } to boost a modality for this query
+  } = {},
+) {
+  if (!mmIndex.items.length)
+    throw new Error("Index empty. Index content first.");
+  if (!question?.trim()) return { results: [], mode: "empty" };
 
   const weights = { ...MODALITY_WEIGHTS, ...(modalityBias || {}) };
 
@@ -422,7 +487,7 @@ export async function queryMultimodal(question, {
     ? mmIndex.items.filter((n) => filterTypes.includes(n.type))
     : mmIndex.items;
 
-  if (!candidates.length) return { results: [], mode: 'no-match' };
+  if (!candidates.length) return { results: [], mode: "no-match" };
 
   if (mmIndex.usingEmbeddings) {
     try {
@@ -432,12 +497,22 @@ export async function queryMultimodal(question, {
         .map((n) => {
           const baseSim = cosineSimilarity(qVec, n.embedding);
           const weight = weights[n.type] ?? 1.0;
-          return { ...projectResult(n), score: baseSim * weight, rawScore: baseSim };
+          return {
+            ...projectResult(n),
+            score: baseSim * weight,
+            rawScore: baseSim,
+          };
         })
         .sort((a, b) => b.score - a.score)
         .slice(0, topK);
-      return { results: scored, mode: 'embeddings', byModality: modalityHistogram(scored) };
-    } catch { /* fall through */ }
+      return {
+        results: scored,
+        mode: "embeddings",
+        byModality: modalityHistogram(scored),
+      };
+    } catch {
+      /* fall through */
+    }
   }
 
   const bm25Ranked = hybridSearch(question, mmIndex.bm25, { topK: topK * 2 });
@@ -447,12 +522,16 @@ export async function queryMultimodal(question, {
       if (!item) return null;
       if (filterTypes && !filterTypes.includes(item.type)) return null;
       const weight = weights[item.type] ?? 1.0;
-      return { ...projectResult(item), score: (r.score ?? 0) * weight, rawScore: r.score ?? 0 };
+      return {
+        ...projectResult(item),
+        score: (r.score ?? 0) * weight,
+        rawScore: r.score ?? 0,
+      };
     })
     .filter(Boolean)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
-  return { results, mode: 'bm25', byModality: modalityHistogram(results) };
+  return { results, mode: "bm25", byModality: modalityHistogram(results) };
 }
 
 function projectResult(item) {
@@ -465,7 +544,7 @@ function projectResult(item) {
     renderedText: item.renderedText,
     payload: item.payload,
     provider: item.provider || null,
-    gemmaUsed: item.gemmaUsed
+    gemmaUsed: item.gemmaUsed,
   };
 }
 
@@ -482,9 +561,12 @@ function modalityHistogram(results) {
  * index without reparsing. Mirrors RAG-Anything's `insert_content_list`.
  * Items must carry at minimum { type, docTitle }.
  */
-export async function insertContentList(contentList, { useGemma = false } = {}) {
+export async function insertContentList(
+  contentList,
+  { useGemma = false } = {},
+) {
   if (!Array.isArray(contentList) || !contentList.length) {
-    throw new Error('contentList must be a non-empty array');
+    throw new Error("contentList must be a non-empty array");
   }
   if (!mmIndex.items.length) {
     return indexMultimodal({ contentList, useGemma });
@@ -496,28 +578,41 @@ export async function insertContentList(contentList, { useGemma = false } = {}) 
   for (let i = 0; i < contentList.length; i++) {
     const raw = contentList[i];
     const rendered = await renderItem(raw, { useGemma });
-    const id = `${raw.docTitle || 'doc'}-${offset + i}`;
+    const id = `${raw.docTitle || "doc"}-${offset + i}`;
     const entry = {
       id,
       type: raw.type,
-      docTitle: raw.docTitle || 'Document',
+      docTitle: raw.docTitle || "Document",
       section: raw.section || null,
       renderedText: rendered.renderedText,
       summary: rendered.summary,
       payload: raw,
       provider: rendered.provider || null,
-      gemmaUsed: rendered.gemmaUsed || false
+      gemmaUsed: rendered.gemmaUsed || false,
     };
     if (useEmbed) {
-      try { entry.embedding = await embed(entry.renderedText); } catch { /* ignore */ }
+      try {
+        entry.embedding = await embed(entry.renderedText);
+      } catch {
+        /* ignore */
+      }
     }
     mmIndex.items.push(entry);
-    mmIndex.hierarchy.push({ from: id, to: `doc::${entry.docTitle}`, kind: 'belongs_to' });
-    mmIndex.stats.byModality[entry.type] = (mmIndex.stats.byModality[entry.type] || 0) + 1;
+    mmIndex.hierarchy.push({
+      from: id,
+      to: `doc::${entry.docTitle}`,
+      kind: "belongs_to",
+    });
+    mmIndex.stats.byModality[entry.type] =
+      (mmIndex.stats.byModality[entry.type] || 0) + 1;
   }
 
   // Rebuild BM25 — cheap enough on small indexes, keeps scoring consistent
-  const bm25Docs = mmIndex.items.map((n, idx) => ({ id: n.id, text: n.renderedText, index: idx }));
+  const bm25Docs = mmIndex.items.map((n, idx) => ({
+    id: n.id,
+    text: n.renderedText,
+    index: idx,
+  }));
   mmIndex.bm25 = buildBM25Index(bm25Docs);
   mmIndex.stats.items = mmIndex.items.length;
   // docs stat: recount distinct
@@ -527,7 +622,7 @@ export async function insertContentList(contentList, { useGemma = false } = {}) 
   return {
     added: contentList.length,
     total: mmIndex.items.length,
-    usingEmbeddings: mmIndex.usingEmbeddings
+    usingEmbeddings: mmIndex.usingEmbeddings,
   };
 }
 
@@ -549,14 +644,16 @@ export function mapMultimodalToRegions(state, queryResult) {
   const clamp = (v) => Math.max(0.04, Math.min(0.95, v));
 
   const topScore = queryResult.results[0]?.score ?? 0;
-  const mean = queryResult.results.reduce((a, r) => a + (r.score ?? 0), 0) / queryResult.results.length;
+  const mean =
+    queryResult.results.reduce((a, r) => a + (r.score ?? 0), 0) /
+    queryResult.results.length;
   const breadth = Math.min(1, queryResult.results.length / 6);
   const hist = queryResult.byModality || {};
 
   regions.HPC = clamp(regions.HPC + topScore * 0.35);
-  regions.CTX = clamp(regions.CTX + breadth * 0.20);
-  regions.PFC = clamp(regions.PFC + (topScore - mean) * 0.30);
-  regions.THL = clamp(regions.THL + breadth * 0.10);
+  regions.CTX = clamp(regions.CTX + breadth * 0.2);
+  regions.PFC = clamp(regions.PFC + (topScore - mean) * 0.3);
+  regions.THL = clamp(regions.THL + breadth * 0.1);
 
   const n = Math.max(1, queryResult.results.length);
   const imgShare = (hist.image || 0) / n;
@@ -564,15 +661,17 @@ export function mapMultimodalToRegions(state, queryResult) {
   const eqShare = (hist.equation || 0) / n;
   const codeShare = (hist.code || 0) / n;
 
-  regions.CTX = clamp(regions.CTX + imgShare * 0.25 + codeShare * 0.10);
-  regions.PFC = clamp(regions.PFC + tableShare * 0.25 + codeShare * 0.15 + eqShare * 0.20);
+  regions.CTX = clamp(regions.CTX + imgShare * 0.25 + codeShare * 0.1);
+  regions.PFC = clamp(
+    regions.PFC + tableShare * 0.25 + codeShare * 0.15 + eqShare * 0.2,
+  );
   regions.HPC = clamp(regions.HPC + eqShare * 0.15);
 
   return {
     ...state,
     regions,
     scenario: `Multimodal RAG · ${queryResult.mode}`,
-    burst: Math.max(state.burst, 8)
+    burst: Math.max(state.burst, 8),
   };
 }
 
@@ -582,6 +681,6 @@ export function _debugSnapshot() {
   return {
     items: mmIndex.items,
     hierarchy: mmIndex.hierarchy,
-    stats: mmIndex.stats
+    stats: mmIndex.stats,
   };
 }
