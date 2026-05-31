@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from "react";
 import ErrorBoundary from "../ErrorBoundary";
+import LazyOnVisible from "./LazyOnVisible";
 
 const ApiDocsPanel = lazy(() => import("../ApiDocsPanel"));
 const CustomRulesPanel = lazy(() => import("../CustomRulesPanel"));
@@ -36,111 +37,147 @@ export default function ToolsSection() {
   return (
     <>
       <ErrorBoundary name="API Docs">
-        <Suspense fallback={<PanelFallback />}>
-          <ApiDocsPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ApiDocsPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Custom Rules">
-        <Suspense fallback={<PanelFallback />}>
-          <CustomRulesPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <CustomRulesPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Badges">
-        <Suspense fallback={<PanelFallback />}>
-          <BadgesPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <BadgesPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Portability">
-        <Suspense fallback={<PanelFallback />}>
-          <PortabilityPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <PortabilityPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="OCR">
-        <Suspense fallback={<PanelFallback />}>
-          <OcrPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <OcrPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Audio">
-        <Suspense fallback={<PanelFallback />}>
-          <AudioPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <AudioPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Macros">
-        <Suspense fallback={<PanelFallback />}>
-          <MacrosPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <MacrosPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Diagnostic">
-        <Suspense fallback={<PanelFallback />}>
-          <DiagnosticPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <DiagnosticPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Hypothesis">
-        <Suspense fallback={<PanelFallback />}>
-          <HypothesisPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <HypothesisPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Context Memory">
-        <Suspense fallback={<PanelFallback />}>
-          <ContextMemoryPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ContextMemoryPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Debate">
-        <Suspense fallback={<PanelFallback />}>
-          <DebatePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <DebatePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Replay">
-        <Suspense fallback={<PanelFallback />}>
-          <ReplayPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ReplayPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Coverage">
-        <Suspense fallback={<PanelFallback />}>
-          <CoveragePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <CoveragePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Calendar Heatmap">
-        <Suspense fallback={<PanelFallback />}>
-          <CalendarHeatmapPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <CalendarHeatmapPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Tone Shifter">
-        <Suspense fallback={<PanelFallback />}>
-          <ToneShifterPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ToneShifterPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Similarity Search">
-        <Suspense fallback={<PanelFallback />}>
-          <SimilaritySearchPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <SimilaritySearchPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Oscillations">
-        <Suspense fallback={<PanelFallback />}>
-          <OscillationsPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <OscillationsPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Layer Explorer">
-        <Suspense fallback={<PanelFallback />}>
-          <LayerExplorerPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <LayerExplorerPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
     </>
   );

@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from "react";
 import ErrorBoundary from "../ErrorBoundary";
+import LazyOnVisible from "./LazyOnVisible";
 
 const TextAdventurePanel = lazy(() => import("../TextAdventurePanel"));
 const ComparatorPanel = lazy(() => import("../ComparatorPanel"));
@@ -45,141 +46,187 @@ export default function StudioSection({ regions }) {
   return (
     <>
       <ErrorBoundary name="Text Adventure">
-        <Suspense fallback={<PanelFallback />}>
-          <TextAdventurePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <TextAdventurePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Comparator">
-        <Suspense fallback={<PanelFallback />}>
-          <ComparatorPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ComparatorPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Drill-Down">
-        <Suspense fallback={<PanelFallback />}>
-          <DrillDownPanel regions={regions} />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <DrillDownPanel regions={regions} />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Session Rooms">
-        <Suspense fallback={<PanelFallback />}>
-          <SessionRoomsPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <SessionRoomsPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Compliment">
-        <Suspense fallback={<PanelFallback />}>
-          <ComplimentPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ComplimentPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Extension">
-        <Suspense fallback={<PanelFallback />}>
-          <ExtensionPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ExtensionPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Rule Packs">
-        <Suspense fallback={<PanelFallback />}>
-          <RulePacksPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <RulePacksPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Scan Archive">
-        <Suspense fallback={<PanelFallback />}>
-          <ScanArchivePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ScanArchivePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Journalism">
-        <Suspense fallback={<PanelFallback />}>
-          <JournalismPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <JournalismPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Privacy Budget">
-        <Suspense fallback={<PanelFallback />}>
-          <PrivacyBudgetPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <PrivacyBudgetPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Genre">
-        <Suspense fallback={<PanelFallback />}>
-          <GenrePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <GenrePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Persona Simulator">
-        <Suspense fallback={<PanelFallback />}>
-          <PersonaPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <PersonaPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Reply Composer">
-        <Suspense fallback={<PanelFallback />}>
-          <ComposerPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ComposerPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Personal Dictionary">
-        <Suspense fallback={<PanelFallback />}>
-          <PersonalDictionaryPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <PersonalDictionaryPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="PWA Install">
-        <Suspense fallback={<PanelFallback />}>
-          <PwaInstallPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <PwaInstallPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Feedback">
-        <Suspense fallback={<PanelFallback />}>
-          <FeedbackPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <FeedbackPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Role Tour">
-        <Suspense fallback={<PanelFallback />}>
-          <RoleTourPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <RoleTourPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Sync">
-        <Suspense fallback={<PanelFallback />}>
-          <SyncPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <SyncPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Theme">
-        <Suspense fallback={<PanelFallback />}>
-          <ThemePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <ThemePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Community Pack">
-        <Suspense fallback={<PanelFallback />}>
-          <CommunityPackPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <CommunityPackPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Milestone">
-        <Suspense fallback={<PanelFallback />}>
-          <MilestonePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <MilestonePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Dream Mode">
-        <Suspense fallback={<PanelFallback />}>
-          <DreamModePanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <DreamModePanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
 
       <ErrorBoundary name="Adversarial Training">
-        <Suspense fallback={<PanelFallback />}>
-          <AdversarialTrainingPanel />
-        </Suspense>
+        <LazyOnVisible>
+          <Suspense fallback={<PanelFallback />}>
+            <AdversarialTrainingPanel />
+          </Suspense>
+        </LazyOnVisible>
       </ErrorBoundary>
     </>
   );
