@@ -1,28 +1,41 @@
-import React from "react";
-import TextAdventurePanel from "../TextAdventurePanel";
-import ComparatorPanel from "../ComparatorPanel";
-import DrillDownPanel from "../DrillDownPanel";
-import SessionRoomsPanel from "../SessionRoomsPanel";
-import ComplimentPanel from "../ComplimentPanel";
-import ExtensionPanel from "../ExtensionPanel";
-import RulePacksPanel from "../RulePacksPanel";
-import ScanArchivePanel from "../ScanArchivePanel";
-import JournalismPanel from "../JournalismPanel";
-import PrivacyBudgetPanel from "../PrivacyBudgetPanel";
-import GenrePanel from "../GenrePanel";
-import PersonaPanel from "../PersonaPanel";
-import ComposerPanel from "../ComposerPanel";
-import PersonalDictionaryPanel from "../PersonalDictionaryPanel";
-import PwaInstallPanel from "../PwaInstallPanel";
-import FeedbackPanel from "../FeedbackPanel";
-import RoleTourPanel from "../RoleTourPanel";
-import SyncPanel from "../SyncPanel";
-import ThemePanel from "../ThemePanel";
-import CommunityPackPanel from "../CommunityPackPanel";
-import MilestonePanel from "../MilestonePanel";
-import DreamModePanel from "../DreamModePanel";
-import AdversarialTrainingPanel from "../AdversarialTrainingPanel";
+import React, { lazy, Suspense } from "react";
 import ErrorBoundary from "../ErrorBoundary";
+
+const TextAdventurePanel = lazy(() => import("../TextAdventurePanel"));
+const ComparatorPanel = lazy(() => import("../ComparatorPanel"));
+const DrillDownPanel = lazy(() => import("../DrillDownPanel"));
+const SessionRoomsPanel = lazy(() => import("../SessionRoomsPanel"));
+const ComplimentPanel = lazy(() => import("../ComplimentPanel"));
+const ExtensionPanel = lazy(() => import("../ExtensionPanel"));
+const RulePacksPanel = lazy(() => import("../RulePacksPanel"));
+const ScanArchivePanel = lazy(() => import("../ScanArchivePanel"));
+const JournalismPanel = lazy(() => import("../JournalismPanel"));
+const PrivacyBudgetPanel = lazy(() => import("../PrivacyBudgetPanel"));
+const GenrePanel = lazy(() => import("../GenrePanel"));
+const PersonaPanel = lazy(() => import("../PersonaPanel"));
+const ComposerPanel = lazy(() => import("../ComposerPanel"));
+const PersonalDictionaryPanel = lazy(
+  () => import("../PersonalDictionaryPanel"),
+);
+const PwaInstallPanel = lazy(() => import("../PwaInstallPanel"));
+const FeedbackPanel = lazy(() => import("../FeedbackPanel"));
+const RoleTourPanel = lazy(() => import("../RoleTourPanel"));
+const SyncPanel = lazy(() => import("../SyncPanel"));
+const ThemePanel = lazy(() => import("../ThemePanel"));
+const CommunityPackPanel = lazy(() => import("../CommunityPackPanel"));
+const MilestonePanel = lazy(() => import("../MilestonePanel"));
+const DreamModePanel = lazy(() => import("../DreamModePanel"));
+const AdversarialTrainingPanel = lazy(
+  () => import("../AdversarialTrainingPanel"),
+);
+
+function PanelFallback() {
+  return (
+    <div className="viewer-loading" role="status">
+      <span className="viewer-loading-dot" />
+    </div>
+  );
+}
 
 /**
  * "Studio" section. Lazy-mounted on first activation, then kept alive via the
@@ -32,95 +45,141 @@ export default function StudioSection({ regions }) {
   return (
     <>
       <ErrorBoundary name="Text Adventure">
-        <TextAdventurePanel />
+        <Suspense fallback={<PanelFallback />}>
+          <TextAdventurePanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Comparator">
-        <ComparatorPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <ComparatorPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Drill-Down">
-        <DrillDownPanel regions={regions} />
+        <Suspense fallback={<PanelFallback />}>
+          <DrillDownPanel regions={regions} />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Session Rooms">
-        <SessionRoomsPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <SessionRoomsPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Compliment">
-        <ComplimentPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <ComplimentPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Extension">
-        <ExtensionPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <ExtensionPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Rule Packs">
-        <RulePacksPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <RulePacksPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Scan Archive">
-        <ScanArchivePanel />
+        <Suspense fallback={<PanelFallback />}>
+          <ScanArchivePanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Journalism">
-        <JournalismPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <JournalismPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Privacy Budget">
-        <PrivacyBudgetPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <PrivacyBudgetPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Genre">
-        <GenrePanel />
+        <Suspense fallback={<PanelFallback />}>
+          <GenrePanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Persona Simulator">
-        <PersonaPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <PersonaPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Reply Composer">
-        <ComposerPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <ComposerPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Personal Dictionary">
-        <PersonalDictionaryPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <PersonalDictionaryPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="PWA Install">
-        <PwaInstallPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <PwaInstallPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Feedback">
-        <FeedbackPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <FeedbackPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Role Tour">
-        <RoleTourPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <RoleTourPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Sync">
-        <SyncPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <SyncPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Theme">
-        <ThemePanel />
+        <Suspense fallback={<PanelFallback />}>
+          <ThemePanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Community Pack">
-        <CommunityPackPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <CommunityPackPanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Milestone">
-        <MilestonePanel />
+        <Suspense fallback={<PanelFallback />}>
+          <MilestonePanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Dream Mode">
-        <DreamModePanel />
+        <Suspense fallback={<PanelFallback />}>
+          <DreamModePanel />
+        </Suspense>
       </ErrorBoundary>
 
       <ErrorBoundary name="Adversarial Training">
-        <AdversarialTrainingPanel />
+        <Suspense fallback={<PanelFallback />}>
+          <AdversarialTrainingPanel />
+        </Suspense>
       </ErrorBoundary>
     </>
   );
