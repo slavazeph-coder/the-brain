@@ -10,269 +10,343 @@
  * instead of multi-query exploration chains.
  */
 
-import { listSnapshots, saveSnapshot, loadSnapshot, compareSnapshots } from './snapshots';
-import { scoreContent } from './cognitiveFirewall';
-import { correlationMatrix, detectAnomalies, buildRegionTimeseries } from './analytics';
-import { classifyContent } from '../data/knowledgeGraph';
-import { generateNarrative } from './narrative';
-import { REGION_INFO } from '../data/network';
+import {
+  listSnapshots,
+  saveSnapshot,
+  loadSnapshot,
+  compareSnapshots,
+} from "./snapshots";
+import { scoreContent } from "./cognitiveFirewall";
+import {
+  correlationMatrix,
+  detectAnomalies,
+  buildRegionTimeseries,
+} from "./analytics";
+import { classifyContent } from "../data/knowledgeGraph";
+import { generateNarrative } from "./narrative";
+import { REGION_INFO } from "../data/network";
 // Layer 82 — tools surfacing the post-L19 layer surface
-import { runAutopsy } from './autopsy';
-import { counterDraft } from './counterDraft';
-import { runDiff } from './diffMode';
-import { detectArchetypes } from './adTransparency';
-import { compareRulesets } from './comparator';
-import { getImmunityState } from './immunityScore';
-import { testHypothesis } from './hypothesis';
-import { explain as explainScore } from './explanation';
-import { mergeTemplateResults } from './semanticTemplates';
-import { pickTodaysChallenge } from './dailyChallenge';
-import { analyzeTimeSeries } from './timeSeries';
-import { issueReceipt } from './receipt';
-import { inspectToolCall, inspectPrompt, loadLog as loadLobsterLog, loadPolicy as loadLobsterPolicy, savePolicy as saveLobsterPolicy } from './lobsterTrap';
+import { runAutopsy } from "./autopsy";
+// counterDraft is imported dynamically in dispatch() — it transitively pulls in
+// geminiEngine + lobsterTrap, and mcpBridge sits in the entry chunk (App.jsx
+// statically imports it), so a static import here would bloat the entry bundle.
+import { runDiff } from "./diffMode";
+import { detectArchetypes } from "./adTransparency";
+import { compareRulesets } from "./comparator";
+import { getImmunityState } from "./immunityScore";
+import { testHypothesis } from "./hypothesis";
+import { explain as explainScore } from "./explanation";
+import { mergeTemplateResults } from "./semanticTemplates";
+import { pickTodaysChallenge } from "./dailyChallenge";
+import { analyzeTimeSeries } from "./timeSeries";
+import { issueReceipt } from "./receipt";
+// lobsterTrap is imported dynamically inside handleToolCall()/dispatch() — it
+// keeps the module out of the entry chunk (App.jsx statically imports mcpBridge).
 
 // ---------- tool catalog ----------
 
 export const BRAIN_TOOLS = [
   {
-    name: 'get_brain_state',
-    description: 'Return the current brain state: 7 region activities, connection weights, tick, scenario, selected region.',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "get_brain_state",
+    description:
+      "Return the current brain state: 7 region activities, connection weights, tick, scenario, selected region.",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'get_region_info',
-    description: 'Return detailed info about a specific brain region (CTX, HPC, THL, AMY, BG, PFC, CBL).',
+    name: "get_region_info",
+    description:
+      "Return detailed info about a specific brain region (CTX, HPC, THL, AMY, BG, PFC, CBL).",
     inputSchema: {
-      type: 'object',
-      properties: { region: { type: 'string', enum: ['CTX','HPC','THL','AMY','BG','PFC','CBL'] } },
-      required: ['region']
-    }
+      type: "object",
+      properties: {
+        region: {
+          type: "string",
+          enum: ["CTX", "HPC", "THL", "AMY", "BG", "PFC", "CBL"],
+        },
+      },
+      required: ["region"],
+    },
   },
   {
-    name: 'list_snapshots',
-    description: 'List all saved brain snapshots with id, name, timestamp, scenario, summary.',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "list_snapshots",
+    description:
+      "List all saved brain snapshots with id, name, timestamp, scenario, summary.",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'save_snapshot',
-    description: 'Persist the current brain state as a named snapshot.',
+    name: "save_snapshot",
+    description: "Persist the current brain state as a named snapshot.",
     inputSchema: {
-      type: 'object',
-      properties: { name: { type: 'string', description: 'Human label for the snapshot' } },
-      required: []
-    }
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Human label for the snapshot" },
+      },
+      required: [],
+    },
   },
   {
-    name: 'compare_snapshots',
-    description: 'Diff two snapshots by id, return per-region delta and top movers.',
+    name: "compare_snapshots",
+    description:
+      "Diff two snapshots by id, return per-region delta and top movers.",
     inputSchema: {
-      type: 'object',
-      properties: { a: { type: 'string' }, b: { type: 'string' } },
-      required: ['a', 'b']
-    }
+      type: "object",
+      properties: { a: { type: "string" }, b: { type: "string" } },
+      required: ["a", "b"],
+    },
   },
   {
-    name: 'scan_content',
-    description: 'Run the Cognitive Firewall against text. Returns manipulation scores, evidence, recommended action.',
+    name: "scan_content",
+    description:
+      "Run the Cognitive Firewall against text. Returns manipulation scores, evidence, recommended action.",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string', description: 'Content to analyze' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Content to analyze" },
+      },
+      required: ["text"],
+    },
   },
   {
-    name: 'apply_scenario',
-    description: 'Switch the brain to a pre-computed scenario (sensory_burst, memory_replay, emotional_salience, executive).',
+    name: "apply_scenario",
+    description:
+      "Switch the brain to a pre-computed scenario (sensory_burst, memory_replay, emotional_salience, executive).",
     inputSchema: {
-      type: 'object',
-      properties: { scenario: { type: 'string', enum: ['sensory_burst','memory_replay','emotional_salience','executive'] } },
-      required: ['scenario']
-    }
+      type: "object",
+      properties: {
+        scenario: {
+          type: "string",
+          enum: [
+            "sensory_burst",
+            "memory_replay",
+            "emotional_salience",
+            "executive",
+          ],
+        },
+      },
+      required: ["scenario"],
+    },
   },
   {
-    name: 'trigger_burst',
-    description: 'Fire a sensory burst through the connectome (spikes all regions briefly).',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "trigger_burst",
+    description:
+      "Fire a sensory burst through the connectome (spikes all regions briefly).",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'reset_brain',
-    description: 'Reset the brain to baseline state.',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "reset_brain",
+    description: "Reset the brain to baseline state.",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'get_correlations',
-    description: 'Return the Pearson correlation matrix between brain regions over the last N ticks.',
+    name: "get_correlations",
+    description:
+      "Return the Pearson correlation matrix between brain regions over the last N ticks.",
     inputSchema: {
-      type: 'object',
-      properties: { window: { type: 'number', default: 40 } },
-      required: []
-    }
+      type: "object",
+      properties: { window: { type: "number", default: 40 } },
+      required: [],
+    },
   },
   {
-    name: 'detect_anomaly',
-    description: 'Z-score anomaly detection — returns regions currently firing >2σ above their recent mean.',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "detect_anomaly",
+    description:
+      "Z-score anomaly detection — returns regions currently firing >2σ above their recent mean.",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'classify_knowledge',
-    description: 'Classify text into the 7 knowledge domains (mapped onto brain regions).',
+    name: "classify_knowledge",
+    description:
+      "Classify text into the 7 knowledge domains (mapped onto brain regions).",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
   {
-    name: 'narrate_state',
-    description: 'Generate a human-readable narration of what the brain is doing right now.',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "narrate_state",
+    description:
+      "Generate a human-readable narration of what the brain is doing right now.",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'impact_analysis',
-    description: 'Blast-radius analysis — given a region, return which other regions are most affected through the connectome.',
+    name: "impact_analysis",
+    description:
+      "Blast-radius analysis — given a region, return which other regions are most affected through the connectome.",
     inputSchema: {
-      type: 'object',
-      properties: { region: { type: 'string' } },
-      required: ['region']
-    }
+      type: "object",
+      properties: { region: { type: "string" } },
+      required: ["region"],
+    },
   },
   // ---------- Layer 82 — expose post-L19 layer surface ----------
   {
-    name: 'run_autopsy',
-    description: 'Layer 36 — per-speaker cognitive profile from a multi-speaker transcript.',
+    name: "run_autopsy",
+    description:
+      "Layer 36 — per-speaker cognitive profile from a multi-speaker transcript.",
     inputSchema: {
-      type: 'object',
-      properties: { transcript: { type: 'string' } },
-      required: ['transcript']
-    }
+      type: "object",
+      properties: { transcript: { type: "string" } },
+      required: ["transcript"],
+    },
   },
   {
-    name: 'counter_draft',
-    description: 'Layer 42 — rewrite manipulative text as neutral while preserving information. Uses Gemma when configured, local substitution otherwise.',
+    name: "counter_draft",
+    description:
+      "Layer 42 — rewrite manipulative text as neutral while preserving information. Uses Gemma when configured, local substitution otherwise.",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
   {
-    name: 'run_diff',
-    description: 'Layer 47 — compare two texts (A vs B) for manipulation pressure; returns per-side scores + delta.',
+    name: "run_diff",
+    description:
+      "Layer 47 — compare two texts (A vs B) for manipulation pressure; returns per-side scores + delta.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        textA: { type: 'string' }, textB: { type: 'string' },
-        labelA: { type: 'string' }, labelB: { type: 'string' }
+        textA: { type: "string" },
+        textB: { type: "string" },
+        labelA: { type: "string" },
+        labelB: { type: "string" },
       },
-      required: ['textA', 'textB']
-    }
+      required: ["textA", "textB"],
+    },
   },
   {
-    name: 'detect_archetypes',
-    description: 'Layer 48 — return matched propaganda archetypes (phishing, cult, FOMO, etc.) for a text.',
+    name: "detect_archetypes",
+    description:
+      "Layer 48 — return matched propaganda archetypes (phishing, cult, FOMO, etc.) for a text.",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
   {
-    name: 'compare_rulesets',
-    description: 'Layer 74 — run the same text through the current DEFAULT_RULES and activeRules; returns pressure delta + evidence diff.',
+    name: "compare_rulesets",
+    description:
+      "Layer 74 — run the same text through the current DEFAULT_RULES and activeRules; returns pressure delta + evidence diff.",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
   {
-    name: 'get_immunity',
-    description: 'Layer 23 — return the user\'s Cognitive Immunity score, streak, and recent event log.',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "get_immunity",
+    description:
+      "Layer 23 — return the user's Cognitive Immunity score, streak, and recent event log.",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'test_hypothesis',
-    description: 'Layer 62 — score evidence for/against a named hypothesis (gaslighting, DARVO, phishing, cult, etc.).',
+    name: "test_hypothesis",
+    description:
+      "Layer 62 — score evidence for/against a named hypothesis (gaslighting, DARVO, phishing, cult, etc.).",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        type: { type: 'string', description: 'Hypothesis id — gaslighting / darvo / love-bombing / guilt-trip / phishing / cult-recruitment / political-attack / high-pressure' },
-        evidenceText: { type: 'string' }
+        type: {
+          type: "string",
+          description:
+            "Hypothesis id — gaslighting / darvo / love-bombing / guilt-trip / phishing / cult-recruitment / political-attack / high-pressure",
+        },
+        evidenceText: { type: "string" },
       },
-      required: ['type', 'evidenceText']
-    }
+      required: ["type", "evidenceText"],
+    },
   },
   {
-    name: 'explain_scan',
-    description: 'Layer 70 — plain-English narrative of why a scan scored how it did. Returns a paragraph + bullets.',
+    name: "explain_scan",
+    description:
+      "Layer 70 — plain-English narrative of why a scan scored how it did. Returns a paragraph + bullets.",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
   {
-    name: 'todays_daily',
-    description: 'Layer 38 — return the 3 items for today\'s Daily Firewall Challenge (same for everyone worldwide on UTC day).',
-    inputSchema: { type: 'object', properties: {}, required: [] }
+    name: "todays_daily",
+    description:
+      "Layer 38 — return the 3 items for today's Daily Firewall Challenge (same for everyone worldwide on UTC day).",
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
   {
-    name: 'analyze_time_series',
-    description: 'Layer 43 — chronological manipulation-pressure trend. Input: newline-separated dated messages. Returns slope, trend tier, peak, escalations.',
+    name: "analyze_time_series",
+    description:
+      "Layer 43 — chronological manipulation-pressure trend. Input: newline-separated dated messages. Returns slope, trend tier, peak, escalations.",
     inputSchema: {
-      type: 'object',
-      properties: { raw: { type: 'string' } },
-      required: ['raw']
-    }
+      type: "object",
+      properties: { raw: { type: "string" } },
+      required: ["raw"],
+    },
   },
   {
-    name: 'issue_receipt',
-    description: 'Layer 46 — generate a deterministic, verifiable scan receipt for a piece of text.',
+    name: "issue_receipt",
+    description:
+      "Layer 46 — generate a deterministic, verifiable scan receipt for a piece of text.",
     inputSchema: {
-      type: 'object',
-      properties: { text: { type: 'string' } },
-      required: ['text']
-    }
+      type: "object",
+      properties: { text: { type: "string" } },
+      required: ["text"],
+    },
   },
   {
-    name: 'lobster_trap_inspect',
-    description: 'Layer 102 — Veea Lobster Trap deep prompt inspection. Detects prompt injection, secret leakage, and PII. Returns allow / redact / block decision with reasons.',
+    name: "lobster_trap_inspect",
+    description:
+      "Layer 102 — Veea Lobster Trap deep prompt inspection. Detects prompt injection, secret leakage, and PII. Returns allow / redact / block decision with reasons.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        prompt: { type: 'string' },
-        surface: { type: 'string', description: 'Optional label for the audit log (e.g. "agent.preflight").' }
+        prompt: { type: "string" },
+        surface: {
+          type: "string",
+          description:
+            'Optional label for the audit log (e.g. "agent.preflight").',
+        },
       },
-      required: ['prompt']
-    }
+      required: ["prompt"],
+    },
   },
   {
-    name: 'lobster_trap_log',
-    description: 'Layer 102 — return the rolling audit log of Lobster Trap inspections (most recent first). Cap 200.',
+    name: "lobster_trap_log",
+    description:
+      "Layer 102 — return the rolling audit log of Lobster Trap inspections (most recent first). Cap 200.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        limit: { type: 'number', description: 'Max entries to return (default 50).' },
-        action: { type: 'string', enum: ['allow', 'redact', 'block'], description: 'Filter by decision.' }
+        limit: {
+          type: "number",
+          description: "Max entries to return (default 50).",
+        },
+        action: {
+          type: "string",
+          enum: ["allow", "redact", "block"],
+          description: "Filter by decision.",
+        },
       },
-      required: []
-    }
+      required: [],
+    },
   },
   {
-    name: 'lobster_trap_policy',
-    description: 'Layer 102 — read or update the Lobster Trap policy. Pass updates to enable/disable enforcement categories; omit them to read the current policy.',
+    name: "lobster_trap_policy",
+    description:
+      "Layer 102 — read or update the Lobster Trap policy. Pass updates to enable/disable enforcement categories; omit them to read the current policy.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        blockOnPromptInjection: { type: 'boolean' },
-        blockOnSecrets: { type: 'boolean' },
-        redactPII: { type: 'boolean' },
-        allowToolDestructive: { type: 'boolean' },
-        remoteEnabled: { type: 'boolean' }
+        blockOnPromptInjection: { type: "boolean" },
+        blockOnSecrets: { type: "boolean" },
+        redactPII: { type: "boolean" },
+        allowToolDestructive: { type: "boolean" },
+        remoteEnabled: { type: "boolean" },
       },
-      required: []
-    }
-  }
+      required: [],
+    },
+  },
 ];
 
 // ---------- bridge state ----------
@@ -284,7 +358,7 @@ let bridgeContext = {
   applyScenarioKey: () => {},
   triggerBurst: () => {},
   resetBrain: () => {},
-  onToolCall: null
+  onToolCall: null,
 };
 
 /**
@@ -292,11 +366,12 @@ let bridgeContext = {
  */
 export function registerBridgeContext(ctx) {
   bridgeContext = { ...bridgeContext, ...ctx };
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     window.__brainsnn_mcp__ = {
       tools: BRAIN_TOOLS,
       call: handleToolCall,
-      listTools: () => BRAIN_TOOLS.map((t) => ({ name: t.name, description: t.description }))
+      listTools: () =>
+        BRAIN_TOOLS.map((t) => ({ name: t.name, description: t.description })),
     };
   }
 }
@@ -305,25 +380,59 @@ export function registerBridgeContext(ctx) {
 
 export async function handleToolCall(name, args = {}) {
   const t0 = Date.now();
+  const { inspectToolCall } = await import("./lobsterTrap");
   const trap = inspectToolCall({ name, args });
-  if (trap.action === 'block') {
-    const payload = { ok: false, error: `Lobster Trap blocked: ${trap.reasons.join('; ')}`, trap };
+  if (trap.action === "block") {
+    const payload = {
+      ok: false,
+      error: `Lobster Trap blocked: ${trap.reasons.join("; ")}`,
+      trap,
+    };
     if (bridgeContext.onToolCall) {
-      bridgeContext.onToolCall({ name, args, result: payload, ms: Date.now() - t0, ok: false });
+      bridgeContext.onToolCall({
+        name,
+        args,
+        result: payload,
+        ms: Date.now() - t0,
+        ok: false,
+      });
     }
     return payload;
   }
-  const effectiveArgs = trap.action === 'redact' && trap.redactedArgs ? trap.redactedArgs : args;
+  const effectiveArgs =
+    trap.action === "redact" && trap.redactedArgs ? trap.redactedArgs : args;
   try {
     const result = await dispatch(name, effectiveArgs);
     if (bridgeContext.onToolCall) {
-      bridgeContext.onToolCall({ name, args: effectiveArgs, result, ms: Date.now() - t0, ok: true, trap });
+      bridgeContext.onToolCall({
+        name,
+        args: effectiveArgs,
+        result,
+        ms: Date.now() - t0,
+        ok: true,
+        trap,
+      });
     }
-    return { ok: true, result, trap: trap.action === 'allow' ? undefined : trap };
+    return {
+      ok: true,
+      result,
+      trap: trap.action === "allow" ? undefined : trap,
+    };
   } catch (err) {
-    const payload = { ok: false, error: err.message || String(err), trap: trap.action === 'allow' ? undefined : trap };
+    const payload = {
+      ok: false,
+      error: err.message || String(err),
+      trap: trap.action === "allow" ? undefined : trap,
+    };
     if (bridgeContext.onToolCall) {
-      bridgeContext.onToolCall({ name, args: effectiveArgs, result: payload, ms: Date.now() - t0, ok: false, trap });
+      bridgeContext.onToolCall({
+        name,
+        args: effectiveArgs,
+        result: payload,
+        ms: Date.now() - t0,
+        ok: false,
+        trap,
+      });
     }
     return payload;
   }
@@ -332,8 +441,8 @@ export async function handleToolCall(name, args = {}) {
 async function dispatch(name, args) {
   const state = bridgeContext.getState();
   switch (name) {
-    case 'get_brain_state': {
-      if (!state) throw new Error('Brain not initialized');
+    case "get_brain_state": {
+      if (!state) throw new Error("Brain not initialized");
       return {
         regions: state.regions,
         weights: state.weights,
@@ -341,11 +450,11 @@ async function dispatch(name, args) {
         scenario: state.scenario,
         selected: state.selected,
         mean: state.mean,
-        plasticity: state.plasticity
+        plasticity: state.plasticity,
       };
     }
 
-    case 'get_region_info': {
+    case "get_region_info": {
       const info = REGION_INFO[args.region];
       if (!info) throw new Error(`Unknown region: ${args.region}`);
       return {
@@ -353,69 +462,72 @@ async function dispatch(name, args) {
         name: info.name,
         role: info.role,
         color: info.color,
-        currentActivity: state?.regions?.[args.region] ?? null
+        currentActivity: state?.regions?.[args.region] ?? null,
       };
     }
 
-    case 'list_snapshots':
+    case "list_snapshots":
       return { snapshots: listSnapshots() };
 
-    case 'save_snapshot': {
-      if (!state) throw new Error('No state to snapshot');
-      const snap = saveSnapshot(state, args.name || `MCP snapshot ${new Date().toLocaleTimeString()}`);
+    case "save_snapshot": {
+      if (!state) throw new Error("No state to snapshot");
+      const snap = saveSnapshot(
+        state,
+        args.name || `MCP snapshot ${new Date().toLocaleTimeString()}`,
+      );
       return { id: snap.id, name: snap.name, timestamp: snap.timestamp };
     }
 
-    case 'compare_snapshots': {
+    case "compare_snapshots": {
       const a = loadSnapshot(args.a);
       const b = loadSnapshot(args.b);
-      if (!a || !b) throw new Error('Snapshot not found');
+      if (!a || !b) throw new Error("Snapshot not found");
       return compareSnapshots(a, b);
     }
 
-    case 'scan_content':
-      if (!args.text || args.text.length < 3) throw new Error('Text too short');
+    case "scan_content":
+      if (!args.text || args.text.length < 3) throw new Error("Text too short");
       return scoreContent(args.text);
 
-    case 'apply_scenario':
+    case "apply_scenario":
       bridgeContext.applyScenarioKey(args.scenario);
       return { applied: args.scenario };
 
-    case 'trigger_burst':
+    case "trigger_burst":
       bridgeContext.triggerBurst();
       return { triggered: true };
 
-    case 'reset_brain':
+    case "reset_brain":
       bridgeContext.resetBrain();
       return { reset: true };
 
-    case 'get_correlations': {
+    case "get_correlations": {
       const history = bridgeContext.getHistory();
       const series = buildRegionTimeseries(history, args.window || 40);
       return { matrix: correlationMatrix(series), window: args.window || 40 };
     }
 
-    case 'detect_anomaly': {
+    case "detect_anomaly": {
       const history = bridgeContext.getHistory();
       const series = buildRegionTimeseries(history, 40);
       return { anomalies: detectAnomalies(series, 2.0) };
     }
 
-    case 'classify_knowledge':
-      if (!args.text) throw new Error('Text required');
+    case "classify_knowledge":
+      if (!args.text) throw new Error("Text required");
       return classifyContent(args.text);
 
-    case 'narrate_state':
-      if (!state) throw new Error('Brain not initialized');
+    case "narrate_state":
+      if (!state) throw new Error("Brain not initialized");
       return { narrative: generateNarrative(state, {}, null) };
 
-    case 'impact_analysis':
+    case "impact_analysis":
       return impactAnalysis(args.region, state);
 
     // ---------- Layer 82 tools ----------
 
-    case 'run_autopsy': {
-      if (!args.transcript) throw new Error('transcript required');
+    case "run_autopsy": {
+      if (!args.transcript) throw new Error("transcript required");
       const autopsy = runAutopsy(args.transcript);
       return {
         speakers: autopsy.speakers,
@@ -424,81 +536,106 @@ async function dispatch(name, args) {
       };
     }
 
-    case 'counter_draft': {
-      if (!args.text) throw new Error('text required');
+    case "counter_draft": {
+      if (!args.text) throw new Error("text required");
+      const { counterDraft } = await import("./counterDraft");
       return await counterDraft(args.text);
     }
 
-    case 'run_diff': {
-      if (!args.textA || !args.textB) throw new Error('textA and textB required');
+    case "run_diff": {
+      if (!args.textA || !args.textB)
+        throw new Error("textA and textB required");
       return runDiff({
-        labelA: args.labelA || 'A',
-        labelB: args.labelB || 'B',
+        labelA: args.labelA || "A",
+        labelB: args.labelB || "B",
         textA: args.textA,
         textB: args.textB,
       });
     }
 
-    case 'detect_archetypes': {
-      if (!args.text) throw new Error('text required');
+    case "detect_archetypes": {
+      if (!args.text) throw new Error("text required");
       const s = scoreContent(args.text);
       return { archetypes: detectArchetypes(s.templates || []) };
     }
 
-    case 'compare_rulesets': {
-      if (!args.text) throw new Error('text required');
+    case "compare_rulesets": {
+      if (!args.text) throw new Error("text required");
       return compareRulesets(args.text);
     }
 
-    case 'get_immunity':
+    case "get_immunity":
       return getImmunityState();
 
-    case 'test_hypothesis': {
-      if (!args.type || !args.evidenceText) throw new Error('type and evidenceText required');
-      return testHypothesis({ type: args.type, evidenceText: args.evidenceText });
+    case "test_hypothesis": {
+      if (!args.type || !args.evidenceText)
+        throw new Error("type and evidenceText required");
+      return testHypothesis({
+        type: args.type,
+        evidenceText: args.evidenceText,
+      });
     }
 
-    case 'explain_scan': {
-      if (!args.text) throw new Error('text required');
+    case "explain_scan": {
+      if (!args.text) throw new Error("text required");
       const s = scoreContent(args.text);
       const merged = mergeTemplateResults(s.templates || [], []);
       const archs = detectArchetypes(merged);
-      return explainScore(args.text, s, { templates: merged, archetypes: archs });
+      return explainScore(args.text, s, {
+        templates: merged,
+        archetypes: archs,
+      });
     }
 
-    case 'todays_daily':
+    case "todays_daily":
       return { items: pickTodaysChallenge() };
 
-    case 'analyze_time_series': {
-      if (!args.raw) throw new Error('raw transcript required');
+    case "analyze_time_series": {
+      if (!args.raw) throw new Error("raw transcript required");
       return analyzeTimeSeries(args.raw);
     }
 
-    case 'issue_receipt': {
-      if (!args.text) throw new Error('text required');
+    case "issue_receipt": {
+      if (!args.text) throw new Error("text required");
       const s = scoreContent(args.text);
       return await issueReceipt({ text: args.text, score: s });
     }
 
-    case 'lobster_trap_inspect': {
-      if (!args.prompt) throw new Error('prompt required');
-      return inspectPrompt({ prompt: args.prompt, surface: args.surface || 'mcp.preflight' });
+    case "lobster_trap_inspect": {
+      if (!args.prompt) throw new Error("prompt required");
+      const { inspectPrompt } = await import("./lobsterTrap");
+      return inspectPrompt({
+        prompt: args.prompt,
+        surface: args.surface || "mcp.preflight",
+      });
     }
 
-    case 'lobster_trap_log': {
+    case "lobster_trap_log": {
       const limit = Math.max(1, Math.min(200, Number(args.limit) || 50));
+      const { loadLog: loadLobsterLog } = await import("./lobsterTrap");
       const log = loadLobsterLog();
-      const filtered = args.action ? log.filter((e) => e.action === args.action) : log;
+      const filtered = args.action
+        ? log.filter((e) => e.action === args.action)
+        : log;
       return { entries: filtered.slice(0, limit), total: log.length };
     }
 
-    case 'lobster_trap_policy': {
+    case "lobster_trap_policy": {
+      const { loadPolicy: loadLobsterPolicy, savePolicy: saveLobsterPolicy } =
+        await import("./lobsterTrap");
       const current = loadLobsterPolicy();
       const patch = {};
-      for (const key of ['blockOnPromptInjection', 'blockOnSecrets', 'redactPII', 'allowToolDestructive', 'remoteEnabled']) {
-        if (typeof args[key] === 'boolean') patch[key] = args[key];
+      for (const key of [
+        "blockOnPromptInjection",
+        "blockOnSecrets",
+        "redactPII",
+        "allowToolDestructive",
+        "remoteEnabled",
+      ]) {
+        if (typeof args[key] === "boolean") patch[key] = args[key];
       }
-      if (Object.keys(patch).length === 0) return { policy: current, updated: false };
+      if (Object.keys(patch).length === 0)
+        return { policy: current, updated: false };
       const next = { ...current, ...patch };
       saveLobsterPolicy(next);
       return { policy: next, updated: true, changed: Object.keys(patch) };
@@ -517,14 +654,14 @@ async function dispatch(name, args) {
  * Confidence-weighted by connection strength.
  */
 function impactAnalysis(region, state) {
-  if (!state) throw new Error('Brain not initialized');
+  if (!state) throw new Error("Brain not initialized");
   const weights = state.weights || {};
   const affected = {};
   let maxWeight = 0;
 
   // First-order: direct neighbors via weights dict (keys like "CTX-PFC")
   for (const [key, w] of Object.entries(weights)) {
-    const [from, to] = key.split('-');
+    const [from, to] = key.split("-");
     if (from === region && to) {
       affected[to] = (affected[to] || 0) + w;
       maxWeight = Math.max(maxWeight, w);
@@ -541,11 +678,15 @@ function impactAnalysis(region, state) {
       region: r,
       weight: w,
       confidence: maxWeight > 0 ? w / maxWeight : 0,
-      currentActivity: state.regions?.[r] ?? 0
+      currentActivity: state.regions?.[r] ?? 0,
     }))
     .sort((a, b) => b.weight - a.weight);
 
-  return { source: region, directlyAffected: ranked, totalAffected: ranked.length };
+  return {
+    source: region,
+    directlyAffected: ranked,
+    totalAffected: ranked.length,
+  };
 }
 
 // ---------- JSON-RPC framing (for stdio MCP server) ----------
@@ -556,22 +697,34 @@ function impactAnalysis(region, state) {
  */
 export async function handleJsonRpc(request) {
   const { id, method, params } = request;
-  if (method === 'tools/list') {
-    return { jsonrpc: '2.0', id, result: { tools: BRAIN_TOOLS } };
+  if (method === "tools/list") {
+    return { jsonrpc: "2.0", id, result: { tools: BRAIN_TOOLS } };
   }
-  if (method === 'tools/call') {
+  if (method === "tools/call") {
     const { name, arguments: args } = params || {};
     const result = await handleToolCall(name, args || {});
     if (!result.ok) {
-      return { jsonrpc: '2.0', id, error: { code: -32000, message: result.error } };
+      return {
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32000, message: result.error },
+      };
     }
     return {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       id,
-      result: { content: [{ type: 'text', text: JSON.stringify(result.result, null, 2) }] }
+      result: {
+        content: [
+          { type: "text", text: JSON.stringify(result.result, null, 2) },
+        ],
+      },
     };
   }
-  return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32601, message: `Method not found: ${method}` },
+  };
 }
 
 // ---------- audit log ----------
