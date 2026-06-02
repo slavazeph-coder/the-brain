@@ -31,7 +31,15 @@ import { pushStep as pushReplayStep } from "../utils/replay";
 import { explain } from "../utils/explanation";
 import { analyzeDecoy, verdictFor as decoyVerdict } from "../utils/sarcasm";
 import { archiveScan } from "../utils/scanArchive";
+import { logScan } from "../utils/manipulationLog";
+import WeekInManipulation from "./WeekInManipulation";
 import { recordFeedback, calibrationReport } from "../utils/feedback";
+
+// dimension key → human label, for the per-signal "why this score" breakdown
+const DIM_LABEL = SCORE_FIELDS.reduce((m, f) => {
+  m[f.key] = f.label;
+  return m;
+}, {});
 
 function ScoreRow({ label, desc, value, color }) {
   return (
@@ -67,6 +75,7 @@ export default function CognitiveFirewallPanel({
   const [heatmapOpen, setHeatmapOpen] = useState(false);
   const [semanticHits, setSemanticHits] = useState([]);
   const [receipt, setReceipt] = useState(null);
+  const [scanSeq, setScanSeq] = useState(0);
   const geminiAvailable = isGeminiConfigured();
   const gemmaAvailable = isGemmaConfigured();
   const llmAvailable = geminiAvailable || gemmaAvailable;
@@ -151,6 +160,13 @@ export default function CognitiveFirewallPanel({
     try {
       const score = await scoreContentSmart(text);
       setResult(score);
+      // Layer 49b — compound this scan into the local manipulation profile
+      try {
+        logScan({ score });
+        setScanSeq((n) => n + 1);
+      } catch {
+        /* logging is best-effort */
+      }
       // Layer 52/56 — if a non-English pack fired, record the badge signal
       if (score?.language && score.language !== "en") {
         try {
@@ -209,7 +225,14 @@ export default function CognitiveFirewallPanel({
         /* receipts are nice-to-have */
       }
     } catch (_) {
-      setResult(scoreContent(text));
+      const fallback = scoreContent(text);
+      setResult(fallback);
+      try {
+        logScan({ score: fallback });
+        setScanSeq((n) => n + 1);
+      } catch {
+        /* noop */
+      }
     } finally {
       setScanning(false);
     }
@@ -404,6 +427,8 @@ export default function CognitiveFirewallPanel({
         )}
       </div>
 
+      <WeekInManipulation refreshKey={scanSeq} />
+
       {result && (
         <div className="firewall-result">
           <div className="firewall-overall" style={{ "--risk": riskColor }}>
@@ -455,18 +480,71 @@ export default function CognitiveFirewallPanel({
             <p>{result.recommendedAction}</p>
           </div>
 
-          {result.evidence.length > 0 && (
-            <div className="firewall-evidence">
-              <span className="eyebrow">Evidence traces</span>
-              <div className="firewall-chips">
-                {result.evidence.map((e, i) => (
-                  <span key={i} className="firewall-chip">
-                    {e}
-                  </span>
+          {Array.isArray(result.signals) && result.signals.length > 0 && (
+            <div className="firewall-why" style={{ marginTop: 12 }}>
+              <span className="eyebrow">Why this score</span>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  marginTop: 6,
+                }}
+              >
+                {result.signals.map((sig) => (
+                  <div
+                    key={sig.category}
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <strong style={{ fontSize: 13, minWidth: 120 }}>
+                      {sig.label}{" "}
+                      <span className="muted small-note">×{sig.count}</span>
+                    </strong>
+                    <div
+                      className="firewall-chips"
+                      style={{
+                        display: "inline-flex",
+                        flexWrap: "wrap",
+                        gap: 4,
+                      }}
+                    >
+                      {sig.phrases.map((p, i) => (
+                        <span key={i} className="firewall-chip">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                    <span
+                      className="muted small-note"
+                      style={{ marginLeft: "auto" }}
+                      title="Score dimensions this signal contributes to"
+                    >
+                      → {sig.drives.map((d) => DIM_LABEL[d] || d).join(", ")}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
           )}
+
+          {(!result.signals || result.signals.length === 0) &&
+            result.evidence.length > 0 && (
+              <div className="firewall-evidence">
+                <span className="eyebrow">Evidence traces</span>
+                <div className="firewall-chips">
+                  {result.evidence.map((e, i) => (
+                    <span key={i} className="firewall-chip">
+                      {e}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
           {mergedTemplates.length > 0 && (
             <div className="firewall-templates">
@@ -741,8 +819,17 @@ export default function CognitiveFirewallPanel({
             </div>
           )}
 
-          <div className="firewall-confidence">
+          <div
+            className="firewall-confidence"
+            title={result.confidenceReason || ""}
+          >
             Confidence: <strong>{result.confidence}</strong>
+            {typeof result.confidenceScore === "number" && (
+              <span className="muted small-note">
+                {" "}
+                · {Math.round(result.confidenceScore * 100)}%
+              </span>
+            )}
             {typeof result.source === "string" &&
               result.source.startsWith("gemini") && (
                 <span className="gemma-source-badge">
@@ -781,6 +868,11 @@ export default function CognitiveFirewallPanel({
               ★ Star
             </button>
           </div>
+          {result.confidenceReason && (
+            <p className="muted small-note" style={{ marginTop: 4 }}>
+              {result.confidenceReason}
+            </p>
+          )}
 
           {/* Layer 93 — Feedback calibration buttons + calibrated pressure */}
           {(() => {
