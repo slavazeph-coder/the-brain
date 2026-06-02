@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scan Anywhere · Bookmarklet Builder</title>
+    <style>
+      :root {
+        --bg: #0a0d12;
+        --bg2: #0e131a;
+        --panel: #121821;
+        --panel2: #161d28;
+        --line: #232c3a;
+        --line2: #2c3749;
+        --txt: #e9eef4;
+        --muted: #8b97a8;
+        --muted2: #6b7787;
+        --accent: #6fd2e2;
+        --accent-d: #1f5560;
+        --accent-ink: #04222a;
+        --warn: #f0b86c;
+        --good: #7fd6a2;
+        --radius: 12px;
+        --mono:
+          ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        --ui:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background:
+          radial-gradient(1200px 600px at 78% -8%, #102029 0%, transparent 55%),
+          radial-gradient(900px 500px at -5% 110%, #12131f 0%, transparent 50%),
+          var(--bg);
+        color: var(--txt);
+        font-family: var(--ui);
+        font-size: 14px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: var(--accent);
+      }
+
+      header {
+        padding: 22px 26px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .eyebrow {
+        font-size: 11px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 700;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 6px 0 4px;
+        letter-spacing: -0.01em;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 760px;
+      }
+
+      .presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+        align-items: center;
+      }
+      .presets .lbl {
+        font-size: 11px;
+        color: var(--muted2);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-right: 2px;
+      }
+
+      .chip {
+        appearance: none;
+        cursor: pointer;
+        user-select: none;
+        background: var(--panel);
+        color: var(--txt);
+        border: 1px solid var(--line2);
+        border-radius: 999px;
+        padding: 6px 13px;
+        font: inherit;
+        font-size: 12.5px;
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          color 0.15s,
+          transform 0.05s;
+      }
+      .chip:hover {
+        border-color: var(--accent-d);
+      }
+      .chip:active {
+        transform: translateY(1px);
+      }
+      .chip.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-ink);
+        font-weight: 600;
+      }
+
+      main.layout {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 18px;
+        padding: 18px 26px 40px;
+        align-items: start;
+      }
+      @media (max-width: 920px) {
+        main.layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+      .controls {
+        padding: 4px 0;
+        position: sticky;
+        top: 14px;
+      }
+      .group {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .group:last-child {
+        border-bottom: 0;
+      }
+      .group > .gtitle {
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted2);
+        margin-bottom: 11px;
+        font-weight: 700;
+      }
+      .field {
+        margin-bottom: 12px;
+      }
+      .field:last-child {
+        margin-bottom: 0;
+      }
+      .field label {
+        display: block;
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-bottom: 5px;
+      }
+      .field .hint {
+        font-size: 11.5px;
+        color: var(--muted2);
+        margin-top: 5px;
+      }
+
+      input[type="text"],
+      textarea,
+      select {
+        width: 100%;
+        background: var(--bg2);
+        color: var(--txt);
+        border: 1px solid var(--line2);
+        border-radius: 9px;
+        padding: 9px 11px;
+        font: inherit;
+        font-size: 13px;
+        resize: vertical;
+      }
+      input[type="text"]:focus,
+      textarea:focus,
+      select:focus {
+        outline: none;
+        border-color: var(--accent-d);
+        box-shadow: 0 0 0 3px rgba(111, 210, 226, 0.12);
+      }
+      input[disabled],
+      textarea[disabled] {
+        opacity: 0.42;
+        cursor: not-allowed;
+      }
+
+      .rangewrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      input[type="range"] {
+        flex: 1;
+        accent-color: var(--accent);
+      }
+      .rangeval {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--accent);
+        min-width: 52px;
+        text-align: right;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+      }
+      .segmented .chip {
+        text-align: center;
+        padding: 8px 6px;
+        border-radius: 9px;
+      }
+
+      /* ---- Stage ---- */
+      .stage {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        min-width: 0;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .card-head h2 {
+        font-size: 13px;
+        margin: 0;
+        letter-spacing: 0.02em;
+      }
+      .card-head .sub {
+        font-size: 11.5px;
+        color: var(--muted2);
+      }
+      .card-body {
+        padding: 18px 16px;
+      }
+
+      /* drag zone */
+      .dragzone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 26px 18px 22px;
+        background:
+          repeating-linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.014) 0 12px,
+            transparent 12px 24px
+          ),
+          var(--panel2);
+        border-radius: 11px;
+        border: 1px dashed var(--line2);
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(180deg, #7fdbe9, #57c2d3);
+        color: var(--accent-ink);
+        font-weight: 700;
+        font-size: 15px;
+        text-decoration: none;
+        cursor: grab;
+        padding: 11px 20px;
+        border-radius: 10px;
+        border: 0;
+        box-shadow:
+          0 6px 22px rgba(87, 194, 211, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.35);
+        transition:
+          transform 0.06s,
+          box-shadow 0.15s;
+      }
+      .btn-primary:active {
+        cursor: grabbing;
+        transform: translateY(1px);
+      }
+      .drag-hint {
+        font-size: 12px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--good);
+        background: rgba(127, 214, 162, 0.08);
+        border: 1px solid rgba(127, 214, 162, 0.25);
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-family: var(--mono);
+      }
+      .badge::before {
+        content: "✓";
+      }
+
+      .demo-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+        align-items: center;
+      }
+      .btn-ghost {
+        appearance: none;
+        cursor: pointer;
+        background: var(--bg2);
+        color: var(--txt);
+        border: 1px solid var(--line2);
+        border-radius: 9px;
+        padding: 8px 14px;
+        font: inherit;
+        font-size: 13px;
+      }
+      .btn-ghost:hover {
+        border-color: var(--accent-d);
+      }
+      .demo-note {
+        font-size: 12px;
+        color: var(--muted2);
+      }
+
+      /* sample text */
+      .sample {
+        margin-top: 4px;
+        padding: 12px 14px;
+        border-left: 3px solid var(--accent-d);
+        background: var(--bg2);
+        border-radius: 0 9px 9px 0;
+        color: #cdd6e2;
+        font-size: 13px;
+      }
+      .sample b {
+        color: var(--txt);
+      }
+
+      /* simulated browser tab */
+      .simtab {
+        margin-top: 16px;
+        border: 1px solid var(--line2);
+        border-radius: 11px;
+        overflow: hidden;
+        background: #0c1117;
+        opacity: 0;
+        transform: translateY(6px);
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+        max-height: 0;
+      }
+      .simtab.show {
+        opacity: 1;
+        transform: none;
+        max-height: 420px;
+      }
+      .simchrome {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        background: #11171f;
+        border-bottom: 1px solid var(--line);
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #34404f;
+      }
+      .urlbar {
+        flex: 1;
+        margin-left: 6px;
+        background: #0a0e13;
+        border: 1px solid var(--line2);
+        border-radius: 7px;
+        padding: 6px 10px;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        color: var(--accent);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .simbody {
+        padding: 16px;
+      }
+      .simbody .pill {
+        display: inline-block;
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border: 1px solid var(--accent-d);
+        border-radius: 999px;
+        padding: 3px 9px;
+        margin-bottom: 10px;
+      }
+      .simbody .cap {
+        background: var(--bg2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 11px 13px;
+        font-size: 13px;
+        color: #d6dee9;
+      }
+      .simbody .meta {
+        margin-top: 9px;
+        font-size: 11.5px;
+        color: var(--muted2);
+        font-family: var(--mono);
+      }
+
+      /* toast */
+      #toastWrap {
+        position: fixed;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+        pointer-events: none;
+      }
+      .toast {
+        pointer-events: auto;
+        max-width: 460px;
+        background: #0f1620;
+        color: var(--txt);
+        border: 1px solid var(--accent-d);
+        border-left: 3px solid var(--accent);
+        border-radius: 10px;
+        padding: 11px 15px;
+        font-size: 13px;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+        animation: toastIn 0.22s ease both;
+      }
+      .toast.out {
+        animation: toastOut 0.25s ease both;
+      }
+      @keyframes toastIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @keyframes toastOut {
+        to {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+      }
+
+      /* output */
+      .out-block {
+        border-top: 1px solid var(--line);
+      }
+      .out-block:first-child {
+        border-top: 0;
+      }
+      pre.code {
+        margin: 0;
+        padding: 14px 16px;
+        background: #0b0f15;
+        font-family: var(--mono);
+        font-size: 12px;
+        line-height: 1.6;
+        color: #cfe7ec;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 230px;
+        overflow: auto;
+      }
+      pre.prompt {
+        color: #d8dee8;
+        white-space: pre-wrap;
+        word-break: normal;
+      }
+      .copybtn {
+        appearance: none;
+        cursor: pointer;
+        background: var(--accent);
+        color: var(--accent-ink);
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 13px;
+        font: inherit;
+        font-size: 12.5px;
+        font-weight: 700;
+      }
+      .copybtn:hover {
+        filter: brightness(1.06);
+      }
+      .copybtn.ok {
+        background: var(--good);
+      }
+      footer {
+        padding: 0 26px 30px;
+        color: var(--muted2);
+        font-size: 12px;
+      }
+      code.inline {
+        font-family: var(--mono);
+        background: var(--bg2);
+        padding: 1px 6px;
+        border-radius: 5px;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">BrainSNN · Layer 49</div>
+      <h1>Scan Anywhere — Bookmarklet Builder</h1>
+      <p>
+        Configure the one-click bookmarklet, drag it to your bookmarks bar, and
+        preview exactly what a click does. The
+        <code class="inline">javascript:</code> href is applied with
+        <code class="inline">setAttribute()</code> — the same framework-safe
+        technique used in <code class="inline">ScanAnywherePanel.jsx</code>, so
+        no "javascript: URL" warning.
+      </p>
+      <div class="presets" id="presets">
+        <span class="lbl">Presets</span>
+        <!-- preset chips injected -->
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- ============ CONTROLS ============ -->
+      <section class="panel controls" id="controls">
+        <div class="group">
+          <div class="gtitle">Target</div>
+          <div class="field">
+            <label for="targetSite">Target site</label>
+            <input
+              type="text"
+              id="targetSite"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <div class="hint">
+              Where the bookmarklet sends the captured text.
+            </div>
+          </div>
+          <div class="field">
+            <label for="param">Query parameter</label>
+            <input
+              type="text"
+              id="param"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <div class="hint">
+              Opens <code class="inline">?&lt;param&gt;=&lt;text&gt;</code> on
+              the target.
+            </div>
+          </div>
+          <div class="field">
+            <label for="maxLen">Max captured length</label>
+            <div class="rangewrap">
+              <input
+                type="range"
+                id="maxLen"
+                min="200"
+                max="10000"
+                step="100"
+              />
+              <span class="rangeval" id="maxLenVal">3000</span>
+            </div>
+            <div class="hint">Selection is trimmed before encoding.</div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="gtitle">Button</div>
+          <div class="field">
+            <label for="label">Button label</label>
+            <input type="text" id="label" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="gtitle">On-click behavior</div>
+          <div class="field">
+            <div class="segmented" id="behavior">
+              <button class="chip" data-behavior="A">Do nothing</button>
+              <button class="chip" data-behavior="B">Toast nudge</button>
+              <button class="chip" data-behavior="C">Live preview</button>
+              <button class="chip" data-behavior="BC">Toast + preview</button>
+            </div>
+            <div class="hint" id="behaviorHint"></div>
+          </div>
+          <div class="field" id="toastField">
+            <label for="toastMsg">Toast message</label>
+            <textarea id="toastMsg" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="gtitle">Try it · sample content</div>
+          <div class="sample" id="sample">
+            <b>URGENT:</b> Your account will be suspended in 24 hours unless you
+            verify now. Act immediately — thousands have already lost access.
+          </div>
+          <div class="hint">
+            Select any text above, then click the button → see how the capture
+            changes.
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ STAGE ============ -->
+      <section class="stage">
+        <!-- preview -->
+        <div class="panel">
+          <div class="card-head">
+            <h2>Live preview</h2>
+            <span class="sub">drag to bookmarks bar · or click to demo</span>
+          </div>
+          <div class="card-body">
+            <div class="dragzone">
+              <a
+                id="bookmarklet"
+                class="btn-primary"
+                draggable="true"
+                title="Drag me to your bookmarks bar"
+                >↯ Scan with BrainSNN</a
+              >
+              <div class="drag-hint">
+                ⬆ Drag this to your bookmarks bar — then click it on any page.
+              </div>
+              <span class="badge" id="hrefBadge"
+                >href set via setAttribute()</span
+              >
+            </div>
+
+            <div class="demo-actions">
+              <button class="btn-ghost" id="demoBtn">▶ Simulate a click</button>
+              <span class="demo-note" id="demoNote"></span>
+            </div>
+
+            <div class="simtab" id="simtab" aria-live="polite">
+              <div class="simchrome">
+                <span class="dot"></span><span class="dot"></span
+                ><span class="dot"></span>
+                <span class="urlbar" id="simUrl"
+                  >https://brainsnn.com/?scan=…</span
+                >
+              </div>
+              <div class="simbody">
+                <span class="pill">Cognitive Firewall · pre-loaded</span>
+                <div class="cap" id="simCap"></div>
+                <div class="meta" id="simMeta"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- bookmarklet source -->
+        <div class="panel">
+          <div class="out-block">
+            <div class="card-head">
+              <h2>Bookmarklet source</h2>
+              <button class="copybtn" id="copySrc" data-target="src">
+                Copy source
+              </button>
+            </div>
+            <pre class="code" id="srcOut"></pre>
+          </div>
+          <!-- claude prompt -->
+          <div class="out-block">
+            <div class="card-head">
+              <h2>Prompt for Claude</h2>
+              <button class="copybtn" id="copyPrompt" data-target="prompt">
+                Copy prompt
+              </button>
+            </div>
+            <pre class="code prompt" id="promptOut"></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Standalone explorer · no build step, no backend. Mirrors
+      <code class="inline"
+        >the-brain/brainsnn-r3f-app/src/components/ScanAnywherePanel.jsx</code
+      >.
+    </footer>
+
+    <div id="toastWrap"></div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        // ---------- defaults + state ----------
+        var DEFAULTS = {
+          targetSite: "https://brainsnn.com",
+          param: "scan",
+          maxLen: 3000,
+          label: "↯ Scan with BrainSNN",
+          behavior: "BC", // A | B | C | BC
+          toastMsg:
+            "Drag this up to your bookmarks bar — then click it on any page. Opening a live preview…",
+        };
+        var state = Object.assign({}, DEFAULTS);
+        window.__state = state; // exposed for inspection / verification
+
+        var PRESETS = {
+          "BrainSNN default": {}, // all defaults (B+C)
+          "Drag-only (silent)": { behavior: "A" },
+          "Toast nudge only": { behavior: "B" },
+          "Live demo": { behavior: "C" },
+          "Custom site": {
+            targetSite: "https://example.com",
+            param: "q",
+            behavior: "BC",
+          },
+        };
+
+        var BEHAVIOR_HINTS = {
+          A: "Click is suppressed — the link is purely for dragging.",
+          B: "Click shows a toast nudging the user to drag it instead.",
+          C: "Click runs a live preview scan of the current page.",
+          BC: "Click nudges with a toast, then runs a live preview scan.",
+        };
+
+        // ---------- element refs ----------
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+        var els = {
+          targetSite: $("targetSite"),
+          param: $("param"),
+          maxLen: $("maxLen"),
+          maxLenVal: $("maxLenVal"),
+          label: $("label"),
+          toastMsg: $("toastMsg"),
+          toastField: $("toastField"),
+          behavior: $("behavior"),
+          behaviorHint: $("behaviorHint"),
+          bookmarklet: $("bookmarklet"),
+          demoBtn: $("demoBtn"),
+          demoNote: $("demoNote"),
+          simtab: $("simtab"),
+          simUrl: $("simUrl"),
+          simCap: $("simCap"),
+          simMeta: $("simMeta"),
+          srcOut: $("srcOut"),
+          promptOut: $("promptOut"),
+          presets: $("presets"),
+          sample: $("sample"),
+        };
+
+        // ---------- helpers ----------
+        function cleanSite(s) {
+          return (
+            String(s || "")
+              .trim()
+              .replace(/\/+$/, "") || "https://brainsnn.com"
+          );
+        }
+        function cleanParam(s) {
+          return String(s || "").trim() || "scan";
+        }
+
+        // The bookmarklet runs on FOREIGN pages, so it uses the absolute target URL.
+        function buildBookmarklet(s) {
+          var site = cleanSite(s.targetSite);
+          var param = encodeURIComponent(cleanParam(s.param));
+          var max = Math.max(1, parseInt(s.maxLen, 10) || 3000);
+          return (
+            "javascript:(function(){" +
+            "var s=window.getSelection?window.getSelection().toString():'';" +
+            "var t=s||(document.title+'. '+(window.location.href||''));" +
+            "var u='" +
+            site +
+            "/?" +
+            param +
+            "='+encodeURIComponent(t.slice(0," +
+            max +
+            "));" +
+            "window.open(u,'_blank','noopener');" +
+            "})();"
+          );
+        }
+
+        // What the playground captures right now (real selection, else this page's title+url).
+        function capturePayload() {
+          var sel = "";
+          try {
+            sel = window.getSelection
+              ? window.getSelection().toString().trim()
+              : "";
+          } catch (e) {}
+          var fallback = document.title + ". " + window.location.href;
+          return (sel || fallback).slice(
+            0,
+            Math.max(1, parseInt(state.maxLen, 10) || 3000),
+          );
+        }
+        function scanUrl(payload) {
+          return (
+            cleanSite(state.targetSite) +
+            "/?" +
+            encodeURIComponent(cleanParam(state.param)) +
+            "=" +
+            encodeURIComponent(payload)
+          );
+        }
+
+        function buildPrompt(s) {
+          var parts = [];
+          if (cleanSite(s.targetSite) !== DEFAULTS.targetSite)
+            parts.push("target " + cleanSite(s.targetSite));
+          if (cleanParam(s.param) !== DEFAULTS.param)
+            parts.push("query parameter `" + cleanParam(s.param) + "`");
+          if (parseInt(s.maxLen, 10) !== DEFAULTS.maxLen)
+            parts.push("capture up to " + s.maxLen + " characters");
+          if (s.label !== DEFAULTS.label)
+            parts.push('button label "' + s.label + '"');
+
+          var click;
+          if (s.behavior === "A")
+            click =
+              "On click, suppress the default action and do nothing else (drag-only).";
+          else if (s.behavior === "B")
+            click =
+              "On click, call preventDefault and show a toast reading “" +
+              s.toastMsg +
+              "”.";
+          else if (s.behavior === "C")
+            click =
+              "On click, call preventDefault and open a live preview scan of the current page (window.open of the relative /?" +
+              cleanParam(s.param) +
+              "= URL with the encoded selection or title+URL, target _blank, noopener).";
+          else
+            click =
+              "On click, call preventDefault, show a toast reading “" +
+              s.toastMsg +
+              "”, then open a live preview scan of the current page (window.open of the relative /?" +
+              cleanParam(s.param) +
+              "= URL, _blank, noopener).";
+
+          var spec = parts.length
+            ? "Update the Scan Anywhere bookmarklet in src/components/ScanAnywherePanel.jsx to use " +
+              parts.join(", ") +
+              "."
+            : "Keep the Scan Anywhere bookmarklet in src/components/ScanAnywherePanel.jsx at its defaults (" +
+              DEFAULTS.targetSite +
+              ", param `" +
+              DEFAULTS.param +
+              "`, " +
+              DEFAULTS.maxLen +
+              " chars).";
+
+          return (
+            spec +
+            "\n" +
+            click +
+            "\nKeep the javascript: href applied to the <a> via a ref + useEffect + setAttribute (never a JSX href), " +
+            "so React does not warn about javascript: URLs and the link stays draggable to the bookmarks bar."
+          );
+        }
+
+        // ---------- toast ----------
+        var toastWrap = $("toastWrap");
+        function showToast(msg) {
+          var t = document.createElement("div");
+          t.className = "toast";
+          t.textContent = msg;
+          toastWrap.appendChild(t);
+          setTimeout(function () {
+            t.classList.add("out");
+            setTimeout(function () {
+              if (t.parentNode) t.parentNode.removeChild(t);
+            }, 260);
+          }, 3200);
+        }
+
+        // ---------- simulated click ----------
+        function runDemo() {
+          var b = state.behavior;
+          window.__lastDemo = { behavior: b, toast: false, opened: null };
+
+          if (b === "A") {
+            els.simtab.classList.remove("show");
+            showFlash("Click suppressed — nothing happens (drag-only).");
+            return;
+          }
+          if (b === "B" || b === "BC") {
+            showToast(state.toastMsg);
+            window.__lastDemo.toast = true;
+          }
+          if (b === "C" || b === "BC") {
+            var payload = capturePayload();
+            var url = scanUrl(payload);
+            window.__lastDemo.opened = url;
+            els.simUrl.textContent = url;
+            els.simCap.textContent = payload;
+            var usedSelection = !!(
+              window.getSelection && window.getSelection().toString().trim()
+            );
+            els.simMeta.textContent =
+              (usedSelection
+                ? "captured: page selection"
+                : "captured: page title + URL") +
+              "  ·  " +
+              payload.length +
+              " chars  ·  target _blank, noopener";
+            els.simtab.classList.add("show");
+          } else {
+            els.simtab.classList.remove("show");
+          }
+        }
+        function showFlash(msg) {
+          els.demoNote.textContent = msg;
+          els.demoNote.style.color = "var(--warn)";
+          setTimeout(function () {
+            els.demoNote.style.color = "";
+            els.demoNote.textContent = defaultNote();
+          }, 2600);
+        }
+        function defaultNote() {
+          return state.behavior === "A"
+            ? "Behavior is “Do nothing”."
+            : "Select text above first to see it captured.";
+        }
+
+        // ---------- render ----------
+        function applyBookmarkletHref() {
+          // *** The whole point: set the javascript: href on the DOM node directly,
+          // never as a framework-managed attribute. ***
+          var code = buildBookmarklet(state);
+          els.bookmarklet.setAttribute("href", code);
+          els.bookmarklet.textContent = state.label;
+          return code;
+        }
+
+        function renderControls() {
+          els.targetSite.value = state.targetSite;
+          els.param.value = state.param;
+          els.maxLen.value = state.maxLen;
+          els.maxLenVal.textContent = String(state.maxLen);
+          els.label.value = state.label;
+          els.toastMsg.value = state.toastMsg;
+
+          // behavior chips
+          Array.prototype.forEach.call(
+            els.behavior.querySelectorAll(".chip"),
+            function (c) {
+              c.classList.toggle(
+                "active",
+                c.getAttribute("data-behavior") === state.behavior,
+              );
+            },
+          );
+          els.behaviorHint.textContent = BEHAVIOR_HINTS[state.behavior];
+
+          // toast field only relevant for B / BC
+          var toastUsed = state.behavior === "B" || state.behavior === "BC";
+          els.toastMsg.disabled = !toastUsed;
+          els.toastField.style.opacity = toastUsed ? "1" : ".5";
+
+          els.demoNote.textContent = defaultNote();
+        }
+
+        function updateAll() {
+          var code = applyBookmarkletHref(); // preview: real draggable href
+          els.srcOut.textContent = code; // output: source
+          els.promptOut.textContent = buildPrompt(state); // output: prompt
+        }
+
+        // ---------- presets ----------
+        function buildPresetChips() {
+          Object.keys(PRESETS).forEach(function (name) {
+            var b = document.createElement("button");
+            b.className = "chip";
+            b.textContent = name;
+            b.addEventListener("click", function () {
+              applyPreset(name);
+            });
+            els.presets.appendChild(b);
+          });
+        }
+        function applyPreset(name) {
+          state = Object.assign({}, DEFAULTS, PRESETS[name]);
+          window.__state = state;
+          Array.prototype.forEach.call(
+            els.presets.querySelectorAll(".chip"),
+            function (c) {
+              c.classList.toggle("active", c.textContent === name);
+            },
+          );
+          renderControls();
+          updateAll();
+        }
+
+        // ---------- wiring ----------
+        function bindText(el, key) {
+          el.addEventListener("input", function () {
+            state[key] = el.value;
+            updateAll();
+          });
+        }
+        bindText(els.targetSite, "targetSite");
+        bindText(els.param, "param");
+        bindText(els.label, "label");
+        bindText(els.toastMsg, "toastMsg");
+
+        els.maxLen.addEventListener("input", function () {
+          state.maxLen = parseInt(els.maxLen.value, 10);
+          els.maxLenVal.textContent = String(state.maxLen);
+          updateAll();
+        });
+
+        Array.prototype.forEach.call(
+          els.behavior.querySelectorAll(".chip"),
+          function (c) {
+            c.addEventListener("click", function () {
+              state.behavior = c.getAttribute("data-behavior");
+              // clear any preset highlight (we're now custom unless it matches)
+              Array.prototype.forEach.call(
+                els.presets.querySelectorAll(".chip"),
+                function (p) {
+                  p.classList.remove("active");
+                },
+              );
+              renderControls();
+              updateAll();
+            });
+          },
+        );
+
+        // Clicking the bookmarklet on THIS page mirrors handleBookmarkletClick:
+        // preventDefault -> (toast) -> (preview). We never navigate away; the
+        // simulated tab stands in for window.open so the playground stays put.
+        els.bookmarklet.addEventListener("click", function (e) {
+          e.preventDefault();
+          runDemo();
+        });
+        els.demoBtn.addEventListener("click", function () {
+          runDemo();
+        });
+
+        // copy buttons
+        function wireCopy(btnId, getText) {
+          var btn = $(btnId);
+          btn.addEventListener("click", function () {
+            var text = getText();
+            var done = function () {
+              var orig = btn.textContent;
+              btn.textContent = "Copied!";
+              btn.classList.add("ok");
+              setTimeout(function () {
+                btn.textContent = orig;
+                btn.classList.remove("ok");
+              }, 1400);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(text).then(done, function () {
+                fallbackCopy(text);
+                done();
+              });
+            } else {
+              fallbackCopy(text);
+              done();
+            }
+          });
+        }
+        function fallbackCopy(text) {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            document.execCommand("copy");
+          } catch (e) {}
+          document.body.removeChild(ta);
+        }
+        wireCopy("copySrc", function () {
+          return els.srcOut.textContent;
+        });
+        wireCopy("copyPrompt", function () {
+          return els.promptOut.textContent;
+        });
+
+        // ---------- init ----------
+        buildPresetChips();
+        els.presets.querySelector(".chip").classList.add("active"); // first preset = default
+        renderControls();
+        updateAll();
+      })();
+    </script>
+  </body>
+</html>
