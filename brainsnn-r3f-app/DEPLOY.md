@@ -1,129 +1,128 @@
-# Deploying BrainSNN on Railway
+# Deploying BrainSNN
 
-The app is a single container: Vite SPA built to `dist/`, served by an
-Express server (`server.js`) that also handles the viral endpoints
-(`/api/og`, `/r/:hash`, `/i/:hash`, `/api/fetch-url`, `/api/leaderboard`).
+BrainSNN is the Vite app in `brainsnn-r3f-app/`, served by `server.js` on
+Railway. The production service is:
 
-## 1. Prerequisites
+- Railway project: `wonderful-charisma`
+- Project id: `c7f26b12-f812-4785-bbaf-a49b9caeb228`
+- Service: `the-brain`
+- Environment: `production`
+- App root: `brainsnn-r3f-app`
+- Healthcheck: `https://www.brainsnn.com/healthz`
 
-- Railway account (free tier is fine for launch week)
-- `brainsnn.com` DNS you can edit
-- Optional but strongly recommended: an Upstash Redis (free) for a
-  persistent weekly leaderboard. Without it the leaderboard still works
-  but resets per process restart.
+## Normal deploy
 
-## 2. Install the Railway CLI
+1. Merge a PR into `main`.
+2. Open GitHub Actions.
+3. Watch `Deploy BrainSNN app to Railway`.
+4. Green means Railway reported a successful deployment and the live healthcheck
+   returned HTTP 200.
+
+The workflow runs when `main` changes any of:
+
+- `brainsnn-r3f-app/**`
+- root `Dockerfile`
+- root `railway.toml`
+- `.github/workflows/brainsnn-app-deploy.yml`
+
+It can also be run manually with `workflow_dispatch`.
+
+## One-time GitHub setup
+
+Required repository secret:
+
+```text
+RAILWAY_TOKEN
+```
+
+Optional repository variables if Railway is renamed:
+
+```text
+RAILWAY_PROJECT_ID
+RAILWAY_SERVICE
+RAILWAY_ENVIRONMENT
+BRAINSNN_HEALTH_URL
+```
+
+Do not put app API keys in GitHub workflow files. Vite build-time values must be
+Railway service variables so Railway can pass them into Docker:
+
+```text
+VITE_CRUMB_LLM_URL
+VITE_CRUMB_LLM_KEY
+VITE_GEMINI_API_KEY
+VITE_GEMINI_MODEL
+VITE_GEMINI_API_BASE
+VITE_GEMMA_API_ENDPOINT
+VITE_GEMMA_API_KEY
+VITE_GEMMA_MODEL
+VITE_TRIBE_API
+VITE_SYNC_WS_URL
+VITE_LOBSTER_TRAP_URL
+VITE_LOBSTER_TRAP_KEY
+```
+
+`VITE_*` values are public once baked into the browser bundle. Use only
+non-privileged client-safe values there.
+
+## Manual fallback
+
+From the repo root:
 
 ```bash
-curl -fsSL https://railway.app/install.sh | sh
-# or: brew install railway
-railway login
+railway link \
+  --project c7f26b12-f812-4785-bbaf-a49b9caeb228 \
+  --service the-brain \
+  --environment production
+
+railway up brainsnn-r3f-app \
+  --path-as-root \
+  --service the-brain \
+  --environment production \
+  --detach
 ```
 
-## 3. Ship the service
-
-From this directory (`brainsnn-r3f-app/`):
+Then verify:
 
 ```bash
-railway link        # pick an existing project or create one
-railway up          # builds Dockerfile, deploys the image
+curl -L https://www.brainsnn.com/healthz
 ```
 
-Railway reads `railway.toml`:
-- builder: `DOCKERFILE`
-- start command: `node server.js`
-- healthcheck: `/healthz`
+Use `www.brainsnn.com` for curl checks. The apex
+`https://brainsnn.com/healthz` currently follows to a 404 in strict curl checks.
 
-The first build takes ~3 min (npm ci + vite build). The service listens
-on `$PORT` (Railway injects it) and binds `0.0.0.0`.
+## Confirm the friendly build
 
-## 4. Attach `brainsnn.com`
+The Vite `dist/index.html` file only references the built JS bundle. The friendly
+landing copy lives in the built app chunk. Check local output:
 
 ```bash
-railway domain brainsnn.com
-```
-
-Railway prints a CNAME target (e.g. `service-production-abc.up.railway.app`).
-Add it at your DNS provider:
-
-```
-Type    Name    Value
-CNAME   @       service-production-abc.up.railway.app
-CNAME   www     service-production-abc.up.railway.app
-```
-
-Many registrars don't allow a CNAME on the apex — use Cloudflare (free
-proxy + flattened CNAME), or your registrar's ALIAS/ANAME record, or
-point `@` at Railway's IPs via an A record if the dashboard offers one.
-HTTPS is automatic once DNS resolves.
-
-## 5. Env vars (Project → Variables)
-
-Required for the leaderboard to persist:
-
-```
-UPSTASH_REDIS_REST_URL    https://xxxx.upstash.io
-UPSTASH_REDIS_REST_TOKEN  <token>
-```
-
-Create an Upstash Redis at <https://upstash.com>, copy the REST URL +
-token. Free tier is enough for launch week.
-
-Optional (unlock deeper layers — app runs fine without them):
-
-```
-VITE_TRIBE_API            https://your-tribe-service
-VITE_GEMMA_API_ENDPOINT   https://generativelanguage.googleapis.com/...
-VITE_GEMMA_API_KEY        ...
-VITE_SYNC_WS_URL          wss://your-relay
-```
-
-`VITE_*` vars are read at Vite build time — set them *before* the next
-`railway up` so the bundle picks them up.
-
-## 6. Smoke test
-
-```bash
-curl https://brainsnn.com/healthz
-# → {"ok":true,"ts":...}
-
-curl -o /tmp/og.png https://brainsnn.com/api/og
-file /tmp/og.png
-# → PNG image data, 1200 x 630
-
-curl -s https://brainsnn.com/api/leaderboard | jq
-# → {"week":"2026-W16","total":0,"top":[],"backend":"upstash"}
-```
-
-Then visit:
-- `https://brainsnn.com/` — live app, demo tiles visible
-- `https://brainsnn.com/r/<hash>` — a shared reaction (replace hash with a real one after a scan)
-- Twitter card validator: <https://cards-dev.twitter.com/validator>
-- LinkedIn post inspector: <https://www.linkedin.com/post-inspector/>
-
-Both should render the 1200×630 card.
-
-## 7. Local dev / staging the container
-
-```bash
-npm install
+npm ci
 npm run build
-npm start                  # boots server.js on :8080
-# then: http://localhost:8080
+npm run verify:friendly-build
 ```
 
-Or build the container:
+Check production:
 
 ```bash
-docker build -t brainsnn .
-docker run --rm -p 8080:8080 -e PORT=8080 brainsnn
+html="$(curl -L -sS https://www.brainsnn.com/)"
+asset="$(printf '%s' "$html" | sed -n 's/.*src="\([^"]*\/assets\/index-[^"]*\.js\)".*/\1/p' | head -1)"
+curl -L -sS "https://www.brainsnn.com${asset}" | grep 'Feel what you read'
 ```
 
-## 8. Rollbacks
+## Rollback
 
-Railway keeps deploy history. Roll back via the dashboard or:
+Use the Railway dashboard deployment history, or:
 
 ```bash
-railway status
 railway redeploy --previous
 ```
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| Workflow fails before deploy | Add `RAILWAY_TOKEN` as a GitHub repository secret. |
+| Workflow deploys but healthcheck fails | Check `BRAINSNN_HEALTH_URL`; `www.brainsnn.com/healthz` is the known-good curl URL. |
+| Crumb LLM URL/key is blank in the app | Set the `VITE_CRUMB_LLM_*` values as Railway service variables, then redeploy. |
+| Local tests fail after `npm ci` | Ensure `@testing-library/dom` is installed from the committed lockfile. |
