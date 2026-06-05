@@ -20,6 +20,38 @@ npm run dev     # → http://localhost:5173
 | `npm run dev`     | Vite dev server with HMR on port 5173                                   |
 | `npm run build`   | Production build → `dist/` (~1.4 MB total, three.js chunked separately) |
 | `npm run preview` | Serves `dist/` locally for verification before pushing                  |
+| `npm run verify:friendly-build` | Confirms the Warm & Simple landing copy is present in the built app |
+
+## Deploy
+
+Pushing changes to `main` under `brainsnn-r3f-app/**`, the root `Dockerfile`,
+`railway.toml`, or `.github/workflows/brainsnn-app-deploy.yml` runs the
+`Deploy BrainSNN app to Railway` workflow and ships the app to
+<https://brainsnn.com>.
+
+The workflow uses `RAILWAY_TOKEN` from GitHub repository secrets and deploys the
+Railway project `wonderful-charisma` (`c7f26b12-f812-4785-bbaf-a49b9caeb228`),
+service `the-brain`, environment `production`. Override those with
+`RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE`, and `RAILWAY_ENVIRONMENT` repo
+variables/secrets if Railway is renamed. `VITE_*` build-time values, including
+`VITE_CRUMB_LLM_URL` and `VITE_CRUMB_LLM_KEY`, must be set as Railway service
+variables so the Docker build can pass them through to Vite.
+
+The production Railway service is configured with `brainsnn-r3f-app` as the app
+root, so the workflow uploads that directory with `--path-as-root`. The health
+check defaults to `https://www.brainsnn.com/healthz` because the apex
+`https://brainsnn.com/healthz` currently follows to a 404 in curl; override with
+the `BRAINSNN_HEALTH_URL` repo variable after the apex redirect is fixed.
+
+Manual fallback from the repo root:
+
+```bash
+railway link --project c7f26b12-f812-4785-bbaf-a49b9caeb228 --service the-brain --environment production
+railway up brainsnn-r3f-app --path-as-root --service the-brain --environment production --detach
+curl -L https://www.brainsnn.com/healthz
+```
+
+Full operator runbook: [DEPLOY.md](DEPLOY.md).
 
 ## Environment variables
 
