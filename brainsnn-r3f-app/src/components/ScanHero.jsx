@@ -55,7 +55,7 @@ export default function ScanHero({ onResult }) {
           <h2>See the hidden feelings in anything you read</h2>
           <p className="scan-subcopy">
             Paste a headline, email, or post — BrainSNN shows you the emotional
-            pull behind the words, in real time.
+            pull behind the words, live.
           </p>
         </div>
         <span className="scan-backend" title="Active analysis backend">
