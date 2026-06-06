@@ -6,7 +6,7 @@
  * shareable as a compact JSON export.
  *
  * Each rule:
- *   { id, category: 'urgency'|'outrage'|'certainty'|'fear', pattern, flags?, label? }
+ *   { id, category: 'urgency'|'outrage'|'certainty'|'fear'|'coercion', pattern, flags?, label? }
  *
  * At scan time we promote the merged set (defaults ∪ custom) into
  * _activeRules via setActiveRules(). Invalid regex sources are silently
@@ -19,13 +19,19 @@ import {
   serializeRules,
   setActiveRules,
   resetActiveRules,
-} from './cognitiveFirewall';
+} from "./cognitiveFirewall";
 
-const STORAGE_KEY = 'brainsnn_custom_rules_v1';
+const STORAGE_KEY = "brainsnn_custom_rules_v1";
 
-export const CATEGORIES = ['urgency', 'outrage', 'certainty', 'fear'];
+export const CATEGORIES = [
+  "urgency",
+  "outrage",
+  "certainty",
+  "fear",
+  "coercion",
+];
 
-function safeRegex(source, flags = 'gi') {
+function safeRegex(source, flags = "gi") {
   try {
     return new RegExp(source, flags);
   } catch {
@@ -43,7 +49,11 @@ function readStore() {
 }
 
 function writeStore(list) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch { /* quota */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  } catch {
+    /* quota */
+  }
 }
 
 /**
@@ -53,9 +63,10 @@ export function getCustomRules() {
   return readStore();
 }
 
-export function addCustomRule({ category, pattern, flags = 'gi', label = '' }) {
-  if (!CATEGORIES.includes(category)) throw new Error(`unknown category ${category}`);
-  if (!safeRegex(pattern, flags)) throw new Error('invalid regex pattern');
+export function addCustomRule({ category, pattern, flags = "gi", label = "" }) {
+  if (!CATEGORIES.includes(category))
+    throw new Error(`unknown category ${category}`);
+  if (!safeRegex(pattern, flags)) throw new Error("invalid regex pattern");
   const entry = {
     id: `cr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     category,
@@ -96,7 +107,7 @@ export function applyMergedRules() {
   for (const cat of CATEGORIES) if (!serialized[cat]) serialized[cat] = [];
   for (const r of list) {
     if (!CATEGORIES.includes(r.category)) continue;
-    serialized[r.category].push({ source: r.pattern, flags: r.flags || 'gi' });
+    serialized[r.category].push({ source: r.pattern, flags: r.flags || "gi" });
   }
   const merged = deserializeRules(serialized);
   setActiveRules(merged);
@@ -107,33 +118,41 @@ export function applyMergedRules() {
  * rules (defaults never travel in the export).
  */
 export function exportCustomRules() {
-  return JSON.stringify({
-    brainsnn: 'custom-rules-v1',
-    rules: readStore().map((r) => ({
-      category: r.category,
-      pattern: r.pattern,
-      flags: r.flags,
-      label: r.label,
-    })),
-  }, null, 2);
+  return JSON.stringify(
+    {
+      brainsnn: "custom-rules-v1",
+      rules: readStore().map((r) => ({
+        category: r.category,
+        pattern: r.pattern,
+        flags: r.flags,
+        label: r.label,
+      })),
+    },
+    null,
+    2,
+  );
 }
 
 export function importCustomRules(json) {
   let data;
-  try { data = JSON.parse(json); } catch { throw new Error('invalid JSON'); }
-  if (data.brainsnn !== 'custom-rules-v1' || !Array.isArray(data.rules)) {
-    throw new Error('not a BrainSNN custom-rules export');
+  try {
+    data = JSON.parse(json);
+  } catch {
+    throw new Error("invalid JSON");
+  }
+  if (data.brainsnn !== "custom-rules-v1" || !Array.isArray(data.rules)) {
+    throw new Error("not a BrainSNN custom-rules export");
   }
   const cleaned = [];
   for (const r of data.rules.slice(0, 80)) {
     if (!CATEGORIES.includes(r.category)) continue;
-    if (!safeRegex(r.pattern, r.flags || 'gi')) continue;
+    if (!safeRegex(r.pattern, r.flags || "gi")) continue;
     cleaned.push({
       id: `cr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       category: r.category,
       pattern: String(r.pattern).slice(0, 400),
-      flags: String(r.flags || 'gi').slice(0, 6),
-      label: String(r.label || '').slice(0, 48),
+      flags: String(r.flags || "gi").slice(0, 6),
+      label: String(r.label || "").slice(0, 48),
       ts: Date.now(),
     });
   }
@@ -144,5 +163,7 @@ export function importCustomRules(json) {
 
 // Auto-apply on module load so custom rules are active from page start.
 try {
-  if (typeof window !== 'undefined') applyMergedRules();
-} catch { /* noop */ }
+  if (typeof window !== "undefined") applyMergedRules();
+} catch {
+  /* noop */
+}

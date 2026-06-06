@@ -6,25 +6,37 @@ import {
 } from "./firewallI18n.js";
 
 const URGENCY_PATTERNS = [
-  /\bnow\b|\bimmediately\b|\burgent\b|\bbreaking\b|\balert\b/gi,
-  /\blimited time\b|\bdon't miss\b|\blast chance\b|\bact(?:s)? fast\b/gi,
-  /!{2,}|\bWARNING\b|\bCRISIS\b|\bSHOCKING\b/gi,
+  /\bnow\b|\bimmediat(?:e|ely)\b|\burgent(?:ly)?\b|\bbreaking\b|\balert\b|\basap\b|\bright away\b/gi,
+  /\blimited[- ]time\b|\bdon'?t miss\b|\blast chance\b|\bact(?:s|ing)? (?:now|fast)\b|\bhurry\b|\bbefore it'?s too late\b/gi,
+  /!{2,}|\bWARNING\b|\bCRISIS\b|\bSHOCKING\b|\bfinal notice\b|\bexpir(?:es?|ing|ation)\b|\bdeadline\b|\bwithin (?:the |\d+ ?)?(?:hour|hours|minute|minutes|days?)\b|\btime[- ]sensitive\b/gi,
 ];
 
 const OUTRAGE_PATTERNS = [
-  /\boutrage\b|\bfurious\b|\bscandal\b|\bterrible\b|\bhorrible\b/gi,
-  /\bunbelievable\b|\bdisgusting\b|\bshocking\b|\bbetray/gi,
-  /\bthey don't want you to know\b|\bhidden\b|\bsecret\b|\bcovered up\b/gi,
+  /\boutrage(?:d|ous)?\b|\bfurious\b|\bscandal(?:ous)?\b|\bterrible\b|\bhorrible\b|\bdisgrace(?:ful)?\b/gi,
+  /\bunbelievable\b|\bdisgusting\b|\bshocking\b|\bbetray(?:al|ed|s)?\b|\bcorrupt(?:ion)?\b/gi,
+  /\bthey don'?t want you to (?:know|see)\b|\bhidden\b|\bsecret\b|\bcover(?:ed)?[- ]?up\b|\bexposed?\b/gi,
 ];
 
 const CERTAINTY_THEATER = [
-  /\b100%\b|\bproven\b|\bguaranteed\b|\bscientifically proven\b|\bfact\b/gi,
-  /\beveryone knows\b|\bobviously\b|\bclearly\b|\bundeniably\b/gi,
+  /\b100%\b|\bproven\b|\bguarantee(?:d)?\b|\bscientifically proven\b|\bfact\b|\bno doubt\b/gi,
+  /\beveryone knows\b|\bobviously\b|\bclearly\b|\bundeniabl[ey]\b|\bnobody can deny\b|\bthe truth is\b/gi,
 ];
 
 const FEAR_PATTERNS = [
-  /\bdie\b|\bdeath\b|\bkill\b|\bdanger\b|\bthreat\b|\bsafe\b|\bunsafe\b/gi,
-  /\bvirus\b|\bpandemic\b|\battack\b|\bwar\b|\bcrash\b|\bcollapse\b/gi,
+  /\bdie\b|\bdeath\b|\bkill(?:ed|s)?\b|\bdanger(?:ous)?\b|\bthreat(?:en(?:ed|ing)?|s)?\b|\bunsafe\b|\bat risk\b/gi,
+  /\bvirus\b|\bpandemic\b|\battack(?:ed|s)?\b|\bwar\b|\bcrash\b|\bcollapse\b|\bdisaster\b|\bemergency\b/gi,
+  /\blose (?:access|your|everything)\b|\bcompromis(?:e|ed)\b|\bbreach(?:ed)?\b|\bpenalt(?:y|ies)\b|\bconsequences\b/gi,
+];
+
+// Coercion / phishing / authority-hijack — the high-precision "do this NOW or
+// else" signatures that drive manipulation pressure + trust erosion. This is
+// the genre (scam emails, account-security lures) the outrage/fear lexicons
+// above miss entirely.
+const COERCION_PATTERNS = [
+  /\bverify your (?:identity|account|details|information|payment)\b|\bconfirm your (?:account|identity|password|details|payment|information)\b/gi,
+  /\bclick (?:here|below|this link|the link|now)\b|\blog ?in to (?:verify|secure|confirm|restore|unlock)\b|\bupdate your (?:payment|billing|account|details|information|password)\b/gi,
+  /\bunauthor(?:i[sz]ed) (?:login|access|transaction|activity|sign[- ]?in)\b|\bsuspicious (?:login|activity|sign[- ]?in|transaction)\b|\baccount(?:\s+\w+){0,3}\s+(?:suspended|terminated|locked|disabled|deactivated|compromised|limited|closed)\b/gi,
+  /\bfailure to (?:comply|respond|verify|act|pay)\b|\byou must\b|\brequired to\b|\b(?:immediate )?action (?:required|needed|requested)\b|\bdo not (?:ignore|delay|share)\b|\bofficial (?:notice|notification|warning)\b|\bgift card\b|\bwire transfer\b|\bsocial security (?:number)?\b/gi,
 ];
 
 /**
@@ -36,6 +48,7 @@ export const DEFAULT_RULES = {
   outrage: OUTRAGE_PATTERNS,
   certainty: CERTAINTY_THEATER,
   fear: FEAR_PATTERNS,
+  coercion: COERCION_PATTERNS,
 };
 
 /**
@@ -136,6 +149,10 @@ const SIGNAL_CATEGORIES = {
     drives: ["cognitiveSuppression", "trustErosion"],
   },
   fear: { label: "Fear", drives: ["emotionalActivation"] },
+  coercion: {
+    label: "Coercion",
+    drives: ["manipulationPressure", "trustErosion", "emotionalActivation"],
+  },
 };
 
 export function scoreContentWithRules(
@@ -171,8 +188,9 @@ export function scoreContentWithRules(
     outrage: rules.outrage || [],
     certainty: rules.certainty || [],
     fear: rules.fear || [],
+    coercion: rules.coercion || [],
   };
-  const counts = { urgency: 0, outrage: 0, certainty: 0, fear: 0 };
+  const counts = { urgency: 0, outrage: 0, certainty: 0, fear: 0, coercion: 0 };
   const signals = [];
   for (const [key, patterns] of Object.entries(rulesByCat)) {
     const phrases = [];
@@ -192,13 +210,22 @@ export function scoreContentWithRules(
     }
   }
 
-  const { urgency, outrage, certainty, fear } = counts;
-  const emotionalActivation = clamp(normalize(fear + outrage, 4) * 0.85);
-  const cognitiveSuppression = clamp(normalize(urgency + certainty, 4) * 0.8);
-  const manipulationPressure = clamp(
-    emotionalActivation * 0.55 + cognitiveSuppression * 0.45,
+  const { urgency, outrage, certainty, fear, coercion } = counts;
+  // Coercion contributes partial emotional load (fear-of-loss) without
+  // double-counting the fear lexicon, drives trust erosion directly (it IS a
+  // trust attack), and is the dominant input to manipulation pressure.
+  const emotionalActivation = clamp(
+    normalize(fear + outrage + coercion * 0.4, 4) * 0.85,
   );
-  const trustErosion = clamp(normalize(outrage + certainty, 5) * 0.78);
+  const cognitiveSuppression = clamp(normalize(urgency + certainty, 4) * 0.8);
+  const trustErosion = clamp(
+    normalize(outrage + certainty + coercion, 5) * 0.82,
+  );
+  const manipulationPressure = clamp(
+    emotionalActivation * 0.4 +
+      cognitiveSuppression * 0.3 +
+      normalize(coercion, 6) * 0.55,
+  );
 
   // Backward-compatible flat evidence (receipt hashing + AI paths consume it).
   const evidence = [...new Set(signals.flatMap((s) => s.phrases))].slice(0, 8);
@@ -213,7 +240,7 @@ export function scoreContentWithRules(
   // score resting on a single category (a possible false positive).
   // NOTE (tunable): the weights + thresholds below are the knob that most
   // shapes how trustworthy the tool *feels*. Worth your calibration.
-  const totalHits = urgency + outrage + certainty + fear;
+  const totalHits = urgency + outrage + certainty + fear + coercion;
   const distinctCats = signals.length;
   const lengthFactor = clamp(words / 60);
   const volumeFactor = clamp(totalHits / 6);
@@ -253,10 +280,18 @@ export function scoreContentWithRules(
         : ".");
   }
 
+  // Verdict tracks the worst credible signal, not just the 3-dimension mean \u2014
+  // a trust attack (high trust erosion / manipulation pressure) must read as
+  // high-risk even when fear/outrage emotional load is modest.
+  const risk = Math.max(
+    overall,
+    manipulationPressure * 0.95,
+    trustErosion * 0.9,
+  );
   const recommendedAction =
-    overall > 0.65
+    risk > 0.6
       ? "High manipulation-signature density \u2014 pause before sharing or reacting."
-      : overall > 0.35
+      : risk > 0.33
         ? "Moderate pressure cues detected \u2014 verify sources before acting."
         : "Low manipulation indicators \u2014 content appears relatively low-risk.";
 

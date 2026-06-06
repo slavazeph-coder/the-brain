@@ -23,6 +23,7 @@ const CAT_LABELS = {
   outrage: "Outrage",
   certainty: "Certainty theater",
   fear: "Fear",
+  coercion: "Coercion",
 };
 
 function read() {
@@ -55,7 +56,7 @@ export function logScan({ score, ts = Date.now() } = {}) {
       (score.cognitiveSuppression || 0) +
       (score.manipulationPressure || 0)) /
     3;
-  const sig = { urgency: 0, outrage: 0, certainty: 0, fear: 0 };
+  const sig = { urgency: 0, outrage: 0, certainty: 0, fear: 0, coercion: 0 };
   (score.signals || []).forEach((s) => {
     if (s && s.category in sig) sig[s.category] = s.count || 0;
   });
@@ -80,7 +81,7 @@ function sumSignals(rows) {
       }
       return acc;
     },
-    { urgency: 0, outrage: 0, certainty: 0, fear: 0 },
+    { urgency: 0, outrage: 0, certainty: 0, fear: 0, coercion: 0 },
   );
 }
 
