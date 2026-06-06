@@ -1,20 +1,50 @@
 import React, { useState } from "react";
 import { analyzeForBrain, activeBackendLabel } from "../utils/brainLLM";
 
+// Each dimension names the brain region the scan drives (see mapTRIBEToRegions)
+// so the result panel visibly connects to the 3D brain reacting above it.
 const SCORES = [
   {
     key: "manipulationPressure",
     label: "Manipulation",
     accent: "var(--danger)",
+    region: "basal ganglia ↑",
   },
-  { key: "emotionalActivation", label: "Emotional", accent: "var(--gold)" },
+  {
+    key: "emotionalActivation",
+    label: "Emotional",
+    accent: "var(--gold)",
+    region: "amygdala + thalamus ↑",
+  },
   {
     key: "cognitiveSuppression",
     label: "Cognitive load",
     accent: "var(--primary)",
+    region: "prefrontal cortex ↓",
   },
-  { key: "trustErosion", label: "Trust erosion", accent: "var(--danger)" },
+  {
+    key: "trustErosion",
+    label: "Trust erosion",
+    accent: "#5591c7",
+    region: "network-wide",
+  },
 ];
+
+// Per-category colour for the "why this score" breakdown — coercion + outrage
+// read as red (trust attack), fear as gold, urgency/certainty as teal.
+const SIGNAL_ACCENT = {
+  coercion: "var(--danger)",
+  outrage: "var(--danger)",
+  fear: "var(--gold)",
+  urgency: "var(--primary)",
+  certainty: "var(--primary)",
+};
+
+const VERDICT = {
+  High: { key: "high", label: "High manipulation risk" },
+  Moderate: { key: "moderate", label: "Moderate pressure" },
+  Low: { key: "low", label: "Low risk" },
+};
 
 const PLACEHOLDER = "Paste a headline, email, or post here…";
 
@@ -112,45 +142,100 @@ export default function ScanHero({ onResult }) {
         )}
       </div>
 
-      {result && (
-        <div className="scan-result">
-          <div className="scan-scores">
-            {SCORES.map(({ key, label, accent }) => {
-              const pct = Math.round((result[key] || 0) * 100);
-              return (
-                <div className="scan-score" key={key}>
-                  <div className="scan-score-top">
-                    <span>{label}</span>
-                    <strong>{pct}%</strong>
+      {result &&
+        (() => {
+          const action = result.recommendedAction || "";
+          const level = VERDICT[action.split(" ")[0]] || VERDICT.Low;
+          const signals = Array.isArray(result.signals) ? result.signals : [];
+          return (
+            <div className="scan-result">
+              <div className={`scan-verdict scan-verdict-${level.key}`}>
+                <span className="scan-verdict-dot" aria-hidden="true" />
+                <div className="scan-verdict-text">
+                  <strong>{level.label}</strong>
+                  <span>{action}</span>
+                </div>
+              </div>
+
+              <div className="scan-scores">
+                {SCORES.map(({ key, label, accent, region }) => {
+                  const pct = Math.round((result[key] || 0) * 100);
+                  return (
+                    <div className="scan-score" key={key}>
+                      <div className="scan-score-top">
+                        <span>{label}</span>
+                        <strong>{pct}%</strong>
+                      </div>
+                      <div className="scan-bar">
+                        <div
+                          className="scan-bar-fill"
+                          style={{ width: `${pct}%`, background: accent }}
+                        />
+                      </div>
+                      <span className="scan-score-region">{region}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {signals.length > 0 && (
+                <div className="scan-why">
+                  <div className="scan-why-head">
+                    Why this score
+                    <span>the exact phrases that fired</span>
                   </div>
-                  <div className="scan-bar">
-                    <div
-                      className="scan-bar-fill"
-                      style={{ width: `${pct}%`, background: accent }}
-                    />
+                  <div className="scan-signals">
+                    {signals.map((s) => (
+                      <div className="scan-signal" key={s.category}>
+                        <div className="scan-signal-top">
+                          <span
+                            className="scan-signal-label"
+                            style={{
+                              color: SIGNAL_ACCENT[s.category] || "var(--text)",
+                            }}
+                          >
+                            <span
+                              className="scan-signal-dot"
+                              style={{
+                                background:
+                                  SIGNAL_ACCENT[s.category] || "var(--muted)",
+                              }}
+                            />
+                            {s.label}
+                          </span>
+                          <span className="scan-signal-count">{s.count}×</span>
+                        </div>
+                        <div className="scan-signal-phrases">
+                          {s.phrases.map((p, i) => (
+                            <span className="scan-phrase" key={i}>
+                              “{p}”
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
 
-          {result.recommendedAction && (
-            <p className="scan-action">
-              <strong>Read:</strong> {result.recommendedAction}
-            </p>
-          )}
+              {result.confidenceReason && (
+                <p className="scan-confidence">
+                  <strong>Confidence: {result.confidence}</strong> —{" "}
+                  {result.confidenceReason}
+                </p>
+              )}
 
-          <div className="scan-meta">
-            <span className="scan-tag">engine: {result.source || "regex"}</span>
-            {result.confidence && (
-              <span className="scan-tag">confidence: {result.confidence}</span>
-            )}
-            {Array.isArray(result.evidence) && result.evidence.length > 0 && (
-              <span className="scan-tag">{result.evidence.length} signals</span>
-            )}
-          </div>
-        </div>
-      )}
+              <div className="scan-meta">
+                <span className="scan-tag">
+                  engine: {result.source || "regex"}
+                </span>
+                <span className="scan-tag scan-tag-brain">
+                  ↳ now driving the brain above
+                </span>
+              </div>
+            </div>
+          );
+        })()}
     </section>
   );
 }

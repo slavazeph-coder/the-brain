@@ -4523,6 +4523,155 @@ h3 {
   padding: 4px 9px;
   border-radius: 8px;
 }
+.scan-tag-brain {
+  color: var(--primary);
+  background: rgba(79, 168, 179, 0.12);
+}
+
+/* ── Verdict banner ─────────────────────────────────────────────── */
+.scan-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.scan-verdict-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+.scan-verdict-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scan-verdict-text strong {
+  font-size: 0.95rem;
+}
+.scan-verdict-text span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.scan-verdict-high {
+  border-color: rgba(221, 105, 116, 0.4);
+  background: rgba(221, 105, 116, 0.08);
+}
+.scan-verdict-high .scan-verdict-dot {
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger);
+}
+.scan-verdict-high .scan-verdict-text strong {
+  color: var(--danger);
+}
+.scan-verdict-moderate {
+  border-color: rgba(232, 185, 52, 0.4);
+  background: rgba(232, 185, 52, 0.08);
+}
+.scan-verdict-moderate .scan-verdict-dot {
+  background: var(--gold);
+  box-shadow: 0 0 10px var(--gold);
+}
+.scan-verdict-moderate .scan-verdict-text strong {
+  color: var(--gold);
+}
+.scan-verdict-low {
+  border-color: rgba(109, 170, 69, 0.35);
+  background: rgba(109, 170, 69, 0.07);
+}
+.scan-verdict-low .scan-verdict-dot {
+  background: var(--ok);
+  box-shadow: 0 0 10px var(--ok);
+}
+.scan-verdict-low .scan-verdict-text strong {
+  color: var(--ok);
+}
+
+/* dimension → brain-region hint under each score bar */
+.scan-score-region {
+  display: block;
+  font-size: 0.66rem;
+  color: var(--faint);
+  margin-top: 5px;
+  font-family: var(--mono, monospace);
+}
+
+/* ── "Why this score" evidence breakdown ────────────────────────── */
+.scan-why {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.scan-why-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 11px;
+}
+.scan-why-head span {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--faint);
+}
+.scan-signals {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.scan-signal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.scan-signal-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.scan-signal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.scan-signal-count {
+  font-size: 0.72rem;
+  font-family: var(--mono, monospace);
+  color: var(--muted);
+}
+.scan-signal-phrases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scan-phrase {
+  font-size: 0.74rem;
+  color: var(--muted);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 7px;
+}
+.scan-confidence {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.scan-confidence strong {
+  color: var(--text);
+}
 @keyframes fadeIn {
   from {
     opacity: 0;
