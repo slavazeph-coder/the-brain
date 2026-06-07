@@ -17,38 +17,19 @@
  */
 
 import { createHash } from "node:crypto";
+// EN lexicons + the scorer come from the shared core so /api/score, the SSE
+// stream, and the on-page scan never drift (src/utils/firewall-parity.test.js
+// guards this). The ES/FR packs add their own lexicons below; coercion is
+// shared from the core too.
+import {
+  EN_RULES,
+  ES_COERCION,
+  FR_COERCION,
+  scoreWithRules,
+  detectLanguage,
+} from "../src/utils/firewallCore.js";
 
-// ---------- server-side Firewall (mirrors src/utils/cognitiveFirewall DEFAULT_RULES) ----------
-
-// Mirrors src/utils/cognitiveFirewall.js DEFAULT_RULES — keep the two in sync.
-// (src/utils/firewall-parity.test.js guards against drift.)
-const RULES_EN = {
-  urgency: [
-    /\bnow\b|\bimmediat(?:e|ely)\b|\burgent(?:ly)?\b|\bbreaking\b|\balert\b|\basap\b|\bright away\b/gi,
-    /\blimited[- ]time\b|\bdon'?t miss\b|\blast chance\b|\bact(?:s|ing)? (?:now|fast)\b|\bhurry\b|\bbefore it'?s too late\b/gi,
-    /!{2,}|\bWARNING\b|\bCRISIS\b|\bSHOCKING\b|\bfinal notice\b|\bexpir(?:es?|ing|ation)\b|\bdeadline\b|\bwithin (?:the |\d+ ?)?(?:hour|hours|minute|minutes|days?)\b|\btime[- ]sensitive\b/gi,
-  ],
-  outrage: [
-    /\boutrage(?:d|ous)?\b|\bfurious\b|\bscandal(?:ous)?\b|\bterrible\b|\bhorrible\b|\bdisgrace(?:ful)?\b/gi,
-    /\bunbelievable\b|\bdisgusting\b|\bshocking\b|\bbetray(?:al|ed|s)?\b|\bcorrupt(?:ion)?\b/gi,
-    /\bthey don'?t want you to (?:know|see)\b|\bhidden\b|\bsecret\b|\bcover(?:ed)?[- ]?up\b|\bexposed?\b/gi,
-  ],
-  certainty: [
-    /\b100%\b|\bproven\b|\bguarantee(?:d)?\b|\bscientifically proven\b|\bfact\b|\bno doubt\b/gi,
-    /\beveryone knows\b|\bobviously\b|\bclearly\b|\bundeniabl[ey]\b|\bnobody can deny\b|\bthe truth is\b/gi,
-  ],
-  fear: [
-    /\bdie\b|\bdeath\b|\bkill(?:ed|s)?\b|\bdanger(?:ous)?\b|\bthreat(?:en(?:ed|ing)?|s)?\b|\bunsafe\b|\bat risk\b/gi,
-    /\bvirus\b|\bpandemic\b|\battack(?:ed|s)?\b|\bwar\b|\bcrash\b|\bcollapse\b|\bdisaster\b|\bemergency\b/gi,
-    /\blose (?:access|your|everything)\b|\bcompromis(?:e|ed)\b|\bbreach(?:ed)?\b|\bpenalt(?:y|ies)\b|\bconsequences\b/gi,
-  ],
-  coercion: [
-    /\bverify your (?:identity|account|details|information|payment)\b|\bconfirm your (?:account|identity|password|details|payment|information)\b/gi,
-    /\bclick (?:here|below|this link|the link|now)\b|\blog ?in to (?:verify|secure|confirm|restore|unlock)\b|\bupdate your (?:payment|billing|account|details|information|password)\b/gi,
-    /\bunauthor(?:i[sz]ed) (?:login|access|transaction|activity|sign[- ]?in)\b|\bsuspicious (?:login|activity|sign[- ]?in|transaction)\b|\baccount(?:\s+\w+){0,3}\s+(?:suspended|terminated|locked|disabled|deactivated|compromised|limited|closed)\b/gi,
-    /\bfailure to (?:comply|respond|verify|act|pay)\b|\byou must\b|\brequired to\b|\b(?:immediate )?action (?:required|needed|requested)\b|\bdo not (?:ignore|delay|share)\b|\bofficial (?:notice|notification|warning)\b|\bgift card\b|\bwire transfer\b|\bsocial security (?:number)?\b/gi,
-  ],
-};
+// ---------- server-side Firewall ----------
 
 const RULES_ES = {
   urgency: [
@@ -69,6 +50,7 @@ const RULES_ES = {
     /\bmuerte\b|\bmorir\b|\bmatar\b|\bpeligro\b|\bamenaza\b|\binseguro\b/gi,
     /\bvirus\b|\bpandemia\b|\bataque\b|\bguerra\b|\bcolapso\b/gi,
   ],
+  coercion: ES_COERCION,
 };
 
 const RULES_FR = {
@@ -90,105 +72,13 @@ const RULES_FR = {
     /\bmort\b|\bmourir\b|\btuer\b|\bdanger\b|\bmenace\b|\brisqué\b/gi,
     /\bvirus\b|\bpandémie\b|\battaque\b|\bguerre\b|\beffondrement\b/gi,
   ],
+  coercion: FR_COERCION,
 };
 
-const PACKS = { en: RULES_EN, es: RULES_ES, fr: RULES_FR };
+const PACKS = { en: EN_RULES, es: RULES_ES, fr: RULES_FR };
 
-function detectLanguage(text) {
-  const t = (text || "").toLowerCase();
-  if (t.length < 15) return "en";
-  const esAccents = (t.match(/[ñáéíóúü]/g) || []).length;
-  const frAccents = (t.match(/[àâçéèêëîïôùûüÿ]/g) || []).length;
-  const esWords = (
-    t.match(
-      /\b(que|los|las|del|por|para|pero|muy|también|donde|actúa|todo el mundo|escándalo|encubri|impactante)\b/g,
-    ) || []
-  ).length;
-  const frWords = (
-    t.match(
-      /\b(que|les|des|pour|avec|dans|aussi|très|mais|tout le monde|maintenant|agissez|sait|étouff|choquant|scandale)\b/g,
-    ) || []
-  ).length;
-  const esScore = esWords * 2 + esAccents;
-  const frScore = frWords * 2 + frAccents;
-  if (esScore > 3 && esScore > frScore * 1.3) return "es";
-  if (frScore > 3 && frScore > esScore * 1.3) return "fr";
-  return "en";
-}
-
-function clamp(v, min = 0, max = 1) {
-  return Math.max(min, Math.min(max, v));
-}
-function normalize(c, base = 3) {
-  return clamp(c / base);
-}
-
-function countMatches(text, patterns) {
-  return patterns.reduce((t, re) => {
-    const m = text.match(re);
-    return t + (m ? m.length : 0);
-  }, 0);
-}
-
-function scoreWithRules(text, rules) {
-  const words = text.trim().split(/\s+/).length;
-  if (words < 5) {
-    return {
-      emotionalActivation: 0,
-      cognitiveSuppression: 0,
-      manipulationPressure: 0,
-      trustErosion: 0,
-      evidence: [],
-      confidence: "low",
-      recommendedAction: "Too short to score.",
-    };
-  }
-  const u = countMatches(text, rules.urgency);
-  const o = countMatches(text, rules.outrage);
-  const c = countMatches(text, rules.certainty);
-  const f = countMatches(text, rules.fear);
-  const x = countMatches(text, rules.coercion || []);
-  const emotionalActivation = clamp(normalize(f + o + x * 0.4, 4) * 0.85);
-  const cognitiveSuppression = clamp(normalize(u + c, 4) * 0.8);
-  const trustErosion = clamp(normalize(o + c + x, 5) * 0.82);
-  const manipulationPressure = clamp(
-    emotionalActivation * 0.4 +
-      cognitiveSuppression * 0.3 +
-      normalize(x, 6) * 0.55,
-  );
-  const evidence = [];
-  for (const cat of Object.values(rules)) {
-    for (const re of cat) {
-      const m = text.match(re);
-      if (m) m.forEach((hit) => evidence.push(hit.toLowerCase()));
-    }
-  }
-  const overall =
-    (emotionalActivation + cognitiveSuppression + manipulationPressure) / 3;
-  const confidence = words > 80 ? "high" : words > 30 ? "medium" : "low";
-  // Verdict tracks the worst credible signal so a trust attack (high trust
-  // erosion / manipulation, modest emotional load) still reads high-risk.
-  const risk = Math.max(
-    overall,
-    manipulationPressure * 0.95,
-    trustErosion * 0.9,
-  );
-  const recommendedAction =
-    risk > 0.6
-      ? "High manipulation-signature density — pause before sharing or reacting."
-      : risk > 0.33
-        ? "Moderate pressure cues detected — verify sources before acting."
-        : "Low manipulation indicators — content appears relatively low-risk.";
-  return {
-    emotionalActivation: +emotionalActivation.toFixed(3),
-    cognitiveSuppression: +cognitiveSuppression.toFixed(3),
-    manipulationPressure: +manipulationPressure.toFixed(3),
-    trustErosion: +trustErosion.toFixed(3),
-    evidence: [...new Set(evidence)].slice(0, 12),
-    confidence,
-    recommendedAction,
-  };
-}
+// detectLanguage + scoreWithRules + clamp/normalize/countMatches all live in
+// firewallCore.js (imported above) — single source of truth with the client.
 
 // Simple server-side propaganda template detection (15 keys)
 const TEMPLATE_PATTERNS = {

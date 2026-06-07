@@ -1,5 +1,22 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { scoreContent } from "../utils/cognitiveFirewall";
+
+// Pre-tap risk hint shown as a chip on each tile, so the examples are
+// self-describing before you even click.
+const VERDICT_META = {
+  high: { label: "High risk", color: "var(--danger)" },
+  moderate: { label: "Moderate", color: "var(--gold)" },
+  low: { label: "Low risk", color: "var(--ok)" },
+};
+
+function levelOf(result) {
+  const a = result.recommendedAction || "";
+  return a.startsWith("High")
+    ? "high"
+    : a.startsWith("Moderate")
+      ? "moderate"
+      : "low";
+}
 
 /**
  * Pre-seeded emotional-payload examples. First-time visitors should never see
@@ -54,6 +71,14 @@ const TILES = [
 ];
 
 export default function DemoTiles({ onPlay }) {
+  // Score each example once (per mount) for the pre-tap risk chip.
+  const verdicts = useMemo(
+    () =>
+      Object.fromEntries(
+        TILES.map((t) => [t.id, levelOf(scoreContent(t.text))]),
+      ),
+    [],
+  );
   return (
     <section className="demo-tiles panel panel-pad">
       <div className="eyebrow">Try it now</div>
@@ -93,7 +118,23 @@ export default function DemoTiles({ onPlay }) {
               lineHeight: 1.3,
             }}
           >
-            <span style={{ fontSize: 22 }}>{tile.emoji}</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 22 }}>{tile.emoji}</span>
+              <span
+                className="demo-tile-verdict"
+                style={{ color: VERDICT_META[verdicts[tile.id]].color }}
+              >
+                {VERDICT_META[verdicts[tile.id]].label}
+              </span>
+            </div>
             <strong>{tile.label}</strong>
             <span className="muted" style={{ fontSize: 12 }}>
               {tile.hint}

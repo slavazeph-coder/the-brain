@@ -4528,6 +4528,19 @@ h3 {
   background: rgba(79, 168, 179, 0.12);
 }
 
+/* Pre-tap risk chip on a demo tile — colour set inline per verdict. */
+.demo-tile-verdict {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
 /* ── Verdict banner ─────────────────────────────────────────────── */
 .scan-verdict {
   display: flex;

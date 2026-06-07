@@ -9,6 +9,12 @@
  * enough to route to the right pack for short snippets.
  */
 
+import { ES_COERCION, FR_COERCION, detectLanguage } from "./firewallCore.js";
+
+// detectLanguage is single-sourced in firewallCore (shared with the server);
+// re-exported here so existing importers keep working.
+export { detectLanguage };
+
 const SPANISH_PACK = {
   urgency: [
     /\bahora\b|\binmediatamente\b|\burgente\b|\bya\b|\balerta\b/gi,
@@ -28,6 +34,7 @@ const SPANISH_PACK = {
     /\bmuerte\b|\bmorir\b|\bmatar\b|\bpeligro\b|\bamenaza\b|\binseguro\b/gi,
     /\bvirus\b|\bpandemia\b|\bataque\b|\bguerra\b|\bcolapso\b/gi,
   ],
+  coercion: ES_COERCION,
 };
 
 const FRENCH_PACK = {
@@ -49,47 +56,24 @@ const FRENCH_PACK = {
     /\bmort\b|\bmourir\b|\btuer\b|\bdanger\b|\bmenace\b|\brisqué\b/gi,
     /\bvirus\b|\bpandémie\b|\battaque\b|\bguerre\b|\beffondrement\b/gi,
   ],
+  coercion: FR_COERCION,
 };
 
 export const LANGUAGE_PACKS = {
-  es: { label: 'Spanish', patterns: SPANISH_PACK },
-  fr: { label: 'French', patterns: FRENCH_PACK },
+  es: { label: "Spanish", patterns: SPANISH_PACK },
+  fr: { label: "French", patterns: FRENCH_PACK },
 };
-
-/**
- * Dead-simple language detector — character frequency + stopword
- * heuristics. Returns 'en' (default), 'es', or 'fr'.
- */
-export function detectLanguage(text = '') {
-  const t = (text || '').toLowerCase();
-  if (t.length < 15) return 'en';
-
-  // Unicode-accent hints
-  const esAccents = (t.match(/[ñáéíóúü]/g) || []).length;
-  const frAccents = (t.match(/[àâçéèêëîïôùûüÿ]/g) || []).length;
-
-  // Stopword hits (weighted by specificity)
-  const esWords = (t.match(/\b(que|los|las|del|por|para|pero|muy|también|donde|actúa|todo el mundo|escándalo|encubri|impactante)\b/g) || []).length;
-  const frWords = (t.match(/\b(que|les|des|pour|avec|dans|aussi|très|mais|tout le monde|maintenant|agissez|sait|étouff|choquant|scandale)\b/g) || []).length;
-
-  const esScore = esWords * 2 + esAccents;
-  const frScore = frWords * 2 + frAccents;
-
-  if (esScore > 3 && esScore > frScore * 1.3) return 'es';
-  if (frScore > 3 && frScore > esScore * 1.3) return 'fr';
-  return 'en';
-}
 
 /**
  * Look up the right pack. Returns null for 'en' (English is the
  * default active ruleset, no replacement needed).
  */
 export function patternsFor(lang) {
-  if (lang === 'en' || !LANGUAGE_PACKS[lang]) return null;
+  if (lang === "en" || !LANGUAGE_PACKS[lang]) return null;
   return LANGUAGE_PACKS[lang].patterns;
 }
 
 export function labelFor(lang) {
-  if (lang === 'en') return 'English';
+  if (lang === "en") return "English";
   return LANGUAGE_PACKS[lang]?.label || lang;
 }

@@ -12,29 +12,33 @@
 
 export const TEMPLATES = [
   {
-    id: 'gaslighting',
-    label: 'Gaslighting',
+    id: "gaslighting",
+    label: "Gaslighting",
     desc: "Denies the target's reality to erode self-trust.",
     patterns: [
-      /\byou\'?re (?:imagining|overreacting|being (?:crazy|paranoid|too sensitive)|making (?:it|this|that) up)\b/i,
+      /\byou\'?re (?:imagining|overreacting|being (?:crazy|paranoid|too sensitive|dramatic)|making (?:it|this|that) up|too emotional)\b/i,
       /\bthat (?:never )?happened\b|\bi never said that\b/i,
       /\byou always (?:twist|exaggerate)\b/i,
+      /\byou\'?re (?:remembering (?:it|that) wrong|misremembering)\b|\bthat\'?s not (?:what|how) (?:it )?happened\b/i,
+      /\bno one (?:will|would) believe you\b|\byou\'?re being paranoid\b/i,
     ],
   },
   {
-    id: 'darvo',
-    label: 'DARVO',
-    desc: 'Deny, Attack, Reverse Victim & Offender.',
+    id: "darvo",
+    label: "DARVO",
+    desc: "Deny, Attack, Reverse Victim & Offender.",
     patterns: [
       /\b(?:actually|really) (?:you|they) are the (?:one|victim|abuser|problem)\b/i,
       /\bi\'?m the (?:real )?victim here\b/i,
       /\bhow dare you accuse (?:me|us)\b/i,
+      /\byou (?:made|forced) me (?:do|say) (?:it|that|this)\b|\bthis is your fault\b/i,
+      /\bafter (?:what|everything) you (?:did|put me through)\b/i,
     ],
   },
   {
-    id: 'love-bombing',
-    label: 'Love bombing',
-    desc: 'Overwhelming flattery early to install loyalty.',
+    id: "love-bombing",
+    label: "Love bombing",
+    desc: "Overwhelming flattery early to install loyalty.",
     patterns: [
       /\byou\'?re the (?:most|best|only) (?:amazing|incredible|brilliant|perfect)\b/i,
       /\bi\'?ve never (?:felt|met|had) (?:anything|anyone) like (?:you|this)\b/i,
@@ -42,9 +46,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'scarcity',
-    label: 'Scarcity',
-    desc: 'Invents artificial rarity to force a decision.',
+    id: "scarcity",
+    label: "Scarcity",
+    desc: "Invents artificial rarity to force a decision.",
     patterns: [
       /\bonly (?:\d+ )?(?:spots?|seats?|slots?|left|remaining)\b/i,
       /\blast chance\b|\bbefore it\'?s too late\b|\boffer ends (?:in|soon)\b/i,
@@ -52,9 +56,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'social-proof',
-    label: 'Social proof',
-    desc: 'Points to a crowd to bypass the reader\'s own judgment.',
+    id: "social-proof",
+    label: "Social proof",
+    desc: "Points to a crowd to bypass the reader's own judgment.",
     patterns: [
       /\beveryone (?:is|\'?s) (?:switching|using|buying|doing)\b/i,
       /\b(?:thousands|millions) of (?:people|users|customers) (?:already|now)\b/i,
@@ -62,9 +66,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'authority',
-    label: 'Authority name-drop',
-    desc: 'Invokes a credentialed figure with no citation.',
+    id: "authority",
+    label: "Authority name-drop",
+    desc: "Invokes a credentialed figure with no citation.",
     patterns: [
       /\b(?:experts?|scientists?|doctors?|studies?) (?:agree|confirm|say|warn)\b/i,
       /\baccording to (?:top|leading) (?:experts?|researchers?)\b/i,
@@ -72,9 +76,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'loaded-question',
-    label: 'Loaded question',
-    desc: 'A question that smuggles a guilty premise.',
+    id: "loaded-question",
+    label: "Loaded question",
+    desc: "A question that smuggles a guilty premise.",
     patterns: [
       /\bwhy do you (?:keep|always|still) (?:lie|hide|deny|ignore)\b/i,
       /\bwhen did you (?:stop|start) (?:lying|cheating|hurting|hating)\b/i,
@@ -82,27 +86,27 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'straw-man',
-    label: 'Straw man',
-    desc: 'Distorts the counter-position so it\'s easier to attack.',
+    id: "straw-man",
+    label: "Straw man",
+    desc: "Distorts the counter-position so it's easier to attack.",
     patterns: [
       /\bso (?:you\'?re saying|what you mean is|your argument is) that we should (?:all|just)\b/i,
       /\boh so (?:now )?(?:nobody|everyone|we all)\b/i,
     ],
   },
   {
-    id: 'whataboutism',
-    label: 'Whataboutism',
-    desc: 'Deflects a critique by pivoting to an unrelated grievance.',
+    id: "whataboutism",
+    label: "Whataboutism",
+    desc: "Deflects a critique by pivoting to an unrelated grievance.",
     patterns: [
       /\bwhat about (?:when|the time|all the times)\b/i,
       /\bbut (?:what|how) about (?:the )?(?:other side|them|you)\b/i,
     ],
   },
   {
-    id: 'false-dichotomy',
-    label: 'False dichotomy',
-    desc: 'Collapses the option space to two extremes.',
+    id: "false-dichotomy",
+    label: "False dichotomy",
+    desc: "Collapses the option space to two extremes.",
     patterns: [
       /\beither (?:you\'?re|we\'?re) (?:with us|against us|one of us|on our side)\b/i,
       /\b(?:only|just) (?:two|2) (?:choices|options|sides)\b/i,
@@ -110,9 +114,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'fear-appeal',
-    label: 'Fear appeal',
-    desc: 'Dramatizes catastrophic consequences to force compliance.',
+    id: "fear-appeal",
+    label: "Fear appeal",
+    desc: "Dramatizes catastrophic consequences to force compliance.",
     patterns: [
       /\bif you don\'?t (?:act|buy|sign|decide) now\b/i,
       /\b(?:catastrophic|devastating|disastrous) (?:consequences|outcome|result)\b/i,
@@ -120,8 +124,8 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'hidden-truth',
-    label: 'Hidden-truth conspiracy',
+    id: "hidden-truth",
+    label: "Hidden-truth conspiracy",
     desc: 'Flatters the reader for being "awake" to a suppressed fact.',
     patterns: [
       /\bthey don\'?t want you to know\b/i,
@@ -130,9 +134,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'moral-outrage',
-    label: 'Moral outrage bait',
-    desc: 'Frames the message as unmissable moral duty.',
+    id: "moral-outrage",
+    label: "Moral outrage bait",
+    desc: "Frames the message as unmissable moral duty.",
     patterns: [
       /\bif you\'?re not (?:furious|outraged|angry|disgusted)(?: you\'?re)?\b/i,
       /\bsilence is (?:violence|complicity)\b/i,
@@ -140,9 +144,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'purity-test',
-    label: 'Purity test',
-    desc: 'Demands perfect ideological alignment as a condition of trust.',
+    id: "purity-test",
+    label: "Purity test",
+    desc: "Demands perfect ideological alignment as a condition of trust.",
     patterns: [
       /\breal (?:allies|patriots|leftists|conservatives) (?:would|don\'?t|always)\b/i,
       /\bif you truly (?:cared|believed|stood with)\b/i,
@@ -150,9 +154,9 @@ export const TEMPLATES = [
     ],
   },
   {
-    id: 'guilt-trip',
-    label: 'Guilt trip',
-    desc: 'Loads shame to steer behavior.',
+    id: "guilt-trip",
+    label: "Guilt trip",
+    desc: "Loads shame to steer behavior.",
     patterns: [
       /\bafter (?:all|everything) (?:i|we|they)\'?ve done for you\b/i,
       /\byou\'?re (?:selfish|ungrateful|a bad)\b/i,
@@ -165,8 +169,8 @@ export const TEMPLATES = [
  * Run text against every template; return an array of matches with
  * which patterns fired.
  */
-export function detectTemplates(text = '') {
-  const lower = (text || '').toLowerCase();
+export function detectTemplates(text = "") {
+  const lower = (text || "").toLowerCase();
   if (lower.length < 12) return [];
   const out = [];
   for (const tpl of TEMPLATES) {

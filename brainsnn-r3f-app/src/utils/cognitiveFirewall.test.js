@@ -55,11 +55,12 @@ describe("cognitiveFirewall scoreContent", () => {
     }
   });
 
-  it("registers pressure (not 'low-risk') on fear-cascade and scarcity-ad copy", () => {
-    for (const key of ["fear", "urgencyAd"]) {
-      const s = scoreContent(TILES[key]);
-      expect(verdict(s.recommendedAction), key).not.toBe("low");
-    }
+  it("rates the fear cascade high and the scarcity ad at least moderate", () => {
+    // Calibrated: "deadly… imminent… protect your family" must clear high-risk.
+    expect(verdict(scoreContent(TILES.fear).recommendedAction)).toBe("high");
+    expect(verdict(scoreContent(TILES.urgencyAd).recommendedAction)).not.toBe(
+      "low",
+    );
   });
 
   it("drives the right dimensions per genre", () => {
@@ -85,5 +86,21 @@ describe("cognitiveFirewall scoreContent", () => {
     const s = scoreContent("Act now!");
     expect(s.confidence).toBe("low");
     expect(s.manipulationPressure).toBe(0);
+  });
+
+  it("detects Spanish and French phishing via the shared coercion packs", () => {
+    const es = scoreContent(
+      "Acceso no autorizado detectado en tu cuenta. Debes verificar tu identidad ahora mismo. Haz clic aquí para confirmar tu cuenta.",
+    );
+    expect(es.language).toBe("es");
+    expect(verdict(es.recommendedAction)).not.toBe("low");
+    expect(es.signals.map((x) => x.category)).toContain("coercion");
+
+    const fr = scoreContent(
+      "Accès non autorisé détecté sur votre compte. Vous devez vérifier votre identité maintenant. Cliquez ici pour confirmer votre compte.",
+    );
+    expect(fr.language).toBe("fr");
+    expect(verdict(fr.recommendedAction)).not.toBe("low");
+    expect(fr.signals.map((x) => x.category)).toContain("coercion");
   });
 });
