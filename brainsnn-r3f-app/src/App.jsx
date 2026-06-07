@@ -130,6 +130,9 @@ export default function App() {
   });
   const [showKbHelp, setShowKbHelp] = useState(false);
   const [firewallResult, setFirewallResult] = useState(null);
+  // Seeds the ScanHero scorecard from a tapped demo tile (nonce re-fires the
+  // reveal even when the same tile is tapped twice).
+  const [scanSeed, setScanSeed] = useState(null);
   const [incomingImmunityCard] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -436,6 +439,7 @@ export default function App() {
           />
 
           <ScanHero
+            seed={scanSeed}
             onResult={(score, content) => {
               markActivity();
               setFirewallResult(score);
@@ -457,14 +461,18 @@ export default function App() {
 
           <DemoTiles
             onPlay={({ text, result }) => {
+              markActivity();
               setFirewallResult(result);
               setState((s) => mapTRIBEToRegions(s, result));
               setInitialFirewallScan({ text, result, autoApply: false });
+              // Fill the ScanHero scorecard too, so a tap reveals the full
+              // verdict + evidence (not just the brain reaction).
+              setScanSeed({ text, result, nonce: Date.now() });
               recordImmunity(IMMUNITY_EVENTS.FIREWALL_SCAN, {
                 pressure: result.manipulationPressure,
                 confidence: result.confidence,
               });
-              toastInfo("Demo scan applied — watch the brain react");
+              toastSuccess("Example loaded — here's what BrainSNN found ↑");
             }}
           />
 

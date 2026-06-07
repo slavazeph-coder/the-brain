@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { analyzeForBrain, activeBackendLabel } from "../utils/brainLLM";
 
 // Each dimension names the brain region the scan drives (see mapTRIBEToRegions)
@@ -52,11 +52,41 @@ const PLACEHOLDER = "Paste a headline, email, or post here…";
  * The main-page centerpiece. Sends content through the swappable backend LLM
  * (analyzeForBrain) and hands the score to App, which maps it onto the 3D brain.
  */
-export default function ScanHero({ onResult }) {
+export default function ScanHero({ onResult, seed }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
+  const [flash, setFlash] = useState(false);
+  const resultRef = useRef(null);
+  const pendingScrollRef = useRef(false);
   const backend = activeBackendLabel();
+
+  // Adopt an externally-seeded scan (e.g. a tapped demo tile): fill the
+  // textarea so it's transparent + editable, show the full scorecard, flash it,
+  // and flag that we want to scroll to it once it's committed.
+  useEffect(() => {
+    if (!seed) return;
+    setText(seed.text || "");
+    setResult(seed.result || null);
+    setFlash(true);
+    pendingScrollRef.current = true;
+    const unflash = setTimeout(() => setFlash(false), 1200);
+    return () => clearTimeout(unflash);
+    // Re-fire on every tap (nonce changes) even for the same tile.
+  }, [seed?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll only AFTER the result has committed (this effect runs post-render,
+  // so resultRef is attached — rAF/timeouts race React's commit under the heavy
+  // 3D thread). Instant, not smooth: smooth animation stalls the WebGL loop.
+  useEffect(() => {
+    if (result && pendingScrollRef.current) {
+      pendingScrollRef.current = false;
+      resultRef.current?.scrollIntoView({
+        behavior: "instant",
+        block: "center",
+      });
+    }
+  }, [result]);
 
   const run = async () => {
     const content = text.trim();
@@ -148,7 +178,10 @@ export default function ScanHero({ onResult }) {
           const level = VERDICT[action.split(" ")[0]] || VERDICT.Low;
           const signals = Array.isArray(result.signals) ? result.signals : [];
           return (
-            <div className="scan-result">
+            <div
+              className={`scan-result${flash ? " scan-result-flash" : ""}`}
+              ref={resultRef}
+            >
               <div className={`scan-verdict scan-verdict-${level.key}`}>
                 <span className="scan-verdict-dot" aria-hidden="true" />
                 <div className="scan-verdict-text">
