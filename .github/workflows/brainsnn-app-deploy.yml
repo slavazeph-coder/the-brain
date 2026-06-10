@@ -74,6 +74,12 @@ jobs:
           RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE || 'the-brain' }}
           RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT || 'production' }}
         run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN secret not set — skipping CLI deploy." \
+                 "Railway's GitHub integration deploys pushes to main on its own;" \
+                 "the healthcheck below still verifies the live service."
+            exit 0
+          fi
           railway up brainsnn-r3f-app \
             --path-as-root \
             --service "$RAILWAY_SERVICE" \
