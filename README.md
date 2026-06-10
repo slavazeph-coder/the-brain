@@ -108,7 +108,7 @@ npm install     # or: npm ci  (uses .npmrc for legacy-peer-deps)
 npm run dev     # → http://localhost:5173
 ```
 
-That's it. The 3D brain renders, the simulation loop ticks, all 35 layers are wired. No keys needed.
+That's it. The 3D brain renders, the simulation loop ticks, all 100+ layers are wired. No keys needed.
 
 ## Environment variables
 
@@ -187,7 +187,7 @@ Cloud-host configs ([Fly.io](brainsnn-r3f-app/server/fly.toml), [Railway](brains
 
 ```
 the-brain/
-├── brainsnn-r3f-app/         ← the deployable: 35-layer 3D brain viewer
+├── brainsnn-r3f-app/         ← the deployable: 100+-layer 3D brain viewer
 │   ├── src/
 │   │   ├── components/        ← 46 React components, one per panel + brain scene
 │   │   ├── utils/             ← simulation, embeddings, RAG, evolve, firewall, …

@@ -1,6 +1,6 @@
 # brainsnn-r3f-app
 
-The 35-layer 3D brain viewer that this repo deploys. React 18 + Vite + React Three Fiber, with optional FastAPI/TRIBE v2 and Gemma 4 backends.
+The 100+-layer 3D brain viewer that this repo deploys. React 18 + Vite + React Three Fiber, with optional FastAPI/TRIBE v2 and Gemma 4 backends.
 
 For the marketing pitch, screenshots, and architecture overview see the [root README](../README.md). This file is the developer's quickstart.
 
