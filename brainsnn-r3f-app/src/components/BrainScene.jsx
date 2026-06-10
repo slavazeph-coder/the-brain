@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, Html, Line, OrbitControls, PerformanceMonitor, Stars } from '@react-three/drei';
+import { Environment, Html, Lightformer, Line, OrbitControls, PerformanceMonitor, Stars } from '@react-three/drei';
 import { EffectComposer, Outline, Selection, Select, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { LINKS, POSITIONS, REGION_INFO } from '../data/network';
@@ -293,7 +293,16 @@ export default function BrainScene({ regions, weights, selected, onSelect, quali
       </mesh>
 
       <OrbitControls enableDamping minDistance={4.5} maxDistance={16} />
-      <Environment preset="night" />
+      {/* Locally-generated environment map. `preset="night"` fetched an HDR
+          from a third-party CDN at runtime — on networks that block it the
+          loader threw and unmounted the app. These Lightformers approximate
+          the same cool night reflections with zero network requests. */}
+      <Environment resolution={64} frames={1}>
+        <color attach="background" args={['#0b1224']} />
+        <Lightformer intensity={0.7} color="#5ad4ff" position={[0, 5, -9]} scale={[10, 10, 1]} />
+        <Lightformer intensity={0.4} color="#7b8cff" position={[-5, 1, -1]} rotation-y={Math.PI / 2} scale={[10, 2, 1]} />
+        <Lightformer intensity={0.3} color="#dce8ff" position={[5, -1, -1]} rotation-y={-Math.PI / 2} scale={[10, 2, 1]} />
+      </Environment>
     </Canvas>
   );
 }

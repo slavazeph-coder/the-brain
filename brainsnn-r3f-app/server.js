@@ -56,6 +56,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, "dist");
 const PORT = Number(process.env.PORT) || 8080;
 
+// Static 1200×630 card (public/og.png, copied into dist/ by the build) —
+// served whenever dynamic OG rendering throws, because social crawlers treat
+// a non-image response as "no preview" and cache that verdict.
+const OG_FALLBACK = join(DIST, "og.png");
+
+function sendOgFallback(res) {
+  if (existsSync(OG_FALLBACK)) {
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.status(200).sendFile(OG_FALLBACK);
+  } else {
+    res.status(500).json({ error: "og render failed" });
+  }
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.use(compression());
@@ -77,9 +92,9 @@ app.get("/api/og", async (req, res) => {
     );
     res.status(200).send(png);
   } catch (err) {
-    // Log and return a small error image-ish response — OG crawlers prefer 200
+    // OG crawlers prefer 200 + an image — fall back to the static card.
     console.error("[og] render failed:", err);
-    res.status(500).json({ error: "og render failed" });
+    sendOgFallback(res);
   }
 });
 
@@ -94,7 +109,7 @@ app.get("/api/social-og", async (req, res) => {
     res.status(200).send(png);
   } catch (err) {
     console.error("[social-og] render failed:", err);
-    res.status(500).json({ error: "social og render failed" });
+    sendOgFallback(res);
   }
 });
 

@@ -47,6 +47,7 @@ const NeuroSection = lazy(() => import("./components/sections/NeuroSection"));
 const IoSection = lazy(() => import("./components/sections/IoSection"));
 
 import { registerServiceWorker } from "./utils/pwa";
+import { isWebGLAvailable } from "./utils/webgl";
 import { registerTheme } from "./utils/theme";
 import { decodeStateFromHash } from "./utils/shareState";
 import { decodeReaction } from "./utils/reactionCard";
@@ -122,6 +123,10 @@ export default function App() {
   const [exportStatus, setExportStatus] = useState("idle");
   const [exportProgress, setExportProgress] = useState(0);
   const [quality, setQuality] = useState("high");
+  // One-time probe — WebGL support can't change without a page reload. A lazy
+  // useState initializer keeps the DOM query out of re-renders without the
+  // extra commit a useEffect-based probe would cost.
+  const [webglOk] = useState(isWebGLAvailable);
   const [gifOptions, setGifOptions] = useState({
     trimStart: 0,
     trimDuration: 2.5,
@@ -491,6 +496,16 @@ export default function App() {
             </div>
 
             <div className="viewer-canvas-wrap">
+              {!webglOk ? (
+                <div className="viewer-loading" role="status">
+                  Your browser couldn&apos;t start WebGL, so the 3D brain
+                  can&apos;t render here — every scan, firewall, and analysis
+                  panel below still works. Enabling hardware acceleration (or
+                  switching to a recent Chrome / Firefox / Safari) brings the
+                  brain back.
+                </div>
+              ) : (
+              <ErrorBoundary name="3D Brain">
               <Suspense
                 fallback={
                   <div className="viewer-loading" role="status">
@@ -512,6 +527,8 @@ export default function App() {
                   }
                 />
               </Suspense>
+              </ErrorBoundary>
+              )}
             </div>
           </section>
 

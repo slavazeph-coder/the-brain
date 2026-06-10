@@ -115,7 +115,7 @@ export default function RoleTourPanel() {
       <div className="eyebrow">Layer 94 · role tour</div>
       <h2>Find the path that fits you</h2>
       <p className="muted">
-        BrainSNN has 90+ layers. Pick your role and step through the
+        BrainSNN has 100+ layers. Pick your role and step through the
         6 most relevant panels for your use case. Each step scrolls
         that panel into view and highlights it.
       </p>

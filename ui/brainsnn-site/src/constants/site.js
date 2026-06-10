@@ -2,7 +2,7 @@ export const SITE = {
   name: "BrainSNN",
   repoUrl: "https://github.com/slavazeph-coder/the-brain",
   domainUrl: "https://brainsnn.com",
-  demoUrl: "https://the-brain-production.up.railway.app",
+  demoUrl: "https://brainsnn.com",
   issuesUrl: "https://github.com/slavazeph-coder/the-brain/issues",
   license: "MIT",
   repoOwner: "slavazeph-coder",

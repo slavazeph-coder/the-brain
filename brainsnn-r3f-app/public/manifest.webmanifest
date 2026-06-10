@@ -1,7 +1,7 @@
 {
   "name": "BrainSNN",
   "short_name": "BrainSNN",
-  "description": "A 3D brain that reads manipulation in real time. 90+ cognitive layers, browser-native.",
+  "description": "A 3D brain that reads manipulation in real time. 100+ cognitive layers, browser-native.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b1224",

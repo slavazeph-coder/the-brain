@@ -20,9 +20,12 @@
       property="og:description"
       content="An affective-intelligence engine that detects fear, urgency, trust erosion, manipulation pressure, and public-perception risk in online content."
     />
+    <meta property="og:image" content="https://brainsnn.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta
-      property="og:image"
-      content="https://brainsnn.com/api/og?title=BrainSNN&subtitle=Emotional+Payload+Intelligence"
+      property="og:image:alt"
+      content="BrainSNN — paste any tweet, see which feeling it installs"
     />
 
     <meta name="twitter:card" content="summary_large_image" />
@@ -34,10 +37,7 @@
       name="twitter:description"
       content="Detect the emotional payload inside posts, ads, emails, scripts, and narratives before it moves people."
     />
-    <meta
-      name="twitter:image"
-      content="https://brainsnn.com/api/og?title=BrainSNN&subtitle=Emotional+Payload+Intelligence"
-    />
+    <meta name="twitter:image" content="https://brainsnn.com/og.png" />
 
     <link rel="canonical" href="https://brainsnn.com/" />
     <script type="application/ld+json">
@@ -55,6 +55,9 @@
       }
     </script>
 
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0b1224" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -64,14 +67,53 @@
       content="black-translucent"
     />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <style>
+      /* Pre-hydration splash — replaced as soon as React mounts. */
+      #root:empty::after {
+        content: "BrainSNN is waking up\2026";
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: #0b1224;
+        color: #5ad4ff;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 15px;
+        letter-spacing: 0.08em;
+      }
+    </style>
   </head>
   <body>
+    <noscript>
+      <div
+        style="
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          background: #0b1224;
+          color: #e6f1ff;
+          font-family: Inter, system-ui, sans-serif;
+          text-align: center;
+          padding: 24px;
+        "
+      >
+        <h1 style="margin: 0; font-size: 28px">BrainSNN</h1>
+        <p style="margin: 0; max-width: 48ch; color: #cbd5e1">
+          A 3D neuromorphic brain that detects the emotional payload inside
+          online content — fear, urgency, trust erosion, manipulation
+          pressure — before it moves people. BrainSNN needs JavaScript and
+          WebGL to run; please enable JavaScript to continue.
+        </p>
+        <p style="margin: 0">
+          <a href="https://github.com/slavazeph-coder/the-brain" style="color: #5ad4ff"
+            >Source on GitHub</a
+          >
+        </p>
+      </div>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
