@@ -8,7 +8,7 @@
  * old shells without needing a separate cache-busting scheme.
  */
 
-const CACHE_VERSION = 'brainsnn-v1';
+const CACHE_VERSION = 'brainsnn-v2';
 const SHELL_URLS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
@@ -32,7 +32,8 @@ function isApi(url) {
          url.pathname.startsWith('/a/') || url.pathname.startsWith('/d/') ||
          url.pathname.startsWith('/x/') || url.pathname.startsWith('/t/') ||
          url.pathname.startsWith('/n/') || url.pathname.startsWith('/v/') ||
-         url.pathname.startsWith('/w/') || url.pathname.startsWith('/b/');
+         url.pathname.startsWith('/w/') || url.pathname.startsWith('/b/') ||
+         url.pathname.startsWith('/s/');
 }
 
 self.addEventListener('fetch', (event) => {

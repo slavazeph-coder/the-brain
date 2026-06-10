@@ -187,7 +187,7 @@ function reactionCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'scan yours → brainsnn.com' } },
-              { type: 'span', props: { children: '35 cognitive layers · browser-native' } },
+              { type: 'span', props: { children: '100+ cognitive layers · browser-native' } },
             ],
           },
         },
@@ -270,7 +270,7 @@ function immunityCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'scan yours → brainsnn.com' } },
-              { type: 'span', props: { children: 'cognitive immunity · 35 layers' } },
+              { type: 'span', props: { children: 'cognitive immunity · 100+ layers' } },
             ],
           },
         },
@@ -378,7 +378,7 @@ function quizCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'try the quiz → brainsnn.com' } },
-              { type: 'span', props: { children: 'cognitive firewall · 35 layers' } },
+              { type: 'span', props: { children: 'cognitive firewall · 100+ layers' } },
             ],
           },
         },
@@ -495,7 +495,7 @@ function timelineCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, fontSize: 20, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'paste yours → brainsnn.com' } },
-              { type: 'span', props: { children: 'time-series · 46 cognitive layers' } },
+              { type: 'span', props: { children: 'time-series · 100+ cognitive layers' } },
             ],
           },
         },
@@ -586,7 +586,7 @@ function inboxCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, fontSize: 18, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'paste yours → brainsnn.com' } },
-              { type: 'span', props: { children: 'inbox mode · 46 cognitive layers' } },
+              { type: 'span', props: { children: 'inbox mode · 100+ cognitive layers' } },
             ],
           },
         },
@@ -664,7 +664,7 @@ function badgeCardNode(payload) {
         }) } },
         { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 20, color: '#94a3b8' }, children: [
           { type: 'span', props: { children: 'earn yours → brainsnn.com' } },
-          { type: 'span', props: { children: `${pct}% · 58 cognitive layers` } },
+          { type: 'span', props: { children: `${pct}% · 100+ cognitive layers` } },
         ] } },
       ],
     },
@@ -726,7 +726,7 @@ function diffCardNode(payload) {
         ] } },
         { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, fontSize: 20, color: '#94a3b8' }, children: [
           { type: 'span', props: { children: 'compare yours → brainsnn.com' } },
-          { type: 'span', props: { children: 'diff mode · 50 cognitive layers' } },
+          { type: 'span', props: { children: 'diff mode · 100+ cognitive layers' } },
         ] } },
       ],
     },
@@ -779,7 +779,7 @@ function recapCardNode(payload) {
         })) } },
         { type: 'div', props: { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 20, color: '#94a3b8' }, children: [
           { type: 'span', props: { children: 'your week → brainsnn.com' } },
-          { type: 'span', props: { children: 'weekly recap · 50 cognitive layers' } },
+          { type: 'span', props: { children: 'weekly recap · 100+ cognitive layers' } },
         ] } },
       ],
     },
@@ -874,7 +874,7 @@ function counterDraftCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 20, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: `−${Math.round(reduction * 100)} pts · brainsnn.com` } },
-              { type: 'span', props: { children: 'counter-draft · 42 cognitive layers' } },
+              { type: 'span', props: { children: 'counter-draft · 100+ cognitive layers' } },
             ],
           },
         },
@@ -973,7 +973,7 @@ function dailyCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 24, fontSize: 20, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'play today → brainsnn.com' } },
-              { type: 'span', props: { children: 'daily challenge · 39 cognitive layers' } },
+              { type: 'span', props: { children: 'daily challenge · 100+ cognitive layers' } },
             ],
           },
         },
@@ -1065,7 +1065,7 @@ function autopsyCardNode(payload) {
             style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, fontSize: 18, color: '#94a3b8' },
             children: [
               { type: 'span', props: { children: 'paste your chat → brainsnn.com' } },
-              { type: 'span', props: { children: 'autopsy · 36 cognitive layers' } },
+              { type: 'span', props: { children: 'autopsy · 100+ cognitive layers' } },
             ],
           },
         },
@@ -1093,7 +1093,7 @@ function fallbackNode(title, subtitle) {
       children: [
         { type: 'div', props: { style: { fontSize: 28, letterSpacing: 8, color: '#5ad4ff', textTransform: 'uppercase', marginBottom: 20, fontWeight: 800 }, children: 'BrainSNN' } },
         { type: 'div', props: { style: { fontSize: 64, fontWeight: 800, textAlign: 'center', lineHeight: 1.1 }, children: subtitle || title } },
-        { type: 'div', props: { style: { fontSize: 24, color: '#94a3b8', marginTop: 32 }, children: '35 cognitive layers · browser-native · zero install' } },
+        { type: 'div', props: { style: { fontSize: 24, color: '#94a3b8', marginTop: 32 }, children: '100+ cognitive layers · browser-native · zero install' } },
       ],
     },
   };
