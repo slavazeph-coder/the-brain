@@ -80,10 +80,10 @@ jobs:
                  "the healthcheck below still verifies the live service."
             exit 0
           fi
-          # Upload the whole repo: the service builds with the root
-          # Dockerfile, which copies brainsnn-r3f-app/ into the image.
-          # (An app-dir --path-as-root upload makes that COPY fail.)
-          railway up . \
+          # Upload the whole repo (no path arg — the CLI rejects '.' with
+          # "prefix not found"): the service builds with the root Dockerfile,
+          # which copies brainsnn-r3f-app/ into the image.
+          railway up \
             --service "$RAILWAY_SERVICE" \
             --environment "$RAILWAY_ENVIRONMENT" \
             --ci
