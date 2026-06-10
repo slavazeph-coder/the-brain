@@ -89,14 +89,21 @@ jobs:
       - name: Healthcheck
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
+          # An asset that only exists in current builds — proves the new
+          # version finished rolling out, not just that something is up.
+          # Railway's own rebuild of main takes a few minutes, hence the
+          # ~10-minute retry window.
+          VERSION_URL: ${{ vars.BRAINSNN_VERSION_URL || 'https://www.brainsnn.com/favicon.svg' }}
         run: |
-          for i in $(seq 1 12); do
-            code="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
-            echo "attempt $i → HTTP $code"
-            if [ "$code" = "200" ]; then
+          for i in $(seq 1 30); do
+            health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
+            version="$(curl -L -s -o /dev/null -w '%{http_code}' "$VERSION_URL" || true)"
+            echo "attempt $i → healthz $health, version marker $version"
+            if [ "$health" = "200" ] && [ "$version" = "200" ]; then
+              echo "Live service is healthy and serving the current build."
               exit 0
             fi
-            sleep 10
+            sleep 20
           done
-          echo "Healthcheck never returned 200 at $HEALTH_URL" >&2
+          echo "Service never became healthy on the current build ($HEALTH_URL / $VERSION_URL)" >&2
           exit 1
