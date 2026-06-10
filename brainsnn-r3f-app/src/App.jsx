@@ -123,8 +123,10 @@ export default function App() {
   const [exportStatus, setExportStatus] = useState("idle");
   const [exportProgress, setExportProgress] = useState(0);
   const [quality, setQuality] = useState("high");
-  // One-time probe — WebGL support can't change without a page reload.
-  const webglOk = useMemo(isWebGLAvailable, []);
+  // One-time probe — WebGL support can't change without a page reload. A lazy
+  // useState initializer keeps the DOM query out of re-renders without the
+  // extra commit a useEffect-based probe would cost.
+  const [webglOk] = useState(isWebGLAvailable);
   const [gifOptions, setGifOptions] = useState({
     trimStart: 0,
     trimDuration: 2.5,
@@ -503,6 +505,7 @@ export default function App() {
                   brain back.
                 </div>
               ) : (
+              <ErrorBoundary name="3D Brain">
               <Suspense
                 fallback={
                   <div className="viewer-loading" role="status">
@@ -524,6 +527,7 @@ export default function App() {
                   }
                 />
               </Suspense>
+              </ErrorBoundary>
               )}
             </div>
           </section>

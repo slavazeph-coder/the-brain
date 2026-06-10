@@ -11,6 +11,9 @@ let cached = null;
 
 export function isWebGLAvailable() {
   if (cached !== null) return cached;
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return false; // non-browser environment — don't cache, it may hydrate later
+  }
   try {
     const canvas = document.createElement('canvas');
     cached = Boolean(
