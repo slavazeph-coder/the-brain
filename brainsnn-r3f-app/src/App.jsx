@@ -14,6 +14,8 @@ const BrainScene = lazy(() => import("./components/BrainScene"));
 
 // Persistent chrome + the default "insights" section ship in the entry chunk.
 import ControlsBar from "./components/ControlsBar";
+import AppHeader from "./components/AppHeader";
+import SimControls from "./components/SimControls";
 import InspectorPanel from "./components/InspectorPanel";
 import ActivityCharts from "./components/ActivityCharts";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
@@ -394,83 +396,7 @@ export default function App() {
 
       <main className="app-layout">
         <section className="main-column">
-          <ControlsBar
-            state={state}
-            isRecording={isRecording}
-            exportStatus={exportStatus}
-            quality={quality}
-            mode={mode}
-            onSetMode={setMode}
-            onSetQuality={setQuality}
-            onToggleRun={() => {
-              markActivity();
-              setState((s) => ({ ...s, running: !s.running }));
-            }}
-            onBurst={() => {
-              markActivity();
-              setState((s) => ({ ...s, burst: 20, scenario: "Sensory Burst" }));
-            }}
-            onReset={() => {
-              markActivity();
-              setState(resetState());
-              setMode("simulation");
-            }}
-            onScenario={(key) => {
-              markActivity();
-              setState((s) => applyScenario(s, key));
-              setMode("simulation");
-            }}
-            onToggleRecording={() => {
-              const canvas = document.querySelector("canvas");
-              if (!canvas) return;
-              if (!isRecording) {
-                try {
-                  recorderRef.current = startCanvasRecording(canvas, {
-                    onStatus: setExportStatus,
-                    onProgress: setExportProgress,
-                  });
-                  setIsRecording(true);
-                } catch (err) {
-                  setExportStatus(err.message);
-                }
-              } else if (recorderRef.current) {
-                recorderRef.current.stop();
-                recorderRef.current = null;
-                setIsRecording(false);
-                setExportStatus("WebM ready");
-                setExportProgress(100);
-              }
-            }}
-            onExportGif={async () => {
-              const canvas = document.querySelector("canvas");
-              if (!canvas) return;
-              try {
-                if (!recorderRef.current) {
-                  recorderRef.current = startCanvasRecording(canvas, {
-                    onStatus: setExportStatus,
-                    onProgress: setExportProgress,
-                  });
-                  setIsRecording(true);
-                  setTimeout(
-                    async () => {
-                      if (recorderRef.current) {
-                        await recorderRef.current.convertToGif(gifOptions);
-                        recorderRef.current = null;
-                        setIsRecording(false);
-                      }
-                    },
-                    Math.max(1200, gifOptions.trimDuration * 1000),
-                  );
-                } else {
-                  await recorderRef.current.convertToGif(gifOptions);
-                  recorderRef.current = null;
-                  setIsRecording(false);
-                }
-              } catch (err) {
-                setExportStatus(err.message);
-              }
-            }}
-          />
+          <AppHeader />
 
           <ScanHero
             seed={scanSeed}
@@ -559,6 +485,90 @@ export default function App() {
               </ErrorBoundary>
               )}
             </div>
+
+            <SimControls>
+              <ControlsBar
+                state={state}
+                isRecording={isRecording}
+                exportStatus={exportStatus}
+                quality={quality}
+                mode={mode}
+                onSetMode={setMode}
+                onSetQuality={setQuality}
+                onToggleRun={() => {
+                  markActivity();
+                  setState((s) => ({ ...s, running: !s.running }));
+                }}
+                onBurst={() => {
+                  markActivity();
+                  setState((s) => ({
+                    ...s,
+                    burst: 20,
+                    scenario: "Sensory Burst",
+                  }));
+                }}
+                onReset={() => {
+                  markActivity();
+                  setState(resetState());
+                  setMode("simulation");
+                }}
+                onScenario={(key) => {
+                  markActivity();
+                  setState((s) => applyScenario(s, key));
+                  setMode("simulation");
+                }}
+                onToggleRecording={() => {
+                  const canvas = document.querySelector("canvas");
+                  if (!canvas) return;
+                  if (!isRecording) {
+                    try {
+                      recorderRef.current = startCanvasRecording(canvas, {
+                        onStatus: setExportStatus,
+                        onProgress: setExportProgress,
+                      });
+                      setIsRecording(true);
+                    } catch (err) {
+                      setExportStatus(err.message);
+                    }
+                  } else if (recorderRef.current) {
+                    recorderRef.current.stop();
+                    recorderRef.current = null;
+                    setIsRecording(false);
+                    setExportStatus("WebM ready");
+                    setExportProgress(100);
+                  }
+                }}
+                onExportGif={async () => {
+                  const canvas = document.querySelector("canvas");
+                  if (!canvas) return;
+                  try {
+                    if (!recorderRef.current) {
+                      recorderRef.current = startCanvasRecording(canvas, {
+                        onStatus: setExportStatus,
+                        onProgress: setExportProgress,
+                      });
+                      setIsRecording(true);
+                      setTimeout(
+                        async () => {
+                          if (recorderRef.current) {
+                            await recorderRef.current.convertToGif(gifOptions);
+                            recorderRef.current = null;
+                            setIsRecording(false);
+                          }
+                        },
+                        Math.max(1200, gifOptions.trimDuration * 1000),
+                      );
+                    } else {
+                      await recorderRef.current.convertToGif(gifOptions);
+                      recorderRef.current = null;
+                      setIsRecording(false);
+                    }
+                  } catch (err) {
+                    setExportStatus(err.message);
+                  }
+                }}
+              />
+            </SimControls>
           </section>
 
           <section className="lower-grid wide-grid">

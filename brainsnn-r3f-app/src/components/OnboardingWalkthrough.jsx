@@ -14,7 +14,7 @@ const STEPS = [
   {
     title: 'Control Bar',
     body: 'Play/pause the simulation, trigger bursts, switch scenarios, toggle quality tiers, and choose your data mode — Simulation, TRIBE v2, or Live EEG.',
-    target: '.controls-bar'
+    target: '.sim-controls'
   },
   {
     title: 'Neural Analytics',

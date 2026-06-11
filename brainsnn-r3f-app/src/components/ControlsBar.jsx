@@ -17,41 +17,7 @@ export default function ControlsBar({
   onSetMode,
 }) {
   return (
-    <section className="panel panel-pad controls-bar">
-      <div>
-        <div className="eyebrow">Affective intelligence</div>
-        <h1>BrainSNN</h1>
-        <p className="muted">
-          BrainSNN reads the feelings hidden in everyday content — headlines,
-          emails, posts — and shows you, live, how they light up a brain. Paste
-          something below to see it work.
-        </p>
-        <div
-          className="showcase-links"
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "16px",
-            marginTop: "6px",
-            fontSize: ".8rem",
-            fontWeight: 700,
-          }}
-        >
-          <a
-            href="/research"
-            style={{ color: "var(--primary)", textDecoration: "none" }}
-          >
-            GaugeGap Research ↗
-          </a>
-          <a
-            href="/crumb-llm"
-            style={{ color: "var(--primary)", textDecoration: "none" }}
-          >
-            Crumb LLM ↗
-          </a>
-        </div>
-      </div>
-
+    <div className="controls-bar">
       <div className="control-actions">
         <button
           className={`btn ${state.running ? "primary" : ""}`}
@@ -120,6 +86,6 @@ export default function ControlsBar({
           ))}
         </div>
       </div>
-    </section>
+    </div>
   );
 }

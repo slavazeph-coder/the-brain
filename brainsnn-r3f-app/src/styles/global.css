@@ -121,7 +121,7 @@ h3 {
   display: grid;
   gap: 16px;
 }
-.controls-bar h1 {
+.app-header h1 {
   font-size: clamp(2rem, 1.4rem + 1.6vw, 3.2rem);
 }
 
@@ -4841,4 +4841,59 @@ h3 {
 }
 .panel-flash {
   animation: panelFlashRing 1.4s ease forwards;
+}
+
+/* ── UX overhaul: slim app header (hero extracted from ControlsBar) ── */
+.app-header h1 {
+  margin: 0 0 6px;
+}
+.app-header .showcase-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.app-header .showcase-links a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* ── UX overhaul: collapsible simulation controls inside the viewer ── */
+.sim-controls {
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.sim-controls > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 44px;
+  padding: 10px 20px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.sim-controls > summary::-webkit-details-marker {
+  display: none;
+}
+.sim-controls > summary::before {
+  content: "▸";
+  color: var(--primary);
+  transition: transform 160ms ease;
+}
+.sim-controls[open] > summary::before {
+  transform: rotate(90deg);
+}
+.sim-controls > summary .muted {
+  font-size: 0.78rem;
+}
+.sim-controls-body {
+  padding: 4px 20px 18px;
+}
+.sim-controls-body .controls-bar {
+  display: grid;
+  gap: 12px;
 }
