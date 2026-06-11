@@ -29,6 +29,8 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import DemoTiles from "./components/DemoTiles";
 import ScanHero from "./components/ScanHero";
 import SectionNav from "./components/SectionNav";
+import SectionHeader from "./components/SectionHeader";
+import PanelAnchor from "./components/PanelAnchor";
 
 // The seven non-default sections each become their own chunk, fetched on first
 // activation (see the "visited" latch in App). React.lazy fires the dynamic
@@ -82,7 +84,11 @@ import {
   pollForPanel,
   scrollToLayerPanel,
 } from "./utils/panelNav";
-import { sectionForLayer } from "./utils/sectionRegistry";
+import {
+  SECTION_REGISTRY,
+  sectionForLayer,
+  sectionPanelCount,
+} from "./utils/sectionRegistry";
 
 /**
  * Fallback shown while a section's chunk is in flight. Reuses the existing
@@ -613,32 +619,44 @@ export default function App() {
 
           <SectionNav
             sections={[
-              { id: "insights", label: "Insights" },
-              { id: "firewall", label: "Scan & Firewall" },
-              { id: "knowledge", label: "Knowledge" },
-              { id: "defense", label: "Defense" },
-              { id: "tools", label: "Tools" },
-              { id: "studio", label: "Studio" },
-              { id: "neuro", label: "Neuro & RAG" },
-              { id: "io", label: "Share & I/O" },
-            ]}
+              "insights",
+              "firewall",
+              "knowledge",
+              "defense",
+              "tools",
+              "studio",
+              "neuro",
+              "io",
+            ].map((id) => ({
+              id,
+              label: SECTION_REGISTRY[id].label,
+              count: sectionPanelCount(id),
+            }))}
             active={activeSection}
             onChange={setActiveSection}
           />
 
           {/* Default section — ships in the entry chunk, always mounted. */}
           <div className="app-section" hidden={activeSection !== "insights"}>
-            <ActivityCharts state={state} />
+            <SectionHeader sectionId="insights" />
 
-            <ErrorBoundary name="Analytics Dashboard">
-              <AnalyticsDashboard state={state} />
-            </ErrorBoundary>
+            <PanelAnchor id="activity-charts" title="Activity Charts">
+              <ActivityCharts state={state} />
+            </PanelAnchor>
 
-            <NarrativePanel
-              state={state}
-              trends={trends}
-              firewallResult={firewallResult}
-            />
+            <PanelAnchor id="l7" title="Analytics Dashboard">
+              <ErrorBoundary name="Analytics Dashboard">
+                <AnalyticsDashboard state={state} />
+              </ErrorBoundary>
+            </PanelAnchor>
+
+            <PanelAnchor id="l8" title="Narrative Engine">
+              <NarrativePanel
+                state={state}
+                trends={trends}
+                firewallResult={firewallResult}
+              />
+            </PanelAnchor>
           </div>
 
           {/* Lazy sections — each gated on the "visited" latch so its chunk is

@@ -4897,3 +4897,59 @@ h3 {
   display: grid;
   gap: 12px;
 }
+
+/* ── UX overhaul: section headers + table of contents ───────────────── */
+.section-header p.muted {
+  margin: 0 0 12px;
+}
+.section-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.section-toc .chip-btn {
+  font-size: 0.78rem;
+}
+.palette-cta kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-left: 4px;
+}
+
+/* ── UX overhaul: collapsible panels in long sections ───────────────── */
+.panel-collapse > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 4px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.panel-collapse > summary::-webkit-details-marker {
+  display: none;
+}
+.panel-collapse > summary::before {
+  content: "▾";
+  color: var(--primary);
+  transition: transform 160ms ease;
+}
+.panel-collapse:not([open]) > summary::before {
+  transform: rotate(-90deg);
+}
+.panel-collapse:not([open]) {
+  border-bottom: 1px dashed var(--border);
+}
+.panel-collapse-body {
+  display: grid;
+  gap: 18px;
+}

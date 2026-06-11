@@ -1,4 +1,6 @@
 import React from "react";
+import PanelAnchor from "../PanelAnchor";
+import SectionHeader from "../SectionHeader";
 import VoiceControl from "../VoiceControl";
 import PluginPanel from "../PluginPanel";
 import LiveSyncPanel from "../LiveSyncPanel";
@@ -37,12 +39,17 @@ export default function IoSection({
 }) {
   return (
     <>
+      <SectionHeader sectionId="io" />
+
+      <PanelAnchor id="l14" title="Voice Narrator">
       <VoiceControl
         state={state}
         trends={trends}
         firewallResult={firewallResult}
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="l15" title="Plugins">
       <PluginPanel
         onApplyResults={(combined) => {
           // Map plugin scores to firewall-compatible format if available
@@ -58,7 +65,9 @@ export default function IoSection({
           toastInfo("Plugin analysis applied to brain");
         }}
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="l16" title="Live Sync">
       <LiveSyncPanel
         state={state}
         onRemoteState={(remote) => {
@@ -72,9 +81,13 @@ export default function IoSection({
           }
         }}
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="l11" title="Share & Embed">
       <SharePanel state={state} />
+      </PanelAnchor>
 
+      <PanelAnchor id="export" title="Export">
       <ExportPanel
         {...gifOptions}
         exportProgress={exportProgress}
@@ -83,7 +96,9 @@ export default function IoSection({
           setGifOptions((prev) => ({ ...prev, [key]: value }))
         }
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="timeline" title="Timeline Replay">
       <TimelinePanel
         history={state.history}
         timelineIndex={timelineIndex}
@@ -97,7 +112,9 @@ export default function IoSection({
           }))
         }
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="eeg" title="Live EEG">
       <EEGPanel
         eegStatus={eegStatus}
         onConnectMuse={async () => {
@@ -142,6 +159,7 @@ export default function IoSection({
           toastInfo("Mock EEG data injected");
         }}
       />
+      </PanelAnchor>
 
       <section className="panel panel-pad deploy-panel">
         <div className="eyebrow">Deployment</div>

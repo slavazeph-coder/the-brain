@@ -7,6 +7,8 @@ import CodeBrainPanel from "../CodeBrainPanel";
 import BrainStewardPanel from "../BrainStewardPanel";
 import ConversationBrainPanel from "../ConversationBrainPanel";
 import ErrorBoundary from "../ErrorBoundary";
+import PanelAnchor from "../PanelAnchor";
+import SectionHeader from "../SectionHeader";
 import {
   recordEvent as recordImmunity,
   IMMUNITY_EVENTS,
@@ -24,6 +26,9 @@ export default function KnowledgeSection({
 }) {
   return (
     <>
+      <SectionHeader sectionId="knowledge" />
+
+      <PanelAnchor id="l6" title="Snapshots">
       <SnapshotPanel
         state={state}
         onRestoreSnapshot={(snap) => {
@@ -41,9 +46,13 @@ export default function KnowledgeSection({
           toastSuccess(`Restored: ${snap.name}`);
         }}
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="l17" title="Heatmap Timeline">
       <HeatmapTimeline state={state} />
+      </PanelAnchor>
 
+      <PanelAnchor id="l18" title="Knowledge Brain">
       <ErrorBoundary name="Knowledge Brain">
         <KnowledgeBrainPanel
           onApplyKnowledgeState={(kbState) => {
@@ -62,11 +71,15 @@ export default function KnowledgeSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l19" title="MCP Bridge">
       <ErrorBoundary name="MCP Bridge">
         <MCPBridgePanel />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l20" title="Code Brain">
       <ErrorBoundary name="Code Brain">
         <CodeBrainPanel
           onApplyToNetwork={(payload) => {
@@ -81,11 +94,15 @@ export default function KnowledgeSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l21" title="Brain Steward">
       <ErrorBoundary name="Brain Steward">
         <BrainStewardPanel />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l22" title="Conversation Brain">
       <ErrorBoundary name="Conversation Brain">
         <ConversationBrainPanel
           onApplyFinalState={(payload) => {
@@ -103,6 +120,7 @@ export default function KnowledgeSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
     </>
   );
 }
