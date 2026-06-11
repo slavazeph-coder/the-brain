@@ -75,6 +75,12 @@ import { listSnapshots, loadSnapshot, saveSnapshot } from "./utils/snapshots";
 import { registerShortcuts } from "./utils/shortcuts";
 import { trendDirection } from "./utils/analytics";
 import { toastSuccess, toastInfo } from "./utils/toastStore";
+import {
+  NAVIGATE_LAYER_EVENT,
+  pollForPanel,
+  scrollToLayerPanel,
+} from "./utils/panelNav";
+import { sectionForLayer } from "./utils/sectionRegistry";
 
 /**
  * Fallback shown while a section's chunk is in flight. Reuses the existing
@@ -331,6 +337,29 @@ export default function App() {
       return next;
     });
   }, [activeSection]);
+
+  // Cross-section layer navigation (⌘K palette, TOC chips). Switch to the
+  // owning section first, then poll: the section chunk and any per-panel
+  // lazy placeholders need a beat to mount before the scroll can land.
+  useEffect(() => {
+    function onNavigate(e) {
+      const layerId = e.detail?.layerId;
+      if (layerId == null) return;
+      const section = sectionForLayer(layerId);
+      if (section) setActiveSection(section);
+      // Poll after the state change commits — never scroll synchronously,
+      // the target section is display:none until React re-renders.
+      pollForPanel(layerId).then((el) => {
+        if (el) {
+          scrollToLayerPanel(layerId);
+        } else if (section) {
+          toastInfo("Section opened — that panel is still loading");
+        }
+      });
+    }
+    window.addEventListener(NAVIGATE_LAYER_EVENT, onNavigate);
+    return () => window.removeEventListener(NAVIGATE_LAYER_EVENT, onNavigate);
+  }, []);
 
   const stats = useMemo(
     () => ({

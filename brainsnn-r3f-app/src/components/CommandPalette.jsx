@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { LAYER_CATALOG, LAYER_GROUPS } from '../utils/layerCatalog';
+import { navigateToLayer, OPEN_PALETTE_EVENT } from '../utils/panelNav';
 
 /**
  * Layer 92 — Command Palette
  *
- * ⌘K / Ctrl-K opens a centered fuzzy-search overlay. Each match is
- * a layer entry; selecting scrolls the matching panel into view (by
- * searching the DOM for a panel whose eyebrow-label contains the
- * layer id) and briefly highlights it.
+ * ⌘K / Ctrl-K (or a `bsnn:open-palette` event from any visible search
+ * button) opens a centered fuzzy-search overlay. Each match is a layer
+ * entry; selecting hands off to the app-level navigate-layer handler,
+ * which switches to the owning section before scrolling — so jumps work
+ * across sections, not just within the visible one.
  */
 
 function fuzzyScore(needle, hay) {
@@ -23,27 +25,6 @@ function fuzzyScore(needle, hay) {
     i = idx + 1;
   }
   return 0.5;
-}
-
-function findAndFlashPanel(layerId) {
-  try {
-    // Every layer panel has an eyebrow "Layer N ·" at its top; find it
-    const re = new RegExp(`\\blayer\\s*${layerId}\\b`, 'i');
-    const labels = document.querySelectorAll('.eyebrow');
-    for (const el of labels) {
-      if (re.test(el.textContent || '')) {
-        const panel = el.closest('.panel');
-        if (!panel) continue;
-        panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const prev = panel.style.boxShadow;
-        panel.style.transition = 'box-shadow 400ms ease';
-        panel.style.boxShadow = '0 0 0 3px rgba(90,212,255,0.6)';
-        setTimeout(() => { panel.style.boxShadow = prev; }, 1400);
-        return true;
-      }
-    }
-  } catch { /* noop */ }
-  return false;
 }
 
 export default function CommandPalette() {
@@ -63,7 +44,14 @@ export default function CommandPalette() {
       if (e.key === 'Escape') setOpen(false);
     }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    function onOpenEvent() {
+      setOpen(true);
+    }
+    window.addEventListener(OPEN_PALETTE_EVENT, onOpenEvent);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_PALETTE_EVENT, onOpenEvent);
+    };
   }, []);
 
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 0); }, [open]);
@@ -85,7 +73,7 @@ export default function CommandPalette() {
   function pick(row) {
     setOpen(false);
     setQ('');
-    setTimeout(() => findAndFlashPanel(row.id), 50);
+    setTimeout(() => navigateToLayer(row.id), 50);
   }
 
   if (!open) return null;

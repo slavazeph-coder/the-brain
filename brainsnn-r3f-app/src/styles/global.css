@@ -4832,3 +4832,13 @@ h3 {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── UX overhaul: shared panel-flash ring (panelNav.flashPanel) ───── */
+@keyframes panelFlashRing {
+  0% { box-shadow: 0 0 0 3px rgba(90, 212, 255, 0.7); }
+  70% { box-shadow: 0 0 0 3px rgba(90, 212, 255, 0.45); }
+  100% { box-shadow: 0 0 0 3px rgba(90, 212, 255, 0); }
+}
+.panel-flash {
+  animation: panelFlashRing 1.4s ease forwards;
+}
