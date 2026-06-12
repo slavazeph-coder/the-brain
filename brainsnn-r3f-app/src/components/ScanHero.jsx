@@ -40,6 +40,7 @@ const SCORES = [
 // read as red (trust attack), fear as gold, urgency/certainty as teal.
 const SIGNAL_ACCENT = {
   coercion: "var(--danger)",
+  scarcity: "var(--gold)",
   outrage: "var(--danger)",
   fear: "var(--gold)",
   urgency: "var(--primary)",

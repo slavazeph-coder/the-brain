@@ -9,7 +9,7 @@
 
 export const URGENCY_PATTERNS = [
   /\bnow\b|\bimmediat(?:e|ely)\b|\burgent(?:ly)?\b|\bbreaking\b|\balert\b|\basap\b|\bright away\b/gi,
-  /\blimited[- ]time\b|\bdon'?t miss\b|\blast chance\b|\bact(?:s|ing)? (?:now|fast)\b|\bhurry\b|\bbefore it'?s too late\b/gi,
+  /\blimited[- ]time\b|\bdon'?t miss\b|\blast chance\b|\bact(?:s|ing)? (?:now|fast|today)\b|\bhurry\b|\bbefore it'?s too late\b|\btime is running out\b|\bdon'?t wait\b|\bends? (?:tonight|today|tomorrow|soon)\b|\bclos(?:es|ing) (?:soon|tonight|today|forever)\b|\bgone forever\b/gi,
   /!{2,}|\bWARNING\b|\bCRISIS\b|\bSHOCKING\b|\bfinal notice\b|\bexpir(?:es?|ing|ation)\b|\bdeadline\b|\bwithin (?:the |\d+ ?)?(?:hour|hours|minute|minutes|days?)\b|\btime[- ]sensitive\b/gi,
 ];
 
@@ -26,7 +26,7 @@ export const CERTAINTY_PATTERNS = [
 
 export const FEAR_PATTERNS = [
   /\bdie\b|\bdeath\b|\bkill(?:ed|s)?\b|\bdanger(?:ous)?\b|\bthreat(?:en(?:ed|ing)?|s)?\b|\bunsafe\b|\bat risk\b/gi,
-  /\bvirus\b|\bpandemic\b|\battack(?:ed|s)?\b|\bwar\b|\bcrash\b|\bcollapse\b|\bdisaster\b|\bemergency\b/gi,
+  /\bvirus\b|\bpandemic\b|\battack(?:ed|s)?\b|\bwar\b|\bcrash\b|\bcollapse\b|\bdisaster\b|\bemergency\b|\bdestroy(?:ed|s|ing)?\b|\bwiped? out\b/gi,
   /\blose (?:access|your|everything)\b|\bcompromis(?:e|ed)\b|\bbreach(?:ed)?\b|\bpenalt(?:y|ies)\b|\bconsequences\b/gi,
   // Catastrophizing / fear-appeal — pushes scare-news ("deadly… imminent…
   // protect your family") above the moderate line where it belongs.
@@ -43,6 +43,16 @@ export const COERCION_PATTERNS = [
   /\bfailure to (?:comply|respond|verify|act|pay)\b|\byou must\b|\brequired to\b|\b(?:immediate )?action (?:required|needed|requested)\b|\bdo not (?:ignore|delay|share)\b|\bofficial (?:notice|notification|warning)\b|\bgift card\b|\bwire transfer\b|\bsocial security (?:number)?\b/gi,
 ];
 
+// Scarcity / FOMO — manufactured shortage and conformity pressure ("only 3
+// left", "everyone is joining"). Deliberately avoids re-matching the urgency
+// lexicon's time phrases ("limited time", "last chance") so the two
+// categories corroborate instead of double-counting one signal.
+export const SCARCITY_PATTERNS = [
+  /\bonly \d+ (?:left|remaining|spots?|seats?|copies)\b|\b(?:spots?|seats?|places|slots)\s+(?:are\s+)?(?:filling|left|remaining|going)(?:\s+(?:up|fast|quickly))?\b|\bwhile (?:supplies|stocks?) last\b|\bselling (?:out|fast)\b|\bwon'?t last\b|\bnever (?:again|be repeated)\b/gi,
+  /\bexclusive (?:access|offer|invite|deal|opportunity)\b|\binvite[- ]only\b|\bwait[- ]?list(?:ed)?\b|\bmembers[- ]only\b|\bonce[- ]in[- ]a[- ]lifetime\b|\bsecret (?:sale|deal|offer)\b/gi,
+  /\beveryone (?:is|else is) (?:joining|buying|switching|talking about|doing)\b|\bjoin (?:the )?(?:thousands|millions|\d[\d,]*\+?)(?:\s+(?:of|who))?\b|\bdon'?t (?:be|get) (?:left (?:out|behind)|the last)\b|\bgoing viral\b|\b\d[\d,]*\+? (?:people|members|customers) (?:already|have|are)\b/gi,
+];
+
 /** The default English ruleset. */
 export const EN_RULES = {
   urgency: URGENCY_PATTERNS,
@@ -50,6 +60,7 @@ export const EN_RULES = {
   certainty: CERTAINTY_PATTERNS,
   fear: FEAR_PATTERNS,
   coercion: COERCION_PATTERNS,
+  scarcity: SCARCITY_PATTERNS,
 };
 
 // Spanish + French coercion — shared by the client i18n packs (firewallI18n.js)
@@ -87,6 +98,10 @@ export const SIGNAL_CATEGORIES = {
   coercion: {
     label: "Coercion",
     drives: ["manipulationPressure", "trustErosion", "emotionalActivation"],
+  },
+  scarcity: {
+    label: "Scarcity / FOMO",
+    drives: ["manipulationPressure", "cognitiveSuppression"],
   },
 };
 
@@ -164,8 +179,16 @@ export function scoreWithRules(text = "", rules = EN_RULES, opts = {}) {
     certainty: rules.certainty || [],
     fear: rules.fear || [],
     coercion: rules.coercion || [],
+    scarcity: rules.scarcity || [],
   };
-  const counts = { urgency: 0, outrage: 0, certainty: 0, fear: 0, coercion: 0 };
+  const counts = {
+    urgency: 0,
+    outrage: 0,
+    certainty: 0,
+    fear: 0,
+    coercion: 0,
+    scarcity: 0,
+  };
   const signals = [];
   for (const [key, patterns] of Object.entries(rulesByCat)) {
     const phrases = [];
@@ -185,21 +208,31 @@ export function scoreWithRules(text = "", rules = EN_RULES, opts = {}) {
     }
   }
 
-  const { urgency, outrage, certainty, fear, coercion } = counts;
+  const { urgency, outrage, certainty, fear, coercion, scarcity } = counts;
   // Coercion contributes partial emotional load (fear-of-loss) without
   // double-counting the fear lexicon, drives trust erosion directly (it IS a
   // trust attack), and is the dominant input to manipulation pressure.
+  // Scarcity is "decide before thinking" pressure — it loads cognitive
+  // suppression and manipulation pressure, not the emotional dimensions.
   const emotionalActivation = clamp(
     normalize(fear + outrage + coercion * 0.4, 4) * 0.85,
   );
-  const cognitiveSuppression = clamp(normalize(urgency + certainty, 4) * 0.8);
+  const cognitiveSuppression = clamp(
+    normalize(urgency + certainty + scarcity * 0.8, 4) * 0.8,
+  );
   const trustErosion = clamp(
     normalize(outrage + certainty + coercion, 5) * 0.82,
   );
+  // Density term: a text saturated with pressure language is manipulative
+  // even when every hit comes from one playbook (pure-urgency blasts, pure
+  // certainty theater). Benign prose with 0–2 incidental hits moves ≤0.04.
+  const totalHits = urgency + outrage + certainty + fear + coercion + scarcity;
   const manipulationPressure = clamp(
     emotionalActivation * 0.4 +
       cognitiveSuppression * 0.3 +
-      normalize(coercion, 6) * 0.55,
+      normalize(coercion, 6) * 0.55 +
+      normalize(scarcity, 6) * 0.3 +
+      normalize(totalHits, 10) * 0.2,
   );
 
   // Backward-compatible flat evidence (receipt hashing + AI paths consume it).
@@ -212,7 +245,6 @@ export function scoreWithRules(text = "", rules = EN_RULES, opts = {}) {
   // A verdict can be confident at BOTH ends: clearly clean OR loudly
   // corroborated. The uncertain middle scores low: too little text, or a
   // notable score resting on a single category (a possible false positive).
-  const totalHits = urgency + outrage + certainty + fear + coercion;
   const distinctCats = signals.length;
   const lengthFactor = clamp(words / 60);
   const volumeFactor = clamp(totalHits / 6);

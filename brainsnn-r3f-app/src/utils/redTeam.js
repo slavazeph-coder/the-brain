@@ -1,7 +1,7 @@
 /**
  * Layer 25 — Red Team Simulator
  *
- * Generates a synthetic attack corpus spanning 5 manipulation categories
+ * Generates a synthetic attack corpus spanning 6 manipulation categories
  * plus benign controls, runs each through the Cognitive Firewall, and
  * computes detection rate + false-positive rate. Finally shows whether
  * the firewall actually works.
@@ -39,7 +39,7 @@ export function resetAttackCorpus() {
 
 // ---------- attack corpus ----------
 
-export const ATTACK_CATEGORIES = ['urgency', 'outrage', 'fear', 'certainty', 'combo', 'benign'];
+export const ATTACK_CATEGORIES = ['urgency', 'outrage', 'fear', 'certainty', 'scarcity', 'combo', 'benign'];
 
 const _ATTACK_CORPUS_DEFAULTS = {
   urgency: [
@@ -90,6 +90,18 @@ const _ATTACK_CORPUS_DEFAULTS = {
     'Undeniable proven fact — clearly guaranteed at 100% certainty by all!',
     "Everyone knows this fact is 100% proven and obviously clearly true!"
   ],
+  scarcity: [
+    'Only 3 spots left! Everyone is joining — don\'t be left out of this exclusive offer!',
+    'While supplies last: this members-only deal is selling out fast, join the thousands already in!',
+    'Invite-only access closing — spots are filling fast and this will never be repeated!',
+    'Exclusive opportunity: only 5 seats remaining and everyone is talking about it!',
+    'Join the millions who already switched — don\'t get left behind, selling fast!',
+    'Secret sale for waitlisted members only — once-in-a-lifetime, won\'t last the weekend!',
+    'Spots are going quickly — 12,000+ people already signed up, don\'t be the last!',
+    'Only 2 copies remaining of this exclusive deal — everyone else is buying right now!',
+    'This invite-only beta is filling up — exclusive access ends when the last spots are gone!',
+    'Don\'t be left out: only 10 left, going viral, and the waitlist closes tonight!'
+  ],
   combo: [
     'BREAKING!! Shocking scandal: they covered up the deadly virus pandemic — act NOW!!!',
     'URGENT alert: the furious hidden conspiracy will kill millions unless you act immediately!',
@@ -117,7 +129,10 @@ const _ATTACK_CORPUS_DEFAULTS = {
     'The park was quiet this morning with just a few people walking their dogs.',
     'I finished reading the book on sleep science and found it genuinely interesting.',
     'The team retrospective focused on improving our code review turnaround time.',
-    'Our research found that moderate exercise correlates with better cognitive performance.'
+    'Our research found that moderate exercise correlates with better cognitive performance.',
+    'The museum has limited opening hours on Sundays, from ten until two.',
+    'Parking near the venue is scarce, so we suggest arriving by train instead.',
+    'The print run was small, but the publisher plans a second edition next spring.'
   ]
 };
 

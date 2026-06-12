@@ -29,6 +29,7 @@ export const CATEGORIES = [
   "certainty",
   "fear",
   "coercion",
+  "scarcity",
 ];
 
 function safeRegex(source, flags = "gi") {

@@ -104,3 +104,33 @@ describe("cognitiveFirewall scoreContent", () => {
     expect(fr.signals.map((x) => x.category)).toContain("coercion");
   });
 });
+
+describe("scarcity / FOMO category", () => {
+  it("ships scarcity rules in the default ruleset", () => {
+    expect(DEFAULT_RULES.scarcity?.length).toBeGreaterThan(0);
+  });
+
+  it("flags manufactured-shortage marketing as manipulative", () => {
+    const s = scoreContent(
+      "Only 3 spots left! Everyone is joining — don't be left out of this exclusive offer, selling out fast while supplies last!",
+    );
+    expect(s.manipulationPressure).toBeGreaterThan(0.3);
+    expect(s.signals.some((sig) => sig.category === "scarcity")).toBe(true);
+    expect(verdict(s.recommendedAction)).not.toBe("low");
+  });
+
+  it("does not flag innocent scarcity-adjacent prose", () => {
+    const s = scoreContent(
+      "The museum has limited opening hours on Sundays, and parking nearby is scarce, so we suggest arriving by train.",
+    );
+    expect(s.manipulationPressure).toBeLessThan(0.2);
+    expect(verdict(s.recommendedAction)).toBe("low");
+  });
+
+  it("density boost flags single-category pressure blasts", () => {
+    const s = scoreContent(
+      "URGENT: act now! Breaking alert — hurry, don't wait, time is running out, act fast before it's too late, deadline now!",
+    );
+    expect(s.manipulationPressure).toBeGreaterThan(0.3);
+  });
+});
