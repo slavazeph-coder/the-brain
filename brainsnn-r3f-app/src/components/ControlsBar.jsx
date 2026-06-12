@@ -1,5 +1,6 @@
 import React from "react";
 import { SCENARIOS } from "../data/network";
+import Term from "./Term";
 
 export default function ControlsBar({
   state,
@@ -26,7 +27,7 @@ export default function ControlsBar({
           {state.running ? "Pause" : "Resume"}
         </button>
         <button className="btn" onClick={onBurst}>
-          Trigger affect burst
+          <Term k="affectBurst">Trigger affect burst</Term>
         </button>
         <button className="btn" onClick={onReset}>
           Reset
@@ -56,7 +57,8 @@ export default function ControlsBar({
 
       <div className="status-row">
         <span className="status-badge">
-          Payload: fear · urgency · trust erosion · behavior pressure
+          <Term k="payload">Payload</Term>: fear · urgency · trust erosion ·
+          behavior pressure
         </span>
         <span className="status-badge">Export: {exportStatus}</span>
         <div className="quality-group">
@@ -77,11 +79,13 @@ export default function ControlsBar({
               className={`chip-btn ${mode === m ? "active" : ""}`}
               onClick={() => onSetMode(m)}
             >
-              {m === "tribe"
-                ? "TRIBE v2"
-                : m === "eeg"
-                  ? "Live EEG"
-                  : "Simulation"}
+              {m === "tribe" ? (
+                <Term k="tribe">TRIBE v2</Term>
+              ) : m === "eeg" ? (
+                <Term k="liveEeg">Live EEG</Term>
+              ) : (
+                <Term k="simulation">Simulation</Term>
+              )}
             </button>
           ))}
         </div>

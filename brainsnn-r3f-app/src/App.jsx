@@ -31,6 +31,8 @@ import ScanHero from "./components/ScanHero";
 import SectionNav from "./components/SectionNav";
 import SectionHeader from "./components/SectionHeader";
 import PanelAnchor from "./components/PanelAnchor";
+import IntroCard from "./components/IntroCard";
+import Term from "./components/Term";
 
 // The seven non-default sections each become their own chunk, fetched on first
 // activation (see the "visited" latch in App). React.lazy fires the dynamic
@@ -446,10 +448,12 @@ export default function App() {
             <div className="viewer-overlay">
               <span className="viewer-chip">Tick {state.tick}</span>
               <span className="viewer-chip">
-                Mean firing {stats.mean.toFixed(3)}
+                <Term k="meanFiring">Mean firing</Term>{" "}
+                {stats.mean.toFixed(3)}
               </span>
               <span className="viewer-chip">
-                Plasticity {stats.plasticity.toFixed(3)}
+                <Term k="plasticity">Plasticity</Term>{" "}
+                {stats.plasticity.toFixed(3)}
               </span>
               <span className="viewer-chip">Selected {state.selected}</span>
               <span className="viewer-chip">Quality {quality}</span>
@@ -638,6 +642,8 @@ export default function App() {
 
           {/* Default section — ships in the entry chunk, always mounted. */}
           <div className="app-section" hidden={activeSection !== "insights"}>
+            <IntroCard />
+
             <SectionHeader sectionId="insights" />
 
             <PanelAnchor id="activity-charts" title="Activity Charts">

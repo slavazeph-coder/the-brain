@@ -4953,3 +4953,38 @@ h3 {
   display: grid;
   gap: 18px;
 }
+
+/* ── UX overhaul: glossary terms + intro card ────────────────────────── */
+.term {
+  text-decoration: underline dotted color-mix(in srgb, var(--primary) 55%, transparent);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.intro-card ol {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+}
+.intro-card li {
+  line-height: 1.5;
+}
+.intro-palette-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.intro-dismiss {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
