@@ -1,4 +1,5 @@
 import React from "react";
+import { openCommandPalette } from "../utils/panelNav";
 
 /**
  * Sticky section navigation for the main page. Switches which panel group is
@@ -26,6 +27,15 @@ export default function SectionNav({ sections, active, onChange }) {
         ))}
       </div>
       <div className="section-nav-labs">
+        <button
+          type="button"
+          className="palette-cta"
+          onClick={openCommandPalette}
+          title="Search all 100+ layers"
+        >
+          <span className="palette-cta-label">Search 100+ layers</span>
+          <kbd>⌘K</kbd>
+        </button>
         <a className="section-lab-link" href="/research">
           GaugeGap ↗
         </a>

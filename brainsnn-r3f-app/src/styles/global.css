@@ -4988,3 +4988,35 @@ h3 {
   color: var(--muted);
   cursor: pointer;
 }
+
+/* ── UX overhaul: visible palette CTA in the section nav ────────────── */
+.section-nav .palette-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.section-nav .palette-cta:hover {
+  border-color: var(--primary);
+}
+.section-nav .palette-cta kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+@media (max-width: 480px) {
+  .section-nav .palette-cta-label {
+    display: none;
+  }
+}
