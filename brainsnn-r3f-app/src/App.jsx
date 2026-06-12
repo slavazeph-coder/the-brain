@@ -14,6 +14,8 @@ const BrainScene = lazy(() => import("./components/BrainScene"));
 
 // Persistent chrome + the default "insights" section ship in the entry chunk.
 import ControlsBar from "./components/ControlsBar";
+import AppHeader from "./components/AppHeader";
+import SimControls from "./components/SimControls";
 import InspectorPanel from "./components/InspectorPanel";
 import ActivityCharts from "./components/ActivityCharts";
 import AnalyticsDashboard from "./components/AnalyticsDashboard";
@@ -27,6 +29,10 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import DemoTiles from "./components/DemoTiles";
 import ScanHero from "./components/ScanHero";
 import SectionNav from "./components/SectionNav";
+import SectionHeader from "./components/SectionHeader";
+import PanelAnchor from "./components/PanelAnchor";
+import IntroCard from "./components/IntroCard";
+import Term from "./components/Term";
 
 // The seven non-default sections each become their own chunk, fetched on first
 // activation (see the "visited" latch in App). React.lazy fires the dynamic
@@ -75,6 +81,16 @@ import { listSnapshots, loadSnapshot, saveSnapshot } from "./utils/snapshots";
 import { registerShortcuts } from "./utils/shortcuts";
 import { trendDirection } from "./utils/analytics";
 import { toastSuccess, toastInfo } from "./utils/toastStore";
+import {
+  NAVIGATE_LAYER_EVENT,
+  pollForPanel,
+  scrollToLayerPanel,
+} from "./utils/panelNav";
+import {
+  SECTION_REGISTRY,
+  sectionForLayer,
+  sectionPanelCount,
+} from "./utils/sectionRegistry";
 
 /**
  * Fallback shown while a section's chunk is in flight. Reuses the existing
@@ -332,6 +348,33 @@ export default function App() {
     });
   }, [activeSection]);
 
+  // Cross-section layer navigation (⌘K palette, TOC chips). Switch to the
+  // owning section first, then poll: the section chunk and any per-panel
+  // lazy placeholders need a beat to mount before the scroll can land.
+  useEffect(() => {
+    function onNavigate(e) {
+      const layerId = e.detail?.layerId;
+      if (layerId == null) return;
+      const section = sectionForLayer(layerId);
+      if (section) setActiveSection(section);
+      // Poll after the state change commits — never scroll synchronously,
+      // the target section is display:none until React re-renders.
+      pollForPanel(layerId, { timeout: section ? 4000 : 800 }).then((el) => {
+        if (el) {
+          scrollToLayerPanel(layerId);
+        } else if (section) {
+          toastInfo("Section opened — that panel is still loading");
+        } else {
+          toastInfo(
+            "That layer is a built-in capability, not a panel — try the Layer Explorer in Tools",
+          );
+        }
+      });
+    }
+    window.addEventListener(NAVIGATE_LAYER_EVENT, onNavigate);
+    return () => window.removeEventListener(NAVIGATE_LAYER_EVENT, onNavigate);
+  }, []);
+
   const stats = useMemo(
     () => ({
       mean:
@@ -365,86 +408,13 @@ export default function App() {
 
       <main className="app-layout">
         <section className="main-column">
-          <ControlsBar
-            state={state}
-            isRecording={isRecording}
-            exportStatus={exportStatus}
-            quality={quality}
-            mode={mode}
-            onSetMode={setMode}
-            onSetQuality={setQuality}
-            onToggleRun={() => {
-              markActivity();
-              setState((s) => ({ ...s, running: !s.running }));
-            }}
-            onBurst={() => {
-              markActivity();
-              setState((s) => ({ ...s, burst: 20, scenario: "Sensory Burst" }));
-            }}
-            onReset={() => {
-              markActivity();
-              setState(resetState());
-              setMode("simulation");
-            }}
-            onScenario={(key) => {
-              markActivity();
-              setState((s) => applyScenario(s, key));
-              setMode("simulation");
-            }}
-            onToggleRecording={() => {
-              const canvas = document.querySelector("canvas");
-              if (!canvas) return;
-              if (!isRecording) {
-                try {
-                  recorderRef.current = startCanvasRecording(canvas, {
-                    onStatus: setExportStatus,
-                    onProgress: setExportProgress,
-                  });
-                  setIsRecording(true);
-                } catch (err) {
-                  setExportStatus(err.message);
-                }
-              } else if (recorderRef.current) {
-                recorderRef.current.stop();
-                recorderRef.current = null;
-                setIsRecording(false);
-                setExportStatus("WebM ready");
-                setExportProgress(100);
-              }
-            }}
-            onExportGif={async () => {
-              const canvas = document.querySelector("canvas");
-              if (!canvas) return;
-              try {
-                if (!recorderRef.current) {
-                  recorderRef.current = startCanvasRecording(canvas, {
-                    onStatus: setExportStatus,
-                    onProgress: setExportProgress,
-                  });
-                  setIsRecording(true);
-                  setTimeout(
-                    async () => {
-                      if (recorderRef.current) {
-                        await recorderRef.current.convertToGif(gifOptions);
-                        recorderRef.current = null;
-                        setIsRecording(false);
-                      }
-                    },
-                    Math.max(1200, gifOptions.trimDuration * 1000),
-                  );
-                } else {
-                  await recorderRef.current.convertToGif(gifOptions);
-                  recorderRef.current = null;
-                  setIsRecording(false);
-                }
-              } catch (err) {
-                setExportStatus(err.message);
-              }
-            }}
-          />
+          <AppHeader />
 
           <ScanHero
             seed={scanSeed}
+            onSelectRegion={(id) =>
+              setState((s) => ({ ...s, selected: id || s.selected }))
+            }
             onResult={(score, content) => {
               markActivity();
               setFirewallResult(score);
@@ -485,10 +455,12 @@ export default function App() {
             <div className="viewer-overlay">
               <span className="viewer-chip">Tick {state.tick}</span>
               <span className="viewer-chip">
-                Mean firing {stats.mean.toFixed(3)}
+                <Term k="meanFiring">Mean firing</Term>{" "}
+                {stats.mean.toFixed(3)}
               </span>
               <span className="viewer-chip">
-                Plasticity {stats.plasticity.toFixed(3)}
+                <Term k="plasticity">Plasticity</Term>{" "}
+                {stats.plasticity.toFixed(3)}
               </span>
               <span className="viewer-chip">Selected {state.selected}</span>
               <span className="viewer-chip">Quality {quality}</span>
@@ -530,6 +502,90 @@ export default function App() {
               </ErrorBoundary>
               )}
             </div>
+
+            <SimControls>
+              <ControlsBar
+                state={state}
+                isRecording={isRecording}
+                exportStatus={exportStatus}
+                quality={quality}
+                mode={mode}
+                onSetMode={setMode}
+                onSetQuality={setQuality}
+                onToggleRun={() => {
+                  markActivity();
+                  setState((s) => ({ ...s, running: !s.running }));
+                }}
+                onBurst={() => {
+                  markActivity();
+                  setState((s) => ({
+                    ...s,
+                    burst: 20,
+                    scenario: "Sensory Burst",
+                  }));
+                }}
+                onReset={() => {
+                  markActivity();
+                  setState(resetState());
+                  setMode("simulation");
+                }}
+                onScenario={(key) => {
+                  markActivity();
+                  setState((s) => applyScenario(s, key));
+                  setMode("simulation");
+                }}
+                onToggleRecording={() => {
+                  const canvas = document.querySelector("canvas");
+                  if (!canvas) return;
+                  if (!isRecording) {
+                    try {
+                      recorderRef.current = startCanvasRecording(canvas, {
+                        onStatus: setExportStatus,
+                        onProgress: setExportProgress,
+                      });
+                      setIsRecording(true);
+                    } catch (err) {
+                      setExportStatus(err.message);
+                    }
+                  } else if (recorderRef.current) {
+                    recorderRef.current.stop();
+                    recorderRef.current = null;
+                    setIsRecording(false);
+                    setExportStatus("WebM ready");
+                    setExportProgress(100);
+                  }
+                }}
+                onExportGif={async () => {
+                  const canvas = document.querySelector("canvas");
+                  if (!canvas) return;
+                  try {
+                    if (!recorderRef.current) {
+                      recorderRef.current = startCanvasRecording(canvas, {
+                        onStatus: setExportStatus,
+                        onProgress: setExportProgress,
+                      });
+                      setIsRecording(true);
+                      setTimeout(
+                        async () => {
+                          if (recorderRef.current) {
+                            await recorderRef.current.convertToGif(gifOptions);
+                            recorderRef.current = null;
+                            setIsRecording(false);
+                          }
+                        },
+                        Math.max(1200, gifOptions.trimDuration * 1000),
+                      );
+                    } else {
+                      await recorderRef.current.convertToGif(gifOptions);
+                      recorderRef.current = null;
+                      setIsRecording(false);
+                    }
+                  } catch (err) {
+                    setExportStatus(err.message);
+                  }
+                }}
+              />
+            </SimControls>
           </section>
 
           <section className="lower-grid wide-grid">
@@ -574,32 +630,46 @@ export default function App() {
 
           <SectionNav
             sections={[
-              { id: "insights", label: "Insights" },
-              { id: "firewall", label: "Scan & Firewall" },
-              { id: "knowledge", label: "Knowledge" },
-              { id: "defense", label: "Defense" },
-              { id: "tools", label: "Tools" },
-              { id: "studio", label: "Studio" },
-              { id: "neuro", label: "Neuro & RAG" },
-              { id: "io", label: "Share & I/O" },
-            ]}
+              "insights",
+              "firewall",
+              "knowledge",
+              "defense",
+              "tools",
+              "studio",
+              "neuro",
+              "io",
+            ].map((id) => ({
+              id,
+              label: SECTION_REGISTRY[id].label,
+              count: sectionPanelCount(id),
+            }))}
             active={activeSection}
             onChange={setActiveSection}
           />
 
           {/* Default section — ships in the entry chunk, always mounted. */}
           <div className="app-section" hidden={activeSection !== "insights"}>
-            <ActivityCharts state={state} />
+            <IntroCard />
 
-            <ErrorBoundary name="Analytics Dashboard">
-              <AnalyticsDashboard state={state} />
-            </ErrorBoundary>
+            <SectionHeader sectionId="insights" />
 
-            <NarrativePanel
-              state={state}
-              trends={trends}
-              firewallResult={firewallResult}
-            />
+            <PanelAnchor id="activity-charts" title="Activity Charts">
+              <ActivityCharts state={state} />
+            </PanelAnchor>
+
+            <PanelAnchor id="l7" title="Analytics Dashboard">
+              <ErrorBoundary name="Analytics Dashboard">
+                <AnalyticsDashboard state={state} />
+              </ErrorBoundary>
+            </PanelAnchor>
+
+            <PanelAnchor id="l8" title="Narrative Engine">
+              <NarrativePanel
+                state={state}
+                trends={trends}
+                firewallResult={firewallResult}
+              />
+            </PanelAnchor>
           </div>
 
           {/* Lazy sections — each gated on the "visited" latch so its chunk is

@@ -8,6 +8,8 @@ import NeurochemistryPanel from "../NeurochemistryPanel";
 import BrainEvolvePanel from "../BrainEvolvePanel";
 import AttackEvolvePanel from "../AttackEvolvePanel";
 import ErrorBoundary from "../ErrorBoundary";
+import PanelAnchor from "../PanelAnchor";
+import SectionHeader from "../SectionHeader";
 import { markActivity } from "../../utils/dreamMode";
 import { mapRagToRegions } from "../../utils/neuroRag";
 import { mapMultimodalToRegions } from "../../utils/multimodalRag";
@@ -43,6 +45,9 @@ export default function NeuroSection({
 }) {
   return (
     <>
+      <SectionHeader sectionId="neuro" />
+
+      <PanelAnchor id="l28" title="Neuro-RAG">
       <ErrorBoundary name="Neuro-RAG">
         <NeuroRagPanel
           onApplyToBrain={(ragResult) => {
@@ -57,7 +62,9 @@ export default function NeuroSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l33" title="Multimodal RAG">
       <ErrorBoundary name="Multimodal RAG">
         <MultimodalRagPanel
           onApplyToBrain={(mmResult) => {
@@ -75,7 +82,9 @@ export default function NeuroSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l34" title="Vector-Graph Fusion">
       <ErrorBoundary name="Vector-Graph Fusion">
         <VectorGraphFusionPanel
           onApplyToBrain={(fusedResult) => {
@@ -91,11 +100,15 @@ export default function NeuroSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l35" title="Direct Insert">
       <ErrorBoundary name="Direct Insert">
         <DirectInsertPanel />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l29" title="Affective Decoder">
       <ErrorBoundary name="Affective Decoder">
         <AffectiveDecoderPanel
           onApplyToBrain={(map) => {
@@ -121,7 +134,9 @@ export default function NeuroSection({
           onDecode={(decoded) => setLastAffectDecode(decoded)}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l30" title="Neurochemistry">
       <ErrorBoundary name="Neurochemistry">
         <NeurochemistryPanel
           lastAffectDecode={lastAffectDecode}
@@ -132,7 +147,9 @@ export default function NeuroSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l31" title="Brain Evolve">
       <ErrorBoundary name="Brain Evolve">
         <BrainEvolvePanel
           onPromote={(node) => {
@@ -152,7 +169,9 @@ export default function NeuroSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l32" title="Attack Evolve">
       <ErrorBoundary name="Attack Evolve">
         <AttackEvolvePanel
           onAttackPromoted={(node, category) => {
@@ -171,12 +190,15 @@ export default function NeuroSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l13" title="Split Brain View">
       <ErrorBoundary name="Split Brain View">
         <Suspense fallback={null}>
           <SplitBrainView currentState={state} quality={quality} />
         </Suspense>
       </ErrorBoundary>
+      </PanelAnchor>
     </>
   );
 }

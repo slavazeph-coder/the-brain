@@ -7,6 +7,8 @@ import GemmaAnalysisPanel from "../GemmaAnalysisPanel";
 import GeminiAnalysisPanel from "../GeminiAnalysisPanel";
 import LobsterTrapPanel from "../LobsterTrapPanel";
 import ErrorBoundary from "../ErrorBoundary";
+import PanelAnchor from "../PanelAnchor";
+import SectionHeader from "../SectionHeader";
 import { mapTRIBEToRegions } from "../../utils/cognitiveFirewall";
 import {
   recordEvent as recordImmunity,
@@ -55,16 +57,25 @@ export default function FirewallSection({
 
   return (
     <>
+      <SectionHeader sectionId="firewall" />
+
+      <PanelAnchor id="l3" title="TRIBE v2">
       <TribePanel
         mode={mode}
         onApplyFrame={applyTribeFrame}
         onSetMode={setMode}
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="l38" title="Daily Challenge">
       <DailyChallengePanel initialHash={incomingDailyHash} />
+      </PanelAnchor>
 
+      <PanelAnchor id="quiz" title="Manipulation Quiz">
       <QuizPanel />
+      </PanelAnchor>
 
+      <PanelAnchor id="l4" title="Cognitive Firewall">
       <CognitiveFirewallPanel
         initialScan={initialFirewallScan}
         onApplyToNetwork={(result) => {
@@ -77,7 +88,9 @@ export default function FirewallSection({
           toastWarning(`Firewall: ${result.recommendedAction.slice(0, 60)}...`);
         }}
       />
+      </PanelAnchor>
 
+      <PanelAnchor id="l5" title="Gemma Analysis">
       <ErrorBoundary name="Gemma Analysis">
         <GemmaAnalysisPanel
           onApplyToNetwork={(gemmaResult) => {
@@ -90,7 +103,9 @@ export default function FirewallSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l101" title="Gemini Analysis">
       <ErrorBoundary name="Gemini Analysis">
         <GeminiAnalysisPanel
           onApplyToNetwork={(geminiResult) => {
@@ -103,10 +118,13 @@ export default function FirewallSection({
           }}
         />
       </ErrorBoundary>
+      </PanelAnchor>
 
+      <PanelAnchor id="l102" title="Lobster Trap">
       <ErrorBoundary name="Lobster Trap">
         <LobsterTrapPanel />
       </ErrorBoundary>
+      </PanelAnchor>
     </>
   );
 }

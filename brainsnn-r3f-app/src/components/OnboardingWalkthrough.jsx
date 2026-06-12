@@ -3,42 +3,37 @@ import React, { useEffect, useState } from 'react';
 const STEPS = [
   {
     title: 'Welcome to BrainSNN',
-    body: 'A neuromorphic brain visualiser powered by React Three Fiber, Meta TRIBE v2, and Google Gemini 2.5 (with Gemma 4 as a fallback). Let\'s take a quick tour.',
+    body: 'A 3D brain that reads the feelings hidden in everyday content — and shows you, live, how they light it up. Six quick stops.',
     target: null
   },
   {
-    title: '3D Brain Viewer',
-    body: 'The main canvas renders 7 brain regions connected by 10 neural pathways with GPU-animated signal flow. Click any region to inspect it.',
+    title: 'Paste anything, see what it does',
+    body: 'Drop a headline, email, or post here and hit Analyze. You get a verdict, the evidence phrases, and the exact feelings the text installs. Not sure what to paste? The example tiles below are one tap.',
+    target: '.scan-hero'
+  },
+  {
+    title: 'Watch the brain react',
+    body: 'Seven regions, ten pathways, live signal flow — every scan drives it. Click a region to inspect it. The full simulation controls (scenarios, recording, quality, data mode) tuck into the strip at the bottom of this panel.',
     target: '.viewer-panel'
   },
   {
-    title: 'Control Bar',
-    body: 'Play/pause the simulation, trigger bursts, switch scenarios, toggle quality tiers, and choose your data mode — Simulation, TRIBE v2, or Live EEG.',
-    target: '.controls-bar'
+    title: 'Eight sections, 100+ layers',
+    body: 'Everything else lives behind these tabs — scanning and firewall tools, knowledge bases, defense drills, studio toys, and more. Each section opens with a map of what\'s inside.',
+    target: '.section-nav'
   },
   {
-    title: 'Neural Analytics',
-    body: 'Real-time sparklines, correlation matrix, anomaly detection, and threshold alerts. Expand for the full mission-control view.',
-    target: '.analytics-dashboard'
+    title: 'Jump anywhere with ⌘K',
+    body: 'The command palette searches all 100+ layers by name. Press ⌘K / Ctrl+K anytime, or click this button — it switches sections and lands you on the right panel.',
+    target: '.section-nav .palette-cta'
   },
   {
-    title: 'Cognitive Firewall',
-    body: 'Paste any content to score manipulation patterns. When Gemini or Gemma is configured, analysis upgrades from regex to AI-powered deep scanning. Every prompt is screened by Veea Lobster Trap before send.',
-    target: '.cognitive-firewall-panel'
-  },
-  {
-    title: 'Snapshots & Sharing',
-    body: 'Save brain states, compare them side-by-side, generate reports, and share via URL or embed code.',
-    target: '.snapshot-panel'
-  },
-  {
-    title: 'You\'re Ready!',
-    body: 'Press ? anytime for keyboard shortcuts. Explore the brain, scan content, and see your neural network come alive.',
+    title: 'You\'re ready',
+    body: 'Press ? for keyboard shortcuts, Shift+? for the full hotkey map, and hover any dotted-underlined term for a plain-English definition. Have fun.',
     target: null
   }
 ];
 
-const STORAGE_KEY = 'brainsnn_onboarded';
+const STORAGE_KEY = 'brainsnn_onboarded_v2';
 
 export default function OnboardingWalkthrough() {
   const [step, setStep] = useState(-1); // -1 = not started / dismissed

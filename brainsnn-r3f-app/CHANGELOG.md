@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.4.0 — 2026-06-12 (UX overhaul)
+
+### Added
+- Section headers with one-line blurbs + clickable table-of-contents chips
+  in all 8 sections; SectionNav shows per-section panel counts.
+- Collapsible panels (default-open) in Tools, Studio, and Defense.
+- Visible "Search 100+ layers ⌘K" buttons (sticky nav + long sections).
+- Plain-language glossary tooltips on ~12 jargon terms; dismissible
+  first-visit intro card.
+- Scan verdict region tags click through to the 3D brain selection.
+
+### Changed
+- Scan-first landing: slim header → scan box → examples → 3D viewer;
+  simulation controls move into a collapsible strip inside the viewer.
+- Onboarding rewritten to 6 steps following the new page order (storage
+  key bumped to v2 — existing users see the new tour once).
+
+### Fixed
+- ⌘K palette jumps now work across sections (previously panels in
+  unvisited sections were unmounted and jumps silently failed).
+
 ## 1.3.0 — 2026-06-10 (launch-readiness release)
 
 ### Fixed

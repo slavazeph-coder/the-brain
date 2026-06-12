@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { analyzeForBrain, activeBackendLabel } from "../utils/brainLLM";
 
+import { flashPanel } from "../utils/panelNav";
+
 // Each dimension names the brain region the scan drives (see mapTRIBEToRegions)
 // so the result panel visibly connects to the 3D brain reacting above it.
 const SCORES = [
@@ -9,24 +11,28 @@ const SCORES = [
     label: "Manipulation",
     accent: "var(--danger)",
     region: "basal ganglia ↑",
+    regionId: "BG",
   },
   {
     key: "emotionalActivation",
     label: "Emotional",
     accent: "var(--gold)",
     region: "amygdala + thalamus ↑",
+    regionId: "AMY",
   },
   {
     key: "cognitiveSuppression",
     label: "Cognitive load",
     accent: "var(--primary)",
     region: "prefrontal cortex ↓",
+    regionId: "PFC",
   },
   {
     key: "trustErosion",
     label: "Trust erosion",
     accent: "#5591c7",
     region: "network-wide",
+    regionId: null,
   },
 ];
 
@@ -52,7 +58,7 @@ const PLACEHOLDER = "Paste a headline, email, or post here…";
  * The main-page centerpiece. Sends content through the swappable backend LLM
  * (analyzeForBrain) and hands the score to App, which maps it onto the 3D brain.
  */
-export default function ScanHero({ onResult, seed }) {
+export default function ScanHero({ onResult, seed, onSelectRegion }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -191,7 +197,7 @@ export default function ScanHero({ onResult, seed }) {
               </div>
 
               <div className="scan-scores">
-                {SCORES.map(({ key, label, accent, region }) => {
+                {SCORES.map(({ key, label, accent, region, regionId }) => {
                   const pct = Math.round((result[key] || 0) * 100);
                   return (
                     <div className="scan-score" key={key}>
@@ -205,7 +211,29 @@ export default function ScanHero({ onResult, seed }) {
                           style={{ width: `${pct}%`, background: accent }}
                         />
                       </div>
-                      <span className="scan-score-region">{region}</span>
+                      {regionId ? (
+                        <button
+                          type="button"
+                          className="scan-score-region region-link"
+                          title="Select this region in the 3D brain"
+                          onClick={() => {
+                            onSelectRegion?.(regionId);
+                            const viewer =
+                              document.querySelector(".viewer-panel");
+                            if (viewer) {
+                              viewer.scrollIntoView({
+                                behavior: "smooth",
+                                block: "center",
+                              });
+                              flashPanel(viewer);
+                            }
+                          }}
+                        >
+                          {region}
+                        </button>
+                      ) : (
+                        <span className="scan-score-region">{region}</span>
+                      )}
                     </div>
                   );
                 })}
@@ -263,7 +291,7 @@ export default function ScanHero({ onResult, seed }) {
                   engine: {result.source || "regex"}
                 </span>
                 <span className="scan-tag scan-tag-brain">
-                  ↳ now driving the brain above
+                  ↳ now driving the brain below
                 </span>
               </div>
             </div>
