@@ -5020,3 +5020,19 @@ h3 {
     display: none;
   }
 }
+
+/* ── UX overhaul: scan-result region links → 3D brain selection ─────── */
+button.region-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline dotted color-mix(in srgb, var(--primary) 55%, transparent);
+  text-underline-offset: 3px;
+}
+button.region-link:hover {
+  color: var(--primary);
+}

@@ -408,6 +408,9 @@ export default function App() {
 
           <ScanHero
             seed={scanSeed}
+            onSelectRegion={(id) =>
+              setState((s) => ({ ...s, selected: id || s.selected }))
+            }
             onResult={(score, content) => {
               markActivity();
               setFirewallResult(score);
