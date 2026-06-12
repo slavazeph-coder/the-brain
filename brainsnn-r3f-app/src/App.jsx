@@ -359,11 +359,15 @@ export default function App() {
       if (section) setActiveSection(section);
       // Poll after the state change commits — never scroll synchronously,
       // the target section is display:none until React re-renders.
-      pollForPanel(layerId).then((el) => {
+      pollForPanel(layerId, { timeout: section ? 4000 : 800 }).then((el) => {
         if (el) {
           scrollToLayerPanel(layerId);
         } else if (section) {
           toastInfo("Section opened — that panel is still loading");
+        } else {
+          toastInfo(
+            "That layer is a built-in capability, not a panel — try the Layer Explorer in Tools",
+          );
         }
       });
     }
