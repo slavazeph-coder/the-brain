@@ -64,7 +64,7 @@ All optional. Copy [.env.example](.env.example) to `.env` and fill in only what 
 | `VITE_GEMMA_API_KEY`      | n/a                      | Bearer token for the Gemma endpoint above                     |
 | `VITE_SYNC_WS_URL`        | Solo mode                | Multi-user live brain state sync over WebSocket (Layer 16)    |
 
-## The 35 layers — file map
+## The layers — file map (first 35 of 103; see src/utils/layerCatalog.js for all)
 
 | Layer | Feature                           | Component (`src/components/`)                                                                                                          |
 | ----- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |

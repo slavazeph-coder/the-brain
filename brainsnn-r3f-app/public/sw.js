@@ -8,7 +8,7 @@
  * old shells without needing a separate cache-busting scheme.
  */
 
-const CACHE_VERSION = 'brainsnn-v2';
+const CACHE_VERSION = 'brainsnn-v3';
 const SHELL_URLS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {

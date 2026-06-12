@@ -1,5 +1,8 @@
 # Good first issues
 
+> These now exist as labelled GitHub issues:
+> [#51–#58](https://github.com/slavazeph-coder/the-brain/issues?q=label%3A%22good+first+issue%22)
+
 Eight contributor-friendly starting points. Each links to the layer it
 touches and gives you the code entry point so you can open a PR without
 a deep repo tour.
