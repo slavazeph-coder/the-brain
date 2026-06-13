@@ -209,31 +209,53 @@ export function scoreWithRules(text = "", rules = EN_RULES, opts = {}) {
   }
 
   const { urgency, outrage, certainty, fear, coercion, scarcity } = counts;
+  const totalHits = urgency + outrage + certainty + fear + coercion + scarcity;
+
+  // ---- Density gate (long-form false-positive guard) ----
+  // Raw match counts overweight a few incidental keyword hits buried in a long
+  // article — "in fact", "cyber attacks", "block unsafe deployments" read as
+  // certainty/fear even in calm prose. Scale every dimension by how DENSE the
+  // pressure language actually is: a short, signal-saturated message keeps full
+  // strength; the same handful of hits scattered across 1,000+ words is
+  // discounted toward zero. The ramp is a NO-OP below ~40 words, so short
+  // adversarial snippets (the whole red-team corpus) are untouched and the
+  // calibrated detection F1 is preserved exactly.
+  const density = totalHits / Math.max(words, 1);
+  const TARGET_DENSITY = 0.02; // ~1 pressure hit per 50 words reads as saturated
+  const lengthRamp = clamp((words - 40) / 160); // 0 at ≤40 words, 1 at ≥200
+  const densityGate = clamp(
+    1 - lengthRamp * (1 - clamp(density / TARGET_DENSITY)),
+  );
+
   // Coercion contributes partial emotional load (fear-of-loss) without
   // double-counting the fear lexicon, drives trust erosion directly (it IS a
   // trust attack), and is the dominant input to manipulation pressure.
   // Scarcity is "decide before thinking" pressure — it loads cognitive
   // suppression and manipulation pressure, not the emotional dimensions.
-  const emotionalActivation = clamp(
+  const emotionalRaw = clamp(
     normalize(fear + outrage + coercion * 0.4, 4) * 0.85,
   );
-  const cognitiveSuppression = clamp(
+  const cognitiveRaw = clamp(
     normalize(urgency + certainty + scarcity * 0.8, 4) * 0.8,
   );
-  const trustErosion = clamp(
-    normalize(outrage + certainty + coercion, 5) * 0.82,
-  );
+  const trustRaw = clamp(normalize(outrage + certainty + coercion, 5) * 0.82);
   // Density term: a text saturated with pressure language is manipulative
   // even when every hit comes from one playbook (pure-urgency blasts, pure
   // certainty theater). Benign prose with 0–2 incidental hits moves ≤0.04.
-  const totalHits = urgency + outrage + certainty + fear + coercion + scarcity;
-  const manipulationPressure = clamp(
-    emotionalActivation * 0.4 +
-      cognitiveSuppression * 0.3 +
+  const pressureRaw = clamp(
+    emotionalRaw * 0.4 +
+      cognitiveRaw * 0.3 +
       normalize(coercion, 6) * 0.55 +
       normalize(scarcity, 6) * 0.3 +
       normalize(totalHits, 10) * 0.2,
   );
+
+  // Apply the gate uniformly so the verdict, confidence, and the brain mapping
+  // all follow the dampened reading.
+  const emotionalActivation = clamp(emotionalRaw * densityGate);
+  const cognitiveSuppression = clamp(cognitiveRaw * densityGate);
+  const trustErosion = clamp(trustRaw * densityGate);
+  const manipulationPressure = clamp(pressureRaw * densityGate);
 
   // Backward-compatible flat evidence (receipt hashing + AI paths consume it).
   const evidence = [...new Set(signals.flatMap((s) => s.phrases))].slice(0, 8);
@@ -275,11 +297,16 @@ export function scoreWithRules(text = "", rules = EN_RULES, opts = {}) {
   } else {
     const catWord = distinctCats === 1 ? "category" : "categories";
     const hitWord = totalHits === 1 ? "match" : "matches";
+    // When the density gate has meaningfully discounted the score, say so —
+    // otherwise "Low risk" next to "4 matches" reads as a contradiction.
+    const sparse = densityGate < 0.6;
     confidenceReason =
       `${totalHits} signal ${hitWord} across ${distinctCats} ${catWord}, in ${words} words` +
-      (fragile
-        ? " — but all of it comes from a single category, so treat with caution."
-        : ".");
+      (sparse
+        ? ` — but that's sparse for the length, so the hits read as incidental, not a campaign.`
+        : fragile
+          ? " — but all of it comes from a single category, so treat with caution."
+          : ".");
   }
 
   // Verdict tracks the worst credible signal, not just the 3-dimension mean —
