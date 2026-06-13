@@ -17,6 +17,7 @@
  */
 
 import { scoreContent, scoreContentSmart } from "./cognitiveFirewall.js";
+import { looksLikeUrl, fetchUrlText, domainOf } from "./urlScan.js";
 
 const CRUMB_LLM_URL = (import.meta.env.VITE_CRUMB_LLM_URL || "").replace(
   /\/$/,
@@ -82,13 +83,58 @@ async function analyzeWithCrumbLlm(text) {
 }
 
 /**
- * Analyze content for the brain. Always resolves to a score object — never
+ * Analyze content for the brain. Accepts EITHER text OR a bare link — the one
+ * front door for the whole app. A link is fetched into clean article text
+ * (via the server reader) and THAT is scored, so "paste a link and scan it"
+ * reads the page, not the URL string. Always resolves to a score object — never
  * throws — so the main page scan flow degrades gracefully to local regex.
+ *
+ * @param {string} input            text or a bare URL
+ * @param {object} [opts]
+ * @param {(stage:object)=>void} [opts.onStage]  progress hook:
+ *        { phase: "reading"|"scoring", domain? }
  */
-export async function analyzeForBrain(text = "") {
-  const trimmed = text.trim();
-  if (!trimmed) return { ...scoreContent(""), source: "regex" };
+export async function analyzeForBrain(input = "", opts = {}) {
+  const { onStage } = opts;
+  const raw = String(input).trim();
+  if (!raw) return { ...scoreContent(""), source: "regex" };
 
+  // --- Link path: read the page, then score its text ----------------------
+  if (looksLikeUrl(raw)) {
+    const domain = domainOf(raw);
+    onStage?.({ phase: "reading", domain });
+    const page = await fetchUrlText(raw);
+    if (!page.ok) {
+      // Don't score the raw URL (it would read as "too short"). Surface a
+      // friendly, actionable error the hero can render instead of a fake score.
+      return {
+        ...scoreContent(""),
+        source: "url_error",
+        fetchError: page.error,
+        fetchedFrom: { url: page.url, domain },
+      };
+    }
+    onStage?.({ phase: "scoring", domain });
+    const score = await analyzeText(page.text);
+    return {
+      ...score,
+      scannedText: page.text,
+      fetchedFrom: {
+        url: page.url,
+        domain,
+        title: page.title,
+        words: page.words,
+      },
+    };
+  }
+
+  // --- Text path ----------------------------------------------------------
+  onStage?.({ phase: "scoring" });
+  return analyzeText(raw);
+}
+
+/** Score already-extracted text through the swappable backend chain. */
+async function analyzeText(trimmed) {
   if (CRUMB_LLM_URL) {
     try {
       // Mirror the safety pre-screen scoreContentSmart applies before any

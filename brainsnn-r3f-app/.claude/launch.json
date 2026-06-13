@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "brainsnn-prod",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 8080
+    },
+    {
+      "name": "playground-static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4178"],
+      "port": 4178
     }
   ]
 }

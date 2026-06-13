@@ -53,7 +53,11 @@ const VERDICT = {
   Low: { key: "low", label: "Low risk" },
 };
 
-const PLACEHOLDER = "Paste a headline, email, or post here…";
+const PLACEHOLDER = "Paste a link, or a headline, email, or post here…";
+
+// Keep provenance titles to a glanceable length.
+const truncate = (s, n = 70) =>
+  s && s.length > n ? `${s.slice(0, n - 1)}…` : s || "";
 
 /**
  * The main-page centerpiece. Sends content through the swappable backend LLM
@@ -62,7 +66,9 @@ const PLACEHOLDER = "Paste a headline, email, or post here…";
 export default function ScanHero({ onResult, seed, onSelectRegion }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState(null); // { phase: "reading"|"scoring", domain? }
   const [result, setResult] = useState(null);
+  const [fetchErr, setFetchErr] = useState(null); // { domain, message }
   const [flash, setFlash] = useState(false);
   const resultRef = useRef(null);
   const pendingScrollRef = useRef(false);
@@ -99,14 +105,27 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
     const content = text.trim();
     if (!content || busy) return;
     setBusy(true);
+    setFetchErr(null);
+    setStage(null);
     try {
-      const score = await analyzeForBrain(content);
+      const score = await analyzeForBrain(content, { onStage: setStage });
+      if (score.source === "url_error") {
+        // Link couldn't be read — show a helpful message, not a fake score.
+        setResult(null);
+        setFetchErr({
+          domain: score.fetchedFrom?.domain,
+          message: score.fetchError,
+        });
+        return;
+      }
       setResult(score);
-      onResult?.(score, content);
+      // Score the page text (not the URL) so the brain + share reflect content.
+      onResult?.(score, score.scannedText || content);
     } catch (_err) {
       // analyzeForBrain never throws, but guard anyway.
     } finally {
       setBusy(false);
+      setStage(null);
     }
   };
 
@@ -121,8 +140,8 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
           <div className="eyebrow">Feel what you read</div>
           <h2>See the hidden feelings in anything you read</h2>
           <p className="scan-subcopy">
-            Paste a headline, email, or post — BrainSNN shows you the emotional
-            pull behind the words, live.
+            Paste a link or any text — BrainSNN reads the page and shows you the
+            emotional pull behind the words, live.
           </p>
         </div>
         <span className="scan-backend" title="Active analysis backend">
@@ -149,10 +168,13 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
       <textarea
         className="scan-input"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (fetchErr) setFetchErr(null);
+        }}
         onKeyDown={onKeyDown}
         placeholder={PLACEHOLDER}
-        aria-label="Content to analyze for emotional payload"
+        aria-label="Link or content to analyze for emotional payload"
         rows={4}
       />
 
@@ -162,7 +184,11 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
           onClick={run}
           disabled={busy || !text.trim()}
         >
-          {busy ? "Analyzing…" : "Analyze → watch the brain react"}
+          {busy
+            ? stage?.phase === "reading"
+              ? `Reading ${stage.domain || "the link"}…`
+              : "Analyzing…"
+            : "Analyze → watch the brain react"}
         </button>
         <span className="scan-hint">⌘/Ctrl + Enter</span>
         {text && (
@@ -171,6 +197,7 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
             onClick={() => {
               setText("");
               setResult(null);
+              setFetchErr(null);
             }}
             disabled={busy}
           >
@@ -178,6 +205,16 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
           </button>
         )}
       </div>
+
+      {fetchErr && !result && (
+        <div className="scan-fetch-error" role="status">
+          <strong>Couldn't read {fetchErr.domain || "that link"}.</strong>
+          <span>
+            {fetchErr.message}. Some sites block readers or sit behind a paywall
+            — paste the text itself and BrainSNN will scan it.
+          </span>
+        </div>
+      )}
 
       {result &&
         (() => {
@@ -189,6 +226,27 @@ export default function ScanHero({ onResult, seed, onSelectRegion }) {
               className={`scan-result${flash ? " scan-result-flash" : ""}`}
               ref={resultRef}
             >
+              {result.fetchedFrom?.words ? (
+                <a
+                  className="scan-provenance"
+                  href={result.fetchedFrom.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={result.fetchedFrom.url}
+                >
+                  <span className="scan-provenance-icon" aria-hidden="true">
+                    🔗
+                  </span>
+                  <span>
+                    Read {result.fetchedFrom.words.toLocaleString()} words from{" "}
+                    <strong>{result.fetchedFrom.domain}</strong>
+                    {result.fetchedFrom.title
+                      ? ` — “${truncate(result.fetchedFrom.title)}”`
+                      : ""}
+                  </span>
+                </a>
+              ) : null}
+
               <div className={`scan-verdict scan-verdict-${level.key}`}>
                 <span className="scan-verdict-dot" aria-hidden="true" />
                 <div className="scan-verdict-text">
