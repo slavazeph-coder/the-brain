@@ -30,7 +30,16 @@ const CRUMB_LLM_URL = (import.meta.env.VITE_CRUMB_LLM_URL || "").replace(
 const CRUMB_LLM_KEY = import.meta.env.VITE_CRUMB_LLM_KEY || "";
 const CRUMB_LLM_TIMEOUT_MS = 12000;
 
+// Route scans through the BrainSNN server's /api/score instead of scoring in
+// the browser. Pairs with a server-only GEMINI_API_KEY so semantic scoring runs
+// with the key NEVER reaching the client bundle. Off by default → local-first.
+const SERVER_SCORING = /^(1|true|on|yes)$/i.test(
+  import.meta.env.VITE_SERVER_SCORING || "",
+);
+const SERVER_SCORE_TIMEOUT_MS = 14000;
+
 export function activeBackendLabel() {
+  if (SERVER_SCORING) return "Server AI";
   if (CRUMB_LLM_URL) return "Crumb LLM";
   // These read import.meta.env at module load in their own files; mirror here.
   if (import.meta.env.VITE_GEMINI_API_KEY) return "Gemini";
@@ -40,6 +49,55 @@ export function activeBackendLabel() {
 
 export function isCrumbLlmConfigured() {
   return CRUMB_LLM_URL.length > 0;
+}
+
+/**
+ * Score via the server's /api/score (semantic when GEMINI_API_KEY is set there,
+ * regex otherwise). The pre-screen still runs IN THE BROWSER so PII never leaves
+ * even on the server route. Throws on any failure so callers fall back to local.
+ */
+async function analyzeWithServerScore(text) {
+  const { inspectPrompt } = await import("./lobsterTrap.js");
+  const trap = inspectPrompt({ prompt: text, surface: "brainllm.server" });
+  if (trap.action === "block") {
+    return {
+      ...scoreContent(text),
+      source: "regex_lobster_blocked",
+      lobsterTrap: trap,
+    };
+  }
+  const safeText =
+    trap.action === "redact" && trap.redacted ? trap.redacted : text;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SERVER_SCORE_TIMEOUT_MS);
+  try {
+    const res = await fetch("/api/score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: safeText }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`/api/score ${res.status}`);
+    const j = await res.json();
+    return {
+      emotionalActivation: clamp(j.emotionalActivation),
+      cognitiveSuppression: clamp(j.cognitiveSuppression),
+      manipulationPressure: clamp(j.manipulationPressure),
+      trustErosion: clamp(j.trustErosion),
+      evidence: Array.isArray(j.evidence) ? j.evidence.slice(0, 10) : [],
+      signals: Array.isArray(j.signals) ? j.signals : [],
+      confidence: ["low", "medium", "high"].includes(j.confidence)
+        ? j.confidence
+        : "medium",
+      confidenceReason: j.confidenceReason || "",
+      recommendedAction: j.recommendedAction || "",
+      source: j.engine || "server",
+      lobsterTrap: trap,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const clamp = (v) => Math.max(0, Math.min(1, Number(v) || 0));
@@ -135,6 +193,15 @@ export async function analyzeForBrain(input = "", opts = {}) {
 
 /** Score already-extracted text through the swappable backend chain. */
 async function analyzeText(trimmed) {
+  // Server route first when enabled — keeps any LLM key on the server.
+  if (SERVER_SCORING) {
+    try {
+      return await analyzeWithServerScore(trimmed);
+    } catch (_err) {
+      // Server unreachable / slow — fall back to the local chain below.
+    }
+  }
+
   if (CRUMB_LLM_URL) {
     try {
       // Mirror the safety pre-screen scoreContentSmart applies before any

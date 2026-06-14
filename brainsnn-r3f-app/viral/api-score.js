@@ -28,6 +28,12 @@ import {
   scoreWithRules,
   detectLanguage,
 } from "../src/utils/firewallCore.js";
+// Server-side semantic scorer — uses a NON-VITE GEMINI_API_KEY so the key never
+// reaches the browser. Falls back to the regex scorer when unset or on error.
+import {
+  isGeminiServerConfigured,
+  analyzeWithGeminiServer,
+} from "./gemini-server.js";
 
 // ---------- server-side Firewall ----------
 
@@ -208,31 +214,55 @@ export async function handleScore(req, res) {
 
   const lang = body.lang && PACKS[body.lang] ? body.lang : detectLanguage(text);
   const rules = PACKS[lang] || PACKS.en;
-  const score = scoreWithRules(text, rules);
+
+  // Deterministic regex pass — always runs. It is the source of `signals`
+  // (the matched-phrase evidence the UI shows), the receipt, and the fallback
+  // dimensions when semantic scoring is unavailable.
+  const regex = scoreWithRules(text, rules);
   const templates = detectTemplates(text);
-  const r = receipt(text, score);
+
+  // Semantic overlay: when GEMINI_API_KEY is set server-side, let Gemini judge
+  // the four dimensions (meaning over vocabulary). Keep the regex `signals` +
+  // templates so the "why this score" breakdown still shows matched phrases.
+  let dims = regex;
+  let engine = "regex-v1";
+  let reasoning = "";
+  if (isGeminiServerConfigured()) {
+    try {
+      const ai = await analyzeWithGeminiServer(text);
+      dims = ai;
+      engine = ai.source; // e.g. "gemini:gemini-2.5-flash"
+      reasoning = ai.reasoning || "";
+    } catch (err) {
+      console.error("[score] gemini fallback to regex:", err.message || err);
+    }
+  }
+
+  const r = receipt(text, dims);
 
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.json({
     text,
     pressure: +(
-      (score.emotionalActivation +
-        score.cognitiveSuppression +
-        score.manipulationPressure) /
+      (dims.emotionalActivation +
+        dims.cognitiveSuppression +
+        dims.manipulationPressure) /
       3
     ).toFixed(3),
-    emotionalActivation: score.emotionalActivation,
-    cognitiveSuppression: score.cognitiveSuppression,
-    manipulationPressure: score.manipulationPressure,
-    trustErosion: score.trustErosion,
-    evidence: score.evidence,
+    emotionalActivation: dims.emotionalActivation,
+    cognitiveSuppression: dims.cognitiveSuppression,
+    manipulationPressure: dims.manipulationPressure,
+    trustErosion: dims.trustErosion,
+    evidence: dims.evidence,
+    signals: regex.signals, // matched-phrase breakdown (always from regex)
     templates,
     language: lang,
-    confidence: score.confidence,
-    recommendedAction: score.recommendedAction,
+    confidence: dims.confidence,
+    confidenceReason: reasoning || regex.confidenceReason,
+    recommendedAction: dims.recommendedAction,
     receipt: r,
-    engine: "regex-v1",
+    engine,
   });
 }
 
