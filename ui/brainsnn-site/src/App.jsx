@@ -1,4 +1,12 @@
-import { Html, Line, OrbitControls, Sparkles, Sphere, Stars, Text } from "@react-three/drei";
+import {
+  Html,
+  Line,
+  OrbitControls,
+  Sparkles,
+  Sphere,
+  Stars,
+  Text,
+} from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -14,12 +22,15 @@ import {
   SOCIAL_PREVIEW_COPY,
   TRUST_CARDS,
   USE_CASES,
+  YOUR_STACK,
 } from "./constants/site";
 import { useBrainSimulation } from "./hooks/useBrainSimulation";
 import { getQuadraticPoint, pathwayCenter } from "./lib/brainMath";
 import { parseGitHubRepo } from "./lib/copy";
 
-const regionMap = Object.fromEntries(BRAIN_REGIONS.map((region) => [region.code, region]));
+const regionMap = Object.fromEntries(
+  BRAIN_REGIONS.map((region) => [region.code, region]),
+);
 
 function useGitHubStars(repoUrl) {
   const [stars, setStars] = useState(null);
@@ -73,7 +84,12 @@ function ActivityMiniChart({ history = [] }) {
     .join(" ");
 
   return (
-    <svg className="mini-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Recent mean firing history">
+    <svg
+      className="mini-chart"
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label="Recent mean firing history"
+    >
       <path d={path} />
     </svg>
   );
@@ -81,7 +97,12 @@ function ActivityMiniChart({ history = [] }) {
 
 function HeroBackground() {
   return (
-    <svg className="hero-network" viewBox="0 0 1600 900" aria-hidden="true" preserveAspectRatio="none">
+    <svg
+      className="hero-network"
+      viewBox="0 0 1600 900"
+      aria-hidden="true"
+      preserveAspectRatio="none"
+    >
       <defs>
         <radialGradient id="glowA" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="rgba(119,219,228,0.22)" />
@@ -96,7 +117,17 @@ function HeroBackground() {
         <path d="M240 300 C 420 360, 520 520, 700 560" />
         <path d="M700 560 C 880 610, 1050 380, 1240 340" />
       </g>
-      {[[180, 180], [340, 500], [520, 220], [720, 180], [700, 560], [980, 520], [1260, 180], [1240, 340], [1430, 480]].map(([cx, cy], index) => (
+      {[
+        [180, 180],
+        [340, 500],
+        [520, 220],
+        [720, 180],
+        [700, 560],
+        [980, 520],
+        [1260, 180],
+        [1240, 340],
+        [1430, 480],
+      ].map(([cx, cy], index) => (
         <g key={index}>
           <circle cx={cx} cy={cy} r="48" fill="url(#glowA)" />
           <circle cx={cx} cy={cy} r="3.5" fill="rgba(241,236,229,0.9)" />
@@ -116,7 +147,11 @@ function BrainNode({ region, activity, selected, spiking, onSelect }) {
     <group position={region.position}>
       <mesh scale={ringScale}>
         <torusGeometry args={[0.52, 0.015, 10, 60]} />
-        <meshBasicMaterial color={selected ? "#f1ece5" : region.color} transparent opacity={selected ? 0.92 : 0.46} />
+        <meshBasicMaterial
+          color={selected ? "#f1ece5" : region.color}
+          transparent
+          opacity={selected ? 0.92 : 0.46}
+        />
       </mesh>
 
       <Sphere
@@ -137,12 +172,23 @@ function BrainNode({ region, activity, selected, spiking, onSelect }) {
         />
       </Sphere>
 
-      <Text position={[0, 0, scale + 0.4]} fontSize={0.28} color="#f1ece5" anchorX="center" anchorY="middle">
+      <Text
+        position={[0, 0, scale + 0.4]}
+        fontSize={0.28}
+        color="#f1ece5"
+        anchorX="center"
+        anchorY="middle"
+      >
         {region.code}
       </Text>
 
       {(hovered || selected) && (
-        <Html center position={[0, scale + 0.7, 0]} className="node-tooltip-wrap" distanceFactor={8}>
+        <Html
+          center
+          position={[0, scale + 0.7, 0]}
+          className="node-tooltip-wrap"
+          distanceFactor={8}
+        >
           <div className="node-tooltip">
             <strong>{region.name}</strong>
             <span>{region.description}</span>
@@ -161,9 +207,15 @@ function BrainEdges({ weights, selectedRegion }) {
         const to = regionMap[pathway.to];
         const start = new THREE.Vector3(...from.position);
         const end = new THREE.Vector3(...to.position);
-        const control = pathwayCenter(start.toArray(), end.toArray(), pathway.curveOffset);
+        const control = pathwayCenter(
+          start.toArray(),
+          end.toArray(),
+          pathway.curveOffset,
+        );
         const weight = weights[pathway.id] ?? pathway.initialWeight;
-        const isSelected = selectedRegion && (selectedRegion === pathway.from || selectedRegion === pathway.to);
+        const isSelected =
+          selectedRegion &&
+          (selectedRegion === pathway.from || selectedRegion === pathway.to);
         const lineColor = pathway.inhibitory ? "#d86e78" : "#5fb7c1";
 
         return (
@@ -188,7 +240,11 @@ function Particle({ pathway, activities, selectedRegion }) {
   const vectors = useMemo(() => {
     const start = new THREE.Vector3(...regionMap[pathway.from].position);
     const end = new THREE.Vector3(...regionMap[pathway.to].position);
-    const control = pathwayCenter(start.toArray(), end.toArray(), pathway.curveOffset);
+    const control = pathwayCenter(
+      start.toArray(),
+      end.toArray(),
+      pathway.curveOffset,
+    );
     return { start, control, end };
   }, [pathway]);
 
@@ -196,16 +252,28 @@ function Particle({ pathway, activities, selectedRegion }) {
     const sourceActivity = activities[pathway.from] ?? 0.2;
     travel.current += 0.004 + sourceActivity * 0.018;
     if (travel.current > 1) travel.current = 0;
-    const point = getQuadraticPoint(vectors.start, vectors.control, vectors.end, travel.current);
+    const point = getQuadraticPoint(
+      vectors.start,
+      vectors.control,
+      vectors.end,
+      travel.current,
+    );
     if (meshRef.current) meshRef.current.position.copy(point);
   });
 
-  const active = !selectedRegion || selectedRegion === pathway.from || selectedRegion === pathway.to;
+  const active =
+    !selectedRegion ||
+    selectedRegion === pathway.from ||
+    selectedRegion === pathway.to;
 
   return (
     <mesh ref={meshRef} visible={active}>
       <sphereGeometry args={[0.06, 18, 18]} />
-      <meshBasicMaterial color={pathway.inhibitory ? "#d86e78" : "#efe9e1"} transparent opacity={0.8} />
+      <meshBasicMaterial
+        color={pathway.inhibitory ? "#d86e78" : "#efe9e1"}
+        transparent
+        opacity={0.8}
+      />
     </mesh>
   );
 }
@@ -214,8 +282,18 @@ function SignalParticles({ activities, selectedRegion }) {
   return (
     <group>
       {PATHWAYS.flatMap((pathway) => [
-        <Particle key={`${pathway.id}-a`} pathway={pathway} activities={activities} selectedRegion={selectedRegion} />,
-        <Particle key={`${pathway.id}-b`} pathway={pathway} activities={activities} selectedRegion={selectedRegion} />,
+        <Particle
+          key={`${pathway.id}-a`}
+          pathway={pathway}
+          activities={activities}
+          selectedRegion={selectedRegion}
+        />,
+        <Particle
+          key={`${pathway.id}-b`}
+          pathway={pathway}
+          activities={activities}
+          selectedRegion={selectedRegion}
+        />,
       ])}
     </group>
   );
@@ -224,15 +302,24 @@ function SignalParticles({ activities, selectedRegion }) {
 function FocusController({ controlsRef, selectedRegion }) {
   const { camera } = useThree();
   const defaultCamera = useMemo(
-    () => ({ position: new THREE.Vector3(6.8, 4.4, 8.2), target: new THREE.Vector3(0.5, 0.1, 0) }),
-    []
+    () => ({
+      position: new THREE.Vector3(6.8, 4.4, 8.2),
+      target: new THREE.Vector3(0.5, 0.1, 0),
+    }),
+    [],
   );
 
   useFrame(() => {
     const selected = selectedRegion ? regionMap[selectedRegion] : null;
-    const desiredTarget = selected ? new THREE.Vector3(...selected.position) : defaultCamera.target;
+    const desiredTarget = selected
+      ? new THREE.Vector3(...selected.position)
+      : defaultCamera.target;
     const desiredPosition = selected
-      ? new THREE.Vector3(selected.position[0] + 2.2, selected.position[1] + 1.8, selected.position[2] + 2.8)
+      ? new THREE.Vector3(
+          selected.position[0] + 2.2,
+          selected.position[1] + 1.8,
+          selected.position[2] + 2.8,
+        )
       : defaultCamera.position;
 
     camera.position.lerp(desiredPosition, 0.06);
@@ -257,8 +344,14 @@ function BrainScene({ simulation, onClearSelection }) {
       <pointLight position={[-4, -3, 6]} intensity={18} color="#d8ab3a" />
 
       <group onClick={onClearSelection}>
-        <BrainEdges weights={simulation.weights} selectedRegion={simulation.selectedRegion} />
-        <SignalParticles activities={simulation.activities} selectedRegion={simulation.selectedRegion} />
+        <BrainEdges
+          weights={simulation.weights}
+          selectedRegion={simulation.selectedRegion}
+        />
+        <SignalParticles
+          activities={simulation.activities}
+          selectedRegion={simulation.selectedRegion}
+        />
         {BRAIN_REGIONS.map((region) => (
           <BrainNode
             key={region.code}
@@ -273,8 +366,17 @@ function BrainScene({ simulation, onClearSelection }) {
 
       <Sparkles count={32} scale={[11, 7, 11]} size={2.2} speed={0.35} />
       <Stars radius={50} depth={30} count={1200} factor={4} fade />
-      <OrbitControls ref={controlsRef} enablePan={false} maxDistance={14} minDistance={5} target={[0.5, 0.1, 0]} />
-      <FocusController controlsRef={controlsRef} selectedRegion={simulation.selectedRegion} />
+      <OrbitControls
+        ref={controlsRef}
+        enablePan={false}
+        maxDistance={14}
+        minDistance={5}
+        target={[0.5, 0.1, 0]}
+      />
+      <FocusController
+        controlsRef={controlsRef}
+        selectedRegion={simulation.selectedRegion}
+      />
     </Canvas>
   );
 }
@@ -284,7 +386,11 @@ function SignalCard({ label, value, detail }) {
     <div className="stat-card">
       <dt>{label}</dt>
       <dd>{value}</dd>
-      <p style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: ".88rem" }}>{detail}</p>
+      <p
+        style={{ margin: "8px 0 0", color: "var(--muted)", fontSize: ".88rem" }}
+      >
+        {detail}
+      </p>
     </div>
   );
 }
@@ -310,12 +416,15 @@ function PilotCard() {
     <div className="checklist-card">
       <h3>Pilot offer</h3>
       <p className="hero-text" style={{ marginBottom: 18 }}>
-        For brands, agencies, creators, and communications teams that want to test content before it shapes attention in the wrong direction.
+        For brands, agencies, creators, and communications teams that want to
+        test content before it shapes attention in the wrong direction.
       </p>
       <ul className="checklist">
         {PILOT_CHECKLIST.map((item) => (
           <li key={item}>
-            <span className="checkbox checked" aria-hidden="true">✓</span>
+            <span className="checkbox checked" aria-hidden="true">
+              ✓
+            </span>
             <span>{item}</span>
           </li>
         ))}
@@ -327,28 +436,42 @@ function PilotCard() {
 export default function App() {
   const { state, controls } = useBrainSimulation();
   const stars = useGitHubStars(SITE.repoUrl);
-  const selectedRegionName = state.selectedRegion ? REGION_LONG_NAMES[state.selectedRegion] : "None";
+  const selectedRegionName = state.selectedRegion
+    ? REGION_LONG_NAMES[state.selectedRegion]
+    : "None";
 
   return (
     <div className="app-shell">
       <header className="nav-shell">
         <div className="shell nav">
           <a href="#top" className="brand" aria-label={`${SITE.name} home`}>
-            <span className="brand-mark" aria-hidden="true"><span /></span>
+            <span className="brand-mark" aria-hidden="true">
+              <span />
+            </span>
             <span>{SITE.name}</span>
           </a>
           <nav className="nav-links" aria-label="Primary">
+            <a href="#stack">Your stack</a>
             <a href="#product">Product</a>
             <a href="#demo">Demo</a>
             <a href="#use-cases">Use cases</a>
             <a href="#pilot">Pilot</a>
-            <a className="button button-primary button-small" href={SITE.demoUrl} target="_blank" rel="noreferrer">Try demo</a>
+            <a
+              className="button button-primary button-small"
+              href={SITE.demoUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Run your brain
+            </a>
           </nav>
         </div>
       </header>
 
       <main>
-        <div className="hero-network-shell"><HeroBackground /></div>
+        <div className="hero-network-shell">
+          <HeroBackground />
+        </div>
         <section className="hero section" id="top">
           <div className="hero-backdrop" aria-hidden="true" />
           <div className="shell hero-grid">
@@ -357,22 +480,58 @@ export default function App() {
               <h1>{SITE.tagline}</h1>
               <p className="hero-text">{SITE.mission}</p>
               <div className="hero-actions">
-                <a href={SITE.demoUrl} target="_blank" rel="noreferrer" className="button button-primary">Analyze content</a>
-                <a href="#pilot" className="button button-secondary">Join pilot</a>
-                <a href={SITE.repoUrl} target="_blank" rel="noreferrer" className="button button-secondary">GitHub</a>
+                <a
+                  href={SITE.demoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button button-primary"
+                >
+                  Run your brain
+                </a>
+                <a href="#demo" className="button button-secondary">
+                  Try the scanner
+                </a>
+                <a
+                  href={SITE.repoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button button-secondary"
+                >
+                  GitHub
+                </a>
               </div>
               <dl className="stats-row" aria-label="Product signals">
-                <SignalCard label="Content" value="Any post" detail="Tweets, ads, emails, scripts, articles, and replies." />
-                <SignalCard label="Payload" value="Affect" detail="Fear, trust, urgency, shame, desire, belonging, and status." />
-                <SignalCard label="Risk" value="Before" detail="Preflight content before it becomes public perception." />
-                <SignalCard label="Repo" value={stars ?? "—"} detail="Open-source foundation with a product-grade surface." />
+                <SignalCard
+                  label="Compute"
+                  value="Yours"
+                  detail="Runs client-side. No account, no API key, no server for the core."
+                />
+                <SignalCard
+                  label="Agents"
+                  value="MCP"
+                  detail="14 tools bridged so Claude/Codex can read and steer the brain."
+                />
+                <SignalCard
+                  label="Layers"
+                  value="100"
+                  detail="Firewall, decoder, knowledge brain, dream mode, and more."
+                />
+                <SignalCard
+                  label="Repo"
+                  value={stars ?? "—"}
+                  detail="Open-source foundation with a product-grade surface."
+                />
               </dl>
             </div>
             <div className="hero-side">
               <div className="hero-panel">
-                <div className="hero-panel-header"><span>What BrainSNN detects</span></div>
+                <div className="hero-panel-header">
+                  <span>What BrainSNN detects</span>
+                </div>
                 <ul className="signal-list">
-                  {IMPACT_SIGNALS.map((signal) => <li key={signal}>{signal}</li>)}
+                  {IMPACT_SIGNALS.map((signal) => (
+                    <li key={signal}>{signal}</li>
+                  ))}
                 </ul>
                 <div className="mini-quote">“{SOCIAL_PREVIEW_COPY.hook}”</div>
                 <div className="badge-row" style={{ marginTop: 16 }}>
@@ -385,17 +544,40 @@ export default function App() {
           </div>
         </section>
 
+        <section className="section" id="stack">
+          <div className="shell">
+            <SectionIntro
+              eyebrow="Your stack"
+              title="Everyone will own a cloud. This is what runs on yours."
+              body="No account, no API key, no vendor between you and your own cognition. BrainSNN is the personal compute layer — wired straight into the agents you already use."
+            />
+            <div className="card-grid six-up">
+              {YOUR_STACK.map((card) => (
+                <article className="info-card" key={card.title}>
+                  <span className="card-icon" aria-hidden="true">
+                    {card.icon}
+                  </span>
+                  <h3>{card.title}</h3>
+                  <p>{card.body}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="section" id="product">
           <div className="shell">
             <SectionIntro
-              eyebrow="Product thesis"
-              title="Content should be reviewed for what it does to people — not only what it says."
-              body="BrainSNN turns invisible emotional pressure into a readable product layer: payload, evidence, risk, behavior pressure, and safer rewrite direction."
+              eyebrow="Proof of power"
+              title="The manipulation scanner is the demo. Owning your cognition is the point."
+              body="BrainSNN turns invisible emotional pressure into a readable product layer: payload, evidence, risk, behavior pressure, and safer rewrite direction — all computed on hardware you control."
             />
             <div className="card-grid six-up">
               {TRUST_CARDS.map((card) => (
                 <article className="info-card" key={card.title}>
-                  <span className="card-icon" aria-hidden="true">{card.icon}</span>
+                  <span className="card-icon" aria-hidden="true">
+                    {card.icon}
+                  </span>
                   <h3>{card.title}</h3>
                   <p>{card.body}</p>
                 </article>
@@ -408,27 +590,66 @@ export default function App() {
           <div className="shell">
             <SectionIntro
               eyebrow="Live intelligence layer"
-              title="A brain-like interface for emotional payload analysis."
-              body="Orbit the model, trigger a burst, and watch the affective system stay alive while the product frames content risk in human language."
+              title="A brain-like interface, running where your data already lives."
+              body="Orbit the model, trigger a burst, and watch the affective system stay alive — the same browser-native engine that powers the full 100-layer brain."
               centered
             />
             <div className="demo-shell">
               <div className="demo-hud top">
                 <span className="hud-chip">Tick {state.tick}</span>
-                <span className="hud-chip">Mean firing {state.meanFiring.toFixed(3)}</span>
-                <span className="hud-chip">Plasticity {state.plasticity.toFixed(3)}</span>
+                <span className="hud-chip">
+                  Mean firing {state.meanFiring.toFixed(3)}
+                </span>
+                <span className="hud-chip">
+                  Plasticity {state.plasticity.toFixed(3)}
+                </span>
                 <span className="hud-chip">Selected {selectedRegionName}</span>
               </div>
               <div className="demo-canvas">
-                <BrainScene simulation={{ ...state, selectRegion: controls.selectRegion }} onClearSelection={controls.clearSelection} />
+                <BrainScene
+                  simulation={{ ...state, selectRegion: controls.selectRegion }}
+                  onClearSelection={controls.clearSelection}
+                />
               </div>
               <div className="demo-hud bottom">
-                <div className="chart-chip"><span>Signal</span><ActivityMiniChart history={state.history} /></div>
-                <div className="demo-actions" role="group" aria-label="Simulation controls">
-                  <button type="button" className={`button button-hud ${state.running ? "active" : ""}`} onClick={controls.toggleRunning}>{state.running ? "Pause" : "Resume"}</button>
-                  <button type="button" className="button button-hud" onClick={controls.triggerBurst}>Trigger affect burst</button>
-                  <button type="button" className="button button-hud" onClick={controls.reset}>Reset</button>
-                  <a className="button button-primary" href={SITE.demoUrl} target="_blank" rel="noreferrer">Open scanner</a>
+                <div className="chart-chip">
+                  <span>Signal</span>
+                  <ActivityMiniChart history={state.history} />
+                </div>
+                <div
+                  className="demo-actions"
+                  role="group"
+                  aria-label="Simulation controls"
+                >
+                  <button
+                    type="button"
+                    className={`button button-hud ${state.running ? "active" : ""}`}
+                    onClick={controls.toggleRunning}
+                  >
+                    {state.running ? "Pause" : "Resume"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-hud"
+                    onClick={controls.triggerBurst}
+                  >
+                    Trigger affect burst
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-hud"
+                    onClick={controls.reset}
+                  >
+                    Reset
+                  </button>
+                  <a
+                    className="button button-primary"
+                    href={SITE.demoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open scanner
+                  </a>
                 </div>
               </div>
             </div>
@@ -448,18 +669,38 @@ export default function App() {
                 <div className="toolkit-head">
                   <div>
                     <h3>Example output</h3>
-                    <p>Designed to become a saved report, share card, or approval artifact.</p>
+                    <p>
+                      Designed to become a saved report, share card, or approval
+                      artifact.
+                    </p>
                   </div>
                 </div>
                 <table className="feature-table">
                   <tbody>
-                    <tr><td>Primary affect</td><td>Threat + urgency</td></tr>
-                    <tr><td>Behavior pressure</td><td>Share before verifying</td></tr>
-                    <tr><td>Trust risk</td><td>Authority claim with missing context</td></tr>
-                    <tr><td>Rewrite direction</td><td>Lower certainty, add source, preserve useful warning</td></tr>
+                    <tr>
+                      <td>Primary affect</td>
+                      <td>Threat + urgency</td>
+                    </tr>
+                    <tr>
+                      <td>Behavior pressure</td>
+                      <td>Share before verifying</td>
+                    </tr>
+                    <tr>
+                      <td>Trust risk</td>
+                      <td>Authority claim with missing context</td>
+                    </tr>
+                    <tr>
+                      <td>Rewrite direction</td>
+                      <td>
+                        Lower certainty, add source, preserve useful warning
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
-                <div className="velocity-note"><strong>Investor-ready category:</strong> emotional payload intelligence for the AI-generated internet.</div>
+                <div className="velocity-note">
+                  <strong>Investor-ready category:</strong> emotional payload
+                  intelligence for the AI-generated internet.
+                </div>
               </div>
             </div>
           </div>
@@ -475,7 +716,9 @@ export default function App() {
             <div className="card-grid six-up">
               {USE_CASES.map((card) => (
                 <article className="info-card" key={card.title}>
-                  <span className="card-icon" aria-hidden="true">{card.icon}</span>
+                  <span className="card-icon" aria-hidden="true">
+                    {card.icon}
+                  </span>
                   <h3>{card.title}</h3>
                   <p>{card.body}</p>
                 </article>
@@ -501,8 +744,20 @@ export default function App() {
                   </article>
                 ))}
                 <div className="hero-actions" style={{ marginTop: 4 }}>
-                  <a href={SITE.demoUrl} target="_blank" rel="noreferrer" className="button button-primary">Try working demo</a>
-                  <a href={`mailto:hello@brainsnn.com?subject=BrainSNN pilot`} className="button button-secondary">Request pilot</a>
+                  <a
+                    href={SITE.demoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="button button-primary"
+                  >
+                    Try working demo
+                  </a>
+                  <a
+                    href={`mailto:hello@brainsnn.com?subject=BrainSNN pilot`}
+                    className="button button-secondary"
+                  >
+                    Request pilot
+                  </a>
                 </div>
               </div>
             </div>
@@ -517,9 +772,15 @@ export default function App() {
             <p>{SITE.mission}</p>
           </div>
           <div className="footer-links">
-            <a href={SITE.domainUrl} target="_blank" rel="noreferrer">brainsnn.com</a>
-            <a href={SITE.demoUrl} target="_blank" rel="noreferrer">Demo</a>
-            <a href={SITE.repoUrl} target="_blank" rel="noreferrer">GitHub</a>
+            <a href={SITE.domainUrl} target="_blank" rel="noreferrer">
+              brainsnn.com
+            </a>
+            <a href={SITE.demoUrl} target="_blank" rel="noreferrer">
+              Demo
+            </a>
+            <a href={SITE.repoUrl} target="_blank" rel="noreferrer">
+              GitHub
+            </a>
             <a href="mailto:hello@brainsnn.com?subject=BrainSNN pilot">Pilot</a>
           </div>
         </div>

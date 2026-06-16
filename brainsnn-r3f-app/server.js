@@ -56,6 +56,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, "dist");
 const PORT = Number(process.env.PORT) || 8080;
 
+// The marketing site (ui/brainsnn-site) is the homepage at "/"; this app is
+// the product, served under "/app". Docker copies its build to site-dist/
+// alongside server.js; local dev falls back to the sibling repo path so
+// `npm run start:dev` works without a manual copy step.
+const SITE_DIST = existsSync(join(__dirname, "site-dist"))
+  ? join(__dirname, "site-dist")
+  : join(__dirname, "..", "ui", "brainsnn-site", "dist");
+
 // Static 1200×630 card (public/og.png, copied into dist/ by the build) —
 // served whenever dynamic OG rendering throws, because social crawlers treat
 // a non-image response as "no preview" and cache that verdict.
@@ -235,37 +243,50 @@ app.get("/w/:hash", handleRecapCard);
 app.get("/b/:hash", handleBadgesCard);
 app.get("/s/:hash", handleSocialPostCard);
 
-// --- Static SPA -------------------------------------------------------------
+// --- Static SPAs --------------------------------------------------------
+// Two builds share this server: the marketing site (homepage, "/") and this
+// app (the product, under "/app"). Share-card and API routes above stay at
+// root-level paths regardless, since they're hash-based deep links that may
+// already be shared in the wild.
 if (!existsSync(DIST)) {
   console.warn(
     `[server] dist/ not found at ${DIST} — run "npm run build" first`,
   );
 }
+if (!existsSync(SITE_DIST)) {
+  console.warn(
+    `[server] marketing site dist/ not found at ${SITE_DIST} — build ui/brainsnn-site first`,
+  );
+}
 
-app.use(
-  express.static(DIST, {
-    etag: true,
-    lastModified: true,
-    maxAge: "1h",
-    setHeaders: (res, filePath) => {
-      // Hashed assets get long cache; index.html stays fresh.
-      if (filePath.endsWith("index.html")) {
-        res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
-      } else if (/\.(js|css|woff2?|png|jpg|svg|webp)$/.test(filePath)) {
-        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-      }
-    },
-  }),
-);
+const staticOptions = {
+  etag: true,
+  lastModified: true,
+  maxAge: "1h",
+  setHeaders: (res, filePath) => {
+    // Hashed assets get long cache; index.html stays fresh.
+    if (filePath.endsWith("index.html")) {
+      res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    } else if (/\.(js|css|woff2?|png|jpg|svg|webp)$/.test(filePath)) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+  },
+};
 
-// Fallback. Extensionless routes load the SPA so client-side routing and
-// share-card deep links keep working. A request that looks like a missing file
-// (ends in an extension) gets the branded 404 page instead of a raw error.
+app.use("/app", express.static(DIST, staticOptions));
+app.use(express.static(SITE_DIST, staticOptions));
+
+// Fallback. Extensionless routes load the matching SPA so client-side
+// routing and share-card deep links keep working. A request that looks like
+// a missing file (ends in an extension) gets the branded 404 page instead of
+// a raw error.
 app.get("*", (req, res) => {
+  const isApp = req.path === "/app" || req.path.startsWith("/app/");
+  const distDir = isApp ? DIST : SITE_DIST;
   if (/\.[a-zA-Z0-9]{1,8}$/.test(req.path)) {
-    res.status(404).sendFile(join(DIST, "404.html"));
+    res.status(404).sendFile(join(distDir, "404.html"));
   } else {
-    res.sendFile(join(DIST, "index.html"));
+    res.sendFile(join(distDir, "index.html"));
   }
 });
 

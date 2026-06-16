@@ -2,15 +2,15 @@ export const SITE = {
   name: "BrainSNN",
   repoUrl: "https://github.com/slavazeph-coder/the-brain",
   domainUrl: "https://brainsnn.com",
-  demoUrl: "https://brainsnn.com",
+  demoUrl: "https://brainsnn.com/app",
   issuesUrl: "https://github.com/slavazeph-coder/the-brain/issues",
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "Affective intelligence for the AI internet.",
+  tagline: "Your personal AI brain. You own it.",
   mission:
-    "An affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.",
-  badge: "Emotional Payload Intelligence · Brand Risk · Public Perception",
+    "BrainSNN is a cognitive engine that runs in your browser, learns from what you feed it, and wires straight into your AI agents — no cloud account, no server, no one else's infrastructure between you and your data.",
+  badge: "Personal AI Infrastructure · Zero Server Core · 100 Cognitive Layers",
 };
 
 export const REGION_LONG_NAMES = {
@@ -42,7 +42,8 @@ export const BRAIN_REGIONS = [
     position: [0, 0.1, 0],
     color: "#71b949",
     baseActivity: 0.56,
-    description: "The intake gate: what content makes the nervous system notice first.",
+    description:
+      "The intake gate: what content makes the nervous system notice first.",
   },
   {
     code: "CTX",
@@ -50,7 +51,8 @@ export const BRAIN_REGIONS = [
     position: [2.45, 0.65, -0.15],
     color: "#5fb7c1",
     baseActivity: 0.26,
-    description: "Meaning assembly: how claims, frames, and context become interpretation.",
+    description:
+      "Meaning assembly: how claims, frames, and context become interpretation.",
   },
   {
     code: "HPC",
@@ -58,7 +60,8 @@ export const BRAIN_REGIONS = [
     position: [1.25, -1.6, 1.35],
     color: "#d8ab3a",
     baseActivity: 0.18,
-    description: "Memory linkage: what the message connects to past beliefs and stories.",
+    description:
+      "Memory linkage: what the message connects to past beliefs and stories.",
   },
   {
     code: "PFC",
@@ -66,7 +69,8 @@ export const BRAIN_REGIONS = [
     position: [3.45, 1.9, 0.75],
     color: "#a78ce5",
     baseActivity: 0.2,
-    description: "Executive control: whether a reader can stay reflective instead of reactive.",
+    description:
+      "Executive control: whether a reader can stay reflective instead of reactive.",
   },
   {
     code: "AMY",
@@ -74,7 +78,8 @@ export const BRAIN_REGIONS = [
     position: [1.85, -0.95, -2.15],
     color: "#d86e78",
     baseActivity: 0.13,
-    description: "Threat and salience: fear, outrage, urgency, shame, and protective attention.",
+    description:
+      "Threat and salience: fear, outrage, urgency, shame, and protective attention.",
   },
   {
     code: "BG",
@@ -82,7 +87,8 @@ export const BRAIN_REGIONS = [
     position: [-1.9, -0.55, -1.25],
     color: "#5b92cf",
     baseActivity: 0.14,
-    description: "Behavioral gating: what the message pressures the reader to do next.",
+    description:
+      "Behavioral gating: what the message pressures the reader to do next.",
   },
   {
     code: "CBL",
@@ -90,7 +96,8 @@ export const BRAIN_REGIONS = [
     position: [-3.1, 1.2, 1.6],
     color: "#c69f31",
     baseActivity: 0.17,
-    description: "Pattern calibration: timing, repetition, and subtle emotional conditioning.",
+    description:
+      "Pattern calibration: timing, repetition, and subtle emotional conditioning.",
   },
 ];
 
@@ -204,88 +211,121 @@ export const IMPACT_SIGNALS = [
   "Behavioral push: click, share, comply, attack, withdraw, or buy",
 ];
 
+export const YOUR_STACK = [
+  {
+    title: "Runs in your browser",
+    icon: "◈",
+    body: "The core engine — all 100 cognitive layers — needs no server, no account, and no API key. Open the page and the brain is already running on your machine.",
+  },
+  {
+    title: "Wired to your agents",
+    icon: "⌁",
+    body: "An MCP bridge exposes 14 tools so Claude Code, Codex, or any MCP-aware agent can read and steer the brain directly — your tools, your control.",
+  },
+  {
+    title: "Your second brain, not theirs",
+    icon: "▣",
+    body: "The Knowledge Brain scans your own files and notes locally. Nothing leaves your machine to build it.",
+  },
+  {
+    title: "Bring your own model",
+    icon: "◉",
+    body: "Point it at local Gemma or Ollama instead of a hosted API. Swap the brain's reasoning layer without swapping who owns the data.",
+  },
+  {
+    title: "Consolidates while you're away",
+    icon: "✦",
+    body: "Dream Mode replays and reweights on idle, the way a brain consolidates memory overnight — on your machine, on your time.",
+  },
+  {
+    title: "Open source, not a black box",
+    icon: "⚙",
+    body: "MIT-licensed. Every layer — firewall, decoder, evolve loop — is code you can read, fork, and run without anyone's permission.",
+  },
+];
+
 export const USE_CASES = [
   {
     title: "Brands and agencies",
     icon: "◎",
-    body:
-      "Preflight posts, ads, landing pages, and crisis replies before they trigger the wrong emotion or damage trust.",
+    body: "Preflight posts, ads, landing pages, and crisis replies before they trigger the wrong emotion or damage trust.",
   },
   {
     title: "Public perception teams",
     icon: "◐",
-    body:
-      "Map how narratives move attention, what feeling they install, and where reputational risk starts to compound.",
+    body: "Map how narratives move attention, what feeling they install, and where reputational risk starts to compound.",
   },
   {
     title: "Creators and media operators",
     icon: "✦",
-    body:
-      "Understand why a hook works, whether it crosses into manipulation, and how to rewrite it without killing the signal.",
+    body: "Understand why a hook works, whether it crosses into manipulation, and how to rewrite it without killing the signal.",
   },
   {
     title: "Compliance and comms review",
     icon: "⌁",
-    body:
-      "Flag emotional overreach, implied pressure, missing context, and claims that could create brand, legal, or trust exposure.",
+    body: "Flag emotional overreach, implied pressure, missing context, and claims that could create brand, legal, or trust exposure.",
   },
   {
     title: "Research and red teams",
     icon: "◇",
-    body:
-      "Stress-test persuasion patterns, cognitive vulnerabilities, and adversarial content with repeatable scoring and evidence trails.",
+    body: "Stress-test persuasion patterns, cognitive vulnerabilities, and adversarial content with repeatable scoring and evidence trails.",
   },
   {
     title: "AI-generated content pipelines",
     icon: "▣",
-    body:
-      "Add an emotional-risk layer between generation and publication so AI output is reviewed for human impact, not only grammar.",
+    body: "Add an emotional-risk layer between generation and publication so AI output is reviewed for human impact, not only grammar.",
   },
 ];
 
 export const PRODUCT_WORKFLOW = [
-  ["Paste or connect content", "Drop in a tweet, ad, email, script, article, campaign concept, or public narrative."],
-  ["Decode the payload", "BrainSNN scores affect, persuasion pressure, trust erosion, behavioral push, and public-perception risk."],
-  ["See the brain reaction", "The 3D model makes the invisible visible: salience, memory linkage, action pressure, and executive override."],
-  ["Rewrite with control", "Get safer, sharper alternatives that keep persuasion ethical and protect brand trust."],
+  [
+    "Paste or connect content",
+    "Drop in a tweet, ad, email, script, article, campaign concept, or public narrative.",
+  ],
+  [
+    "Decode the payload",
+    "BrainSNN scores affect, persuasion pressure, trust erosion, behavioral push, and public-perception risk.",
+  ],
+  [
+    "See the brain reaction",
+    "The 3D model makes the invisible visible: salience, memory linkage, action pressure, and executive override.",
+  ],
+  [
+    "Rewrite with control",
+    "Get safer, sharper alternatives that keep persuasion ethical and protect brand trust.",
+  ],
 ];
 
 export const TRUST_CARDS = [
   {
-    title: "Emotional payload detection",
+    title: "Yours, not rented",
     icon: "⚡",
-    body:
-      "The product is built around what content does to attention and behavior, not only what the words literally say.",
+    body: "The brain runs on your machine. There is no account that can be suspended and no vendor that can raise the price of your own cognition.",
   },
   {
     title: "Evidence-first scoring",
     icon: "⌕",
-    body:
-      "Each result should expose the exact phrases, frames, and signals that triggered fear, urgency, trust loss, or manipulation risk.",
+    body: "Each result should expose the exact phrases, frames, and signals that triggered fear, urgency, trust loss, or manipulation risk.",
   },
   {
     title: "Affective decoder",
     icon: "◉",
-    body:
-      "Classifies content across threat, reward, social, and cognitive affect clusters so teams can understand the feeling being installed.",
+    body: "Classifies content across threat, reward, social, and cognitive affect clusters so you can understand the feeling being installed.",
   },
   {
-    title: "Brand-risk layer",
+    title: "Agent-native",
     icon: "🛡",
-    body:
-      "Useful for reputation, comms, marketing, compliance, and public-response workflows where emotional misfire is expensive.",
+    body: "The MCP bridge means your AI agents don't call an API to think — they read and steer this brain directly, as an extension of themselves.",
   },
   {
     title: "Human-readable interface",
     icon: "▧",
-    body:
-      "The 3D brain is not decoration. It turns invisible cognitive pressure into a visual system that non-technical users can read quickly.",
+    body: "The 3D brain is not decoration. It turns invisible cognitive state into a visual system anyone can read at a glance.",
   },
   {
     title: "Research-ready architecture",
     icon: "🧠",
-    body:
-      "Neuromorphic, SNN, affective-computing, and red-team modules can evolve behind the same product surface without confusing first-time users.",
+    body: "Neuromorphic, SNN, affective-computing, and red-team modules evolve behind the same product surface without confusing first-time users.",
   },
 ];
 
@@ -352,7 +392,7 @@ export const COMMUNITY_CHANNELS = [
   {
     title: "Investors",
     emoji: "▣",
-    body: "The fundable category is emotional payload intelligence for the AI-generated internet, not a vague brain demo.",
+    body: "The fundable category is personal AI infrastructure — owned compute, not rented intelligence — with manipulation detection as the wedge that proves it works.",
     href: SITE.repoUrl,
     cta: "Review code",
   },
@@ -394,19 +434,19 @@ export const GOOD_FIRST_ISSUES = [
 ];
 
 export const SOCIAL_PREVIEW_COPY = {
-  hook: "BrainSNN detects the emotional payload inside online content before it moves people.",
-  sub:
-    "Paste any post, ad, email, or narrative. See fear, trust erosion, urgency, desire, shame, belonging, and behavior pressure.",
-  cta: "Try the demo or join the pilot.",
+  hook: "Everyone will own a cloud. BrainSNN is what runs on yours.",
+  sub: "A 100-layer cognitive engine that runs in your browser, wires into your AI agents, and never asks you to log in.",
+  cta: "Run your brain, or try the manipulation scanner first.",
 };
 
 export const VIRAL_CONTENT = {
-  twitterThread: `BrainSNN is an affective-intelligence engine for the AI-generated internet.\n\nPaste a post, ad, email, or script. It detects the emotional payload before it shapes attention, behavior, brand risk, or public perception.\n\nDemo: ${SITE.demoUrl}`,
-  hackerNewsTitle: "Show HN: BrainSNN — emotional payload intelligence for online content",
-  hackerNewsBody: `BrainSNN analyzes posts, ads, scripts, and messages for emotional payload, persuasion pressure, trust erosion, and public-perception risk.\n\nThe product direction is simple: content should be reviewed for what it does to people, not only what it says.\n\nDemo: ${SITE.demoUrl}\nRepo: ${SITE.repoUrl}`,
-  redditML: `BrainSNN: affective-intelligence layer for online content. It maps emotional payloads, persuasion patterns, and brand-risk signals before publication. Demo: ${SITE.demoUrl}`,
-  redditR3F: `BrainSNN uses a 3D brain interface to make emotional payload analysis visible to non-technical users. Demo: ${SITE.demoUrl}`,
-  launchPlan: `Launch around one clear claim: online content has an emotional payload. BrainSNN detects it before it shapes attention, behavior, brand risk, or public perception.`,
+  twitterThread: `Steve Jobs bet on everyone owning a computer. BrainSNN is a bet that everyone will own a brain.\n\n100 cognitive layers. Runs in your browser. Wires into Claude/Codex via MCP. No account, no server, no one else's infrastructure.\n\nDemo: ${SITE.demoUrl}`,
+  hackerNewsTitle:
+    "Show HN: BrainSNN — a personal AI brain that runs in your browser",
+  hackerNewsBody: `BrainSNN is a 100-layer cognitive engine — firewall, affective decoder, knowledge brain, dream mode, MCP bridge to your agents — that runs entirely client-side. No account, no cloud dependency for the core.\n\nThe thesis: AI infrastructure shouldn't require renting someone else's cloud. This one runs on yours.\n\nDemo: ${SITE.demoUrl}\nRepo: ${SITE.repoUrl}`,
+  redditML: `BrainSNN: a browser-native cognitive engine — SNN-style regions, an MCP bridge to your AI agents, local Gemma/Ollama support. You own the compute. Demo: ${SITE.demoUrl}`,
+  redditR3F: `BrainSNN uses a 3D brain interface to make a personal AI engine's internal state visible and ownable. Demo: ${SITE.demoUrl}`,
+  launchPlan: `Launch around one clear claim: AI infrastructure doesn't have to be rented. BrainSNN is a personal AI brain you own outright, with the emotional-payload scanner as the first visceral demo of what it can do.`,
 };
 
 export const SHARE_ROUTES = {
@@ -421,16 +461,18 @@ export const SHARE_ROUTES = {
 
 export const README_MD = `# BrainSNN
 
-**Affective intelligence for the AI internet.**
+**Your personal AI brain. You own it.**
 
-BrainSNN is an affective-intelligence engine that detects the emotional payload inside online content before it shapes attention, behavior, brand risk, or public perception.
+BrainSNN is a 100-layer cognitive engine that runs entirely in your browser — no account, no server, no one else's infrastructure between you and your data. It wires directly into your AI agents via MCP, and ships with an emotional-payload scanner as its first proof of power: paste any post, ad, or email and see the manipulation pressure before it shapes attention, behavior, brand risk, or public perception.
 
 ## What it does
 
-- Analyzes posts, ads, emails, scripts, articles, and public narratives
-- Detects fear, urgency, outrage, shame, belonging, desire, trust erosion, and manipulation pressure
+- Runs the full cognitive engine client-side — zero server required for the core
+- Bridges 14 tools to Claude Code, Codex, or any MCP-aware agent
+- Scans posts, ads, emails, scripts, and articles for fear, urgency, outrage, shame, belonging, desire, trust erosion, and manipulation pressure
 - Shows evidence behind each score
-- Visualizes the reaction through a 3D brain interface
+- Visualizes brain state through a live 3D interface
+- Builds a local Knowledge Brain from your own files — nothing leaves your machine
 - Produces safer rewrite options and report-ready outputs
 
 ## Live links

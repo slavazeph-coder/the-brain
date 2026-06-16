@@ -6,6 +6,15 @@
 
 FROM node:20-slim
 
+WORKDIR /site
+
+# Build the marketing site (homepage at /) first — it has no env-dependent
+# build steps, so its layer caches independently of the app's ARGs below.
+COPY ui/brainsnn-site/package.json ui/brainsnn-site/package-lock.json* ./
+RUN npm ci --no-audit --no-fund
+COPY ui/brainsnn-site/ ./
+RUN npm run build
+
 WORKDIR /app
 
 # Install app dependencies first for better layer caching.
@@ -14,6 +23,11 @@ RUN npm ci --no-audit --no-fund
 
 # Copy the deployable app and build the Vite bundle served by server.js.
 COPY brainsnn-r3f-app/ ./
+
+# The marketing site's build output (already on disk at /site/dist from the
+# build above — single-stage image, no COPY --from needed) is served at "/"
+# by server.js; the app's own build (below) is served under "/app".
+RUN cp -r /site/dist ./site-dist
 
 # Railway Docker builds only expose service variables to build steps when the
 # Dockerfile declares them as ARGs. Vite reads VITE_* at build time.

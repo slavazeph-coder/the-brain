@@ -2,7 +2,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/",
+  base: "/app/",
   // Dev-only: forward API calls (incl. /api/fetch-url, the link reader) to the
   // Express server so `npm run dev` exercises the SAME backend as production.
   // Run `node server.js` alongside `vite` to use it. Inert in `vite build`.
