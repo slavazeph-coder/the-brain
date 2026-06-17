@@ -134,11 +134,12 @@ jobs:
       - name: Healthcheck
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
-          # An asset that only exists in current builds — proves the new
-          # version finished rolling out, not just that something is up.
+          # An app asset that proves the build finished rolling out, not just
+          # that something is up. Lives under /app/ since the reposition gave
+          # "/" to the marketing site (the old /favicon.svg now 404s there).
           # Railway's own rebuild of main takes a few minutes, hence the
           # ~10-minute retry window.
-          VERSION_URL: ${{ vars.BRAINSNN_VERSION_URL || 'https://www.brainsnn.com/favicon.svg' }}
+          VERSION_URL: ${{ vars.BRAINSNN_VERSION_URL || 'https://www.brainsnn.com/app/favicon.svg' }}
         run: |
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
