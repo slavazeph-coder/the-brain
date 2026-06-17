@@ -10,10 +10,10 @@ on:
     branches:
       - main
     paths:
-      - 'brainsnn-r3f-app/**'
-      - 'Dockerfile'
-      - 'railway.toml'
-      - '.github/workflows/brainsnn-app-deploy.yml'
+      - "brainsnn-r3f-app/**"
+      - "Dockerfile"
+      - "railway.toml"
+      - ".github/workflows/brainsnn-app-deploy.yml"
   workflow_dispatch:
 
 permissions:
@@ -83,6 +83,11 @@ jobs:
         run: npm run build
 
       - name: Smoke test the built app headless
+        # The app moved to /app/ (base) when the marketing site took over "/".
+        # CI builds only brainsnn-r3f-app, so "/" (marketing) 404s here — point
+        # the smoke at the app's real path. Production serves both via Docker.
+        env:
+          SMOKE_URL: http://localhost:8080/app/
         run: |
           node server.js &
           for i in $(seq 1 20); do
