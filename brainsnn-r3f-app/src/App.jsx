@@ -123,7 +123,28 @@ export default function App() {
     return createInitialState();
   });
   const [mode, setMode] = useState("simulation");
-  const [activeSection, setActiveSection] = useState("insights");
+  const [activeSection, setActiveSection] = useState(() => {
+    // A deep/share link lands the visitor on the relevant section.
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get("d")) return "firewall"; // daily challenge
+      if (p.get("i") || p.get("a")) return "defense"; // immunity / autopsy card
+    } catch {
+      /* noop */
+    }
+    return "insights";
+  });
+  // The full 8-section lab is collapsed by default so /app reads like the
+  // focused scan tool (the friendly-designer feel) rather than 35 layers at
+  // once. One tap reveals everything; a share/deep link auto-opens it.
+  const [labOpen, setLabOpen] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return Boolean(p.get("i") || p.get("a") || p.get("d"));
+    } catch {
+      return false;
+    }
+  });
   // "Visited" latch: which sections have been activated at least once. A
   // section is only rendered once it has been visited, so its lazy chunk loads
   // on first activation — never on initial page load. Once rendered it stays
@@ -406,7 +427,7 @@ export default function App() {
       <CommandPalette />
       <HotkeyMap />
 
-      <main className="app-layout">
+      <main className={`app-layout${labOpen ? "" : " app-layout--focused"}`}>
         <section className="main-column">
           <AppHeader />
 
@@ -455,8 +476,7 @@ export default function App() {
             <div className="viewer-overlay">
               <span className="viewer-chip">Tick {state.tick}</span>
               <span className="viewer-chip">
-                <Term k="meanFiring">Mean firing</Term>{" "}
-                {stats.mean.toFixed(3)}
+                <Term k="meanFiring">Mean firing</Term> {stats.mean.toFixed(3)}
               </span>
               <span className="viewer-chip">
                 <Term k="plasticity">Plasticity</Term>{" "}
@@ -477,29 +497,29 @@ export default function App() {
                   brain back.
                 </div>
               ) : (
-              <ErrorBoundary name="3D Brain">
-              <Suspense
-                fallback={
-                  <div className="viewer-loading" role="status">
-                    <span className="viewer-loading-dot" />
-                    Loading the brain…
-                  </div>
-                }
-              >
-                <BrainScene
-                  regions={state.regions}
-                  weights={state.weights}
-                  selected={state.selected}
-                  quality={quality}
-                  knowledgeMode={knowledgeMode}
-                  affectOverride={affectOverride}
-                  onQualityChange={setQuality}
-                  onSelect={(id) =>
-                    setState((s) => ({ ...s, selected: id || s.selected }))
-                  }
-                />
-              </Suspense>
-              </ErrorBoundary>
+                <ErrorBoundary name="3D Brain">
+                  <Suspense
+                    fallback={
+                      <div className="viewer-loading" role="status">
+                        <span className="viewer-loading-dot" />
+                        Loading the brain…
+                      </div>
+                    }
+                  >
+                    <BrainScene
+                      regions={state.regions}
+                      weights={state.weights}
+                      selected={state.selected}
+                      quality={quality}
+                      knowledgeMode={knowledgeMode}
+                      affectOverride={affectOverride}
+                      onQualityChange={setQuality}
+                      onSelect={(id) =>
+                        setState((s) => ({ ...s, selected: id || s.selected }))
+                      }
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               )}
             </div>
 
@@ -588,205 +608,243 @@ export default function App() {
             </SimControls>
           </section>
 
-          <section className="lower-grid wide-grid">
-            <div className="panel panel-pad metric-grid">
-              <div className="metric">
-                <small>Regions</small>
-                <strong>7</strong>
-              </div>
-              <div className="metric">
-                <small>Connections</small>
-                <strong>10</strong>
-              </div>
-              <div className="metric">
-                <small>Scenario</small>
-                <strong>{state.scenario}</strong>
-              </div>
-              <div className="metric">
-                <small>Lead region</small>
-                <strong>
-                  {
-                    Object.entries(state.regions).sort(
-                      (a, b) => b[1] - a[1],
-                    )[0][0]
-                  }
-                </strong>
-              </div>
-            </div>
+          {!labOpen && (
+            <button
+              type="button"
+              className="lab-reveal"
+              onClick={() => setLabOpen(true)}
+              aria-expanded="false"
+            >
+              <strong>Explore the full lab ↓</strong>
+              <span>
+                Scan archive · Cognitive Firewall · Knowledge · Defense · Studio
+                · Neuro &amp; RAG · 35 layers
+              </span>
+            </button>
+          )}
 
-            <div className="panel panel-pad explainer">
-              <div className="eyebrow">Selected region</div>
-              <h2>
-                {state.selected} · {REGION_INFO[state.selected].name}
-              </h2>
-              <p className="muted">{REGION_INFO[state.selected].role}</p>
-              <p className="muted small-note">
-                Data source: {modeLabel}. Switch modes to toggle between
-                synthetic simulation, TRIBE v2 neural predictions, and live EEG
-                input. Press <strong>?</strong> for keyboard shortcuts.
-              </p>
-            </div>
-          </section>
+          {labOpen && (
+            <>
+              <section className="lower-grid wide-grid">
+                <div className="panel panel-pad metric-grid">
+                  <div className="metric">
+                    <small>Regions</small>
+                    <strong>7</strong>
+                  </div>
+                  <div className="metric">
+                    <small>Connections</small>
+                    <strong>10</strong>
+                  </div>
+                  <div className="metric">
+                    <small>Scenario</small>
+                    <strong>{state.scenario}</strong>
+                  </div>
+                  <div className="metric">
+                    <small>Lead region</small>
+                    <strong>
+                      {
+                        Object.entries(state.regions).sort(
+                          (a, b) => b[1] - a[1],
+                        )[0][0]
+                      }
+                    </strong>
+                  </div>
+                </div>
 
-          <SectionNav
-            sections={[
-              "insights",
-              "firewall",
-              "knowledge",
-              "defense",
-              "tools",
-              "studio",
-              "neuro",
-              "io",
-            ].map((id) => ({
-              id,
-              label: SECTION_REGISTRY[id].label,
-              count: sectionPanelCount(id),
-            }))}
-            active={activeSection}
-            onChange={setActiveSection}
-          />
+                <div className="panel panel-pad explainer">
+                  <div className="eyebrow">Selected region</div>
+                  <h2>
+                    {state.selected} · {REGION_INFO[state.selected].name}
+                  </h2>
+                  <p className="muted">{REGION_INFO[state.selected].role}</p>
+                  <p className="muted small-note">
+                    Data source: {modeLabel}. Switch modes to toggle between
+                    synthetic simulation, TRIBE v2 neural predictions, and live
+                    EEG input. Press <strong>?</strong> for keyboard shortcuts.
+                  </p>
+                </div>
+              </section>
 
-          {/* Default section — ships in the entry chunk, always mounted. */}
-          <div className="app-section" hidden={activeSection !== "insights"}>
-            <IntroCard />
-
-            <SectionHeader sectionId="insights" />
-
-            <PanelAnchor id="activity-charts" title="Activity Charts">
-              <ActivityCharts state={state} />
-            </PanelAnchor>
-
-            <PanelAnchor id="l7" title="Analytics Dashboard">
-              <ErrorBoundary name="Analytics Dashboard">
-                <AnalyticsDashboard state={state} />
-              </ErrorBoundary>
-            </PanelAnchor>
-
-            <PanelAnchor id="l8" title="Narrative Engine">
-              <NarrativePanel
-                state={state}
-                trends={trends}
-                firewallResult={firewallResult}
+              <SectionNav
+                sections={[
+                  "insights",
+                  "firewall",
+                  "knowledge",
+                  "defense",
+                  "tools",
+                  "studio",
+                  "neuro",
+                  "io",
+                ].map((id) => ({
+                  id,
+                  label: SECTION_REGISTRY[id].label,
+                  count: sectionPanelCount(id),
+                }))}
+                active={activeSection}
+                onChange={setActiveSection}
               />
-            </PanelAnchor>
-          </div>
 
-          {/* Lazy sections — each gated on the "visited" latch so its chunk is
-              fetched on first activation, then kept mounted (hidden) so panel
-              state/sockets survive tab switches. The outer ErrorBoundary also
-              catches chunk-load failures (which Suspense alone does not). */}
-          <div className="app-section" hidden={activeSection !== "firewall"}>
-            {visited.has("firewall") && (
-              <ErrorBoundary name="Scan & Firewall">
-                <Suspense fallback={<SectionLoading />}>
-                  <FirewallSection
-                    mode={mode}
-                    setMode={setMode}
-                    setState={setState}
-                    setFirewallResult={setFirewallResult}
-                    initialFirewallScan={initialFirewallScan}
-                    incomingDailyHash={incomingDailyHash}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
+              {/* Default section — ships in the entry chunk, always mounted. */}
+              <div
+                className="app-section"
+                hidden={activeSection !== "insights"}
+              >
+                <IntroCard />
 
-          <div className="app-section" hidden={activeSection !== "knowledge"}>
-            {visited.has("knowledge") && (
-              <ErrorBoundary name="Knowledge">
-                <Suspense fallback={<SectionLoading />}>
-                  <KnowledgeSection
-                    state={state}
-                    setState={setState}
-                    setKnowledgeMode={setKnowledgeMode}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
+                <SectionHeader sectionId="insights" />
 
-          <div className="app-section" hidden={activeSection !== "defense"}>
-            {visited.has("defense") && (
-              <ErrorBoundary name="Defense">
-                <Suspense fallback={<SectionLoading />}>
-                  <DefenseSection
-                    incomingImmunityCard={incomingImmunityCard}
-                    incomingAutopsyHash={incomingAutopsyHash}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
+                <PanelAnchor id="activity-charts" title="Activity Charts">
+                  <ActivityCharts state={state} />
+                </PanelAnchor>
 
-          <div className="app-section" hidden={activeSection !== "tools"}>
-            {visited.has("tools") && (
-              <ErrorBoundary name="Tools">
-                <Suspense fallback={<SectionLoading />}>
-                  <ToolsSection />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
+                <PanelAnchor id="l7" title="Analytics Dashboard">
+                  <ErrorBoundary name="Analytics Dashboard">
+                    <AnalyticsDashboard state={state} />
+                  </ErrorBoundary>
+                </PanelAnchor>
 
-          <div className="app-section" hidden={activeSection !== "studio"}>
-            {visited.has("studio") && (
-              <ErrorBoundary name="Studio">
-                <Suspense fallback={<SectionLoading />}>
-                  <StudioSection regions={state.regions} />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
-
-          <div className="app-section" hidden={activeSection !== "neuro"}>
-            {visited.has("neuro") && (
-              <ErrorBoundary name="Neuro & RAG">
-                <Suspense fallback={<SectionLoading />}>
-                  <NeuroSection
-                    state={state}
-                    setState={setState}
-                    quality={quality}
-                    lastAffectDecode={lastAffectDecode}
-                    setAffectOverride={setAffectOverride}
-                    setLastAffectDecode={setLastAffectDecode}
-                  />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
-
-          <div className="app-section" hidden={activeSection !== "io"}>
-            {visited.has("io") && (
-              <ErrorBoundary name="Share & I/O">
-                <Suspense fallback={<SectionLoading />}>
-                  <IoSection
+                <PanelAnchor id="l8" title="Narrative Engine">
+                  <NarrativePanel
                     state={state}
                     trends={trends}
                     firewallResult={firewallResult}
-                    setState={setState}
-                    gifOptions={gifOptions}
-                    setGifOptions={setGifOptions}
-                    exportProgress={exportProgress}
-                    exportStatus={exportStatus}
-                    timelineIndex={timelineIndex}
-                    setTimelineIndex={setTimelineIndex}
-                    eegStatus={eegStatus}
-                    setEegStatus={setEegStatus}
-                    setMode={setMode}
                   />
-                </Suspense>
-              </ErrorBoundary>
-            )}
-          </div>
+                </PanelAnchor>
+              </div>
+
+              {/* Lazy sections — each gated on the "visited" latch so its chunk is
+              fetched on first activation, then kept mounted (hidden) so panel
+              state/sockets survive tab switches. The outer ErrorBoundary also
+              catches chunk-load failures (which Suspense alone does not). */}
+              <div
+                className="app-section"
+                hidden={activeSection !== "firewall"}
+              >
+                {visited.has("firewall") && (
+                  <ErrorBoundary name="Scan & Firewall">
+                    <Suspense fallback={<SectionLoading />}>
+                      <FirewallSection
+                        mode={mode}
+                        setMode={setMode}
+                        setState={setState}
+                        setFirewallResult={setFirewallResult}
+                        initialFirewallScan={initialFirewallScan}
+                        incomingDailyHash={incomingDailyHash}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <div
+                className="app-section"
+                hidden={activeSection !== "knowledge"}
+              >
+                {visited.has("knowledge") && (
+                  <ErrorBoundary name="Knowledge">
+                    <Suspense fallback={<SectionLoading />}>
+                      <KnowledgeSection
+                        state={state}
+                        setState={setState}
+                        setKnowledgeMode={setKnowledgeMode}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <div className="app-section" hidden={activeSection !== "defense"}>
+                {visited.has("defense") && (
+                  <ErrorBoundary name="Defense">
+                    <Suspense fallback={<SectionLoading />}>
+                      <DefenseSection
+                        incomingImmunityCard={incomingImmunityCard}
+                        incomingAutopsyHash={incomingAutopsyHash}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <div className="app-section" hidden={activeSection !== "tools"}>
+                {visited.has("tools") && (
+                  <ErrorBoundary name="Tools">
+                    <Suspense fallback={<SectionLoading />}>
+                      <ToolsSection />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <div className="app-section" hidden={activeSection !== "studio"}>
+                {visited.has("studio") && (
+                  <ErrorBoundary name="Studio">
+                    <Suspense fallback={<SectionLoading />}>
+                      <StudioSection regions={state.regions} />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <div className="app-section" hidden={activeSection !== "neuro"}>
+                {visited.has("neuro") && (
+                  <ErrorBoundary name="Neuro & RAG">
+                    <Suspense fallback={<SectionLoading />}>
+                      <NeuroSection
+                        state={state}
+                        setState={setState}
+                        quality={quality}
+                        lastAffectDecode={lastAffectDecode}
+                        setAffectOverride={setAffectOverride}
+                        setLastAffectDecode={setLastAffectDecode}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <div className="app-section" hidden={activeSection !== "io"}>
+                {visited.has("io") && (
+                  <ErrorBoundary name="Share & I/O">
+                    <Suspense fallback={<SectionLoading />}>
+                      <IoSection
+                        state={state}
+                        trends={trends}
+                        firewallResult={firewallResult}
+                        setState={setState}
+                        gifOptions={gifOptions}
+                        setGifOptions={setGifOptions}
+                        exportProgress={exportProgress}
+                        exportStatus={exportStatus}
+                        timelineIndex={timelineIndex}
+                        setTimelineIndex={setTimelineIndex}
+                        eegStatus={eegStatus}
+                        setEegStatus={setEegStatus}
+                        setMode={setMode}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="lab-collapse"
+                onClick={() => setLabOpen(false)}
+              >
+                Collapse the lab ↑
+              </button>
+            </>
+          )}
         </section>
 
-        <InspectorPanel
-          state={state}
-          onSelect={(id) => setState((s) => ({ ...s, selected: id }))}
-          timelineFrame={timelineFrame}
-        />
+        {labOpen && (
+          <InspectorPanel
+            state={state}
+            onSelect={(id) => setState((s) => ({ ...s, selected: id }))}
+            timelineFrame={timelineFrame}
+          />
+        )}
       </main>
     </div>
   );

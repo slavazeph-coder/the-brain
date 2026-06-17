@@ -84,6 +84,64 @@ button {
   min-width: 0;
 }
 
+/* Scan-first landing: a single, narrower column (no inspector rail) so /app
+   reads like the focused friendly-designer tool until the lab is revealed. */
+.app-layout--focused {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1000px;
+}
+
+/* One calm disclosure standing in for the 8-tab nav + 35-layer wall. */
+.lab-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+.lab-reveal:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.lab-reveal strong {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.lab-reveal span {
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 60ch;
+}
+.lab-collapse {
+  align-self: center;
+  margin: 6px auto 4px;
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.lab-collapse:hover {
+  color: var(--text);
+  border-color: var(--primary);
+}
+
 .panel {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent),
@@ -4885,9 +4943,15 @@ h3 {
 
 /* ── UX overhaul: shared panel-flash ring (panelNav.flashPanel) ───── */
 @keyframes panelFlashRing {
-  0% { box-shadow: 0 0 0 3px rgba(90, 212, 255, 0.7); }
-  70% { box-shadow: 0 0 0 3px rgba(90, 212, 255, 0.45); }
-  100% { box-shadow: 0 0 0 3px rgba(90, 212, 255, 0); }
+  0% {
+    box-shadow: 0 0 0 3px rgba(90, 212, 255, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 3px rgba(90, 212, 255, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(90, 212, 255, 0);
+  }
 }
 .panel-flash {
   animation: panelFlashRing 1.4s ease forwards;
@@ -5006,7 +5070,8 @@ h3 {
 
 /* ── UX overhaul: glossary terms + intro card ────────────────────────── */
 .term {
-  text-decoration: underline dotted color-mix(in srgb, var(--primary) 55%, transparent);
+  text-decoration: underline dotted
+    color-mix(in srgb, var(--primary) 55%, transparent);
   text-underline-offset: 3px;
   cursor: help;
 }
@@ -5080,7 +5145,8 @@ button.region-link {
   color: inherit;
   cursor: pointer;
   text-align: left;
-  text-decoration: underline dotted color-mix(in srgb, var(--primary) 55%, transparent);
+  text-decoration: underline dotted
+    color-mix(in srgb, var(--primary) 55%, transparent);
   text-underline-offset: 3px;
 }
 button.region-link:hover {
