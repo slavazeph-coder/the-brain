@@ -1,8 +1,5 @@
 # Railway config for BrainSNN when the service deploys from the repository root.
 # The Dockerfile copies and builds brainsnn-r3f-app/, then serves it with Express.
-#
-# Redeploy trigger: 2026-06-18 — force a fresh Railway build/rollout of the
-# current main after the live site was reported unreachable. No code change.
 
 [build]
 builder = "DOCKERFILE"

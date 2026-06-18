@@ -11,7 +11,6 @@ What it is:
 - live 3D brain demo
 - viral toolkit for X / HN / Reddit
 - README preview and launch checklist
-- GitHub Pages workflow support
 
 Best for:
 - launch day
@@ -40,13 +39,14 @@ Best for:
 - `ui/brainsnn-site` = the public launch page
 - `ui/brainsnn-viewer` = the stronger in-product experience
 
-## Recommended next move after merge
+## Recommended next move
 
-1. Merge PR #1
-2. Turn on GitHub Pages for `ui/brainsnn-site`
-3. Replace placeholder media in the landing page
-4. Decide whether to deploy `ui/brainsnn-viewer` separately on Vercel
-5. Update the landing page later so its CTA points into the deployed viewer
+`ui/brainsnn-site` is built and served at `/` on Railway (brainsnn.com) by the
+root `Dockerfile`; the app is served under `/app`. From here:
+
+1. Replace placeholder media in the landing page
+2. Decide whether to deploy `ui/brainsnn-viewer` separately on Vercel
+3. Update the landing page later so its CTA points into the deployed viewer
 
 ## Why both matter
 

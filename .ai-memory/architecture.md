@@ -1,6 +1,6 @@
 ---
 type: project
-description: The Brain — workspace structure, OpenClaw setup, and submodules
+description: The Brain — repo structure and deployment
 ---
 
 # Architecture
@@ -8,52 +8,43 @@ description: The Brain — workspace structure, OpenClaw setup, and submodules
 ## Repo
 
 - GitHub: https://github.com/slavazeph-coder/the-brain (private)
-- Local: /Users/slavaz/openclaw-workspace/the-brain
-- VS Code: open `the-brain.code-workspace` for multi-root view
-- Type: collaborative AI workspace — no fixed stack yet, grows with tasks
+- VS Code: open `the-brain.code-workspace`
+- Type: collaborative AI workspace built around the BrainSNN 3D brain viewer
 
 ## Structure
 
 ```
 the-brain/
-├── agents/
-│   ├── awesome-openclaw-agents/   ← 177 agent templates (SOUL.md format)
-│   │   └── agents.json            ← machine-readable catalog
-│   └── openclaw-agents/           ← 9-agent orchestration system
-│       ├── setup.sh               ← one-command install
-│       └── agents.yaml            ← routing + definitions
-├── brainsnn-r3f-app/              ← 3D brain viewer + TRIBE v2
+├── brainsnn-r3f-app/              ← the deployable: 100+-layer 3D brain viewer
 │   ├── src/                       ← React 18 + R3F frontend
 │   │   └── components/brain/      ← Neural flow grid (shaders, FlowTube, PulseWave)
-│   ├── server/                    ← FastAPI + TRIBE v2 inference + region mapper
+│   ├── server/                    ← FastAPI + TRIBE v2 inference (optional backend)
+│   ├── mcp-server/                ← Node stdio MCP bridge for Claude Code / Codex
 │   └── package.json
 ├── ui/
-│   └── openclaw-office/           ← React 19 + Vite dashboard UI
-│       └── pnpm dev               ← starts dev server
+│   ├── brainsnn-site/             ← marketing landing page (served at / by Railway)
+│   └── brainsnn-viewer/           ← alternate product-style viewer
+├── xio_evolve/                    ← XIO-Evolve Learn→Design→Experiment→Analyze pipeline
+├── docs/screenshots/              ← panel shots + demo GIF used by the README
+├── Dockerfile                     ← Railway image: builds brainsnn-site (/) + app (/app)
+├── railway.toml                   ← Railway build/deploy config
 ├── .ai-memory/                    ← shared AI context (tracked in git)
 ├── .claude/CLAUDE.md              ← wires Claude to .ai-memory/
 ├── AGENTS.md                      ← wires Codex to .ai-memory/
-└── the-brain.code-workspace       ← VS Code multi-root workspace
+└── the-brain.code-workspace       ← VS Code workspace
 ```
 
-## Submodules
+## Deployment
 
-All three external repos are git submodules — update with:
-
-```bash
-git submodule update --remote
-```
-
-## OpenClaw
-
-- Binary: /opt/homebrew/bin/openclaw (v2026.3.11)
-- State: ~/.openclaw/
-- Config: ~/.openclaw/openclaw.json
-- Gateway: ws://127.0.0.1:18789 (launchd service)
-- Logs: ~/.openclaw/logs/gateway.log
+- brainsnn.com is served by **Railway** from the repo-root `Dockerfile`:
+  the marketing site (`ui/brainsnn-site`) is served at `/`, and the app
+  (`brainsnn-r3f-app`) under `/app`.
+- CI/CD: `.github/workflows/brainsnn-app-deploy.yml` runs test → smoke →
+  deploy, then healthchecks the live service. Railway also auto-deploys
+  pushes to `main` (gated by "Wait for CI").
 
 ## AI Wiring
 
 - Claude: reads `.claude/CLAUDE.md` → `.ai-memory/MEMORY.md`
 - Codex: reads `AGENTS.md` → `.ai-memory/MEMORY.md`
-- VS Code tasks embedded in `the-brain.code-workspace` (OpenClaw + AI tasks)
+- VS Code AI tasks embedded in `the-brain.code-workspace`

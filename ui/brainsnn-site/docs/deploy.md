@@ -1,37 +1,30 @@
-# Deploy BrainSNN
+# Deploy BrainSNN site
 
-## GitHub Pages
+The marketing site (`ui/brainsnn-site`) ships as part of the **Railway**
+deployment that backs brainsnn.com. The repo-root `Dockerfile` builds this
+site and serves its `dist/` at `/`, while the 3D app (`brainsnn-r3f-app`) is
+served under `/app`. Pushing to `main` triggers the Railway build/deploy —
+no separate Pages step is required.
 
-A workflow is included at:
+## Build it standalone
 
-- `.github/workflows/brainsnn-site-pages.yml`
+```bash
+cd ui/brainsnn-site
+npm install
+npm run build      # → dist/
+```
 
-### First-time setup
+## Vercel (optional alternative)
 
-1. Open **Settings → Pages** in the repository.
-2. Set **Source** to **GitHub Actions**.
-3. Merge the `feat/brainsnn-launch-site` branch into `main`.
-4. The workflow will build `ui/brainsnn-site` and publish `dist/` automatically.
-
-### Notes
-
-- The app already uses `base: "./"` in Vite, which keeps asset URLs safe for GitHub Pages.
-- After the first successful deploy, update `src/constants/site.js` so `SITE.demoUrl` matches the actual live Pages URL.
-- Replace the placeholder assets in `public/` before launch day.
-
-## Vercel
-
-If you prefer Vercel:
+If you prefer to host this site on its own:
 
 - Root Directory: `ui/brainsnn-site`
 - Build Command: `npm run build`
 - Output Directory: `dist`
 
-## Recommended launch order
+## Notes
 
-1. Merge the PR
-2. Turn on Pages
-3. Wait for the first deploy
-4. Update `SITE.demoUrl`
-5. Replace placeholder media with a real GIF / clip
-6. Launch with the toolkit copy in the site
+- The app uses `base: "./"` in Vite, which keeps asset URLs portable across hosts.
+- Replace the placeholder assets in `public/` before launch day.
+- If you host the site at its own URL, update `src/constants/site.js` so
+  `SITE.demoUrl` points at the live app.

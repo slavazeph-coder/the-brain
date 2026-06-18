@@ -200,9 +200,8 @@ the-brain/
 │   ├── mcp-server/            ← Node stdio MCP bridge for Claude Code / Codex
 │   └── .env.example           ← all 4 optional env vars documented
 ├── ui/
-│   ├── brainsnn-site/         ← marketing landing page (GitHub Pages)
+│   ├── brainsnn-site/         ← marketing landing page (served at / by Railway)
 │   └── brainsnn-viewer/       ← alternate product-style viewer
-├── agents/                    ← OpenClaw agent library (177 templates + 9-agent system)
 ├── xio_evolve/                ← XIO-Evolve Learn→Design→Experiment→Analyze pipeline
 ├── docs/
 │   ├── screenshots/           ← 12 panel shots + demo GIF (used by this README)
