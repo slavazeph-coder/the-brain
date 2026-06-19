@@ -47,8 +47,9 @@ Railway's native GitHub integration has historically been configured with
 Directory to the repo root or disable native auto-deploy and let this GitHub
 Actions workflow deploy. As a guardrail, the app build also carries a checked-in
 marketing fallback at `brainsnn-r3f-app/public/site-dist`; Vite copies that to
-`dist/site-dist`, and `server.js` serves it at `/` if the repo-root build did
-not provide `site-dist`.
+`dist/site-dist`, and `server.js` checks both locations before falling back to a
+small inline homepage. This keeps `/` user-friendly even if Railway insists on
+the app-root Dockerfile.
 
 The health check verifies `/healthz`, `/app/favicon.svg`, `/social-preview.svg`,
 and the actual homepage marker `BrainSNN - Live Affective Intelligence` so a
