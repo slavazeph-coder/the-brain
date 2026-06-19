@@ -187,22 +187,32 @@ jobs:
           # Static homepage asset with copy from ui/brainsnn-site. This proves
           # marketing-site-only changes deployed too.
           SITE_PREVIEW_URL: ${{ vars.BRAINSNN_SITE_PREVIEW_URL || 'https://www.brainsnn.com/social-preview.svg' }}
+          # The actual homepage must be the marketing site, not the app-shell
+          # fallback. This catches Railway builds that stay rooted at
+          # brainsnn-r3f-app and silently skip the repo-root Dockerfile.
+          SITE_HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
         run: |
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             version="$(curl -L -s -o /dev/null -w '%{http_code}' "$VERSION_URL" || true)"
             preview="$(curl -L -s -o /tmp/brainsnn-social-preview.svg -w '%{http_code}' "$SITE_PREVIEW_URL" || true)"
+            home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$SITE_HOME_URL" || true)"
             if [ "$preview" = "200" ] && grep -Fq "See the emotions" /tmp/brainsnn-social-preview.svg; then
               site_marker="ok"
             else
               site_marker="missing"
             fi
-            echo "attempt $i → healthz $health, app marker $version, site marker $preview/$site_marker"
-            if [ "$health" = "200" ] && [ "$version" = "200" ] && [ "$site_marker" = "ok" ]; then
+            if [ "$home" = "200" ] && grep -Fq "BrainSNN - Live Affective Intelligence" /tmp/brainsnn-home.html; then
+              home_marker="ok"
+            else
+              home_marker="missing"
+            fi
+            echo "attempt $i → healthz $health, app marker $version, preview marker $preview/$site_marker, home marker $home/$home_marker"
+            if [ "$health" = "200" ] && [ "$version" = "200" ] && [ "$site_marker" = "ok" ] && [ "$home_marker" = "ok" ]; then
               echo "Live service is healthy and serving the current app + homepage build."
               exit 0
             fi
             sleep 20
           done
-          echo "Service never became healthy on the current build ($HEALTH_URL / $VERSION_URL / $SITE_PREVIEW_URL)" >&2
+          echo "Service never became healthy on the current build ($HEALTH_URL / $VERSION_URL / $SITE_PREVIEW_URL / $SITE_HOME_URL)" >&2
           exit 1
