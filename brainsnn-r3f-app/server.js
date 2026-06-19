@@ -22,7 +22,7 @@ import express from "express";
 import compression from "compression";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { renderOg } from "./viral/og.js";
 import { renderSocialOg, handleSocialPostCard } from "./viral/social-card.js";
@@ -68,12 +68,20 @@ const SITE_DIST_CANDIDATES = [
   join(__dirname, "site-dist"),
   join(__dirname, "..", "ui", "brainsnn-site", "dist"),
 ];
+const SITE_READY_MARKER = "Paste a post. Watch the brain react.";
+function hasCurrentHomepage(candidate) {
+  const indexPath = join(candidate, "index.html");
+  if (!existsSync(indexPath)) return false;
+  try {
+    return readFileSync(indexPath, "utf8").includes(SITE_READY_MARKER);
+  } catch {
+    return false;
+  }
+}
 const SITE_DIST =
-  SITE_DIST_CANDIDATES.find((candidate) =>
-    existsSync(join(candidate, "index.html")),
-  ) ??
+  SITE_DIST_CANDIDATES.find((candidate) => hasCurrentHomepage(candidate)) ??
   SITE_DIST_CANDIDATES[0];
-const HAS_SITE_DIST = existsSync(join(SITE_DIST, "index.html"));
+const HAS_SITE_DIST = hasCurrentHomepage(SITE_DIST);
 
 const SITE_HOME_FALLBACK = `<!doctype html>
 <html lang="en">
