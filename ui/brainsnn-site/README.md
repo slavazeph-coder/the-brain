@@ -4,15 +4,15 @@
 ![React Three Fiber](https://img.shields.io/badge/React%20Three%20Fiber-R3F-black)
 ![Three.js](https://img.shields.io/badge/Three.js-3D-informational)
 
-**BrainSNN reads the feed back.**
+**BrainSNN shows the emotions AI cannot see.**
 
-This package is the public BrainSNN.com marketing site. It explains the product in plain English: social feeds learn what keeps people watching; BrainSNN shows what posts, ads, and narratives are trying to make people feel, believe, and do.
+This package is the public BrainSNN.com marketing site. It explains the product in plain English: BrainSNN uses Crumb LLM and spiking-neural analysis to show what posts, ads, videos, and narratives are trying to make people feel, believe, and do.
 
-The page points visitors to the working scanner at `https://brainsnn.com/app`, while the embedded React Three Fiber brain keeps the deeper personal-AI infrastructure visible.
+The page points visitors to the working scanner at `https://www.brainsnn.com/app`, while the embedded React Three Fiber brain previews the live affective scan.
 
-No backprop.  
-No retraining.  
-No account required for the core scanner.
+Crumb LLM wave processing.  
+Spiking neural affect map.  
+Evidence-first scanner output.
 
 ## Quick start
 
@@ -34,9 +34,10 @@ npm run preview
 ## What is inside
 
 - Public launch page for BrainSNN.com
-- Feed mirror section inspired by short-form social product positioning
-- Clear CTA into the scanner at `https://brainsnn.com/app`
-- Live 3D R3F brain graph with STDP-like weight updates
+- Live demo hub with preloaded social/ad/news scan examples
+- Clear CTA into the scanner at `https://www.brainsnn.com/app`
+- Live 3D R3F brain graph with scan-driven affect coloring
+- Research links to Crumb LLM and GaugeGap Foundry
 - Browser-first build with no backend required
 
 ## Deploy

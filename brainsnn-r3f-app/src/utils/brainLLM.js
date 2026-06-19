@@ -2,12 +2,12 @@
  * brainLLM — the single backend-LLM entry point for the main page scan flow.
  *
  * Backend is swappable WITHOUT touching call sites:
- *   1. Crumb LLM   — if VITE_CRUMB_LLM_URL is set, POST the content there.
- *                    (The physics-based O(N log N) model — host it on a GPU
- *                    endpoint and point this env var at it. Not on Railway.)
- *   2. Gemini      — via scoreContentSmart() when VITE_GEMINI_API_KEY is set.
- *   3. Gemma       — next fallback inside scoreContentSmart().
- *   4. Regex       — local Cognitive Firewall, always available, zero config.
+ *   1. Server score — /api/score, which can prefer server-side Crumb LLM,
+ *                     then Gemini, then regex without exposing secrets.
+ *   2. Crumb LLM    — direct VITE_CRUMB_LLM_URL dev path only. Do not put a
+ *                     privileged token in VITE_CRUMB_LLM_KEY.
+ *   3. Gemini/Gemma — via scoreContentSmart() when client env is configured.
+ *   4. Regex        — local Cognitive Firewall, always available, zero config.
  *
  * Every backend resolves to the SAME score shape so the brain mapping
  * (mapTRIBEToRegions) and the hero UI never change:
@@ -39,7 +39,7 @@ const SERVER_SCORING = /^(1|true|on|yes)$/i.test(
 const SERVER_SCORE_TIMEOUT_MS = 14000;
 
 export function activeBackendLabel() {
-  if (SERVER_SCORING) return "Server AI";
+  if (SERVER_SCORING) return "Server scoring";
   if (CRUMB_LLM_URL) return "Crumb LLM";
   // These read import.meta.env at module load in their own files; mirror here.
   if (import.meta.env.VITE_GEMINI_API_KEY) return "Gemini";

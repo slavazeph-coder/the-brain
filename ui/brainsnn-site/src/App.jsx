@@ -12,16 +12,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   BRAIN_REGIONS,
+  CRUMB_PIPELINE,
+  EMOTION_LAYERS,
   FEED_MIRROR_STEPS,
   FEED_PAYLOAD_SIGNALS,
-  IMPACT_SIGNALS,
+  LIVE_SCAN_EXAMPLES,
   PATHWAYS,
   PILOT_CHECKLIST,
   PRODUCT_WORKFLOW,
+  RESEARCH_CARDS,
   REGION_LONG_NAMES,
   ROADMAP_CARDS,
   SITE,
-  SOCIAL_PREVIEW_COPY,
   TRUST_CARDS,
   USE_CASES,
   YOUR_STACK,
@@ -218,7 +220,7 @@ function BrainEdges({ weights, selectedRegion }) {
         const isSelected =
           selectedRegion &&
           (selectedRegion === pathway.from || selectedRegion === pathway.to);
-        const lineColor = pathway.inhibitory ? "#d86e78" : "#5fb7c1";
+        const lineColor = pathway.inhibitory ? "#fb7185" : "#00f5ff";
 
         return (
           <Line
@@ -272,7 +274,7 @@ function Particle({ pathway, activities, selectedRegion }) {
     <mesh ref={meshRef} visible={active}>
       <sphereGeometry args={[0.06, 18, 18]} />
       <meshBasicMaterial
-        color={pathway.inhibitory ? "#d86e78" : "#efe9e1"}
+        color={pathway.inhibitory ? "#fb7185" : "#f8fafc"}
         transparent
         opacity={0.8}
       />
@@ -339,11 +341,11 @@ function BrainScene({ simulation, onClearSelection }) {
 
   return (
     <Canvas camera={{ position: [6.8, 4.4, 8.2], fov: 42 }}>
-      <color attach="background" args={["#050505"]} />
-      <fog attach="fog" args={["#050505", 10, 20]} />
+      <color attach="background" args={["#050713"]} />
+      <fog attach="fog" args={["#050713", 10, 20]} />
       <ambientLight intensity={0.9} />
-      <pointLight position={[4, 6, 4]} intensity={45} color="#8ee6ef" />
-      <pointLight position={[-4, -3, 6]} intensity={18} color="#d8ab3a" />
+      <pointLight position={[4, 6, 4]} intensity={48} color="#00f5ff" />
+      <pointLight position={[-4, -3, 6]} intensity={20} color="#a855f7" />
 
       <group onClick={onClearSelection}>
         <BrainEdges
@@ -357,7 +359,10 @@ function BrainScene({ simulation, onClearSelection }) {
         {BRAIN_REGIONS.map((region) => (
           <BrainNode
             key={region.code}
-            region={region}
+            region={{
+              ...region,
+              color: simulation.colors?.[region.code] || region.color,
+            }}
             activity={simulation.activities[region.code]}
             spiking={simulation.spikes[region.code]}
             selected={simulation.selectedRegion === region.code}
@@ -394,6 +399,176 @@ function SignalCard({ label, value, detail }) {
         {detail}
       </p>
     </div>
+  );
+}
+
+function PipelineStrip({ activeIndex }) {
+  return (
+    <div className="pipeline-strip" aria-label="BrainSNN analysis pipeline">
+      {CRUMB_PIPELINE.map((step, index) => (
+        <div
+          className={`pipeline-step ${index === activeIndex ? "active" : ""}`}
+          key={step.label}
+        >
+          <span>{String(index + 1).padStart(2, "0")}</span>
+          <strong>{step.label}</strong>
+          <p>{step.detail}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmotionBars({ example }) {
+  return (
+    <div className="emotion-grid" aria-label="Detected affect heatmap">
+      {example.affects.map(([label, value]) => {
+        const swatch = EMOTION_LAYERS.find(([name]) =>
+          label.toLowerCase().includes(name.toLowerCase()),
+        )?.[1];
+        return (
+          <div className="emotion-row" key={label}>
+            <div className="emotion-row-head">
+              <span>
+                <i style={{ background: swatch || "#00f5ff" }} />
+                {label}
+              </span>
+              <strong>{value}%</strong>
+            </div>
+            <div className="emotion-meter">
+              <span
+                style={{
+                  width: `${value}%`,
+                  background: swatch || "#00f5ff",
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScanTimeline({ values = [] }) {
+  if (!values.length) return null;
+  const points = values
+    .map((value, index) => {
+      const x = (index / Math.max(values.length - 1, 1)) * 100;
+      const y = 100 - value;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg
+      className="scan-timeline"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Attention curve"
+    >
+      <polyline points={points} />
+    </svg>
+  );
+}
+
+function LiveScanCard({ example, phase, phaseIndex, onNext }) {
+  return (
+    <aside className="hero-scan-card" aria-label="Live BrainSNN scan preview">
+      <div className="scan-card-head">
+        <span>Live affective scan</span>
+        <strong>{phase.label}</strong>
+      </div>
+      <div className="scan-card-video" aria-hidden="true">
+        <div className="scan-card-frame">
+          <span>{example.label}</span>
+          <p>{example.sample}</p>
+        </div>
+        <div className="scan-card-overlay">
+          <span>Crumb LLM</span>
+          <span>SNN spikes</span>
+          <span>Brain view</span>
+        </div>
+      </div>
+      <PipelineStrip activeIndex={phaseIndex} />
+      <div className="scan-card-metrics">
+        {example.metrics.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{value}%</strong>
+          </div>
+        ))}
+      </div>
+      <ScanTimeline values={example.timeline} />
+      <p className="scan-card-verdict">{example.verdict}</p>
+      <button
+        type="button"
+        className="button button-secondary button-small"
+        onClick={onNext}
+      >
+        Cycle sample
+      </button>
+    </aside>
+  );
+}
+
+function DemoControlPanel({ activeIndex, onSelectExample, example }) {
+  return (
+    <div className="demo-copy-panel">
+      <span className="section-tag">Live demo hub</span>
+      <h3>Paste content, watch the brain light up, then share the scan.</h3>
+      <p>
+        The homepage demo uses preloaded scans so it never feels broken. The
+        full app at /app keeps the real URL/text scanner, multimodal hooks, and
+        share-card pipeline.
+      </p>
+      <div className="demo-example-list">
+        {LIVE_SCAN_EXAMPLES.map((item, index) => (
+          <button
+            type="button"
+            className={`demo-example-button ${
+              index === activeIndex ? "active" : ""
+            }`}
+            key={item.label}
+            onClick={() => onSelectExample(index)}
+          >
+            <span>{item.label}</span>
+            <strong>{item.title}</strong>
+          </button>
+        ))}
+      </div>
+      <EmotionBars example={example} />
+    </div>
+  );
+}
+
+function ResearchSection() {
+  return (
+    <section className="section section-surface" id="research">
+      <div className="shell">
+        <SectionIntro
+          eyebrow="Technology and research"
+          title="Crumb LLM powers the scan. GaugeGap keeps the research honest."
+          body="BrainSNN presents deep tech in product language, with links to the underlying research surfaces for people who want to inspect the machinery."
+        />
+        <div className="research-link-grid">
+          {RESEARCH_CARDS.map((card) => (
+            <a
+              className="research-card"
+              key={card.title}
+              href={card.href}
+              target={card.href.startsWith("http") ? "_blank" : undefined}
+              rel={card.href.startsWith("http") ? "noreferrer" : undefined}
+            >
+              <span>{card.label}</span>
+              <h3>{card.title}</h3>
+              <p>{card.body}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -518,10 +693,52 @@ function PilotCard() {
 
 export default function App() {
   const { state, controls } = useBrainSimulation();
+  const [activeScanIndex, setActiveScanIndex] = useState(0);
+  const [scanPhaseIndex, setScanPhaseIndex] = useState(0);
   const stars = useGitHubStars(SITE.repoUrl);
+  const activeScan = LIVE_SCAN_EXAMPLES[activeScanIndex];
+  const activePhase = CRUMB_PIPELINE[scanPhaseIndex];
+  const demoActivities = useMemo(() => {
+    const intensity = activePhase?.intensity ?? 0.6;
+    return Object.fromEntries(
+      BRAIN_REGIONS.map((region) => {
+        const liveBase = state.activities[region.code] || region.baseActivity;
+        const boost = activeScan.regionBoosts?.[region.code] || 0;
+        const value = Math.min(
+          1,
+          liveBase * 0.42 + region.baseActivity * 0.28 + boost * intensity,
+        );
+        return [region.code, value];
+      }),
+    );
+  }, [activePhase, activeScan, state.activities]);
   const selectedRegionName = state.selectedRegion
     ? REGION_LONG_NAMES[state.selectedRegion]
     : "None";
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setScanPhaseIndex((index) => (index + 1) % CRUMB_PIPELINE.length);
+    }, 2200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const selectScanExample = (index) => {
+    setActiveScanIndex(index);
+    setScanPhaseIndex(0);
+    controls.triggerBurst();
+  };
+
+  const cycleScanExample = () => {
+    selectScanExample((activeScanIndex + 1) % LIVE_SCAN_EXAMPLES.length);
+  };
+
+  const demoSimulation = {
+    ...state,
+    activities: demoActivities,
+    colors: activeScan.regionColors,
+    selectRegion: controls.selectRegion,
+  };
 
   return (
     <div className="app-shell">
@@ -534,11 +751,11 @@ export default function App() {
             <span>{SITE.name}</span>
           </a>
           <nav className="nav-links" aria-label="Primary">
-            <a href="#stack">Your stack</a>
+            <a href="#demo">Live demo</a>
             <a href="#product">Product</a>
-            <a href="#feed-mirror">Feed mirror</a>
-            <a href="#demo">Demo</a>
+            <a href="#workflow">How it works</a>
             <a href="#use-cases">Use cases</a>
+            <a href="#research">Research</a>
             <a href="#pilot">Pilot</a>
             <a
               className="button button-primary button-small"
@@ -570,63 +787,51 @@ export default function App() {
                   rel="noreferrer"
                   className="button button-primary"
                 >
-                  Scan a post
-                </a>
-                <a href="#feed-mirror" className="button button-secondary">
-                  See the feed mirror
+                  Try live demo
                 </a>
                 <a href="#demo" className="button button-secondary">
-                  Watch the brain
+                  Watch the brain scan
+                </a>
+                <a href="/crumb-llm" className="button button-secondary">
+                  Crumb LLM
                 </a>
                 <a
-                  href={SITE.repoUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                  href="#research"
                   className="button button-secondary"
                 >
-                  GitHub
+                  Research
                 </a>
               </div>
               <dl className="stats-row" aria-label="Product signals">
                 <SignalCard
-                  label="Compute"
-                  value="Yours"
-                  detail="Runs client-side. No account, no API key, no server for the core."
+                  label="Pipeline"
+                  value="Crumb"
+                  detail="Wave-field LLM pass feeds the affective scan."
                 />
                 <SignalCard
-                  label="Agents"
-                  value="MCP"
-                  detail="14 tools bridged so Claude/Codex can read and steer the brain."
+                  label="Signals"
+                  value="4D"
+                  detail="Emotion, cognition, pressure, and trust risk."
                 />
                 <SignalCard
-                  label="Layers"
-                  value="100"
-                  detail="Firewall, decoder, knowledge brain, dream mode, and more."
+                  label="Demo"
+                  value="Live"
+                  detail="3D brain, heatmap, timeline, and share path."
                 />
                 <SignalCard
                   label="Repo"
                   value={stars ?? "—"}
-                  detail="Open-source foundation with a product-grade surface."
+                  detail="Open-source foundation behind the public product."
                 />
               </dl>
             </div>
             <div className="hero-side">
-              <div className="hero-panel">
-                <div className="hero-panel-header">
-                  <span>What BrainSNN detects</span>
-                </div>
-                <ul className="signal-list">
-                  {IMPACT_SIGNALS.map((signal) => (
-                    <li key={signal}>{signal}</li>
-                  ))}
-                </ul>
-                <div className="mini-quote">“{SOCIAL_PREVIEW_COPY.hook}”</div>
-                <div className="badge-row" style={{ marginTop: 16 }}>
-                  <span className="mini-badge">Brand safety</span>
-                  <span className="mini-badge">Persuasion patterns</span>
-                  <span className="mini-badge">Public perception</span>
-                </div>
-              </div>
+              <LiveScanCard
+                example={activeScan}
+                phase={activePhase}
+                phaseIndex={scanPhaseIndex}
+                onNext={cycleScanExample}
+              />
             </div>
           </div>
         </section>
@@ -635,8 +840,8 @@ export default function App() {
           <div className="shell">
             <SectionIntro
               eyebrow="Your stack"
-              title="Your browser becomes the counter-feed."
-              body="No account, no API key, no vendor between you and your own cognition. BrainSNN scans the emotional payload locally, then gives your agents a readable cognitive layer they can use."
+              title="Affective intelligence that users can actually read."
+              body="BrainSNN keeps the first experience simple: scan content, see the feeling, inspect the evidence, and open the deeper cognitive engine only when you need it."
             />
             <div className="card-grid six-up">
               {YOUR_STACK.map((card) => (
@@ -655,9 +860,9 @@ export default function App() {
         <section className="section" id="product">
           <div className="shell">
             <SectionIntro
-              eyebrow="Proof of power"
-              title="The manipulation scanner is the demo. Owning your cognition is the point."
-              body="BrainSNN turns invisible emotional pressure into a readable product layer: payload, evidence, risk, behavior pressure, and safer rewrite direction — all computed on hardware you control."
+              eyebrow="Product"
+              title="Most AI reads sentiment. BrainSNN reads the payload."
+              body="The scanner combines emotional activation, cognitive suppression, manipulation pressure, and trust erosion into a result that teams can act on before publishing."
             />
             <div className="card-grid six-up">
               {TRUST_CARDS.map((card) => (
@@ -679,66 +884,70 @@ export default function App() {
           <div className="shell">
             <SectionIntro
               eyebrow="Live intelligence layer"
-              title="A brain-like interface, running where your data already lives."
-              body="Orbit the model, trigger a burst, and watch the affective system stay alive — the same browser-native engine that powers the full 100-layer brain."
+              title="The brain scan is the product."
+              body="Choose a sample, watch Crumb LLM move through the pipeline, and see the SNN surface the hidden emotional payload as heat, spikes, and attention curves."
               centered
             />
-            <div className="demo-shell">
-              <div className="demo-hud top">
-                <span className="hud-chip">Tick {state.tick}</span>
-                <span className="hud-chip">
-                  Mean firing {state.meanFiring.toFixed(3)}
-                </span>
-                <span className="hud-chip">
-                  Plasticity {state.plasticity.toFixed(3)}
-                </span>
-                <span className="hud-chip">Selected {selectedRegionName}</span>
-              </div>
-              <div className="demo-canvas">
-                <BrainScene
-                  simulation={{ ...state, selectRegion: controls.selectRegion }}
-                  onClearSelection={controls.clearSelection}
-                />
-              </div>
-              <div className="demo-hud bottom">
-                <div className="chart-chip">
-                  <span>Signal</span>
-                  <ActivityMiniChart history={state.history} />
+            <div className="demo-layout">
+              <DemoControlPanel
+                activeIndex={activeScanIndex}
+                onSelectExample={selectScanExample}
+                example={activeScan}
+              />
+              <div className="demo-shell">
+                <div className="demo-hud top">
+                  <span className="hud-chip">Phase {activePhase.label}</span>
+                  <span className="hud-chip">
+                    Mean firing {state.meanFiring.toFixed(3)}
+                  </span>
+                  <span className="hud-chip">Selected {selectedRegionName}</span>
                 </div>
-                <div
-                  className="demo-actions"
-                  role="group"
-                  aria-label="Simulation controls"
-                >
-                  <button
-                    type="button"
-                    className={`button button-hud ${state.running ? "active" : ""}`}
-                    onClick={controls.toggleRunning}
+                <div className="demo-canvas">
+                  <BrainScene
+                    simulation={demoSimulation}
+                    onClearSelection={controls.clearSelection}
+                  />
+                </div>
+                <div className="demo-hud bottom">
+                  <div className="chart-chip">
+                    <span>{activeScan.label}</span>
+                    <ActivityMiniChart history={state.history} />
+                  </div>
+                  <div
+                    className="demo-actions"
+                    role="group"
+                    aria-label="Simulation controls"
                   >
-                    {state.running ? "Pause" : "Resume"}
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-hud"
-                    onClick={controls.triggerBurst}
-                  >
-                    Trigger affect burst
-                  </button>
-                  <button
-                    type="button"
-                    className="button button-hud"
-                    onClick={controls.reset}
-                  >
-                    Reset
-                  </button>
-                  <a
-                    className="button button-primary"
-                    href={SITE.demoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open scanner
-                  </a>
+                    <button
+                      type="button"
+                      className={`button button-hud ${state.running ? "active" : ""}`}
+                      onClick={controls.toggleRunning}
+                    >
+                      {state.running ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-hud"
+                      onClick={controls.triggerBurst}
+                    >
+                      Trigger spike
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-hud"
+                      onClick={controls.reset}
+                    >
+                      Reset
+                    </button>
+                    <a
+                      className="button button-primary"
+                      href={SITE.demoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open scanner
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -748,9 +957,9 @@ export default function App() {
         <section className="section" id="workflow">
           <div className="shell">
             <SectionIntro
-              eyebrow="Workflow"
-              title="From raw content to risk-aware rewrite."
-              body="The first wedge stays simple enough to sell: paste content, decode the payload, show the evidence, and give teams a safer way to publish."
+              eyebrow="How it works"
+              title="From raw content to a shareable brain scan."
+              body="The full path stays understandable: input content, process with Crumb LLM, convert the signal into spiking neural activity, and return evidence a human can use."
             />
             <div className="two-column">
               <WorkflowSteps />
@@ -815,6 +1024,8 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        <ResearchSection />
 
         <section className="section" id="pilot">
           <div className="shell">

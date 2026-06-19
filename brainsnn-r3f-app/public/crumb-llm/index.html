@@ -6,11 +6,11 @@
     <title>Crumb LLM — Physics-based language model (O(N log N))</title>
     <meta
       name="description"
-      content="A physics-based language model. Wave-equation mixing replaces quadratic attention: O(N log N) cost, fixed field-cache, structure-aware. Research preview from XIO AI Solutions."
+      content="A physics-based language model. Wave-equation mixing replaces quadratic attention: O(N log N) cost, fixed field-cache, structure-aware. Standalone Crumb LLM research preview from XIO AI Solutions."
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="BrainSNN" />
-    <meta property="og:url" content="https://brainsnn.com/crumb-llm" />
+    <meta property="og:url" content="https://www.brainsnn.com/crumb-llm" />
     <meta
       property="og:title"
       content="Crumb LLM — what if attention was a wave?"
@@ -21,7 +21,7 @@
     />
     <meta
       property="og:image"
-      content="https://brainsnn.com/api/og?title=Crumb+LLM&subtitle=Physics-based+language+model"
+      content="https://www.brainsnn.com/api/og?title=Crumb+LLM&subtitle=Physics-based+language+model"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
@@ -34,16 +34,16 @@
     />
     <meta
       name="twitter:image"
-      content="https://brainsnn.com/api/og?title=Crumb+LLM&subtitle=Physics-based+language+model"
+      content="https://www.brainsnn.com/api/og?title=Crumb+LLM&subtitle=Physics-based+language+model"
     />
-    <link rel="canonical" href="https://brainsnn.com/crumb-llm" />
+    <link rel="canonical" href="https://www.brainsnn.com/crumb-llm" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "TechArticle",
         "headline": "Crumb LLM — a physics-based language model",
         "description": "Wave-equation mixing replaces quadratic attention: O(N log N) cost, fixed field-cache, structure-aware.",
-        "url": "https://brainsnn.com/crumb-llm",
+        "url": "https://www.brainsnn.com/crumb-llm",
         "author": {
           "@type": "Organization",
           "name": "XIO AI Solutions",
@@ -52,7 +52,7 @@
         "publisher": {
           "@type": "Organization",
           "name": "BrainSNN",
-          "url": "https://brainsnn.com"
+          "url": "https://www.brainsnn.com"
         }
       }
     </script>
@@ -65,8 +65,8 @@
         <a href="/" class="back">&larr; Back to BrainSNN</a>
         <h1><span>Crumb</span> LLM</h1>
         <p class="tagline">
-          A new kind of language model. Physics-based. O(N&nbsp;log&nbsp;N).
-          Structure-aware.
+          A standalone physics-based language model for long-context,
+          structure-aware analysis.
         </p>
         <p class="plain">
           <strong>In plain terms:</strong> instead of comparing every word to
@@ -318,9 +318,10 @@ Output logits</pre
           architecture and benchmark results on structured CRUMB text with small
           models. The production multi-tenant inference server
           (<code>crumb_llm.serve</code>) targets GPU hosting and is deployed
-          separately from this site — it is not served from brainsnn.com. The
-          reference implementation ships inside the open-source
-          <code>crumb-format</code> package.
+          separately from this site. BrainSNN can call it through a server-side
+          scorer so Crumb credentials never enter the browser. The standalone
+          package direction is <code>crumb-llm</code>; <code>crumb-format</code>
+          remains useful for CRUMB parser priors, adapters, and indexing.
         </p>
       </div>
 
@@ -328,7 +329,8 @@ Output logits</pre
       <section>
         <h2>Explore the code</h2>
         <p class="section-sub">
-          Crumb LLM ships inside the open-source crumb-format package (MIT).
+          Crumb LLM is moving as a standalone package and CLI; crumb-format
+          remains the open-source CRUMB structure layer.
         </p>
         <div class="cta-row">
           <a class="btn primary" href="/crumb-llm/playground"
@@ -361,9 +363,9 @@ Output logits</pre
         <p>
           Crumb LLM &middot; part of
           <a href="https://github.com/XioAISolutions/crumb-format"
-            >crumb-format</a
+            >the CRUMB research stack</a
           >
-          &middot; <a href="https://brainsnn.com">BrainSNN</a> &middot;
+          &middot; <a href="https://www.brainsnn.com">BrainSNN</a> &middot;
           <a href="https://xioai.co">XIO AI Solutions</a>
         </p>
       </footer>

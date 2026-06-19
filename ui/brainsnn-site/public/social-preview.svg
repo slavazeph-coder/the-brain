@@ -1,42 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#0b0a09"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">BrainSNN - Live Affective Intelligence</title>
+  <desc id="desc">A glowing 3D brain scan preview for BrainSNN.</desc>
+  <rect width="1200" height="630" fill="#0a0a0f"/>
   <defs>
-    <radialGradient id="g1" cx="30%" cy="30%" r="45%">
-      <stop offset="0%" stop-color="#5fb7c1" stop-opacity="0.26"/>
-      <stop offset="100%" stop-color="#5fb7c1" stop-opacity="0"/>
+    <radialGradient id="cyan" cx="75%" cy="30%" r="42%">
+      <stop offset="0%" stop-color="#00f5ff" stop-opacity="0.36"/>
+      <stop offset="100%" stop-color="#00f5ff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="g2" cx="72%" cy="30%" r="42%">
-      <stop offset="0%" stop-color="#d86e78" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#d86e78" stop-opacity="0"/>
+    <radialGradient id="purple" cx="90%" cy="76%" r="36%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="g3" cx="64%" cy="75%" r="35%">
-      <stop offset="0%" stop-color="#d8ab3a" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#d8ab3a" stop-opacity="0"/>
+    <radialGradient id="risk" cx="65%" cy="58%" r="32%">
+      <stop offset="0%" stop-color="#fb7185" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="1200" height="630" fill="url(#g1)"/>
-  <rect width="1200" height="630" fill="url(#g2)"/>
-  <rect width="1200" height="630" fill="url(#g3)"/>
-  <g stroke="#5fb7c1" stroke-opacity="0.32" stroke-width="4" fill="none">
-    <path d="M720 166 C 815 128, 942 168, 1030 124"/>
-    <path d="M690 262 C 790 224, 884 282, 1006 258"/>
-    <path d="M734 354 C 842 390, 940 340, 1064 414"/>
-    <path d="M698 440 C 800 480, 920 470, 1036 518"/>
+  <rect width="1200" height="630" fill="url(#cyan)"/>
+  <rect width="1200" height="630" fill="url(#purple)"/>
+  <rect width="1200" height="630" fill="url(#risk)"/>
+  <g stroke="#00f5ff" stroke-opacity="0.36" stroke-width="4" fill="none">
+    <path d="M704 154 C 804 96, 942 152, 1030 112"/>
+    <path d="M668 250 C 786 208, 900 280, 1036 246"/>
+    <path d="M694 344 C 812 410, 944 328, 1082 414"/>
+    <path d="M652 458 C 784 520, 924 454, 1048 534"/>
+    <path d="M760 136 C 734 248, 738 346, 708 468"/>
+    <path d="M930 122 C 910 248, 936 354, 1010 520"/>
   </g>
   <g>
-    <circle cx="720" cy="166" r="18" fill="#5fb7c1"/>
-    <circle cx="1030" cy="124" r="14" fill="#d8ab3a"/>
-    <circle cx="690" cy="262" r="18" fill="#71b949"/>
-    <circle cx="1006" cy="258" r="16" fill="#d86e78"/>
-    <circle cx="734" cy="354" r="17" fill="#a78ce5"/>
-    <circle cx="1064" cy="414" r="15" fill="#5b92cf"/>
-    <circle cx="698" cy="440" r="18" fill="#d8ab3a"/>
-    <circle cx="1036" cy="518" r="14" fill="#5fb7c1"/>
+    <circle cx="704" cy="154" r="22" fill="#00f5ff"/>
+    <circle cx="1030" cy="112" r="18" fill="#22d3ee"/>
+    <circle cx="668" cy="250" r="21" fill="#14b8a6"/>
+    <circle cx="1036" cy="246" r="23" fill="#fb7185"/>
+    <circle cx="694" cy="344" r="22" fill="#a855f7"/>
+    <circle cx="1082" cy="414" r="18" fill="#f97316"/>
+    <circle cx="652" cy="458" r="21" fill="#38bdf8"/>
+    <circle cx="1048" cy="534" r="18" fill="#00f5ff"/>
   </g>
-  <text x="86" y="150" fill="#77dbe4" font-size="30" font-family="Arial, Helvetica, sans-serif" font-weight="700" letter-spacing="5">BRAINSNN</text>
-  <text x="86" y="266" fill="#efe9e1" font-size="74" font-family="Arial, Helvetica, sans-serif" font-weight="700">Read the Feed</text>
-  <text x="86" y="344" fill="#efe9e1" font-size="74" font-family="Arial, Helvetica, sans-serif" font-weight="700">Back</text>
-  <text x="90" y="410" fill="#b7b0a7" font-size="31" font-family="Arial, Helvetica, sans-serif">See what posts, ads, and narratives try</text>
-  <text x="90" y="452" fill="#b7b0a7" font-size="31" font-family="Arial, Helvetica, sans-serif">to make people feel, believe, and do</text>
-  <text x="90" y="494" fill="#b7b0a7" font-size="31" font-family="Arial, Helvetica, sans-serif">before they shape attention.</text>
+  <text x="86" y="142" fill="#00f5ff" font-size="30" font-family="Arial, Helvetica, sans-serif" font-weight="700" letter-spacing="5">BRAINSNN</text>
+  <text x="86" y="262" fill="#f8fafc" font-size="72" font-family="Arial, Helvetica, sans-serif" font-weight="800">See the emotions</text>
+  <text x="86" y="342" fill="#f8fafc" font-size="72" font-family="Arial, Helvetica, sans-serif" font-weight="800">AI can't see</text>
+  <text x="90" y="414" fill="#cbd5e1" font-size="30" font-family="Arial, Helvetica, sans-serif">Real-time affective intelligence powered by</text>
+  <text x="90" y="456" fill="#cbd5e1" font-size="30" font-family="Arial, Helvetica, sans-serif">Crumb LLM and spiking neural networks.</text>
+  <rect x="90" y="508" width="268" height="62" rx="31" fill="#00f5ff"/>
+  <text x="126" y="549" fill="#051214" font-size="26" font-family="Arial, Helvetica, sans-serif" font-weight="800">Try live demo</text>
 </svg>
