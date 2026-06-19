@@ -59,13 +59,21 @@ const DIST = join(__dirname, "dist");
 const PORT = Number(process.env.PORT) || 8080;
 
 // The marketing site (ui/brainsnn-site) is the homepage at "/"; this app is
-// the product, served under "/app". Docker copies its build to site-dist/
-// alongside server.js; local dev falls back to the sibling repo path so
-// `npm run start:dev` works without a manual copy step.
-const SITE_DIST = existsSync(join(__dirname, "site-dist"))
-  ? join(__dirname, "site-dist")
-  : join(__dirname, "..", "ui", "brainsnn-site", "dist");
-const HAS_SITE_DIST = existsSync(SITE_DIST);
+// the product, served under "/app". The repo-root Dockerfile copies the site
+// build to ./site-dist. If Railway still builds from brainsnn-r3f-app only,
+// Vite copies public/site-dist to dist/site-dist as a compatibility fallback.
+// Local dev falls back to the sibling repo path.
+const SITE_DIST_CANDIDATES = [
+  join(__dirname, "site-dist"),
+  join(DIST, "site-dist"),
+  join(__dirname, "..", "ui", "brainsnn-site", "dist"),
+];
+const SITE_DIST =
+  SITE_DIST_CANDIDATES.find((candidate) =>
+    existsSync(join(candidate, "index.html")),
+  ) ??
+  SITE_DIST_CANDIDATES[0];
+const HAS_SITE_DIST = existsSync(join(SITE_DIST, "index.html"));
 
 // Static 1200×630 card (public/og.png, copied into dist/ by the build) —
 // served whenever dynamic OG rendering throws, because social crawlers treat

@@ -24,10 +24,14 @@ npm run dev     # → http://localhost:5173
 
 ## Deploy
 
-Pushing changes to `main` under `brainsnn-r3f-app/**`, the root `Dockerfile`,
-`railway.toml`, or `.github/workflows/brainsnn-app-deploy.yml` runs the
-`Deploy BrainSNN app to Railway` workflow and ships the app to
-<https://brainsnn.com>.
+Pushing changes to `main` under `brainsnn-r3f-app/**`, `ui/brainsnn-site/**`,
+the root `Dockerfile`, `railway.toml`, or
+`.github/workflows/brainsnn-app-deploy.yml` runs the
+`Deploy BrainSNN app to Railway` workflow and ships BrainSNN.com.
+
+The intended production build starts from the repository root: the root
+`Dockerfile` builds `ui/brainsnn-site` for the homepage at `/`, builds this app
+for `/app`, then serves both through `brainsnn-r3f-app/server.js`.
 
 The workflow uses `RAILWAY_TOKEN` from GitHub repository secrets and deploys the
 Railway project `wonderful-charisma` (`c7f26b12-f812-4785-bbaf-a49b9caeb228`),
@@ -37,18 +41,30 @@ variables/secrets if Railway is renamed. `VITE_*` build-time values, including
 `VITE_CRUMB_LLM_URL` and `VITE_CRUMB_LLM_KEY`, must be set as Railway service
 variables so the Docker build can pass them through to Vite.
 
-The production Railway service is configured with `brainsnn-r3f-app` as the app
-root, so the workflow uploads that directory with `--path-as-root`. The health
-check defaults to `https://www.brainsnn.com/healthz` because the apex
-`https://brainsnn.com/healthz` currently follows to a 404 in curl; override with
-the `BRAINSNN_HEALTH_URL` repo variable after the apex redirect is fixed.
+Railway's native GitHub integration has historically been configured with
+`Root Directory = brainsnn-r3f-app`. That app-only build cannot reach
+`ui/brainsnn-site`, so production operators should either clear Railway's Root
+Directory to the repo root or disable native auto-deploy and let this GitHub
+Actions workflow deploy. As a guardrail, the app build also carries a checked-in
+marketing fallback at `brainsnn-r3f-app/public/site-dist`; Vite copies that to
+`dist/site-dist`, and `server.js` serves it at `/` if the repo-root build did
+not provide `site-dist`.
+
+The health check verifies `/healthz`, `/app/favicon.svg`, `/social-preview.svg`,
+and the actual homepage marker `BrainSNN - Live Affective Intelligence` so a
+green deploy means the live service is serving the app and the marketing
+homepage.
 
 Manual fallback from the repo root:
 
 ```bash
-railway link --project c7f26b12-f812-4785-bbaf-a49b9caeb228 --service the-brain --environment production
-railway up brainsnn-r3f-app --path-as-root --service the-brain --environment production --detach
+railway up \
+  --project c7f26b12-f812-4785-bbaf-a49b9caeb228 \
+  --service the-brain \
+  --environment production \
+  --ci
 curl -L https://www.brainsnn.com/healthz
+curl -L https://www.brainsnn.com/ | grep -F "BrainSNN - Live Affective Intelligence"
 ```
 
 Full operator runbook: [DEPLOY.md](DEPLOY.md).
