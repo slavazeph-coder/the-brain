@@ -84,7 +84,7 @@ const SITE_HOME_FALLBACK = `<!doctype html>
     <title>BrainSNN - Live Affective Intelligence</title>
     <meta
       name="description"
-      content="BrainSNN uses Crumb LLM and spiking-neural analysis to reveal emotional payload, attention risk, viral potential, and brand impact inside online content."
+      content="BrainSNN turns text, links, ads, and videos into live affective brain scans with Crumb LLM, spiking neural networks, attention curves, emotion heatmaps, and brand-risk signals."
     />
     <style>
       :root { color-scheme: dark; --bg: #0a0a0f; --cyan: #00f5ff; --purple: #a855f7; --muted: #a9b2c7; }
@@ -92,16 +92,24 @@ const SITE_HOME_FALLBACK = `<!doctype html>
       body {
         min-height: 100vh;
         margin: 0;
-        display: grid;
-        place-items: center;
         background:
           radial-gradient(circle at 78% 12%, rgba(0,245,255,.24), transparent 30rem),
           radial-gradient(circle at 10% 86%, rgba(168,85,247,.2), transparent 28rem),
+          radial-gradient(circle at 78% 88%, rgba(251,113,133,.13), transparent 24rem),
           linear-gradient(135deg, #0a0a0f 0%, #111827 55%, #09090f 100%);
         color: #f8fafc;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      main { width: min(980px, calc(100% - 32px)); padding: 56px 0; }
+      main {
+        width: min(1120px, calc(100% - 32px));
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, .7fr);
+        gap: 28px;
+        align-items: center;
+        margin: 0 auto;
+        padding: 56px 0;
+      }
       p:first-child { color: var(--cyan); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: .8rem; }
       h1 { max-width: 760px; margin: 0; font-size: clamp(3rem, 8vw, 6.2rem); line-height: .94; }
       .lede { max-width: 720px; color: var(--muted); font-size: clamp(1.08rem, 2vw, 1.35rem); line-height: 1.65; }
@@ -112,7 +120,7 @@ const SITE_HOME_FALLBACK = `<!doctype html>
         align-items: center;
         justify-content: center;
         border: 1px solid rgba(148,163,184,.28);
-        border-radius: 999px;
+        border-radius: 8px;
         padding: 0 20px;
         color: #f8fafc;
         font-weight: 800;
@@ -125,20 +133,52 @@ const SITE_HOME_FALLBACK = `<!doctype html>
         color: #061018;
         box-shadow: 0 0 28px rgba(0,245,255,.28);
       }
+      .panel {
+        border: 1px solid rgba(148,163,184,.26);
+        border-radius: 8px;
+        padding: 20px;
+        background: rgba(13,20,34,.82);
+        box-shadow: inset 0 0 60px rgba(0,245,255,.05);
+      }
+      .scan { display: grid; gap: 12px; }
+      .scan div {
+        min-height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid rgba(148,163,184,.24);
+        border-radius: 8px;
+        padding: 0 14px;
+        background: linear-gradient(90deg, rgba(0,245,255,.24), rgba(251,113,133,.13));
+      }
+      .scan span { color: #cbd5e1; }
+      .scan strong { font-size: 1.35rem; }
+      @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
     </style>
   </head>
   <body>
     <main>
-      <p>Crumb LLM + Spiking Neural Networks</p>
-      <h1>See the emotions AI can't see.</h1>
-      <p class="lede">
-        BrainSNN turns posts, ads, videos, and narratives into a live affective brain scan:
-        attention, emotional payload, trust risk, behavior pressure, and viral potential.
-      </p>
-      <div class="actions">
-        <a href="/app/">Try live demo</a>
-        <a href="/crumb-llm/">Crumb LLM</a>
-        <a href="/research/">GaugeGap research</a>
+      <section>
+        <p>Crumb LLM + Spiking Neural Networks</p>
+        <h1>See the emotions hidden in any content.</h1>
+        <p class="lede">
+          BrainSNN turns posts, ads, videos, and narratives into a live affective brain scan:
+          attention, emotional payload, trust risk, behavior pressure, and viral potential.
+        </p>
+        <div class="actions">
+          <a href="/app/">Try live demo</a>
+          <a href="/crumb-llm/">Crumb LLM</a>
+          <a href="/research/">GaugeGap research</a>
+        </div>
+      </section>
+      <div class="panel" aria-label="Affective scan preview">
+        <p>LIVE SCAN PREVIEW</p>
+        <div class="scan">
+          <div><span>Affective score</span><strong>87</strong></div>
+          <div><span>Attention curve</span><strong>Rising</strong></div>
+          <div><span>Trust risk</span><strong>High</strong></div>
+          <div><span>Viral pressure</span><strong>Hot</strong></div>
+        </div>
       </div>
     </main>
   </body>
@@ -165,17 +205,24 @@ function sendSocialPreviewFallback(res) {
   res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">BrainSNN - Live Affective Intelligence</title>
-  <desc id="desc">BrainSNN shows the emotional payload inside online content as a live brain scan.</desc>
+  <desc id="desc">BrainSNN shows hidden emotional payload, attention, risk, and viral pressure as a live brain scan.</desc>
   <rect width="1200" height="630" fill="#0a0a0f"/>
-  <circle cx="982" cy="118" r="210" fill="#00f5ff" opacity="0.26"/>
+  <circle cx="982" cy="118" r="210" fill="#00f5ff" opacity="0.22"/>
   <circle cx="164" cy="532" r="190" fill="#a855f7" opacity="0.18"/>
   <circle cx="850" cy="420" r="170" fill="#fb7185" opacity="0.16"/>
+  <path d="M700 168 C790 74 992 106 1022 246 C1050 379 914 490 780 436 C660 388 622 250 700 168Z" fill="none" stroke="#00f5ff" stroke-width="4" opacity=".44"/>
+  <path d="M740 226 C810 174 936 190 964 284 C996 392 856 438 770 366 C722 326 700 264 740 226Z" fill="none" stroke="#a855f7" stroke-width="4" opacity=".42"/>
+  <circle cx="772" cy="246" r="10" fill="#00f5ff"/>
+  <circle cx="886" cy="208" r="10" fill="#a855f7"/>
+  <circle cx="938" cy="332" r="11" fill="#fb7185"/>
+  <circle cx="810" cy="380" r="10" fill="#22d3ee"/>
+  <path d="M772 246 L886 208 L938 332 L810 380 Z" fill="none" stroke="#e0f2fe" stroke-width="2" opacity=".46"/>
   <text x="88" y="152" fill="#00f5ff" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="700">BrainSNN</text>
-  <text x="88" y="275" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="78" font-weight="800">See the emotions</text>
-  <text x="88" y="360" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="78" font-weight="800">AI can't see</text>
-  <text x="92" y="430" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="500">Crumb LLM + spiking neural analysis for content risk.</text>
-  <rect x="88" y="500" width="292" height="74" rx="37" fill="#f8fafc"/>
-  <text x="126" y="548" fill="#101820" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">Open BrainSNN</text>
+  <text x="88" y="265" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800">See the emotions</text>
+  <text x="88" y="348" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800">hidden in content</text>
+  <text x="92" y="418" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="32" font-weight="500">Crumb LLM + spiking neural analysis for brand risk.</text>
+  <rect x="88" y="492" width="342" height="72" rx="8" fill="#f8fafc"/>
+  <text x="126" y="538" fill="#101820" font-family="Inter, Arial, sans-serif" font-size="29" font-weight="800">Run a live scan</text>
 </svg>`);
 }
 
