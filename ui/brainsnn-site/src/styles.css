@@ -600,10 +600,6 @@ code,pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
   justify-content:space-between;
   gap: 12px;
 }
-payload-row-head span {
-  color: var(--text);
-  font-weight: 700;
-}
 .payload-row-head span {
   color: var(--text);
   font-weight: 700;
