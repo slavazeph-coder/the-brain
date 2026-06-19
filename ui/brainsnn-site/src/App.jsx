@@ -12,6 +12,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   BRAIN_REGIONS,
+  FEED_MIRROR_STEPS,
+  FEED_PAYLOAD_SIGNALS,
   IMPACT_SIGNALS,
   PATHWAYS,
   PILOT_CHECKLIST,
@@ -411,6 +413,87 @@ function WorkflowSteps() {
   );
 }
 
+function FeedMirrorSection() {
+  return (
+    <section
+      className="section section-surface feed-mirror-section"
+      id="feed-mirror"
+    >
+      <div className="shell">
+        <div className="feed-mirror-layout">
+          <div>
+            <SectionIntro
+              eyebrow="Feed mirror"
+              title="Platforms predict attention. BrainSNN explains the feeling."
+              body="The same idea that makes a feed powerful can make BrainSNN useful in plain English: show people what content is doing to their attention before it becomes belief, behavior, or brand risk."
+            />
+            <div className="feed-contrast-list">
+              {FEED_MIRROR_STEPS.map((item, index) => (
+                <article className="feed-contrast-item" key={item.title}>
+                  <span className="feed-contrast-index">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div>
+                    <span className="feed-contrast-label">{item.label}</span>
+                    <h3>{item.title}</h3>
+                    <p>{item.body}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <aside
+            className="feed-scan-card"
+            aria-label="Example BrainSNN feed scan"
+          >
+            <div className="feed-card-toolbar">
+              <span>Example feed scan</span>
+              <span>Local analysis</span>
+            </div>
+            <div className="feed-post-card">
+              <span>Short-form hook</span>
+              <p>
+                If you are still ignoring this, the people ahead of you already
+                saw it coming. Do not wait until everyone else moves first.
+              </p>
+            </div>
+            <div className="payload-stack">
+              {FEED_PAYLOAD_SIGNALS.map((signal) => (
+                <div className="payload-row" key={signal.label}>
+                  <div className="payload-row-head">
+                    <span>{signal.label}</span>
+                    <strong>{signal.value}%</strong>
+                  </div>
+                  <div className="payload-meter" aria-hidden="true">
+                    <span style={{ width: `${signal.value}%` }} />
+                  </div>
+                  <p>{signal.detail}</p>
+                </div>
+              ))}
+            </div>
+            <div className="feed-verdict">
+              <strong>Readable output</strong>
+              <p>
+                Scarcity and status are doing the work. Keep the useful warning,
+                remove the pressure, and add evidence before publishing.
+              </p>
+            </div>
+            <a
+              className="button button-primary"
+              href={SITE.demoUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Scan your feed
+            </a>
+          </aside>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PilotCard() {
   return (
     <div className="checklist-card">
@@ -453,6 +536,7 @@ export default function App() {
           <nav className="nav-links" aria-label="Primary">
             <a href="#stack">Your stack</a>
             <a href="#product">Product</a>
+            <a href="#feed-mirror">Feed mirror</a>
             <a href="#demo">Demo</a>
             <a href="#use-cases">Use cases</a>
             <a href="#pilot">Pilot</a>
@@ -462,7 +546,7 @@ export default function App() {
               target="_blank"
               rel="noreferrer"
             >
-              Run your brain
+              Scan a post
             </a>
           </nav>
         </div>
@@ -486,10 +570,13 @@ export default function App() {
                   rel="noreferrer"
                   className="button button-primary"
                 >
-                  Run your brain
+                  Scan a post
+                </a>
+                <a href="#feed-mirror" className="button button-secondary">
+                  See the feed mirror
                 </a>
                 <a href="#demo" className="button button-secondary">
-                  Try the scanner
+                  Watch the brain
                 </a>
                 <a
                   href={SITE.repoUrl}
@@ -548,8 +635,8 @@ export default function App() {
           <div className="shell">
             <SectionIntro
               eyebrow="Your stack"
-              title="Everyone will own a cloud. This is what runs on yours."
-              body="No account, no API key, no vendor between you and your own cognition. BrainSNN is the personal compute layer — wired straight into the agents you already use."
+              title="Your browser becomes the counter-feed."
+              body="No account, no API key, no vendor between you and your own cognition. BrainSNN scans the emotional payload locally, then gives your agents a readable cognitive layer they can use."
             />
             <div className="card-grid six-up">
               {YOUR_STACK.map((card) => (
@@ -585,6 +672,8 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        <FeedMirrorSection />
 
         <section className="section section-surface" id="demo">
           <div className="shell">

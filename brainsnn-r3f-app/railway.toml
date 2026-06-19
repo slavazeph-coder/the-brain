@@ -1,4 +1,8 @@
-# Railway config for the BrainSNN viral app (Vite SPA + Express).
+# Railway config for the BrainSNN app-only build (Vite SPA + Express).
+#
+# Important: this subdirectory config cannot build the BrainSNN.com homepage
+# in ../ui/brainsnn-site because Docker context is limited to brainsnn-r3f-app.
+# Full production deploys for brainsnn.com must use the repo-root Dockerfile.
 #
 # Deploy:
 #   railway login
