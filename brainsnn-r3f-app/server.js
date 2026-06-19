@@ -63,6 +63,7 @@ const PORT = Number(process.env.PORT) || 8080;
 const SITE_DIST = existsSync(join(__dirname, "site-dist"))
   ? join(__dirname, "site-dist")
   : join(__dirname, "..", "ui", "brainsnn-site", "dist");
+const HAS_SITE_DIST = existsSync(SITE_DIST);
 
 // Static 1200×630 card (public/og.png, copied into dist/ by the build) —
 // served whenever dynamic OG rendering throws, because social crawlers treat
@@ -253,9 +254,9 @@ if (!existsSync(DIST)) {
     `[server] dist/ not found at ${DIST} — run "npm run build" first`,
   );
 }
-if (!existsSync(SITE_DIST)) {
+if (!HAS_SITE_DIST) {
   console.warn(
-    `[server] marketing site dist/ not found at ${SITE_DIST} — build ui/brainsnn-site first`,
+    `[server] marketing site dist/ not found at ${SITE_DIST} — serving the app at "/" as a fallback`,
   );
 }
 
@@ -274,7 +275,11 @@ const staticOptions = {
 };
 
 app.use("/app", express.static(DIST, staticOptions));
-app.use(express.static(SITE_DIST, staticOptions));
+if (HAS_SITE_DIST) {
+  app.use(express.static(SITE_DIST, staticOptions));
+} else {
+  app.use(express.static(DIST, staticOptions));
+}
 
 // Fallback. Extensionless routes load the matching SPA so client-side
 // routing and share-card deep links keep working. A request that looks like
@@ -282,7 +287,7 @@ app.use(express.static(SITE_DIST, staticOptions));
 // a raw error.
 app.get("*", (req, res) => {
   const isApp = req.path === "/app" || req.path.startsWith("/app/");
-  const distDir = isApp ? DIST : SITE_DIST;
+  const distDir = isApp || !HAS_SITE_DIST ? DIST : SITE_DIST;
   if (/\.[a-zA-Z0-9]{1,8}$/.test(req.path)) {
     res.status(404).sendFile(join(distDir, "404.html"));
   } else {
