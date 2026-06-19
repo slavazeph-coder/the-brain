@@ -192,7 +192,7 @@ jobs:
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             version="$(curl -L -s -o /dev/null -w '%{http_code}' "$VERSION_URL" || true)"
             preview="$(curl -L -s -o /tmp/brainsnn-social-preview.svg -w '%{http_code}' "$SITE_PREVIEW_URL" || true)"
-            if [ "$preview" = "200" ] && grep -Fq "Read the Feed" /tmp/brainsnn-social-preview.svg; then
+            if [ "$preview" = "200" ] && grep -Fq "See the emotions" /tmp/brainsnn-social-preview.svg; then
               site_marker="ok"
             else
               site_marker="missing"
