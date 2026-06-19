@@ -1,9 +1,16 @@
 name: Deploy BrainSNN app to Railway
 
 # Deploys brainsnn-r3f-app (served by server.js) to the Railway service that
-# backs brainsnn.com. Documented in brainsnn-r3f-app/DEPLOY.md — requires the
+# backs brainsnn.com. The root Dockerfile also builds ui/brainsnn-site for the
+# homepage at "/". Documented in brainsnn-r3f-app/DEPLOY.md — requires the
 # RAILWAY_TOKEN repository secret; project/service/health defaults can be
 # overridden with repository variables.
+#
+# Important: Railway's dashboard GitHub integration has historically been
+# rooted at brainsnn-r3f-app. That native path cannot build ui/brainsnn-site.
+# Keep native auto-deploy disabled, or set the Railway Root Directory to the
+# repo root, so it cannot overwrite this repo-root CLI deploy with an app-only
+# image after CI completes.
 
 on:
   push:
@@ -11,6 +18,7 @@ on:
       - main
     paths:
       - "brainsnn-r3f-app/**"
+      - "ui/brainsnn-site/**"
       - "Dockerfile"
       - "railway.toml"
       - ".github/workflows/brainsnn-app-deploy.yml"
@@ -24,6 +32,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ui/brainsnn-site
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/brainsnn-site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build marketing site
+        run: npm run build
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -103,7 +135,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [test, smoke]
+    needs: [site, test, smoke]
     timeout-minutes: 15
     environment:
       name: production
@@ -124,15 +156,21 @@ jobs:
           RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT || 'production' }}
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_TOKEN secret not set — skipping CLI deploy." \
-                 "Railway's GitHub integration deploys pushes to main on its own;" \
-                 "the healthcheck below still verifies the live service."
-            exit 0
+            echo "RAILWAY_TOKEN secret is required for the repo-root deploy." >&2
+            echo "Railway's native GitHub integration has been rooted at brainsnn-r3f-app," >&2
+            echo "which cannot build ui/brainsnn-site for the BrainSNN.com homepage." >&2
+            exit 1
           fi
+          test -f Dockerfile
+          test -f railway.toml
+          test -f ui/brainsnn-site/package.json
+          test -f brainsnn-r3f-app/package.json
           # Upload the whole repo (no path arg — the CLI rejects '.' with
           # "prefix not found"): the service builds with the root Dockerfile,
-          # which copies brainsnn-r3f-app/ into the image.
+          # which builds ui/brainsnn-site for "/" and brainsnn-r3f-app for
+          # "/app".
           railway up \
+            --project "$RAILWAY_PROJECT_ID" \
             --service "$RAILWAY_SERVICE" \
             --environment "$RAILWAY_ENVIRONMENT" \
             --ci
@@ -146,16 +184,25 @@ jobs:
           # Railway's own rebuild of main takes a few minutes, hence the
           # ~10-minute retry window.
           VERSION_URL: ${{ vars.BRAINSNN_VERSION_URL || 'https://www.brainsnn.com/app/favicon.svg' }}
+          # Static homepage asset with copy from ui/brainsnn-site. This proves
+          # marketing-site-only changes deployed too.
+          SITE_PREVIEW_URL: ${{ vars.BRAINSNN_SITE_PREVIEW_URL || 'https://www.brainsnn.com/social-preview.svg' }}
         run: |
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             version="$(curl -L -s -o /dev/null -w '%{http_code}' "$VERSION_URL" || true)"
-            echo "attempt $i → healthz $health, version marker $version"
-            if [ "$health" = "200" ] && [ "$version" = "200" ]; then
-              echo "Live service is healthy and serving the current build."
+            preview="$(curl -L -s -o /tmp/brainsnn-social-preview.svg -w '%{http_code}' "$SITE_PREVIEW_URL" || true)"
+            if [ "$preview" = "200" ] && grep -Fq "Read the Feed" /tmp/brainsnn-social-preview.svg; then
+              site_marker="ok"
+            else
+              site_marker="missing"
+            fi
+            echo "attempt $i → healthz $health, app marker $version, site marker $preview/$site_marker"
+            if [ "$health" = "200" ] && [ "$version" = "200" ] && [ "$site_marker" = "ok" ]; then
+              echo "Live service is healthy and serving the current app + homepage build."
               exit 0
             fi
             sleep 20
           done
-          echo "Service never became healthy on the current build ($HEALTH_URL / $VERSION_URL)" >&2
+          echo "Service never became healthy on the current build ($HEALTH_URL / $VERSION_URL / $SITE_PREVIEW_URL)" >&2
           exit 1

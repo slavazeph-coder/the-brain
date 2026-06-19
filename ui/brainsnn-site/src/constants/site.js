@@ -7,10 +7,10 @@ export const SITE = {
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "Your personal AI brain. You own it.",
+  tagline: "BrainSNN reads the feed back.",
   mission:
-    "BrainSNN is a cognitive engine that runs in your browser, learns from what you feed it, and wires straight into your AI agents — no cloud account, no server, no one else's infrastructure between you and your data.",
-  badge: "Personal AI Infrastructure · Zero Server Core · 100 Cognitive Layers",
+    "Social feeds learn what keeps you watching. BrainSNN shows what posts, ads, and narratives are trying to make you feel, believe, and do - then keeps that cognitive engine running in your browser, under your control.",
+  badge: "Feed mirror / Cognitive firewall / Personal AI infrastructure",
 };
 
 export const REGION_LONG_NAMES = {
@@ -296,6 +296,47 @@ export const PRODUCT_WORKFLOW = [
   ],
 ];
 
+export const FEED_MIRROR_STEPS = [
+  {
+    label: "Social graph",
+    title: "Instagram shows who you know.",
+    body: "Friends, creators, follows, and social proof become the surface layer.",
+  },
+  {
+    label: "Attention graph",
+    title: "TikTok predicts what keeps you watching.",
+    body: "The system learns the next clip before the viewer can name the feeling.",
+  },
+  {
+    label: "Cognitive graph",
+    title: "BrainSNN shows what the feed is doing.",
+    body: "Fear, urgency, status, belonging, certainty, and action pressure become readable evidence.",
+  },
+];
+
+export const FEED_PAYLOAD_SIGNALS = [
+  {
+    label: "Urgency",
+    value: 86,
+    detail: "Time pressure is carrying the hook.",
+  },
+  {
+    label: "Status",
+    value: 72,
+    detail: "The copy implies insiders already moved.",
+  },
+  {
+    label: "Certainty",
+    value: 64,
+    detail: "Missing evidence is presented as settled fact.",
+  },
+  {
+    label: "Action push",
+    value: 78,
+    detail: "The message nudges a fast share or click.",
+  },
+];
+
 export const TRUST_CARDS = [
   {
     title: "Yours, not rented",
@@ -434,19 +475,19 @@ export const GOOD_FIRST_ISSUES = [
 ];
 
 export const SOCIAL_PREVIEW_COPY = {
-  hook: "Everyone will own a cloud. BrainSNN is what runs on yours.",
-  sub: "A 100-layer cognitive engine that runs in your browser, wires into your AI agents, and never asks you to log in.",
-  cta: "Run your brain, or try the manipulation scanner first.",
+  hook: "The feed is reading you. BrainSNN reads the feed.",
+  sub: "A browser-native cognitive engine that scans what content is trying to make people feel, believe, and do.",
+  cta: "Scan a post, or open the full personal AI brain.",
 };
 
 export const VIRAL_CONTENT = {
-  twitterThread: `Steve Jobs bet on everyone owning a computer. BrainSNN is a bet that everyone will own a brain.\n\n100 cognitive layers. Runs in your browser. Wires into Claude/Codex via MCP. No account, no server, no one else's infrastructure.\n\nDemo: ${SITE.demoUrl}`,
+  twitterThread: `The feed is reading you. BrainSNN reads the feed.\n\nPaste a post, ad, or narrative and see what it is trying to make people feel, believe, and do. The scanner runs in your browser and opens into a 100-layer personal AI brain.\n\nDemo: ${SITE.demoUrl}`,
   hackerNewsTitle:
-    "Show HN: BrainSNN — a personal AI brain that runs in your browser",
-  hackerNewsBody: `BrainSNN is a 100-layer cognitive engine — firewall, affective decoder, knowledge brain, dream mode, MCP bridge to your agents — that runs entirely client-side. No account, no cloud dependency for the core.\n\nThe thesis: AI infrastructure shouldn't require renting someone else's cloud. This one runs on yours.\n\nDemo: ${SITE.demoUrl}\nRepo: ${SITE.repoUrl}`,
-  redditML: `BrainSNN: a browser-native cognitive engine — SNN-style regions, an MCP bridge to your AI agents, local Gemma/Ollama support. You own the compute. Demo: ${SITE.demoUrl}`,
+    "Show HN: BrainSNN - a browser scanner that reads the feed back",
+  hackerNewsBody: `BrainSNN scans posts, ads, emails, scripts, and narratives for emotional payload: fear, urgency, status, belonging, certainty, trust erosion, and behavior pressure.\n\nThe deeper system is a 100-layer cognitive engine with a firewall, affective decoder, knowledge brain, dream mode, and MCP bridge to agents. The core runs client-side, so the first experience is simple: paste content, see what it is trying to do, and inspect the evidence.\n\nDemo: ${SITE.demoUrl}\nRepo: ${SITE.repoUrl}`,
+  redditML: `BrainSNN: a browser-native cognitive engine that reads the feed back - paste content and see the emotional payload before it shapes attention. Demo: ${SITE.demoUrl}`,
   redditR3F: `BrainSNN uses a 3D brain interface to make a personal AI engine's internal state visible and ownable. Demo: ${SITE.demoUrl}`,
-  launchPlan: `Launch around one clear claim: AI infrastructure doesn't have to be rented. BrainSNN is a personal AI brain you own outright, with the emotional-payload scanner as the first visceral demo of what it can do.`,
+  launchPlan: `Launch around one clear claim: the feed is reading you, so BrainSNN reads the feed. Lead with paste -> scan -> evidence -> safer rewrite, then show the 100-layer personal AI brain underneath.`,
 };
 
 export const SHARE_ROUTES = {
@@ -461,9 +502,9 @@ export const SHARE_ROUTES = {
 
 export const README_MD = `# BrainSNN
 
-**Your personal AI brain. You own it.**
+**BrainSNN reads the feed back.**
 
-BrainSNN is a 100-layer cognitive engine that runs entirely in your browser — no account, no server, no one else's infrastructure between you and your data. It wires directly into your AI agents via MCP, and ships with an emotional-payload scanner as its first proof of power: paste any post, ad, or email and see the manipulation pressure before it shapes attention, behavior, brand risk, or public perception.
+BrainSNN is a 100-layer cognitive engine that runs in your browser and starts with one simple promise: paste any post, ad, email, script, or narrative and see what it is trying to make people feel, believe, and do before it shapes attention, behavior, brand risk, or public perception.
 
 ## What it does
 

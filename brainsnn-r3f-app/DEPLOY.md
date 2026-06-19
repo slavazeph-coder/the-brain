@@ -1,26 +1,56 @@
 # Deploying BrainSNN
 
-BrainSNN is the Vite app in `brainsnn-r3f-app/`, served by `server.js` on
-Railway. The production service is:
+BrainSNN.com is served by one Railway service from the repo root:
+
+- `ui/brainsnn-site/` builds the public homepage at `/`.
+- `brainsnn-r3f-app/` builds the scanner/product app at `/app/`.
+- `brainsnn-r3f-app/server.js` serves both builds.
+- The root `Dockerfile` is the full production build.
+
+The production service is:
 
 - Railway project: `wonderful-charisma`
 - Project id: `c7f26b12-f812-4785-bbaf-a49b9caeb228`
 - Service: `the-brain`
 - Environment: `production`
-- App root: `brainsnn-r3f-app`
+- Required build context: repo root
 - Healthcheck: `https://www.brainsnn.com/healthz`
+
+## Railway dashboard setting
+
+The Railway dashboard currently shows:
+
+- Root Directory: `brainsnn-r3f-app`
+- Auto deploys from GitHub: enabled
+- Wait for CI: enabled
+
+That native GitHub path is app-only. It cannot build `ui/brainsnn-site/`,
+because Docker cannot copy files outside the `brainsnn-r3f-app` build context.
+
+Use one of these production-safe configurations:
+
+1. Recommended: disable Railway native auto-deploy and let GitHub Actions run
+   the repo-root `railway up` deploy.
+2. Alternative: keep Railway native auto-deploy, but clear Root Directory so it
+   builds from the repo root with the root `Dockerfile` and root `railway.toml`.
+
+Do not leave native auto-deploy enabled with Root Directory set to
+`brainsnn-r3f-app`. With "Wait for CI" enabled, Railway can start an app-only
+native deployment after the GitHub Actions deploy succeeds, overwriting the
+homepage build.
 
 ## Normal deploy
 
 1. Merge a PR into `main`.
 2. Open GitHub Actions.
 3. Watch `Deploy BrainSNN app to Railway`.
-4. Green means Railway reported a successful deployment and the live healthcheck
-   returned HTTP 200.
+4. Green means the workflow built the homepage and app, deployed the repo root
+   to Railway, and verified the live homepage + app markers.
 
 The workflow runs when `main` changes any of:
 
 - `brainsnn-r3f-app/**`
+- `ui/brainsnn-site/**`
 - root `Dockerfile`
 - root `railway.toml`
 - `.github/workflows/brainsnn-app-deploy.yml`
@@ -42,6 +72,8 @@ RAILWAY_PROJECT_ID
 RAILWAY_SERVICE
 RAILWAY_ENVIRONMENT
 BRAINSNN_HEALTH_URL
+BRAINSNN_VERSION_URL
+BRAINSNN_SITE_PREVIEW_URL
 ```
 
 Do not put app API keys in GitHub workflow files. Vite build-time values must be
@@ -75,8 +107,8 @@ railway link \
   --service the-brain \
   --environment production
 
-railway up brainsnn-r3f-app \
-  --path-as-root \
+railway up \
+  --project c7f26b12-f812-4785-bbaf-a49b9caeb228 \
   --service the-brain \
   --environment production \
   --detach
@@ -86,6 +118,8 @@ Then verify:
 
 ```bash
 curl -L https://www.brainsnn.com/healthz
+curl -L -s https://www.brainsnn.com/social-preview.svg | grep 'Read the Feed'
+curl -L -s -o /dev/null -w '%{http_code}\n' https://www.brainsnn.com/app/favicon.svg
 ```
 
 Use `www.brainsnn.com` for curl checks. The apex
@@ -124,5 +158,6 @@ railway redeploy --previous
 | --- | --- |
 | Workflow fails before deploy | Add `RAILWAY_TOKEN` as a GitHub repository secret. |
 | Workflow deploys but healthcheck fails | Check `BRAINSNN_HEALTH_URL`; `www.brainsnn.com/healthz` is the known-good curl URL. |
+| Homepage changes do not appear | Confirm Railway native auto-deploy is disabled or Root Directory is repo root; `brainsnn-r3f-app` root builds cannot include `ui/brainsnn-site`. |
 | Crumb LLM URL/key is blank in the app | Set the `VITE_CRUMB_LLM_*` values as Railway service variables, then redeploy. |
 | Local tests fail after `npm ci` | Ensure `@testing-library/dom` is installed from the committed lockfile. |

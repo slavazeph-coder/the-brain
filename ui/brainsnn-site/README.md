@@ -1,16 +1,18 @@
-# 🧠 BrainSNN
+# BrainSNN
 
 ![MIT License](https://img.shields.io/badge/license-MIT-green)
 ![React Three Fiber](https://img.shields.io/badge/React%20Three%20Fiber-R3F-black)
 ![Three.js](https://img.shields.io/badge/Three.js-3D-informational)
 
-**Brain-inspired AI that never stops learning.**
+**BrainSNN reads the feed back.**
 
-BrainSNN is an open-source 3D neuromorphic brain network visualizer built with React Three Fiber. It models **7 brain regions**, **10 plastic pathways**, and a simplified **STDP continuous learning rule** in real time.
+This package is the public BrainSNN.com marketing site. It explains the product in plain English: social feeds learn what keeps people watching; BrainSNN shows what posts, ads, and narratives are trying to make people feel, believe, and do.
+
+The page points visitors to the working scanner at `https://brainsnn.com/app`, while the embedded React Three Fiber brain keeps the deeper personal-AI infrastructure visible.
 
 No backprop.  
 No retraining.  
-No server required for the main demo.  
+No account required for the core scanner.
 
 ## Quick start
 
@@ -31,11 +33,21 @@ npm run preview
 
 ## What is inside
 
-- Cinematic launch page with strong GitHub CTA
+- Public launch page for BrainSNN.com
+- Feed mirror section inspired by short-form social product positioning
+- Clear CTA into the scanner at `https://brainsnn.com/app`
 - Live 3D R3F brain graph with STDP-like weight updates
-- Viral launch toolkit for X, HN, and Reddit
-- README preview block and launch checklist
 - Browser-first build with no backend required
+
+## Deploy
+
+`main` deploys to BrainSNN.com through the root Railway app workflow. Local fallback:
+
+```bash
+cd ui/brainsnn-site
+npm ci
+npm run build
+```
 
 ## Add a region
 
