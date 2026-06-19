@@ -184,12 +184,11 @@ jobs:
           # Railway's own rebuild of main takes a few minutes, hence the
           # ~10-minute retry window.
           VERSION_URL: ${{ vars.BRAINSNN_VERSION_URL || 'https://www.brainsnn.com/app/favicon.svg' }}
-          # Static homepage asset with copy from ui/brainsnn-site. This proves
-          # marketing-site-only changes deployed too.
+          # Static homepage asset with BrainSNN social-card copy. This proves
+          # homepage/public asset changes deployed too.
           SITE_PREVIEW_URL: ${{ vars.BRAINSNN_SITE_PREVIEW_URL || 'https://www.brainsnn.com/social-preview.svg' }}
-          # The actual homepage must be the marketing site, not the app-shell
-          # fallback. This catches Railway builds that stay rooted at
-          # brainsnn-r3f-app and silently skip the repo-root Dockerfile.
+          # The actual homepage must include the current viral landing, not
+          # just an older title-only fallback.
           SITE_HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
         run: |
           for i in $(seq 1 30); do
@@ -202,7 +201,9 @@ jobs:
             else
               site_marker="missing"
             fi
-            if [ "$home" = "200" ] && grep -Fq "BrainSNN - Live Affective Intelligence" /tmp/brainsnn-home.html; then
+            if [ "$home" = "200" ] \
+              && grep -Fq "Paste a post. Watch the brain react." /tmp/brainsnn-home.html \
+              && grep -Fq "Start free, upgrade when scans become workflow." /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
