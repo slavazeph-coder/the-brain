@@ -1,16 +1,16 @@
 export const SITE = {
   name: "BrainSNN",
   repoUrl: "https://github.com/slavazeph-coder/the-brain",
-  domainUrl: "https://brainsnn.com",
-  demoUrl: "https://brainsnn.com/app",
+  domainUrl: "https://www.brainsnn.com",
+  demoUrl: "https://www.brainsnn.com/app",
   issuesUrl: "https://github.com/slavazeph-coder/the-brain/issues",
   license: "MIT",
   repoOwner: "slavazeph-coder",
   repoName: "the-brain",
-  tagline: "BrainSNN reads the feed back.",
+  tagline: "See the emotions AI can't see.",
   mission:
-    "Social feeds learn what keeps you watching. BrainSNN shows what posts, ads, and narratives are trying to make you feel, believe, and do - then keeps that cognitive engine running in your browser, under your control.",
-  badge: "Feed mirror / Cognitive firewall / Personal AI infrastructure",
+    "BrainSNN uses Crumb LLM and spiking-neural analysis to reveal the emotional payload inside posts, ads, videos, and narratives before they shape attention, behavior, brand risk, or perception.",
+  badge: "Affective intelligence / Crumb LLM / Live brain scan",
 };
 
 export const REGION_LONG_NAMES = {
@@ -24,15 +24,15 @@ export const REGION_LONG_NAMES = {
 };
 
 export const THEME = {
-  background: "#0a0a09",
-  surface: "#141211",
-  surfaceAlt: "#1a1715",
-  text: "#f1ece5",
-  muted: "#a49d95",
-  teal: "#5fb7c1",
-  cyan: "#77dbe4",
-  gold: "#d8ab3a",
-  red: "#d86e78",
+  background: "#0a0a0f",
+  surface: "#10121d",
+  surfaceAlt: "#15172a",
+  text: "#f8fafc",
+  muted: "#a9b2c7",
+  teal: "#22d3ee",
+  cyan: "#00f5ff",
+  gold: "#f59e0b",
+  red: "#fb7185",
 };
 
 export const BRAIN_REGIONS = [
@@ -40,7 +40,7 @@ export const BRAIN_REGIONS = [
     code: "THL",
     name: REGION_LONG_NAMES.THL,
     position: [0, 0.1, 0],
-    color: "#71b949",
+    color: "#22d3ee",
     baseActivity: 0.56,
     description:
       "The intake gate: what content makes the nervous system notice first.",
@@ -49,7 +49,7 @@ export const BRAIN_REGIONS = [
     code: "CTX",
     name: REGION_LONG_NAMES.CTX,
     position: [2.45, 0.65, -0.15],
-    color: "#5fb7c1",
+    color: "#00f5ff",
     baseActivity: 0.26,
     description:
       "Meaning assembly: how claims, frames, and context become interpretation.",
@@ -58,7 +58,7 @@ export const BRAIN_REGIONS = [
     code: "HPC",
     name: REGION_LONG_NAMES.HPC,
     position: [1.25, -1.6, 1.35],
-    color: "#d8ab3a",
+    color: "#a855f7",
     baseActivity: 0.18,
     description:
       "Memory linkage: what the message connects to past beliefs and stories.",
@@ -67,7 +67,7 @@ export const BRAIN_REGIONS = [
     code: "PFC",
     name: REGION_LONG_NAMES.PFC,
     position: [3.45, 1.9, 0.75],
-    color: "#a78ce5",
+    color: "#38bdf8",
     baseActivity: 0.2,
     description:
       "Executive control: whether a reader can stay reflective instead of reactive.",
@@ -76,7 +76,7 @@ export const BRAIN_REGIONS = [
     code: "AMY",
     name: REGION_LONG_NAMES.AMY,
     position: [1.85, -0.95, -2.15],
-    color: "#d86e78",
+    color: "#fb7185",
     baseActivity: 0.13,
     description:
       "Threat and salience: fear, outrage, urgency, shame, and protective attention.",
@@ -85,7 +85,7 @@ export const BRAIN_REGIONS = [
     code: "BG",
     name: REGION_LONG_NAMES.BG,
     position: [-1.9, -0.55, -1.25],
-    color: "#5b92cf",
+    color: "#8b5cf6",
     baseActivity: 0.14,
     description:
       "Behavioral gating: what the message pressures the reader to do next.",
@@ -94,7 +94,7 @@ export const BRAIN_REGIONS = [
     code: "CBL",
     name: REGION_LONG_NAMES.CBL,
     position: [-3.1, 1.2, 1.6],
-    color: "#c69f31",
+    color: "#14b8a6",
     baseActivity: 0.17,
     description:
       "Pattern calibration: timing, repetition, and subtle emotional conditioning.",
@@ -205,10 +205,182 @@ export const PATHWAYS = [
 ];
 
 export const IMPACT_SIGNALS = [
-  "Fear, threat, urgency, and outrage pressure",
-  "Trust erosion, certainty theatre, and authority hijacking",
-  "Shame, status, belonging, desire, and identity activation",
+  "Joy, fear, trust, anger, surprise, shame, and belonging cues",
+  "Attention spikes, cognitive load, urgency, and certainty theatre",
+  "Brand-safety risk, trust erosion, and public-perception drift",
   "Behavioral push: click, share, comply, attack, withdraw, or buy",
+];
+
+export const LIVE_SCAN_EXAMPLES = [
+  {
+    label: "Viral reel",
+    title: "Creator hook before the payoff",
+    sample:
+      "If you skip this, you will be behind everyone who already saw the signal.",
+    verdict:
+      "Status pressure and scarcity are carrying the hook. The scan recommends keeping the urgency, but adding evidence before asking viewers to act.",
+    metrics: [
+      ["Affective score", 87],
+      ["Attention spike", 92],
+      ["Brand risk", 41],
+      ["Viral potential", 84],
+    ],
+    regionBoosts: {
+      THL: 0.72,
+      AMY: 0.66,
+      BG: 0.58,
+      PFC: 0.18,
+      CTX: 0.42,
+      HPC: 0.3,
+      CBL: 0.46,
+    },
+    regionColors: {
+      THL: "#00f5ff",
+      AMY: "#fb7185",
+      BG: "#a855f7",
+      CTX: "#22d3ee",
+      PFC: "#38bdf8",
+      HPC: "#c084fc",
+      CBL: "#14b8a6",
+    },
+    timeline: [22, 34, 68, 91, 88, 74, 59, 82, 71, 48],
+    affects: [
+      ["Surprise", 78],
+      ["Fear", 62],
+      ["Trust", 34],
+      ["Anger", 28],
+    ],
+  },
+  {
+    label: "Ad preflight",
+    title: "Launch claim with implied authority",
+    sample:
+      "Experts agree this is the only safe option before the market changes.",
+    verdict:
+      "Authority and false certainty are doing too much work. Add source detail and reduce the absolute claim before publishing.",
+    metrics: [
+      ["Affective score", 73],
+      ["Attention spike", 68],
+      ["Brand risk", 76],
+      ["Viral potential", 58],
+    ],
+    regionBoosts: {
+      THL: 0.48,
+      AMY: 0.42,
+      BG: 0.5,
+      PFC: 0.24,
+      CTX: 0.66,
+      HPC: 0.52,
+      CBL: 0.3,
+    },
+    regionColors: {
+      THL: "#22d3ee",
+      AMY: "#f97316",
+      BG: "#a855f7",
+      CTX: "#00f5ff",
+      PFC: "#38bdf8",
+      HPC: "#c084fc",
+      CBL: "#14b8a6",
+    },
+    timeline: [18, 28, 39, 52, 69, 76, 72, 61, 57, 44],
+    affects: [
+      ["Trust", 46],
+      ["Fear", 38],
+      ["Certainty", 81],
+      ["Risk", 76],
+    ],
+  },
+  {
+    label: "News frame",
+    title: "Crisis headline with missing context",
+    sample:
+      "A shocking collapse is coming, and officials do not want families to know.",
+    verdict:
+      "Threat, hidden-truth framing, and trust erosion are stacked together. The safer rewrite names what is known and removes the implied cover-up.",
+    metrics: [
+      ["Affective score", 91],
+      ["Attention spike", 86],
+      ["Brand risk", 88],
+      ["Viral potential", 79],
+    ],
+    regionBoosts: {
+      THL: 0.62,
+      AMY: 0.86,
+      BG: 0.64,
+      PFC: 0.12,
+      CTX: 0.36,
+      HPC: 0.58,
+      CBL: 0.28,
+    },
+    regionColors: {
+      THL: "#00f5ff",
+      AMY: "#ff6b35",
+      BG: "#fb7185",
+      CTX: "#22d3ee",
+      PFC: "#38bdf8",
+      HPC: "#a855f7",
+      CBL: "#14b8a6",
+    },
+    timeline: [31, 45, 73, 88, 93, 84, 69, 76, 63, 51],
+    affects: [
+      ["Fear", 86],
+      ["Anger", 64],
+      ["Trust loss", 82],
+      ["Surprise", 71],
+    ],
+  },
+];
+
+export const CRUMB_PIPELINE = [
+  {
+    label: "Input",
+    detail: "URL, text, video, ad, article, or social post",
+    intensity: 0.35,
+  },
+  {
+    label: "Crumb LLM",
+    detail: "Wave-field processing mixes context in O(N log N)",
+    intensity: 0.68,
+  },
+  {
+    label: "SNN spikes",
+    detail: "Affect maps into thalamus, amygdala, cortex, and basal ganglia",
+    intensity: 0.92,
+  },
+  {
+    label: "Brain scan",
+    detail: "Risk, attention, emotion, and shareable output",
+    intensity: 0.78,
+  },
+];
+
+export const EMOTION_LAYERS = [
+  ["Joy", "#22d3ee"],
+  ["Fear", "#fb7185"],
+  ["Trust", "#14b8a6"],
+  ["Anger", "#f97316"],
+  ["Surprise", "#a855f7"],
+];
+
+export const RESEARCH_CARDS = [
+  {
+    title: "Crumb LLM",
+    label: "Physics-first AI",
+    body: "Wave-field language processing for long context, fixed field-cache behavior, and BrainSNN's affective analysis pipeline.",
+    href: "/crumb-llm",
+  },
+  {
+    title: "GaugeGap Foundry",
+    label: "Verification infrastructure",
+    body: "Finite-system benchmark tracks for GaugeGap, FlowGap, and CurveRank, with explicit boundaries around what is and is not proven.",
+    href: "/research",
+  },
+  {
+    title: "Cognitive Firewall",
+    label: "Product evidence",
+    body: "Regex, semantic, and server-side scorers return the exact phrases and frames that pushed a scan into risk.",
+    href: SITE.demoUrl,
+  },
 ];
 
 export const YOUR_STACK = [
@@ -279,20 +451,20 @@ export const USE_CASES = [
 
 export const PRODUCT_WORKFLOW = [
   [
-    "Paste or connect content",
-    "Drop in a tweet, ad, email, script, article, campaign concept, or public narrative.",
+    "Input content",
+    "Paste a URL, text, post, ad, script, or uploaded clip. Preloaded demos keep the scan experience working even before every backend is configured.",
   ],
   [
-    "Decode the payload",
-    "BrainSNN scores affect, persuasion pressure, trust erosion, behavioral push, and public-perception risk.",
+    "Crumb LLM wave processing",
+    "The physics-based Crumb layer mixes context through wave-field processing, then hands a structured affective signal to BrainSNN.",
   ],
   [
-    "See the brain reaction",
-    "The 3D model makes the invisible visible: salience, memory linkage, action pressure, and executive override.",
+    "Spiking neural analysis",
+    "The SNN layer lights up salience, memory linkage, action pressure, and executive override like a live brain scan.",
   ],
   [
-    "Rewrite with control",
-    "Get safer, sharper alternatives that keep persuasion ethical and protect brand trust.",
+    "Output and share",
+    "Generate emotional payload scores, evidence, safer rewrite direction, and shareable scan assets for teams or social posts.",
   ],
 ];
 
@@ -475,19 +647,28 @@ export const GOOD_FIRST_ISSUES = [
 ];
 
 export const SOCIAL_PREVIEW_COPY = {
-  hook: "The feed is reading you. BrainSNN reads the feed.",
-  sub: "A browser-native cognitive engine that scans what content is trying to make people feel, believe, and do.",
-  cta: "Scan a post, or open the full personal AI brain.",
+  hook: "See the emotions AI can't see.",
+  sub: "Affective intelligence powered by Crumb LLM and spiking neural analysis.",
+  cta: "Scan content, watch the brain react, and share the result.",
 };
 
 export const VIRAL_CONTENT = {
-  twitterThread: `The feed is reading you. BrainSNN reads the feed.\n\nPaste a post, ad, or narrative and see what it is trying to make people feel, believe, and do. The scanner runs in your browser and opens into a 100-layer personal AI brain.\n\nDemo: ${SITE.demoUrl}`,
+  twitterThread: `Most AI reads sentiment. BrainSNN reads the payload.
+
+Paste a post, ad, article, or narrative and see the emotion, pressure, trust risk, and attention curve as a live brain scan powered by Crumb LLM and SNN analysis.
+
+Demo: ${SITE.demoUrl}`,
   hackerNewsTitle:
-    "Show HN: BrainSNN - a browser scanner that reads the feed back",
-  hackerNewsBody: `BrainSNN scans posts, ads, emails, scripts, and narratives for emotional payload: fear, urgency, status, belonging, certainty, trust erosion, and behavior pressure.\n\nThe deeper system is a 100-layer cognitive engine with a firewall, affective decoder, knowledge brain, dream mode, and MCP bridge to agents. The core runs client-side, so the first experience is simple: paste content, see what it is trying to do, and inspect the evidence.\n\nDemo: ${SITE.demoUrl}\nRepo: ${SITE.repoUrl}`,
-  redditML: `BrainSNN: a browser-native cognitive engine that reads the feed back - paste content and see the emotional payload before it shapes attention. Demo: ${SITE.demoUrl}`,
+    "Show HN: BrainSNN - live affective intelligence for online content",
+  hackerNewsBody: `BrainSNN scans posts, ads, emails, scripts, and narratives for emotional payload: fear, urgency, status, belonging, certainty, trust erosion, and behavior pressure.
+
+The product combines Crumb LLM wave processing, a cognitive firewall, and a live 3D SNN brain scan. The first experience is simple: paste content, see what it is trying to do, inspect the evidence, and open the full scanner.
+
+Demo: ${SITE.demoUrl}
+Repo: ${SITE.repoUrl}`,
+  redditML: `BrainSNN: live affective intelligence for content analysis - paste content and see emotion, pressure, trust risk, and attention curves as a brain scan. Demo: ${SITE.demoUrl}`,
   redditR3F: `BrainSNN uses a 3D brain interface to make a personal AI engine's internal state visible and ownable. Demo: ${SITE.demoUrl}`,
-  launchPlan: `Launch around one clear claim: the feed is reading you, so BrainSNN reads the feed. Lead with paste -> scan -> evidence -> safer rewrite, then show the 100-layer personal AI brain underneath.`,
+  launchPlan: `Launch around one clear claim: BrainSNN shows the emotions AI cannot see. Lead with scan -> brain view -> evidence -> shareable output, then show Crumb LLM and GaugeGap underneath.`,
 };
 
 export const SHARE_ROUTES = {
@@ -502,15 +683,16 @@ export const SHARE_ROUTES = {
 
 export const README_MD = `# BrainSNN
 
-**BrainSNN reads the feed back.**
+**BrainSNN shows the emotions AI can't see.**
 
-BrainSNN is a 100-layer cognitive engine that runs in your browser and starts with one simple promise: paste any post, ad, email, script, or narrative and see what it is trying to make people feel, believe, and do before it shapes attention, behavior, brand risk, or public perception.
+BrainSNN is a live affective-intelligence engine that starts with one simple promise: paste any post, ad, email, script, or narrative and see what it is trying to make people feel, believe, and do before it shapes attention, behavior, brand risk, or public perception.
 
 ## What it does
 
 - Runs the full cognitive engine client-side — zero server required for the core
 - Bridges 14 tools to Claude Code, Codex, or any MCP-aware agent
 - Scans posts, ads, emails, scripts, and articles for fear, urgency, outrage, shame, belonging, desire, trust erosion, and manipulation pressure
+- Uses Crumb LLM wave processing and SNN-style brain visualization for the public demo path
 - Shows evidence behind each score
 - Visualizes brain state through a live 3D interface
 - Builds a local Knowledge Brain from your own files — nothing leaves your machine

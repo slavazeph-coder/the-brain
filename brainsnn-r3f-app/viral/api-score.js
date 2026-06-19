@@ -34,6 +34,12 @@ import {
   isGeminiServerConfigured,
   analyzeWithGeminiServer,
 } from "./gemini-server.js";
+// Server-side Crumb scorer — uses CRUMB_LLM_URL/CRUMB_LLM_KEY on the Node
+// process, so production can use Crumb without exposing a browser token.
+import {
+  isCrumbServerConfigured,
+  analyzeWithCrumbServer,
+} from "./crumb-server.js";
 
 // ---------- server-side Firewall ----------
 
@@ -221,13 +227,23 @@ export async function handleScore(req, res) {
   const regex = scoreWithRules(text, rules);
   const templates = detectTemplates(text);
 
-  // Semantic overlay: when GEMINI_API_KEY is set server-side, let Gemini judge
-  // the four dimensions (meaning over vocabulary). Keep the regex `signals` +
-  // templates so the "why this score" breakdown still shows matched phrases.
+  // Semantic overlay: prefer server-side Crumb LLM when configured, then
+  // Gemini. Keep regex `signals` + templates so "why this score" still shows
+  // matched phrases even when the semantic engine supplies the dimensions.
   let dims = regex;
   let engine = "regex-v1";
   let reasoning = "";
-  if (isGeminiServerConfigured()) {
+  if (isCrumbServerConfigured()) {
+    try {
+      const ai = await analyzeWithCrumbServer(text);
+      dims = ai;
+      engine = ai.source; // e.g. "crumb-llm:server"
+      reasoning = ai.reasoning || "";
+    } catch (err) {
+      console.error("[score] crumb fallback:", err.message || err);
+    }
+  }
+  if (engine === "regex-v1" && isGeminiServerConfigured()) {
     try {
       const ai = await analyzeWithGeminiServer(text);
       dims = ai;

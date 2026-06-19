@@ -11,6 +11,8 @@
  *   GET  /api/fetch-url       → HTML-strip reader (?u=)
  *   GET  /api/leaderboard     → weekly top-N + total
  *   POST /api/leaderboard     → submit a score
+ *   GET  /robots.txt          → crawler policy
+ *   GET  /sitemap.xml         → canonical URL map
  *   GET  /healthz             → liveness (Railway healthcheck)
  *
  * Everything SPA-routed falls through to dist/index.html for client routing.
@@ -85,16 +87,18 @@ function sendSocialPreviewFallback(res) {
   res.setHeader("Cache-Control", "public, max-age=300");
   res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">BrainSNN - Read the Feed</title>
-  <desc id="desc">BrainSNN reads the emotional payload inside online content.</desc>
-  <rect width="1200" height="630" fill="#101820"/>
-  <circle cx="982" cy="118" r="210" fill="#2dd4bf" opacity="0.24"/>
-  <circle cx="164" cy="532" r="190" fill="#fb7185" opacity="0.18"/>
-  <text x="88" y="152" fill="#7dd3fc" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="700">BrainSNN</text>
-  <text x="88" y="285" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="86" font-weight="800">Read the Feed</text>
-  <text x="92" y="360" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="500">See what posts, ads, and narratives try to make people feel, believe, and do.</text>
-  <rect x="88" y="438" width="292" height="74" rx="37" fill="#f8fafc"/>
-  <text x="126" y="486" fill="#101820" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">Open BrainSNN</text>
+  <title id="title">BrainSNN - Live Affective Intelligence</title>
+  <desc id="desc">BrainSNN shows the emotional payload inside online content as a live brain scan.</desc>
+  <rect width="1200" height="630" fill="#0a0a0f"/>
+  <circle cx="982" cy="118" r="210" fill="#00f5ff" opacity="0.26"/>
+  <circle cx="164" cy="532" r="190" fill="#a855f7" opacity="0.18"/>
+  <circle cx="850" cy="420" r="170" fill="#fb7185" opacity="0.16"/>
+  <text x="88" y="152" fill="#00f5ff" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="700">BrainSNN</text>
+  <text x="88" y="275" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="78" font-weight="800">See the emotions</text>
+  <text x="88" y="360" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="78" font-weight="800">AI can't see</text>
+  <text x="92" y="430" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="500">Crumb LLM + spiking neural analysis for content risk.</text>
+  <rect x="88" y="500" width="292" height="74" rx="37" fill="#f8fafc"/>
+  <text x="126" y="548" fill="#101820" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">Open BrainSNN</text>
 </svg>`);
 }
 
@@ -148,6 +152,18 @@ app.get("/social-preview.svg", (_req, res) => {
   } else {
     sendSocialPreviewFallback(res);
   }
+});
+
+app.get("/robots.txt", (_req, res) => {
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.sendFile(join(DIST, "robots.txt"));
+});
+
+app.get("/sitemap.xml", (_req, res) => {
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.sendFile(join(DIST, "sitemap.xml"));
 });
 
 // --- URL reader -------------------------------------------------------------
