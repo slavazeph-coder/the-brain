@@ -65,6 +65,7 @@ const PORT = Number(process.env.PORT) || 8080;
 // Local dev falls back to the sibling repo path.
 const SITE_DIST_CANDIDATES = [
   join(__dirname, "site-dist"),
+  join(__dirname, "public", "site-dist"),
   join(DIST, "site-dist"),
   join(__dirname, "..", "ui", "brainsnn-site", "dist"),
 ];
@@ -74,6 +75,74 @@ const SITE_DIST =
   ) ??
   SITE_DIST_CANDIDATES[0];
 const HAS_SITE_DIST = existsSync(join(SITE_DIST, "index.html"));
+
+const SITE_HOME_FALLBACK = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BrainSNN - Live Affective Intelligence</title>
+    <meta
+      name="description"
+      content="BrainSNN uses Crumb LLM and spiking-neural analysis to reveal emotional payload, attention risk, viral potential, and brand impact inside online content."
+    />
+    <style>
+      :root { color-scheme: dark; --bg: #0a0a0f; --cyan: #00f5ff; --purple: #a855f7; --muted: #a9b2c7; }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 78% 12%, rgba(0,245,255,.24), transparent 30rem),
+          radial-gradient(circle at 10% 86%, rgba(168,85,247,.2), transparent 28rem),
+          linear-gradient(135deg, #0a0a0f 0%, #111827 55%, #09090f 100%);
+        color: #f8fafc;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { width: min(980px, calc(100% - 32px)); padding: 56px 0; }
+      p:first-child { color: var(--cyan); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; font-size: .8rem; }
+      h1 { max-width: 760px; margin: 0; font-size: clamp(3rem, 8vw, 6.2rem); line-height: .94; }
+      .lede { max-width: 720px; color: var(--muted); font-size: clamp(1.08rem, 2vw, 1.35rem); line-height: 1.65; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+      a {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(148,163,184,.28);
+        border-radius: 999px;
+        padding: 0 20px;
+        color: #f8fafc;
+        font-weight: 800;
+        text-decoration: none;
+        background: rgba(15,23,42,.72);
+      }
+      a:first-child {
+        border-color: rgba(0,245,255,.82);
+        background: linear-gradient(135deg, var(--cyan), var(--purple));
+        color: #061018;
+        box-shadow: 0 0 28px rgba(0,245,255,.28);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>Crumb LLM + Spiking Neural Networks</p>
+      <h1>See the emotions AI can't see.</h1>
+      <p class="lede">
+        BrainSNN turns posts, ads, videos, and narratives into a live affective brain scan:
+        attention, emotional payload, trust risk, behavior pressure, and viral potential.
+      </p>
+      <div class="actions">
+        <a href="/app/">Try live demo</a>
+        <a href="/crumb-llm/">Crumb LLM</a>
+        <a href="/research/">GaugeGap research</a>
+      </div>
+    </main>
+  </body>
+</html>`;
 
 // Static 1200×630 card (public/og.png, copied into dist/ by the build) —
 // served whenever dynamic OG rendering throws, because social crawlers treat
@@ -308,7 +377,7 @@ if (!existsSync(DIST)) {
 }
 if (!HAS_SITE_DIST) {
   console.warn(
-    `[server] marketing site dist/ not found at ${SITE_DIST} — serving the app at "/" as a fallback`,
+    `[server] marketing site dist/ not found at ${SITE_DIST} — serving the inline homepage fallback at "/"`,
   );
 }
 
@@ -325,6 +394,15 @@ const staticOptions = {
     }
   },
 };
+
+app.get("/", (_req, res) => {
+  if (HAS_SITE_DIST) {
+    res.sendFile(join(SITE_DIST, "index.html"));
+  } else {
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    res.type("html").send(SITE_HOME_FALLBACK);
+  }
+});
 
 app.use("/app", express.static(DIST, staticOptions));
 if (HAS_SITE_DIST) {
