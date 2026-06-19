@@ -1,6 +1,8 @@
 node_modules/
 dist/
 site-dist/
+!public/site-dist/
+!public/site-dist/**
 .env
 .env.local
 .env.*.local
