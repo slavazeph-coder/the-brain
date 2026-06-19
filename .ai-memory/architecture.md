@@ -22,9 +22,7 @@ the-brain/
 │   ├── mcp-server/                ← Node stdio MCP bridge for Claude Code / Codex
 │   └── package.json
 ├── ui/
-│   ├── brainsnn-site/             ← marketing landing page (served at / by Railway)
-│   └── brainsnn-viewer/           ← alternate product-style viewer
-├── xio_evolve/                    ← XIO-Evolve Learn→Design→Experiment→Analyze pipeline
+│   └── brainsnn-site/             ← marketing landing page (served at / by Railway)
 ├── docs/screenshots/              ← panel shots + demo GIF used by the README
 ├── Dockerfile                     ← Railway image: builds brainsnn-site (/) + app (/app)
 ├── railway.toml                   ← Railway build/deploy config

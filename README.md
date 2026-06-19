@@ -200,13 +200,10 @@ the-brain/
 │   ├── mcp-server/            ← Node stdio MCP bridge for Claude Code / Codex
 │   └── .env.example           ← all 4 optional env vars documented
 ├── ui/
-│   ├── brainsnn-site/         ← marketing landing page (served at / by Railway)
-│   └── brainsnn-viewer/       ← alternate product-style viewer
-├── xio_evolve/                ← XIO-Evolve Learn→Design→Experiment→Analyze pipeline
+│   └── brainsnn-site/         ← marketing landing page (served at / by Railway)
 ├── docs/
 │   ├── screenshots/           ← 12 panel shots + demo GIF (used by this README)
 │   └── architecture.mmd       ← Mermaid source for the diagram above
-└── BRAINSNN_START_HERE.md     ← multi-surface explainer (3 apps in one repo)
 ```
 
 ## Tech stack
