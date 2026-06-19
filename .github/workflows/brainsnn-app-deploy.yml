@@ -29,7 +29,7 @@ permissions:
 
 concurrency:
   group: brainsnn-app-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   site:
