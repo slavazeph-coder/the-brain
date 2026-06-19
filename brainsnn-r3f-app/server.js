@@ -80,6 +80,24 @@ function sendOgFallback(res) {
   }
 }
 
+function sendSocialPreviewFallback(res) {
+  res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">BrainSNN - Read the Feed</title>
+  <desc id="desc">BrainSNN reads the emotional payload inside online content.</desc>
+  <rect width="1200" height="630" fill="#101820"/>
+  <circle cx="982" cy="118" r="210" fill="#2dd4bf" opacity="0.24"/>
+  <circle cx="164" cy="532" r="190" fill="#fb7185" opacity="0.18"/>
+  <text x="88" y="152" fill="#7dd3fc" font-family="Inter, Arial, sans-serif" font-size="36" font-weight="700">BrainSNN</text>
+  <text x="88" y="285" fill="#f8fafc" font-family="Inter, Arial, sans-serif" font-size="86" font-weight="800">Read the Feed</text>
+  <text x="92" y="360" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="500">See what posts, ads, and narratives try to make people feel, believe, and do.</text>
+  <rect x="88" y="438" width="292" height="74" rx="37" fill="#f8fafc"/>
+  <text x="126" y="486" fill="#101820" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="800">Open BrainSNN</text>
+</svg>`);
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.use(compression());
@@ -119,6 +137,16 @@ app.get("/api/social-og", async (req, res) => {
   } catch (err) {
     console.error("[social-og] render failed:", err);
     sendOgFallback(res);
+  }
+});
+
+app.get("/social-preview.svg", (_req, res) => {
+  const sitePreview = join(SITE_DIST, "social-preview.svg");
+  if (HAS_SITE_DIST && existsSync(sitePreview)) {
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.status(200).sendFile(sitePreview);
+  } else {
+    sendSocialPreviewFallback(res);
   }
 });
 
