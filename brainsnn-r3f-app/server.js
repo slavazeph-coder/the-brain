@@ -58,15 +58,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, "dist");
 const PORT = Number(process.env.PORT) || 8080;
 
-// The marketing site (ui/brainsnn-site) is the homepage at "/"; this app is
-// the product, served under "/app". The repo-root Dockerfile copies the site
-// build to ./site-dist. If Railway still builds from brainsnn-r3f-app only,
-// Vite copies public/site-dist to dist/site-dist as a compatibility fallback.
-// Local dev falls back to the sibling repo path.
+// The app-owned homepage fallback is the source of truth for "/"; this app is
+// the product, served under "/app". Prefer public/site-dist (and the copy Vite
+// emits to dist/site-dist) before ./site-dist because the repo-root Dockerfile
+// may copy the older ui/brainsnn-site build there.
 const SITE_DIST_CANDIDATES = [
-  join(__dirname, "site-dist"),
   join(__dirname, "public", "site-dist"),
   join(DIST, "site-dist"),
+  join(__dirname, "site-dist"),
   join(__dirname, "..", "ui", "brainsnn-site", "dist"),
 ];
 const SITE_DIST =
