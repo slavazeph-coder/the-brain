@@ -1,11 +1,8 @@
 node_modules/
+build/
 dist/
-site-dist/
-!public/site-dist/
-!public/site-dist/**
-.env
-.env.local
-.env.*.local
-cache/
+coverage/
 .DS_Store
 *.log
+.env*
+!.env.example
