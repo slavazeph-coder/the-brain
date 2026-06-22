@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Initialize Gemini safely
 let ai: GoogleGenAI | null = null;
@@ -198,6 +198,11 @@ async function callGeminiWithRetry(aiClient: GoogleGenAI, options: any, maxRetri
 // ----------------------------------------------------
 // API ENDPOINTS
 // ----------------------------------------------------
+
+// Health check endpoint for container orchestrators (Railway healthcheckPath).
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 app.post("/api/analyze", async (req, res) => {
   const { content, type } = req.body || {};

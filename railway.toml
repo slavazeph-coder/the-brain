@@ -1,12 +1,13 @@
 # Railway config for BrainSNN when the service deploys from the repository root.
-# The Dockerfile copies and builds brainsnn-r3f-app/, then serves it with Express.
+# The Dockerfile builds brainsnnworkspace/ (TypeScript/Vite SPA) and serves it
+# with the bundled Express server at dist/server.cjs.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node server.js"
+startCommand = "node dist/server.cjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/healthz"
