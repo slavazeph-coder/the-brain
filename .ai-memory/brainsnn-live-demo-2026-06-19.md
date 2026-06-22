@@ -1,0 +1,17 @@
+---
+type: project
+description: BrainSNN homepage live demo and Crumb LLM server integration notes
+---
+
+# BrainSNN Live Demo + Crumb Server Notes
+
+- 2026-06-19: Homepage (`ui/brainsnn-site`) was repositioned as a live affective-intelligence brain scan with preloaded viral reel, ad preflight, and news-frame examples. The public demo still links to `/app` for real URL/text scanning.
+- Production Crumb LLM should run through server-side `/api/score` using `CRUMB_LLM_URL` and `CRUMB_LLM_KEY`; do not put privileged Crumb credentials in `VITE_CRUMB_LLM_KEY`.
+- `/api/score` now prefers server-side Crumb when configured, then Gemini, then regex. Regex still supplies phrase-level `signals` for the UI evidence trail.
+- Node 26 can leave Vitest's global `localStorage` unavailable. `brainsnn-r3f-app/src/test/setup.js` provides a memory storage shim so onboarding tests pass without `--localstorage-file`.
+- Local dependency install in this worktree hit npm/DNS issues. Verification used the complete canonical installs under `/Users/slavaz/the-brain/.../node_modules` via temporary symlinks, then removed those symlinks.
+- 2026-06-19 deploy hardening: PR #66 added a checked-in `public/site-dist` homepage fallback and stronger `/` marker healthcheck, proving the gate catches app-shell root regressions. Railway CLI still honored the service's `brainsnn-r3f-app/Dockerfile` config, so PR #67 added `public/site-dist` as a runtime candidate and an inline `/` fallback. Verified live `https://www.brainsnn.com/`: `/` 200 with `BrainSNN - Live Affective Intelligence`, `/app/` 200 app shell, `/social-preview.svg` 200, `/healthz` 200.
+- 2026-06-19 final BrainSNN.com deploy: PR #68 shipped the richer viral Affective Intelligence landing; PR #69 made `server.js` prefer app-owned homepage builds; PR #70 made stale `site-dist` candidates fail marker validation; PR #71 fixed the real packaging footgun by unignoring `brainsnn-r3f-app/public/site-dist/**`. Railway CLI upload appears to honor `.gitignore`, so the old `site-dist/` ignore pattern stripped the committed homepage assets until explicit `!public/site-dist/` exceptions were added. Final verified live `https://www.brainsnn.com/`: `/` 200 and 13,523 bytes with demo/pricing markers, `/app/` 200, `/healthz` 200, `/social-preview.svg` 200. GitHub Actions deploy run `27849068299` passed.
+- 2026-06-20 domain check: `https://www.brainsnn.com/` still serves the new 13,523-byte landing from Railway with demo/pricing markers. Bare `https://brainsnn.com/` is not the Railway site: GoDaddy nameservers return apex A records `3.33.251.168` and `15.197.225.128`, and HTTP forwarding redirects to capitalized `https://Www.brainsnn.com`, which Railway treats as a different host and returns fallback/404. Fix must happen in DNS/GoDaddy/Railway custom-domain settings, not the repo deploy.
+- 2026-06-20 user deploy rule: for BrainSNN production, do not spin up another Railway/GitHub branch by default. Push the fix through GitHub, merge to `main`, let Railway auto-deploy from `main`, then watch the GitHub Actions/Railway run and verify live markers.
+- 2026-06-21 Gemini ZIP integration: treat uploaded Gemini workspaces as visual/product references unless explicitly approved as replacements. The ZIP included a separate React/server stack plus Gemini/Google Drive OAuth export flow; production should keep the existing Railway Express app and port only the safe visual/product ideas into `brainsnn-r3f-app/public/site-dist`.
