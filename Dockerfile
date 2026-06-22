@@ -1,63 +1,25 @@
 # BrainSNN root Dockerfile for Railway deployments that build from repo root.
 #
-# The deployable app lives in brainsnn-r3f-app/. This wrapper keeps Railway
-# deterministic even if the dashboard Root Directory is left at the repository
-# root instead of the app subdirectory.
+# The deployable app lives in brainsnnworkspace/ — a TypeScript/Vite SPA served
+# by an Express server (bundled to dist/server.cjs via esbuild). This wrapper
+# keeps Railway deterministic even if the dashboard Root Directory is left at the
+# repository root instead of the app subdirectory.
 
 FROM node:20-slim
-
-WORKDIR /site
-
-# Build the marketing site (homepage at /) first — it has no env-dependent
-# build steps, so its layer caches independently of the app's ARGs below.
-COPY ui/brainsnn-site/package.json ui/brainsnn-site/package-lock.json* ./
-RUN npm ci --no-audit --no-fund
-COPY ui/brainsnn-site/ ./
-RUN npm run build
 
 WORKDIR /app
 
 # Install app dependencies first for better layer caching.
-COPY brainsnn-r3f-app/package.json brainsnn-r3f-app/package-lock.json brainsnn-r3f-app/.npmrc ./
+COPY brainsnnworkspace/package.json brainsnnworkspace/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Copy the deployable app and build the Vite bundle served by server.js.
-COPY brainsnn-r3f-app/ ./
-
-# The marketing site's build output (already on disk at /site/dist from the
-# build above — single-stage image, no COPY --from needed) is served at "/"
-# by server.js; the app's own build (below) is served under "/app".
-RUN cp -r /site/dist ./site-dist
-
-# Railway Docker builds only expose service variables to build steps when the
-# Dockerfile declares them as ARGs. Vite reads VITE_* at build time.
-ARG VITE_GEMINI_API_KEY
-ARG VITE_GEMINI_MODEL
-ARG VITE_GEMINI_API_BASE
-ARG VITE_GEMMA_API_ENDPOINT
-ARG VITE_GEMMA_API_KEY
-ARG VITE_GEMMA_MODEL
-ARG VITE_TRIBE_API
-ARG VITE_SYNC_WS_URL
-ARG VITE_LOBSTER_TRAP_URL
-ARG VITE_LOBSTER_TRAP_KEY
-ARG VITE_CRUMB_LLM_URL
-ARG VITE_CRUMB_LLM_KEY
-ENV VITE_GEMINI_API_KEY=$VITE_GEMINI_API_KEY
-ENV VITE_GEMINI_MODEL=$VITE_GEMINI_MODEL
-ENV VITE_GEMINI_API_BASE=$VITE_GEMINI_API_BASE
-ENV VITE_GEMMA_API_ENDPOINT=$VITE_GEMMA_API_ENDPOINT
-ENV VITE_GEMMA_API_KEY=$VITE_GEMMA_API_KEY
-ENV VITE_GEMMA_MODEL=$VITE_GEMMA_MODEL
-ENV VITE_TRIBE_API=$VITE_TRIBE_API
-ENV VITE_SYNC_WS_URL=$VITE_SYNC_WS_URL
-ENV VITE_LOBSTER_TRAP_URL=$VITE_LOBSTER_TRAP_URL
-ENV VITE_LOBSTER_TRAP_KEY=$VITE_LOBSTER_TRAP_KEY
-ENV VITE_CRUMB_LLM_URL=$VITE_CRUMB_LLM_URL
-ENV VITE_CRUMB_LLM_KEY=$VITE_CRUMB_LLM_KEY
-
+# Copy the app sources and build the Vite client bundle (dist/) plus the
+# esbuild-bundled Express server (dist/server.cjs).
+COPY brainsnnworkspace/ ./
 RUN npm run build
 
+# The server reads GEMINI_API_KEY at runtime (set it as a Railway service
+# variable). Without a key it serves the deterministic local SNN simulation.
 ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
@@ -65,4 +27,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 8080) + '/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-CMD ["node", "server.js"]
+CMD ["node", "dist/server.cjs"]

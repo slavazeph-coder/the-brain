@@ -1,0 +1,8 @@
+{
+  "name": "Remix: BrainSNN",
+  "description": "Affective Intelligence for Online Content powered by Spiking Neural Networks and Crumb LLM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
