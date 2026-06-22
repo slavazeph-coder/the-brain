@@ -1,0 +1,12 @@
+{
+  "name": "BrainSNN",
+  "short_name": "BrainSNN",
+  "description": "Affective Intelligence for Online Content powered by Spiking Neural Networks and Crumb LLM.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06060a",
+  "theme_color": "#06060a",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" }
+  ]
+}

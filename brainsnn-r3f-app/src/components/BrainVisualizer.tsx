@@ -18,7 +18,7 @@ interface BrainNode {
   label: string;
 }
 
-export default function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizerProps) {
+function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizerProps) {
   if (!metrics) {
     return null;
   }
@@ -411,12 +411,14 @@ export default function BrainVisualizer({ metrics, payloadType, isProcessing }: 
   }, [nodes, zoom, isRotating, activeRegion, metrics, isProcessing, rotation]);
 
   // Handle Drag / Rotation controls
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     isDragging.current = true;
     previousMousePosition.current = { x: e.clientX, y: e.clientY };
+    // Keep tracking the drag even if the pointer leaves the canvas (and let touch drag rotate).
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDragging.current) {
       // Find nearest active region block for hover interactivity
       const canvas = canvasRef.current;
@@ -464,7 +466,7 @@ export default function BrainVisualizer({ metrics, payloadType, isProcessing }: 
     previousMousePosition.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     isDragging.current = false;
   };
 
@@ -539,11 +541,14 @@ export default function BrainVisualizer({ metrics, payloadType, isProcessing }: 
           ref={canvasRef}
           width={400}
           height={400}
-          className="cursor-grab active:cursor-grabbing w-full h-full max-w-full z-10 transition-transform duration-300"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          role="img"
+          aria-label={`3D spiking neural network brain visualization. Payload type ${payloadType}. Mean firing rate ${metrics.firingRate} hertz.`}
+          className="cursor-grab active:cursor-grabbing touch-none w-full h-full max-w-full z-10 transition-transform duration-300"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          onPointerCancel={handlePointerUp}
         />
 
         {/* Floating Scenarios HUD Info */}
@@ -613,3 +618,5 @@ export default function BrainVisualizer({ metrics, payloadType, isProcessing }: 
     </div>
   );
 }
+
+export default React.memo(BrainVisualizer);
