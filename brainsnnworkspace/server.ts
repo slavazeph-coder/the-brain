@@ -200,7 +200,7 @@ async function callGeminiWithRetry(aiClient: GoogleGenAI, options: any, maxRetri
 // ----------------------------------------------------
 
 app.post("/api/analyze", async (req, res) => {
-  const { content, type } = req.body;
+  const { content, type } = req.body || {};
 
   if (!content) {
     return res.status(400).json({ error: "Content parameter is required." });
@@ -381,13 +381,13 @@ app.get("/api/download-zip", (req: any, res: any) => {
         const fullPath = path.join(dirPath, item);
         const relativeZipPath = zipPath ? path.join(zipPath, item) : item;
 
-        // Smart exclusions for compact download sizes
+        // Smart exclusions for compact download sizes and security
         if (
           item === "node_modules" ||
           item === ".git" ||
           item === "dist" ||
           item === ".aistudio" ||
-          item === ".env" ||
+          (item.startsWith(".env") && item !== ".env.example") ||
           item === ".npm" ||
           item === ".cache"
         ) {

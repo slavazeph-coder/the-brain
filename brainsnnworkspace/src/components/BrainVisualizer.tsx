@@ -19,6 +19,10 @@ interface BrainNode {
 }
 
 export default function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizerProps) {
+  if (!metrics) {
+    return null;
+  }
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [rotation, setRotation] = useState({ x: 0.5, y: 0.8 });
   const [zoom, setZoom] = useState(1.1);
@@ -404,7 +408,7 @@ export default function BrainVisualizer({ metrics, payloadType, isProcessing }: 
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [nodes, zoom, isRotating, activeRegion, metrics, isProcessing]);
+  }, [nodes, zoom, isRotating, activeRegion, metrics, isProcessing, rotation]);
 
   // Handle Drag / Rotation controls
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
