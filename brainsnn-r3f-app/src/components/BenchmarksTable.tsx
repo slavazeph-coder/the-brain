@@ -10,7 +10,7 @@ interface BenchmarkRow {
   improved: boolean;
 }
 
-export default function BenchmarksTable() {
+function BenchmarksTable() {
   const [activeTab, setActiveTab] = useState<'scaling' | 'speed' | 'accuracy'>('scaling');
 
   const benchmarksData: Record<'scaling' | 'speed' | 'accuracy', BenchmarkRow[]> = {
@@ -198,3 +198,5 @@ export default function BenchmarksTable() {
     </div>
   );
 }
+
+export default React.memo(BenchmarksTable);

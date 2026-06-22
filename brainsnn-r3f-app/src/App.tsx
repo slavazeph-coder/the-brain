@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { 
   Zap, 
   Cpu, 
@@ -31,7 +31,9 @@ import {
   Heart,
   MessageSquare,
   Download,
-  Cloud
+  Cloud,
+  Menu,
+  X
 } from "lucide-react";
 import BrainVisualizer from "./components/BrainVisualizer";
 import BenchmarksTable from "./components/BenchmarksTable";
@@ -124,6 +126,8 @@ export default function App() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [scanHistory, setScanHistory] = useState<AnalysisResult[]>([]);
   const [shareCopied, setShareCopied] = useState(false);
+  const [postCopied, setPostCopied] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Crumb LLM Physics Tuner States
   const [damping, setDamping] = useState(0.15);
@@ -157,6 +161,7 @@ export default function App() {
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [checkoutComplete, setCheckoutComplete] = useState(false);
   const [creditCardNum, setCreditCardNum] = useState("");
+  const [checkoutEmail, setCheckoutEmail] = useState("");
 
   const pricingTiers: SubscriptionPlan[] = [
     {
@@ -395,20 +400,22 @@ export default function App() {
 
       const data: AnalysisResult = await response.json();
       setAnalysisResult(data);
-      
+
       // Prepend to scan history
       setScanHistory(prev => {
         if (prev.some(x => x.id === data.id)) return prev;
         return [data, ...prev].slice(0, 10);
       });
-      
+      setStatusMessage("");
+
     } catch (err) {
       console.error(err);
+      // Keep the failure visible briefly so it is announced rather than wiped instantly.
       setStatusMessage("Simulation fault. Recovering local neuro-emulator...");
+      setTimeout(() => setStatusMessage(""), 4000);
     } finally {
       clearInterval(interval);
       setIsProcessing(false);
-      setStatusMessage("");
     }
   };
 
@@ -442,8 +449,103 @@ export default function App() {
       setSelectedPlan(null);
       setCheckoutComplete(false);
       setCreditCardNum("");
+      setCheckoutEmail("");
     }, 2500);
   };
+
+  // Compose the current scan into a branded "NeuroGlow" social card and download
+  // it as a real PNG. Self-contained (offscreen canvas), so it works regardless
+  // of which tab is mounted. Colors are locked to the BrainSNN theme.
+  const downloadNeuroGlowFrame = () => {
+    const W = 1200, H = 675;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = "#06060a";
+    ctx.fillRect(0, 0, W, H);
+
+    const accent = ctx.createLinearGradient(0, 0, W, H);
+    accent.addColorStop(0, "#00f5ff");
+    accent.addColorStop(1, "#a855f7");
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, W, 8);
+
+    // Monogram tile
+    ctx.fillStyle = accent;
+    const tileX = 80, tileY = 70, tileS = 92;
+    ctx.beginPath();
+    ctx.roundRect(tileX, tileY, tileS, tileS, 20);
+    ctx.fill();
+    ctx.fillStyle = "#06060a";
+    ctx.font = "700 30px 'JetBrains Mono', monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("SNN", tileX + tileS / 2, tileY + tileS / 2 + 1);
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#f1f1f6";
+    ctx.font = "700 52px 'Inter', system-ui, sans-serif";
+    ctx.fillText("BrainSNN", tileX + tileS + 28, tileY + 62);
+
+    const r = analysisResult;
+    ctx.fillStyle = "#f1f1f6";
+    ctx.font = "700 44px 'Inter', system-ui, sans-serif";
+    ctx.fillText(r?.title ?? "Affective Intelligence Scan", 80, 250);
+
+    ctx.fillStyle = "#9aa0b4";
+    ctx.font = "400 24px 'Inter', system-ui, sans-serif";
+    ctx.fillText(`Payload: ${r?.payloadType ?? "—"}   ·   Risk: ${r?.riskRating ?? "—"}`, 80, 300);
+
+    // Metric tiles
+    const metrics: [string, string][] = [
+      ["VIRAL SCORE", `${r?.viralScore ?? 0}`],
+      ["FIRING RATE", `${r?.metrics.firingRate ?? 0} Hz`],
+      ["PLASTICITY", `${r?.metrics.plasticity ?? 0}%`],
+      ["CONFIDENCE", `${r?.confidence ?? 0}%`],
+    ];
+    const cardW = 250, cardH = 130, gap = 24, startX = 80, startY = 360;
+    metrics.forEach(([label, value], i) => {
+      const x = startX + i * (cardW + gap);
+      ctx.fillStyle = "#0a0a0f";
+      ctx.beginPath();
+      ctx.roundRect(x, startY, cardW, cardH, 16);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(168,85,247,0.25)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x, startY, cardW, cardH, 16);
+      ctx.stroke();
+      ctx.fillStyle = "#7c8294";
+      ctx.font = "500 16px 'JetBrains Mono', monospace";
+      ctx.fillText(label, x + 22, startY + 42);
+      ctx.fillStyle = "#00f5ff";
+      ctx.font = "700 46px 'Inter', system-ui, sans-serif";
+      ctx.fillText(value, x + 22, startY + 100);
+    });
+
+    ctx.fillStyle = "#00f5ff";
+    ctx.font = "500 22px 'JetBrains Mono', monospace";
+    ctx.fillText("brainsnn.com", 80, 600);
+    ctx.fillStyle = "#a855f7";
+    ctx.font = "400 18px 'JetBrains Mono', monospace";
+    ctx.fillText("O(N log N) · WAVE-EQUATION ATTENTION CORE", 80, 632);
+
+    const link = document.createElement("a");
+    link.download = `brainsnn-neuroglow-${r?.id ?? "scan"}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  // Sentence-level virality scoring is O(n) over the content and was being
+  // recomputed on every render; memoize on the raw content it depends on.
+  const scoredSegments = useMemo(
+    () => segmentContent(analysisResult?.rawContent ?? "").map((seg, idx) => ({ ...seg, originalIndex: idx })),
+    [analysisResult?.rawContent]
+  );
 
   return (
     <div className="w-full min-h-screen bg-[#0a0a0f] text-[#e0e0e0] flex flex-col font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
@@ -516,8 +618,36 @@ export default function App() {
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
             <span>SYSTEM OPTIMAL</span>
           </div>
+          {/* Mobile menu toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(v => !v)}
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-nav"
+            className="md:hidden flex items-center justify-center bg-zinc-950/65 border border-white/5 rounded-full p-2 text-[#00f5ff] cursor-pointer"
+          >
+            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+          </button>
         </div>
       </header>
+
+      {/* Mobile tab navigator (additive; reuses header styling) */}
+      {mobileMenuOpen && (
+        <nav
+          id="mobile-nav"
+          className="md:hidden sticky top-[57px] z-40 bg-[#0a0a0f]/95 backdrop-blur-md border-b border-white/10 flex flex-col px-4 py-1 font-mono text-xs uppercase tracking-widest"
+        >
+          {([['demo', 'SNN Visualizer'], ['crumb', 'Crumb LLM Physics'], ['pricing', 'Monetization Deck'], ['lab', 'Cognitive Firewall']] as [typeof activeTab, string][]).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => { setActiveTab(id); setMobileMenuOpen(false); }}
+              className={`text-left py-3 border-b border-white/5 last:border-b-0 transition-colors cursor-pointer ${activeTab === id ? "text-[#00f5ff]" : "text-white/70 hover:text-white"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       {/* Hero Visual Segment with vertical reel style reactive mock player & promo hooks */}
       <section className="relative w-full border-b border-white/10 overflow-hidden py-12 md:py-20 px-4 md:px-8 z-10" id="hero-segment-main">
@@ -731,9 +861,11 @@ export default function App() {
                 <div className="absolute right-3.5 top-1/4 flex flex-col gap-4.5 z-20 text-white">
                   
                   {/* Play & Pause */}
-                  <button 
+                  <button
                     onClick={() => setReelPlaying(!reelPlaying)}
                     title="Toggle simulated playback"
+                    aria-label={reelPlaying ? "Pause preview" : "Play preview"}
+                    aria-pressed={reelPlaying}
                     className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 border border-white/10 flex items-center justify-center transition-all cursor-pointer shadow-md group border-none"
                   >
                     {reelPlaying ? <Pause className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" /> : <Play className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />}
@@ -746,6 +878,8 @@ export default function App() {
                       setReelLikes(prev => isLiked ? prev - 1 : prev + 1);
                     }}
                     title="Give reaction"
+                    aria-label="Like preview"
+                    aria-pressed={isLiked}
                     className="flex flex-col items-center cursor-pointer focus:outline-none"
                   >
                     <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all shadow-md ${
@@ -1121,6 +1255,7 @@ export default function App() {
                 <button
                   onClick={() => triggerScan()}
                   disabled={isProcessing || !contentInput.trim()}
+                  aria-busy={isProcessing}
                   className={`w-full py-3 rounded-xl text-xs uppercase font-bold tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 ${
                     isProcessing 
                       ? "bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed" 
@@ -1140,6 +1275,8 @@ export default function App() {
                     </>
                   )}
                 </button>
+                {/* Screen-reader announcement of scan progress / errors */}
+                <span className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0" aria-live="polite">{statusMessage}</span>
               </div>
 
               {/* Preloaded Scenarios Block */}
@@ -1582,7 +1719,7 @@ export default function App() {
               {trendAlertsEnabled ? (
                 <div className="space-y-3.5 leading-relaxed">
                   {(() => {
-                    const allSegments = segmentContent(analysisResult.rawContent).map((seg, idx) => ({ ...seg, originalIndex: idx }));
+                    const allSegments = scoredSegments;
                     let segmentsToRender = allSegments;
                     
                     if (highlightAnomalies) {
@@ -1798,6 +1935,8 @@ export default function App() {
 
                 <canvas
                   ref={waveCanvasRef}
+                  role="img"
+                  aria-label="Crumb LLM damped harmonic attention waveform compared to transformer attention decay"
                   width={420}
                   height={220}
                   className="w-full max-w-full aspect-[21/11] bg-black/40 rounded-xl border border-white/5"
@@ -1933,18 +2072,21 @@ export default function App() {
                           Synapse Pipeline Enabled!
                         </h5>
                         <p className="text-xs text-zinc-400">
-                          API key and local container access keys issued to <span className="text-cyan-400 font-bold">{selectedPlan.id === "tier_free" ? "explorer@brainsnn" : "slavazeph@gmail.com"}</span>.
+                          API key and local container access keys issued to <span className="text-cyan-400 font-bold">{checkoutEmail || (selectedPlan.id === "tier_free" ? "your explorer inbox" : "your registered email")}</span>.
                         </p>
                       </div>
                     ) : (
                       <form onSubmit={handleSimulatePayment} className="space-y-4">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-mono text-zinc-400 uppercase">Registered user email:</label>
-                          <input 
-                            type="email" 
-                            disabled 
-                            value="slavazeph@gmail.com" 
-                            className="w-full bg-zinc-950 border border-white/5 rounded-lg p-2.5 text-xs text-zinc-400 font-mono focus:outline-none"
+                          <label htmlFor="checkout-email" className="text-[10px] font-mono text-zinc-400 uppercase">Registered user email:</label>
+                          <input
+                            id="checkout-email"
+                            type="email"
+                            required
+                            placeholder="you@company.com"
+                            value={checkoutEmail}
+                            onChange={(e) => setCheckoutEmail(e.target.value)}
+                            className="w-full bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-cyan-300 font-mono focus:ring-1 focus:ring-cyan-500 focus:outline-none"
                           />
                         </div>
 
@@ -2457,23 +2599,24 @@ export default function App() {
 
                       const postText = `🔥 Brand Neuromarketing Scan processed! My SNN emotional analysis score: ${analysisResult?.viralScore || 72}% computed live in @BrainSNN. Highly targeted emotional spike levels. ${hashtagsStr}\n\nCheckout visual: ${window.location.origin}/share/${analysisResult?.id || "demo"}`;
                       navigator.clipboard.writeText(postText);
-                      alert("Successfully compiled social post with SNN link, hashtags, and virality metrics copied to clipboard!");
+                      setPostCopied(true);
+                      setTimeout(() => setPostCopied(false), 2000);
                     }}
                     disabled={gifProgress < 100}
                     className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold uppercase transition-all tracking-wider flex items-center justify-center gap-1.5 ${
-                      gifProgress < 100 
+                      gifProgress < 100
                         ? "bg-zinc-900 border border-zinc-800 text-zinc-500 cursor-not-allowed"
                         : "bg-[#00f5ff]/15 hover:bg-[#00f5ff]/25 text-[#00f5ff] border border-cyan-500/35 cursor-pointer shadow-[0_0_15px_rgba(0,245,255,0.15)]"
                     }`}
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy Post & Hashtags</span>
+                    {postCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{postCopied ? "Copied!" : "Copy Post & Hashtags"}</span>
                   </button>
 
                   <button
                     onClick={() => {
                       if (gifProgress < 100) return;
-                      alert("Direct Simulated Image export downloaded successfully. In production, this saves the modular frame containing the active 3D SNN mesh.");
+                      downloadNeuroGlowFrame();
                     }}
                     disabled={gifProgress < 100}
                     className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold uppercase transition-all tracking-wider flex items-center justify-center gap-1.5 ${
@@ -2488,7 +2631,7 @@ export default function App() {
                 </div>
 
                 <div className="text-[9px] font-mono text-zinc-500 leading-normal border-t border-white/5 pt-2">
-                  * Dynamic WebM exports bypass client-rendering pipelines and are compiled on dedicated SNN visual core servers for optimum compression.
+                  * The NeuroGlow frame is rendered client-side from your live scan and downloaded as a PNG card.
                 </div>
               </div>
 
