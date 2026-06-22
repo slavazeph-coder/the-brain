@@ -1,25 +1,22 @@
 # BrainSNN root Dockerfile for Railway deployments that build from repo root.
 #
-# The deployable app lives in brainsnnworkspace/ — a TypeScript/Vite SPA served
-# by an Express server (bundled to dist/server.cjs via esbuild). This wrapper
-# keeps Railway deterministic even if the dashboard Root Directory is left at the
-# repository root instead of the app subdirectory.
+# Mirrors brainsnn-r3f-app/Dockerfile so the app builds the same whether Railway
+# is rooted at the repo root or at brainsnn-r3f-app/. The deployable app is the
+# TypeScript/Vite SPA served by the esbuild-bundled Express server.
 
 FROM node:20-slim
 
 WORKDIR /app
 
 # Install app dependencies first for better layer caching.
-COPY brainsnnworkspace/package.json brainsnnworkspace/package-lock.json ./
+COPY brainsnn-r3f-app/package.json brainsnn-r3f-app/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Copy the app sources and build the Vite client bundle (dist/) plus the
+# Copy app sources and build the Vite client bundle (dist/) plus the
 # esbuild-bundled Express server (dist/server.cjs).
-COPY brainsnnworkspace/ ./
+COPY brainsnn-r3f-app/ ./
 RUN npm run build
 
-# The server reads GEMINI_API_KEY at runtime (set it as a Railway service
-# variable). Without a key it serves the deterministic local SNN simulation.
 ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080

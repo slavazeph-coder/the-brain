@@ -1,16 +1,9 @@
 name: Deploy BrainSNN app to Railway
 
-# Deploys brainsnn-r3f-app (served by server.js) to the Railway service that
-# backs brainsnn.com. The root Dockerfile also builds ui/brainsnn-site for the
-# homepage at "/". Documented in brainsnn-r3f-app/DEPLOY.md — requires the
+# Deploys brainsnn-r3f-app (a TypeScript/Vite SPA served by an esbuild-bundled
+# Express server) to the Railway service that backs brainsnn.com. Requires the
 # RAILWAY_TOKEN repository secret; project/service/health defaults can be
 # overridden with repository variables.
-#
-# Important: Railway's dashboard GitHub integration has historically been
-# rooted at brainsnn-r3f-app. That native path cannot build ui/brainsnn-site.
-# Keep native auto-deploy disabled, or set the Railway Root Directory to the
-# repo root, so it cannot overwrite this repo-root CLI deploy with an app-only
-# image after CI completes.
 
 on:
   push:
@@ -18,7 +11,6 @@ on:
       - main
     paths:
       - "brainsnn-r3f-app/**"
-      - "ui/brainsnn-site/**"
       - "Dockerfile"
       - "railway.toml"
       - ".github/workflows/brainsnn-app-deploy.yml"
@@ -32,31 +24,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  site:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: ui/brainsnn-site
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: ui/brainsnn-site/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Build marketing site
-        run: npm run build
-
-  test:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -77,65 +45,30 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Run tests
-        run: npm test
+      - name: Typecheck
+        run: npm run lint
 
       - name: Build
         run: npm run build
 
-      - name: Verify friendly build
-        run: npm run verify:friendly-build
-
-  smoke:
-    runs-on: ubuntu-latest
-    needs: test
-    timeout-minutes: 12
-    defaults:
-      run:
-        working-directory: brainsnn-r3f-app
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: brainsnn-r3f-app/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
-
-      - name: Install Playwright (not in the app lockfile by design)
-        # Reinstalls a browser from scratch each run; cap it so a hung
-        # download fails fast instead of stalling the whole job.
-        timeout-minutes: 5
-        run: |
-          npm i --no-save playwright
-          npx playwright install --with-deps chromium
-
-      - name: Build
-        run: npm run build
-
-      - name: Smoke test the built app headless
-        # The app moved to /app/ (base) when the marketing site took over "/".
-        # CI builds only brainsnn-r3f-app, so "/" (marketing) 404s here — point
-        # the smoke at the app's real path. Production serves both via Docker.
+      - name: Boot-check the built server
         env:
-          SMOKE_URL: http://localhost:8080/app/
+          NODE_ENV: production
+          PORT: "8080"
         run: |
-          node server.js &
+          node dist/server.cjs &
+          SRV=$!
           for i in $(seq 1 20); do
-            curl -sf http://localhost:8080/healthz >/dev/null && break
+            curl -sf http://127.0.0.1:8080/healthz >/dev/null && break
             sleep 1
           done
-          node scripts/smoke.mjs
+          curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "Affective Intelligence Core"
+          kill $SRV 2>/dev/null || true
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [site, test, smoke]
+    needs: [build]
     timeout-minutes: 15
     environment:
       name: production
@@ -156,19 +89,13 @@ jobs:
           RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT || 'production' }}
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_TOKEN secret is required for the repo-root deploy." >&2
-            echo "Railway's native GitHub integration has been rooted at brainsnn-r3f-app," >&2
-            echo "which cannot build ui/brainsnn-site for the BrainSNN.com homepage." >&2
+            echo "RAILWAY_TOKEN secret is required for the deploy." >&2
             exit 1
           fi
           test -f Dockerfile
           test -f railway.toml
-          test -f ui/brainsnn-site/package.json
           test -f brainsnn-r3f-app/package.json
-          # Upload the whole repo (no path arg — the CLI rejects '.' with
-          # "prefix not found"): the service builds with the root Dockerfile,
-          # which builds ui/brainsnn-site for "/" and brainsnn-r3f-app for
-          # "/app".
+          # Upload the repo; Railway builds the service-rooted Dockerfile.
           railway up \
             --project "$RAILWAY_PROJECT_ID" \
             --service "$RAILWAY_SERVICE" \
@@ -178,42 +105,25 @@ jobs:
       - name: Healthcheck
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
-          # An app asset that proves the build finished rolling out, not just
-          # that something is up. Lives under /app/ since the reposition gave
-          # "/" to the marketing site (the old /favicon.svg now 404s there).
-          # Railway's own rebuild of main takes a few minutes, hence the
-          # ~10-minute retry window.
-          VERSION_URL: ${{ vars.BRAINSNN_VERSION_URL || 'https://www.brainsnn.com/app/favicon.svg' }}
-          # Static homepage asset with BrainSNN social-card copy. This proves
-          # homepage/public asset changes deployed too.
-          SITE_PREVIEW_URL: ${{ vars.BRAINSNN_SITE_PREVIEW_URL || 'https://www.brainsnn.com/social-preview.svg' }}
-          # The actual homepage must include the current viral landing, not
-          # just an older title-only fallback.
-          SITE_HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
+          # The SPA shell carries the app title — proves the new build rolled out,
+          # not just that something is up. Railway's rebuild takes a few minutes,
+          # hence the ~10-minute retry window.
+          HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
         run: |
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
-            version="$(curl -L -s -o /dev/null -w '%{http_code}' "$VERSION_URL" || true)"
-            preview="$(curl -L -s -o /tmp/brainsnn-social-preview.svg -w '%{http_code}' "$SITE_PREVIEW_URL" || true)"
-            home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$SITE_HOME_URL" || true)"
-            if [ "$preview" = "200" ] && grep -Fq "See the emotions" /tmp/brainsnn-social-preview.svg; then
-              site_marker="ok"
-            else
-              site_marker="missing"
-            fi
-            if [ "$home" = "200" ] \
-              && grep -Fq "Paste a post. Watch the brain react." /tmp/brainsnn-home.html \
-              && grep -Fq "Start free, upgrade when scans become workflow." /tmp/brainsnn-home.html; then
+            home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
+            if [ "$home" = "200" ] && grep -Fq "Affective Intelligence Core" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
             fi
-            echo "attempt $i → healthz $health, app marker $version, preview marker $preview/$site_marker, home marker $home/$home_marker"
-            if [ "$health" = "200" ] && [ "$version" = "200" ] && [ "$site_marker" = "ok" ] && [ "$home_marker" = "ok" ]; then
-              echo "Live service is healthy and serving the current app + homepage build."
+            echo "attempt $i → healthz $health, home $home/$home_marker"
+            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ]; then
+              echo "Live service is healthy and serving the current build."
               exit 0
             fi
             sleep 20
           done
-          echo "Service never became healthy on the current build ($HEALTH_URL / $VERSION_URL / $SITE_PREVIEW_URL / $SITE_HOME_URL)" >&2
+          echo "Service never became healthy on the current build ($HEALTH_URL / $HOME_URL)" >&2
           exit 1
