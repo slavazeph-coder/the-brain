@@ -568,7 +568,7 @@ export default function App() {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-lg font-bold font-sans text-white tracking-tight leading-none">BrainSNN.com</span>
-              <span className="text-[10px] bg-cyan-950/40 text-cyan-400 border border-cyan-500/20 px-1.5 py-0.2 rounded font-mono font-bold">V2.0</span>
+              <span className="text-[10px] bg-cyan-950/40 text-cyan-400 border border-cyan-500/20 px-1.5 py-0.5 rounded font-mono font-bold">V2.0</span>
             </div>
             <p className="text-[9px] text-[#00f5ff] uppercase tracking-widest font-mono">Affective Intelligence Core</p>
           </div>
@@ -668,7 +668,7 @@ export default function App() {
             </h1>
 
             <p className="text-zinc-400 text-sm sm:text-base leading-relaxed max-w-2xl">
-              Powered by the proprietary, physics-based <span className="text-cyan-300 font-semibold">Crumb LLM</span> using $O(N \log N)$ Spiking Neural Networks (SNNs). Decode emotional metrics, attention cascades, and brand safety profiles in text, URL articles, or vertical video feeds.
+              Powered by the proprietary, physics-based <span className="text-cyan-300 font-semibold">Crumb LLM</span> using O(N log N) Spiking Neural Networks (SNNs). Decode emotional metrics, attention cascades, and brand safety profiles in text, URL articles, or vertical video feeds.
             </p>
 
             <div className="flex flex-wrap gap-4 pt-2">
@@ -699,7 +699,7 @@ export default function App() {
             <div className="grid grid-cols-3 gap-6 pt-6 border-t border-white/5 max-w-lg">
               <div>
                 <p className="text-[10px] font-mono text-zinc-500 uppercase">Attention Run</p>
-                <p className="text-xl font-bold text-white mt-0.5">$O(n \log n)$</p>
+                <p className="text-xl font-bold text-white mt-0.5">O(n log n)</p>
                 <p className="text-[9px] font-mono text-cyan-400">Wave Mechanics</p>
               </div>
               <div>
@@ -725,7 +725,7 @@ export default function App() {
                 {/* Dynamically styled background based on reelStyle */}
                 {reelStyle === "viral" && (
                   <>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-rose-955/10 to-black/40 z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-rose-950/10 to-black/40 z-10" />
                     <div className="absolute inset-x-0 bottom-1/4 h-24 flex items-center justify-center opacity-65 z-0">
                       <div className="w-48 h-48 bg-rose-500/20 rounded-full blur-3xl animate-pulse"></div>
                       <div className="w-32 h-32 bg-[#a855f7]/20 rounded-full blur-2xl animate-pulse ml-10"></div>
@@ -735,7 +735,7 @@ export default function App() {
 
                 {reelStyle === "matrix" && (
                   <>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-green-955/20 to-black/60 z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-green-950/20 to-black/60 z-10" />
                     <div className="absolute inset-x-0 bottom-1/4 h-24 flex items-center justify-center opacity-65 z-0">
                       <div className="w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl animate-pulse"></div>
                       <div className="w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl animate-pulse ml-10"></div>
@@ -748,7 +748,7 @@ export default function App() {
 
                 {reelStyle === "subliminal" && (
                   <>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-amber-955/25 to-black/50 z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-amber-950/25 to-black/50 z-10" />
                     <div className="absolute inset-x-0 bottom-1/4 h-24 flex items-center justify-center opacity-65 z-0">
                       <div className="w-48 h-48 bg-amber-500/15 rounded-full blur-3xl animate-pulse"></div>
                       <div className="w-32 h-32 bg-red-500/10 rounded-full blur-2xl animate-pulse ml-10"></div>
@@ -844,7 +844,7 @@ export default function App() {
                     </div>
 
                     {/* Live-updating Overlay Message Caption */}
-                    <div className="bg-gradient-to-r from-purple-955/80 to-slate-955/80 p-3 rounded-xl border border-purple-500/20 backdrop-blur-sm shadow-xl transition-all">
+                    <div className="bg-gradient-to-r from-purple-950/80 to-slate-950/80 p-3 rounded-xl border border-purple-500/20 backdrop-blur-sm shadow-xl transition-all">
                       <p className="text-xs font-bold text-white tracking-wide leading-relaxed line-clamp-3">
                         "{reelCaption}"
                       </p>
@@ -884,7 +884,7 @@ export default function App() {
                   >
                     <div className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all shadow-md ${
                       isLiked 
-                        ? 'bg-rose-500/20 border-rose-500/60 text-rose-450' 
+                        ? 'bg-rose-500/20 border-rose-500/60 text-rose-400' 
                         : 'bg-black/60 hover:bg-black/80 border-white/10 text-white'
                     }`}>
                       <Heart className={`w-4 h-4 ${isLiked ? 'fill-rose-500 text-rose-500 animate-bounce' : ''}`} />
@@ -945,8 +945,8 @@ export default function App() {
                     onClick={() => setReelStyle("viral")}
                     className={`px-2 py-1 text-[9px] font-bold font-mono rounded border transition-all ${
                       reelStyle === "viral" 
-                        ? "bg-rose-500/10 text-rose-455 border-rose-500/40" 
-                        : "bg-zinc-900 border-transparent hover:border-zinc-850 text-zinc-450"
+                        ? "bg-rose-500/10 text-rose-400 border-rose-500/40" 
+                        : "bg-zinc-900 border-transparent hover:border-zinc-800 text-zinc-400"
                     }`}
                   >
                     Viral Sunset
@@ -955,8 +955,8 @@ export default function App() {
                     onClick={() => setReelStyle("matrix")}
                     className={`px-2 py-1 text-[9px] font-bold font-mono rounded border transition-all ${
                       reelStyle === "matrix" 
-                        ? "bg-emerald-500/10 text-emerald-455 border-emerald-500/40" 
-                        : "bg-zinc-900 border-transparent hover:border-zinc-850 text-zinc-450"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/40" 
+                        : "bg-zinc-900 border-transparent hover:border-zinc-800 text-zinc-400"
                     }`}
                   >
                     Matrix Core
@@ -965,8 +965,8 @@ export default function App() {
                     onClick={() => setReelStyle("subliminal")}
                     className={`px-2 py-1 text-[9px] font-bold font-mono rounded border transition-all ${
                       reelStyle === "subliminal" 
-                        ? "bg-amber-500/10 text-amber-455 border-amber-500/40" 
-                        : "bg-zinc-900 border-transparent hover:border-zinc-850 text-zinc-455"
+                        ? "bg-amber-500/10 text-amber-400 border-amber-500/40" 
+                        : "bg-zinc-900 border-transparent hover:border-zinc-800 text-zinc-400"
                     }`}
                   >
                     Amber Alert
@@ -1025,7 +1025,7 @@ export default function App() {
                     value={customCommentText}
                     onChange={(e) => setCustomCommentText(e.target.value)}
                     placeholder="Type e.g. OMG scary / wow hype / now!"
-                    className="flex-1 text-xs bg-zinc-905 border border-white/5 rounded px-2 py-1 text-zinc-300 focus:outline-[#a855f7] focus:outline-1"
+                    className="flex-1 text-xs bg-zinc-900 border border-white/5 rounded px-2 py-1 text-zinc-300 focus:outline-[#a855f7] focus:outline-1"
                   />
                   <button 
                     onClick={() => {
@@ -1200,11 +1200,11 @@ export default function App() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5 text-cyan-400 rotate-12" />
-                        <span className="text-[10px] font-mono text-zinc-350 uppercase tracking-wider font-bold">
+                        <span className="text-[10px] font-mono text-zinc-300 uppercase tracking-wider font-bold">
                           AI Neuromodulator Optimizer
                         </span>
                       </div>
-                      <span className="text-[8px] bg-cyan-950/40 text-cyan-400 border border-cyan-500/15 px-1 py-0.2 rounded font-mono font-bold uppercase">
+                      <span className="text-[8px] bg-cyan-950/40 text-cyan-400 border border-cyan-500/15 px-1 py-0.5 rounded font-mono font-bold uppercase">
                         Vibe Engine
                       </span>
                     </div>
@@ -1215,38 +1215,38 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => optimizeInputForVibe('dopamine')}
-                        className="bg-rose-950/20 hover:bg-rose-955/40 border border-rose-500/15 hover:border-rose-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
+                        className="bg-rose-950/20 hover:bg-rose-950/40 border border-rose-500/15 hover:border-rose-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
                         title="Spike curiosity and high engagement Dopamine spikes"
                       >
                         <span className="text-xs group-hover:scale-110 transition-transform">🔥</span>
-                        <span className="text-[9px] font-mono font-bold text-rose-350">Dopamine</span>
+                        <span className="text-[9px] font-mono font-bold text-rose-300">Dopamine</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => optimizeInputForVibe('threat')}
-                        className="bg-amber-950/20 hover:bg-amber-955/40 border border-amber-500/15 hover:border-amber-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
+                        className="bg-amber-950/20 hover:bg-amber-950/40 border border-amber-500/15 hover:border-amber-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
                         title="Spike urgency, warning, and crisis triggers in brain"
                       >
                         <span className="text-xs group-hover:scale-110 transition-transform">🚨</span>
-                        <span className="text-[9px] font-mono font-bold text-amber-310">Threat</span>
+                        <span className="text-[9px] font-mono font-bold text-amber-300">Threat</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => optimizeInputForVibe('empathy')}
-                        className="bg-purple-950/20 hover:bg-purple-955/40 border border-purple-500/15 hover:border-purple-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
+                        className="bg-purple-950/20 hover:bg-purple-950/40 border border-purple-500/15 hover:border-purple-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
                         title="Spike transparency, connection, and empathy triggers"
                       >
                         <span className="text-xs group-hover:scale-110 transition-transform">❤️</span>
-                        <span className="text-[9px] font-mono font-bold text-purple-350">Empathy</span>
+                        <span className="text-[9px] font-mono font-bold text-purple-300">Empathy</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => optimizeInputForVibe('academic')}
-                        className="bg-cyan-950/20 hover:bg-cyan-955/40 border border-cyan-500/15 hover:border-cyan-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
+                        className="bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-500/15 hover:border-cyan-500/35 p-1.5 rounded-lg flex flex-col gap-0.5 items-center justify-center text-center transition-all group cursor-pointer"
                         title="Spike authority, proof, and factual metrics"
                       >
                         <span className="text-xs group-hover:scale-110 transition-transform">🎓</span>
-                        <span className="text-[9px] font-mono font-bold text-cyan-350">Authority</span>
+                        <span className="text-[9px] font-mono font-bold text-cyan-300">Authority</span>
                       </button>
                     </div>
                   </div>
@@ -1662,7 +1662,7 @@ export default function App() {
                   onClick={() => setHighlightAnomalies(!highlightAnomalies)}
                   disabled={!trendAlertsEnabled}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    !trendAlertsEnabled ? "opacity-30 cursor-not-allowed bg-zinc-805" : highlightAnomalies ? "bg-cyan-500" : "bg-zinc-700"
+                    !trendAlertsEnabled ? "opacity-30 cursor-not-allowed bg-zinc-800" : highlightAnomalies ? "bg-cyan-500" : "bg-zinc-700"
                   }`}
                   role="switch"
                   aria-checked={highlightAnomalies}
@@ -1854,7 +1854,7 @@ export default function App() {
                   {/* Damping parameter slider */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-mono">
-                      <span className="text-slate-300">Damping Coefficient ($\alpha$)</span>
+                      <span className="text-slate-300">Damping Coefficient (α)</span>
                       <span className="text-cyan-400 font-bold">{damping.toFixed(3)}</span>
                     </div>
                     <input
@@ -1872,7 +1872,7 @@ export default function App() {
                   {/* Frequency slider */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-mono">
-                      <span className="text-slate-300">Phase frequency ($\omega$)</span>
+                      <span className="text-slate-300">Phase frequency (ω)</span>
                       <span className="text-cyan-400 font-bold">{frequency.toFixed(2)} Hz</span>
                     </div>
                     <input
@@ -1890,7 +1890,7 @@ export default function App() {
                   {/* Phase offset slider */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs font-mono">
-                      <span className="text-slate-300">Wave phase offset ($\phi$)</span>
+                      <span className="text-slate-300">Wave phase offset (φ)</span>
                       <span className="text-cyan-400 font-bold">{phase.toFixed(2)} rad</span>
                     </div>
                     <input
@@ -2030,7 +2030,7 @@ export default function App() {
                     className={`w-full py-2.5 mt-6 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
                       plan.popular 
                         ? "bg-purple-600 hover:bg-purple-500 text-white shadow-[0_5px_15px_rgba(168,85,247,0.25)]" 
-                        : "bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800"
+                        : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800"
                     }`}
                   >
                     {plan.cta}
@@ -2196,7 +2196,7 @@ export default function App() {
                           <h5 className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors font-sans truncate">
                             {scan.title}
                           </h5>
-                          <span className="text-[9px] bg-zinc-950/60 text-zinc-500 font-mono px-1.5 py-0.2 rounded uppercase select-none">
+                          <span className="text-[9px] bg-zinc-950/60 text-zinc-500 font-mono px-1.5 py-0.5 rounded uppercase select-none">
                             {scan.contentType}
                           </span>
                         </div>
@@ -2281,7 +2281,7 @@ export default function App() {
           <span>CRUMB-CORE-SNN-ENGINE-01</span>
           <span className="hidden md:inline">GAUGE-GAP RESEARCH FOUNDRY</span>
           <span>LATENCY: 12MS</span>
-          <span>COMPLEXITY: $O(N \log N)$</span>
+          <span>COMPLEXITY: O(N log N)</span>
         </div>
         <div className="flex gap-4">
           <span className="text-[#00f5ff]">System: Optimal</span>
@@ -2549,7 +2549,7 @@ export default function App() {
                 {/* Simulated processing steps panel */}
                 <div className="bg-zinc-950/60 border border-white/5 rounded-xl p-4.5 space-y-4">
                   <div className="space-y-1.5">
-                    <span className="text-[10px] font-mono text-zinc-450 uppercase tracking-wider block">WebM & GIF compilation status:</span>
+                    <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block">WebM & GIF compilation status:</span>
                     <div className="w-full bg-zinc-900 border border-white/5 rounded-full h-3.5 relative overflow-hidden">
                       <div 
                         className="bg-gradient-to-r from-cyan-400 via-indigo-500 to-[#a855f7] h-full rounded-full transition-all duration-300"
