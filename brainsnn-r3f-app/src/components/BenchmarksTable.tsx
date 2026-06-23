@@ -109,7 +109,7 @@ function BenchmarksTable() {
             Physics-Based wave Attention Performance
           </h3>
           <p className="text-zinc-400 text-xs mt-1">
-            How physics-inspired wave mechanics replace quadratic $O(N^2)$ scaling to deliver real-time neuromarketing insights.
+            How physics-inspired wave mechanics replace quadratic O(N²) scaling to deliver real-time neuromarketing insights.
           </p>
         </div>
 
@@ -149,7 +149,7 @@ function BenchmarksTable() {
             <tr className="border-b border-white/5 text-[11px] font-mono text-zinc-500 uppercase tracking-widest">
               <th className="py-3 px-4">Evaluation Dim</th>
               <th className="py-3 px-4">Metric Scope</th>
-              <th className="py-3 px-4 text-cyan-300">Crumb SNN ($O(N \log N)$)</th>
+              <th className="py-3 px-4 text-cyan-300">Crumb SNN (O(N log N))</th>
               <th className="py-3 px-4 text-zinc-400">Meta TRIBE / Transf.</th>
               <th className="py-3 px-4 hidden md:table-cell">ROI Optimization</th>
             </tr>
