@@ -117,6 +117,17 @@ function segmentContent(text: string): { text: string; score: number }[] {
   });
 }
 
+// Safe clipboard write: navigator.clipboard is only defined in secure
+// contexts (HTTPS/localhost). Guard so a copy action never throws on HTTP
+// or in unsupported browsers. Returns whether the write was attempted.
+function copyToClipboard(text: string): boolean {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).catch(() => {});
+    return true;
+  }
+  return false;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<'demo' | 'crumb' | 'pricing' | 'lab'>('demo');
   const [contentInput, setContentInput] = useState(PRELOAD_SCENARIOS[0].text);
@@ -135,6 +146,7 @@ export default function App() {
   const [phase, setPhase] = useState(0.0);
   const [showMathModal, setShowMathModal] = useState(false);
   const waveCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const statusClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Trend Alerts States
   const [trendAlertsEnabled, setTrendAlertsEnabled] = useState(true);
@@ -365,9 +377,16 @@ export default function App() {
     const rawContent = overrideContent || contentInput;
     if (!rawContent.trim()) return;
 
+    // Cancel any pending status-clear from a prior (failed) scan so it can't
+    // wipe the status line of this new scan mid-flight.
+    if (statusClearTimer.current) {
+      clearTimeout(statusClearTimer.current);
+      statusClearTimer.current = null;
+    }
+
     setIsProcessing(true);
     setStatusMessage("Compiling synaptic layers...");
-    
+
     // Fast simulated status log phases matching physical SNN compile steps
     const states = [
       "Connecting to Crumb LLM wave-field...",
@@ -412,7 +431,10 @@ export default function App() {
       console.error(err);
       // Keep the failure visible briefly so it is announced rather than wiped instantly.
       setStatusMessage("Simulation fault. Recovering local neuro-emulator...");
-      setTimeout(() => setStatusMessage(""), 4000);
+      statusClearTimer.current = setTimeout(() => {
+        setStatusMessage("");
+        statusClearTimer.current = null;
+      }, 4000);
     } finally {
       clearInterval(interval);
       setIsProcessing(false);
@@ -420,7 +442,7 @@ export default function App() {
   };
 
   const handleShare = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/share/${analysisResult?.id || "demo"}`);
+    copyToClipboard(`${window.location.origin}/share/${analysisResult?.id || "demo"}`);
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
   };
@@ -503,8 +525,8 @@ export default function App() {
     // Metric tiles
     const metrics: [string, string][] = [
       ["VIRAL SCORE", `${r?.viralScore ?? 0}`],
-      ["FIRING RATE", `${r?.metrics.firingRate ?? 0} Hz`],
-      ["PLASTICITY", `${r?.metrics.plasticity ?? 0}%`],
+      ["FIRING RATE", `${r?.metrics?.firingRate ?? 0} Hz`],
+      ["PLASTICITY", `${r?.metrics?.plasticity ?? 0}%`],
       ["CONFIDENCE", `${r?.confidence ?? 0}%`],
     ];
     const cardW = 250, cardH = 130, gap = 24, startX = 80, startY = 360;
@@ -2598,7 +2620,7 @@ export default function App() {
                         : '#FYPHack #Cerebral #MindBlown #ViralTrends';
 
                       const postText = `🔥 Brand Neuromarketing Scan processed! My SNN emotional analysis score: ${analysisResult?.viralScore || 72}% computed live in @BrainSNN. Highly targeted emotional spike levels. ${hashtagsStr}\n\nCheckout visual: ${window.location.origin}/share/${analysisResult?.id || "demo"}`;
-                      navigator.clipboard.writeText(postText);
+                      copyToClipboard(postText);
                       setPostCopied(true);
                       setTimeout(() => setPostCopied(false), 2000);
                     }}

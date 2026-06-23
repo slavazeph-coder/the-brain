@@ -24,13 +24,16 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
   }
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [rotation, setRotation] = useState({ x: 0.5, y: 0.8 });
   const [zoom, setZoom] = useState(1.1);
   const [isRotating, setIsRotating] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [activeRegion, setActiveRegion] = useState<string | null>(null);
   const isDragging = useRef(false);
   const previousMousePosition = useRef({ x: 0, y: 0 });
+
+  // Live orbit angles. Kept in a ref (not state) so dragging and auto-spin
+  // mutate them every frame without re-rendering or tearing down the loop.
+  const anglesRef = useRef({ x: 0.5, y: 0.8 });
 
   const fearColor = "rgba(239, 68, 68, ";     // red
   const angerColor = "rgba(249, 115, 22, ";    // orange
@@ -41,6 +44,22 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
 
   // Set up logical 3D node points for key cognitive centers
   const [nodes, setNodes] = useState<BrainNode[]>([]);
+
+  // Mirror volatile values into refs so the single long-lived animation loop
+  // reads their latest values each frame instead of being recreated on every
+  // change (which previously reset pulses/frame and caused stutter).
+  const nodesRef = useRef(nodes);
+  const zoomRef = useRef(zoom);
+  const isRotatingRef = useRef(isRotating);
+  const activeRegionRef = useRef(activeRegion);
+  const metricsRef = useRef(metrics);
+  const isProcessingRef = useRef(isProcessing);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { isRotatingRef.current = isRotating; }, [isRotating]);
+  useEffect(() => { activeRegionRef.current = activeRegion; }, [activeRegion]);
+  useEffect(() => { metricsRef.current = metrics; }, [metrics]);
+  useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
   useEffect(() => {
     // Dynamic weights linked to current SNN values
@@ -61,8 +80,6 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
     if (!ctx) return;
 
     let animationId: number;
-    let localYAngle = rotation.y;
-    let localXAngle = rotation.x;
     let pulses: { nodeIndex: number; progress: number; speed: number }[] = [];
 
     // Animation variables
@@ -70,7 +87,15 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
 
     const render = () => {
       frame++;
-      
+
+      // Read the latest volatile values once per frame from refs.
+      const nodes = nodesRef.current;
+      const zoom = zoomRef.current;
+      const isRotating = isRotatingRef.current;
+      const activeRegion = activeRegionRef.current;
+      const metrics = metricsRef.current;
+      const isProcessing = isProcessingRef.current;
+
       const width = canvas.width;
       const height = canvas.height;
       const hWidth = width / 2;
@@ -85,8 +110,10 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
 
       // Rotate automatically if requested
       if (isRotating && !isDragging.current) {
-        localYAngle += 0.004;
+        anglesRef.current.y += 0.004;
       }
+      const localYAngle = anglesRef.current.y;
+      const localXAngle = anglesRef.current.x;
 
       // Add synaptic spikes/pulses based on firing rate (Hz)
       const maxPulses = Math.floor(metrics.firingRate / 10);
@@ -408,7 +435,9 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
     return () => {
       cancelAnimationFrame(animationId);
     };
-  }, [nodes, zoom, isRotating, activeRegion, metrics, isProcessing, rotation]);
+    // Set up once: the loop reads all volatile values from refs each frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle Drag / Rotation controls
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -432,10 +461,10 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
         // Quick 2D proximity checking
         const width = canvas.width;
         const height = canvas.height;
-        const cosY = Math.cos(rotation.y);
-        const sinY = Math.sin(rotation.y);
-        const cosX = Math.cos(rotation.x);
-        const sinX = Math.sin(rotation.x);
+        const cosY = Math.cos(anglesRef.current.y);
+        const sinY = Math.sin(anglesRef.current.y);
+        const cosX = Math.cos(anglesRef.current.x);
+        const sinX = Math.sin(anglesRef.current.x);
         
         const x1 = n.x * cosY - n.z * sinY;
         const y2 = n.y * cosX - (n.x * sinY + n.z * cosY) * sinX;
@@ -458,10 +487,10 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
     const deltaX = e.clientX - previousMousePosition.current.x;
     const deltaY = e.clientY - previousMousePosition.current.y;
 
-    setRotation(prev => ({
-      x: Math.min(Math.max(prev.x + deltaY * 0.007, -1.2), 1.2),
-      y: prev.y + deltaX * 0.007
-    }));
+    anglesRef.current = {
+      x: Math.min(Math.max(anglesRef.current.x + deltaY * 0.007, -1.2), 1.2),
+      y: anglesRef.current.y + deltaX * 0.007
+    };
 
     previousMousePosition.current = { x: e.clientX, y: e.clientY };
   };
@@ -471,7 +500,7 @@ function BrainVisualizer({ metrics, payloadType, isProcessing }: BrainVisualizer
   };
 
   const resetViewport = () => {
-    setRotation({ x: 0.5, y: 0.8 });
+    anglesRef.current = { x: 0.5, y: 0.8 };
     setZoom(1.1);
     setIsRotating(true);
   };

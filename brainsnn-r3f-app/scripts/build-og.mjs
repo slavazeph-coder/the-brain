@@ -8,10 +8,13 @@
 //
 // The committed public/og-image.png is what ships; runtime and CI never need
 // this script or @resvg/resvg-js. Colors are locked to the BrainSNN theme.
+//
+// Set FONTS_DIR to point at a directory containing the TTFs below if they live
+// somewhere other than the default author-machine path.
 import { Resvg } from "@resvg/resvg-js";
 import { writeFileSync } from "node:fs";
 
-const FONTS = "/mnt/skills/examples/canvas-design/canvas-fonts";
+const FONTS = process.env.FONTS_DIR || "/mnt/skills/examples/canvas-design/canvas-fonts";
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <defs>
