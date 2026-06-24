@@ -63,7 +63,7 @@ jobs:
             sleep 1
           done
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
-          curl -sf http://127.0.0.1:8080/ | grep -Fq "Affective Intelligence Core"
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Decision Engine for Brand Content"
           kill $SRV 2>/dev/null || true
 
   deploy:
@@ -113,7 +113,7 @@ jobs:
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
-            if [ "$home" = "200" ] && grep -Fq "Affective Intelligence Core" /tmp/brainsnn-home.html; then
+            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Decision Engine for Brand Content" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
