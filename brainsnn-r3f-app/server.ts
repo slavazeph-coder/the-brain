@@ -104,20 +104,20 @@ function runLocalSimulation(content: string, type: string): any {
   });
 
   const riskRating = (fear > 70 || anger > 70) ? "High" : (fear > 45 || anger > 45) ? "Medium" : "Low";
-  const riskDescription = riskRating === "High" 
-    ? "Significant outrage-triggers detected. High potential for cognitive bias triggers and audience fatigue."
+  const riskDescription = riskRating === "High"
+    ? "High-pressure emotional language may weaken credibility and make the message harder to approve."
     : riskRating === "Medium"
-    ? "Moderate sensationalism detected. Content uses emotional anchors to drive click-through rates."
-    : "Safe affective baseline. Content exhibits authentic expression and healthy brand alignment.";
+    ? "Some urgency or emotional pressure appears before enough proof. Tighten the claim before publishing."
+    : "Low trust risk. The message is unlikely to feel manipulative in its current shape.";
 
   const viralScore = Math.min(Math.max(Math.round((excitement * 0.4) + (urgency * 0.3) + (fear * 0.2) + (100 - trust * 0.1)), 10), 100);
   const gaugeGapScore = Math.round(((fear + anger + urgency) / 3) - trust); // positive means high sensationalist manipulation
 
   const defaultTitles = [
-    "Affective Decoded Simulation",
-    "SNN Cortical Activation Scan",
-    "Crumb LLM Narrative Diagnostics",
-    "Neuromarketing Target Analysis"
+    "Content Decision Scan",
+    "Hook and Trust Readout",
+    "Publishing Risk Review",
+    "Brand Message Scan"
   ];
   const title = defaultTitles[Math.floor(Math.random() * defaultTitles.length)];
 
@@ -133,18 +133,18 @@ function runLocalSimulation(content: string, type: string): any {
     riskDescription: riskDescription,
     viralScore: viralScore,
     gaugeGapScore: gaugeGapScore,
-    summary: "Decoded via local Crumb SNN Emulator. The narrative exhibits a rich waveform with a major spike " + 
-             (excitement > 60 ? "at the Sensory Salience phase" : "during general urgency processing") + 
-             ". Peak emotional potential remains tightly coupled to human click behaviors.",
+    summary: "This is an AI-estimated content response. The message " +
+             (excitement > 60 ? "has enough energy to earn attention" : "is directionally clear but could use a sharper hook") +
+             ", and the safest next step is to add proof before increasing urgency.",
     insights: [
-      `Spiking Neural Network Mean firing rate of ${firingRate}Hz suggests high cognitive loading density.`,
-      `Neuromarketing index points to ${payloadType === "Organic Baseline" ? "sustained organic engagement" : "an interactive attention hook"} in the midphase.`,
-      `The GaugeGap score (${gaugeGapScore}) shows a ${Math.abs(gaugeGapScore) > 20 ? "deviation" : "tight alignment"} against academic neutrality bounds.`
+      `The opening creates a ${excitement > 60 ? "strong" : "moderate"} attention signal.`,
+      `Content-response signals point to ${payloadType === "Organic Baseline" ? "sustained organic engagement" : "an attention hook that needs proof"} in the midphase.`,
+      `The trust gap is ${Math.abs(gaugeGapScore) > 20 ? "worth reviewing before publishing" : "currently manageable"} based on pressure and proof signals.`
     ],
     recommendations: [
-      "Smooth down early urgency cues to recover long-term audience trust index (+12%).",
-      "Incorporate high sensory credibility phrases to balance structural dopamine spike profiles.",
-      "Embed visual captions matching real-time brain scans to double click conversions as styled by social platforms."
+      "Replace unsupported urgency with one concrete reason to believe the claim.",
+      "Keep the strongest opening, then add proof before asking the reader to act.",
+      "Make the final sentence calmer, clearer, and easier to approve for brand use."
     ],
     payloadType: payloadType,
     confidence: 88,
@@ -203,7 +203,8 @@ app.get("/healthz", (_req, res) => {
 });
 
 app.post("/api/analyze", async (req, res) => {
-  const { content, type } = req.body || {};
+  const { content, type, contentType } = req.body || {};
+  const inputType = type || contentType || "text";
 
   if (!content) {
     return res.status(400).json({ error: "Content parameter is required." });
@@ -213,24 +214,24 @@ app.post("/api/analyze", async (req, res) => {
   // If we had a quota error within the last 5 minutes, go straight to fallback simulation to avoid log warning storms
   if (isGeminiQuotaLimited && (now - lastQuotaCheckTime < 5 * 60 * 1000)) {
     console.log("[Quota Memory Status] Gemini is currently flagged as quota-limited of the free tier. Bypassing slow retries to run local SNN simulation instantly.");
-    const localResult = runLocalSimulation(content, type || "text");
+    const localResult = runLocalSimulation(content, inputType);
     return res.json(localResult);
   }
 
   // If Gemini is not set up, go straight to fallback simulation
   if (!ai) {
     console.log("No Gemini API connection. Executing SNN local simulation...");
-    const localResult = runLocalSimulation(content, type || "text");
+    const localResult = runLocalSimulation(content, inputType);
     return res.json(localResult);
   }
 
   try {
     const prompt = `
-      You are BrainSNN's Affective Intelligence Engine powered by Crumb LLM. Your purpose is to decode the deep emotional payload, SNN spiking characteristics, and brand safety profiles within the following content.
+      You are BrainSNN's content decision engine. Estimate how the content may affect attention, trust, manipulation risk, and brand safety. Do not claim literal human brain measurement.
 
       Analyze this content and map it to a complex Spiking Neural Network simulation result:
       ---
-      Content Type: ${type || 'text'}
+      Content Type: ${inputType}
       Content Body: "${content}"
       ---
 
@@ -252,7 +253,7 @@ app.post("/api/analyze", async (req, res) => {
         "gaugeGapScore": A score (-50 to +50) indicating the deviation of this message's tone from an objective, fair, baseline tone,
         "summary": "A 2-3 sentence overview describing the emotional waveform, primary triggers, and underlying psychological effect.",
         "insights": [
-          "An array of 3 unique, expert-level neuromarketing or cognitive insights concerning this piece of content."
+          "An array of 3 unique, plain-English content and audience-response insights concerning this piece of content."
         ],
         "recommendations": [
           "An array of 3 distinct, actionable editing or brand safety optimization recommendations."
@@ -323,7 +324,7 @@ app.post("/api/analyze", async (req, res) => {
       timestamp: new Date().toISOString(),
       title: parsedData.title || "Affective Analysis Decoded",
       rawContent: content,
-      contentType: type || "text",
+      contentType: inputType,
       metrics: {
         fear: Number(parsedData.fear) || 15,
         anger: Number(parsedData.anger) || 10,
@@ -361,7 +362,7 @@ app.post("/api/analyze", async (req, res) => {
   } catch (error: any) {
     const errorMsg = error?.message || String(error);
     console.log("[Info] Gemini API returned temporary rate limit/congestion. Swapped seamlessly to local SNN physical emulator fallback.", errorMsg);
-    const localResult = runLocalSimulation(content, type || "text");
+    const localResult = runLocalSimulation(content, inputType);
     return res.json(localResult);
   }
 });

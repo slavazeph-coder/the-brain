@@ -1,0 +1,111 @@
+{
+  "url": "http://127.0.0.1:5173/",
+  "title": "BrainSNN — Affective Intelligence for Online Content",
+  "skippedOnboarding": true,
+  "results": [
+    {
+      "name": "desktop-1440x1000",
+      "width": 1440,
+      "height": 1000,
+      "path": "/Users/slavaz/Documents/New project/the-brain/docs/brain-engine-redesign/baseline/desktop-1440x1000.png",
+      "buttonCount": 269,
+      "canvasCount": 9,
+      "clientWidth": 1425,
+      "firstH2": "THL · Thalamus",
+      "h1": "BrainSNN",
+      "panelCount": 93,
+      "scrollHeight": 43932,
+      "scrollWidth": 1425,
+      "title": "BrainSNN — Affective Intelligence for Online Content",
+      "overflowX": false
+    },
+    {
+      "name": "desktop-1280x800",
+      "width": 1280,
+      "height": 800,
+      "path": "/Users/slavaz/Documents/New project/the-brain/docs/brain-engine-redesign/baseline/desktop-1280x800.png",
+      "buttonCount": 269,
+      "canvasCount": 9,
+      "clientWidth": 1265,
+      "firstH2": "THL · Thalamus",
+      "h1": "BrainSNN",
+      "panelCount": 93,
+      "scrollHeight": 44549,
+      "scrollWidth": 1265,
+      "title": "BrainSNN — Affective Intelligence for Online Content",
+      "overflowX": false
+    },
+    {
+      "name": "tablet-1024x768",
+      "width": 1024,
+      "height": 768,
+      "path": "/Users/slavaz/Documents/New project/the-brain/docs/brain-engine-redesign/baseline/tablet-1024x768.png",
+      "buttonCount": 269,
+      "canvasCount": 9,
+      "clientWidth": 1009,
+      "firstH2": "THL · Thalamus",
+      "h1": "BrainSNN",
+      "panelCount": 93,
+      "scrollHeight": 45215,
+      "scrollWidth": 1009,
+      "title": "BrainSNN — Affective Intelligence for Online Content",
+      "overflowX": false
+    },
+    {
+      "name": "tablet-768x1024",
+      "width": 768,
+      "height": 1024,
+      "path": "/Users/slavaz/Documents/New project/the-brain/docs/brain-engine-redesign/baseline/tablet-768x1024.png",
+      "buttonCount": 269,
+      "canvasCount": 9,
+      "clientWidth": 753,
+      "firstH2": "THL · Thalamus",
+      "h1": "BrainSNN",
+      "panelCount": 93,
+      "scrollHeight": 47837,
+      "scrollWidth": 753,
+      "title": "BrainSNN — Affective Intelligence for Online Content",
+      "overflowX": false
+    },
+    {
+      "name": "mobile-390x844",
+      "width": 390,
+      "height": 844,
+      "path": "/Users/slavaz/Documents/New project/the-brain/docs/brain-engine-redesign/baseline/mobile-390x844.png",
+      "buttonCount": 269,
+      "canvasCount": 9,
+      "clientWidth": 375,
+      "firstH2": "THL · Thalamus",
+      "h1": "BrainSNN",
+      "panelCount": 93,
+      "scrollHeight": 47678,
+      "scrollWidth": 375,
+      "title": "BrainSNN — Affective Intelligence for Online Content",
+      "overflowX": false
+    },
+    {
+      "name": "mobile-360x800",
+      "width": 360,
+      "height": 800,
+      "path": "/Users/slavaz/Documents/New project/the-brain/docs/brain-engine-redesign/baseline/mobile-360x800.png",
+      "buttonCount": 269,
+      "canvasCount": 9,
+      "clientWidth": 345,
+      "firstH2": "THL · Thalamus",
+      "h1": "BrainSNN",
+      "panelCount": 93,
+      "scrollHeight": 47678,
+      "scrollWidth": 345,
+      "title": "BrainSNN — Affective Intelligence for Online Content",
+      "overflowX": false
+    }
+  ],
+  "logs": [
+    {
+      "level": "error",
+      "message": "Warning: A future version of React will block javascript: URLs as a security precaution. Use event handlers instead if you can. If you need to generate unsafe HTML try using dangerouslySetInnerHTML instead. React was passed %s.%s \"javascript:(function(){var s=window.getSelection?window.getSelection().toString():'';var t=s||(document.title+'. '+(window.location.href||''));var u='https://brainsnn.com/?scan='+encodeURIComponent(t.slice(0,3000));window.open(u,'_blank','noopener');})();\" \n    at a\n    at div\n    at section\n    at ScanAnywherePanel (http://127.0.0.1:5173/src/components/ScanAnywherePanel.jsx:4:31)\n    at ErrorBoundary (http://127.0.0.1:5173/src/components/ErrorBoundary.jsx:4:5)\n    at section\n    at main\n    at div\n    at App (http://127.0.0.1:5173/src/App.jsx:120:29)",
+      "timestamp": "2026-06-23T16:18:27.260Z",
+      "url": "http://127.0.0.1:5173/node_modules/.vite/deps/chunk-6GVQVV34.js?v=c0fdc559"
+    }
+  ]
+}
