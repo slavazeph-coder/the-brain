@@ -1348,7 +1348,7 @@
 
 .pricing-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
 }
 
@@ -1358,6 +1358,258 @@
 
 .pricing-grid p {
   color: var(--bsn-text-secondary);
+}
+
+.layer-trace-panel,
+.autopsy-workspace,
+.pricing-workspace {
+  margin-top: 18px;
+}
+
+.layer-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.layer-chip,
+.engine-trace-grid article,
+.autopsy-input-grid label,
+.autopsy-card-grid article,
+.account-connect-panel,
+.engine-status-card,
+.layer-explorer-list article {
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+}
+
+.layer-chip {
+  min-height: 92px;
+  padding: 12px;
+  border-left: 3px solid var(--layer-color, var(--bsn-cyan));
+}
+
+.layer-chip span,
+.layer-chip small,
+.engine-trace-list span,
+.engine-status-card strong,
+.autopsy-metrics span {
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.layer-chip strong {
+  display: block;
+  margin: 8px 0 4px;
+}
+
+.engine-trace-grid,
+.autopsy-input-grid,
+.autopsy-card-grid,
+.engine-status-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.engine-trace-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.engine-trace-grid article,
+.autopsy-card-grid article,
+.account-connect-panel,
+.engine-status-card {
+  padding: 14px;
+}
+
+.engine-trace-grid h3,
+.autopsy-card-grid h3,
+.account-connect-panel h2 {
+  margin: 0 0 10px;
+}
+
+.engine-trace-grid dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.engine-trace-grid dt {
+  color: var(--bsn-text-muted);
+  font-size: 0.78rem;
+}
+
+.engine-trace-grid dd {
+  margin: 0;
+}
+
+.engine-trace-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+
+.engine-trace-list li {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) 120px minmax(0, 1.4fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--bsn-border);
+}
+
+.engine-trace-list p {
+  margin: 0;
+  color: var(--bsn-text-secondary);
+}
+
+.autopsy-input-grid,
+.autopsy-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.autopsy-input-grid label {
+  display: grid;
+  gap: 8px;
+  color: var(--bsn-text-secondary);
+  font-weight: 700;
+}
+
+.autopsy-input-grid textarea {
+  min-height: 170px;
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  padding: 12px;
+  resize: vertical;
+  color: var(--bsn-text);
+  background: rgba(6, 6, 10, 0.92);
+}
+
+.autopsy-results {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.autopsy-verdict {
+  padding: 18px;
+  border: 1px solid rgba(0, 245, 255, 0.18);
+  border-radius: var(--bsn-radius-lg);
+  background: linear-gradient(135deg, rgba(0, 245, 255, 0.08), rgba(168, 85, 247, 0.08));
+}
+
+.autopsy-card-grid article.winner,
+.pricing-grid article.featured {
+  border-color: rgba(0, 245, 255, 0.46);
+  box-shadow: 0 0 24px rgba(0, 245, 255, 0.08);
+}
+
+.autopsy-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.autopsy-metrics div {
+  padding: 10px;
+  border-radius: var(--bsn-radius);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.autopsy-metrics strong,
+.plan-price {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--bsn-font-mono);
+  font-size: 1.2rem;
+}
+
+.plan-price {
+  margin: 10px 0;
+  font-family: var(--bsn-font-display);
+  font-size: 2rem;
+}
+
+.pricing-grid ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 16px 0;
+  list-style: none;
+}
+
+.pricing-grid li {
+  display: flex;
+  gap: 8px;
+  color: var(--bsn-text-secondary);
+}
+
+.account-connect-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px) auto;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.account-connect-panel label,
+.layer-explorer-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.account-connect-panel input,
+.layer-explorer-controls input,
+.layer-explorer-controls select {
+  min-height: 44px;
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  padding: 0 12px;
+  color: var(--bsn-text);
+  background: rgba(6, 6, 10, 0.92);
+}
+
+.engine-status-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.engine-status-card svg {
+  color: var(--bsn-cyan);
+}
+
+.layer-explorer-controls {
+  grid-template-columns: minmax(0, 1fr) 220px;
+  margin: 14px 0;
+}
+
+.layer-explorer-list {
+  display: grid;
+  gap: 8px;
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.layer-explorer-list article {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 140px;
+  gap: 12px;
+  align-items: center;
+  border-left: 3px solid var(--layer-color, var(--bsn-cyan));
+}
+
+.layer-explorer-list p {
+  margin: 3px 0 0;
+  color: var(--bsn-text-secondary);
+  font-size: 0.86rem;
 }
 
 .command-input-label input {
@@ -1381,6 +1633,10 @@
 }
 
 .mobile-navigation {
+  display: none;
+}
+
+.mobile-more-sheet {
   display: none;
 }
 
@@ -1458,6 +1714,41 @@
     background: rgba(0, 245, 255, 0.09);
   }
 
+  .mobile-more-sheet {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    z-index: 70;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--bsn-border);
+    border-radius: var(--bsn-radius-lg);
+    background: rgba(9, 9, 17, 0.96);
+    box-shadow: var(--bsn-shadow);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-more-sheet button {
+    min-height: 48px;
+    border: 1px solid var(--bsn-border);
+    border-radius: var(--bsn-radius);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--bsn-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .mobile-more-sheet button.active {
+    color: var(--bsn-cyan);
+    border-color: rgba(0, 245, 255, 0.45);
+    background: rgba(0, 245, 255, 0.08);
+  }
+
   .scan-composer h1,
   .workspace-heading h1,
   .synapse-header h1 {
@@ -1475,7 +1766,18 @@
   .share-dialog-grid,
   .heatmap-layout,
   .approval-card,
-  .pricing-grid {
+  .pricing-grid,
+  .engine-trace-grid,
+  .autopsy-input-grid,
+  .autopsy-card-grid,
+  .account-connect-panel,
+  .engine-status-grid,
+  .layer-explorer-controls,
+  .layer-explorer-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .engine-trace-list li {
     grid-template-columns: 1fr;
   }
 

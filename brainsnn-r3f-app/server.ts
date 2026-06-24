@@ -1,14 +1,26 @@
 import express from "express";
 import path from "path";
+import crypto from "crypto";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { analyzeContentLocally } from "./src/lib/analysisEngine.js";
+import {
+  createAutopsyFromLayerStack,
+  createRewriteFromLayerStack,
+  getEngineStatusSnapshot,
+  runLayerRouter
+} from "./src/lib/layerRouter.js";
+import { LAYER_CATALOG } from "./src/lib/layerCatalog.js";
 
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+app.use(express.json({ limit: "2mb" }));
 
 const PORT = Number(process.env.PORT) || 3000;
+const APP_URL = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://www.brainsnn.com";
+const STRIPE_API_BASE = "https://api.stripe.com/v1";
 
 // Initialize Gemini safely
 let ai: GoogleGenAI | null = null;
@@ -40,122 +52,20 @@ if (apiKey && apiKey !== "MY_GEMINI_API_KEY" && apiKey !== "") {
 // Deterministic High-Fidelity Local SNN Simulation Fallback
 // ----------------------------------------------------
 function runLocalSimulation(content: string, type: string): any {
-  const cleanStr = content.toLowerCase();
-  
-  // Calculate raw scores based on keyword clusters
-  let fear = Math.round(15 + Math.random() * 20);
-  let anger = Math.round(10 + Math.random() * 15);
-  let urgency = Math.round(20 + Math.random() * 25);
-  let trust = Math.round(40 + Math.random() * 30);
-  let excitement = Math.round(30 + Math.random() * 30);
-  let empathy = Math.round(25 + Math.random() * 25);
-
-  // Trigger matches
-  if (cleanStr.includes("panic") || cleanStr.includes("banned") || cleanStr.includes("scared") || cleanStr.includes("warning") || cleanStr.includes("crisis") || cleanStr.includes("danger") || cleanStr.includes("shocking")) {
-    fear += 45;
-    anger += 25;
-    trust -= 20;
-    excitement += 20;
-  }
-  if (cleanStr.includes("hack") || cleanStr.includes("secret") || cleanStr.includes("underground") || cleanStr.includes("expose") || cleanStr.includes("comment") || cleanStr.includes("viral")) {
-    urgency += 35;
-    excitement += 35;
-    trust += 5;
-  }
-  if (cleanStr.includes("now") || cleanStr.includes("urgent") || cleanStr.includes("limited") || cleanStr.includes("stop") || cleanStr.includes("before you click")) {
-    urgency += 45;
-  }
-  if (cleanStr.includes("research") || cleanStr.includes("proven") || cleanStr.includes("science") || cleanStr.includes("academic") || cleanStr.includes("snn") || cleanStr.includes("physics")) {
-    trust += 35;
-    empathy += 10;
-  }
-  if (cleanStr.includes("love") || cleanStr.includes("together") || cleanStr.includes("ethics") || cleanStr.includes("fair") || cleanStr.includes("people") || cleanStr.includes("community")) {
-    empathy += 45;
-    trust += 25;
-  }
-
-  // Constrain scores
-  fear = Math.min(Math.max(fear, 5), 100);
-  anger = Math.min(Math.max(anger, 5), 100);
-  urgency = Math.min(Math.max(urgency, 5), 100);
-  trust = Math.min(Math.max(trust, 5), 100);
-  excitement = Math.min(Math.max(excitement, 5), 100);
-  empathy = Math.min(Math.max(empathy, 5), 100);
-
-  // Generate SNN Metrics based on physics formulas
-  const firingRate = Math.round(30 + (fear * 0.4) + (excitement * 0.5) + (urgency * 0.3)); // Hz
-  const plasticity = Math.round(40 + (empathy * 0.3) + (trust * 0.3) - (fear * 0.1));
-
-  // Determine payload categories
-  let payloadType = "Organic Baseline";
-  if (fear > 60 && anger > 50) payloadType = "Fear Cascade & Hostility";
-  else if (urgency > 70 && excitement > 60) payloadType = "Sensory Burst (High Urgency)";
-  else if (trust > 70 && empathy > 60) payloadType = "Emotional Salience & Trust";
-  else if (excitement > 70) payloadType = "Sensory Salience Burst";
-
-  // Attention curve over 10 ticks
-  const attentionCurve = Array.from({ length: 10 }, (_, i) => {
-    // Wave equation mix
-    const t = i / 9;
-    const baseVal = 40 + Math.sin(t * Math.PI * 2.5) * 20;
-    const peakEnhancement = (excitement * 0.3 + urgency * 0.2) * Math.exp(-Math.pow(t - 0.4, 2) / 0.1);
-    const dipFactor = (fear > 65) ? Math.cos(t * Math.PI) * 15 : 0;
-    return Math.min(Math.max(Math.round(baseVal + peakEnhancement + dipFactor), 15), 100);
-  });
-
-  const riskRating = (fear > 70 || anger > 70) ? "High" : (fear > 45 || anger > 45) ? "Medium" : "Low";
-  const riskDescription = riskRating === "High"
-    ? "High-pressure emotional language may weaken credibility and make the message harder to approve."
-    : riskRating === "Medium"
-    ? "Some urgency or emotional pressure appears before enough proof. Tighten the claim before publishing."
-    : "Low trust risk. The message is unlikely to feel manipulative in its current shape.";
-
-  const viralScore = Math.min(Math.max(Math.round((excitement * 0.4) + (urgency * 0.3) + (fear * 0.2) + (100 - trust * 0.1)), 10), 100);
-  const gaugeGapScore = Math.round(((fear + anger + urgency) / 3) - trust); // positive means high sensationalist manipulation
-
-  const defaultTitles = [
-    "Content Decision Scan",
-    "Hook and Trust Readout",
-    "Publishing Risk Review",
-    "Brand Message Scan"
-  ];
-  const title = defaultTitles[Math.floor(Math.random() * defaultTitles.length)];
-
-  return {
-    id: "sc_" + Math.random().toString(36).substring(2, 11),
-    timestamp: new Date().toISOString(),
-    title: title,
-    rawContent: content,
-    contentType: type,
-    metrics: { fear, anger, urgency, trust, excitement, empathy, firingRate, plasticity },
-    attentionCurve: attentionCurve.map((lvl, index) => ({ second: index * 3, level: lvl })),
-    riskRating: riskRating,
-    riskDescription: riskDescription,
-    viralScore: viralScore,
-    gaugeGapScore: gaugeGapScore,
-    summary: "This is an AI-estimated content response. The message " +
-             (excitement > 60 ? "has enough energy to earn attention" : "is directionally clear but could use a sharper hook") +
-             ", and the safest next step is to add proof before increasing urgency.",
-    insights: [
-      `The opening creates a ${excitement > 60 ? "strong" : "moderate"} attention signal.`,
-      `Content-response signals point to ${payloadType === "Organic Baseline" ? "sustained organic engagement" : "an attention hook that needs proof"} in the midphase.`,
-      `The trust gap is ${Math.abs(gaugeGapScore) > 20 ? "worth reviewing before publishing" : "currently manageable"} based on pressure and proof signals.`
-    ],
-    recommendations: [
-      "Replace unsupported urgency with one concrete reason to believe the claim.",
-      "Keep the strongest opening, then add proof before asking the reader to act.",
-      "Make the final sentence calmer, clearer, and easier to approve for brand use."
-    ],
-    payloadType: payloadType,
-    confidence: 88,
-    crumbModelStats: {
-      wavesDamping: 0.15,
-      wavesFrequency: 4.8,
-      attentionComplexity: "O(N log N) wave-equation core",
-      perplexityDelta: -14.2
-    },
-    isFallback: true
+  const localResult = (analyzeContentLocally as any)({ content, contentType: type, forceFallback: true });
+  const baseResult = {
+    ...localResult,
+    riskRating: localResult.gaugeGapScore >= 70 ? "High" : localResult.gaugeGapScore >= 48 ? "Medium" : "Low",
   };
+  return (runLayerRouter as any)({
+    content,
+    contentType: type,
+    baseResult,
+    providerTrace: [
+      { stage: "Local fallback", status: "completed", note: "Deterministic BrainSNN local layer stack used because primary model was unavailable." }
+    ],
+    engineStatus: getEngineStatusSnapshot(process.env),
+  });
 }
 
 // Helper function to call Gemini with robust exponential backoff retry for transient errors
@@ -193,6 +103,54 @@ async function callGeminiWithRetry(aiClient: GoogleGenAI, options: any, maxRetri
   }
 }
 
+function verifyStripeSignature(rawBody: Buffer, signatureHeader = "", secret = "") {
+  if (!rawBody || !signatureHeader || !secret) return false;
+  const parts = Object.fromEntries(signatureHeader.split(",").map((part) => {
+    const [key, ...value] = part.split("=");
+    return [key, value.join("=")];
+  }));
+  const timestamp = parts.t;
+  const signature = parts.v1;
+  if (!timestamp || !signature) return false;
+  const payload = `${timestamp}.${rawBody.toString("utf8")}`;
+  const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(signature, "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function handleStripeWebhook(req: express.Request, res: express.Response) {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(501).json({ error: "Stripe webhook secret is not configured." });
+  }
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+  const signature = req.header("stripe-signature") || "";
+  if (!verifyStripeSignature(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET)) {
+    return res.status(400).json({ error: "Invalid Stripe signature." });
+  }
+  let event: any;
+  try {
+    event = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    return res.status(400).json({ error: "Invalid Stripe event JSON." });
+  }
+  const trackedEvents = new Set([
+    "checkout.session.completed",
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.deleted",
+  ]);
+  if (trackedEvents.has(event.type)) {
+    console.log(`[Stripe] ${event.type}`, {
+      id: event.id,
+      customer: event.data?.object?.customer,
+      subscription: event.data?.object?.subscription || event.data?.object?.id,
+      status: event.data?.object?.status,
+    });
+  }
+  return res.json({ received: true });
+}
+
 // ----------------------------------------------------
 // API ENDPOINTS
 // ----------------------------------------------------
@@ -200,6 +158,170 @@ async function callGeminiWithRetry(aiClient: GoogleGenAI, options: any, maxRetri
 // Health check endpoint for container orchestrators (Railway healthcheckPath).
 app.get("/healthz", (_req, res) => {
   res.status(200).json({ status: "ok" });
+});
+
+app.get("/api/layers", (_req, res) => {
+  const status = getEngineStatusSnapshot(process.env);
+  res.json({
+    totalLayers: LAYER_CATALOG.length,
+    coreLayers: status.coreLayers,
+    layers: LAYER_CATALOG,
+  });
+});
+
+app.get("/api/engines/status", async (_req, res) => {
+  const status = getEngineStatusSnapshot(process.env);
+  if (status.engines.tribe.configured) {
+    try {
+      const health = await fetch(`${process.env.TRIBE_API_URL}/health`, { signal: AbortSignal.timeout(2500) }).then((r) => r.json());
+      status.engines.tribe = { ...status.engines.tribe, status: "online", modelLoaded: Boolean(health.model_loaded) };
+    } catch {
+      status.engines.tribe = { ...status.engines.tribe, status: "unreachable" };
+    }
+  }
+  res.json(status);
+});
+
+app.get("/api/engines/tribe/health", async (_req, res) => {
+  if (!process.env.TRIBE_API_URL) {
+    return res.status(501).json({ error: "TRIBE_API_URL is not configured.", status: "not_configured" });
+  }
+  try {
+    const response = await fetch(`${process.env.TRIBE_API_URL}/health`, { signal: AbortSignal.timeout(4000) });
+    const body = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(body);
+  } catch (error: any) {
+    return res.status(503).json({ error: error?.message || "TRIBE health check failed.", status: "unreachable" });
+  }
+});
+
+app.get("/api/engines/tribe/scenarios", async (_req, res) => {
+  if (!process.env.TRIBE_API_URL) {
+    return res.status(501).json({ error: "TRIBE_API_URL is not configured.", scenarios: [] });
+  }
+  try {
+    const response = await fetch(`${process.env.TRIBE_API_URL}/scenarios`, { signal: AbortSignal.timeout(5000) });
+    const body = await response.json();
+    return res.status(response.ok ? 200 : response.status).json(body);
+  } catch (error: any) {
+    return res.status(503).json({ error: error?.message || "TRIBE scenarios unavailable.", scenarios: [] });
+  }
+});
+
+app.post("/api/rewrite", (req, res) => {
+  const { content, goal } = req.body || {};
+  if (!content || String(content).trim().length < 12) {
+    return res.status(400).json({ error: "Content is required for rewrite." });
+  }
+  const rewrite = createRewriteFromLayerStack(content, goal || "trust");
+  const comparison = (runLayerRouter as any)({
+    content: rewrite.content,
+    contentType: "text",
+    baseResult: (analyzeContentLocally as any)({ content: rewrite.content, contentType: "text", forceFallback: true }),
+    providerTrace: [{ stage: "Rewrite layer stack", status: "completed", note: "Counter-Draft, Refutation, Tone Shifter and Persona Simulator generated the rewrite." }],
+    engineStatus: getEngineStatusSnapshot(process.env),
+  });
+  return res.json({ ...rewrite, comparison });
+});
+
+app.post("/api/autopsy", (req, res) => {
+  const { leftContent, rightContent, left, right } = req.body || {};
+  const resolvedLeft = leftContent || left;
+  const resolvedRight = rightContent || right;
+  if (!resolvedLeft || !resolvedRight) {
+    return res.status(400).json({ error: "Both leftContent and rightContent are required." });
+  }
+  return res.json(createAutopsyFromLayerStack(resolvedLeft, resolvedRight));
+});
+
+app.post("/api/auth/magic-link", async (req, res) => {
+  const { email } = req.body || {};
+  if (!email || !String(email).includes("@")) {
+    return res.status(400).json({ error: "A valid email is required." });
+  }
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    return res.status(501).json({ error: "Supabase Auth is not configured.", status: "not_configured" });
+  }
+  try {
+    const response = await fetch(`${process.env.SUPABASE_URL}/auth/v1/otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: process.env.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        email,
+        create_user: true,
+        options: { email_redirect_to: `${APP_URL}/app/` },
+      }),
+    });
+    if (!response.ok) {
+      return res.status(response.status).json(await response.json().catch(() => ({ error: "Supabase sign-in failed." })));
+    }
+    return res.json({ ok: true, status: "magic_link_sent" });
+  } catch (error: any) {
+    return res.status(502).json({ error: error?.message || "Supabase sign-in failed." });
+  }
+});
+
+app.post("/api/billing/checkout", async (req, res) => {
+  const { plan = "basic", email } = req.body || {};
+  const priceId = plan === "pro" ? process.env.STRIPE_PRICE_PRO : process.env.STRIPE_PRICE_BASIC;
+  if (!process.env.STRIPE_SECRET_KEY || !priceId) {
+    return res.status(501).json({ error: "Stripe Checkout is not configured.", status: "not_configured" });
+  }
+  try {
+    const params = new URLSearchParams();
+    params.set("mode", "subscription");
+    params.set("success_url", `${APP_URL}/app/?checkout=success&plan=${encodeURIComponent(plan)}`);
+    params.set("cancel_url", `${APP_URL}/app/?checkout=cancelled`);
+    params.set("line_items[0][price]", priceId);
+    params.set("line_items[0][quantity]", "1");
+    params.set("allow_promotion_codes", "true");
+    if (email) params.set("customer_email", String(email));
+    params.set("metadata[product]", "brainsnn");
+    params.set("metadata[plan]", String(plan));
+    const response = await fetch(`${STRIPE_API_BASE}/checkout/sessions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params,
+    });
+    const body = await response.json();
+    if (!response.ok) return res.status(response.status).json(body);
+    return res.json({ url: body.url, id: body.id });
+  } catch (error: any) {
+    return res.status(502).json({ error: error?.message || "Stripe Checkout failed." });
+  }
+});
+
+app.post("/api/billing/portal", async (req, res) => {
+  const { customerId } = req.body || {};
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(501).json({ error: "Stripe customer portal is not configured.", status: "not_configured" });
+  }
+  if (!customerId) return res.status(400).json({ error: "customerId is required." });
+  try {
+    const params = new URLSearchParams();
+    params.set("customer", String(customerId));
+    params.set("return_url", `${APP_URL}/app/`);
+    const response = await fetch(`${STRIPE_API_BASE}/billing_portal/sessions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params,
+    });
+    const body = await response.json();
+    if (!response.ok) return res.status(response.status).json(body);
+    return res.json({ url: body.url, id: body.id });
+  } catch (error: any) {
+    return res.status(502).json({ error: error?.message || "Stripe portal failed." });
+  }
 });
 
 app.post("/api/analyze", async (req, res) => {
@@ -357,7 +479,15 @@ app.post("/api/analyze", async (req, res) => {
       isFallback: false
     };
 
-    return res.json(outputResult);
+    return res.json((runLayerRouter as any)({
+      content,
+      contentType: inputType,
+      baseResult: outputResult,
+      providerTrace: [
+        { stage: "Gemini Deep Analysis", status: "completed", provider: selectedModel, note: "Primary model returned the base AnalysisResult payload." }
+      ],
+      engineStatus: getEngineStatusSnapshot(process.env),
+    }));
 
   } catch (error: any) {
     const errorMsg = error?.message || String(error);

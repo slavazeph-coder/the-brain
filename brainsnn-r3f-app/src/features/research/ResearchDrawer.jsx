@@ -2,6 +2,46 @@ import React from 'react';
 import { FlaskConical } from 'lucide-react';
 import { BenchmarksPanel } from './BenchmarksPanel.jsx';
 import { CrumbPhysicsPanel } from './CrumbPhysicsPanel.jsx';
+import { LAYER_CATALOG, LAYER_GROUPS, searchLayers } from '../../lib/layerCatalog.js';
+
+function LayerExplorer() {
+  const [query, setQuery] = React.useState('');
+  const [group, setGroup] = React.useState('all');
+  const layers = React.useMemo(() => searchLayers(query, group), [query, group]);
+  return (
+    <section className="research-panel layer-explorer-panel">
+      <div className="bsn-section-head">
+        <div>
+          <p className="bsn-eyebrow">Layer Explorer</p>
+          <h2>{LAYER_CATALOG.length} BrainSNN layers indexed</h2>
+        </div>
+        <span className="bsn-mono">{layers.length} shown</span>
+      </div>
+      <div className="layer-explorer-controls">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search layer, group or number..." />
+        <select value={group} onChange={(event) => setGroup(event.target.value)}>
+          <option value="all">All groups</option>
+          {Object.entries(LAYER_GROUPS).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
+        </select>
+      </div>
+      <div className="layer-explorer-list">
+        {layers.map((layer) => {
+          const meta = LAYER_GROUPS[layer.group] || {};
+          return (
+            <article key={layer.id} style={{ '--layer-color': meta.color || '#00f5ff' }}>
+              <span>L{layer.id}</span>
+              <div>
+                <strong>{layer.name}</strong>
+                <p>{layer.blurb}</p>
+              </div>
+              <small>{meta.label || layer.group}</small>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 export function ResearchDrawer() {
   return (
@@ -14,13 +54,14 @@ export function ResearchDrawer() {
       <div className="research-summary">
         <article>
           <h3>Production</h3>
-          <p>Brain Scan, executive verdict, scorecard, content heatmap, Synapse rewrites, local Memory, local Neural Queue and export.</p>
+          <p>Analyze, Improve, Autopsy, History, Pricing, layer traces, deterministic firewall signals, TRIBE projection, Context Memory and export.</p>
         </article>
         <article>
           <h3>Experimental</h3>
-          <p>Crumb LLM physics, wave parameters, cognitive firewall language, technical SNN metrics and older demo surfaces.</p>
+          <p>TRIBE live prediction, Gemma multimodal analysis, Crumb LLM physics, rule evolution, RAG, MCP bridge, EEG and benchmarks remain clearly labeled.</p>
         </article>
       </div>
+      <LayerExplorer />
       <CrumbPhysicsPanel />
       <BenchmarksPanel />
       <section className="legacy-lab-shell">

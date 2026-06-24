@@ -1,7 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Mail, Users } from 'lucide-react';
-import { Modal } from '../components/ui/Modal.jsx';
-import { Button } from '../components/ui/Button.jsx';
 import { track } from '../lib/analytics.js';
 import { excerpt } from '../lib/formatters.js';
 import { loadQueue, saveQueue } from '../lib/storage.js';
@@ -9,8 +6,10 @@ import { useScanEngine } from '../features/scan/useScanEngine.js';
 import { useScanHistory } from '../features/memory/useScanHistory.js';
 import { ScanWorkspace } from '../features/scan/ScanWorkspace.jsx';
 import { ImprovementWorkspace } from '../features/improve/ImprovementWorkspace.jsx';
+import { AutopsyWorkspace } from '../features/autopsy/AutopsyWorkspace.jsx';
 import { ScanHistory } from '../features/memory/ScanHistory.jsx';
 import { ApprovalQueue } from '../features/approvals/ApprovalQueue.jsx';
+import { PricingWorkspace } from '../features/pricing/PricingWorkspace.jsx';
 import { ResearchDrawer } from '../features/research/ResearchDrawer.jsx';
 import { ShareDialog } from '../features/export/ShareDialog.jsx';
 import { AppHeader } from './AppHeader.jsx';
@@ -36,46 +35,14 @@ function makeQueueItem(result, content, comparison, status = 'Draft') {
   };
 }
 
-function UpgradeModal({ open, onClose }) {
-  function mailto(subject) {
-    window.location.href = `mailto:hello@brainsnn.com?subject=${encodeURIComponent(subject)}`;
-  }
-  return (
-    <Modal open={open} onClose={onClose} title="BrainSNN plans">
-      <div className="pricing-grid">
-        <article>
-          <h3>Free Explorer</h3>
-          <p>Core verdict, basic rewrite, watermarked exports and local history.</p>
-          <Button variant="secondary" onClick={onClose}>Continue Free</Button>
-        </article>
-        <article>
-          <h3>Pro</h3>
-          <p>More scans, full version comparisons, advanced memory and export polish as they ship.</p>
-          <Button variant="primary" onClick={() => { track('upgrade_clicked'); mailto('Join BrainSNN Pro waitlist'); }}>
-            <Mail size={16} aria-hidden="true" /> Join Pro Waitlist
-          </Button>
-        </article>
-        <article>
-          <h3>Team Pilot</h3>
-          <p>Brand rules, batch reviews, reports and pilot onboarding when shared workflows are implemented.</p>
-          <Button variant="secondary" onClick={() => { track('pilot_clicked'); mailto('Book a BrainSNN Team Pilot'); }}>
-            <Users size={16} aria-hidden="true" /> Book a Team Pilot
-          </Button>
-        </article>
-      </div>
-    </Modal>
-  );
-}
-
 export function AppShell() {
   const scan = useScanEngine();
   const history = useScanHistory();
-  const [active, setActive] = useState('cortex');
+  const [active, setActive] = useState('analyze');
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exportResult, setExportResult] = useState(null);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [queue, setQueue] = useState([]);
 
   useEffect(() => {
@@ -99,7 +66,8 @@ export function AppShell() {
   }, []);
 
   const navigate = useCallback((id) => {
-    setActive(id);
+    const aliases = { cortex: 'analyze', synapse: 'improve', memory: 'history' };
+    setActive(aliases[id] || id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -135,38 +103,52 @@ export function AppShell() {
   const openMemoryItem = useCallback((item) => {
     if (item?.result) {
       scan.loadResult(item.result);
-      navigate('cortex');
+      navigate('analyze');
     }
   }, [navigate, scan]);
 
   const duplicateMemoryItem = useCallback((item) => {
     scan.setInput(item.result?.rawContent || item.excerpt || '');
-    navigate('cortex');
+    navigate('analyze');
   }, [navigate, scan]);
 
   const content = useMemo(() => {
-    if (active === 'synapse') {
+    if (active === 'improve') {
       return (
         <ImprovementWorkspace
           result={scan.state.result}
-          onGoToCortex={() => navigate('cortex')}
+          onGoToCortex={() => navigate('analyze')}
           onSaveVersion={(result, contentValue, comparison) => { history.addVersion(result, contentValue, comparison); track('version_created'); }}
           onQueue={(result, contentValue, comparison) => { addToQueue(result, contentValue, comparison, 'Ready'); navigate('queue'); }}
           onApprove={approve}
         />
       );
     }
-    if (active === 'memory') {
-      return <ScanHistory history={history} onOpen={openMemoryItem} onDuplicate={duplicateMemoryItem} onGoToCortex={() => navigate('cortex')} />;
+    if (active === 'autopsy') {
+      return (
+        <AutopsyWorkspace
+          onSendToImprove={(result, contentValue) => {
+            scan.loadResult(result);
+            if (contentValue) scan.setInput(contentValue);
+            navigate('improve');
+          }}
+        />
+      );
+    }
+    if (active === 'history') {
+      return <ScanHistory history={history} onOpen={openMemoryItem} onDuplicate={duplicateMemoryItem} onGoToCortex={() => navigate('analyze')} />;
+    }
+    if (active === 'pricing') {
+      return <PricingWorkspace />;
     }
     if (active === 'queue') {
       return (
         <ApprovalQueue
           queue={queue}
-          onGoToCortex={() => navigate('cortex')}
-          onOpen={(item) => { if (item.result) scan.loadResult(item.result); navigate('cortex'); }}
+          onGoToCortex={() => navigate('analyze')}
+          onOpen={(item) => { if (item.result) scan.loadResult(item.result); navigate('analyze'); }}
           onApprove={(item) => persistQueue(queue.map((entry) => entry.id === item.id ? { ...entry, status: 'Approved', updatedAt: new Date().toISOString() } : entry))}
-          onReturn={(item) => { if (item.versions?.[0]?.result) scan.loadResult(item.versions[0].result); navigate('synapse'); }}
+          onReturn={(item) => { if (item.versions?.[0]?.result) scan.loadResult(item.versions[0].result); navigate('improve'); }}
           onExport={(item) => openExport(item.result || item.versions?.[0]?.result)}
         />
       );
@@ -177,7 +159,7 @@ export function AppShell() {
     return (
       <ScanWorkspace
         scan={scan}
-        onImprove={(result) => { scan.loadResult(result); navigate('synapse'); }}
+        onImprove={(result) => { scan.loadResult(result); navigate('improve'); }}
         onSave={saveResult}
         onQueue={(result) => { addToQueue(result); navigate('queue'); }}
         onExport={openExport}
@@ -192,14 +174,14 @@ export function AppShell() {
         onNavigate={navigate}
         collapsed={collapsed}
         onToggle={() => setCollapsed((value) => !value)}
-        onUpgrade={() => setUpgradeOpen(true)}
+        onUpgrade={() => navigate('pricing')}
       />
       <div className="brain-main-shell">
         <AppHeader
           active={active}
           onOpenCommand={() => setCommandOpen(true)}
           onExport={() => openExport(scan.state.result)}
-          onUpgrade={() => setUpgradeOpen(true)}
+          onUpgrade={() => navigate('pricing')}
           hasResult={Boolean(scan.state.result)}
         />
         <main className="brain-content">{content}</main>
@@ -207,7 +189,6 @@ export function AppShell() {
       <MobileNavigation active={active} onNavigate={navigate} />
       <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} onNavigate={navigate} />
       <ShareDialog open={exportOpen} onClose={() => setExportOpen(false)} result={exportResult || scan.state.result} />
-      <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </div>
   );
 }

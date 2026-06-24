@@ -26,6 +26,10 @@ export function TechnicalDetails({ result, onOpenResearch }) {
           <div><span>Model</span><strong>{result.crumbModelStats?.model || 'unknown'}</strong></div>
           <div><span>Confidence</span><strong>{result.confidence ?? 'n/a'}</strong></div>
           <div><span>Fallback</span><strong>{result.isFallback ? 'Yes' : 'No'}</strong></div>
+          <div><span>Layers evaluated</span><strong>{result.crumbModelStats?.layersEvaluated ?? result.layersUsed?.length ?? 'n/a'}</strong></div>
+          <div><span>Total layers</span><strong>{result.crumbModelStats?.totalLayersAvailable ?? 102}</strong></div>
+          <div><span>TRIBE scenario</span><strong>{result.tribeProjection?.scenario || 'n/a'}</strong></div>
+          <div><span>Receipt</span><strong>{result.receipt?.id || 'n/a'}</strong></div>
         </div>
       ) : null}
     </section>

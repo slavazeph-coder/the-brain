@@ -1,11 +1,13 @@
-import { Brain, GitCompare, History, Send, FlaskConical } from 'lucide-react';
+import { Brain, CreditCard, FlaskConical, GitCompare, History, Microscope, Sparkles } from 'lucide-react';
 
 export const NAV_ITEMS = [
-  { id: 'cortex', label: 'Cortex', mobileLabel: 'Scan', icon: Brain, description: 'Scan and diagnose content.' },
-  { id: 'synapse', label: 'Synapse', mobileLabel: 'Improve', icon: GitCompare, description: 'Rewrite and compare versions.' },
-  { id: 'memory', label: 'Memory', mobileLabel: 'Memory', icon: History, description: 'Saved scans and versions.' },
-  { id: 'queue', label: 'Neural Queue', mobileLabel: 'More', icon: Send, description: 'Local approvals and exports.' },
-  { id: 'research', label: 'Research', mobileLabel: 'More', icon: FlaskConical, description: 'Advanced SNN and Crumb lab.' },
+  { id: 'analyze', label: 'Analyze', mobileLabel: 'Analyze', icon: Brain, description: 'Cortex scan for attention, trust and trigger signals.' },
+  { id: 'improve', label: 'Improve', mobileLabel: 'Improve', icon: Sparkles, description: 'Synapse rewrites and version comparison.' },
+  { id: 'autopsy', label: 'Autopsy', mobileLabel: 'Autopsy', icon: GitCompare, description: 'Battle two variants through the layer stack.' },
+  { id: 'history', label: 'History', mobileLabel: 'More', icon: History, description: 'Memory, context triggers and saved scans.' },
+  { id: 'pricing', label: 'Pricing', mobileLabel: 'More', icon: CreditCard, description: 'Paid beta plans and engine readiness.' },
+  { id: 'research', label: 'Research', mobileLabel: 'More', icon: FlaskConical, description: '102-layer map, TRIBE, Gemma and Crumb lab.' },
+  { id: 'queue', label: 'Queue', mobileLabel: 'More', icon: Microscope, description: 'Local review queue and approvals.' },
 ];
 
 export function getNavItem(id) {

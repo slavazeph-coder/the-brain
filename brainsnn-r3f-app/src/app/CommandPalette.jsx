@@ -14,7 +14,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     <Modal open={open} onClose={onClose} title="Command palette">
       <label className="command-input-label">
         Search commands
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Go to Cortex, Synapse, Memory..." autoFocus />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Go to Analyze, Improve, Autopsy..." autoFocus />
       </label>
       <div className="command-list">
         {commands.map((item) => (

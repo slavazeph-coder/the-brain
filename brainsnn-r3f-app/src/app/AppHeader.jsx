@@ -12,7 +12,8 @@ export function AppHeader({ active, onOpenCommand, onExport, onUpgrade, hasResul
         <h1>{item.description}</h1>
         <p>The decision engine for everything your brand publishes.</p>
         <div className="app-header-status" aria-label="System status">
-          <span className="status-chip"><span aria-hidden="true" />SNN_ENGINE_ACTIVE</span>
+          <span className="status-chip"><span aria-hidden="true" />102_LAYER_STACK</span>
+          <span className="status-chip"><span aria-hidden="true" />TRIBE_READY_TRACE</span>
           <span className="status-chip"><span aria-hidden="true" />LOCAL_MEMORY_READY</span>
         </div>
       </div>

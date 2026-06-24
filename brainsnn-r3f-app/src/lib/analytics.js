@@ -18,6 +18,11 @@ const allowedEvents = new Set([
   'share_text_copied',
   'upgrade_clicked',
   'pilot_clicked',
+  'pricing_viewed',
+  'checkout_started',
+  'autopsy_started',
+  'autopsy_completed',
+  'layer_trace_viewed',
 ]);
 
 export function track(eventName, properties = {}) {

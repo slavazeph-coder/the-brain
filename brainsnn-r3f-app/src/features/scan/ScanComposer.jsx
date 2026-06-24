@@ -38,7 +38,7 @@ export function ScanComposer({ scan, onRun }) {
       <div className="scan-composer-copy">
         <p className="bsn-kicker">Decision Engine</p>
         <h1 id="cortex-heading">Know how it lands before you publish.</h1>
-        <p>Scan a hook, ad, email, post or script. BrainSNN shows what captures attention, what damages trust and what to change next.</p>
+        <p>Scan a hook, ad, email, post or script. BrainSNN routes it through the 102-layer engine: Cognitive Firewall, Gemma/Gemini/OpenAI-ready analysis, Context Memory and TRIBE-informed brain projection.</p>
       </div>
 
       <ContentTypeSelector value={state.contentType} onChange={setContentType} />
@@ -78,7 +78,7 @@ export function ScanComposer({ scan, onRun }) {
       {state.status === 'error' ? <p role="alert" className="bsn-validation">{state.error}</p> : null}
 
       <ExampleSelector onSelect={setInput} />
-      <p className="scan-privacy-note">Local history stays in this browser. Analysis uses the BrainSNN server when available; demo fallback results are clearly labeled.</p>
+      <p className="scan-privacy-note">Local history stays in this browser unless persistence is configured. Results are AI-estimated content-response signals, not literal brain measurement.</p>
     </section>
   );
 }

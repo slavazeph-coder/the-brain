@@ -45,6 +45,45 @@ export interface AnalysisResult {
   confidence: number;         // 0-100
   crumbModelStats: CrumbModelStats;
   isFallback?: boolean;
+  layersUsed?: Array<{ id: number; name: string; group: string; blurb: string }>;
+  engineTrace?: Array<{ stage: string; status: string; provider?: string; note: string }>;
+  firewallSignals?: {
+    emotionalActivation: number;
+    cognitiveSuppression: number;
+    manipulationPressure: number;
+    trustErosion: number;
+    density?: number;
+    evidence?: Array<{ label: string; match: string }>;
+    templates?: Array<{ id: string; label: string; risk: string }>;
+    source?: string;
+  };
+  affectProfile?: {
+    dominantAffect: string;
+    valence: number;
+    arousal: number;
+    clusters: Array<{ id: string; label: string; value: number }>;
+  };
+  contextTriggers?: {
+    genre: string;
+    entityCandidates: string[];
+    recurringSignals: string[];
+    memoryPrompt: string;
+  };
+  tribeProjection?: {
+    source: string;
+    status: string;
+    scenario: string;
+    regions: Record<string, number>;
+    note: string;
+  };
+  receipt?: {
+    id: string;
+    contentHash: string;
+    resultHash: string;
+    generatedAt: string;
+    disclaimer: string;
+  };
+  researchNotes?: string[];
 }
 
 export interface SubscriptionPlan {

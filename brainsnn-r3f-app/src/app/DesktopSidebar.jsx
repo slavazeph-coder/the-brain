@@ -4,7 +4,7 @@ import { IconButton } from '../components/ui/IconButton.jsx';
 import { NAV_ITEMS } from './navigation.js';
 
 export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgrade }) {
-  const ResearchIcon = NAV_ITEMS[4].icon;
+  const ResearchIcon = NAV_ITEMS.find((item) => item.id === 'research')?.icon || BrainCircuit;
   return (
     <aside className={`desktop-sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Primary navigation">
       <div className="sidebar-brand">
@@ -17,7 +17,7 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgr
         ) : null}
       </div>
       <nav className="sidebar-nav">
-        {NAV_ITEMS.slice(0, 4).map((item) => (
+        {NAV_ITEMS.filter((item) => ['analyze', 'improve', 'autopsy', 'history', 'pricing'].includes(item.id)).map((item) => (
           <button key={item.id} type="button" className={active === item.id ? 'active' : ''} onClick={() => onNavigate(item.id)}>
             <item.icon size={18} aria-hidden="true" />
             {!collapsed ? <span>{item.label}</span> : null}
@@ -29,9 +29,13 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgr
           <ResearchIcon size={18} aria-hidden="true" />
           {!collapsed ? <span>Research</span> : null}
         </button>
+        <button type="button" className={active === 'queue' ? 'active' : ''} onClick={() => onNavigate('queue')}>
+          <BrainCircuit size={18} aria-hidden="true" />
+          {!collapsed ? <span>Queue</span> : null}
+        </button>
         <button type="button" onClick={onUpgrade}>
           <Settings size={18} aria-hidden="true" />
-          {!collapsed ? <span>Plans</span> : null}
+          {!collapsed ? <span>Account</span> : null}
         </button>
         <IconButton label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={onToggle}>
           {collapsed ? <ChevronRight size={18} aria-hidden="true" /> : <ChevronLeft size={18} aria-hidden="true" />}
