@@ -267,6 +267,13 @@
   opacity: 0.48;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+}
+
+.bsn-button-primary:disabled {
+  color: var(--bsn-text-muted);
+  background: rgba(13, 13, 20, 0.82);
+  border-color: var(--bsn-border);
 }
 
 .bsn-icon-button {
@@ -1346,6 +1353,14 @@
   min-height: 120px;
 }
 
+.results-scroll-anchor {
+  scroll-margin-top: 96px;
+}
+
+.results-action-status {
+  margin: 12px 0 0;
+}
+
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1852,6 +1867,14 @@
     grid-template-columns: 1fr;
   }
 
+  .results-main {
+    order: -1;
+  }
+
+  .results-inspector {
+    order: 0;
+  }
+
   .verdict-score {
     width: 150px;
   }
@@ -1902,11 +1925,23 @@
   }
 
   .app-header h1 {
-    font-size: 1.4rem;
+    max-width: 230px;
+    font-size: 1.05rem;
+    line-height: 1.16;
   }
 
   .app-header p {
     display: none;
+  }
+
+  .app-header-status,
+  .app-header > div:first-child > .bsn-kicker,
+  .app-header .header-actions .bsn-button:disabled {
+    display: none !important;
+  }
+
+  .results-scroll-anchor {
+    scroll-margin-top: 112px;
   }
 
   .app-header-status {

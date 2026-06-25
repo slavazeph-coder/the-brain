@@ -149,7 +149,10 @@ export function AppShell() {
           onOpen={(item) => { if (item.result) scan.loadResult(item.result); navigate('analyze'); }}
           onApprove={(item) => persistQueue(queue.map((entry) => entry.id === item.id ? { ...entry, status: 'Approved', updatedAt: new Date().toISOString() } : entry))}
           onReturn={(item) => { if (item.versions?.[0]?.result) scan.loadResult(item.versions[0].result); navigate('improve'); }}
-          onExport={(item) => openExport(item.result || item.versions?.[0]?.result)}
+          onExport={(item) => {
+            persistQueue(queue.map((entry) => entry.id === item.id ? { ...entry, status: 'Exported', updatedAt: new Date().toISOString() } : entry));
+            openExport(item.result || item.versions?.[0]?.result);
+          }}
         />
       );
     }

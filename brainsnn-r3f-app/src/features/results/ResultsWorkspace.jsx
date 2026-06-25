@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Download, GitCompare, Save, Send, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
@@ -14,6 +14,11 @@ import { TechnicalDetails } from './TechnicalDetails.jsx';
 
 export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
   const verdict = deriveExecutiveVerdict(result);
+  const [status, setStatus] = useState('');
+  function handleSave() {
+    const record = onSave(result);
+    setStatus(record ? 'Saved to local Memory.' : 'Could not save this scan.');
+  }
   return (
     <div className="results-workbench" data-testid="results-workspace">
       <main className="results-main" aria-label="Brain Scan results">
@@ -43,10 +48,11 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
         <div className="inspector-actions">
           <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
           <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
-          <Button variant="ghost" onClick={() => onSave(result)}><Save size={16} aria-hidden="true" /> Save to Memory</Button>
+          <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to Memory</Button>
           <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Queue</Button>
           <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
         </div>
+        {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
       </aside>
     </div>
   );

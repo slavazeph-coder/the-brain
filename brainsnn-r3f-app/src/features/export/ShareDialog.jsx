@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Copy, Download, FileJson, FileText, Link2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { track } from '../../lib/analytics.js';
@@ -58,6 +58,7 @@ async function downloadPng(result) {
   ctx.font = '700 30px Inter, sans-serif';
   ctx.fillText('brainsnn.com', 900, 560);
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('PNG export could not be generated.');
   download('brainsnn-brain-scan.png', blob);
 }
 
@@ -70,6 +71,12 @@ export function ShareDialog({ open, onClose, result }) {
     const metricMap = Object.fromEntries(getBusinessMetrics(result).map((metric) => [metric.id, metric.value]));
     return `BRAIN SCAN\n"${verdict.headline}"\n\nHook Strength: ${metricMap.hookStrength}\nTrust: ${metricMap.trust}\nManipulation Risk: ${metricMap.manipulationRisk}\n\nAI-estimated content response from BrainSNN.`;
   }, [result, verdict]);
+
+  useEffect(() => {
+    if (!open) return;
+    setManualCopy('');
+    setStatus('');
+  }, [open, result?.id]);
 
   if (!result) return null;
 
@@ -86,10 +93,14 @@ export function ShareDialog({ open, onClose, result }) {
 
   function exportReport() {
     download('brainsnn-report.txt', new Blob([`${shareText}\n\nSummary:\n${result.summary}\n\nOriginal:\n${result.rawContent}`], { type: 'text/plain;charset=utf-8' }));
+    setStatus('Plain-text report downloaded.');
+    track('export_downloaded', { type: 'txt' });
   }
 
   function exportJson() {
     download('brainsnn-result.json', new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }));
+    setStatus('JSON export downloaded.');
+    track('export_downloaded', { type: 'json' });
   }
 
   return (
@@ -98,7 +109,15 @@ export function ShareDialog({ open, onClose, result }) {
         <SharePreview result={result} />
         <div className="export-actions-list">
           <ExportCard icon={Copy} title="Copy summary" description="Short result summary for docs, Slack or client notes." actionLabel="Copy" onAction={() => copyText(shareText, 'share_text_copied')} />
-          <ExportCard icon={Download} title="Download PNG" description="Readable NeuroGlow social image with BrainSNN watermark." actionLabel="Download" onAction={async () => { await downloadPng(result); track('export_downloaded', { type: 'png' }); }} />
+          <ExportCard icon={Download} title="Download PNG" description="Readable NeuroGlow social image with BrainSNN watermark." actionLabel="Download" onAction={async () => {
+            try {
+              await downloadPng(result);
+              setStatus('PNG downloaded.');
+              track('export_downloaded', { type: 'png' });
+            } catch (error) {
+              setStatus(error.message || 'PNG export failed.');
+            }
+          }} />
           <ExportCard icon={FileText} title="Export report" description="Plain-text report with summary and original content." actionLabel="Export" onAction={exportReport} />
           <ExportCard icon={FileJson} title="Export JSON" description="Technical result payload for debugging or future import." actionLabel="Export" onAction={exportJson} />
           <ExportCard icon={Link2} title="Copy public result link" description="Coming soon. Public links need persisted scans before they can resolve." actionLabel="Coming soon" disabled />
