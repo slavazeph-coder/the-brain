@@ -15,6 +15,7 @@ import { ShareDialog } from '../features/export/ShareDialog.jsx';
 import { AppHeader } from './AppHeader.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
 import { DesktopSidebar } from './DesktopSidebar.jsx';
+import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
 
 function makeQueueItem(result, content, comparison, status = 'Draft') {
@@ -38,6 +39,7 @@ function makeQueueItem(result, content, comparison, status = 'Draft') {
 export function AppShell() {
   const scan = useScanEngine();
   const history = useScanHistory();
+  const [route, setRoute] = useState(() => (window.location.pathname.startsWith('/app') ? 'app' : 'landing'));
   const [active, setActive] = useState('analyze');
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -47,6 +49,14 @@ export function AppShell() {
 
   useEffect(() => {
     setQueue(loadQueue());
+  }, []);
+
+  useEffect(() => {
+    function syncRoute() {
+      setRoute(window.location.pathname.startsWith('/app') ? 'app' : 'landing');
+    }
+    window.addEventListener('popstate', syncRoute);
+    return () => window.removeEventListener('popstate', syncRoute);
   }, []);
 
   useEffect(() => {
@@ -67,9 +77,21 @@ export function AppShell() {
 
   const navigate = useCallback((id) => {
     const aliases = { cortex: 'analyze', synapse: 'improve', memory: 'history' };
+    if (route !== 'app') {
+      window.history.pushState({}, '', '/app');
+      setRoute('app');
+    }
     setActive(aliases[id] || id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [route]);
+
+  const openWorkspace = useCallback((prefill = '') => {
+    if (typeof prefill === 'string') scan.setInput(prefill);
+    window.history.pushState({}, '', '/app');
+    setRoute('app');
+    setActive('analyze');
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  }, [scan]);
 
   const saveResult = useCallback((result) => {
     const record = history.addResult(result);
@@ -169,6 +191,10 @@ export function AppShell() {
       />
     );
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
+
+  if (route === 'landing') {
+    return <LandingPage onStart={openWorkspace} />;
+  }
 
   return (
     <div className="brain-app">

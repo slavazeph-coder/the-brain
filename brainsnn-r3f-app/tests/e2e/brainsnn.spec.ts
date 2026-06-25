@@ -152,8 +152,18 @@ test.beforeEach(async ({ page }) => {
   await mockBackend(page);
 });
 
-test('core analyze to export workflow works with deterministic fallback data', async ({ page }) => {
+test('interactive landing routes into the scanner with a prefilled sample', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByRole('heading', { name: /See response signals in any content/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Launch Active Demo/ })).toBeVisible();
+  await page.getByRole('button', { name: /Launch Active Demo/ }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
+  await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
+});
+
+test('core analyze to export workflow works with deterministic fallback data', async ({ page }) => {
+  await page.goto('/app');
   await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
 
   await runScan(page);
@@ -174,7 +184,7 @@ test('core analyze to export workflow works with deterministic fallback data', a
 
 test('memory, autopsy, pricing and accessibility surfaces render', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'Desktop nav owns direct History/Pricing access; mobile shell is covered separately.');
-  await page.goto('/');
+  await page.goto('/app');
   await runScan(page);
   await page.getByRole('button', { name: /Save to Memory/ }).click();
   await page.getByRole('button', { name: 'History' }).click();
@@ -198,7 +208,7 @@ test('memory, autopsy, pricing and accessibility surfaces render', async ({ page
 
 test('mobile navigation has no horizontal overflow at 390px', async ({ page }) => {
   test.skip(test.info().project.name !== 'mobile', 'Mobile navigation is hidden in the desktop shell.');
-  await page.goto('/');
+  await page.goto('/app');
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav).toBeVisible();
   await mobileNav.getByRole('button', { name: 'Autopsy' }).click();
