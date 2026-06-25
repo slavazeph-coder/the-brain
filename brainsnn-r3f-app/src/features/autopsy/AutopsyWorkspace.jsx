@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { GitCompare, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
+import { track } from '../../lib/analytics.js';
 import { createAutopsyFromLayerStack } from '../../lib/layerRouter.js';
 import { getBusinessMetrics } from '../../lib/scoreMapping.js';
 import { BrainVisualizer } from '../results/BrainVisualizer.jsx';
@@ -29,6 +30,8 @@ export function AutopsyWorkspace({ onSendToImprove }) {
   const [right, setRight] = useState(sampleB);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
   const canRun = left.trim().length >= 12 && right.trim().length >= 12;
   const winnerLabel = useMemo(() => {
     if (!result) return '';
@@ -36,13 +39,32 @@ export function AutopsyWorkspace({ onSendToImprove }) {
     return result.winner === 'left' ? 'Variant A wins' : 'Variant B wins';
   }, [result]);
 
-  function runAutopsy() {
+  async function runAutopsy() {
     setError('');
+    setMessage('');
     if (!canRun) {
       setError('Enter two meaningful variants to compare.');
       return;
     }
-    setResult(createAutopsyFromLayerStack(left, right));
+    setLoading(true);
+    track('autopsy_started');
+    try {
+      const response = await fetch('/api/autopsy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leftContent: left, rightContent: right }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.left || !body.right) throw new Error(body.error || 'Autopsy endpoint unavailable.');
+      setResult(body);
+      setMessage('Autopsy completed through the server layer stack.');
+      track('autopsy_completed');
+    } catch (error) {
+      setResult(createAutopsyFromLayerStack(left, right));
+      setMessage(`${error.message || 'Autopsy endpoint unavailable.'} Local layer comparison was used instead.`);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const winningResult = result?.winner === 'right' ? result.right : result?.left;
@@ -67,14 +89,15 @@ export function AutopsyWorkspace({ onSendToImprove }) {
         </label>
       </section>
       <div className="synapse-actions">
-        <Button variant="primary" onClick={runAutopsy} disabled={!canRun}>
-          <GitCompare size={16} aria-hidden="true" /> Run Autopsy
+        <Button variant="primary" onClick={runAutopsy} disabled={!canRun || loading}>
+          <GitCompare size={16} aria-hidden="true" /> {loading ? 'Running...' : 'Run Autopsy'}
         </Button>
         <Button variant="ghost" onClick={() => { setLeft(sampleA); setRight(sampleB); }}>
           Load example
         </Button>
       </div>
       {error ? <p role="alert" className="bsn-validation">{error}</p> : null}
+      {message ? <p role="status" className="bsn-note autopsy-message">{message}</p> : null}
 
       {result ? (
         <div className="autopsy-results">

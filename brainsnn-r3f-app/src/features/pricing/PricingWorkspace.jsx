@@ -24,7 +24,7 @@ const plans = [
     name: 'Pro',
     price: '$29/mo',
     description: 'For marketers and small agencies running repeated variants.',
-    features: ['200 analyses/month', 'Autopsy/Battle mode', 'Context memory', 'Share links and deeper layer traces'],
+    features: ['200 analyses/month', 'Autopsy/Battle mode', 'Context memory', 'Export-ready reports and deeper layer traces'],
   },
   {
     id: 'team',
@@ -70,6 +70,10 @@ export function PricingWorkspace() {
       window.location.href = 'mailto:hello@brainsnn.com?subject=Book%20a%20BrainSNN%20Team%20Pilot';
       return;
     }
+    if (!stripeReady) {
+      setMessage(`${planId === 'pro' ? 'Pro' : 'Basic'} waitlist intent captured locally. Configure Stripe price IDs to turn this into live Checkout.`);
+      return;
+    }
     try {
       const response = await fetch('/api/billing/checkout', {
         method: 'POST',
@@ -86,6 +90,13 @@ export function PricingWorkspace() {
       setMessage('Checkout could not start. Try again after Stripe env vars are configured.');
     }
   }
+
+  const stripeReady = Boolean(status?.engines?.stripe?.configured);
+  const ctaLabel = (plan) => {
+    if (plan.id === 'free') return 'Continue Free';
+    if (plan.id === 'team') return 'Book Pilot';
+    return stripeReady ? `Start ${plan.name}` : `Join ${plan.name} Waitlist`;
+  };
 
   async function sendMagicLink() {
     setMessage('');
@@ -138,7 +149,7 @@ export function PricingWorkspace() {
               ))}
             </ul>
             <Button variant={plan.highlighted ? 'primary' : 'secondary'} onClick={() => startCheckout(plan.id)}>
-              <CreditCard size={16} aria-hidden="true" /> {plan.id === 'free' ? 'Continue Free' : plan.id === 'team' ? 'Book Pilot' : `Start ${plan.name}`}
+              <CreditCard size={16} aria-hidden="true" /> {ctaLabel(plan)}
             </Button>
           </article>
         ))}

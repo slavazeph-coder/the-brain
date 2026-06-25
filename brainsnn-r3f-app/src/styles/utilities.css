@@ -1352,6 +1352,72 @@
   gap: 12px;
 }
 
+.engine-readiness-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid rgba(0, 245, 255, 0.14);
+  border-radius: var(--bsn-radius-lg);
+  background:
+    linear-gradient(135deg, rgba(0, 245, 255, 0.045), rgba(168, 85, 247, 0.045)),
+    rgba(9, 9, 17, 0.78);
+}
+
+.engine-readiness-panel h2 {
+  margin: 4px 0 8px;
+}
+
+.readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.readiness-item {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(6, 6, 10, 0.55);
+}
+
+.readiness-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--bsn-cyan);
+  background: rgba(0, 245, 255, 0.08);
+}
+
+.readiness-item span {
+  display: block;
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-text-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.readiness-item strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.synapse-message,
+.autopsy-message {
+  margin: 12px 0 0;
+}
+
 .pricing-grid h3 {
   margin-top: 0;
 }
@@ -1771,9 +1837,14 @@
   .autopsy-input-grid,
   .autopsy-card-grid,
   .account-connect-panel,
+  .engine-readiness-panel,
   .engine-status-grid,
   .layer-explorer-controls,
   .layer-explorer-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .readiness-grid {
     grid-template-columns: 1fr;
   }
 

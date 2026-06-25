@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect } from 'react';
 import { ErrorState } from '../../components/ui/ErrorState.jsx';
 import { ResultsWorkspace } from '../results/ResultsWorkspace.jsx';
+import { EngineReadinessPanel } from './EngineReadinessPanel.jsx';
 import { ScanComposer } from './ScanComposer.jsx';
 import { track } from '../../lib/analytics.js';
 
@@ -21,6 +22,7 @@ export function ScanWorkspace({ scan, onImprove, onSave, onQueue, onExport }) {
           <ErrorState message={scan.state.error} onRetry={run} />
         </div>
       ) : null}
+      {!scan.state.result && scan.state.status !== 'scanning' ? <EngineReadinessPanel /> : null}
       {scan.state.result ? (
         <ResultsWorkspace
           result={scan.state.result}
