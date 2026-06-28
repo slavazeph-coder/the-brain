@@ -237,26 +237,31 @@ app.post("/api/autopsy", (req, res) => {
 // Layer 103 — 39 Hz Soliton Field. Deterministic microtubule ionic-soliton /
 // gamma-synchrony model. Runs fully offline (no model key required).
 app.post("/api/soliton", (req, res) => {
-  const { content, type, contentType } = req.body || {};
-  const inputType = type || contentType || "text";
-  if (!content || String(content).trim().length < 4) {
-    return res.status(400).json({ error: "Content is required for the 39 Hz soliton field." });
+  try {
+    const { content, type, contentType } = req.body || {};
+    const inputType = type || contentType || "text";
+    if (!content || String(content).trim().length < 4) {
+      return res.status(400).json({ error: "Content is required for the 39 Hz soliton field." });
+    }
+    const routed = (runLayerRouter as any)({
+      content,
+      contentType: inputType,
+      baseResult: (analyzeContentLocally as any)({ content, contentType: inputType, forceFallback: true }),
+      providerTrace: [
+        { stage: "L103 39 Hz Soliton Field", status: "completed", note: "Microtubule ionic-soliton gamma model evaluated locally." }
+      ],
+      engineStatus: getEngineStatusSnapshot(process.env),
+    });
+    return res.json({
+      solitonField: routed.solitonField,
+      affectProfile: routed.affectProfile,
+      firewallSignals: routed.firewallSignals,
+      receipt: routed.receipt,
+    });
+  } catch (error: any) {
+    console.error("Error evaluating 39 Hz soliton field:", error?.message || error);
+    return res.status(500).json({ error: "Failed to evaluate the 39 Hz soliton field." });
   }
-  const routed = (runLayerRouter as any)({
-    content,
-    contentType: inputType,
-    baseResult: (analyzeContentLocally as any)({ content, contentType: inputType, forceFallback: true }),
-    providerTrace: [
-      { stage: "L103 39 Hz Soliton Field", status: "completed", note: "Microtubule ionic-soliton gamma model evaluated locally." }
-    ],
-    engineStatus: getEngineStatusSnapshot(process.env),
-  });
-  return res.json({
-    solitonField: routed.solitonField,
-    affectProfile: routed.affectProfile,
-    firewallSignals: routed.firewallSignals,
-    receipt: routed.receipt,
-  });
 });
 
 app.post("/api/auth/magic-link", async (req, res) => {

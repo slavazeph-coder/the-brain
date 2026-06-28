@@ -93,7 +93,7 @@ function runGammaLattice(rng, drivers) {
       sx += Math.cos(phases[i]);
       sy += Math.sin(phases[i]);
     }
-    const r = Math.hypot(sx, sy) / PROTOFILAMENTS;
+    const r = Math.sqrt(sx * sx + sy * sy) / PROTOFILAMENTS;
     const psi = Math.atan2(sy, sx);
     for (let i = 0; i < PROTOFILAMENTS; i += 1) {
       const dtheta = omega[i] + K * PROTOFILAMENTS * r * Math.sin(psi - phases[i]);
@@ -108,7 +108,7 @@ function runGammaLattice(rng, drivers) {
     fx += Math.cos(phases[i]);
     fy += Math.sin(phases[i]);
   }
-  const gammaCoherence = clamp01(Math.hypot(fx, fy) / PROTOFILAMENTS);
+  const gammaCoherence = clamp01(Math.sqrt(fx * fx + fy * fy) / PROTOFILAMENTS);
   const meanOmega = velAccum / (100 * PROTOFILAMENTS);     // rad/s averaged over last 100 ms
   const effectiveFrequencyHz = clampHz(meanOmega / (2 * Math.PI));
   return { gammaCoherence, effectiveFrequencyHz };
