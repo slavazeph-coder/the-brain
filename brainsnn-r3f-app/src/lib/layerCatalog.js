@@ -42,7 +42,10 @@ const layerNames = [
   ['Role Tour', 'view'], ['Image Bbox Annotation', 'firewall'], ['Cross-device Sync', 'data'],
   ['Hotkey Map', 'view'], ['Theme + A11y', 'view'], ['Federated Community Firewall', 'firewall'],
   ['Milestone Dashboard', 'view'], ['Gemini Deep Analysis', 'backend'], ['Veea Lobster Trap', 'backend'],
+  ['39 Hz Soliton Field', 'backend'],
 ];
+
+const TOTAL_LAYERS = layerNames.length;
 
 const blurbs = {
   3: 'TRIBE v2 and scenario projections mapped to the 7-region BrainSNN model.',
@@ -58,9 +61,10 @@ const blurbs = {
   70: 'Plain-English narration of what each engine layer contributed.',
   101: 'Gemini/Gemma/OpenAI-style deep analysis and counter-draft guidance.',
   102: 'Prompt injection, PII and secret preflight before model calls.',
+  103: '39 Hz microtubule soliton field: gamma-band synchrony and leapfrogging ionic solitons as a deterministic signal layer.',
 };
 
-export const CORE_LAYER_IDS = [3, 4, 5, 29, 36, 39, 40, 46, 48, 63, 70, 101, 102];
+export const CORE_LAYER_IDS = [3, 4, 5, 29, 36, 39, 40, 46, 48, 63, 70, 101, 102, 103];
 
 export const LAYER_CATALOG = layerNames.map(([name, group], index) => {
   const id = index + 1;
@@ -68,7 +72,7 @@ export const LAYER_CATALOG = layerNames.map(([name, group], index) => {
     id,
     name,
     group,
-    blurb: blurbs[id] || `${LAYER_GROUPS[group]?.label || 'BrainSNN'} layer preserved in the 102-layer engine stack.`,
+    blurb: blurbs[id] || `${LAYER_GROUPS[group]?.label || 'BrainSNN'} layer preserved in the ${TOTAL_LAYERS}-layer engine stack.`,
   };
 });
 
