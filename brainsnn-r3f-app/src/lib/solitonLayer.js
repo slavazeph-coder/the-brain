@@ -132,10 +132,16 @@ function runSolitonTrain(rng, drive) {
     starts.push(rng());
   }
 
+  // Overtakes on the unit ring = integer crossings of each pair's relative
+  // displacement. Including the initial gap (starts[i] - starts[j]) counts a
+  // faster packet that begins just behind a slower one and passes it inside the
+  // window, even when the relative displacement over the window is < 1.
   let leapfrogEvents = 0;
   for (let i = 0; i < count; i += 1) {
     for (let j = i + 1; j < count; j += 1) {
-      leapfrogEvents += Math.floor(Math.abs(vels[i] - vels[j]) * window);
+      const rel0 = starts[i] - starts[j];
+      const relEnd = rel0 + (vels[i] - vels[j]) * window;
+      leapfrogEvents += Math.floor(Math.max(rel0, relEnd)) - Math.floor(Math.min(rel0, relEnd));
     }
   }
 
