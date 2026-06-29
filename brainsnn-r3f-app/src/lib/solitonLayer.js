@@ -80,9 +80,9 @@ function runGammaLattice(rng, drivers) {
     omega[i] = 2 * Math.PI * (GAMMA_BASE_HZ + (rng() - 0.5) * 2 * detuneHz);
   }
 
-  const dt = 1 / 1000;   // 1 ms integration step
-  const steps = 600;     // 600 ms settling window
-  const sampleFrom = steps - 100;
+  const dt = 4 / 1000;   // 4 ms integration step
+  const steps = 150;     // 150 steps × 4 ms = 600 ms settling window
+  const sampleFrom = steps - 25;   // sample effective frequency over the last 100 ms
   const K = coupling / PROTOFILAMENTS;
   let velAccum = 0;
 
@@ -109,7 +109,7 @@ function runGammaLattice(rng, drivers) {
     fy += Math.sin(phases[i]);
   }
   const gammaCoherence = clamp01(Math.sqrt(fx * fx + fy * fy) / PROTOFILAMENTS);
-  const meanOmega = velAccum / (100 * PROTOFILAMENTS);     // rad/s averaged over last 100 ms
+  const meanOmega = velAccum / (25 * PROTOFILAMENTS);     // rad/s averaged over last 100 ms (25 steps × 4 ms)
   const effectiveFrequencyHz = clampHz(meanOmega / (2 * Math.PI));
   return { gammaCoherence, effectiveFrequencyHz };
 }
