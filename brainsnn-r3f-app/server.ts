@@ -11,6 +11,7 @@ import {
   runLayerRouter
 } from "./src/lib/layerRouter.js";
 import { LAYER_CATALOG } from "./src/lib/layerCatalog.js";
+import { SOLITON_PRESETS, computeSolitonPreset, exploreSolitonField } from "./src/lib/solitonLayer.js";
 
 dotenv.config();
 
@@ -261,6 +262,30 @@ app.post("/api/soliton", (req, res) => {
   } catch (error: any) {
     console.error("Error evaluating 39 Hz soliton field:", error?.message || error);
     return res.status(500).json({ error: "Failed to evaluate the 39 Hz soliton field." });
+  }
+});
+
+// Named soliton presets and their fields — lets agents/UI preview archetypes
+// (high-pressure / trustful / mixed / baseline) without a content scan. Offline.
+app.get("/api/soliton/presets", (_req, res) => {
+  try {
+    const presets = Object.keys(SOLITON_PRESETS).map((name) => (computeSolitonPreset as any)(name));
+    return res.json({ presets });
+  } catch (error: any) {
+    console.error("Error building soliton presets:", error?.message || error);
+    return res.status(500).json({ error: "Failed to build soliton presets." });
+  }
+});
+
+// Deterministic sensitivity sweep of one driver axis (e.g. pressure) so the
+// coherence/binding response curve can be charted without a full scan. Offline.
+app.post("/api/soliton/explore", (req, res) => {
+  try {
+    const { axis, steps, base, contentType } = req.body || {};
+    return res.json((exploreSolitonField as any)({ axis, steps, base, contentType }));
+  } catch (error: any) {
+    console.error("Error exploring soliton field:", error?.message || error);
+    return res.status(500).json({ error: "Failed to explore the 39 Hz soliton field." });
   }
 });
 

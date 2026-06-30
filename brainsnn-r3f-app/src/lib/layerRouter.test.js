@@ -39,6 +39,15 @@ describe('BrainSNN layer router', () => {
     expect(again.solitonField.leapfrogEvents).toBe(enriched.solitonField.leapfrogEvents);
   });
 
+  it('folds a stable soliton hash into the firewall receipt', () => {
+    const baseResult = analyzeContentLocally({ content: 'Customer proof makes this calmer launch claim easier to trust today.' });
+    const enriched = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(typeof enriched.receipt.solitonHash).toBe('string');
+    expect(enriched.receipt.solitonHash.length).toBeGreaterThan(0);
+    const again = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(again.receipt.solitonHash).toBe(enriched.receipt.solitonHash);
+  });
+
   it('reports engine readiness from env without leaking secrets', () => {
     const status = getEngineStatusSnapshot({ STRIPE_SECRET_KEY: 'sk_test_secret', TRIBE_API_URL: 'https://example.com' });
     expect(status.totalLayers).toBe(103);

@@ -76,10 +76,39 @@ export interface AnalysisResult {
     regions: Record<string, number>;
     note: string;
   };
+  solitonField?: {
+    layer: number;
+    label: string;
+    band: string;
+    baseFrequencyHz: number;
+    contextualBaseHz: number;
+    effectiveFrequencyHz: number;
+    detuneHz: number;
+    gammaCoherence: number;          // 0-1 Kuramoto order parameter
+    synchrony: 'bound' | 'partial' | 'desynchronized';
+    confinement: number;             // 0-1
+    bindingScore: number;            // 0-100
+    protofilaments: number;
+    solitons: Array<{ id: string; position: number; amplitude: number; velocity: number; width: number; track: number[] }>;
+    leapfrogEvents: number;
+    collisions: Array<{ tMs: number; pair: [number, number]; phaseShift: number }>;
+    solitonEnergy: number;
+    energyConserved: boolean;
+    ionicDrive: number;              // 0-1
+    oscillationBands: { delta: number; theta: number; alpha: number; beta: number; gamma: number };
+    thetaGammaPAC: number;           // 0-1 phase-amplitude coupling
+    coherenceTrace: number[];
+    frequencyTraceHz: number[];
+    sampleTimesMs: number[];
+    spectralPeaks: Array<{ freqHz: number; power: number }>;
+    note: string;
+    disclaimer: string;
+  };
   receipt?: {
     id: string;
     contentHash: string;
     resultHash: string;
+    solitonHash?: string;
     generatedAt: string;
     disclaimer: string;
   };

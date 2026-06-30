@@ -10,6 +10,7 @@ import { ContentHeatmap } from './ContentHeatmap.jsx';
 import { AttentionTimeline } from './AttentionTimeline.jsx';
 import { EvidencePanel } from './EvidencePanel.jsx';
 import { LayerTracePanel } from './LayerTracePanel.jsx';
+import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
 
 export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
@@ -29,6 +30,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
         <EvidencePanel result={result} />
         <DecisionScorecard result={result} />
         <LayerTracePanel result={result} />
+        <SolitonFieldPanel result={result} />
         <TechnicalDetails result={result} onOpenResearch={onOpenResearch || (() => {})} />
       </main>
       <aside className="results-inspector" aria-label="Recommended next actions">

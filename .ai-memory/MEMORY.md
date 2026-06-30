@@ -37,6 +37,12 @@ BrainSNN backend layer stack (now 103 layers).
 - Wired into `runLayerRouter` (`solitonField` output + L103 engine-trace entry),
   registered in `layerCatalog.js` as core layer 103, exposed at `POST /api/soliton`
   (offline, no model key). Tests in `layerRouter.test.js`.
+- Deepened: time-series traces (coherence/frequency waveform), KdV soliton widths +
+  per-packet tracks + collision events (analytic phase shift), DFT spectral peaks,
+  delta..gamma oscillation bands + theta-gamma PAC coupling, context-aware base Hz,
+  `receipt.solitonHash`. Endpoints `GET /api/soliton/presets`, `POST /api/soliton/explore`
+  (ensemble-averaged sweep). UI: `SolitonFieldPanel.jsx` in the results view. Tests in
+  `solitonLayer.test.js`.
 
 ### PenguinWalk Arena — Shipped 2026-03-21
 
