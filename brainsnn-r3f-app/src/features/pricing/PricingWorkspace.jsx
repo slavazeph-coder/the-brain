@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Check, CreditCard, Database, Layers, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
+import { LAYER_CATALOG } from '../../lib/layerCatalog.js';
 
 const plans = [
   {
@@ -117,7 +118,7 @@ export function PricingWorkspace() {
     <div className="pricing-workspace" data-testid="pricing-workspace">
       <header className="workspace-heading">
         <p className="bsn-kicker">Pricing</p>
-        <h1>Paid beta for the 102-layer BrainSNN stack.</h1>
+        <h1>Paid beta for the {LAYER_CATALOG.length}-layer BrainSNN stack.</h1>
         <p>Start free, then unlock more scans, Autopsy, synced history and deeper layer traces with real Stripe Checkout.</p>
       </header>
 

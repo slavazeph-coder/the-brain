@@ -26,6 +26,24 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 <!-- Both AIs append notes here as they work -->
 
+### Layer 103 — 39 Hz Soliton Field (backend)
+
+Added a deterministic microtubule ionic-soliton / gamma-synchrony layer to the
+BrainSNN backend layer stack (now 103 layers).
+
+- `brainsnn-r3f-app/src/lib/solitonLayer.js` — Kuramoto ring of 13 protofilament
+  oscillators near 39 Hz (coherence collapses under manipulation pressure) plus a
+  KdV-flavored leapfrogging soliton train. Fully seeded/reproducible.
+- Wired into `runLayerRouter` (`solitonField` output + L103 engine-trace entry),
+  registered in `layerCatalog.js` as core layer 103, exposed at `POST /api/soliton`
+  (offline, no model key). Tests in `layerRouter.test.js`.
+- Deepened: time-series traces (coherence/frequency waveform), KdV soliton widths +
+  per-packet tracks + collision events (analytic phase shift), DFT spectral peaks,
+  delta..gamma oscillation bands + theta-gamma PAC coupling, context-aware base Hz,
+  `receipt.solitonHash`. Endpoints `GET /api/soliton/presets`, `POST /api/soliton/explore`
+  (ensemble-averaged sweep). UI: `SolitonFieldPanel.jsx` in the results view. Tests in
+  `solitonLayer.test.js`.
+
 ### PenguinWalk Arena — Shipped 2026-03-21
 
 Club Penguin-style AI debate arena live at https://penguinwalk.co

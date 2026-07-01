@@ -1,26 +1,17 @@
 <div align="center">
 
-# The Brain
+# The Brain — BrainSNN
 
-**A 3D brain that sees, learns, defends, and dreams — 100 cognitive layers, zero backprop, browser-native.**
-
-### Live: [brainsnn.com](https://brainsnn.com) — paste any tweet, see which feeling it installs.
-
-**🏆 [TechEx Intelligent Enterprise Solutions Hackathon](https://lablab.ai/ai-hackathons/techex-intelligent-enterprise-solutions-hackathon) submission — May 11-19, 2026. Targeting Best Gemini + Best Veea (Lobster Trap) + Security & Trust + Data & Intelligence. Full pitch in [HACKATHON.md](HACKATHON.md).**
+**A browser + Express "cognitive brain" that scores any text for attention, trust, manipulation and affect — through a 103-layer deterministic engine, no backprop, no GPU.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
-[![React 18](https://img.shields.io/badge/react-18-149eca.svg)](https://react.dev)
-[![Vite](https://img.shields.io/badge/vite-5-646cff.svg)](https://vitejs.dev)
-[![React Three Fiber](https://img.shields.io/badge/R3F-3D-black.svg)](https://r3f.docs.pmnd.rs/)
-[![Browser-native](https://img.shields.io/badge/runs-locally-success.svg)](#run-it-locally)
+[![React 19](https://img.shields.io/badge/react-19-149eca.svg)](https://react.dev)
+[![Vite](https://img.shields.io/badge/vite-6-646cff.svg)](https://vitejs.dev)
+[![Express](https://img.shields.io/badge/express-4-000000.svg)](https://expressjs.com)
 
 <br/>
 
-<img src="docs/screenshots/01-hero.png" alt="BrainSNN — 3D neuromorphic brain viewer with 7 regions firing through the Sensory Burst scenario" width="900" />
-
-<br/>
-
-<img src="docs/screenshots/brainsnn-demo.gif" alt="The brain pulsing through Sensory Burst → Memory Replay → Emotional Salience → Executive Override" width="560" />
+<img src="docs/screenshots/soliton-field-panel.png" alt="Layer 103 — the 39 Hz soliton field panel in the results view" width="720" />
 
 </div>
 
@@ -28,202 +19,171 @@
 
 ## What this is
 
-**BrainSNN** is a 3D neuromorphic brain viewer that runs entirely in your browser. Seven anatomical regions, ten plastic pathways, and 100 layered cognitive features stacked on top — a Cognitive Firewall, a self-evolving rule engine, multimodal RAG, an affective decoder, a neurochemistry sandbox, an idle Dream Mode, an MCP bridge to your AI agents, and more.
+**BrainSNN** is a content-response analyzer dressed as a brain. Paste a headline, ad, email
+or script and it estimates hook strength, trust, urgency, emotional charge, manipulation risk
+and brand safety — then enriches that base scan through a stack of **103 deterministic
+"cognitive" layers**: a Cognitive Firewall, an Affective Decoder, a TRIBE-style 7-region
+projection, business-metric mapping, audit receipts, and the newest addition, a **39 Hz
+soliton field** (Layer 103).
 
-Drop a paragraph in. Watch the amygdala glow. Slide cortisol up. Watch the hippocampus drop. Open Brain Evolve. Watch the firewall grow new rules to catch the manipulation it just missed. Open Dream Mode. Walk away. Come back to a brain that's been consolidating its weights while idle.
+The whole engine is **deterministic** — identical content yields an identical result — so every
+layer is regression-testable and every scan produces a reproducible audit receipt. Results are
+AI-estimated content-response signals, **not** literal brain, biometric or EEG measurements.
 
-No backprop. No retraining. No server required for the main demo — TRIBE v2, Google Gemini 2.5 (or Gemma 4 as a fallback), Veea Lobster Trap, and the WebSocket sync are _optional_ upgrades, each behind one env var.
+Optional integrations (Google Gemini for deep analysis, Stripe for billing, Supabase for auth,
+an external TRIBE service for fMRI-style projection) each sit behind a single environment
+variable. Leave them unset and the app runs fully offline on its deterministic local engine.
 
 ## Run it
 
-- **Frontend:** runs entirely in your browser. `npm install && npm run dev` — done. See [Run it locally](#run-it-locally) for the production preview path.
-- **TRIBE v2 backend:** optional. Local: `cd brainsnn-r3f-app/server && uvicorn api:app --reload`. Cloud configs (Fly.io / Railway / Docker) are checked in for when you want to host it remotely — see [brainsnn-r3f-app/server/README.md](brainsnn-r3f-app/server/README.md).
+Everything lives in `brainsnn-r3f-app/` (an Express server that also serves the React SPA):
 
-## The 100 layers
+```bash
+cd brainsnn-r3f-app
+npm install
+npm run dev          # Express + Vite middleware → http://localhost:3000
+```
 
-The full feature catalog lives in [.ai-memory/MEMORY.md](.ai-memory/MEMORY.md). A curated tour of representative layers:
+No keys required — the deterministic engine drives every panel out of the box.
 
-| Hero shot                                                            | What it does                                                                                                                                                                                                                                            |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img src="docs/screenshots/02-cognitive-firewall.png" width="380"/>  | **Layer 4 — Cognitive Firewall.** Regex-based scoring across urgency / outrage / fear / certainty. Returns a 4-dimension manipulation profile and the matched evidence.                                                                                 |
-| <img src="docs/screenshots/03-brain-evolve.png" width="380"/>        | **Layer 31 — Brain Evolve.** UCB1 / Island / MAP-Elites samplers (cannibalized from `GAIR-NLP/ASI-Evolve`) mutate firewall rulesets and score each candidate's F1 against the red-team corpus. Promote the winner to swap the live firewall.            |
-| <img src="docs/screenshots/04-affective-decoder.png" width="380"/>   | **Layer 29 — Affective Decoder.** 12-affect taxonomy across threat / reward / social / cognitive clusters, plotted on Russell's valence × arousal circumplex. Tells you _which_ feeling is being installed, not just that something pressed the button. |
-| <img src="docs/screenshots/05-neurochemistry.png" width="380"/>      | **Layer 30 — Neurochemistry Sandbox.** 6 NT sliders with real region-effect profiles. 9 presets (caffeine, meditation, acute stress, SSRI 4 wk, MDMA phase II, …). Match an NT signature to the last decoded affect.                                    |
-| <img src="docs/screenshots/06-multimodal-rag.png" width="380"/>      | **Layer 33 — Multimodal RAG Router.** Cannibalized from `HKUDS/RAG-Anything`. Routes text / image / table / equation / code through per-modality handlers, each rendered into embeddable text.                                                          |
-| <img src="docs/screenshots/07-vector-graph-fusion.png" width="380"/> | **Layer 34 — Vector-Graph Fusion.** Reranks Layer 33 hits with graph coherence (Louvain communities + sequence neighbors + sibling pulls). Slider controls the vector ↔ graph weight.                                                                   |
-| <img src="docs/screenshots/08-dream-mode.png" width="380"/>          | **Layer 26 — Dream Mode.** Idle monitor drifts the brain into replay-consolidation after N seconds. Co-active region pairs gain weight (STDP). Any activity wakes the brain.                                                                            |
-| <img src="docs/screenshots/09-red-team.png" width="380"/>            | **Layer 25 — Red Team Simulator.** 65-sample synthetic attack corpus across 5 manipulation categories + benign controls. Outputs detection rate, FPR, F1, and an A–F verdict grade.                                                                     |
-| <img src="docs/screenshots/10-knowledge-brain.png" width="380"/>     | **Layer 18 — Knowledge Brain.** Second-brain system with file scanner (find/tree, Obsidian import), LLM-Wiki markdown generator, and Gemini / Gemma-powered gap analysis.                                                                               |
-| <img src="docs/screenshots/11-mcp-bridge.png" width="380"/>          | **Layer 19 — MCP Brain Bridge.** 14 tools exposed via JSON-RPC. Standalone Node stdio server + WebSocket relay so Claude Code / Codex agents can read and steer the brain.                                                                              |
-| <img src="docs/screenshots/12-analytics.png" width="380"/>           | **Layer 7 — Analytics Dashboard.** Sparkline trends, Pearson correlation matrix across regions, z-score anomaly detection with threshold alerts.                                                                                                        |
+```bash
+npm test             # node test runner (tinyVitest), 27 tests
+npm run lint         # tsc --noEmit
+npm run build        # vite build + esbuild → dist/ (client) + dist/server.cjs
+npm start            # node dist/server.cjs  (production)
+npm run test:e2e     # Playwright end-to-end
+```
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    classDef browser  fill:#0b1224,stroke:#5ad4ff,stroke-width:2px,color:#e6f1ff
-    classDef optional fill:#1a1f2e,stroke:#7c8aa1,stroke-dasharray:5 5,color:#cbd5e1
-    classDef external fill:#13231a,stroke:#5ee69a,color:#dcfce7
-
-    subgraph Browser["Browser (zero-install)"]
-        direction TB
-        ui[React 18 + Vite UI<br/>46 panels]
-        r3f[React Three Fiber<br/>3D brain + neural flow]
-        layers["100 cognitive layers<br/>Firewall · Evolve · RAG · Dream · etc"]
-        embed[transformers.js<br/>MiniLM-L6 in-browser embeddings]
-        mcp[MCP Bridge<br/>14 JSON-RPC tools]
-
-        ui --> r3f
-        ui --> layers
-        layers --> embed
-        layers --> mcp
+    subgraph Browser["Browser SPA — React 19 + Vite"]
+        views["Analyze · Improve · Autopsy · Research views"]
+        panels["Results panels:<br/>firewall · affect · TRIBE · soliton"]
     end
 
-    tribe["FastAPI + TRIBE v2<br/>(real fMRI predictions)<br/>Fly.io / Railway"]
-    gemini["Gemini 2.5 (default) or Gemma 4<br/>(deep multimodal analysis)<br/>Google AI Studio / Ollama / vLLM"]
-    lobster["Veea Lobster Trap<br/>(prompt-injection / PII / policy)<br/>local + optional remote"]
-    sync["WebSocket relay<br/>(multi-user live sync)"]
-    agents["Claude Code / Codex agents<br/>via stdio MCP server"]
+    server["Express (server.ts)<br/>API + Vite middleware / static dist"]
+    router["103-layer deterministic engine<br/>src/lib/layerRouter.js"]
 
-    layers -. VITE_TRIBE_API .-> tribe
-    layers -. VITE_GEMINI_API_KEY / VITE_GEMMA_API_ENDPOINT .-> gemini
-    layers -. VITE_LOBSTER_TRAP_URL .-> lobster
-    layers -. VITE_SYNC_WS_URL .-> sync
-    mcp <-. WebSocket relay .-> agents
+    views -->|POST /api/analyze| server
+    server --> router
+    router --> panels
 
-    class Browser browser
-    class ui,r3f,layers,embed,mcp browser
-    class tribe,gemini,lobster,sync optional
-    class agents external
+    router -. GEMINI_API_KEY .-> gemini["Gemini — deep analysis"]
+    server -. STRIPE_* .-> stripe["Stripe — billing"]
+    server -. SUPABASE_* .-> supabase["Supabase — magic-link auth"]
+    router -. TRIBE_API_URL .-> tribe["TRIBE — external projection"]
 ```
 
-The browser column ships everything in the box. Every external arrow is gated by an env var — leave them blank and the corresponding layer falls back gracefully (TRIBE → STDP simulation, Gemini/Gemma → regex scoring, Lobster Trap → local heuristics, sync → solo mode).
+Every external arrow is gated by an env var; unset, the layer falls back to the deterministic
+local path (Gemini → local scoring, Stripe/Supabase → `501 not_configured`, TRIBE → local
+7-region projection).
 
-## Quickstart
+## The engine
 
-```bash
-git clone https://github.com/slavazeph-coder/the-brain
-cd the-brain/brainsnn-r3f-app
-npm install     # or: npm ci  (uses .npmrc for legacy-peer-deps)
-npm run dev     # → http://localhost:5173
-```
+A base scan (`src/lib/analysisEngine.js`) is enriched by `runLayerRouter`
+(`src/lib/layerRouter.js`), which stacks the core layers onto every result:
 
-That's it. The 3D brain renders, the simulation loop ticks, all 100+ layers are wired. No keys needed.
+| Layer | What it does |
+| ----- | ------------ |
+| **L4 — Cognitive Firewall** | Deterministic pressure scoring across urgency / outrage / fear / certainty / trust, with matched evidence and named manipulation templates. |
+| **L29 — Affective Decoder** | Dominant affect + valence/arousal + threat/reward/social/cognitive clusters. |
+| **L3 — TRIBE Projection** | 7-region (CTX/HPC/THL/AMY/BG/PFC/CBL) activation projection; uses an external TRIBE service when configured, else a local mapping. |
+| **L48 — Business Metrics** | Maps the scan into 8 decision KPIs (hook strength, trust, manipulation risk, shareability, …). |
+| **L46 — Firewall Receipt** | Deterministic content/result/soliton hashes for a reproducible audit trail. |
+| **L103 — 39 Hz Soliton Field** | Gamma-band synchrony + leapfrogging ionic-soliton model (below). |
+
+The full catalog of 103 layers lives in `src/lib/layerCatalog.js`; the Research view has a
+searchable Layer Explorer.
+
+### Layer 103 — the 39 Hz soliton field
+
+A biophysically-inspired signal layer that models the ~39 Hz gamma oscillation and the
+leapfrogging ionic solitons of neuronal microtubules:
+
+- A **Kuramoto ring** of 13 protofilament oscillators near 39 Hz — coherence phase-locks for
+  trustworthy content and fragments (desynchronizes) under manipulation pressure.
+- A **KdV soliton train** — taller packets travel faster and overtake shorter ones; collisions
+  carry the analytic two-soliton phase shift.
+- Time-series traces (coherence/frequency waveform), a DFT of the binding envelope, delta→gamma
+  oscillation bands with a theta–gamma phase-amplitude coupling metric, and a content-aware base
+  frequency. Fully deterministic and seeded from the content hash.
+
+It renders in the results view (`SolitonFieldPanel`) and has an interactive sensitivity lab in
+the Research view (`SolitonLabPanel`), backed by `POST /api/soliton`, `GET /api/soliton/presets`
+and `POST /api/soliton/explore`. It is a signal-processing analogy, not a microtubule/EEG
+measurement.
+
+<div align="center">
+<img src="docs/screenshots/soliton-lab.png" alt="39 Hz soliton sensitivity lab in the Research view" width="720" />
+</div>
+
+## API endpoints
+
+| Method | Route | Purpose |
+| ------ | ----- | ------- |
+| GET | `/healthz` | Container health check |
+| GET | `/api/layers` | The 103-layer catalog + core layers |
+| GET | `/api/engines/status` | Which optional engines are configured |
+| POST | `/api/analyze` | Full layer-router scan (Gemini if configured, else local) |
+| POST | `/api/rewrite` | Layer-stack rewrite toward a goal |
+| POST | `/api/autopsy` | A/B comparison of two variants |
+| POST | `/api/soliton` | Layer 103 field for one input (offline) |
+| GET | `/api/soliton/presets` | Field for the named archetypes |
+| POST | `/api/soliton/explore` | Ensemble-averaged driver sensitivity sweep |
+| POST | `/api/auth/magic-link` · `/api/billing/*` | Supabase / Stripe (when configured) |
 
 ## Environment variables
 
-All variables are **optional**. The app runs in pure-frontend mode without any of them set.
+All optional — the app runs fully offline without any of them. Set them server-side (not `VITE_`):
 
-| Variable                  | What it unlocks                                          | Where to get it                                                                                                   |
-| ------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `VITE_TRIBE_API`          | TRIBE v2 fMRI predictions instead of STDP simulation     | Run [brainsnn-r3f-app/server/](brainsnn-r3f-app/server/) locally or deploy to Fly.io                              |
-| `VITE_GEMINI_API_KEY`     | Google Gemini 2.5 deep multimodal analysis (default LLM) | [Google AI Studio](https://aistudio.google.com/app/apikey)                                                        |
-| `VITE_GEMINI_MODEL`       | Gemini model id (default `gemini-2.5-flash`; or `-pro`)  | n/a                                                                                                               |
-| `VITE_GEMMA_API_ENDPOINT` | Gemma 4 deep multimodal analysis (Gemini fallback)       | [Google AI Studio](https://aistudio.google.com), Ollama, or any OpenAI-compatible endpoint                        |
-| `VITE_GEMMA_API_KEY`      | Auth for the Gemma endpoint above                        | Same as above                                                                                                     |
-| `VITE_LOBSTER_TRAP_URL`   | Optional Veea Lobster Trap remote inspection endpoint    | Veea-issued; local heuristics run by default with zero network                                                    |
-| `VITE_LOBSTER_TRAP_KEY`   | Auth for the Lobster Trap endpoint above                 | Same as above                                                                                                     |
-| `VITE_SYNC_WS_URL`        | Multi-user live sync over WebSocket                      | Run any WebSocket relay; example schema in [LiveSyncPanel.jsx](brainsnn-r3f-app/src/components/LiveSyncPanel.jsx) |
-
-See [brainsnn-r3f-app/.env.example](brainsnn-r3f-app/.env.example) for the copyable template.
-
-## Run it locally
-
-The 3D brain is a pure static SPA — no Node runtime, no server, no auth. Build it once, serve `dist/` from anything.
-
-### Dev server (with HMR)
-
-```bash
-cd brainsnn-r3f-app
-npm install
-npm run dev          # → http://localhost:5173
-```
-
-### Production preview
-
-```bash
-cd brainsnn-r3f-app
-npm run build        # → dist/  (~1.4 MB, three.js chunked separately)
-npm run preview      # → http://localhost:4173 — same bundle Vercel/Netlify would serve
-```
-
-### Serve `dist/` from anything
-
-The build output is just an `index.html` + a few hashed JS / CSS chunks. Drop it behind any static webserver:
-
-```bash
-# Built-in Python — zero install
-cd brainsnn-r3f-app/dist && python3 -m http.server 8080
-
-# Caddy — auto-HTTPS for a public hostname
-caddy file-server --root brainsnn-r3f-app/dist --listen :8080
-
-# Nginx — drop `try_files $uri /index.html;` for SPA routing
-#   root /srv/the-brain/brainsnn-r3f-app/dist;
-
-# Tunnel a local server to a public URL on demand
-cloudflared tunnel --url http://localhost:4173
-# or:  ngrok http 4173
-```
-
-> SPA routing note: any host you pick should rewrite unknown paths to `/index.html`. Vite's `npm run preview` already does this; nginx/caddy snippets above show how.
-
-### Optional backend (TRIBE v2)
-
-The Python/FastAPI server is fully optional — without it, the app runs in STDP simulation mode and every panel still works. When you want real fMRI predictions:
-
-```bash
-cd brainsnn-r3f-app/server
-docker build -t brainsnn-tribe .
-docker run -p 8642:8642 --rm brainsnn-tribe
-
-# then in brainsnn-r3f-app/.env:
-echo "VITE_TRIBE_API=http://localhost:8642" >> ../.env
-```
-
-Cloud-host configs ([Fly.io](brainsnn-r3f-app/server/fly.toml), [Railway](brainsnn-r3f-app/server/railway.toml)) are checked in for later. Full backend docs: [brainsnn-r3f-app/server/README.md](brainsnn-r3f-app/server/README.md).
+| Variable | Unlocks |
+| -------- | ------- |
+| `GEMINI_API_KEY` | Gemini deep analysis on `/api/analyze` (else deterministic local engine) |
+| `STRIPE_SECRET_KEY`, `STRIPE_PRICE_BASIC`, `STRIPE_PRICE_PRO`, `STRIPE_WEBHOOK_SECRET` | Stripe checkout, portal and webhook |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Magic-link auth |
+| `TRIBE_API_URL` | External TRIBE projection health/scenarios (else local projection) |
+| `PORT`, `APP_URL` | Server port (default 3000) / public URL |
 
 ## Project layout
 
 ```
 the-brain/
-├── brainsnn-r3f-app/         ← the deployable: 100+-layer 3D brain viewer
+├── brainsnn-r3f-app/          ← the deployable app (Express + React SPA)
+│   ├── server.ts              ← Express: API endpoints + Vite middleware / static dist
 │   ├── src/
-│   │   ├── components/        ← 46 React components, one per panel + brain scene
-│   │   ├── utils/             ← simulation, embeddings, RAG, evolve, firewall, …
-│   │   └── data/network.js    ← 7 regions × 10 pathways topology
-│   ├── server/                ← FastAPI + TRIBE v2 (optional backend)
-│   │   ├── api.py             ← /health · /scenarios · /predict
-│   │   ├── Dockerfile         ← Python 3.11-slim + nilearn pre-warm
-│   │   ├── fly.toml           ← Fly.io 4GB VM config
-│   │   └── railway.toml       ← Railway alternative
-│   ├── mcp-server/            ← Node stdio MCP bridge for Claude Code / Codex
-│   └── .env.example           ← all 4 optional env vars documented
-├── ui/
-│   └── brainsnn-site/         ← marketing landing page (served at / by Railway)
-├── docs/
-│   ├── screenshots/           ← 12 panel shots + demo GIF (used by this README)
-│   └── architecture.mmd       ← Mermaid source for the diagram above
+│   │   ├── app/               ← shell: AppShell, navigation, landing, sidebar, command palette
+│   │   ├── features/          ← scan · results · improve · autopsy · research · memory · pricing · approvals · export
+│   │   ├── lib/               ← layerRouter · analysisEngine · solitonLayer · scoreMapping · storage · …
+│   │   ├── components/ui/      ← Meter, Badge, Button, …
+│   │   ├── styles/            ← tokens.css, utilities.css
+│   │   └── test/              ← tinyVitest harness
+│   ├── scripts/test-runner.mjs
+│   └── tests/                 ← Playwright e2e
+├── ui/brainsnn-site/          ← marketing landing site
+├── docs/screenshots/          ← UI screenshots
+└── README.md
 ```
 
 ## Tech stack
 
-- **Frontend:** React 18, Vite 5, React Three Fiber 8, Three.js 0.170, postprocessing 6, FFmpeg.wasm
-- **In-browser ML:** transformers.js (`Xenova/all-MiniLM-L6-v2`, ~25MB quantized), pure-JS Louvain community detection, BM25 + trigram Jaccard hybrid search
-- **Backend (optional):** FastAPI, Uvicorn, Meta TRIBE v2, nilearn, NumPy
-- **Agent integration:** Node stdio MCP server, WebSocket relay, 14 JSON-RPC tools
+- **Server:** Express 4, TypeScript (run via `tsx`, bundled with `esbuild`)
+- **Frontend:** React 19, Vite 6, Tailwind (`@tailwindcss/vite`), `motion`, `lucide-react`
+- **Engine:** deterministic 103-layer router — regex/scoring firewall, affect decoder, Kuramoto +
+  KdV soliton model, seeded PRNG; no ML runtime required
+- **Optional:** `@google/genai` (Gemini), Stripe REST, Supabase Auth, external TRIBE service
+- **Tests:** `tinyVitest` (custom node runner) + Playwright
 
 ## Contributing
 
-This repo is the joint workspace of [Claude Code](https://claude.com/claude-code) and [Codex CLI](https://github.com/openai/codex), coordinated through `.ai-memory/`. The architecture and conventions live in [.ai-memory/architecture.md](.ai-memory/architecture.md) and [.ai-memory/conventions.md](.ai-memory/conventions.md).
+This repo is a joint AI workspace coordinated through `.ai-memory/`. See `AGENTS.md` and
+`GOOD_FIRST_ISSUES.md`. Good first issues:
 
-Issues and PRs welcome. Good first issues:
-
-- A new manipulation category for the Cognitive Firewall + matching red-team corpus entries
-- A new affect class for the 12-affect taxonomy with a Russell coordinate
-- A new neurotransmitter preset (e.g. ketamine micro-dose, propofol)
-- A new pre-computed scenario in [brainsnn-r3f-app/server/scenarios/](brainsnn-r3f-app/server/scenarios/)
+- A new manipulation template + firewall signal (`src/lib/layerRouter.js`)
+- A new affect class in the decoder
+- A new soliton preset / sweep axis in `src/lib/solitonLayer.js`
 
 ## License
 
-MIT — see the per-file headers. Cannibalized work credited inline (`GAIR-NLP/ASI-Evolve` for Brain Evolve, `HKUDS/RAG-Anything` for Multimodal RAG, Meta `facebookresearch/tribev2` for the fMRI backend, `Xenova/transformers.js` for in-browser embeddings).
+MIT — see per-file headers.

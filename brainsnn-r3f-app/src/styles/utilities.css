@@ -2211,6 +2211,229 @@
   color: var(--bsn-text-secondary);
 }
 
+/* Layer 103 — 39 Hz soliton field panel */
+.soliton-panel {
+  margin-top: 18px;
+}
+
+.soliton-gauges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.soliton-viz {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.soliton-viz article {
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+  padding: 14px;
+}
+
+.soliton-viz h3 {
+  margin: 0 0 10px;
+}
+
+.soliton-scope {
+  width: 100%;
+  height: 110px;
+  display: block;
+}
+
+.soliton-scope-axis {
+  stroke: var(--bsn-border);
+  stroke-width: 0.4;
+}
+
+.soliton-scope-line {
+  fill: none;
+  stroke: var(--bsn-cyan);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.soliton-ring {
+  width: 100%;
+  max-width: 180px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.soliton-ring-track {
+  fill: none;
+  stroke: var(--bsn-border);
+  stroke-width: 0.8;
+}
+
+.soliton-ring-dot {
+  fill: var(--bsn-purple);
+  opacity: 0.85;
+}
+
+.soliton-ring-count {
+  fill: var(--bsn-text);
+  font-family: var(--bsn-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.soliton-ring-label {
+  fill: var(--bsn-text-muted);
+  font-size: 4.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.soliton-bands {
+  display: grid;
+  gap: 8px;
+}
+
+.soliton-band-row {
+  display: grid;
+  grid-template-columns: 58px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.soliton-band-row span {
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.soliton-band-row strong {
+  text-align: right;
+  font-size: 0.82rem;
+}
+
+.soliton-band-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.soliton-band-track span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--bsn-cyan);
+}
+
+.soliton-disclaimer {
+  margin-top: 12px;
+}
+
+/* Soliton sensitivity lab (Research view) */
+.soliton-lab-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.soliton-lab-controls label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--bsn-text-muted);
+}
+
+.soliton-lab-controls select {
+  padding: 8px 10px;
+  border-radius: var(--bsn-radius);
+  border: 1px solid var(--bsn-border);
+  background: rgba(9, 9, 17, 0.82);
+  color: var(--bsn-text);
+}
+
+.soliton-lab-chart {
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+  padding: 14px;
+}
+
+.soliton-sweep {
+  width: 100%;
+  height: 150px;
+  display: block;
+}
+
+.soliton-sweep-grid {
+  stroke: var(--bsn-border);
+  stroke-width: 0.3;
+  stroke-dasharray: 1 2;
+}
+
+.soliton-sweep-axis {
+  stroke: var(--bsn-border);
+  stroke-width: 0.4;
+}
+
+.soliton-sweep-line {
+  fill: none;
+  stroke: var(--bsn-cyan);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.soliton-sweep-dot {
+  fill: var(--bsn-purple);
+}
+
+.soliton-lab-chart-legend {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.7rem;
+  color: var(--bsn-text-muted);
+  margin-top: 6px;
+}
+
+.soliton-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.soliton-preset-card {
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+  padding: 14px;
+}
+
+.soliton-preset-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.soliton-preset-head strong {
+  font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .soliton-viz {
+    grid-template-columns: 1fr;
+  }
+}
+
 .autopsy-input-grid,
 .autopsy-card-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1,6 +1,7 @@
 import { CORE_LAYER_IDS, LAYER_CATALOG, layersByIds } from './layerCatalog.js';
 import { analyzeContentLocally } from './analysisEngine.js';
 import { getBusinessMetrics } from './scoreMapping.js';
+import { computeSolitonField } from './solitonLayer.js';
 
 const urgencyTerms = /\b(now|today|deadline|limited|last chance|urgent|immediately|act fast|before it'?s too late)\b/gi;
 const outrageTerms = /\b(outrage|furious|rigged|corrupt|betrayed|enemy|disgusting|they don't want|scandal)\b/gi;
@@ -185,6 +186,7 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
   const rawContent = String(content || result.rawContent || '');
   const firewallSignals = buildFirewallSignals(rawContent, result);
   const affectProfile = buildAffectProfile(rawContent, result, firewallSignals);
+  const solitonField = computeSolitonField({ content: rawContent, contentType, firewallSignals, affectProfile, metrics: result.metrics });
   const contextTriggers = buildContextTriggers(rawContent, result);
   const tribeProjection = buildTribeProjection(result, firewallSignals, affectProfile, engineStatus.tribe || {});
   const receipt = {
@@ -196,6 +198,12 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
       gaugeGapScore: result.gaugeGapScore,
       firewallSignals,
     })),
+    solitonHash: stableHash(JSON.stringify({
+      gammaCoherence: solitonField.gammaCoherence,
+      leapfrogEvents: solitonField.leapfrogEvents,
+      bindingScore: solitonField.bindingScore,
+      thetaGammaPAC: solitonField.thetaGammaPAC,
+    })),
     generatedAt: result.timestamp || new Date().toISOString(),
     disclaimer: 'AI-estimated content response. Not a medical, biometric, or literal neurological measurement.',
   };
@@ -204,6 +212,7 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
     { stage: 'L102 Lobster Trap', status: 'local_preflight', note: 'PII/prompt-risk safety preflight is represented in the engine trace.' },
     { stage: 'L4 Cognitive Firewall', status: 'completed', note: `${firewallSignals.templates.length} template signal(s) evaluated.` },
     { stage: 'L29 Affective Decoder', status: 'completed', note: `Dominant affect: ${affectProfile.dominantAffect}.` },
+    { stage: 'L103 39 Hz Soliton Field', status: 'completed', note: `Gamma coherence ${solitonField.gammaCoherence} at ${solitonField.effectiveFrequencyHz} Hz (${solitonField.synchrony}); ${solitonField.leapfrogEvents} leapfrog event(s); theta-gamma PAC ${solitonField.thetaGammaPAC}.` },
     { stage: 'L3 TRIBE v2 Projection', status: tribeProjection.status, note: tribeProjection.note },
     ...providerTrace,
     { stage: 'L46 Firewall Receipt', status: 'completed', note: receipt.id },
@@ -213,6 +222,7 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
     contentType,
     firewallSignals,
     affectProfile,
+    solitonField,
     contextTriggers,
     tribeProjection,
     layersUsed,

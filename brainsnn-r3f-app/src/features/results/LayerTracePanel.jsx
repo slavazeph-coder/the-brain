@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge } from '../../components/ui/Badge.jsx';
-import { LAYER_GROUPS } from '../../lib/layerCatalog.js';
+import { LAYER_GROUPS, LAYER_CATALOG } from '../../lib/layerCatalog.js';
 
 export function LayerTracePanel({ result }) {
   const layers = Array.isArray(result?.layersUsed) ? result.layersUsed : [];
@@ -14,7 +14,7 @@ export function LayerTracePanel({ result }) {
     <section className="layer-trace-panel" aria-labelledby="layer-trace-heading">
       <div className="bsn-section-head">
         <div>
-          <p className="bsn-eyebrow">102-layer engine</p>
+          <p className="bsn-eyebrow">{LAYER_CATALOG.length}-layer engine</p>
           <h2 id="layer-trace-heading">Layers used in this scan</h2>
         </div>
         <Badge tone="cyan">{layers.length || trace.length} active layers</Badge>
