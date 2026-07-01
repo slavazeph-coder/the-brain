@@ -3,6 +3,7 @@ import { Activity, ArrowRight, BrainCircuit, CheckCircle2, FlaskConical, Pause, 
 import { Button } from '../components/ui/Button.jsx';
 import { EXAMPLES } from '../features/scan/ExampleSelector.jsx';
 import { track } from '../lib/analytics.js';
+import { LAYER_CATALOG } from '../lib/layerCatalog.js';
 
 const DEMO_SAMPLES = [
   {
@@ -137,7 +138,7 @@ export function LandingPage({ onStart }) {
           </h1>
           <p>
             BrainSNN estimates hook strength, trust pressure, emotional charge and brand-safety risk before a post,
-            ad, email or script goes live. Technical Crumb LLM, TRIBE and 102-layer traces stay available when you want the research layer.
+            ad, email or script goes live. Technical Crumb LLM, TRIBE and {LAYER_CATALOG.length}-layer traces stay available when you want the research layer.
           </p>
           <div className="landing-actions">
             <Button variant="primary" onClick={() => start(activeSample)}>
@@ -224,7 +225,7 @@ export function LandingPage({ onStart }) {
         <article>
           <FlaskConical size={18} aria-hidden="true" />
           <span>Research drawer</span>
-          <strong>102-layer traces, Crumb physics and benchmarks stay out of the buyer workflow.</strong>
+          <strong>{LAYER_CATALOG.length}-layer traces, Crumb physics and benchmarks stay out of the buyer workflow.</strong>
         </article>
       </section>
     </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { FlaskConical } from 'lucide-react';
 import { BenchmarksPanel } from './BenchmarksPanel.jsx';
 import { CrumbPhysicsPanel } from './CrumbPhysicsPanel.jsx';
+import { SolitonLabPanel } from './SolitonLabPanel.jsx';
 import { LAYER_CATALOG, LAYER_GROUPS, searchLayers } from '../../lib/layerCatalog.js';
 
 function LayerExplorer() {
@@ -62,6 +63,7 @@ export function ResearchDrawer() {
         </article>
       </div>
       <LayerExplorer />
+      <SolitonLabPanel />
       <CrumbPhysicsPanel />
       <BenchmarksPanel />
       <section className="legacy-lab-shell">
