@@ -4,15 +4,7 @@ import { getBusinessMetrics } from './scoreMapping.js';
 import { computeSolitonField } from './solitonLayer.js';
 import { computeFirewall, detectTemplates } from './firewallLayer.js';
 import { computeAffect } from './affectLayer.js';
-
-export function clamp01(value) {
-  return Math.max(0, Math.min(1, Number(value) || 0));
-}
-
-export function clampScore(value, fallback = 0) {
-  const n = Number.isFinite(Number(value)) ? Number(value) : fallback;
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
+import { clampScore } from './formatters.js';
 
 export function stableHash(value = '') {
   let hash = 2166136261;

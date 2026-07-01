@@ -54,11 +54,11 @@ export function computeAffect({ content = '', metrics = {}, firewallSignals = {}
   const curiosity = count(text, curiosityTerms);
   const empathy = count(text, empathyTerms);
   const m = {
-    trust: Number(metrics.trust) || 50,
-    excitement: Number(metrics.excitement) || 40,
-    fear: Number(metrics.fear) || 0,
-    anger: Number(metrics.anger) || 0,
-    urgency: Number(metrics.urgency) || 0,
+    trust: Number(metrics?.trust) || 50,
+    excitement: Number(metrics?.excitement) || 40,
+    fear: Number(metrics?.fear) || 0,
+    anger: Number(metrics?.anger) || 0,
+    urgency: Number(metrics?.urgency) || 0,
   };
   const emotionalActivation = Number(firewallSignals?.emotionalActivation) || 0;
 

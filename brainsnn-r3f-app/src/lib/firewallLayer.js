@@ -102,9 +102,9 @@ export function computeFirewall({ content = '', metrics = {}, isFallback = false
   const density = Math.min(1, (urgency + outrage + fear + certainty) / Math.max(3, wordCount / 18));
 
   // Core signals — identical formulas to the original layer router.
-  const emotionalActivation = clamp01(((Number(metrics.fear) || 0) + (Number(metrics.anger) || 0) + fear * 12 + outrage * 10) / 180);
-  const cognitiveSuppression = clamp01(((Number(metrics.urgency) || 0) + urgency * 11 + certainty * 9) / 160);
-  const trustErosion = clamp01((((100 - (Number(metrics.trust) || 50)) / 100) * 0.58) + density * 0.34 - Math.min(0.18, trust * 0.03));
+  const emotionalActivation = clamp01(((Number(metrics?.fear) || 0) + (Number(metrics?.anger) || 0) + fear * 12 + outrage * 10) / 180);
+  const cognitiveSuppression = clamp01(((Number(metrics?.urgency) || 0) + urgency * 11 + certainty * 9) / 160);
+  const trustErosion = clamp01((((100 - (Number(metrics?.trust) || 50)) / 100) * 0.58) + density * 0.34 - Math.min(0.18, trust * 0.03));
   const manipulationPressure = clamp01((emotionalActivation * 0.42) + (cognitiveSuppression * 0.38) + (trustErosion * 0.2));
 
   const evidence = [
