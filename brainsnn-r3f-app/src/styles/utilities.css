@@ -2428,6 +2428,143 @@
   font-size: 0.9rem;
 }
 
+/* Layer 4 — Cognitive Firewall panel */
+.firewall-panel,
+.affect-panel {
+  margin-top: 18px;
+}
+
+.firewall-gauges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.firewall-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 12px;
+}
+
+.firewall-grid article {
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+  padding: 14px;
+}
+
+.firewall-grid h3 {
+  margin: 0 0 10px;
+}
+
+.firewall-heatmap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  line-height: 1.7;
+}
+
+.firewall-seg {
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.fw-seg-cool { background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.24); }
+.fw-seg-warm { background: rgba(234, 179, 8, 0.16); border-color: rgba(234, 179, 8, 0.32); }
+.fw-seg-hot { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.38); }
+
+.firewall-tactics {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.firewall-tactic-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.firewall-tactic-head span {
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-text-muted);
+  font-size: 0.75rem;
+}
+
+.firewall-tactics p {
+  margin: 2px 0 0;
+  color: var(--bsn-text-secondary);
+  font-size: 0.82rem;
+}
+
+/* Layer 29 — Affective Decoder panel */
+.affect-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.affect-viz {
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+  padding: 14px;
+}
+
+.affect-circumplex {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.affect-ring {
+  fill: rgba(168, 85, 247, 0.04);
+  stroke: var(--bsn-border);
+  stroke-width: 0.5;
+}
+
+.affect-axis {
+  stroke: var(--bsn-border);
+  stroke-width: 0.4;
+  stroke-dasharray: 1 2;
+}
+
+.affect-axis-label {
+  fill: var(--bsn-text-muted);
+  font-size: 3.6px;
+  font-family: var(--bsn-font-mono);
+}
+
+.affect-dot {
+  fill: var(--bsn-purple);
+}
+
+.affect-point {
+  fill: var(--bsn-cyan);
+  stroke: #0b0b11;
+  stroke-width: 0.8;
+}
+
+.affect-bars {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+@media (max-width: 720px) {
+  .firewall-grid,
+  .affect-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .soliton-viz {
     grid-template-columns: 1fr;

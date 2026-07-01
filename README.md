@@ -87,8 +87,8 @@ A base scan (`src/lib/analysisEngine.js`) is enriched by `runLayerRouter`
 
 | Layer | What it does |
 | ----- | ------------ |
-| **L4 — Cognitive Firewall** | Deterministic pressure scoring across urgency / outrage / fear / certainty / trust, with matched evidence and named manipulation templates. |
-| **L29 — Affective Decoder** | Dominant affect + valence/arousal + threat/reward/social/cognitive clusters. |
+| **L4 — Cognitive Firewall** | Pressure scoring across urgency / outrage / fear / certainty / trust, with a per-category breakdown, a per-sentence pressure heatmap, an A–F grade, and named tactics with confidence (`src/lib/firewallLayer.js`, `POST /api/firewall`). |
+| **L29 — Affective Decoder** | Dominant affect + valence/arousal, a 9-affect taxonomy on Russell's valence×arousal circumplex, and a per-sentence emotion trajectory (`src/lib/affectLayer.js`, `POST /api/affect`). |
 | **L3 — TRIBE Projection** | 7-region (CTX/HPC/THL/AMY/BG/PFC/CBL) activation projection; uses an external TRIBE service when configured, else a local mapping. |
 | **L48 — Business Metrics** | Maps the scan into 8 decision KPIs (hook strength, trust, manipulation risk, shareability, …). |
 | **L46 — Firewall Receipt** | Deterministic content/result/soliton hashes for a reproducible audit trail. |
@@ -127,12 +127,37 @@ measurement.
 | GET | `/api/layers` | The 103-layer catalog + core layers |
 | GET | `/api/engines/status` | Which optional engines are configured |
 | POST | `/api/analyze` | Full layer-router scan (Gemini if configured, else local) |
+| POST | `/api/firewall` | Cognitive Firewall profile for one input (offline) |
+| POST | `/api/affect` | Affective Decoder profile for one input (offline) |
 | POST | `/api/rewrite` | Layer-stack rewrite toward a goal |
 | POST | `/api/autopsy` | A/B comparison of two variants |
 | POST | `/api/soliton` | Layer 103 field for one input (offline) |
 | GET | `/api/soliton/presets` | Field for the named archetypes |
 | POST | `/api/soliton/explore` | Ensemble-averaged driver sensitivity sweep |
 | POST | `/api/auth/magic-link` · `/api/billing/*` | Supabase / Stripe (when configured) |
+
+## MCP server (agent bridge)
+
+`brainsnn-r3f-app/mcp-server/` is a stdio [MCP](https://modelcontextprotocol.io) server that
+exposes the deterministic engine to agents (Claude Code / Codex) — all tools run offline, no
+keys. Tools: `brain_analyze`, `brain_firewall`, `brain_affect`, `brain_soliton`,
+`brain_soliton_explore`, `brain_layers`.
+
+```bash
+cd brainsnn-r3f-app/mcp-server
+npm install
+npm run smoke        # spawns the server, lists tools, calls a few
+```
+
+Register it with an MCP client (e.g. Claude Code):
+
+```json
+{
+  "mcpServers": {
+    "brainsnn": { "command": "node", "args": ["brainsnn-r3f-app/mcp-server/index.mjs"] }
+  }
+}
+```
 
 ## Environment variables
 

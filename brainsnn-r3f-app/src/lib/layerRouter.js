@@ -2,18 +2,8 @@ import { CORE_LAYER_IDS, LAYER_CATALOG, layersByIds } from './layerCatalog.js';
 import { analyzeContentLocally } from './analysisEngine.js';
 import { getBusinessMetrics } from './scoreMapping.js';
 import { computeSolitonField } from './solitonLayer.js';
-
-const urgencyTerms = /\b(now|today|deadline|limited|last chance|urgent|immediately|act fast|before it'?s too late)\b/gi;
-const outrageTerms = /\b(outrage|furious|rigged|corrupt|betrayed|enemy|disgusting|they don't want|scandal)\b/gi;
-const fearTerms = /\b(risk|danger|lose|fail|threat|panic|crisis|damage|warning|unsafe|hidden truth)\b/gi;
-const certaintyTerms = /\b(guaranteed|proven|everyone knows|obviously|undeniably|100%|fact|scientifically proven)\b/gi;
-const trustTerms = /\b(proof|data|tested|customer|source|case study|measured|verified|transparent|specific|evidence)\b/gi;
-const empathyTerms = /\b(you|your|together|help|support|understand|people|customers|team|community)\b/gi;
-const curiosityTerms = /\b(why|how|what if|surprising|discover|learn|before|after|mistake|lesson)\b/gi;
-
-function count(text, regex) {
-  return (String(text || '').match(regex) || []).length;
-}
+import { computeFirewall, detectTemplates } from './firewallLayer.js';
+import { computeAffect } from './affectLayer.js';
 
 export function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
@@ -34,11 +24,6 @@ export function stableHash(value = '') {
   return (hash >>> 0).toString(36);
 }
 
-function findEvidence(text, regex, label) {
-  const matches = String(text || '').match(regex) || [];
-  return [...new Set(matches.map((match) => match.trim().toLowerCase()))].slice(0, 5).map((match) => ({ label, match }));
-}
-
 function detectGenre(text) {
   const lower = String(text || '').toLowerCase();
   if (lower.includes('subject:') || lower.includes('unsubscribe')) return 'sales_email';
@@ -46,81 +31,6 @@ function detectGenre(text) {
   if (lower.includes('thread') || lower.includes('founder')) return 'founder_post';
   if (lower.length < 180) return 'social_hook';
   return 'brand_message';
-}
-
-function detectTemplates(text) {
-  const templates = [];
-  if (count(text, urgencyTerms) > 0 && count(text, trustTerms) === 0) templates.push({ id: 'forced-urgency', label: 'Forced urgency', risk: 'Pressure appears before proof.' });
-  if (count(text, fearTerms) > 0) templates.push({ id: 'fear-pressure', label: 'Fear pressure', risk: 'Risk framing may attract attention while lowering trust.' });
-  if (count(text, outrageTerms) > 0) templates.push({ id: 'outrage-hook', label: 'Outrage hook', risk: 'Conflict language may increase charge and brand risk.' });
-  if (count(text, certaintyTerms) > 0) templates.push({ id: 'certainty-theater', label: 'Certainty theater', risk: 'Absolute claims need evidence or qualification.' });
-  if (!templates.length) templates.push({ id: 'organic-baseline', label: 'Organic baseline', risk: 'No high-pressure template dominates.' });
-  return templates.slice(0, 5);
-}
-
-function buildFirewallSignals(text, result = {}) {
-  const metrics = result.metrics || {};
-  const urgency = count(text, urgencyTerms);
-  const outrage = count(text, outrageTerms);
-  const fear = count(text, fearTerms);
-  const certainty = count(text, certaintyTerms);
-  const trust = count(text, trustTerms);
-  const wordCount = Math.max(1, String(text || '').trim().split(/\s+/).filter(Boolean).length);
-  const density = Math.min(1, (urgency + outrage + fear + certainty) / Math.max(3, wordCount / 18));
-  const emotionalActivation = clamp01(((Number(metrics.fear) || 0) + (Number(metrics.anger) || 0) + fear * 12 + outrage * 10) / 180);
-  const cognitiveSuppression = clamp01(((Number(metrics.urgency) || 0) + urgency * 11 + certainty * 9) / 160);
-  const trustErosion = clamp01((((100 - (Number(metrics.trust) || 50)) / 100) * 0.58) + density * 0.34 - Math.min(0.18, trust * 0.03));
-  const manipulationPressure = clamp01((emotionalActivation * 0.42) + (cognitiveSuppression * 0.38) + (trustErosion * 0.2));
-  const evidence = [
-    ...findEvidence(text, urgencyTerms, 'urgency'),
-    ...findEvidence(text, outrageTerms, 'outrage'),
-    ...findEvidence(text, fearTerms, 'fear'),
-    ...findEvidence(text, certaintyTerms, 'certainty'),
-    ...findEvidence(text, trustTerms, 'proof'),
-  ].slice(0, 10);
-  return {
-    emotionalActivation: Number(emotionalActivation.toFixed(3)),
-    cognitiveSuppression: Number(cognitiveSuppression.toFixed(3)),
-    manipulationPressure: Number(manipulationPressure.toFixed(3)),
-    trustErosion: Number(trustErosion.toFixed(3)),
-    density: Number(density.toFixed(3)),
-    evidence,
-    templates: detectTemplates(text),
-    source: result.isFallback ? 'deterministic-firewall-fallback' : 'model-plus-firewall',
-  };
-}
-
-function buildAffectProfile(text, result = {}, firewallSignals) {
-  const metrics = result.metrics || {};
-  const curiosity = count(text, curiosityTerms);
-  const empathy = count(text, empathyTerms);
-  const trust = Number(metrics.trust) || 50;
-  const excitement = Number(metrics.excitement) || 40;
-  const fear = Number(metrics.fear) || 0;
-  const anger = Number(metrics.anger) || 0;
-  const urgency = Number(metrics.urgency) || 0;
-  const dominantAffect = fear + anger > 115
-    ? 'threat'
-    : trust > 68 && empathy > 2
-      ? 'trust'
-      : curiosity + excitement / 30 > 3
-        ? 'curiosity'
-        : urgency > 70
-          ? 'pressure'
-          : 'clarity';
-  const valence = clampScore(48 + trust * 0.32 + empathy * 4 - fear * 0.18 - anger * 0.16, 50);
-  const arousal = clampScore(32 + excitement * 0.32 + urgency * 0.25 + (firewallSignals?.emotionalActivation || 0) * 32, 45);
-  return {
-    dominantAffect,
-    valence,
-    arousal,
-    clusters: [
-      { id: 'threat', label: 'Threat', value: clampScore((fear + anger) / 2, 20) },
-      { id: 'reward', label: 'Reward', value: clampScore(excitement, 40) },
-      { id: 'social', label: 'Social trust', value: clampScore((trust + empathy * 10) / 2, 45) },
-      { id: 'cognitive', label: 'Curiosity / clarity', value: clampScore(curiosity * 16 + trust * 0.28, 38) },
-    ],
-  };
 }
 
 function buildContextTriggers(text, result = {}) {
@@ -184,8 +94,8 @@ export function getEngineStatusSnapshot(env = {}) {
 export function runLayerRouter({ content, contentType = 'text', baseResult, providerTrace = [], engineStatus = {} } = {}) {
   const result = baseResult || analyzeContentLocally({ content, contentType, forceFallback: true });
   const rawContent = String(content || result.rawContent || '');
-  const firewallSignals = buildFirewallSignals(rawContent, result);
-  const affectProfile = buildAffectProfile(rawContent, result, firewallSignals);
+  const firewallSignals = computeFirewall({ content: rawContent, metrics: result.metrics, isFallback: result.isFallback });
+  const affectProfile = computeAffect({ content: rawContent, metrics: result.metrics, firewallSignals });
   const solitonField = computeSolitonField({ content: rawContent, contentType, firewallSignals, affectProfile, metrics: result.metrics });
   const contextTriggers = buildContextTriggers(rawContent, result);
   const tribeProjection = buildTribeProjection(result, firewallSignals, affectProfile, engineStatus.tribe || {});
