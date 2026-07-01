@@ -12,6 +12,8 @@ import {
 } from "./src/lib/layerRouter.js";
 import { LAYER_CATALOG } from "./src/lib/layerCatalog.js";
 import { SOLITON_PRESETS, computeSolitonPreset, exploreSolitonField } from "./src/lib/solitonLayer.js";
+import { computeFirewall } from "./src/lib/firewallLayer.js";
+import { computeAffect } from "./src/lib/affectLayer.js";
 
 dotenv.config();
 
@@ -262,6 +264,43 @@ app.post("/api/soliton", (req, res) => {
   } catch (error: any) {
     console.error("Error evaluating 39 Hz soliton field:", error?.message || error);
     return res.status(500).json({ error: "Failed to evaluate the 39 Hz soliton field." });
+  }
+});
+
+// Layer 4 — Cognitive Firewall. Deterministic manipulation-pressure profile
+// (categories, per-sentence heatmap, grade, tactics). Offline, no model key.
+app.post("/api/firewall", (req, res) => {
+  try {
+    const { content, type, contentType } = req.body || {};
+    const inputType = type || contentType || "text";
+    if (!content || String(content).trim().length < 4) {
+      return res.status(400).json({ error: "Content is required for the Cognitive Firewall." });
+    }
+    const base = (analyzeContentLocally as any)({ content, contentType: inputType, forceFallback: true });
+    const firewall = (computeFirewall as any)({ content, metrics: base.metrics, isFallback: true });
+    return res.json({ firewall, metrics: base.metrics });
+  } catch (error: any) {
+    console.error("Error evaluating Cognitive Firewall:", error?.message || error);
+    return res.status(500).json({ error: "Failed to evaluate the Cognitive Firewall." });
+  }
+});
+
+// Layer 29 — Affective Decoder. Deterministic affect taxonomy on Russell's
+// valence×arousal circumplex + per-sentence trajectory. Offline, no model key.
+app.post("/api/affect", (req, res) => {
+  try {
+    const { content, type, contentType } = req.body || {};
+    const inputType = type || contentType || "text";
+    if (!content || String(content).trim().length < 4) {
+      return res.status(400).json({ error: "Content is required for the Affective Decoder." });
+    }
+    const base = (analyzeContentLocally as any)({ content, contentType: inputType, forceFallback: true });
+    const firewall = (computeFirewall as any)({ content, metrics: base.metrics, isFallback: true });
+    const affect = (computeAffect as any)({ content, metrics: base.metrics, firewallSignals: firewall });
+    return res.json({ affect, metrics: base.metrics });
+  } catch (error: any) {
+    console.error("Error evaluating Affective Decoder:", error?.message || error);
+    return res.status(500).json({ error: "Failed to evaluate the Affective Decoder." });
   }
 });
 

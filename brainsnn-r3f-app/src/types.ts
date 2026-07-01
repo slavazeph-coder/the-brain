@@ -56,12 +56,22 @@ export interface AnalysisResult {
     evidence?: Array<{ label: string; match: string }>;
     templates?: Array<{ id: string; label: string; risk: string }>;
     source?: string;
+    grade?: string;
+    tier?: string;
+    wordCount?: number;
+    categories?: Array<{ id: string; label: string; hits: number; score: number; matches: string[] }>;
+    heatmap?: Array<{ id: string; text: string; pressure: number; top: string }>;
+    tactics?: Array<{ id: string; label: string; confidence: number; risk: string }>;
   };
   affectProfile?: {
     dominantAffect: string;
     valence: number;
     arousal: number;
     clusters: Array<{ id: string; label: string; value: number }>;
+    taxonomy?: Array<{ id: string; label: string; x: number; y: number; score: number }>;
+    dominantEmotion?: string;
+    circumplex?: { x: number; y: number };
+    trajectory?: Array<{ id: string; text: string; valence: number; arousal: number }>;
   };
   contextTriggers?: {
     genre: string;
