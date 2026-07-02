@@ -10,7 +10,7 @@ const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 console.log('tools:', names.join(', '));
 
-const expected = ['brain_affect', 'brain_analyze', 'brain_firewall', 'brain_layers', 'brain_soliton', 'brain_soliton_explore'];
+const expected = ['brain_affect', 'brain_analyze', 'brain_decode', 'brain_firewall', 'brain_layers', 'brain_soliton', 'brain_soliton_explore'];
 for (const name of expected) {
   if (!names.includes(name)) throw new Error(`missing tool: ${name}`);
 }
@@ -26,6 +26,10 @@ if (!firewall.grade) throw new Error('brain_firewall returned no grade');
 const layers = JSON.parse((await client.callTool({ name: 'brain_layers', arguments: {} })).content[0].text);
 console.log('brain_layers → total', layers.total);
 if (layers.total < 103) throw new Error('brain_layers total too low');
+
+const decode = JSON.parse((await client.callTool({ name: 'brain_decode', arguments: { decodedText: 'Customer proof makes this launch easier to trust.', confidence: 42 } })).content[0].text);
+console.log('brain_decode →', 'uncertainty', decode.uncertainty.band, '| firewall grade', decode.result.firewallSignals.grade);
+if (!decode.uncertainty.band || !decode.neuralInput.schemaVersion) throw new Error('brain_decode returned an incomplete envelope');
 
 await client.close();
 console.log('SMOKE_OK');

@@ -1,8 +1,29 @@
 import React, { useState } from 'react';
 import { Button } from '../../components/ui/Button.jsx';
-import { createReplayNeuralInput } from '../../lib/neuralInputGateway.js';
 
 const SAMPLE = 'Customer proof makes this calmer launch claim easier to trust today.';
+const BAND_COLOR = { high: 'var(--bsn-green)', medium: 'var(--bsn-yellow)', low: 'var(--bsn-red)' };
+
+function tokenBackground(confidence) {
+  if (confidence >= 0.75) return 'rgba(34,197,94,0.16)';
+  if (confidence >= 0.5) return 'rgba(234,179,8,0.18)';
+  return 'rgba(239,68,68,0.18)';
+}
+
+// Per-token confidence strip. Uses the decoder's per-token scores when present,
+// otherwise applies the overall decode confidence to each token.
+function TokenStrip({ neuralInput, uncertainty }) {
+  const tokens = neuralInput.tokenConfidences?.length
+    ? neuralInput.tokenConfidences
+    : neuralInput.decodedText.split(/\s+/).filter(Boolean).map((token) => ({ token, confidence: uncertainty.confidence }));
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', lineHeight: 1.9 }}>
+      {tokens.map((item, index) => (
+        <span key={index} title={`${Math.round(item.confidence * 100)}% confidence`} style={{ padding: '1px 6px', borderRadius: 6, background: tokenBackground(item.confidence) }}>{item.token}</span>
+      ))}
+    </div>
+  );
+}
 const inputStyle = {
   width: '100%',
   minHeight: 44,
@@ -38,32 +59,28 @@ export function DecoderTranscriptPanel() {
       setError('Confirm that this decoded transcript is authorized for research use.');
       return;
     }
-
-    let envelope;
-    try {
-      envelope = createReplayNeuralInput({
-        decodedText: transcript,
-        modality: 'decoded_text',
-        confidence,
-        decoder,
-        source: 'research-import',
-        consentConfirmed: authorized,
-      });
-    } catch (cause) {
-      setError(cause.message || 'The transcript could not be imported.');
+    if (!transcript.trim()) {
+      setError('Enter a decoded transcript to analyze.');
       return;
     }
 
     setStatus('loading');
     try {
-      const response = await fetch('/api/analyze', {
+      const response = await fetch('/api/neural/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: envelope.decodedText, contentType: 'decoder-transcript' }),
+        body: JSON.stringify({
+          decodedText: transcript,
+          modality: 'decoded_text',
+          confidence,
+          decoder,
+          source: 'research-import',
+          consentConfirmed: authorized,
+        }),
       });
-      const analysis = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(analysis.error || 'Analysis service unavailable.');
-      setRecord({ envelope, analysis });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Analysis service unavailable.');
+      setRecord(data);
       setStatus('success');
     } catch (cause) {
       setStatus('error');
@@ -71,7 +88,8 @@ export function DecoderTranscriptPanel() {
     }
   }
 
-  const metrics = record?.analysis?.metrics || {};
+  const analysis = record?.result || {};
+  const metrics = analysis.metrics || {};
 
   return (
     <section className="research-panel" aria-labelledby="decoder-transcript-heading" data-testid="decoder-transcript-panel">
@@ -116,16 +134,24 @@ export function DecoderTranscriptPanel() {
 
       {record ? (
         <div style={{ marginTop: 20, display: 'grid', gap: 14 }}>
+          <article style={{ padding: 14, borderRadius: 12, border: `1px solid ${BAND_COLOR[record.uncertainty.band]}`, background: 'rgba(255,255,255,0.02)' }}>
+            <span className="bsn-mono" style={{ color: BAND_COLOR[record.uncertainty.band] }}>Decode uncertainty · {record.uncertainty.band}</span>
+            <p className="bsn-note" style={{ margin: '6px 0 0' }}>{record.uncertainty.label}</p>
+          </article>
+          <div>
+            <span className="bsn-mono" style={{ color: 'var(--bsn-text-muted)', fontSize: 12 }}>Per-token confidence</span>
+            <div style={{ marginTop: 8 }}><TokenStrip neuralInput={record.neuralInput} uncertainty={record.uncertainty} /></div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12 }}>
-            <Metric label="Decoder confidence" value={`${Math.round(record.envelope.confidence * 100)}%`} />
-            <Metric label="Trust" value={`${Math.round(metrics.trust || 0)}/100`} />
-            <Metric label="Viral score" value={`${Math.round(record.analysis.viralScore || 0)}/100`} />
-            <Metric label="Pressure" value={`${Math.round(record.analysis.firewallSignals?.manipulationPressure || 0)}/100`} />
+            <Metric label="Decoder confidence" value={`${Math.round(record.neuralInput.confidence * 100)}%`} />
+            <Metric label="Firewall grade" value={analysis.firewallSignals?.grade || '—'} />
+            <Metric label="Dominant affect" value={analysis.affectProfile?.dominantEmotion || analysis.affectProfile?.dominantAffect || '—'} />
+            <Metric label="Pressure" value={`${Math.round((analysis.firewallSignals?.manipulationPressure || 0) * 100)}/100`} />
           </div>
           <article style={{ padding: 16, borderRadius: 12, background: 'rgba(0,245,255,0.045)', border: '1px solid rgba(0,245,255,0.18)' }}>
-            <strong>{record.analysis.title || 'Transcript analyzed'}</strong>
-            <p className="bsn-note" style={{ marginBottom: 0 }}>{record.analysis.summary}</p>
-            <p className="bsn-mono" style={{ marginBottom: 0 }}>Receipt: {record.analysis.receipt?.id || 'layer-router receipt generated'}</p>
+            <strong>{analysis.title || 'Transcript analyzed'}</strong>
+            <p className="bsn-note" style={{ marginBottom: 0 }}>{analysis.summary}</p>
+            <p className="bsn-mono" style={{ marginBottom: 0 }}>Receipt: {analysis.receipt?.id || 'layer-router receipt generated'} · via {record.neuralInput.provenance?.decoder}</p>
           </article>
         </div>
       ) : null}

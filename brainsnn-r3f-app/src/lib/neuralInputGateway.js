@@ -153,3 +153,23 @@ export function getNeuralGatewayCapabilities(env = {}) {
     disclaimer: NEURAL_INPUT_DISCLAIMER,
   };
 }
+
+// Turn a decode envelope's confidence into an uncertainty band + human label so
+// downstream results can be marked tentative when the decoder was unsure.
+// Deterministic: same envelope in, same label out.
+export function deriveDecodeUncertainty(envelope = {}) {
+  const confidence = normalizeConfidence(envelope.confidence, 0);
+  const tokens = Array.isArray(envelope.tokenConfidences) ? envelope.tokenConfidences : [];
+  const band = confidence >= 0.75 ? 'high' : confidence >= 0.5 ? 'medium' : 'low';
+  const lowConfidenceTokens = tokens
+    .map((item) => ({ token: item?.token, confidence: normalizeConfidence(item?.confidence, 0) }))
+    .filter((item) => item.token && item.confidence < 0.5)
+    .slice(0, 32);
+  const pct = Math.round(confidence * 100);
+  const label = band === 'high'
+    ? `Decoded at ${pct}% confidence — treat as reliable input.`
+    : band === 'medium'
+      ? `Decoded at ${pct}% confidence — verify key claims before acting.`
+      : `Decoded at ${pct}% confidence — tentative; may contain decode errors.`;
+  return { confidence, band, label, lowConfidenceTokens };
+}

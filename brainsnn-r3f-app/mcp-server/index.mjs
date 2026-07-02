@@ -14,6 +14,7 @@ import { LAYER_CATALOG } from '../src/lib/layerCatalog.js';
 import { computeSolitonField, exploreSolitonField } from '../src/lib/solitonLayer.js';
 import { computeFirewall } from '../src/lib/firewallLayer.js';
 import { computeAffect } from '../src/lib/affectLayer.js';
+import { createReplayNeuralInput, deriveDecodeUncertainty } from '../src/lib/neuralInputGateway.js';
 
 const json = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 const baseScan = (content, contentType = 'text') => analyzeContentLocally({ content, contentType, forceFallback: true });
@@ -74,6 +75,17 @@ server.tool(
   'List the BrainSNN layer catalog (id, name, group, blurb).',
   {},
   async () => json({ total: LAYER_CATALOG.length, layers: LAYER_CATALOG }),
+);
+
+server.tool(
+  'brain_decode',
+  'Neural decoder gateway (L19): analyze an authorized decoded transcript (output of a communication decoder) through the full BrainSNN stack, with a decode-uncertainty label. Transcript-in only — no raw signals; a real external decoder is wired via NEURAL_DECODER_URL on the server.',
+  { decodedText: z.string(), confidence: z.number().optional(), decoder: z.string().optional(), modality: z.string().optional() },
+  async ({ decodedText, confidence, decoder, modality }) => {
+    const envelope = createReplayNeuralInput({ decodedText, confidence, decoder, modality, source: 'mcp', consentConfirmed: true });
+    const result = runLayerRouter({ content: envelope.decodedText, baseResult: baseScan(envelope.decodedText), engineStatus: getEngineStatusSnapshot(process.env) });
+    return json({ neuralInput: envelope, uncertainty: deriveDecodeUncertainty(envelope), result });
+  },
 );
 
 const transport = new StdioServerTransport();

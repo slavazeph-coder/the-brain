@@ -129,6 +129,9 @@ measurement.
 | POST | `/api/analyze` | Full layer-router scan (Gemini if configured, else local) |
 | POST | `/api/firewall` | Cognitive Firewall profile for one input (offline) |
 | POST | `/api/affect` | Affective Decoder profile for one input (offline) |
+| POST | `/api/neural/analyze` | Analyze an authorized decoded-transcript envelope (L19 gateway) |
+| POST | `/api/neural/decode` | Proxy an external decoder via `NEURAL_DECODER_URL`, then analyze |
+| GET | `/api/neural/capabilities` | Neural gateway modes / modalities / remote status |
 | POST | `/api/rewrite` | Layer-stack rewrite toward a goal |
 | POST | `/api/autopsy` | A/B comparison of two variants |
 | POST | `/api/soliton` | Layer 103 field for one input (offline) |
@@ -141,7 +144,7 @@ measurement.
 `brainsnn-r3f-app/mcp-server/` is a stdio [MCP](https://modelcontextprotocol.io) server that
 exposes the deterministic engine to agents (Claude Code / Codex) — all tools run offline, no
 keys. Tools: `brain_analyze`, `brain_firewall`, `brain_affect`, `brain_soliton`,
-`brain_soliton_explore`, `brain_layers`.
+`brain_soliton_explore`, `brain_layers`, `brain_decode`.
 
 ```bash
 cd brainsnn-r3f-app/mcp-server
@@ -169,6 +172,7 @@ All optional — the app runs fully offline without any of them. Set them server
 | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_BASIC`, `STRIPE_PRICE_PRO`, `STRIPE_WEBHOOK_SECRET` | Stripe checkout, portal and webhook |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Magic-link auth |
 | `TRIBE_API_URL` | External TRIBE projection health/scenarios (else local projection) |
+| `NEURAL_DECODER_URL`, `NEURAL_DECODER_KEY` | Approved external communication-decoder endpoint for `/api/neural/decode` (analyzes decoded text only; else replay mode) |
 | `PORT`, `APP_URL` | Server port (default 3000) / public URL |
 
 ## Project layout
