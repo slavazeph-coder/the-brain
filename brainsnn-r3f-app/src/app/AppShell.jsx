@@ -10,7 +10,7 @@ import { AutopsyWorkspace } from '../features/autopsy/AutopsyWorkspace.jsx';
 import { ScanHistory } from '../features/memory/ScanHistory.jsx';
 import { ApprovalQueue } from '../features/approvals/ApprovalQueue.jsx';
 import { PricingWorkspace } from '../features/pricing/PricingWorkspace.jsx';
-import { ResearchDrawer } from '../features/research/ResearchDrawer.jsx';
+import { ResearchWorkspaceV2 } from '../features/research/ResearchWorkspaceV2.jsx';
 import { ShareDialog } from '../features/export/ShareDialog.jsx';
 import { AppHeader } from './AppHeader.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
@@ -179,7 +179,7 @@ export function AppShell() {
       );
     }
     if (active === 'research') {
-      return <ResearchDrawer />;
+      return <ResearchWorkspaceV2 />;
     }
     return (
       <ScanWorkspace
