@@ -1,6 +1,7 @@
 import { describe, expect, it } from '../test/tinyVitest.js';
 import {
   createReplayNeuralInput,
+  deriveDecodeUncertainty,
   getNeuralGatewayCapabilities,
   normalizeConfidence,
   normalizeModality,
@@ -71,5 +72,31 @@ describe('Neural Input Gateway', () => {
     expect(capabilities.schemaVersion).toBe('brainsnn.neural-input.v1');
     expect(capabilities.modalities).toContain('meg');
     expect(capabilities.retainsRawSignal).toBe(false);
+  });
+
+  it('reports remote configured when NEURAL_DECODER_URL is set', () => {
+    expect(getNeuralGatewayCapabilities({ NEURAL_DECODER_URL: 'https://decoder.example' }).remoteConfigured).toBe(true);
+  });
+});
+
+describe('deriveDecodeUncertainty', () => {
+  it('bands confidence into high / medium / low', () => {
+    expect(deriveDecodeUncertainty(createReplayNeuralInput({ decodedText: 'reliable line', confidence: 90 })).band).toBe('high');
+    expect(deriveDecodeUncertainty(createReplayNeuralInput({ decodedText: 'unsure line', confidence: 60 })).band).toBe('medium');
+    expect(deriveDecodeUncertainty(createReplayNeuralInput({ decodedText: 'tentative line', confidence: 30 })).band).toBe('low');
+  });
+
+  it('surfaces low-confidence tokens and a human label, deterministically', () => {
+    const envelope = createReplayNeuralInput({
+      decodedText: 'proof helps trust',
+      confidence: 40,
+      tokenConfidences: [{ token: 'proof', confidence: 0.9 }, { token: 'helps', confidence: 0.3 }, { token: 'trust', confidence: 0.2 }],
+    });
+    const a = deriveDecodeUncertainty(envelope);
+    const b = deriveDecodeUncertainty(envelope);
+    expect(a.band).toBe('low');
+    expect(a.lowConfidenceTokens).toHaveLength(2);
+    expect(a.label).toContain('40%');
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

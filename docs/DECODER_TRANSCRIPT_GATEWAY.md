@@ -72,10 +72,21 @@ This feature:
 - does not retain source recordings;
 - keeps experimental functionality inside the Research workspace.
 
+## Server + agent surface
+
+- `POST /api/neural/analyze` — normalizes a replay envelope, runs it through the 103-layer
+  stack, and returns `{ neuralInput, uncertainty, result }`.
+- `POST /api/neural/decode` — proxies to an approved external decoder when `NEURAL_DECODER_URL`
+  is set (optional `NEURAL_DECODER_KEY`), normalizes the response, then analyzes; returns
+  `501 not_configured` otherwise. This is the seam for a real decoder (e.g. a Brain2Qwerty-style
+  service); no model or weights are bundled here.
+- `GET /api/neural/capabilities` — reports modes, modalities and `remoteConfigured`.
+- MCP tool `brain_decode` exposes the same replay path to agents (transcript-in only).
+
 ## Next milestones
 
-1. Add a server-side adapter that accepts the same decoded-text envelope from approved external services.
-2. Add token-confidence visualization and uncertainty-aware result labels.
+1. ~~Add a server-side adapter that accepts the same decoded-text envelope from approved external services.~~ **Shipped** (`/api/neural/*`).
+2. ~~Add token-confidence visualization and uncertainty-aware result labels.~~ **Shipped** (`deriveDecodeUncertainty`, panel token strip + band).
 3. Add benchmark fixtures using published or properly licensed decoder outputs.
 4. Compare deterministic BrainSNN results across original, decoded and corrected transcripts.
 5. Add signed receipts and configurable retention policies before any production pilot.

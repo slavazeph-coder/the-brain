@@ -14,6 +14,12 @@ import { LAYER_CATALOG } from "./src/lib/layerCatalog.js";
 import { SOLITON_PRESETS, computeSolitonPreset, exploreSolitonField } from "./src/lib/solitonLayer.js";
 import { computeFirewall } from "./src/lib/firewallLayer.js";
 import { computeAffect } from "./src/lib/affectLayer.js";
+import {
+  createReplayNeuralInput,
+  normalizeRemoteDecoderResponse,
+  getNeuralGatewayCapabilities,
+  deriveDecodeUncertainty,
+} from "./src/lib/neuralInputGateway.js";
 
 dotenv.config();
 
@@ -301,6 +307,72 @@ app.post("/api/affect", (req, res) => {
   } catch (error: any) {
     console.error("Error evaluating Affective Decoder:", error?.message || error);
     return res.status(500).json({ error: "Failed to evaluate the Affective Decoder." });
+  }
+});
+
+// Layer 19 — Neural decoder integration. Runs an authorized decoded-text
+// envelope through the full deterministic stack and surfaces the decoder's
+// confidence as an uncertainty label. Analyzes decoded text only — no raw
+// signals, no model keys. A real external decoder plugs in via NEURAL_DECODER_URL.
+function analyzeNeuralEnvelope(envelope: any) {
+  const content = envelope.decodedText;
+  const baseResult = (analyzeContentLocally as any)({ content, contentType: "text", forceFallback: true });
+  const result = (runLayerRouter as any)({
+    content,
+    contentType: "text",
+    baseResult,
+    providerTrace: [
+      { stage: "L19 Neural Input Gateway", status: "completed", note: `Decoded transcript via ${envelope.provenance?.decoder || "decoder"} (${Math.round((envelope.confidence || 0) * 100)}% confidence).` },
+    ],
+    engineStatus: getEngineStatusSnapshot(process.env),
+  });
+  return { neuralInput: envelope, uncertainty: (deriveDecodeUncertainty as any)(envelope), result };
+}
+
+app.get("/api/neural/capabilities", (_req, res) => {
+  return res.json((getNeuralGatewayCapabilities as any)(process.env));
+});
+
+app.post("/api/neural/analyze", (req, res) => {
+  let envelope: any;
+  try {
+    envelope = (createReplayNeuralInput as any)(req.body || {});
+  } catch (error: any) {
+    return res.status(400).json({ error: error?.message || "Could not import the decoded transcript." });
+  }
+  try {
+    return res.json(analyzeNeuralEnvelope(envelope));
+  } catch (error: any) {
+    console.error("Error analyzing decoded transcript:", error?.message || error);
+    return res.status(500).json({ error: "Failed to analyze the decoded transcript." });
+  }
+});
+
+app.post("/api/neural/decode", async (req, res) => {
+  const decoderUrl = process.env.NEURAL_DECODER_URL;
+  if (!decoderUrl) {
+    return res.status(501).json({ error: "No external neural decoder configured (set NEURAL_DECODER_URL).", status: "not_configured" });
+  }
+  try {
+    const request = req.body || {};
+    const upstream = await fetch(decoderUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.NEURAL_DECODER_KEY ? { Authorization: `Bearer ${process.env.NEURAL_DECODER_KEY}` } : {}),
+      },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!upstream.ok) {
+      return res.status(502).json({ error: `Neural decoder returned ${upstream.status}.` });
+    }
+    const decoded = await upstream.json();
+    const envelope = (normalizeRemoteDecoderResponse as any)(decoded, request);
+    return res.json(analyzeNeuralEnvelope(envelope));
+  } catch (error: any) {
+    console.error("Error calling neural decoder:", error?.message || error);
+    return res.status(502).json({ error: error?.message || "Neural decoder request failed." });
   }
 });
 
