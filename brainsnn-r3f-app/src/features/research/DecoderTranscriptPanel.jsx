@@ -78,8 +78,16 @@ export function DecoderTranscriptPanel() {
           consentConfirmed: authorized,
         }),
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Analysis service unavailable.');
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Could not read the analysis response.');
+      }
+      if (!response.ok) throw new Error(data?.error || 'Analysis service unavailable.');
+      if (!data?.neuralInput || !data?.uncertainty || !data?.result) {
+        throw new Error('The analysis response was malformed.');
+      }
       setRecord(data);
       setStatus('success');
     } catch (cause) {
