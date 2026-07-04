@@ -57,7 +57,11 @@ function LandingBrain({ sample, paused }) {
   ], [sample]);
 
   return (
-    <div className={`landing-brain ${paused ? 'paused' : ''}`} aria-label="Animated BrainSNN signal preview">
+    <div
+      className={`landing-brain ${paused ? 'paused' : ''}`}
+      role="img"
+      aria-label={`Animated signal preview: hook ${sample.scores.hook}, trust ${sample.scores.trust}, risk ${sample.scores.risk}`}
+    >
       <div className="landing-brain-core" />
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <defs>
@@ -72,22 +76,21 @@ function LandingBrain({ sample, paused }) {
         <path d="M48 64 C 58 73, 65 73, 72 66" />
       </svg>
       {nodes.map((node) => (
-        <button
+        <span
           key={node.id}
-          type="button"
           className="landing-brain-node"
           style={{ left: `${node.x}%`, top: `${node.y}%`, '--node-color': node.color, '--node-scale': 0.72 + node.value / 180 }}
-          aria-label={`${node.label} demo signal ${node.value}`}
+          aria-hidden="true"
         >
           <span>{node.label}</span>
           <strong>{node.value}</strong>
-        </button>
+        </span>
       ))}
     </div>
   );
 }
 
-export function LandingPage({ onStart }) {
+export function LandingPage({ onStart, onNavigate }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const activeSample = DEMO_SAMPLES[activeIndex];
@@ -109,6 +112,11 @@ export function LandingPage({ onStart }) {
     onStart(sample.content);
   }
 
+  function goTo(id) {
+    if (onNavigate) onNavigate(id);
+    else onStart('');
+  }
+
   return (
     <div className="landing-shell">
       <header className="landing-nav" aria-label="BrainSNN landing navigation">
@@ -120,9 +128,9 @@ export function LandingPage({ onStart }) {
           </span>
           <em>V2.0</em>
         </button>
-        <div className="landing-status">
+        <div className="landing-status" role="status">
           <span aria-hidden="true" />
-          System optimal
+          Engine ready — runs in your browser
         </div>
       </header>
 
@@ -130,39 +138,40 @@ export function LandingPage({ onStart }) {
         <section className="landing-copy" aria-labelledby="landing-heading">
           <div className="landing-trend-pill">
             <Sparkles size={18} aria-hidden="true" />
-            Neuromarketing trends 2026: real-time content pre-testing
+            Pre-test your content in seconds — free, no signup
           </div>
           <h1 id="landing-heading">
-            See response signals in any content
-            <span>before behavior forms.</span>
+            Know how your content will land
+            <span>before you publish.</span>
           </h1>
           <p>
-            BrainSNN estimates hook strength, trust pressure, emotional charge and brand-safety risk before a post,
-            ad, email or script goes live. Technical Crumb LLM, TRIBE and {LAYER_CATALOG.length}-layer traces stay available when you want the research layer.
+            Paste a post, ad, email or script. BrainSNN scores attention, trust, emotional charge and
+            manipulation risk — then helps you rewrite it. Scans run instantly in your browser; the
+            {' '}{LAYER_CATALOG.length}-layer research engine is there when you want to go deeper.
           </p>
           <div className="landing-actions">
             <Button variant="primary" onClick={() => start(activeSample)}>
-              Launch Active Demo <ArrowRight size={17} aria-hidden="true" />
+              Try a live example <ArrowRight size={17} aria-hidden="true" />
             </Button>
             <Button variant="secondary" onClick={() => onStart('')}>
-              Open Scanner <BrainCircuit size={17} aria-hidden="true" />
+              Scan your own draft <BrainCircuit size={17} aria-hidden="true" />
             </Button>
           </div>
           <div className="landing-metrics" aria-label="BrainSNN capability highlights">
             <div>
-              <span>Attention run</span>
-              <strong>O(N log N)</strong>
-              <small>Wave mechanics</small>
+              <span>Scan time</span>
+              <strong>~5s</strong>
+              <small>Free, no signup</small>
             </div>
             <div>
-              <span>Trust gain</span>
+              <span>Trust lift</span>
               <strong>+31</strong>
-              <small>Rewrite target</small>
+              <small>Avg. rewrite target</small>
             </div>
             <div>
-              <span>Layer trace</span>
-              <strong>102</strong>
-              <small>Context triggers</small>
+              <span>Analysis layers</span>
+              <strong>{LAYER_CATALOG.length}</strong>
+              <small>Deterministic engine</small>
             </div>
           </div>
         </section>
@@ -214,20 +223,43 @@ export function LandingPage({ onStart }) {
       <section className="landing-deep-strip" aria-label="Advanced engine surfaces">
         <article>
           <Activity size={18} aria-hidden="true" />
-          <span>Decision Engine</span>
-          <strong>Scan, diagnose, improve, compare, approve and export in one flow.</strong>
+          <span>One flow</span>
+          <strong>Scan, diagnose, improve, compare, approve and export in one place.</strong>
         </article>
         <article>
           <Zap size={18} aria-hidden="true" />
-          <span>TRIBE + Gemma-ready</span>
-          <strong>Provider layers activate only when configured; local fallback remains transparent.</strong>
+          <span>Private by default</span>
+          <strong>Scans run on the local engine and history stays in your browser unless you connect a provider.</strong>
         </article>
         <article>
           <FlaskConical size={18} aria-hidden="true" />
-          <span>Research drawer</span>
-          <strong>{LAYER_CATALOG.length}-layer traces, Crumb physics and benchmarks stay out of the buyer workflow.</strong>
+          <span>Research-grade depth</span>
+          <strong>{LAYER_CATALOG.length}-layer traces and the physics lab live behind Research, out of your daily workflow.</strong>
         </article>
       </section>
+
+      <footer className="landing-footer" aria-label="BrainSNN footer">
+        <div className="landing-footer-links">
+          <div>
+            <span>Product</span>
+            <button type="button" onClick={() => onStart('')}>Open the scanner</button>
+            <button type="button" onClick={() => start(activeSample)}>Try a live example</button>
+          </div>
+          <div>
+            <span>Plans</span>
+            <button type="button" onClick={() => goTo('pricing')}>Pricing</button>
+          </div>
+          <div>
+            <span>Deep end</span>
+            <button type="button" onClick={() => goTo('research')}>Research &amp; layer map</button>
+          </div>
+        </div>
+        <p className="landing-footer-note">
+          Results are AI-estimated content-response signals, not literal brain, biometric or EEG measurements.
+          Your drafts and history stay in this browser unless you connect persistence.
+        </p>
+        <p className="landing-footer-legal">© {new Date().getFullYear()} BrainSNN · hello@brainsnn.com</p>
+      </footer>
     </div>
   );
 }

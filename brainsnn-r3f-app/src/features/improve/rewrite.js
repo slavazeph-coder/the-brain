@@ -12,15 +12,28 @@ function trimSentences(content) {
   return String(content || '').replace(/\s+/g, ' ').trim();
 }
 
+// Each replacement must read naturally in place (same part of speech,
+// works at a sentence start) so the output never looks machine-spliced.
+const SOFTENERS = [
+  [/\blast chance\b/gi, 'quick heads-up'],
+  [/\bact now\b/gi, 'take a look'],
+  [/\bthey don't want you to know\b/gi, 'that often gets overlooked'],
+  [/\bguaranteed\b/gi, 'designed'],
+  [/\bguarantees\b/gi, 'is built to support'],
+  [/\bguarantee\b/gi, 'aim for'],
+  [/\bsecret\b/gi, 'practical'],
+];
+
+function repairSentenceCasing(text) {
+  return text.replace(/(^|[.!?]\s+)([a-z])/g, (match, boundary, letter) => `${boundary}${letter.toUpperCase()}`);
+}
+
 export function createRewrite(content, goal = 'trust') {
   const text = trimSentences(content);
   if (!text) return '';
-  const softened = text
-    .replace(/\blast chance\b/gi, 'a useful moment')
-    .replace(/\bact now\b/gi, 'see whether it fits')
-    .replace(/\bthey don't want you to know\b/gi, 'the overlooked part is')
-    .replace(/\bguaranteed\b/gi, 'designed to help')
-    .replace(/\bsecret\b/gi, 'practical signal');
+  const softened = repairSentenceCasing(
+    SOFTENERS.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text),
+  );
 
   const openers = {
     curiosity: 'What changes when your message earns attention and trust at the same time?',

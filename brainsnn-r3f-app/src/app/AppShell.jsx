@@ -193,7 +193,7 @@ export function AppShell() {
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
 
   if (route === 'landing') {
-    return <LandingPage onStart={openWorkspace} />;
+    return <LandingPage onStart={openWorkspace} onNavigate={navigate} />;
   }
 
   return (

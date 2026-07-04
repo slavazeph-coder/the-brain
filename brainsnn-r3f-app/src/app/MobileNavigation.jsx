@@ -4,16 +4,18 @@ import { Brain, CreditCard, Ellipsis, FlaskConical, GitCompare, History, ListChe
 const mobileItems = [
   { id: 'analyze', label: 'Analyze', icon: Brain },
   { id: 'improve', label: 'Improve', icon: Sparkles },
-  { id: 'autopsy', label: 'Autopsy', icon: GitCompare },
+  { id: 'autopsy', label: 'Compare', icon: GitCompare },
   { id: 'more', label: 'More', icon: Ellipsis },
 ];
 
 const moreItems = [
+  { id: 'queue', label: 'Approvals', icon: ListChecks },
   { id: 'history', label: 'History', icon: History },
   { id: 'pricing', label: 'Pricing', icon: CreditCard },
-  { id: 'queue', label: 'Queue', icon: ListChecks },
   { id: 'research', label: 'Research', icon: FlaskConical },
 ];
+
+const moreIds = moreItems.map((item) => item.id);
 
 export function MobileNavigation({ active, onNavigate }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -35,19 +37,22 @@ export function MobileNavigation({ active, onNavigate }) {
   return (
     <>
       {moreOpen ? (
-        <div className="mobile-more-sheet" role="dialog" aria-label="More navigation">
-          {moreItems.map((item) => (
-            <button key={item.id} type="button" className={active === item.id ? 'active' : ''} onClick={() => navigate(item.id)}>
-              <item.icon size={18} aria-hidden="true" />
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="mobile-sheet-backdrop" onClick={() => setMoreOpen(false)} aria-hidden="true" />
+          <div className="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="More navigation">
+            {moreItems.map((item) => (
+              <button key={item.id} type="button" className={active === item.id ? 'active' : ''} onClick={() => navigate(item.id)}>
+                <item.icon size={18} aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </>
       ) : null}
       <nav className="mobile-navigation" aria-label="Mobile navigation">
         {mobileItems.map((item) => {
           const isMore = item.id === 'more';
-          const isActive = isMore ? ['history', 'pricing', 'queue', 'research'].includes(active) : active === item.id;
+          const isActive = isMore ? moreIds.includes(active) : active === item.id;
           return (
             <button
               key={item.id}

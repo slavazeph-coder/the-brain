@@ -6,21 +6,16 @@ import { getNavItem } from './navigation.js';
 export function AppHeader({ active, onOpenCommand, onExport, onUpgrade, hasResult }) {
   const item = getNavItem(active);
   return (
-    <header className="app-header">
+    <header className="app-header app-header-compact">
       <div>
         <p className="bsn-kicker">{item.label}</p>
-        <h1>{item.description}</h1>
-        <p>The decision engine for everything your brand publishes.</p>
-        <div className="app-header-status" aria-label="System status">
-          <span className="status-chip"><span aria-hidden="true" />102_LAYER_STACK</span>
-          <span className="status-chip"><span aria-hidden="true" />TRIBE_READY_TRACE</span>
-          <span className="status-chip"><span aria-hidden="true" />LOCAL_MEMORY_READY</span>
-        </div>
       </div>
       <div className="header-actions">
         <Button variant="ghost" onClick={onOpenCommand}><Command size={16} aria-hidden="true" /> Command</Button>
         <Button variant="secondary" onClick={onUpgrade}><Sparkles size={16} aria-hidden="true" /> Pro / Pilot</Button>
-        <Button variant="primary" onClick={onExport} disabled={!hasResult}><Download size={16} aria-hidden="true" /> Export</Button>
+        <span title={hasResult ? undefined : 'Run a scan first to export it'}>
+          <Button variant="primary" onClick={onExport} disabled={!hasResult}><Download size={16} aria-hidden="true" /> Export</Button>
+        </span>
       </div>
     </header>
   );
