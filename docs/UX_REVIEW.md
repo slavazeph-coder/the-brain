@@ -367,6 +367,7 @@ Landing: single column, max-width 1200, sections at 96px vertical rhythm (64px m
 - Command palette: autofocus search, focus trap, Esc/outside-click close, restore focus.
 - More sheet: opens ≤300 ms slide-up, backdrop tap + swipe-down close.
 - Pricing CTA: after waitlist join, button becomes confirmed state ("On the list ✓") — no dev-speak.
+- Score display: engine signals such as `firewallSignals.manipulationPressure` are emitted on a **0–1 scale** (`src/lib/firewallLayer.js:108`); any new UI that renders them as a score out of 100 must multiply by 100, as `FirewallPanel.jsx:31` and `LayerTracePanel.jsx:41` already do.
 
 ### Responsive behavior
 
