@@ -11,3 +11,7 @@ __pycache__/
 venv/
 env/
 *.egg-info/
+
+# Playwright artifacts
+brainsnn-r3f-app/test-results/
+brainsnn-r3f-app/playwright-report/
