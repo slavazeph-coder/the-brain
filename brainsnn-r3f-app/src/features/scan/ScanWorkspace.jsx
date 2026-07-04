@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { ErrorState } from '../../components/ui/ErrorState.jsx';
+import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 import { ResultsWorkspace } from '../results/ResultsWorkspace.jsx';
 import { EngineReadinessPanel } from './EngineReadinessPanel.jsx';
 import { ScanComposer } from './ScanComposer.jsx';
@@ -32,6 +33,9 @@ export function ScanWorkspace({ scan, onImprove, onSave, onQueue, onExport }) {
         </div>
       ) : null}
       {!scan.state.result && scan.state.status !== 'scanning' ? <EngineReadinessPanel /> : null}
+      <p className="bsn-visually-hidden" aria-live="polite">
+        {scan.state.result ? `Scan complete. Decision score ${deriveExecutiveVerdict(scan.state.result).score} out of 100.` : ''}
+      </p>
       {scan.state.result ? (
         <div ref={resultsRef} className="results-scroll-anchor">
           <ResultsWorkspace

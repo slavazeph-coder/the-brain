@@ -20,12 +20,12 @@ export function ScanHistory({ history, onOpen, onDuplicate, onGoToCortex }) {
     return (
       <div className="memory-workspace">
         <header className="workspace-heading">
-          <p className="bsn-kicker">Memory</p>
-          <h1>Your local publishing memory.</h1>
+          <p className="bsn-kicker">History · Memory</p>
+          <h1>Your saved scans and versions.</h1>
           <p>Completed scans, saved versions and verdicts will appear here. This version stores them only in this browser.</p>
         </header>
-        <EmptyState title="No saved scans yet" actionLabel="Run a Brain Scan" onAction={onGoToCortex}>
-          Save a result from Cortex to build a useful local history of what works for your content.
+        <EmptyState title="No saved scans yet" actionLabel="Scan your first draft" onAction={onGoToCortex}>
+          Save a result from Analyze to build a useful local history of what works for your content.
         </EmptyState>
       </div>
     );
@@ -34,7 +34,7 @@ export function ScanHistory({ history, onOpen, onDuplicate, onGoToCortex }) {
   return (
     <div className="memory-workspace" data-testid="memory-workspace">
       <header className="workspace-heading">
-        <p className="bsn-kicker">Memory</p>
+        <p className="bsn-kicker">History · Memory</p>
         <h1>Previous scans and versions.</h1>
         <p>Local-only history for comparing drafts over time. No cloud sync is implied in this build.</p>
       </header>

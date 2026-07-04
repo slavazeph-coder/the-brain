@@ -103,7 +103,7 @@ export function ScanComposer({ scan, onRun }) {
       </div>
 
       <div className="scan-composer-footer">
-        <span className={state.validation.valid ? 'bsn-mono' : 'bsn-validation'}>
+        <span className={state.validation.valid || !state.input.trim() ? 'bsn-mono' : 'bsn-validation'}>
           {state.input.trim().length.toLocaleString()} / 12,000 characters
           {!state.validation.valid && state.input ? ` - ${state.validation.message}` : ''}
         </span>

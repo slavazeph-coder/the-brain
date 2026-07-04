@@ -10,7 +10,7 @@ const plans = [
     name: 'Free',
     price: '$0',
     description: 'Try the decision engine with local history and watermarked exports.',
-    features: ['5 analyses/month', 'Core verdict', 'Basic layer trace', 'Local history'],
+    features: ['5 analyses/month', 'Verdict + top fix on every scan', 'See which checks fired', 'Local history'],
   },
   {
     id: 'basic',
@@ -25,7 +25,7 @@ const plans = [
     name: 'Pro',
     price: '$29/mo',
     description: 'For marketers and small agencies running repeated variants.',
-    features: ['200 analyses/month', 'Autopsy/Battle mode', 'Context memory', 'Export-ready reports and deeper layer traces'],
+    features: ['200 analyses/month', 'Compare mode for A/B variants', 'Engine remembers your past scans', 'Export-ready reports and deeper layer traces'],
   },
   {
     id: 'team',
@@ -72,7 +72,7 @@ export function PricingWorkspace() {
       return;
     }
     if (!stripeReady) {
-      setMessage(`${planId === 'pro' ? 'Pro' : 'Basic'} waitlist intent captured locally. Configure Stripe price IDs to turn this into live Checkout.`);
+      setMessage(`You're on the ${planId === 'pro' ? 'Pro' : 'Basic'} list. We'll open checkout soon — everything stays free in the meantime.`);
       return;
     }
     try {
@@ -93,6 +93,8 @@ export function PricingWorkspace() {
   }
 
   const stripeReady = Boolean(status?.engines?.stripe?.configured);
+  // Ops/config status is for operators, not customers; opt in with ?ops=1.
+  const showOpsStatus = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ops') === '1';
   const ctaLabel = (plan) => {
     if (plan.id === 'free') return 'Continue Free';
     if (plan.id === 'team') return 'Book Pilot';
@@ -118,8 +120,8 @@ export function PricingWorkspace() {
     <div className="pricing-workspace" data-testid="pricing-workspace">
       <header className="workspace-heading">
         <p className="bsn-kicker">Pricing</p>
-        <h1>Paid beta for the {LAYER_CATALOG.length}-layer BrainSNN stack.</h1>
-        <p>Start free, then unlock more scans, Autopsy, synced history and deeper layer traces with real Stripe Checkout.</p>
+        <h1>Start free. Upgrade when you need more scans.</h1>
+        <p>The free plan runs the full {LAYER_CATALOG.length}-layer engine in your browser. Paid beta plans add more scans per month, variant comparison, synced history and deeper reports.</p>
       </header>
 
       <section className="account-connect-panel">
@@ -156,12 +158,14 @@ export function PricingWorkspace() {
         ))}
       </section>
 
-      <section className="engine-status-grid" aria-label="Engine readiness">
-        <EngineStatusCard icon={Layers} label={`${status?.totalLayers || 102} layers`} status={{ configured: true, status: 'indexed' }} />
-        <EngineStatusCard icon={CreditCard} label="Stripe" status={status?.engines?.stripe} />
-        <EngineStatusCard icon={Database} label="Supabase" status={status?.engines?.supabase} />
-        <EngineStatusCard icon={Sparkles} label="OpenAI / Gemini / Gemma" status={{ configured: Boolean(status?.engines?.openai?.configured || status?.engines?.gemini?.configured || status?.engines?.gemma?.configured), status: 'provider stack' }} />
-      </section>
+      {showOpsStatus ? (
+        <section className="engine-status-grid" aria-label="Engine readiness">
+          <EngineStatusCard icon={Layers} label={`${status?.totalLayers || LAYER_CATALOG.length} layers`} status={{ configured: true, status: 'indexed' }} />
+          <EngineStatusCard icon={CreditCard} label="Stripe" status={status?.engines?.stripe} />
+          <EngineStatusCard icon={Database} label="Supabase" status={status?.engines?.supabase} />
+          <EngineStatusCard icon={Sparkles} label="OpenAI / Gemini / Gemma" status={{ configured: Boolean(status?.engines?.openai?.configured || status?.engines?.gemini?.configured || status?.engines?.gemma?.configured), status: 'provider stack' }} />
+        </section>
+      ) : null}
 
       {message ? <p role="status" className="bsn-note pricing-message">{message}</p> : null}
     </div>

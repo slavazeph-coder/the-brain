@@ -154,9 +154,9 @@ test.beforeEach(async ({ page }) => {
 
 test('interactive landing routes into the scanner with a prefilled sample', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /See response signals in any content/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Launch Active Demo/ })).toBeVisible();
-  await page.getByRole('button', { name: /Launch Active Demo/ }).click();
+  await expect(page.getByRole('heading', { name: /Know how your content will land/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Try a live example/ }).first()).toBeVisible();
+  await page.getByRole('button', { name: /Try a live example/ }).first().click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
@@ -167,11 +167,12 @@ test('core analyze to export workflow works with deterministic fallback data', a
   await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
 
   await runScan(page);
+  await page.getByRole('tab', { name: /Advanced/ }).click();
   await expect(page.getByRole('heading', { name: 'Layers used in this scan' })).toBeVisible();
 
   await page.getByRole('button', { name: /Improve This/ }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
-  await page.getByRole('button', { name: /Run comparison/ }).click();
+  await page.getByRole('button', { name: /Score both versions/ }).click();
   await expect(page.getByText('Version 1 vs Version 2')).toBeVisible();
 
   await page.getByRole('button', { name: /Save as version/ }).click();
@@ -186,13 +187,13 @@ test('memory, autopsy, pricing and accessibility surfaces render', async ({ page
   test.skip(test.info().project.name === 'mobile', 'Desktop nav owns direct History/Pricing access; mobile shell is covered separately.');
   await page.goto('/app');
   await runScan(page);
-  await page.getByRole('button', { name: /Save to Memory/ }).click();
-  await page.getByRole('button', { name: 'History' }).click();
+  await page.getByRole('button', { name: /Save to History/ }).click();
+  await page.getByRole('button', { name: 'History', exact: true }).click();
   await expect(page.getByTestId('memory-workspace')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Autopsy' }).click();
+  await page.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(page.getByTestId('autopsy-workspace')).toBeVisible();
-  await page.getByRole('button', { name: /Run Autopsy/ }).click();
+  await page.getByRole('button', { name: /Compare variants/ }).click();
   await expect(page.getByText(/Variant [AB] wins|Tie/)).toBeVisible();
 
   await page.getByRole('button', { name: 'Pricing' }).click();
@@ -211,7 +212,7 @@ test('mobile navigation has no horizontal overflow at 390px', async ({ page }) =
   await page.goto('/app');
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav).toBeVisible();
-  await mobileNav.getByRole('button', { name: 'Autopsy' }).click();
+  await mobileNav.getByRole('button', { name: 'Compare', exact: true }).click();
   await expect(page.getByTestId('autopsy-workspace')).toBeVisible();
   await mobileNav.getByRole('button', { name: 'More' }).click();
   await expect(page.getByRole('dialog', { name: 'More navigation' })).toBeVisible();

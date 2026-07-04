@@ -1,14 +1,13 @@
-import { Brain, CreditCard, FlaskConical, GitCompare, History, Microscope, Sparkles } from 'lucide-react';
-import { LAYER_CATALOG } from '../lib/layerCatalog.js';
+import { Brain, CreditCard, FlaskConical, GitCompare, History, ListChecks, Sparkles } from 'lucide-react';
 
 export const NAV_ITEMS = [
-  { id: 'analyze', label: 'Analyze', mobileLabel: 'Analyze', icon: Brain, description: 'Cortex scan for attention, trust and trigger signals.' },
-  { id: 'improve', label: 'Improve', mobileLabel: 'Improve', icon: Sparkles, description: 'Synapse rewrites and version comparison.' },
-  { id: 'autopsy', label: 'Autopsy', mobileLabel: 'Autopsy', icon: GitCompare, description: 'Battle two variants through the layer stack.' },
-  { id: 'history', label: 'History', mobileLabel: 'More', icon: History, description: 'Memory, context triggers and saved scans.' },
-  { id: 'pricing', label: 'Pricing', mobileLabel: 'More', icon: CreditCard, description: 'Paid beta plans and engine readiness.' },
-  { id: 'research', label: 'Research', mobileLabel: 'More', icon: FlaskConical, description: `${LAYER_CATALOG.length}-layer map, TRIBE, Gemma and Crumb lab.` },
-  { id: 'queue', label: 'Queue', mobileLabel: 'More', icon: Microscope, description: 'Local review queue and approvals.' },
+  { id: 'analyze', label: 'Analyze', mobileLabel: 'Analyze', icon: Brain, description: 'Scan content for attention, trust and risk signals.' },
+  { id: 'improve', label: 'Improve', mobileLabel: 'Improve', icon: Sparkles, description: 'Generate and compare a stronger rewrite.' },
+  { id: 'autopsy', label: 'Compare', mobileLabel: 'Compare', icon: GitCompare, description: 'Score two variants side by side.' },
+  { id: 'queue', label: 'Approvals', mobileLabel: 'More', icon: ListChecks, description: 'Drafts waiting for review or export.' },
+  { id: 'history', label: 'History', mobileLabel: 'More', icon: History, description: 'Saved scans and versions.' },
+  { id: 'pricing', label: 'Pricing', mobileLabel: 'More', icon: CreditCard, description: 'Plans and upgrade options.' },
+  { id: 'research', label: 'Research', mobileLabel: 'More', icon: FlaskConical, description: 'Layer map and experimental lab.' },
 ];
 
 export function getNavItem(id) {

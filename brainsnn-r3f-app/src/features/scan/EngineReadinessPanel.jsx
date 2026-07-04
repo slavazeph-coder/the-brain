@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CreditCard, Database, Layers, RadioTower, Sparkles } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
+import { LAYER_CATALOG } from '../../lib/layerCatalog.js';
 
 function statusLabel(status) {
   if (!status) return 'checking';
@@ -46,47 +47,43 @@ export function EngineReadinessPanel() {
   return (
     <section className="engine-readiness-panel" aria-labelledby="engine-readiness-heading">
       <div>
-        <p className="bsn-eyebrow">Launch readiness</p>
-        <h2 id="engine-readiness-heading">What BrainSNN will use on this scan</h2>
+        <p className="bsn-eyebrow">Engine status</p>
+        <h2 id="engine-readiness-heading">What powers this scan</h2>
         <p className="bsn-note">
-          The production workflow is honest about what is configured: local fallback remains usable,
-          provider layers activate when env vars exist, and public links stay disabled until persistence is real.
+          Scans run on the built-in local engine by default — nothing leaves your browser.
+          Optional providers switch on automatically when they are connected.
         </p>
       </div>
       <div className="readiness-grid">
         <ReadinessItem
           icon={Layers}
           label="Layer stack"
-          detail={`${status?.totalLayers || 102} indexed layers`}
+          detail={`${status?.totalLayers || LAYER_CATALOG.length} analysis layers`}
           status="active"
         />
         <ReadinessItem
           icon={Sparkles}
-          label="Model path"
-          detail={modelStack}
+          label="Model"
+          detail={modelStack.includes('fallback') ? 'local engine (offline)' : modelStack}
           status={status ? 'ready' : 'checking'}
-          tone={modelStack.includes('fallback') ? 'warning' : 'cyan'}
         />
         <ReadinessItem
           icon={RadioTower}
-          label="TRIBE v2"
-          detail="projection layer with optional service"
+          label="TRIBE projection"
+          detail={status?.engines?.tribe?.configured ? 'external service connected' : 'built-in projection layer'}
           status={statusLabel(status?.engines?.tribe)}
-          tone={status?.engines?.tribe?.configured ? 'cyan' : 'warning'}
         />
         <ReadinessItem
           icon={Database}
-          label="Memory"
-          detail={persistenceReady ? 'cloud persistence ready' : 'local browser history'}
-          status={persistenceReady ? 'configured' : 'local only'}
-          tone={persistenceReady ? 'cyan' : 'warning'}
+          label="History"
+          detail={persistenceReady ? 'synced to your account' : 'stays in this browser'}
+          status={persistenceReady ? 'synced' : 'private'}
         />
         <ReadinessItem
           icon={CreditCard}
-          label="Payments"
-          detail={billingReady ? 'Stripe Checkout ready' : 'waitlist / free mode'}
-          status={billingReady ? 'configured' : 'not live'}
-          tone={billingReady ? 'cyan' : 'warning'}
+          label="Plan"
+          detail={billingReady ? 'checkout available' : 'free mode'}
+          status={billingReady ? 'ready' : 'free'}
         />
       </div>
     </section>

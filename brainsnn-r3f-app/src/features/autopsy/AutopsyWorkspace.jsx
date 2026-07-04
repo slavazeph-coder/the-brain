@@ -57,11 +57,11 @@ export function AutopsyWorkspace({ onSendToImprove }) {
       const body = await response.json().catch(() => ({}));
       if (!response.ok || !body.left || !body.right) throw new Error(body.error || 'Autopsy endpoint unavailable.');
       setResult(body);
-      setMessage('Autopsy completed through the server layer stack.');
+      setMessage('Comparison completed through the server layer stack.');
       track('autopsy_completed');
     } catch (error) {
       setResult(createAutopsyFromLayerStack(left, right));
-      setMessage(`${error.message || 'Autopsy endpoint unavailable.'} Local layer comparison was used instead.`);
+      setMessage(`${error.message || 'Comparison endpoint unavailable.'} Local layer comparison was used instead.`);
     } finally {
       setLoading(false);
     }
@@ -73,12 +73,12 @@ export function AutopsyWorkspace({ onSendToImprove }) {
   return (
     <div className="autopsy-workspace" data-testid="autopsy-workspace">
       <header className="workspace-heading">
-        <p className="bsn-kicker">Autopsy</p>
-        <h1>Reverse-engineer which version should publish.</h1>
-        <p>Battle two hooks, ads or posts through the BrainSNN layer stack. See the emotional triggers, trust pressure and decision score side by side.</p>
+        <p className="bsn-kicker">Compare · Autopsy</p>
+        <h1>See which version should publish.</h1>
+        <p>Score two hooks, ads or posts through the BrainSNN layer stack. See the emotional triggers, trust pressure and decision score side by side.</p>
       </header>
 
-      <section className="autopsy-input-grid" aria-label="Autopsy inputs">
+      <section className="autopsy-input-grid" aria-label="Comparison inputs">
         <label>
           Variant A
           <textarea value={left} onChange={(event) => setLeft(event.target.value)} />
@@ -90,7 +90,7 @@ export function AutopsyWorkspace({ onSendToImprove }) {
       </section>
       <div className="synapse-actions">
         <Button variant="primary" onClick={runAutopsy} disabled={!canRun || loading}>
-          <GitCompare size={16} aria-hidden="true" /> {loading ? 'Running...' : 'Run Autopsy'}
+          <GitCompare size={16} aria-hidden="true" /> {loading ? 'Comparing...' : 'Compare variants'}
         </Button>
         <Button variant="ghost" onClick={() => { setLeft(sampleA); setRight(sampleB); }}>
           Load example

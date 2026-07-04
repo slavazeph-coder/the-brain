@@ -1,10 +1,23 @@
 import React from 'react';
-import { BrainCircuit, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { BrainCircuit, ChevronLeft, ChevronRight, CreditCard } from 'lucide-react';
 import { IconButton } from '../components/ui/IconButton.jsx';
 import { NAV_ITEMS } from './navigation.js';
 
+const WORKFLOW_IDS = ['analyze', 'improve', 'autopsy', 'queue'];
+const LIBRARY_IDS = ['history', 'research'];
+
+function NavButton({ item, active, collapsed, onNavigate }) {
+  return (
+    <button type="button" className={active === item.id ? 'active' : ''} onClick={() => onNavigate(item.id)}>
+      <item.icon size={18} aria-hidden="true" />
+      {!collapsed ? <span>{item.label}</span> : null}
+    </button>
+  );
+}
+
 export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgrade }) {
-  const ResearchIcon = NAV_ITEMS.find((item) => item.id === 'research')?.icon || BrainCircuit;
+  const workflowItems = WORKFLOW_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)).filter(Boolean);
+  const libraryItems = LIBRARY_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)).filter(Boolean);
   return (
     <aside className={`desktop-sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Primary navigation">
       <div className="sidebar-brand">
@@ -17,25 +30,17 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgr
         ) : null}
       </div>
       <nav className="sidebar-nav">
-        {NAV_ITEMS.filter((item) => ['analyze', 'improve', 'autopsy', 'history', 'pricing'].includes(item.id)).map((item) => (
-          <button key={item.id} type="button" className={active === item.id ? 'active' : ''} onClick={() => onNavigate(item.id)}>
-            <item.icon size={18} aria-hidden="true" />
-            {!collapsed ? <span>{item.label}</span> : null}
-          </button>
+        {workflowItems.map((item) => (
+          <NavButton key={item.id} item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <button type="button" className={active === 'research' ? 'active' : ''} onClick={() => onNavigate('research')}>
-          <ResearchIcon size={18} aria-hidden="true" />
-          {!collapsed ? <span>Research</span> : null}
-        </button>
-        <button type="button" className={active === 'queue' ? 'active' : ''} onClick={() => onNavigate('queue')}>
-          <BrainCircuit size={18} aria-hidden="true" />
-          {!collapsed ? <span>Queue</span> : null}
-        </button>
-        <button type="button" onClick={onUpgrade}>
-          <Settings size={18} aria-hidden="true" />
-          {!collapsed ? <span>Account</span> : null}
+        {libraryItems.map((item) => (
+          <NavButton key={item.id} item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />
+        ))}
+        <button type="button" className={active === 'pricing' ? 'active' : ''} onClick={onUpgrade}>
+          <CreditCard size={18} aria-hidden="true" />
+          {!collapsed ? <span>Pricing</span> : null}
         </button>
         <IconButton label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={onToggle}>
           {collapsed ? <ChevronRight size={18} aria-hidden="true" /> : <ChevronLeft size={18} aria-hidden="true" />}

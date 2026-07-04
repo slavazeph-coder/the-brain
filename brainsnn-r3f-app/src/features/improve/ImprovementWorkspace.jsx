@@ -31,8 +31,8 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
   if (!result) {
     return (
       <div className="synapse-workspace">
-        <EmptyState title="Run a Brain Scan first" actionLabel="Go to Cortex" onAction={onGoToCortex}>
-          Synapse needs a completed scan before it can generate rewrites and compare versions.
+        <EmptyState title="Run a Brain Scan first" actionLabel="Go to Analyze" onAction={onGoToCortex}>
+          Improve needs a completed scan before it can generate rewrites and compare versions.
         </EmptyState>
       </div>
     );
@@ -100,8 +100,8 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
   return (
     <div className="synapse-workspace" data-testid="synapse-workspace">
       <header className="synapse-header">
-        <p className="bsn-kicker">Synapse</p>
-        <h1>Turn the diagnosis into a better draft.</h1>
+        <p className="bsn-kicker">Improve · Synapse</p>
+        <h1>Turn the diagnosis into a stronger draft.</h1>
         <p>Edit the rewrite, compare versions, then save, approve or export only when the scores move in the right direction.</p>
       </header>
       <RewriteControls goal={goal} onGoalChange={(value) => { setGoal(value); track('rewrite_goal_selected', { goal: value }); }} onGenerate={generate} generating={busy === 'generate'} />
@@ -112,12 +112,12 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
             <textarea value={original} readOnly />
           </label>
           <label className="rewrite-pane">
-            <span>Improved version</span>
+            <span>Suggested rewrite — edit before publishing</span>
             <textarea value={rewrite} onChange={(event) => { setRewrite(event.target.value); setComparison(null); }} />
           </label>
         </div>
         <div className="synapse-actions" style={{ marginTop: 14 }}>
-          <Button variant="primary" onClick={compare} disabled={!canCompare}><GitCompare size={16} aria-hidden="true" /> {busy === 'compare' ? 'Comparing...' : 'Run comparison'}</Button>
+          <Button variant="primary" onClick={compare} disabled={!canCompare}><GitCompare size={16} aria-hidden="true" /> {busy === 'compare' ? 'Scoring...' : 'Score both versions'}</Button>
           <Button variant="secondary" onClick={copyRewrite}><Clipboard size={16} aria-hidden="true" /> Copy improved version</Button>
           <Button variant="ghost" onClick={() => onSaveVersion(result, rewrite, comparison)}><Save size={16} aria-hidden="true" /> Save as version</Button>
           <Button variant="ghost" onClick={() => onQueue(result, rewrite, comparison)}><Send size={16} aria-hidden="true" /> Mark for approval</Button>
