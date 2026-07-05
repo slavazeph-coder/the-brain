@@ -1,15 +1,51 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowRight, BrainCircuit, CheckCircle2, FlaskConical, Pause, Play, RadioTower, Sparkles, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
+import { Brain3D } from '../features/brain3d/Brain3D.jsx';
+import { ClassicsGallery } from '../features/scan/ClassicsGallery.jsx';
 import { EXAMPLES } from '../features/scan/ExampleSelector.jsx';
 import { track } from '../lib/analytics.js';
 import { LAYER_CATALOG } from '../lib/layerCatalog.js';
+import { CLASSIC_PRESETS } from '../lib/classicPresets.js';
+import { SOCIAL_EMBEDS, SocialEmbedCard } from '../features/social/SocialEmbedCard.jsx';
+
+const PERSONAS = [
+  {
+    id: 'creators',
+    label: 'Creators',
+    job: 'Know if the hook earns the first three seconds — before the algorithm decides for you.',
+    cta: 'Scan a hook',
+    sample: CLASSIC_PRESETS.find((preset) => preset.id === 'curiosity-gap-hook')?.content || '',
+  },
+  {
+    id: 'marketers',
+    label: 'Marketers',
+    job: 'Preflight ads and campaigns for trust cost and brand-safety risk before spend goes live.',
+    cta: 'Scan an ad',
+    sample: CLASSIC_PRESETS.find((preset) => preset.id === 'luxury-scarcity-ad')?.content || '',
+  },
+  {
+    id: 'founders',
+    label: 'Founders',
+    job: 'Make launch posts and investor updates land as confident, not desperate.',
+    cta: 'Scan a launch post',
+    sample: EXAMPLES.find((example) => example.id === 'founder-post')?.content || EXAMPLES[2]?.content || '',
+  },
+  {
+    id: 'safety',
+    label: 'Trust & safety',
+    job: 'Expose manipulation pressure, forced urgency and scam patterns with evidence you can cite.',
+    cta: 'Scan a scam email',
+    sample: CLASSIC_PRESETS.find((preset) => preset.id === 'account-phishing-email')?.content || '',
+  },
+];
 
 const DEMO_SAMPLES = [
   {
     id: 'social-hook',
     label: 'Creator hook',
     title: 'Proof-led social post',
+    preset: 'trustful',
     content: EXAMPLES.find((example) => example.id === 'social-hook')?.content || EXAMPLES[0].content,
     verdict: 'Strong trust signal. Hook needs more contrast.',
     scores: { hook: 78, trust: 86, risk: 18 },
@@ -19,6 +55,7 @@ const DEMO_SAMPLES = [
     id: 'paid-ad',
     label: 'Ad preflight',
     title: 'Paid campaign claim',
+    preset: 'mixed',
     content: EXAMPLES.find((example) => example.id === 'paid-ad')?.content || EXAMPLES[1].content,
     verdict: 'Clear promise. Add one proof point before the CTA.',
     scores: { hook: 84, trust: 73, risk: 29 },
@@ -28,10 +65,21 @@ const DEMO_SAMPLES = [
     id: 'sales-email',
     label: 'Trust repair',
     title: 'Outbound email opener',
+    preset: 'baseline',
     content: EXAMPLES.find((example) => example.id === 'sales-email')?.content || EXAMPLES[3].content,
     verdict: 'Useful empathy. Reduce pressure in the second sentence.',
     scores: { hook: 69, trust: 81, risk: 24 },
     timeline: [33, 39, 54, 64, 67, 73, 70, 75, 71, 77],
+  },
+  {
+    id: 'pressure-pitch',
+    label: 'Pressure alert',
+    title: 'High-pressure sales pitch',
+    preset: 'high-pressure',
+    content: 'Last chance! Prices double at midnight and only 3 spots remain. Act now or regret it forever.',
+    verdict: 'Manipulation pressure is carrying the message. The brain desynchronizes.',
+    scores: { hook: 88, trust: 31, risk: 86 },
+    timeline: [55, 78, 92, 88, 71, 52, 44, 39, 33, 28],
   },
 ];
 
@@ -149,6 +197,9 @@ export function LandingPage({ onStart, onNavigate }) {
             manipulation risk — then helps you rewrite it. Scans run instantly in your browser; the
             {' '}{LAYER_CATALOG.length}-layer research engine is there when you want to go deeper.
           </p>
+          <p className="landing-viral-line">
+            Will it hook? Will it backfire? See the viral pull and the trust cost before you post.
+          </p>
           <div className="landing-actions">
             <Button variant="primary" onClick={() => start(activeSample)}>
               Try a live example <ArrowRight size={17} aria-hidden="true" />
@@ -184,7 +235,13 @@ export function LandingPage({ onStart, onNavigate }) {
               {paused ? 'Resume' : 'Pause'}
             </button>
           </div>
-          <LandingBrain sample={activeSample} paused={paused} />
+          <Brain3D
+            mode="demo"
+            presetName={activeSample.preset}
+            paused={paused}
+            fallback={<LandingBrain sample={activeSample} paused={paused} />}
+            ariaLabel={`Animated brain scan preview for ${activeSample.title}`}
+          />
           <div className="landing-sample-card">
             <div className="landing-sample-head">
               <span>AI @NeuroEngine</span>
@@ -219,6 +276,47 @@ export function LandingPage({ onStart, onNavigate }) {
           </div>
         </aside>
       </main>
+
+      <section className="landing-classics" aria-labelledby="landing-classics-heading">
+        <div className="landing-section-head">
+          <p className="bsn-eyebrow">Scan the classics</p>
+          <h2 id="landing-classics-heading">See how infamous formulas score.</h2>
+          <p>One click runs a real scan on the archetypes everyone recognizes — from luxury ads to scam emails.</p>
+        </div>
+        <ClassicsGallery onSelect={(content, preset) => { track('classic_preset_selected', { presetId: preset?.id, surface: 'landing' }); onStart(content); }} />
+      </section>
+
+      <section className="landing-personas" aria-labelledby="landing-personas-heading">
+        <div className="landing-section-head">
+          <p className="bsn-eyebrow">Built for</p>
+          <h2 id="landing-personas-heading">Whatever you publish, scan it first.</h2>
+        </div>
+        <div className="landing-persona-grid">
+          {PERSONAS.map((persona) => (
+            <article key={persona.id}>
+              <span>{persona.label}</span>
+              <p>{persona.job}</p>
+              <Button variant="ghost" onClick={() => { track('persona_cta_clicked', { persona: persona.id }); onStart(persona.sample); }}>
+                {persona.cta} <ArrowRight size={15} aria-hidden="true" />
+              </Button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {SOCIAL_EMBEDS.length ? (
+        <section className="landing-reels" aria-labelledby="landing-reels-heading">
+          <div className="landing-section-head">
+            <p className="bsn-eyebrow">See it in action</p>
+            <h2 id="landing-reels-heading">Watch real scans on social.</h2>
+          </div>
+          <div className="landing-reels-grid">
+            {SOCIAL_EMBEDS.map((embed) => (
+              <SocialEmbedCard key={embed.url} embed={embed} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="landing-deep-strip" aria-label="Advanced engine surfaces">
         <article>

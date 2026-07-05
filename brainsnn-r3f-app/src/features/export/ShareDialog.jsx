@@ -1,65 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Copy, Download, FileJson, FileText, Link2 } from 'lucide-react';
+import { Copy, Download, FileJson, FileText, Link2, Share2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { track } from '../../lib/analytics.js';
 import { deriveExecutiveVerdict, getBusinessMetrics } from '../../lib/scoreMapping.js';
 import { ExportCard } from './ExportCard.jsx';
 import { SharePreview } from './SharePreview.jsx';
+import { downloadBlob, renderScoreCardBlob, shareScoreCard } from './scoreCard.js';
 
 function download(filename, blob) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-async function downloadPng(result) {
-  const verdict = deriveExecutiveVerdict(result);
-  const metricMap = Object.fromEntries(getBusinessMetrics(result).map((metric) => [metric.id, metric.value]));
-  const canvas = document.createElement('canvas');
-  canvas.width = 1200;
-  canvas.height = 630;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#06060a';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const gradient = ctx.createRadialGradient(260, 140, 0, 260, 140, 520);
-  gradient.addColorStop(0, 'rgba(0,245,255,0.32)');
-  gradient.addColorStop(1, 'rgba(168,85,247,0.02)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#00f5ff';
-  ctx.font = '700 28px JetBrains Mono, monospace';
-  ctx.fillText('BRAIN SCAN', 72, 88);
-  ctx.fillStyle = '#f1f1f6';
-  ctx.font = '700 72px Space Grotesk, Inter, sans-serif';
-  const headline = verdict.headline;
-  ctx.fillText(headline.slice(0, 25), 72, 210);
-  if (headline.length > 25) ctx.fillText(headline.slice(25, 52), 72, 290);
-  ctx.fillStyle = '#9aa0b4';
-  ctx.font = '28px Inter, sans-serif';
-  ctx.fillText('AI-estimated content response', 72, 350);
-  const rows = [
-    ['Hook Strength', metricMap.hookStrength],
-    ['Trust', metricMap.trust],
-    ['Manipulation Risk', metricMap.manipulationRisk],
-  ];
-  rows.forEach(([label, value], index) => {
-    const y = 430 + index * 56;
-    ctx.fillStyle = '#9aa0b4';
-    ctx.fillText(label, 72, y);
-    ctx.fillStyle = index === 2 ? '#ef4444' : '#00f5ff';
-    ctx.font = '700 34px JetBrains Mono, monospace';
-    ctx.fillText(String(value), 420, y);
-    ctx.font = '28px Inter, sans-serif';
-  });
-  ctx.fillStyle = '#f1f1f6';
-  ctx.font = '700 30px Inter, sans-serif';
-  ctx.fillText('brainsnn.com', 900, 560);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) throw new Error('PNG export could not be generated.');
-  download('brainsnn-brain-scan.png', blob);
+  downloadBlob(filename, blob);
 }
 
 export function ShareDialog({ open, onClose, result }) {
@@ -69,7 +18,7 @@ export function ShareDialog({ open, onClose, result }) {
   const shareText = useMemo(() => {
     if (!result || !verdict) return '';
     const metricMap = Object.fromEntries(getBusinessMetrics(result).map((metric) => [metric.id, metric.value]));
-    return `BRAIN SCAN\n"${verdict.headline}"\n\nHook Strength: ${metricMap.hookStrength}\nTrust: ${metricMap.trust}\nManipulation Risk: ${metricMap.manipulationRisk}\n\nAI-estimated content response from BrainSNN.`;
+    return `BRAIN SCAN\n"${verdict.headline}"\n\nHook Strength: ${metricMap.hookStrength}\nTrust: ${metricMap.trust}\nViral Pull: ${verdict.viralScore}\nManipulation Risk: ${metricMap.manipulationRisk}\n\nAI-estimated content response from BrainSNN — scan yours free at brainsnn.com`;
   }, [result, verdict]);
 
   useEffect(() => {
@@ -108,10 +57,30 @@ export function ShareDialog({ open, onClose, result }) {
       <div className="share-dialog-grid" data-testid="export-dialog">
         <SharePreview result={result} />
         <div className="export-actions-list">
+          <ExportCard
+            icon={Share2}
+            title="Share your score"
+            description="Branded score card with decision score, viral pull and the brain snapshot."
+            actionLabel={typeof navigator !== 'undefined' && navigator.canShare ? 'Share' : 'Download'}
+            onAction={async () => {
+              try {
+                const { method } = await shareScoreCard(result);
+                if (method === 'shared') {
+                  setStatus('Score card shared.');
+                  track('share_card_shared');
+                } else if (method === 'downloaded') {
+                  setStatus('Score card downloaded — post it anywhere.');
+                  track('share_card_downloaded');
+                }
+              } catch (error) {
+                setStatus(error.message || 'Score card could not be generated.');
+              }
+            }}
+          />
           <ExportCard icon={Copy} title="Copy summary" description="Short result summary for docs, Slack or client notes." actionLabel="Copy" onAction={() => copyText(shareText, 'share_text_copied')} />
-          <ExportCard icon={Download} title="Download PNG" description="Readable NeuroGlow social image with BrainSNN watermark." actionLabel="Download" onAction={async () => {
+          <ExportCard icon={Download} title="Download PNG" description="The same score card as a plain PNG download." actionLabel="Download" onAction={async () => {
             try {
-              await downloadPng(result);
+              download('brainsnn-brain-scan.png', await renderScoreCardBlob(result));
               setStatus('PNG downloaded.');
               track('export_downloaded', { type: 'png' });
             } catch (error) {

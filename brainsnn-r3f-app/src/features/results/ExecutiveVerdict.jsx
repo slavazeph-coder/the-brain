@@ -23,9 +23,16 @@ export function ExecutiveVerdict({ result }) {
         <h2 id="executive-verdict-heading">{verdict.headline}</h2>
         <p>{verdict.interpretation}</p>
       </div>
-      <div className="verdict-score" aria-label={`Decision score ${verdict.score} out of 100`}>
-        <strong>{verdict.score}</strong>
-        <span>Decision score</span>
+      <div className="verdict-score-row">
+        <div className="verdict-score" aria-label={`Decision score ${verdict.score} out of 100`}>
+          <strong>{verdict.score}</strong>
+          <span>Decision score</span>
+        </div>
+        <div className="verdict-score verdict-score-viral" aria-label={`Viral pull ${verdict.viralScore} out of 100 — ${verdict.viralLabel}`}>
+          <strong>{verdict.viralScore}</strong>
+          <span>Viral pull</span>
+          <small>{verdict.viralLabel}</small>
+        </div>
       </div>
       <div className="verdict-grid">
         <div>

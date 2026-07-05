@@ -14,6 +14,7 @@ export function SharePreview({ result }) {
       <dl>
         <div><dt>Hook Strength</dt><dd>{metricMap.hookStrength}</dd></div>
         <div><dt>Trust</dt><dd>{metricMap.trust}</dd></div>
+        <div><dt>Viral Pull</dt><dd>{verdict.viralScore}</dd></div>
         <div><dt>Manipulation Risk</dt><dd>{metricMap.manipulationRisk}</dd></div>
       </dl>
       <strong>brainsnn.com</strong>
