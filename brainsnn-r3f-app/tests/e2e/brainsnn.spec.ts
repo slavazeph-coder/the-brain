@@ -149,6 +149,8 @@ async function runScan(page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  // Keep CI deterministic and off software WebGL: force the 2D brain fallback.
+  await page.addInitScript(() => localStorage.setItem('brainsnn:force-brain-2d', '1'));
   await mockBackend(page);
 });
 
@@ -156,10 +158,38 @@ test('interactive landing routes into the scanner with a prefilled sample', asyn
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Know how your content will land/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /Try a live example/ }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: /See how infamous formulas score/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Whatever you publish, scan it first/i })).toBeVisible();
   await page.getByRole('button', { name: /Try a live example/ }).first().click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
+});
+
+test('classic preset routes into the scanner with prefilled content', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('classics-gallery').getByRole('button', { name: 'Scan this' }).first().click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
+});
+
+test('3D brain mounts or falls back cleanly without console errors', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Mobile always uses the 2D fallback by design.');
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  // No force-2d flag on this navigation: clear it before load.
+  await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
+  await page.goto('/');
+  await page.waitForTimeout(4000);
+  const has3d = await page.locator('.brain3d canvas').count();
+  const hasFallback = await page.locator('.landing-brain').count();
+  expect(has3d + hasFallback).toBeGreaterThan(0);
+  // Resource-load failures (fonts/CDN blocked in CI sandboxes) are not app
+  // errors; this test guards against exceptions from the 3D mount itself.
+  const fatal = errors.filter((text) => !/favicon|manifest|WebGL warning|Failed to load resource/i.test(text));
+  expect(fatal).toEqual([]);
 });
 
 test('core analyze to export workflow works with deterministic fallback data', async ({ page }) => {
@@ -180,6 +210,7 @@ test('core analyze to export workflow works with deterministic fallback data', a
   await expect(page.getByTestId('queue-workspace')).toBeVisible();
   await page.getByRole('button', { name: /^Export$/ }).first().click();
   await expect(page.getByTestId('export-dialog')).toBeVisible();
+  await expect(page.getByText('Share your score')).toBeVisible();
   await expect(page.getByText('Copy public result link')).toBeVisible();
 });
 

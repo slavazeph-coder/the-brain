@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { Download, GitCompare, Save, Send, Sparkles } from 'lucide-react';
+import { Download, GitCompare, Save, Send, Share2, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 import { ExecutiveVerdict } from './ExecutiveVerdict.jsx';
-import { BrainVisualizer } from './BrainVisualizer.jsx';
+import { BrainSignalView } from './BrainSignalView.jsx';
 import { DecisionScorecard } from './DecisionScorecard.jsx';
 import { ContentHeatmap } from './ContentHeatmap.jsx';
 import { AttentionTimeline } from './AttentionTimeline.jsx';
@@ -81,7 +81,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
         <ExecutiveVerdict result={result} />
         <ResultsTabs active={tab} onChange={setTab} />
         <TabPanel id="overview" active={tab}>
-          <BrainVisualizer result={result} />
+          <BrainSignalView result={result} />
           <DecisionScorecard result={result} />
         </TabPanel>
         <TabPanel id="lines" active={tab}>
@@ -105,6 +105,10 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
           <strong>{verdict.score}</strong>
           <span>Decision score</span>
         </div>
+        <div className="inspector-callout inspector-viral">
+          <span>Viral pull</span>
+          <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
+        </div>
         <div className="inspector-callout">
           <span>Primary risk</span>
           <strong>{verdict.primaryRisk}</strong>
@@ -118,6 +122,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
           <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
           <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
           <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
+          <Button variant="secondary" onClick={() => onExport(result)}><Share2 size={16} aria-hidden="true" /> Share your score</Button>
           <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
         </div>
         {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}

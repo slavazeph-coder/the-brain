@@ -23,6 +23,13 @@ const allowedEvents = new Set([
   'autopsy_started',
   'autopsy_completed',
   'layer_trace_viewed',
+  'landing_viewed',
+  'landing_scan_cta_clicked',
+  'classic_preset_selected',
+  'persona_cta_clicked',
+  'share_card_shared',
+  'share_card_downloaded',
+  'brain3d_fallback_used',
 ]);
 
 export function track(eventName, properties = {}) {

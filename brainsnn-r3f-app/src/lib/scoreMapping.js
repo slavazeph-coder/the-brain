@@ -106,9 +106,18 @@ export function deriveExecutiveVerdict(result = {}) {
       ? 'Add a concrete reason to believe the claim.'
       : 'Tighten the ask and preserve the strongest sentence.';
 
+  const viralScore = clampScore(result.viralScore, 45);
+  const viralLabel = viralScore >= 75
+    ? 'Built to spread'
+    : viralScore >= 55
+      ? 'Shareable with a push'
+      : 'Low spread pressure';
+
   return {
     headline,
     score,
+    viralScore,
+    viralLabel,
     interpretation: result.summary || 'AI-estimated response signals for this content.',
     primaryStrength,
     primaryRisk,

@@ -1,5 +1,6 @@
 import React from 'react';
 import { track } from '../../lib/analytics.js';
+import { ClassicsGallery } from './ClassicsGallery.jsx';
 
 export const EXAMPLES = [
   {
@@ -54,6 +55,17 @@ export function ExampleSelector({ onSelect }) {
         <summary>Try a high-risk example</summary>
         <p className="bsn-note">Useful for testing trust-risk and fallback labels. It is intentionally exaggerated.</p>
         <button className="bsn-chip" type="button" onClick={() => onSelect(RISK_EXAMPLE)}>Load high-risk copy</button>
+      </details>
+      <details className="scan-risk-example">
+        <summary>Scan the classics</summary>
+        <p className="bsn-note">Recognizable formulas — iconic ads, viral hooks, scam emails — as one-click scans.</p>
+        <ClassicsGallery
+          compact
+          onSelect={(content, preset) => {
+            track('classic_preset_selected', { presetId: preset?.id, surface: 'composer' });
+            onSelect(content);
+          }}
+        />
       </details>
     </div>
   );
