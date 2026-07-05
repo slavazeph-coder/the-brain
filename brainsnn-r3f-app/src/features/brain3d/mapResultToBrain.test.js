@@ -29,6 +29,10 @@ describe('mapResultToActivities', () => {
     expect(activities.BG).toBe(0);
   });
 
+  it('tolerates an explicit null result', () => {
+    assertActivities(mapResultToActivities(null));
+  });
+
   it('falls back to metrics when the projection is missing', () => {
     const activities = mapResultToActivities({ metrics: { urgency: 90, fear: 80, trust: 20, excitement: 70, empathy: 30 } });
     assertActivities(activities);

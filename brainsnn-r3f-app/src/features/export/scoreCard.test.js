@@ -35,4 +35,10 @@ describe('composeScoreCardText', () => {
     expect(typeof card.headline).toBe('string');
     expect(card.excerpt).toBe('');
   });
+
+  it('tolerates an explicit null result', () => {
+    const card = composeScoreCardText(null);
+    expect(typeof card.headline).toBe('string');
+    expect(card.excerpt).toBe('');
+  });
 });

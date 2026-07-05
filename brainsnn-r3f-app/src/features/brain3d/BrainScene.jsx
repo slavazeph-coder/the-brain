@@ -39,8 +39,11 @@ function BrainNode({ region, activity, activityScore, selected, spiking, onSelec
         <meshBasicMaterial color={selected ? '#f1ece5' : region.color} transparent opacity={selected ? 0.92 : 0.46} />
       </mesh>
 
+      {/* Static unit geometry + mesh scale: passing `scale` through args would
+          rebuild the geometry every simulation tick. */}
       <Sphere
-        args={[scale, 32, 32]}
+        args={[1, 32, 32]}
+        scale={scale}
         onClick={interactive ? (event) => { event.stopPropagation(); onSelect(region.code); } : undefined}
         onPointerOver={interactive ? () => setHovered(true) : undefined}
         onPointerOut={interactive ? () => setHovered(false) : undefined}
@@ -111,7 +114,7 @@ function Particle({ pathway, activities, selectedRegion, speed, color, opacity }
   }, [pathway]);
 
   useFrame(() => {
-    const sourceActivity = activities[pathway.from] ?? 0.2;
+    const sourceActivity = activities?.[pathway.from] ?? 0.2;
     travel.current += (0.004 + sourceActivity * 0.018) * speed;
     if (travel.current > 1) travel.current = 0;
     const point = getQuadraticPoint(vectors.start, vectors.control, vectors.end, travel.current, scratch);

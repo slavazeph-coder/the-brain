@@ -20,6 +20,7 @@ const BrainScene = React.lazy(() => import('./BrainScene.jsx'));
 let cachedWebglSupport = null;
 function hasWebgl() {
   if (cachedWebglSupport != null) return cachedWebglSupport;
+  if (typeof document === 'undefined') return false;
   try {
     const canvas = document.createElement('canvas');
     cachedWebglSupport = Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
@@ -27,6 +28,17 @@ function hasWebgl() {
     cachedWebglSupport = false;
   }
   return cachedWebglSupport;
+}
+
+// localStorage can throw a SecurityError when storage is blocked by privacy
+// settings; a blocked flag must never crash the app.
+function getForced2dFlag() {
+  try {
+    if (typeof localStorage !== 'undefined') return localStorage.getItem('brainsnn:force-brain-2d');
+  } catch {
+    // ignore storage-access errors
+  }
+  return null;
 }
 
 // '3d' unless the device can't run it well. Small screens and low-memory
@@ -43,8 +55,8 @@ function useBrainQuality() {
   const [quality, setQuality] = useState(() => detectBrainQuality({
     width: typeof window !== 'undefined' ? window.innerWidth : undefined,
     deviceMemory: typeof navigator !== 'undefined' ? navigator.deviceMemory : undefined,
-    webgl: typeof document !== 'undefined' ? hasWebgl() : false,
-    forced: typeof localStorage !== 'undefined' ? localStorage.getItem('brainsnn:force-brain-2d') : null,
+    webgl: hasWebgl(),
+    forced: getForced2dFlag(),
   }));
 
   useEffect(() => {
@@ -53,7 +65,7 @@ function useBrainQuality() {
         width: window.innerWidth,
         deviceMemory: navigator.deviceMemory,
         webgl: hasWebgl(),
-        forced: localStorage.getItem('brainsnn:force-brain-2d'),
+        forced: getForced2dFlag(),
       }));
     }
     window.addEventListener('resize', onResize);
@@ -114,9 +126,13 @@ function Brain3DInner({ mode, result, presetName, paused, ariaLabel, onRegionSel
 
   const { state, controls } = useBrainSimulation({ running: active, targetActivities: derived.targets });
 
+  // Keep the latest callback in a ref so an unstable inline prop cannot
+  // re-trigger this effect (or loop) on every parent render.
+  const onRegionSelectRef = useRef(onRegionSelect);
+  onRegionSelectRef.current = onRegionSelect;
   useEffect(() => {
-    if (onRegionSelect) onRegionSelect(state.selectedRegion);
-  }, [onRegionSelect, state.selectedRegion]);
+    onRegionSelectRef.current?.(state.selectedRegion);
+  }, [state.selectedRegion]);
 
   return (
     <div ref={wrapRef} className={`brain3d brain3d-${mode}`} role="img" aria-label={ariaLabel || 'Animated 3D brain scan visualization'}>

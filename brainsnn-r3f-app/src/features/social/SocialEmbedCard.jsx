@@ -28,9 +28,15 @@ export function SocialEmbedCard({ embed }) {
   useEffect(() => {
     if (!activated || embed.platform !== 'instagram') return;
     loadInstagramScript();
+    // Cap retries: if the script is blocked (adblock/offline) the poll must
+    // not spin forever.
+    let attempts = 0;
     const timer = window.setInterval(() => {
+      attempts += 1;
       if (window.instgrm?.Embeds) {
         window.instgrm.Embeds.process();
+        window.clearInterval(timer);
+      } else if (attempts >= 30) {
         window.clearInterval(timer);
       }
     }, 400);

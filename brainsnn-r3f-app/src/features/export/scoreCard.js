@@ -6,9 +6,11 @@ import { BRAIN_REGIONS } from '../brain3d/brainRegions.js';
 import { mapResultToActivities } from '../brain3d/mapResultToBrain.js';
 
 export function composeScoreCardText(result = {}) {
-  const verdict = deriveExecutiveVerdict(result);
-  const metricMap = Object.fromEntries(getBusinessMetrics(result).map((metric) => [metric.id, metric.value]));
-  const raw = String(result.rawContent || '').replace(/\s+/g, ' ').trim();
+  // Explicit null bypasses the default parameter.
+  const safeResult = result || {};
+  const verdict = deriveExecutiveVerdict(safeResult);
+  const metricMap = Object.fromEntries(getBusinessMetrics(safeResult).map((metric) => [metric.id, metric.value]));
+  const raw = String(safeResult.rawContent || '').replace(/\s+/g, ' ').trim();
   const excerpt = raw.length > 90 ? `${raw.slice(0, 87).trimEnd()}…` : raw;
   return {
     headline: verdict.headline,
@@ -55,9 +57,26 @@ export async function renderScoreCardBlob(result, { width = 1200, height = 630 }
   if (card.headline.length > 28) ctx.fillText(card.headline.slice(28, 58), 72, 228);
 
   if (card.excerpt) {
+    // fillText does not wrap; measure and break so the quote never runs into
+    // the right-hand score column (centered at x=920).
     ctx.fillStyle = '#9aa0b4';
     ctx.font = 'italic 24px Inter, sans-serif';
-    ctx.fillText(`“${card.excerpt}”`, 72, card.headline.length > 28 ? 282 : 214);
+    const words = `“${card.excerpt}”`.split(' ');
+    const maxWidth = 620;
+    const lineHeight = 30;
+    let line = '';
+    let y = card.headline.length > 28 ? 268 : 214;
+    for (const word of words) {
+      const testLine = line ? `${line} ${word}` : word;
+      if (ctx.measureText(testLine).width > maxWidth && line) {
+        ctx.fillText(line, 72, y);
+        line = word;
+        y += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, 72, y);
   }
 
   // Metric rows (left column)
@@ -127,7 +146,7 @@ export async function renderScoreCardBlob(result, { width = 1200, height = 630 }
 
   ctx.fillStyle = '#7c8294';
   ctx.font = '20px Inter, sans-serif';
-  ctx.fillText(card.disclaimer, 72, 328);
+  ctx.fillText(card.disclaimer, 72, 622);
   ctx.fillStyle = '#f1f1f6';
   ctx.font = '700 30px Inter, sans-serif';
   ctx.fillText(card.footer, 990, 596);

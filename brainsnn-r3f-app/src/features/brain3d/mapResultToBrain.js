@@ -17,7 +17,9 @@ function fromScore(value, fallback = 0.4) {
 // tribeProjection.regions {CTX,HPC,THL,AMY,BG,PFC,CBL} 0-100 -> activities 0-1.
 // Falls back to a metrics-derived estimate when the projection is missing.
 export function mapResultToActivities(result = {}) {
-  const regions = result.tribeProjection?.regions;
+  // Explicit null bypasses the default parameter.
+  const safeResult = result || {};
+  const regions = safeResult.tribeProjection?.regions;
   if (regions && typeof regions === 'object') {
     const activities = {};
     for (const region of BRAIN_REGIONS) {
@@ -25,7 +27,7 @@ export function mapResultToActivities(result = {}) {
     }
     return activities;
   }
-  const metrics = result.metrics || {};
+  const metrics = safeResult.metrics || {};
   const urgency = fromScore(metrics.urgency);
   const fear = fromScore(metrics.fear);
   const trust = fromScore(metrics.trust);
