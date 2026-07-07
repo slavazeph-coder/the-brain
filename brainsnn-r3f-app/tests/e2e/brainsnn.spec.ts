@@ -173,6 +173,28 @@ test('classic preset routes into the scanner with prefilled content', async ({ p
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
 });
 
+test('reconstruct page renders from a direct route and links into the scanner', async ({ page }) => {
+  await page.goto('/reconstruct');
+  await expect(page.getByTestId('reconstruct-page')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Grab the site. Ship the proof.' })).toBeVisible();
+  await expect(page.getByText('npm run reconstruct -- grab https://example.com')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Open GitHub/ })).toHaveAttribute('href', /github\.com\/XioAISolutions\/Reconstruct/);
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+
+  await page.getByRole('button', { name: /Scan this pitch/ }).click();
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(page.locator('#brain-scan-input')).toHaveValue(/Reconstruct is the proof-first/);
+});
+
+test('landing navigation opens the Reconstruct page without a reload', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.landing-nav-actions').getByRole('button', { name: 'Reconstruct', exact: true }).click();
+  await expect(page).toHaveURL(/\/reconstruct$/);
+  await expect(page.getByTestId('reconstruct-page')).toBeVisible();
+});
+
 test('3D brain mounts or falls back cleanly without console errors', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'Mobile always uses the 2D fallback by design.');
   const errors: string[] = [];

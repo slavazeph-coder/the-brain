@@ -138,12 +138,13 @@ function LandingBrain({ sample, paused }) {
   );
 }
 
-export function LandingPage({ onStart, onNavigate }) {
+export function LandingPage({ onStart, onNavigate, onOpenReconstruct }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const activeSample = DEMO_SAMPLES[activeIndex];
 
   useEffect(() => {
+    document.title = 'BrainSNN | Decision Engine for Brand Content';
     track('landing_viewed');
   }, []);
 
@@ -176,9 +177,14 @@ export function LandingPage({ onStart, onNavigate }) {
           </span>
           <em>V2.0</em>
         </button>
-        <div className="landing-status" role="status">
-          <span aria-hidden="true" />
-          Engine ready — runs in your browser
+        <div className="landing-nav-actions">
+          <button type="button" className="landing-nav-link" onClick={() => onOpenReconstruct?.()}>
+            Reconstruct
+          </button>
+          <div className="landing-status" role="status">
+            <span aria-hidden="true" />
+            Engine ready — runs in your browser
+          </div>
         </div>
       </header>
 
@@ -342,6 +348,7 @@ export function LandingPage({ onStart, onNavigate }) {
             <span>Product</span>
             <button type="button" onClick={() => onStart('')}>Open the scanner</button>
             <button type="button" onClick={() => start(activeSample)}>Try a live example</button>
+            <button type="button" onClick={() => onOpenReconstruct?.()}>Reconstruct grabber</button>
           </div>
           <div>
             <span>Plans</span>

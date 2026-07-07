@@ -773,3 +773,15 @@ canon: /HACKATHON.md.
 - E2E Test 2 also exposed Gemini JSON truncation: 1024 output tokens can
   cut off `recommendedAction` and yield invalid JSON on the golden prompt;
   Gemini analysis needs at least 2048 output tokens.
+
+### Reconstruct page on BrainSNN — 2026-07-07
+
+- Added `brainsnn-r3f-app/src/app/ReconstructPage.jsx` as the direct
+  `/reconstruct` route for the proof-first Reconstruct grabber.
+- AppShell now recognizes `/reconstruct`; the BrainSNN landing header and
+  footer link to the page without leaving the SPA.
+- The page uses marker `data-build-marker="reconstruct-grab-page"` for
+  local/live verification and links to
+  `https://github.com/XioAISolutions/Reconstruct`.
+- Verified locally with `npm run lint`, `npm test`, `npm run build`,
+  `npm run test:e2e`, and Playwright screenshots on desktop/mobile.

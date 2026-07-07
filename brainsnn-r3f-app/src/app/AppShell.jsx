@@ -17,6 +17,13 @@ import { CommandPalette } from './CommandPalette.jsx';
 import { DesktopSidebar } from './DesktopSidebar.jsx';
 import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
+import { ReconstructPage } from './ReconstructPage.jsx';
+
+function resolveRoute(pathname) {
+  if (pathname.startsWith('/app')) return 'app';
+  if (pathname.startsWith('/reconstruct')) return 'reconstruct';
+  return 'landing';
+}
 
 function makeQueueItem(result, content, comparison, status = 'Draft') {
   const sourceContent = content || result?.rawContent || '';
@@ -39,7 +46,7 @@ function makeQueueItem(result, content, comparison, status = 'Draft') {
 export function AppShell() {
   const scan = useScanEngine();
   const history = useScanHistory();
-  const [route, setRoute] = useState(() => (window.location.pathname.startsWith('/app') ? 'app' : 'landing'));
+  const [route, setRoute] = useState(() => resolveRoute(window.location.pathname));
   const [active, setActive] = useState('analyze');
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -53,7 +60,7 @@ export function AppShell() {
 
   useEffect(() => {
     function syncRoute() {
-      setRoute(window.location.pathname.startsWith('/app') ? 'app' : 'landing');
+      setRoute(resolveRoute(window.location.pathname));
     }
     window.addEventListener('popstate', syncRoute);
     return () => window.removeEventListener('popstate', syncRoute);
@@ -92,6 +99,18 @@ export function AppShell() {
     setActive('analyze');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   }, [scan]);
+
+  const openLanding = useCallback(() => {
+    window.history.pushState({}, '', '/');
+    setRoute('landing');
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  }, []);
+
+  const openReconstruct = useCallback(() => {
+    window.history.pushState({}, '', '/reconstruct');
+    setRoute('reconstruct');
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  }, []);
 
   const saveResult = useCallback((result) => {
     const record = history.addResult(result);
@@ -192,8 +211,12 @@ export function AppShell() {
     );
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
 
+  if (route === 'reconstruct') {
+    return <ReconstructPage onHome={openLanding} onStart={openWorkspace} />;
+  }
+
   if (route === 'landing') {
-    return <LandingPage onStart={openWorkspace} onNavigate={navigate} />;
+    return <LandingPage onStart={openWorkspace} onNavigate={navigate} onOpenReconstruct={openReconstruct} />;
   }
 
   return (
