@@ -185,6 +185,7 @@ test('reconstruct page renders from a direct route and links into the scanner', 
 
   await page.getByRole('button', { name: /Scan this pitch/ }).click();
   await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveTitle('BrainSNN | Decision Engine for Brand Content');
   await expect(page.locator('#brain-scan-input')).toHaveValue(/Reconstruct is the proof-first/);
 });
 

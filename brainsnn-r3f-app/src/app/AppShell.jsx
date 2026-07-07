@@ -67,6 +67,12 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
+    if (route === 'app') {
+      document.title = 'BrainSNN | Decision Engine for Brand Content';
+    }
+  }, [route]);
+
+  useEffect(() => {
     function handleKeyDown(event) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
