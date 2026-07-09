@@ -2,7 +2,7 @@
 
 # The Brain — BrainSNN
 
-**A browser + Express "cognitive brain" that scores any text for attention, trust, manipulation and affect — through a 103-layer deterministic engine, no backprop, no GPU.**
+**A browser + Express "cognitive brain" that scores any text for attention, trust, manipulation and affect — through a 103-layer deterministic engine (no backprop, no ML runtime), with a live WebGL 3D brain that reacts to every scan.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 [![React 19](https://img.shields.io/badge/react-19-149eca.svg)](https://react.dev)
@@ -29,6 +29,11 @@ soliton field** (Layer 103).
 The whole engine is **deterministic** — identical content yields an identical result — so every
 layer is regression-testable and every scan produces a reproducible audit receipt. Results are
 AI-estimated content-response signals, **not** literal brain, biometric or EEG measurements.
+
+The result lands in a **tabbed results view** (Overview / Line-by-line / Audience / Advanced) next
+to a **live WebGL 3D brain** whose regions light up from the scan, and you can export or share a
+score card. The scoring itself stays CPU-only and deterministic; the 3D brain is a lazy-loaded
+visualization layer.
 
 Optional integrations (Google Gemini for deep analysis, Stripe for billing, Supabase for auth,
 an external TRIBE service for fMRI-style projection) each sit behind a single environment
@@ -182,8 +187,8 @@ the-brain/
 ├── brainsnn-r3f-app/          ← the deployable app (Express + React SPA)
 │   ├── server.ts              ← Express: API endpoints + Vite middleware / static dist
 │   ├── src/
-│   │   ├── app/               ← shell: AppShell, navigation, landing, sidebar, command palette
-│   │   ├── features/          ← scan · results · improve · autopsy · research · memory · pricing · approvals · export
+│   │   ├── app/               ← shell: AppShell, navigation, landing, Reconstruct page, command palette
+│   │   ├── features/          ← scan · results (tabbed) · improve · autopsy · research · brain3d · social · export · …
 │   │   ├── lib/               ← layerRouter · analysisEngine · solitonLayer · scoreMapping · storage · …
 │   │   ├── components/ui/      ← Meter, Badge, Button, …
 │   │   ├── styles/            ← tokens.css, utilities.css
@@ -199,10 +204,17 @@ the-brain/
 
 - **Server:** Express 4, TypeScript (run via `tsx`, bundled with `esbuild`)
 - **Frontend:** React 19, Vite 6, Tailwind (`@tailwindcss/vite`), `motion`, `lucide-react`
+- **3D brain:** a live WebGL brain (`three`, `@react-three/fiber`, `@react-three/drei`) that reacts
+  to each scan. It is **lazy-loaded** — `src/features/brain3d/Brain3D.jsx` is the only module that
+  imports `three`/R3F, so it stays out of the main bundle and degrades to a 2D canvas fallback.
 - **Engine:** deterministic 103-layer router — regex/scoring firewall, affect decoder, Kuramoto +
-  KdV soliton model, seeded PRNG; no ML runtime required
-- **Optional:** `@google/genai` (Gemini), Stripe REST, Supabase Auth, external TRIBE service
-- **Tests:** `tinyVitest` (custom node runner) + Playwright
+  KdV soliton model, seeded PRNG; the scoring engine itself needs **no ML runtime and no GPU**.
+- **Results UI:** tabbed — Overview / Line-by-line / Audience / Advanced — plus shareable score
+  cards (`src/features/social`, `src/features/export`) and a classics gallery.
+- **Optional:** `@google/genai` (Gemini), Stripe REST, Supabase Auth, external TRIBE service, and an
+  external communication decoder via `NEURAL_DECODER_URL`.
+- **Tests:** `tinyVitest` (custom node runner) + Playwright; CI runs typecheck + tests + build + the
+  MCP smoke on every PR (`.github/workflows/ci.yml`).
 
 ## Contributing
 
