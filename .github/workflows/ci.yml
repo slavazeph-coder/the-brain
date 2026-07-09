@@ -10,19 +10,13 @@ on:
     paths:
       - "brainsnn-r3f-app/**"
       - ".github/workflows/ci.yml"
-  push:
-    branches-ignore:
-      - main
-    paths:
-      - "brainsnn-r3f-app/**"
-      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
