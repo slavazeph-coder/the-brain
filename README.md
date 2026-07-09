@@ -225,6 +225,18 @@ This repo is a joint AI workspace coordinated through `.ai-memory/`. See `AGENTS
 - A new affect class in the decoder
 - A new soliton preset / sweep axis in `src/lib/solitonLayer.js`
 
+## The layer catalog as data
+
+The 103-layer catalog is published as a validated dataset — nodes plus a data-flow **dependency
+graph** and a versioned **manifest** (content-hashed) — inspired by
+[os-taxonomy](https://github.com/withmarbleapp/os-taxonomy):
+
+- `brainsnn-r3f-app/data/layer-catalog.json` — the dataset (regenerate with `npm run export:catalog`)
+- `brainsnn-r3f-app/schema/layer-catalog.schema.json` — its JSON Schema
+- `npm run validate:catalog` — structural + referential + acyclicity check (also gated in CI)
+- `GET /api/layers` now returns the `manifest` and `dependencies` alongside the layers
+
 ## License
 
-MIT — see per-file headers.
+MIT — see per-file headers. Sources, dependencies and external licensing boundaries are recorded
+in [PROVENANCE.md](PROVENANCE.md).

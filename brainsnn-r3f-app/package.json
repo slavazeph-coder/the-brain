@@ -12,7 +12,9 @@
     "lint": "tsc --noEmit",
     "test": "node scripts/test-runner.mjs",
     "test:run": "node scripts/test-runner.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "validate:catalog": "node scripts/validate-catalog.mjs",
+    "export:catalog": "node scripts/export-catalog.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
