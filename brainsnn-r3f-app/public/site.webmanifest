@@ -1,11 +1,11 @@
 {
-  "name": "BrainSNN",
-  "short_name": "BrainSNN",
-  "description": "Affective Intelligence for Online Content powered by Spiking Neural Networks and Crumb LLM.",
+  "name": "GaugeGap Foundry by BrainSNN",
+  "short_name": "GaugeGap",
+  "description": "Playable science, visual challenges and reproducible research experiments by BrainSNN.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#06060a",
-  "theme_color": "#06060a",
+  "background_color": "#030308",
+  "theme_color": "#030308",
   "icons": [
     { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" }
   ]

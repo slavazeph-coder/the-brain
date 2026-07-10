@@ -63,7 +63,7 @@ jobs:
             sleep 1
           done
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
-          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Decision Engine for Brand Content"
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "GaugeGap Foundry | Play with the impossible"
           kill $SRV 2>/dev/null || true
 
   deploy:
@@ -113,14 +113,14 @@ jobs:
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
-            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Decision Engine for Brand Content" /tmp/brainsnn-home.html; then
+            if [ "$home" = "200" ] && grep -Fq "GaugeGap Foundry | Play with the impossible" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
             fi
             echo "attempt $i → healthz $health, home $home/$home_marker"
             if [ "$health" = "200" ] && [ "$home_marker" = "ok" ]; then
-              echo "Live service is healthy and serving the current build."
+              echo "Live service is healthy and serving the current GaugeGap build."
               exit 0
             fi
             sleep 20
