@@ -1,22 +1,23 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   ArrowRight,
   BrainCircuit,
   CheckCircle2,
   ChevronDown,
+  Dna,
   FlaskConical,
   Gauge,
   Layers3,
-  LockKeyhole,
   Microscope,
   Play,
   Share2,
   Sparkles,
   WandSparkles,
+  Waves,
   Zap,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
-import { AttractorPlayground } from '../features/gaugegap/AttractorPlayground.jsx';
+import { ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
 import { track } from '../lib/analytics.js';
 import '../styles/gaugegap.css';
 
@@ -25,11 +26,35 @@ const CONTENT_SAMPLE = 'Everyone says this breakthrough changes everything. Here
 const LABS = [
   {
     id: 'attractor',
-    eyebrow: 'Live now',
+    eyebrow: 'Live experiment 001',
     title: 'Butterfly Effect Lab',
-    description: 'Change the rules of a chaotic system, capture the result and challenge someone to beat your discovery score.',
+    description: 'Tune a chaotic system until order and turbulence balance on the same orbit.',
     icon: Gauge,
-    action: 'Play now',
+    action: 'Shape chaos',
+  },
+  {
+    id: 'fireflies',
+    eyebrow: 'Live experiment 002',
+    title: 'Firefly Sync Lab',
+    description: 'Connect hundreds of independent clocks and watch collective rhythm emerge without a leader.',
+    icon: Sparkles,
+    action: 'Sync the swarm',
+  },
+  {
+    id: 'waves',
+    eyebrow: 'Live experiment 003',
+    title: 'Wave Eraser',
+    description: 'Move a detector through overlapping waves and find the exact places where energy disappears.',
+    icon: Waves,
+    action: 'Find silence',
+  },
+  {
+    id: 'reaction',
+    eyebrow: 'Live experiment 004',
+    title: 'Living Chemistry',
+    description: 'Draw into a reaction-diffusion field and grow coral, cells, worms and mazes from two chemicals.',
+    icon: Dna,
+    action: 'Grow a species',
   },
   {
     id: 'soliton',
@@ -47,25 +72,17 @@ const LABS = [
     icon: BrainCircuit,
     action: 'Scan a viral claim',
   },
-  {
-    id: 'claim',
-    eyebrow: 'Coming next',
-    title: 'Claim Boundary Game',
-    description: 'Build the strongest claim the evidence allows. Push too far and the model breaks your argument in public.',
-    icon: LockKeyhole,
-    action: 'Join the first run',
-  },
 ];
 
 const LOOP = [
   { number: '01', title: 'Play', text: 'Touch the variables before reading the lesson. The system teaches through response.' },
   { number: '02', title: 'Discover', text: 'Find an unusual state, score it and preserve the exact parameters that produced it.' },
-  { number: '03', title: 'Publish', text: 'Export the visual, the short clip, the challenge link and the explanation from one run.' },
+  { number: '03', title: 'Publish', text: 'Export the visual, the challenge link and the explanation from one run.' },
 ];
 
-export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
-  const playgroundRef = useRef(null);
+const ARCADE_IDS = new Set(['attractor', 'fireflies', 'waves', 'reaction']);
 
+export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
   useEffect(() => {
     document.title = 'GaugeGap Foundry | Play with the impossible';
     track('gaugegap_landing_viewed');
@@ -78,10 +95,18 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
 
   function openLab(id) {
     track('gaugegap_lab_clicked', { labId: id });
-    if (id === 'attractor') scrollToPlayground();
+    if (ARCADE_IDS.has(id)) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('lab', id);
+      url.searchParams.delete('run');
+      url.searchParams.delete('state');
+      url.hash = 'playground';
+      window.history.replaceState({}, '', url);
+      window.dispatchEvent(new CustomEvent('gaugegap:lab', { detail: { lab: id } }));
+      scrollToPlayground();
+    }
     if (id === 'soliton') onNavigate?.('research');
     if (id === 'content') onStart?.(CONTENT_SAMPLE);
-    if (id === 'claim') onOpenReconstruct?.();
   }
 
   return (
@@ -96,7 +121,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
           <em>Alpha</em>
         </button>
         <nav className="gg-nav-links" aria-label="Primary">
-          <button type="button" onClick={scrollToPlayground}>Playground</button>
+          <button type="button" onClick={scrollToPlayground}>Arcade</button>
           <button type="button" onClick={() => document.getElementById('labs')?.scrollIntoView({ behavior: 'smooth' })}>Experiments</button>
           <button type="button" onClick={() => onNavigate?.('research')}>Research</button>
         </nav>
@@ -115,18 +140,18 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
             <p className="gg-kicker"><Sparkles size={16} /> Science you can touch, remix and publish</p>
             <h1 id="gg-hero-heading">Don’t just learn the universe. <span>Play with it.</span></h1>
             <p className="gg-hero-lead">
-              GaugeGap turns difficult research into live experiments, visual challenges and shareable discoveries.
-              Change one rule. Watch reality respond. Publish what you find.
+              Four live experiments turn difficult science into visual games and shareable challenges.
+              Shape chaos, synchronize a crowd, erase a wave or draw a new species.
             </p>
             <div className="gg-hero-actions">
-              <Button variant="primary" onClick={scrollToPlayground}>Enter the live experiment <ArrowRight size={17} /></Button>
+              <Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
               <Button variant="secondary" onClick={() => onNavigate?.('research')}>See the research layer <Microscope size={17} /></Button>
             </div>
             <div className="gg-hero-proof" aria-label="Product capabilities">
-              <div><strong>Live</strong><span>Browser simulations</span></div>
-              <div><strong>1-click</strong><span>Posters and clips</span></div>
+              <div><strong>4 live</strong><span>Distinct experiments</span></div>
+              <div><strong>1-click</strong><span>Challenge links</span></div>
               <div><strong>Exact</strong><span>Shareable run states</span></div>
-              <div><strong>Open</strong><span>Assumptions and limits</span></div>
+              <div><strong>Open</strong><span>Equations and limits</span></div>
             </div>
           </div>
 
@@ -157,20 +182,18 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
             </div>
             <div className="gg-challenge-copy">
               <p>Find the most beautiful edge of chaos.</p>
-              <span>Current community score to beat</span>
-              <strong>90+</strong>
+              <span>Then try three completely different systems</span>
+              <strong>4 labs</strong>
             </div>
             <button type="button" onClick={scrollToPlayground}>Accept challenge <ArrowRight size={16} /></button>
           </div>
 
-          <button type="button" className="gg-scroll-cue" onClick={scrollToPlayground} aria-label="Scroll to the live experiment">
-            <span>Scroll to experiment</span><ChevronDown size={17} />
+          <button type="button" className="gg-scroll-cue" onClick={scrollToPlayground} aria-label="Scroll to the science arcade">
+            <span>Scroll to arcade</span><ChevronDown size={17} />
           </button>
         </section>
 
-        <div ref={playgroundRef}>
-          <AttractorPlayground />
-        </div>
+        <ExperimentArcade />
 
         <section className="gg-loop" aria-labelledby="gg-loop-heading">
           <div className="gg-section-heading">
@@ -190,9 +213,9 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
           <div className="gg-output-ribbon" aria-label="Generated outputs">
             <span>One run creates</span>
             <strong>Interactive link</strong>
-            <strong>6-second clip</strong>
-            <strong>Poster</strong>
+            <strong>Visual loop</strong>
             <strong>Score challenge</strong>
+            <strong>Lesson hook</strong>
             <strong>Research state</strong>
           </div>
         </section>
@@ -209,7 +232,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
             {LABS.map((lab, index) => {
               const Icon = lab.icon;
               return (
-                <article key={lab.id} className={`gg-lab-card gg-lab-card-${index + 1}`}>
+                <article key={lab.id} className={`gg-lab-card gg-lab-card-${(index % 4) + 1}`}>
                   <div className="gg-lab-card-art" aria-hidden="true">
                     <Icon size={34} />
                     <span /><span /><span />
@@ -257,10 +280,10 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
 
         <section className="gg-final-cta" aria-labelledby="gg-final-heading">
           <div className="gg-final-glow" />
-          <p className="gg-kicker"><Sparkles size={16} /> Your first discovery is already running</p>
-          <h2 id="gg-final-heading">Change one variable. Make something nobody has seen.</h2>
-          <p>Then turn the result into the clip, challenge and explanation that brings the next person into the lab.</p>
-          <Button variant="primary" onClick={scrollToPlayground}>Play with the butterfly <ArrowRight size={17} /></Button>
+          <p className="gg-kicker"><Sparkles size={16} /> Four worlds are already running</p>
+          <h2 id="gg-final-heading">Pick a system. Break its rules. Share what appears.</h2>
+          <p>The next person should arrive through your challenge—not through another explanation page.</p>
+          <Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
         </section>
       </main>
 
@@ -270,7 +293,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
           <p><strong>GaugeGap Foundry</strong><small>Playable science and publishing infrastructure by BrainSNN.</small></p>
         </div>
         <nav>
-          <button type="button" onClick={scrollToPlayground}>Playground</button>
+          <button type="button" onClick={scrollToPlayground}>Arcade</button>
           <button type="button" onClick={() => onNavigate?.('research')}>Research</button>
           <button type="button" onClick={() => onStart?.('')}>BrainSNN scanner</button>
           <button type="button" onClick={() => onOpenReconstruct?.()}>Reconstruct</button>
