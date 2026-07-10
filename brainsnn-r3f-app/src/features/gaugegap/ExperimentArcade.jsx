@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, Dna, Gauge, Shuffle, Sparkles, Waves } from 'lucide-react';
+import { Activity, CircleDot, Dna, Gauge, Orbit, Shield, Shuffle, Sparkles, Waves, Wind } from 'lucide-react';
 import { AttractorPlayground } from './AttractorPlayground.jsx';
 import { FireflySyncLab, ReactionDiffusionLab, WaveInterferenceLab } from './CollectivePlaygrounds.jsx';
+import { FlockMindLab, OutbreakZeroLab } from './AgentPlaygrounds.jsx';
+import { ChaosTwinsLab, GravityForgeLab } from './PhysicsPlaygrounds.jsx';
 import '../../styles/arcade.css';
+import '../../styles/deep-arcade.css';
 
 const EXPERIMENTS = [
   {
@@ -44,6 +47,46 @@ const EXPERIMENTS = [
     icon: Dna,
     accent: 'pink',
     mechanic: 'Create',
+  },
+  {
+    id: 'gravity',
+    number: '005',
+    title: 'Gravity Forge',
+    short: 'Build a solar system',
+    description: 'Launch planets into a live n-body field and see whether your orbital architecture survives.',
+    icon: Orbit,
+    accent: 'amber',
+    mechanic: 'Construct',
+  },
+  {
+    id: 'flock',
+    number: '006',
+    title: 'Flock Mind',
+    short: 'Steer emergence',
+    description: 'Act as predator or beacon while leaderless agents coordinate through only local rules.',
+    icon: Wind,
+    accent: 'blue',
+    mechanic: 'Influence',
+  },
+  {
+    id: 'outbreak',
+    number: '007',
+    title: 'Outbreak Zero',
+    short: 'Contain the network',
+    description: 'Choose patient zero, spend twelve vaccines and break the transmission graph before it turns red.',
+    icon: Shield,
+    accent: 'red',
+    mechanic: 'Intervene',
+  },
+  {
+    id: 'pendulum',
+    number: '008',
+    title: 'Chaos Twins',
+    short: 'Race two futures',
+    description: 'Start two double pendulums almost identically and measure how quickly their futures separate.',
+    icon: CircleDot,
+    accent: 'orange',
+    mechanic: 'Predict',
   },
 ];
 
@@ -89,8 +132,8 @@ export function ExperimentArcade() {
       <div className="gg-arcade-intro">
         <div>
           <p className="gg-kicker"><Activity size={16} /> GaugeGap science arcade</p>
-          <h2 id="gg-arcade-title">Four experiments. Four different ways to play.</h2>
-          <p>Tune chaos, synchronize a crowd, erase a wave or draw living chemistry. Every lab starts in seconds and hides the real model one layer underneath.</p>
+          <h2 id="gg-arcade-title">Eight experiments. Eight different ways to think.</h2>
+          <p>Tune, synchronize, explore, draw, construct, influence, intervene and predict. Every lab begins as play, then exposes the scientific model underneath.</p>
         </div>
         <button type="button" className="gg-surprise-button" onClick={surpriseMe}><Shuffle size={16} /> Surprise me</button>
       </div>
@@ -128,15 +171,19 @@ export function ExperimentArcade() {
         {active === 'fireflies' ? <FireflySyncLab /> : null}
         {active === 'waves' ? <WaveInterferenceLab /> : null}
         {active === 'reaction' ? <ReactionDiffusionLab /> : null}
+        {active === 'gravity' ? <GravityForgeLab /> : null}
+        {active === 'flock' ? <FlockMindLab /> : null}
+        {active === 'outbreak' ? <OutbreakZeroLab /> : null}
+        {active === 'pendulum' ? <ChaosTwinsLab /> : null}
       </div>
 
       <div className="gg-arcade-lesson">
-        <span>What we borrowed from the best interactive-science sites</span>
+        <span>A complete science arcade needs</span>
         <strong>Immediate motion</strong>
-        <strong>Recognizable presets</strong>
-        <strong>One clear challenge</strong>
-        <strong>Different interaction styles</strong>
-        <strong>A shareable result</strong>
+        <strong>A clear mission</strong>
+        <strong>Different interaction verbs</strong>
+        <strong>A visible model</strong>
+        <strong>A shareable challenge</strong>
       </div>
     </section>
   );
