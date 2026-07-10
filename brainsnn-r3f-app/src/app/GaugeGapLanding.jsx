@@ -4,16 +4,20 @@ import {
   BrainCircuit,
   CheckCircle2,
   ChevronDown,
+  CircleDot,
   Dna,
   FlaskConical,
   Gauge,
   Layers3,
   Microscope,
+  Orbit,
   Play,
   Share2,
+  Shield,
   Sparkles,
   WandSparkles,
   Waves,
+  Wind,
   Zap,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
@@ -57,6 +61,38 @@ const LABS = [
     action: 'Grow a species',
   },
   {
+    id: 'gravity',
+    eyebrow: 'Live experiment 005',
+    title: 'Gravity Forge',
+    description: 'Launch planets into a live n-body field and build an orbital system that does not destroy itself.',
+    icon: Orbit,
+    action: 'Build a system',
+  },
+  {
+    id: 'flock',
+    eyebrow: 'Live experiment 006',
+    title: 'Flock Mind',
+    description: 'Steer a leaderless crowd as predator or beacon while local rules create group intelligence.',
+    icon: Wind,
+    action: 'Steer emergence',
+  },
+  {
+    id: 'outbreak',
+    eyebrow: 'Live experiment 007',
+    title: 'Outbreak Zero',
+    description: 'Pick patient zero, spend twelve vaccines and interrupt the contact graph before it turns red.',
+    icon: Shield,
+    action: 'Contain it',
+  },
+  {
+    id: 'pendulum',
+    eyebrow: 'Live experiment 008',
+    title: 'Chaos Twins',
+    description: 'Race two nearly identical double pendulums and measure when their futures stop agreeing.',
+    icon: CircleDot,
+    action: 'Race the futures',
+  },
+  {
     id: 'soliton',
     eyebrow: 'Research engine',
     title: 'Soliton Collision Lab',
@@ -80,7 +116,7 @@ const LOOP = [
   { number: '03', title: 'Publish', text: 'Export the visual, the challenge link and the explanation from one run.' },
 ];
 
-const ARCADE_IDS = new Set(['attractor', 'fireflies', 'waves', 'reaction']);
+const ARCADE_IDS = new Set(['attractor', 'fireflies', 'waves', 'reaction', 'gravity', 'flock', 'outbreak', 'pendulum']);
 
 export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
   useEffect(() => {
@@ -140,16 +176,16 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
             <p className="gg-kicker"><Sparkles size={16} /> Science you can touch, remix and publish</p>
             <h1 id="gg-hero-heading">Don’t just learn the universe. <span>Play with it.</span></h1>
             <p className="gg-hero-lead">
-              Four live experiments turn difficult science into visual games and shareable challenges.
-              Shape chaos, synchronize a crowd, erase a wave or draw a new species.
+              Eight live experiments turn difficult science into visual games and shareable challenges.
+              Shape chaos, build orbits, steer a flock, contain an outbreak and race competing futures.
             </p>
             <div className="gg-hero-actions">
               <Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
               <Button variant="secondary" onClick={() => onNavigate?.('research')}>See the research layer <Microscope size={17} /></Button>
             </div>
             <div className="gg-hero-proof" aria-label="Product capabilities">
-              <div><strong>4 live</strong><span>Distinct experiments</span></div>
-              <div><strong>1-click</strong><span>Challenge links</span></div>
+              <div><strong>8 live</strong><span>Distinct experiments</span></div>
+              <div><strong>8 verbs</strong><span>Different ways to play</span></div>
               <div><strong>Exact</strong><span>Shareable run states</span></div>
               <div><strong>Open</strong><span>Equations and limits</span></div>
             </div>
@@ -182,8 +218,8 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
             </div>
             <div className="gg-challenge-copy">
               <p>Find the most beautiful edge of chaos.</p>
-              <span>Then try three completely different systems</span>
-              <strong>4 labs</strong>
+              <span>Then jump into seven completely different systems</span>
+              <strong>8 labs</strong>
             </div>
             <button type="button" onClick={scrollToPlayground}>Accept challenge <ArrowRight size={16} /></button>
           </div>
@@ -280,7 +316,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
 
         <section className="gg-final-cta" aria-labelledby="gg-final-heading">
           <div className="gg-final-glow" />
-          <p className="gg-kicker"><Sparkles size={16} /> Four worlds are already running</p>
+          <p className="gg-kicker"><Sparkles size={16} /> Eight worlds are already running</p>
           <h2 id="gg-final-heading">Pick a system. Break its rules. Share what appears.</h2>
           <p>The next person should arrive through your challenge—not through another explanation page.</p>
           <Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
