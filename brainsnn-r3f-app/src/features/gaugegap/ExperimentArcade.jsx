@@ -5,6 +5,7 @@ import { FireflySyncLab, ReactionDiffusionLab, WaveInterferenceLab } from './Col
 import { FlockMindLab, OutbreakZeroLab } from './AgentPlaygrounds.jsx';
 import { ChaosTwinsLab, GravityForgeLab } from './PhysicsPlaygrounds.jsx';
 import '../../styles/arcade.css';
+import '../../styles/deep-arcade.css';
 
 const EXPERIMENTS = [
   {
