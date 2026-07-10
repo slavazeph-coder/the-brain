@@ -1,0 +1,228 @@
+.gg-arcade-card-amber { --arcade-accent: #ffc857; }
+.gg-arcade-card-blue { --arcade-accent: #60a5fa; }
+.gg-arcade-card-red { --arcade-accent: #ff5873; }
+.gg-arcade-card-orange { --arcade-accent: #fb923c; }
+
+.gg-deep-lab {
+  background:
+    radial-gradient(circle at 74% 0%, rgba(96, 165, 250, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(9, 11, 25, 0.98), rgba(3, 5, 13, 0.99));
+}
+
+.gg-gravity-canvas,
+.gg-flock-canvas,
+.gg-outbreak-canvas,
+.gg-pendulum-canvas {
+  cursor: crosshair;
+}
+
+.gg-deep-mission {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  padding: 14px;
+  border: 1px solid rgba(125, 249, 255, 0.16);
+  border-radius: 14px;
+  color: #dffcff;
+  background: linear-gradient(135deg, rgba(125, 249, 255, 0.07), rgba(139, 92, 246, 0.04));
+}
+
+.gg-deep-mission svg {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--bsn-cyan);
+}
+
+.gg-deep-mission span,
+.gg-model-card span {
+  color: var(--bsn-text-muted);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gg-deep-mission strong {
+  color: var(--bsn-text);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.gg-deep-presets,
+.gg-deep-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.gg-deep-presets button,
+.gg-deep-toggle button {
+  min-height: 39px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  color: var(--bsn-text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.gg-deep-presets button:hover,
+.gg-deep-presets button.active,
+.gg-deep-toggle button:hover,
+.gg-deep-toggle button.active {
+  border-color: rgba(125, 249, 255, 0.44);
+  color: #e7ffff;
+  background: rgba(125, 249, 255, 0.08);
+}
+
+.gg-deep-presets button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.gg-model-card {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.gg-model-card strong {
+  display: block;
+  margin-top: 6px;
+  color: #f3f5ff;
+  font-family: var(--bsn-font-display);
+  font-size: 1rem;
+}
+
+.gg-model-card p {
+  margin: 7px 0 0;
+  color: var(--bsn-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.gg-deep-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 17px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.gg-deep-actions button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--bsn-text-secondary);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.gg-deep-actions button:hover {
+  border-color: rgba(125, 249, 255, 0.42);
+  color: #e7ffff;
+  background: rgba(125, 249, 255, 0.07);
+}
+
+.gg-deep-actions > span {
+  flex: 1 1 260px;
+  color: var(--bsn-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.gg-outbreak-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.gg-outbreak-stats span {
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  color: var(--bsn-text-muted);
+  background: rgba(255, 255, 255, 0.02);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.62rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.gg-outbreak-stats strong {
+  display: block;
+  margin-top: 4px;
+  color: #e7fbff;
+  font-size: 1rem;
+}
+
+.gg-gravity-wrap::before,
+.gg-flock-canvas + .gg-sim-canvas-label::before,
+.gg-outbreak-canvas + .gg-sim-canvas-label::before,
+.gg-pendulum-canvas + .gg-sim-canvas-label::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #7df9ff;
+  box-shadow: 0 0 12px rgba(125, 249, 255, 0.8);
+}
+
+@media (max-width: 1050px) {
+  .gg-arcade-selector {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .gg-deep-actions {
+    align-items: stretch;
+  }
+
+  .gg-deep-actions button {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+  }
+
+  .gg-deep-actions > span {
+    flex-basis: 100%;
+    text-align: left;
+  }
+
+  .gg-deep-presets,
+  .gg-deep-toggle {
+    grid-template-columns: 1fr;
+  }
+
+  .gg-deep-presets button:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .gg-arcade-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .gg-arcade-card {
+    min-height: 190px;
+  }
+
+  .gg-outbreak-stats {
+    grid-template-columns: 1fr;
+  }
+}
