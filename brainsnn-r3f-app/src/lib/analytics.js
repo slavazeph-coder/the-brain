@@ -30,6 +30,15 @@ const allowedEvents = new Set([
   'share_card_shared',
   'share_card_downloaded',
   'brain3d_fallback_used',
+  'gaugegap_landing_viewed',
+  'gaugegap_hero_play_clicked',
+  'gaugegap_lab_clicked',
+  'gaugegap_lab_selected',
+  'gaugegap_filter_selected',
+  'gaugegap_surprise_clicked',
+  'gaugegap_pathway_selected',
+  'gaugegap_client_cta_clicked',
+  'gaugegap_research_cta_clicked',
 ]);
 
 export function track(eventName, properties = {}) {

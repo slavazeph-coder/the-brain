@@ -2,56 +2,58 @@ import React, { useEffect } from 'react';
 import {
   ArrowRight,
   BrainCircuit,
-  Bug,
-  Car,
   CheckCircle2,
   ChevronDown,
-  CircleDot,
-  Dna,
   FlaskConical,
-  Gauge,
-  Grid3X3,
   Layers3,
-  Leaf,
   Microscope,
-  Orbit,
   Play,
   Share2,
   Shield,
   Sparkles,
   WandSparkles,
-  Waves,
-  Wind,
   Zap,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
 import { ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
+import { ClientPathways, TrustLadder, VisitorRoutes } from '../features/gaugegap/AudiencePathways.jsx';
 import { track } from '../lib/analytics.js';
 import '../styles/gaugegap.css';
+import '../styles/arcade-discovery.css';
 
 const CONTENT_SAMPLE = 'Everyone says this breakthrough changes everything. Here is what the evidence actually shows, what remains uncertain, and the one result worth paying attention to.';
 
-const LABS = [
-  { id: 'attractor', eyebrow: 'Live experiment 001', title: 'Butterfly Effect Lab', description: 'Tune a chaotic system until order and turbulence balance on the same orbit.', icon: Gauge, action: 'Shape chaos' },
-  { id: 'fireflies', eyebrow: 'Live experiment 002', title: 'Firefly Sync Lab', description: 'Connect hundreds of independent clocks and watch collective rhythm emerge without a leader.', icon: Sparkles, action: 'Sync the swarm' },
-  { id: 'waves', eyebrow: 'Live experiment 003', title: 'Wave Eraser', description: 'Move a detector through overlapping waves and find the exact places where energy disappears.', icon: Waves, action: 'Find silence' },
-  { id: 'reaction', eyebrow: 'Live experiment 004', title: 'Living Chemistry', description: 'Draw into a reaction-diffusion field and grow coral, cells, worms and mazes from two chemicals.', icon: Dna, action: 'Grow a species' },
-  { id: 'gravity', eyebrow: 'Live experiment 005', title: 'Gravity Forge', description: 'Launch planets into a live n-body field and build an orbital system that does not destroy itself.', icon: Orbit, action: 'Build a system' },
-  { id: 'flock', eyebrow: 'Live experiment 006', title: 'Flock Mind', description: 'Steer a leaderless crowd as predator or beacon while local rules create group intelligence.', icon: Wind, action: 'Steer emergence' },
-  { id: 'outbreak', eyebrow: 'Live experiment 007', title: 'Outbreak Zero', description: 'Pick patient zero, spend twelve vaccines and interrupt the contact graph before it turns red.', icon: Shield, action: 'Contain it' },
-  { id: 'pendulum', eyebrow: 'Live experiment 008', title: 'Chaos Twins', description: 'Race two nearly identical double pendulums and measure when their futures stop agreeing.', icon: CircleDot, action: 'Race the futures' },
-  { id: 'ants', eyebrow: 'Live experiment 009', title: 'Ant Trail Architect', description: 'Place food and barriers while a leaderless colony discovers and reinforces its own road system.', icon: Bug, action: 'Build ant roads' },
-  { id: 'traffic', eyebrow: 'Live experiment 010', title: 'Traffic Tamer', description: 'Control signal phases under rising demand and keep every queue from becoming a citywide jam.', icon: Car, action: 'Run the lights' },
-  { id: 'life', eyebrow: 'Live experiment 011', title: 'Life Painter', description: 'Paint living cells and let four tiny rules transform them into moving computational machines.', icon: Grid3X3, action: 'Paint a universe' },
-  { id: 'ecosystem', eyebrow: 'Live experiment 012', title: 'Ecosystem Keeper', description: 'Add plants, prey or predators and keep an entire food web alive through delayed feedback.', icon: Leaf, action: 'Balance the world' },
-  { id: 'soliton', eyebrow: 'Research engine', title: 'Soliton Collision Lab', description: 'Launch nonlinear waves, change their amplitude and watch them pass through one another without losing identity.', icon: Zap, action: 'Open research lab' },
-  { id: 'content', eyebrow: 'BrainSNN crossover', title: 'Mind-Hack Autopsy', description: 'Paste viral content and expose the emotional pressure, trust cost and attention mechanics hiding inside it.', icon: BrainCircuit, action: 'Scan a viral claim' },
+const DEEPER_TOOLS = [
+  {
+    id: 'soliton',
+    eyebrow: 'Research workspace',
+    title: 'Soliton Collision Lab',
+    description: 'Move from a visual demonstration into nonlinear-wave controls, diagnostics and model-specific outputs.',
+    icon: Zap,
+    action: 'Open research mode',
+  },
+  {
+    id: 'content',
+    eyebrow: 'BrainSNN engine',
+    title: 'Mind-Hack Autopsy',
+    description: 'Paste content and expose attention pressure, emotional charge, trust cost and manipulation signals.',
+    icon: BrainCircuit,
+    action: 'Test the decision engine',
+  },
+  {
+    id: 'reconstruct',
+    eyebrow: 'Claim boundary',
+    title: 'Reconstruct a Stronger Claim',
+    description: 'Separate what the evidence supports from what the story merely implies, then rebuild the claim responsibly.',
+    icon: Shield,
+    action: 'Build a defensible claim',
+  },
 ];
 
 const LOOP = [
-  { number: '01', title: 'Play', text: 'Touch the variables before reading the lesson. The system teaches through response.' },
-  { number: '02', title: 'Return', text: 'Daily missions, XP, levels and achievements create a reason to explore another system tomorrow.' },
-  { number: '03', title: 'Publish', text: 'Share the visual, challenge link, score and explanation from the same experiment state.' },
+  { number: '01', title: 'Play', text: 'Touch the system before reading the explanation. Immediate response earns attention.' },
+  { number: '02', title: 'Understand', text: 'Missions, model notes and visible limits connect the experience to the underlying mechanism.' },
+  { number: '03', title: 'Publish', text: 'Share the run, challenge and explanation from the same experiment state.' },
 ];
 
 const ARCADE_IDS = new Set(['attractor', 'fireflies', 'waves', 'reaction', 'gravity', 'flock', 'outbreak', 'pendulum', 'ants', 'traffic', 'life', 'ecosystem']);
@@ -62,9 +64,18 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
     track('gaugegap_landing_viewed');
   }, []);
 
+  function scrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function scrollToPlayground() {
     track('gaugegap_hero_play_clicked');
-    document.getElementById('playground')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollTo('playground');
+  }
+
+  function openResearch() {
+    track('gaugegap_research_cta_clicked');
+    onNavigate?.('research');
   }
 
   function openLab(id) {
@@ -79,8 +90,9 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
       window.dispatchEvent(new CustomEvent('gaugegap:lab', { detail: { lab: id } }));
       scrollToPlayground();
     }
-    if (id === 'soliton') onNavigate?.('research');
+    if (id === 'soliton') openResearch();
     if (id === 'content') onStart?.(CONTENT_SAMPLE);
+    if (id === 'reconstruct') onOpenReconstruct?.();
   }
 
   return (
@@ -93,12 +105,12 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
         </button>
         <nav className="gg-nav-links" aria-label="Primary">
           <button type="button" onClick={scrollToPlayground}>Arcade</button>
-          <button type="button" onClick={() => document.getElementById('labs')?.scrollIntoView({ behavior: 'smooth' })}>Experiments</button>
-          <button type="button" onClick={() => onNavigate?.('research')}>Research</button>
+          <button type="button" onClick={() => scrollTo('clients')}>For organizations</button>
+          <button type="button" onClick={openResearch}>Research</button>
         </nav>
         <div className="gg-nav-actions">
           <button type="button" className="gg-brain-link" onClick={() => onStart?.('')}>Open BrainSNN</button>
-          <Button variant="primary" onClick={scrollToPlayground}>Play now <Play size={15} /></Button>
+          <Button variant="primary" onClick={() => scrollTo('gg-start-heading')}>Start here <Play size={15} /></Button>
         </div>
       </header>
 
@@ -108,26 +120,26 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
           <div className="gg-hero-orb gg-hero-orb-one" />
           <div className="gg-hero-orb gg-hero-orb-two" />
           <div className="gg-hero-copy">
-            <p className="gg-kicker"><Sparkles size={16} /> Science you can touch, remix and master</p>
-            <h1 id="gg-hero-heading">Don’t just learn the universe. <span>Play with it.</span></h1>
+            <p className="gg-kicker"><Sparkles size={16} /> Playable science for curious people and ambitious organizations</p>
+            <h1 id="gg-hero-heading">Do not just explain the idea. <span>Let people operate it.</span></h1>
             <p className="gg-hero-lead">
-              Twelve live experiments turn difficult science into games, daily missions and shareable challenges.
-              Build ant roads, tame traffic, paint cellular life, balance ecosystems—and keep climbing your Foundry passport.
+              GaugeGap is the public science arcade. BrainSNN is the analysis and publishing engine underneath.
+              Together they turn difficult systems into interactive missions, shareable discoveries and client-ready experiences.
             </p>
             <div className="gg-hero-actions">
               <Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
-              <Button variant="secondary" onClick={() => onNavigate?.('research')}>See the research layer <Microscope size={17} /></Button>
+              <Button variant="secondary" onClick={() => scrollTo('clients')}>Build for your audience <ArrowRight size={17} /></Button>
             </div>
             <div className="gg-hero-proof" aria-label="Product capabilities">
               <div><strong>12 live</strong><span>Distinct experiments</span></div>
-              <div><strong>Daily</strong><span>Missions and streaks</span></div>
-              <div><strong>Local</strong><span>XP and achievements</span></div>
+              <div><strong>4 paths</strong><span>Clear first steps</span></div>
+              <div><strong>Client</strong><span>Custom pilot pathway</span></div>
               <div><strong>Open</strong><span>Models and limits</span></div>
             </div>
           </div>
 
           <div className="gg-hero-challenge" aria-label="Featured GaugeGap challenge">
-            <div className="gg-challenge-topline"><span><i /> Daily arcade live</span><strong>12 worlds</strong></div>
+            <div className="gg-challenge-topline"><span><i /> Live system</span><strong>Start in seconds</strong></div>
             <div className="gg-mini-attractor" aria-hidden="true">
               <svg viewBox="0 0 520 380" role="presentation">
                 <defs>
@@ -138,39 +150,44 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
                 <path className="gg-orbit-path gg-orbit-b" d="M258 190 C202 105 113 112 114 196 C115 278 218 284 258 190 C303 92 398 106 401 190 C404 275 303 288 258 190Z" />
                 <circle cx="255" cy="190" r="6" />
               </svg>
-              <span className="gg-mini-label gg-mini-label-a">play today</span><span className="gg-mini-label gg-mini-label-b">level up tomorrow</span>
+              <span className="gg-mini-label gg-mini-label-a">change one rule</span><span className="gg-mini-label gg-mini-label-b">watch the future split</span>
             </div>
-            <div className="gg-challenge-copy"><p>Complete today’s system challenge.</p><span>Earn XP, extend your streak and unlock the next badge</span><strong>+50 XP</strong></div>
-            <button type="button" onClick={scrollToPlayground}>Open today’s mission <ArrowRight size={16} /></button>
+            <div className="gg-challenge-copy"><p>Find the edge of chaos.</p><span>No signup. No tutorial wall. The model responds immediately.</span><strong>2 min</strong></div>
+            <button type="button" onClick={() => openLab('attractor')}>Play the fastest demo <ArrowRight size={16} /></button>
           </div>
 
-          <button type="button" className="gg-scroll-cue" onClick={scrollToPlayground} aria-label="Scroll to the science arcade"><span>Scroll to arcade</span><ChevronDown size={17} /></button>
+          <button type="button" className="gg-scroll-cue" onClick={() => scrollTo('gg-start-heading')} aria-label="Choose a starting path"><span>Choose your path</span><ChevronDown size={17} /></button>
         </section>
 
+        <VisitorRoutes onResearch={openResearch} />
         <ExperimentArcade />
 
         <section className="gg-loop" aria-labelledby="gg-loop-heading">
-          <div className="gg-section-heading"><p className="gg-kicker"><Share2 size={16} /> The audience growth engine</p><h2 id="gg-loop-heading">Every experiment becomes a reason to return.</h2><p>The simulator creates spectacle. The passport creates continuity. Sharing turns one person’s discovery into the next person’s first challenge.</p></div>
+          <div className="gg-section-heading"><p className="gg-kicker"><Share2 size={16} /> The engagement engine</p><h2 id="gg-loop-heading">A useful interaction should continue after the first click.</h2><p>The visual earns attention. The model earns understanding. The shared state brings the next person into the same system.</p></div>
           <div className="gg-loop-grid">{LOOP.map((item) => <article key={item.number}><span>{item.number}</span><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
-          <div className="gg-output-ribbon" aria-label="Generated outputs"><span>One session creates</span><strong>XP progress</strong><strong>Daily streak</strong><strong>Challenge link</strong><strong>Visual loop</strong><strong>Research state</strong></div>
+          <div className="gg-output-ribbon" aria-label="Generated outputs"><span>One experience can create</span><strong>Interactive lesson</strong><strong>Challenge link</strong><strong>Visual asset</strong><strong>Model note</strong><strong>Research state</strong></div>
         </section>
 
+        <ClientPathways />
+
         <section id="labs" className="gg-labs" aria-labelledby="gg-labs-heading">
-          <div className="gg-section-heading gg-section-heading-wide"><div><p className="gg-kicker"><FlaskConical size={16} /> Foundry experiments</p><h2 id="gg-labs-heading">Come for the game. Stay for the instrument.</h2></div><p>Each lab starts with a tactile mission, then opens into equations, assumptions, reproducible settings and exportable evidence.</p></div>
+          <div className="gg-section-heading gg-section-heading-wide"><div><p className="gg-kicker"><FlaskConical size={16} /> Beyond the public arcade</p><h2 id="gg-labs-heading">Three deeper tools. Three different jobs.</h2></div><p>The arcade builds intuition. These workspaces analyze content, expose claim boundaries and support deeper technical exploration.</p></div>
           <div className="gg-lab-grid">
-            {LABS.map((lab, index) => { const Icon = lab.icon; return <article key={lab.id} className={`gg-lab-card gg-lab-card-${(index % 4) + 1}`}><div className="gg-lab-card-art" aria-hidden="true"><Icon size={34} /><span /><span /><span /></div><div className="gg-lab-card-copy"><p>{lab.eyebrow}</p><h3>{lab.title}</h3><span>{lab.description}</span><button type="button" onClick={() => openLab(lab.id)}>{lab.action} <ArrowRight size={15} /></button></div></article>; })}
+            {DEEPER_TOOLS.map((lab, index) => { const Icon = lab.icon; return <article key={lab.id} className={`gg-lab-card gg-lab-card-${index + 1}`}><div className="gg-lab-card-art" aria-hidden="true"><Icon size={34} /><span /><span /><span /></div><div className="gg-lab-card-copy"><p>{lab.eyebrow}</p><h3>{lab.title}</h3><span>{lab.description}</span><button type="button" onClick={() => openLab(lab.id)}>{lab.action} <ArrowRight size={15} /></button></div></article>; })}
           </div>
         </section>
 
         <section className="gg-depth" aria-labelledby="gg-depth-heading">
           <div className="gg-depth-visual" aria-hidden="true"><div className="gg-depth-ring gg-depth-ring-one" /><div className="gg-depth-ring gg-depth-ring-two" /><div className="gg-depth-core"><Layers3 size={38} /></div><span className="gg-depth-node gg-depth-node-one">Play</span><span className="gg-depth-node gg-depth-node-two">Model</span><span className="gg-depth-node gg-depth-node-three">Verify</span><span className="gg-depth-node gg-depth-node-four">Publish</span></div>
-          <div className="gg-depth-copy"><p className="gg-kicker"><Layers3 size={16} /> Two depths, one experience</p><h2 id="gg-depth-heading">Entertainment on the surface. Research underneath.</h2><p>GaugeGap preserves the model, parameters, initial condition, assumptions and claim boundary so the same game can mature into a real research instrument.</p><ul><li><CheckCircle2 size={17} /> Every shared run preserves its settings.</li><li><CheckCircle2 size={17} /> Research mode exposes equations and limitations.</li><li><CheckCircle2 size={17} /> BrainSNN turns discoveries into responsible publishing.</li></ul><div className="gg-depth-actions"><Button variant="primary" onClick={() => onNavigate?.('research')}>Open research mode <Microscope size={16} /></Button><Button variant="ghost" onClick={() => onStart?.(CONTENT_SAMPLE)}>Test the publishing engine <WandSparkles size={16} /></Button></div></div>
+          <div className="gg-depth-copy"><p className="gg-kicker"><Layers3 size={16} /> One platform, two visible products</p><h2 id="gg-depth-heading">GaugeGap attracts attention. BrainSNN turns the result into a decision.</h2><p>The public experience should be simple. The engine underneath preserves the model, analyzes the message and supports a more responsible publishing workflow.</p><ul><li><CheckCircle2 size={17} /> GaugeGap handles interaction, missions and shareable states.</li><li><CheckCircle2 size={17} /> BrainSNN handles content analysis, revision and publishing decisions.</li><li><CheckCircle2 size={17} /> Research mode exposes equations, diagnostics and limitations.</li></ul><div className="gg-depth-actions"><Button variant="primary" onClick={openResearch}>Open research mode <Microscope size={16} /></Button><Button variant="ghost" onClick={() => onStart?.(CONTENT_SAMPLE)}>Test BrainSNN <WandSparkles size={16} /></Button></div></div>
         </section>
 
-        <section className="gg-final-cta" aria-labelledby="gg-final-heading"><div className="gg-final-glow" /><p className="gg-kicker"><Sparkles size={16} /> Twelve worlds are already running</p><h2 id="gg-final-heading">Pick a system. Complete the mission. Come back stronger tomorrow.</h2><p>The next person should arrive through your challenge—and find a reason to begin their own streak.</p><Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button></section>
+        <TrustLadder onResearch={openResearch} />
+
+        <section className="gg-final-cta" aria-labelledby="gg-final-heading"><div className="gg-final-glow" /><p className="gg-kicker"><Sparkles size={16} /> Choose the next useful step</p><h2 id="gg-final-heading">Play a system—or build one for the people you need to reach.</h2><p>The public arcade proves the interaction model. A focused client pilot applies it to your own audience, concept and outcome.</p><div className="gg-hero-actions"><Button variant="primary" onClick={scrollToPlayground}>Enter the arcade <ArrowRight size={17} /></Button><Button variant="secondary" onClick={() => scrollTo('clients')}>Discuss a client pilot <ArrowRight size={17} /></Button></div></section>
       </main>
 
-      <footer className="gg-footer"><div><span className="gg-brand-mark">G</span><p><strong>GaugeGap Foundry</strong><small>Playable science and publishing infrastructure by BrainSNN.</small></p></div><nav><button type="button" onClick={scrollToPlayground}>Arcade</button><button type="button" onClick={() => onNavigate?.('research')}>Research</button><button type="button" onClick={() => onStart?.('')}>BrainSNN scanner</button><button type="button" onClick={() => onOpenReconstruct?.()}>Reconstruct</button></nav><p className="gg-footer-note">Simulations are educational numerical models, not proof of physical claims. Exact assumptions and limitations belong with every research release.</p><p className="gg-footer-legal">© {new Date().getFullYear()} GaugeGap Foundry · BrainSNN.com</p></footer>
+      <footer className="gg-footer"><div><span className="gg-brand-mark">G</span><p><strong>GaugeGap Foundry</strong><small>Playable science and interactive client experiences by BrainSNN.</small></p></div><nav><button type="button" onClick={scrollToPlayground}>Arcade</button><button type="button" onClick={() => scrollTo('clients')}>For organizations</button><button type="button" onClick={openResearch}>Research</button><button type="button" onClick={() => onStart?.('')}>BrainSNN</button><a href="mailto:hello@brainsnn.com">Contact</a></nav><p className="gg-footer-note">Public simulations are educational numerical models, not proof of physical claims. Research releases must state assumptions, diagnostics and limitations.</p><p className="gg-footer-legal">© {new Date().getFullYear()} GaugeGap Foundry · BrainSNN.com</p></footer>
     </div>
   );
 }
