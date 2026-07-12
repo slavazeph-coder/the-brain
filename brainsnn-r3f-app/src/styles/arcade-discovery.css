@@ -59,7 +59,36 @@
 .gg-lab-loading strong { color: #e9ffff; }
 .gg-lab-loading small { color: var(--bsn-text-muted); }
 
+#labs .gg-lab-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#labs .gg-lab-card { grid-template-columns: 1fr; }
+#labs .gg-lab-card-art {
+  min-height: 190px;
+  border-right: 0;
+  border-bottom: 1px solid var(--gg-line);
+}
+
+.gg-final-cta .gg-hero-actions {
+  position: relative;
+  justify-content: center;
+}
+
+.gg-footer nav a {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  color: #a8adbf;
+  text-decoration: none;
+}
+.gg-footer nav a:hover { color: white; }
+
 @keyframes gg-lab-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1000px) {
+  #labs .gg-lab-grid { grid-template-columns: 1fr; }
+  #labs .gg-lab-card { grid-template-columns: minmax(170px, 0.5fr) minmax(0, 1fr); }
+  #labs .gg-lab-card-art { min-height: 100%; border-right: 1px solid var(--gg-line); border-bottom: 0; }
+}
 
 @media (max-width: 700px) {
   .gg-arcade-filters {
@@ -69,4 +98,6 @@
   .gg-arcade-filters button { width: 100%; }
   .gg-arcade-filters > span { grid-column: 1 / -1; margin-left: 0; text-align: right; }
   .gg-lab-loading { min-height: 420px; }
+  #labs .gg-lab-card { grid-template-columns: 1fr; }
+  #labs .gg-lab-card-art { min-height: 170px; border-right: 0; border-bottom: 1px solid var(--gg-line); }
 }
