@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download, Pause, Play, RotateCcw, Share2, Sparkles, Video } from 'lucide-react';
+import { Copy, Download, FileJson, Pause, Play, RotateCcw, Share2, Sparkles, Video } from 'lucide-react';
+import { buildAttractorEvidence, downloadJson } from './evidence.js';
 
 const PRESETS = [
   { id: 'classic', label: 'Classic butterfly', sigma: 10, rho: 28, beta: 2.667, speed: 1 },
@@ -288,6 +289,12 @@ export function AttractorPlayground() {
     { key: 'speed', label: 'Time', min: 0.35, max: 2, step: 0.05 },
   ];
 
+  async function exportEvidence() {
+    const pack = await buildAttractorEvidence({ params, scores, shareUrl: getShareUrl(), controls });
+    downloadJson(`gaugegap-evidence-attractor-${String(pack.content_hash).slice(0, 8)}.json`, pack);
+    setNotice('Evidence pack saved: exact parameters, solver settings and a content hash travel with your run.');
+  }
+
   return (
     <section id="playground" className="gg-playground" aria-labelledby="gg-playground-title">
       <div className="gg-playground-head">
@@ -366,6 +373,7 @@ export function AttractorPlayground() {
             <button type="button" onClick={copyRun}><Copy size={17} /> Copy link</button>
             <button type="button" onClick={downloadPoster}><Download size={17} /> Save poster</button>
             <button type="button" onClick={recordClip} disabled={recording}><Video size={17} /> {recording ? 'Recording…' : 'Record clip'}</button>
+            <button type="button" onClick={exportEvidence}><FileJson size={17} /> Export evidence</button>
           </div>
 
           <p className="gg-notice" role="status">{notice}</p>

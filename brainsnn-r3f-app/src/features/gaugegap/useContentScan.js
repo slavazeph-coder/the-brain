@@ -1,0 +1,57 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { analyzeContentLocally } from '../../lib/analysisEngine.js';
+import { runLayerRouter } from '../../lib/layerRouter.js';
+import { validateScanInput } from '../../lib/validation.js';
+import { track } from '../../lib/analytics.js';
+
+// Deterministic scan-time pause so the brain burst reads as a live simulation
+// instead of an instant table swap.
+const SIMULATION_MS = 550;
+
+export function scanContentLocally(content) {
+  const baseResult = analyzeContentLocally({ content, contentType: 'text', forceFallback: true });
+  return runLayerRouter({ content, contentType: 'text', baseResult });
+}
+
+// Fully client-side scan for the arcade's Content Reaction Lab: no fetch, no
+// cold start. The full /app workspace keeps its server-backed useScanEngine.
+export function useContentScan() {
+  const [input, setInput] = useState('');
+  const [status, setStatus] = useState('idle');
+  const [result, setResult] = useState(null);
+  const [previousResult, setPreviousResult] = useState(null);
+  const [error, setError] = useState('');
+  const timerRef = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+
+  const runSimulation = useCallback((override) => {
+    const content = typeof override === 'string' ? override : input;
+    const validation = validateScanInput(content);
+    if (!validation.valid) {
+      setError(validation.message);
+      return;
+    }
+    setError('');
+    setStatus('running');
+    track('gaugegap_content_scan_started', { chars: content.length });
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      const nextResult = scanContentLocally(content);
+      setResult((current) => {
+        setPreviousResult(current);
+        return nextResult;
+      });
+      setStatus('done');
+      track('gaugegap_content_scan_completed', { risk: nextResult.gaugeGapScore });
+    }, SIMULATION_MS);
+  }, [input]);
+
+  const applyContent = useCallback((content, { autoRun = true } = {}) => {
+    setInput(content);
+    setError('');
+    if (autoRun) runSimulation(content);
+  }, [runSimulation]);
+
+  return { input, setInput, status, result, previousResult, error, setError, runSimulation, applyContent };
+}

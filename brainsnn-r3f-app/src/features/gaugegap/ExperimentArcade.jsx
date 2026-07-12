@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Bug, Car, CircleDot, Dna, Gauge, Grid3X3, Leaf, Orbit, Shield, Shuffle, Sparkles, Waves, Wind } from 'lucide-react';
+import { Activity, BrainCircuit, Bug, Car, CircleDot, Dna, Gauge, Grid3X3, Leaf, Orbit, Shield, Shuffle, Sparkles, Waves, Wind } from 'lucide-react';
 import { ArcadeProgress, useArcadeProgress } from './ArcadeProgress.jsx';
 import { track } from '../../lib/analytics.js';
 import '../../styles/arcade.css';
@@ -23,6 +23,7 @@ const LAB_COMPONENTS = {
   traffic: lazyNamed(() => import('./PlayfulPlaygrounds.jsx'), 'TrafficTamerLab'),
   life: lazyNamed(() => import('./WorldPlaygrounds.jsx'), 'LifePainterLab'),
   ecosystem: lazyNamed(() => import('./WorldPlaygrounds.jsx'), 'EcosystemBalanceLab'),
+  content: lazyNamed(() => import('./ContentReactionLab.jsx'), 'ContentReactionLab'),
 };
 
 const EXPERIMENTS = [
@@ -38,11 +39,12 @@ const EXPERIMENTS = [
   { id: 'traffic', number: '010', title: 'Traffic Tamer', short: 'Beat the intersection', description: 'Control signal phases under rising demand and keep every queue from becoming a citywide jam.', icon: Car, accent: 'yellow', mechanic: 'Control', category: 'society', featured: true },
   { id: 'life', number: '011', title: 'Life Painter', short: 'Paint computation', description: 'Draw living cells and let four tiny rules transform them into moving, evolving machines.', icon: Grid3X3, accent: 'teal', mechanic: 'Invent', category: 'systems' },
   { id: 'ecosystem', number: '012', title: 'Ecosystem Keeper', short: 'Balance a living world', description: 'Add energy, prey or predators and keep the entire food web alive through delayed feedback.', icon: Leaf, accent: 'green', mechanic: 'Balance', category: 'life' },
+  { id: 'content', number: '013', title: 'Mind-Hack Autopsy', short: 'Scan viral content', description: 'Paste an ad, tweet or email and watch a live brain react — attention, trust, emotional charge and manipulation risk.', icon: BrainCircuit, accent: 'violet', mechanic: 'Decode', category: 'society', featured: true },
 ];
 
 const FILTERS = [
   { id: 'featured', label: 'Start here' },
-  { id: 'all', label: 'All 12' },
+  { id: 'all', label: 'All 13' },
   { id: 'physics', label: 'Physics' },
   { id: 'life', label: 'Life' },
   { id: 'systems', label: 'Complex systems' },
@@ -73,7 +75,7 @@ function LabLoading({ title }) {
   );
 }
 
-export function ExperimentArcade() {
+export function ExperimentArcade({ onOpenScanner }) {
   const [active, setActive] = useState(initialExperiment);
   const [filter, setFilter] = useState(initialFilter);
   const cardRefs = useRef(new Map());
@@ -155,7 +157,7 @@ export function ExperimentArcade() {
       <div className="gg-arcade-intro">
         <div>
           <p className="gg-kicker"><Activity size={16} /> GaugeGap science arcade</p>
-          <h2 id="gg-arcade-title">Start with four. Explore all twelve when you are ready.</h2>
+          <h2 id="gg-arcade-title">Start with five. Explore all thirteen when you are ready.</h2>
           <p>The stranger-friendly route shows the strongest first experiences. Filters reveal the full library without making the first visit feel like a wall of choices.</p>
         </div>
         <button type="button" className="gg-surprise-button" onClick={surpriseMe}><Shuffle size={16} /> Surprise me</button>
@@ -202,7 +204,7 @@ export function ExperimentArcade() {
       <div id="gg-active-lab" role="tabpanel" className="gg-arcade-stage" data-experiment={activeExperiment.id} aria-label={`${activeExperiment.title} experiment`}>
         <div className="gg-arcade-stage-topline"><span><i /> Experiment {activeExperiment.number} loaded</span><strong>{activeExperiment.title}</strong></div>
         <Suspense fallback={<LabLoading title={activeExperiment.title} />}>
-          <ActiveLab />
+          <ActiveLab {...(active === 'content' ? { onOpenScanner } : {})} />
         </Suspense>
       </div>
 

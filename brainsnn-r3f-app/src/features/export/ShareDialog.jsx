@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Copy, Download, FileJson, FileText, Link2, Share2 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal.jsx';
 import { track } from '../../lib/analytics.js';
-import { deriveExecutiveVerdict, getBusinessMetrics } from '../../lib/scoreMapping.js';
+import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
+import { getHeadlineScores } from '../../lib/headlineScores.js';
 import { ExportCard } from './ExportCard.jsx';
 import { SharePreview } from './SharePreview.jsx';
 import { downloadBlob, renderScoreCardBlob, shareScoreCard } from './scoreCard.js';
@@ -17,8 +18,8 @@ export function ShareDialog({ open, onClose, result }) {
   const verdict = result ? deriveExecutiveVerdict(result) : null;
   const shareText = useMemo(() => {
     if (!result || !verdict) return '';
-    const metricMap = Object.fromEntries(getBusinessMetrics(result).map((metric) => [metric.id, metric.value]));
-    return `BRAIN SCAN\n"${verdict.headline}"\n\nHook Strength: ${metricMap.hookStrength}\nTrust: ${metricMap.trust}\nViral Pull: ${verdict.viralScore}\nManipulation Risk: ${metricMap.manipulationRisk}\n\nAI-estimated content response from BrainSNN — scan yours free at brainsnn.com`;
+    const lines = getHeadlineScores(result).map((metric) => `${metric.label}: ${metric.value}`).join('\n');
+    return `BRAIN SCAN\n"${verdict.headline}"\n\n${lines}\n\nAI-estimated content response from BrainSNN — scan yours free at brainsnn.com`;
   }, [result, verdict]);
 
   useEffect(() => {

@@ -16,11 +16,11 @@ describe('composeScoreCardText', () => {
     expect(card.excerpt.endsWith('…')).toBe(true);
   });
 
-  it('includes viral pull and manipulation risk rows', () => {
+  it('includes the four playground headline rows', () => {
     const card = composeScoreCardText(mockResult);
     const labels = card.metricRows.map(([label]) => label);
-    expect(labels).toContain('Viral Pull');
-    expect(labels).toContain('Manipulation Risk');
+    expect(labels).toEqual(['Attention', 'Trust', 'Emotional Charge', 'Manipulation Risk']);
+    for (const [, value] of card.metricRows) expect(Number.isFinite(value)).toBe(true);
     expect(card.footer).toBe('brainsnn.com');
   });
 
