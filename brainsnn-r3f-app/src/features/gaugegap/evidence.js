@@ -27,7 +27,7 @@ export async function sha256Hex(text) {
 
 // Solver facts mirror the render loop in AttractorPlayground.jsx; update both
 // together if the integrator changes.
-export async function buildAttractorEvidence({ params, scores, shareUrl, controls = [], now = new Date() }) {
+export async function buildAttractorEvidence({ params = {}, scores, shareUrl, controls = [], now = new Date() } = {}) {
   const pack = {
     schema: EVIDENCE_SCHEMA,
     created_at_utc: now.toISOString(),
@@ -58,10 +58,14 @@ export async function buildAttractorEvidence({ params, scores, shareUrl, control
 }
 
 export function downloadJson(filename, data) {
+  if (typeof document === 'undefined') return;
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = filename;
+  // Firefox needs the anchor in the DOM before click() triggers a download.
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
   window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }

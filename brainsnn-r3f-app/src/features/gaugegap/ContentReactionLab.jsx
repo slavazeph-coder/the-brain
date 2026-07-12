@@ -81,6 +81,10 @@ export function ContentReactionLab({ onOpenScanner }) {
 
   async function pasteFromClipboard() {
     try {
+      if (!navigator?.clipboard?.readText) {
+        setError('Clipboard access is not supported here — paste into the box instead.');
+        return;
+      }
       const text = await navigator.clipboard.readText();
       if (text) {
         setInput(text.slice(0, MAX_SCAN_CHARS));
