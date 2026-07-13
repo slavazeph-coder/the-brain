@@ -8,6 +8,28 @@ import { track } from '../../lib/analytics.js';
 // instead of an instant table swap.
 const SIMULATION_MS = 550;
 
+// Challenge links carry the pasted text in the same `state` param the other
+// arcade labs use, so the arcade's lab-switch cleanup applies unchanged.
+export const SHARED_TEXT_LIMIT = 1600;
+
+export function parseSharedContent(search) {
+  const params = new URLSearchParams(search || '');
+  if (params.get('lab') !== 'content') return null;
+  const raw = params.get('state');
+  if (!raw) return null;
+  const text = String(raw).slice(0, SHARED_TEXT_LIMIT).trim();
+  return validateScanInput(text).valid ? text : null;
+}
+
+export function buildContentShareUrl(href, text) {
+  const url = new URL(href);
+  url.searchParams.set('lab', 'content');
+  url.searchParams.delete('run');
+  url.searchParams.set('state', String(text || '').slice(0, SHARED_TEXT_LIMIT));
+  url.hash = 'playground';
+  return url.toString();
+}
+
 export function scanContentLocally(content) {
   const baseResult = analyzeContentLocally({ content, contentType: 'text', forceFallback: true });
   return runLayerRouter({ content, contentType: 'text', baseResult });

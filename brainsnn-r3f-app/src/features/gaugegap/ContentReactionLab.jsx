@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowRight, ClipboardPaste, Eraser, Play, Share2, Sparkles, WandSparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, ClipboardPaste, Copy, Eraser, Link2, Play, Share2, Sparkles, WandSparkles } from 'lucide-react';
 import { Brain3D } from '../brain3d/Brain3D.jsx';
 import { BrainVisualizer } from '../results/BrainVisualizer.jsx';
 import { ShareDialog } from '../export/ShareDialog.jsx';
@@ -10,8 +10,8 @@ import { getClassicPreset } from '../../lib/classicPresets.js';
 import { compareResults, deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 import { MAX_SCAN_CHARS } from '../../lib/validation.js';
 import { track } from '../../lib/analytics.js';
-import { DeepLabHeading } from './DeepLabChrome.jsx';
-import { useContentScan, scanContentLocally } from './useContentScan.js';
+import { copyChallenge, DeepLabHeading, shareChallenge } from './DeepLabChrome.jsx';
+import { buildContentShareUrl, parseSharedContent, useContentScan, scanContentLocally } from './useContentScan.js';
 
 const GENRES = [
   { id: 'ad', label: 'Ad', presetId: 'luxury-scarcity-ad', placeholder: 'Paste ad copy — the promise, the pressure, the ask…' },
@@ -59,6 +59,20 @@ export function ContentReactionLab({ onOpenScanner }) {
   const [genreId, setGenreId] = useState('ad');
   const [shareOpen, setShareOpen] = useState(false);
   const [rewrite, setRewrite] = useState(null);
+  const [notice, setNotice] = useState('');
+  const shared = useMemo(() => (typeof window === 'undefined' ? null : parseSharedContent(window.location.search)), []);
+  const applyContentRef = useRef(applyContent);
+  applyContentRef.current = applyContent;
+
+  // Deliberately depends on `shared` only: the effect must re-fire when
+  // StrictMode's dev double-invoke clears the pending scan timer, but must not
+  // re-apply the shared text on every keystroke (applyContent is unstable).
+  useEffect(() => {
+    if (!shared) return;
+    applyContentRef.current(shared);
+    setNotice('Challenge loaded — this exact text arrived with the shared link. Beat its scores.');
+    track('gaugegap_content_challenge_opened');
+  }, [shared]);
 
   const genre = GENRES.find((entry) => entry.id === genreId) || GENRES[0];
   const scores = result ? getHeadlineScores(result) : null;
@@ -68,6 +82,7 @@ export function ContentReactionLab({ onOpenScanner }) {
 
   function handleRun(content) {
     setRewrite(null);
+    setNotice('');
     runSimulation(content);
   }
 
@@ -93,6 +108,25 @@ export function ContentReactionLab({ onOpenScanner }) {
     } catch {
       setError('Clipboard access was blocked — paste into the box instead.');
     }
+  }
+
+  function challengeUrl() {
+    return buildContentShareUrl(window.location.href, input);
+  }
+
+  async function shareChallengeLink() {
+    track('gaugegap_content_challenge_shared');
+    await shareChallenge({
+      title: 'Run my copy through a brain',
+      text: 'I scanned this in the BrainSNN content lab. Open the link, see the reaction, then try beating the scores with your version.',
+      url: challengeUrl(),
+      setNotice,
+    });
+  }
+
+  async function copyChallengeLink() {
+    track('gaugegap_content_challenge_copied');
+    await copyChallenge(challengeUrl(), setNotice);
   }
 
   function makeRewrite({ goal, label }) {
@@ -150,7 +184,7 @@ export function ContentReactionLab({ onOpenScanner }) {
           </button>
           {error ? <p className="gg-content-error" role="alert">{error}</p> : null}
           <p className="gg-content-status" role="status">
-            {running ? 'Signal entering the lattice — watch the regions light up.' : result ? 'Simulation complete. Rewrite it, share it, or change one line and run again.' : 'Nothing leaves your browser: the scan runs locally.'}
+            {notice || (running ? 'Signal entering the lattice — watch the regions light up.' : result ? 'Simulation complete. Rewrite it, share it, or change one line and run again.' : 'Nothing leaves your browser: the scan runs locally.')}
           </p>
         </div>
 
@@ -175,6 +209,8 @@ export function ContentReactionLab({ onOpenScanner }) {
             </button>
           ))}
           <button type="button" onClick={() => setShareOpen(true)}><Share2 size={15} /> Share score card</button>
+          <button type="button" onClick={shareChallengeLink}><Link2 size={15} /> Share challenge</button>
+          <button type="button" onClick={copyChallengeLink}><Copy size={15} /> Copy link</button>
           <button type="button" className="gg-content-open-app" onClick={() => onOpenScanner?.(input)}>
             Open full analysis <ArrowRight size={15} />
           </button>

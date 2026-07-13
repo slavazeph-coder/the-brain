@@ -183,6 +183,13 @@ test('content reaction lab runs a fully local simulation on the homepage', async
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
 });
 
+test('shared challenge link prefills and auto-runs the content lab', async ({ page }) => {
+  const sample = 'Only forty were ever made. Private viewings close this week.';
+  await page.goto(`/?lab=content&state=${encodeURIComponent(sample)}#playground`);
+  await expect(page.getByLabel('Content to simulate')).toHaveValue(sample);
+  await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
+});
+
 test('arcade selector opens the content lab from the featured row', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('tab', { name: /Mind-Hack Autopsy/ }).click();
