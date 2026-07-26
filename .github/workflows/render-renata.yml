@@ -7,6 +7,12 @@ on:
     paths:
       - tools/renata_render.py
       - .github/workflows/render-renata.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/renata_render.py
+      - .github/workflows/render-renata.yml
   workflow_dispatch:
 
 permissions:
