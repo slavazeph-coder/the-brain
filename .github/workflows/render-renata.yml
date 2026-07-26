@@ -6,12 +6,14 @@ on:
       - render/por-que-renata-episode1
     paths:
       - tools/renata_render.py
+      - tools/polish_renata_subtitles.py
       - .github/workflows/render-renata.yml
   pull_request:
     branches:
       - main
     paths:
       - tools/renata_render.py
+      - tools/polish_renata_subtitles.py
       - .github/workflows/render-renata.yml
   workflow_dispatch:
 
@@ -34,6 +36,9 @@ jobs:
 
       - name: Build full vertical episode
         run: python3 tools/renata_render.py
+
+      - name: Polish mobile subtitles
+        run: python3 tools/polish_renata_subtitles.py
 
       - name: Inspect rendered files
         run: |
