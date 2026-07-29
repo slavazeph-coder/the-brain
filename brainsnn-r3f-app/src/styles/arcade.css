@@ -811,3 +811,112 @@
   .gg-content-brain > * { min-height: 300px; }
   .gg-content-actions .gg-content-open-app { margin-left: 0; }
 }
+
+/* ---- Content lab: per-sentence math ---- */
+
+.gg-content-band {
+  font-family: var(--bsn-font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--bsn-text-muted);
+}
+
+.gg-content-math {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(10, 10, 20, 0.72);
+}
+
+.gg-content-math-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.gg-content-math-head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #e7fbff;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gg-content-math-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gg-content-math-tabs button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bsn-text-muted);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.gg-content-math-tabs button.active {
+  border-color: rgba(125, 249, 255, 0.55);
+  background: rgba(125, 249, 255, 0.12);
+  color: #e7fbff;
+}
+
+.gg-content-drivers {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: driver;
+}
+
+.gg-content-drivers li {
+  display: grid;
+  gap: 6px;
+}
+
+.gg-content-driver-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.gg-content-driver-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7df9ff, #ff5edb);
+}
+
+.gg-content-drivers p {
+  margin: 0;
+  color: var(--bsn-text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.gg-content-drivers em {
+  font-style: normal;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.74rem;
+  color: var(--bsn-cyan);
+}
+
+.gg-content-math-note {
+  margin: 0;
+  color: var(--bsn-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}

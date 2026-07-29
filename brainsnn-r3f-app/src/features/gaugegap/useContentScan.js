@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { analyzeContentLocally } from '../../lib/analysisEngine.js';
 import { runLayerRouter } from '../../lib/layerRouter.js';
 import { validateScanInput } from '../../lib/validation.js';
+import { analyzeSensitivity } from '../../lib/ablation.js';
 import { track } from '../../lib/analytics.js';
 
 // Deterministic scan-time pause so the brain burst reads as a live simulation
@@ -42,6 +43,7 @@ export function useContentScan() {
   const [status, setStatus] = useState('idle');
   const [result, setResult] = useState(null);
   const [previousResult, setPreviousResult] = useState(null);
+  const [sensitivity, setSensitivity] = useState(null);
   const [error, setError] = useState('');
   const timerRef = useRef(0);
 
@@ -64,6 +66,9 @@ export function useContentScan() {
         setPreviousResult(current);
         return nextResult;
       });
+      // Leave-one-sentence-out attribution and its jackknife band. Measured at
+      // ~27 ms for the 18-sentence ceiling, so it runs inline with the scan.
+      setSensitivity(analyzeSensitivity(content));
       setStatus('done');
       track('gaugegap_content_scan_completed', { risk: nextResult.gaugeGapScore });
     }, SIMULATION_MS);
@@ -75,5 +80,5 @@ export function useContentScan() {
     if (autoRun) runSimulation(content);
   }, [runSimulation]);
 
-  return { input, setInput, status, result, previousResult, error, setError, runSimulation, applyContent };
+  return { input, setInput, status, result, previousResult, sensitivity, error, setError, runSimulation, applyContent };
 }

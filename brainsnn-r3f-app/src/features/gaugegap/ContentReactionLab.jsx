@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ClipboardPaste, Copy, Eraser, Link2, Play, Share2, Sparkles, WandSparkles } from 'lucide-react';
+import { ArrowRight, ClipboardPaste, Copy, Eraser, Link2, Play, Share2, Sigma, Sparkles, WandSparkles } from 'lucide-react';
 import { Brain3D } from '../brain3d/Brain3D.jsx';
 import { BrainVisualizer } from '../results/BrainVisualizer.jsx';
 import { ShareDialog } from '../export/ShareDialog.jsx';
 import { createRewrite } from '../improve/rewrite.js';
 import { isKeyboardScanShortcut } from '../scan/keyboard.js';
 import { getHeadlineScores } from '../../lib/headlineScores.js';
+import { topDrivers } from '../../lib/ablation.js';
 import { getClassicPreset } from '../../lib/classicPresets.js';
 import { compareResults, deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 import { MAX_SCAN_CHARS } from '../../lib/validation.js';
@@ -28,7 +29,7 @@ const REWRITE_ACTIONS = [
 
 const PLACEHOLDER_TILES = ['Attention', 'Trust', 'Emotional Charge', 'Manipulation Risk'].map((label) => ({ id: `pending-${label}`, label }));
 
-function ScoreTiles({ scores, previousScores }) {
+function ScoreTiles({ scores, previousScores, band }) {
   const previousById = previousScores ? Object.fromEntries(previousScores.map((score) => [score.id, score.value])) : {};
   return (
     <div className="gg-content-scores" role="group" aria-label="Headline content scores">
@@ -46,6 +47,11 @@ function ScoreTiles({ scores, previousScores }) {
                 {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}
               </em>
             ) : null}
+            {!pending && band?.[score.id]?.stderr > 0 ? (
+              <b className="gg-content-band" title="Jackknife standard error over leave-one-sentence-out replicates">
+                ±{band[score.id].stderr}
+              </b>
+            ) : null}
             <small>{pending ? 'Run a simulation' : score.detail || score.explanation}</small>
           </article>
         );
@@ -54,8 +60,63 @@ function ScoreTiles({ scores, previousScores }) {
   );
 }
 
+function DriverPanel({ sensitivity, scores }) {
+  const [scoreId, setScoreId] = useState('manipulationRisk');
+  if (!sensitivity) return null;
+  if (!sensitivity.sentences.length) {
+    return <p className="gg-content-status">{sensitivity.note}</p>;
+  }
+
+  const drivers = topDrivers(sensitivity, scoreId, { limit: 4 });
+  const label = scores?.find((score) => score.id === scoreId)?.label || scoreId;
+  const spread = sensitivity.orderSensitivity?.[scoreId] ?? 0;
+
+  return (
+    <div className="gg-content-math" data-testid="content-math">
+      <div className="gg-content-math-head">
+        <strong><Sigma size={15} /> Where this score comes from</strong>
+        <div className="gg-content-math-tabs" role="tablist" aria-label="Score to explain">
+          {(scores || []).map((score) => (
+            <button
+              key={score.id}
+              type="button"
+              role="tab"
+              aria-selected={score.id === scoreId}
+              className={score.id === scoreId ? 'active' : ''}
+              onClick={() => setScoreId(score.id)}
+            >
+              {score.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {drivers.length ? (
+        <ol className="gg-content-drivers">
+          {drivers.map((driver) => (
+            <li key={driver.index}>
+              <div className="gg-content-driver-bar" aria-hidden="true">
+                <span style={{ width: `${Math.min(100, driver.share)}%` }} />
+              </div>
+              <p>{driver.sentence}</p>
+              <em>+{driver.contribution} pts · {driver.share}% of {label}</em>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="gg-content-status">No single sentence raises {label} — it comes from the text as a whole.</p>
+      )}
+
+      <p className="gg-content-math-note">
+        Each sentence is scored by removing it and re-running the scan. The ± on each tile is the
+        jackknife standard error over those runs. Reordering the sentences moves {label} by {spread} pts.
+      </p>
+    </div>
+  );
+}
+
 export function ContentReactionLab({ onOpenScanner }) {
-  const { input, setInput, status, result, previousResult, error, setError, runSimulation, applyContent } = useContentScan();
+  const { input, setInput, status, result, previousResult, sensitivity, error, setError, runSimulation, applyContent } = useContentScan();
   const [genreId, setGenreId] = useState('ad');
   const [shareOpen, setShareOpen] = useState(false);
   const [rewrite, setRewrite] = useState(null);
@@ -199,7 +260,9 @@ export function ContentReactionLab({ onOpenScanner }) {
         </div>
       </div>
 
-      <ScoreTiles scores={scores} previousScores={previousScores} />
+      <ScoreTiles scores={scores} previousScores={previousScores} band={sensitivity?.band} />
+
+      <DriverPanel sensitivity={sensitivity} scores={scores} />
 
       {result ? (
         <div className="gg-content-actions">

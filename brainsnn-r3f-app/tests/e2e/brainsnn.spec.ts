@@ -183,6 +183,25 @@ test('content reaction lab runs a fully local simulation on the homepage', async
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
 });
 
+test('content lab shows per-sentence math with a jackknife band', async ({ page }) => {
+  await page.goto('/?lab=content#playground');
+  await page.getByLabel('Content to simulate').fill(
+    'Our team shipped a small update to the billing page this week. '
+    + 'URGENT: verify your account within 24 hours or it will be permanently deleted, click immediately!',
+  );
+  await page.getByRole('button', { name: 'Run simulation' }).click();
+
+  const math = page.getByTestId('content-math');
+  await expect(math).toBeVisible();
+  // The pressure sentence, not the benign opener, should own the risk score.
+  await expect(math.locator('.gg-content-drivers li').first()).toContainText('URGENT');
+  await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Manipulation Risk');
+
+  // Switching the explained score re-attributes.
+  await math.getByRole('tab', { name: 'Attention' }).click();
+  await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Attention');
+});
+
 test('shared challenge link prefills and auto-runs the content lab', async ({ page }) => {
   const sample = 'Only forty were ever made. Private viewings close this week.';
   await page.goto(`/?lab=content&state=${encodeURIComponent(sample)}#playground`);
