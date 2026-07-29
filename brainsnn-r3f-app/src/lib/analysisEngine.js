@@ -11,6 +11,8 @@ const CURIOSITY_TERMS = /\b(what if|why|how|secret|surprising|learn|discover|bef
 const SPECIFIC_TERMS = /\b(\d+(?:[.,:]\d+)?%?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|seconds?|minutes?|hours?|days?|weeks?|months?)\b/gi;
 // Admitting limits is a credibility signal, not a weakness.
 const LIMITATION_TERMS = /\b(do not know|don'?t know|not yet|uncertain|directional|rather than|caveat|limitation|approximately|estimated|remaining|unchanged|treat .{0,12} as)\b/gi;
+// Concrete detail wrapped in a deadline or ultimatum.
+const COERCED_SPECIFIC_TERMS = /\b(?:within|in|for|after|before|next|only|just|last)\s+(?:the\s+)?(?:next\s+)?\d+(?:[.,:]\d+)?\s*(?:seconds?|minutes?|hours?|days?|weeks?|months?)?|\b\d+\s*(?:seconds?|minutes?|hours?|days?)\s+(?:or|before|left|remaining)\b/gi;
 const VAGUE_TERMS = /\b(game[- ]changer|revolutionary|world[- ]class|best|ultimate|massive|unprecedented|guaranteed|viral|explode)\b/gi;
 
 function countMatches(text, regex) {
@@ -69,11 +71,15 @@ export function analyzeContentLocally({ content, contentType = 'text', forceFall
   const curiosityHits = countMatches(rawContent, CURIOSITY_TERMS);
   const vagueHits = countMatches(rawContent, VAGUE_TERMS);
   const specificHits = countMatches(rawContent, SPECIFIC_TERMS);
+  // "verify within 24 hours" is a deadline, not proof: discount concrete
+  // detail that appears inside urgency phrasing so pressure cannot buy trust.
+  const coercedSpecifics = countMatches(rawContent, COERCED_SPECIFIC_TERMS);
+  const evidenceHits = Math.max(0, specificHits - coercedSpecifics);
   const limitationHits = countMatches(rawContent, LIMITATION_TERMS);
   const wordCount = Math.max(1, rawContent.split(/\s+/).filter(Boolean).length);
 
   const trust = clampScore(
-    46 + trustHits * 7 + specificHits * 8 + limitationHits * 9 + empathyHits * 2
+    46 + trustHits * 7 + evidenceHits * 8 + limitationHits * 9 + empathyHits * 2
     - vagueHits * 9 - fearHits * 4 - angerHits * 7,
     50,
   );

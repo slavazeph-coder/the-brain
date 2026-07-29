@@ -1,31 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Flame, Medal, Star, Trophy } from 'lucide-react';
+import {
+  ACHIEVEMENT_XP,
+  applyAchievement,
+  applyVisit,
+  dateKey,
+  emptyProgress,
+  levelFor,
+  normalizeProgress,
+  STORAGE_KEY,
+  yesterdayKey,
+} from './arcadeProgressCore.js';
 
-const STORAGE_KEY = 'gaugegap-arcade-progress-v1';
-
-function dateKey(date = new Date()) {
-  return date.toISOString().slice(0, 10);
-}
-
-function yesterdayKey() {
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
-  return dateKey(date);
-}
 
 function readProgress() {
-  if (typeof window === 'undefined') return { visited: [], xp: 0, streak: 0, lastVisit: '', dailyWins: [] };
+  if (typeof window === 'undefined') return emptyProgress();
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
-    return {
-      visited: Array.isArray(parsed.visited) ? parsed.visited : [],
-      xp: Number(parsed.xp) || 0,
-      streak: Number(parsed.streak) || 0,
-      lastVisit: parsed.lastVisit || '',
-      dailyWins: Array.isArray(parsed.dailyWins) ? parsed.dailyWins : [],
-    };
+    return normalizeProgress(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}'));
   } catch {
-    return { visited: [], xp: 0, streak: 0, lastVisit: '', dailyWins: [] };
+    return emptyProgress();
   }
 }
 
@@ -45,25 +38,21 @@ export function useArcadeProgress(experiments) {
   }, [progress]);
 
   const recordVisit = useCallback((id) => {
-    const today = dateKey();
-    setProgress((current) => {
-      const firstVisit = !current.visited.includes(id);
-      const firstToday = current.lastVisit !== today;
-      const dailyWin = id === dailyLab?.id && !current.dailyWins.includes(today);
-      let streak = current.streak;
-      if (firstToday) streak = current.lastVisit === yesterdayKey() ? Math.max(1, current.streak + 1) : 1;
-      return {
-        visited: firstVisit ? [...current.visited, id] : current.visited,
-        xp: current.xp + (firstVisit ? 25 : 2) + (dailyWin ? 50 : 0),
-        streak,
-        lastVisit: today,
-        dailyWins: dailyWin ? [...current.dailyWins.slice(-29), today] : current.dailyWins,
-      };
-    });
+    setProgress((current) => applyVisit(current, {
+      id,
+      dailyLabId: dailyLab?.id,
+      today: dateKey(),
+      yesterday: yesterdayKey(),
+    }));
   }, [dailyLab?.id]);
 
-  const level = Math.floor(progress.xp / 125) + 1;
-  const levelProgress = progress.xp % 125;
+  // Pay XP for something the player actually did inside a lab. Idempotent:
+  // re-earning an achievement never pays twice.
+  const recordAchievement = useCallback((id, options = {}) => {
+    setProgress((current) => applyAchievement(current, id, options));
+  }, []);
+
+  const { level, levelProgress } = levelFor(progress.xp);
   const achievements = useMemo(() => [
     { id: 'first', label: 'First Contact', unlocked: progress.visited.length >= 1 },
     { id: 'sampler', label: 'System Sampler', unlocked: progress.visited.length >= 4 },
@@ -71,9 +60,11 @@ export function useArcadeProgress(experiments) {
     { id: 'completionist', label: 'Foundry Completionist', unlocked: progress.visited.length >= experiments.length },
     { id: 'streak', label: 'Three-Day Signal', unlocked: progress.streak >= 3 },
     { id: 'daily', label: 'Daily Challenger', unlocked: progress.dailyWins.length >= 3 },
-  ], [experiments.length, progress.dailyWins.length, progress.streak, progress.visited.length]);
+    { id: 'defender', label: 'Held the Line', unlocked: progress.unlocked.includes('defender') },
+    { id: 'efficient-defender', label: 'Minimal Intervention', unlocked: progress.unlocked.includes('efficient-defender') },
+  ], [experiments.length, progress.dailyWins.length, progress.streak, progress.visited.length, progress.unlocked]);
 
-  return { progress, recordVisit, dailyLab, level, levelProgress, achievements };
+  return { progress, recordVisit, recordAchievement, dailyLab, level, levelProgress, achievements };
 }
 
 export function ArcadeProgress({ progress, level, levelProgress, achievements, dailyLab, onOpenDaily }) {

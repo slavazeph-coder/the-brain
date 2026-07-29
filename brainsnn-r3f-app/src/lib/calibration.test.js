@@ -46,8 +46,8 @@ describe('calibration corpus', () => {
 // scoring change cannot quietly make rank agreement worse; raise them whenever
 // the engine genuinely improves.
 //
-// Measured 2026-07: trust 0.56, manipulationRisk 0.60, urgency 0.64,
-// viralPull 0.37; overall pair accuracy 0.80, mean Spearman 0.54.
+// Measured 2026-07: trust 0.70, manipulationRisk 0.63, urgency 0.64,
+// viralPull 0.37; overall pair accuracy 0.81, mean Spearman 0.59.
 describe('measured calibration (regression guard)', () => {
   it('ranks urgency well', () => {
     expect(report.dimensions.urgency.spearman).toBeGreaterThan(0.55);
@@ -67,8 +67,8 @@ describe('measured calibration (regression guard)', () => {
   // specificity and stated-limitation signals turned it positive. This must
   // never go negative again.
   it('ranks trust in the right direction', () => {
-    expect(report.dimensions.trust.spearman).toBeGreaterThan(0.45);
-    expect(report.dimensions.trust.inversionRate).toBeLessThan(0.3);
+    expect(report.dimensions.trust.spearman).toBeGreaterThan(0.6);
+    expect(report.dimensions.trust.inversionRate).toBeLessThan(0.25);
   });
 
   it('keeps overall pair accuracy well above chance', () => {
@@ -98,16 +98,21 @@ describe('the trust defect that calibration caught', () => {
     expect(hedged.trust).toBeGreaterThan(absolute.trust);
   });
 
-  // KNOWN REMAINING LIMITATION, documented rather than hidden.
-  //
-  // The specificity signal counts numerals and time units, so a fake deadline
-  // ("verify within 24 hours") reads as concrete detail and lifts the trust
-  // score of phishing above where it belongs. Discounting numerals adjacent to
-  // urgency terms is the obvious next step; until then this is pinned so the
-  // limitation stays visible and cannot drift further.
-  it('still over-credits deadline numerals in phishing', () => {
+  // Fix for the limitation this suite previously pinned: the specificity
+  // signal counted numerals, so a fake deadline ("verify within 24 hours")
+  // read as concrete detail. Specifics inside urgency phrasing are now
+  // discounted, which must not cost an HONEST deadline its credit.
+  it('no longer lets a fake deadline buy trust', () => {
     const phishing = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'account-phishing-email'));
-    expect(phishing.trust).toBeGreaterThan(60);
+    const flashSale = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'countdown-flash-sale'));
+    expect(phishing.trust).toBeLessThanOrEqual(60);
+    expect(flashSale.trust).toBeLessThan(50);
+  });
+
+  it('still credits a deadline that gives its reason', () => {
+    const honest = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'measured-deadline-notice'));
+    const phishing = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'account-phishing-email'));
+    expect(honest.trust).toBeGreaterThan(phishing.trust + 25);
   });
 });
 

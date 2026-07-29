@@ -40,7 +40,7 @@ function layoutRegions(width, height) {
   }]));
 }
 
-export function BrainGameLab() {
+export function BrainGameLab({ onAchievement }) {
   const [mode, setMode] = useState('mission');
   const [paused, setPaused] = useState(false);
   const [interventions, setInterventions] = useState(EMPTY);
@@ -66,6 +66,21 @@ export function BrainGameLab() {
   const rules = mode === 'challenge' ? CHALLENGE : MISSION;
   const used = countInterventions(interventions);
   const finished = evaluation.status === 'won' || evaluation.status === 'lost';
+
+  // XP for an actual accomplishment rather than for opening the lab. Fires once
+  // per outcome; recordAchievement is itself idempotent.
+  const awardedRef = useRef('');
+  useEffect(() => {
+    if (evaluation.status !== 'won' || mode === 'sandbox') return;
+    const key = `${mode}-${evaluation.scores.defense}`;
+    if (awardedRef.current === key) return;
+    awardedRef.current = key;
+    onAchievement?.('defender', { score: evaluation.scores.defense, labId: 'braingame' });
+    if (evaluation.remaining >= rules.budget - 1) {
+      onAchievement?.('efficient-defender', { score: evaluation.scores.defense, labId: 'braingame' });
+    }
+    track('gaugegap_brain_mission_won', { mode, defense: evaluation.scores.defense });
+  }, [evaluation.status, evaluation.scores.defense, evaluation.remaining, mode, onAchievement, rules.budget]);
 
   // The simulation owns its own loop so the canvas never waits on React.
   useEffect(() => {
@@ -269,6 +284,7 @@ export function BrainGameLab() {
     setNotice('');
     setMode(nextMode);
     setResetKey((key) => key + 1);
+    awardedRef.current = '';
   }
 
   function handleCanvasClick(event) {

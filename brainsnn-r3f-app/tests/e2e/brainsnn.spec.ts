@@ -183,6 +183,19 @@ test('content reaction lab runs a fully local simulation on the homepage', async
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
 });
 
+test('spiking network lab runs in a worker and shows the regimes', async ({ page }) => {
+  await page.goto('/?lab=spiking#playground');
+  await expect(page.getByTestId('spiking-network-lab')).toBeVisible();
+  // The first run is kicked off on mount and executes off the main thread.
+  await expect(page.getByTestId('snn-hud')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('snn-hud')).toContainText(/Hz/i);
+
+  // Sub-threshold external drive must silence the network entirely.
+  await page.getByRole('button', { name: 'Below threshold' }).click();
+  await page.getByRole('button', { name: /Run network/ }).click();
+  await expect(page.getByTestId('snn-hud')).toContainText('0 Hz', { timeout: 30_000 });
+});
+
 test('defend the brain mission is machine-checked and losable', async ({ page }) => {
   await page.goto('/?lab=braingame#playground');
   await expect(page.getByTestId('brain-game-lab')).toBeVisible();

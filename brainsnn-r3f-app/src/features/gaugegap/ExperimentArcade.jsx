@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Brain, BrainCircuit, Bug, Car, CircleDot, Dna, Gauge, Grid3X3, Leaf, Orbit, Shield, Shuffle, Sparkles, Waves, Wind } from 'lucide-react';
+import { Activity, Brain, BrainCircuit, Bug, Cpu, Car, CircleDot, Dna, Gauge, Grid3X3, Leaf, Orbit, Shield, Shuffle, Sparkles, Waves, Wind } from 'lucide-react';
 import { ArcadeProgress, useArcadeProgress } from './ArcadeProgress.jsx';
 import { track } from '../../lib/analytics.js';
 import '../../styles/arcade.css';
@@ -25,6 +25,7 @@ const LAB_COMPONENTS = {
   ecosystem: lazyNamed(() => import('./WorldPlaygrounds.jsx'), 'EcosystemBalanceLab'),
   content: lazyNamed(() => import('./ContentReactionLab.jsx'), 'ContentReactionLab'),
   braingame: lazyNamed(() => import('./BrainGameLab.jsx'), 'BrainGameLab'),
+  spiking: lazyNamed(() => import('./SpikingNetworkLab.jsx'), 'SpikingNetworkLab'),
 };
 
 const EXPERIMENTS = [
@@ -42,11 +43,12 @@ const EXPERIMENTS = [
   { id: 'ecosystem', number: '012', title: 'Ecosystem Keeper', short: 'Balance a living world', description: 'Add energy, prey or predators and keep the entire food web alive through delayed feedback.', icon: Leaf, accent: 'green', mechanic: 'Balance', category: 'life' },
   { id: 'content', number: '013', title: 'Mind-Hack Autopsy', short: 'Scan viral content', description: 'Paste an ad, tweet or email and watch a live brain react — attention, trust, emotional charge and manipulation risk.', icon: BrainCircuit, accent: 'violet', mechanic: 'Decode', category: 'society', featured: true },
   { id: 'braingame', number: '014', title: 'Defend the Brain', short: 'Hold the loop', description: 'Pressure ramps into the threat loop. Cut, lesion or stimulate to keep judgment online before the gate is taken.', icon: Brain, accent: 'red', mechanic: 'Defend', category: 'systems', featured: true },
+  { id: 'spiking', number: '015', title: 'Spiking Network', short: 'Walk the phase diagram', description: 'A real leaky integrate-and-fire network. Move inhibition and drive to cross between regular, irregular and silent firing.', icon: Cpu, accent: 'blue', mechanic: 'Tune', category: 'systems' },
 ];
 
 const FILTERS = [
   { id: 'featured', label: 'Start here' },
-  { id: 'all', label: 'All 14' },
+  { id: 'all', label: 'All 15' },
   { id: 'physics', label: 'Physics' },
   { id: 'life', label: 'Life' },
   { id: 'systems', label: 'Complex systems' },
@@ -87,7 +89,7 @@ export function ExperimentArcade({ onOpenScanner }) {
     if (filter === 'featured') return EXPERIMENTS.filter((experiment) => experiment.featured);
     return EXPERIMENTS.filter((experiment) => experiment.category === filter);
   }, [filter]);
-  const { progress, recordVisit, dailyLab, level, levelProgress, achievements } = useArcadeProgress(EXPERIMENTS);
+  const { progress, recordVisit, recordAchievement, dailyLab, level, levelProgress, achievements } = useArcadeProgress(EXPERIMENTS);
   const ActiveLab = LAB_COMPONENTS[active] || LAB_COMPONENTS.attractor;
 
   useEffect(() => { recordVisit(active); }, [active, recordVisit]);
@@ -159,7 +161,7 @@ export function ExperimentArcade({ onOpenScanner }) {
       <div className="gg-arcade-intro">
         <div>
           <p className="gg-kicker"><Activity size={16} /> GaugeGap science arcade</p>
-          <h2 id="gg-arcade-title">Start with six. Explore all fourteen when you are ready.</h2>
+          <h2 id="gg-arcade-title">Start with six. Explore all fifteen when you are ready.</h2>
           <p>The stranger-friendly route shows the strongest first experiences. Filters reveal the full library without making the first visit feel like a wall of choices.</p>
         </div>
         <button type="button" className="gg-surprise-button" onClick={surpriseMe}><Shuffle size={16} /> Surprise me</button>
@@ -206,7 +208,7 @@ export function ExperimentArcade({ onOpenScanner }) {
       <div id="gg-active-lab" role="tabpanel" className="gg-arcade-stage" data-experiment={activeExperiment.id} aria-label={`${activeExperiment.title} experiment`}>
         <div className="gg-arcade-stage-topline"><span><i /> Experiment {activeExperiment.number} loaded</span><strong>{activeExperiment.title}</strong></div>
         <Suspense fallback={<LabLoading title={activeExperiment.title} />}>
-          <ActiveLab {...(active === 'content' ? { onOpenScanner } : {})} />
+          <ActiveLab {...(active === 'content' ? { onOpenScanner } : {})} {...(active === 'braingame' ? { onAchievement: recordAchievement } : {})} />
         </Suspense>
       </div>
 
