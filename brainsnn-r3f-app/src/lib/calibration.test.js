@@ -1,5 +1,5 @@
 import { describe, expect, it } from '../test/tinyVitest.js';
-import { calibrate, formatCalibrationCard, spearman } from './calibration.js';
+import { calibrate, formatCalibrationCard, scoreCorpusItem, spearman } from './calibration.js';
 import { CALIBRATION_CORPUS, LEVEL_RANK } from './calibrationCorpus.js';
 
 const report = calibrate();
@@ -45,37 +45,69 @@ describe('calibration corpus', () => {
 // These thresholds pin MEASURED behaviour, not aspiration. They exist so a
 // scoring change cannot quietly make rank agreement worse; raise them whenever
 // the engine genuinely improves.
+//
+// Measured 2026-07: trust 0.56, manipulationRisk 0.60, urgency 0.64,
+// viralPull 0.37; overall pair accuracy 0.80, mean Spearman 0.54.
 describe('measured calibration (regression guard)', () => {
   it('ranks urgency well', () => {
     expect(report.dimensions.urgency.spearman).toBeGreaterThan(0.55);
   });
 
-  it('ranks manipulation risk positively', () => {
-    expect(report.dimensions.manipulationRisk.spearman).toBeGreaterThan(0.3);
+  it('ranks manipulation risk well', () => {
+    expect(report.dimensions.manipulationRisk.spearman).toBeGreaterThan(0.5);
   });
 
   it('ranks viral pull positively', () => {
-    expect(report.dimensions.viralPull.spearman).toBeGreaterThan(0.25);
+    expect(report.dimensions.viralPull.spearman).toBeGreaterThan(0.3);
   });
 
-  it('keeps overall pair accuracy above chance', () => {
-    expect(report.overall.pairAccuracy).toBeGreaterThan(0.6);
+  // Regression guard for a fixed defect: trust used to be ANTI-correlated
+  // (Spearman -0.505), ranking outrage bait above a sincere apology, because
+  // TRUST_TERMS rewarded trust *vocabulary* rather than evidence. Adding
+  // specificity and stated-limitation signals turned it positive. This must
+  // never go negative again.
+  it('ranks trust in the right direction', () => {
+    expect(report.dimensions.trust.spearman).toBeGreaterThan(0.45);
+    expect(report.dimensions.trust.inversionRate).toBeLessThan(0.3);
   });
 
-  // KNOWN DEFECT — documented, not hidden.
+  it('keeps overall pair accuracy well above chance', () => {
+    expect(report.overall.pairAccuracy).toBeGreaterThan(0.75);
+    expect(report.overall.meanSpearman).toBeGreaterThan(0.45);
+  });
+});
+
+describe('the trust defect that calibration caught', () => {
+  it('now scores a specific apology above outrage bait', () => {
+    const apology = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'sincere-apology'));
+    const outrage = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'outrage-bait-post'));
+    expect(apology.trust).toBeGreaterThan(outrage.trust);
+  });
+
+  it('credits concrete checkable detail on its own', () => {
+    const specific = scoreCorpusItem({ content: 'Median export time fell from 42 seconds to 6 seconds on Tuesday across 14 teams.' });
+    const plain = scoreCorpusItem({ content: 'The update went out and things are better now than they were before.' });
+    // The concrete version names no trust vocabulary at all, yet must outrank
+    // an unfalsifiable claim of improvement.
+    expect(specific.trust).toBeGreaterThan(plain.trust + 20);
+  });
+
+  it('credits stated limitations as a trust signal', () => {
+    const hedged = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'transparent-limitation'));
+    const absolute = scoreCorpusItem({ content: 'This is the ultimate world-class solution and it is guaranteed to work for everyone.' });
+    expect(hedged.trust).toBeGreaterThan(absolute.trust);
+  });
+
+  // KNOWN REMAINING LIMITATION, documented rather than hidden.
   //
-  // Trust is currently ANTI-correlated with its labels: the engine ranks a
-  // sincere, specific apology below outrage bait. Cause: TRUST_TERMS rewards
-  // trust *vocabulary* rather than evidence, so "share this because once it's
-  // gone" earns +13 for the connective "because", while "on Tuesday our update
-  // broke checkout for six hours" earns nothing because none of its concrete
-  // words are in the bank.
-  //
-  // This assertion documents the defect so it cannot silently worsen. When the
-  // trust signal is fixed, flip it to a positive threshold.
-  it('documents that trust ranking is currently inverted', () => {
-    expect(report.dimensions.trust.spearman).toBeLessThan(0);
-    expect(report.dimensions.trust.inversionRate).toBeGreaterThan(0.5);
+  // The specificity signal counts numerals and time units, so a fake deadline
+  // ("verify within 24 hours") reads as concrete detail and lifts the trust
+  // score of phishing above where it belongs. Discounting numerals adjacent to
+  // urgency terms is the obvious next step; until then this is pinned so the
+  // limitation stays visible and cannot drift further.
+  it('still over-credits deadline numerals in phishing', () => {
+    const phishing = scoreCorpusItem(CALIBRATION_CORPUS.find((item) => item.id === 'account-phishing-email'));
+    expect(phishing.trust).toBeGreaterThan(60);
   });
 });
 
