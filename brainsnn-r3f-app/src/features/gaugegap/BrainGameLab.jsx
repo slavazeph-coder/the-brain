@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Brain, FileJson, Pause, Play, RotateCcw, SkipForward, Zap } from 'lucide-react';
+import { Activity, Brain, FileJson, Pause, Play, RotateCcw, ShieldCheck, SkipForward, Zap } from 'lucide-react';
 import { BRAIN_REGIONS, PATHWAYS, REGION_MAP } from '../brain3d/brainRegions.js';
 import { createBrainParams, createBrainState, stepBrain } from '../brain3d/brainModel.js';
 import { createRng } from '../../lib/rng.js';
@@ -17,7 +17,7 @@ import {
   MISSION,
   missionNotice,
 } from './brainGame.js';
-import { buildRunProof } from './runProof.js';
+import { buildRunProof, verifyRunProof } from './runProof.js';
 import { downloadJson } from './evidence.js';
 import { track } from '../../lib/analytics.js';
 
@@ -52,6 +52,7 @@ export function BrainGameLab({ onAchievement }) {
   const [seed, setSeed] = useState('defend-01');
   const [resetKey, setResetKey] = useState(0);
   const [log, setLog] = useState([]);
+  const [verdict, setVerdict] = useState(null);
   const tickRef = useRef(0);
 
   const canvasRef = useRef(null);
@@ -438,6 +439,33 @@ export function BrainGameLab({ onAchievement }) {
         >
           <FileJson size={16} /> Export run proof
         </button>
+        <label className="gg-verify-proof">
+          <ShieldCheck size={16} /> Verify a proof
+          <input
+            type="file"
+            accept="application/json"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (!file) return;
+              try {
+                const result = await verifyRunProof(JSON.parse(await file.text()));
+                setVerdict(result);
+                setNotice(result.verified
+                  ? 'Verified: the log replays to exactly the score it claims.'
+                  : `Rejected — ${result.problems[0]}`);
+              } catch (error) {
+                setVerdict({ verified: false, problems: [`unreadable proof: ${error.message}`] });
+                setNotice('That file could not be read as a run proof.');
+              }
+            }}
+          />
+        </label>
+        {verdict ? (
+          <span className={verdict.verified ? 'gg-verdict-ok' : 'gg-verdict-bad'} data-testid="proof-verdict">
+            {verdict.verified ? '✓ replay matches' : `✗ ${verdict.problems.length} problem(s)`}
+          </span>
+        ) : null}
         <span>{notice || missionNotice(evaluation, mode)}</span>
       </div>
     </div>

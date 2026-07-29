@@ -342,3 +342,22 @@
   background: #04040c;
   min-height: 340px;
 }
+
+.gg-verify-proof {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--bsn-text-secondary);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.gg-verify-proof input { display: none; }
+
+.gg-verdict-ok { color: #d9ff65; font-family: var(--bsn-font-mono); font-size: 0.78rem; }
+.gg-verdict-bad { color: #ff5873; font-family: var(--bsn-font-mono); font-size: 0.78rem; }
