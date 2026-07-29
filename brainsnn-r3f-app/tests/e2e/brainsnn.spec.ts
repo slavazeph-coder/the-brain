@@ -225,6 +225,11 @@ test('content lab shows per-sentence math with a jackknife band', async ({ page 
   await expect(math.locator('.gg-content-drivers li').first()).toContainText('URGENT');
   await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Manipulation Risk');
 
+  // Every score states where it sits against the labelled corpus, rather than
+  // implying the index is a percentage.
+  await expect(page.locator('.gg-content-score small').first()).toContainText(/percentile|higher than|lower than/);
+  await expect(page.getByTestId('calibration-card')).toContainText(/Ranks \d+% of \d+ labelled comparisons/);
+
   // Switching the explained score re-attributes.
   await math.getByRole('tab', { name: 'Attention' }).click();
   await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Attention');

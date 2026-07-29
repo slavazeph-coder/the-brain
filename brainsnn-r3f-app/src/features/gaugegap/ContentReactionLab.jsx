@@ -7,6 +7,8 @@ import { createRewrite } from '../improve/rewrite.js';
 import { isKeyboardScanShortcut } from '../scan/keyboard.js';
 import { getHeadlineScores } from '../../lib/headlineScores.js';
 import { topDrivers } from '../../lib/ablation.js';
+import { describePercentile, SCORE_SCALE_NOTE } from '../../lib/scoreReference.js';
+import { calibrate, formatCalibrationCard } from '../../lib/calibration.js';
 import { getClassicPreset } from '../../lib/classicPresets.js';
 import { compareResults, deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 import { MAX_SCAN_CHARS } from '../../lib/validation.js';
@@ -52,11 +54,45 @@ function ScoreTiles({ scores, previousScores, band }) {
                 ±{band[score.id].stderr}
               </b>
             ) : null}
-            <small>{pending ? 'Run a simulation' : score.detail || score.explanation}</small>
+            <small>{pending ? 'Run a simulation' : describePercentile(score.id, score.value) || score.detail || score.explanation}</small>
           </article>
         );
       })}
     </div>
+  );
+}
+
+// What the engine has actually been measured to do, stated where the scores
+// are read rather than buried in a README.
+function CalibrationCard() {
+  const report = useMemo(() => calibrate(), []);
+  const trust = report.dimensions.trust;
+  return (
+    <details className="gg-content-calibration" data-testid="calibration-card">
+      <summary>
+        <strong>How good are these numbers?</strong>
+        <span>{formatCalibrationCard(report)}</span>
+      </summary>
+      <table>
+        <thead>
+          <tr><th>Dimension</th><th>Rank agreement</th><th>Pairs ordered wrongly</th></tr>
+        </thead>
+        <tbody>
+          {Object.entries(report.dimensions).map(([id, entry]) => (
+            <tr key={id}>
+              <td>{id}</td>
+              <td>{entry.spearman}</td>
+              <td>{entry.inversions} / {entry.comparablePairs}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        {SCORE_SCALE_NOTE} Agreement is Spearman rank correlation against hand-labelled
+        archetypes; trust was measured at {trust.spearman} after a defect that had it
+        ranking backwards was fixed.
+      </p>
+    </details>
   );
 }
 
@@ -261,6 +297,8 @@ export function ContentReactionLab({ onOpenScanner }) {
       </div>
 
       <ScoreTiles scores={scores} previousScores={previousScores} band={sensitivity?.band} />
+
+      {scores ? <CalibrationCard /> : null}
 
       <DriverPanel sensitivity={sensitivity} scores={scores} />
 

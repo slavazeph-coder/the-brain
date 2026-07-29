@@ -920,3 +920,61 @@
   font-size: 0.78rem;
   line-height: 1.6;
 }
+
+/* ---- Calibration card ---- */
+
+.gg-content-calibration {
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(10, 10, 20, 0.6);
+}
+
+.gg-content-calibration summary {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  cursor: pointer;
+  list-style: none;
+}
+
+.gg-content-calibration summary::-webkit-details-marker { display: none; }
+
+.gg-content-calibration summary strong {
+  color: #e7fbff;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gg-content-calibration summary span {
+  color: var(--bsn-text-secondary);
+  font-size: 0.86rem;
+}
+
+.gg-content-calibration table {
+  width: 100%;
+  margin-top: 14px;
+  border-collapse: collapse;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.76rem;
+}
+
+.gg-content-calibration th,
+.gg-content-calibration td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.12);
+  color: var(--bsn-text-secondary);
+}
+
+.gg-content-calibration th { color: var(--bsn-text-muted); font-weight: 500; }
+
+.gg-content-calibration p {
+  margin: 12px 0 0;
+  color: var(--bsn-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
