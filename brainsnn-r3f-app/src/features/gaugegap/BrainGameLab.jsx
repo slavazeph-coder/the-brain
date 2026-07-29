@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Brain, Pause, Play, RotateCcw, SkipForward, Zap } from 'lucide-react';
+import { Activity, Brain, FileJson, Pause, Play, RotateCcw, SkipForward, Zap } from 'lucide-react';
 import { BRAIN_REGIONS, PATHWAYS, REGION_MAP } from '../brain3d/brainRegions.js';
 import { createBrainParams, createBrainState, stepBrain } from '../brain3d/brainModel.js';
 import { createRng } from '../../lib/rng.js';
@@ -17,6 +17,8 @@ import {
   MISSION,
   missionNotice,
 } from './brainGame.js';
+import { buildRunProof } from './runProof.js';
+import { downloadJson } from './evidence.js';
 import { track } from '../../lib/analytics.js';
 
 const EMPTY = { lesions: [], cuts: [], stimuli: {} };
@@ -49,6 +51,8 @@ export function BrainGameLab() {
   const [notice, setNotice] = useState('');
   const [seed, setSeed] = useState('defend-01');
   const [resetKey, setResetKey] = useState(0);
+  const [log, setLog] = useState([]);
+  const tickRef = useRef(0);
 
   const canvasRef = useRef(null);
   const modeRef = useRef(mode);
@@ -122,6 +126,7 @@ export function BrainGameLab() {
       const limit = activeMode === 'challenge' ? CHALLENGE.hijackTarget : MISSION.hijackLimit;
       breachTicks = hijackIndex > limit ? breachTicks + 1 : 0;
       worstBreach = Math.max(worstBreach, breachTicks);
+      tickRef.current = frames.length;
       return { targets, params };
     }
 
@@ -229,6 +234,7 @@ export function BrainGameLab() {
           used: countInterventions(interventionsRef.current),
           breachTicks,
           worstBreach,
+          elapsed: frames.length,
         }));
       }
 
@@ -249,12 +255,15 @@ export function BrainGameLab() {
       return;
     }
     setInterventions((previous) => applyIntervention(previous, choice));
+    setLog((previous) => [...previous, { tick: tickRef.current, id: choice.id }]);
     setNotice(choice.hint);
     track('gaugegap_brain_intervention', { id: choice.id, mode });
   }
 
   function reset(nextMode = mode) {
     setInterventions(EMPTY);
+    setLog([]);
+    tickRef.current = 0;
     setPaused(false);
     setSelected(null);
     setNotice('');
@@ -402,6 +411,17 @@ export function BrainGameLab() {
           <Brain size={16} /> Share run
         </button>
         <button type="button" onClick={() => copyChallenge(gameUrl, setNotice)}>Copy link</button>
+        <button
+          type="button"
+          onClick={async () => {
+            const proof = await buildRunProof({ mode, seed, log });
+            downloadJson(`brainsnn-run-${String(proof.content_hash).slice(0, 8)}.json`, proof);
+            setNotice('Run proof saved. Anyone can replay the log and check the score recomputes.');
+            track('gaugegap_brain_proof_exported', { mode });
+          }}
+        >
+          <FileJson size={16} /> Export run proof
+        </button>
         <span>{notice || missionNotice(evaluation, mode)}</span>
       </div>
     </div>

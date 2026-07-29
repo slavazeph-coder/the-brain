@@ -75,7 +75,7 @@ export function countInterventions(interventions) {
  * Returns the live status plus a three-axis score in the arcade's house style,
  * where control and efficiency pull against each other.
  */
-export function evaluateRun({ frames, finalState, params, targets, mode, used, breachTicks = 0, worstBreach = null }) {
+export function evaluateRun({ frames, finalState, params, targets, mode, used, breachTicks = 0, worstBreach = null, elapsed = null }) {
   const rules = mode === 'challenge' ? CHALLENGE : MISSION;
   const metrics = frames.length && finalState
     ? computeBrainMetrics({ trace: frames, finalState, params, targets })
@@ -83,7 +83,9 @@ export function evaluateRun({ frames, finalState, params, targets, mode, used, b
 
   const hijack = metrics ? metrics.hijackIndex : 0;
   const control = metrics ? metrics.controlRatio : 1;
-  const elapsed = frames.length;
+  // Callers may pass only a rolling window of frames for metrics, so the
+  // elapsed tick count is supplied separately when it differs.
+  const ticksElapsed = elapsed == null ? frames.length : elapsed;
   const budget = rules.budget;
   const remaining = Math.max(0, budget - used);
 
@@ -94,9 +96,9 @@ export function evaluateRun({ frames, finalState, params, targets, mode, used, b
   let status = 'running';
   if (mode === 'mission') {
     if (worst >= rules.breachGrace) status = 'lost';
-    else if (elapsed >= rules.durationTicks) status = 'won';
+    else if (ticksElapsed >= rules.durationTicks) status = 'won';
   } else if (mode === 'challenge') {
-    if (elapsed >= rules.durationTicks) {
+    if (ticksElapsed >= rules.durationTicks) {
       status = hijack <= rules.hijackTarget ? 'won' : 'lost';
     }
   }
@@ -111,7 +113,7 @@ export function evaluateRun({ frames, finalState, params, targets, mode, used, b
     metrics,
     hijack,
     control: Math.round(control * 100) / 100,
-    elapsed,
+    elapsed: ticksElapsed,
     remaining,
     used,
     breachTicks,
