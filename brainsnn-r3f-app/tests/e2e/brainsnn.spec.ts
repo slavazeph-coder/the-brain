@@ -183,6 +183,21 @@ test('content reaction lab runs a fully local simulation on the homepage', async
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
 });
 
+test('defend the brain mission is machine-checked and losable', async ({ page }) => {
+  await page.goto('/?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.getByTestId('brain-game-hud')).toContainText(/Hijack/i);
+
+  // Doing nothing must actually lose — the arcade's first real fail state.
+  await expect(page.getByTestId('brain-game-banner')).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByTestId('brain-game-banner')).toContainText('Judgment offline');
+
+  // Replaying and intervening keeps the run alive past the point it just failed.
+  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: /Silence threat/ }).click();
+  await expect(page.getByTestId('brain-game-hud')).toContainText('5/6');
+});
+
 test('content lab shows per-sentence math with a jackknife band', async ({ page }) => {
   await page.goto('/?lab=content#playground');
   await page.getByLabel('Content to simulate').fill(

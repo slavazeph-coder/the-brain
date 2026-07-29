@@ -75,10 +75,16 @@ export function computeBrainMetrics(trial) {
     eiBalance[code] = round(total > 0 ? (excitatory - inhibitory) / total : 0, 4);
   }
 
-  // Judgment vs threat: the model's core semantic contrast.
+  // Judgment vs threat: the model's core semantic contrast. Capped because a
+  // silenced amygdala drives the denominator to ~0, and any ratio past 10 says
+  // the same thing: threat is not competing.
+  const CONTROL_RATIO_CAP = 10;
   const pfc = meanActivity.PFC;
   const amy = meanActivity.AMY;
-  const controlRatio = round(amy > 0 ? pfc / amy : pfc > 0 ? Infinity : 1, 4);
+  const controlRatio = round(
+    amy > 0 ? Math.min(CONTROL_RATIO_CAP, pfc / amy) : pfc > 0 ? CONTROL_RATIO_CAP : 1,
+    4,
+  );
 
   // How far threat + action pressure ran ahead of reflective control, 0-100.
   const hijackRaw = mean(trace.map((frame) => (

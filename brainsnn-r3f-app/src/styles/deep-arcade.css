@@ -226,3 +226,112 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Defend the Brain (experiment 014) ---- */
+
+.gg-brain-game-canvas {
+  background: radial-gradient(circle at 50% 40%, rgba(255, 88, 115, 0.08), transparent 60%), #04040c;
+  cursor: pointer;
+}
+
+.gg-brain-game-hud {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.gg-brain-game-hud span {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(4, 4, 12, 0.72);
+  color: var(--bsn-text-muted);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gg-brain-game-hud span strong { color: #e7fbff; margin-left: 6px; }
+.gg-brain-game-hud span.danger { border-color: rgba(255, 88, 115, 0.7); }
+.gg-brain-game-hud span.danger strong { color: #ff5873; }
+
+.gg-brain-game-banner {
+  position: absolute;
+  inset: auto 14px 14px 14px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(6, 6, 16, 0.93);
+  text-align: center;
+}
+
+.gg-brain-game-banner strong {
+  font-family: var(--bsn-font-display);
+  font-size: 1.5rem;
+  color: #e7fbff;
+}
+
+.gg-brain-game-banner.won strong { color: #d9ff65; }
+.gg-brain-game-banner.lost strong { color: #ff5873; }
+
+.gg-brain-game-banner span {
+  color: var(--bsn-text-muted);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.76rem;
+}
+
+.gg-brain-game-banner button {
+  min-height: 44px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #7df9ff, #ff5edb);
+  color: #05060f;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gg-brain-game-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.gg-brain-game-actions button,
+.gg-brain-game-transport button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--bsn-text-secondary);
+  font-size: 0.84rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.gg-brain-game-actions button.active {
+  border-color: rgba(217, 255, 101, 0.6);
+  background: rgba(217, 255, 101, 0.12);
+  color: #eaffc0;
+}
+
+.gg-brain-game-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gg-brain-game-transport {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
