@@ -99,6 +99,64 @@ A base scan (`src/lib/analysisEngine.js`) is enriched by `runLayerRouter`
 | **L46 — Firewall Receipt** | Deterministic content/result/soliton hashes for a reproducible audit trail. |
 | **L103 — 39 Hz Soliton Field** | Gamma-band synchrony + leapfrogging ionic-soliton model (below). |
 
+### How good are the numbers?
+
+The scores used to be asserted. They are now measured against a labelled
+corpus of 18 content archetypes (`src/lib/calibrationCorpus.js`), reported as
+**rank agreement** rather than invented precision, and guarded in CI so a
+scoring change cannot silently regress:
+
+| Dimension | Spearman ρ | Pairs ordered wrongly |
+| --- | --- | --- |
+| trust | 0.700 | 16 / 107 |
+| urgency | 0.641 | 14 / 111 |
+| manipulation risk | 0.631 | 21 / 117 |
+| viral pull | 0.366 | 32 / 107 |
+
+**81% of 442 labelled comparisons ranked correctly** (mean ρ 0.585).
+
+Calibration found a real defect: trust was originally **anti-correlated**
+(ρ −0.505), scoring outrage bait as more trustworthy than a sincere apology,
+because it counted trust *vocabulary* rather than evidence. Adding specificity
+and stated-limitation signals — and discounting specifics that sit inside
+urgency phrasing, so a fake deadline cannot buy credibility — turned it
+positive.
+
+Two honesty notes, both enforced by tests rather than left to good intentions:
+
+- The scores are **0–100 indices, not probabilities**. Each one is shown with
+  its percentile against the corpus, because "86th percentile of known
+  archetypes" is a true statement where "86%" is not.
+- Labels are **ordinal**. We can defend that phishing carries more pressure
+  than an understated luxury line; we cannot defend a claim that it scores
+  exactly 84. See `docs/ANNOTATION_RUBRIC.md`, which also requires a
+  Krippendorff's alpha (`src/lib/agreement.js`) before any corpus release
+  claims reliability.
+
+### The brain, and a real spiking network
+
+The 7-region model (`src/features/brain3d/brainModel.js`) is deterministic and
+seeded, so the same content always produces the same run — which is what makes
+brain readouts scoreable, shareable and verifiable. It exposes interventions
+(lesion a region, cut a pathway, inject current) and derived measurements:
+firing rates in Hz, PFC/AMY control ratio, hijack index, gain around the
+THL→CTX→AMY→BG⊣THL control loop, E/I balance, spike correlation, settling
+time, plasticity and net STDP flux.
+
+That model is a *rate* model. `src/lib/snn/` adds the real thing: a leaky
+integrate-and-fire network in the Brunel (2000) formulation — Dale's law,
+sparse random connectivity, transmission delays, Poisson drive — with the
+standard measurements (CV of ISI, Fano factor, population spectrum). Its
+regime behaviour is checked against the published analysis in
+`brunelValidation.test.js`, so **gamma-band power is measured rather than
+asserted**.
+
+**Claim boundary.** Every neural readout ships with it: these are simulated
+dynamics of a model driven by lexical features of the text, not a measurement
+of any human brain, and not a clinical or predictive claim. The simulation is
+downstream of the same lexical scores, so it adds structure — not new
+information about the text.
+
 The full catalog of 103 layers lives in `src/lib/layerCatalog.js`; the Research view has a
 searchable Layer Explorer.
 

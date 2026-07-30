@@ -7,6 +7,12 @@ const FEAR_TERMS = /\b(risk|danger|lose|fail|threat|mistake|panic|scared|crisis|
 const ANGER_TERMS = /\b(outrage|furious|disgusting|betrayed|enemy|fight|rigged|corrupt|they don't want)\b/gi;
 const EMPATHY_TERMS = /\b(you|your|together|help|support|understand|simple|clear|feel|people|customers|team)\b/gi;
 const CURIOSITY_TERMS = /\b(what if|why|how|secret|surprising|learn|discover|before|after|mistake|lesson)\b/gi;
+// Concrete, checkable detail — the strongest available proxy for evidence.
+const SPECIFIC_TERMS = /\b(\d+(?:[.,:]\d+)?%?|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december|seconds?|minutes?|hours?|days?|weeks?|months?)\b/gi;
+// Admitting limits is a credibility signal, not a weakness.
+const LIMITATION_TERMS = /\b(do not know|don'?t know|not yet|uncertain|directional|rather than|caveat|limitation|approximately|estimated|remaining|unchanged|treat .{0,12} as)\b/gi;
+// Concrete detail wrapped in a deadline or ultimatum.
+const COERCED_SPECIFIC_TERMS = /\b(?:within|in|for|after|before|next|only|just|last)\s+(?:the\s+)?(?:next\s+)?\d+(?:[.,:]\d+)?\s*(?:seconds?|minutes?|hours?|days?|weeks?|months?)?|\b\d+\s*(?:seconds?|minutes?|hours?|days?)\s+(?:or|before|left|remaining)\b/gi;
 const VAGUE_TERMS = /\b(game[- ]changer|revolutionary|world[- ]class|best|ultimate|massive|unprecedented|guaranteed|viral|explode)\b/gi;
 
 function countMatches(text, regex) {
@@ -64,15 +70,25 @@ export function analyzeContentLocally({ content, contentType = 'text', forceFall
   const empathyHits = countMatches(rawContent, EMPATHY_TERMS);
   const curiosityHits = countMatches(rawContent, CURIOSITY_TERMS);
   const vagueHits = countMatches(rawContent, VAGUE_TERMS);
+  const specificHits = countMatches(rawContent, SPECIFIC_TERMS);
+  // "verify within 24 hours" is a deadline, not proof: discount concrete
+  // detail that appears inside urgency phrasing so pressure cannot buy trust.
+  const coercedSpecifics = countMatches(rawContent, COERCED_SPECIFIC_TERMS);
+  const evidenceHits = Math.max(0, specificHits - coercedSpecifics);
+  const limitationHits = countMatches(rawContent, LIMITATION_TERMS);
   const wordCount = Math.max(1, rawContent.split(/\s+/).filter(Boolean).length);
 
-  const trust = clampScore(48 + trustHits * 13 + empathyHits * 3 - vagueHits * 8 - fearHits * 4 - angerHits * 7, 50);
+  const trust = clampScore(
+    46 + trustHits * 7 + evidenceHits * 8 + limitationHits * 9 + empathyHits * 2
+    - vagueHits * 9 - fearHits * 4 - angerHits * 7,
+    50,
+  );
   const urgency = clampScore(28 + urgencyHits * 18 + fearHits * 7 + curiosityHits * 3, 34);
   const empathy = clampScore(38 + empathyHits * 8 - angerHits * 5, 42);
   const fear = clampScore(12 + fearHits * 18 + urgencyHits * 3, 18);
   const anger = clampScore(8 + angerHits * 22 + fearHits * 4, 10);
   const excitement = clampScore(38 + curiosityHits * 13 + urgencyHits * 5 + Math.min(18, wordCount / 20), 44);
-  const viralScore = clampScore((excitement * 0.5) + (urgency * 0.25) + (empathy * 0.15) + (trust * 0.1), 50);
+  const viralScore = clampScore((excitement * 0.58) + (urgency * 0.27) + (empathy * 0.15), 50);
   const gaugeGapScore = clampScore((fear * 0.27) + (anger * 0.27) + (urgency * 0.28) + (100 - trust) * 0.18, 40);
   const confidence = clampScore(54 + Math.min(20, wordCount / 6) + Math.min(12, segments.length * 2) - (wordCount < 18 ? 12 : 0), 60);
   const riskRating = gaugeGapScore >= 70 ? 'High trust risk' : gaugeGapScore >= 48 ? 'Moderate trust risk' : 'Low trust risk';

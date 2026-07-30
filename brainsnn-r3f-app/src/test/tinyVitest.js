@@ -59,6 +59,9 @@ function makeMatchers(received, negate = false) {
     toBeGreaterThanOrEqual(expected) {
       assert(received >= expected, `Expected ${received} to be greater than or equal to ${expected}`);
     },
+    toBeLessThan(expected) {
+      assert(received < expected, `Expected ${received} to be less than ${expected}`);
+    },
     toBeLessThanOrEqual(expected) {
       assert(received <= expected, `Expected ${received} to be less than or equal to ${expected}`);
     },

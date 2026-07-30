@@ -1,6 +1,7 @@
 // Shareable score card: composes the text payload (pure, unit-testable) and
 // renders a 1200x630 branded PNG. Extends the previous ShareDialog downloadPng.
-import { deriveExecutiveVerdict, getBusinessMetrics } from '../../lib/scoreMapping.js';
+import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
+import { getHeadlineScores } from '../../lib/headlineScores.js';
 import { synchronyPalette } from '../brain3d/mapResultToBrain.js';
 import { BRAIN_REGIONS } from '../brain3d/brainRegions.js';
 import { mapResultToActivities } from '../brain3d/mapResultToBrain.js';
@@ -9,7 +10,7 @@ export function composeScoreCardText(result = {}) {
   // Explicit null bypasses the default parameter.
   const safeResult = result || {};
   const verdict = deriveExecutiveVerdict(safeResult);
-  const metricMap = Object.fromEntries(getBusinessMetrics(safeResult).map((metric) => [metric.id, metric.value]));
+  const headlineMap = Object.fromEntries(getHeadlineScores(safeResult).map((metric) => [metric.label, metric.value]));
   const raw = String(safeResult.rawContent || '').replace(/\s+/g, ' ').trim();
   const excerpt = raw.length > 90 ? `${raw.slice(0, 87).trimEnd()}…` : raw;
   return {
@@ -18,11 +19,13 @@ export function composeScoreCardText(result = {}) {
     viralScore: verdict.viralScore,
     viralLabel: verdict.viralLabel,
     excerpt,
+    // The same four headline scores the playground shows, so shared cards and
+    // the live simulator never disagree.
     metricRows: [
-      ['Hook Strength', metricMap.hookStrength, 'good'],
-      ['Trust', metricMap.trust, 'good'],
-      ['Viral Pull', verdict.viralScore, 'good'],
-      ['Manipulation Risk', metricMap.manipulationRisk, 'risk'],
+      ['Attention', headlineMap.Attention, 'good'],
+      ['Trust', headlineMap.Trust, 'good'],
+      ['Emotional Charge', headlineMap['Emotional Charge'], 'good'],
+      ['Manipulation Risk', headlineMap['Manipulation Risk'], 'risk'],
     ],
     footer: 'brainsnn.com',
     disclaimer: 'AI-estimated content response',

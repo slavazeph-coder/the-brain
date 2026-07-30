@@ -147,7 +147,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
               <Button variant="secondary" onClick={() => scrollTo('clients')}>Build for your audience <ArrowRight size={17} /></Button>
             </div>
             <div className="gg-hero-proof" aria-label="Product capabilities">
-              <div><strong>13 live</strong><span>12 arcade + flagship lab</span></div>
+              <div><strong>16 live</strong><span>15 arcade + flagship lab</span></div>
               <div><strong>4 paths</strong><span>Clear first steps</span></div>
               <div><strong>Client</strong><span>Custom pilot pathway</span></div>
               <div><strong>Open</strong><span>Models and limits</span></div>
@@ -176,7 +176,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
         </section>
 
         <VisitorRoutes onResearch={openResearch} />
-        <ExperimentArcade />
+        <ExperimentArcade onOpenScanner={onStart} />
 
         <section className="gg-loop" aria-labelledby="gg-loop-heading">
           <div className="gg-section-heading"><p className="gg-kicker"><Share2 size={16} /> The engagement engine</p><h2 id="gg-loop-heading">A useful interaction should continue after the first click.</h2><p>The visual earns attention. The model earns understanding. The shared state brings the next person into the same system.</p></div>
@@ -195,7 +195,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
 
         <section className="gg-depth" aria-labelledby="gg-depth-heading">
           <div className="gg-depth-visual" aria-hidden="true"><div className="gg-depth-ring gg-depth-ring-one" /><div className="gg-depth-ring gg-depth-ring-two" /><div className="gg-depth-core"><Layers3 size={38} /></div><span className="gg-depth-node gg-depth-node-one">Play</span><span className="gg-depth-node gg-depth-node-two">Model</span><span className="gg-depth-node gg-depth-node-three">Verify</span><span className="gg-depth-node gg-depth-node-four">Publish</span></div>
-          <div className="gg-depth-copy"><p className="gg-kicker"><Layers3 size={16} /> One platform, two visible products</p><h2 id="gg-depth-heading">GaugeGap attracts attention. BrainSNN turns the result into a decision.</h2><p>The public experience should be simple. The engine underneath preserves the model, analyzes the message and supports a more responsible publishing workflow.</p><ul><li><CheckCircle2 size={17} /> GaugeGap handles interaction, missions and shareable states.</li><li><CheckCircle2 size={17} /> BrainSNN handles content analysis, revision and publishing decisions.</li><li><CheckCircle2 size={17} /> Research mode exposes equations, diagnostics and limitations.</li></ul><div className="gg-depth-actions"><Button variant="primary" onClick={openResearch}>Open research mode <Microscope size={16} /></Button><Button variant="ghost" onClick={() => onStart?.(CONTENT_SAMPLE)}>Test BrainSNN <WandSparkles size={16} /></Button></div></div>
+          <div className="gg-depth-copy"><p className="gg-kicker"><Layers3 size={16} /> One platform, two visible products</p><h2 id="gg-depth-heading">GaugeGap attracts attention. BrainSNN turns the result into a decision.</h2><p>The public experience should be simple. The engine underneath preserves the model, analyzes the message and supports a more responsible publishing workflow.</p><ul><li><CheckCircle2 size={17} /> GaugeGap handles interaction, missions and shareable states.</li><li><CheckCircle2 size={17} /> BrainSNN handles content analysis, revision and publishing decisions.</li><li><CheckCircle2 size={17} /> Research mode exposes equations, diagnostics and limitations.</li></ul><div className="gg-depth-actions"><Button variant="primary" onClick={openResearch}>Open research mode <Microscope size={16} /></Button><Button variant="ghost" onClick={() => onStart?.(CONTENT_SAMPLE)}>Test BrainSNN <WandSparkles size={16} /></Button></div><p className="gg-depth-foundry"><a href="https://xioaisolutions.github.io/gaugegap-foundry/foundry-experience/" target="_blank" rel="noreferrer">Open the Deep Foundry — the verification-first research playground with proofpack export <ArrowRight size={14} /></a></p></div>
         </section>
 
         <TrustLadder onResearch={openResearch} />

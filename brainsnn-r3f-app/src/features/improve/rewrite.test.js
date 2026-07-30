@@ -31,4 +31,11 @@ describe('createRewrite', () => {
   it('is deterministic for identical input', () => {
     expect(createRewrite(pressureDraft, 'clarity')).toBe(createRewrite(pressureDraft, 'clarity'));
   });
+
+  it('supports the urgency goal with its own opener and closer', () => {
+    expect(REWRITE_GOALS.some((goal) => goal.id === 'urgency')).toBe(true);
+    const rewrite = createRewrite(pressureDraft, 'urgency');
+    expect(rewrite.startsWith('Here is why this matters right now')).toBe(true);
+    expect(rewrite).toContain('real deadline or cost of waiting');
+  });
 });

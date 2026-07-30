@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Externally licensed evaluation corpora are fetched locally, never vendored.
+datasets/

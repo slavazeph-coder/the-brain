@@ -154,23 +154,99 @@ test.beforeEach(async ({ page }) => {
   await mockBackend(page);
 });
 
-test('interactive landing routes into the scanner with a prefilled sample', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Know how your content will land/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Try a live example/ }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: /See how infamous formulas score/i })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /Whatever you publish, scan it first/i })).toBeVisible();
-  await page.getByRole('button', { name: /Try a live example/ }).first().click();
+test('content reaction lab runs a fully local simulation on the homepage', async ({ page }) => {
+  const analyzeRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/analyze')) analyzeRequests.push(request.url());
+  });
+
+  await page.goto('/?lab=content#playground');
+  await expect(page.getByRole('heading', { name: /Do not just explain the idea/i })).toBeVisible();
+  await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
+
+  await page.getByLabel('Content to simulate').fill('Only forty were ever made. Private viewings close this week, and the small circle of people who understand why that matters is almost full.');
+  await page.getByRole('button', { name: 'Run simulation' }).click();
+
+  // Four headline tiles fill with numeric values from the in-browser engine.
+  await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
+  await expect(page.locator('.gg-content-score')).toHaveCount(4);
+  await expect(page).toHaveURL(/\/\?lab=content/);
+  expect(analyzeRequests).toEqual([]);
+
+  // Rewrite panel produces a scored alternative without leaving the page.
+  await page.getByRole('button', { name: 'Reduce manipulation' }).click();
+  await expect(page.getByTestId('content-rewrite')).toBeVisible();
+
+  // The escape hatch into the full analyst app carries the content along.
+  await page.getByRole('button', { name: /Open full analysis/ }).click();
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
   await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
 });
 
-test('classic preset routes into the scanner with prefilled content', async ({ page }) => {
+test('spiking network lab runs in a worker and shows the regimes', async ({ page }) => {
+  await page.goto('/?lab=spiking#playground');
+  await expect(page.getByTestId('spiking-network-lab')).toBeVisible();
+  // The first run is kicked off on mount and executes off the main thread.
+  await expect(page.getByTestId('snn-hud')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('snn-hud')).toContainText(/Hz/i);
+
+  // Sub-threshold external drive must silence the network entirely.
+  await page.getByRole('button', { name: 'Below threshold' }).click();
+  await page.getByRole('button', { name: /Run network/ }).click();
+  await expect(page.getByTestId('snn-hud')).toContainText('0 Hz', { timeout: 30_000 });
+});
+
+test('defend the brain mission is machine-checked and losable', async ({ page }) => {
+  await page.goto('/?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.getByTestId('brain-game-hud')).toContainText(/Hijack/i);
+
+  // Doing nothing must actually lose — the arcade's first real fail state.
+  await expect(page.getByTestId('brain-game-banner')).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByTestId('brain-game-banner')).toContainText('Judgment offline');
+
+  // Replaying and intervening keeps the run alive past the point it just failed.
+  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: /Silence threat/ }).click();
+  await expect(page.getByTestId('brain-game-hud')).toContainText('5/6');
+});
+
+test('content lab shows per-sentence math with a jackknife band', async ({ page }) => {
+  await page.goto('/?lab=content#playground');
+  await page.getByLabel('Content to simulate').fill(
+    'Our team shipped a small update to the billing page this week. '
+    + 'URGENT: verify your account within 24 hours or it will be permanently deleted, click immediately!',
+  );
+  await page.getByRole('button', { name: 'Run simulation' }).click();
+
+  const math = page.getByTestId('content-math');
+  await expect(math).toBeVisible();
+  // The pressure sentence, not the benign opener, should own the risk score.
+  await expect(math.locator('.gg-content-drivers li').first()).toContainText('URGENT');
+  await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Manipulation Risk');
+
+  // Every score states where it sits against the labelled corpus, rather than
+  // implying the index is a percentage.
+  await expect(page.locator('.gg-content-score small').first()).toContainText(/percentile|higher than|lower than/);
+  await expect(page.getByTestId('calibration-card')).toContainText(/Ranks \d+% of \d+ labelled comparisons/);
+
+  // Switching the explained score re-attributes.
+  await math.getByRole('tab', { name: 'Attention' }).click();
+  await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Attention');
+});
+
+test('shared challenge link prefills and auto-runs the content lab', async ({ page }) => {
+  const sample = 'Only forty were ever made. Private viewings close this week.';
+  await page.goto(`/?lab=content&state=${encodeURIComponent(sample)}#playground`);
+  await expect(page.getByLabel('Content to simulate')).toHaveValue(sample);
+  await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
+});
+
+test('arcade selector opens the content lab from the featured row', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('classics-gallery').getByRole('button', { name: 'Scan this' }).first().click();
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
+  await page.getByRole('tab', { name: /Mind-Hack Autopsy/ }).click();
+  await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
+  await expect(page).toHaveURL(/lab=content/);
 });
 
 test('reconstruct page renders from a direct route and links into the scanner', async ({ page }) => {
@@ -189,9 +265,9 @@ test('reconstruct page renders from a direct route and links into the scanner', 
   await expect(page.locator('#brain-scan-input')).toHaveValue(/Reconstruct is the proof-first/);
 });
 
-test('landing navigation opens the Reconstruct page without a reload', async ({ page }) => {
+test('landing deeper-tools card opens the Reconstruct page without a reload', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.landing-nav-actions').getByRole('button', { name: 'Reconstruct', exact: true }).click();
+  await page.getByRole('button', { name: /Build a defensible claim/ }).click();
   await expect(page).toHaveURL(/\/reconstruct$/);
   await expect(page.getByTestId('reconstruct-page')).toBeVisible();
 });
@@ -202,12 +278,13 @@ test('3D brain mounts or falls back cleanly without console errors', async ({ pa
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  // No force-2d flag on this navigation: clear it before load.
+  // No force-2d flag on this navigation: clear it before load. The 3D brain
+  // now lives inside the arcade's content lab.
   await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
-  await page.goto('/');
+  await page.goto('/?lab=content#playground');
   await page.waitForTimeout(4000);
   const has3d = await page.locator('.brain3d canvas').count();
-  const hasFallback = await page.locator('.landing-brain').count();
+  const hasFallback = await page.locator('.brain-visualizer').count();
   expect(has3d + hasFallback).toBeGreaterThan(0);
   // Resource-load failures (fonts/CDN blocked in CI sandboxes) are not app
   // errors; this test guards against exceptions from the 3D mount itself.
