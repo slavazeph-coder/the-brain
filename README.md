@@ -92,7 +92,7 @@ A base scan (`src/lib/analysisEngine.js`) is enriched by `runLayerRouter`
 
 | Layer | What it does |
 | ----- | ------------ |
-| **L4 — Cognitive Firewall** | Pressure scoring across urgency / outrage / fear / certainty / trust, with a per-category breakdown, a per-sentence pressure heatmap, an A–F grade, and named tactics with confidence (`src/lib/firewallLayer.js`, `POST /api/firewall`). |
+| **L4 — Cognitive Firewall** | Pressure scoring across urgency / outrage / fear / certainty / trust, with a per-category breakdown, a per-sentence pressure heatmap, an A–F grade, named tactics with confidence, and SemEval-taxonomy persuasion techniques with the phrases that triggered them (`src/lib/firewallLayer.js`, `src/lib/persuasionTechniques.js`, `POST /api/firewall`). |
 | **L29 — Affective Decoder** | Dominant affect + valence/arousal, a 9-affect taxonomy on Russell's valence×arousal circumplex, and a per-sentence emotion trajectory (`src/lib/affectLayer.js`, `POST /api/affect`). |
 | **L3 — TRIBE Projection** | 7-region (CTX/HPC/THL/AMY/BG/PFC/CBL) activation projection; uses an external TRIBE service when configured, else a local mapping. |
 | **L48 — Business Metrics** | Maps the scan into 8 decision KPIs (hook strength, trust, manipulation risk, shareability, …). |
@@ -108,12 +108,12 @@ scoring change cannot silently regress:
 
 | Dimension | Spearman ρ | Pairs ordered wrongly |
 | --- | --- | --- |
+| manipulation risk | 0.892 | 8 / 117 |
 | trust | 0.700 | 16 / 107 |
 | urgency | 0.641 | 14 / 111 |
-| manipulation risk | 0.631 | 21 / 117 |
 | viral pull | 0.366 | 32 / 107 |
 
-**81% of 442 labelled comparisons ranked correctly** (mean ρ 0.585).
+**84% of 442 labelled comparisons ranked correctly** (mean ρ 0.650).
 
 Calibration found a real defect: trust was originally **anti-correlated**
 (ρ −0.505), scoring outrage bait as more trustworthy than a sincere apology,
@@ -121,6 +121,42 @@ because it counted trust *vocabulary* rather than evidence. Adding specificity
 and stated-limitation signals — and discounting specifics that sit inside
 urgency phrasing, so a fake deadline cannot buy credibility — turned it
 positive.
+
+### Naming techniques the way everyone else names them
+
+The firewall's original four tactics — forced urgency, fear pressure, outrage
+hook, certainty theater — were ours. Only one of them mapped onto a class
+anyone else had annotated, which made them impossible to check against outside
+work. `src/lib/persuasionTechniques.js` adds a detector whose classes are taken
+from the **SemEval propaganda / persuasion taxonomies** (SemEval-2020 Task 11
+"PTC", SemEval-2023 Task 3): Loaded Language, Appeal to Fear/Prejudice,
+Name Calling, Exaggeration/Minimisation, Doubt, Bandwagon, Appeal to Authority,
+Thought-terminating Cliché, Black-and-White Fallacy, Obfuscation, Appeal to
+Time, Repetition — 12 classes named verbatim, plus 2 detections whose mapping is
+approximate and **labelled as approximate in the UI and excluded from
+`coveredClasses()`**, because claiming verbatim coverage you only partly
+approximate is borrowed credibility.
+
+Each detection carries the phrases that triggered it and the sentences they came
+from, so it is explainable rather than an opaque score. Eleven of the twelve are
+cue-phrase detectors; Repetition is structural, because repetition has no cue
+phrase to look for.
+
+On the labelled corpus the technique detector ranks manipulation risk at
+**ρ 0.918 on its own**, against 0.631 for the previous engine score. It is
+folded into the headline at **30% weight**, not swapped in, for a stated reason:
+its cue lists were tuned while looking at that same corpus, so 0.918 is an
+**in-sample** number. The minority weight takes most of the available
+improvement (0.631 → 0.892) without betting the headline on a lexicon that has
+never been held out. `scripts/eval-corpus.mjs` is where a held-out corpus gets
+scored when one is available.
+
+The detector states its own ceiling (`DETECTOR_LIMITS`): lexical cue detection,
+not a trained classifier, favouring precision over recall — published systems
+for these classes are transformer models. On the corpus it fires on **0 of 6**
+passages labelled low risk and on **all** passages labelled high or extreme, but
+"no technique matched" is a weaker claim than "no manipulation", and the UI says
+so.
 
 Two honesty notes, both enforced by tests rather than left to good intentions:
 

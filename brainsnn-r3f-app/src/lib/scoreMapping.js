@@ -7,7 +7,19 @@ export function getBusinessMetrics(result = {}) {
   const urgency = clampScore(metrics.urgency, 0);
   const emotionalCharge = clampScore(((Number(metrics.fear) || 0) + (Number(metrics.anger) || 0) + (Number(metrics.excitement) || 0)) / 3, 35);
   const empathy = clampScore(metrics.empathy, 40);
-  const manipulationRisk = clampScore((Number(result.gaugeGapScore) || 0) * 0.5 + (Number(metrics.fear) || 0) * 0.16 + (Number(metrics.anger) || 0) * 0.16 + (Number(metrics.urgency) || 0) * 0.18, 40);
+  // Manipulation risk mixes the affect-weighted engine score with the
+  // taxonomy-aligned technique detector. On the labelled corpus the detector
+  // ranks manipulation risk far better on its own (Spearman 0.92 vs 0.63), but
+  // its cue lists were tuned while looking at that same corpus, so that number
+  // is in-sample. The weight below is deliberately minority-share: it takes
+  // most of the available improvement (0.63 -> 0.89) without betting the
+  // headline score on a lexicon that has never been held out.
+  const engineRisk = (Number(result.gaugeGapScore) || 0) * 0.5 + (Number(metrics.fear) || 0) * 0.16 + (Number(metrics.anger) || 0) * 0.16 + (Number(metrics.urgency) || 0) * 0.18;
+  const techniqueRisk = Number(result.firewallSignals?.techniquePressure);
+  const manipulationRisk = clampScore(
+    Number.isFinite(techniqueRisk) ? engineRisk * 0.7 + techniqueRisk * 0.3 : engineRisk,
+    40,
+  );
   const shareability = clampScore(result.viralScore, 45);
   const confidence = clampScore(result.confidence, 60);
   return [
