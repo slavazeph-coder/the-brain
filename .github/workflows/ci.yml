@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Validate layer catalog
+        run: npm run validate:catalog
+
       - name: Test
         run: npm test
 

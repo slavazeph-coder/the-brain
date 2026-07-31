@@ -10,7 +10,7 @@ import {
   getEngineStatusSnapshot,
   runLayerRouter
 } from "./src/lib/layerRouter.js";
-import { LAYER_CATALOG } from "./src/lib/layerCatalog.js";
+import { LAYER_CATALOG, LAYER_DEPENDENCIES, getCatalogManifest } from "./src/lib/layerCatalog.js";
 import { SOLITON_PRESETS, computeSolitonPreset, exploreSolitonField } from "./src/lib/solitonLayer.js";
 import { computeFirewall } from "./src/lib/firewallLayer.js";
 import { computeAffect } from "./src/lib/affectLayer.js";
@@ -173,8 +173,10 @@ app.get("/api/layers", (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
   res.json({
     totalLayers: LAYER_CATALOG.length,
+    manifest: (getCatalogManifest as any)(),
     coreLayers: status.coreLayers,
     layers: LAYER_CATALOG,
+    dependencies: LAYER_DEPENDENCIES,
   });
 });
 

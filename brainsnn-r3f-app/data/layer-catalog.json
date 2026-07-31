@@ -1,0 +1,744 @@
+{
+  "manifest": {
+    "schemaVersion": "brainsnn.layer-catalog.v1",
+    "version": "1.0.0",
+    "totalLayers": 103,
+    "coreLayerIds": [
+      3,
+      4,
+      5,
+      29,
+      36,
+      39,
+      40,
+      46,
+      48,
+      63,
+      70,
+      101,
+      102,
+      103
+    ],
+    "dependencyEdges": 6,
+    "groups": {
+      "view": 18,
+      "firewall": 45,
+      "share": 12,
+      "data": 14,
+      "backend": 9,
+      "progression": 5
+    },
+    "contentHash": "smjcw2"
+  },
+  "groups": {
+    "view": {
+      "label": "3D & UX",
+      "color": "#00f5ff"
+    },
+    "firewall": {
+      "label": "Cognitive Firewall",
+      "color": "#a855f7"
+    },
+    "share": {
+      "label": "Share & Cards",
+      "color": "#f97316"
+    },
+    "data": {
+      "label": "Data & State",
+      "color": "#22c55e"
+    },
+    "backend": {
+      "label": "Backend & Agents",
+      "color": "#06b6d4"
+    },
+    "progression": {
+      "label": "Progression",
+      "color": "#eab308"
+    }
+  },
+  "layers": [
+    {
+      "id": 1,
+      "name": "3D Brain Viewer",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 2,
+      "name": "Neural Flow Grid",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 3,
+      "name": "TRIBE v2 Frames",
+      "group": "backend",
+      "blurb": "TRIBE v2 and scenario projections mapped to the 7-region BrainSNN model."
+    },
+    {
+      "id": 4,
+      "name": "Cognitive Firewall",
+      "group": "firewall",
+      "blurb": "Deterministic pressure scoring across urgency, outrage, certainty, fear and trust erosion."
+    },
+    {
+      "id": 5,
+      "name": "Gemma 4 Engine",
+      "group": "firewall",
+      "blurb": "Gemma endpoint support for deep multimodal analysis when configured server-side."
+    },
+    {
+      "id": 6,
+      "name": "Snapshots",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 7,
+      "name": "Analytics Dashboard",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 8,
+      "name": "Narrative Engine",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 9,
+      "name": "Toast Notifications",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 10,
+      "name": "Keyboard Shortcuts",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 11,
+      "name": "Share & Embed",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 12,
+      "name": "Onboarding Walkthrough",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 13,
+      "name": "Split Brain View",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 14,
+      "name": "AI Voice Narrator",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 15,
+      "name": "Plugin System",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 16,
+      "name": "Live Sync",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 17,
+      "name": "Heatmap Timeline",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 18,
+      "name": "Knowledge Brain",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 19,
+      "name": "MCP Bridge",
+      "group": "backend",
+      "blurb": "Backend & Agents layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 20,
+      "name": "Code-Aware Knowledge",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 21,
+      "name": "Brain Steward",
+      "group": "backend",
+      "blurb": "Backend & Agents layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 22,
+      "name": "Conversation Brain",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 23,
+      "name": "Cognitive Immunity Score",
+      "group": "progression",
+      "blurb": "Progression layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 24,
+      "name": "Real Embeddings",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 25,
+      "name": "Red Team Simulator",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 26,
+      "name": "Dream Mode",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 27,
+      "name": "Adversarial Training",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 28,
+      "name": "Neuro-RAG",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 29,
+      "name": "Affective Decoder",
+      "group": "firewall",
+      "blurb": "12-affect trigger decoding across threat, reward, social and cognitive clusters."
+    },
+    {
+      "id": 30,
+      "name": "Neurochemistry Sandbox",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 31,
+      "name": "Brain Evolve",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 32,
+      "name": "Attack Evolve",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 33,
+      "name": "Multimodal RAG Router",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 34,
+      "name": "Vector-Graph Fusion",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 35,
+      "name": "Direct Content Insertion",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 36,
+      "name": "Autopsy Mode",
+      "group": "share",
+      "blurb": "Per-content autopsy and A/B battle rollups for variants and transcripts."
+    },
+    {
+      "id": 37,
+      "name": "Cognitive Fragments",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 38,
+      "name": "Daily Firewall Challenge",
+      "group": "progression",
+      "blurb": "Progression layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 39,
+      "name": "Propaganda Templates",
+      "group": "firewall",
+      "blurb": "Named manipulation and persuasion templates, surfaced as concrete evidence."
+    },
+    {
+      "id": 40,
+      "name": "Sentence Heatmap",
+      "group": "firewall",
+      "blurb": "Sentence-level heatmap annotation connected to recommendations."
+    },
+    {
+      "id": 41,
+      "name": "Refutation Library",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 42,
+      "name": "Counter-Draft",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 43,
+      "name": "Time-Series Autopsy",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 44,
+      "name": "Inbox Mode",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 45,
+      "name": "Semantic Templates",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 46,
+      "name": "Firewall Receipts",
+      "group": "share",
+      "blurb": "Deterministic scan receipt for export, share links and audit trails."
+    },
+    {
+      "id": 47,
+      "name": "Diff Mode",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 48,
+      "name": "Ad Transparency",
+      "group": "firewall",
+      "blurb": "Ad transparency archetypes such as FOMO, proof gap and coercive scarcity."
+    },
+    {
+      "id": 49,
+      "name": "Scan Anywhere",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 50,
+      "name": "Weekly Recap",
+      "group": "progression",
+      "blurb": "Progression layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 51,
+      "name": "Style Fingerprint",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 52,
+      "name": "Multi-lingual Firewall",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 53,
+      "name": "Echo Detector",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 54,
+      "name": "Public Scoring API",
+      "group": "backend",
+      "blurb": "Backend & Agents layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 55,
+      "name": "Custom Rules Editor",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 56,
+      "name": "Badge System",
+      "group": "progression",
+      "blurb": "Progression layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 57,
+      "name": "Data Portability",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 58,
+      "name": "Image OCR Firewall",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 59,
+      "name": "Audio Firewall",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 60,
+      "name": "Firewall Macros",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 61,
+      "name": "Firewall Diagnostic",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 62,
+      "name": "Hypothesis Mode",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 63,
+      "name": "Context Memory",
+      "group": "data",
+      "blurb": "Entity and campaign memory for recurring context triggers."
+    },
+    {
+      "id": 64,
+      "name": "Debate Mode",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 65,
+      "name": "Firewall Replay",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 66,
+      "name": "Coverage Heatmap",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 67,
+      "name": "Calendar Heatmap",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 68,
+      "name": "Tone Shifter",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 69,
+      "name": "Similarity Search",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 70,
+      "name": "Explanation Mode",
+      "group": "firewall",
+      "blurb": "Plain-English narration of what each engine layer contributed."
+    },
+    {
+      "id": 71,
+      "name": "Neural Oscillations",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 72,
+      "name": "Layer Explorer",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 73,
+      "name": "Text Adventure Training",
+      "group": "progression",
+      "blurb": "Progression layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 74,
+      "name": "Firewall Comparator",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 75,
+      "name": "Region Drill-Down",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 76,
+      "name": "Streaming Scoring API",
+      "group": "backend",
+      "blurb": "Backend & Agents layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 77,
+      "name": "Session Rooms",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 78,
+      "name": "Vertical Card Variants",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 79,
+      "name": "Compliment Detector",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 80,
+      "name": "Decoy / Sarcasm Detector",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 81,
+      "name": "Browser Extension Generator",
+      "group": "share",
+      "blurb": "Share & Cards layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 82,
+      "name": "MCP Tool Expansion",
+      "group": "backend",
+      "blurb": "Backend & Agents layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 83,
+      "name": "Rule Pack Library",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 84,
+      "name": "Scan Archive",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 85,
+      "name": "Journalism Bulk Mode",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 86,
+      "name": "Privacy Budget",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 87,
+      "name": "Genre Classifier",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 88,
+      "name": "Persona Simulator",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 89,
+      "name": "Refutation Composer",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 90,
+      "name": "Personal Dictionary",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 91,
+      "name": "PWA Install",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 92,
+      "name": "Command Palette",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 93,
+      "name": "Feedback Calibration",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 94,
+      "name": "Role Tour",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 95,
+      "name": "Image Bbox Annotation",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 96,
+      "name": "Cross-device Sync",
+      "group": "data",
+      "blurb": "Data & State layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 97,
+      "name": "Hotkey Map",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 98,
+      "name": "Theme + A11y",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 99,
+      "name": "Federated Community Firewall",
+      "group": "firewall",
+      "blurb": "Cognitive Firewall layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 100,
+      "name": "Milestone Dashboard",
+      "group": "view",
+      "blurb": "3D & UX layer preserved in the 103-layer engine stack."
+    },
+    {
+      "id": 101,
+      "name": "Gemini Deep Analysis",
+      "group": "backend",
+      "blurb": "Gemini/Gemma/OpenAI-style deep analysis and counter-draft guidance."
+    },
+    {
+      "id": 102,
+      "name": "Veea Lobster Trap",
+      "group": "backend",
+      "blurb": "Prompt injection, PII and secret preflight before model calls."
+    },
+    {
+      "id": 103,
+      "name": "39 Hz Soliton Field",
+      "group": "backend",
+      "blurb": "39 Hz microtubule soliton field: gamma-band synchrony and leapfrogging ionic solitons as a deterministic signal layer."
+    }
+  ],
+  "dependencies": [
+    {
+      "id": 29,
+      "dependsOn": [
+        4
+      ],
+      "reason": "Affect arousal is sharpened by the firewall's emotional-activation signal."
+    },
+    {
+      "id": 3,
+      "dependsOn": [
+        4,
+        29
+      ],
+      "reason": "The 7-region projection is driven by firewall pressure and affect valence/arousal."
+    },
+    {
+      "id": 48,
+      "dependsOn": [
+        4
+      ],
+      "reason": "Business metrics (manipulation risk, hook strength) derive from firewall signals."
+    },
+    {
+      "id": 103,
+      "dependsOn": [
+        4,
+        29
+      ],
+      "reason": "The soliton lattice is detuned by manipulation pressure and driven by affect arousal."
+    },
+    {
+      "id": 70,
+      "dependsOn": [
+        4,
+        29,
+        3
+      ],
+      "reason": "The narration summarizes what the firewall, affect and projection layers contributed."
+    },
+    {
+      "id": 46,
+      "dependsOn": [
+        4,
+        103
+      ],
+      "reason": "The receipt hashes the firewall signals and the soliton field for reproducibility."
+    }
+  ],
+  "coreLayerIds": [
+    3,
+    4,
+    5,
+    29,
+    36,
+    39,
+    40,
+    46,
+    48,
+    63,
+    70,
+    101,
+    102,
+    103
+  ]
+}

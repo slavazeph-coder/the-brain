@@ -93,3 +93,116 @@ export function searchLayers(query = '', group = 'all') {
       || LAYER_GROUPS[layer.group]?.label.toLowerCase().includes(q);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Layer dependency graph, manifest and validation
+// ---------------------------------------------------------------------------
+// Inspired by Marble's os-taxonomy (a schema-validated knowledge graph with a
+// prerequisite dependency graph, a versioned manifest and a validator). Here
+// the "prerequisites" are the real data-flow edges inside `runLayerRouter`:
+// which core layer consumes another layer's output.
+
+export const CATALOG_SCHEMA_VERSION = 'brainsnn.layer-catalog.v1';
+export const CATALOG_VERSION = '1.0.0';
+
+// { id, dependsOn: [ids], reason } — a DAG that mirrors runLayerRouter's flow.
+export const LAYER_DEPENDENCIES = [
+  { id: 29, dependsOn: [4], reason: 'Affect arousal is sharpened by the firewall\'s emotional-activation signal.' },
+  { id: 3, dependsOn: [4, 29], reason: 'The 7-region projection is driven by firewall pressure and affect valence/arousal.' },
+  { id: 48, dependsOn: [4], reason: 'Business metrics (manipulation risk, hook strength) derive from firewall signals.' },
+  { id: 103, dependsOn: [4, 29], reason: 'The soliton lattice is detuned by manipulation pressure and driven by affect arousal.' },
+  { id: 70, dependsOn: [4, 29, 3], reason: 'The narration summarizes what the firewall, affect and projection layers contributed.' },
+  { id: 46, dependsOn: [4, 103], reason: 'The receipt hashes the firewall signals and the soliton field for reproducibility.' },
+];
+
+export function dependenciesFor(id) {
+  return LAYER_DEPENDENCIES.find((edge) => edge.id === id)?.dependsOn ?? [];
+}
+
+function catalogHash() {
+  const payload = JSON.stringify({
+    layers: LAYER_CATALOG.map((layer) => [layer.id, layer.name, layer.group]),
+    core: CORE_LAYER_IDS,
+    deps: LAYER_DEPENDENCIES.map((edge) => [edge.id, edge.dependsOn]),
+  });
+  let hash = 2166136261;
+  for (let i = 0; i < payload.length; i += 1) {
+    hash ^= payload.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+// Deterministic manifest (no timestamps) so the content hash is stable and can
+// be cited by a scan receipt.
+export function getCatalogManifest() {
+  const groups = {};
+  for (const key of Object.keys(LAYER_GROUPS)) {
+    groups[key] = LAYER_CATALOG.filter((layer) => layer.group === key).length;
+  }
+  return {
+    schemaVersion: CATALOG_SCHEMA_VERSION,
+    version: CATALOG_VERSION,
+    totalLayers: LAYER_CATALOG.length,
+    coreLayerIds: [...CORE_LAYER_IDS],
+    dependencyEdges: LAYER_DEPENDENCIES.length,
+    groups,
+    contentHash: catalogHash(),
+  };
+}
+
+// Structural + referential integrity check. Returns { ok, errors }.
+export function validateCatalog() {
+  const errors = [];
+  const ids = LAYER_CATALOG.map((layer) => layer.id);
+  const idSet = new Set(ids);
+
+  if (idSet.size !== ids.length) errors.push('Duplicate layer ids.');
+  ids.forEach((id, index) => {
+    if (id !== index + 1) errors.push(`Layer ids must be contiguous from 1; got ${id} at position ${index + 1}.`);
+  });
+
+  LAYER_CATALOG.forEach((layer) => {
+    if (!LAYER_GROUPS[layer.group]) errors.push(`Layer ${layer.id} has unknown group "${layer.group}".`);
+    if (!layer.blurb || !layer.blurb.trim()) errors.push(`Layer ${layer.id} has an empty blurb.`);
+  });
+
+  new Set(CORE_LAYER_IDS).forEach((id) => {
+    if (!idSet.has(id)) errors.push(`CORE_LAYER_IDS references missing layer ${id}.`);
+  });
+  if (new Set(CORE_LAYER_IDS).size !== CORE_LAYER_IDS.length) errors.push('Duplicate ids in CORE_LAYER_IDS.');
+
+  const seenEdges = new Set();
+  LAYER_DEPENDENCIES.forEach((edge) => {
+    if (!idSet.has(edge.id)) errors.push(`Dependency references missing layer ${edge.id}.`);
+    if (seenEdges.has(edge.id)) errors.push(`Duplicate dependency entry for layer ${edge.id}.`);
+    seenEdges.add(edge.id);
+    (edge.dependsOn || []).forEach((dep) => {
+      if (!idSet.has(dep)) errors.push(`Layer ${edge.id} depends on missing layer ${dep}.`);
+      if (dep === edge.id) errors.push(`Layer ${edge.id} depends on itself.`);
+    });
+    if (!edge.reason || !edge.reason.trim()) errors.push(`Dependency ${edge.id} has no reason.`);
+  });
+
+  // Cycle detection (DFS over the dependency edges).
+  const adjacency = new Map(LAYER_DEPENDENCIES.map((edge) => [edge.id, edge.dependsOn || []]));
+  const state = new Map();
+  const visit = (node) => {
+    if (state.get(node) === 'done') return false;
+    if (state.get(node) === 'active') return true;
+    state.set(node, 'active');
+    for (const next of adjacency.get(node) || []) {
+      if (visit(next)) return true;
+    }
+    state.set(node, 'done');
+    return false;
+  };
+  for (const edge of LAYER_DEPENDENCIES) {
+    if (visit(edge.id)) {
+      errors.push(`Dependency cycle detected at layer ${edge.id}.`);
+      break;
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
+}
