@@ -16,6 +16,7 @@ export function FirewallPanel({ result }) {
   if (!fw || !Array.isArray(fw.categories)) return null;
   const heatmap = Array.isArray(fw.heatmap) ? fw.heatmap : [];
   const tactics = Array.isArray(fw.tactics) ? fw.tactics : [];
+  const techniques = Array.isArray(fw.techniques) ? fw.techniques : [];
 
   return (
     <section className="firewall-panel" aria-labelledby="firewall-heading">
@@ -62,6 +63,52 @@ export function FirewallPanel({ result }) {
           </ul>
         </article>
       </div>
+
+      <article className="firewall-techniques">
+        <div className="firewall-techniques-head">
+          <h3>Published persuasion techniques</h3>
+          <span>{techniques.length ? `${techniques.length} detected` : 'none detected'}</span>
+        </div>
+        <p className="bsn-note">
+          Named using the SemEval propaganda/persuasion taxonomies, so a detection can be
+          checked against outside annotation rather than only against us.
+        </p>
+        {techniques.length ? (
+          <ul className="firewall-technique-list">
+            {techniques.map((technique) => (
+              <li key={technique.id}>
+                <div className="firewall-technique-head">
+                  <strong>{technique.label}</strong>
+                  <span>{technique.confidence}%</span>
+                </div>
+                <p className="firewall-technique-class">
+                  {technique.published}
+                  {technique.mapping === 'approximate' ? (
+                    <span
+                      className="firewall-technique-approx"
+                      title={technique.mappingNote}
+                    >
+                      approximate match
+                    </span>
+                  ) : null}
+                </p>
+                <p>{technique.description}</p>
+                {technique.matches?.length ? (
+                  <p className="firewall-technique-matches">
+                    {technique.matches.map((match) => (
+                      <code key={match}>{match}</code>
+                    ))}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="bsn-note">No taxonomy technique matched. That is a weaker claim than
+            &ldquo;no manipulation&rdquo;: the detector matches cue phrases, so novel phrasings are missed.</p>
+        )}
+        {fw.techniqueLimits ? <p className="firewall-technique-limits">{fw.techniqueLimits}</p> : null}
+      </article>
     </section>
   );
 }

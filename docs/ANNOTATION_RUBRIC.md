@@ -83,11 +83,30 @@ The script reports **AUC** (ranking), **Brier** (probabilistic accuracy) and
 Ranking and calibration come apart routinely — a scorer can order items
 perfectly while its numbers mean nothing as percentages — so both are reported.
 
-## Known gap
+## Known gap (partly closed)
 
-`firewallLayer.js` currently detects only four tactics (`forced-urgency`,
+`firewallLayer.js` originally detected only four tactics (`forced-urgency`,
 `fear-pressure`, `outrage-hook`, `certainty-theater`), each a regex-count
-threshold, and only *fear-pressure* maps cleanly onto a published class
+threshold, and only *fear-pressure* mapped cleanly onto a published class
 (*Appeal to Fear/Prejudice*). Building a detector against the full published
-taxonomy is the substantive work these corpora should drive — not merely
-validating what already exists.
+taxonomy was named here as the substantive work these corpora should drive.
+
+`src/lib/persuasionTechniques.js` is that detector: 12 classes named verbatim
+from the SemEval taxonomies plus 2 explicitly-approximate mappings, each
+detection carrying its triggering phrases and sentence indices. The four
+original tactics are kept and reported separately rather than silently
+replaced, so the two views can be compared.
+
+What remains open, and matters more than the class count:
+
+- **It is a cue-phrase detector, not a classifier.** Recall is bounded by the
+  phrasings in its pattern lists. The published systems for these classes are
+  fine-tuned transformers; this is not one, and `DETECTOR_LIMITS` says so.
+- **Its calibration is in-sample.** The patterns were adjusted while looking at
+  `calibrationCorpus.js`, so ρ 0.918 on that corpus is not a held-out result.
+  A real corpus fetched into `datasets/` and scored through
+  `scripts/eval-corpus.mjs` is the number that would settle it. Until then the
+  detector carries minority weight (30%) in the headline manipulation score.
+- **No inter-annotator agreement of our own.** `src/lib/agreement.js` computes
+  Krippendorff's alpha, but our 18 archetype labels are single-annotator and
+  must not be described as reliable until that changes.

@@ -46,15 +46,18 @@ describe('calibration corpus', () => {
 // scoring change cannot quietly make rank agreement worse; raise them whenever
 // the engine genuinely improves.
 //
-// Measured 2026-07: trust 0.70, manipulationRisk 0.63, urgency 0.64,
-// viralPull 0.37; overall pair accuracy 0.81, mean Spearman 0.59.
+// Measured 2026-07 after folding the taxonomy-aligned technique detector into
+// manipulation risk at 30% weight: trust 0.70, manipulationRisk 0.89 (was
+// 0.63), urgency 0.64, viralPull 0.37; overall pair accuracy 0.84 (was 0.81),
+// mean Spearman 0.65 (was 0.59).
 describe('measured calibration (regression guard)', () => {
   it('ranks urgency well', () => {
     expect(report.dimensions.urgency.spearman).toBeGreaterThan(0.55);
   });
 
   it('ranks manipulation risk well', () => {
-    expect(report.dimensions.manipulationRisk.spearman).toBeGreaterThan(0.5);
+    expect(report.dimensions.manipulationRisk.spearman).toBeGreaterThan(0.85);
+    expect(report.dimensions.manipulationRisk.inversionRate).toBeLessThan(0.1);
   });
 
   it('ranks viral pull positively', () => {
@@ -72,8 +75,8 @@ describe('measured calibration (regression guard)', () => {
   });
 
   it('keeps overall pair accuracy well above chance', () => {
-    expect(report.overall.pairAccuracy).toBeGreaterThan(0.75);
-    expect(report.overall.meanSpearman).toBeGreaterThan(0.45);
+    expect(report.overall.pairAccuracy).toBeGreaterThan(0.82);
+    expect(report.overall.meanSpearman).toBeGreaterThan(0.6);
   });
 });
 

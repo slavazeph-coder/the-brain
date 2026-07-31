@@ -12,6 +12,7 @@
 
 import { clampScore } from './formatters.js';
 import { splitIntoSegments } from './validation.js';
+import { DETECTOR_LIMITS, techniquePressure } from './persuasionTechniques.js';
 
 const urgencyTerms = /\b(now|today|deadline|limited|last chance|urgent|immediately|act fast|before it'?s too late)\b/gi;
 const outrageTerms = /\b(outrage|furious|rigged|corrupt|betrayed|enemy|disgusting|they don't want|scandal)\b/gi;
@@ -43,6 +44,11 @@ function matchedPhrases(text, regex, limit = 6) {
 function findEvidence(text, regex, label) {
   return matchedPhrases(text, regex, 5).map((match) => ({ label, match }));
 }
+
+// The four tactics below are ours. Only `fear-pressure` maps onto a class
+// anyone else has annotated, which makes them hard to check against outside
+// work — see persuasionTechniques.js for the taxonomy-aligned detector that
+// runs alongside them and is reported separately rather than replacing them.
 
 // Named manipulation templates (kept for back-compat with the layer trace).
 export function detectTemplates(text) {
@@ -144,6 +150,10 @@ export function computeFirewall({ content = '', metrics = {}, isFallback = false
     };
   });
 
+  // Taxonomy-aligned detection, computed alongside the tactics above so the
+  // two can be compared rather than conflated.
+  const persuasion = techniquePressure(text);
+
   return {
     emotionalActivation: Number(emotionalActivation.toFixed(3)),
     cognitiveSuppression: Number(cognitiveSuppression.toFixed(3)),
@@ -160,5 +170,10 @@ export function computeFirewall({ content = '', metrics = {}, isFallback = false
     categories,
     heatmap,
     tactics: detectTactics(text),
+    // Published-taxonomy view of the same text.
+    techniques: persuasion.techniques,
+    techniquePressure: persuasion.score,
+    techniqueCount: persuasion.distinct,
+    techniqueLimits: DETECTOR_LIMITS,
   };
 }

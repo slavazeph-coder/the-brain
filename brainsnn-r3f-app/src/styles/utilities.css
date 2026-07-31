@@ -2524,6 +2524,112 @@
   font-size: 0.82rem;
 }
 
+/* Published persuasion techniques (SemEval taxonomy view) */
+.firewall-techniques {
+  margin-top: 12px;
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(9, 9, 17, 0.82);
+  padding: 14px;
+}
+
+.firewall-techniques-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.firewall-techniques-head h3 {
+  margin: 0;
+}
+
+.firewall-techniques-head span {
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-text-muted);
+  font-size: 0.75rem;
+}
+
+.firewall-technique-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+
+.firewall-technique-list li {
+  border: 1px solid var(--bsn-border);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.firewall-technique-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.firewall-technique-head span {
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-text-muted);
+  font-size: 0.75rem;
+}
+
+.firewall-technique-class {
+  margin: 4px 0 0;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.72rem;
+  color: var(--bsn-accent, #22d3ee);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.firewall-technique-approx {
+  border: 1px dashed rgba(234, 179, 8, 0.5);
+  color: rgba(234, 179, 8, 0.92);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 0.66rem;
+  cursor: help;
+}
+
+.firewall-technique-list p {
+  margin: 4px 0 0;
+  color: var(--bsn-text-secondary);
+  font-size: 0.82rem;
+}
+
+.firewall-technique-matches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.firewall-technique-matches code {
+  font-size: 0.7rem;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.firewall-technique-limits {
+  margin: 10px 0 0;
+  font-size: 0.74rem;
+  color: var(--bsn-text-muted);
+  border-top: 1px solid var(--bsn-border);
+  padding-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .firewall-technique-list { grid-template-columns: 1fr; }
+}
+
 /* Layer 29 — Affective Decoder panel */
 .affect-layout {
   display: grid;
