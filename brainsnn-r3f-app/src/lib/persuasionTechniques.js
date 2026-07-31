@@ -331,6 +331,8 @@ export function approximateTechniques() {
 }
 
 export const DETECTOR_LIMITS = 'Lexical cue detection, not a trained classifier. '
-  + 'Precision is favoured over recall: paraphrased or novel phrasings of a technique will be missed. '
   + 'Class names follow the SemEval propaganda/persuasion taxonomies so results are comparable to published annotation, '
-  + 'and techniques whose mapping is approximate rather than verbatim are marked as such.';
+  + 'and techniques whose mapping is approximate rather than verbatim are marked as such. '
+  + 'Measured on 17 held-out passages it had never been tuned against, it found half the annotated '
+  + 'techniques, missed all four expressed in paraphrase, and raised three false alarms on five benign passages. '
+  + 'Treat a detection as a prompt to look, not a verdict — and "nothing detected" as much weaker than "nothing there".';
