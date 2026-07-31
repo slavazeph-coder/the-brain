@@ -102,11 +102,26 @@ What remains open, and matters more than the class count:
 - **It is a cue-phrase detector, not a classifier.** Recall is bounded by the
   phrasings in its pattern lists. The published systems for these classes are
   fine-tuned transformers; this is not one, and `DETECTOR_LIMITS` says so.
-- **Its calibration is in-sample.** The patterns were adjusted while looking at
-  `calibrationCorpus.js`, so ρ 0.918 on that corpus is not a held-out result.
-  A real corpus fetched into `datasets/` and scored through
-  `scripts/eval-corpus.mjs` is the number that would settle it. Until then the
-  detector carries minority weight (30%) in the headline manipulation score.
+- **Its in-sample number was misleading, and we measured by how much.**
+  The patterns were adjusted while looking at `calibrationCorpus.js`, so
+  ρ 0.918 there is not a held-out result. `holdoutCorpus.js` — 17 passages
+  written to be scored once, never tuned against — puts the detector at
+  **ρ 0.488**, with 50% class recall, 0 of 4 paraphrased techniques found, and
+  3 false alarms on 5 benign passages.
+
+  The same set put the *engine* score at **ρ 0.051**, against its in-sample
+  0.631. That result reversed a design decision: the detector had been given
+  minority weight (30%) to hedge toward the engine score, which turned out to
+  be the worse generaliser by a wide margin. It now carries 50%.
+
+  Anyone extending the detector must read the protocol at the top of
+  `holdoutCorpus.js` first. Tuning a pattern to fix a holdout failure converts
+  the file into a second training set and destroys the only unbiased
+  measurement in the repo. The correct move on a genuine defect is to fix it,
+  retire those items into the calibration corpus, and write a fresh holdout.
+
+  A real external corpus fetched into `datasets/` and scored through
+  `scripts/eval-corpus.mjs` remains the number that would settle it.
 - **No inter-annotator agreement of our own.** `src/lib/agreement.js` computes
   Krippendorff's alpha, but our 18 archetype labels are single-annotator and
   must not be described as reliable until that changes.

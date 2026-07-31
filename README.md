@@ -108,12 +108,14 @@ scoring change cannot silently regress:
 
 | Dimension | Spearman ρ | Pairs ordered wrongly |
 | --- | --- | --- |
-| manipulation risk | 0.892 | 8 / 117 |
+| manipulation risk | 0.884 | 8 / 117 |
 | trust | 0.700 | 16 / 107 |
 | urgency | 0.641 | 14 / 111 |
 | viral pull | 0.366 | 32 / 107 |
 
-**84% of 442 labelled comparisons ranked correctly** (mean ρ 0.650).
+**84% of 442 labelled comparisons ranked correctly** (mean ρ 0.648). These are
+**in-sample** figures — see the holdout section below for what the same code does
+on text it has not seen.
 
 Calibration found a real defect: trust was originally **anti-correlated**
 (ρ −0.505), scoring outrage bait as more trustworthy than a sincere apology,
@@ -142,21 +144,52 @@ from, so it is explainable rather than an opaque score. Eleven of the twelve are
 cue-phrase detectors; Repetition is structural, because repetition has no cue
 phrase to look for.
 
-On the labelled corpus the technique detector ranks manipulation risk at
-**ρ 0.918 on its own**, against 0.631 for the previous engine score. It is
-folded into the headline at **30% weight**, not swapped in, for a stated reason:
-its cue lists were tuned while looking at that same corpus, so 0.918 is an
-**in-sample** number. The minority weight takes most of the available
-improvement (0.631 → 0.892) without betting the headline on a lexicon that has
-never been held out. `scripts/eval-corpus.mjs` is where a held-out corpus gets
-scored when one is available.
+### What happened when we actually held data out
 
-The detector states its own ceiling (`DETECTOR_LIMITS`): lexical cue detection,
-not a trained classifier, favouring precision over recall — published systems
-for these classes are transformer models. On the corpus it fires on **0 of 6**
-passages labelled low risk and on **all** passages labelled high or extreme, but
-"no technique matched" is a weaker claim than "no manipulation", and the UI says
-so.
+The numbers above are **in-sample**. Both the engine score and the detector's
+cue lists were shaped while looking at those 18 archetypes, so they measure fit,
+not skill. `src/lib/holdoutCorpus.js` is 17 passages written to be scored
+**once**, under a rule enforced by comment, test and code review: *no detector
+pattern may be tuned in response to a result on this set.*
+
+It went badly, and that is the point of having it:
+
+| | In-sample | Held out |
+| --- | --- | --- |
+| engine score alone | 0.631 | **0.051** |
+| technique detector alone | 0.918 | **0.488** |
+
+The engine score's rank agreement was **almost entirely corpus memorisation** —
+0.051 is no better than arbitrary on text it has not seen. The detector
+generalises poorly too, but it is the only component that generalises at all.
+
+That inverted the original design. The detector was first folded in at 30%
+weight, hedged *toward* the engine score on the theory that a tuned lexicon was
+the riskier input. The holdout showed the hedge pointed at the worse
+generaliser, so the weight is now **50%**, near the top of a flat held-out range
+and free in-sample (0.892 → 0.884). One caveat stated plainly: that weight was
+chosen using the holdout, so the weight itself is not independently validated
+even though the two measurements behind it are.
+
+Three specific failures, each pinned by a test so they stay visible:
+
+- **0 of 4 paraphrased techniques detected.** "The window shuts Friday and we
+  are not reopening it" is Appeal to Time by any annotator's reading and the
+  detector sees nothing. This is the recall ceiling `DETECTOR_LIMITS` claims,
+  demonstrated rather than asserted.
+- **3 false alarms on 5 benign passages** — a security notice that must say
+  "suspicious activity", a postmortem that must say "destroyed", an honest pitch
+  that says "the best tool we have shipped" and then gives the benchmark. This
+  is the failure mode that matters most, because flagging an honest message is
+  worse than missing a manipulative one.
+- **50% of annotated classes found**, and 67% of manipulative passages flagged
+  at all.
+
+So: "no technique matched" is a much weaker claim than "no manipulation", and
+the UI says so. The detector is a useful signal and a poor classifier, which is
+what a cue-phrase method should be expected to be — published systems for these
+classes are fine-tuned transformers. `scripts/eval-corpus.mjs` is where a real
+external corpus gets scored when licensing allows one to be vendored.
 
 Two honesty notes, both enforced by tests rather than left to good intentions:
 

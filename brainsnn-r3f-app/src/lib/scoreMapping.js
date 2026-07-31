@@ -8,16 +8,29 @@ export function getBusinessMetrics(result = {}) {
   const emotionalCharge = clampScore(((Number(metrics.fear) || 0) + (Number(metrics.anger) || 0) + (Number(metrics.excitement) || 0)) / 3, 35);
   const empathy = clampScore(metrics.empathy, 40);
   // Manipulation risk mixes the affect-weighted engine score with the
-  // taxonomy-aligned technique detector. On the labelled corpus the detector
-  // ranks manipulation risk far better on its own (Spearman 0.92 vs 0.63), but
-  // its cue lists were tuned while looking at that same corpus, so that number
-  // is in-sample. The weight below is deliberately minority-share: it takes
-  // most of the available improvement (0.63 -> 0.89) without betting the
-  // headline score on a lexicon that has never been held out.
+  // taxonomy-aligned technique detector (src/lib/persuasionTechniques.js).
+  //
+  // This weight was originally 30%, hedged on the reasoning that the detector's
+  // 0.92 came from the corpus its cue lists were tuned against, so the engine
+  // score was the safer anchor. The holdout set (src/lib/holdoutCorpus.js)
+  // falsified that: on 17 passages neither component had seen,
+  //
+  //   engine score alone     Spearman 0.051   (in-sample 0.631)
+  //   technique detector     Spearman 0.488   (in-sample 0.918)
+  //
+  // Both overfit, but the engine score overfits almost completely — its
+  // in-sample rank agreement was nearly all corpus memorisation. Hedging
+  // toward it was hedging toward the worse generaliser.
+  //
+  // 50/50 sits near the top of a flat held-out range (0.42-0.49 for weights
+  // 0.2-1.0) and keeps the affect signals the detector does not model. Caveat
+  // worth stating: this weight was chosen using the holdout, so the weight
+  // itself is not independently validated even though the two inputs to the
+  // decision are. In-sample cost is nil (0.892 -> 0.884).
   const engineRisk = (Number(result.gaugeGapScore) || 0) * 0.5 + (Number(metrics.fear) || 0) * 0.16 + (Number(metrics.anger) || 0) * 0.16 + (Number(metrics.urgency) || 0) * 0.18;
   const techniqueRisk = Number(result.firewallSignals?.techniquePressure);
   const manipulationRisk = clampScore(
-    Number.isFinite(techniqueRisk) ? engineRisk * 0.7 + techniqueRisk * 0.3 : engineRisk,
+    Number.isFinite(techniqueRisk) ? engineRisk * 0.5 + techniqueRisk * 0.5 : engineRisk,
     40,
   );
   const shareability = clampScore(result.viralScore, 45);

@@ -205,7 +205,16 @@ describe('DETECTOR_LIMITS', () => {
     expect(DETECTOR_LIMITS).toContain('not a trained classifier');
   });
 
-  it('admits the recall ceiling instead of implying full coverage', () => {
-    expect(DETECTOR_LIMITS).toMatch(/recall/);
+  // The limits text used to say "precision is favoured over recall", which is
+  // the kind of claim that sounds rigorous and commits to nothing. It now
+  // quotes the held-out measurement instead.
+  it('quotes the held-out failures rather than gesturing at a tradeoff', () => {
+    expect(DETECTOR_LIMITS).toContain('held-out');
+    expect(DETECTOR_LIMITS).toMatch(/paraphrase/);
+    expect(DETECTOR_LIMITS).toMatch(/false alarm/);
+  });
+
+  it('tells the reader a null result is weak evidence', () => {
+    expect(DETECTOR_LIMITS).toContain('nothing detected');
   });
 });
