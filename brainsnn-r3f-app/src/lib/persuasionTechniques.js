@@ -47,13 +47,21 @@ function detectRepetition(text) {
   const counts = new Map();
   for (const token of content) counts.set(token, (counts.get(token) || 0) + 1);
   // Repeated adjacent pairs count too — "it's gone, it's gone" is repetition
-  // even when each word alone is common.
+  // even when each word alone is common. A pair of pure function words is not:
+  // "the scope of the review ... the size of the cache ... the cost of the
+  // migration" repeats "of the" four times and is ordinary prose, so a bigram
+  // must carry at least one content word to count.
   for (let i = 0; i < tokens.length - 1; i += 1) {
-    const bigram = `${tokens[i]} ${tokens[i + 1]}`;
+    const [left, right] = [tokens[i], tokens[i + 1]];
+    // Stopword membership, not length: "act now" is short but content-bearing,
+    // while "of the" is neither.
+    const carriesContent = [left, right].some((token) => !STOPWORDS.has(token));
+    if (!carriesContent) continue;
+    const bigram = `${left} ${right}`;
     counts.set(bigram, (counts.get(bigram) || 0) + 1);
   }
   const repeated = [...counts.entries()]
-    .filter(([phrase, n]) => n >= MIN_REPEATS && (phrase.includes(' ') ? n >= MIN_REPEATS : true))
+    .filter(([, n]) => n >= MIN_REPEATS)
     .sort((a, b) => b[1] - a[1]);
   if (!repeated.length) return [];
   // Report one entry per excess occurrence so confidence scales with insistence.

@@ -123,6 +123,20 @@ describe('structural repetition detector', () => {
       + 'You can review it before the meeting on Thursday.';
     expect(detectTechniques(text).some((entry) => entry.id === 'repetition')).toBe(false);
   });
+
+  // Regression: counting every repeated adjacent pair flagged "of the" four
+  // times in a sentence that is plainly not repetitive. A bigram now has to
+  // carry a content word.
+  it('does not fire on a repeated pair of pure function words', () => {
+    const text = 'The scope of the review covers the shape of the index, '
+      + 'the size of the cache, and the cost of the migration path.';
+    expect(detectTechniques(text).some((entry) => entry.id === 'repetition')).toBe(false);
+  });
+
+  it('still fires when the repeated pair carries a content word', () => {
+    const text = 'Act now, act now, act now before the window closes.';
+    expect(detectTechniques(text).some((entry) => entry.id === 'repetition')).toBe(true);
+  });
 });
 
 describe('techniquePressure', () => {
