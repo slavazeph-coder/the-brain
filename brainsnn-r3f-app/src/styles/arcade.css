@@ -419,6 +419,32 @@
 .gg-arcade-range output { color: var(--bsn-cyan); font-family: var(--bsn-font-mono); }
 .gg-arcade-range input { width: 100%; accent-color: #7df9ff; }
 
+/* Slider rows in the deep labs (Flock Mind, Outbreak Zero, Gravity Forge, Chaos
+   Twins, Ant Trail, Traffic Tamer, Life Painter, Ecosystem Keeper). Same layout
+   as .gg-arcade-range above, but these mark the value up as a <strong> inside
+   the label span rather than an <output>, so the value styling has to attach
+   there instead — which is why they cannot simply share a selector.
+   Twenty of these existed with no rule at all, leaving every slider in eight
+   labs unstyled. */
+.gg-control-row { display: grid; gap: 9px; }
+
+.gg-control-row > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: var(--bsn-text-secondary);
+}
+
+.gg-control-row > span strong {
+  color: var(--bsn-cyan);
+  font-family: var(--bsn-font-mono);
+  font-weight: 600;
+}
+
+.gg-control-row input { width: 100%; accent-color: #7df9ff; }
+
 .gg-sim-mission {
   margin-top: 4px;
   padding: 13px;

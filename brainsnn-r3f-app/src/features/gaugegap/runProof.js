@@ -21,10 +21,39 @@ import {
   INTERVENTIONS,
   MISSION,
 } from './brainGame.js';
+import { resolvePackets } from './brainGame3d.js';
 
 export const RUN_PROOF_SCHEMA = 'brainsnn.defend_the_brain_run.v1';
+// v2 adds the packet schedule so the containment score is verifiable too. v1
+// proofs still verify — the schema is additive, and old exports stay valid.
+export const RUN_PROOF_SCHEMA_V2 = 'brainsnn.defend_the_brain_run.v2';
+export const SUPPORTED_SCHEMAS = Object.freeze([RUN_PROOF_SCHEMA, RUN_PROOF_SCHEMA_V2]);
 
 const INTERVENTION_BY_ID = Object.fromEntries(INTERVENTIONS.map((entry) => [entry.id, entry]));
+
+/**
+ * Strip a packet down to what verification needs.
+ *
+ * This is the privacy boundary. A packet carries `phrase` — the literal words
+ * from the player's own text that triggered the detection — and a proof is
+ * something people share. `techniqueId` is a taxonomy class name and is safe;
+ * the phrase and the label are not, and neither is needed to recompute
+ * containment. A custom level therefore exports its shape, never its content.
+ */
+export function redactPacket(packet) {
+  return {
+    id: packet.id,
+    techniqueId: packet.techniqueId,
+    route: packet.route,
+    path: packet.path,
+    regions: packet.regions,
+    guard: packet.guard ?? null,
+    spawnTick: packet.spawnTick,
+    travelTicks: packet.travelTicks,
+    landTick: packet.landTick,
+    impact: packet.impact,
+  };
+}
 
 /**
  * Replay a run from its log. Pure and deterministic: identical inputs always
@@ -91,15 +120,28 @@ export function replayRun({ mode = 'mission', seed = 'defend-01', log = [] } = {
 }
 
 /** Build a signed-by-content proof of a completed run. */
-export async function buildRunProof({ mode, seed, log, now = new Date() }) {
+export async function buildRunProof({ mode, seed, log, level = null, now = new Date() }) {
   const outcome = replayRun({ mode, seed, log });
+  const packets = level?.packets || [];
+  const containment = packets.length
+    ? resolvePackets({ packets, log, interventions: INTERVENTIONS })
+    : null;
+
   const proof = {
-    schema: RUN_PROOF_SCHEMA,
+    schema: packets.length ? RUN_PROOF_SCHEMA_V2 : RUN_PROOF_SCHEMA,
     created_at_utc: now.toISOString(),
     lab: 'braingame',
     mode,
     seed,
     log: log.map((entry) => ({ tick: entry.tick, id: entry.id })),
+    ...(packets.length ? {
+      level: {
+        id: level.id,
+        seed: level.seed,
+        // Text is deliberately absent — see redactPacket.
+        packets: packets.map(redactPacket),
+      },
+    } : {}),
     result: {
       status: outcome.status,
       scores: outcome.scores,
@@ -107,6 +149,11 @@ export async function buildRunProof({ mode, seed, log, now = new Date() }) {
       control: outcome.control,
       used: outcome.used,
       worstBreach: outcome.worstBreach,
+      ...(containment ? {
+        containment: containment.containment,
+        blocked: containment.blocked,
+        landed: containment.landed,
+      } : {}),
     },
     claim_boundary: 'Score from a deterministic 7-region model replay. Verifiable by recomputation; '
       + 'not a measurement of any human brain.',
@@ -121,7 +168,7 @@ export async function buildRunProof({ mode, seed, log, now = new Date() }) {
  */
 export async function verifyRunProof(proof) {
   const problems = [];
-  if (!proof || proof.schema !== RUN_PROOF_SCHEMA) problems.push(`unsupported schema: ${proof?.schema}`);
+  if (!proof || !SUPPORTED_SCHEMAS.includes(proof.schema)) problems.push(`unsupported schema: ${proof?.schema}`);
   if (!proof?.seed) problems.push('missing seed');
   if (!Array.isArray(proof?.log)) problems.push('missing intervention log');
 
@@ -145,5 +192,30 @@ export async function verifyRunProof(proof) {
     problems.push(`score mismatch: claimed ${proof.result?.scores?.defense}, replayed ${replay.scores.defense}`);
   }
 
-  return { verified: !problems.length, problems, replayed: replay.scores, recomputedHash };
+  // v2 additionally re-resolves the packet schedule against the same log, so a
+  // claimed containment cannot be edited any more than a claimed defense can.
+  let replayedContainment = null;
+  if (proof.schema === RUN_PROOF_SCHEMA_V2) {
+    const packets = proof.level?.packets;
+    if (!Array.isArray(packets) || !packets.length) {
+      problems.push('v2 proof carries no packet schedule');
+    } else {
+      const resolved = resolvePackets({ packets, log: proof.log, interventions: INTERVENTIONS });
+      replayedContainment = resolved.containment;
+      if (proof.result?.containment != null && resolved.containment !== proof.result.containment) {
+        problems.push(`containment mismatch: claimed ${proof.result.containment}, replayed ${resolved.containment}`);
+      }
+      if (proof.result?.landed != null && resolved.landed !== proof.result.landed) {
+        problems.push(`landed mismatch: claimed ${proof.result.landed}, replayed ${resolved.landed}`);
+      }
+    }
+  }
+
+  return {
+    verified: !problems.length,
+    problems,
+    replayed: replay.scores,
+    replayedContainment,
+    recomputedHash,
+  };
 }

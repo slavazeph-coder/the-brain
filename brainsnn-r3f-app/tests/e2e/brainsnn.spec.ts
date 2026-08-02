@@ -352,3 +352,73 @@ test('mobile navigation has no horizontal overflow at 390px', async ({ page }) =
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
+
+test('defend the brain renders a real 3D board driven by detected techniques', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  // The suite-wide beforeEach forces the 2D fallback to keep CI off software
+  // WebGL; this test is specifically about the 3D board, so clear it.
+  await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
+  await page.goto('/?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.locator('[data-testid="brain-game-3d"]')).toBeVisible({ timeout: 45_000 });
+  await expect(page.locator('[data-testid="brain-game-3d"] canvas')).toBeVisible({ timeout: 45_000 });
+
+  // The attack is built from the persuasion detector, so the panel names real
+  // taxonomy classes and quotes the phrases that triggered them.
+  const breakdown = page.getByTestId('brain-game-breakdown');
+  await expect(breakdown).toBeVisible();
+  await expect(breakdown).toContainText(/Appeal to Time|Exaggeration|Bandwagon|Doubt/);
+
+  // Switching levels rebuilds the attack from a different passage.
+  await page.getByTestId('brain-game-level').selectOption('guru-urgency-pitch');
+  await expect(breakdown.locator('li')).toHaveCount(5, { timeout: 20_000 });
+
+  expect(errors).toEqual([]);
+});
+
+test('defend the brain falls back to the 2D board without WebGL', async ({ page }) => {
+  // The 3D board is an upgrade, never a requirement: the game has to stay
+  // playable when WebGL is unavailable.
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function patched(type: string, ...rest: unknown[]) {
+      if (type === 'webgl' || type === 'webgl2') return null;
+      return original.call(this, type, ...rest);
+    };
+  });
+
+  await page.goto('/?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.locator('[data-testid="brain-game-3d"]')).toHaveCount(0);
+  await expect(page.locator('canvas.gg-brain-game-canvas')).toBeVisible();
+  await expect(page.getByTestId('brain-game-hud')).toContainText(/Hijack/i);
+});
+
+test('a run proof carries no text from the level it was played on', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+
+  // Build a level from text with distinctive words, then export a proof and
+  // assert none of those words made it in. A proof is meant to be shared.
+  await page.getByTestId('brain-game-level').selectOption('custom');
+  await page.getByTestId('brain-game-custom-text')
+    .fill('URGENT: doors close tonight, zebra pineapple, and everyone else has already joined.');
+  await page.getByRole('button', { name: 'Build the level' }).click();
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: /Export run proof/ }).click();
+  const file = await download;
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const proof = Buffer.concat(chunks).toString('utf8').toLowerCase();
+
+  expect(proof).toContain('defend_the_brain_run');
+  for (const secret of ['zebra', 'pineapple', 'doors close', 'urgent']) {
+    expect(proof).not.toContain(secret);
+  }
+});

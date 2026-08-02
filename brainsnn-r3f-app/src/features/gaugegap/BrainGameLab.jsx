@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Brain, FileJson, Pause, Play, RotateCcw, ShieldCheck, SkipForward, Zap } from 'lucide-react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, Brain, Boxes, FileJson, Pause, Play, RotateCcw, ShieldCheck, SkipForward, Volume2, VolumeX, Zap } from 'lucide-react';
 import { BRAIN_REGIONS, PATHWAYS, REGION_MAP } from '../brain3d/brainRegions.js';
 import { createBrainParams, createBrainState, stepBrain } from '../brain3d/brainModel.js';
 import { createRng } from '../../lib/rng.js';
@@ -20,9 +20,20 @@ import {
 import { buildRunProof, verifyRunProof } from './runProof.js';
 import { downloadJson } from './evidence.js';
 import { track } from '../../lib/analytics.js';
+import { breakdownByTechnique, resolvePackets, scorePackets } from './brainGame3d.js';
+import { buildCuratedLevel, buildLevel, CURATED_LEVELS, levelDifficulty } from './brainGameLevels.js';
+import { isThreeTier, resolveQualityTier } from '../brain3d/quality.js';
+import { DETECTOR_LIMITS } from '../../lib/persuasionTechniques.js';
+import { useReducedMotion } from '../../hooks/useReducedMotion.js';
+import { createGameAudio } from '../../lib/audio/gameAudio.js';
+
+// three is ~250 KB gzipped. It loads when someone actually plays in 3D, never
+// on first paint — enforced by scripts/check-three-imports.mjs.
+const GameScene = React.lazy(() => import('../brain3d/GameScene.jsx'));
 
 const EMPTY = { lesions: [], cuts: [], stimuli: {} };
 const TRACE_WINDOW = 60;
+const TICK_MS = 120;
 
 // Project the 3D region layout onto the canvas. x and z read best from above.
 function layoutRegions(width, height) {
@@ -55,6 +66,80 @@ export function BrainGameLab({ onAchievement }) {
   const [verdict, setVerdict] = useState(null);
   const tickRef = useRef(0);
 
+  // --- level, packets and the 3D board ---
+  const reducedMotion = useReducedMotion();
+  const [levelId, setLevelId] = useState(CURATED_LEVELS[1].id);
+  const [customText, setCustomText] = useState('');
+  const [level, setLevel] = useState(() => buildCuratedLevel(CURATED_LEVELS[1].id));
+  const [tier, setTier] = useState('2d');
+  const [use3d, setUse3d] = useState(true);
+  // Published every logical tick so the 3D board tracks the simulation. At the
+  // 120 ms tick that is ~8 renders/sec of a seven-sphere scene, which is far
+  // cheaper than driving it from React at frame rate.
+  const [liveFrame, setLiveFrame] = useState({ activities: {}, spikes: {}, weights: {} });
+  const lastStepAtRef = useRef(0);
+  const shakeRef = useRef(0);
+
+  // Muted until asked for. The context is built on the first unmute click, not
+  // at import, which is what browsers require and what keeps the console clean.
+  const audioRef = useRef(null);
+  const [soundOn, setSoundOn] = useState(false);
+  if (audioRef.current === null) audioRef.current = createGameAudio();
+  useEffect(() => () => audioRef.current?.close(), []);
+
+  useEffect(() => {
+    function detect() {
+      let forced = null;
+      try {
+        forced = typeof localStorage !== 'undefined' ? localStorage.getItem('brainsnn:force-brain-2d') : null;
+      } catch {
+        // storage can be blocked; fall through to capability detection
+      }
+      let webgl = true;
+      try {
+        const probe = document.createElement('canvas');
+        webgl = Boolean(probe.getContext('webgl2') || probe.getContext('webgl'));
+      } catch {
+        webgl = false;
+      }
+      setTier(resolveQualityTier({
+        width: window.innerWidth,
+        deviceMemory: navigator.deviceMemory,
+        hardwareConcurrency: navigator.hardwareConcurrency,
+        webgl,
+        forced,
+        reducedMotion,
+      }));
+    }
+    detect();
+    window.addEventListener('resize', detect);
+    return () => window.removeEventListener('resize', detect);
+  }, [reducedMotion]);
+
+  const canRender3d = isThreeTier(tier);
+  const showing3d = canRender3d && use3d;
+  const coarsePointer = typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(pointer: coarse)').matches;
+
+  // Packet outcomes are a pure function of the schedule and the log, so this is
+  // just derived state — never simulated, never frame-dependent.
+  const resolution = useMemo(() => resolvePackets({
+    packets: level.packets,
+    log,
+    interventions: INTERVENTIONS,
+    untilTick: evaluation.elapsed,
+  }), [level.packets, log, evaluation.elapsed]);
+  const containment = scorePackets(resolution);
+
+  // Fractional tick for smooth packet motion. Cosmetic: nothing derived from it
+  // reaches a score.
+  const getTick = useCallback(() => {
+    const since = performance.now() - lastStepAtRef.current;
+    const partial = Math.max(0, Math.min(1, since / TICK_MS));
+    return tickRef.current + partial;
+  }, []);
+
   const canvasRef = useRef(null);
   const modeRef = useRef(mode);
   const pausedRef = useRef(paused);
@@ -68,6 +153,21 @@ export function BrainGameLab({ onAchievement }) {
   const used = countInterventions(interventions);
   const finished = evaluation.status === 'won' || evaluation.status === 'lost';
 
+  // Packets resolve in the tick domain, so the audible event is a change in the
+  // running totals rather than anything the renderer noticed.
+  const lastCountsRef = useRef({ blocked: 0, landed: 0 });
+  useEffect(() => {
+    const previous = lastCountsRef.current;
+    if (resolution.blocked > previous.blocked) audioRef.current?.play('block');
+    if (resolution.landed > previous.landed) audioRef.current?.play('leak');
+    lastCountsRef.current = { blocked: resolution.blocked, landed: resolution.landed };
+  }, [resolution.blocked, resolution.landed]);
+
+  useEffect(() => {
+    if (evaluation.status === 'won') audioRef.current?.play('win');
+    else if (evaluation.status === 'lost') audioRef.current?.play('lose');
+  }, [evaluation.status]);
+
   // XP for an actual accomplishment rather than for opening the lab. Fires once
   // per outcome; recordAchievement is itself idempotent.
   const awardedRef = useRef('');
@@ -80,8 +180,24 @@ export function BrainGameLab({ onAchievement }) {
     if (evaluation.remaining >= rules.budget - 1) {
       onAchievement?.('efficient-defender', { score: evaluation.scores.defense, labId: 'braingame' });
     }
-    track('gaugegap_brain_mission_won', { mode, defense: evaluation.scores.defense });
-  }, [evaluation.status, evaluation.scores.defense, evaluation.remaining, mode, onAchievement, rules.budget]);
+    // Containment is its own axis: you can survive the run on the rate model
+    // while still letting every technique through, so sealing the board is a
+    // separate accomplishment from holding the line.
+    if (resolution.resolved > 0 && resolution.landed === 0) {
+      onAchievement?.('sealed', { score: containment.containment, labId: 'braingame' });
+    }
+    if (levelId === CURATED_LEVELS[CURATED_LEVELS.length - 1].id) {
+      onAchievement?.('boss-defender', { score: evaluation.scores.defense, labId: 'braingame' });
+    }
+    if (levelId === 'custom') {
+      onAchievement?.('own-text', { score: evaluation.scores.defense, labId: 'braingame' });
+    }
+    track('gaugegap_brain_mission_won', { mode, defense: evaluation.scores.defense, level: levelId });
+  }, [
+    evaluation.status, evaluation.scores.defense, evaluation.remaining,
+    mode, onAchievement, rules.budget, levelId,
+    resolution.resolved, resolution.landed, containment.containment,
+  ]);
 
   // The simulation owns its own loop so the canvas never waits on React.
   useEffect(() => {
@@ -143,6 +259,14 @@ export function BrainGameLab({ onAchievement }) {
       breachTicks = hijackIndex > limit ? breachTicks + 1 : 0;
       worstBreach = Math.max(worstBreach, breachTicks);
       tickRef.current = frames.length;
+      lastStepAtRef.current = performance.now();
+      // Breach drives the camera shake. Read by the scene, never by scoring.
+      shakeRef.current = breachTicks > 0 ? Math.min(1, breachTicks / 12) : 0;
+      if (breachTicks > 0) audioRef.current?.play('alarm', { intensity: shakeRef.current });
+      else if (state.spikes?.PFC || state.spikes?.AMY) audioRef.current?.play('spike');
+      // The 3D board follows the simulation, so state has to be published every
+      // tick rather than on the 200 ms score cadence below.
+      setLiveFrame({ activities: state.activities, spikes: state.spikes, weights: state.weights });
       return { targets, params };
     }
 
@@ -273,6 +397,7 @@ export function BrainGameLab({ onAchievement }) {
     setInterventions((previous) => applyIntervention(previous, choice));
     setLog((previous) => [...previous, { tick: tickRef.current, id: choice.id }]);
     setNotice(choice.hint);
+    audioRef.current?.play('intervene');
     track('gaugegap_brain_intervention', { id: choice.id, mode });
   }
 
@@ -280,12 +405,71 @@ export function BrainGameLab({ onAchievement }) {
     setInterventions(EMPTY);
     setLog([]);
     tickRef.current = 0;
+    lastStepAtRef.current = performance.now();
+    shakeRef.current = 0;
     setPaused(false);
     setSelected(null);
     setNotice('');
     setMode(nextMode);
     setResetKey((key) => key + 1);
     awardedRef.current = '';
+  }
+
+  function loadLevel(nextLevel, nextId) {
+    if (!nextLevel) return;
+    setLevel(nextLevel);
+    setLevelId(nextId);
+    setSeed(nextLevel.seed);
+    reset(mode);
+    setNotice(nextLevel.empty
+      ? 'Nothing detected in this text. That is the detector finding no cue it knows — not proof the text is clean.'
+      : `${nextLevel.title}: ${nextLevel.packets.length} packets across ${nextLevel.routes.length} route(s).`);
+    track('gaugegap_brain_level_loaded', { level: nextId, packets: nextLevel.packets.length });
+  }
+
+  function loadCustomText() {
+    const text = customText.trim();
+    if (!text) {
+      setNotice('Paste some text first — an ad, an email, a post.');
+      return;
+    }
+    loadLevel(buildLevel({ text, id: 'custom', title: 'Your text', mode }), 'custom');
+  }
+
+  // The five interventions have fixed targets, so a direct tap on the board maps
+  // onto one only where the model gives the player a lever. Tapping elsewhere
+  // inspects instead of failing silently.
+  function interventionFor(kind, target) {
+    return INTERVENTIONS.find((choice) => choice.kind === kind && choice.target === target) || null;
+  }
+
+  function handleRegionTap(code) {
+    const choice = interventionFor('stimulus', code);
+    if (choice) {
+      chooseIntervention(choice);
+      return;
+    }
+    setSelected(code);
+    setNotice(`${REGION_MAP[code]?.name || code}: ${REGION_MAP[code]?.description || ''}`);
+  }
+
+  function handleRegionLesion(code) {
+    const choice = interventionFor('lesion', code);
+    if (choice) {
+      chooseIntervention(choice);
+      return;
+    }
+    setNotice(`${REGION_MAP[code]?.name || code} cannot be taken offline in this mission.`);
+  }
+
+  function handlePathwayTap(pathwayId) {
+    const choice = interventionFor('cut', pathwayId);
+    if (choice) {
+      chooseIntervention(choice);
+      return;
+    }
+    const pathway = PATHWAYS.find((entry) => entry.id === pathwayId);
+    setNotice(`${pathway?.label || pathwayId} is not cuttable in this mission.`);
   }
 
   function handleCanvasClick(event) {
@@ -333,21 +517,62 @@ export function BrainGameLab({ onAchievement }) {
       />
 
       <div className="gg-sim-frame">
-        <div className="gg-sim-canvas-wrap">
+        <div className="gg-sim-canvas-wrap gg-g3d-wrap" data-tier={tier} data-render={showing3d ? '3d' : '2d'}>
+          {/* The 2D canvas is not dead code: it is the fallback for devices
+              without WebGL, and it stays mounted (hidden) in 3D so the
+              simulation loop it owns keeps driving both renderers. */}
           <canvas
             ref={canvasRef}
-            className="gg-sim-canvas gg-brain-game-canvas"
+            className={`gg-sim-canvas gg-brain-game-canvas ${showing3d ? 'gg-canvas-hidden' : ''}`}
             onClick={handleCanvasClick}
+            aria-hidden={showing3d ? 'true' : undefined}
             aria-label="Seven-region brain circuit. Click a region to inspect it."
           />
+          {showing3d ? (
+            <div className="gg-g3d-stage" data-testid="brain-game-3d">
+              <Suspense fallback={<div className="gg-g3d-loading">Loading the board…</div>}>
+                <GameScene
+                  activities={liveFrame.activities}
+                  spikes={liveFrame.spikes}
+                  weights={liveFrame.weights}
+                  interventions={interventions}
+                  packets={level.packets}
+                  getTick={getTick}
+                  shakeRef={shakeRef}
+                  onRegionTap={handleRegionTap}
+                  onRegionLesion={handleRegionLesion}
+                  onPathwayTap={handlePathwayTap}
+                  quality={tier}
+                  reducedMotion={reducedMotion}
+                  coarsePointer={coarsePointer}
+                  active={!finished}
+                />
+              </Suspense>
+            </div>
+          ) : null}
           <div className="gg-sim-canvas-label">
             {selected ? `${REGION_MAP[selected]?.name}` : 'THL → CTX → AMY → BG ⊣ THL — the one closed loop'}
           </div>
+          {canRender3d ? (
+            <button
+              type="button"
+              className="gg-sim-float-action gg-g3d-toggle"
+              onClick={() => setUse3d((value) => !value)}
+              data-testid="brain-game-3d-toggle"
+            >
+              <Boxes size={14} /> {showing3d ? '2D view' : '3D view'}
+            </button>
+          ) : null}
           <div className="gg-brain-game-hud" data-testid="brain-game-hud">
             <span className={evaluation.hijack > rules.hijackLimit || evaluation.hijack > (rules.hijackTarget ?? 100) ? 'danger' : ''}>
               Hijack <strong>{evaluation.hijack}</strong>
             </span>
             <span>Control <strong>{evaluation.control}</strong></span>
+            {level.packets.length ? (
+              <span className={containment.containment < 50 ? 'danger' : ''} data-testid="brain-game-containment">
+                Contained <strong>{resolution.blocked}/{resolution.resolved || 0}</strong>
+              </span>
+            ) : null}
             {mode !== 'sandbox' ? <span>Budget <strong>{evaluation.remaining}/{rules.budget}</strong></span> : null}
             {mode !== 'sandbox' ? <span>Tick <strong>{evaluation.elapsed}/{rules.durationTicks}</strong></span> : null}
           </div>
@@ -371,6 +596,45 @@ export function BrainGameLab({ onAchievement }) {
                   ? `Finish under hijack ${CHALLENGE.hijackTarget} using at most ${CHALLENGE.budget} interventions.`
                   : `Keep hijack under ${MISSION.hijackLimit} for ${MISSION.durationTicks} ticks with ${MISSION.budget} interventions.`}
             </strong>
+          </div>
+
+          <div className="gg-g3d-levels">
+            <span className="gg-g3d-levels-head">
+              Level
+              <em>{levelDifficulty(level).label}</em>
+            </span>
+            <select
+              value={levelId}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (next === 'custom') {
+                  setLevelId('custom');
+                  return;
+                }
+                loadLevel(buildCuratedLevel(next, { mode }), next);
+              }}
+              aria-label="Choose a level"
+              data-testid="brain-game-level"
+            >
+              {CURATED_LEVELS.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.title}</option>
+              ))}
+              <option value="custom">Your own text…</option>
+            </select>
+            <p>{levelId === 'custom' ? 'Paste anything. Whatever the detector finds becomes what attacks you.' : level.blurb}</p>
+            {levelId === 'custom' ? (
+              <div className="gg-g3d-custom">
+                <textarea
+                  value={customText}
+                  onChange={(event) => setCustomText(event.target.value)}
+                  placeholder="Paste an ad, an email, a post…"
+                  rows={4}
+                  aria-label="Text to build a level from"
+                  data-testid="brain-game-custom-text"
+                />
+                <button type="button" onClick={loadCustomText}>Build the level</button>
+              </div>
+            ) : null}
           </div>
 
           <div className="gg-deep-toggle" role="tablist" aria-label="Game mode">
@@ -413,12 +677,57 @@ export function BrainGameLab({ onAchievement }) {
             </button>
             <button type="button" onClick={() => { stepOnceRef.current = true; }}><SkipForward size={15} /> Step</button>
             <button type="button" onClick={() => reset()}><RotateCcw size={15} /> Reset</button>
+            <button
+              type="button"
+              aria-pressed={soundOn}
+              onClick={() => {
+                const next = audioRef.current.setEnabled(!soundOn);
+                setSoundOn(next);
+                if (next) audioRef.current.play('intervene');
+              }}
+              data-testid="brain-game-sound"
+            >
+              {soundOn ? <Volume2 size={15} /> : <VolumeX size={15} />}{soundOn ? 'Sound on' : 'Sound off'}
+            </button>
           </div>
+
+          {level.packets.length ? (
+            <div className="gg-g3d-breakdown" data-testid="brain-game-breakdown">
+              <span>What is attacking</span>
+              <ul>
+                {breakdownByTechnique({ packets: level.packets, resolution }).map((row) => (
+                  <li key={row.techniqueId} className={row.landed > 0 ? 'leaked' : row.resolved > 0 ? 'held' : ''}>
+                    <div>
+                      <strong>{row.label}</strong>
+                      <em>{row.route}</em>
+                    </div>
+                    <p>{row.published}</p>
+                    {row.phrase ? <code>{row.phrase}</code> : null}
+                    <span>
+                      {row.landed > 0 ? `${row.landed} got through` : null}
+                      {row.landed > 0 && row.blocked > 0 ? ' · ' : null}
+                      {row.blocked > 0 ? `${row.blocked} stopped` : null}
+                      {row.resolved === 0 ? `${row.pending} incoming` : row.pending > 0 ? ` · ${row.pending} incoming` : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           <div className="gg-model-card">
             <span>Model underneath</span>
             <strong>7-region leaky rate network with STDP</strong>
             <p>{BRAIN_CLAIM_BOUNDARY}</p>
+          </div>
+
+          {/* The game is only as good as the detector aiming it, and the
+              detector is measurably weak. Saying so here is the difference
+              between a toy and an instrument. */}
+          <div className="gg-model-card gg-g3d-limits">
+            <span>What this cannot see</span>
+            <strong>Paraphrases get through undetected</strong>
+            <p>{DETECTOR_LIMITS}</p>
           </div>
         </aside>
       </div>
@@ -431,7 +740,7 @@ export function BrainGameLab({ onAchievement }) {
         <button
           type="button"
           onClick={async () => {
-            const proof = await buildRunProof({ mode, seed, log });
+            const proof = await buildRunProof({ mode, seed, log, level });
             downloadJson(`brainsnn-run-${String(proof.content_hash).slice(0, 8)}.json`, proof);
             setNotice('Run proof saved. Anyone can replay the log and check the score recomputes.');
             track('gaugegap_brain_proof_exported', { mode });

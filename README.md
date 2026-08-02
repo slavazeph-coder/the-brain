@@ -202,6 +202,51 @@ Two honesty notes, both enforced by tests rather than left to good intentions:
   Krippendorff's alpha (`src/lib/agreement.js`) before any corpus release
   claims reliability.
 
+### Defend the Brain — the detector, as a game you play in 3D
+
+The site had a beautiful 3D brain that did nothing and a real game rendered as a
+flat diagram. `BrainScene.jsx` drew seven regions and ten curved axons whose
+width tracked live STDP weights — while using **two of the eleven** control verbs
+the simulation exposes. Twenty lines away, the game took the same regions and
+pathways and threw away the Y axis to project them onto a 2D canvas.
+
+Lab 014 now plays on the actual brain, and **the enemies are the persuasion
+techniques found in real text**. Paste an email, or pick a level built from the
+labelled archetype corpus; `detectTechniques()` runs; every detection becomes
+packets that fly the axons carrying the literal phrase that triggered them.
+
+Each technique attacks where it actually attacks a reader, and each route has a
+counter among the five interventions the game already had — so this added no new
+player verbs:
+
+| Route | Techniques | How you stop it |
+| --- | --- | --- |
+| **Threat loop** `THL→CTX→AMY→BG` | fear, ultimatums, manufactured deadlines, prize lures | cut either link, or take the amygdala offline |
+| **Familiarity** `THL→CTX→HPC` | bandwagon, authority, repetition | steady the pattern (CBL) |
+| **Reasoning** `THL→CTX→PFC` | doubt, obfuscation, thought-terminating clichés | drive judgment (PFC) |
+
+Tap a region to stimulate it, hold to lesion it, tap an axon to cut it. A test
+asserts every route is answerable, because a route with no counter would be an
+unwinnable attack.
+
+**Packets are derived, not simulated.** Run proofs replay `(seed, [{tick, id}])`
+and recompute the score, so frame-rate-dependent packet physics would make every
+replay diverge. Packets are scheduled up front from a seeded RNG and everything
+touching a score resolves in the logical tick domain: *visuals may interpolate,
+scoring never does.* Proofs go to v2 with the packet schedule so containment is
+verifiable the same way defense already was — with the triggering phrases
+redacted first, because a proof is meant to be shared and those phrases are the
+player's own words.
+
+Playtested through the resolver rather than asserted: doing nothing contains 0%,
+one counter 36–43%, both guards 57%, all five played early 100% — and all five
+played at tick 200 only 43%. Timing is the skill, and that is a test.
+
+The game also states what its own instrument cannot see. A panel next to the
+board carries the held-out numbers: half the annotated techniques found, **none**
+of the four paraphrased ones, three false alarms on five benign passages. A
+detection is a prompt to look, not a verdict.
+
 ### The brain, and a real spiking network
 
 The 7-region model (`src/features/brain3d/brainModel.js`) is deterministic and
