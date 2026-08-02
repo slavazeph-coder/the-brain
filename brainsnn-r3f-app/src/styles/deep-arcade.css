@@ -361,3 +361,257 @@
 
 .gg-verdict-ok { color: #d9ff65; font-family: var(--bsn-font-mono); font-size: 0.78rem; }
 .gg-verdict-bad { color: #ff5873; font-family: var(--bsn-font-mono); font-size: 0.78rem; }
+
+/* ---- Defend the Brain in 3D (experiment 014) ---- */
+
+/* The 2D canvas stays mounted while the 3D board is showing — it owns the
+   simulation loop that drives both — so it is hidden rather than unmounted. */
+.gg-canvas-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The wrap must not take its height from the canvas.
+   The 2D canvas sets its own `height` attribute from its rendered box via a
+   ResizeObserver. If it also *drives* layout, the two feed each other: box
+   grows -> attribute grows -> intrinsic height grows -> box grows, and the
+   panel gains a few pixels every frame forever. It stayed latent while the
+   sidebar was short enough to set the grid row height; adding the level picker
+   and the breakdown made the canvas the taller of the two and started the loop.
+   Taking it out of flow means the row height comes from the sidebar alone. */
+.gg-g3d-wrap > .gg-brain-game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* The sidebar is tall — level picker, five interventions, the attack breakdown
+   and two claim cards — and a stretched grid row would drag the board to match,
+   leaving a viewport-and-a-half of letterboxed brain and a camera framing built
+   for an aspect nobody has. Cap it, top-align it, and stick it so the board
+   stays on screen while the sidebar scrolls past. */
+.gg-g3d-wrap {
+  align-self: start;
+  position: sticky;
+  top: 16px;
+  height: min(68vh, 620px);
+  min-height: 380px;
+}
+
+.gg-g3d-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.gg-g3d-stage canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  touch-action: none; /* one finger orbits, two pinch — never scroll the page */
+}
+
+.gg-g3d-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--bsn-text-muted);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.78rem;
+}
+
+.gg-g3d-toggle {
+  top: 14px;
+  right: 14px;
+  bottom: auto;
+  left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Labels and tooltips rendered inside the WebGL scene via drei <Html>. */
+.gg-g3d-label span {
+  font-family: var(--bsn-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  color: rgba(241, 245, 249, 0.86);
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  user-select: none;
+}
+
+.gg-g3d-tip-wrap { pointer-events: none; }
+
+.gg-g3d-tip {
+  display: grid;
+  gap: 2px;
+  min-width: 132px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(125, 249, 255, 0.28);
+  background: rgba(4, 6, 16, 0.94);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+}
+
+.gg-g3d-tip strong { font-size: 0.74rem; color: #f1f5f9; }
+.gg-g3d-tip span { font-size: 0.66rem; color: var(--bsn-text-muted); }
+
+/* Level picker */
+.gg-g3d-levels {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gg-g3d-levels-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--bsn-text-muted);
+}
+
+.gg-g3d-levels-head em {
+  font-style: normal;
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-cyan);
+  letter-spacing: 0.04em;
+}
+
+.gg-g3d-levels select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bsn-border);
+  background: rgba(4, 6, 16, 0.9);
+  color: #e2e8f0;
+  font-size: 0.8rem;
+}
+
+.gg-g3d-levels p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--bsn-text-secondary);
+}
+
+.gg-g3d-custom { display: grid; gap: 8px; }
+
+.gg-g3d-custom textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bsn-border);
+  background: rgba(4, 6, 16, 0.9);
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.gg-g3d-custom button {
+  justify-self: start;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(125, 249, 255, 0.34);
+  background: rgba(125, 249, 255, 0.09);
+  color: #cffafe;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+/* Per-technique breakdown */
+.gg-g3d-breakdown {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--bsn-border);
+  border-radius: var(--bsn-radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.gg-g3d-breakdown > span {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--bsn-text-muted);
+}
+
+.gg-g3d-breakdown ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gg-g3d-breakdown li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--bsn-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Neutral until something has actually been resolved — a technique whose
+   packets are still in flight is not a success and not yet a failure. */
+.gg-g3d-breakdown li.held {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.07);
+}
+
+.gg-g3d-breakdown li.leaked {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.gg-g3d-breakdown li > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gg-g3d-breakdown strong { font-size: 0.76rem; color: #e2e8f0; }
+
+.gg-g3d-breakdown em {
+  font-style: normal;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.62rem;
+  color: var(--bsn-text-muted);
+}
+
+.gg-g3d-breakdown p {
+  margin: 0;
+  font-size: 0.66rem;
+  font-family: var(--bsn-font-mono);
+  color: var(--bsn-cyan);
+}
+
+.gg-g3d-breakdown code {
+  font-size: 0.66rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fbbf24;
+  justify-self: start;
+}
+
+.gg-g3d-breakdown li > span {
+  font-size: 0.66rem;
+  color: var(--bsn-text-muted);
+}
+
+.gg-g3d-limits p { font-size: 0.7rem; }
+
+@media (max-width: 820px) {
+  .gg-g3d-wrap { min-height: 420px; }
+}

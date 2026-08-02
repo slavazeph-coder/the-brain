@@ -62,6 +62,9 @@ export function useArcadeProgress(experiments) {
     { id: 'daily', label: 'Daily Challenger', unlocked: progress.dailyWins.length >= 3 },
     { id: 'defender', label: 'Held the Line', unlocked: progress.unlocked.includes('defender') },
     { id: 'efficient-defender', label: 'Minimal Intervention', unlocked: progress.unlocked.includes('efficient-defender') },
+    { id: 'sealed', label: 'Airtight', unlocked: progress.unlocked.includes('sealed') },
+    { id: 'boss-defender', label: 'Broke the Guru', unlocked: progress.unlocked.includes('boss-defender') },
+    { id: 'own-text', label: 'Read Your Own Mail', unlocked: progress.unlocked.includes('own-text') },
   ], [experiments.length, progress.dailyWins.length, progress.streak, progress.visited.length, progress.unlocked]);
 
   return { progress, recordVisit, recordAchievement, dailyLab, level, levelProgress, achievements };

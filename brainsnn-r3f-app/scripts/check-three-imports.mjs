@@ -27,6 +27,7 @@ const SRC = join(ROOT, 'src');
 // entry must be loaded only via a dynamic import somewhere up its chain.
 const THREE_IMPORTERS = new Set([
   'src/features/brain3d/BrainScene.jsx',
+  'src/features/brain3d/GameScene.jsx',
 ]);
 
 const THREE_IMPORT = /from\s+['"](three|@react-three\/[a-z-]+)['"]|import\s*\(\s*['"](three|@react-three\/[a-z-]+)['"]/;

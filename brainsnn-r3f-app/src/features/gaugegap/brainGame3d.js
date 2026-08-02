@@ -90,12 +90,26 @@ export const DEFAULT_ROUTE = 'threat';
 /** A stimulus at or above this level counts as a route's guard being up. */
 export const GUARD_THRESHOLD = 0.15;
 
-// Packets are spread across the run rather than dumped at tick 0, and none
-// arrive before the player has had a moment to look at the board.
-export const FIRST_SPAWN_TICK = 18;
-export const TRAVEL_TICKS_MIN = 26;
-export const TRAVEL_TICKS_MAX = 46;
+// Packets arrive in waves rather than as a uniform drizzle.
+//
+// Spreading them evenly across the run reads as an empty board: with a dozen
+// packets over 300 ticks only two are ever in flight, so nothing feels like
+// pressure. Waves give the run a shape — a surge you have to answer, then a lull
+// to see whether the answer worked.
+export const FIRST_SPAWN_TICK = 16;
+export const TRAVEL_TICKS_MIN = 44;
+export const TRAVEL_TICKS_MAX = 76;
 export const MAX_PACKETS = 90;
+export const PACKETS_PER_WAVE = 4;
+export const MIN_WAVES = 2;
+export const MAX_WAVES = 5;
+// How much a packet may drift from its wave's arrival, so a wave lands as a
+// cluster rather than a single instant.
+export const WAVE_JITTER = 9;
+
+export function waveCountFor(packetCount) {
+  return Math.max(MIN_WAVES, Math.min(MAX_WAVES, Math.ceil(packetCount / PACKETS_PER_WAVE)));
+}
 
 export function routeForTechnique(techniqueId) {
   return ROUTES[TECHNIQUE_ROUTES[techniqueId] || DEFAULT_ROUTE] || ROUTES[DEFAULT_ROUTE];
@@ -119,37 +133,52 @@ export function packetsForTechnique(technique) {
 export function buildPacketSchedule({ techniques = [], seed = 'defend-01', durationTicks = 300 } = {}) {
   const rng = createRng(`${seed}:packets`);
   const packets = [];
-  // Leave a tail so the last packet resolves before the run ends; a packet that
-  // lands after the final tick could never be scored.
-  const lastSpawn = Math.max(FIRST_SPAWN_TICK, durationTicks - TRAVEL_TICKS_MAX - 5);
-  const span = Math.max(1, lastSpawn - FIRST_SPAWN_TICK);
 
+  // Plan the waves first so packets can be dealt into them. The last wave has
+  // to leave room for the longest possible flight: a packet landing after the
+  // final tick could never be scored.
+  const planned = [];
   for (const technique of techniques) {
-    const route = routeForTechnique(technique.id);
     const count = packetsForTechnique(technique);
-    for (let index = 0; index < count; index += 1) {
-      if (packets.length >= MAX_PACKETS) break;
-      const spawnTick = Math.round(FIRST_SPAWN_TICK + rng() * span);
-      const travelTicks = Math.round(TRAVEL_TICKS_MIN + rng() * (TRAVEL_TICKS_MAX - TRAVEL_TICKS_MIN));
-      packets.push({
-        id: `${technique.id}-${index}`,
-        techniqueId: technique.id,
-        label: technique.label || technique.id,
-        published: technique.published || '',
-        // The literal phrase that triggered the detection, so a packet can show
-        // the player the actual words rather than an abstract category.
-        phrase: (technique.matches && technique.matches[0]) || '',
-        confidence: Math.max(0, Math.min(100, Number(technique.confidence) || 0)),
-        route: route.id,
-        path: route.path,
-        regions: route.regions,
-        guard: route.guard,
-        spawnTick,
-        travelTicks,
-        landTick: spawnTick + travelTicks,
-        impact: Math.max(0.05, Math.min(1, (Number(technique.confidence) || 0) / 100)),
-      });
+    for (let index = 0; index < count && planned.length < MAX_PACKETS; index += 1) {
+      planned.push({ technique, index });
     }
+  }
+  const waves = waveCountFor(planned.length);
+  const lastSpawn = Math.max(FIRST_SPAWN_TICK, durationTicks - TRAVEL_TICKS_MAX - WAVE_JITTER - 4);
+  const waveGap = waves > 1 ? (lastSpawn - FIRST_SPAWN_TICK) / (waves - 1) : 0;
+
+  for (let slot = 0; slot < planned.length; slot += 1) {
+    const { technique, index } = planned[slot];
+    const route = routeForTechnique(technique.id);
+    // Deal round-robin so a wave mixes routes: a surge of three different
+    // attacks needs three different answers, which is the interesting case.
+    const wave = slot % waves;
+    const jitter = Math.round((rng() * 2 - 1) * WAVE_JITTER);
+    const spawnTick = Math.max(
+      FIRST_SPAWN_TICK,
+      Math.min(lastSpawn + WAVE_JITTER, Math.round(FIRST_SPAWN_TICK + wave * waveGap + jitter)),
+    );
+    const travelTicks = Math.round(TRAVEL_TICKS_MIN + rng() * (TRAVEL_TICKS_MAX - TRAVEL_TICKS_MIN));
+    packets.push({
+      wave,
+      id: `${technique.id}-${index}`,
+      techniqueId: technique.id,
+      label: technique.label || technique.id,
+      published: technique.published || '',
+      // The literal phrase that triggered the detection, so a packet can show
+      // the player the actual words rather than an abstract category.
+      phrase: (technique.matches && technique.matches[0]) || '',
+      confidence: Math.max(0, Math.min(100, Number(technique.confidence) || 0)),
+      route: route.id,
+      path: route.path,
+      regions: route.regions,
+      guard: route.guard,
+      spawnTick,
+      travelTicks,
+      landTick: spawnTick + travelTicks,
+      impact: Math.max(0.05, Math.min(1, (Number(technique.confidence) || 0) / 100)),
+    });
   }
 
   // Sorted by arrival so the renderer and the resolver agree on ordering, and
@@ -259,6 +288,12 @@ export function breakdownByTechnique({ packets = [], resolution = null } = {}) {
       else entry.landed += 1;
     }
     byId.set(packet.techniqueId, entry);
+  }
+  // `pending` matters for the live panel: mid-run, "0 of 3 stopped" reads as
+  // failure when in fact none of the three has arrived yet.
+  for (const entry of byId.values()) {
+    entry.pending = entry.total - entry.blocked - entry.landed;
+    entry.resolved = entry.blocked + entry.landed;
   }
   return [...byId.values()].sort((a, b) => b.landed - a.landed || b.total - a.total);
 }

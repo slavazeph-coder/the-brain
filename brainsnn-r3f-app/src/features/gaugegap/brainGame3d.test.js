@@ -15,6 +15,9 @@ import {
   ROUTES,
   routeForTechnique,
   scorePackets,
+  MIN_WAVES,
+  MAX_WAVES,
+  waveCountFor,
   TECHNIQUE_ROUTES,
 } from './brainGame3d.js';
 import { INTERVENTIONS } from './brainGame.js';
@@ -124,6 +127,47 @@ describe('buildPacketSchedule', () => {
 
   it('carries the triggering phrase so a packet can show real words', () => {
     expect(schedule()[0].phrase.length).toBeGreaterThan(0);
+  });
+});
+
+// Spreading packets evenly across the run left only two in flight at a time and
+// read as an empty board. These pin the wave structure that fixed it.
+describe('wave pacing', () => {
+  it('scales wave count with volume, within bounds', () => {
+    expect(waveCountFor(1)).toBe(MIN_WAVES);
+    expect(waveCountFor(1000)).toBe(MAX_WAVES);
+    expect(waveCountFor(12)).toBeGreaterThanOrEqual(MIN_WAVES);
+    expect(waveCountFor(12)).toBeLessThanOrEqual(MAX_WAVES);
+  });
+
+  it('assigns every packet to a wave inside the planned range', () => {
+    const packets = schedule();
+    const waves = waveCountFor(packets.length);
+    for (const packet of packets) {
+      expect(packet.wave).toBeGreaterThanOrEqual(0);
+      expect(packet.wave).toBeLessThan(waves);
+    }
+  });
+
+  it('puts several packets in the air at once', () => {
+    const packets = schedule();
+    let peak = 0;
+    for (let tick = 0; tick <= 300; tick += 2) {
+      peak = Math.max(peak, activePackets(packets, tick).length);
+    }
+    expect(peak).toBeGreaterThan(2);
+  });
+
+  it('mixes routes within a wave so a surge needs more than one answer', () => {
+    // Round-robin dealing is what produces this; a wave of one route would be
+    // answerable with a single cut.
+    const mixed = buildPacketSchedule({
+      techniques: SAMPLE,
+      seed: 'mix',
+      durationTicks: 300,
+    });
+    const routesInWaveZero = new Set(mixed.filter((packet) => packet.wave === 0).map((packet) => packet.route));
+    expect(routesInWaveZero.size).toBeGreaterThan(1);
   });
 });
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from '../../test/tinyVitest.js';
-import { buildRunProof, replayRun, RUN_PROOF_SCHEMA, verifyRunProof } from './runProof.js';
+import { buildRunProof, redactPacket, replayRun, RUN_PROOF_SCHEMA, RUN_PROOF_SCHEMA_V2, verifyRunProof } from './runProof.js';
+import { buildCuratedLevel, buildLevel } from './brainGameLevels.js';
+import { INTERVENTIONS } from './brainGame.js';
 
 const NOW = new Date('2026-07-29T00:00:00Z');
 const WINNING_LOG = [{ tick: 5, id: 'lesion-amy' }];
@@ -93,5 +95,72 @@ describe('verifyRunProof', () => {
     const bad = await verifyRunProof({ schema: 'something.else' });
     expect(bad.verified).toBe(false);
     expect(bad.problems.length).toBeGreaterThan(0);
+  });
+});
+
+// --- v2: containment, and the privacy boundary -----------------------------
+describe('run proof v2', () => {
+  const level = buildCuratedLevel('guru-urgency-pitch');
+  const log = INTERVENTIONS.map((choice, index) => ({ tick: 1 + index, id: choice.id }));
+
+  it('upgrades the schema only when a level is supplied', async () => {
+    const withLevel = await buildRunProof({ mode: 'mission', seed: level.seed, log, level });
+    const without = await buildRunProof({ mode: 'mission', seed: 'defend-01', log });
+    expect(withLevel.schema).toBe(RUN_PROOF_SCHEMA_V2);
+    expect(without.schema).toBe(RUN_PROOF_SCHEMA);
+  });
+
+  it('records and re-verifies containment', async () => {
+    const proof = await buildRunProof({ mode: 'mission', seed: level.seed, log, level });
+    expect(proof.result.containment).toBe(100);
+    const result = await verifyRunProof(proof);
+    expect(result.verified).toBe(true);
+    expect(result.replayedContainment).toBe(100);
+  });
+
+  it('rejects an inflated containment claim', async () => {
+    const proof = await buildRunProof({ mode: 'mission', seed: level.seed, log: [], level });
+    const forged = { ...proof, result: { ...proof.result, containment: 100, landed: 0 } };
+    const result = await verifyRunProof(forged);
+    expect(result.verified).toBe(false);
+  });
+
+  it('rejects a v2 proof whose packet schedule was removed', async () => {
+    const proof = await buildRunProof({ mode: 'mission', seed: level.seed, log, level });
+    const stripped = { ...proof, level: { ...proof.level, packets: [] } };
+    const result = await verifyRunProof(stripped);
+    expect(result.verified).toBe(false);
+  });
+
+  it('still verifies a v1 proof', async () => {
+    const proof = await buildRunProof({ mode: 'mission', seed: 'defend-01', log });
+    expect((await verifyRunProof(proof)).verified).toBe(true);
+  });
+});
+
+// A proof is meant to be shared. The packets carry the literal phrases that
+// triggered each detection, which for a pasted email is the user's own words —
+// those must never leave the browser inside a proof.
+describe('run proof privacy', () => {
+  it('carries no text from the level', async () => {
+    const level = buildLevel({
+      text: 'URGENT: doors close tonight and everyone else has already joined the programme.',
+      id: 'custom',
+    });
+    expect(level.packets.length).toBeGreaterThan(0);
+    const proof = await buildRunProof({ mode: 'mission', seed: level.seed, log: [], level });
+    const serialized = JSON.stringify(proof).toLowerCase();
+    for (const word of ['doors close', 'everyone else', 'urgent', 'programme']) {
+      expect(serialized.includes(word)).toBe(false);
+    }
+    expect(serialized.includes('text')).toBe(false);
+  });
+
+  it('redacts the phrase and label but keeps the taxonomy class', () => {
+    const packet = { id: 'a', techniqueId: 'appeal-to-time', label: 'Appeal to time', phrase: 'doors close', published: 'Appeal to Time', route: 'threat', path: [], regions: [], guard: null, spawnTick: 1, travelTicks: 2, landTick: 3, impact: 0.5 };
+    const redacted = redactPacket(packet);
+    expect(redacted.techniqueId).toBe('appeal-to-time');
+    expect(redacted.phrase).toBe(undefined);
+    expect(redacted.label).toBe(undefined);
   });
 });

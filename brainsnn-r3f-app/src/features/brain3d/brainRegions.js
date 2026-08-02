@@ -86,6 +86,48 @@ export const PATHWAYS = [
 
 export const REGION_MAP = Object.fromEntries(BRAIN_REGIONS.map((region) => [region.code, region]));
 
+export const PATHWAY_MAP = Object.fromEntries(PATHWAYS.map((pathway) => [pathway.id, pathway]));
+
+// Curve geometry for the axons, kept here rather than in the scene so it stays
+// three-free and unit-testable — the game positions packets along exactly the
+// same curves the scene draws, and the two must not be allowed to drift.
+
+/** Control point of a pathway's quadratic curve: the midpoint plus its offset. */
+export function pathwayControlPoint(pathway) {
+  const from = REGION_MAP[pathway.from];
+  const to = REGION_MAP[pathway.to];
+  if (!from || !to) return [0, 0, 0];
+  const offset = pathway.curveOffset || [0, 0, 0];
+  return [
+    (from.position[0] + to.position[0]) / 2 + offset[0],
+    (from.position[1] + to.position[1]) / 2 + offset[1],
+    (from.position[2] + to.position[2]) / 2 + offset[2],
+  ];
+}
+
+/** Point at parameter `t` on the quadratic Bézier through start/control/end. */
+export function quadraticPoint(start, control, end, t) {
+  const u = 1 - t;
+  const a = u * u;
+  const b = 2 * u * t;
+  const c = t * t;
+  return [
+    a * start[0] + b * control[0] + c * end[0],
+    a * start[1] + b * control[1] + c * end[1],
+    a * start[2] + b * control[2] + c * end[2],
+  ];
+}
+
+/** Point at `t` along a named pathway, or null if the id is unknown. */
+export function pointOnPathway(pathwayId, t) {
+  const pathway = PATHWAY_MAP[pathwayId];
+  if (!pathway) return null;
+  const from = REGION_MAP[pathway.from];
+  const to = REGION_MAP[pathway.to];
+  if (!from || !to) return null;
+  return quadraticPoint(from.position, pathwayControlPoint(pathway), to.position, Math.max(0, Math.min(1, t)));
+}
+
 // Plain-language tooltip copy per region, phrased for a non-technical reader.
 export const REGION_MEANINGS = {
   THL: (value) => `Attention intake at ${value}/100 — how hard this content grabs notice.`,
