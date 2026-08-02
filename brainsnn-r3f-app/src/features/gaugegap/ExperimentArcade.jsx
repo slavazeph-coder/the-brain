@@ -28,6 +28,19 @@ const LAB_COMPONENTS = {
   spiking: lazyNamed(() => import('./SpikingNetworkLab.jsx'), 'SpikingNetworkLab'),
 };
 
+// Per-lab props, declared next to the components they belong to rather than as
+// a chain of ternaries at the render site. `ctx` carries whatever the arcade can
+// offer a lab; a lab takes only what it needs. Labs absent from this map get no
+// props, which is the common case.
+const LAB_PROPS = {
+  content: ({ onOpenScanner }) => ({ onOpenScanner }),
+  braingame: ({ recordAchievement }) => ({ onAchievement: recordAchievement }),
+};
+
+function labProps(experiment, ctx) {
+  return LAB_PROPS[experiment.id]?.(ctx) || {};
+}
+
 const EXPERIMENTS = [
   { id: 'attractor', number: '001', title: 'Butterfly Effect', short: 'Shape chaos', description: 'Tune a Lorenz system until order and turbulence balance on the same orbit.', icon: Gauge, accent: 'cyan', mechanic: 'Tune', category: 'physics', featured: true },
   { id: 'fireflies', number: '002', title: 'Firefly Sync', short: 'Create collective rhythm', description: 'Give hundreds of independent clocks one weak connection and watch a shared pulse emerge.', icon: Sparkles, accent: 'lime', mechanic: 'Synchronize', category: 'systems', featured: true },
@@ -46,9 +59,15 @@ const EXPERIMENTS = [
   { id: 'spiking', number: '015', title: 'Spiking Network', short: 'Walk the phase diagram', description: 'A real leaky integrate-and-fire network. Move inhibition and drive to cross between regular, irregular and silent firing.', icon: Cpu, accent: 'blue', mechanic: 'Tune', category: 'systems' },
 ];
 
+// The registry is the single source of truth for which labs exist. The landing
+// page used to keep its own hand-written copy of this list, which silently went
+// stale the moment labs 013-015 were added — deep links to them did nothing.
+export const ARCADE_LAB_IDS = new Set(EXPERIMENTS.map((experiment) => experiment.id));
+export const ARCADE_LAB_COUNT = EXPERIMENTS.length;
+
 const FILTERS = [
   { id: 'featured', label: 'Start here' },
-  { id: 'all', label: 'All 15' },
+  { id: 'all', label: `All ${EXPERIMENTS.length}` },
   { id: 'physics', label: 'Physics' },
   { id: 'life', label: 'Life' },
   { id: 'systems', label: 'Complex systems' },
@@ -208,7 +227,7 @@ export function ExperimentArcade({ onOpenScanner }) {
       <div id="gg-active-lab" role="tabpanel" className="gg-arcade-stage" data-experiment={activeExperiment.id} aria-label={`${activeExperiment.title} experiment`}>
         <div className="gg-arcade-stage-topline"><span><i /> Experiment {activeExperiment.number} loaded</span><strong>{activeExperiment.title}</strong></div>
         <Suspense fallback={<LabLoading title={activeExperiment.title} />}>
-          <ActiveLab {...(active === 'content' ? { onOpenScanner } : {})} {...(active === 'braingame' ? { onAchievement: recordAchievement } : {})} />
+          <ActiveLab {...labProps(activeExperiment, { onOpenScanner, recordAchievement })} />
         </Suspense>
       </div>
 

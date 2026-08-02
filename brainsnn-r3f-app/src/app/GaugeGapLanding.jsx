@@ -16,7 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
-import { ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
+import { ARCADE_LAB_COUNT, ARCADE_LAB_IDS, ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
 import { ClientPathways, TrustLadder, VisitorRoutes } from '../features/gaugegap/AudiencePathways.jsx';
 import { track } from '../lib/analytics.js';
 import '../styles/gaugegap.css';
@@ -66,7 +66,9 @@ const LOOP = [
   { number: '03', title: 'Publish', text: 'Share the run, challenge and explanation from the same experiment state.' },
 ];
 
-const ARCADE_IDS = new Set(['attractor', 'fireflies', 'waves', 'reaction', 'gravity', 'flock', 'outbreak', 'pendulum', 'ants', 'traffic', 'life', 'ecosystem']);
+// Imported from the arcade registry rather than restated here — the local copy
+// this replaced had gone stale and silently dropped labs 013-015.
+const ARCADE_IDS = ARCADE_LAB_IDS;
 
 export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
   useEffect(() => {
@@ -147,7 +149,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
               <Button variant="secondary" onClick={() => scrollTo('clients')}>Build for your audience <ArrowRight size={17} /></Button>
             </div>
             <div className="gg-hero-proof" aria-label="Product capabilities">
-              <div><strong>16 live</strong><span>15 arcade + flagship lab</span></div>
+              <div><strong>{ARCADE_LAB_COUNT + 1} live</strong><span>{ARCADE_LAB_COUNT} arcade + flagship lab</span></div>
               <div><strong>4 paths</strong><span>Clear first steps</span></div>
               <div><strong>Client</strong><span>Custom pilot pathway</span></div>
               <div><strong>Open</strong><span>Models and limits</span></div>
