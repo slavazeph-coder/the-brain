@@ -386,7 +386,6 @@ test('defend the brain falls back to the 2D board without WebGL', async ({ page 
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function patched(type: string, ...rest: unknown[]) {
       if (type === 'webgl' || type === 'webgl2') return null;
-      // @ts-expect-error - passthrough for every other context type
       return original.call(this, type, ...rest);
     };
   });

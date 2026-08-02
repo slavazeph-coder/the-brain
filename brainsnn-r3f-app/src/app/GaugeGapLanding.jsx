@@ -1,20 +1,5 @@
 import React, { useEffect } from 'react';
-import {
-  ArrowRight,
-  BrainCircuit,
-  CheckCircle2,
-  ChevronDown,
-  FlaskConical,
-  Layers3,
-  Microscope,
-  Orbit,
-  Play,
-  Share2,
-  Shield,
-  Sparkles,
-  WandSparkles,
-  Zap,
-} from 'lucide-react';
+import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Microscope, Orbit, Play, Share2, Shield, Sparkles, WandSparkles, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
 import { ARCADE_LAB_COUNT, ARCADE_LAB_IDS, ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
 import { ClientPathways, TrustLadder, VisitorRoutes } from '../features/gaugegap/AudiencePathways.jsx';
@@ -143,10 +128,15 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
               GaugeGap is the public science arcade. BrainSNN is the analysis and publishing engine underneath.
               Together they turn difficult systems into interactive missions, shareable discoveries and client-ready experiences.
             </p>
+            {/* The game leads. It is a link, not an embedded canvas: mounting
+                the 3D board here would cost every cold visitor ~250 KB gzipped
+                of three.js for a hero most of them scroll straight past. */}
             <div className="gg-hero-actions">
-              <Button variant="primary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
+              <Button variant="primary" onClick={() => openLab('braingame')}>
+                Play Defend the Brain <Brain size={17} />
+              </Button>
+              <Button variant="secondary" onClick={scrollToPlayground}>Enter the science arcade <ArrowRight size={17} /></Button>
               <a className="button button-secondary" href={FRACTAL_LAB_URL} target="_blank" rel="noreferrer">Open Fractal Reality Lab <Orbit size={17} /></a>
-              <Button variant="secondary" onClick={() => scrollTo('clients')}>Build for your audience <ArrowRight size={17} /></Button>
             </div>
             <div className="gg-hero-proof" aria-label="Product capabilities">
               <div><strong>{ARCADE_LAB_COUNT + 1} live</strong><span>{ARCADE_LAB_COUNT} arcade + flagship lab</span></div>

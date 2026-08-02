@@ -1,5 +1,5 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Brain, Boxes, FileJson, Pause, Play, RotateCcw, ShieldCheck, SkipForward, Zap } from 'lucide-react';
+import { Activity, Brain, Boxes, FileJson, Pause, Play, RotateCcw, ShieldCheck, SkipForward, Volume2, VolumeX, Zap } from 'lucide-react';
 import { BRAIN_REGIONS, PATHWAYS, REGION_MAP } from '../brain3d/brainRegions.js';
 import { createBrainParams, createBrainState, stepBrain } from '../brain3d/brainModel.js';
 import { createRng } from '../../lib/rng.js';
@@ -25,6 +25,7 @@ import { buildCuratedLevel, buildLevel, CURATED_LEVELS, levelDifficulty } from '
 import { isThreeTier, resolveQualityTier } from '../brain3d/quality.js';
 import { DETECTOR_LIMITS } from '../../lib/persuasionTechniques.js';
 import { useReducedMotion } from '../../hooks/useReducedMotion.js';
+import { createGameAudio } from '../../lib/audio/gameAudio.js';
 
 // three is ~250 KB gzipped. It loads when someone actually plays in 3D, never
 // on first paint — enforced by scripts/check-three-imports.mjs.
@@ -78,6 +79,13 @@ export function BrainGameLab({ onAchievement }) {
   const [liveFrame, setLiveFrame] = useState({ activities: {}, spikes: {}, weights: {} });
   const lastStepAtRef = useRef(0);
   const shakeRef = useRef(0);
+
+  // Muted until asked for. The context is built on the first unmute click, not
+  // at import, which is what browsers require and what keeps the console clean.
+  const audioRef = useRef(null);
+  const [soundOn, setSoundOn] = useState(false);
+  if (audioRef.current === null) audioRef.current = createGameAudio();
+  useEffect(() => () => audioRef.current?.close(), []);
 
   useEffect(() => {
     function detect() {
@@ -144,6 +152,21 @@ export function BrainGameLab({ onAchievement }) {
   const rules = mode === 'challenge' ? CHALLENGE : MISSION;
   const used = countInterventions(interventions);
   const finished = evaluation.status === 'won' || evaluation.status === 'lost';
+
+  // Packets resolve in the tick domain, so the audible event is a change in the
+  // running totals rather than anything the renderer noticed.
+  const lastCountsRef = useRef({ blocked: 0, landed: 0 });
+  useEffect(() => {
+    const previous = lastCountsRef.current;
+    if (resolution.blocked > previous.blocked) audioRef.current?.play('block');
+    if (resolution.landed > previous.landed) audioRef.current?.play('leak');
+    lastCountsRef.current = { blocked: resolution.blocked, landed: resolution.landed };
+  }, [resolution.blocked, resolution.landed]);
+
+  useEffect(() => {
+    if (evaluation.status === 'won') audioRef.current?.play('win');
+    else if (evaluation.status === 'lost') audioRef.current?.play('lose');
+  }, [evaluation.status]);
 
   // XP for an actual accomplishment rather than for opening the lab. Fires once
   // per outcome; recordAchievement is itself idempotent.
@@ -239,6 +262,8 @@ export function BrainGameLab({ onAchievement }) {
       lastStepAtRef.current = performance.now();
       // Breach drives the camera shake. Read by the scene, never by scoring.
       shakeRef.current = breachTicks > 0 ? Math.min(1, breachTicks / 12) : 0;
+      if (breachTicks > 0) audioRef.current?.play('alarm', { intensity: shakeRef.current });
+      else if (state.spikes?.PFC || state.spikes?.AMY) audioRef.current?.play('spike');
       // The 3D board follows the simulation, so state has to be published every
       // tick rather than on the 200 ms score cadence below.
       setLiveFrame({ activities: state.activities, spikes: state.spikes, weights: state.weights });
@@ -372,6 +397,7 @@ export function BrainGameLab({ onAchievement }) {
     setInterventions((previous) => applyIntervention(previous, choice));
     setLog((previous) => [...previous, { tick: tickRef.current, id: choice.id }]);
     setNotice(choice.hint);
+    audioRef.current?.play('intervene');
     track('gaugegap_brain_intervention', { id: choice.id, mode });
   }
 
@@ -651,6 +677,18 @@ export function BrainGameLab({ onAchievement }) {
             </button>
             <button type="button" onClick={() => { stepOnceRef.current = true; }}><SkipForward size={15} /> Step</button>
             <button type="button" onClick={() => reset()}><RotateCcw size={15} /> Reset</button>
+            <button
+              type="button"
+              aria-pressed={soundOn}
+              onClick={() => {
+                const next = audioRef.current.setEnabled(!soundOn);
+                setSoundOn(next);
+                if (next) audioRef.current.play('intervene');
+              }}
+              data-testid="brain-game-sound"
+            >
+              {soundOn ? <Volume2 size={15} /> : <VolumeX size={15} />}{soundOn ? 'Sound on' : 'Sound off'}
+            </button>
           </div>
 
           {level.packets.length ? (
