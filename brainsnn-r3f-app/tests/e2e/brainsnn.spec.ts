@@ -422,3 +422,19 @@ test('a run proof carries no text from the level it was played on', async ({ pag
     expect(proof).not.toContain(secret);
   }
 });
+
+test('a shared challenge link restores the level it was played on', async ({ page }) => {
+  // braingame used to write ?state= and never read it back, so every shared
+  // link opened the default level. Both halves of the round trip are covered.
+  await page.goto('/?lab=braingame&state=challenge~outrage-bait-post#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.getByTestId('brain-game-level')).toHaveValue('outrage-bait-post');
+  await expect(page.locator('.gg-deep-toggle button.active')).toHaveText('Challenge');
+
+  // A pasted passage travels with the link and rebuilds the same attack.
+  const shared = 'mission~custom~Doors close tonight, and everyone else has already joined.';
+  await page.goto(`/?lab=braingame&state=${encodeURIComponent(shared)}#playground`);
+  await expect(page.getByTestId('brain-game-level')).toHaveValue('custom');
+  await expect(page.getByTestId('brain-game-custom-text')).toHaveValue(/Doors close tonight/);
+  await expect(page.getByTestId('brain-game-breakdown').locator('li').first()).toBeVisible();
+});

@@ -26,6 +26,7 @@ import { isThreeTier, resolveQualityTier } from '../brain3d/quality.js';
 import { DETECTOR_LIMITS } from '../../lib/persuasionTechniques.js';
 import { useReducedMotion } from '../../hooks/useReducedMotion.js';
 import { createGameAudio } from '../../lib/audio/gameAudio.js';
+import { buildGameShareUrl, CUSTOM_LEVEL_ID, describeSharedGame, parseGameState } from './brainGameShare.js';
 
 // three is ~250 KB gzipped. It loads when someone actually plays in 3D, never
 // on first paint — enforced by scripts/check-three-imports.mjs.
@@ -86,6 +87,27 @@ export function BrainGameLab({ onAchievement }) {
   const [soundOn, setSoundOn] = useState(false);
   if (audioRef.current === null) audioRef.current = createGameAudio();
   useEffect(() => () => audioRef.current?.close(), []);
+
+  // Restore a shared challenge once, on mount. Keyed to nothing so it cannot
+  // re-apply and stomp the level someone picked afterwards.
+  const sharedAppliedRef = useRef(false);
+  useEffect(() => {
+    if (sharedAppliedRef.current) return;
+    sharedAppliedRef.current = true;
+    const shared = parseGameState(window.location.search);
+    if (!shared) return;
+    const nextLevel = shared.levelId === CUSTOM_LEVEL_ID
+      ? buildLevel({ text: shared.text, id: CUSTOM_LEVEL_ID, title: 'Shared passage', mode: shared.mode })
+      : buildCuratedLevel(shared.levelId, { mode: shared.mode });
+    if (!nextLevel) return;
+    if (shared.levelId === CUSTOM_LEVEL_ID) setCustomText(shared.text);
+    setMode(shared.mode);
+    setLevelId(shared.levelId);
+    setLevel(nextLevel);
+    setSeed(nextLevel.seed);
+    setNotice(describeSharedGame(shared));
+    track('gaugegap_brain_challenge_opened', { level: shared.levelId, mode: shared.mode });
+  }, []);
 
   useEffect(() => {
     function detect() {
@@ -494,14 +516,13 @@ export function BrainGameLab({ onAchievement }) {
     }
   }
 
+  // Carries mode + level (and, for a pasted passage, its text) so a recipient
+  // fights the same thing. This used to carry only the seed, which nothing read
+  // back, so every shared link opened the default level.
   const gameUrl = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    const url = new URL(window.location.href);
-    url.searchParams.set('lab', 'braingame');
-    url.searchParams.set('state', seed);
-    url.hash = 'playground';
-    return url.toString();
-  }, [seed]);
+    return buildGameShareUrl(window.location.href, { mode, levelId, text: level.text });
+  }, [mode, levelId, level.text]);
 
   const modeMeta = GAME_MODES.find((entry) => entry.id === mode) || GAME_MODES[0];
 
