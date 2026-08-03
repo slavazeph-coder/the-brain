@@ -1,7 +1,7 @@
 // The lazy-loaded WebGL brain. This is the ONLY module that may import
 // three / @react-three/fiber / @react-three/drei — everything else stays in
 // the main bundle. Ported and adapted from ui/brainsnn-site/src/App.jsx.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html, Line, OrbitControls, Sparkles, Sphere, Stars } from '@react-three/drei';
@@ -101,52 +101,89 @@ function BrainEdges({ weights, selectedRegion, edgeColor }) {
   );
 }
 
-function Particle({ pathway, activities, selectedRegion, speed, color, opacity }) {
+/**
+ * Every signal particle in a single InstancedMesh.
+ *
+ * This used to be one <mesh> per particle — 10 pathways x 2-3 copies — and each
+ * one carried its own useFrame subscription and its own sphereGeometry. That is
+ * 20-30 draw calls, 20-30 geometries and 20-30 per-frame React closures for what
+ * is visually a handful of dots, on the scene that renders on the homepage.
+ * One mesh, one geometry, one useFrame writing all the matrices.
+ *
+ * Inhibitory pathways stay pink, so colour is per-instance rather than on the
+ * material.
+ */
+function SignalParticles({ activities, selectedRegion, params, palette }) {
   const meshRef = useRef();
-  const travel = useRef(Math.random());
+  const dummy = useMemo(() => new THREE.Object3D(), []);
   const scratch = useMemo(() => new THREE.Vector3(), []);
+  const tint = useMemo(() => new THREE.Color(), []);
 
-  const vectors = useMemo(() => {
-    const start = new THREE.Vector3(...REGION_MAP[pathway.from].position);
-    const end = new THREE.Vector3(...REGION_MAP[pathway.to].position);
-    const control = pathwayCenter(REGION_MAP[pathway.from].position, REGION_MAP[pathway.to].position, pathway.curveOffset);
-    return { start, control, end };
-  }, [pathway]);
+  // One entry per particle: which pathway it rides, its curve, its speed and
+  // where along the curve it currently is.
+  const particles = useMemo(() => {
+    const list = [];
+    for (const pathway of PATHWAYS) {
+      const from = REGION_MAP[pathway.from];
+      const to = REGION_MAP[pathway.to];
+      const start = new THREE.Vector3(...from.position);
+      const end = new THREE.Vector3(...to.position);
+      const control = pathwayCenter(from.position, to.position, pathway.curveOffset);
+      for (let index = 0; index < params.count; index += 1) {
+        list.push({
+          pathway,
+          start,
+          control,
+          end,
+          speed: params.speed * (1 + index * 0.18),
+          // Staggered rather than random so the scene looks the same on every
+          // mount — the rest of this codebase is deterministic and this was the
+          // one place quietly calling Math.random().
+          travel: (index + 1) / (params.count + 1),
+        });
+      }
+    }
+    return list;
+  }, [params.count, params.speed]);
+
+  useLayoutEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    particles.forEach((particle, index) => {
+      tint.set(particle.pathway.inhibitory ? '#fb7185' : palette.particle);
+      mesh.setColorAt(index, tint);
+    });
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }, [particles, palette.particle, tint]);
 
   useFrame(() => {
-    const sourceActivity = activities?.[pathway.from] ?? 0.2;
-    travel.current += (0.004 + sourceActivity * 0.018) * speed;
-    if (travel.current > 1) travel.current = 0;
-    const point = getQuadraticPoint(vectors.start, vectors.control, vectors.end, travel.current, scratch);
-    if (meshRef.current) meshRef.current.position.copy(point);
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    particles.forEach((particle, index) => {
+      const sourceActivity = activities?.[particle.pathway.from] ?? 0.2;
+      particle.travel += (0.004 + sourceActivity * 0.018) * particle.speed;
+      if (particle.travel > 1) particle.travel = 0;
+      getQuadraticPoint(particle.start, particle.control, particle.end, particle.travel, scratch);
+      dummy.position.copy(scratch);
+      // Selecting a region dims the rest of the graph; a zero-scale instance is
+      // the instanced equivalent of visible={false}.
+      const active = !selectedRegion
+        || selectedRegion === particle.pathway.from
+        || selectedRegion === particle.pathway.to;
+      dummy.scale.setScalar(active ? 1 : 0.0001);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(index, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
   });
 
-  const active = !selectedRegion || selectedRegion === pathway.from || selectedRegion === pathway.to;
+  if (!particles.length) return null;
 
   return (
-    <mesh ref={meshRef} visible={active}>
-      <sphereGeometry args={[0.06, 12, 12]} />
-      <meshBasicMaterial color={pathway.inhibitory ? '#fb7185' : color} transparent opacity={opacity} />
-    </mesh>
-  );
-}
-
-function SignalParticles({ activities, selectedRegion, params, palette }) {
-  const copies = Array.from({ length: params.count }, (_, index) => index);
-  return (
-    <group>
-      {PATHWAYS.flatMap((pathway) => copies.map((index) => (
-        <Particle
-          key={`${pathway.id}-${index}`}
-          pathway={pathway}
-          activities={activities}
-          selectedRegion={selectedRegion}
-          speed={params.speed * (1 + index * 0.18)}
-          color={palette.particle}
-          opacity={params.opacity}
-        />
-      )))}
-    </group>
+    <instancedMesh ref={meshRef} args={[null, null, particles.length]} frustumCulled={false}>
+      <sphereGeometry args={[0.06, 10, 10]} />
+      <meshBasicMaterial transparent opacity={params.opacity} toneMapped={false} />
+    </instancedMesh>
   );
 }
 
