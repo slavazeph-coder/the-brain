@@ -247,6 +247,15 @@ board carries the held-out numbers: half the annotated techniques found, **none*
 of the four paraphrased ones, three false alarms on five benign passages. A
 detection is a prompt to look, not a verdict.
 
+**Challenge links** (`?lab=braingame&state=<mode>~<level>`) carry the mode, the
+level and — for a passage you pasted yourself — its text, so a recipient fights
+the same thing rather than the default. Unrecognised input is rejected rather
+than guessed at, so a link to a level that no longer exists opens the ladder
+instead of something arbitrary. Run proofs are separate and deliberately carry
+**no text at all**: only a seed, tick/intervention pairs, and a redacted packet
+schedule, because a proof is something you publish and the phrases in it would
+be your own words.
+
 ### The brain, and a real spiking network
 
 The 7-region model (`src/features/brain3d/brainModel.js`) is deterministic and
