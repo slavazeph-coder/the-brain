@@ -52,12 +52,18 @@ npm run dev          # Express + Vite middleware → http://localhost:3000
 No keys required — the deterministic engine drives every panel out of the box.
 
 ```bash
-npm test             # node test runner (tinyVitest), 27 tests
+npm test             # node test runner (tinyVitest)
 npm run lint         # tsc --noEmit
 npm run build        # vite build + esbuild → dist/ (client) + dist/server.cjs
 npm start            # node dist/server.cjs  (production)
 npm run test:e2e     # Playwright end-to-end
 ```
+
+**Node 22.6 or newer is required** (enforced by `engines` in `package.json`).
+The powder-lab engine is TypeScript and the test runner executes it through
+Node's native `--experimental-strip-types` rather than a build step, so the flag
+has to exist. On Node 20 `npm test` fails immediately with
+`node: bad option: --experimental-strip-types`.
 
 ## Architecture
 
