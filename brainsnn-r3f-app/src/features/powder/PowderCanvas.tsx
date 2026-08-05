@@ -25,9 +25,13 @@ export interface PowderStats {
   regime: RegimeReadout;
 }
 
+export type PowderTool = 'paint' | 'spark';
+
 export interface PowderCanvasProps {
   engine: PowderEngine;
   layer: NeuroLayer;
+  /** Paint material, or charge the neurons under the cursor. */
+  tool?: PowderTool;
   /** Read through a ref so changing it never restarts the loop. */
   material: Material;
   brush: number;
@@ -51,6 +55,7 @@ const PUBLISH_MS = 220;
 export function PowderCanvas({
   engine,
   layer,
+  tool = 'paint',
   material,
   brush,
   paused,
@@ -70,6 +75,8 @@ export function PowderCanvas({
   const recorder = externalRecorder ?? fallbackRecorder.current;
 
   // Mirrors, so the loop reads current values without being re-created.
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
   const materialRef = useRef(material);
   const brushRef = useRef(brush);
   const pausedRef = useRef(paused);
@@ -164,6 +171,15 @@ export function PowderCanvas({
   function paint(event: React.PointerEvent<HTMLCanvasElement>) {
     onFirstDraw?.();
     const cell = toCell(event);
+
+    // The spark tool injects charge instead of material. Right button still
+    // erases, so there is always a way out of a mis-drawn circuit.
+    if (toolRef.current === 'spark' && !erasingRef.current) {
+      engine.sparkAt(cell.x, cell.y, brushRef.current, paramsRef.current.threshold);
+      lastCellRef.current = cell;
+      return;
+    }
+
     const chosen = erasingRef.current ? Material.AIR : materialRef.current;
     const previous = lastCellRef.current;
     if (previous) {

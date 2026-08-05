@@ -119,7 +119,7 @@ export const MISSIONS: readonly Mission[] = Object.freeze([
   {
     id: 'first-spark',
     title: 'Make something fire',
-    hint: 'Draw a neuron, then press Stimulate.',
+    hint: 'Draw a neuron, then press Stimulate all — or use Spark and click it.',
     why: 'A neuron is a leaky integrator: it holds charge, leaks it away, and fires only when the total crosses threshold.',
     check: ({ firedSinceLastCheck }) => firedSinceLastCheck,
   },
@@ -133,14 +133,17 @@ export const MISSIONS: readonly Mission[] = Object.freeze([
   {
     id: 'learned',
     title: 'Teach a synapse',
-    hint: `Fire the same path repeatedly until a synapse passes weight ${LEARNED_WEIGHT}.`,
+    // Measured: with the global Stimulate both ends fire on the same tick, so
+    // the synapse never spikes *before* the neuron and nothing ever learns.
+    // Spark is the affordance that makes the causal window reachable.
+    hint: `Spark the upstream neuron, then spark the downstream one a moment later, until a synapse passes weight ${LEARNED_WEIGHT}. Too early and nothing happens — that is the causal window.`,
     why: 'A synapse that fires shortly before its target gains weight. That is spike-timing-dependent plasticity, and it is the whole of the learning here.',
     check: ({ engine }) => anySynapse(engine, (weight) => weight >= LEARNED_WEIGHT),
   },
   {
     id: 'dopamine',
     title: 'Learn faster with dopamine',
-    hint: 'Pour dopamine over a circuit that is still learning, then keep firing it.',
+    hint: 'Pour dopamine over a circuit that is still learning, then keep sparking it in order.',
     // Phrased to match exactly what is checked: a learned synapse with dopamine
     // in range. The checker cannot prove the dopamine caused it.
     why: 'Learning runs three times faster inside a dopamine field, which is why a reward signal is worth having at all.',

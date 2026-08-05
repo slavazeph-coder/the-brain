@@ -208,6 +208,83 @@ describe('MissionTracker', () => {
   });
 });
 
+// This is the test that caught the real gap: the global Stimulate fires every
+// neuron on the same tick, so a synapse never spikes before its downstream
+// neuron and STDP can never trigger. "Teach a synapse" was unreachable by the
+// path its own hint described.
+describe('learning is reachable, and only the causal way round', () => {
+  function pair() {
+    const engine = new PowderEngine({ width: 60, height: 20, seed: 'stdp' });
+    const layer = new NeuroLayer(engine.size);
+    engine.setCell(5, 10, Material.NEURO);
+    for (let x = 6; x < 15; x += 1) engine.setCell(x, 10, Material.SYNAPSE);
+    engine.setCell(15, 10, Material.NEURO);
+    return { engine, layer, up: engine.index(5, 10), down: engine.index(15, 10), last: engine.index(14, 10) };
+  }
+
+  /** Sparks upstream at phase 0 and downstream at `lag`, repeatedly. */
+  function train(lag: number, ticks = 2000) {
+    const { engine, layer, up, down, last } = pair();
+    for (let tick = 0; tick < ticks; tick += 1) {
+      const phase = tick % 40;
+      if (phase === 0) engine.sparkAt(5, 10, 0, REAL_PARAMS.threshold);
+      if (phase === lag) engine.sparkAt(15, 10, 0, REAL_PARAMS.threshold);
+      layer.step(engine, REAL_PARAMS);
+    }
+    return engine.weight[last];
+  }
+
+  it('does not learn when both ends fire together, which is what Stimulate does', () => {
+    const { engine, layer, last } = pair();
+    for (let tick = 0; tick < 2000; tick += 1) {
+      if (tick % 40 === 0) {
+        // Every neuron at once: the global stimulus.
+        engine.sparkAt(5, 10, 0, REAL_PARAMS.threshold);
+        engine.sparkAt(15, 10, 0, REAL_PARAMS.threshold);
+      }
+      layer.step(engine, REAL_PARAMS);
+    }
+    expect(engine.weight[last]).toBeCloseTo(0.1, 2);
+  });
+
+  it('does not learn when the downstream spark comes too early', () => {
+    // The wave needs 9 ticks to cross 9 cells; before that there is nothing
+    // for the neuron to be caused by.
+    expect(train(4)).toBeCloseTo(0.1, 2);
+    expect(train(8)).toBeCloseTo(0.1, 2);
+  });
+
+  it('learns to full weight once the spark lands inside the causal window', () => {
+    expect(train(9)).toBeCloseTo(1, 2);
+    expect(train(14)).toBeCloseTo(1, 2);
+  });
+});
+
+describe('sparkAt', () => {
+  it('charges only neurons, and only inside the brush', () => {
+    const engine = new PowderEngine({ width: 32, height: 16, seed: 'spark' });
+    engine.setCell(5, 5, Material.NEURO);
+    engine.setCell(5, 6, Material.SAND);
+    engine.setCell(20, 5, Material.NEURO); // outside the brush
+    expect(engine.sparkAt(5, 5, 2, 1)).toBe(1);
+    expect(engine.voltage[engine.index(5, 5)]).toBe(2);
+    expect(engine.voltage[engine.index(5, 6)]).toBe(0);
+    expect(engine.voltage[engine.index(20, 5)]).toBe(0);
+  });
+
+  it('cannot override a refractory neuron', () => {
+    const engine = new PowderEngine({ width: 32, height: 16, seed: 'spark' });
+    engine.setCell(5, 5, Material.NEURO);
+    engine.timer[engine.index(5, 5)] = 4;
+    expect(engine.sparkAt(5, 5, 1, 1)).toBe(0);
+  });
+
+  it('reports zero when there is nothing to charge', () => {
+    const engine = new PowderEngine({ width: 32, height: 16, seed: 'spark' });
+    expect(engine.sparkAt(5, 5, 3, 1)).toBe(0);
+  });
+});
+
 // The objectives have to be reachable by playing, not only by hand-setting
 // fields. This drives a real circuit and expects the early ones to fall out.
 describe('missions against a real circuit', () => {

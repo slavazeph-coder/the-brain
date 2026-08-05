@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Brain, Eraser, Pause, Play, RotateCcw, Camera, Zap, Link2, Save, FolderOpen } from 'lucide-react';
 import { PowderEngine } from './powderEngine.ts';
 import { NeuroLayer, GAME_PARAMS, PARAM_SETS, type NeuroParams } from './neuroLayer.ts';
-import { PowderCanvas, type PowderStats } from './PowderCanvas.tsx';
+import { PowderCanvas, type PowderStats, type PowderTool } from './PowderCanvas.tsx';
 import { MaterialPalette } from './MaterialPalette.tsx';
 import { Material, materialByHotkey, MATERIAL_BY_ID } from './materials.ts';
 import { upscaleCanvas } from './renderGrid.ts';
@@ -60,6 +60,7 @@ export function PowderLabPage() {
   const missions = useMemo(() => new MissionTracker(), []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const [tool, setTool] = useState<PowderTool>('paint');
   const [material, setMaterial] = useState<Material>(Material.SAND);
   const [brush, setBrush] = useState(3);
   const [paused, setPaused] = useState(false);
@@ -124,7 +125,12 @@ export function PowderLabPage() {
       const picked = materialByHotkey(event.key);
       if (picked !== null) {
         setMaterial(picked);
+        setTool('paint');
         setNotice(`${MATERIAL_BY_ID[picked].name} selected.`);
+        return;
+      }
+      if (event.key === 's' || event.key === 'S') {
+        setTool((current) => (current === 'spark' ? 'paint' : 'spark'));
         return;
       }
       if (event.key === ' ') {
@@ -137,6 +143,12 @@ export function PowderLabPage() {
   }, []);
 
   const handleStats = useCallback((next: PowderStats) => setStats(next), []);
+
+  // Choosing a material means you want to paint it, so it also leaves spark mode.
+  const pickMaterial = useCallback((next: Material) => {
+    setMaterial(next);
+    setTool('paint');
+  }, []);
 
   function clearAll() {
     engine.clear();
@@ -254,7 +266,7 @@ export function PowderLabPage() {
             )}
           </div>
 
-          <MaterialPalette value={material} onChange={setMaterial} />
+          <MaterialPalette value={tool === 'paint' ? material : null} onChange={pickMaterial} />
           <div className="powder-stamps">
             <span className="powder-palette-heading">Stamps</span>
             {STAMPS.map((stamp) => (
@@ -277,6 +289,7 @@ export function PowderLabPage() {
           <PowderCanvas
             engine={engine}
             layer={layer}
+            tool={tool}
             material={material}
             brush={brush}
             paused={paused}
@@ -312,8 +325,23 @@ export function PowderLabPage() {
             <button type="button" onClick={() => setPaused((value) => !value)} data-testid="powder-pause">
               {paused ? <Play size={15} /> : <Pause size={15} />}{paused ? 'Run' : 'Pause'}
             </button>
+            <button
+              type="button"
+              className={tool === 'spark' ? 'is-active' : ''}
+              aria-pressed={tool === 'spark'}
+              onClick={() => {
+                const next = tool === 'spark' ? 'paint' : 'spark';
+                setTool(next);
+                setNotice(next === 'spark'
+                  ? 'Spark: click a neuron to charge just that one. Spark upstream, then downstream a moment later, and the synapse between them learns.'
+                  : 'Back to painting.');
+              }}
+              data-testid="powder-spark"
+            >
+              <Zap size={15} /> Spark <kbd>S</kbd>
+            </button>
             <button type="button" onClick={stimulate} data-testid="powder-stimulate">
-              <Zap size={15} /> Stimulate
+              <Zap size={15} /> Stimulate all
             </button>
             <button type="button" onClick={clearAll} data-testid="powder-clear">
               <RotateCcw size={15} /> Clear
@@ -330,7 +358,7 @@ export function PowderLabPage() {
             <button type="button" onClick={loadSlot} disabled={!hasSave} data-testid="powder-load">
               <FolderOpen size={15} /> Load
             </button>
-            <button type="button" onClick={() => setMaterial(Material.AIR)}>
+            <button type="button" onClick={() => pickMaterial(Material.AIR)}>
               <Eraser size={15} /> Eraser
             </button>
           </div>

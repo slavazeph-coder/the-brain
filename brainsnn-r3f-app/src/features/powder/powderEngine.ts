@@ -209,6 +209,41 @@ export class PowderEngine {
     }
   }
 
+  /**
+   * Charges the neurons under a circular brush — an electrode rather than a
+   * paintbrush.
+   *
+   * This exists because the global Stimulate button fires *every* neuron on the
+   * same tick, and two neurons wired together therefore always fire
+   * simultaneously. Their spikes then travel toward each other and annihilate
+   * mid-wire, so the synapse next to a neuron never spikes *before* it. STDP is
+   * pre-before-post, so with only a global stimulus it can never trigger and no
+   * circuit can ever learn. Charging one neuron at a chosen moment is what
+   * makes the causal window reachable — and, since sparking too early does
+   * nothing, it is also how you discover the window exists.
+   *
+   * Returns how many units were charged, so the UI can say when nothing was hit.
+   */
+  sparkAt(cx: number, cy: number, radius: number, threshold: number): number {
+    const r = Math.max(0, radius | 0);
+    let charged = 0;
+    for (let oy = -r; oy <= r; oy += 1) {
+      for (let ox = -r; ox <= r; ox += 1) {
+        if (ox * ox + oy * oy > r * r) continue;
+        const x = (cx | 0) + ox;
+        const y = (cy | 0) + oy;
+        if (!this.inBounds(x, y)) continue;
+        const at = this.index(x, y);
+        const material = this.cells[at] & MATERIAL_MASK;
+        if (material !== Material.NEURO && material !== Material.INHIB) continue;
+        if (this.timer[at] > 0) continue; // refractory: an electrode cannot override that
+        this.voltage[at] = threshold * 2;
+        charged += 1;
+      }
+    }
+    return charged;
+  }
+
   countNonEmpty(): number {
     let count = 0;
     for (let at = 0; at < this.size; at += 1) {

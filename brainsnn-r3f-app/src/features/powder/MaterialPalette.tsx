@@ -2,7 +2,8 @@ import React from 'react';
 import { Material, SELECTABLE_MATERIALS, type MaterialSpec } from './materials.ts';
 
 export interface MaterialPaletteProps {
-  value: Material;
+  /** null when another tool is active, so no swatch reads as selected. */
+  value: Material | null;
   onChange: (material: Material) => void;
   /** Restrict the palette, for the cut-down hero widget. */
   only?: readonly Material[];

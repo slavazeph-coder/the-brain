@@ -427,3 +427,18 @@
   color: var(--bsn-text-muted, #94a3b8);
   font-style: italic;
 }
+
+.powder-buttons button.is-active {
+  border-color: rgba(255, 94, 219, 0.6);
+  background: rgba(255, 94, 219, 0.12);
+  color: #ffe4f7;
+}
+
+.powder-buttons kbd {
+  margin-left: auto;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}

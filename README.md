@@ -341,6 +341,16 @@ It is at least as careful about what it *won't* report:
 Each of those refusals is a test, because a readout that always prints
 something is the easy version to build and the wrong one.
 
+**Spark is an electrode, not a paintbrush.** Building the objectives surfaced a
+real gap: the only way to inject charge was a global *Stimulate all*, which
+fires every neuron on the same tick. Two wired neurons therefore always fired
+simultaneously, their spikes travelled toward each other and annihilated
+mid-wire, and the synapse next to a neuron never spiked *before* it. STDP is
+pre-before-post, so **no circuit could ever learn**. Spark charges the one
+neuron you click. Measured against a 9-cell wire: sparking the downstream
+neuron 4 or 8 ticks later leaves the weight at 0.1, and 9 to 16 ticks later
+drives it to 1.0 — which is the causal window, discoverable by playing.
+
 **Objectives close the loop.** Six of them, ordered so following them teaches
 the model rather than the interface: make something fire, run a spike down a
 long wire, teach a synapse past weight 0.8, learn faster with dopamine, push a
