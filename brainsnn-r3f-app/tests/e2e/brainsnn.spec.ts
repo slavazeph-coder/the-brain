@@ -438,3 +438,59 @@ test('a shared challenge link restores the level it was played on', async ({ pag
   await expect(page.getByTestId('brain-game-custom-text')).toHaveValue(/Doors close tonight/);
   await expect(page.getByTestId('brain-game-breakdown').locator('li').first()).toBeVisible();
 });
+
+test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  // The full 14-material palette, and the four brain materials among them.
+  await expect(page.locator('.powder-swatch')).toHaveCount(14);
+  await expect(page.getByTestId('powder-palette')).toContainText('Neuro');
+  await expect(page.getByTestId('powder-palette')).toContainText('Synapse');
+
+  // The opening scene is seeded, so the HUD reports a real circuit rather than
+  // an empty grid, and the loop is actually running.
+  const hud = page.getByTestId('powder-hud');
+  await expect(hud).toContainText(/Neurons/);
+  await expect(hud).toContainText(/Synapses/);
+  await expect(async () => {
+    const text = (await hud.textContent()) || '';
+    const fps = Number(/FPS\s*(\d+)/.exec(text)?.[1] ?? 0);
+    expect(fps).toBeGreaterThan(20);
+  }).toPass({ timeout: 15_000 });
+
+  // The model toggle swaps in the Brunel-derived parameters and says so.
+  await page.getByTestId('powder-model-real').click();
+  await expect(page.locator('.powder-model-note')).toContainText(/Threshold 20 mV/);
+
+  expect(errors).toEqual([]);
+});
+
+test('drawing in the powder lab puts material on the grid', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  // Clear first so the count reflects only what this test drew.
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze so nothing falls away
+
+  const canvas = page.getByTestId('powder-canvas');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-pause').click(); // resume so stats publish
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    const particles = Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0);
+    expect(particles).toBeGreaterThan(0);
+  }).toPass({ timeout: 15_000 });
+});

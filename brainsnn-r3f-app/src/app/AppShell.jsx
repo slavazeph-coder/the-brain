@@ -19,9 +19,16 @@ import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
 import { ReconstructPage } from './ReconstructPage.jsx';
 
+// The powder lab is a full page of its own and pulls in a simulation engine, so
+// it is lazily loaded like any other heavy surface rather than bundled into the
+// shell every visitor pays for.
+const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx')
+  .then((module) => ({ default: module.PowderLabPage })));
+
 function resolveRoute(pathname) {
   if (pathname.startsWith('/app')) return 'app';
   if (pathname.startsWith('/reconstruct')) return 'reconstruct';
+  if (pathname.startsWith('/lab')) return 'lab';
   return 'landing';
 }
 
@@ -216,6 +223,14 @@ export function AppShell() {
       />
     );
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
+
+  if (route === 'lab') {
+    return (
+      <React.Suspense fallback={<div className="powder-boot">Loading the lab…</div>}>
+        <PowderLabPage />
+      </React.Suspense>
+    );
+  }
 
   if (route === 'reconstruct') {
     return <ReconstructPage onHome={openLanding} onStart={openWorkspace} />;
