@@ -341,6 +341,29 @@ It is at least as careful about what it *won't* report:
 Each of those refusals is a test, because a readout that always prints
 something is the easy version to build and the wrong one.
 
+**Spark is an electrode, not a paintbrush.** Building the objectives surfaced a
+real gap: the only way to inject charge was a global *Stimulate all*, which
+fires every neuron on the same tick. Two wired neurons therefore always fired
+simultaneously, their spikes travelled toward each other and annihilated
+mid-wire, and the synapse next to a neuron never spiked *before* it. STDP is
+pre-before-post, so **no circuit could ever learn**. Spark charges the one
+neuron you click. Measured against a 9-cell wire: sparking the downstream
+neuron 4 or 8 ticks later leaves the weight at 0.1, and 9 to 16 ticks later
+drives it to 1.0 — which is the causal window, discoverable by playing.
+
+**Objectives close the loop.** Six of them, ordered so following them teaches
+the model rather than the interface: make something fire, run a spike down a
+long wire, teach a synapse past weight 0.8, learn faster with dopamine, push a
+neuron below zero with inhibition, and reach the asynchronous irregular regime.
+
+Every one is verified from engine state — a flood fill over connected synapse
+cells, a weight, a negative membrane potential, the measured regime — so an
+objective can only be completed by building the thing. None can be awarded for
+pressing a button or visiting a panel, and a test asserts that all six are
+false on an empty grid. They also do not start counting until you draw, stamp
+or stimulate: the opening scene fires by itself, and being credited for
+watching a demo is the kind of hollow progress this is meant not to be.
+
 Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
 dependency and not a server: a grid is mostly long runs of the same material,
 so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.

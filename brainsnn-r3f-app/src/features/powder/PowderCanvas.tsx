@@ -10,6 +10,7 @@ import { NeuroLayer, type NeuroParams } from './neuroLayer.ts';
 import { renderGrid } from './renderGrid.ts';
 import { Material } from './materials.ts';
 import { RegimeRecorder, type RegimeReadout } from './regime.ts';
+import { MissionTracker, type Mission } from './missions.ts';
 
 export interface PowderStats {
   fps: number;
@@ -24,9 +25,13 @@ export interface PowderStats {
   regime: RegimeReadout;
 }
 
+export type PowderTool = 'paint' | 'spark';
+
 export interface PowderCanvasProps {
   engine: PowderEngine;
   layer: NeuroLayer;
+  /** Paint material, or charge the neurons under the cursor. */
+  tool?: PowderTool;
   /** Read through a ref so changing it never restarts the loop. */
   material: Material;
   brush: number;
@@ -39,6 +44,10 @@ export interface PowderCanvasProps {
   onFirstDraw?: () => void;
   /** Statistics recorder, owned by the page so Clear can reset it. */
   recorder?: RegimeRecorder;
+  /** Objective tracker, owned by the page so progress can be persisted. */
+  missions?: MissionTracker;
+  /** Fired when an objective is met, so the page can announce it. */
+  onMissionComplete?: (mission: Mission) => void;
 }
 
 const PUBLISH_MS = 220;
@@ -46,6 +55,7 @@ const PUBLISH_MS = 220;
 export function PowderCanvas({
   engine,
   layer,
+  tool = 'paint',
   material,
   brush,
   paused,
@@ -55,6 +65,8 @@ export function PowderCanvas({
   ariaLabel = 'Neuro Powder Lab simulation grid',
   onFirstDraw,
   recorder: externalRecorder,
+  missions,
+  onMissionComplete,
 }: PowderCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement | null>(null);
   const canvasRef = externalRef ?? internalRef;
@@ -63,6 +75,8 @@ export function PowderCanvas({
   const recorder = externalRecorder ?? fallbackRecorder.current;
 
   // Mirrors, so the loop reads current values without being re-created.
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
   const materialRef = useRef(material);
   const brushRef = useRef(brush);
   const pausedRef = useRef(paused);
@@ -73,6 +87,11 @@ export function PowderCanvas({
   pausedRef.current = paused;
   paramsRef.current = params;
   statsRef.current = onStats;
+
+  const missionsRef = useRef(missions);
+  const onMissionCompleteRef = useRef(onMissionComplete);
+  missionsRef.current = missions;
+  onMissionCompleteRef.current = onMissionComplete;
 
   const drawingRef = useRef(false);
   const erasingRef = useRef(false);
@@ -104,6 +123,12 @@ export function PowderCanvas({
         // Paused time is not measured time — a window that spanned a pause
         // would report intervals that never happened.
         recorder.observe(layer, paramsRef.current, neuro.neurons, neuro.synapses);
+
+        const tracker = missionsRef.current;
+        if (tracker) {
+          const newly = tracker.observe({ engine, layer, regime: recorder.current() });
+          for (const mission of newly) onMissionCompleteRef.current?.(mission);
+        }
       }
 
       renderGrid(engine, layer, image);
@@ -146,6 +171,15 @@ export function PowderCanvas({
   function paint(event: React.PointerEvent<HTMLCanvasElement>) {
     onFirstDraw?.();
     const cell = toCell(event);
+
+    // The spark tool injects charge instead of material. Right button still
+    // erases, so there is always a way out of a mis-drawn circuit.
+    if (toolRef.current === 'spark' && !erasingRef.current) {
+      engine.sparkAt(cell.x, cell.y, brushRef.current, paramsRef.current.threshold);
+      lastCellRef.current = cell;
+      return;
+    }
+
     const chosen = erasingRef.current ? Material.AIR : materialRef.current;
     const previous = lastCellRef.current;
     if (previous) {

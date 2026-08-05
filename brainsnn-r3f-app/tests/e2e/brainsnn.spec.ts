@@ -494,6 +494,41 @@ test('the powder lab has a link in the desktop navigation', async ({ page }, tes
   await expect(page).toHaveURL(/\/lab$/);
 });
 
+test('powder lab objectives are earned by building, not handed out', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  const panel = page.getByTestId('powder-missions');
+  await expect(panel).toBeVisible();
+
+  // Clear first: nothing on the grid means nothing can have been earned.
+  await page.getByTestId('powder-clear').click();
+  const spark = panel.locator('[data-mission="first-spark"]');
+  const dopamine = panel.locator('[data-mission="dopamine"]');
+  await expect(spark).toHaveAttribute('data-complete', 'false');
+
+  // Draw a neuron and stimulate it. That, and only that, should complete it.
+  await page.locator('.powder-swatch[data-material="10"]').click(); // Neuro
+  const canvas = page.getByTestId('powder-canvas');
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.4);
+  await page.getByTestId('powder-stimulate').click();
+
+  await expect(spark).toHaveAttribute('data-complete', 'true', { timeout: 20_000 });
+  // Nothing was drawn for this one, so it must still be outstanding.
+  await expect(dopamine).toHaveAttribute('data-complete', 'false');
+
+  // Progress is progress, not a drawing: it survives Clear and a reload.
+  await page.getByTestId('powder-clear').click();
+  await expect(spark).toHaveAttribute('data-complete', 'true');
+  await page.goto('/lab');
+  await expect(
+    page.getByTestId('powder-missions').locator('[data-mission="first-spark"]'),
+  ).toHaveAttribute('data-complete', 'true');
+});
+
 test('the powder lab measures its own firing regime, and says when it will not', async ({ page }) => {
   test.setTimeout(90_000);
 
