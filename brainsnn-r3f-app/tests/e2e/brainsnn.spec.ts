@@ -438,3 +438,153 @@ test('a shared challenge link restores the level it was played on', async ({ pag
   await expect(page.getByTestId('brain-game-custom-text')).toHaveValue(/Doors close tonight/);
   await expect(page.getByTestId('brain-game-breakdown').locator('li').first()).toBeVisible();
 });
+
+test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  // The full 14-material palette, and the four brain materials among them.
+  await expect(page.locator('.powder-swatch')).toHaveCount(14);
+  await expect(page.getByTestId('powder-palette')).toContainText('Neuro');
+  await expect(page.getByTestId('powder-palette')).toContainText('Synapse');
+
+  // The opening scene is seeded, so the HUD reports a real circuit rather than
+  // an empty grid, and the loop is actually running.
+  const hud = page.getByTestId('powder-hud');
+  await expect(hud).toContainText(/Neurons/);
+  await expect(hud).toContainText(/Synapses/);
+  await expect(async () => {
+    const text = (await hud.textContent()) || '';
+    const fps = Number(/FPS\s*(\d+)/.exec(text)?.[1] ?? 0);
+    expect(fps).toBeGreaterThan(20);
+  }).toPass({ timeout: 15_000 });
+
+  // The model toggle swaps in the Brunel-derived parameters and says so.
+  await page.getByTestId('powder-model-real').click();
+  await expect(page.locator('.powder-model-note')).toContainText(/Threshold 20 mV/);
+
+  expect(errors).toEqual([]);
+});
+
+test('the powder lab measures its own firing regime, and says when it will not', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+  const readout = page.getByTestId('powder-regime-label');
+
+  // Game feel: the dimensionless statistics are measured, but a rate in hertz
+  // and a calibrated regime label are both withheld, and the page says why.
+  await expect(readout).toContainText(/no duration/, { timeout: 30_000 });
+  await expect(page.getByTestId('powder-regime')).toContainText('—'); // rate, withheld
+
+  // Real model: the opening scene has enough neurons firing to classify.
+  await page.getByTestId('powder-model-real').click();
+  await expect(readout).toContainText(
+    /Asynchronous|Synchronous|Silent/,
+    { timeout: 45_000 },
+  );
+
+  // Whatever it landed on, the numbers behind it have to be real numbers.
+  const panel = (await page.getByTestId('powder-regime').textContent()) || '';
+  expect(panel).toMatch(/CV of ISI/);
+  expect(panel).not.toMatch(/NaN|undefined/);
+});
+
+test('drawing in the powder lab puts material on the grid', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  // Clear first so the count reflects only what this test drew.
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze so nothing falls away
+
+  const canvas = page.getByTestId('powder-canvas');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-pause').click(); // resume so stats publish
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    const particles = Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0);
+    expect(particles).toBeGreaterThan(0);
+  }).toPass({ timeout: 15_000 });
+});
+
+test('a powder lab link carries the whole grid, with no server involved', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze, so the shared grid is exactly what was drawn
+
+  // Wall does not fall, so the grid is stable enough to compare across a reload.
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  const canvas = page.getByTestId('powder-canvas');
+  // On the narrow viewport the palette pushes the canvas below the fold, and
+  // page.mouse works in viewport coordinates — without this the drag lands on
+  // nothing and the test fails two steps later for the wrong reason.
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0)).toBeGreaterThan(50);
+  }).toPass({ timeout: 10_000 });
+
+  await page.getByTestId('powder-share').click();
+  await expect(page).toHaveURL(/[?&]grid=p1%3A240x160%3A/);
+  const shared = page.url();
+
+  // A fresh load of that URL restores the drawing rather than the demo scene.
+  await page.goto(shared);
+  await expect(page.getByTestId('powder-lab')).toContainText('Loaded a shared grid.');
+  await page.getByTestId('powder-pause').click();
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0)).toBeGreaterThan(50);
+    // The demo scene is full of synapses; a wall line has none.
+    expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
+  }).toPass({ timeout: 15_000 });
+});
+
+test('a powder lab drawing survives a reload through the local save slot', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click();
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  await page.getByTestId('powder-canvas').scrollIntoViewIfNeeded();
+  const box = (await page.getByTestId('powder-canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.6, { steps: 10 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-save').click();
+  await expect(page.getByTestId('powder-lab')).toContainText('Saved to this browser.');
+
+  await page.goto('/lab');
+  await page.getByTestId('powder-load').click();
+  await expect(page.getByTestId('powder-lab')).toContainText('Restored your saved grid.');
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
+  }).toPass({ timeout: 15_000 });
+});

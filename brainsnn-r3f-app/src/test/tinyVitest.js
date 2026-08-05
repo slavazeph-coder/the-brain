@@ -53,6 +53,15 @@ function makeMatchers(received, negate = false) {
     toHaveLength(expected) {
       assert(received?.length === expected, `Expected length ${received?.length} to be ${expected}`);
     },
+    // Float32Array round-trips 0.1 as 0.10000000149011612, so anything that
+    // reads back out of a typed array needs a tolerance rather than toBe.
+    toBeCloseTo(expected, precision = 6) {
+      const tolerance = 10 ** -precision / 2;
+      assert(
+        Math.abs(received - expected) < tolerance,
+        `Expected ${received} to be within ${tolerance} of ${expected}`,
+      );
+    },
     toBeGreaterThan(expected) {
       assert(received > expected, `Expected ${received} to be greater than ${expected}`);
     },

@@ -1,0 +1,343 @@
+/* Neuro Powder Lab (/lab)
+   Dark glassmorphic chrome, neon per-material accents. Uses the site's own
+   --bsn-* tokens so it sits inside the existing design language rather than
+   next to it. */
+
+.powder-page {
+  min-height: 100vh;
+  padding: 26px clamp(14px, 3vw, 40px) 40px;
+  background:
+    radial-gradient(circle at 15% -10%, rgba(255, 0, 255, 0.09), transparent 42%),
+    radial-gradient(circle at 85% 0%, rgba(0, 255, 255, 0.08), transparent 40%),
+    #06060c;
+  color: var(--bsn-text, #e2e8f0);
+}
+
+.powder-header { max-width: 78ch; margin: 0 auto 22px; }
+
+.powder-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  color: #ff5edb;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.powder-header h1 {
+  margin: 0 0 10px;
+  font-family: var(--bsn-font-display);
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  line-height: 1.1;
+}
+
+.powder-lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--bsn-text-secondary, #9aa0b4);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.powder-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(200px, 250px);
+  gap: 16px;
+  align-items: start;
+  max-width: 1500px;
+  margin: 0 auto;
+}
+
+.powder-rail {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  background: rgba(21, 21, 32, 0.72);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 16px;
+}
+
+/* --- the grid itself --- */
+
+.powder-stage {
+  position: relative;
+  border: 1px solid rgba(125, 249, 255, 0.16);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0a0a0f;
+  box-shadow: inset 0 0 70px rgba(0, 0, 0, 0.8);
+}
+
+.powder-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  /* The backing store is 240x160; this is the 4x upscale. */
+  image-rendering: pixelated;
+  touch-action: none; /* one finger draws, never scrolls the page */
+  cursor: crosshair;
+}
+
+.powder-hud {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.powder-hud span {
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  background: rgba(4, 4, 12, 0.78);
+  color: var(--bsn-text-muted, #94a3b8);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.powder-hud strong { color: #7df9ff; margin-left: 5px; }
+
+/* --- palette --- */
+
+.powder-palette { display: grid; gap: 14px; }
+.powder-palette-group { display: grid; gap: 7px; }
+
+.powder-palette-heading {
+  font-family: var(--bsn-font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-palette-heading-brain { color: #ff5edb; }
+
+.powder-swatches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.powder-swatch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--bsn-text-secondary, #9aa0b4);
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-align: left;
+  min-height: 38px;
+  /* Selection is CSS rather than `motion`: a swatch highlight is not worth a
+     ~50 KB animation runtime in the lab bundle. */
+  transition: border-color 140ms ease, background 140ms ease,
+              box-shadow 180ms ease, transform 120ms ease;
+}
+
+.powder-swatch:hover { border-color: rgba(255, 255, 255, 0.24); }
+.powder-swatch:active { transform: scale(0.97); }
+
+.powder-swatch.is-active {
+  border-color: var(--swatch);
+  background: color-mix(in srgb, var(--swatch) 16%, transparent);
+  color: #f8fafc;
+  box-shadow: 0 0 0 1px var(--swatch), 0 0 16px -4px var(--swatch);
+}
+
+.powder-swatch-chip {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: var(--swatch);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.powder-swatch-label { flex: 1 1 auto; min-width: 0; }
+
+.powder-swatch kbd {
+  font-family: var(--bsn-font-mono);
+  font-size: 0.6rem;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+/* --- controls --- */
+
+.powder-control { display: grid; gap: 7px; }
+
+.powder-control > span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--bsn-text-secondary, #9aa0b4);
+}
+
+.powder-control output { font-family: var(--bsn-font-mono); color: #7df9ff; }
+.powder-control input { width: 100%; accent-color: #7df9ff; }
+
+.powder-buttons { display: grid; gap: 6px; }
+
+.powder-buttons button,
+.powder-stamps button,
+.powder-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--bsn-text-secondary, #9aa0b4);
+  font-size: 0.76rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.powder-buttons button:hover,
+.powder-stamps button:hover,
+.powder-toggle button:hover {
+  border-color: rgba(125, 249, 255, 0.42);
+  color: #e7ffff;
+  background: rgba(125, 249, 255, 0.08);
+}
+
+.powder-buttons button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.powder-buttons button:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+  color: var(--bsn-text-secondary, #9aa0b4);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.powder-stamps { display: grid; gap: 6px; }
+
+.powder-model { display: grid; gap: 8px; }
+.powder-toggle { display: grid; gap: 6px; }
+
+.powder-toggle button.is-active {
+  border-color: rgba(255, 94, 219, 0.6);
+  background: rgba(255, 94, 219, 0.12);
+  color: #ffe4f7;
+}
+
+.powder-model-note,
+.powder-boundary p {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-boundary {
+  display: grid;
+  gap: 6px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.powder-notice {
+  max-width: 1500px;
+  margin: 14px auto 0;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.74rem;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+@media (max-width: 1100px) {
+  .powder-layout { grid-template-columns: minmax(0, 1fr); }
+  .powder-rail { position: static; }
+  .powder-swatches { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .powder-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .powder-swatch-label { display: none; }
+  .powder-hud span { font-size: 0.58rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .powder-swatch { transition: none; }
+  .powder-swatch:active { transform: none; }
+}
+
+/* --- regime readout --- */
+
+.powder-regime {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid rgba(125, 249, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(125, 249, 255, 0.04);
+}
+
+.powder-regime-label {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--bsn-text-secondary, #9aa0b4);
+}
+
+.powder-regime-label strong {
+  font-family: var(--bsn-font-mono);
+  color: #7df9ff;
+  letter-spacing: 0.06em;
+}
+
+.powder-regime-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+  margin: 0;
+}
+
+.powder-regime-stats div { display: flex; justify-content: space-between; gap: 8px; }
+
+.powder-regime-stats dt {
+  font-size: 0.66rem;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-regime-stats dd {
+  margin: 0;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.68rem;
+  color: #e2e8f0;
+}
+
+.powder-regime-note {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-regime-note code {
+  font-family: var(--bsn-font-mono);
+  font-size: 0.64rem;
+  color: #ff5edb;
+}

@@ -13,7 +13,12 @@ globalThis.window = {
 };
 globalThis.localStorage = globalThis.window.localStorage;
 
-const files = execFileSync('find', ['src', '-name', '*.test.js', '-o', '-name', '*.test.jsx'], {
+// `.test.ts` is included because the powder engine is TypeScript. Node 22 strips
+// types natively, so this needs no build step and no transpiler — but it does
+// need the --experimental-strip-types flag, which package.json passes. Without
+// it Node throws on the first type annotation, which is a loud failure rather
+// than a silently skipped suite.
+const files = execFileSync('find', ['src', '-name', '*.test.js', '-o', '-name', '*.test.jsx', '-o', '-name', '*.test.ts'], {
   encoding: 'utf8',
 })
   .trim()

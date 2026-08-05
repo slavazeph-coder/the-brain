@@ -10,6 +10,12 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4180',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    // Sandboxes and CI images often ship a Chromium whose build number does not
+    // match this Playwright version, and downloading another one is not always
+    // allowed. Point at the installed binary instead of failing to launch.
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
+      : {},
   },
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
