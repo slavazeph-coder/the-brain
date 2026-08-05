@@ -1,8 +1,9 @@
 import { describe, expect, it } from '../../test/tinyVitest.js';
 import { PowderEngine } from './powderEngine.ts';
-import { NeuroLayer, GAME_PARAMS, REAL_PARAMS } from './neuroLayer.ts';
+import { NeuroLayer, GAME_PARAMS, MAX_WEIGHT, REAL_PARAMS } from './neuroLayer.ts';
 import { Material } from './materials.ts';
-import { RegimeRecorder, type RegimeReadout } from './regime.ts';
+import { RegimeRecorder, WINDOW_TICKS, type RegimeReadout } from './regime.ts';
+import { createRng } from '../../lib/rng.js';
 import {
   LEARNED_WEIGHT,
   LONG_AXON_CELLS,
@@ -257,6 +258,67 @@ describe('learning is reachable, and only the causal way round', () => {
   it('learns to full weight once the spark lands inside the causal window', () => {
     expect(train(9)).toBeCloseTo(1, 2);
     expect(train(14)).toBeCloseTo(1, 2);
+  });
+});
+
+// The headline objective is billed as the point of the whole lab, so "can a
+// player actually get there" is worth pinning rather than hoping. Same class of
+// question that caught the STDP bug above.
+describe('the asynchronous irregular objective is reachable', () => {
+  /** A recurrent ring of neurons wired with learned synapses — drawable by hand. */
+  function ring(count: number, inhibEvery: number) {
+    const engine = new PowderEngine({ width: 120, height: 90, seed: 'ring' });
+    const layer = new NeuroLayer(engine.size);
+    const cx = 60, cy = 45, radius = 34;
+    const spots = Array.from({ length: count }, (_, i) => {
+      const angle = (i / count) * Math.PI * 2;
+      return { x: Math.round(cx + radius * Math.cos(angle)), y: Math.round(cy + radius * Math.sin(angle)) };
+    });
+    spots.forEach((p, i) => engine.setCell(
+      p.x, p.y, inhibEvery > 0 && i % inhibEvery === 0 ? Material.INHIB : Material.NEURO,
+    ));
+    for (let i = 0; i < count; i += 1) {
+      const a = spots[i];
+      const b = spots[(i + 1) % count];
+      let { x, y } = a;
+      const stepX = Math.sign(b.x - x);
+      const stepY = Math.sign(b.y - y);
+      while (x !== b.x) { x += stepX; if (engine.getCell(x, y) === Material.AIR) engine.setCell(x, y, Material.SYNAPSE); }
+      while (y !== b.y) { y += stepY; if (engine.getCell(x, y) === Material.AIR) engine.setCell(x, y, Material.SYNAPSE); }
+    }
+    for (let at = 0; at < engine.size; at += 1) {
+      if ((engine.cells[at] & 0x1f) === Material.SYNAPSE) engine.weight[at] = MAX_WEIGHT;
+    }
+    return { engine, layer, neurons: spots.map((p) => engine.index(p.x, p.y)) };
+  }
+
+  function run(inhibEvery: number, drive: number, regular: boolean) {
+    const { engine, layer, neurons } = ring(16, inhibEvery);
+    const recorder = new RegimeRecorder();
+    const rng = createRng(`ai-${inhibEvery}-${drive}-${regular}`);
+    for (let tick = 0; tick < WINDOW_TICKS * 3; tick += 1) {
+      neurons.forEach((at, i) => {
+        const fire = regular ? tick % 20 === 0 : rng() < drive;
+        if (fire && engine.timer[at] === 0) engine.voltage[at] = REAL_PARAMS.threshold * 2;
+        void i;
+      });
+      const stats = layer.step(engine, REAL_PARAMS);
+      recorder.observe(layer, REAL_PARAMS, stats.neurons, stats.synapses);
+    }
+    return recorder.current();
+  }
+
+  it('lands in AI when the drive is irregular', () => {
+    const readout = run(3, 0.06, false);
+    expect(readout.cvIsi).toBeGreaterThan(0.5);
+    expect(readout.synchrony).toBeLessThan(0.02);
+    expect(readout.regime).toBe('AI');
+  });
+
+  it('lands somewhere else when the same circuit is driven like a metronome', () => {
+    // The circuit is identical; only the timing of the drive changed. That is
+    // the lesson the objective is there to teach.
+    expect(run(3, 0, true).regime).not.toBe('AI');
   });
 });
 
