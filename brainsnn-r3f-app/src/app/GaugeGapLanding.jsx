@@ -36,6 +36,14 @@ const DEEPER_TOOLS = [
     action: 'Test the decision engine',
   },
   {
+    id: 'powder',
+    eyebrow: 'Sandbox',
+    title: 'Neuro Powder Lab',
+    description: 'A falling-sand sandbox where four of the materials are the spiking model. Draw a circuit and the same metrics module the research page uses reports its firing regime.',
+    icon: FlaskConical,
+    action: 'Open the sandbox',
+  },
+  {
     id: 'reconstruct',
     eyebrow: 'Claim boundary',
     title: 'Reconstruct a Stronger Claim',
@@ -94,6 +102,9 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
     if (id === 'soliton') openResearch();
     if (id === 'content') onStart?.(CONTENT_SAMPLE);
     if (id === 'reconstruct') onOpenReconstruct?.();
+    // A full navigation rather than a client-side route change: /lab is its own
+    // lazily-loaded page and shares nothing with the landing state.
+    if (id === 'powder') window.location.assign('/lab');
   }
 
   return (
@@ -109,6 +120,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
           <a href={FRACTAL_LAB_URL} target="_blank" rel="noreferrer">Fractal Lab</a>
           <button type="button" onClick={() => scrollTo('clients')}>For organizations</button>
           <button type="button" onClick={openResearch}>Research</button>
+          <a href="/lab" data-testid="nav-powder-lab">Powder Lab</a>
         </nav>
         <div className="gg-nav-actions">
           <button type="button" className="gg-brain-link" onClick={() => onStart?.('')}>Open BrainSNN</button>
