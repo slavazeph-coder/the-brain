@@ -341,3 +341,89 @@
   font-size: 0.64rem;
   color: #ff5edb;
 }
+
+/* --- objectives --- */
+
+.powder-missions { display: grid; gap: 8px; }
+
+.powder-missions .powder-palette-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.powder-missions output {
+  font-family: var(--bsn-font-mono);
+  color: #7df9ff;
+  letter-spacing: 0;
+}
+
+.powder-missions ol {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: mission;
+}
+
+.powder-missions li {
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px 7px 26px;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  counter-increment: mission;
+}
+
+.powder-missions li::before {
+  content: counter(mission);
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.52rem;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-missions li.is-done {
+  border-color: rgba(125, 249, 255, 0.4);
+  background: rgba(125, 249, 255, 0.07);
+}
+
+.powder-missions li.is-done::before {
+  content: '✓';
+  border-color: #7df9ff;
+  color: #06060c;
+  background: #7df9ff;
+}
+
+.powder-missions strong {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--bsn-text-secondary, #9aa0b4);
+}
+
+.powder-missions li.is-done strong { color: #e7ffff; }
+
+.powder-missions span {
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-missions-idle {
+  margin: 0;
+  font-size: 0.64rem;
+  line-height: 1.45;
+  color: var(--bsn-text-muted, #94a3b8);
+  font-style: italic;
+}

@@ -341,6 +341,19 @@ It is at least as careful about what it *won't* report:
 Each of those refusals is a test, because a readout that always prints
 something is the easy version to build and the wrong one.
 
+**Objectives close the loop.** Six of them, ordered so following them teaches
+the model rather than the interface: make something fire, run a spike down a
+long wire, teach a synapse past weight 0.8, learn faster with dopamine, push a
+neuron below zero with inhibition, and reach the asynchronous irregular regime.
+
+Every one is verified from engine state — a flood fill over connected synapse
+cells, a weight, a negative membrane potential, the measured regime — so an
+objective can only be completed by building the thing. None can be awarded for
+pressing a button or visiting a panel, and a test asserts that all six are
+false on an empty grid. They also do not start counting until you draw, stamp
+or stimulate: the opening scene fires by itself, and being credited for
+watching a demo is the kind of hollow progress this is meant not to be.
+
 Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
 dependency and not a server: a grid is mostly long runs of the same material,
 so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.

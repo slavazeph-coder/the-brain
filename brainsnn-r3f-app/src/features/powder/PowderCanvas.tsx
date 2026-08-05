@@ -10,6 +10,7 @@ import { NeuroLayer, type NeuroParams } from './neuroLayer.ts';
 import { renderGrid } from './renderGrid.ts';
 import { Material } from './materials.ts';
 import { RegimeRecorder, type RegimeReadout } from './regime.ts';
+import { MissionTracker, type Mission } from './missions.ts';
 
 export interface PowderStats {
   fps: number;
@@ -39,6 +40,10 @@ export interface PowderCanvasProps {
   onFirstDraw?: () => void;
   /** Statistics recorder, owned by the page so Clear can reset it. */
   recorder?: RegimeRecorder;
+  /** Objective tracker, owned by the page so progress can be persisted. */
+  missions?: MissionTracker;
+  /** Fired when an objective is met, so the page can announce it. */
+  onMissionComplete?: (mission: Mission) => void;
 }
 
 const PUBLISH_MS = 220;
@@ -55,6 +60,8 @@ export function PowderCanvas({
   ariaLabel = 'Neuro Powder Lab simulation grid',
   onFirstDraw,
   recorder: externalRecorder,
+  missions,
+  onMissionComplete,
 }: PowderCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement | null>(null);
   const canvasRef = externalRef ?? internalRef;
@@ -73,6 +80,11 @@ export function PowderCanvas({
   pausedRef.current = paused;
   paramsRef.current = params;
   statsRef.current = onStats;
+
+  const missionsRef = useRef(missions);
+  const onMissionCompleteRef = useRef(onMissionComplete);
+  missionsRef.current = missions;
+  onMissionCompleteRef.current = onMissionComplete;
 
   const drawingRef = useRef(false);
   const erasingRef = useRef(false);
@@ -104,6 +116,12 @@ export function PowderCanvas({
         // Paused time is not measured time — a window that spanned a pause
         // would report intervals that never happened.
         recorder.observe(layer, paramsRef.current, neuro.neurons, neuro.synapses);
+
+        const tracker = missionsRef.current;
+        if (tracker) {
+          const newly = tracker.observe({ engine, layer, regime: recorder.current() });
+          for (const mission of newly) onMissionCompleteRef.current?.(mission);
+        }
       }
 
       renderGrid(engine, layer, image);

@@ -16,7 +16,32 @@ import {
   buildShareUrl, hasLocalSave, loadLocal, loadShareString, readShareParam, saveLocal,
 } from './share.ts';
 import { RegimeRecorder, WINDOW_TICKS, type RegimeReadout } from './regime.ts';
+import { MISSIONS, MissionTracker, type Mission } from './missions.ts';
 import '../../styles/powder.css';
+
+/** Objectives are progress, not a drawing, so they survive Clear and reload. */
+const MISSION_STORAGE_KEY = 'brainsnn.powder.missions';
+
+function loadMissionProgress(): string[] {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(MISSION_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : [];
+  } catch {
+    // Unreadable or malformed progress means starting over, never a crash.
+    return [];
+  }
+}
+
+function saveMissionProgress(ids: Iterable<string>): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(MISSION_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    // Storage refused. The objectives still work for this session.
+  }
+}
 
 const EMPTY_REGIME: RegimeReadout = {
   ready: false, reason: 'Measuring…', cvIsi: 0, fano: 0, synchrony: 0,
@@ -32,6 +57,7 @@ export function PowderLabPage() {
   const engine = useMemo(() => new PowderEngine({ seed: 'neuro-powder' }), []);
   const layer = useMemo(() => new NeuroLayer(engine.size), [engine.size]);
   const recorder = useMemo(() => new RegimeRecorder(), []);
+  const missions = useMemo(() => new MissionTracker(), []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [material, setMaterial] = useState<Material>(Material.SAND);
@@ -42,6 +68,25 @@ export function PowderLabPage() {
   const [notice, setNotice] = useState('Draw with the left button. Right button erases.');
   const [hasSave, setHasSave] = useState(false);
   useEffect(() => { setHasSave(hasLocalSave()); }, []);
+
+  // Objectives only start counting once the visitor has done something. The
+  // opening scene fires by itself, and being credited for watching a demo is
+  // exactly the kind of hollow progress this panel is meant not to be.
+  const [engaged, setEngaged] = useState(false);
+  const engage = useCallback(() => setEngaged(true), []);
+
+  const [done, setDone] = useState<readonly string[]>([]);
+  useEffect(() => {
+    missions.restore(loadMissionProgress());
+    setDone([...missions.completed()]);
+  }, [missions]);
+
+  const handleMissionComplete = useCallback((mission: Mission) => {
+    const ids = [...missions.completed()];
+    setDone(ids);
+    saveMissionProgress(ids);
+    setNotice(`Objective complete — ${mission.title}. ${mission.why}`);
+  }, [missions]);
 
   // Seeded so the page is never a blank grid, and kept firing until the visitor
   // touches it — a sandbox that does nothing until you understand it is a
@@ -103,6 +148,7 @@ export function PowderLabPage() {
   function stimulate() {
     // Kick every neuron on the board, so a circuit can be tested without
     // hand-charging one cell.
+    engage();
     let count = 0;
     for (let at = 0; at < engine.size; at += 1) {
       const kind = engine.cells[at] & 0x1f;
@@ -177,6 +223,37 @@ export function PowderLabPage() {
 
       <div className="powder-layout">
         <aside className="powder-rail powder-rail-left">
+          {/* Objectives, not achievements: each one is a thing the model does
+              that you cannot see by looking, and each is verified from the grid
+              rather than awarded for pressing anything. */}
+          <div className="powder-missions" data-testid="powder-missions">
+            <span className="powder-palette-heading">
+              Objectives <output>{done.length}/{MISSIONS.length}</output>
+            </span>
+            <ol>
+              {MISSIONS.map((mission) => {
+                const complete = done.includes(mission.id);
+                return (
+                  <li
+                    key={mission.id}
+                    className={complete ? 'is-done' : ''}
+                    data-mission={mission.id}
+                    data-complete={complete ? 'true' : 'false'}
+                  >
+                    <strong>{mission.title}</strong>
+                    <span>{complete ? mission.why : mission.hint}</span>
+                  </li>
+                );
+              })}
+            </ol>
+            {engaged ? null : (
+              <p className="powder-missions-idle">
+                The demo runs itself. Objectives start counting once you draw,
+                stamp or stimulate — watching is not progress.
+              </p>
+            )}
+          </div>
+
           <MaterialPalette value={material} onChange={setMaterial} />
           <div className="powder-stamps">
             <span className="powder-palette-heading">Stamps</span>
@@ -186,6 +263,7 @@ export function PowderLabPage() {
                 type="button"
                 onClick={() => {
                   applyStamp(engine, stamp, 100, 70);
+                  engage();
                   setNotice(`${stamp.name} placed. ${stamp.blurb}`);
                 }}
               >
@@ -206,7 +284,9 @@ export function PowderLabPage() {
             onStats={handleStats}
             canvasRef={canvasRef}
             recorder={recorder}
-            onFirstDraw={() => { touchedRef.current = true; }}
+            missions={engaged ? missions : undefined}
+            onMissionComplete={handleMissionComplete}
+            onFirstDraw={() => { touchedRef.current = true; engage(); }}
           />
           <div className="powder-hud" data-testid="powder-hud">
             <span>FPS <strong>{stats.fps}</strong></span>
