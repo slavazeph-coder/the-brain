@@ -15,16 +15,23 @@ import { OPENING_SCENE, applyStamp, STAMPS } from './stamps.ts';
 import {
   buildShareUrl, hasLocalSave, loadLocal, loadShareString, readShareParam, saveLocal,
 } from './share.ts';
+import { RegimeRecorder, WINDOW_TICKS, type RegimeReadout } from './regime.ts';
 import '../../styles/powder.css';
+
+const EMPTY_REGIME: RegimeReadout = {
+  ready: false, reason: 'Measuring…', cvIsi: 0, fano: 0, synchrony: 0,
+  rateHz: null, regime: null, neurons: 0, spikes: 0, windowTicks: WINDOW_TICKS,
+};
 
 const EMPTY_STATS: PowderStats = {
   fps: 0, particles: 0, neurons: 0, synapses: 0,
-  spikesPerSecond: 0, meanWeight: 0, dopamineCells: 0,
+  spikesPerSecond: 0, meanWeight: 0, dopamineCells: 0, regime: EMPTY_REGIME,
 };
 
 export function PowderLabPage() {
   const engine = useMemo(() => new PowderEngine({ seed: 'neuro-powder' }), []);
   const layer = useMemo(() => new NeuroLayer(engine.size), [engine.size]);
+  const recorder = useMemo(() => new RegimeRecorder(), []);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [material, setMaterial] = useState<Material>(Material.SAND);
@@ -89,6 +96,7 @@ export function PowderLabPage() {
   function clearAll() {
     engine.clear();
     layer.reset();
+    recorder.reset();
     setNotice('Grid cleared.');
   }
 
@@ -145,6 +153,7 @@ export function PowderLabPage() {
   function loadSlot() {
     if (loadLocal(engine)) {
       layer.reset();
+      recorder.reset();
       touchedRef.current = true;
       setNotice('Restored your saved grid.');
       return;
@@ -196,6 +205,7 @@ export function PowderLabPage() {
             params={params}
             onStats={handleStats}
             canvasRef={canvasRef}
+            recorder={recorder}
             onFirstDraw={() => { touchedRef.current = true; }}
           />
           <div className="powder-hud" data-testid="powder-hud">
@@ -255,7 +265,13 @@ export function PowderLabPage() {
                   role="tab"
                   aria-selected={entry.id === params.id}
                   className={entry.id === params.id ? 'is-active' : ''}
-                  onClick={() => { setParams(entry); setNotice(entry.note); }}
+                  onClick={() => {
+                    setParams(entry);
+                    // A window that straddled the switch would mix two models'
+                    // statistics into one number.
+                    recorder.reset();
+                    setNotice(entry.note);
+                  }}
                   data-testid={`powder-model-${entry.id}`}
                 >
                   {entry.label}
@@ -263,6 +279,32 @@ export function PowderLabPage() {
               ))}
             </div>
             <p className="powder-model-note">{params.note}</p>
+          </div>
+
+          {/* The readout that makes this a lab rather than a toy: the same
+              metrics module the research page runs on the validated Brunel
+              network, pointed at whatever you drew. */}
+          <div className="powder-regime" data-testid="powder-regime">
+            <span className="powder-palette-heading">Firing regime</span>
+            <p className="powder-regime-label" data-testid="powder-regime-label">
+              {stats.regime.regime
+                ? <><strong>{stats.regime.regime}</strong> — {stats.regime.reason}</>
+                : stats.regime.reason}
+            </p>
+            <dl className="powder-regime-stats">
+              <div><dt>CV of ISI</dt><dd>{stats.regime.cvIsi.toFixed(3)}</dd></div>
+              <div><dt>Fano</dt><dd>{stats.regime.fano.toFixed(3)}</dd></div>
+              <div><dt>Synchrony</dt><dd>{stats.regime.synchrony.toFixed(4)}</dd></div>
+              <div>
+                <dt>Rate</dt>
+                <dd>{stats.regime.rateHz === null ? '—' : `${stats.regime.rateHz} Hz`}</dd>
+              </div>
+            </dl>
+            <p className="powder-regime-note">
+              Measured over {stats.regime.windowTicks} ticks by{' '}
+              <code>snnMetrics.js</code> — the same module the research page uses on
+              the Brunel network, not a second implementation.
+            </p>
           </div>
 
           {/* Consistent with the rest of this codebase: say what the thing is

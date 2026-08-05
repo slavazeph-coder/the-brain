@@ -9,6 +9,7 @@ import { PowderEngine } from './powderEngine.ts';
 import { NeuroLayer, type NeuroParams } from './neuroLayer.ts';
 import { renderGrid } from './renderGrid.ts';
 import { Material } from './materials.ts';
+import { RegimeRecorder, type RegimeReadout } from './regime.ts';
 
 export interface PowderStats {
   fps: number;
@@ -19,6 +20,8 @@ export interface PowderStats {
   spikesPerSecond: number;
   meanWeight: number;
   dopamineCells: number;
+  /** Measured over its own tumbling window, not the publish cadence. */
+  regime: RegimeReadout;
 }
 
 export interface PowderCanvasProps {
@@ -34,6 +37,8 @@ export interface PowderCanvasProps {
   ariaLabel?: string;
   /** Fired once the visitor draws, so an intro demo can stand down. */
   onFirstDraw?: () => void;
+  /** Statistics recorder, owned by the page so Clear can reset it. */
+  recorder?: RegimeRecorder;
 }
 
 const PUBLISH_MS = 220;
@@ -49,9 +54,13 @@ export function PowderCanvas({
   canvasRef: externalRef,
   ariaLabel = 'Neuro Powder Lab simulation grid',
   onFirstDraw,
+  recorder: externalRecorder,
 }: PowderCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement | null>(null);
   const canvasRef = externalRef ?? internalRef;
+  const fallbackRecorder = useRef<RegimeRecorder | null>(null);
+  if (!fallbackRecorder.current) fallbackRecorder.current = new RegimeRecorder();
+  const recorder = externalRecorder ?? fallbackRecorder.current;
 
   // Mirrors, so the loop reads current values without being re-created.
   const materialRef = useRef(material);
@@ -92,6 +101,9 @@ export function PowderCanvas({
         const neuro = layer.step(engine, paramsRef.current);
         firedSincePublish += neuro.fired;
         latest = neuro;
+        // Paused time is not measured time — a window that spanned a pause
+        // would report intervals that never happened.
+        recorder.observe(layer, paramsRef.current, neuro.neurons, neuro.synapses);
       }
 
       renderGrid(engine, layer, image);
@@ -108,6 +120,7 @@ export function PowderCanvas({
           spikesPerSecond: Math.round(firedSincePublish / elapsed),
           meanWeight: latest.meanWeight,
           dopamineCells: latest.dopamineCells,
+          regime: recorder.current(),
         });
         lastPublish = now;
         framesSincePublish = 0;
@@ -119,7 +132,7 @@ export function PowderCanvas({
 
     frame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frame);
-  }, [engine, layer, canvasRef]);
+  }, [engine, layer, canvasRef, recorder]);
 
   /** Pointer position to a grid cell. The 0.999 clamp keeps the right/bottom
    *  edge from indexing one past the end. */

@@ -149,12 +149,20 @@ export class NeuroLayer {
   private readonly sinceSpike: Uint16Array;
   /** Set for a few ticks after a unit fires, so the renderer can flash it. */
   readonly firing: Uint8Array;
+  /**
+   * Cell indices of the units that crossed threshold this tick, valid for the
+   * first `firedCount` entries. Written during the pass that already visits
+   * them, so a statistics recorder does not need its own scan of the grid.
+   */
+  readonly firedCells: Int32Array;
+  firedCount = 0;
 
   constructor(size: number) {
     this.pending = new Uint8Array(size);
     this.pendingNegative = new Uint8Array(size);
     this.sinceSpike = new Uint16Array(size);
     this.firing = new Uint8Array(size);
+    this.firedCells = new Int32Array(size);
     this.sinceSpike.fill(0xffff);
   }
 
@@ -163,6 +171,7 @@ export class NeuroLayer {
     this.pendingNegative.fill(0);
     this.firing.fill(0);
     this.sinceSpike.fill(0xffff);
+    this.firedCount = 0;
   }
 
   step(engine: PowderEngine, params: NeuroParams): NeuroStats {
@@ -180,6 +189,7 @@ export class NeuroLayer {
     let spikes = 0;
     let weightSum = 0;
     let dopamineCells = 0;
+    this.firedCount = 0;
 
     // --- Phase 1: decide -----------------------------------------------------
     for (let y = 0; y < height; y += 1) {
@@ -232,6 +242,7 @@ export class NeuroLayer {
         voltage[at] *= params.decay;
 
         if (voltage[at] >= params.threshold) {
+          this.firedCells[fired] = at;
           fired += 1;
           voltage[at] = params.reset;
           timer[at] = params.refractoryTicks;
@@ -286,6 +297,8 @@ export class NeuroLayer {
         voltage[nAt] += amplitude;
       }
     }
+
+    this.firedCount = fired;
 
     return {
       neurons,

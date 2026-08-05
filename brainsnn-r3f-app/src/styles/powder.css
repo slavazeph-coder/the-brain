@@ -283,3 +283,61 @@
   .powder-swatch { transition: none; }
   .powder-swatch:active { transform: none; }
 }
+
+/* --- regime readout --- */
+
+.powder-regime {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid rgba(125, 249, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(125, 249, 255, 0.04);
+}
+
+.powder-regime-label {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--bsn-text-secondary, #9aa0b4);
+}
+
+.powder-regime-label strong {
+  font-family: var(--bsn-font-mono);
+  color: #7df9ff;
+  letter-spacing: 0.06em;
+}
+
+.powder-regime-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+  margin: 0;
+}
+
+.powder-regime-stats div { display: flex; justify-content: space-between; gap: 8px; }
+
+.powder-regime-stats dt {
+  font-size: 0.66rem;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-regime-stats dd {
+  margin: 0;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.68rem;
+  color: #e2e8f0;
+}
+
+.powder-regime-note {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--bsn-text-muted, #94a3b8);
+}
+
+.powder-regime-note code {
+  font-family: var(--bsn-font-mono);
+  font-size: 0.64rem;
+  color: #ff5edb;
+}

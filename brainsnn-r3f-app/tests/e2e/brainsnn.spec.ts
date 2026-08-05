@@ -471,6 +471,31 @@ test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test('the powder lab measures its own firing regime, and says when it will not', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+  const readout = page.getByTestId('powder-regime-label');
+
+  // Game feel: the dimensionless statistics are measured, but a rate in hertz
+  // and a calibrated regime label are both withheld, and the page says why.
+  await expect(readout).toContainText(/no duration/, { timeout: 30_000 });
+  await expect(page.getByTestId('powder-regime')).toContainText('—'); // rate, withheld
+
+  // Real model: the opening scene has enough neurons firing to classify.
+  await page.getByTestId('powder-model-real').click();
+  await expect(readout).toContainText(
+    /Asynchronous|Synchronous|Silent/,
+    { timeout: 45_000 },
+  );
+
+  // Whatever it landed on, the numbers behind it have to be real numbers.
+  const panel = (await page.getByTestId('powder-regime').textContent()) || '';
+  expect(panel).toMatch(/CV of ISI/);
+  expect(panel).not.toMatch(/NaN|undefined/);
+});
+
 test('drawing in the powder lab puts material on the grid', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/lab');

@@ -320,6 +320,27 @@ amplitude is the one deliberate exception: it is scaled by a constant the page
 states on screen, because Brunel's `J = 0.1 mV` against a 20 mV threshold needs
 hundreds of coincident inputs, which a hand-drawn circuit does not have.
 
+**The regime readout is the payoff.** A recorder accumulates spike statistics
+in exactly the shape `src/lib/snn/snnMetrics.js` already reads, so a circuit you
+drew is measured by the same module — not a second implementation — that
+characterises the validated Brunel network on the research page: CV of
+inter-spike intervals, population Fano factor, synchrony, and Brunel's
+four-way `AI` / `SI` / `SR` / `AR` label.
+
+It is at least as careful about what it *won't* report:
+
+- **No rate in hertz under "game feel."** A game tick is a rendered frame with
+  no duration, so hertz would be invented. The dimensionless statistics are
+  still shown; the rate reads `—` and the page says why.
+- **No regime label under "game feel"** either — the thresholds are calibrated
+  against Brunel's analysis, which the game constants are not.
+- **No label below 8 neurons.** Four neurons in a ring have a CV of ISI, but
+  calling it "asynchronous irregular" would be dressing an anecdote in a result.
+- **No label before there are enough intervals** to compute CV at all.
+
+Each of those refusals is a test, because a readout that always prints
+something is the easy version to build and the wrong one.
+
 Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
 dependency and not a server: a grid is mostly long runs of the same material,
 so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.
