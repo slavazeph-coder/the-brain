@@ -471,6 +471,29 @@ test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test('the powder lab is reachable from the homepage, not just by typing the URL', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/');
+
+  // The featured card is how most people will actually find it, and it is the
+  // only one of the two routes that exists on a narrow viewport — .gg-nav-links
+  // is display:none there.
+  const card = page.locator('.gg-lab-card', { hasText: 'Neuro Powder Lab' });
+  await card.scrollIntoViewIfNeeded();
+  await card.getByRole('button', { name: /Open the sandbox/ }).click();
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+  await expect(page).toHaveURL(/\/lab$/);
+});
+
+test('the powder lab has a link in the desktop navigation', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', '.gg-nav-links is display:none below 900px');
+  test.setTimeout(60_000);
+  await page.goto('/');
+  await page.getByTestId('nav-powder-lab').click();
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+  await expect(page).toHaveURL(/\/lab$/);
+});
+
 test('the powder lab measures its own firing regime, and says when it will not', async ({ page }) => {
   test.setTimeout(90_000);
 

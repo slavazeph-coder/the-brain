@@ -121,18 +121,26 @@
   gap: 4px;
 }
 
+/* Anchors are included deliberately: this nav mixes <button> (in-app routes)
+   with <a> (Fractal Lab, Powder Lab), and the anchors were rendering as bare
+   links next to pill-shaped buttons. */
 .gg-nav-links button,
+.gg-nav-links a,
 .gg-brain-link {
+  display: inline-flex;
+  align-items: center;
   min-height: 42px;
   padding: 0 14px;
   border: 0;
   border-radius: 999px;
   color: #c6cad8;
   background: transparent;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .gg-nav-links button:hover,
+.gg-nav-links a:hover,
 .gg-brain-link:hover {
   color: white;
   background: rgba(255, 255, 255, 0.055);
