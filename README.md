@@ -65,6 +65,14 @@ Node's native `--experimental-strip-types` rather than a build step, so the flag
 has to exist. On Node 20 `npm test` fails immediately with
 `node: bad option: --experimental-strip-types`.
 
+If Playwright refuses to launch because the installed Chromium build number does
+not match its own, point it at the binary you have instead of downloading
+another one:
+
+```bash
+PLAYWRIGHT_CHROMIUM_PATH=/path/to/chromium npm run test:e2e
+```
+
 ## Architecture
 
 ```mermaid
@@ -289,6 +297,37 @@ information about the text.
 The full catalog of 103 layers lives in `src/lib/layerCatalog.js`; the Research view has a
 searchable Layer Explorer.
 
+### Neuro Powder Lab — `/lab`
+
+A falling-sand sandbox (`src/features/powder/`) where four of the materials are
+the spiking model. A 240×160 cellular automaton runs in one packed
+`Uint32Array` at 60 fps on the main thread: sand piles, water levels, oil
+floats and burns, acid eats everything except wall, lava turns sand to glass.
+
+Drawn alongside those are **Neuro**, **Synapse**, **Dopamine** and
+**Inhibitory neuron**. A neuron cell is a leaky integrate-and-fire unit; a
+synapse conducts one cell per tick, so transmission delay is proportional to
+wire *length* rather than a fixed constant; a synapse that fires shortly before
+its downstream neuron gains weight, and gains it three times faster inside a
+dopamine field. Weight renders as brightness, so a circuit visibly learns.
+
+The **neuron model toggle** is the point. "Game feel" uses constants picked so
+a hand-drawn circuit is legible at a glance. "Brunel (2000) model" imports the
+parameters straight from `src/lib/snn/lifNetwork.js` — the same threshold,
+reset, exponential decay and refractory period the validated network uses —
+rather than retyping them, so the two cannot drift apart. Post-synaptic
+amplitude is the one deliberate exception: it is scaled by a constant the page
+states on screen, because Brunel's `J = 0.1 mV` against a 20 mV threshold needs
+hundreds of coincident inputs, which a hand-drawn circuit does not have.
+
+Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
+dependency and not a server: a grid is mostly long runs of the same material,
+so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.
+
+**Claim boundary**, shipped on the page: a 2D cellular automaton whose neuron
+cells follow a published integrate-and-fire model. It is not a simulation of
+cortical tissue and carries no claim about biological brains.
+
 ### Layer 103 — the 39 Hz soliton field
 
 A biophysically-inspired signal layer that models the ~39 Hz gamma oscillation and the
@@ -375,7 +414,8 @@ the-brain/
 │   ├── server.ts              ← Express: API endpoints + Vite middleware / static dist
 │   ├── src/
 │   │   ├── app/               ← shell: AppShell, navigation, landing, Reconstruct page, command palette
-│   │   ├── features/          ← scan · results (tabbed) · improve · autopsy · research · brain3d · social · export · …
+│   │   ├── features/          ← scan · results (tabbed) · improve · autopsy · research · brain3d · powder · social · export · …
+│   │   │   └── powder/        ← Neuro Powder Lab: cellular automaton + LIF layer (TypeScript, unit-tested)
 │   │   ├── lib/               ← layerRouter · analysisEngine · solitonLayer · scoreMapping · storage · …
 │   │   ├── components/ui/      ← Meter, Badge, Button, …
 │   │   ├── styles/            ← tokens.css, utilities.css

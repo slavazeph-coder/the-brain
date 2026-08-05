@@ -143,9 +143,14 @@
   cursor: pointer;
   text-align: left;
   min-height: 38px;
+  /* Selection is CSS rather than `motion`: a swatch highlight is not worth a
+     ~50 KB animation runtime in the lab bundle. */
+  transition: border-color 140ms ease, background 140ms ease,
+              box-shadow 180ms ease, transform 120ms ease;
 }
 
 .powder-swatch:hover { border-color: rgba(255, 255, 255, 0.24); }
+.powder-swatch:active { transform: scale(0.97); }
 
 .powder-swatch.is-active {
   border-color: var(--swatch);
@@ -215,6 +220,17 @@
   background: rgba(125, 249, 255, 0.08);
 }
 
+.powder-buttons button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.powder-buttons button:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+  color: var(--bsn-text-secondary, #9aa0b4);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .powder-stamps { display: grid; gap: 6px; }
 
 .powder-model { display: grid; gap: 8px; }
@@ -261,4 +277,9 @@
   .powder-swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .powder-swatch-label { display: none; }
   .powder-hud span { font-size: 0.58rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .powder-swatch { transition: none; }
+  .powder-swatch:active { transform: none; }
 }

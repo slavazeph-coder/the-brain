@@ -494,3 +494,72 @@ test('drawing in the powder lab puts material on the grid', async ({ page }) => 
     expect(particles).toBeGreaterThan(0);
   }).toPass({ timeout: 15_000 });
 });
+
+test('a powder lab link carries the whole grid, with no server involved', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze, so the shared grid is exactly what was drawn
+
+  // Wall does not fall, so the grid is stable enough to compare across a reload.
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  const canvas = page.getByTestId('powder-canvas');
+  // On the narrow viewport the palette pushes the canvas below the fold, and
+  // page.mouse works in viewport coordinates — without this the drag lands on
+  // nothing and the test fails two steps later for the wrong reason.
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0)).toBeGreaterThan(50);
+  }).toPass({ timeout: 10_000 });
+
+  await page.getByTestId('powder-share').click();
+  await expect(page).toHaveURL(/[?&]grid=p1%3A240x160%3A/);
+  const shared = page.url();
+
+  // A fresh load of that URL restores the drawing rather than the demo scene.
+  await page.goto(shared);
+  await expect(page.getByTestId('powder-lab')).toContainText('Loaded a shared grid.');
+  await page.getByTestId('powder-pause').click();
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0)).toBeGreaterThan(50);
+    // The demo scene is full of synapses; a wall line has none.
+    expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
+  }).toPass({ timeout: 15_000 });
+});
+
+test('a powder lab drawing survives a reload through the local save slot', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click();
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  await page.getByTestId('powder-canvas').scrollIntoViewIfNeeded();
+  const box = (await page.getByTestId('powder-canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.6, { steps: 10 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-save').click();
+  await expect(page.getByTestId('powder-lab')).toContainText('Saved to this browser.');
+
+  await page.goto('/lab');
+  await page.getByTestId('powder-load').click();
+  await expect(page.getByTestId('powder-lab')).toContainText('Restored your saved grid.');
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
+  }).toPass({ timeout: 15_000 });
+});

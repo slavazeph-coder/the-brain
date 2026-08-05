@@ -4,7 +4,7 @@
 // right. The engine and the brain layer are created once and held in refs; only
 // the throttled stats and the small control values live in React state.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Brain, Eraser, Pause, Play, RotateCcw, Camera, Zap } from 'lucide-react';
+import { Brain, Eraser, Pause, Play, RotateCcw, Camera, Zap, Link2, Save, FolderOpen } from 'lucide-react';
 import { PowderEngine } from './powderEngine.ts';
 import { NeuroLayer, GAME_PARAMS, PARAM_SETS, type NeuroParams } from './neuroLayer.ts';
 import { PowderCanvas, type PowderStats } from './PowderCanvas.tsx';
@@ -12,6 +12,9 @@ import { MaterialPalette } from './MaterialPalette.tsx';
 import { Material, materialByHotkey, MATERIAL_BY_ID } from './materials.ts';
 import { upscaleCanvas } from './renderGrid.ts';
 import { OPENING_SCENE, applyStamp, STAMPS } from './stamps.ts';
+import {
+  buildShareUrl, hasLocalSave, loadLocal, loadShareString, readShareParam, saveLocal,
+} from './share.ts';
 import '../../styles/powder.css';
 
 const EMPTY_STATS: PowderStats = {
@@ -30,12 +33,22 @@ export function PowderLabPage() {
   const [params, setParams] = useState<NeuroParams>(GAME_PARAMS);
   const [stats, setStats] = useState<PowderStats>(EMPTY_STATS);
   const [notice, setNotice] = useState('Draw with the left button. Right button erases.');
+  const [hasSave, setHasSave] = useState(false);
+  useEffect(() => { setHasSave(hasLocalSave()); }, []);
 
   // Seeded so the page is never a blank grid, and kept firing until the visitor
   // touches it — a sandbox that does nothing until you understand it is a
-  // sandbox nobody stays in.
+  // sandbox nobody stays in. A shared link takes precedence: someone who
+  // followed one came to see that grid, not the demo.
   const touchedRef = useRef(false);
   useEffect(() => {
+    const shared = typeof window === 'undefined' ? null : readShareParam(window.location.search);
+    if (shared && loadShareString(engine, shared)) {
+      touchedRef.current = true;
+      setNotice('Loaded a shared grid.');
+      return;
+    }
+    if (shared) setNotice('That shared link could not be read, so here is the demo instead.');
     applyStamp(engine, OPENING_SCENE, 20, 34);
   }, [engine]);
 
@@ -109,6 +122,34 @@ export function PowderLabPage() {
     anchor.remove();
     URL.revokeObjectURL(url);
     setNotice('Saved a PNG at 4x.');
+  }
+
+  async function shareLink() {
+    const url = buildShareUrl(engine, window.location.href);
+    // Address bar first: that always works, so there is a link to copy by hand
+    // even where the clipboard API is unavailable or denied.
+    window.history.replaceState(null, '', url);
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice('Link copied. It carries the whole grid, no server involved.');
+    } catch {
+      setNotice('Link is in the address bar — copy it from there.');
+    }
+  }
+
+  function saveSlot() {
+    setHasSave(true);
+    setNotice(saveLocal(engine) ? 'Saved to this browser.' : 'This browser refused to store the grid.');
+  }
+
+  function loadSlot() {
+    if (loadLocal(engine)) {
+      layer.reset();
+      touchedRef.current = true;
+      setNotice('Restored your saved grid.');
+      return;
+    }
+    setNotice('Nothing saved in this browser yet.');
   }
 
   return (
@@ -189,6 +230,15 @@ export function PowderLabPage() {
             </button>
             <button type="button" onClick={savePng}>
               <Camera size={15} /> Save PNG
+            </button>
+            <button type="button" onClick={shareLink} data-testid="powder-share">
+              <Link2 size={15} /> Copy link
+            </button>
+            <button type="button" onClick={saveSlot} data-testid="powder-save">
+              <Save size={15} /> Save
+            </button>
+            <button type="button" onClick={loadSlot} disabled={!hasSave} data-testid="powder-load">
+              <FolderOpen size={15} /> Load
             </button>
             <button type="button" onClick={() => setMaterial(Material.AIR)}>
               <Eraser size={15} /> Eraser
