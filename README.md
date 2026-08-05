@@ -324,6 +324,14 @@ Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
 dependency and not a server: a grid is mostly long runs of the same material,
 so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.
 
+**Performance, measured rather than asserted.** The whole pipeline — automaton
+tick, brain layer, pixel render — costs **2.0 ms per frame at 2,200 particles**
+and **3.9 ms with all 38,400 cells active**, i.e. 12% and 23% of a 16.7 ms
+frame on Node 22. Cost tracks grid size, not particle count, because the scan
+visits every cell either way. `perf.test.ts` keeps loose ceilings around those
+numbers — loose enough not to flake on a busy runner, tight enough to catch a
+rule that goes accidentally quadratic.
+
 **Claim boundary**, shipped on the page: a 2D cellular automaton whose neuron
 cells follow a published integrate-and-fire model. It is not a simulation of
 cortical tissue and carries no claim about biological brains.
