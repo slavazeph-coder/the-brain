@@ -177,6 +177,24 @@ describe('the palette makes no claim it cannot keep', () => {
     }
   });
 
+  // Anchoring fire so fuel cannot evict it raises one obvious risk: a flame
+  // that nothing can displace could wedge the grid. It cannot, because it
+  // always burns out — but that is worth proving rather than asserting.
+  it('does not wedge the grid, because anchored fire still burns out', () => {
+    const engine = grid();
+    for (let x = 10; x < 20; x += 1) engine.setCell(x, 20, Material.FIRE);
+    for (let x = 10; x < 20; x += 1) engine.setCell(x, 5, Material.SAND);
+    for (let tick = 0; tick < 400; tick += 1) engine.tick();
+
+    expect(engine.countOf(Material.FIRE)).toBe(0);
+    let onFloor = 0;
+    for (let x = 0; x < engine.width; x += 1) {
+      if (engine.getCell(x, engine.height - 1) === Material.SAND) onFloor += 1;
+    }
+    // Every grain got past where the flame had been.
+    expect(onFloor).toBe(10);
+  });
+
   it('starts fire with fuel so "dies out" is a promise it can keep', () => {
     const engine = grid();
     engine.setCell(10, 10, Material.FIRE);
