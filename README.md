@@ -341,6 +341,17 @@ It is at least as careful about what it *won't* report:
 Each of those refusals is a test, because a readout that always prints
 something is the easy version to build and the wrong one.
 
+**Every palette tooltip is a claim, and each one is tested.** `promises.test.ts`
+walks the material table and asserts the specific thing each blurb says — fire
+consumes plants, gas ignites, dopamine flows, water levels, a synapse conducts
+exactly one cell per tick. Writing it found that oil did not burn: because fire
+is the lightest thing on the grid, anything denser sank straight past it, so a
+flame lit on a pool was pushed up out of the fuel within a tick or two. An
+84-cell pool lost **one** cell in 250 ticks, which is not what "extremely
+flammable" describes. Fire is now anchored while it burns — it still rises only
+once it has nothing left to eat, and still burns out — and the same pool goes
+to zero in about 120 ticks.
+
 **Spark is an electrode, not a paintbrush.** Building the objectives surfaced a
 real gap: the only way to inject charge was a global *Stimulate all*, which
 fires every neuron on the same tick. Two wired neurons therefore always fired

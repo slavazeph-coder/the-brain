@@ -310,6 +310,14 @@ export class PowderEngine {
     const target = this.materialAt(this.index(x, y));
     if (target === Material.WALL) return false;
     if (IS_STATIC[target]) return false;
+    // Fire is an event, not a fluid to be shoved around. Because it is the
+    // lightest thing on the grid, anything denser used to sink straight past
+    // it — so a flame lit on an oil pool was pushed up out of the fuel within a
+    // tick or two and the pool never caught. Measured: a 84-cell pool lost one
+    // cell in 250 ticks, which is not what "extremely flammable" describes.
+    // Fire still moves by its own rule, rising only once it has nothing to eat,
+    // and it always burns out, so this cannot wedge the grid permanently.
+    if (target === Material.FIRE) return false;
     return DENSITY[target] < moverDensity;
   }
 
