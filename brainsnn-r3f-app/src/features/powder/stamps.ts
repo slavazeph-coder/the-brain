@@ -7,10 +7,17 @@
 //
 // A stamp is a small ASCII picture. Legend:
 //   .  leave whatever is already there      N  neuron
-//   -  synapse                              I  inhibitory neuron
-//   D  dopamine                             #  wall
-//   o  sand                                 ~  water
+//   -  synapse (fresh, weight 0.1)          I  inhibitory neuron
+//   =  synapse, already learned (1.0)       D  dopamine
+//   #  wall                                 o  sand
+//   ~  water
+//
+// The learned synapse exists because a fresh one cannot fire its target — that
+// is the whole point of the weight — so any stamp meant to run on its own has
+// to ship with its wiring already trained. Without it a "feedback loop" stamp
+// is a loop that cannot loop.
 import { Material } from './materials.ts';
+import { MAX_WEIGHT } from './neuroLayer.ts';
 import type { PowderEngine } from './powderEngine.ts';
 
 const LEGEND: Record<string, Material | null> = {
@@ -18,11 +25,15 @@ const LEGEND: Record<string, Material | null> = {
   N: Material.NEURO,
   I: Material.INHIB,
   '-': Material.SYNAPSE,
+  '=': Material.SYNAPSE,
   D: Material.DOPAMINE,
   '#': Material.WALL,
   o: Material.SAND,
   '~': Material.WATER,
 };
+
+/** Characters that place a synapse at full weight rather than the 0.1 floor. */
+const LEARNED = new Set(['=']);
 
 export interface Stamp {
   id: string;
@@ -35,9 +46,17 @@ export interface Stamp {
 export const STARTER_CIRCUIT: Stamp = Object.freeze({
   id: 'starter',
   name: 'Simple circuit',
-  blurb: 'One neuron drives another down a wire. Press Stimulate.',
+  // Wired learned, because with a fresh synapse "drives another" is not what
+  // happens: Stimulate fires both ends directly and the far neuron would have
+  // fired with no wire at all. Learned, the spike genuinely carries.
+  // "Spark it once and it crosses" would be wrong under the Brunel model: one
+  // learned arrival is 12 mV and a resting neuron needs 20, so the far neuron
+  // charges but does not fire until a second spike lands before the first has
+  // leaked away. Under the game constants one is already enough.
+  blurb: 'One neuron drives another down a trained wire. Spark the left one twice in quick '
+    + 'succession — under the Brunel model a single spike only charges the far neuron.',
   rows: Object.freeze([
-    'N-----------N',
+    'N===========N',
   ]),
 });
 
@@ -134,23 +153,44 @@ export const STAMPS: readonly Stamp[] = Object.freeze([
   {
     id: 'learning',
     name: 'Learning bench',
-    blurb: 'A circuit sitting in dopamine. Stimulate it and watch the weight climb.',
+    // The old wording was "Stimulate it and watch the weight climb", which was
+    // measurably false: Stimulate fires both ends on the same tick, so the
+    // synapse never spikes *before* the far neuron and nothing is learned. The
+    // wire is 40 cells so the spike takes about two thirds of a second to
+    // cross, which is long enough to move a mouse; the dopamine trough triples
+    // the gain so a handful of well-timed pairs is enough.
+    blurb: 'Spark the left neuron, then the right one about two-thirds of a second later. '
+      + 'Too early and nothing sticks — that gap is the causal window.',
+    // 42 columns on every row: the trough needs a floor under its last cell or
+    // that dopamine drips onto the wire. The wire is 40 cells, so the spike
+    // takes ~40 ticks — about two thirds of a second at 60 fps, which is the
+    // number the blurb quotes.
     rows: Object.freeze([
-      '..DDDDDDD..',
-      'N----------N',
-      '..DDDDDDD..',
+      '#DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD#',
+      '##########################################',
+      'N----------------------------------------N',
     ]),
   },
   {
     id: 'loop',
     name: 'Feedback loop',
-    blurb: 'Output wired back to input. Give it one spike and see what happens.',
+    // Wired with learned synapses, because a fresh one cannot fire its target
+    // and this stamp promises the loop sustains itself.
+    blurb: 'Two trained arms of equal length. The spike splits and reaches the far neuron '
+      + 'from both sides on the same tick. Under the Brunel model one arm alone is not '
+      + 'enough — cut one and it goes quiet.',
+    // The corners used to be blank, which left the ring open: (0,1) had no
+    // synapse neighbour at (0,0) or (1,1), so the "loop" was four dead-end
+    // stubs and nothing ever went round. Closed corners also make the two
+    // arms symmetric, so a spike leaving one neuron arrives at the other from
+    // both sides on the same tick — two arrivals at once, which is what a
+    // resting neuron needs to reach threshold from a single learned synapse.
     rows: Object.freeze([
-      '.-------.',
-      '-.......-',
+      '=========',
+      '=.......=',
       'N.......N',
-      '-.......-',
-      '.-------.',
+      '=.......=',
+      '=========',
     ]),
   },
   {
@@ -183,6 +223,9 @@ export function applyStamp(engine: PowderEngine, stamp: Stamp, x: number, y: num
       const cellY = y + row;
       if (!engine.inBounds(cellX, cellY)) continue;
       engine.setCell(cellX, cellY, material);
+      // setCell always starts a synapse at the weight floor, so a learned one
+      // has to be written afterwards.
+      if (LEARNED.has(line[column])) engine.weight[engine.index(cellX, cellY)] = MAX_WEIGHT;
       placed += 1;
     }
   }

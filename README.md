@@ -341,6 +341,23 @@ It is at least as careful about what it *won't* report:
 Each of those refusals is a test, because a readout that always prints
 something is the easy version to build and the wrong one.
 
+**Stamp blurbs are claims too**, and auditing them found three more that were
+false. "Learning bench — Stimulate it and watch the weight climb" never
+climbed: Stimulate fires both ends on the same tick, so the synapse never spikes
+before the far neuron. The "Feedback loop" had blank corners, leaving four
+dead-end stubs rather than a ring. And "one neuron drives another" was not what
+happened with a fresh wire — Stimulate fired both ends directly, so the far
+neuron would have fired with no wire at all. All three are fixed and pinned,
+including the negative cases.
+
+Fixing them surfaced the model's actual shape, which is now stated rather than
+implied: one learned arrival is 12 mV against a 20 mV threshold, so a **single**
+spike charges a resting neuron but does not fire it. Two do — either two sparks
+in quick succession, or two equal-length arms arriving on the same tick. That
+last one makes the feedback loop a coincidence detector under the Brunel model:
+cut one arm and it goes quiet. Under the game constants a single arrival already
+clears threshold, so the blurb scopes the claim to the model it holds for.
+
 **Every palette tooltip is a claim, and each one is tested.** `promises.test.ts`
 walks the material table and asserts the specific thing each blurb says — fire
 consumes plants, gas ignites, dopamine flows, water levels, a synapse conducts
