@@ -1606,3 +1606,111 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* --- lead capture --- */
+
+.gg-brief {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 72px 24px;
+}
+
+.lead-form {
+  display: grid;
+  gap: 18px;
+  padding: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lead-form-intro h3 {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+}
+
+.lead-form-intro p {
+  margin: 0;
+  color: #c6cad8;
+  font-size: 0.9rem;
+}
+
+.lead-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.lead-form-grid-wide { grid-template-columns: minmax(0, 1fr); }
+
+.lead-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: #c6cad8;
+}
+
+.lead-form input,
+.lead-form select,
+.lead-form textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(6, 6, 14, 0.7);
+  color: #f1f3f9;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.lead-form textarea { min-height: 84px; resize: vertical; }
+
+.lead-form input:focus-visible,
+.lead-form select:focus-visible,
+.lead-form textarea:focus-visible {
+  outline: 2px solid rgba(125, 249, 255, 0.6);
+  outline-offset: 1px;
+}
+
+.lead-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.lead-form-mailto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #c6cad8;
+  font-size: 0.82rem;
+}
+
+.lead-form-failure {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 138, 138, 0.4);
+  background: rgba(255, 90, 90, 0.09);
+  color: #ffd9d9;
+  font-size: 0.84rem;
+}
+
+.lead-form-failure a { color: #fff; }
+
+.lead-form-sent {
+  border-color: rgba(125, 249, 255, 0.45);
+  background: rgba(125, 249, 255, 0.07);
+}
+
+.lead-form-sent h3 { margin: 0 0 6px; }
+.lead-form-sent p { margin: 0; color: #c6cad8; }
+
+.pricing-lead { margin-top: 26px; }
+.pricing-beta-note { margin-top: 18px; }
+
+@media (max-width: 720px) {
+  .lead-form-grid { grid-template-columns: minmax(0, 1fr); }
+}

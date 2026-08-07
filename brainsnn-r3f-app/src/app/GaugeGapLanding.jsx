@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Microscope, Orbit, Play, Share2, Shield, Sparkles, WandSparkles, Zap } from 'lucide-react';
+import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Microscope, Orbit, Play, Send, Share2, Shield, Sparkles, WandSparkles, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
 import { ARCADE_LAB_COUNT, ARCADE_LAB_IDS, ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
 import { ClientPathways, TrustLadder, VisitorRoutes } from '../features/gaugegap/AudiencePathways.jsx';
+import { LeadForm } from '../features/leads/LeadForm.jsx';
 import { track } from '../lib/analytics.js';
 import '../styles/gaugegap.css';
 import '../styles/arcade-discovery.css';
@@ -83,6 +84,13 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
     onNavigate?.('research');
   }
 
+  // Pricing lived two clicks deep inside the /app shell and was linked from
+  // nowhere on the marketing site, so a visitor who wanted to buy had no path.
+  function openPricing() {
+    track('gaugegap_pricing_cta_clicked');
+    onNavigate?.('pricing');
+  }
+
   function openLab(id) {
     track('gaugegap_lab_clicked', { labId: id });
     if (id === 'fractal') {
@@ -121,6 +129,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
           <button type="button" onClick={() => scrollTo('clients')}>For organizations</button>
           <button type="button" onClick={openResearch}>Research</button>
           <a href="/lab" data-testid="nav-powder-lab">Powder Lab</a>
+          <button type="button" onClick={openPricing} data-testid="nav-pricing">Pricing</button>
         </nav>
         <div className="gg-nav-actions">
           <button type="button" className="gg-brain-link" onClick={() => onStart?.('')}>Open BrainSNN</button>
@@ -190,8 +199,21 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
 
         <ClientPathways />
 
+        {/* The conversion point. Everything above this used to end at a bare
+            mailto:, which does nothing visible on most phones and webmail. */}
+        <section id="brief" className="gg-brief" aria-labelledby="gg-brief-heading">
+          <div className="gg-section-heading">
+            <div>
+              <p className="gg-kicker"><Send size={16} /> Start a pilot</p>
+              <h2 id="gg-brief-heading">Tell us the smallest useful version.</h2>
+            </div>
+            <p>We reply with a scope, a timeline and what it would cost — or we tell you it is not worth building.</p>
+          </div>
+          <LeadForm defaultSegment="brands" />
+        </section>
+
         <section id="labs" className="gg-labs" aria-labelledby="gg-labs-heading">
-          <div className="gg-section-heading gg-section-heading-wide"><div><p className="gg-kicker"><FlaskConical size={16} /> Beyond the public arcade</p><h2 id="gg-labs-heading">Four deeper tools. Four different jobs.</h2></div><p>The arcade builds intuition. These workspaces analyze content, expose claim boundaries and support deeper technical exploration.</p></div>
+          <div className="gg-section-heading gg-section-heading-wide"><div><p className="gg-kicker"><FlaskConical size={16} /> Beyond the public arcade</p><h2 id="gg-labs-heading">{DEEPER_TOOLS.length} deeper tools. {DEEPER_TOOLS.length} different jobs.</h2></div><p>The arcade builds intuition. These workspaces analyze content, expose claim boundaries and support deeper technical exploration.</p></div>
           <div className="gg-lab-grid">
             {DEEPER_TOOLS.map((lab, index) => { const Icon = lab.icon; return <article key={lab.id} className={`gg-lab-card gg-lab-card-${index + 1}`}><div className="gg-lab-card-art" aria-hidden="true"><Icon size={34} /><span /><span /><span /></div><div className="gg-lab-card-copy"><p>{lab.eyebrow}</p><h3>{lab.title}</h3><span>{lab.description}</span><button type="button" onClick={() => openLab(lab.id)}>{lab.action} <ArrowRight size={15} /></button></div></article>; })}
           </div>
@@ -207,7 +229,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
         <section className="gg-final-cta" aria-labelledby="gg-final-heading"><div className="gg-final-glow" /><p className="gg-kicker"><Sparkles size={16} /> Choose the next useful step</p><h2 id="gg-final-heading">Play a system—or build one for the people you need to reach.</h2><p>The public arcade proves the interaction model. A focused client pilot applies it to your own audience, concept and outcome.</p><div className="gg-hero-actions"><Button variant="primary" onClick={scrollToPlayground}>Enter the arcade <ArrowRight size={17} /></Button><a className="button button-secondary" href={FRACTAL_LAB_URL} target="_blank" rel="noreferrer">Explore the flagship lab <Orbit size={17} /></a><Button variant="secondary" onClick={() => scrollTo('clients')}>Discuss a client pilot <ArrowRight size={17} /></Button></div></section>
       </main>
 
-      <footer className="gg-footer"><div><span className="gg-brand-mark">G</span><p><strong>GaugeGap Foundry</strong><small>Playable science and interactive client experiences by BrainSNN.</small></p></div><nav><button type="button" onClick={scrollToPlayground}>Arcade</button><a href={FRACTAL_LAB_URL} target="_blank" rel="noreferrer">Fractal Lab</a><button type="button" onClick={() => scrollTo('clients')}>For organizations</button><button type="button" onClick={openResearch}>Research</button><button type="button" onClick={() => onStart?.('')}>BrainSNN</button><a href="mailto:hello@brainsnn.com">Contact</a></nav><p className="gg-footer-note">Public simulations are educational numerical models, not proof of physical claims. Research releases must state assumptions, diagnostics and limitations.</p><p className="gg-footer-legal">© {new Date().getFullYear()} GaugeGap Foundry · BrainSNN.com</p></footer>
+      <footer className="gg-footer"><div><span className="gg-brand-mark">G</span><p><strong>GaugeGap Foundry</strong><small>Playable science and interactive client experiences by BrainSNN.</small></p></div><nav><button type="button" onClick={scrollToPlayground}>Arcade</button><a href={FRACTAL_LAB_URL} target="_blank" rel="noreferrer">Fractal Lab</a><button type="button" onClick={() => scrollTo('clients')}>For organizations</button><button type="button" onClick={openResearch}>Research</button><button type="button" onClick={openPricing}>Pricing</button><button type="button" onClick={() => onStart?.('')}>BrainSNN</button><a href="mailto:hello@brainsnn.com">Contact</a></nav><p className="gg-footer-note">Public simulations are educational numerical models, not proof of physical claims. Research releases must state assumptions, diagnostics and limitations.</p><p className="gg-footer-legal">© {new Date().getFullYear()} GaugeGap Foundry · BrainSNN.com</p></footer>
     </div>
   );
 }

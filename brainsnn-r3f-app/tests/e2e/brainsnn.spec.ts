@@ -316,6 +316,11 @@ test('core analyze to export workflow works with deterministic fallback data', a
 
 test('memory, autopsy, pricing and accessibility surfaces render', async ({ page }) => {
   test.skip(test.info().project.name === 'mobile', 'Desktop nav owns direct History/Pricing access; mobile shell is covered separately.');
+  // Scan + history + compare + pricing + a full axe pass in one test lands at
+  // ~30s alone, which is exactly the default timeout, so it tipped over
+  // whenever a second worker competed for CPU. Its heavy neighbours all set
+  // this explicitly; this one had been relying on the margin.
+  test.setTimeout(90_000);
   await page.goto('/app');
   await runScan(page);
   await page.getByRole('button', { name: /Save to History/ }).click();
@@ -329,7 +334,10 @@ test('memory, autopsy, pricing and accessibility surfaces render', async ({ page
 
   await page.getByRole('button', { name: 'Pricing' }).click();
   await expect(page.getByTestId('pricing-workspace')).toBeVisible();
-  await expect(page.getByText('$9/mo')).toBeVisible();
+  // Was "$9/mo" — a tier whose per-month limits no code enforced. The page now
+  // states what is true: free during beta, pilots are the paid thing.
+  await expect(page.getByText('$0')).toBeVisible();
+  await expect(page.getByTestId('pricing-workspace')).toContainText(/not open yet/i);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
     .disableRules(['color-contrast'])
@@ -662,4 +670,80 @@ test('a powder lab drawing survives a reload through the local save slot', async
     const text = (await page.getByTestId('powder-hud').textContent()) || '';
     expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
   }).toPass({ timeout: 15_000 });
+});
+
+test('a visitor who wants to buy can find pricing from the landing page', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'mobile', '.gg-nav-links is display:none below 900px');
+  test.setTimeout(60_000);
+  await page.goto('/');
+
+  // Pricing used to live two clicks deep inside the /app shell and was linked
+  // from nowhere on the marketing site.
+  await page.getByTestId('nav-pricing').click();
+  await expect(page.getByTestId('pricing-workspace')).toBeVisible();
+  await expect(page).toHaveURL(/\/app/);
+});
+
+test('the pricing page does not promise limits the code does not enforce', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  await page.goto('/app');
+  // Desktop keeps Pricing in the sidebar; mobile puts it behind "More".
+  if (testInfo.project.name === 'mobile') {
+    const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
+    await mobileNav.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('dialog', { name: 'More navigation' }).getByRole('button', { name: 'Pricing' }).click();
+  } else {
+    await page.getByRole('button', { name: 'Pricing' }).first().click();
+  }
+  const pricing = page.getByTestId('pricing-workspace');
+  await expect(pricing).toBeVisible();
+
+  const copy = (await pricing.textContent()) || '';
+  // Each of these described a capability that does not exist in src/.
+  expect(copy).not.toMatch(/analyses\s*\/\s*month/i);
+  expect(copy).not.toMatch(/watermark/i);
+  expect(copy).not.toMatch(/synced history/i);
+  expect(copy).not.toMatch(/waitlist/i);
+  // And it says so rather than leaving a greyed-out tier to imply it.
+  expect(copy).toMatch(/not open yet/i);
+});
+
+test('the lead form never confirms a lead the server did not take', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // Unconfigured is the default: LEADS_WEBHOOK_URL is unset, so /api/leads
+  // returns 501. The UI must show the mailto fallback, never a success state.
+  await page.route('**/api/leads', (route) => route.fulfill({
+    status: 501,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: 'Lead capture is not configured.', status: 'not_configured', fallbackEmail: 'hello@brainsnn.com' }),
+  }));
+
+  await page.goto('/');
+  const form = page.getByTestId('lead-form');
+  await form.scrollIntoViewIfNeeded();
+  await page.getByTestId('lead-email').fill('buyer@example.com');
+  await form.getByRole('button', { name: /Send the brief/ }).click();
+
+  await expect(page.getByTestId('lead-form-failure')).toBeVisible();
+  await expect(page.getByTestId('lead-form-failure')).toContainText(/Nothing was saved/i);
+  await expect(page.getByTestId('lead-form-sent')).toHaveCount(0);
+});
+
+test('the lead form confirms only when the server accepts the lead', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.route('**/api/leads', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true, status: 'received' }),
+  }));
+
+  await page.goto('/');
+  const form = page.getByTestId('lead-form');
+  await form.scrollIntoViewIfNeeded();
+  await page.getByTestId('lead-email').fill('buyer@example.com');
+  await form.getByRole('button', { name: /Send the brief/ }).click();
+
+  await expect(page.getByTestId('lead-form-sent')).toBeVisible();
+  await expect(page.getByTestId('lead-form-sent')).toContainText('buyer@example.com');
 });
