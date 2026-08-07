@@ -341,6 +341,16 @@ It is at least as careful about what it *won't* report:
 Each of those refusals is a test, because a readout that always prints
 something is the easy version to build and the wrong one.
 
+**The page's own lede was the last overclaim.** It ended *"not numbers invented
+for a game"* — while the model the page loads with is labelled, three panels
+away, *"arbitrary constants chosen to be responsive"*. The published model is
+the **structure** (leaky integration, refractory period, pre-before-post
+plasticity); the Brunel numbers are one toggle away. The lede now says that, and
+a test checks each half: threshold, reset, decay, refractory and inhibition are
+imported from `BRUNEL_DEFAULTS` unchanged, the amplitude is the single scaled
+parameter and its note names the factor, and the default set is verifiably not
+the published one.
+
 **Stamp blurbs are claims too**, and auditing them found three more that were
 false. "Learning bench — Stimulate it and watch the weight climb" never
 climbed: Stimulate fires both ends on the same tick, so the synapse never spikes

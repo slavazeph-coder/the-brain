@@ -10,7 +10,11 @@
 // it is not duplicated here; what follows is the set that was not.
 import { describe, expect, it } from '../../test/tinyVitest.js';
 import { PowderEngine, FIRE_FUEL } from './powderEngine.ts';
-import { NeuroLayer, GAME_PARAMS, STDP_GAIN, STDP_GAIN_DOPAMINE } from './neuroLayer.ts';
+import {
+  NeuroLayer, GAME_PARAMS, PARAM_SETS, REAL_PARAMS, REAL_PSP_GAIN, REAL_TICK_MS,
+  STDP_GAIN, STDP_GAIN_DOPAMINE,
+} from './neuroLayer.ts';
+import { BRUNEL_DEFAULTS } from '../../lib/snn/lifNetwork.js';
 import { MATERIALS, MATERIAL_BY_ID, Material } from './materials.ts';
 
 function grid(width = 40, height = 24, seed = 'promise') {
@@ -221,5 +225,42 @@ describe('the palette makes no claim it cannot keep', () => {
     engine.setCell(5, 5, Material.SAND);
     engine.brushDraw(5, 5, 1, Material.AIR);
     expect(engine.getCell(5, 5)).toBe(Material.AIR);
+  });
+});
+
+// The page's own copy is a claim too, and it was the least-audited one on it.
+//
+// The lede used to end "not numbers invented for a game" — while the model the
+// page loads with is labelled, three panels away, "arbitrary constants chosen
+// to be responsive". The published model is the *structure*; the Brunel numbers
+// are one toggle away. These pin what the corrected wording asserts.
+describe('the real-model claim the page makes', () => {
+  it('imports threshold, reset, decay, refractory and inhibition unchanged', () => {
+    expect(REAL_PARAMS.threshold).toBe(BRUNEL_DEFAULTS.vThreshold);
+    expect(REAL_PARAMS.reset).toBe(BRUNEL_DEFAULTS.vReset);
+    expect(REAL_PARAMS.decay).toBe(Math.exp(-REAL_TICK_MS / BRUNEL_DEFAULTS.tauMs));
+    expect(REAL_PARAMS.refractoryTicks).toBe(Math.round(BRUNEL_DEFAULTS.refractoryMs / REAL_TICK_MS));
+    expect(REAL_PARAMS.inhibitoryFactor).toBe(-BRUNEL_DEFAULTS.g);
+  });
+
+  it('scales exactly one parameter, and names it on screen', () => {
+    // "with one scaled amplitude the panel names and explains" is only honest
+    // if the amplitude is the single departure and the note admits it.
+    expect(REAL_PARAMS.psp).toBeCloseTo(BRUNEL_DEFAULTS.J * REAL_PSP_GAIN, 6);
+    expect(REAL_PARAMS.psp).not.toBe(BRUNEL_DEFAULTS.J);
+    expect(REAL_PARAMS.note).toContain(String(REAL_PSP_GAIN));
+    expect(REAL_PARAMS.note.toLowerCase()).toContain('scaled');
+  });
+
+  it('keeps the game constants visibly not the published ones', () => {
+    // "start tuned for how it feels to draw" has to be true of the default set.
+    expect(GAME_PARAMS.threshold).not.toBe(BRUNEL_DEFAULTS.vThreshold);
+    expect(GAME_PARAMS.reset).not.toBe(BRUNEL_DEFAULTS.vReset);
+    expect(GAME_PARAMS.note.toLowerCase()).toContain('arbitrary');
+  });
+
+  it('loads with the tuned set, which is what the lede now says', () => {
+    expect(PARAM_SETS[0]).toBe(GAME_PARAMS);
+    expect(PARAM_SETS.length).toBe(2);
   });
 });
