@@ -225,10 +225,20 @@ export function PowderLabPage() {
         <div>
           <p className="powder-kicker"><Brain size={15} /> brainsnn.com · Neuro Powder Lab</p>
           <h1>Drop sand. Then build a brain out of it.</h1>
+          {/* The old wording ended "not numbers invented for a game", which
+              contradicted the model note three panels away: the default set is
+              labelled "arbitrary constants chosen to be responsive". The
+              published model is the structure — leaky integration, a
+              refractory period, pre-before-post plasticity — and the Brunel
+              numbers are one toggle away. Say that instead of overclaiming the
+              state the page actually loads in. */}
           <p className="powder-lede">
             A falling-sand sandbox where the neurons are real. Draw a neuron, run a synapse
-            to another, and the spike obeys the same leaky integrate-and-fire model this
-            site publishes — not numbers invented for a game.
+            to another, and the spike follows the leaky integrate-and-fire model this site
+            publishes. The constants start tuned for how it feels to draw; switch to the
+            Brunel model and the threshold, reset, decay and refractory period come
+            straight from the validated network — with one scaled amplitude the panel
+            names and explains.
           </p>
         </div>
       </header>

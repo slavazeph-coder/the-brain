@@ -471,6 +471,23 @@ test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test('the powder lab lede does not overclaim the model it loads with', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab');
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+
+  const lede = page.locator('.powder-lede');
+  // The page loads on the tuned constants, whose own note calls them
+  // arbitrary. The lede used to end "not numbers invented for a game", which
+  // contradicted that note three panels away.
+  await expect(lede).not.toContainText(/not numbers invented for a game/i);
+  await expect(lede).toContainText(/start tuned/i);
+  await expect(lede).toContainText(/Brunel/);
+
+  // And the note it must stay consistent with is the one on screen by default.
+  await expect(page.locator('.powder-model-note')).toContainText(/[Aa]rbitrary constants/);
+});
+
 test('the powder lab is reachable from the homepage, not just by typing the URL', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/');
