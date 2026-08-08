@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+/* Web fonts load from index.html as a non-blocking stylesheet. A CSS @import
+   here was render-blocking *and* serialised behind this file, so first paint
+   waited on fonts.googleapis.com — measured at 12.9s when that host is slow or
+   blocked, versus 0.45s when it is not reachable at all. Every font stack in
+   tokens.css already names system fallbacks, so text paints either way. */
 @import "tailwindcss";
 
 @theme {

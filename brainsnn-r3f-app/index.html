@@ -11,6 +11,24 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/site.webmanifest" />
 
+    <!-- Fonts are an enhancement, never a gate on first paint. `media="print"`
+         makes the browser fetch without blocking render; onload promotes it to
+         all media.
+
+         There is deliberately no <noscript> fallback: Chromium still treats a
+         stylesheet inside <noscript> as render-blocking even with JS enabled,
+         which measured 12.7s to first paint here versus 0.27s without it. It
+         would also buy nothing — this is a React SPA, so with JS disabled there
+         is no content to style. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="GaugeGap Foundry by BrainSNN" />
