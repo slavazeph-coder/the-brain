@@ -1,40 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Check, CreditCard, Database, Layers, ShieldCheck, Sparkles } from 'lucide-react';
+import { Check, CreditCard, Database, Layers, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { LAYER_CATALOG } from '../../lib/layerCatalog.js';
-
-const plans = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: '$0',
-    description: 'Try the decision engine with local history and watermarked exports.',
-    features: ['5 analyses/month', 'Verdict + top fix on every scan', 'See which checks fired', 'Local history'],
-  },
-  {
-    id: 'basic',
-    name: 'Basic',
-    price: '$9/mo',
-    description: 'Enough scans for a solo creator or founder testing weekly content.',
-    features: ['30 analyses/month', 'Improve workflow', 'PNG/text exports', 'Synced history when Supabase is configured'],
-    highlighted: true,
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '$29/mo',
-    description: 'For marketers and small agencies running repeated variants.',
-    features: ['200 analyses/month', 'Compare mode for A/B variants', 'Engine remembers your past scans', 'Export-ready reports and deeper layer traces'],
-  },
-  {
-    id: 'team',
-    name: 'Team Pilot',
-    price: 'Pilot',
-    description: 'Brand rules, batch reviews and reporting with onboarding.',
-    features: ['Brand rules', 'Batch reviews', 'Team reports', 'Pilot onboarding'],
-  },
-];
+import { LeadForm } from '../leads/LeadForm.jsx';
+import { track } from '../../lib/analytics.js';
+import { BETA_NOTE, PRICING_PLANS } from './pricingPlans.js';
 
 function EngineStatusCard({ icon: Icon, label, status }) {
   const configured = status?.configured || status?.status === 'online';
@@ -50,9 +21,10 @@ function EngineStatusCard({ icon: Icon, label, status }) {
 export function PricingWorkspace() {
   const [status, setStatus] = useState(null);
   const [message, setMessage] = useState('');
-  const [email, setEmail] = useState('');
+  const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
+    track('pricing_viewed');
     let cancelled = false;
     fetch('/api/engines/status')
       .then((response) => response.json())
@@ -61,86 +33,36 @@ export function PricingWorkspace() {
     return () => { cancelled = true; };
   }, []);
 
-  async function startCheckout(planId) {
+  function choosePlan(planId) {
     setMessage('');
     if (planId === 'free') {
-      setMessage('Free mode is active. Your scans stay available in this browser until you connect persistence.');
+      track('upgrade_clicked', { plan: 'free' });
+      setMessage('Nothing to do — it is already running. Paste something into Analyze.');
       return;
     }
-    if (planId === 'team') {
-      window.location.href = 'mailto:hello@brainsnn.com?subject=Book%20a%20BrainSNN%20Team%20Pilot';
-      return;
-    }
-    if (!stripeReady) {
-      setMessage(`You're on the ${planId === 'pro' ? 'Pro' : 'Basic'} list. We'll open checkout soon — everything stays free in the meantime.`);
-      return;
-    }
-    try {
-      const response = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: planId, email: email || undefined }),
-      });
-      const body = await response.json();
-      if (!response.ok || !body.url) {
-        setMessage(body.error || 'Checkout is not configured yet.');
-        return;
-      }
-      window.location.href = body.url;
-    } catch {
-      setMessage('Checkout could not start. Try again after Stripe env vars are configured.');
-    }
+    track('pilot_clicked', { plan: planId, from: 'pricing' });
+    setShowForm(true);
   }
 
-  const stripeReady = Boolean(status?.engines?.stripe?.configured);
   // Ops/config status is for operators, not customers; opt in with ?ops=1.
   const showOpsStatus = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ops') === '1';
-  const ctaLabel = (plan) => {
-    if (plan.id === 'free') return 'Continue Free';
-    if (plan.id === 'team') return 'Book Pilot';
-    return stripeReady ? `Start ${plan.name}` : `Join ${plan.name} Waitlist`;
-  };
-
-  async function sendMagicLink() {
-    setMessage('');
-    try {
-      const response = await fetch('/api/auth/magic-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const body = await response.json();
-      setMessage(response.ok ? 'Magic link requested. Check your email.' : body.error || 'Supabase Auth is not configured yet.');
-    } catch {
-      setMessage('Could not request a magic link.');
-    }
-  }
+  const ctaLabel = (plan) => (plan.id === 'free' ? 'Start using it' : 'Start a pilot brief');
 
   return (
     <div className="pricing-workspace" data-testid="pricing-workspace">
       <header className="workspace-heading">
         <p className="bsn-kicker">Pricing</p>
-        <h1>Start free. Upgrade when you need more scans.</h1>
-        <p>The free plan runs the full {LAYER_CATALOG.length}-layer engine in your browser. Paid beta plans add more scans per month, variant comparison, synced history and deeper reports.</p>
+        <h1>Free while we are in beta. Pilots are what you buy.</h1>
+        <p>
+          The full {LAYER_CATALOG.length}-layer engine runs in your browser with no account,
+          no limit and nothing to cancel. What we sell today is a built interactive
+          experience for your audience — so the honest version of this page is two options,
+          not four tiers.
+        </p>
       </header>
 
-      <section className="account-connect-panel">
-        <div>
-          <p className="bsn-eyebrow">Account layer</p>
-          <h2>Connect email for persistence readiness</h2>
-          <p className="bsn-note">Supabase magic links activate when `SUPABASE_URL` and `SUPABASE_ANON_KEY` are configured. Until then, local history still works.</p>
-        </div>
-        <label>
-          Email
-          <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" />
-        </label>
-        <Button variant="secondary" onClick={sendMagicLink} disabled={!email.includes('@')}>
-          <ShieldCheck size={16} aria-hidden="true" /> Send magic link
-        </Button>
-      </section>
-
       <section className="pricing-grid" aria-label="Pricing plans">
-        {plans.map((plan) => (
+        {PRICING_PLANS.map((plan) => (
           <article key={plan.id} className={plan.highlighted ? 'featured' : ''}>
             {plan.highlighted ? <Badge tone="cyan">Recommended beta</Badge> : null}
             <h3>{plan.name}</h3>
@@ -151,12 +73,20 @@ export function PricingWorkspace() {
                 <li key={feature}><Check size={15} aria-hidden="true" /> {feature}</li>
               ))}
             </ul>
-            <Button variant={plan.highlighted ? 'primary' : 'secondary'} onClick={() => startCheckout(plan.id)}>
+            <Button variant={plan.highlighted ? 'primary' : 'secondary'} onClick={() => choosePlan(plan.id)}>
               <CreditCard size={16} aria-hidden="true" /> {ctaLabel(plan)}
             </Button>
           </article>
         ))}
       </section>
+
+      {showForm ? (
+        <section className="pricing-lead" aria-label="Start a pilot brief">
+          <LeadForm defaultSegment="brands" />
+        </section>
+      ) : null}
+
+      <p className="bsn-note pricing-beta-note">{BETA_NOTE}</p>
 
       {showOpsStatus ? (
         <section className="engine-status-grid" aria-label="Engine readiness">

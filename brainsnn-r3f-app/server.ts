@@ -30,6 +30,8 @@ app.use(express.json({ limit: "2mb" }));
 const PORT = Number(process.env.PORT) || 3000;
 const APP_URL = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://www.brainsnn.com";
 const STRIPE_API_BASE = "https://api.stripe.com/v1";
+/** Shown to a visitor whenever a lead could not be delivered, so the trail never dead-ends. */
+const LEADS_FALLBACK_EMAIL = process.env.LEADS_FALLBACK_EMAIL || "hello@brainsnn.com";
 
 // Initialize Gemini safely
 let ai: GoogleGenAI | null = null;
@@ -428,6 +430,87 @@ app.post("/api/auth/magic-link", async (req, res) => {
     return res.json({ ok: true, status: "magic_link_sent" });
   } catch (error: any) {
     return res.status(502).json({ error: error?.message || "Supabase sign-in failed." });
+  }
+});
+
+// ----------------------------------------------------
+// LEAD CAPTURE
+// ----------------------------------------------------
+//
+// The only conversion mechanism this product had was a bare
+// `mailto:hello@brainsnn.com`, which does nothing visible for anyone on mobile
+// or webmail — so an unknown share of people who wanted to buy simply bounced.
+//
+// The hard rule here, and the reason this endpoint exists at all: it must never
+// report success for a lead that was not delivered. The pricing page used to
+// tell people "You're on the Pro list" while storing nothing anywhere, and that
+// is the exact failure this replaces. When no destination is configured it
+// returns 501 like every other unconfigured integration in this file, and the
+// UI is required to show the mailto fallback rather than a confirmation.
+const LEAD_SEGMENTS = new Set([
+  "schools", "publishers", "brands", "research", "self-serve", "other",
+]);
+
+/** Trim, cap and drop anything empty so one long paste cannot fill the log. */
+function leadField(value: unknown, max = 2000): string {
+  return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+app.post("/api/leads", async (req, res) => {
+  const body = req.body || {};
+  const email = leadField(body.email, 320);
+  if (!email || !email.includes("@")) {
+    return res.status(400).json({ error: "A valid email is required." });
+  }
+
+  const segment = LEAD_SEGMENTS.has(body.segment) ? body.segment : "other";
+  const lead = {
+    email,
+    segment,
+    name: leadField(body.name, 200),
+    audience: leadField(body.audience),
+    concept: leadField(body.concept),
+    outcome: leadField(body.outcome),
+    timeline: leadField(body.timeline, 200),
+    receivedAt: new Date().toISOString(),
+  };
+
+  const webhook = process.env.LEADS_WEBHOOK_URL;
+  if (!webhook) {
+    // No destination: say so plainly rather than swallowing the lead.
+    return res.status(501).json({
+      error: "Lead capture is not configured.",
+      status: "not_configured",
+      fallbackEmail: LEADS_FALLBACK_EMAIL,
+    });
+  }
+
+  try {
+    const response = await fetch(webhook, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.LEADS_WEBHOOK_TOKEN
+          ? { Authorization: `Bearer ${process.env.LEADS_WEBHOOK_TOKEN}` }
+          : {}),
+      },
+      body: JSON.stringify(lead),
+    });
+    if (!response.ok) {
+      // Upstream rejected it, so it is not captured. Do not claim otherwise.
+      return res.status(502).json({
+        error: "Lead could not be delivered.",
+        status: "delivery_failed",
+        fallbackEmail: LEADS_FALLBACK_EMAIL,
+      });
+    }
+    return res.json({ ok: true, status: "received" });
+  } catch (error: any) {
+    return res.status(502).json({
+      error: error?.message || "Lead could not be delivered.",
+      status: "delivery_failed",
+      fallbackEmail: LEADS_FALLBACK_EMAIL,
+    });
   }
 });
 

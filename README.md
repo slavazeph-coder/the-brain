@@ -494,6 +494,9 @@ All optional — the app runs fully offline without any of them. Set them server
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Magic-link auth |
 | `TRIBE_API_URL` | External TRIBE projection health/scenarios (else local projection) |
 | `NEURAL_DECODER_URL`, `NEURAL_DECODER_KEY` | Approved external communication-decoder endpoint for `/api/neural/decode` (analyzes decoded text only; else replay mode) |
+| `LEADS_WEBHOOK_URL`, `LEADS_WEBHOOK_TOKEN` | Where `POST /api/leads` delivers a pilot brief. Unset, the endpoint returns `501` and the form shows its email fallback — it never reports a lead it did not capture |
+| `LEADS_FALLBACK_EMAIL` | Address offered when a lead cannot be delivered (default `hello@brainsnn.com`) |
+| `VITE_ANALYTICS_URL` | Collector that receives `track()` events as JSON. Unset, nothing is sent |
 | `PORT`, `APP_URL` | Server port (default 3000) / public URL |
 
 ## Project layout
