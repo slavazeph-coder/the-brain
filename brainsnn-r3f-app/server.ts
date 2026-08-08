@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import { readFileSync } from "node:fs";
 import crypto from "crypto";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -14,6 +15,7 @@ import { LAYER_CATALOG } from "./src/lib/layerCatalog.js";
 import { SOLITON_PRESETS, computeSolitonPreset, exploreSolitonField } from "./src/lib/solitonLayer.js";
 import { computeFirewall } from "./src/lib/firewallLayer.js";
 import { computeAffect } from "./src/lib/affectLayer.js";
+import { applyRouteMeta } from "./src/lib/routeMeta.js";
 import {
   createReplayNeuralInput,
   normalizeRemoteDecoderResponse,
@@ -766,8 +768,16 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
+
+    // Every route used to be served the identical index.html, so a shared
+    // /lab?grid=... link, a challenge link and the homepage all previewed as
+    // the same generic card. Social scrapers do not run JavaScript, so the
+    // client cannot fix this — the tags have to be right in the HTML we send.
+    const indexHtml = readFileSync(path.join(distPath, "index.html"), "utf8");
     app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+      const [pathname, search = ""] = req.originalUrl.split("?");
+      const origin = APP_URL.replace(/\/$/, "");
+      res.type("html").send(applyRouteMeta(indexHtml, pathname, search, origin));
     });
     console.log(`Serving static distribution assets from ${distPath}`);
   }
