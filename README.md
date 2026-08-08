@@ -402,6 +402,13 @@ false on an empty grid. They also do not start counting until you draw, stamp
 or stimulate: the opening scene fires by itself, and being credited for
 watching a demo is the kind of hollow progress this is meant not to be.
 
+Every route serves its own social card. The app is a SPA, so all four routes
+used to return the same `index.html` and therefore the same `<title>` and Open
+Graph tags — a shared `/lab?grid=…` link previewed identically to the homepage,
+which matters when sharing is the growth loop. `src/lib/routeMeta.js` rewrites
+the tags server-side (scrapers do not run JavaScript), and a link carrying a
+grid says so rather than inheriting the lab's generic card.
+
 Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
 dependency and not a server: a grid is mostly long runs of the same material,
 so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.
