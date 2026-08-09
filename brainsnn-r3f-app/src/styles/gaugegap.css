@@ -1714,3 +1714,81 @@
 @media (max-width: 720px) {
   .lead-form-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------------------------------------------------------------
+   Mobile navigation menu
+
+   .gg-nav-links is display:none below 1120px and there was nothing to
+   reveal it, so on a phone the header offered the logo and "Start here"
+   and nothing else. Six primary destinations — including Pricing — were
+   unreachable except through a footer link 22 screens down.
+   --------------------------------------------------------------- */
+
+.gg-nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  /* 44px is the minimum comfortable touch target. */
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e8eaf2;
+  cursor: pointer;
+}
+
+.gg-nav-toggle:hover { background: rgba(255, 255, 255, 0.09); }
+.gg-nav-toggle:focus-visible { outline: 2px solid var(--bsn-cyan, #00f5ff); outline-offset: 2px; }
+
+.gg-mobile-menu {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  width: min(100% - 28px, 1320px);
+  margin: 0 auto 8px;
+  padding: 8px;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: #0a0a12;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.gg-mobile-menu button,
+.gg-mobile-menu a {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #d4d8e6;
+  font-size: 0.98rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.gg-mobile-menu button:hover,
+.gg-mobile-menu a:hover { background: rgba(255, 255, 255, 0.07); color: white; }
+.gg-mobile-menu button:focus-visible,
+.gg-mobile-menu a:focus-visible { outline: 2px solid var(--bsn-cyan, #00f5ff); outline-offset: -2px; }
+
+.gg-mobile-menu-brain {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 0 0 11px 11px !important;
+  color: var(--bsn-cyan, #00f5ff) !important;
+}
+
+/* Shown exactly where .gg-nav-links is hidden, so the two can never both be
+   absent — the state this whole block exists to make impossible. */
+@media (max-width: 1120px) {
+  .gg-nav-toggle { display: inline-flex; }
+  .gg-mobile-menu { display: flex; }
+}
