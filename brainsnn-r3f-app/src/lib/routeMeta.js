@@ -12,7 +12,16 @@
 // client cannot fix this. The server has to put the right tags in the HTML it
 // sends, which is what applyRouteMeta does.
 
+import { buildHoldoutReport } from './holdoutReport.js';
+
 const SITE_NAME = 'GaugeGap Foundry by BrainSNN';
+
+// The evidence card quotes two figures, so it computes them rather than
+// repeating them. A social card is the one place a stale number does the most
+// damage: it is what gets screenshotted and pasted into a pitch, long after the
+// page it came from has moved on. ~20 ms once at server boot, and this module is
+// imported only by server.ts.
+const EVIDENCE = buildHoldoutReport();
 
 /** Longest matching prefix wins, so `/lab` can differ from `/`. */
 const ROUTES = [
@@ -30,6 +39,19 @@ const ROUTES = [
     description:
       'Separate what the evidence supports from what the story merely implies, '
       + 'then rebuild the claim responsibly.',
+  },
+  {
+    // The card is the pitch here: a vendor leading with its own worst number is
+    // the thing worth clicking, so the description says the number rather than
+    // promising accuracy.
+    path: '/evidence',
+    title: 'What our detector scores on text it has never seen | GaugeGap Foundry',
+    description:
+      'The held-out evaluation, computed live: rank agreement falls from '
+      + `${EVIDENCE.inSample.rho} on the passages the cue patterns were written against to `
+      + `${EVIDENCE.outOfSample.rho} on ${EVIDENCE.corpusSize} it had never seen. `
+      + `Every miss and all ${EVIDENCE.falseAlarmCount} false alarms are shown, with the `
+      + 'phrases behind each detection.',
   },
   {
     path: '/app',

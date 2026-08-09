@@ -78,6 +78,8 @@ export const ALLOWED_EVENTS = new Set([
   'reconstruct_page_viewed',
   'reconstruct_command_copied',
   'reconstruct_scan_copy_clicked',
+  'holdout_evidence_viewed',
+  'holdout_evidence_cta_clicked',
 ]);
 
 /**

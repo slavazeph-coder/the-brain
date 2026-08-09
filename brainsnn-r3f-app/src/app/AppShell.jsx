@@ -18,6 +18,7 @@ import { DesktopSidebar } from './DesktopSidebar.jsx';
 import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
 import { ReconstructPage } from './ReconstructPage.jsx';
+import { HoldoutEvidencePage } from '../features/research/HoldoutEvidencePage.jsx';
 
 // The powder lab is a full page of its own and pulls in a simulation engine, so
 // it is lazily loaded like any other heavy surface rather than bundled into the
@@ -28,6 +29,7 @@ const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.
 function resolveRoute(pathname) {
   if (pathname.startsWith('/app')) return 'app';
   if (pathname.startsWith('/reconstruct')) return 'reconstruct';
+  if (pathname.startsWith('/evidence')) return 'evidence';
   if (pathname.startsWith('/lab')) return 'lab';
   return 'landing';
 }
@@ -122,6 +124,12 @@ export function AppShell() {
   const openReconstruct = useCallback(() => {
     window.history.pushState({}, '', '/reconstruct');
     setRoute('reconstruct');
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  }, []);
+
+  const openEvidence = useCallback(() => {
+    window.history.pushState({}, '', '/evidence');
+    setRoute('evidence');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   }, []);
 
@@ -236,8 +244,19 @@ export function AppShell() {
     return <ReconstructPage onHome={openLanding} onStart={openWorkspace} />;
   }
 
+  if (route === 'evidence') {
+    return <HoldoutEvidencePage onHome={openLanding} onStart={openWorkspace} />;
+  }
+
   if (route === 'landing') {
-    return <LandingPage onStart={openWorkspace} onNavigate={navigate} onOpenReconstruct={openReconstruct} />;
+    return (
+      <LandingPage
+        onStart={openWorkspace}
+        onNavigate={navigate}
+        onOpenReconstruct={openReconstruct}
+        onOpenEvidence={openEvidence}
+      />
+    );
   }
 
   return (
