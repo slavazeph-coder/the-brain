@@ -22,7 +22,7 @@ import {
   getNeuralGatewayCapabilities,
   deriveDecodeUncertainty,
 } from "./src/lib/neuralInputGateway.js";
-import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling } from "./src/lib/rateLimit.js";
+import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, routeTier } from "./src/lib/rateLimit.js";
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
 
 dotenv.config();
@@ -243,8 +243,16 @@ app.get("/healthz", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-// Floor under every API route. The stricter per-route limits below stack on top.
-app.use("/api", limit("general"));
+// Floor under every API route that does not declare its own tier. Routes that
+// do are skipped here and limited once, at their own mount — see DEDICATED_ROUTES
+// in rateLimit.js for why stacking the two was wrong rather than cautious.
+const generalLimit = limit("general");
+app.use("/api", (req, res, next) => {
+  // Inside a mounted middleware req.path is relative to "/api", so the full
+  // path has to be reassembled before it can be matched against the table.
+  if (routeTier(req.originalUrl.split("?")[0]) !== "general") return next();
+  return generalLimit(req, res, next);
+});
 
 app.get("/api/layers", (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
