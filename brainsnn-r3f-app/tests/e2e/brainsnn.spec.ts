@@ -747,3 +747,42 @@ test('the lead form confirms only when the server accepts the lead', async ({ pa
   await expect(page.getByTestId('lead-form-sent')).toBeVisible();
   await expect(page.getByTestId('lead-form-sent')).toContainText('buyer@example.com');
 });
+
+test('real interaction reaches the analytics sink, and carries no pasted text', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // track() forwarded to VITE_ANALYTICS_URL, which was unset, so every call site
+  // in the app fed a function that sent nothing anywhere. It now defaults to
+  // this app's own /api/events. This asserts the wire end to end — a real click
+  // in a real browser producing a real request — because the previous failure
+  // was invisible from inside the app.
+  const posted: any[] = [];
+  await page.route('**/api/events', async (route) => {
+    try {
+      posted.push(JSON.parse(route.request().postData() || '{}'));
+    } catch {
+      posted.push({ unparseable: true });
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/');
+  await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_landing_viewed');
+
+  // A lab click is one of the sixteen names the allowlist used to drop on the
+  // floor, so this is the specific regression under test.
+  const labButton = page.locator('.gg-lab-card button').first();
+  await labButton.scrollIntoViewIfNeeded();
+  await labButton.click();
+  await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_lab_clicked');
+
+  // Every event carries a path and a timestamp, and none of them carries the
+  // content fields the product exists to analyse.
+  for (const event of posted) {
+    expect(typeof event.path).toBe('string');
+    expect(event.at).toBeTruthy();
+    for (const field of ['content', 'rawContent', 'text']) {
+      expect(event.properties?.[field]).toBeUndefined();
+    }
+  }
+});

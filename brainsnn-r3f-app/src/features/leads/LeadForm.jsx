@@ -14,7 +14,7 @@
 //
 // That is the same discipline the rest of this codebase applies to model
 // claims, applied to a claim made to a customer.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2, Mail, Send } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { track } from '../../lib/analytics.js';
@@ -57,6 +57,13 @@ export function LeadForm({
   });
   const [state, setState] = useState('idle'); // idle | sending | sent | failed
   const [failure, setFailure] = useState(null);
+
+  // Submissions were tracked and views were not, so the form's conversion rate
+  // had no denominator: a day with no leads was indistinguishable from a day
+  // where nobody ever saw the form.
+  useEffect(() => {
+    track('lead_form_viewed', { segment: defaultSegment, compact });
+  }, [defaultSegment, compact]);
 
   function set(field, value) {
     setLead((current) => ({ ...current, [field]: value }));

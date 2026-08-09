@@ -22,12 +22,29 @@ import {
   getNeuralGatewayCapabilities,
   deriveDecodeUncertainty,
 } from "./src/lib/neuralInputGateway.js";
+import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling } from "./src/lib/rateLimit.js";
+import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
 
 dotenv.config();
 
 const app = express();
+
+// Railway terminates TLS at its edge and forwards, so without this every
+// request arrives from the proxy's address and the rate limiter below would key
+// every visitor to one bucket — one busy user would lock out the site. Trusting
+// exactly one hop takes the address Railway itself appended, which a client
+// cannot forge by sending its own X-Forwarded-For.
+app.set("trust proxy", 1);
+
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
-app.use(express.json({ limit: "2mb" }));
+
+// Body caps are per-route and mounted before the general parser, which then
+// skips anything already parsed. The old single 2 MB cap applied to /api/analyze
+// too, and that endpoint embeds the body in a Gemini prompt paid for with the
+// operator's key — 2 MB is roughly 500,000 tokens of attacker-chosen text.
+app.use("/api/analyze", express.json({ limit: BODY_LIMITS.analyze }));
+app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
+app.use(express.json({ limit: BODY_LIMITS.general }));
 
 const PORT = Number(process.env.PORT) || 3000;
 const APP_URL = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://www.brainsnn.com";
@@ -81,13 +98,21 @@ function runLocalSimulation(content: string, type: string): any {
   });
 }
 
-// Helper function to call Gemini with robust exponential backoff retry for transient errors
-async function callGeminiWithRetry(aiClient: GoogleGenAI, options: any, maxRetries = 2, delayMs = 600): Promise<any> {
+// Helper function to call Gemini with robust exponential backoff retry for transient errors.
+//
+// maxRetries was 2, and the caller loops over two models, so one HTTP request
+// could bill six calls. It is now 1: two models × two attempts, and the loop
+// stops on quota rather than trying the second model with the same exhausted
+// project. Every attempt is charged against the process-wide spend ceiling
+// first, so the count is of calls actually paid for, not requests received.
+async function callGeminiWithRetry(aiClient: GoogleGenAI, options: any, maxRetries = 1, delayMs = 600): Promise<any> {
   let attempt = 0;
   while (true) {
     try {
+      if (!geminiCeiling.tryConsume()) throw new GeminiCeilingReached("Gemini hourly ceiling reached.");
       return await aiClient.models.generateContent(options);
     } catch (error: any) {
+      if (error instanceof GeminiCeilingReached) throw error;
       attempt++;
       const errorStr = String(error?.message || error || "");
       
@@ -165,13 +190,61 @@ async function handleStripeWebhook(req: express.Request, res: express.Response) 
 }
 
 // ----------------------------------------------------
+// RATE LIMITING
+// ----------------------------------------------------
+//
+// The logic lives in src/lib/rateLimit.js with unit tests and an injected clock;
+// this is only the wiring. See that file for why the endpoints below are the
+// risky ones and why an in-memory limiter is per-process.
+
+const limiters = {
+  analyze: new RateLimiter(LIMITS.analyze),
+  magicLink: new RateLimiter(LIMITS.magicLink),
+  general: new RateLimiter(LIMITS.general),
+  events: new RateLimiter(LIMITS.events),
+};
+
+/** Bounds what the process can spend on Gemini however many callers ask.
+ *  Tune with GEMINI_HOURLY_CEILING; 0 stops paid calls without removing the key. */
+const geminiCeiling = new SpendCeiling(resolveGeminiCeiling(process.env));
+
+/** Marks the one error the analyze handler must answer with the local engine. */
+class GeminiCeilingReached extends Error {}
+
+// Keys are attacker-supplied, so the maps are swept rather than left to grow.
+// unref() so this timer never holds the process open by itself.
+setInterval(() => {
+  for (const limiter of Object.values(limiters)) limiter.sweep();
+}, 5 * 60 * 1000).unref();
+
+function limit(name: keyof typeof limiters, keyOf?: (req: express.Request) => string) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const key = keyOf ? `${req.ip}|${keyOf(req)}` : String(req.ip);
+    const result = limiters[name].consume(key);
+    res.setHeader("X-RateLimit-Limit", String(limiters[name].limit));
+    res.setHeader("X-RateLimit-Remaining", String(result.remaining));
+    if (result.allowed) return next();
+    res.setHeader("Retry-After", String(result.retryAfterSeconds));
+    return res.status(429).json({
+      error: "Too many requests. Please wait a moment and try again.",
+      retryAfter: result.retryAfterSeconds,
+    });
+  };
+}
+
+// ----------------------------------------------------
 // API ENDPOINTS
 // ----------------------------------------------------
 
 // Health check endpoint for container orchestrators (Railway healthcheckPath).
+// Declared before the limiter so a throttled instance never fails its own health
+// check and gets restarted for being popular.
 app.get("/healthz", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
+
+// Floor under every API route. The stricter per-route limits below stack on top.
+app.use("/api", limit("general"));
 
 app.get("/api/layers", (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
@@ -404,7 +477,11 @@ app.post("/api/soliton/explore", (req, res) => {
   }
 });
 
-app.post("/api/auth/magic-link", async (req, res) => {
+// Limited per IP *and* per email address: without the second key one mailbox
+// could be bombed from many addresses, which is the abuse that gets a sending
+// domain flagged. Supabase is unset today, so this endpoint returns 501 — the
+// cap goes in now, while it is still theoretical.
+app.post("/api/auth/magic-link", limit("magicLink", (req) => String(req.body?.email || "").toLowerCase()), async (req, res) => {
   const { email } = req.body || {};
   if (!email || !String(email).includes("@")) {
     return res.status(400).json({ error: "A valid email is required." });
@@ -433,6 +510,25 @@ app.post("/api/auth/magic-link", async (req, res) => {
   } catch (error: any) {
     return res.status(502).json({ error: error?.message || "Supabase sign-in failed." });
   }
+});
+
+// ----------------------------------------------------
+// ANALYTICS SINK
+// ----------------------------------------------------
+//
+// track() forwards to VITE_ANALYTICS_URL, which was unset, so every call site
+// fed a function that sent nothing anywhere. This gives the events somewhere to
+// land that is already owned and already running: one JSON line per event on
+// stdout, which Railway retains and which is greppable for the prefix.
+//
+// Validation lives in src/lib/eventSink.js and is re-applied here rather than
+// trusted from the client, because this endpoint is public — see that file.
+// 204 regardless of whether the event was kept: a rejected event is not the
+// visitor's problem, and sendBeacon ignores the body anyway.
+app.post("/api/events", limit("events"), (req, res) => {
+  const record = normalizeEvent(req.body, { path: req.path });
+  if (record) console.log(formatEventLine(record));
+  return res.status(204).end();
 });
 
 // ----------------------------------------------------
@@ -575,7 +671,7 @@ app.post("/api/billing/portal", async (req, res) => {
   }
 });
 
-app.post("/api/analyze", async (req, res) => {
+app.post("/api/analyze", limit("analyze"), async (req, res) => {
   const { content, type, contentType } = req.body || {};
   const inputType = type || contentType || "text";
 
@@ -663,21 +759,33 @@ app.post("/api/analyze", async (req, res) => {
       } catch (err: any) {
         lastError = err;
         const errMsg = err?.message || String(err);
-        
+
+        // The hourly spend ceiling is not a model problem, so trying the second
+        // model would just be a second refusal. Serve the local engine instead —
+        // which is already what runs when no key is set, so this is the
+        // well-travelled path rather than an error nobody has seen.
+        if (err instanceof GeminiCeilingReached) {
+          console.warn("[Warn] Gemini hourly ceiling reached. Serving the local SNN engine.");
+          const localResult = runLocalSimulation(content, inputType);
+          return res.json(localResult);
+        }
+
         // Check for quota
-        const isQuota = errMsg.toLowerCase().includes("quota") || 
-                        errMsg.toLowerCase().includes("exhausted") || 
-                        errMsg.toLowerCase().includes("limit") || 
+        const isQuota = errMsg.toLowerCase().includes("quota") ||
+                        errMsg.toLowerCase().includes("exhausted") ||
+                        errMsg.toLowerCase().includes("limit") ||
                         errMsg.toLowerCase().includes("billing") ||
                         err?.status === "RESOURCE_EXHAUSTED";
-        
+
         if (isQuota) {
           isGeminiQuotaLimited = true;
           lastQuotaCheckTime = Date.now();
           console.warn(`[Warn] Quota-limit hit for model ${model}. Flagging Gemini as quota-limited.`);
-        } else {
-          console.warn(`[Warn] Attempt with model ${model} failed:`, errMsg);
+          // Both models bill the same exhausted project, so the fallback model
+          // would only add a second charge for the same refusal.
+          break;
         }
+        console.warn(`[Warn] Attempt with model ${model} failed:`, errMsg);
       }
     }
 

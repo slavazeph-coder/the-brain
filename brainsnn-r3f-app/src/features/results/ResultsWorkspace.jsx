@@ -14,6 +14,7 @@ import { FirewallPanel } from './FirewallPanel.jsx';
 import { AffectPanel } from './AffectPanel.jsx';
 import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
+import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
   { id: 'overview', label: 'Overview' },
@@ -71,6 +72,18 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
   const verdict = deriveExecutiveVerdict(result);
   const [status, setStatus] = useState('');
   const [tab, setTab] = useState('overview');
+
+  // Whether anyone reads past the first screen was unanswerable: both of these
+  // event names were declared and never fired. The tabs are the only place in
+  // the app where "went deeper" is a discrete action, so this is where they
+  // belong. The Advanced tab is the one holding the layer trace, which is the
+  // research surface a technical buyer would be looking for.
+  function selectTab(next) {
+    setTab(next);
+    track('result_section_viewed', { section: next, isFallback: Boolean(result.isFallback) });
+    if (next === 'advanced') track('layer_trace_viewed');
+  }
+
   function handleSave() {
     const record = onSave(result);
     setStatus(record ? 'Saved to local history.' : 'Could not save this scan.');
@@ -79,7 +92,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
     <div className="results-workbench" data-testid="results-workspace">
       <main className="results-main" aria-label="Brain Scan results">
         <ExecutiveVerdict result={result} />
-        <ResultsTabs active={tab} onChange={setTab} />
+        <ResultsTabs active={tab} onChange={selectTab} />
         <TabPanel id="overview" active={tab}>
           <BrainSignalView result={result} />
           <DecisionScorecard result={result} />

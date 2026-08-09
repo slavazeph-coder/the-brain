@@ -2,12 +2,11 @@
 //
 // This used to validate an event name, strip the risky fields, and then throw
 // the event away — 51 call sites feeding a function that sent nothing anywhere.
-// Nothing about the funnel was measurable, and the four commerce events below
-// were declared and never once fired.
+// Nothing about the funnel was measurable.
 //
-// It now forwards to a sink when one is configured, and still does nothing when
-// one is not. Two properties of the original are deliberately preserved because
-// they were the right calls:
+// It now posts to /api/events by default, so measurement works without an
+// account anywhere. Two properties of the original are deliberately preserved
+// because they were the right calls:
 //
 //   1. The allowlist. An event that is not named here is dropped, so a typo or
 //      an ad-hoc event cannot start leaking new data silently.
@@ -41,13 +40,16 @@ const allowedEvents = new Set([
   'autopsy_started',
   'autopsy_completed',
   'layer_trace_viewed',
-  'landing_viewed',
-  'landing_scan_cta_clicked',
   'classic_preset_selected',
-  'persona_cta_clicked',
   'share_card_shared',
   'share_card_downloaded',
   'brain3d_fallback_used',
+  // `landing_viewed`, `landing_scan_cta_clicked` and `persona_cta_clicked` used
+  // to sit here. LandingPage.jsx is now a one-line re-export of
+  // GaugeGapLanding.jsx, so those three named a page that no longer exists and
+  // `gaugegap_landing_viewed` covers what they measured. Deleted rather than
+  // given invented call sites — a list that describes the app is worth more
+  // than a longer one that does not.
   'gaugegap_landing_viewed',
   'gaugegap_hero_play_clicked',
   'gaugegap_lab_clicked',
@@ -58,7 +60,33 @@ const allowedEvents = new Set([
   'gaugegap_client_cta_clicked',
   'gaugegap_research_cta_clicked',
   'gaugegap_pricing_cta_clicked',
+  // Sixteen names below were being fired by real call sites and dropped here,
+  // because the allowlist was never updated as the labs were built. Every
+  // question about whether the labs are actually played — missions won, scans
+  // run, challenges shared — was unanswerable, and looked exactly like nobody
+  // doing those things. analyticsCoverage.test.js now fails if this recurs.
+  'gaugegap_content_scan_started',
+  'gaugegap_content_scan_completed',
+  'gaugegap_content_challenge_opened',
+  'gaugegap_content_challenge_shared',
+  'gaugegap_content_challenge_copied',
+  'gaugegap_content_sample_loaded',
+  'gaugegap_content_rewrite_created',
+  'gaugegap_snn_run',
+  'gaugegap_brain_challenge_opened',
+  'gaugegap_brain_mission_won',
+  'gaugegap_brain_intervention',
+  'gaugegap_brain_level_loaded',
+  'gaugegap_brain_proof_exported',
+  'reconstruct_page_viewed',
+  'reconstruct_command_copied',
+  'reconstruct_scan_copy_clicked',
 ]);
+
+/** Exported so eventSink.test.js can assert the two allowlists have not drifted
+ *  apart — a name on one list and not the other silently drops real events,
+ *  which is indistinguishable from nobody having done that thing. */
+export const __ALLOWED_EVENTS_FOR_TEST = Object.freeze([...allowedEvents]);
 
 /** Fields that must never leave the browser, whatever a caller passes. */
 const REDACTED_PROPERTIES = ['content', 'rawContent', 'text'];
@@ -70,15 +98,24 @@ export function sanitizeProperties(properties = {}) {
 }
 
 /**
- * Where events go. Set `VITE_ANALYTICS_URL` to a collector that accepts a JSON
- * POST. Unset — which is the default — nothing is sent, exactly as before.
+ * Where events go.
+ *
+ * Defaults to this app's own `/api/events`, so measurement works out of the box
+ * and does not wait on choosing a third-party analytics account. Set
+ * `VITE_ANALYTICS_URL` to point somewhere else later; set it to `off` to send
+ * nothing at all.
  */
+export const DEFAULT_SINK_URL = '/api/events';
+
 function sinkUrl() {
+  let configured;
   try {
-    return import.meta.env?.VITE_ANALYTICS_URL || '';
+    configured = import.meta.env?.VITE_ANALYTICS_URL;
   } catch {
-    return '';
+    configured = undefined;
   }
+  if (configured === 'off') return '';
+  return configured || DEFAULT_SINK_URL;
 }
 
 export function isAnalyticsConfigured() {
