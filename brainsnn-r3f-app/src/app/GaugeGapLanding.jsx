@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Microscope, Orbit, Play, ScanSearch, Send, Share2, Shield, Sparkles, WandSparkles, Zap } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Menu, Microscope, Orbit, Play, ScanSearch, Send, Share2, Shield, Sparkles, WandSparkles, X, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
 import { ARCADE_LAB_COUNT, ARCADE_LAB_IDS, ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
 import { ClientPathways, TrustLadder, VisitorRoutes } from '../features/gaugegap/AudiencePathways.jsx';
@@ -62,6 +62,53 @@ const DEEPER_TOOLS = [
   },
 ];
 
+/**
+ * The primary nav, as data.
+ *
+ * Rendered twice — the desktop bar and the mobile menu — from this one list, so
+ * the two cannot drift. A link present at one breakpoint and absent at the other
+ * is invisible to everyone who is not on that breakpoint, which is the failure
+ * this replaced: below 1120px the entire bar was `display: none` with nothing to
+ * reveal it.
+ */
+const NAV_LINKS = [
+  { id: 'arcade', label: 'Arcade', action: 'playground' },
+  { id: 'fractal', label: 'Fractal Lab', href: FRACTAL_LAB_URL, external: true },
+  { id: 'clients', label: 'For organizations', action: 'clients' },
+  { id: 'research', label: 'Research', action: 'research' },
+  { id: 'powder', label: 'Powder Lab', href: '/lab', testId: 'nav-powder-lab' },
+  { id: 'pricing', label: 'Pricing', action: 'pricing', testId: 'nav-pricing' },
+];
+
+/** One renderer for both copies; `inMenu` only changes the test id and closes
+ *  the menu on activation. */
+function renderNavLink(link, handlers, inMenu = false) {
+  const testId = link.testId ? (inMenu ? `${link.testId}-mobile` : link.testId) : undefined;
+  if (link.href) {
+    return (
+      <a
+        key={link.id}
+        href={link.href}
+        data-testid={testId}
+        onClick={inMenu ? handlers.close : undefined}
+        {...(link.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      >
+        {link.label}
+      </a>
+    );
+  }
+  return (
+    <button
+      key={link.id}
+      type="button"
+      data-testid={testId}
+      onClick={() => { if (inMenu) handlers.close(); handlers.run(link.action); }}
+    >
+      {link.label}
+    </button>
+  );
+}
+
 const LOOP = [
   { number: '01', title: 'Play', text: 'Touch the system before reading the explanation. Immediate response earns attention.' },
   { number: '02', title: 'Understand', text: 'Missions, model notes and visible limits connect the experience to the underlying mechanism.' },
@@ -73,10 +120,36 @@ const LOOP = [
 const ARCADE_IDS = ARCADE_LAB_IDS;
 
 export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct, onOpenEvidence }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const menuButtonRef = useRef(null);
+
   useEffect(() => {
     document.title = 'GaugeGap Foundry | Play with the impossible';
     track('gaugegap_landing_viewed');
   }, []);
+
+  // A menu that can only be closed by the button that opened it is a trap on a
+  // phone, where the button is easy to miss with a thumb.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function onKeyDown(event) {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    }
+    function onPointerDown(event) {
+      if (menuRef.current?.contains(event.target)) return;
+      if (menuButtonRef.current?.contains(event.target)) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [menuOpen]);
 
   function scrollTo(id) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -98,6 +171,23 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct, onOpen
     track('gaugegap_pricing_cta_clicked');
     onNavigate?.('pricing');
   }
+
+  // The single dispatch table both nav copies go through, so a link behaves
+  // identically at every breakpoint rather than being wired twice.
+  //
+  // Deliberately rebuilt each render rather than memoised: these close over the
+  // props, and a useMemo with an empty dependency list would keep calling the
+  // first render's closures forever. Six buttons is not a workload worth a
+  // staleness bug.
+  const navHandlers = {
+    close: () => setMenuOpen(false),
+    run: (action) => {
+      if (action === 'playground') scrollToPlayground();
+      if (action === 'clients') scrollTo('clients');
+      if (action === 'research') openResearch();
+      if (action === 'pricing') openPricing();
+    },
+  };
 
   function openLab(id) {
     track('gaugegap_lab_clicked', { labId: id });
@@ -133,18 +223,49 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct, onOpen
           <em>Alpha</em>
         </button>
         <nav className="gg-nav-links" aria-label="Primary">
-          <button type="button" onClick={scrollToPlayground}>Arcade</button>
-          <a href={FRACTAL_LAB_URL} target="_blank" rel="noreferrer">Fractal Lab</a>
-          <button type="button" onClick={() => scrollTo('clients')}>For organizations</button>
-          <button type="button" onClick={openResearch}>Research</button>
-          <a href="/lab" data-testid="nav-powder-lab">Powder Lab</a>
-          <button type="button" onClick={openPricing} data-testid="nav-pricing">Pricing</button>
+          {NAV_LINKS.map((link) => renderNavLink(link, navHandlers))}
         </nav>
         <div className="gg-nav-actions">
           <button type="button" className="gg-brain-link" onClick={() => onStart?.('')}>Open BrainSNN</button>
           <Button variant="primary" onClick={() => scrollTo('gg-start-heading')}>Start here <Play size={15} /></Button>
+          {/* Below 1120px .gg-nav-links is display:none, and there was nothing
+              to reveal it — so on a phone the header offered the logo and
+              "Start here" and nothing else. The only route to pricing was a
+              footer link 22 screens down an 18,900px page, and the e2e that
+              asserts a buyer can find pricing skips on mobile, so it was never
+              caught. */}
+          <button
+            type="button"
+            className="gg-nav-toggle"
+            data-testid="nav-menu-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="gg-mobile-menu"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            onClick={() => setMenuOpen((open) => !open)}
+            ref={menuButtonRef}
+          >
+            {menuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </header>
+
+      {menuOpen && (
+        <nav
+          className="gg-mobile-menu"
+          id="gg-mobile-menu"
+          data-testid="nav-mobile-menu"
+          aria-label="Primary"
+          ref={menuRef}
+        >
+          {/* Same NAV_LINKS as the desktop bar. Two hand-maintained copies of a
+              nav drift, and a link that exists on one breakpoint and not the
+              other is invisible to whoever is not on that breakpoint. */}
+          {NAV_LINKS.map((link) => renderNavLink(link, navHandlers, true))}
+          <button type="button" className="gg-mobile-menu-brain" onClick={() => { setMenuOpen(false); onStart?.(''); }}>
+            Open BrainSNN
+          </button>
+        </nav>
+      )}
 
       <main>
         <section className="gg-hero" aria-labelledby="gg-hero-heading">

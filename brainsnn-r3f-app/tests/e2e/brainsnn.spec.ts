@@ -673,15 +673,67 @@ test('a powder lab drawing survives a reload through the local save slot', async
 });
 
 test('a visitor who wants to buy can find pricing from the landing page', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === 'mobile', '.gg-nav-links is display:none below 900px');
+  test.setTimeout(60_000);
+
+  // This test used to skip on mobile, on the grounds that .gg-nav-links is
+  // display:none below 1120px. That was the bug, not a reason to skip: nothing
+  // revealed those links, so on a phone the header offered the logo and "Start
+  // here" and the only route to pricing was a footer link 22 screens down an
+  // 18,900px page. The test now runs everywhere and takes whichever nav the
+  // breakpoint actually offers.
+  await page.goto('/');
+
+  const toggle = page.getByTestId('nav-menu-toggle');
+  if (await toggle.isVisible()) {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await page.getByTestId('nav-pricing-mobile').click();
+  } else {
+    await page.getByTestId('nav-pricing').click();
+  }
+
+  await expect(page.getByTestId('pricing-workspace')).toBeVisible();
+  await expect(page).toHaveURL(/\/app/);
+});
+
+test('every primary destination is reachable at every breakpoint', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/');
 
-  // Pricing used to live two clicks deep inside the /app shell and was linked
-  // from nowhere on the marketing site.
-  await page.getByTestId('nav-pricing').click();
-  await expect(page.getByTestId('pricing-workspace')).toBeVisible();
-  await expect(page).toHaveURL(/\/app/);
+  // The guarantee that matters is narrow and absolute: whatever the viewport,
+  // at least one navigation is on screen. Both being hidden is the state that
+  // shipped, and it is invisible to anyone testing at their own screen size.
+  const bar = page.locator('.gg-nav-links');
+  const toggle = page.getByTestId('nav-menu-toggle');
+  const barVisible = await bar.isVisible();
+  const toggleVisible = await toggle.isVisible();
+  expect(barVisible || toggleVisible).toBe(true);
+  // And never both, which would be two navs competing for the same taps.
+  expect(barVisible && toggleVisible).toBe(false);
+
+  const nav = barVisible ? bar : (await toggle.click(), page.getByTestId('nav-mobile-menu'));
+  for (const label of ['Arcade', 'Fractal Lab', 'For organizations', 'Research', 'Powder Lab', 'Pricing']) {
+    await expect(nav.getByText(label, { exact: true })).toBeVisible();
+  }
+});
+
+test('the mobile menu can be dismissed without hitting the button again', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/');
+  const toggle = page.getByTestId('nav-menu-toggle');
+  test.skip(!(await toggle.isVisible()), 'Desktop shows the full bar and has no toggle.');
+
+  // A menu that only closes via the control that opened it is a trap on a phone,
+  // where that control is easy to miss with a thumb.
+  await toggle.click();
+  await expect(page.getByTestId('nav-mobile-menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('nav-mobile-menu')).toHaveCount(0);
+
+  await toggle.click();
+  await expect(page.getByTestId('nav-mobile-menu')).toBeVisible();
+  await page.locator('.gg-hero-copy h1').click({ position: { x: 5, y: 5 } });
+  await expect(page.getByTestId('nav-mobile-menu')).toHaveCount(0);
 });
 
 test('the pricing page does not promise limits the code does not enforce', async ({ page }, testInfo) => {
