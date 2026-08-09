@@ -101,12 +101,22 @@ Key rates:
 - Confirm `brainsnn.com` and `www.brainsnn.com` resolve to the same current deployment.
 - Confirm the deployed title is `GaugeGap Foundry | Play with the impossible`.
 - Verify every lab on iPhone Safari and desktop Chrome.
-- Connect analytics events to a real privacy-conscious analytics destination.
+- ~~Connect analytics events to a real privacy-conscious analytics destination.~~ Done:
+  `track()` posts to this app's own `POST /api/events`, which writes one JSON line
+  per event to stdout. No third-party account, and `VITE_ANALYTICS_URL` repoints it
+  later. The audit behind it found sixteen events being fired and dropped by the
+  allowlist; `analyticsCoverage.test.js` now fails on the next one.
 - Confirm `hello@brainsnn.com` receives mail.
 
 ### P1 — client readiness
 
-- Publish one real case study or internal pilot with before/after engagement evidence.
+- ~~Publish one real case study or internal pilot with before/after engagement evidence.~~
+  Done, in the form the evidence actually supports: `/evidence` runs the detector
+  over the 17 held-out passages live in the browser and publishes the
+  generalisation gap — rank agreement 0.918 in-sample against 0.488 on text it had
+  never seen — with every miss, every false alarm and the phrases behind each
+  detection. Not a before/after engagement study, which would need a client and a
+  campaign; this is the claim that can be made without inventing either.
 - Create one downloadable pilot brief or one-page capabilities sheet.
 - Add a calendar booking route after the email pathway proves demand.
 - Add a lightweight statement of data handling for BrainSNN content scans.

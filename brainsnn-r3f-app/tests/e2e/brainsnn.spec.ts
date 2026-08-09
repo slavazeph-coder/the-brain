@@ -786,3 +786,63 @@ test('real interaction reaches the analytics sink, and carries no pasted text', 
     }
   }
 });
+
+test('the evidence page publishes the engine\'s own worst number, computed live', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // STRANGER_CLIENT_PASS.md carried "publish one real case study" as an open
+  // item and none existed. This is it, and the property that makes it worth
+  // anything is that every figure is computed in the browser from the same
+  // modules the product runs on — so it cannot drift from the code.
+  await page.goto('/evidence');
+  await expect(page.getByTestId('evidence-page')).toBeVisible();
+
+  // All 17 held-out passages are shown, not a flattering subset.
+  const passages = page.getByTestId('evidence-passage');
+  await expect(passages).toHaveCount(17);
+
+  // The headline is the generalisation gap, and it must run the unflattering
+  // way: worse on text the detector never saw. If these two were ever equal the
+  // holdout would have been contaminated.
+  const figures = page.getByTestId('evidence-headline').locator('.evidence-figure strong');
+  const inSample = Number(await figures.nth(0).innerText());
+  const heldOut = Number(await figures.nth(1).innerText());
+  expect(Number.isFinite(inSample)).toBe(true);
+  expect(heldOut).toBeLessThan(inSample);
+
+  // The verdict sentence quotes the same figures rather than restating them.
+  await expect(page.getByTestId('evidence-verdict')).toContainText(String(heldOut));
+
+  // Misses and false alarms are on the page, not just the wins.
+  await expect(page.getByTestId('evidence-missed').first()).toBeVisible();
+  await expect(page.getByTestId('evidence-falsealarm').first()).toBeVisible();
+
+  // Every detection names the phrase that triggered it, so a reader can check
+  // it against the passage instead of trusting a score.
+  const firstDetection = page.locator('.evidence-matches').first();
+  await expect(firstDetection).toContainText(/triggered by/);
+
+  // This is the page meant to be forwarded to someone else's accessibility
+  // team, so it does not get to be the one page that fails.
+  const audit = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(audit.violations).toEqual([]);
+});
+
+test('the evidence page is reachable from the landing page and has its own social card', async ({ page, request }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/');
+  const card = page.locator('.gg-lab-card', { hasText: 'never seen' });
+  await card.scrollIntoViewIfNeeded();
+  await card.getByRole('button').click();
+  await expect(page.getByTestId('evidence-page')).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/evidence');
+
+  // Scrapers do not run JavaScript, so the card has to be in the served HTML.
+  const html = await (await request.get('/evidence')).text();
+  expect(html).toContain('never seen');
+  const og = html.match(/<meta property="og:description" content="([^"]*)"/)?.[1] || '';
+  // The description quotes the measured figures, so it must carry decimals
+  // rather than an adjective.
+  expect(og).toMatch(/0\.\d+/);
+});

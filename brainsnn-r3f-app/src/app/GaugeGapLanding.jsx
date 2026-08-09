@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Microscope, Orbit, Play, Send, Share2, Shield, Sparkles, WandSparkles, Zap } from 'lucide-react';
+import { ArrowRight, Brain, BrainCircuit, CheckCircle2, ChevronDown, FlaskConical, Layers3, Microscope, Orbit, Play, ScanSearch, Send, Share2, Shield, Sparkles, WandSparkles, Zap } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
 import { ARCADE_LAB_COUNT, ARCADE_LAB_IDS, ExperimentArcade } from '../features/gaugegap/ExperimentArcade.jsx';
 import { ClientPathways, TrustLadder, VisitorRoutes } from '../features/gaugegap/AudiencePathways.jsx';
@@ -52,6 +52,14 @@ const DEEPER_TOOLS = [
     icon: Shield,
     action: 'Build a defensible claim',
   },
+  {
+    id: 'evidence',
+    eyebrow: 'Held-out evaluation',
+    title: 'How well it works on text it has never seen',
+    description: 'The measured result, computed as the page loads: what the detector catches, what it misses, and every benign message it wrongly flags.',
+    icon: ScanSearch,
+    action: 'Read the evaluation',
+  },
 ];
 
 const LOOP = [
@@ -64,7 +72,7 @@ const LOOP = [
 // this replaced had gone stale and silently dropped labs 013-015.
 const ARCADE_IDS = ARCADE_LAB_IDS;
 
-export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
+export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct, onOpenEvidence }) {
   useEffect(() => {
     document.title = 'GaugeGap Foundry | Play with the impossible';
     track('gaugegap_landing_viewed');
@@ -110,6 +118,7 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct }) {
     if (id === 'soliton') openResearch();
     if (id === 'content') onStart?.(CONTENT_SAMPLE);
     if (id === 'reconstruct') onOpenReconstruct?.();
+    if (id === 'evidence') onOpenEvidence?.();
     // A full navigation rather than a client-side route change: /lab is its own
     // lazily-loaded page and shares nothing with the landing state.
     if (id === 'powder') window.location.assign('/lab');
