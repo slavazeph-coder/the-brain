@@ -1,11 +1,13 @@
 import { describe, expect, it } from '../test/tinyVitest.js';
 import {
   BODY_LIMITS,
+  DEDICATED_ROUTES,
   GEMINI_CEILING,
   LIMITS,
   RateLimiter,
   SpendCeiling,
   resolveGeminiCeiling,
+  routeTier,
 } from './rateLimit.js';
 
 // An injected clock throughout: a limiter tested with real time is a limiter
@@ -121,6 +123,45 @@ describe('the configured limits are the ones the risk calls for', () => {
   it('bounds hourly Gemini spend', () => {
     expect(GEMINI_CEILING.windowMs).toBe(60 * 60_000);
     expect(GEMINI_CEILING.limit).toBeGreaterThan(0);
+  });
+});
+
+describe('exactly one limiter governs each route', () => {
+  // Found by measuring a real browsing session rather than by reading the code:
+  // /api/events declares 240/min and was being held to 120 by the general floor
+  // mounted across /api, so half its configured allowance was unreachable on the
+  // busiest route on the site.
+  it('routes a dedicated path to its own tier, not the floor', () => {
+    expect(routeTier('/api/events')).toBe('events');
+    expect(routeTier('/api/analyze')).toBe('analyze');
+    expect(routeTier('/api/auth/magic-link')).toBe('magicLink');
+  });
+
+  it('sends everything else to the floor', () => {
+    for (const path of ['/api/layers', '/api/firewall', '/api/leads', '/api/soliton/explore']) {
+      expect(routeTier(path)).toBe('general');
+    }
+  });
+
+  it('is not fooled by a query string or a trailing slash', () => {
+    expect(routeTier('/api/events?v=2')).toBe('events');
+    expect(routeTier('/api/events/')).toBe('events');
+  });
+
+  it('names only tiers that exist', () => {
+    // A typo here would silently send a route to the floor.
+    for (const tier of Object.values(DEDICATED_ROUTES)) {
+      expect(Object.keys(LIMITS)).toContain(tier);
+    }
+  });
+
+  it('gives every declared tier a route to govern', () => {
+    // The mirror of the bug: a tier configured and never reachable is a number
+    // that describes nothing, which is how the 240 came to be misleading.
+    const governed = new Set([...Object.values(DEDICATED_ROUTES), 'general']);
+    for (const tier of Object.keys(LIMITS)) {
+      expect(governed.has(tier)).toBe(true);
+    }
   });
 });
 

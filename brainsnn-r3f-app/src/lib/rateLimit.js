@@ -149,6 +149,37 @@ export const LIMITS = Object.freeze({
   events: { limit: 240, windowMs: 60_000 },
 });
 
+/**
+ * Routes that carry their own tier, so the general floor must not also apply.
+ *
+ * Mounting `general` across `/api` and then a per-route tier on top looked like
+ * defence in depth and was not: two counters both run, and the *stricter* one
+ * decides. For `/api/analyze` (12/min) and `/api/auth/magic-link` (3/hour) the
+ * dedicated tier is stricter, so `general` never bound and the stacking was
+ * merely inert. For `/api/events` it was actively wrong — the endpoint declares
+ * 240/min and `general` capped it at 120, making half the configured allowance
+ * unreachable on the highest-volume route on the site.
+ *
+ * So: exactly one limiter per route. `routeTier()` is the single place that
+ * decides which, and the coherence of the whole table is asserted in tests
+ * rather than left to whoever next adds a route.
+ */
+export const DEDICATED_ROUTES = Object.freeze({
+  '/api/analyze': 'analyze',
+  '/api/auth/magic-link': 'magicLink',
+  '/api/events': 'events',
+});
+
+/**
+ * Which limiter governs a path.
+ * @param {string} pathname a full request path, query already stripped
+ * @returns {keyof LIMITS} the tier name, defaulting to `general`
+ */
+export function routeTier(pathname = '') {
+  const clean = String(pathname).split('?')[0].replace(/\/+$/, '') || '/';
+  return DEDICATED_ROUTES[clean] || 'general';
+}
+
 /** Gemini calls allowed per hour across the whole process. */
 export const GEMINI_CEILING = Object.freeze({ limit: 240, windowMs: 60 * 60_000 });
 
