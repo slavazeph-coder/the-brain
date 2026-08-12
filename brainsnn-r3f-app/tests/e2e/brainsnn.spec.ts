@@ -994,3 +994,49 @@ test('a card is refused for a link that does not carry a grid', async ({ request
     expect(response.status()).toBe(404);
   }
 });
+
+test('a visit through a tagged link reports where it came from, and keeps reporting it', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // Attribution is the part that makes every other traffic change checkable, so
+  // it is asserted the same way the sink itself is: a real navigation in a real
+  // browser producing a real request.
+  const posted: any[] = [];
+  await page.route('**/api/events', async (route) => {
+    try {
+      posted.push(JSON.parse(route.request().postData() || '{}'));
+    } catch {
+      posted.push({ unparseable: true });
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/lab?s=lab&utm_source=hn&utm_medium=social');
+  await expect.poll(() => posted.map((event) => event.event)).toContain('visit');
+
+  const visit = posted.find((event) => event.event === 'visit');
+  expect(visit.from.share).toBe('lab');
+  expect(visit.from.utm_source).toBe('hn');
+  expect(visit.from.utm_medium).toBe('social');
+
+  // First touch. A second page load with no tags at all must still report the
+  // original source — otherwise a visitor who arrives from a shared link and
+  // then clicks anything becomes "direct", which is how a referral channel
+  // disappears from its own report.
+  posted.length = 0;
+  await page.goto('/');
+  await expect.poll(() => posted.length).toBeGreaterThan(0);
+  for (const event of posted) {
+    expect(event.from?.utm_source).toBe('hn');
+    expect(event.from?.share).toBe('lab');
+  }
+
+  // Host only, ever. No value may carry a path or a query — on a search engine
+  // that query is the visitor's own words.
+  for (const event of posted) {
+    for (const value of Object.values(event.from || {})) {
+      expect(String(value)).not.toContain('/');
+      expect(String(value)).not.toContain('?');
+    }
+  }
+});
