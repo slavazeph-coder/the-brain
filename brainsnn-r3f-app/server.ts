@@ -16,6 +16,11 @@ import { SOLITON_PRESETS, computeSolitonPreset, exploreSolitonField } from "./sr
 import { computeFirewall } from "./src/lib/firewallLayer.js";
 import { computeAffect } from "./src/lib/affectLayer.js";
 import { applyRouteMeta } from "./src/lib/routeMeta.js";
+import { buildSitemap } from "./src/lib/sitemap.js";
+import { encodePng, fitInto } from "./src/lib/png.js";
+import { PowderEngine } from "./src/features/powder/powderEngine.ts";
+import { applyDecodedGrid, decodeGrid } from "./src/features/powder/share.ts";
+import { renderGrid } from "./src/features/powder/renderGrid.ts";
 import {
   createReplayNeuralInput,
   normalizeRemoteDecoderResponse,
@@ -243,6 +248,14 @@ app.get("/healthz", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
+// The sitemap, built from the same route table that decides what each URL's
+// title and social card say. robots.txt points here. Declared above the API
+// limiter for the same reason as the health check: it is cheap, it is public,
+// and a crawler that gets a 429 on it may not come back for a while.
+app.get("/sitemap.xml", (_req, res) => {
+  res.type("application/xml").send(buildSitemap(APP_URL));
+});
+
 // Floor under every API route that does not declare its own tier. Routes that
 // do are skipped here and limited once, at their own mount — see DEDICATED_ROUTES
 // in rateLimit.js for why stacking the two was wrong rather than cautious.
@@ -261,6 +274,49 @@ app.get("/api/layers", (_req, res) => {
     coreLayers: status.coreLayers,
     layers: LAYER_CATALOG,
   });
+});
+
+// ----------------------------------------------------
+// SOCIAL CARD FOR A SHARED CIRCUIT
+// ----------------------------------------------------
+//
+// The share button says the link "carries the whole grid, no server involved",
+// and it does — but the preview everyone sees before deciding whether to open it
+// was the same generic site card as every other URL. A shared circuit is the one
+// thing on this site whose preview can show what was actually shared.
+//
+// So the card is drawn from the link: decode the grid, load it into a real
+// engine, and render it with the same function the browser canvas uses, which
+// means the preview cannot drift from what opening the link shows.
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
+
+app.get("/api/og/lab", (req, res) => {
+  const share = typeof req.query.grid === "string" ? req.query.grid : "";
+  const grid = decodeGrid(share);
+  // decodeGrid already bounds the string length and the dimensions, and returns
+  // null for anything it does not fully understand.
+  if (!grid) return res.status(404).json({ error: "not_a_grid" });
+
+  const engine = new PowderEngine({ width: grid.width, height: grid.height });
+  if (!applyDecodedGrid(engine, grid)) return res.status(404).json({ error: "not_a_grid" });
+
+  const pixels = { data: new Uint8ClampedArray(engine.size * 4) };
+  // No neuro layer: a card is one still frame of the drawn circuit, not a run of
+  // it, so nothing is firing and weights come from the link itself.
+  renderGrid(engine, null, pixels);
+
+  const framed = fitInto(
+    { width: grid.width, height: grid.height, data: pixels.data },
+    OG_WIDTH,
+    OG_HEIGHT,
+  );
+
+  // The whole grid is in the URL, so the response is a pure function of it and
+  // can be cached forever. A different circuit is a different URL.
+  res.type("image/png");
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  return res.send(encodePng(OG_WIDTH, OG_HEIGHT, framed));
 });
 
 app.get("/api/engines/status", async (_req, res) => {
@@ -883,7 +939,14 @@ async function startServer() {
     console.log("Mounted Vite development middleware");
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // `index: false` matters more than it looks. By default express.static
+    // answers "/" with dist/index.html straight off disk, so the homepage — the
+    // most-linked URL on the site — was the one route that never reached
+    // applyRouteMeta below. It looked correct only because the baked-in tags in
+    // index.html happen to be the homepage's own. Anything the server computes
+    // per route, including the content a crawler reads, was silently skipped
+    // there. Letting "/" fall through to the catch-all fixes that.
+    app.use(express.static(distPath, { index: false }));
 
     // Every route used to be served the identical index.html, so a shared
     // /lab?grid=... link, a challenge link and the homepage all previewed as

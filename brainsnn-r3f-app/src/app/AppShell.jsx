@@ -34,6 +34,9 @@ function resolveRoute(pathname) {
   return 'landing';
 }
 
+/** Module scope so a remount cannot report a second arrival for one page load. */
+let visitTracked = false;
+
 function makeQueueItem(result, content, comparison, status = 'Draft') {
   const sourceContent = content || result?.rawContent || '';
   return {
@@ -65,6 +68,16 @@ export function AppShell() {
 
   useEffect(() => {
     setQueue(loadQueue());
+  }, []);
+
+  // One arrival, recorded once. Every other event in the app describes
+  // something a visitor did after getting here; this is the one that says how
+  // they got here at all, and it is what the rest of the funnel is measured
+  // against. `track` attaches the first-touch source itself.
+  useEffect(() => {
+    if (visitTracked) return; // StrictMode mounts effects twice in development
+    visitTracked = true;
+    track('visit', { route: resolveRoute(window.location.pathname) });
   }, []);
 
   useEffect(() => {
