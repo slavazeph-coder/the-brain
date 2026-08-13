@@ -94,6 +94,59 @@ describe('normalizeEvent', () => {
   });
 });
 
+describe('attribution on the record', () => {
+  it('keeps the declared source fields', () => {
+    const record = normalizeEvent({
+      event: 'visit',
+      from: { ref: 'news.ycombinator.com', utm_source: 'hn', utm_medium: 'social', share: 'lab' },
+    }, { at });
+    expect(record.from.ref).toBe('news.ycombinator.com');
+    expect(record.from.utm_source).toBe('hn');
+    expect(record.from.utm_medium).toBe('social');
+    expect(record.from.share).toBe('lab');
+  });
+
+  it('drops a field it was not told to expect', () => {
+    const record = normalizeEvent({
+      event: 'visit',
+      from: { ref: 'x.com', utm_term: 'private search words', fbclid: 'abc' },
+    }, { at });
+    expect(record.from.ref).toBe('x.com');
+    expect(record.from.utm_term).toBe(undefined);
+    expect(record.from.fbclid).toBe(undefined);
+  });
+
+  // attribution.js sends the host only. This is the check that holds when a
+  // forged request ignores that, because a full referrer URL carries the search
+  // query someone typed to get here.
+  it('rejects a value carrying a path or query rather than truncating it', () => {
+    const record = normalizeEvent({
+      event: 'visit',
+      from: {
+        ref: 'google.com/search?q=is+my+boss+gaslighting+me',
+        utm_source: 'ok-value',
+      },
+    }, { at });
+    expect(record.from.ref).toBe(undefined);
+    expect(record.from.utm_source).toBe('ok-value');
+    expect(formatEventLine(record)).not.toContain('gaslighting');
+  });
+
+  it('rejects an over-long or non-string value', () => {
+    const record = normalizeEvent({
+      event: 'visit',
+      from: { ref: 'x'.repeat(5000), utm_source: { nested: 'prose' }, utm_medium: 12 },
+    }, { at });
+    expect(record.from).toEqual({});
+  });
+
+  it('reports a direct visit as an empty object whatever the client sent', () => {
+    for (const from of [undefined, null, 'nope', [], {}]) {
+      expect(normalizeEvent({ event: 'visit', from }, { at }).from).toEqual({});
+    }
+  });
+});
+
 describe('formatEventLine', () => {
   it('emits one greppable line', () => {
     const line = formatEventLine(normalizeEvent({ event: 'pricing_viewed' }, { at }));

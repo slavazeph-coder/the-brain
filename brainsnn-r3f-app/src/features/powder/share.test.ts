@@ -14,6 +14,8 @@ import {
   loadShareString,
   readShareParam,
   saveLocal,
+  SOURCE_PARAM,
+  SOURCE_VALUE,
   type StorageLike,
 } from './share.ts';
 
@@ -157,6 +159,16 @@ describe('share urls', () => {
     const restored = small();
     expect(loadShareString(restored, param!)).toBe(true);
     expect(restored.getCell(4, 4)).toBe(Material.NEURO);
+  });
+
+  it('tags the link as a share, so the loop is not invisible', () => {
+    // Without this, a visit from a shared circuit is indistinguishable from
+    // someone typing the URL, and the only organic growth loop the product has
+    // reports as zero.
+    const parsed = new URL(buildShareUrl(small(), 'https://brainsnn.com/lab'));
+    expect(parsed.searchParams.get(SOURCE_PARAM)).toBe(SOURCE_VALUE);
+    // Still a working grid link, not just a tagged one.
+    expect(readShareParam(parsed.search) !== null).toBe(true);
   });
 
   it('replaces an existing grid parameter instead of appending a second', () => {

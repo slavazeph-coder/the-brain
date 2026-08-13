@@ -178,10 +178,22 @@ export function loadShareString(engine: PowderEngine, text: string): boolean {
 
 export const SHARE_PARAM = 'grid';
 
+/**
+ * Marks a visit as having arrived through a shared circuit.
+ *
+ * Sharing is this product's only organic growth loop, and until this existed
+ * every visit it produced was indistinguishable from someone typing the URL —
+ * so the loop could not be told apart from no loop at all. Read by
+ * src/lib/attribution.js.
+ */
+export const SOURCE_PARAM = 's';
+export const SOURCE_VALUE = 'lab';
+
 export function buildShareUrl(engine: PowderEngine, base: string): string {
   const url = new URL(base);
   url.hash = '';
   url.searchParams.set(SHARE_PARAM, encodeGrid(engine));
+  url.searchParams.set(SOURCE_PARAM, SOURCE_VALUE);
   return url.toString();
 }
 

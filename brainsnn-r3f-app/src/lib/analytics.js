@@ -13,7 +13,13 @@
 //   2. Stripping `content` / `rawContent` / `text`. The whole product is built
 //      around analysing text people paste, and none of that text may leave the
 //      browser through analytics. This is enforced by a test.
+import { attribution } from './attribution.js';
+
 const allowedEvents = new Set([
+  // Fired once per session, and the only event that is about arriving rather
+  // than about something done after arriving. Everything below measures the
+  // funnel; without this one there is nothing to measure the funnel *against*.
+  'visit',
   'cortex_viewed',
   'scan_started',
   'scan_completed',
@@ -135,9 +141,15 @@ export function track(eventName, properties = {}) {
   const url = sinkUrl();
   if (!url || typeof window === 'undefined') return;
 
+  // Attribution rides as its own field rather than inside `properties`, for two
+  // reasons: `sanitizeProperties` must stay free to strip whatever it likes
+  // without taking the source with it, and the 12-property cap in eventSink.js
+  // is there for event detail — spending four of those twelve on the same four
+  // values in every event would starve it.
   const payload = JSON.stringify({
     event: eventName,
     properties: safeProperties,
+    from: attribution(),
     path: window.location?.pathname,
     at: new Date().toISOString(),
   });

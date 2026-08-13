@@ -898,3 +898,145 @@ test('the evidence page is reachable from the landing page and has its own socia
   // rather than an adjective.
   expect(og).toMatch(/0\.\d+/);
 });
+
+// --- Discovery and sharing surfaces -----------------------------------------
+//
+// These assert what the server sends, not what React renders, so they only mean
+// anything against a production server — same as the social-card test above.
+// Run them with PLAYWRIGHT_BASE_URL pointed at `npm start`; against the dev
+// server Vite serves index.html untouched and they will fail for that reason
+// rather than for a real one.
+
+test('the sitemap lists every route the app serves', async ({ request }) => {
+  const response = await request.get('/sitemap.xml');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('xml');
+
+  const xml = await response.text();
+  for (const path of ['/', '/lab', '/app', '/evidence', '/reconstruct']) {
+    expect(xml).toContain(`<loc>https://www.brainsnn.com${path}</loc>`);
+  }
+});
+
+test('robots.txt points crawlers at the sitemap and keeps them out of the API', async ({ request }) => {
+  const body = await (await request.get('/robots.txt')).text();
+  expect(body).toContain('Sitemap: https://www.brainsnn.com/sitemap.xml');
+  expect(body).toContain('Disallow: /api/');
+  // Assistant crawlers are a channel this site wants, named explicitly so the
+  // answer does not change silently when a default does.
+  expect(body).toContain('GPTBot');
+  expect(body).toContain('ClaudeBot');
+});
+
+test('every route serves content a crawler can read without running JavaScript', async ({ request }) => {
+  const headings = new Set<string>();
+
+  for (const path of ['/', '/lab', '/app', '/evidence', '/reconstruct']) {
+    const html = await (await request.get(path)).text();
+    const heading = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1] || '';
+    expect(heading.length).toBeGreaterThan(10);
+    headings.add(heading);
+
+    // Inside #root, so React replaces it on mount rather than leaving it under
+    // the running app.
+    expect(html).toContain('<div id="root"><main data-prerendered="1"');
+  }
+
+  // The homepage is the one that regressed before: express.static answered "/"
+  // off disk, so it never reached the per-route rendering at all.
+  expect(headings.size).toBe(5);
+});
+
+test('a shared circuit previews as itself rather than as the site card', async ({ page, request }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/lab');
+  const canvas = page.getByTestId('powder-canvas');
+  await expect(canvas).toBeVisible();
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze, so the card shows what was drawn
+
+  // Wall, because it does not fall: the card has to match the link.
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 10 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-share').click();
+  await expect(page).toHaveURL(/[?&]grid=p1%3A240x160%3A/);
+
+  const shared = new URL(page.url());
+  // The link carries its own source tag, so a visit through it is not
+  // indistinguishable from someone typing the URL.
+  expect(shared.searchParams.get('s')).toBe('lab');
+  const grid = shared.searchParams.get('grid')!;
+
+  const html = await (await request.get(`/lab?grid=${encodeURIComponent(grid)}`)).text();
+  const image = html.match(/<meta property="og:image" content="([^"]*)"/)?.[1] || '';
+  expect(image).toContain('/api/og/lab?grid=');
+
+  const card = await request.get(`/api/og/lab?grid=${encodeURIComponent(grid)}`);
+  expect(card.status()).toBe(200);
+  expect(card.headers()['content-type']).toContain('image/png');
+
+  const bytes = Buffer.from(await card.body());
+  expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  expect(bytes.readUInt32BE(16)).toBe(1200); // IHDR width
+  expect(bytes.readUInt32BE(20)).toBe(630); // IHDR height
+});
+
+test('a card is refused for a link that does not carry a grid', async ({ request }) => {
+  for (const grid of ['', 'garbage', 'p1:240x160:truncated']) {
+    const response = await request.get(`/api/og/lab?grid=${encodeURIComponent(grid)}`);
+    expect(response.status()).toBe(404);
+  }
+});
+
+test('a visit through a tagged link reports where it came from, and keeps reporting it', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // Attribution is the part that makes every other traffic change checkable, so
+  // it is asserted the same way the sink itself is: a real navigation in a real
+  // browser producing a real request.
+  const posted: any[] = [];
+  await page.route('**/api/events', async (route) => {
+    try {
+      posted.push(JSON.parse(route.request().postData() || '{}'));
+    } catch {
+      posted.push({ unparseable: true });
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/lab?s=lab&utm_source=hn&utm_medium=social');
+  await expect.poll(() => posted.map((event) => event.event)).toContain('visit');
+
+  const visit = posted.find((event) => event.event === 'visit');
+  expect(visit.from.share).toBe('lab');
+  expect(visit.from.utm_source).toBe('hn');
+  expect(visit.from.utm_medium).toBe('social');
+
+  // First touch. A second page load with no tags at all must still report the
+  // original source — otherwise a visitor who arrives from a shared link and
+  // then clicks anything becomes "direct", which is how a referral channel
+  // disappears from its own report.
+  posted.length = 0;
+  await page.goto('/');
+  await expect.poll(() => posted.length).toBeGreaterThan(0);
+  for (const event of posted) {
+    expect(event.from?.utm_source).toBe('hn');
+    expect(event.from?.share).toBe('lab');
+  }
+
+  // Host only, ever. No value may carry a path or a query — on a search engine
+  // that query is the visitor's own words.
+  for (const event of posted) {
+    for (const value of Object.values(event.from || {})) {
+      expect(String(value)).not.toContain('/');
+      expect(String(value)).not.toContain('?');
+    }
+  }
+});

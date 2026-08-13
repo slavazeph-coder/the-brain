@@ -13,6 +13,12 @@
 
 <img src="docs/screenshots/soliton-field-panel.png" alt="Layer 103 — the 39 Hz soliton field panel in the results view" width="720" />
 
+<br/>
+
+**[Score some text](https://www.brainsnn.com/app?utm_source=github&utm_medium=readme&utm_campaign=the-brain)** ·
+**[Build a circuit out of falling sand](https://www.brainsnn.com/lab?utm_source=github&utm_medium=readme&utm_campaign=the-brain)** ·
+**[What it scores on text it has never seen](https://www.brainsnn.com/evidence?utm_source=github&utm_medium=readme&utm_campaign=the-brain)**
+
 </div>
 
 ---
@@ -409,9 +415,33 @@ which matters when sharing is the growth loop. `src/lib/routeMeta.js` rewrites
 the tags server-side (scrapers do not run JavaScript), and a link carrying a
 grid says so rather than inheriting the lab's generic card.
 
+**A shared circuit previews as itself.** The card for a `?grid=…` link is drawn
+from the link: `GET /api/og/lab` decodes the grid, loads it into a real engine
+and renders it with the same function the browser canvas uses, so the preview
+cannot drift from what opening the link shows. The PNG is written by
+`src/lib/png.js` on top of Node's `zlib` — a signature, three chunks and a CRC
+each — rather than by adding an image dependency to a server whose point is that
+it needs none.
+
 Sharing is a hand-rolled run-length encoding in the URL (`?grid=…`), not a
 dependency and not a server: a grid is mostly long runs of the same material,
 so a full 240×160 scene fits in a few hundred characters. Nothing is uploaded.
+
+**A crawler sees a page rather than an empty div.** The served document is
+`<div id="root"></div>` and a module script, so anything that does not execute
+JavaScript — which is most assistant crawlers — saw a blank page on every URL.
+Each route now carries its own heading and prose in `routeMeta.js`, injected
+into `#root`, where React's `createRoot` replaces it on mount: visitors get the
+app, crawlers get content, and the two cannot disagree because there is one
+source for both. `/sitemap.xml` is built from the same route table, so it cannot
+list a route that 404s or omit one that just launched.
+
+**Where visitors come from is measured.** Roughly 65 event names all described
+what someone did *after* arriving, and nothing described the arrival, so no
+traffic experiment could be checked. `src/lib/attribution.js` captures
+first-touch source — referrer **host only**, never the path or the search query
+that produced it — and every event carries it. Shared lab links tag themselves
+`s=lab`, which is what makes the growth loop distinguishable from no loop.
 
 **Performance, measured rather than asserted.** The whole pipeline — automaton
 tick, brain layer, pixel render — costs **2.0 ms per frame at 2,200 particles**

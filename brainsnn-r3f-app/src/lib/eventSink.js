@@ -22,6 +22,7 @@
 
 /** Mirrors the allowlist in analytics.js. Anything not named here is dropped. */
 export const ALLOWED_EVENTS = new Set([
+  'visit',
   'cortex_viewed',
   'scan_started',
   'scan_completed',
@@ -95,6 +96,44 @@ const MAX_PROPERTY_LENGTH = 120;
 const MAX_PROPERTIES = 12;
 const MAX_PATH_LENGTH = 512;
 
+/**
+ * The only attribution fields that may be logged. Mirrors ATTRIBUTION_FIELDS in
+ * attribution.js, duplicated for the same reason the event allowlist is: this
+ * endpoint is public, so what the client promises to send is a courtesy and this
+ * is the check that actually holds.
+ */
+const ATTRIBUTION_FIELDS = Object.freeze([
+  'utm_source', 'utm_medium', 'utm_campaign', 'share', 'ref',
+]);
+
+/**
+ * Attribution values are hostnames and short campaign tags.
+ *
+ * A value containing a slash is either a full referrer URL — which carries the
+ * search query someone typed, and is exactly what attribution.js exists to strip
+ * — or something being smuggled past the property redaction into a different
+ * field. Either way it is not a channel name, so it is dropped rather than
+ * truncated: a half a URL in the log is worse than no value.
+ */
+function attributionValue(value) {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_PROPERTY_LENGTH) return undefined;
+  if (/[/\\?#\s]/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+/** @returns {object} the bounded source fields; `{}` for a direct visit. */
+function normalizeAttribution(from) {
+  const out = {};
+  if (!from || typeof from !== 'object' || Array.isArray(from)) return out;
+  for (const key of ATTRIBUTION_FIELDS) {
+    const safe = attributionValue(from[key]);
+    if (safe !== undefined) out[key] = safe;
+  }
+  return out;
+}
+
 function scalar(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'boolean') return value;
@@ -128,6 +167,10 @@ export function normalizeEvent(body, { path: reqPath = '', at = new Date() } = {
   return {
     event: name,
     properties,
+    // Where the visitor came from, host-only and first-touch. Its own field
+    // rather than a property, so the property cap stays available for event
+    // detail and the redaction rules above stay independent of it.
+    from: normalizeAttribution(body.from),
     // The client reports its own path; keep it, bounded, and prefer it over the
     // request path because /api/events is the same for every event.
     path: (clientPath || reqPath).slice(0, MAX_PATH_LENGTH),

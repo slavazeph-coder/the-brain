@@ -1,2 +1,32 @@
+# The API is not content. It is rate-limited per IP, and a crawler working
+# through it spends that budget on nobody's behalf.
 User-agent: *
 Allow: /
+Disallow: /api/
+
+# Assistant crawlers are named explicitly rather than left to the wildcard.
+# They are a channel this site wants — someone asking an assistant how to tell
+# manufactured urgency from the real thing should be able to be told about the
+# held-out evaluation at /evidence — and being explicit means the answer does not
+# change silently the next time a default does.
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+
+Sitemap: https://www.brainsnn.com/sitemap.xml
