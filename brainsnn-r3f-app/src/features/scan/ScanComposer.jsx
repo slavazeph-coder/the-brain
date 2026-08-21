@@ -77,9 +77,9 @@ export function ScanComposer({ scan, onRun }) {
   return (
     <section className="scan-composer" aria-labelledby="cortex-heading">
       <div className="scan-composer-copy">
-        <p className="bsn-kicker">Decision Engine</p>
-        <h1 id="cortex-heading">Know how it lands before you publish.</h1>
-        <p>Scan a hook, ad, email, post or script. BrainSNN shows what captures attention, what damages trust and what to change next.</p>
+        <p className="bsn-kicker">Creative Decision Intelligence</p>
+        <h1 id="cortex-heading">Paste what you’re about to publish. See what’s likely to land — and what to fix.</h1>
+        <p>Test a hook, ad, email, post, landing page or video script before you spend money promoting it. BrainSNN scores attention, trust and content pressure, then shows what to change next.</p>
       </div>
 
       <div className="scan-composer-grid">
@@ -94,7 +94,7 @@ export function ScanComposer({ scan, onRun }) {
               className="scan-textarea"
               value={state.input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Paste a headline, post, ad, email or script..."
+              placeholder="Paste a headline, post, ad, email, landing-page copy or video script..."
               disabled={scanning}
             />
           </label>
