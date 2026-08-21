@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Brain, CreditCard, Ellipsis, FlaskConical, GitCompare, History, ListChecks, Sparkles } from 'lucide-react';
+import { Brain, CreditCard, Ellipsis, FlaskConical, Gamepad2, GitCompare, History, ListChecks, Sparkles } from 'lucide-react';
 
 const mobileItems = [
   { id: 'analyze', label: 'Analyze', icon: Brain },
   { id: 'improve', label: 'Improve', icon: Sparkles },
   { id: 'autopsy', label: 'Compare', icon: GitCompare },
+  { id: 'arcade', label: 'Arcade', icon: Gamepad2 },
   { id: 'more', label: 'More', icon: Ellipsis },
 ];
 

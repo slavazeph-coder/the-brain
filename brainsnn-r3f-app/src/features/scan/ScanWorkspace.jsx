@@ -5,6 +5,7 @@ import { ResultsWorkspace } from '../results/ResultsWorkspace.jsx';
 import { EngineReadinessPanel } from './EngineReadinessPanel.jsx';
 import { ScanComposer } from './ScanComposer.jsx';
 import { track } from '../../lib/analytics.js';
+import { ArcadeDiscoveryStrip } from '../../app/ArcadeDiscoveryStrip.jsx';
 
 export function ScanWorkspace({ scan, onImprove, onSave, onQueue, onExport }) {
   const resultsRef = useRef(null);
@@ -47,6 +48,7 @@ export function ScanWorkspace({ scan, onImprove, onSave, onQueue, onExport }) {
           />
         </div>
       ) : null}
+      <ArcadeDiscoveryStrip />
     </div>
   );
 }

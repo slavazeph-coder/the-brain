@@ -4,7 +4,7 @@ import { IconButton } from '../components/ui/IconButton.jsx';
 import { NAV_ITEMS } from './navigation.js';
 
 const WORKFLOW_IDS = ['analyze', 'improve', 'autopsy', 'queue'];
-const LIBRARY_IDS = ['history', 'research'];
+const LIBRARY_IDS = ['history', 'arcade', 'research'];
 
 function NavButton({ item, active, collapsed, onNavigate }) {
   return (
