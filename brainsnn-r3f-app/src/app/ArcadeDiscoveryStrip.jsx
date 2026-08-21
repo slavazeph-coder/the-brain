@@ -1,13 +1,11 @@
 import React from 'react';
 import { ArrowRight, Gamepad2, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/Button.jsx';
-import { track } from '../lib/analytics.js';
 
 const LABS = ['Defend the Brain', 'Fractal Reality Lab', 'Neuro Powder Lab'];
 
 export function ArcadeDiscoveryStrip() {
   function openArcade() {
-    track('arcade_discovery_clicked', { source: 'analyze_footer' });
     window.location.assign('/arcade');
   }
 
