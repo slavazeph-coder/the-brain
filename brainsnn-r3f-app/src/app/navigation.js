@@ -1,4 +1,4 @@
-import { Brain, CreditCard, FlaskConical, GitCompare, History, ListChecks, Sparkles } from 'lucide-react';
+import { Brain, CreditCard, FlaskConical, Gamepad2, GitCompare, History, ListChecks, Sparkles } from 'lucide-react';
 
 export const NAV_ITEMS = [
   { id: 'analyze', label: 'Analyze', mobileLabel: 'Analyze', icon: Brain, description: 'Scan content for attention, trust and risk signals.' },
@@ -7,6 +7,7 @@ export const NAV_ITEMS = [
   { id: 'queue', label: 'Approvals', mobileLabel: 'More', icon: ListChecks, description: 'Drafts waiting for review or export.' },
   { id: 'history', label: 'History', mobileLabel: 'More', icon: History, description: 'Saved scans and versions.' },
   { id: 'pricing', label: 'Pricing', mobileLabel: 'More', icon: CreditCard, description: 'Plans and upgrade options.' },
+  { id: 'arcade', label: 'Arcade', mobileLabel: 'More', icon: Gamepad2, description: 'Explore the GaugeGap science arcade and interactive labs.' },
   { id: 'research', label: 'Research', mobileLabel: 'More', icon: FlaskConical, description: 'Layer map and experimental lab.' },
 ];
 
