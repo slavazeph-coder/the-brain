@@ -27,11 +27,15 @@ const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.
   .then((module) => ({ default: module.PowderLabPage })));
 
 function resolveRoute(pathname) {
+  if (pathname.startsWith('/arcade')) return 'arcade';
   if (pathname.startsWith('/app')) return 'app';
   if (pathname.startsWith('/reconstruct')) return 'reconstruct';
   if (pathname.startsWith('/evidence')) return 'evidence';
   if (pathname.startsWith('/lab')) return 'lab';
-  return 'landing';
+  // The product is now the homepage. The old GaugeGap landing experience lives
+  // at /arcade so cold visitors can get to the BrainSNN decision engine without
+  // an extra click.
+  return 'app';
 }
 
 /** Module scope so a remount cannot report a second arrival for one page load. */
@@ -90,7 +94,7 @@ export function AppShell() {
 
   useEffect(() => {
     if (route === 'app') {
-      document.title = 'BrainSNN | Decision Engine for Brand Content';
+      document.title = 'BrainSNN | Creative Decision Intelligence';
     }
   }, [route]);
 
@@ -112,8 +116,14 @@ export function AppShell() {
 
   const navigate = useCallback((id) => {
     const aliases = { cortex: 'analyze', synapse: 'improve', memory: 'history' };
+    if (id === 'arcade') {
+      window.history.pushState({}, '', '/arcade');
+      setRoute('arcade');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (route !== 'app') {
-      window.history.pushState({}, '', '/app');
+      window.history.pushState({}, '', '/');
       setRoute('app');
     }
     setActive(aliases[id] || id);
@@ -122,7 +132,7 @@ export function AppShell() {
 
   const openWorkspace = useCallback((prefill = '') => {
     if (typeof prefill === 'string') scan.setInput(prefill);
-    window.history.pushState({}, '', '/app');
+    window.history.pushState({}, '', '/');
     setRoute('app');
     setActive('analyze');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -130,7 +140,8 @@ export function AppShell() {
 
   const openLanding = useCallback(() => {
     window.history.pushState({}, '', '/');
-    setRoute('landing');
+    setRoute('app');
+    setActive('analyze');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   }, []);
 
@@ -261,7 +272,7 @@ export function AppShell() {
     return <HoldoutEvidencePage onHome={openLanding} onStart={openWorkspace} />;
   }
 
-  if (route === 'landing') {
+  if (route === 'arcade') {
     return (
       <LandingPage
         onStart={openWorkspace}
