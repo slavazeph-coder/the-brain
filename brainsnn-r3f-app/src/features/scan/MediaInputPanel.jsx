@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Film, LoaderCircle, Upload, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { frameSignalFromPixels, sampleCountForDuration } from '../../lib/mediaFusion.js';
@@ -91,8 +91,17 @@ async function sampleVideo(file) {
 
 export function MediaInputPanel({ media, onMedia, disabled = false }) {
   const inputRef = useRef(null);
+  const previewUrlRef = useRef('');
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+
+  function revokePreview() {
+    if (!previewUrlRef.current) return;
+    URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = '';
+  }
+
+  useEffect(() => () => revokePreview(), []);
 
   async function handleFile(event) {
     const file = event.target.files?.[0];
@@ -101,15 +110,26 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
     setStatus('Sampling visual changes locally…');
     try {
       const sampled = await sampleVideo(file);
-      onMedia(sampled);
-      setStatus(`Ready: ${sampled.signals.length} frames sampled across ${sampled.duration.toFixed(1)}s.`);
+      revokePreview();
+      const previewUrl = URL.createObjectURL(file);
+      previewUrlRef.current = previewUrl;
+      onMedia({ ...sampled, previewUrl });
+      setStatus(`Ready: ${sampled.signals.length} frames sampled across ${sampled.duration.toFixed(1)}s. Local preview stays in this browser session.`);
     } catch (sampleError) {
+      revokePreview();
       onMedia(null);
       setStatus('');
       setError(sampleError?.message || 'Could not sample this video.');
     } finally {
       if (inputRef.current) inputRef.current.value = '';
     }
+  }
+
+  function removeMedia() {
+    revokePreview();
+    onMedia(null);
+    setStatus('');
+    setError('');
   }
 
   return (
@@ -126,7 +146,7 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
           {media ? 'Replace video' : 'Choose video'}
         </Button>
         {media ? (
-          <Button variant="ghost" onClick={() => { onMedia(null); setStatus(''); }} disabled={disabled}>
+          <Button variant="ghost" onClick={removeMedia} disabled={disabled}>
             <X size={16} aria-hidden="true" /> Remove
           </Button>
         ) : null}
@@ -134,7 +154,7 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
       {media ? (
         <div className="media-ready-card">
           <strong>{media.fileName}</strong>
-          <span>{media.duration.toFixed(1)}s · {media.signals.length} sampled frames · raw file stays local</span>
+          <span>{media.duration.toFixed(1)}s · {media.signals.length} sampled frames · raw file stays local · preview available this session</span>
         </div>
       ) : null}
       {status ? <p className="bsn-note" role="status">{status}</p> : null}
