@@ -1,15 +1,16 @@
 name: CI
 
-# Gates every pull request (and non-main branch push) that touches the app:
+# Gates every pull request that touches the app or its deployment workflow:
 # typecheck, the deterministic test suite, a production build, and the stdio
-# MCP server smoke test. Runs before the Railway deploy workflow (which is
-# push-to-main only), so red tests block a merge instead of shipping.
+# MCP server smoke test. The push-to-main deploy workflow repeats the production
+# build gate before Railway receives a release.
 
 on:
   pull_request:
     paths:
       - "brainsnn-r3f-app/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/brainsnn-app-deploy.yml"
   workflow_dispatch:
 
 permissions:
