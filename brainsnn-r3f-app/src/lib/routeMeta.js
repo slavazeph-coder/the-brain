@@ -1,170 +1,106 @@
-// Per-route titles and social previews.
-//
-// This is a single-page app, so every route was served the same index.html and
-// therefore the same <title> and the same Open Graph card. A link to the powder
-// lab, a shared grid, a challenge link and the homepage all previewed
-// identically — which matters here more than for most sites, because sharing is
-// the product's growth loop. The share button says "Link copied. It carries the
-// whole grid, no server involved", and the preview then said nothing about the
-// grid.
-//
-// Social scrapers do not run JavaScript, so setting document.title on the
-// client cannot fix this. The server has to put the right tags in the HTML it
-// sends, which is what applyRouteMeta does.
-//
-// The same argument, taken one step further, is why each route also carries a
-// `heading` and `body` here. The document this server sends is
-// `<div id="root"></div>` and a module script: a crawler that does not execute
-// JavaScript sees a blank page on every URL. Google renders eventually; the
-// assistant crawlers that increasingly decide what gets recommended mostly do
-// not. So each route's real content — the claim it makes, in its own words —
-// is injected into #root, where React 19's createRoot replaces it on mount.
-// Visitors get the app; crawlers get a page that says something.
+// Per-route titles, crawler-readable copy and social previews.
+// The server rewrites these before serving the SPA because most social scrapers
+// do not execute JavaScript.
 
 import { buildHoldoutReport } from './holdoutReport.js';
 
-const SITE_NAME = 'GaugeGap Foundry by BrainSNN';
-
-// The evidence card quotes two figures, so it computes them rather than
-// repeating them. A social card is the one place a stale number does the most
-// damage: it is what gets screenshotted and pasted into a pitch, long after the
-// page it came from has moved on. ~20 ms once at server boot, and this module is
-// imported only by server.ts.
+const SITE_NAME = 'BrainSNN';
 const EVIDENCE = buildHoldoutReport();
 
-/** Longest matching prefix wins, so `/lab` can differ from `/`. */
+/** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
 const ROUTES = [
   {
     path: '/lab',
-    title: 'Neuro Powder Lab | Drop sand, then build a brain out of it',
+    title: 'Neuro Powder Lab | BrainSNN Arcade',
     description:
-      'A falling-sand sandbox where four of the materials are a spiking neuron model. '
-      + 'Draw a circuit, watch it learn, and read its firing regime from the same metrics '
-      + 'module the research page uses.',
+      'A falling-sand sandbox where four materials are a spiking neuron model. '
+      + 'Draw a circuit, watch it learn, and inspect its firing regime.',
     heading: 'Neuro Powder Lab',
     body: [
-      'A falling-sand sandbox that turns into a neural circuit. Sand, water and oil '
-      + 'behave the way a powder game leads you to expect. Four of the materials do '
-      + 'not: they are neurons, synapses and the wiring between them, running a '
-      + 'spiking model rather than an animation of one.',
-      'Draw a circuit cell by cell, drive it, and watch the synapses change weight. '
-      + 'The firing regime is measured by the same metrics module the research page '
-      + 'uses, so what the lab reports and what the research claims cannot disagree.',
-      'Any grid can be shared as a link. The whole circuit travels inside the URL — '
-      + 'there is no server copy, and nothing about it is stored here.',
+      'A falling-sand sandbox that turns into a neural circuit. Sand, water and oil behave the way a powder game leads you to expect; neurons, synapses and wiring run a spiking model rather than a decorative animation.',
+      'Draw a circuit cell by cell, drive it, and watch the synapses change weight. The lab uses the same measured firing-regime metrics exposed in BrainSNN research.',
+      'Any grid can be shared as a link. The circuit travels inside the URL, so there is no server copy of the grid.',
+    ],
+  },
+  {
+    path: '/arcade',
+    title: 'GaugeGap Arcade | Playable BrainSNN experiments',
+    description:
+      'Explore BrainSNN’s interactive research playground: neural circuits, fractals, cognitive experiments and shareable simulations.',
+    heading: 'GaugeGap Arcade',
+    body: [
+      'The Arcade is BrainSNN’s experimental playground: interactive models, neural simulations and small research experiences you can operate rather than only read about.',
+      'It sits behind the main BrainSNN analyzer so visitors can use the product first, then explore the science and experiments underneath it.',
     ],
   },
   {
     path: '/reconstruct',
-    title: 'Reconstruct a Stronger Claim | GaugeGap Foundry',
+    title: 'Reconstruct a Stronger Claim | BrainSNN',
     description:
-      'Separate what the evidence supports from what the story merely implies, '
-      + 'then rebuild the claim responsibly.',
+      'Separate what the evidence supports from what the story merely implies, then rebuild the claim responsibly.',
     heading: 'Reconstruct a stronger claim',
     body: [
-      'Most weak claims are not lies. They are a supported finding and an '
-      + 'unsupported implication, welded together in one sentence so that '
-      + 'disagreeing with the second looks like denying the first.',
-      'Reconstruct pulls the two apart: what the evidence actually carries, what '
-      + 'the framing adds on top, and what a version that keeps only the first '
-      + 'would sound like.',
+      'Most weak claims are not lies. They are a supported finding and an unsupported implication welded together in one sentence.',
+      'Reconstruct pulls the two apart: what the evidence actually carries, what the framing adds on top, and what a version that keeps only the supported part would sound like.',
     ],
   },
   {
-    // The card is the pitch here: a vendor leading with its own worst number is
-    // the thing worth clicking, so the description says the number rather than
-    // promising accuracy.
     path: '/evidence',
-    title: 'What our detector scores on text it has never seen | GaugeGap Foundry',
+    title: 'What BrainSNN scores on text it has never seen | BrainSNN',
     description:
       'The held-out evaluation, computed live: rank agreement falls from '
       + `${EVIDENCE.inSample.rho} on the passages the cue patterns were written against to `
       + `${EVIDENCE.outOfSample.rho} on ${EVIDENCE.corpusSize} it had never seen. `
-      + `Every miss and all ${EVIDENCE.falseAlarmCount} false alarms are shown, with the `
-      + 'phrases behind each detection.',
+      + `Every miss and all ${EVIDENCE.falseAlarmCount} false alarms are shown.`,
     heading: 'What the detector scores on text it has never seen',
     body: [
-      `Rank agreement on the passages the cue patterns were written against is `
-      + `${EVIDENCE.inSample.rho}. On ${EVIDENCE.corpusSize} passages the detector had `
-      + `never seen, it is ${EVIDENCE.outOfSample.rho}. The gap between those two numbers `
-      + 'is the part of the score that came from having seen the answer.',
-      `Every miss and all ${EVIDENCE.falseAlarmCount} false alarms are listed, each with `
-      + 'the phrases that triggered it, so a disagreement can be about a specific '
-      + 'passage rather than about the average.',
-      'The figures are computed as this page is served, from the corpus in the '
-      + 'repository. They are not transcribed from a report, which is why they can '
-      + 'go down.',
+      `Rank agreement on the passages the cue patterns were written against is ${EVIDENCE.inSample.rho}. On ${EVIDENCE.corpusSize} passages the detector had never seen, it is ${EVIDENCE.outOfSample.rho}.`,
+      `Every miss and all ${EVIDENCE.falseAlarmCount} false alarms are listed with the phrases that triggered them, so disagreements can be inspected case by case.`,
+      'The figures are computed as this page is served from the corpus in the repository rather than copied from a static report.',
     ],
   },
   {
     path: '/app',
-    title: 'BrainSNN | Score any text for pressure, trust and manipulation',
+    title: 'BrainSNN | Turn text, pages and video into decision intelligence',
     description:
-      'Paste a headline, ad or email and see attention pressure, emotional charge, '
-      + 'trust cost and named persuasion techniques — with the claim boundary visible.',
-    heading: 'Score any text for pressure, trust and manipulation',
+      'Paste content or upload a screen recording. BrainSNN surfaces attention, trust, evidence gaps, visual transitions, workflow steps and specific next actions.',
+    heading: 'Analyze what you are about to publish — or show BrainSNN what happened',
     body: [
-      'Paste a headline, an ad, a cold email or a message that felt wrong, and get '
-      + 'a reading: how hard it pushes for attention, what it costs in trust, which '
-      + 'emotions it reaches for, and which named persuasion techniques it uses.',
-      'The techniques are named the way the research literature names them — Loaded '
-      + 'Language, Appeal to Fear, Doubt, Bandwagon and the rest of the SemEval '
-      + 'persuasion taxonomy — so a score can be checked against work done outside '
-      + 'this project, and each one is shown with the phrase that triggered it.',
-      'Scoring is deterministic and runs on the server without a model key: the same '
-      + 'text always produces the same result, and every scan carries a receipt hash '
-      + 'that can be recomputed.',
+      'BrainSNN accepts text, page copy, local video or screen recordings, and decoded neural-model transcripts. It turns those inputs into structured attention, trust, risk, evidence and workflow signals.',
+      'Video mode adaptively samples low-resolution visual changes in the browser and fuses those timestamps with optional transcript or operator notes. The raw video is not uploaded by this V0.1 path.',
+      'Recommendations point back to the actual claim, proof line, workflow step or timestamp that caused them. Visual transitions are review cues, not object, person or action recognition.',
     ],
   },
   {
     path: '/',
-    title: 'GaugeGap Foundry | Play with the impossible',
+    title: 'BrainSNN | Turn text, pages and video into decision intelligence',
     description:
-      'Playable science and custom interactive experiences by BrainSNN. Explore live '
-      + 'simulations, share exact run states, or build a focused pilot for your audience.',
-    heading: 'Play with the impossible',
+      'Paste content or upload a screen recording. BrainSNN surfaces attention, trust, evidence gaps, visual transitions, workflow steps and specific next actions.',
+    heading: 'Know what lands — and what happened',
     body: [
-      'GaugeGap Foundry builds science you operate rather than read about. Each lab '
-      + 'is a real model with its assumptions visible: draw a spiking circuit in a '
-      + 'falling-sand grid, push a content analyzer until it breaks, or run a '
-      + 'simulation and share the exact state it ended in.',
-      'Underneath sits BrainSNN, a deterministic engine that scores text for '
-      + 'attention pressure, trust, emotional charge and named persuasion techniques '
-      + '— and that publishes what it scores on text it has never seen, including '
-      + 'where it fails.',
-      'Everything public here is an educational numerical model, not proof of a '
-      + 'physical claim. Where a number would be easy to overstate, the page states '
-      + 'the boundary instead.',
+      'BrainSNN is the product on the homepage. Paste a draft, page, ad, email or script, or upload a local screen recording and run the analysis without first entering a separate app.',
+      'The current stack combines deterministic content signals with contextual recommendations. Video mode adds browser-local visual-change sampling and transcript-to-workflow extraction; neural mode accepts decoded text from an authorized decoder rather than raw brain signals.',
+      'Results are directional AI-estimated signals, not literal neurological measurement. GaugeGap Arcade and the research pages remain available underneath the main analyzer for people who want to inspect the experiments and evidence.',
     ],
   },
 ];
 
-/**
- * Links every route, on every route.
- *
- * A crawler that does not execute JavaScript sees no navigation at all — the
- * menus are React. Without this, each page is an island and only whichever URL
- * happened to get linked from outside is discoverable.
- */
 const CRAWL_LINKS = Object.freeze([
-  { path: '/', label: 'GaugeGap Foundry' },
+  { path: '/', label: 'BrainSNN analyzer' },
+  { path: '/arcade', label: 'GaugeGap Arcade' },
   { path: '/lab', label: 'Neuro Powder Lab' },
-  { path: '/app', label: 'BrainSNN content analysis' },
+  { path: '/app', label: 'BrainSNN legacy app route' },
   { path: '/evidence', label: 'Held-out evaluation' },
   { path: '/reconstruct', label: 'Reconstruct a claim' },
 ]);
 
-/** A shared grid deserves to say so rather than inheriting the lab's generic card. */
 const SHARED_GRID = {
   title: 'Someone built this in the Neuro Powder Lab',
   description:
-    'A circuit drawn cell by cell in a falling-sand sandbox, carried entirely in this '
-    + 'link — no server involved. Open it, then draw your own.',
+    'A circuit drawn cell by cell in a falling-sand sandbox, carried entirely in this link — no server copy required.',
   heading: 'Someone built this in the Neuro Powder Lab',
   body: [
-    'This link carries a circuit somebody drew cell by cell in a falling-sand '
-    + 'sandbox where four of the materials are a spiking neuron model. The whole '
-    + 'grid travels inside the URL — there is no server copy to look up.',
+    'This link carries a circuit somebody drew cell by cell in a falling-sand sandbox where four materials are a spiking neuron model.',
     'Open it to watch it run, then clear the grid and draw your own.',
   ],
 };
@@ -179,9 +115,6 @@ export function resolveRouteMeta(pathname = '/', search = '') {
     return {
       ...route,
       ...SHARED_GRID,
-      // The card becomes a picture of the circuit in the link. Every other
-      // preview on the site can only show the site; this one can show the thing
-      // that was actually shared, which is the reason anyone opens it.
       image: `/api/og/lab?grid=${encodeURIComponent(grid)}`,
     };
   }
@@ -196,14 +129,6 @@ function escapeAttribute(value) {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * The content a crawler sees, rendered into #root.
- *
- * Styled to match the app's own background rather than left unstyled, because
- * for a moment on a slow connection a real visitor sees this too — it should
- * read as the page arriving, not as a different page flashing past. It is also
- * what someone browsing with JavaScript off gets, which was previously nothing.
- */
 export function renderContentBlock(meta, currentPath = '/') {
   if (!meta?.heading) return '';
 
@@ -224,13 +149,6 @@ export function renderContentBlock(meta, currentPath = '/') {
     + '</main>';
 }
 
-/**
- * Rewrites the title and the description/OG/Twitter tags in a built index.html.
- *
- * Deliberately a string rewrite over the existing tags rather than an injection
- * of extra ones: duplicate og:title tags are resolved differently by different
- * scrapers, so there must only ever be one of each.
- */
 export function applyRouteMeta(html, pathname, search = '', origin = '') {
   const meta = resolveRouteMeta(pathname, search);
   const title = escapeAttribute(meta.title);
@@ -239,26 +157,11 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
 
   let out = html
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${title}</title>`)
-    .replace(
-      /(<meta\s+name="description"\s+content=")[\s\S]*?(")/,
-      `$1${description}$2`,
-    )
-    .replace(
-      /(<meta\s+property="og:title"\s+content=")[\s\S]*?(")/,
-      `$1${title}$2`,
-    )
-    .replace(
-      /(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/,
-      `$1${description}$2`,
-    )
-    .replace(
-      /(<meta\s+name="twitter:title"\s+content=")[\s\S]*?(")/,
-      `$1${title}$2`,
-    )
-    .replace(
-      /(<meta\s+name="twitter:description"\s+content=")[\s\S]*?(")/,
-      `$1${description}$2`,
-    );
+    .replace(/(<meta\s+name="description"\s+content=")[\s\S]*?(")/, `$1${description}$2`)
+    .replace(/(<meta\s+property="og:title"\s+content=")[\s\S]*?(")/, `$1${title}$2`)
+    .replace(/(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/, `$1${description}$2`)
+    .replace(/(<meta\s+name="twitter:title"\s+content=")[\s\S]*?(")/, `$1${title}$2`)
+    .replace(/(<meta\s+name="twitter:description"\s+content=")[\s\S]*?(")/, `$1${description}$2`);
 
   if (url) {
     out = out
@@ -266,9 +169,6 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
       .replace(/(<link\s+rel="canonical"\s+href=")[\s\S]*?(")/, `$1${url}$2`);
   }
 
-  // A route may name its own preview image; everything else keeps the site card.
-  // The shared-grid case uses this to preview as the circuit it carries, which
-  // is the only preview here that can say something the site card cannot.
   if (meta.image && origin) {
     const image = escapeAttribute(`${origin.replace(/\/$/, '')}${meta.image}`);
     out = out
@@ -276,9 +176,6 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
       .replace(/(<meta\s+name="twitter:image"\s+content=")[\s\S]*?(")/, `$1${image}$2`);
   }
 
-  // Injected rather than appended: React's createRoot replaces the children of
-  // #root on mount, so this has to be inside it to be replaced rather than left
-  // behind under the running app.
   const block = renderContentBlock(meta, pathname);
   if (block) {
     out = out.replace(
