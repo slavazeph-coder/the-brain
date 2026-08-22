@@ -16,6 +16,7 @@ import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
 import { InputFusionPanel } from './InputFusionPanel.jsx';
 import { ResultFeedback } from './ResultFeedback.jsx';
+import { CreativeNeuralReadout } from './CreativeNeuralReadout.jsx';
 import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
@@ -70,10 +71,11 @@ function TabPanel({ id, active, children }) {
   );
 }
 
-export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
+export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
   const verdict = deriveExecutiveVerdict(result);
   const [status, setStatus] = useState('');
   const [tab, setTab] = useState('overview');
+  const isVideoReadout = result?.contentType === 'video' && Boolean(result?.multimodal);
 
   function selectTab(next) {
     setTab(next);
@@ -89,12 +91,22 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
   return (
     <div className="results-workbench" data-testid="results-workspace">
       <main className="results-main" aria-label="Brain Scan results">
-        <ExecutiveVerdict result={result} />
+        {isVideoReadout ? (
+          <CreativeNeuralReadout
+            result={result}
+            media={media}
+            onCompare={onImprove}
+            onExport={onExport}
+          />
+        ) : (
+          <ExecutiveVerdict result={result} />
+        )}
         <ResultsTabs active={tab} onChange={selectTab} />
         <TabPanel id="overview" active={tab}>
-          <InputFusionPanel result={result} />
-          <BrainSignalView result={result} />
+          {!isVideoReadout ? <InputFusionPanel result={result} /> : null}
+          {!isVideoReadout ? <BrainSignalView result={result} /> : null}
           <DecisionScorecard result={result} />
+          {isVideoReadout ? <InputFusionPanel result={result} /> : null}
         </TabPanel>
         <TabPanel id="lines" active={tab}>
           <ContentHeatmap result={result} />

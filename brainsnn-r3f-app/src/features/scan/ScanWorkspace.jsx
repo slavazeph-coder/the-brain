@@ -41,6 +41,7 @@ export function ScanWorkspace({ scan, onImprove, onSave, onQueue, onExport }) {
         <div ref={resultsRef} className="results-scroll-anchor">
           <ResultsWorkspace
             result={scan.state.result}
+            media={scan.state.media}
             onImprove={onImprove}
             onSave={onSave}
             onQueue={onQueue}
