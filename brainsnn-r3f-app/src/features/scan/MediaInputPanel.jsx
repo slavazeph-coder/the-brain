@@ -32,10 +32,13 @@ function once(target, eventName, timeoutMs = 8000) {
   });
 }
 
-async function seek(video, time) {
-  if (Math.abs(video.currentTime - time) < 0.03 && video.readyState >= 2) return;
-  video.currentTime = time;
-  await once(video, 'seeked');
+async function seek(video, time, duration) {
+  let target = time;
+  if (video.readyState < 2 && target < 0.02) target = Math.min(0.02, Math.max(0, duration - 0.04));
+  if (Math.abs(video.currentTime - target) < 0.03 && video.readyState >= 2) return;
+  const pending = once(video, 'seeked');
+  video.currentTime = target;
+  await pending;
 }
 
 async function sampleVideo(file) {
@@ -47,10 +50,11 @@ async function sampleVideo(file) {
   video.preload = 'metadata';
   video.muted = true;
   video.playsInline = true;
+  const metadataReady = once(video, 'loadedmetadata');
   video.src = objectUrl;
 
   try {
-    await once(video, 'loadedmetadata');
+    await metadataReady;
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
     if (!duration || duration <= 0) throw new Error('Could not read the video duration.');
 
@@ -65,7 +69,7 @@ async function sampleVideo(file) {
     for (let index = 0; index < SAMPLE_COUNT; index += 1) {
       const fraction = SAMPLE_COUNT === 1 ? 0.5 : index / (SAMPLE_COUNT - 1);
       const timestamp = Math.min(Math.max(0, duration * fraction), Math.max(0, duration - 0.04));
-      await seek(video, timestamp);
+      await seek(video, timestamp, duration);
       context.drawImage(video, 0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
       const pixels = context.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT).data;
       signals.push(frameSignalFromPixels(pixels, previous, timestamp));
