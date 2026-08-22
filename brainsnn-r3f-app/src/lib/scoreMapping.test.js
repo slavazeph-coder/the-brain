@@ -14,13 +14,15 @@ describe('score mapping', () => {
     expect(metrics.every((metric) => metric.value >= 0 && metric.value <= 100)).toBe(true);
   });
 
-  it('generates an executive verdict without inventing backend fields', () => {
+  it('generates an executive verdict from contextual recommendation fields', () => {
     const result = analyzeContentLocally({
       content: 'They do not want you to know this urgent secret. Act now before every competitor steals your customers.',
     });
     const verdict = deriveExecutiveVerdict(result);
-    expect(verdict.headline).toMatch(/Trust risk|High pressure|Clear draft|Strong hook/);
-    expect(verdict.label).toBe('Demo model result');
+    expect(verdict.headline).toBe(result.recommendations[0].title);
+    expect(verdict.primaryRisk).toBe(result.recommendations[0].rationale);
+    expect(verdict.bestNextMove).toBe(result.recommendations[0].rewriteHint);
+    expect(verdict.label).toBe('Deterministic local result');
     expect(verdict.score).toBeGreaterThanOrEqual(0);
   });
 
