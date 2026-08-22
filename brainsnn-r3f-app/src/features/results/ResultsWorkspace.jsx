@@ -123,34 +123,51 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
           <TechnicalDetails result={result} onOpenResearch={onOpenResearch || (() => {})} />
         </TabPanel>
       </main>
-      <aside className="results-inspector" aria-label="Recommended next actions">
-        <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Deterministic local result' : 'AI-estimated response'}</Badge>
-        <div className="inspector-score">
-          <strong>{verdict.score}</strong>
-          <span>Decision score</span>
-        </div>
-        <div className="inspector-callout inspector-viral">
-          <span>Viral pull</span>
-          <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
-        </div>
-        <div className="inspector-callout">
-          <span>Primary risk</span>
-          <strong>{verdict.primaryRisk}</strong>
-        </div>
-        <div className="inspector-callout">
-          <span>Best next action</span>
-          <p>{verdict.bestNextMove}</p>
-        </div>
-        <div className="inspector-actions">
-          <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
-          <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
-          <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
-          <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
-          <Button variant="secondary" onClick={() => onExport(result)}><Share2 size={16} aria-hidden="true" /> Share your score</Button>
-          <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
-        </div>
-        {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
-        <ResultFeedback key={result.id || result.timestamp} result={result} />
+      <aside className={`results-inspector${isVideoReadout ? ' results-inspector-video' : ''}`} aria-label="Recommended next actions">
+        {isVideoReadout ? (
+          <>
+            <Badge tone="cyan">Video workstation</Badge>
+            <p className="bsn-note">The Creative Neural Readout now owns the score, risk, timed moments and exact edit. Keep this rail for actions only.</p>
+            <div className="inspector-actions">
+              <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
+              <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
+              <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
+              <Button variant="secondary" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
+            </div>
+            {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
+            <ResultFeedback key={result.id || result.timestamp} result={result} />
+          </>
+        ) : (
+          <>
+            <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Deterministic local result' : 'AI-estimated response'}</Badge>
+            <div className="inspector-score">
+              <strong>{verdict.score}</strong>
+              <span>Decision score</span>
+            </div>
+            <div className="inspector-callout inspector-viral">
+              <span>Viral pull</span>
+              <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
+            </div>
+            <div className="inspector-callout">
+              <span>Primary risk</span>
+              <strong>{verdict.primaryRisk}</strong>
+            </div>
+            <div className="inspector-callout">
+              <span>Best next action</span>
+              <p>{verdict.bestNextMove}</p>
+            </div>
+            <div className="inspector-actions">
+              <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
+              <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
+              <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
+              <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
+              <Button variant="secondary" onClick={() => onExport(result)}><Share2 size={16} aria-hidden="true" /> Share your score</Button>
+              <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
+            </div>
+            {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
+            <ResultFeedback key={result.id || result.timestamp} result={result} />
+          </>
+        )}
       </aside>
     </div>
   );
