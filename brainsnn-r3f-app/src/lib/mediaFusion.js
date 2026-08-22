@@ -1,5 +1,6 @@
 const MAX_WORKFLOW_STEPS = 8;
-const MAX_EVENTS = 12;
+const MAX_EVENTS = 16;
+const MAX_BROWSER_SAMPLES = 120;
 
 function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
@@ -16,18 +17,24 @@ function toScore(value) {
   return Math.round(clamp(Number(value) || 0) * 100);
 }
 
+function average(values = []) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + (Number(value) || 0), 0) / values.length;
+}
+
 /**
- * Browser-local sampling density. Short clips get enough samples to catch fast
- * UI steps; longer clips stay bounded so a visitor never pays an unbounded CPU
- * cost just for choosing a video.
+ * Browser-local sampling density. Short-form creative now receives enough
+ * samples to support useful sliding-window analysis while long clips remain
+ * bounded so a visitor never pays an unbounded CPU cost for selecting a video.
  */
 export function sampleCountForDuration(duration = 0) {
   const seconds = Math.max(0, Number(duration) || 0);
-  if (seconds <= 20) return 12;
-  if (seconds <= 45) return 16;
-  if (seconds <= 90) return 24;
-  if (seconds <= 180) return 28;
-  return 32;
+  if (seconds <= 0) return 12;
+  if (seconds <= 15) return Math.max(12, Math.ceil(seconds * 2));
+  if (seconds <= 30) return Math.max(30, Math.ceil(seconds * 1.5));
+  if (seconds <= 60) return Math.max(45, Math.ceil(seconds));
+  if (seconds <= 180) return Math.max(60, Math.ceil(seconds * 0.5));
+  return Math.min(MAX_BROWSER_SAMPLES, Math.max(72, Math.ceil(seconds * 0.25)));
 }
 
 export function frameSignalFromPixels(data, previous = null, timestamp = 0) {
@@ -89,6 +96,72 @@ export function deriveVisualEvents(signals = []) {
     .slice(0, MAX_EVENTS);
 }
 
+export function deriveWindowMoments(points = [], requestedWindowSeconds = 5) {
+  if (!points.length) {
+    return {
+      windowSeconds: requestedWindowSeconds,
+      strongest: null,
+      weakest: null,
+      largestDrop: null,
+      windows: [],
+    };
+  }
+
+  const lastTimestamp = Number(points[points.length - 1]?.timestamp) || 0;
+  const firstTimestamp = Number(points[0]?.timestamp) || 0;
+  const availableDuration = Math.max(0.5, lastTimestamp - firstTimestamp);
+  const windowSeconds = Math.min(Math.max(1, requestedWindowSeconds), Math.max(1, availableDuration));
+  const windows = [];
+
+  for (let index = 0; index < points.length; index += 1) {
+    const start = Number(points[index]?.timestamp) || 0;
+    const end = Math.min(lastTimestamp || (start + windowSeconds), start + windowSeconds);
+    const members = points.filter((point) => {
+      const timestamp = Number(point.timestamp) || 0;
+      return timestamp >= start && timestamp <= end;
+    });
+    if (!members.length) continue;
+
+    const first = members[0];
+    const last = members[members.length - 1];
+    const attention = average(members.map((point) => point.attentionProxy));
+    const responseChange = average(members.map((point) => point.responseChange));
+    const load = average(members.map((point) => point.loadProxy));
+    const drop = (Number(first.attentionProxy) || 0) - (Number(last.attentionProxy) || 0);
+
+    windows.push({
+      start: Number(start.toFixed(2)),
+      end: Number(end.toFixed(2)),
+      duration: Number(Math.max(0, end - start).toFixed(2)),
+      sampleCount: members.length,
+      attentionProxy: Math.round(attention),
+      responseChange: Math.round(responseChange),
+      loadProxy: Math.round(load),
+      attentionDrop: Math.round(drop),
+    });
+  }
+
+  const usable = windows.filter((window) => window.sampleCount >= Math.min(2, points.length));
+  const source = usable.length ? usable : windows;
+  const strongest = source.reduce((best, window) => (
+    window.responseChange > best.responseChange ? window : best
+  ), source[0]);
+  const weakest = source.reduce((best, window) => (
+    window.attentionProxy < best.attentionProxy ? window : best
+  ), source[0]);
+  const largestDrop = source.reduce((best, window) => (
+    window.attentionDrop > best.attentionDrop ? window : best
+  ), source[0]);
+
+  return {
+    windowSeconds,
+    strongest,
+    weakest,
+    largestDrop,
+    windows,
+  };
+}
+
 /**
  * Presentation-oriented V0.1 temporal readout. These values are deliberately
  * labelled proxies: they are derived only from browser-local frame deltas,
@@ -103,6 +176,7 @@ export function deriveTemporalReadout(signals = []) {
       tracks: [],
       strongest: null,
       weakest: null,
+      windows: deriveWindowMoments([]),
       disclaimer: 'No browser-local frame signals were available for a temporal readout.',
     };
   }
@@ -113,7 +187,7 @@ export function deriveTemporalReadout(signals = []) {
     const responseChange = responseChangeForSignal(signal, previous);
     const previousChange = previous ? responseChangeForSignal(previous, previousPrevious) : 0;
     const luminance = clamp(Number(signal.luminance) || 0);
-    const warmth = clamp(0.5 + ((Number(signal.red) || 0) - (Number(signal.blue) || 0)) * 0.9);
+    const visualTone = clamp(0.5 + ((Number(signal.red) || 0) - (Number(signal.blue) || 0)) * 0.9);
     const attentionProxy = clamp(0.18 + responseChange * 0.68 + Math.abs(luminance - 0.5) * 0.12);
     const loadProxy = clamp(0.16 + responseChange * 0.5 + previousChange * 0.24 + Math.abs(luminance - (previous?.luminance || luminance)) * 0.35);
     const stability = clamp(1 - responseChange);
@@ -123,7 +197,7 @@ export function deriveTemporalReadout(signals = []) {
       responseChange: toScore(responseChange),
       attentionProxy: toScore(attentionProxy),
       loadProxy: toScore(loadProxy),
-      toneProxy: toScore(warmth),
+      visualTone: toScore(visualTone),
       luminance: toScore(luminance),
       stability: toScore(stability),
     };
@@ -132,6 +206,7 @@ export function deriveTemporalReadout(signals = []) {
   const strongest = points.reduce((best, point) => point.responseChange > best.responseChange ? point : best, points[0]);
   const weakCandidates = points.length > 2 ? points.slice(1) : points;
   const weakest = weakCandidates.reduce((best, point) => point.attentionProxy < best.attentionProxy ? point : best, weakCandidates[0]);
+  const windows = deriveWindowMoments(points, 5);
 
   const makeTrack = (id, label, provenance, key) => ({
     id,
@@ -148,12 +223,13 @@ export function deriveTemporalReadout(signals = []) {
       makeTrack('response-change', 'Response change', 'pixel + luminance delta', 'responseChange'),
       makeTrack('attention-proxy', 'Attention proxy', 'visual-change heuristic only', 'attentionProxy'),
       makeTrack('load-proxy', 'Cognitive-load proxy', 'rapid-change heuristic only', 'loadProxy'),
-      makeTrack('tone-proxy', 'Affect / tone proxy', 'colour-energy heuristic; not emotion recognition', 'toneProxy'),
+      makeTrack('visual-tone', 'Visual tone', 'colour-energy signal; not emotion recognition', 'visualTone'),
       makeTrack('luminance', 'Luminance', 'frame brightness', 'luminance'),
       makeTrack('stability', 'Visual stability', 'inverse response change', 'stability'),
     ],
     strongest,
     weakest,
+    windows,
     disclaimer: 'Temporal V0.1 tracks are modelled visual proxies from browser-local frame changes. They are not measured human attention, emotion, cognition or neural activity.',
   };
 }
@@ -224,14 +300,14 @@ function deriveRecommendedEdit(text = '', proofPoints = [], workflowSteps = [], 
     }
   }
 
-  const strongestTime = temporalReadout?.strongest?.timestamp;
+  const strongestWindow = temporalReadout?.windows?.strongest;
   return {
     headline: 'Keep proof attached to the strongest transition',
     instruction: firstProof
       ? `Keep “${firstProof.slice(0, 135)}” visually close to the claim or action it supports.`
       : 'Keep the strongest evidence visually close to the claim or action it supports.',
-    timingNote: Number.isFinite(strongestTime)
-      ? `Largest visual response change occurs around ${formatTime(strongestTime)}; V0.1 cannot verify whether that moment contains the claim or proof.`
+    timingNote: strongestWindow
+      ? `Highest average response-change window is ${formatTime(strongestWindow.start)}–${formatTime(strongestWindow.end)}; V0.1 cannot verify whether that window contains the claim or proof.`
       : 'Exact video placement requires timestamped transcript/audio.',
   };
 }

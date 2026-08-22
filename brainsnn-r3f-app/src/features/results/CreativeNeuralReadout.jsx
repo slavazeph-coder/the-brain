@@ -3,6 +3,11 @@ import { Activity, Download, GitCompare, MessageSquareText, Play, Sparkles, Targ
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
+import {
+  answerFromModelAnalysis,
+  answerScanQuestionLocally,
+  buildScanQuestionPrompt,
+} from '../../lib/scanInterpreter.js';
 import { BrainSignalView } from './BrainSignalView.jsx';
 
 const DEFAULT_QUESTIONS = [
@@ -11,7 +16,7 @@ const DEFAULT_QUESTIONS = [
   'Why did this score what it did?',
   'Which claim needs proof?',
   'What should I move earlier?',
-  'Where is the strongest hook?',
+  'Where is the strongest window?',
 ];
 
 function formatTime(seconds = 0, precision = 1) {
@@ -21,42 +26,16 @@ function formatTime(seconds = 0, precision = 1) {
   return `${String(minutes).padStart(2, '0')}:${remainder.toFixed(precision).padStart(precision ? 4 : 2, '0')}`;
 }
 
+function formatWindow(window) {
+  if (!window) return '—';
+  return `${formatTime(window.start)}–${formatTime(window.end)}`;
+}
+
 function nearestPoint(points = [], time = 0) {
   if (!points.length) return null;
   return points.reduce((best, point) => (
     Math.abs((point.timestamp || 0) - time) < Math.abs((best.timestamp || 0) - time) ? point : best
   ), points[0]);
-}
-
-function answerScanQuestion(question, result, temporal, verdict) {
-  const normalized = String(question || '').toLowerCase();
-  const strongest = temporal?.strongest;
-  const weakest = temporal?.weakest;
-  const recommendation = result?.multimodal?.recommendedEdit;
-  const missing = result?.multimodal?.missingEvidence || [];
-
-  if (/attention|weakest|drop|lose/.test(normalized)) {
-    if (!weakest) return 'This scan has no time-resolved visual samples to rank yet.';
-    return `[${formatTime(weakest.timestamp)}] The visual-attention proxy is lowest here at ${weakest.attentionProxy}/100. This is a browser-local visual-change heuristic, not measured human attention.`;
-  }
-  if (/strongest|hook|best moment|peak/.test(normalized)) {
-    if (!strongest) return 'This scan has no time-resolved visual samples to rank yet.';
-    return `[${formatTime(strongest.timestamp)}] This is the strongest response-change moment in V0.1: ${strongest.responseChange}/100, with attention proxy ${strongest.attentionProxy}/100. Treat it as a visual transition peak, not a measured neurological hook.`;
-  }
-  if (/why|score/.test(normalized)) {
-    return `Decision score ${verdict.score}/100. The current scan-level risk is “${verdict.primaryRisk}”. BrainSNN combines the existing creative metrics with V0.1 multimodal evidence; the time-resolved tracks remain modelled proxies.`;
-  }
-  if (/proof|claim|evidence/.test(normalized)) {
-    if (missing.length) return `${missing[0]} ${recommendation?.instruction || ''}`.trim();
-    return recommendation?.instruction || 'Concrete proof was detected in the supplied transcript/notes. V0.1 cannot yet verify exactly which video second contains that proof because the transcript is not time-aligned.';
-  }
-  if (/move|earlier|change|edit|fix/.test(normalized)) {
-    return recommendation?.instruction || verdict.bestNextMove;
-  }
-  if (/compare|version b|a\/b/.test(normalized)) {
-    return 'A/B comparison is ready at the workflow level: scan Version B, then use Compare Version. This V0.1 workstation does not fabricate a second creative or infer performance without another scan.';
-  }
-  return recommendation?.instruction || `The strongest current signal is at ${strongest ? formatTime(strongest.timestamp) : 'an untimed scan-level result'}. Ask about attention, proof, the score, strongest/weakest moments, or what to change.`;
 }
 
 function Track({ track, duration, currentTime, onSeek }) {
@@ -109,8 +88,12 @@ export function CreativeNeuralReadout({ result, media, onCompare, onExport }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [question, setQuestion] = useState(DEFAULT_QUESTIONS[0]);
   const [answer, setAnswer] = useState('');
+  const [answerSource, setAnswerSource] = useState('');
+  const [answerEvidence, setAnswerEvidence] = useState([]);
+  const [askBusy, setAskBusy] = useState(false);
   const multimodal = result?.multimodal || {};
   const temporal = multimodal.temporalReadout || {};
+  const windows = temporal.windows || {};
   const duration = Number(multimodal.duration) || Number(media?.duration) || 0;
   const verdict = useMemo(() => deriveExecutiveVerdict(result), [result]);
   const current = useMemo(() => nearestPoint(temporal.points || [], currentTime), [currentTime, temporal.points]);
@@ -124,9 +107,39 @@ export function CreativeNeuralReadout({ result, media, onCompare, onExport }) {
     if (videoRef.current && Number.isFinite(videoRef.current.duration)) videoRef.current.currentTime = safe;
   }
 
-  function ask(nextQuestion = question) {
-    setQuestion(nextQuestion);
-    setAnswer(answerScanQuestion(nextQuestion, result, temporal, verdict));
+  async function ask(nextQuestion = question) {
+    const resolvedQuestion = String(nextQuestion || '').trim();
+    if (!resolvedQuestion || askBusy) return;
+    setQuestion(resolvedQuestion);
+
+    const local = answerScanQuestionLocally(resolvedQuestion, result);
+    setAnswer(local.answer);
+    setAnswerEvidence(local.evidence || []);
+    setAnswerSource('deterministic scan interpreter');
+    setAskBusy(true);
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: buildScanQuestionPrompt(resolvedQuestion, result),
+          type: 'text',
+        }),
+      });
+      if (!response.ok) return;
+      const analysis = await response.json();
+      const modelAnswer = answerFromModelAnalysis(analysis);
+      if (modelAnswer) {
+        setAnswer(modelAnswer);
+        setAnswerEvidence(local.evidence || []);
+        setAnswerSource('model-assisted · grounded scan facts');
+      }
+    } catch {
+      // The deterministic answer is already visible; model assistance is optional.
+    } finally {
+      setAskBusy(false);
+    }
   }
 
   return (
@@ -225,17 +238,24 @@ export function CreativeNeuralReadout({ result, media, onCompare, onExport }) {
         </section>
 
         <section className="creative-readout-panel creative-moments-panel" aria-labelledby="creative-moments-heading">
-          <div className="creative-panel-title"><Target size={15} aria-hidden="true" /><span id="creative-moments-heading">MOMENTS</span><strong>VISUAL PROXY</strong></div>
-          <button type="button" onClick={() => seek(temporal.strongest?.timestamp || 0)}>
-            <small>STRONGEST RESPONSE CHANGE</small>
-            <strong>{temporal.strongest ? formatTime(temporal.strongest.timestamp) : '—'}</strong>
-            <span>{temporal.strongest ? `${temporal.strongest.responseChange}/100 change · ${temporal.strongest.attentionProxy}/100 attention proxy` : 'No temporal sample.'}</span>
+          <div className="creative-panel-title"><Target size={15} aria-hidden="true" /><span id="creative-moments-heading">MOMENTS</span><strong>5-SECOND WINDOWS</strong></div>
+          <button type="button" onClick={() => seek(windows.strongest?.start || 0)}>
+            <small>STRONGEST RESPONSE-CHANGE WINDOW</small>
+            <strong>{formatWindow(windows.strongest)}</strong>
+            <span>{windows.strongest ? `${windows.strongest.responseChange}/100 average change · ${windows.strongest.sampleCount} samples` : 'No temporal window.'}</span>
           </button>
-          <button type="button" onClick={() => seek(temporal.weakest?.timestamp || 0)}>
-            <small>WEAKEST VISUAL-ATTENTION PROXY</small>
-            <strong>{temporal.weakest ? formatTime(temporal.weakest.timestamp) : '—'}</strong>
-            <span>{temporal.weakest ? `${temporal.weakest.attentionProxy}/100 attention proxy · review ±2.5s` : 'No temporal sample.'}</span>
+          <button type="button" onClick={() => seek(windows.weakest?.start || 0)}>
+            <small>WEAKEST ATTENTION-PROXY WINDOW</small>
+            <strong>{formatWindow(windows.weakest)}</strong>
+            <span>{windows.weakest ? `${windows.weakest.attentionProxy}/100 average attention proxy · ${windows.weakest.sampleCount} samples` : 'No temporal window.'}</span>
           </button>
+          {windows.largestDrop?.attentionDrop > 0 ? (
+            <button type="button" onClick={() => seek(windows.largestDrop.start || 0)}>
+              <small>LARGEST WITHIN-WINDOW DROP</small>
+              <strong>{formatWindow(windows.largestDrop)}</strong>
+              <span>{windows.largestDrop.attentionDrop}-point attention-proxy decline across the window</span>
+            </button>
+          ) : null}
           <div className="creative-recommendation-card">
             <small>WHAT BRAINSNN WOULD CHANGE</small>
             <strong>{multimodal.recommendedEdit?.headline || 'Add stronger evidence'}</strong>
@@ -248,14 +268,20 @@ export function CreativeNeuralReadout({ result, media, onCompare, onExport }) {
       <section className="creative-ask-panel" aria-labelledby="creative-ask-heading">
         <div className="creative-ask-title"><MessageSquareText size={18} aria-hidden="true" /><div><span className="bsn-eyebrow">Grounded in this scan JSON</span><h3 id="creative-ask-heading">Ask BrainSNN</h3></div></div>
         <div className="creative-question-chips">
-          {DEFAULT_QUESTIONS.map((item) => <button key={item} type="button" onClick={() => ask(item)}>{item}</button>)}
+          {DEFAULT_QUESTIONS.map((item) => <button key={item} type="button" onClick={() => ask(item)} disabled={askBusy}>{item}</button>)}
         </div>
         <form onSubmit={(event) => { event.preventDefault(); ask(question); }}>
           <input value={question} onChange={(event) => setQuestion(event.target.value)} aria-label="Ask BrainSNN about this scan" />
-          <Button variant="primary" type="submit">Ask</Button>
+          <Button variant="primary" type="submit" disabled={askBusy}>{askBusy ? 'Checking…' : 'Ask'}</Button>
         </form>
-        {answer ? <div className="creative-answer" role="status"><strong>BrainSNN</strong><p>{answer}</p></div> : null}
-        <p className="creative-ask-footnote">Answers use the structured result, timestamps and current V0.1 provenance. They do not add hidden object recognition, audio transcription, purchase intent or measured neural data.</p>
+        {answer ? (
+          <div className="creative-answer" role="status">
+            <strong>BrainSNN</strong>
+            <p>{answer}</p>
+            <small>{answerSource}{answerEvidence.length ? ` · evidence: ${answerEvidence.join(', ')}` : ''}</small>
+          </div>
+        ) : null}
+        <p className="creative-ask-footnote">The deterministic interpreter answers immediately from structured scan facts. When the configured BrainSNN model is available it may refine that answer using the same bounded facts; local fallback remains authoritative when model assistance is unavailable. No hidden object recognition, audio transcription, purchase intent or measured neural data is added.</p>
       </section>
     </section>
   );
