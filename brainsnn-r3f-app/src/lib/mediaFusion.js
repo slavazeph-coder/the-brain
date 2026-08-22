@@ -1,5 +1,5 @@
 const MAX_WORKFLOW_STEPS = 8;
-const MAX_EVENTS = 10;
+const MAX_EVENTS = 12;
 
 function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
@@ -10,6 +10,20 @@ function formatTime(seconds = 0) {
   const minutes = Math.floor(safe / 60);
   const remainder = Math.floor(safe % 60);
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
+}
+
+/**
+ * Browser-local sampling density. Short clips get enough samples to catch fast
+ * UI steps; longer clips stay bounded so a visitor never pays an unbounded CPU
+ * cost just for choosing a video.
+ */
+export function sampleCountForDuration(duration = 0) {
+  const seconds = Math.max(0, Number(duration) || 0);
+  if (seconds <= 20) return 12;
+  if (seconds <= 45) return 16;
+  if (seconds <= 90) return 24;
+  if (seconds <= 180) return 28;
+  return 32;
 }
 
 export function frameSignalFromPixels(data, previous = null, timestamp = 0) {
@@ -92,12 +106,17 @@ export function extractProofPoints(text = '') {
   return candidates.filter((item) => proofPattern.test(item)).slice(0, 5);
 }
 
-export function deriveMissingEvidence(text = '', proofPoints = []) {
+export function deriveMissingEvidence(text = '', proofPoints = [], workflowSteps = []) {
   const notes = String(text || '').trim();
   const missing = [];
   if (!notes) missing.push('No transcript or operator notes supplied — the visual layer can segment change, but not infer the business meaning of each scene yet.');
-  if (!proofPoints.length) missing.push('No concrete proof point, customer example, or measurable constraint was detected.');
-  if (notes && !/\b(result|outcome|revenue|conversion|saved|reduced|increased|decreased|faster|cheaper|accuracy|time|cost)\b/i.test(notes)) {
+  if (!proofPoints.length) {
+    const finalStep = workflowSteps.at?.(-1)?.label || workflowSteps[workflowSteps.length - 1]?.label;
+    missing.push(finalStep
+      ? `The workflow reaches “${finalStep.slice(0, 120)}” but no measurable result, customer outcome, or constraint is attached to that step.`
+      : 'No concrete proof point, customer example, or measurable constraint was detected.');
+  }
+  if (notes && !/\b(result|outcome|revenue|conversion|saved|reduced|increased|decreased|faster|cheaper|accuracy|time|cost|roi|roas)\b/i.test(notes)) {
     missing.push('No explicit outcome is stated, so the recommendation layer cannot tie the workflow to measurable value yet.');
   }
   return missing.slice(0, 3);
@@ -108,7 +127,7 @@ export function buildMultimodalFusion({ text = '', media = null } = {}) {
   const events = deriveVisualEvents(signals);
   const workflowSteps = extractWorkflowSteps(text);
   const proofPoints = extractProofPoints(text);
-  const missingEvidence = deriveMissingEvidence(text, proofPoints);
+  const missingEvidence = deriveMissingEvidence(text, proofPoints, workflowSteps);
   const duration = Number(media?.duration) || 0;
   const packetLines = [
     '[BrainSNN multimodal video packet]',
@@ -135,7 +154,7 @@ export function buildMultimodalFusion({ text = '', media = null } = {}) {
   return {
     packet: packetLines.join('\n'),
     result: {
-      schemaVersion: 'brainsnn.multimodal.v0',
+      schemaVersion: 'brainsnn.multimodal.v0.1',
       mode: 'browser-sampled-video',
       fileName: media?.fileName || 'local video',
       duration,
@@ -149,7 +168,7 @@ export function buildMultimodalFusion({ text = '', media = null } = {}) {
         'Screen-recording to structured workflow / SOP draft',
         'Creative video segmentation before publishing',
       ],
-      disclaimer: 'V0 samples visual-change signals in the browser and fuses them with transcript/notes. It does not yet perform object identification or automatic audio transcription.',
+      disclaimer: 'V0.1 samples visual-change signals in the browser and fuses them with transcript/notes. A transition means pixels changed; it does not identify people, objects, actions, or audio yet.',
     },
   };
 }
