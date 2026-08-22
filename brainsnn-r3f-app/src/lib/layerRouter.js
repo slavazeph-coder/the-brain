@@ -147,24 +147,35 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
 export function createRewriteFromLayerStack(content, goal = 'trust') {
   const text = String(content || '').replace(/\s+/g, ' ').trim();
   if (!text) return { content: '', changes: [], layersUsed: layersByIds([41, 42, 68, 88, 89]) };
-  const proofLine = goal === 'curiosity'
-    ? 'Open with the unanswered question, then earn the click with proof.'
-    : goal === 'reduce-risk'
-      ? 'Keep urgency only where there is a clear reason for it.'
-      : goal === 'clarity'
-        ? 'Name the audience, outcome and next action in one clean sequence.'
-        : 'Lead with proof before the ask.';
+
+  const context = analyzeContentLocally({ content: text, forceFallback: true });
+  const primary = context.recommendations?.[0];
   const softened = text
     .replace(/\blast chance\b/gi, 'a useful moment')
     .replace(/\bact now\b/gi, 'see whether it fits')
     .replace(/\bsecret\b/gi, 'practical signal')
     .replace(/\bguaranteed\b/gi, 'designed to help');
+
+  const goalNote = goal === 'curiosity'
+    ? 'Layer 89 Cognitive Translator kept the unanswered question visible without inventing a new claim.'
+    : goal === 'reduce-risk'
+      ? 'Layer 42 Counter-Draft removed unsupported pressure while preserving the intended action.'
+      : goal === 'clarity'
+        ? 'Layer 68 Tone Shifter simplified the sequence without adding claims that were not in the source.'
+        : 'Layer 41 Refutation Library checked the strongest claim against the evidence already present.';
+
+  const contextualChange = primary
+    ? `${primary.title}: ${primary.rewriteHint}`
+    : 'No generic proof instruction was appended; verify the strongest claim against the evidence already in the draft.';
+
   return {
-    content: `${proofLine}\n\n${softened}\n\nAdd one specific proof point before publishing.`,
+    // Keep the copy clean. Recommendations belong in the change log rather than
+    // being pasted into the user's publishable text as a template sentence.
+    content: softened,
     changes: [
-      'Layer 42 Counter-Draft softened pressure language.',
-      'Layer 41 Refutation Library preserved the claim but asked for evidence.',
-      'Layer 68 Tone Shifter kept the intent while reducing manipulation risk.',
+      contextualChange,
+      'Layer 42 Counter-Draft softened pressure language only where it was actually present.',
+      goalNote,
       'Layer 88 Persona Simulator checked that the rewrite remains readable to a cautious buyer.',
     ],
     layersUsed: layersByIds([41, 42, 68, 88, 89]),
