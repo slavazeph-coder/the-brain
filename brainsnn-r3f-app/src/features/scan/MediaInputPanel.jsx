@@ -1,11 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { Film, LoaderCircle, Upload, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
-import { frameSignalFromPixels } from '../../lib/mediaFusion.js';
+import { frameSignalFromPixels, sampleCountForDuration } from '../../lib/mediaFusion.js';
 
-const SAMPLE_COUNT = 8;
-const ANALYSIS_WIDTH = 48;
-const ANALYSIS_HEIGHT = 27;
+const ANALYSIS_WIDTH = 64;
+const ANALYSIS_HEIGHT = 36;
 const MAX_VIDEO_BYTES = 180 * 1024 * 1024;
 
 function once(target, eventName, timeoutMs = 8000) {
@@ -57,6 +56,7 @@ async function sampleVideo(file) {
     await metadataReady;
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
     if (!duration || duration <= 0) throw new Error('Could not read the video duration.');
+    const sampleCount = sampleCountForDuration(duration);
 
     const canvas = document.createElement('canvas');
     canvas.width = ANALYSIS_WIDTH;
@@ -66,8 +66,8 @@ async function sampleVideo(file) {
 
     const signals = [];
     let previous = null;
-    for (let index = 0; index < SAMPLE_COUNT; index += 1) {
-      const fraction = SAMPLE_COUNT === 1 ? 0.5 : index / (SAMPLE_COUNT - 1);
+    for (let index = 0; index < sampleCount; index += 1) {
+      const fraction = sampleCount === 1 ? 0.5 : index / (sampleCount - 1);
       const timestamp = Math.min(Math.max(0, duration * fraction), Math.max(0, duration - 0.04));
       await seek(video, timestamp, duration);
       context.drawImage(video, 0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
@@ -117,7 +117,7 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
       <div className="media-input-copy">
         <span className="bsn-eyebrow"><Film size={14} aria-hidden="true" /> Multimodal video layer</span>
         <strong>Upload a video or screen recording</strong>
-        <p>BrainSNN samples low-resolution visual-change signals in your browser, then fuses them with the transcript or notes below. The raw video is not uploaded by this V0 layer.</p>
+        <p>BrainSNN adaptively samples visual-change signals in your browser, then fuses them with the transcript or notes below. Short workflows get denser sampling; the raw video is not uploaded.</p>
       </div>
       <input ref={inputRef} className="bsn-visually-hidden" type="file" accept="video/*" onChange={handleFile} disabled={disabled} />
       <div className="media-input-actions">
