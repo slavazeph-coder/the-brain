@@ -3,9 +3,9 @@ import { analyzeContentLocally } from '../../lib/analysisEngine.js';
 import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
 
 describe('verdict labeling', () => {
-  it('shows an unmistakable fallback label in verdict view model', () => {
+  it('shows an unmistakable deterministic fallback label in verdict view model', () => {
     const result = analyzeContentLocally({ content: 'Last chance to act now before everything changes.' });
-    expect(deriveExecutiveVerdict(result).label).toBe('Demo model result');
+    expect(deriveExecutiveVerdict(result).label).toBe('Deterministic local result');
   });
 
   it('defensively renders sparse result data without undefined or NaN values', () => {

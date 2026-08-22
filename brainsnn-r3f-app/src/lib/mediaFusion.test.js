@@ -5,9 +5,18 @@ import {
   extractProofPoints,
   extractWorkflowSteps,
   frameSignalFromPixels,
+  sampleCountForDuration,
 } from './mediaFusion.js';
 
 describe('multimodal fusion', () => {
+  it('scales sample density with clip length while staying bounded', () => {
+    expect(sampleCountForDuration(12)).toBe(12);
+    expect(sampleCountForDuration(30)).toBe(16);
+    expect(sampleCountForDuration(60)).toBe(24);
+    expect(sampleCountForDuration(120)).toBe(28);
+    expect(sampleCountForDuration(600)).toBe(32);
+  });
+
   it('measures a changed frame as motion', () => {
     const first = new Uint8ClampedArray([0, 0, 0, 255, 20, 20, 20, 255]);
     const second = new Uint8ClampedArray([255, 255, 255, 255, 20, 20, 20, 255]);
@@ -45,6 +54,7 @@ describe('multimodal fusion', () => {
     });
     expect(fusion.packet.includes('demo.mp4')).toBe(true);
     expect(fusion.result.frameCount).toBe(2);
+    expect(fusion.result.disclaimer.includes('pixels changed')).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(fusion.result, 'rawFrames')).toBe(false);
   });
 });
