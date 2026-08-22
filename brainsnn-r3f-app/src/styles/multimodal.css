@@ -202,6 +202,93 @@
   padding-top: 2px;
 }
 
+.result-feedback {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--bsn-purple, #9c7cff) 22%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bsn-purple, #9c7cff) 5%, transparent);
+}
+
+.result-feedback > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.result-feedback-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.result-feedback-options button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--bsn-text-muted, #9aa4b2) 22%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--bsn-text-muted, #aab2bf);
+  font: inherit;
+  font-size: .76rem;
+  cursor: pointer;
+}
+
+.result-feedback-options button:hover,
+.result-feedback-options button.selected {
+  border-color: color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 55%, transparent);
+  background: color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 9%, transparent);
+  color: var(--bsn-text, #f3f6fa);
+}
+
+.result-feedback label {
+  display: grid;
+  gap: 6px;
+  color: var(--bsn-text-muted, #aab2bf);
+  font-size: .78rem;
+}
+
+.result-feedback select,
+.result-feedback textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--bsn-text-muted, #9aa4b2) 24%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bsn-surface, #111722) 92%, transparent);
+  color: var(--bsn-text, #f3f6fa);
+  font: inherit;
+  padding: 9px 10px;
+}
+
+.result-feedback textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.result-feedback-submit {
+  display: grid;
+  gap: 8px;
+}
+
+.result-feedback-submit p,
+.result-feedback.submitted p {
+  margin: 0;
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+.result-feedback.submitted {
+  grid-template-columns: 20px 1fr;
+  align-items: start;
+  color: var(--bsn-success, #7ee2ad);
+}
+
 @media (max-width: 720px) {
   .media-ready-card {
     align-items: flex-start;
@@ -218,5 +305,9 @@
 
   .fusion-result-card {
     padding: 16px;
+  }
+
+  .result-feedback-options {
+    grid-template-columns: 1fr;
   }
 }
