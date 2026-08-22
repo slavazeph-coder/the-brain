@@ -12,6 +12,10 @@ function formatTime(seconds = 0) {
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }
 
+function toScore(value) {
+  return Math.round(clamp(Number(value) || 0) * 100);
+}
+
 /**
  * Browser-local sampling density. Short clips get enough samples to catch fast
  * UI steps; longer clips stay bounded so a visitor never pays an unbounded CPU
@@ -61,14 +65,17 @@ export function frameSignalFromPixels(data, previous = null, timestamp = 0) {
   };
 }
 
+function responseChangeForSignal(signal, previous) {
+  const motion = Number(signal?.motion) || 0;
+  const luminanceShift = previous ? Math.abs((signal?.luminance || 0) - (previous?.luminance || 0)) : 0;
+  return clamp((motion * 2.2) + (luminanceShift * 0.8));
+}
+
 export function deriveVisualEvents(signals = []) {
   if (!signals.length) return [];
   return signals
     .map((signal, index) => {
-      const motion = Number(signal.motion) || 0;
-      const previous = signals[index - 1];
-      const luminanceShift = previous ? Math.abs((signal.luminance || 0) - (previous.luminance || 0)) : 0;
-      const intensity = clamp((motion * 2.2) + (luminanceShift * 0.8));
+      const intensity = responseChangeForSignal(signal, signals[index - 1]);
       const level = intensity >= 0.55 ? 'high' : intensity >= 0.24 ? 'medium' : 'low';
       return {
         timestamp: signal.timestamp || 0,
@@ -80,6 +87,75 @@ export function deriveVisualEvents(signals = []) {
     })
     .filter((event, index) => index === 0 || event.level !== 'low')
     .slice(0, MAX_EVENTS);
+}
+
+/**
+ * Presentation-oriented V0.1 temporal readout. These values are deliberately
+ * labelled proxies: they are derived only from browser-local frame deltas,
+ * luminance and colour energy. They are not measured attention, emotion or
+ * cognitive load and they do not identify people, objects or actions.
+ */
+export function deriveTemporalReadout(signals = []) {
+  if (!signals.length) {
+    return {
+      schemaVersion: 'brainsnn.temporal.v0.1',
+      points: [],
+      tracks: [],
+      strongest: null,
+      weakest: null,
+      disclaimer: 'No browser-local frame signals were available for a temporal readout.',
+    };
+  }
+
+  const points = signals.map((signal, index) => {
+    const previous = signals[index - 1];
+    const previousPrevious = signals[index - 2];
+    const responseChange = responseChangeForSignal(signal, previous);
+    const previousChange = previous ? responseChangeForSignal(previous, previousPrevious) : 0;
+    const luminance = clamp(Number(signal.luminance) || 0);
+    const warmth = clamp(0.5 + ((Number(signal.red) || 0) - (Number(signal.blue) || 0)) * 0.9);
+    const attentionProxy = clamp(0.18 + responseChange * 0.68 + Math.abs(luminance - 0.5) * 0.12);
+    const loadProxy = clamp(0.16 + responseChange * 0.5 + previousChange * 0.24 + Math.abs(luminance - (previous?.luminance || luminance)) * 0.35);
+    const stability = clamp(1 - responseChange);
+
+    return {
+      timestamp: Number(signal.timestamp) || 0,
+      responseChange: toScore(responseChange),
+      attentionProxy: toScore(attentionProxy),
+      loadProxy: toScore(loadProxy),
+      toneProxy: toScore(warmth),
+      luminance: toScore(luminance),
+      stability: toScore(stability),
+    };
+  });
+
+  const strongest = points.reduce((best, point) => point.responseChange > best.responseChange ? point : best, points[0]);
+  const weakCandidates = points.length > 2 ? points.slice(1) : points;
+  const weakest = weakCandidates.reduce((best, point) => point.attentionProxy < best.attentionProxy ? point : best, weakCandidates[0]);
+
+  const makeTrack = (id, label, provenance, key) => ({
+    id,
+    label,
+    provenance,
+    values: points.map((point) => ({ timestamp: point.timestamp, value: point[key] })),
+  });
+
+  return {
+    schemaVersion: 'brainsnn.temporal.v0.1',
+    source: 'browser-local frame deltas only',
+    points,
+    tracks: [
+      makeTrack('response-change', 'Response change', 'pixel + luminance delta', 'responseChange'),
+      makeTrack('attention-proxy', 'Attention proxy', 'visual-change heuristic only', 'attentionProxy'),
+      makeTrack('load-proxy', 'Cognitive-load proxy', 'rapid-change heuristic only', 'loadProxy'),
+      makeTrack('tone-proxy', 'Affect / tone proxy', 'colour-energy heuristic; not emotion recognition', 'toneProxy'),
+      makeTrack('luminance', 'Luminance', 'frame brightness', 'luminance'),
+      makeTrack('stability', 'Visual stability', 'inverse response change', 'stability'),
+    ],
+    strongest,
+    weakest,
+    disclaimer: 'Temporal V0.1 tracks are modelled visual proxies from browser-local frame changes. They are not measured human attention, emotion, cognition or neural activity.',
+  };
 }
 
 function sentenceCandidates(text = '') {
@@ -122,12 +198,52 @@ export function deriveMissingEvidence(text = '', proofPoints = [], workflowSteps
   return missing.slice(0, 3);
 }
 
+function deriveRecommendedEdit(text = '', proofPoints = [], workflowSteps = [], temporalReadout = null) {
+  const finalStep = workflowSteps.at?.(-1)?.label || workflowSteps[workflowSteps.length - 1]?.label || '';
+  const firstProof = proofPoints[0] || '';
+
+  if (!firstProof) {
+    return {
+      headline: 'Add measurable proof before the final action',
+      instruction: finalStep
+        ? `Insert one concrete result, customer outcome or measurable constraint before “${finalStep.slice(0, 120)}”.`
+        : 'Insert one concrete result, customer outcome or measurable constraint before the final CTA or workflow action.',
+      timingNote: 'The transcript is not time-aligned, so V0.1 will not invent an exact video second for this edit.',
+    };
+  }
+
+  if (finalStep) {
+    const proofIndex = String(text).indexOf(firstProof);
+    const stepIndex = String(text).indexOf(finalStep);
+    if (proofIndex >= 0 && stepIndex >= 0 && proofIndex > stepIndex) {
+      return {
+        headline: 'Move proof before the action',
+        instruction: `Move “${firstProof.slice(0, 135)}” before “${finalStep.slice(0, 110)}” so evidence arrives before the ask.`,
+        timingNote: 'This recommendation uses transcript order only; exact video placement requires timestamped transcript/audio.',
+      };
+    }
+  }
+
+  const strongestTime = temporalReadout?.strongest?.timestamp;
+  return {
+    headline: 'Keep proof attached to the strongest transition',
+    instruction: firstProof
+      ? `Keep “${firstProof.slice(0, 135)}” visually close to the claim or action it supports.`
+      : 'Keep the strongest evidence visually close to the claim or action it supports.',
+    timingNote: Number.isFinite(strongestTime)
+      ? `Largest visual response change occurs around ${formatTime(strongestTime)}; V0.1 cannot verify whether that moment contains the claim or proof.`
+      : 'Exact video placement requires timestamped transcript/audio.',
+  };
+}
+
 export function buildMultimodalFusion({ text = '', media = null } = {}) {
   const signals = Array.isArray(media?.signals) ? media.signals : [];
   const events = deriveVisualEvents(signals);
+  const temporalReadout = deriveTemporalReadout(signals);
   const workflowSteps = extractWorkflowSteps(text);
   const proofPoints = extractProofPoints(text);
   const missingEvidence = deriveMissingEvidence(text, proofPoints, workflowSteps);
+  const recommendedEdit = deriveRecommendedEdit(text, proofPoints, workflowSteps, temporalReadout);
   const duration = Number(media?.duration) || 0;
   const packetLines = [
     '[BrainSNN multimodal video packet]',
@@ -160,15 +276,24 @@ export function buildMultimodalFusion({ text = '', media = null } = {}) {
       duration,
       frameCount: signals.length,
       events,
+      temporalReadout,
       workflowSteps,
       proofPoints,
       missingEvidence,
+      recommendedEdit,
       commercialUses: [
         'Security-footage triage and timestamped event review',
         'Screen-recording to structured workflow / SOP draft',
         'Creative video segmentation before publishing',
       ],
-      disclaimer: 'V0.1 samples visual-change signals in the browser and fuses them with transcript/notes. A transition means pixels changed; it does not identify people, objects, actions, or audio yet.',
+      provenance: {
+        visual: 'browser-local 64×36 frame sampling',
+        transcript: text.trim() ? 'operator-supplied transcript / notes; not time-aligned' : 'none',
+        audio: 'not analyzed',
+        objectRecognition: 'not available',
+        neuralValidation: 'not measured',
+      },
+      disclaimer: 'V0.1 samples visual-change signals in the browser and fuses them with transcript/notes. A transition means pixels changed; it does not identify people, objects, actions, audio, purchase intent or measured brain activity.',
     },
   };
 }
