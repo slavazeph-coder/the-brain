@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Activity, Clipboard, Eraser, ShieldCheck, Zap } from 'lucide-react';
+import { Activity, BrainCircuit, Clipboard, Eraser, Film, ShieldCheck, Zap } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { ContentTypeSelector } from './ContentTypeSelector.jsx';
 import { ExampleSelector } from './ExampleSelector.jsx';
 import { isKeyboardScanShortcut } from './keyboard.js';
+import { MediaInputPanel } from './MediaInputPanel.jsx';
 import { ScanProgress } from './ScanProgress.jsx';
 
 function getPreviewSignals(input) {
@@ -21,15 +22,22 @@ function getPreviewSignals(input) {
   ];
 }
 
-function PreScanSignals({ input }) {
+function PreScanSignals({ input, contentType, media }) {
   const signals = useMemo(() => getPreviewSignals(input), [input]);
   const hasInput = input.trim().length > 0;
+  const hasMedia = Boolean(media?.signals?.length);
+  const modeMessage = contentType === 'video' && hasMedia
+    ? `${media.signals.length} visual samples ready to fuse${hasInput ? ' with your transcript' : ''}`
+    : contentType === 'neural'
+      ? (hasInput ? 'Decoded transcript ready for L19 replay' : 'Paste decoded text to wake the neural gateway')
+      : (hasInput ? 'Signals are forming' : 'Paste a draft to wake the engine');
+
   return (
     <aside className="pre-scan-panel" aria-label="Local pre-scan signal preview">
       <div>
         <span className="bsn-eyebrow">Live pre-scan</span>
-        <strong>{hasInput ? 'Signals are forming' : 'Paste a draft to wake the engine'}</strong>
-        <p>Local preview only. The full Brain Scan runs through the API and layer stack.</p>
+        <strong>{modeMessage}</strong>
+        <p>{contentType === 'video' ? 'Video change signals stay local; the fused event packet runs through the BrainSNN stack.' : 'Local preview only. The full Brain Scan runs through the API and layer stack.'}</p>
       </div>
       <div className="pre-scan-bars">
         {signals.map((signal) => {
@@ -47,11 +55,27 @@ function PreScanSignals({ input }) {
   );
 }
 
+const labels = {
+  text: 'Content to scan',
+  webpage: 'URL or page text',
+  video: 'Transcript / operator notes (optional)',
+  neural: 'Decoded neural transcript',
+};
+
+const placeholders = {
+  text: 'Paste a headline, post, ad, email, or landing-page copy…',
+  webpage: 'Paste the URL or page copy you want BrainSNN to inspect…',
+  video: 'Optional: paste the transcript, describe the workflow, or note what should be detected in the video…',
+  neural: 'Paste decoded text from an authorized neural decoder. BrainSNN analyzes this text, not raw brain signals…',
+};
+
 export function ScanComposer({ scan, onRun }) {
   const textareaRef = useRef(null);
-  const { state, setInput, setContentType, cancelScan } = scan;
+  const { state, setInput, setContentType, setMedia, cancelScan } = scan;
   const scanning = state.status === 'scanning';
-  const valid = state.validation.valid && !scanning;
+  const contentType = state.contentType === 'script' ? 'video' : state.contentType;
+  const mediaReady = contentType === 'video' && Boolean(state.media?.signals?.length);
+  const valid = (state.validation.valid || mediaReady) && !scanning;
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -74,48 +98,59 @@ export function ScanComposer({ scan, onRun }) {
     }
   }
 
+  function clearAll() {
+    setInput('');
+    setMedia(null);
+  }
+
+  const RunIcon = contentType === 'video' ? Film : contentType === 'neural' ? BrainCircuit : Zap;
+  const runLabel = contentType === 'video' ? 'Run Multimodal Scan' : contentType === 'neural' ? 'Run Neural Replay' : 'Run Brain Scan';
+
   return (
     <section className="scan-composer" aria-labelledby="cortex-heading">
       <div className="scan-composer-copy">
         <p className="bsn-kicker">Creative Decision Intelligence</p>
-        <h1 id="cortex-heading">Paste what you’re about to publish. See what’s likely to land — and what to fix.</h1>
-        <p>Test a hook, ad, email, post, landing page or video script before you spend money promoting it. BrainSNN scores attention, trust and content pressure, then shows what to change next.</p>
+        <h1 id="cortex-heading">Paste what you’re about to publish — or show BrainSNN what happened.</h1>
+        <p>Analyze text, a page, a screen recording, or decoded neural transcript. BrainSNN turns the input into attention, trust and risk signals, then surfaces concrete evidence, events and next actions.</p>
       </div>
 
       <div className="scan-composer-grid">
         <div className="scan-input-stack">
-          <ContentTypeSelector value={state.contentType} onChange={setContentType} />
+          <ContentTypeSelector value={contentType} onChange={setContentType} />
+
+          {contentType === 'video' ? <MediaInputPanel media={state.media} onMedia={setMedia} disabled={scanning} /> : null}
 
           <label className="scan-input-label" htmlFor="brain-scan-input">
-            Content to scan
+            {labels[contentType] || labels.text}
             <textarea
               ref={textareaRef}
               id="brain-scan-input"
               className="scan-textarea"
               value={state.input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Paste a headline, post, ad, email, landing-page copy or video script..."
+              placeholder={placeholders[contentType] || placeholders.text}
               disabled={scanning}
             />
           </label>
         </div>
-        <PreScanSignals input={state.input} />
+        <PreScanSignals input={state.input} contentType={contentType} media={state.media} />
       </div>
 
       <div className="scan-composer-footer">
-        <span className={state.validation.valid || !state.input.trim() ? 'bsn-mono' : 'bsn-validation'}>
+        <span className={state.validation.valid || !state.input.trim() || mediaReady ? 'bsn-mono' : 'bsn-validation'}>
           {state.input.trim().length.toLocaleString()} / 12,000 characters
-          {!state.validation.valid && state.input ? ` - ${state.validation.message}` : ''}
+          {!state.validation.valid && state.input && !mediaReady ? ` - ${state.validation.message}` : ''}
+          {contentType === 'video' && !mediaReady ? ' · add a video to enable visual analysis' : ''}
         </span>
         <div className="scan-actions">
-          <Button variant="ghost" onClick={pasteFromClipboard}>
+          <Button variant="ghost" onClick={pasteFromClipboard} disabled={scanning}>
             <Clipboard size={16} aria-hidden="true" /> Paste
           </Button>
-          <Button variant="secondary" onClick={() => setInput('')} disabled={!state.input || scanning}>
+          <Button variant="secondary" onClick={clearAll} disabled={(!state.input && !state.media) || scanning}>
             <Eraser size={16} aria-hidden="true" /> Clear
           </Button>
           <Button variant="primary" onClick={onRun} disabled={!valid}>
-            <Zap size={16} aria-hidden="true" /> Run Brain Scan
+            <RunIcon size={16} aria-hidden="true" /> {runLabel}
           </Button>
         </div>
       </div>
@@ -123,8 +158,15 @@ export function ScanComposer({ scan, onRun }) {
       {scanning ? <ScanProgress onCancel={cancelScan} /> : null}
       {state.status === 'error' ? <p role="alert" className="bsn-validation">{state.error}</p> : null}
 
-      <ExampleSelector onSelect={setInput} />
-      <p className="scan-privacy-note">Local history stays in this browser unless persistence is configured. Results are AI-estimated content-response signals, not literal brain measurement.</p>
+      {contentType === 'text' || contentType === 'webpage' ? <ExampleSelector onSelect={setInput} /> : null}
+      <p className="scan-privacy-note">
+        {contentType === 'video'
+          ? 'Raw video stays in this browser in V0; only a compact visual-change/event packet plus any transcript you provide is analyzed. '
+          : contentType === 'neural'
+            ? 'Neural mode accepts decoded text only and is experimental research tooling; BrainSNN does not interpret raw brain signals. '
+            : 'Local history stays in this browser unless persistence is configured. '}
+        Results are AI-estimated signals, not literal brain measurement.
+      </p>
     </section>
   );
 }
