@@ -7,26 +7,6 @@ export function getBusinessMetrics(result = {}) {
   const urgency = clampScore(metrics.urgency, 0);
   const emotionalCharge = clampScore(((Number(metrics.fear) || 0) + (Number(metrics.anger) || 0) + (Number(metrics.excitement) || 0)) / 3, 35);
   const empathy = clampScore(metrics.empathy, 40);
-  // Manipulation risk mixes the affect-weighted engine score with the
-  // taxonomy-aligned technique detector (src/lib/persuasionTechniques.js).
-  //
-  // This weight was originally 30%, hedged on the reasoning that the detector's
-  // 0.92 came from the corpus its cue lists were tuned against, so the engine
-  // score was the safer anchor. The holdout set (src/lib/holdoutCorpus.js)
-  // falsified that: on 17 passages neither component had seen,
-  //
-  //   engine score alone     Spearman 0.051   (in-sample 0.631)
-  //   technique detector     Spearman 0.488   (in-sample 0.918)
-  //
-  // Both overfit, but the engine score overfits almost completely — its
-  // in-sample rank agreement was nearly all corpus memorisation. Hedging
-  // toward it was hedging toward the worse generaliser.
-  //
-  // 50/50 sits near the top of a flat held-out range (0.42-0.49 for weights
-  // 0.2-1.0) and keeps the affect signals the detector does not model. Caveat
-  // worth stating: this weight was chosen using the holdout, so the weight
-  // itself is not independently validated even though the two inputs to the
-  // decision are. In-sample cost is nil (0.892 -> 0.884).
   const engineRisk = (Number(result.gaugeGapScore) || 0) * 0.5 + (Number(metrics.fear) || 0) * 0.16 + (Number(metrics.anger) || 0) * 0.16 + (Number(metrics.urgency) || 0) * 0.18;
   const techniqueRisk = Number(result.firewallSignals?.techniquePressure);
   const manipulationRisk = clampScore(
@@ -36,70 +16,14 @@ export function getBusinessMetrics(result = {}) {
   const shareability = clampScore(result.viralScore, 45);
   const confidence = clampScore(result.confidence, 60);
   return [
-    {
-      id: 'hookStrength',
-      label: 'Hook Strength',
-      value: hookStrength,
-      color: 'cyan',
-      direction: 'higher-good',
-      explanation: 'Estimated ability to earn the first few seconds of attention.',
-    },
-    {
-      id: 'trust',
-      label: 'Trust',
-      value: trust,
-      color: 'green',
-      direction: 'higher-good',
-      explanation: 'How much the copy supports credibility and belief.',
-    },
-    {
-      id: 'urgency',
-      label: 'Urgency',
-      value: urgency,
-      color: urgency > 72 && trust < 55 ? 'yellow' : 'purple',
-      direction: 'contextual',
-      explanation: 'Pressure to act. Useful with proof, risky without it.',
-    },
-    {
-      id: 'emotionalCharge',
-      label: 'Emotional Charge',
-      value: emotionalCharge,
-      color: emotionalCharge > 72 ? 'orange' : 'purple',
-      direction: 'contextual',
-      explanation: 'The intensity of the emotional language.',
-    },
-    {
-      id: 'empathy',
-      label: 'Empathy',
-      value: empathy,
-      color: 'green',
-      direction: 'higher-good',
-      explanation: 'Signals that the message understands the audience.',
-    },
-    {
-      id: 'manipulationRisk',
-      label: 'Manipulation Risk',
-      value: manipulationRisk,
-      color: manipulationRisk > 62 ? 'red' : 'yellow',
-      direction: 'lower-good',
-      explanation: 'Risk that the message feels forced, coercive, or unsupported.',
-    },
-    {
-      id: 'shareability',
-      label: 'Shareability',
-      value: shareability,
-      color: 'cyan',
-      direction: 'higher-good',
-      explanation: 'Directional estimate of how memorable and repeatable it is.',
-    },
-    {
-      id: 'confidence',
-      label: 'Confidence',
-      value: confidence,
-      color: 'purple',
-      direction: 'higher-good',
-      explanation: 'Confidence in this estimate based on available content.',
-    },
+    { id: 'hookStrength', label: 'Hook Strength', value: hookStrength, color: 'cyan', direction: 'higher-good', explanation: 'Estimated ability to earn the first few seconds of attention.' },
+    { id: 'trust', label: 'Trust', value: trust, color: 'green', direction: 'higher-good', explanation: 'How much the copy supports credibility and belief.' },
+    { id: 'urgency', label: 'Urgency', value: urgency, color: urgency > 72 && trust < 55 ? 'yellow' : 'purple', direction: 'contextual', explanation: 'Pressure to act. Useful with proof, risky without it.' },
+    { id: 'emotionalCharge', label: 'Emotional Charge', value: emotionalCharge, color: emotionalCharge > 72 ? 'orange' : 'purple', direction: 'contextual', explanation: 'The intensity of the emotional language.' },
+    { id: 'empathy', label: 'Empathy', value: empathy, color: 'green', direction: 'higher-good', explanation: 'Signals that the message understands the audience.' },
+    { id: 'manipulationRisk', label: 'Manipulation Risk', value: manipulationRisk, color: manipulationRisk > 62 ? 'red' : 'yellow', direction: 'lower-good', explanation: 'Risk that the message feels forced, coercive, or unsupported.' },
+    { id: 'shareability', label: 'Shareability', value: shareability, color: 'cyan', direction: 'higher-good', explanation: 'Directional estimate of how memorable and repeatable it is.' },
+    { id: 'confidence', label: 'Confidence', value: confidence, color: 'purple', direction: 'higher-good', explanation: 'Confidence in this estimate based on available content.' },
   ];
 }
 
@@ -110,26 +34,30 @@ export function deriveExecutiveVerdict(result = {}) {
   const trust = byId.trust.value;
   const risk = byId.manipulationRisk.value;
   const score = clampScore((hook * 0.34) + (trust * 0.3) + ((100 - risk) * 0.22) + (byId.shareability.value * 0.14), 50);
+  const firstRecommendation = result.recommendations?.[0];
+  const whatWorks = result.insights?.find((item) => item.label === 'What works')?.text;
 
-  let headline = 'Clear draft. Needs sharper proof.';
-  if (hook >= 72 && risk >= 62) headline = 'Strong hook. Trust risk.';
-  else if (hook >= 72 && trust >= 62) headline = 'Strong hook. Credible signal.';
-  else if (trust >= 70 && hook < 62) headline = 'Credible, but too quiet.';
-  else if (risk >= 72) headline = 'High pressure. Rebuild trust.';
+  let headline = firstRecommendation?.title || 'Clear draft. Needs sharper proof.';
+  if (!firstRecommendation) {
+    if (hook >= 72 && risk >= 62) headline = 'Strong hook. Trust risk.';
+    else if (hook >= 72 && trust >= 62) headline = 'Strong hook. Credible signal.';
+    else if (trust >= 70 && hook < 62) headline = 'Credible, but too quiet.';
+    else if (risk >= 72) headline = 'High pressure. Rebuild trust.';
+  }
 
-  const primaryStrength = hook >= trust
+  const primaryStrength = whatWorks || (hook >= trust
     ? 'The opening gives the audience a reason to keep reading.'
-    : 'The message has credibility signals worth keeping.';
-  const primaryRisk = risk >= 62
+    : 'The message has credibility signals worth keeping.');
+  const primaryRisk = firstRecommendation?.rationale || (risk >= 62
     ? 'Pressure or emotional charge may be doing more work than proof.'
     : trust < 55
       ? 'The promise needs clearer evidence.'
-      : 'The close can be more specific.';
-  const bestNextMove = risk >= 62
+      : 'The close can be more specific.');
+  const bestNextMove = firstRecommendation?.rewriteHint || (risk >= 62
     ? 'Keep the opening. Replace unsupported urgency with proof.'
     : trust < 55
       ? 'Add a concrete reason to believe the claim.'
-      : 'Tighten the ask and preserve the strongest sentence.';
+      : 'Tighten the ask and preserve the strongest sentence.');
 
   const viralScore = clampScore(result.viralScore, 45);
   const viralLabel = viralScore >= 75
@@ -147,7 +75,7 @@ export function deriveExecutiveVerdict(result = {}) {
     primaryStrength,
     primaryRisk,
     bestNextMove,
-    label: result.isFallback ? 'Demo model result' : 'AI-estimated response',
+    label: result.isFallback ? 'Deterministic local result' : 'AI-estimated response',
   };
 }
 
@@ -159,12 +87,7 @@ export function compareResults(original, revised) {
     const lowerGood = id === 'manipulationRisk';
     return {
       id,
-      label: {
-        hookStrength: 'Hook Strength',
-        trust: 'Trust',
-        manipulationRisk: 'Manipulation Risk',
-        shareability: 'Shareability',
-      }[id],
+      label: { hookStrength: 'Hook Strength', trust: 'Trust', manipulationRisk: 'Manipulation Risk', shareability: 'Shareability' }[id],
       before: originalMetrics[id],
       after: revisedMetrics[id],
       delta,
