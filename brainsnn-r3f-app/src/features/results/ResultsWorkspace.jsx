@@ -15,6 +15,7 @@ import { AffectPanel } from './AffectPanel.jsx';
 import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
 import { InputFusionPanel } from './InputFusionPanel.jsx';
+import { ResultFeedback } from './ResultFeedback.jsx';
 import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
@@ -84,6 +85,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
     const record = onSave(result);
     setStatus(record ? 'Saved to local history.' : 'Could not save this scan.');
   }
+
   return (
     <div className="results-workbench" data-testid="results-workspace">
       <main className="results-main" aria-label="Brain Scan results">
@@ -110,7 +112,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
         </TabPanel>
       </main>
       <aside className="results-inspector" aria-label="Recommended next actions">
-        <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Demo model result' : 'AI-estimated response'}</Badge>
+        <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Deterministic local result' : 'AI-estimated response'}</Badge>
         <div className="inspector-score">
           <strong>{verdict.score}</strong>
           <span>Decision score</span>
@@ -136,6 +138,7 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
           <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
         </div>
         {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
+        <ResultFeedback key={result.id || result.timestamp} result={result} />
       </aside>
     </div>
   );
