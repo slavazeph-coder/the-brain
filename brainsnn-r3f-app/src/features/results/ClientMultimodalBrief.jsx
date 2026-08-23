@@ -1,6 +1,7 @@
 import React from 'react';
 import { Activity, AlertTriangle, CheckCircle2, Clock3, FileText, LockKeyhole, Mic2, Target, Volume2 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
+import { BeliefReportPanel } from './BeliefReportPanel.jsx';
 
 function formatTime(seconds = 0) {
   const safe = Math.max(0, Number(seconds) || 0);
@@ -23,6 +24,8 @@ function kindLabel(kind) {
     drop: 'DROP',
     weakest: 'WEAK WINDOW',
     strongest: 'HIGH CHANGE',
+    pattern: 'PATTERN',
+    disagreement: 'DISAGREEMENT',
   })[kind] || String(kind || 'MOMENT').toUpperCase();
 }
 
@@ -65,7 +68,7 @@ export function ClientMultimodalBrief({ result, media }) {
   const anchors = brief.evidenceAnchors || [];
   const badge = alignmentBadge(brief.alignmentMode);
   const transcriptSegments = (transcript.segments || []).slice(0, 14);
-  const clientMoments = moments.slice(0, 12);
+  const clientMoments = moments.slice(0, 14);
   const localAsr = transcript.timingOrigin === 'local-asr';
   const localTranscript = transcript.localTranscript || media?.localTranscript || null;
 
@@ -111,6 +114,8 @@ export function ClientMultimodalBrief({ result, media }) {
           <p>{brief.exactEdit}</p>
         </SummaryCard>
       </div>
+
+      <BeliefReportPanel report={multimodal.beliefReport} />
 
       {anchors.length ? (
         <section className="client-evidence-section" aria-labelledby="client-evidence-heading">
@@ -198,6 +203,7 @@ export function ClientMultimodalBrief({ result, media }) {
         <div className="client-presenter-title"><Target size={17} aria-hidden="true" /><div><span className="bsn-eyebrow">Use this in the room</span><h3 id="client-presenter-heading">What to tell the client</h3></div></div>
         <div className="client-presenter-script">
           <p>“We’re not asking you to trust a mystery score. BrainSNN shows the creative as a timeline: what visually changed, where local sound energy shifted, where the transcript places the claim, proof, price and CTA, and which edit that evidence supports.”</p>
+          <p>“The Pattern Intelligence layer adds a second opinion: it marks state changes, unusual windows, and where that pattern view agrees—or disagrees—with the explainable BrainSNN rules. Today that layer is an S-DBN-ready proxy, not a trained performance predictor.”</p>
           {localAsr ? (
             <p>“For this scan, BrainSNN generated the transcript locally in the browser. The speech model gives us useful word-level timing, but we label it as model-generated and verify important edit points against playback rather than pretending it is exact ground truth.”</p>
           ) : (
