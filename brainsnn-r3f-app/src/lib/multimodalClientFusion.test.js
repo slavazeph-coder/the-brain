@@ -64,7 +64,7 @@ describe('client-ready multimodal fusion v0.2', () => {
       text: `[00:03] This can improve your workflow\n[00:09] Customer pilot saved 20 hours`,
     });
     expect(result.disclaimer.toLowerCase()).toMatch(/does not measure human attention/);
-    expect(result.audioTimeline.disclaimer.toLowerCase()).toMatch(/does not transcribe speech/);
+    expect(result.audioTimeline.disclaimer.toLowerCase()).toMatch(/do not transcribe speech/);
     expect(packet).toMatch(/client-ready multimodal v0.2/);
     expect(packet).toMatch(/Transcript alignment: timed/);
   });
