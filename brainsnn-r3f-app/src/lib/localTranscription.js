@@ -260,3 +260,5 @@ export function __resetLocalTranscriberForTests() {
   transcriberPromise = null;
   transcriberKey = '';
 }
+
+// Post-merge validation branch marker; no runtime behavior change.
