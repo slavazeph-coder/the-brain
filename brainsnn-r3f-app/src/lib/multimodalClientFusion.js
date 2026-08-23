@@ -1,0 +1,286 @@
+import { audioPointAtTime, unavailableAudioTimeline } from './audioFeatures.js';
+import { buildMultimodalFusion } from './mediaFusion.js';
+import { formatTranscriptTime, parseTimedTranscript } from './timedTranscript.js';
+
+function compact(value = '', max = 180) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function formatRange(start, end) {
+  return `${formatTranscriptTime(start)}–${formatTranscriptTime(end)}`;
+}
+
+function transcriptTimingPrefix(timeline) {
+  if (timeline?.mode === 'timed') return 'At';
+  if (timeline?.mode === 'estimated') return 'Around';
+  return 'In';
+}
+
+function momentForSegment(segment, audioTimeline, timelineMode) {
+  const audio = audioPointAtTime(audioTimeline, segment.start);
+  const labelMap = {
+    claim: 'Claim appears',
+    proof: 'Proof / measurable support',
+    cta: 'Call to action',
+    price: 'Price / commercial ask',
+    workflow: 'Workflow action',
+  };
+  const actionMap = {
+    claim: 'Keep supporting proof close to this claim; soften it if evidence is not yet visible.',
+    proof: 'Keep this evidence visually adjacent to the claim it supports.',
+    cta: 'Confirm the viewer has seen enough proof before this ask.',
+    price: 'Avoid making price carry the credibility burden; establish value/proof first.',
+    workflow: 'Check whether this step is necessary or can be shortened for client-facing content.',
+  };
+  return {
+    id: `client-${segment.id}`,
+    start: segment.start,
+    end: segment.end,
+    kind: segment.kind,
+    label: labelMap[segment.kind] || 'Narration',
+    detail: compact(segment.text, 220),
+    whyItMatters: segment.kind === 'proof'
+      ? 'This is evidence the viewer can use to evaluate the surrounding claim.'
+      : segment.kind === 'cta'
+        ? 'This is the moment the creative asks the viewer to act.'
+        : segment.kind === 'price'
+          ? 'Commercial friction enters here; proof and value should already be established.'
+          : segment.kind === 'claim'
+            ? 'A claim creates a credibility obligation: the next beats should support it.'
+            : 'This is a semantic beat supplied by the transcript.',
+    action: actionMap[segment.kind] || 'Review whether this beat earns its time in the final cut.',
+    confidence: timelineMode === 'timed' ? 'provided timestamp' : 'estimated timing',
+    source: 'transcript',
+    audioEnergy: audio?.energy ?? null,
+  };
+}
+
+function buildClientMoments(baseResult, transcriptTimeline, audioTimeline) {
+  const moments = [];
+  const windows = baseResult?.temporalReadout?.windows || {};
+
+  if (windows.largestDrop?.attentionDrop > 0) {
+    moments.push({
+      id: 'visual-largest-drop',
+      start: windows.largestDrop.start,
+      end: windows.largestDrop.end,
+      kind: 'drop',
+      label: 'Largest visual-attention-proxy drop',
+      detail: `${windows.largestDrop.attentionDrop}-point decline across this five-second review window.`,
+      whyItMatters: 'This is the strongest pacing/change warning in the browser-local visual heuristic.',
+      action: 'Review the full span for dead time, dense explanation, weak visual support, or an unnecessary transition.',
+      confidence: 'visual proxy',
+      source: 'visual',
+      audioEnergy: audioPointAtTime(audioTimeline, windows.largestDrop.start)?.energy ?? null,
+    });
+  }
+
+  if (windows.weakest) {
+    moments.push({
+      id: 'visual-weakest',
+      start: windows.weakest.start,
+      end: windows.weakest.end,
+      kind: 'weakest',
+      label: 'Weakest visual-attention-proxy window',
+      detail: `${windows.weakest.attentionProxy}/100 average proxy across five seconds.`,
+      whyItMatters: 'The visual-change heuristic is lowest here, making this a useful review target.',
+      action: 'Check whether the scene needs a tighter cut, stronger demonstration, or less explanation.',
+      confidence: 'visual proxy',
+      source: 'visual',
+      audioEnergy: audioPointAtTime(audioTimeline, windows.weakest.start)?.energy ?? null,
+    });
+  }
+
+  if (windows.strongest) {
+    moments.push({
+      id: 'visual-strongest',
+      start: windows.strongest.start,
+      end: windows.strongest.end,
+      kind: 'strongest',
+      label: 'Strongest response-change window',
+      detail: `${windows.strongest.responseChange}/100 average visual response-change signal.`,
+      whyItMatters: 'This is where the creative changes most strongly in the current visual model.',
+      action: 'If the message here matters, keep its meaning clear and avoid stacking unrelated claims into the same burst.',
+      confidence: 'visual proxy',
+      source: 'visual',
+      audioEnergy: audioPointAtTime(audioTimeline, windows.strongest.start)?.energy ?? null,
+    });
+  }
+
+  for (const segment of (transcriptTimeline?.segments || []).filter((item) => item.kind !== 'narration').slice(0, 18)) {
+    moments.push(momentForSegment(segment, audioTimeline, transcriptTimeline.mode));
+  }
+
+  return moments
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .slice(0, 24);
+}
+
+function anchor(kind, segment, mode) {
+  if (!segment) return null;
+  return {
+    kind,
+    start: segment.start,
+    end: segment.end,
+    label: `${kind.toUpperCase()} · ${formatRange(segment.start, segment.end)}`,
+    text: compact(segment.text, 130),
+    alignment: mode,
+  };
+}
+
+function buildClientBrief(baseResult, transcriptTimeline, audioTimeline) {
+  const sequence = transcriptTimeline?.sequence || {};
+  const windows = baseResult?.temporalReadout?.windows || {};
+  const timingWord = transcriptTimeline?.mode === 'timed' ? 'exact supplied timing' : transcriptTimeline?.mode === 'estimated' ? 'estimated timing' : 'visual timing only';
+  let headline = 'Client-ready creative review';
+  let primaryIssue = 'No major semantic sequencing issue could be timed from the supplied transcript.';
+  let businessRisk = 'The client may spend against a creative before proof, pacing and CTA order are clearly reviewed.';
+  let exactEdit = baseResult?.recommendedEdit?.instruction || 'Review the weakest five-second window and keep measurable proof close to the claim it supports.';
+
+  if (sequence.firstClaim && sequence.firstProof && sequence.claimProofGapSeconds != null && sequence.claimProofGapSeconds > 1) {
+    const prefix = transcriptTimingPrefix(transcriptTimeline);
+    headline = 'Proof arrives after the claim';
+    primaryIssue = `${prefix} ${formatTranscriptTime(sequence.firstClaim.start)}, the creative introduces “${compact(sequence.firstClaim.text, 100)}”. The first detected proof appears at ${formatTranscriptTime(sequence.firstProof.start)}, ${sequence.claimProofGapSeconds.toFixed(1)}s later.`;
+    businessRisk = 'The viewer is asked to accept the claim before seeing support, which can weaken trust and make the eventual CTA work harder.';
+    exactEdit = transcriptTimeline.mode === 'timed'
+      ? `Move the proof at ${formatTranscriptTime(sequence.firstProof.start)} to immediately follow—or precede—the claim at ${formatTranscriptTime(sequence.firstClaim.start)}. Keep the claim-to-proof gap under roughly two seconds in the next cut.`
+      : `The transcript suggests the proof follows the claim by about ${sequence.claimProofGapSeconds.toFixed(1)}s. Move that proof earlier, but verify the exact edit point in the source video because this transcript alignment is estimated.`;
+  } else if (sequence.firstClaim && !sequence.firstProof) {
+    headline = 'Claim detected without measurable support';
+    primaryIssue = `${transcriptTimingPrefix(transcriptTimeline)} ${formatTranscriptTime(sequence.firstClaim.start)}, the transcript makes a claim but no proof/customer/result segment was detected afterward.`;
+    businessRisk = 'An unsupported commercial claim can lower credibility and make pricing or CTA moments feel premature.';
+    exactEdit = `Add one concrete result, customer example, benchmark, demonstration or measurable constraint immediately after “${compact(sequence.firstClaim.text, 115)}”.`;
+  } else if (sequence.firstPrice && sequence.firstProof && sequence.firstPrice.start < sequence.firstProof.start) {
+    headline = 'Price appears before proof';
+    primaryIssue = `${transcriptTimingPrefix(transcriptTimeline)} ${formatTranscriptTime(sequence.firstPrice.start)}, price/commercial language appears before the first detected proof at ${formatTranscriptTime(sequence.firstProof.start)}.`;
+    businessRisk = 'The viewer encounters friction before the creative has established enough evidence or value.';
+    exactEdit = 'Move the proof/demo ahead of the price reveal, or delay the price until the value proposition is already supported.';
+  } else if (windows.largestDrop?.attentionDrop > 0) {
+    headline = 'One five-second span deserves a tighter cut';
+    primaryIssue = `${formatRange(windows.largestDrop.start, windows.largestDrop.end)} contains the largest within-window visual-attention-proxy decline (${windows.largestDrop.attentionDrop} points).`;
+    businessRisk = 'If this span also contains explanation or a key claim, the creative may be spending valuable runtime in its weakest pacing window.';
+    exactEdit = `Review ${formatRange(windows.largestDrop.start, windows.largestDrop.end)} first. Remove dead time, shorten explanation, or move a demonstration/proof beat into this span if the message needs support.`;
+  }
+
+  const evidenceAnchors = [
+    anchor('claim', sequence.firstClaim, transcriptTimeline.mode),
+    anchor('proof', sequence.firstProof, transcriptTimeline.mode),
+    anchor('price', sequence.firstPrice, transcriptTimeline.mode),
+    anchor('cta', sequence.firstCta, transcriptTimeline.mode),
+  ].filter(Boolean);
+
+  if (windows.largestDrop) {
+    evidenceAnchors.push({
+      kind: 'drop',
+      start: windows.largestDrop.start,
+      end: windows.largestDrop.end,
+      label: `DROP · ${formatRange(windows.largestDrop.start, windows.largestDrop.end)}`,
+      text: `${windows.largestDrop.attentionDrop || 0}-point within-window attention-proxy decline`,
+      alignment: 'visual proxy',
+    });
+  }
+
+  return {
+    status: 'client-ready',
+    alignmentMode: transcriptTimeline?.mode || 'none',
+    timingLabel: timingWord,
+    headline,
+    primaryIssue,
+    businessRisk,
+    exactEdit,
+    evidenceAnchors: evidenceAnchors.slice(0, 8),
+    presenterNotes: [
+      transcriptTimeline?.mode === 'timed'
+        ? 'Transcript timestamps were supplied by the user, so semantic events can be shown at those exact caption times.'
+        : transcriptTimeline?.mode === 'estimated'
+          ? 'Transcript timing is estimated from the video duration; present these ranges as review cues, not exact spoken-word timestamps.'
+          : 'No timed transcript is available; only visual timing can be presented as time-localized.',
+      audioTimeline?.status === 'ready'
+        ? 'Audio energy/dynamics were decoded locally in the browser. This is not transcription, speaker recognition or emotion detection.'
+        : 'No usable audio envelope was available, so the client brief does not make audio claims.',
+      'The visual timeline is a modelled browser-local creative proxy. It is not measured human attention, EEG, fMRI, biometric data or purchase intent.',
+    ],
+  };
+}
+
+function buildPacketExtension(transcriptTimeline, audioTimeline, clientBrief, clientMoments) {
+  const lines = [
+    '',
+    '[BrainSNN client-ready multimodal v0.2]',
+    `Transcript alignment: ${transcriptTimeline.mode} (${transcriptTimeline.sourceFormat}; confidence ${transcriptTimeline.confidence})`,
+    `Client brief: ${clientBrief.headline}`,
+    `Primary issue: ${clientBrief.primaryIssue}`,
+    `Recommended edit: ${clientBrief.exactEdit}`,
+  ];
+
+  if (transcriptTimeline.segments.length) {
+    lines.push('Timed/estimated transcript beats:');
+    for (const segment of transcriptTimeline.segments.slice(0, 12)) {
+      lines.push(`- ${formatRange(segment.start, segment.end)} [${segment.kind}] ${compact(segment.text, 160)}`);
+    }
+  }
+
+  if (audioTimeline.status === 'ready') {
+    lines.push(`Audio envelope: mean energy ${audioTimeline.summary.meanEnergy}/100; max ${audioTimeline.summary.maxEnergy}/100; silent fraction ${Math.round(audioTimeline.summary.silentFraction * 100)}%.`);
+  } else {
+    lines.push(`Audio envelope: unavailable (${compact(audioTimeline.reason || 'not decoded', 120)}).`);
+  }
+
+  if (clientMoments.length) {
+    lines.push('Client moments:');
+    for (const moment of clientMoments.slice(0, 10)) lines.push(`- ${formatRange(moment.start, moment.end)} ${moment.label}: ${compact(moment.detail, 140)}`);
+  }
+  return lines.join('\n');
+}
+
+export function buildClientMultimodalFusion({ text = '', media = null } = {}) {
+  const base = buildMultimodalFusion({ text, media });
+  const transcriptTimeline = parseTimedTranscript(text, Number(media?.duration) || 0);
+  const audioTimeline = media?.audio?.schemaVersion
+    ? media.audio
+    : unavailableAudioTimeline(media?.audio?.reason || 'No browser-local audio envelope was attached to this scan.');
+  const timelineTracks = [
+    ...(base.result.temporalReadout?.tracks || []),
+    ...(audioTimeline.status === 'ready' ? audioTimeline.tracks : []),
+  ];
+  const clientMoments = buildClientMoments(base.result, transcriptTimeline, audioTimeline);
+  const clientBrief = buildClientBrief(base.result, transcriptTimeline, audioTimeline);
+  const recommendedEdit = {
+    headline: clientBrief.headline,
+    instruction: clientBrief.exactEdit,
+    timingNote: transcriptTimeline.mode === 'timed'
+      ? 'Edit timing uses user-supplied transcript/caption timestamps.'
+      : transcriptTimeline.mode === 'estimated'
+        ? 'Timing is estimated from transcript sentence length across the video duration; verify exact edit points in the source file.'
+        : base.result.recommendedEdit?.timingNote,
+  };
+
+  const result = {
+    ...base.result,
+    schemaVersion: 'brainsnn.multimodal.v0.2',
+    transcriptTimeline,
+    audioTimeline,
+    timelineTracks,
+    clientMoments,
+    clientBrief,
+    recommendedEdit,
+    provenance: {
+      ...base.result.provenance,
+      transcript: transcriptTimeline.mode === 'timed'
+        ? `user-supplied timed transcript (${transcriptTimeline.sourceFormat})`
+        : transcriptTimeline.mode === 'estimated'
+          ? 'operator-supplied transcript; timing estimated locally from sentence length and video duration'
+          : 'none',
+      audio: audioTimeline.status === 'ready'
+        ? 'browser-local decoded PCM energy/dynamics envelope; no semantic audio inference'
+        : `unavailable: ${audioTimeline.reason || 'not decoded'}`,
+    },
+    disclaimer: 'V0.2 combines browser-local visual-change proxies, optional local audio energy/dynamics, and user-supplied transcript timing or clearly labelled estimated alignment. It does not measure human attention, emotion, cognition, purchase intent, EEG, fMRI or neural activity, and it does not automatically identify spoken words, speakers, people or objects.',
+  };
+
+  return {
+    packet: `${base.packet}${buildPacketExtension(transcriptTimeline, audioTimeline, clientBrief, clientMoments)}`,
+    result,
+  };
+}
