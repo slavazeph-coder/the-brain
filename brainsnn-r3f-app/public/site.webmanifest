@@ -1,7 +1,7 @@
 {
-  "name": "GaugeGap Foundry by BrainSNN",
-  "short_name": "GaugeGap",
-  "description": "Playable science, visual challenges and reproducible research experiments by BrainSNN.",
+  "name": "BrainSNN",
+  "short_name": "BrainSNN",
+  "description": "Creative decision intelligence for analyzing content, surfacing modelled attention, trust and risk signals, and turning them into concrete next edits.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#030308",
