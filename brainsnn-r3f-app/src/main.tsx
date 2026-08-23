@@ -9,6 +9,7 @@ import './styles/multimodal.css';
 import './styles/creative-readout.css';
 import './styles/client-multimodal.css';
 import './styles/neural-visual-pass.css';
+import './styles/neural-visual-motion.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
