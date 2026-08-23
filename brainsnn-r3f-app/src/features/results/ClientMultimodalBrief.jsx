@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, AlertTriangle, CheckCircle2, Clock3, FileText, LockKeyhole, Target, Volume2 } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, FileText, LockKeyhole, Mic2, Target, Volume2 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
 
 function formatTime(seconds = 0) {
@@ -27,9 +27,23 @@ function kindLabel(kind) {
 }
 
 function alignmentBadge(mode) {
-  if (mode === 'timed') return { tone: 'cyan', label: 'TIMED TRANSCRIPT' };
+  if (mode === 'local-asr') return { tone: 'warning', label: 'LOCAL ASR TIMING' };
+  if (mode === 'timed') return { tone: 'cyan', label: 'SUPPLIED TIMING' };
   if (mode === 'estimated') return { tone: 'warning', label: 'ESTIMATED ALIGNMENT' };
   return { tone: 'neutral', label: 'VISUAL TIMING ONLY' };
+}
+
+function transcriptSourceLabel(transcript) {
+  if (transcript?.timingOrigin === 'local-asr') return 'Local Whisper timing';
+  if (transcript?.timingOrigin === 'supplied') return 'Provided timestamps';
+  if (transcript?.mode === 'estimated') return 'Estimated timing';
+  return 'Not timed';
+}
+
+function transcriptSegmentNote(transcript, segment) {
+  if (transcript?.timingOrigin === 'local-asr') return 'Browser-local speech model timestamp; verify critical wording and cut points against playback.';
+  if (segment?.alignment === 'provided') return 'Timestamp supplied by transcript/captions.';
+  return 'Estimated from sentence length and video duration.';
 }
 
 function SummaryCard({ icon: Icon, label, children, tone = '' }) {
@@ -52,6 +66,8 @@ export function ClientMultimodalBrief({ result, media }) {
   const badge = alignmentBadge(brief.alignmentMode);
   const transcriptSegments = (transcript.segments || []).slice(0, 14);
   const clientMoments = moments.slice(0, 12);
+  const localAsr = transcript.timingOrigin === 'local-asr';
+  const localTranscript = transcript.localTranscript || media?.localTranscript || null;
 
   return (
     <section className="client-brief" aria-labelledby="client-brief-heading">
@@ -63,16 +79,26 @@ export function ClientMultimodalBrief({ result, media }) {
         </div>
         <div className="client-brief-badges">
           <Badge tone={badge.tone}>{badge.label}</Badge>
-          <Badge tone="cyan">MULTIMODAL V0.2</Badge>
+          <Badge tone="cyan">MULTIMODAL V0.3</Badge>
         </div>
       </header>
 
       <div className="client-brief-sourcebar" aria-label="Client scan source summary">
         <span><Activity size={14} aria-hidden="true" /><small>VISUAL</small><strong>{multimodal.frameCount || 0} local samples</strong></span>
         <span><Volume2 size={14} aria-hidden="true" /><small>AUDIO</small><strong>{audio.status === 'ready' ? `${audio.points?.length || 0} energy points` : 'Unavailable'}</strong></span>
-        <span><FileText size={14} aria-hidden="true" /><small>TRANSCRIPT</small><strong>{transcript.mode === 'timed' ? 'Provided timestamps' : transcript.mode === 'estimated' ? 'Estimated timing' : 'Not timed'}</strong></span>
+        <span>{localAsr ? <Mic2 size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}<small>TRANSCRIPT</small><strong>{transcriptSourceLabel(transcript)}</strong></span>
         <span><LockKeyhole size={14} aria-hidden="true" /><small>RAW MEDIA</small><strong>Browser-local</strong></span>
       </div>
+
+      {localAsr ? (
+        <div className="client-asr-provenance">
+          <Mic2 size={17} aria-hidden="true" />
+          <div>
+            <strong>Speech-to-text generated locally in this browser</strong>
+            <p>{localTranscript?.model || 'Whisper'} · {localTranscript?.device || 'browser'} · {localTranscript?.wordCount || 0} timed words. These are model-generated speech timestamps, not measured or user-supplied ground truth.</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="client-brief-grid">
         <SummaryCard icon={AlertTriangle} label="PRIMARY ISSUE" tone="risk">
@@ -98,7 +124,7 @@ export function ClientMultimodalBrief({ result, media }) {
                 <span>{kindLabel(item.kind)}</span>
                 <strong>{formatRange(item.start, item.end)}</strong>
                 <p>{item.text}</p>
-                <small>{item.alignment}</small>
+                <small>{item.alignment === 'local-asr' ? 'local ASR · verify timing' : item.alignment}</small>
               </article>
             ))}
           </div>
@@ -130,7 +156,7 @@ export function ClientMultimodalBrief({ result, media }) {
         <section className="client-detail-panel" aria-labelledby="client-transcript-heading">
           <div className="client-section-heading compact">
             <div><span className="bsn-eyebrow">Semantic timeline</span><h3 id="client-transcript-heading">Transcript / caption beats</h3></div>
-            <small>{transcript.sourceFormat || 'none'}</small>
+            <small>{localAsr ? 'LOCAL ASR' : transcript.sourceFormat || 'none'}</small>
           </div>
           {transcriptSegments.length ? (
             <div className="client-transcript-list">
@@ -138,12 +164,12 @@ export function ClientMultimodalBrief({ result, media }) {
                 <article key={segment.id}>
                   <div><strong>{formatRange(segment.start, segment.end)}</strong><span className={`client-kind client-kind-${segment.kind}`}>{kindLabel(segment.kind)}</span></div>
                   <p>{segment.text}</p>
-                  <small>{segment.alignment === 'provided' ? 'Timestamp supplied by transcript/captions' : 'Estimated from sentence length and video duration'}</small>
+                  <small>{transcriptSegmentNote(transcript, segment)}</small>
                 </article>
               ))}
             </div>
-          ) : <p className="bsn-note">No timed transcript is available. Add SRT/VTT or [mm:ss] lines to turn semantic beats into client-presentable timestamps.</p>}
-          <p className="client-boundary-note">{transcript.disclaimer}</p>
+          ) : <p className="bsn-note">No timed transcript is available. Generate local captions, add SRT/VTT, or add [mm:ss] lines to turn semantic beats into time-localized review cues.</p>}
+          <p className="client-boundary-note">{transcript.disclaimer || (localAsr ? localTranscript?.disclaimer : '')}</p>
         </section>
 
         <section className="client-detail-panel" aria-labelledby="client-audio-heading">
@@ -171,8 +197,12 @@ export function ClientMultimodalBrief({ result, media }) {
       <section className="client-presenter" aria-labelledby="client-presenter-heading">
         <div className="client-presenter-title"><Target size={17} aria-hidden="true" /><div><span className="bsn-eyebrow">Use this in the room</span><h3 id="client-presenter-heading">What to tell the client</h3></div></div>
         <div className="client-presenter-script">
-          <p>“We’re not asking you to trust a mystery score. BrainSNN shows the creative as a timeline: what visually changed, where local sound energy shifted, where your own captions place the claim, proof, price and CTA, and which exact edit the evidence supports.”</p>
-          <p>“When you give us real caption timestamps, those semantic moments are exact to the supplied transcript. When you only give plain text, we clearly mark timing as estimated instead of pretending it is measured.”</p>
+          <p>“We’re not asking you to trust a mystery score. BrainSNN shows the creative as a timeline: what visually changed, where local sound energy shifted, where the transcript places the claim, proof, price and CTA, and which edit that evidence supports.”</p>
+          {localAsr ? (
+            <p>“For this scan, BrainSNN generated the transcript locally in the browser. The speech model gives us useful word-level timing, but we label it as model-generated and verify important edit points against playback rather than pretending it is exact ground truth.”</p>
+          ) : (
+            <p>“When you give us caption timestamps, those semantic moments follow the supplied transcript. When you only give plain text, we clearly mark timing as estimated instead of pretending it is measured.”</p>
+          )}
           <p>“The current brain-style layer is a modelled reference visualization. It is not an MRI, EEG or biometric readout. The value today is faster creative review and a reproducible decision trail.”</p>
         </div>
       </section>
