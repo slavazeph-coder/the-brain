@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, AlertTriangle, CheckCircle2, Clock3, FileText, LockKeyhole, Mic2, Target, Volume2 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { BeliefReportPanel } from './BeliefReportPanel.jsx';
+import { OutcomeLearningPanel } from './OutcomeLearningPanel.jsx';
 
 function formatTime(seconds = 0) {
   const safe = Math.max(0, Number(seconds) || 0);
@@ -116,6 +117,7 @@ export function ClientMultimodalBrief({ result, media }) {
       </div>
 
       <BeliefReportPanel report={multimodal.beliefReport} />
+      <OutcomeLearningPanel result={result} />
 
       {anchors.length ? (
         <section className="client-evidence-section" aria-labelledby="client-evidence-heading">
@@ -204,12 +206,13 @@ export function ClientMultimodalBrief({ result, media }) {
         <div className="client-presenter-script">
           <p>“We’re not asking you to trust a mystery score. BrainSNN shows the creative as a timeline: what visually changed, where local sound energy shifted, where the transcript places the claim, proof, price and CTA, and which edit that evidence supports.”</p>
           <p>“The Pattern Intelligence layer adds a second opinion: it marks state changes, unusual windows, and where that pattern view agrees—or disagrees—with the explainable BrainSNN rules. Today that layer is an S-DBN-ready proxy, not a trained performance predictor.”</p>
+          <p>“Brand Brain closes the loop with your real published outcomes. Once enough comparable results exist for the same brand and goal, it shows which new creative signatures resemble stronger and weaker saved results—without presenting resemblance as a guaranteed forecast.”</p>
           {localAsr ? (
             <p>“For this scan, BrainSNN generated the transcript locally in the browser. The speech model gives us useful word-level timing, but we label it as model-generated and verify important edit points against playback rather than pretending it is exact ground truth.”</p>
           ) : (
             <p>“When you give us caption timestamps, those semantic moments follow the supplied transcript. When you only give plain text, we clearly mark timing as estimated instead of pretending it is measured.”</p>
           )}
-          <p>“The current brain-style layer is a modelled reference visualization. It is not an MRI, EEG or biometric readout. The value today is faster creative review and a reproducible decision trail.”</p>
+          <p>“The current brain-style layer is a modelled reference visualization. It is not an MRI, EEG or biometric readout. The value today is faster creative review, outcome-backed learning, and a reproducible decision trail.”</p>
         </div>
       </section>
 

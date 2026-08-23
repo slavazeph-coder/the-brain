@@ -36,7 +36,7 @@ describe('belief multimodal fusion', () => {
       text: `[00:02] This can cut editing time dramatically\n[00:08] A customer pilot saved 20 hours\n[00:14] Book a demo today`,
     });
 
-    expect(fusion.result.schemaVersion).toBe('brainsnn.multimodal.v0.2');
+    expect(fusion.result.schemaVersion).toBe('brainsnn.multimodal.v0.3');
     expect(fusion.result.beliefReport.schemaVersion).toBe('brainsnn.belief.v0.1');
     expect(fusion.result.beliefReport.model.learnedWeights).toBe(false);
     expect(fusion.result.beliefReport.windows.length).toBeGreaterThan(0);
