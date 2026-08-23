@@ -6,7 +6,7 @@
 #   docker build -t brainsnn .
 #   docker run -p 8080:8080 --rm -e PORT=8080 brainsnn
 
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 
@@ -14,9 +14,15 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Source + build (Vite client bundle in dist/ + esbuild server at dist/server.cjs).
+# Source + validation + build (Vite client bundle in dist/ + esbuild server at dist/server.cjs).
 COPY . .
-RUN npm run build
+RUN npm run lint \
+  && npm test \
+  && npm run build \
+  && cd mcp-server \
+  && npm ci --no-audit --no-fund \
+  && npm run smoke \
+  && rm -rf node_modules
 
 # GEMINI_API_KEY is read at runtime (set it as a Railway service variable).
 # Without a key the server runs the deterministic local SNN simulation.
