@@ -99,4 +99,45 @@ describe('browser-local transcription v0.3', () => {
     expect(progress.includes('complete')).toBe(true);
     __resetLocalTranscriberForTests();
   });
+
+  it('retries inference on browser WASM when a WebGPU transcriber fails after loading', async () => {
+    __resetLocalTranscriberForTests();
+    const pipelineDevices = [];
+    const progress = [];
+    const fakeRuntime = { navigator: { gpu: {} } };
+    const fakePipeline = async (_task, _model, options) => {
+      const device = options?.device || 'wasm';
+      pipelineDevices.push(device);
+      if (device === 'webgpu') {
+        return async () => {
+          throw new Error('simulated WebGPU inference failure');
+        };
+      }
+      return async () => ({
+        text: 'WASM fallback works.',
+        chunks: [
+          { text: ' WASM', timestamp: [0, 0.4] },
+          { text: ' fallback', timestamp: [0.45, 0.9] },
+          { text: ' works.', timestamp: [0.95, 1.3] },
+        ],
+      });
+    };
+
+    const result = await transcribeAudioLocally({
+      samples: new Float32Array(16000 * 2),
+      sampleRate: 16000,
+      duration: 2,
+      preferWebGPU: true,
+      pipelineFactory: fakePipeline,
+      runtime: fakeRuntime,
+      onProgress: (event) => progress.push(event.stage),
+    });
+
+    expect(pipelineDevices[0]).toBe('webgpu');
+    expect(pipelineDevices[1]).toBe('wasm');
+    expect(progress.includes('webgpu-inference-fallback')).toBe(true);
+    expect(result.device).toBe('wasm');
+    expect(result.text).toMatch(/WASM fallback works/);
+    __resetLocalTranscriberForTests();
+  });
 });
