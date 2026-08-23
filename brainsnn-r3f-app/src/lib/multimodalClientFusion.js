@@ -259,6 +259,17 @@ export function buildClientMultimodalFusion({ text = '', media = null } = {}) {
   const result = {
     ...base.result,
     schemaVersion: 'brainsnn.multimodal.v0.2',
+    temporalReadout: {
+      ...(base.result.temporalReadout || {}),
+      schemaVersion: 'brainsnn.temporal.v0.2',
+      tracks: timelineTracks,
+      modalities: {
+        visual: Boolean(base.result.temporalReadout?.tracks?.length),
+        audio: audioTimeline.status === 'ready',
+        transcript: transcriptTimeline.mode !== 'none',
+        transcriptAlignment: transcriptTimeline.mode,
+      },
+    },
     transcriptTimeline,
     audioTimeline,
     timelineTracks,
