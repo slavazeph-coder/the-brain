@@ -27,16 +27,19 @@ function PreScanSignals({ input, contentType, media }) {
   const signals = useMemo(() => getPreviewSignals(input), [input]);
   const hasInput = input.trim().length > 0;
   const hasMedia = Boolean(media?.signals?.length);
+  const localTranscriptReady = Boolean(media?.localTranscript?.status === 'ready');
   const transcriptTimeline = useMemo(() => (
     contentType === 'video' && hasMedia && hasInput
       ? parseTimedTranscript(input, Number(media?.duration) || 0)
       : null
   ), [contentType, hasMedia, hasInput, input, media?.duration]);
-  const transcriptStatus = transcriptTimeline?.mode === 'timed'
-    ? ' · exact caption timing ready'
-    : transcriptTimeline?.mode === 'estimated'
-      ? ' · transcript timing will be estimated'
-      : '';
+  const transcriptStatus = localTranscriptReady
+    ? ` · local Whisper timing ready (${media.localTranscript.wordCount || 0} words; model-estimated)`
+    : transcriptTimeline?.mode === 'timed'
+      ? ' · supplied caption timing ready'
+      : transcriptTimeline?.mode === 'estimated'
+        ? ' · transcript timing will be estimated'
+        : '';
   const audioStatus = hasMedia
     ? (media?.audio?.status === 'ready' ? ' · local audio envelope ready' : ' · no audio envelope')
     : '';
@@ -51,7 +54,7 @@ function PreScanSignals({ input, contentType, media }) {
       <div>
         <span className="bsn-eyebrow">Live pre-scan</span>
         <strong>{modeMessage}</strong>
-        <p>{contentType === 'video' ? 'Visual + optional audio-envelope signals stay local; the compact fused packet runs through BrainSNN. Supplied captions preserve their timestamps.' : 'Local preview only. The full Brain Scan runs through the API and layer stack.'}</p>
+        <p>{contentType === 'video' ? 'Visual + audio-envelope signals stay local. Speech can be generated locally with Whisper; generated timestamps remain model estimates and are labelled separately from supplied captions.' : 'Local preview only. The full Brain Scan runs through the API and layer stack.'}</p>
       </div>
       <div className="pre-scan-bars">
         {signals.map((signal) => {
@@ -79,7 +82,7 @@ const labels = {
 const placeholders = {
   text: 'Paste a headline, post, ad, email, or landing-page copy…',
   webpage: 'Paste the URL or page copy you want BrainSNN to inspect…',
-  video: 'Best: paste SRT/VTT or timestamped lines, e.g. [00:00] Hook\n[00:05] Claim\n[00:10] Customer result\n[00:18] CTA\n\nPlain transcript also works; BrainSNN will label the timing as estimated.',
+  video: 'Upload a video and BrainSNN can generate local Whisper captions automatically. You can also paste SRT/VTT or timestamped lines, e.g. [00:00] Hook\n[00:05] Claim\n[00:10] Customer result\n[00:18] CTA\n\nPlain transcript also works; BrainSNN will label the timing as estimated.',
   neural: 'Paste decoded text from an authorized neural decoder. BrainSNN analyzes this text, not raw brain signals…',
 };
 
@@ -95,6 +98,7 @@ export function ScanComposer({ scan, onRun }) {
       ? parseTimedTranscript(state.input, Number(state.media?.duration) || 0)
       : null
   ), [contentType, mediaReady, state.input, state.media?.duration]);
+  const localTranscriptReady = Boolean(state.media?.localTranscript?.status === 'ready');
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -137,7 +141,15 @@ export function ScanComposer({ scan, onRun }) {
         <div className="scan-input-stack">
           <ContentTypeSelector value={contentType} onChange={setContentType} />
 
-          {contentType === 'video' ? <MediaInputPanel media={state.media} onMedia={setMedia} disabled={scanning} /> : null}
+          {contentType === 'video' ? (
+            <MediaInputPanel
+              media={state.media}
+              onMedia={setMedia}
+              transcript={state.input}
+              onTranscript={setInput}
+              disabled={scanning}
+            />
+          ) : null}
 
           <label className="scan-input-label" htmlFor="brain-scan-input">
             {labels[contentType] || labels.text}
@@ -153,12 +165,14 @@ export function ScanComposer({ scan, onRun }) {
           </label>
           {contentType === 'video' ? (
             <div className="scan-timing-hint" aria-live="polite">
-              <strong>For a client demo:</strong> paste SRT/VTT or <code>[mm:ss]</code> lines to show claims, proof, price and CTA at supplied timestamps.
-              {transcriptPreview?.mode === 'timed'
-                ? <span> ✓ Supplied timing detected ({transcriptPreview.sourceFormat}).</span>
-                : transcriptPreview?.mode === 'estimated'
-                  ? <span> Plain transcript detected — timing will be clearly labelled estimated.</span>
-                  : null}
+              <strong>For a client demo:</strong> use local Whisper for one-click captions, or paste SRT/VTT / <code>[mm:ss]</code> lines yourself.
+              {localTranscriptReady
+                ? <span> ✓ Local Whisper timing detected — word positions are model-generated and should be verified for critical moments.</span>
+                : transcriptPreview?.mode === 'timed'
+                  ? <span> ✓ Supplied timing detected ({transcriptPreview.sourceFormat}).</span>
+                  : transcriptPreview?.mode === 'estimated'
+                    ? <span> Plain transcript detected — timing will be clearly labelled estimated.</span>
+                    : null}
             </div>
           ) : null}
         </div>
@@ -190,7 +204,7 @@ export function ScanComposer({ scan, onRun }) {
       {contentType === 'text' || contentType === 'webpage' ? <ExampleSelector onSelect={setInput} /> : null}
       <p className="scan-privacy-note">
         {contentType === 'video'
-          ? 'Raw video and local audio samples stay in this browser in V0.2; only compact visual/audio features plus any transcript you provide are analyzed. Audio means energy/dynamics only, not automatic speech or emotion recognition. '
+          ? 'Raw video, sampled frames and decoded PCM stay in this browser in V0.3. Local Whisper downloads model files into the browser and generates text/timestamps locally; only the generated transcript plus compact visual/audio features enter the BrainSNN scan. Model-generated word timing is not treated as measured or user-supplied timing. '
           : contentType === 'neural'
             ? 'Neural mode accepts decoded text only and is experimental research tooling; BrainSNN does not interpret raw brain signals. '
             : 'Local history stays in this browser unless persistence is configured. '}
