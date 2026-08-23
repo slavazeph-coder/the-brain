@@ -17,6 +17,7 @@ import { TechnicalDetails } from './TechnicalDetails.jsx';
 import { InputFusionPanel } from './InputFusionPanel.jsx';
 import { ResultFeedback } from './ResultFeedback.jsx';
 import { CreativeNeuralReadout } from './CreativeNeuralReadout.jsx';
+import { ClientMultimodalBrief } from './ClientMultimodalBrief.jsx';
 import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
@@ -92,12 +93,15 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
     <div className="results-workbench" data-testid="results-workspace">
       <main className="results-main" aria-label="Brain Scan results">
         {isVideoReadout ? (
-          <CreativeNeuralReadout
-            result={result}
-            media={media}
-            onCompare={onImprove}
-            onExport={onExport}
-          />
+          <>
+            <CreativeNeuralReadout
+              result={result}
+              media={media}
+              onCompare={onImprove}
+              onExport={onExport}
+            />
+            <ClientMultimodalBrief result={result} media={media} />
+          </>
         ) : (
           <ExecutiveVerdict result={result} />
         )}
