@@ -7,6 +7,7 @@ import './styles/utilities.css';
 import './styles/arcade-home.css';
 import './styles/multimodal.css';
 import './styles/creative-readout.css';
+import './styles/client-multimodal.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
