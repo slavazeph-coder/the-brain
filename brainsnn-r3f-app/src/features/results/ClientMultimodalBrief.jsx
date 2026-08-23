@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, AlertTriangle, CheckCircle2, Clock3, FileText, LockKeyhole, Target, Volume2 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { BeliefReportPanel } from './BeliefReportPanel.jsx';
+import { OutcomeLearningPanel } from './OutcomeLearningPanel.jsx';
 
 function formatTime(seconds = 0) {
   const safe = Math.max(0, Number(seconds) || 0);
@@ -90,6 +91,7 @@ export function ClientMultimodalBrief({ result, media }) {
       </div>
 
       <BeliefReportPanel report={multimodal.beliefReport} />
+      <OutcomeLearningPanel result={result} />
 
       {anchors.length ? (
         <section className="client-evidence-section" aria-labelledby="client-evidence-heading">
@@ -178,6 +180,7 @@ export function ClientMultimodalBrief({ result, media }) {
         <div className="client-presenter-script">
           <p>“We’re not asking you to trust a mystery score. BrainSNN shows the creative as a timeline: what visually changed, where local sound energy shifted, where your own captions place the claim, proof, price and CTA, and which exact edit the evidence supports.”</p>
           <p>“The Pattern Intelligence layer adds a second opinion: it marks state changes, unusual windows, and where that pattern view agrees—or disagrees—with the explainable BrainSNN rules. Today that layer is an S-DBN-ready proxy, not a trained performance predictor.”</p>
+          <p>“Brand Brain closes the loop with your real published outcomes. Once we have enough examples for the same goal, it shows which new creative signatures resemble the stronger and weaker results in your own saved history—without pretending that resemblance is a guaranteed forecast.”</p>
           <p>“When you give us real caption timestamps, those semantic moments are exact to the supplied transcript. When you only give plain text, we clearly mark timing as estimated instead of pretending it is measured.”</p>
           <p>“The current brain-style layer is a modelled reference visualization. It is not an MRI, EEG or biometric readout. The value today is faster creative review and a reproducible decision trail.”</p>
         </div>
