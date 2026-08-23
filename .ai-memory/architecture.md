@@ -48,7 +48,7 @@ The video workflow can now generate captions locally in the browser:
 
 - Visual frames are sampled in-browser.
 - Audio is decoded to mono PCM in-browser for the energy/dynamics envelope.
-- Optional speech-to-text uses Transformers.js 3.8.1 with `onnx-community/whisper-tiny.en`.
+- Optional speech-to-text uses Transformers.js 3.8.1 with `Xenova/whisper-tiny.en`, selected because its export supports word-level timestamps in the current browser runtime.
 - Whisper receives 16 kHz Float32 mono audio and requests word-level timestamps.
 - WebGPU is preferred when available; browser WASM/CPU is the fallback.
 - Raw video, pixel buffers, and decoded PCM are not sent to an external speech service by this layer.
