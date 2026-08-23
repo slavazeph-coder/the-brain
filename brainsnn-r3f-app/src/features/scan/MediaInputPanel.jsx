@@ -279,10 +279,17 @@ export function MediaInputPanel({ media, onMedia, transcript = '', onTranscript,
       const audioStatus = decoded.audio.status === 'ready'
         ? `${decoded.audio.points.length} local audio points ready`
         : 'audio unavailable';
-      setStatus(`Ready: ${sampled.signals.length} visual frames across ${sampled.duration.toFixed(1)}s · ${audioStatus}. Raw media stays in this browser session.`);
+      const readyMessage = `Ready: ${sampled.signals.length} visual frames across ${sampled.duration.toFixed(1)}s · ${audioStatus}. Raw media stays in this browser session.`;
+      setStatus(readyMessage);
 
       if (autoTranscript && !String(transcript || '').trim() && decoded.samples?.length) {
-        await runTranscription({ file, decoded, mediaSnapshot: nextMedia });
+        try {
+          await runTranscription({ file, decoded, mediaSnapshot: nextMedia });
+        } catch (transcriptionError) {
+          if (jobRef.current !== jobId) return;
+          setError(`Local captions unavailable: ${transcriptionError?.message || 'speech-to-text could not complete'}. The visual/audio scan is still ready; you can retry or paste captions.`);
+          setStatus(readyMessage);
+        }
       }
     } catch (sampleError) {
       if (jobRef.current !== jobId) return;
@@ -305,7 +312,7 @@ export function MediaInputPanel({ media, onMedia, transcript = '', onTranscript,
       await runTranscription({ file: media.sourceFile, decoded: null, mediaSnapshot: media });
     } catch (transcriptionError) {
       setError(transcriptionError?.message || 'Local transcription could not complete.');
-      setStatus('');
+      setStatus('The video scan is still ready. Retry local captions or paste a supplied transcript.');
     }
   }
 
