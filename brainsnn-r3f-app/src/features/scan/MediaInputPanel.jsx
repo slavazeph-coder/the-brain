@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Film, LoaderCircle, Upload, X } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
+import { deriveAudioEnvelope, unavailableAudioTimeline } from '../../lib/audioFeatures.js';
 import { frameSignalFromPixels, sampleCountForDuration } from '../../lib/mediaFusion.js';
 
 const ANALYSIS_WIDTH = 64;
 const ANALYSIS_HEIGHT = 36;
 const MAX_VIDEO_BYTES = 180 * 1024 * 1024;
+const MAX_AUDIO_DECODE_BYTES = 80 * 1024 * 1024;
+const MAX_AUDIO_DECODE_SECONDS = 180;
 
 function once(target, eventName, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
@@ -89,6 +92,38 @@ async function sampleVideo(file) {
   }
 }
 
+async function analyzeAudioLocally(file, duration) {
+  if (!file || file.size > MAX_AUDIO_DECODE_BYTES) {
+    return unavailableAudioTimeline('Audio envelope skipped for files over 80 MB to protect browser memory.');
+  }
+  if (Number(duration) > MAX_AUDIO_DECODE_SECONDS) {
+    return unavailableAudioTimeline('Audio envelope skipped for clips over 180 seconds in the client-side V0.2 path.');
+  }
+
+  const AudioContextImpl = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextImpl) return unavailableAudioTimeline('Web Audio decoding is unavailable in this browser.');
+
+  let context = null;
+  try {
+    context = new AudioContextImpl();
+    const bytes = await file.arrayBuffer();
+    const buffer = await context.decodeAudioData(bytes);
+    if (!buffer?.numberOfChannels || !buffer.length) return unavailableAudioTimeline('The file decoded without a usable audio channel.');
+
+    const mono = new Float32Array(buffer.length);
+    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < data.length; i += 1) mono[i] += data[i] / buffer.numberOfChannels;
+    }
+
+    return deriveAudioEnvelope(mono, buffer.sampleRate, Number(duration) || buffer.duration, 2);
+  } catch (error) {
+    return unavailableAudioTimeline(`Audio envelope unavailable: ${error?.message || 'browser codec decode failed'}.`);
+  } finally {
+    try { await context?.close?.(); } catch { /* no-op */ }
+  }
+}
+
 export function MediaInputPanel({ media, onMedia, disabled = false }) {
   const inputRef = useRef(null);
   const previewUrlRef = useRef('');
@@ -107,14 +142,18 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
     const file = event.target.files?.[0];
     if (!file) return;
     setError('');
-    setStatus('Sampling visual changes locally…');
+    setStatus('Sampling visual + audio signals locally…');
     try {
       const sampled = await sampleVideo(file);
+      const audio = await analyzeAudioLocally(file, sampled.duration);
       revokePreview();
       const previewUrl = URL.createObjectURL(file);
       previewUrlRef.current = previewUrl;
-      onMedia({ ...sampled, previewUrl });
-      setStatus(`Ready: ${sampled.signals.length} frames sampled across ${sampled.duration.toFixed(1)}s. Local preview stays in this browser session.`);
+      onMedia({ ...sampled, audio, previewUrl });
+      const audioStatus = audio.status === 'ready'
+        ? `${audio.points.length} local audio points ready`
+        : 'audio envelope unavailable';
+      setStatus(`Ready: ${sampled.signals.length} visual frames across ${sampled.duration.toFixed(1)}s · ${audioStatus}. Raw media stays in this browser session.`);
     } catch (sampleError) {
       revokePreview();
       onMedia(null);
@@ -137,7 +176,7 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
       <div className="media-input-copy">
         <span className="bsn-eyebrow"><Film size={14} aria-hidden="true" /> Multimodal video layer</span>
         <strong>Upload a video or screen recording</strong>
-        <p>BrainSNN adaptively samples visual-change signals in your browser, then fuses them with the transcript or notes below. Short workflows get denser sampling; the raw video is not uploaded.</p>
+        <p>BrainSNN adaptively samples visual change and, when the browser codec allows it, a lightweight audio energy/dynamics envelope. Both are computed locally, then fused with the transcript/captions below. Raw video and audio are not uploaded by this layer.</p>
       </div>
       <input ref={inputRef} className="bsn-visually-hidden" type="file" accept="video/*" onChange={handleFile} disabled={disabled} />
       <div className="media-input-actions">
@@ -154,11 +193,14 @@ export function MediaInputPanel({ media, onMedia, disabled = false }) {
       {media ? (
         <div className="media-ready-card">
           <strong>{media.fileName}</strong>
-          <span>{media.duration.toFixed(1)}s · {media.signals.length} sampled frames · raw file stays local · preview available this session</span>
+          <span>
+            {media.duration.toFixed(1)}s · {media.signals.length} sampled visual frames · {media.audio?.status === 'ready' ? `${media.audio.points.length} audio envelope points` : 'audio envelope unavailable'} · raw file stays local
+          </span>
         </div>
       ) : null}
       {status ? <p className="bsn-note" role="status">{status}</p> : null}
       {error ? <p className="bsn-validation" role="alert">{error}</p> : null}
+      <p className="bsn-note">Audio V0.2 measures local energy/dynamics only. It does not transcribe speech, identify speakers, infer emotion, or measure audience response.</p>
     </section>
   );
 }
