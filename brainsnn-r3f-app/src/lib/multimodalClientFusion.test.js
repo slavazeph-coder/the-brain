@@ -35,7 +35,7 @@ function localAsrMediaFixture() {
       schemaVersion: 'brainsnn.local-transcript.v0.3',
       status: 'ready',
       provider: 'transformers.js',
-      model: 'onnx-community/whisper-tiny.en',
+      model: 'Xenova/whisper-tiny.en',
       device: 'wasm',
       timing: 'model-word-timestamps',
       timingIsMeasured: false,
@@ -109,6 +109,6 @@ describe('client-ready multimodal fusion v0.3', () => {
     expect(result.clientBrief.presenterNotes[0].toLowerCase()).not.toMatch(/exact caption/);
     expect(result.disclaimer.toLowerCase()).toMatch(/speech and word timestamps are model-generated/);
     expect(packet).toMatch(/Transcript alignment: local-asr/);
-    expect(packet).toMatch(/browser-local onnx-community\/whisper-tiny.en/);
+    expect(packet).toMatch(/browser-local Xenova\/whisper-tiny.en/);
   });
 });
