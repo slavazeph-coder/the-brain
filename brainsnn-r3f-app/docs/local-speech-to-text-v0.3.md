@@ -24,7 +24,7 @@ The browser speech path lives in `src/lib/localTranscription.js`.
 Current V0.3 defaults:
 
 - Runtime: Transformers.js 3.8.1 loaded on demand from jsDelivr.
-- ASR model: `onnx-community/whisper-tiny.en`.
+- ASR model: `Xenova/whisper-tiny.en`, selected because the export supports word-level timestamps in the current Transformers.js browser path.
 - Input sample rate to Whisper: 16 kHz mono Float32 PCM.
 - Preferred execution: WebGPU when `navigator.gpu` is available.
 - Fallback execution: browser WASM/CPU.
@@ -117,13 +117,14 @@ Expected fallbacks:
 - File is above browser audio limit: keep visual scan; do not attempt local audio/STT.
 - Clip is longer than current local audio limit: keep visual scan; do not attempt local audio/STT.
 - WebGPU pipeline fails: retry pipeline through the browser WASM/CPU path.
+- WebGPU inference fails after the model loaded: rebuild the speech pipeline in browser WASM/CPU and retry inference once.
 - Model/runtime download fails: keep visual/audio scan and let the operator retry or paste captions.
 - Whisper returns no usable speech: keep visual/audio scan and surface the empty-speech result as an actionable error.
 - Restored historical scan has no original File object: ask the operator to re-select the source video before regenerating local captions.
 
 ## Test strategy
 
-### Automated CI coverage
+### Automated application CI coverage
 
 `src/lib/localTranscription.test.js` tests the deterministic pieces without downloading a real model:
 
@@ -134,6 +135,7 @@ Expected fallbacks:
 - local-ASR provenance
 - the complete transcription orchestration through an injected fake ASR pipeline
 - use of word timestamps
+- WebGPU inference failure falling back to browser WASM/CPU
 
 `src/lib/multimodalClientFusion.test.js` tests the integration boundary:
 
@@ -144,11 +146,24 @@ Expected fallbacks:
 - client recommendations tell the operator to verify the generated timing
 - packet/provenance records browser-local speech-to-text and the no-raw-audio-upload boundary
 
-The normal BrainSNN CI still runs TypeScript checking, the full test suite, a production build, and the MCP smoke test.
+The normal BrainSNN CI runs TypeScript checking, the full test suite, a production build, and the MCP smoke test.
 
-### Real-browser smoke test
+### Real-browser Whisper smoke
 
-CI deliberately does not download Whisper model weights. After a deploy, perform one real-device smoke test with a short, clearly spoken English clip:
+A separate `Whisper Browser Smoke` GitHub Actions workflow exercises the real browser runtime rather than a mock. It:
+
+1. launches the Vite app in a GitHub Actions runner,
+2. starts a real headless Chrome session,
+3. downloads a known spoken WAV fixture,
+4. downloads the actual Transformers.js Whisper model files,
+5. runs real browser WASM inference with `return_timestamps: "word"`,
+6. verifies a usable transcript, word timestamps, segment output, raw-audio privacy provenance, and completion state.
+
+The smoke workflow exists specifically to catch failures that deterministic tests cannot, such as stale fixture URLs, incompatible model exports, CDN/runtime breakage, or missing timestamp support.
+
+### Real-device smoke test
+
+After deploy, still perform one real-device smoke with a short, clearly spoken English clip:
 
 1. Open the BrainSNN video scan.
 2. Leave `Auto-generate local captions` enabled.
@@ -162,7 +177,7 @@ CI deliberately does not download Whisper model weights. After a deploy, perform
 10. Confirm the client brief says timing is model-generated and requires verification.
 11. Confirm a deliberately failed/no-audio file still leaves the visual scan usable.
 
-Passing CI proves the application logic/build contract. Passing this browser smoke proves the real model/CDN/browser execution path on that device/browser.
+Passing application CI proves the application logic/build contract. Passing the automated browser smoke proves the real model/CDN/headless-browser inference path. Passing a real-device smoke validates the deployed browser/device experience.
 
 ## Client demo script
 
