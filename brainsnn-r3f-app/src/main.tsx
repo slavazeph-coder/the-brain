@@ -10,6 +10,7 @@ import './styles/creative-readout.css';
 import './styles/client-multimodal.css';
 import './styles/belief-report.css';
 import './styles/local-transcription.css';
+import './styles/outcome-learning.css';
 import './styles/neural-visual-pass.css';
 import './styles/neural-visual-motion.css';
 
