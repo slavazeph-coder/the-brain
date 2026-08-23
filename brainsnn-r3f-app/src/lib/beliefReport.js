@@ -1,13 +1,11 @@
 // BrainSNN Belief Report V0.1
 //
-// This is the product-side learned-pattern reporting layer. It deliberately does
-// not claim neuroscience, measured attention, emotion, purchase intent, or
-// outcome prediction. Until a trained S-DBN adapter is configured, it derives a
+// Product-side learned-pattern reporting layer. It deliberately does not claim
+// neuroscience, measured attention, emotion, purchase intent, or outcome
+// prediction. Until a trained S-DBN adapter is configured, it derives a
 // deterministic latent-state proxy from the same bounded multimodal features
-// BrainSNN already exposes. The schema is intentionally stable so a real learned
-// model can replace the proxy later without rebuilding the reporting UI.
-
-const EPSILON = 1e-9;
+// BrainSNN already exposes. The schema is stable so a real learned model can
+// replace the proxy later without rebuilding the reporting UI.
 
 function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, Number(value) || 0));
@@ -82,7 +80,7 @@ function featureVectorForWindow(window, multimodal) {
 
 function hashState(features) {
   // Compact, deterministic state fingerprint. A learned adapter can later
-  // replace this state assignment while preserving the public schema.
+  // replace state assignment while preserving the public schema.
   const buckets = [
     Math.floor(features.attention / 25),
     Math.floor(features.responseChange / 25),
@@ -129,22 +127,22 @@ function deterministicFlags(window, multimodal) {
   return flags;
 }
 
-function agreementForWindow({ surprise, stateChanged, flags }) {
+function agreementForWindow({ surprise, transitionMagnitude, flags }) {
   const deterministicConcern = flags.includes('attention_proxy_drop') || flags.includes('high_change_load_proxy');
-  const learnedConcern = surprise >= 0.42 || stateChanged;
+  const patternConcern = surprise >= 0.42 || transitionMagnitude >= 0.4;
   let score = 0.5;
   let label = 'mixed';
-  if (deterministicConcern && learnedConcern) {
-    score = 0.86;
+  if (deterministicConcern && patternConcern) {
+    score = 0.88;
     label = 'high';
-  } else if (!deterministicConcern && !learnedConcern) {
-    score = 0.74;
+  } else if (!deterministicConcern && !patternConcern) {
+    score = 0.78;
     label = 'stable';
   } else {
-    score = 0.34;
+    score = 0.32;
     label = 'review';
   }
-  return { score: Number(score.toFixed(2)), label, deterministicConcern, learnedConcern };
+  return { score: Number(score.toFixed(2)), label, deterministicConcern, patternConcern };
 }
 
 function bestBy(items, selector) {
@@ -170,21 +168,23 @@ export function buildBeliefReport(multimodal = {}) {
   let previousState = null;
   let previousFeatures = null;
 
-  const learnedWindows = windows.map((window, index) => {
+  const patternWindows = windows.map((window, index) => {
     const currentFeatures = features[index];
+    const priorState = previousState;
     const stateId = hashState(currentFeatures);
-    const stateChanged = previousState != null && previousState !== stateId;
+    const stateChanged = priorState != null && priorState !== stateId;
     const surprise = reconstructionSurprise(currentFeatures, baseline);
     const transitionMagnitude = previousFeatures ? clamp(vectorDistance(currentFeatures, previousFeatures) * 1.7) : 0;
     const spikeRateProxy = clamp((currentFeatures.responseChange * 0.45 + currentFeatures.audioDynamics * 0.25 + currentFeatures.semanticDensity * 0.3) / 100);
     const sparsityProxy = clamp(1 - spikeRateProxy * 0.72);
     const flags = deterministicFlags(window, multimodal);
-    const agreement = agreementForWindow({ surprise, stateChanged, flags });
+    const agreement = agreementForWindow({ surprise, transitionMagnitude, flags });
 
     const item = {
       start: Number((Number(window.start) || 0).toFixed(2)),
       end: Number((Number(window.end) || Number(window.start) || 0).toFixed(2)),
       stateId,
+      previousStateId: priorState,
       stateConfidence: Number(clamp(0.52 + Math.abs(surprise - 0.5) * 0.36 + Math.min(0.12, transitionMagnitude * 0.15)).toFixed(2)),
       surprise: Number(surprise.toFixed(3)),
       reconstructionError: Number((surprise * 0.88).toFixed(3)),
@@ -201,16 +201,16 @@ export function buildBeliefReport(multimodal = {}) {
     return item;
   });
 
-  const stateCounts = learnedWindows.reduce((acc, item) => {
+  const stateCounts = patternWindows.reduce((acc, item) => {
     acc[item.stateId] = (acc[item.stateId] || 0) + 1;
     return acc;
   }, {});
   const dominantState = Object.entries(stateCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const highestSurprise = bestBy(learnedWindows, (item) => item.surprise || 0);
-  const highestTransition = bestBy(learnedWindows, (item) => item.transitionMagnitude || 0);
-  const highestDisagreement = bestBy(learnedWindows, (item) => 1 - (item.agreement?.score ?? 0.5));
-  const agreementScore = learnedWindows.length ? mean(learnedWindows.map((item) => item.agreement.score)) : 0;
-  const surpriseVariance = variance(learnedWindows.map((item) => item.surprise));
+  const highestSurprise = bestBy(patternWindows, (item) => item.surprise || 0);
+  const highestTransition = bestBy(patternWindows, (item) => item.transitionMagnitude || 0);
+  const highestDisagreement = bestBy(patternWindows, (item) => 1 - (item.agreement?.score ?? 0.5));
+  const agreementScore = patternWindows.length ? mean(patternWindows.map((item) => item.agreement.score)) : 0;
+  const surpriseVariance = variance(patternWindows.map((item) => item.surprise));
 
   return {
     schemaVersion: 'brainsnn.belief.v0.1',
@@ -221,12 +221,13 @@ export function buildBeliefReport(multimodal = {}) {
       learnedWeights: false,
       note: 'Deterministic latent-state proxy over existing BrainSNN multimodal features. Replaceable by a trained S-DBN adapter without changing the report schema.',
     },
-    windows: learnedWindows,
+    windows: patternWindows,
     summary: {
       dominantState: dominantState == null ? null : Number(dominantState),
       uniqueStates: Object.keys(stateCounts).length,
-      stateTransitions: learnedWindows.filter((item) => item.stateChanged).length,
-      meanSurprise: Number(mean(learnedWindows.map((item) => item.surprise)).toFixed(3)),
+      stateTransitions: patternWindows.filter((item) => item.stateChanged).length,
+      reviewWindows: patternWindows.filter((item) => item.agreement.label === 'review').length,
+      meanSurprise: Number(mean(patternWindows.map((item) => item.surprise)).toFixed(3)),
       surpriseVariance: Number(surpriseVariance.toFixed(4)),
       agreementScore: Number(agreementScore.toFixed(3)),
       highestSurprise: highestSurprise ? {
@@ -239,7 +240,7 @@ export function buildBeliefReport(multimodal = {}) {
         start: highestTransition.start,
         end: highestTransition.end,
         value: highestTransition.transitionMagnitude,
-        fromState: null,
+        fromState: highestTransition.previousStateId,
         toState: highestTransition.stateId,
       } : null,
       highestDisagreement: highestDisagreement ? {
@@ -252,30 +253,30 @@ export function buildBeliefReport(multimodal = {}) {
     tracks: [
       {
         id: 'belief-state',
-        label: 'Learned state proxy',
+        label: 'Pattern state proxy',
         provenance: 'BrainSNN S-DBN-ready latent-state schema; current V0.1 uses deterministic feature-state proxy',
-        values: learnedWindows.map((item) => ({ timestamp: item.start, value: item.stateId })),
+        values: patternWindows.map((item) => ({ timestamp: item.start, value: item.stateId })),
       },
       {
         id: 'belief-surprise',
         label: 'Pattern surprise',
         provenance: 'Distance from this scan\'s multimodal feature baseline; not measured audience response',
-        values: learnedWindows.map((item) => ({ timestamp: item.start, value: Math.round(item.surprise * 100) })),
+        values: patternWindows.map((item) => ({ timestamp: item.start, value: Math.round(item.surprise * 100) })),
       },
       {
         id: 'belief-agreement',
         label: 'Model agreement',
-        provenance: 'Agreement between deterministic BrainSNN flags and learned-pattern proxy',
-        values: learnedWindows.map((item) => ({ timestamp: item.start, value: Math.round(item.agreement.score * 100) })),
+        provenance: 'Agreement between deterministic BrainSNN flags and the pattern proxy',
+        values: patternWindows.map((item) => ({ timestamp: item.start, value: Math.round(item.agreement.score * 100) })),
       },
       {
         id: 'belief-transition',
         label: 'State transition',
         provenance: 'Magnitude of change in the bounded multimodal feature representation',
-        values: learnedWindows.map((item) => ({ timestamp: item.start, value: Math.round(item.transitionMagnitude * 100) })),
+        values: patternWindows.map((item) => ({ timestamp: item.start, value: Math.round(item.transitionMagnitude * 100) })),
       },
     ],
-    disclaimer: 'Belief Report V0.1 reports learned-model-ready pattern states, surprise, transitions and cross-model agreement over BrainSNN\'s existing bounded multimodal features. The current proxy does not use trained S-DBN weights and does not measure human attention, emotion, cognition, intent, EEG, fMRI, or neural activity.',
+    disclaimer: 'Belief Report V0.1 reports S-DBN-ready pattern states, surprise, transitions and cross-model agreement over BrainSNN\'s existing bounded multimodal features. The current proxy does not use trained S-DBN weights and does not measure human attention, emotion, cognition, intent, EEG, fMRI, or neural activity.',
   };
 }
 
