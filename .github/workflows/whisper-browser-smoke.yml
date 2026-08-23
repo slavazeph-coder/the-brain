@@ -9,6 +9,16 @@ on:
       - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.html'
       - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.mjs'
       - '.github/workflows/whisper-browser-smoke.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'brainsnn-r3f-app/src/lib/localTranscription.js'
+      - 'brainsnn-r3f-app/src/lib/localTranscription.test.js'
+      - 'brainsnn-r3f-app/src/features/scan/MediaInputPanel.jsx'
+      - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.html'
+      - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.mjs'
+      - '.github/workflows/whisper-browser-smoke.yml'
   workflow_dispatch:
 
 permissions:
