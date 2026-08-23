@@ -8,6 +8,7 @@ import './styles/arcade-home.css';
 import './styles/multimodal.css';
 import './styles/creative-readout.css';
 import './styles/client-multimodal.css';
+import './styles/belief-report.css';
 import './styles/neural-visual-pass.css';
 import './styles/neural-visual-motion.css';
 
