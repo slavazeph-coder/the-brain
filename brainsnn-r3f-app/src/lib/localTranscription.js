@@ -1,5 +1,6 @@
 const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
 export const LOCAL_TRANSCRIPT_SCHEMA = 'brainsnn.local-transcript.v0.3';
+// This export is pinned because BrainSNN requires word-level timestamps; the real-browser smoke validates that contract.
 export const DEFAULT_WHISPER_MODEL = 'Xenova/whisper-tiny.en';
 export const WHISPER_SAMPLE_RATE = 16000;
 
