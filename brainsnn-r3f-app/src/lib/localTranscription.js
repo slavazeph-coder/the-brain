@@ -168,9 +168,9 @@ function emitProgress(callback, stage, detail = {}, fraction = null) {
   callback({ stage, fraction, ...detail });
 }
 
-async function getTranscriber({ model, preferWebGPU, moduleLoader, onProgress, pipelineFactory } = {}) {
+async function getTranscriber({ model, preferWebGPU, moduleLoader, onProgress, pipelineFactory, runtime = globalThis } = {}) {
   const selectedModel = model || DEFAULT_WHISPER_MODEL;
-  const capabilities = localSpeechCapabilities();
+  const capabilities = localSpeechCapabilities(runtime);
   const requestedDevice = preferWebGPU !== false && capabilities.webgpu ? 'webgpu' : 'wasm';
   const key = `${selectedModel}:${requestedDevice}`;
   if (transcriberPromise && transcriberKey === key) return { transcriber: await transcriberPromise, device: requestedDevice };
@@ -206,8 +206,16 @@ async function getTranscriber({ model, preferWebGPU, moduleLoader, onProgress, p
     emitProgress(onProgress, 'webgpu-fallback', { reason: error?.message || 'WebGPU initialization failed.' }, null);
     transcriberPromise = null;
     transcriberKey = '';
-    return getTranscriber({ model: selectedModel, preferWebGPU: false, moduleLoader, onProgress, pipelineFactory });
+    return getTranscriber({ model: selectedModel, preferWebGPU: false, moduleLoader, onProgress, pipelineFactory, runtime });
   }
+}
+
+async function runInference(transcriber, waveform) {
+  return transcriber(waveform, {
+    return_timestamps: 'word',
+    chunk_length_s: 30,
+    stride_length_s: 5,
+  });
 }
 
 export async function transcribeAudioLocally({
@@ -219,19 +227,31 @@ export async function transcribeAudioLocally({
   onProgress,
   moduleLoader,
   pipelineFactory,
+  runtime = globalThis,
 } = {}) {
   if (!(samples instanceof Float32Array) || !samples.length) throw new Error('No decoded audio samples are available for transcription.');
   emitProgress(onProgress, 'resampling', { inputSampleRate: sampleRate, outputSampleRate: WHISPER_SAMPLE_RATE }, 0);
   const waveform = resampleAudio(samples, sampleRate, WHISPER_SAMPLE_RATE);
-  const { transcriber, device } = await getTranscriber({ model, preferWebGPU, moduleLoader, onProgress, pipelineFactory });
+  let { transcriber, device } = await getTranscriber({ model, preferWebGPU, moduleLoader, onProgress, pipelineFactory, runtime });
   emitProgress(onProgress, 'transcribing', { model, device, seconds: duration || (waveform.length / WHISPER_SAMPLE_RATE) }, 0);
-  const output = await transcriber(waveform, {
-    return_timestamps: 'word',
-    chunk_length_s: 30,
-    stride_length_s: 5,
-  });
+
+  let output;
+  try {
+    output = await runInference(transcriber, waveform);
+  } catch (error) {
+    if (device !== 'webgpu') throw error;
+    emitProgress(onProgress, 'webgpu-inference-fallback', { reason: error?.message || 'WebGPU inference failed.' }, null);
+    transcriberPromise = null;
+    transcriberKey = '';
+    const fallback = await getTranscriber({ model, preferWebGPU: false, moduleLoader, onProgress, pipelineFactory, runtime });
+    transcriber = fallback.transcriber;
+    device = fallback.device;
+    emitProgress(onProgress, 'transcribing', { model, device, seconds: duration || (waveform.length / WHISPER_SAMPLE_RATE), retry: true }, 0);
+    output = await runInference(transcriber, waveform);
+  }
+
   const result = normalizeTranscriptionOutput(output, { duration, model, device });
-  emitProgress(onProgress, 'complete', { wordCount: result.words.length, segmentCount: result.segments.length }, 1);
+  emitProgress(onProgress, 'complete', { wordCount: result.words.length, segmentCount: result.segments.length, device }, 1);
   return result;
 }
 
