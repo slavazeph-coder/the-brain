@@ -1,0 +1,68 @@
+name: Provision BrainSNN Postgres
+
+on:
+  push:
+    branches: [customer-ready-v1]
+    paths:
+      - '.github/workflows/railway-provision-postgres.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brainsnn-postgres-provision
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      PROJECT_ID: c7f26b12-f812-4785-bbaf-a49b9caeb228
+      ENVIRONMENT_ID: 96828263-a5d4-442f-ae6f-df7bff99aab8
+    steps:
+      - name: Require Railway credentials
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN repository secret is required." >&2
+            exit 1
+          fi
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Link production project
+        run: railway link --project "$PROJECT_ID" --environment "$ENVIRONMENT_ID" --json
+
+      - name: Provision managed Postgres database
+        run: |
+          railway add --database postgres --json > /tmp/railway-postgres-add.json
+          railway status --json > /tmp/railway-status.json
+          grep -qi 'postgres' /tmp/railway-status.json
+          echo "Managed Postgres resource provisioned."
+
+      - name: Verify Postgres connection variables exist
+        run: |
+          railway variable list --service Postgres --environment "$ENVIRONMENT_ID" --json > /tmp/postgres-vars.json
+          grep -q 'DATABASE_URL' /tmp/postgres-vars.json
+          echo "Postgres DATABASE_URL is available."
+
+      - name: Link BrainSNN app to Postgres without early redeploy
+        run: |
+          DB_REF="$(printf '$%s' '{{Postgres.DATABASE_URL}}')"
+          railway variable set \
+            --service the-brain \
+            --environment "$ENVIRONMENT_ID" \
+            --skip-deploys \
+            "DATABASE_URL=$DB_REF" \
+            "BRAND_BRAIN_DB_POOL_MAX=4" \
+            "BRAND_BRAIN_MEMORY_FALLBACK=0"
+
+      - name: Verify app variable keys
+        run: |
+          railway variable list --service the-brain --environment "$ENVIRONMENT_ID" --json > /tmp/app-vars.json
+          grep -q 'DATABASE_URL' /tmp/app-vars.json
+          grep -q 'BRAND_BRAIN_DB_POOL_MAX' /tmp/app-vars.json
+          grep -q 'BRAND_BRAIN_MEMORY_FALLBACK' /tmp/app-vars.json
+          echo "BrainSNN database reference and Brand Brain settings are configured."
