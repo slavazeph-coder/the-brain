@@ -1,0 +1,208 @@
+name: Finalize BrainSNN customer-ready branch
+
+on:
+  push:
+    branches: [customer-ready-v1]
+    paths:
+      - '.github/workflows/customer-ready-finalize.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: customer-ready-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: customer-ready-v1
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+
+      - name: Wire customer-ready persistence, provenance, docs and build gates
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              text = p.read_text()
+              if new in text:
+                  return
+              if old not in text:
+                  raise SystemExit(f"missing marker for {label}: {path}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Mount the server-backed Brand Brain router behind the existing body caps.
+          replace_once(
+              'brainsnn-r3f-app/server.ts',
+              'import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";\n',
+              'import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";\nimport { createBrandBrainRouter } from "./server/brandBrainRouter.js";\n',
+              'brand brain import',
+          )
+          replace_once(
+              'brainsnn-r3f-app/server.ts',
+              'app.use(express.json({ limit: BODY_LIMITS.general }));\n',
+              'app.use(express.json({ limit: BODY_LIMITS.general }));\n\n// Persistent pilot Brand Brain. Production deliberately reports 503 when DATABASE_URL is absent;\n// it never pretends browser or process memory is durable customer storage.\napp.use("/api/brand-brain", createBrandBrainRouter());\n',
+              'brand brain mount',
+          )
+
+          # Truthful predicted-neural receipt + export in the customer-visible brain panel.
+          p = Path('brainsnn-r3f-app/src/features/results/BrainSignalView.jsx')
+          text = p.read_text()
+          if "buildNeuralScanReceipt" not in text:
+              marker = "import { BrainVisualizer } from './BrainVisualizer.jsx';\n"
+              if marker not in text:
+                  raise SystemExit('missing BrainSignalView import marker')
+              text = text.replace(
+                  marker,
+                  marker + "import { Button } from '../../components/ui/Button.jsx';\nimport { buildNeuralScanReceipt } from '../../lib/neuralScanReceipt.js';\n",
+                  1,
+              )
+          if 'const receipt = useMemo(() => buildNeuralScanReceipt(result), [result]);' not in text:
+              marker = "  const activities = useMemo(() => mapResultToActivities(result), [result]);\n"
+              if marker not in text:
+                  raise SystemExit('missing BrainSignalView activities marker')
+              text = text.replace(
+                  marker,
+                  marker + "  const receipt = useMemo(() => buildNeuralScanReceipt(result), [result]);\n",
+                  1,
+              )
+          if 'function downloadPredictedReceipt()' not in text:
+              marker = "  const palette = synchronyPalette(synchrony);\n\n"
+              if marker not in text:
+                  raise SystemExit('missing BrainSignalView palette marker')
+              text = text.replace(
+                  marker,
+                  marker + "  function downloadPredictedReceipt() {\n    const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' });\n    const url = URL.createObjectURL(blob);\n    const anchor = document.createElement('a');\n    anchor.href = url;\n    anchor.download = 'brainsnn-predicted-neural-response.json';\n    document.body.appendChild(anchor);\n    anchor.click();\n    anchor.remove();\n    URL.revokeObjectURL(url);\n  }\n\n",
+                  1,
+              )
+          if 'Download predicted scan receipt' not in text:
+              marker = "        {synchrony ? (\n          <span className=\"brain-signal-sync\" style={{ color: palette.edge }}>\n            <span aria-hidden=\"true\">◉</span> lattice {palette.label}\n          </span>\n        ) : null}\n"
+              if marker not in text:
+                  raise SystemExit('missing BrainSignalView header marker')
+              text = text.replace(
+                  marker,
+                  marker + "        <Button variant=\"ghost\" type=\"button\" onClick={downloadPredictedReceipt}>Download predicted scan receipt</Button>\n",
+                  1,
+              )
+          if 'Receipt mode:' not in text:
+              marker = "      <p className=\"brain-summary\">\n        Drag to orbit, click a region to focus it. Region intensity comes from this scan's 7-region projection; particle\n        speed and color follow the 39 Hz soliton field.\n      </p>\n"
+              if marker not in text:
+                  raise SystemExit('missing BrainSignalView summary marker')
+              text = text.replace(
+                  marker,
+                  marker + "      <p className=\"brain-summary\">\n        Receipt mode: <strong>{receipt.predictionMode}</strong> · model: <strong>{receipt.modelVersion}</strong> · confidence: <strong>{receipt.confidence == null ? 'not calibrated' : `${Math.round(receipt.confidence * 100)}%`}</strong>. Reference projection only — not measured MRI, fMRI, EEG or biometric data.\n      </p>\n",
+                  1,
+              )
+          p.write_text(text)
+
+          # Runtime configuration contract for persistent customer data.
+          env_path = Path('brainsnn-r3f-app/.env.example')
+          env = env_path.read_text()
+          if 'DATABASE_URL=' not in env:
+              env += '''\n\n# Brand Brain persistent pilot storage. Required in production for saved client history.\n# Railway Postgres normally injects DATABASE_URL automatically when linked to the service.\nDATABASE_URL=\"\"\n# Small pool is sufficient for pilot traffic; server clamps this to 1..10.\nBRAND_BRAIN_DB_POOL_MAX=\"4\"\n# Set to require only when the database endpoint requires TLS. Railway private networking typically does not.\nPGSSLMODE=\"\"\n# Development/testing only. Production never falls back to process memory.\nBRAND_BRAIN_MEMORY_FALLBACK=\"0\"\n'''
+              env_path.write_text(env)
+
+          # Make both Docker entry points use the supported Node line and explicitly gate high-severity audit findings.
+          for docker in ['brainsnn-r3f-app/Dockerfile', 'Dockerfile']:
+              p = Path(docker)
+              text = p.read_text().replace('FROM node:20-slim', 'FROM node:22-slim')
+              if 'npm audit --audit-level=high' not in text:
+                  text = text.replace(
+                      'RUN npm ci --no-audit --no-fund',
+                      'RUN npm ci --no-audit --no-fund \\\n  && npm audit --audit-level=high',
+                      1,
+                  )
+              if docker == 'Dockerfile' and 'RUN npm run lint' not in text:
+                  text = text.replace('RUN npm run build', 'RUN npm run lint \\\n  && npm test \\\n  && npm run build', 1)
+              p.write_text(text)
+
+          # Document what the customer-ready claim does and does not mean.
+          brand_doc = Path('brainsnn-r3f-app/BRAND_BRAIN.md')
+          text = brand_doc.read_text()
+          marker = '## Server-backed pilot persistence'
+          if marker not in text:
+              text += '''\n\n## Server-backed pilot persistence\n\nCustomer pilot history is persisted by the Express API under `/api/brand-brain` when `DATABASE_URL` is configured. The browser stores only an opaque workspace id and bearer capability token plus a one-time legacy-import marker. The server stores only a SHA-256 token hash and verifies it with timing-safe comparison.\n\nProduction has no silent memory fallback. If the database is absent or unreachable, `/api/brand-brain/status` reports the persistence failure and the client disables save behavior rather than claiming the outcome was stored. A memory store exists only when `NODE_ENV` is not `production` and `BRAND_BRAIN_MEMORY_FALLBACK=1`.\n\nOutcome data is descriptive evidence for a brand's own history. BrainSNN does not infer causality or convert a small sample into a guaranteed ROAS/CTR/CPA outcome. Neural-response representations and commercial outcome signals remain separate.\n'''
+              brand_doc.write_text(text)
+
+          customer_doc = Path('brainsnn-r3f-app/docs/customer-ready.md')
+          customer_doc.parent.mkdir(parents=True, exist_ok=True)
+          customer_doc.write_text('''# BrainSNN customer-ready pilot contract\n\n## Persistence\n\n- Brand Brain outcomes are durable only when `DATABASE_URL` is configured.\n- Production never falls back to browser history or process memory as a substitute for server persistence.\n- Pilot workspaces use a random 256-bit capability token; only its SHA-256 hash is stored by the server.\n- Raw customer video is not inserted into Brand Brain outcome history by the feedback-loop feature.\n\n## Neural readout boundary\n\nThe current customer-visible neural representation is a seven-region predicted/reference projection. It is not subject MRI, fMRI, EEG, a biometric measurement, a diagnosis, or a measured neural recording. The exported JSON receipt includes model/provenance metadata, confidence when the model pipeline actually provides one, the current region values, stimulus hash only when present, and whether a time-resolved prediction was supplied.\n\n## Outcome-learning boundary\n\nBrand Brain compares a creative signature with that brand's saved actual outcomes. Current maturity gates remain:\n\n- fewer than 3 comparable outcomes: collection only; no historical-fit signal;\n- 3-7 comparable outcomes: directional nearest-neighbor evidence;\n- 8+ comparable outcomes: descriptive feature associations become available.\n\nThese are historical correlations used to prioritize tests, not causal findings or guaranteed performance.\n\n## Release gate\n\nA customer-ready branch must pass TypeScript checking, the deterministic unit suite, production bundle build, MCP smoke test, and `npm audit --audit-level=high`. Production persistence must additionally be verified against the deployed Postgres service before claiming Brand Brain saves are live.\n''')
+          PY
+
+      - name: Add Postgres runtime and TypeScript declarations
+        working-directory: brainsnn-r3f-app
+        run: |
+          npm install pg@^8.13.1 --save --package-lock-only
+          npm install @types/pg@^8.11.10 --save-dev --package-lock-only
+
+      - name: Resolve auditable lockfile and install exact tree
+        working-directory: brainsnn-r3f-app
+        run: |
+          npm audit fix --package-lock-only || true
+          npm ci --no-audit --no-fund
+          npm audit --audit-level=high
+
+      - name: Typecheck
+        working-directory: brainsnn-r3f-app
+        run: npm run lint
+
+      - name: Deterministic tests
+        working-directory: brainsnn-r3f-app
+        run: npm test
+
+      - name: Production build
+        working-directory: brainsnn-r3f-app
+        run: npm run build
+
+      - name: MCP smoke test
+        working-directory: brainsnn-r3f-app/mcp-server
+        run: |
+          npm ci --no-audit --no-fund
+          npm run smoke
+
+      - name: Boot-check server and persistence fail-closed behavior
+        working-directory: brainsnn-r3f-app
+        env:
+          NODE_ENV: production
+          PORT: '8080'
+          DATABASE_URL: ''
+        run: |
+          node dist/server.cjs >/tmp/brainsnn-server.log 2>&1 &
+          SRV=$!
+          trap 'kill $SRV 2>/dev/null || true' EXIT
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8080/healthz >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
+          status="$(curl -s -o /tmp/brand-status.json -w '%{http_code}' http://127.0.0.1:8080/api/brand-brain/status)"
+          test "$status" = '503'
+          grep -q '"configured":false' /tmp/brand-status.json
+
+      - name: Commit finalized customer-ready branch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Dockerfile brainsnn-r3f-app
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'Finalize customer-ready persistence and neural receipts'
+            git push origin HEAD:customer-ready-v1
+          fi
