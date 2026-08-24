@@ -1,9 +1,14 @@
 import { deriveExecutiveVerdict } from './scoreMapping.js';
+import {
+  buildNeuralMirrorEmbedding,
+  neuralMirrorCanInfluenceOutcomeSimilarity,
+  predictNeuralMirror,
+} from './neuralMirror.js';
 
 export const OUTCOME_KEY = 'brainsnn.outcomes.v1';
 export const OUTCOME_STORAGE_VERSION = 1;
 export const OUTCOME_SCHEMA_VERSION = 'brainsnn.outcome.v0.1';
-export const SIGNATURE_SCHEMA_VERSION = 'brainsnn.signature.v0.1';
+export const SIGNATURE_SCHEMA_VERSION = 'brainsnn.signature.v0.2';
 
 export const OUTCOME_METRICS = [
   { id: 'roas', label: 'ROAS', direction: 'higher', unit: 'x', hint: 'Revenue divided by ad spend' },
@@ -32,6 +37,8 @@ const FEATURE_WEIGHTS = {
   proofRate: 0.6,
   ctaRate: 0.3,
 };
+
+const NEURAL_SIMILARITY_WEIGHT = 0.2;
 
 function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, Number(value) || 0));
@@ -83,6 +90,35 @@ function stateShare(windows = []) {
   return Math.max(...counts.values()) / windows.length;
 }
 
+function neuralSignatureForResult(result = {}) {
+  let prediction = result?.multimodal?.neuralMirror || result?.neuralMirror || null;
+  if (!prediction) {
+    try {
+      prediction = predictNeuralMirror(result);
+    } catch {
+      prediction = null;
+    }
+  }
+  if (!prediction) return null;
+  const embedding = buildNeuralMirrorEmbedding(prediction, 16);
+  const canInfluenceSimilarity = Boolean(embedding?.length && neuralMirrorCanInfluenceOutcomeSimilarity(prediction));
+  return {
+    schemaVersion: prediction.schemaVersion || null,
+    modelId: prediction?.model?.id || null,
+    modelVersion: prediction?.model?.version || null,
+    trained: Boolean(prediction?.model?.trained),
+    validatedAgainstNeuralData: Boolean(prediction?.model?.validatedAgainstNeuralData && prediction?.evidence?.validatedAgainstNeuralData),
+    referenceSpace: prediction?.referenceSpace?.type || null,
+    atlas: prediction?.referenceSpace?.atlas || null,
+    anatomicalRegistration: Boolean(prediction?.referenceSpace?.anatomicalRegistration),
+    canInfluenceSimilarity,
+    embedding: Array.isArray(embedding) ? embedding : null,
+    boundary: canInfluenceSimilarity
+      ? 'Validated Neural Mirror representation is eligible as one bounded similarity feature.'
+      : 'Neural Mirror representation is stored for provenance/research only and is excluded from commercial outcome similarity until validation gates pass.',
+  };
+}
+
 export function buildCreativeSignature(result = {}) {
   const verdict = deriveExecutiveVerdict(result);
   const belief = result?.multimodal?.beliefReport || {};
@@ -109,20 +145,25 @@ export function buildCreativeSignature(result = {}) {
     proofRate: clamp(flagRate(windows, 'proof_present')),
     ctaRate: clamp(flagRate(windows, 'cta_present')),
   };
+  const neuralMirror = neuralSignatureForResult(result);
 
   return {
     schemaVersion: SIGNATURE_SCHEMA_VERSION,
     features,
+    neuralMirror,
     provenance: {
       beliefModelId: belief?.model?.id || null,
       beliefModelVersion: belief?.model?.version || null,
       beliefLearnedWeights: Boolean(belief?.model?.learnedWeights),
+      neuralMirrorModelId: neuralMirror?.modelId || null,
+      neuralMirrorModelVersion: neuralMirror?.modelVersion || null,
+      neuralMirrorEligibleForOutcomeSimilarity: Boolean(neuralMirror?.canInfluenceSimilarity),
       resultId: result?.id || null,
     },
   };
 }
 
-export function signatureSimilarity(a, b) {
+function baseSignatureSimilarity(a, b) {
   const left = a?.features || a || {};
   const right = b?.features || b || {};
   const keys = Object.keys(FEATURE_WEIGHTS).filter((key) => Number.isFinite(Number(left[key])) && Number.isFinite(Number(right[key])));
@@ -136,7 +177,47 @@ export function signatureSimilarity(a, b) {
     weightSum += weight;
   }
   const distance = Math.sqrt(weightedSquared / Math.max(weightSum, 1e-9));
-  return Number(clamp(1 - distance).toFixed(4));
+  return clamp(1 - distance);
+}
+
+function cosineSimilarity(left = [], right = []) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length || !left.length) return null;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = safeNumber(left[index]);
+    const b = safeNumber(right[index]);
+    dot += a * b;
+    normA += a * a;
+    normB += b * b;
+  }
+  const denominator = Math.sqrt(normA * normB);
+  if (!denominator) return null;
+  return clamp((dot / denominator + 1) / 2);
+}
+
+function comparableNeuralSignatures(a, b) {
+  const left = a?.neuralMirror;
+  const right = b?.neuralMirror;
+  return Boolean(
+    left?.canInfluenceSimilarity
+    && right?.canInfluenceSimilarity
+    && left.modelId
+    && left.modelId === right.modelId
+    && left.modelVersion === right.modelVersion
+    && left.referenceSpace === right.referenceSpace
+    && Array.isArray(left.embedding)
+    && Array.isArray(right.embedding),
+  );
+}
+
+export function signatureSimilarity(a, b) {
+  const base = baseSignatureSimilarity(a, b);
+  if (!comparableNeuralSignatures(a, b)) return Number(base.toFixed(4));
+  const neural = cosineSimilarity(a.neuralMirror.embedding, b.neuralMirror.embedding);
+  if (neural == null) return Number(base.toFixed(4));
+  return Number(clamp((base * (1 - NEURAL_SIMILARITY_WEIGHT)) + (neural * NEURAL_SIMILARITY_WEIGHT)).toFixed(4));
 }
 
 export function getOutcomeMetric(metricId) {
@@ -169,6 +250,9 @@ function normalizeRecord(record) {
       beliefModelId: record.provenance?.beliefModelId || record.signature?.provenance?.beliefModelId || null,
       beliefModelVersion: record.provenance?.beliefModelVersion || record.signature?.provenance?.beliefModelVersion || null,
       beliefLearnedWeights: Boolean(record.provenance?.beliefLearnedWeights ?? record.signature?.provenance?.beliefLearnedWeights),
+      neuralMirrorModelId: record.provenance?.neuralMirrorModelId || record.signature?.provenance?.neuralMirrorModelId || null,
+      neuralMirrorModelVersion: record.provenance?.neuralMirrorModelVersion || record.signature?.provenance?.neuralMirrorModelVersion || null,
+      neuralMirrorEligibleForOutcomeSimilarity: Boolean(record.provenance?.neuralMirrorEligibleForOutcomeSimilarity ?? record.signature?.provenance?.neuralMirrorEligibleForOutcomeSimilarity),
     },
   };
 }
@@ -337,7 +421,7 @@ export function evaluateAgainstBrandHistory({ result, signature, records = [], b
         : 'Resembles weaker saved history';
 
   return {
-    schemaVersion: 'brainsnn.brand-history-eval.v0.1',
+    schemaVersion: 'brainsnn.brand-history-eval.v0.2',
     brandId: slugify(brandName),
     brandName: String(brandName || '').trim(),
     metric,
@@ -349,7 +433,12 @@ export function evaluateAgainstBrandHistory({ result, signature, records = [], b
     neighbors,
     associations: featureAssociations(history, percentiles),
     signature: currentSignature,
-    boundary: 'Historical fit is a descriptive similarity signal derived only from this brand’s saved outcomes. It is not a causal estimate, calibrated probability, or guaranteed performance forecast.',
+    neuralMirror: {
+      present: Boolean(currentSignature?.neuralMirror),
+      eligibleForOutcomeSimilarity: Boolean(currentSignature?.neuralMirror?.canInfluenceSimilarity),
+      boundary: currentSignature?.neuralMirror?.boundary || 'No Neural Mirror representation is attached to this signature.',
+    },
+    boundary: 'Historical fit is a descriptive similarity signal derived only from this brand’s saved outcomes. It is not a causal estimate, calibrated probability, or guaranteed performance forecast. Neural Mirror features are excluded unless their explicit neural-validation and compatibility gates pass.',
   };
 }
 
