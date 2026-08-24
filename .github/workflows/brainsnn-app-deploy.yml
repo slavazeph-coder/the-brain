@@ -26,7 +26,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     defaults:
       run:
         working-directory: brainsnn-r3f-app
@@ -45,8 +45,14 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Security audit
+        run: npm audit --audit-level=high
+
       - name: Typecheck
         run: npm run lint
+
+      - name: Test
+        run: npm test
 
       - name: Build
         run: npm run build
@@ -55,16 +61,26 @@ jobs:
         env:
           NODE_ENV: production
           PORT: "8080"
+          DATABASE_URL: ""
         run: |
           node dist/server.cjs &
           SRV=$!
+          trap 'kill $SRV 2>/dev/null || true' EXIT
           for i in $(seq 1 20); do
             curl -sf http://127.0.0.1:8080/healthz >/dev/null && break
             sleep 1
           done
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
           curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Turn text, pages and video into decision intelligence"
-          kill $SRV 2>/dev/null || true
+          brand_status="$(curl -s -o /tmp/brand-status.json -w '%{http_code}' http://127.0.0.1:8080/api/brand-brain/status)"
+          test "$brand_status" = "503"
+          grep -q '"configured":false' /tmp/brand-status.json
+
+      - name: MCP server smoke test
+        working-directory: brainsnn-r3f-app/mcp-server
+        run: |
+          npm ci --no-audit --no-fund
+          npm run smoke
 
   deploy:
     runs-on: ubuntu-latest
@@ -95,35 +111,38 @@ jobs:
           test -f Dockerfile
           test -f railway.toml
           test -f brainsnn-r3f-app/package.json
-          # Upload the repo; Railway builds the service-rooted Dockerfile.
           railway up \
             --project "$RAILWAY_PROJECT_ID" \
             --service "$RAILWAY_SERVICE" \
             --environment "$RAILWAY_ENVIRONMENT" \
             --ci
 
-      - name: Healthcheck
+      - name: Healthcheck current build and persistent Brand Brain
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
-          # The SPA shell carries the current BrainSNN product title. Checking it
-          # proves the multimodal analyzer build rolled out, not merely that an
-          # older container is still answering health checks.
           HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
+          BRAND_BRAIN_STATUS_URL: ${{ vars.BRAINSNN_BRAND_BRAIN_STATUS_URL || 'https://www.brainsnn.com/api/brand-brain/status' }}
         run: |
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
+            brand="$(curl -L -s -o /tmp/brainsnn-brand.json -w '%{http_code}' "$BRAND_BRAIN_STATUS_URL" || true)"
             if [ "$home" = "200" ] && grep -Fq "BrainSNN | Turn text, pages and video into decision intelligence" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
             fi
-            echo "attempt $i → healthz $health, home $home/$home_marker"
-            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ]; then
-              echo "Live service is healthy and serving the current BrainSNN build."
+            if [ "$brand" = "200" ] && grep -q '"configured":true' /tmp/brainsnn-brand.json && grep -q '"status":"ready"' /tmp/brainsnn-brand.json; then
+              brand_marker="ready"
+            else
+              brand_marker="not-ready"
+            fi
+            echo "attempt $i → healthz $health, home $home/$home_marker, brand-brain $brand/$brand_marker"
+            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ] && [ "$brand_marker" = "ready" ]; then
+              echo "Live service is healthy, current, and persistent Brand Brain is ready."
               exit 0
             fi
             sleep 20
           done
-          echo "Service never became healthy on the current build ($HEALTH_URL / $HOME_URL)" >&2
+          echo "Service never became fully customer-ready ($HEALTH_URL / $HOME_URL / $BRAND_BRAIN_STATUS_URL)" >&2
           exit 1
