@@ -1,14 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Database, GitCompareArrows, Save, Target, Trash2, TrendingUp } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Database, GitCompareArrows, RefreshCw, Save, Target, Trash2, TrendingUp, WifiOff } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
 import {
   OUTCOME_METRICS,
   createOutcomeRecord,
   evaluateAgainstBrandHistory,
   formatMetricValue,
-  loadOutcomeRecords,
-  saveOutcomeRecords,
 } from '../../lib/outcomeLearning.js';
+import {
+  deleteBrandBrainOutcome,
+  ensureBrandBrainWorkspace,
+  getBrandBrainStatus,
+  importLegacyBrandBrainHistory,
+  listBrandBrainBrands,
+  listBrandBrainHistory,
+  saveBrandBrainOutcome,
+} from '../../lib/brandBrainClient.js';
 
 function featureLabel(feature = '') {
   return ({
@@ -43,13 +50,107 @@ function fitTone(score) {
   return 'neutral';
 }
 
+function syncTone(state) {
+  if (state === 'ready') return 'cyan';
+  if (state === 'unavailable' || state === 'offline' || state === 'error') return 'warning';
+  return 'neutral';
+}
+
+function syncLabel(state) {
+  return ({
+    loading: 'SYNCING',
+    ready: 'SERVER-BACKED HISTORY',
+    unavailable: 'PERSISTENCE NOT CONFIGURED',
+    offline: 'OFFLINE',
+    error: 'SYNC ERROR',
+  })[state] || 'SYNCING';
+}
+
+function resultModelVersion(result = {}) {
+  return String(
+    result?.modelVersion
+      || result?.engineVersion
+      || result?.multimodal?.beliefReport?.model?.version
+      || result?.multimodal?.beliefReport?.model?.id
+      || 'unknown',
+  );
+}
+
 export function OutcomeLearningPanel({ result }) {
-  const [records, setRecords] = useState(() => loadOutcomeRecords());
-  const [brandName, setBrandName] = useState(() => loadOutcomeRecords()[0]?.brandName || '');
+  const [records, setRecords] = useState([]);
+  const [serverBrands, setServerBrands] = useState([]);
+  const [credential, setCredential] = useState(null);
+  const [syncState, setSyncState] = useState('loading');
+  const [syncMessage, setSyncMessage] = useState('Connecting Brand Brain to server-backed workspace history…');
+  const [brandName, setBrandName] = useState('');
   const [metricId, setMetricId] = useState('roas');
   const [creativeLabel, setCreativeLabel] = useState(result?.title || 'Current creative');
   const [outcomeValue, setOutcomeValue] = useState('');
   const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const synchronize = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      setSyncState('offline');
+      setSyncMessage('You are offline. Brand Brain will not pretend outcomes were saved. Reconnect and retry.');
+      return;
+    }
+
+    setSyncState('loading');
+    setSyncMessage('Checking server-backed Brand Brain persistence…');
+    try {
+      const status = await getBrandBrainStatus();
+      if (!status?.configured || status?.status !== 'ready') {
+        setSyncState('unavailable');
+        setSyncMessage(status?.message || 'Server-backed Brand Brain persistence is not configured.');
+        setRecords([]);
+        return;
+      }
+
+      const nextCredential = await ensureBrandBrainWorkspace();
+      setCredential(nextCredential);
+      const imported = await importLegacyBrandBrainHistory(nextCredential);
+      const [history, brands] = await Promise.all([
+        listBrandBrainHistory(nextCredential),
+        listBrandBrainBrands(nextCredential),
+      ]);
+      setRecords(history);
+      setServerBrands(brands);
+      if (!brandName && history[0]?.brandName) setBrandName(history[0].brandName);
+      setSyncState('ready');
+      setSyncMessage(imported.imported
+        ? `Connected. Imported ${imported.imported} legacy browser outcome${imported.imported === 1 ? '' : 's'} once into this workspace.`
+        : 'Connected. Outcome history is stored server-side for this pilot workspace.');
+    } catch (error) {
+      const backendUnavailable = error?.payload?.configured === false || error?.status === 503;
+      setSyncState(backendUnavailable ? 'unavailable' : 'error');
+      setSyncMessage(backendUnavailable
+        ? (error?.payload?.message || error?.message || 'Server-backed Brand Brain persistence is unavailable.')
+        : (error?.message || 'Could not synchronize Brand Brain history.'));
+      setRecords([]);
+    }
+  }, [brandName]);
+
+  useEffect(() => {
+    synchronize();
+  // synchronize intentionally runs once on mount; brand selection must not recreate a workspace.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onOffline = () => {
+      setSyncState('offline');
+      setSyncMessage('You are offline. New outcomes will not be saved until the server is reachable.');
+    };
+    const onOnline = () => synchronize();
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [synchronize]);
 
   useEffect(() => {
     setCreativeLabel(result?.title || (result?.id ? `Creative ${String(result.id).slice(0, 8)}` : 'Current creative'));
@@ -58,9 +159,10 @@ export function OutcomeLearningPanel({ result }) {
 
   const brands = useMemo(() => {
     const map = new Map();
+    for (const item of serverBrands) map.set(item.id, item.name);
     for (const item of records) map.set(item.brandId, item.brandName);
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [records]);
+  }, [records, serverBrands]);
 
   const evaluation = useMemo(() => evaluateAgainstBrandHistory({
     result,
@@ -71,31 +173,75 @@ export function OutcomeLearningPanel({ result }) {
 
   const metric = OUTCOME_METRICS.find((item) => item.id === metricId) || OUTCOME_METRICS[0];
   const validValue = outcomeValue !== '' && Number.isFinite(Number(outcomeValue)) && Number(outcomeValue) >= 0;
-  const canSave = Boolean(brandName.trim() && creativeLabel.trim() && metric && validValue);
+  const canSave = Boolean(syncState === 'ready' && credential && !saving && brandName.trim() && creativeLabel.trim() && metric && validValue);
 
-  function saveOutcome() {
-    if (!canSave) return;
+  async function refreshWorkspace() {
+    if (!credential) return synchronize();
     try {
-      const record = createOutcomeRecord({
+      const [history, brands] = await Promise.all([
+        listBrandBrainHistory(credential),
+        listBrandBrainBrands(credential),
+      ]);
+      setRecords(history);
+      setServerBrands(brands);
+      setSyncState('ready');
+    } catch (error) {
+      setSyncState(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'error');
+      setSyncMessage(error?.message || 'Could not refresh Brand Brain history.');
+    }
+  }
+
+  async function saveOutcome() {
+    if (!canSave) {
+      if (syncState !== 'ready') setMessage('Server-backed Brand Brain history is unavailable; this outcome was not saved.');
+      return;
+    }
+    setSaving(true);
+    setMessage('Saving actual outcome to Brand Brain…');
+    try {
+      const localRecord = createOutcomeRecord({
         result,
         brandName,
         creativeLabel,
         metricId,
         value: Number(outcomeValue),
       });
-      const next = saveOutcomeRecords([record, ...records.filter((item) => item.id !== record.id)]);
-      setRecords(next);
+      const saved = await saveBrandBrainOutcome(credential, {
+        ...localRecord,
+        modelVersion: resultModelVersion(result),
+        provenance: {
+          source: 'customer-entered post-publish outcome',
+          signatureSource: 'BrainSNN creative signature',
+          analysisMode: String(result?.analysisMode || result?.mode || 'unknown'),
+        },
+      });
+      setRecords((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setServerBrands((current) => current.some((item) => item.id === saved.brandId)
+        ? current
+        : [...current, { id: saved.brandId, name: saved.brandName }]);
       setOutcomeValue('');
-      setMessage(`Saved ${metric.label} outcome for ${record.creativeLabel}.`);
+      setMessage(`Saved actual ${metric.label} for ${saved.creativeLabel} to the server-backed workspace.`);
     } catch (error) {
-      setMessage(error?.message || 'Could not save this outcome.');
+      setMessage(`Outcome was not saved: ${error?.message || 'Brand Brain persistence failed.'}`);
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) setSyncState('offline');
+      else setSyncState('error');
+    } finally {
+      setSaving(false);
     }
   }
 
-  function removeOutcome(id) {
-    const next = saveOutcomeRecords(records.filter((item) => item.id !== id));
-    setRecords(next);
-    setMessage('Outcome removed from local Brand Brain history.');
+  async function removeOutcome(id) {
+    if (!credential || syncState !== 'ready') {
+      setMessage('The server is unavailable, so BrainSNN did not remove this outcome.');
+      return;
+    }
+    try {
+      await deleteBrandBrainOutcome(credential, id);
+      setRecords((current) => current.filter((item) => item.id !== id));
+      setMessage('Outcome removed from the server-backed Brand Brain workspace.');
+    } catch (error) {
+      setMessage(`Outcome was not removed: ${error?.message || 'Brand Brain persistence failed.'}`);
+    }
   }
 
   return (
@@ -104,19 +250,30 @@ export function OutcomeLearningPanel({ result }) {
         <div className="outcome-learning-title">
           <Database size={19} aria-hidden="true" />
           <div>
-            <span className="bsn-eyebrow">Brand Brain · feedback loop</span>
-            <h3 id="outcome-learning-heading">Outcome Learning V0.1</h3>
+            <span className="bsn-eyebrow">Brand Brain · closed-loop evidence</span>
+            <h3 id="outcome-learning-heading">Outcome Learning V0.2</h3>
           </div>
         </div>
         <div className="outcome-learning-badges">
           <Badge tone={maturityTone(evaluation.maturity.id)}>{evaluation.maturity.label}</Badge>
-          <Badge tone="neutral">BROWSER-LOCAL HISTORY</Badge>
+          <Badge tone={syncTone(syncState)}>{syncLabel(syncState)}</Badge>
         </div>
       </header>
 
       <p className="outcome-learning-intro">
-        Close the loop with real post-publish results. BrainSNN stores a compact creative signature beside the actual outcome, then compares future creatives with that brand’s own saved history. It does not turn a few examples into a fake win probability.
+        Close the loop with real post-publish results. BrainSNN stores a compact creative signature beside the customer-entered actual outcome, then compares future creatives with that workspace’s own brand history. It does not convert a small sample into a fabricated win probability.
       </p>
+
+      <div className={`outcome-fit-banner ${syncState === 'ready' ? '' : 'warning'}`} role="status">
+        {syncState === 'offline' ? <WifiOff size={18} aria-hidden="true" /> : <Database size={18} aria-hidden="true" />}
+        <div>
+          <Badge tone={syncTone(syncState)}>{syncLabel(syncState)}</Badge>
+          <p>{syncMessage}</p>
+        </div>
+        {syncState !== 'loading' ? (
+          <button type="button" className="outcome-delete" onClick={synchronize}><RefreshCw size={13} aria-hidden="true" /> Retry sync</button>
+        ) : null}
+      </div>
 
       <div className="outcome-learning-controls">
         <label>
@@ -137,8 +294,8 @@ export function OutcomeLearningPanel({ result }) {
       <div className="outcome-learning-status">
         <article>
           <small>SAVED COMPARABLE OUTCOMES</small>
-          <strong>{evaluation.sampleCount}</strong>
-          <span>{evaluation.maturity.message}</span>
+          <strong>{syncState === 'ready' ? evaluation.sampleCount : '—'}</strong>
+          <span>{syncState === 'ready' ? evaluation.maturity.message : 'Server history is not currently available.'}</span>
         </article>
         <article>
           <small>HISTORICAL FIT SIGNAL</small>
@@ -184,7 +341,7 @@ export function OutcomeLearningPanel({ result }) {
       {evaluation.associations.length ? (
         <section className="outcome-associations" aria-labelledby="outcome-association-heading">
           <div className="outcome-section-heading">
-            <div><Target size={16} aria-hidden="true" /><h4 id="outcome-association-heading">Descriptive associations in saved history</h4></div>
+            <div><Target size={16} aria-hidden="true" /><h4 id="outcome-association-heading">Descriptive associations in saved workspace history</h4></div>
             <small>Spearman rank · n={evaluation.sampleCount}</small>
           </div>
           <div className="outcome-association-list">
@@ -196,14 +353,14 @@ export function OutcomeLearningPanel({ result }) {
               </article>
             ))}
           </div>
-          <p className="outcome-association-boundary">These are correlations inside this browser’s saved brand history. They are not causal findings.</p>
+          <p className="outcome-association-boundary">These are descriptive correlations inside this workspace’s saved brand history. They are not causal findings.</p>
         </section>
       ) : null}
 
       <section className="outcome-capture" aria-labelledby="outcome-capture-heading">
         <div className="outcome-section-heading">
           <div><Save size={16} aria-hidden="true" /><h4 id="outcome-capture-heading">Record the actual result</h4></div>
-          <small>feed published performance back into BrainSNN</small>
+          <small>customer-entered post-publish performance</small>
         </div>
         <div className="outcome-capture-grid">
           <label>
@@ -215,15 +372,17 @@ export function OutcomeLearningPanel({ result }) {
             <div className="outcome-value-input"><input type="number" min="0" step="any" inputMode="decimal" value={outcomeValue} onChange={(event) => setOutcomeValue(event.target.value)} placeholder="0" /><em>{metric.unit}</em></div>
             <small>{metric.hint}</small>
           </label>
-          <button type="button" className="outcome-save" disabled={!canSave} onClick={saveOutcome}><Save size={15} aria-hidden="true" /> Save outcome</button>
+          <button type="button" className="outcome-save" disabled={!canSave} onClick={saveOutcome}><Save size={15} aria-hidden="true" /> {saving ? 'Saving…' : 'Save outcome'}</button>
         </div>
+        {syncState !== 'ready' ? <p className="outcome-message" role="status">Saving is disabled until server-backed history is available. BrainSNN will not silently fall back to browser-only outcomes.</p> : null}
         {message ? <p className="outcome-message" role="status">{message}</p> : null}
       </section>
 
       <footer className="outcome-learning-footer">
-        <strong>Claim boundary</strong>
+        <strong>Claim & storage boundary</strong>
         <p>{evaluation.boundary}</p>
-        <small>V0.1 stores the outcome history in this browser only. The raw video is not added to Brand Brain history.</small>
+        <small>Outcomes and creative signatures are server-backed when persistence is ready. This browser stores only the opaque pilot workspace credential and a one-time migration marker; raw video is not added to Brand Brain history.</small>
+        {syncState === 'ready' ? <button type="button" className="outcome-delete" onClick={refreshWorkspace}><RefreshCw size={13} aria-hidden="true" /> Refresh history</button> : null}
       </footer>
     </section>
   );
