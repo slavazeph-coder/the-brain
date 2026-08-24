@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "brainsnn.dataset-manifest.v0.1",
+  "id": "algonauts-2025",
+  "name": "Algonauts Project 2025 / CNeuroMod audiovisual movie fMRI challenge data",
+  "installed": false,
+  "approximateSizeGb": 90,
+  "subjects": ["sub-01", "sub-02", "sub-03", "sub-05"],
+  "target": {
+    "type": "fMRI parcel response",
+    "atlas": "Schaefer1000",
+    "parcelCount": 1000,
+    "chunkSeconds": 1.49,
+    "reference": "MNI/common cortical parcel representation"
+  },
+  "stimulus": {
+    "type": "audiovisual movie/TV clips",
+    "rights": "Review stimulus/media rights separately from the challenge neural-data license before any commercial training use."
+  },
+  "license": {
+    "challengeData": "CC0-1.0",
+    "commercialEligibility": "Neural/challenge data is permissive; stimulus rights remain a separate provenance gate."
+  },
+  "sources": [
+    "https://algonautsproject.com/",
+    "https://github.com/courtois-neuromod/algonauts_2025.competitors",
+    "https://portal.conp.ca/dataset?id=projects/algonauts_2025"
+  ],
+  "expectedLocalInputs": {
+    "features": "precomputed stimulus feature matrix [time, feature_dimension]",
+    "targets": "recorded fMRI parcel matrix [time, 1000]"
+  },
+  "splitPolicy": "Use subject/stimulus-aware held-out evaluation. Never tune hyperparameters on the final test set.",
+  "notes": [
+    "The first BrainSNN benchmark should use fixed/precomputed features so the objective can be validated cheaply on CPU.",
+    "Track feature-model and stimulus licensing independently in every experiment record.",
+    "TRIBE v2 is a research reference only and is not a source of commercial labels for this pipeline."
+  ]
+}
