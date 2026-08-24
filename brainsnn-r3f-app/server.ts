@@ -29,6 +29,7 @@ import {
 } from "./src/lib/neuralInputGateway.js";
 import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, routeTier } from "./src/lib/rateLimit.js";
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
+import { createBrandBrainRouter } from "./server/brandBrainRouter.js";
 
 dotenv.config();
 
@@ -50,6 +51,10 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handl
 app.use("/api/analyze", express.json({ limit: BODY_LIMITS.analyze }));
 app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
 app.use(express.json({ limit: BODY_LIMITS.general }));
+
+// Persistent pilot Brand Brain. Production deliberately reports 503 when DATABASE_URL is absent;
+// it never pretends browser or process memory is durable customer storage.
+app.use("/api/brand-brain", createBrandBrainRouter());
 
 const PORT = Number(process.env.PORT) || 3000;
 const APP_URL = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://www.brainsnn.com";

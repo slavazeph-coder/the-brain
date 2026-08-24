@@ -12,7 +12,8 @@ WORKDIR /app
 
 # Install deps first for layer caching.
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund \
+  && npm audit --audit-level=high
 
 # Source + validation + build (Vite client bundle in dist/ + esbuild server at dist/server.cjs).
 COPY . .

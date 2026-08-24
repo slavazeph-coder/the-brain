@@ -4,18 +4,21 @@
 # is rooted at the repo root or at brainsnn-r3f-app/. The deployable app is the
 # TypeScript/Vite SPA served by the esbuild-bundled Express server.
 
-FROM node:20-slim
+FROM node:22-slim
 
 WORKDIR /app
 
 # Install app dependencies first for better layer caching.
 COPY brainsnn-r3f-app/package.json brainsnn-r3f-app/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund \
+  && npm audit --audit-level=high
 
 # Copy app sources and build the Vite client bundle (dist/) plus the
 # esbuild-bundled Express server (dist/server.cjs).
 COPY brainsnn-r3f-app/ ./
-RUN npm run build
+RUN npm run lint \
+  && npm test \
+  && npm run build
 
 ENV NODE_ENV=production
 ENV PORT=8080

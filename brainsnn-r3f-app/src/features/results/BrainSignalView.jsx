@@ -3,6 +3,8 @@ import { Brain3D } from '../brain3d/Brain3D.jsx';
 import { BRAIN_REGIONS } from '../brain3d/brainRegions.js';
 import { mapResultToActivities, synchronyPalette } from '../brain3d/mapResultToBrain.js';
 import { BrainVisualizer } from './BrainVisualizer.jsx';
+import { Button } from '../../components/ui/Button.jsx';
+import { buildNeuralScanReceipt } from '../../lib/neuralScanReceipt.js';
 
 // Results-mode wrapper for the 3D brain: same chrome and disclaimer as the 2D
 // signal map, with a 7-region legend and the soliton synchrony state. Falls
@@ -10,8 +12,21 @@ import { BrainVisualizer } from './BrainVisualizer.jsx';
 export function BrainSignalView({ result }) {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const activities = useMemo(() => mapResultToActivities(result), [result]);
+  const receipt = useMemo(() => buildNeuralScanReceipt(result), [result]);
   const synchrony = result?.solitonField?.synchrony;
   const palette = synchronyPalette(synchrony);
+
+  function downloadPredictedReceipt() {
+    const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'brainsnn-predicted-neural-response.json';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <section className="brain-visualizer" aria-labelledby="brain-signal-heading">
@@ -26,6 +41,7 @@ export function BrainSignalView({ result }) {
             <span aria-hidden="true">◉</span> lattice {palette.label}
           </span>
         ) : null}
+        <Button variant="ghost" type="button" onClick={downloadPredictedReceipt}>Download predicted scan receipt</Button>
       </div>
       <Brain3D
         mode="result"
@@ -49,6 +65,9 @@ export function BrainSignalView({ result }) {
       <p className="brain-summary">
         Drag to orbit, click a region to focus it. Region intensity comes from this scan's 7-region projection; particle
         speed and color follow the 39 Hz soliton field.
+      </p>
+      <p className="brain-summary">
+        Receipt mode: <strong>{receipt.predictionMode}</strong> · model: <strong>{receipt.modelVersion}</strong> · confidence: <strong>{receipt.confidence == null ? 'not calibrated' : `${Math.round(receipt.confidence * 100)}%`}</strong>. Reference projection only — not measured MRI, fMRI, EEG or biometric data.
       </p>
     </section>
   );

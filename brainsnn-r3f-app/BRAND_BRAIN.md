@@ -31,3 +31,12 @@ V0.1 does not add raw video to Brand Brain history. It stores the compact BrainS
 6. After 8 comparable outcomes, inspect descriptive feature associations as hypotheses for the next creative iteration.
 
 Brand Brain should be presented as a decision-support and learning layer, not as a guaranteed ad-performance predictor.
+
+
+## Server-backed pilot persistence
+
+Customer pilot history is persisted by the Express API under `/api/brand-brain` when `DATABASE_URL` is configured. The browser stores only an opaque workspace id and bearer capability token plus a one-time legacy-import marker. The server stores only a SHA-256 token hash and verifies it with timing-safe comparison.
+
+Production has no silent memory fallback. If the database is absent or unreachable, `/api/brand-brain/status` reports the persistence failure and the client disables save behavior rather than claiming the outcome was stored. A memory store exists only when `NODE_ENV` is not `production` and `BRAND_BRAIN_MEMORY_FALLBACK=1`.
+
+Outcome data is descriptive evidence for a brand's own history. BrainSNN does not infer causality or convert a small sample into a guaranteed ROAS/CTR/CPA outcome. Neural-response representations and commercial outcome signals remain separate.
