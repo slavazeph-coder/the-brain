@@ -23,6 +23,13 @@ function makeResult(id, overrides = {}) {
     firewallSignals: { manipulationPressure: overrides.pressure ?? 0.18 },
     scores: { clarity: overrides.clarity ?? 70 },
     multimodal: {
+      temporalReadout: overrides.temporalReadout || {
+        points: [
+          { timestamp: 0, responseChange: 20, attentionProxy: 35, loadProxy: 30, visualTone: 45, luminance: 55, stability: 80 },
+          { timestamp: 1, responseChange: 70, attentionProxy: 74, loadProxy: 62, visualTone: 54, luminance: 60, stability: 30 },
+          { timestamp: 2, responseChange: 40, attentionProxy: 52, loadProxy: 48, visualTone: 50, luminance: 58, stability: 60 },
+        ],
+      },
       beliefReport: {
         model: { id: 'brainsnn-sdbn-proxy-v0', version: '0.1.0', learnedWeights: false },
         windows,
@@ -35,6 +42,7 @@ function makeResult(id, overrides = {}) {
           uniqueStates: overrides.uniqueStates ?? 2,
         },
       },
+      ...(overrides.neuralMirror ? { neuralMirror: overrides.neuralMirror } : {}),
     },
   };
 }
@@ -61,18 +69,46 @@ describe('Brand Brain outcome learning', () => {
     window.localStorage.clear();
   });
 
-  it('creates a bounded, state-id-agnostic creative signature', () => {
+  it('creates a bounded, state-id-agnostic creative signature with an explicitly excluded CPU Neural Mirror baseline', () => {
     const signature = buildCreativeSignature(makeResult('a'));
     const values = Object.values(signature.features);
-    expect(signature.schemaVersion).toBe('brainsnn.signature.v0.1');
+    expect(signature.schemaVersion).toBe('brainsnn.signature.v0.2');
     expect(Object.prototype.hasOwnProperty.call(signature.features, 'stateId')).toBe(false);
     expect(values.every((value) => value >= 0 && value <= 1)).toBe(true);
+    expect(signature.neuralMirror.modelId).toBe('brainsnn-mirror-cpu-baseline');
+    expect(signature.neuralMirror.validatedAgainstNeuralData).toBe(false);
+    expect(signature.neuralMirror.canInfluenceSimilarity).toBe(false);
+    expect(signature.provenance.neuralMirrorEligibleForOutcomeSimilarity).toBe(false);
   });
 
   it('returns identical similarity for identical signatures and lower similarity for changed patterns', () => {
     const first = buildCreativeSignature(makeResult('a'));
     const second = buildCreativeSignature(makeResult('b', { trust: 20, agreement: 0.25, meanSurprise: 0.8, reviewWindows: 2, transitions: 2 }));
     expect(signatureSimilarity(first, first)).toBe(1);
+    expect(signatureSimilarity(first, second) < 1).toBe(true);
+  });
+
+  it('does not let unvalidated Neural Mirror embeddings change commercial outcome similarity', () => {
+    const first = buildCreativeSignature(makeResult('a'));
+    const second = JSON.parse(JSON.stringify(first));
+    second.neuralMirror.embedding = second.neuralMirror.embedding.map((value) => -value);
+    expect(first.neuralMirror.canInfluenceSimilarity).toBe(false);
+    expect(signatureSimilarity(first, second)).toBe(1);
+  });
+
+  it('only blends Neural Mirror similarity after compatible validation gates are explicitly present', () => {
+    const first = buildCreativeSignature(makeResult('a'));
+    const second = JSON.parse(JSON.stringify(first));
+    for (const signature of [first, second]) {
+      signature.neuralMirror.canInfluenceSimilarity = true;
+      signature.neuralMirror.validatedAgainstNeuralData = true;
+      signature.neuralMirror.trained = true;
+      signature.neuralMirror.anatomicalRegistration = true;
+      signature.neuralMirror.modelId = 'brainsnn-mirror-validated-fixture';
+      signature.neuralMirror.modelVersion = '1.0.0';
+      signature.neuralMirror.referenceSpace = 'fixture-parcels';
+    }
+    second.neuralMirror.embedding = second.neuralMirror.embedding.map((value) => -value);
     expect(signatureSimilarity(first, second) < 1).toBe(true);
   });
 
@@ -105,6 +141,7 @@ describe('Brand Brain outcome learning', () => {
     expect(evaluation.neighbors).toHaveLength(5);
     expect(evaluation.neighbors[0].similarity >= evaluation.neighbors[1].similarity).toBe(true);
     expect(evaluation.boundary.includes('not a causal estimate')).toBe(true);
+    expect(evaluation.neuralMirror.eligibleForOutcomeSimilarity).toBe(false);
   });
 
   it('only exposes feature associations once comparative history is available', () => {
