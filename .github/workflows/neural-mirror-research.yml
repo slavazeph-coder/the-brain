@@ -1,0 +1,56 @@
+name: Neural Mirror Research
+
+on:
+  pull_request:
+    paths:
+      - 'neural-mirror/**'
+      - 'brainsnn-r3f-app/src/lib/neuralMirror*'
+      - 'brainsnn-r3f-app/src/lib/researchDirector*'
+      - 'brainsnn-r3f-app/src/lib/outcomeLearning*'
+      - '.github/workflows/neural-mirror-research.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'neural-mirror/**'
+      - 'brainsnn-r3f-app/src/lib/neuralMirror*'
+      - 'brainsnn-r3f-app/src/lib/researchDirector*'
+      - 'brainsnn-r3f-app/src/lib/outcomeLearning*'
+      - '.github/workflows/neural-mirror-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-research-self-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: neural-mirror/requirements.txt
+      - name: Install research dependencies
+        run: python -m pip install -r neural-mirror/requirements.txt
+      - name: Compile research package
+        run: python -m compileall -q neural-mirror
+      - name: Run independent Neural Mirror CPU self-test
+        env:
+          PYTHONPATH: neural-mirror
+        run: python neural-mirror/scripts/self_test.py
+      - name: Verify Research Director proposal path
+        env:
+          PYTHONPATH: neural-mirror
+        run: |
+          tmpdir="$(mktemp -d)"
+          python neural-mirror/scripts/propose.py --registry "$tmpdir/experiments.sqlite" > "$tmpdir/proposal.json"
+          python - "$tmpdir/proposal.json" <<'PY'
+          import json, sys
+          proposal = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert proposal['requiresApproval'] is True
+          assert proposal['decisionAuthority'] == 'held-out benchmark'
+          assert proposal['proposedExperiment']['model']['family'] == 'ridge'
+          print('RESEARCH_DIRECTOR_SELF_TEST_OK')
+          PY
