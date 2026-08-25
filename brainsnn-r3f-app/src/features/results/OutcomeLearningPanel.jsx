@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Database, GitCompareArrows, Save, Target, Trash2, TrendingUp } from 'lucide-react';
+import { Cloud, CloudOff, Database, GitCompareArrows, Save, Target, Trash2, TrendingUp } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
 import {
   OUTCOME_METRICS,
@@ -7,8 +7,12 @@ import {
   evaluateAgainstBrandHistory,
   formatMetricValue,
   loadOutcomeRecords,
-  saveOutcomeRecords,
 } from '../../lib/outcomeLearning.js';
+import {
+  appendSyncedOutcomeRecord,
+  deleteSyncedOutcomeRecord,
+  loadSyncedOutcomeRecords,
+} from '../../lib/outcomeSync.js';
 
 function featureLabel(feature = '') {
   return ({
@@ -43,13 +47,39 @@ function fitTone(score) {
   return 'neutral';
 }
 
+function storageLabel(storage, synced) {
+  if (synced && storage === 'postgres') return 'SERVER-SYNCED HISTORY';
+  if (synced && storage === 'memory-fallback') return 'SERVER MEMORY FALLBACK';
+  return 'BROWSER-LOCAL FALLBACK';
+}
+
 export function OutcomeLearningPanel({ result }) {
-  const [records, setRecords] = useState(() => loadOutcomeRecords());
-  const [brandName, setBrandName] = useState(() => loadOutcomeRecords()[0]?.brandName || '');
+  const initialRecords = loadOutcomeRecords();
+  const [records, setRecords] = useState(() => initialRecords);
+  const [brandName, setBrandName] = useState(() => initialRecords[0]?.brandName || '');
   const [metricId, setMetricId] = useState('roas');
   const [creativeLabel, setCreativeLabel] = useState(result?.title || 'Current creative');
   const [outcomeValue, setOutcomeValue] = useState('');
   const [message, setMessage] = useState('');
+  const [storage, setStorage] = useState('browser-local');
+  const [synced, setSynced] = useState(false);
+  const [syncing, setSyncing] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    loadSyncedOutcomeRecords().then((state) => {
+      if (!active) return;
+      setRecords(state.records);
+      setStorage(state.storage);
+      setSynced(Boolean(state.synced));
+      setSyncing(false);
+      if (!brandName && state.records[0]?.brandName) setBrandName(state.records[0].brandName);
+    }).catch(() => {
+      if (!active) return;
+      setSyncing(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setCreativeLabel(result?.title || (result?.id ? `Creative ${String(result.id).slice(0, 8)}` : 'Current creative'));
@@ -73,7 +103,7 @@ export function OutcomeLearningPanel({ result }) {
   const validValue = outcomeValue !== '' && Number.isFinite(Number(outcomeValue)) && Number(outcomeValue) >= 0;
   const canSave = Boolean(brandName.trim() && creativeLabel.trim() && metric && validValue);
 
-  function saveOutcome() {
+  async function saveOutcome() {
     if (!canSave) return;
     try {
       const record = createOutcomeRecord({
@@ -83,19 +113,25 @@ export function OutcomeLearningPanel({ result }) {
         metricId,
         value: Number(outcomeValue),
       });
-      const next = saveOutcomeRecords([record, ...records.filter((item) => item.id !== record.id)]);
-      setRecords(next);
+      const state = await appendSyncedOutcomeRecord(record);
+      setRecords(state.records);
+      setStorage(state.storage);
+      setSynced(Boolean(state.synced));
       setOutcomeValue('');
-      setMessage(`Saved ${metric.label} outcome for ${record.creativeLabel}.`);
+      setMessage(state.synced
+        ? `Saved ${metric.label} outcome for ${record.creativeLabel} and synced it to Brand Brain.`
+        : `Saved ${metric.label} outcome locally. Server sync is unavailable, so this browser will retry later.`);
     } catch (error) {
       setMessage(error?.message || 'Could not save this outcome.');
     }
   }
 
-  function removeOutcome(id) {
-    const next = saveOutcomeRecords(records.filter((item) => item.id !== id));
-    setRecords(next);
-    setMessage('Outcome removed from local Brand Brain history.');
+  async function removeOutcome(id) {
+    const state = await deleteSyncedOutcomeRecord(id);
+    setRecords(state.records);
+    setStorage(state.storage);
+    setSynced(Boolean(state.synced));
+    setMessage(state.synced ? 'Outcome removed from synced Brand Brain history.' : 'Outcome removed locally; server deletion can retry when sync returns.');
   }
 
   return (
@@ -105,17 +141,17 @@ export function OutcomeLearningPanel({ result }) {
           <Database size={19} aria-hidden="true" />
           <div>
             <span className="bsn-eyebrow">Brand Brain · feedback loop</span>
-            <h3 id="outcome-learning-heading">Outcome Learning V0.1</h3>
+            <h3 id="outcome-learning-heading">Outcome Learning V0.2</h3>
           </div>
         </div>
         <div className="outcome-learning-badges">
           <Badge tone={maturityTone(evaluation.maturity.id)}>{evaluation.maturity.label}</Badge>
-          <Badge tone="neutral">BROWSER-LOCAL HISTORY</Badge>
+          <Badge tone={synced && storage === 'postgres' ? 'cyan' : 'neutral'}>{syncing ? 'SYNCING HISTORY' : storageLabel(storage, synced)}</Badge>
         </div>
       </header>
 
       <p className="outcome-learning-intro">
-        Close the loop with real post-publish results. BrainSNN stores a compact creative signature beside the actual outcome, then compares future creatives with that brand’s own saved history. It does not turn a few examples into a fake win probability.
+        Close the loop with real post-publish results. BrainSNN stores a compact creative signature beside the actual outcome, synchronizes that history to the current anonymous workspace when server persistence is available, and compares future creatives only with that brand’s own saved history. It does not turn a few examples into a fake win probability.
       </p>
 
       <div className="outcome-learning-controls">
@@ -152,12 +188,34 @@ export function OutcomeLearningPanel({ result }) {
         </article>
       </div>
 
+      <div className="outcome-fit-banner">
+        {synced ? <Cloud size={18} aria-hidden="true" /> : <CloudOff size={18} aria-hidden="true" />}
+        <div>
+          <Badge tone={synced && storage === 'postgres' ? 'cyan' : 'neutral'}>{storageLabel(storage, synced)}</Badge>
+          <p>{synced && storage === 'postgres'
+            ? 'Outcome history is persisted in BrainSNN’s Postgres workspace and mirrored into this browser for fast local access.'
+            : 'BrainSNN is using the browser-local cache right now. Existing history remains usable and will migrate/sync when server persistence becomes available.'}</p>
+        </div>
+      </div>
+
       {evaluation.historicalFit != null ? (
         <div className="outcome-fit-banner">
           <TrendingUp size={18} aria-hidden="true" />
           <div>
             <Badge tone={fitTone(evaluation.historicalFit)}>{evaluation.fitLabel.toUpperCase()}</Badge>
             <p>This creative’s BrainSNN signature is being compared only with saved {metric.label} outcomes for <strong>{evaluation.brandName}</strong>. Use it to prioritize tests, not to promise results.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {evaluation.neuralMirror?.present ? (
+        <div className="outcome-fit-banner">
+          <Database size={18} aria-hidden="true" />
+          <div>
+            <Badge tone={evaluation.neuralMirror.eligibleForOutcomeSimilarity ? 'cyan' : 'neutral'}>
+              {evaluation.neuralMirror.eligibleForOutcomeSimilarity ? 'NEURAL MIRROR ELIGIBLE' : 'NEURAL MIRROR RESEARCH-ONLY'}
+            </Badge>
+            <p>{evaluation.neuralMirror.boundary}</p>
           </div>
         </div>
       ) : null}
@@ -196,7 +254,7 @@ export function OutcomeLearningPanel({ result }) {
               </article>
             ))}
           </div>
-          <p className="outcome-association-boundary">These are correlations inside this browser’s saved brand history. They are not causal findings.</p>
+          <p className="outcome-association-boundary">These are correlations inside the saved brand history for this workspace. They are not causal findings.</p>
         </section>
       ) : null}
 
@@ -223,7 +281,7 @@ export function OutcomeLearningPanel({ result }) {
       <footer className="outcome-learning-footer">
         <strong>Claim boundary</strong>
         <p>{evaluation.boundary}</p>
-        <small>V0.1 stores the outcome history in this browser only. The raw video is not added to Brand Brain history.</small>
+        <small>V0.2 persists compact outcome/signature records when Postgres is available and keeps a browser-local cache/fallback. Raw video is not added to Brand Brain history.</small>
       </footer>
     </section>
   );
