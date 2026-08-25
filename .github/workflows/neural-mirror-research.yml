@@ -130,7 +130,7 @@ jobs:
 
   postgres-persistence-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -145,36 +145,27 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    defaults:
-      run:
-        working-directory: brainsnn-r3f-app
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/brainsnn_ci
-      BRAND_BRAIN_MEMORY_FALLBACK: 'false'
-      NODE_ENV: production
-      PORT: '18082'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: brainsnn-r3f-app/package-lock.json
-      - name: Install PostgreSQL client
+      - name: Install host PostgreSQL client
         run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
-      - name: Install web dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Build production bundle
-        run: npm run build
-      - name: Start production bundle against Postgres
+      - name: Build exact production Docker image
+        run: docker build -t brainsnn-postgres-ci brainsnn-r3f-app
+      - name: Start production image against real Postgres
         run: |
-          npm start > /tmp/brainsnn-postgres.log 2>&1 &
-          echo $! > /tmp/brainsnn-postgres.pid
+          docker run -d --name brainsnn-postgres-ci --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e BRAND_BRAIN_MEMORY_FALLBACK=false \
+            -e NODE_ENV=production \
+            -e PORT=18082 \
+            brainsnn-postgres-ci
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:18082/healthz >/dev/null; then exit 0; fi
             sleep 1
           done
-          cat /tmp/brainsnn-postgres.log
+          docker logs brainsnn-postgres-ci
           exit 1
       - name: Exercise durable Brand Brain persistence
         run: |
@@ -209,7 +200,7 @@ jobs:
           echo "POSTGRES_PERSISTENCE_SMOKE_OK"
       - name: Show Postgres-backed server log on failure
         if: failure()
-        run: cat /tmp/brainsnn-postgres.log || true
+        run: docker logs brainsnn-postgres-ci || true
 
   production-container-smoke:
     runs-on: ubuntu-latest
