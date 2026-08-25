@@ -7,7 +7,11 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "node dist/server.cjs"
+# Brand Brain persistence is installed by a Node preload that wraps Express
+# before server.cjs imports it. Keeping this command aligned with package.json
+# and the Docker CMD is required for the /api/v1/brand-brain/* routes to exist
+# in production.
+startCommand = "node --require ./brand-brain-preload.cjs dist/server.cjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/healthz"
