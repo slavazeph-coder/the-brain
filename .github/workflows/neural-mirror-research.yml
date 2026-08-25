@@ -5,6 +5,7 @@ on:
     paths:
       - 'neural-mirror/**'
       - 'brainsnn-r3f-app/Dockerfile'
+      - 'brainsnn-r3f-app/railway.toml'
       - 'brainsnn-r3f-app/package.json'
       - 'brainsnn-r3f-app/package-lock.json'
       - 'brainsnn-r3f-app/brand-brain-preload.cjs'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'neural-mirror/**'
       - 'brainsnn-r3f-app/Dockerfile'
+      - 'brainsnn-r3f-app/railway.toml'
       - 'brainsnn-r3f-app/package.json'
       - 'brainsnn-r3f-app/package-lock.json'
       - 'brainsnn-r3f-app/brand-brain-preload.cjs'
@@ -131,6 +133,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Guard Railway production startup uses Brand Brain preload
+        run: grep -F 'startCommand = "node --require ./brand-brain-preload.cjs dist/server.cjs"' brainsnn-r3f-app/railway.toml
       - name: Build production Docker image
         run: docker build -t brainsnn-neural-mirror-ci brainsnn-r3f-app
       - name: Verify psql runtime dependency exists
