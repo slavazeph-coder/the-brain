@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { execFile } = require('node:child_process');
+const { spawn } = require('node:child_process');
 const originalExpress = require('express');
 const expressPath = require.resolve('express');
 
@@ -10,6 +10,8 @@ const COOKIE_NAME = 'brainsnn_workspace';
 const MAX_RECORD_BYTES = 128 * 1024;
 const MAX_RECORDS_PER_WORKSPACE = 5000;
 const REQUESTS_PER_MINUTE = 120;
+const MAX_PSQL_OUTPUT_BYTES = 2 * 1024 * 1024;
+const PSQL_TIMEOUT_MS = 8_000;
 const memoryFallback = new Map();
 const rateBuckets = new Map();
 let tableReady = false;
@@ -49,18 +51,63 @@ function allowRequest(req) {
 function psql(sql, variables = {}) {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) return Promise.reject(new Error('DATABASE_URL is not configured'));
-  const args = ['--no-psqlrc', '--set=ON_ERROR_STOP=1', databaseUrl];
+
+  // psql variable interpolation (:'name') is a psql client feature. Supplying
+  // SQL with -c sends the command directly to the server, so those variables
+  // can remain unresolved. Feed SQL through stdin instead so psql performs
+  // variable substitution before PostgreSQL parses the statement.
+  const args = ['--no-psqlrc', '--set=ON_ERROR_STOP=1'];
   for (const [key, value] of Object.entries(variables)) args.push('-v', `${key}=${String(value)}`);
-  args.push('-Atqc', sql);
+  args.push('-Atq', databaseUrl);
+
   return new Promise((resolve, reject) => {
-    execFile('psql', args, { timeout: 8_000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const child = spawn('psql', args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: PSQL_TIMEOUT_MS,
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const finish = (error, output = '') => {
+      if (settled) return;
+      settled = true;
       if (error) {
         error.message = `Brand Brain database command failed: ${String(stderr || error.message).slice(0, 400)}`;
         reject(error);
         return;
       }
-      resolve(String(stdout || '').trim());
+      resolve(String(output || '').trim());
+    };
+
+    child.on('error', (error) => finish(error));
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+      if (Buffer.byteLength(stdout, 'utf8') > MAX_PSQL_OUTPUT_BYTES) {
+        child.kill('SIGKILL');
+        finish(new Error('psql output exceeded the configured limit'));
+      }
     });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+      if (Buffer.byteLength(stderr, 'utf8') > MAX_PSQL_OUTPUT_BYTES) {
+        child.kill('SIGKILL');
+        finish(new Error('psql error output exceeded the configured limit'));
+      }
+    });
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        finish(null, stdout);
+        return;
+      }
+      const detail = signal ? `psql terminated by ${signal}` : `psql exited with code ${code}`;
+      finish(new Error(detail));
+    });
+
+    child.stdin.on('error', (error) => {
+      if (error?.code !== 'EPIPE') finish(error);
+    });
+    child.stdin.end(`${String(sql || '')}\n`);
   });
 }
 
