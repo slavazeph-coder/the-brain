@@ -13,11 +13,13 @@ import { PricingWorkspace } from '../features/pricing/PricingWorkspace.jsx';
 import { ResearchWorkspaceV2 } from '../features/research/ResearchWorkspaceV2.jsx';
 import { ShareDialog } from '../features/export/ShareDialog.jsx';
 import { AppHeader } from './AppHeader.jsx';
+import { BehaviourHome } from './BehaviourHome.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
 import { DesktopSidebar } from './DesktopSidebar.jsx';
 import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
 import { ReconstructPage } from './ReconstructPage.jsx';
+import { SurvivalWorldPage } from './SurvivalWorldPage.jsx';
 import { HoldoutEvidencePage } from '../features/research/HoldoutEvidencePage.jsx';
 
 // The powder lab is a full page of its own and pulls in a simulation engine, so
@@ -27,15 +29,13 @@ const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.
   .then((module) => ({ default: module.PowderLabPage })));
 
 function resolveRoute(pathname) {
+  if (pathname.startsWith('/lab/survival')) return 'survival';
   if (pathname.startsWith('/arcade')) return 'arcade';
   if (pathname.startsWith('/app')) return 'app';
   if (pathname.startsWith('/reconstruct')) return 'reconstruct';
   if (pathname.startsWith('/evidence')) return 'evidence';
   if (pathname.startsWith('/lab')) return 'lab';
-  // The product is now the homepage. The old GaugeGap landing experience lives
-  // at /arcade so cold visitors can get to the BrainSNN decision engine without
-  // an extra click.
-  return 'app';
+  return 'home';
 }
 
 /** Module scope so a remount cannot report a second arrival for one page load. */
@@ -74,12 +74,8 @@ export function AppShell() {
     setQueue(loadQueue());
   }, []);
 
-  // One arrival, recorded once. Every other event in the app describes
-  // something a visitor did after getting here; this is the one that says how
-  // they got here at all, and it is what the rest of the funnel is measured
-  // against. `track` attaches the first-touch source itself.
   useEffect(() => {
-    if (visitTracked) return; // StrictMode mounts effects twice in development
+    if (visitTracked) return;
     visitTracked = true;
     track('visit', { route: resolveRoute(window.location.pathname) });
   }, []);
@@ -93,9 +89,7 @@ export function AppShell() {
   }, []);
 
   useEffect(() => {
-    if (route === 'app') {
-      document.title = 'BrainSNN | Creative Decision Intelligence';
-    }
+    if (route === 'app') document.title = 'BrainSNN | Creative Decision Intelligence';
   }, [route]);
 
   useEffect(() => {
@@ -116,6 +110,18 @@ export function AppShell() {
 
   const navigate = useCallback((id) => {
     const aliases = { cortex: 'analyze', synapse: 'improve', memory: 'history' };
+    if (id === 'home') {
+      window.history.pushState({}, '', '/');
+      setRoute('home');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (id === 'worlds') {
+      window.history.pushState({}, '', '/lab/survival');
+      setRoute('survival');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (id === 'arcade') {
       window.history.pushState({}, '', '/arcade');
       setRoute('arcade');
@@ -123,7 +129,7 @@ export function AppShell() {
       return;
     }
     if (route !== 'app') {
-      window.history.pushState({}, '', '/');
+      window.history.pushState({}, '', '/app');
       setRoute('app');
     }
     setActive(aliases[id] || id);
@@ -132,7 +138,7 @@ export function AppShell() {
 
   const openWorkspace = useCallback((prefill = '') => {
     if (typeof prefill === 'string') scan.setInput(prefill);
-    window.history.pushState({}, '', '/');
+    window.history.pushState({}, '', '/app');
     setRoute('app');
     setActive('analyze');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -140,8 +146,7 @@ export function AppShell() {
 
   const openLanding = useCallback(() => {
     window.history.pushState({}, '', '/');
-    setRoute('app');
-    setActive('analyze');
+    setRoute('home');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
   }, []);
 
@@ -224,9 +229,7 @@ export function AppShell() {
     if (active === 'history') {
       return <ScanHistory history={history} onOpen={openMemoryItem} onDuplicate={duplicateMemoryItem} onGoToCortex={() => navigate('analyze')} />;
     }
-    if (active === 'pricing') {
-      return <PricingWorkspace />;
-    }
+    if (active === 'pricing') return <PricingWorkspace />;
     if (active === 'queue') {
       return (
         <ApprovalQueue
@@ -242,9 +245,7 @@ export function AppShell() {
         />
       );
     }
-    if (active === 'research') {
-      return <ResearchWorkspaceV2 />;
-    }
+    if (active === 'research') return <ResearchWorkspaceV2 />;
     return (
       <ScanWorkspace
         scan={scan}
@@ -256,6 +257,10 @@ export function AppShell() {
     );
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
 
+  if (route === 'home') return <BehaviourHome />;
+
+  if (route === 'survival') return <SurvivalWorldPage />;
+
   if (route === 'lab') {
     return (
       <React.Suspense fallback={<div className="powder-boot">Loading the lab…</div>}>
@@ -264,13 +269,9 @@ export function AppShell() {
     );
   }
 
-  if (route === 'reconstruct') {
-    return <ReconstructPage onHome={openLanding} onStart={openWorkspace} />;
-  }
+  if (route === 'reconstruct') return <ReconstructPage onHome={openLanding} onStart={openWorkspace} />;
 
-  if (route === 'evidence') {
-    return <HoldoutEvidencePage onHome={openLanding} onStart={openWorkspace} />;
-  }
+  if (route === 'evidence') return <HoldoutEvidencePage onHome={openLanding} onStart={openWorkspace} />;
 
   if (route === 'arcade') {
     return (
