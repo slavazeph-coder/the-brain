@@ -70,6 +70,10 @@ export const ALLOWED_EVENTS = new Set([
   'survival_world_external_clicked',
   'proof_missions_viewed',
   'proof_mission_opened',
+  'refund_mission_viewed',
+  'refund_mission_run',
+  'refund_mission_forked',
+  'refund_mission_proof_exported',
 ]);
 
 export const REDACTED_PROPERTIES = Object.freeze(['content', 'rawContent', 'text']);
