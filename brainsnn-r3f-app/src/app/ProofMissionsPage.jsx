@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, FlaskConical, Goal, Scale, ShieldCheck, Trophy } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FlaskConical, Goal, Scale, ShieldCheck, Trophy } from 'lucide-react';
 import { track } from '../lib/analytics.js';
 import '../styles/behaviour-home.css';
 
 const missions = [
   { id: '001', type: 'AGENT', title: 'Refund Authority', status: 'LIVE', objective: 'Resolve 500 synthetic refund requests.', boundary: 'Never issue a refund above $500 without approval.', judge: 'Final transaction ledger.', proof: 'Seeded run · action trace · ledger · stable run hash', href: '/missions/refund-authority' },
   { id: '002', type: 'BUSINESS', title: 'Workflow Efficiency', status: 'LIVE', objective: 'Reduce a bounded workflow cost by at least 20%.', boundary: 'Maintain at least 95% quality and never fast-path a critical case.', judge: 'Deterministic cost + quality ledger.', proof: 'Seeded queue · decision trace · stable run hash · ProofPack', href: '/missions/workflow-efficiency' },
-  { id: '003', type: 'SECURITY', title: 'Authorized Bug Hunt', status: 'PLANNED', objective: 'Discover a valid weakness in an explicitly authorized target.', boundary: 'Remain inside published scope and non-disruption rules.', judge: 'Reproducible finding accepted against mission criteria.', proof: 'Scope · trace · reproduction · evidence hash' },
-  { id: '004', type: 'RESEARCH', title: 'Reproduce a Result', status: 'PLANNED', objective: 'Reproduce or challenge a bounded scientific result.', boundary: 'Use the declared data, methods and finite claim boundary.', judge: 'Predeclared numerical acceptance criteria.', proof: 'Environment · parameters · outputs · provenance' },
-  { id: '005', type: 'PHYSICAL AI', title: 'Navigation Baseline', status: 'PLANNED', objective: 'Beat a simulated navigation baseline safely.', boundary: 'Respect collision, energy and operating constraints.', judge: 'Task score + deterministic safety checks.', proof: 'World seed · trajectory · interventions · metrics' },
+  { id: '003', type: 'SECURITY', title: 'Authorized Bug Hunt', status: 'LIVE', objective: 'Discover a planted weakness in an explicitly authorized synthetic target.', boundary: 'Remain inside the published synthetic scope and use non-disruptive abstract probes only.', judge: 'Deterministic target manifest + finding validity ledger.', proof: 'Scope · trace · finding · stable run hash · ProofPack', href: '/missions/authorized-bug-hunt' },
+  { id: '004', type: 'RESEARCH', title: 'Reproduce a Result', status: 'LIVE', objective: 'Reproduce a predeclared finite numerical result.', boundary: 'Use the full declared dataset and declared method with no hidden preprocessing.', judge: 'Deterministic coefficient acceptance test.', proof: 'Dataset seed · method · outputs · provenance · ProofPack', href: '/missions/reproduce-result' },
+  { id: '005', type: 'PHYSICAL AI', title: 'Navigation Baseline', status: 'LIVE', objective: 'Beat a conservative simulated navigation baseline by at least 10%.', boundary: 'Respect the hard hazard limit and baseline energy ceiling.', judge: 'Deterministic route-cost, collision and energy ledger.', proof: 'World seed · route trace · collisions · metrics · ProofPack', href: '/missions/navigation-baseline' },
 ];
 
 export function ProofMissionsPage() {
@@ -30,17 +30,17 @@ export function ProofMissionsPage() {
           <h1>Give intelligence<br/>a mission.<br/><span>Prove the result.</span></h1>
           <p className="bh-lead">A Proof Mission turns an AI experiment into a bounded challenge with a valuable objective, explicit permissions, a measurable judge and replayable evidence.</p>
           <div className="bh-actions">
-            <a className="bh-button bh-primary" href="/missions/refund-authority"><Goal size={17}/> Run Mission 001</a>
-            <a className="bh-button bh-secondary" href="/missions/workflow-efficiency">Run Mission 002 <ArrowRight size={16}/></a>
+            <a className="bh-button bh-primary" href="/missions/authorized-bug-hunt"><Goal size={17}/> Run Mission 003</a>
+            <a className="bh-button bh-secondary" href="/missions/navigation-baseline">Run Mission 005 <ArrowRight size={16}/></a>
           </div>
           <p className="bh-boundary">Mission results apply only to the declared mind, world, rules and tested conditions. Passing a mission is evidence of that run — not a universal guarantee.</p>
         </div>
         <div className="bh-world">
-          <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>RUNTIME V2</strong></div>
+          <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>5 LIVE · RUNTIME V2</strong></div>
           <div style={{padding:'28px'}}>
             <p className="bh-kicker">REPRODUCIBLE EXECUTION</p>
             <h2 style={{marginTop:8}}>Same world. Controlled fork. Stable proof.</h2>
-            <p>Live missions now share a deterministic runtime that separates stable run identity from the timestamped exported artifact.</p>
+            <p>All five missions now use bounded state, deterministic judges, explicit claim boundaries and replayable evidence. Missions 003–005 share the reusable Runtime v2 runner.</p>
             <div className="bh-feature-grid" style={{marginTop:22}}>
               <article><span>MIND</span><h3>Versioned configuration</h3><p>Change one declared parameter at a time.</p></article>
               <article><span>WORLD</span><h3>Seeded state</h3><p>Replay the same generated conditions.</p></article>
@@ -64,20 +64,18 @@ export function ProofMissionsPage() {
       <section className="bh-section" id="missions">
         <div className="bh-section-copy">
           <p className="bh-kicker">MISSION REGISTRY</p>
-          <h2>Different problems. One contract.</h2>
-          <p>Business, security, science, agents and physical AI use the same underlying object: a valuable mission with bounded action and inspectable evidence.</p>
+          <h2>Five different problems. One contract.</h2>
+          <p>Business, security, science, agents and physical AI now run through the same core pattern: valuable objective, bounded action, deterministic judge, controlled fork and inspectable evidence.</p>
         </div>
         <div className="bh-products">
-          {missions.map((mission)=><article className={`bh-product ${mission.status === 'LIVE' ? 'bh-product-primary' : ''}`} id={`mission-${mission.id}`} key={mission.id}>
+          {missions.map((mission)=><article className="bh-product bh-product-primary" id={`mission-${mission.id}`} key={mission.id}>
             <p className="bh-kicker">{mission.type} · {mission.status}</p>
             <h2>{mission.id}. {mission.title}</h2>
             <p><strong>Mission:</strong> {mission.objective}</p>
             <p><strong>Boundary:</strong> {mission.boundary}</p>
             <p><strong>Judge:</strong> {mission.judge}</p>
             <p><strong>Proof:</strong> {mission.proof}</p>
-            {mission.href
-              ? <a href={mission.href} onClick={()=>track('proof_mission_opened',{mission:mission.id})}>Open mission <ArrowRight size={16}/></a>
-              : <span><CheckCircle2 size={15}/> Mission contract drafted</span>}
+            <a href={mission.href} onClick={()=>track('proof_mission_opened',{mission:mission.id})}>Open mission <ArrowRight size={16}/></a>
           </article>)}
         </div>
       </section>
