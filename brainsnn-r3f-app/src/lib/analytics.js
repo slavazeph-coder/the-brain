@@ -81,6 +81,18 @@ const allowedEvents = new Set([
   'workflow_mission_run',
   'workflow_mission_forked',
   'workflow_mission_proof_exported',
+  'bug_hunt_mission_viewed',
+  'bug_hunt_mission_run',
+  'bug_hunt_mission_forked',
+  'bug_hunt_mission_proof_exported',
+  'reproduce_mission_viewed',
+  'reproduce_mission_run',
+  'reproduce_mission_forked',
+  'reproduce_mission_proof_exported',
+  'navigation_mission_viewed',
+  'navigation_mission_run',
+  'navigation_mission_forked',
+  'navigation_mission_proof_exported',
 ]);
 
 export const __ALLOWED_EVENTS_FOR_TEST = Object.freeze([...allowedEvents]);
