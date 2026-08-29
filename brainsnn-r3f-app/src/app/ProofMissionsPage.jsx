@@ -21,7 +21,7 @@ export function ProofMissionsPage() {
     <header className="bh-nav">
       <a className="bh-brand" href="/"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Proof Missions</small></span></a>
       <nav><a href="/">Home</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a><a href="/app">Creative Engine</a></nav>
-      <a className="bh-nav-cta" href="#missions">Browse missions <ArrowRight size={15}/></a>
+      <a className="bh-nav-cta" href="/missions/build">Build a mission <ArrowRight size={15}/></a>
     </header>
     <main>
       <section className="bh-hero">
@@ -30,17 +30,17 @@ export function ProofMissionsPage() {
           <h1>Give intelligence<br/>a mission.<br/><span>Prove the result.</span></h1>
           <p className="bh-lead">A Proof Mission turns an AI experiment into a bounded challenge with a valuable objective, explicit permissions, a measurable judge and replayable evidence.</p>
           <div className="bh-actions">
-            <a className="bh-button bh-primary" href="/missions/authorized-bug-hunt"><Goal size={17}/> Run Mission 003</a>
-            <a className="bh-button bh-secondary" href="/missions/navigation-baseline">Run Mission 005 <ArrowRight size={16}/></a>
+            <a className="bh-button bh-primary" href="/missions/build"><Goal size={17}/> Build a Mission</a>
+            <a className="bh-button bh-secondary" href="/missions/authorized-bug-hunt">Run Mission 003 <ArrowRight size={16}/></a>
           </div>
           <p className="bh-boundary">Mission results apply only to the declared mind, world, rules and tested conditions. Passing a mission is evidence of that run — not a universal guarantee.</p>
         </div>
         <div className="bh-world">
-          <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>5 LIVE · RUNTIME V2</strong></div>
+          <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>5 LIVE · BUILDER V1</strong></div>
           <div style={{padding:'28px'}}>
             <p className="bh-kicker">REPRODUCIBLE EXECUTION</p>
             <h2 style={{marginTop:8}}>Same world. Controlled fork. Stable proof.</h2>
-            <p>All five missions now use bounded state, deterministic judges, explicit claim boundaries and replayable evidence. Missions 003–005 share the reusable Runtime v2 runner.</p>
+            <p>All five curated missions use bounded state, deterministic judges, explicit claim boundaries and replayable evidence. Mission Builder now lets you author the same contract from declared templates and thresholds.</p>
             <div className="bh-feature-grid" style={{marginTop:22}}>
               <article><span>MIND</span><h3>Versioned configuration</h3><p>Change one declared parameter at a time.</p></article>
               <article><span>WORLD</span><h3>Seeded state</h3><p>Replay the same generated conditions.</p></article>
@@ -61,9 +61,16 @@ export function ProofMissionsPage() {
         <div><Scale size={19}/><span>JUDGE + PROOF</span><strong>How the result is decided and verified</strong></div>
       </section>
 
+      <section className="bh-section">
+        <div className="bh-enterprise">
+          <div><p className="bh-kicker">MISSION BUILDER V1</p><h2>Turn your own bounded problem into a runnable contract.</h2><p>Choose a finite world template, name the mind or policy, state the objective and hard boundary, set deterministic acceptance thresholds, then run and fork the same seeded world. No arbitrary code execution.</p></div>
+          <a className="bh-button bh-primary" href="/missions/build">Open Mission Builder <ArrowRight size={16}/></a>
+        </div>
+      </section>
+
       <section className="bh-section" id="missions">
         <div className="bh-section-copy">
-          <p className="bh-kicker">MISSION REGISTRY</p>
+          <p className="bh-kicker">CURATED MISSION REGISTRY</p>
           <h2>Five different problems. One contract.</h2>
           <p>Business, security, science, agents and physical AI now run through the same core pattern: valuable objective, bounded action, deterministic judge, controlled fork and inspectable evidence.</p>
         </div>
@@ -81,8 +88,8 @@ export function ProofMissionsPage() {
       </section>
 
       <section className="bh-enterprise">
-        <div><p className="bh-kicker">THE MARKETPLACE PATH</p><h2>Bring a problem worth solving.</h2><p>The next layer lets organizations publish authorized, bounded missions with acceptance criteria and rewards. Competing minds attempt the mission; BrainSNN records the attempts and GaugeGap proves the result.</p></div>
-        <a className="bh-button bh-primary" href="https://www.xioai.co/" target="_blank" rel="noreferrer">Propose a mission <ArrowRight size={16}/></a>
+        <div><p className="bh-kicker">THE MARKETPLACE PATH</p><h2>Author first. Publish later.</h2><p>The builder is the safe first step toward a mission marketplace: structured public contracts can eventually be published with acceptance criteria and rewards, while competing minds attempt them and GaugeGap proves each run.</p></div>
+        <a className="bh-button bh-primary" href="/missions/build">Build the contract <ArrowRight size={16}/></a>
       </section>
     </main>
     <footer className="bh-footer"><a href="/"><ArrowLeft size={14}/> BrainSNN</a><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
