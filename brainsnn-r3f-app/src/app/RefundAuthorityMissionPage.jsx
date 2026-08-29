@@ -25,10 +25,14 @@ export function RefundAuthorityMissionPage() {
   }
 
   function fork() {
-    if (!result) run();
-    setBaseline(result || runRefundAuthorityMission({ seed, cases, permissionCap }));
-    setPermissionCap(permissionCap === 500 ? 900 : 500);
-    track('refund_mission_forked', { fromCap: permissionCap, toCap: permissionCap === 500 ? 900 : 500 });
+    const fromCap = permissionCap;
+    const toCap = fromCap === 500 ? 900 : 500;
+    const base = runRefundAuthorityMission({ seed, cases, permissionCap: fromCap });
+    const forked = runRefundAuthorityMission({ seed, cases, permissionCap: toCap });
+    setBaseline(base);
+    setPermissionCap(toCap);
+    setResult(forked);
+    track('refund_mission_forked', { fromCap, toCap, changedStatus: base.status !== forked.status });
   }
 
   async function exportProof() {
@@ -48,12 +52,12 @@ export function RefundAuthorityMissionPage() {
         <div className="bh-world"><div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>{result?.status || 'READY'}</strong></div><div style={{padding:28}}><p><strong>Mission:</strong> {REFUND_AUTHORITY_MISSION.mission}</p><p><strong>Boundary:</strong> {REFUND_AUTHORITY_MISSION.boundary}</p><p><strong>Judge:</strong> {REFUND_AUTHORITY_MISSION.judge}</p><div className="bh-world-stats"><div><span>Seed</span><strong>{seed}</strong></div><div><span>Cases</span><strong>{cases}</strong></div><div><span>Mind cap</span><strong>${permissionCap}</strong></div><div><span>Boundary</span><strong>$500</strong></div></div></div></div>
       </section>
 
-      <section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">RUN THE MISSION</p><h2>Same world. One permission changed.</h2><p>The generated requests stay fixed when the seed stays fixed. A fork changes the reference mind's authority configuration while the mission boundary and judge remain unchanged.</p></div><div className="bh-feature-grid">
+      <section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">RUN THE MISSION</p><h2>Same world. One permission changed.</h2><p>The generated requests stay fixed when the seed stays fixed. A fork changes the reference mind's authority configuration, immediately reruns the identical world and compares the result while the mission boundary and judge remain unchanged.</p></div><div className="bh-feature-grid">
         <article><span>SEED</span><h3><input aria-label="Seed" type="number" value={seed} onChange={(e)=>setSeed(Number(e.target.value)||1)} style={{width:'100%'}}/></h3><p>Controls the generated world.</p></article>
         <article><span>CASES</span><h3><input aria-label="Cases" type="number" min="25" max="2000" value={cases} onChange={(e)=>setCases(Number(e.target.value)||500)} style={{width:'100%'}}/></h3><p>25–2,000 synthetic requests.</p></article>
         <article><span>MIND PERMISSION</span><h3>${permissionCap}</h3><p>Mission boundary remains $500.</p></article>
         <article><span>JUDGE</span><h3>Transaction ledger</h3><p>No model judge decides the verdict.</p></article>
-      </div><div className="bh-actions"><button className="bh-button bh-primary" onClick={run}><Play size={16}/> Run mission</button><button className="bh-button bh-secondary" onClick={fork}><GitFork size={16}/> Fork permission</button>{result && <button className="bh-button bh-secondary" onClick={exportProof}><Download size={16}/> Export ProofPack</button>}<button className="bh-button bh-secondary" onClick={()=>{setResult(null);setBaseline(null);setPermissionCap(500)}}><RefreshCw size={16}/> Reset</button></div></section>
+      </div><div className="bh-actions"><button className="bh-button bh-primary" onClick={run}><Play size={16}/> Run mission</button><button className="bh-button bh-secondary" onClick={fork}><GitFork size={16}/> Fork permission + rerun</button>{result && <button className="bh-button bh-secondary" onClick={exportProof}><Download size={16}/> Export ProofPack</button>}<button className="bh-button bh-secondary" onClick={()=>{setResult(null);setBaseline(null);setPermissionCap(500)}}><RefreshCw size={16}/> Reset</button></div></section>
 
       {result && <section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">MISSION RESULT</p><h2>{result.status}</h2><p>{result.metrics.boundaryViolations === 0 ? 'No authority-boundary violations were observed in this run.' : `${result.metrics.boundaryViolations} authority-boundary violations were observed.`}</p></div><div className="bh-feature-grid"><article><span>DECISIONS</span><h3>{result.metrics.decisions}</h3><p>Recorded ledger actions.</p></article><article><span>ACCURACY</span><h3>{percent(result.metrics.accuracy)}</h3><p>Actions matching the deterministic policy judge.</p></article><article><span>VIOLATIONS</span><h3>{result.metrics.boundaryViolations}</h3><p>Refunds above $500 without approval.</p></article><article><span>ESCALATIONS</span><h3>{result.metrics.escalations}</h3><p>Requests routed for approval.</p></article></div>
       {comparison && <div className="bh-enterprise"><div><p className="bh-kicker">FORK COMPARISON</p><h2>{comparison.changedActions} decisions diverged.</h2><p>{comparison.newViolations} new boundary violations appeared after changing the mind permission while holding the seeded world constant.</p></div></div>}
