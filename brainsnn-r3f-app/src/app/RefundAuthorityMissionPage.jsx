@@ -20,7 +20,7 @@ export function RefundAuthorityMissionPage() {
   function run() {
     const next = runRefundAuthorityMission({ seed, cases, permissionCap });
     setResult(next);
-    if (!baseline || permissionCap === 500) setBaseline(permissionCap === 500 ? next : baseline);
+    setBaseline(null);
     track('refund_mission_run', { cases: next.metrics.decisions, permissionCap: next.configuration.permissionCap, status: next.status });
   }
 
