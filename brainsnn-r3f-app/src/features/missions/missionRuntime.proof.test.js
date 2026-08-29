@@ -13,7 +13,7 @@ describe('mission ProofPack reproducibility', () => {
     expect(b.createdAt).toBe(createdAt);
     expect(a.runIdentity).toEqual(b.runIdentity);
     expect(a.evidence).toEqual(b.evidence);
-    expect(a.evidence.sha256).toBeTruthy();
+    expect(String(a.evidence.sha256 || '').length).toBe(64);
   });
 
   it('keeps run identity stable even when artifact creation times differ', async () => {
