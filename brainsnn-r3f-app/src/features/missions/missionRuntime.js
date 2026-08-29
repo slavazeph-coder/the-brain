@@ -46,7 +46,7 @@ async function sha256Hex(value) {
     .join('');
 }
 
-export async function buildMissionProofPack(result, comparison = null) {
+export async function buildMissionProofPack(result, comparison = null, createdAt = null) {
   const runCore = {
     mission: result.mission,
     configuration: result.configuration,
@@ -56,11 +56,14 @@ export async function buildMissionProofPack(result, comparison = null) {
     claimBoundary: result.mission.claimBoundary,
   };
   const runSha256 = await sha256Hex(runCore);
+  const proofCreatedAt = typeof createdAt === 'string' && createdAt.trim()
+    ? createdAt.trim()
+    : new Date().toISOString();
 
   const body = {
     schema: 'gaugegap.brainsnn_proof_mission.v1',
     runtime: 'brainsnn.proof_mission_runtime.v2',
-    createdAt: new Date().toISOString(),
+    createdAt: proofCreatedAt,
     ...runCore,
     comparison,
     runIdentity: {
