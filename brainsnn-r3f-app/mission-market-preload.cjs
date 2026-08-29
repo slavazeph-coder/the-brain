@@ -256,10 +256,12 @@ async function submitMission(missionId, body) {
   const policy = marketplace.normalizeSubmissionPolicy(body?.policy || {}, mission.configuration);
   const configuration = marketplace.buildSubmissionConfiguration(mission.configuration, policy);
   const result = builder.runBuiltMission(configuration);
-  const proofPack = await runtime.buildMissionProofPack(result, null);
+  const createdAt = new Date().toISOString();
+  const proofPack = await runtime.buildMissionProofPack(result, null, createdAt);
   const proof = {
     schema: proofPack.schema,
     runtime: proofPack.runtime,
+    createdAt: proofPack.createdAt,
     runIdentity: proofPack.runIdentity,
     evidence: proofPack.evidence,
     claimBoundary: proofPack.claimBoundary,
@@ -285,7 +287,7 @@ async function submissionProof(missionId, submissionId) {
   const { builder, runtime, marketplace } = await missionModules();
   const configuration = marketplace.buildSubmissionConfiguration(mission.configuration, stored.payload.policy);
   const result = builder.runBuiltMission(configuration);
-  const proofPack = await runtime.buildMissionProofPack(result, null);
+  const proofPack = await runtime.buildMissionProofPack(result, null, stored.payload.proof?.createdAt || null);
   return {
     missionId,
     submissionId,
