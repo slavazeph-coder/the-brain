@@ -41,7 +41,7 @@ export function WorkflowEfficiencyMissionPage() {
   function run() {
     const next = runWorkflowEfficiencyMission({ seed, cases, reviewThreshold });
     setResult(next);
-    if (!baseline || reviewThreshold === 0.62) setBaseline(reviewThreshold === 0.62 ? next : baseline);
+    setBaseline(null);
     track('workflow_mission_run', {
       cases: next.metrics.decisions,
       reviewThreshold: next.configuration.reviewThreshold,
