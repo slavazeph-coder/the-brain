@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, FlaskConical, Goal, Scale, ShieldCheck, Trophy } from 'lucide-react';
 import { track } from '../lib/analytics.js';
+import { listPublishedMissions } from '../features/missions/missionMarketplaceApi.js';
 import '../styles/behaviour-home.css';
 
 const missions = [
@@ -12,9 +13,17 @@ const missions = [
 ];
 
 export function ProofMissionsPage() {
+  const [published, setPublished] = useState([]);
+  const [marketError, setMarketError] = useState('');
+
   useEffect(() => {
     document.title = 'Proof Missions | BrainSNN';
     track('proof_missions_viewed');
+    let live = true;
+    listPublishedMissions()
+      .then((response) => { if (live) setPublished(response.missions || []); })
+      .catch((error) => { if (live) setMarketError(error.message || 'Published missions are temporarily unavailable.'); });
+    return () => { live = false; };
   }, []);
 
   return <div className="bh-site">
@@ -31,21 +40,21 @@ export function ProofMissionsPage() {
           <p className="bh-lead">A Proof Mission turns an AI experiment into a bounded challenge with a valuable objective, explicit permissions, a measurable judge and replayable evidence.</p>
           <div className="bh-actions">
             <a className="bh-button bh-primary" href="/missions/build"><Goal size={17}/> Build a Mission</a>
-            <a className="bh-button bh-secondary" href="/missions/authorized-bug-hunt">Run Mission 003 <ArrowRight size={16}/></a>
+            <a className="bh-button bh-secondary" href="#marketplace">Browse public missions <ArrowRight size={16}/></a>
           </div>
           <p className="bh-boundary">Mission results apply only to the declared mind, world, rules and tested conditions. Passing a mission is evidence of that run — not a universal guarantee.</p>
         </div>
         <div className="bh-world">
-          <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>5 LIVE · BUILDER V1</strong></div>
+          <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>5 CURATED · PUBLIC MARKETPLACE</strong></div>
           <div style={{padding:'28px'}}>
             <p className="bh-kicker">REPRODUCIBLE EXECUTION</p>
-            <h2 style={{marginTop:8}}>Same world. Controlled fork. Stable proof.</h2>
-            <p>All five curated missions use bounded state, deterministic judges, explicit claim boundaries and replayable evidence. Mission Builder now lets you author the same contract from declared templates and thresholds.</p>
+            <h2 style={{marginTop:8}}>Same world. Controlled policy. Stable proof.</h2>
+            <p>Curated missions and community-published challenges now share the same contract pattern. Public submissions are recomputed on the server before entering a leaderboard.</p>
             <div className="bh-feature-grid" style={{marginTop:22}}>
-              <article><span>MIND</span><h3>Versioned configuration</h3><p>Change one declared parameter at a time.</p></article>
-              <article><span>WORLD</span><h3>Seeded state</h3><p>Replay the same generated conditions.</p></article>
+              <article><span>MIND</span><h3>Versioned configuration</h3><p>Participants submit a declared policy.</p></article>
+              <article><span>WORLD</span><h3>Seeded state</h3><p>Published challenge state stays immutable.</p></article>
               <article><span>JUDGE</span><h3>Deterministic ledger</h3><p>Objective rules decide the result.</p></article>
-              <article><span>PROOF</span><h3>ProofPack</h3><p>Run identity plus artifact hash.</p></article>
+              <article><span>PROOF</span><h3>ProofPack</h3><p>Verified run identity plus artifact hash.</p></article>
             </div>
           </div>
         </div>
@@ -61,9 +70,28 @@ export function ProofMissionsPage() {
         <div><Scale size={19}/><span>JUDGE + PROOF</span><strong>How the result is decided and verified</strong></div>
       </section>
 
+      <section className="bh-section" id="marketplace">
+        <div className="bh-section-copy">
+          <p className="bh-kicker">PUBLIC MISSION MARKETPLACE</p>
+          <h2>Published challenges anyone can attempt.</h2>
+          <p>The mission contract is immutable after publication. Participants change only the declared policy fields, then BrainSNN recomputes the run server-side and attaches a verified ProofPack to the leaderboard entry.</p>
+          {marketError && <p className="bh-boundary">{marketError}</p>}
+        </div>
+        <div className="bh-products">
+          {published.length === 0 && !marketError ? <article className="bh-product bh-product-primary"><p className="bh-kicker">MARKETPLACE READY</p><h2>No public missions yet.</h2><p>Publish the first challenge from Mission Builder.</p><a href="/missions/build">Build + publish <ArrowRight size={16}/></a></article> : published.map((mission) => <article className="bh-product bh-product-primary" key={mission.id}>
+            <p className="bh-kicker">{mission.contract?.type || 'CUSTOM'} · {mission.submissionCount || 0} SUBMISSIONS</p>
+            <h2>{mission.contract?.title || mission.id}</h2>
+            <p><strong>Mission:</strong> {mission.contract?.mission}</p>
+            <p><strong>Boundary:</strong> {mission.contract?.boundary}</p>
+            <p><strong>Judge:</strong> {mission.contract?.judge}</p>
+            <a href={`/m/${mission.id}`}>Attempt mission <ArrowRight size={16}/></a>
+          </article>)}
+        </div>
+      </section>
+
       <section className="bh-section">
         <div className="bh-enterprise">
-          <div><p className="bh-kicker">MISSION BUILDER V1</p><h2>Turn your own bounded problem into a runnable contract.</h2><p>Choose a finite world template, name the mind or policy, state the objective and hard boundary, set deterministic acceptance thresholds, then run and fork the same seeded world. No arbitrary code execution.</p></div>
+          <div><p className="bh-kicker">MISSION BUILDER</p><h2>Turn your own bounded problem into a public challenge.</h2><p>Choose a finite world template, state the objective and hard boundary, set deterministic acceptance thresholds, then publish the immutable contract. Other policies can compete without changing the challenge.</p></div>
           <a className="bh-button bh-primary" href="/missions/build">Open Mission Builder <ArrowRight size={16}/></a>
         </div>
       </section>
@@ -72,7 +100,7 @@ export function ProofMissionsPage() {
         <div className="bh-section-copy">
           <p className="bh-kicker">CURATED MISSION REGISTRY</p>
           <h2>Five different problems. One contract.</h2>
-          <p>Business, security, science, agents and physical AI now run through the same core pattern: valuable objective, bounded action, deterministic judge, controlled fork and inspectable evidence.</p>
+          <p>Business, security, science, agents and physical AI use the same core pattern: valuable objective, bounded action, deterministic judge, controlled fork and inspectable evidence.</p>
         </div>
         <div className="bh-products">
           {missions.map((mission)=><article className="bh-product bh-product-primary" id={`mission-${mission.id}`} key={mission.id}>
@@ -88,8 +116,8 @@ export function ProofMissionsPage() {
       </section>
 
       <section className="bh-enterprise">
-        <div><p className="bh-kicker">THE MARKETPLACE PATH</p><h2>Author first. Publish later.</h2><p>The builder is the safe first step toward a mission marketplace: structured public contracts can eventually be published with acceptance criteria and rewards, while competing minds attempt them and GaugeGap proves each run.</p></div>
-        <a className="bh-button bh-primary" href="/missions/build">Build the contract <ArrowRight size={16}/></a>
+        <div><p className="bh-kicker">MARKETPLACE PRIMITIVE</p><h2>Immutable challenge. Mutable policy. Verified result.</h2><p>This is the first real marketplace layer: persistent public missions, server-recomputed submissions, deterministic ranking and a ProofPack attached to every accepted run.</p></div>
+        <a className="bh-button bh-primary" href="/missions/build">Publish a mission <ArrowRight size={16}/></a>
       </section>
     </main>
     <footer className="bh-footer"><a href="/"><ArrowLeft size={14}/> BrainSNN</a><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
