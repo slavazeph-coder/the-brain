@@ -1,0 +1,244 @@
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, Download, GitFork, Goal, Play, RefreshCw, Scale, ShieldCheck } from 'lucide-react';
+import { buildMissionProofPack } from '../features/missions/missionRuntime.js';
+import {
+  BUILDER_WORLD_TEMPLATES,
+  DEFAULT_MISSION_DRAFT,
+  buildMissionContract,
+  compareBuiltMissionRuns,
+  forkMissionDraft,
+  getBuilderWorldTemplate,
+  runBuiltMission,
+} from '../features/missions/missionBuilder.js';
+import '../styles/behaviour-home.css';
+
+function percent(value) {
+  return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function downloadJson(name, value) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const fieldStyle = {
+  width: '100%',
+  padding: '11px 12px',
+  borderRadius: 10,
+  border: '1px solid rgba(255,255,255,.14)',
+  background: 'rgba(255,255,255,.04)',
+  color: 'inherit',
+  font: 'inherit',
+};
+
+const textareaStyle = { ...fieldStyle, minHeight: 86, resize: 'vertical' };
+
+export function MissionBuilderPage() {
+  const [draft, setDraft] = useState({ ...DEFAULT_MISSION_DRAFT });
+  const [result, setResult] = useState(null);
+  const [baseline, setBaseline] = useState(null);
+  const [hasFork, setHasFork] = useState(false);
+
+  const contract = useMemo(() => buildMissionContract(draft), [draft]);
+  const template = useMemo(() => getBuilderWorldTemplate(draft.worldTemplate), [draft.worldTemplate]);
+  const comparison = useMemo(
+    () => (hasFork && baseline && result ? compareBuiltMissionRuns(baseline, result) : null),
+    [baseline, hasFork, result],
+  );
+
+  React.useEffect(() => {
+    document.title = 'Mission Builder | BrainSNN';
+  }, []);
+
+  function update(key, value) {
+    setDraft((current) => ({ ...current, [key]: value }));
+    setResult(null);
+    setBaseline(null);
+    setHasFork(false);
+  }
+
+  function updateNumber(key, value) {
+    update(key, Number(value));
+  }
+
+  function runMission() {
+    const next = runBuiltMission(draft);
+    setDraft(next.configuration);
+    setResult(next);
+    setBaseline(null);
+    setHasFork(false);
+  }
+
+  function forkMission() {
+    const base = result || runBuiltMission(draft);
+    const nextDraft = forkMissionDraft(draft);
+    const next = runBuiltMission(nextDraft);
+    setBaseline(base);
+    setDraft(next.configuration);
+    setResult(next);
+    setHasFork(true);
+  }
+
+  async function exportProof() {
+    if (!result) return;
+    const proof = await buildMissionProofPack(result, comparison);
+    downloadJson(`brainsnn-custom-proof-${result.configuration.seed}.json`, proof);
+  }
+
+  function reset() {
+    setDraft({ ...DEFAULT_MISSION_DRAFT });
+    setResult(null);
+    setBaseline(null);
+    setHasFork(false);
+  }
+
+  const evidence = result
+    ? result.ledger.filter((entry) => entry.boundaryViolation || entry.action !== 'HOLD').slice(0, 12)
+    : [];
+
+  return <div className="bh-site">
+    <header className="bh-nav">
+      <a className="bh-brand" href="/missions"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Mission Builder</small></span></a>
+      <nav><a href="/missions">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
+      <a className="bh-nav-cta" href="/missions"><ArrowLeft size={15}/> Registry</a>
+    </header>
+
+    <main>
+      <section className="bh-hero">
+        <div className="bh-hero-copy">
+          <p className="bh-kicker"><Goal size={15}/> PROOF MISSION BUILDER</p>
+          <h1>Define the contract.<br/><span>Then prove the run.</span></h1>
+          <p className="bh-lead">Author a bounded deterministic mission without writing executable code. Pick a seeded world, state the objective, declare the hard boundary and choose measurable acceptance thresholds.</p>
+          <p className="bh-boundary">Builder v1 executes only BrainSNN's declared finite templates. Your text describes the contract; the verdict comes only from the structured deterministic judge below.</p>
+        </div>
+
+        <div className="bh-world">
+          <div className="bh-world-top"><span><i/> LIVE CONTRACT PREVIEW</span><strong>{result?.status || 'DRAFT'}</strong></div>
+          <div style={{ padding: 28 }}>
+            <p className="bh-kicker">{contract.type} · CUSTOM</p>
+            <h2 style={{ marginTop: 8 }}>{contract.title}</h2>
+            <p><strong>Mind:</strong> {contract.mind}</p>
+            <p><strong>World:</strong> {contract.world}</p>
+            <p><strong>Mission:</strong> {contract.mission}</p>
+            <p><strong>Boundary:</strong> {contract.boundary}</p>
+            <p><strong>Judge:</strong> {contract.judge}</p>
+            <p><strong>Proof:</strong> {contract.proof}</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="bh-section">
+        <div className="bh-section-copy">
+          <p className="bh-kicker">1 · AUTHOR THE CONTRACT</p>
+          <h2>Describe the mission. Keep the judge structured.</h2>
+          <p>The authored language is preserved in the ProofPack, while the world size, seed, thresholds and policy controls are normalized into bounded numeric fields.</p>
+        </div>
+
+        <div className="bh-feature-grid">
+          <article>
+            <span>WORLD TEMPLATE</span>
+            <h3><select aria-label="World template" value={draft.worldTemplate} onChange={(event) => update('worldTemplate', event.target.value)} style={fieldStyle}>
+              {BUILDER_WORLD_TEMPLATES.map((world) => <option key={world.id} value={world.id}>{world.label}</option>)}
+            </select></h3>
+            <p>{template.description}</p>
+          </article>
+          <article>
+            <span>MISSION TITLE</span>
+            <h3><input aria-label="Mission title" value={draft.title} onChange={(event) => update('title', event.target.value)} style={fieldStyle}/></h3>
+            <p>Short name stored in the mission contract.</p>
+          </article>
+          <article>
+            <span>MIND / POLICY</span>
+            <h3><input aria-label="Mind or policy" value={draft.mind} onChange={(event) => update('mind', event.target.value)} style={fieldStyle}/></h3>
+            <p>Name the policy, model or configuration being evaluated.</p>
+          </article>
+          <article>
+            <span>SEED</span>
+            <h3><input aria-label="Seed" type="number" min="1" max="2147483647" value={draft.seed} onChange={(event) => updateNumber('seed', event.target.value)} style={fieldStyle}/></h3>
+            <p>Replay the same generated world exactly.</p>
+          </article>
+        </div>
+
+        <div className="bh-products" style={{ marginTop: 20 }}>
+          <article className="bh-product bh-product-primary">
+            <p className="bh-kicker">MISSION</p>
+            <textarea aria-label="Mission objective" value={draft.objective} onChange={(event) => update('objective', event.target.value)} style={textareaStyle}/>
+          </article>
+          <article className="bh-product">
+            <p className="bh-kicker">HARD BOUNDARY</p>
+            <textarea aria-label="Mission boundary" value={draft.boundary} onChange={(event) => update('boundary', event.target.value)} style={textareaStyle}/>
+          </article>
+          <article className="bh-product">
+            <p className="bh-kicker">JUDGE</p>
+            <textarea aria-label="Mission judge" value={draft.judge} onChange={(event) => update('judge', event.target.value)} style={textareaStyle}/>
+          </article>
+        </div>
+      </section>
+
+      <section className="bh-section">
+        <div className="bh-section-copy">
+          <p className="bh-kicker">2 · SET THE MEASURABLE RULES</p>
+          <h2>The words do not decide the verdict. These numbers do.</h2>
+        </div>
+        <div className="bh-feature-grid">
+          <article><span>WORLD SIZE</span><h3><input aria-label="World size" type="number" min="25" max="500" value={draft.cases} onChange={(event) => updateNumber('cases', event.target.value)} style={fieldStyle}/></h3><p>25–500 finite items.</p></article>
+          <article><span>HARD RISK LIMIT</span><h3><input aria-label="Hard risk limit" type="number" min="0.05" max="0.9" step="0.01" value={draft.maxRisk} onChange={(event) => updateNumber('maxRisk', event.target.value)} style={fieldStyle}/></h3><p>Any action above this limit is a boundary violation.</p></article>
+          <article><span>MIN IMPROVEMENT</span><h3><input aria-label="Minimum improvement" type="number" min="0" max="2" step="0.01" value={draft.minimumImprovement} onChange={(event) => updateNumber('minimumImprovement', event.target.value)} style={fieldStyle}/></h3><p>{percent(draft.minimumImprovement)} required vs the conservative baseline.</p></article>
+          <article><span>MIN QUALITY</span><h3><input aria-label="Minimum quality" type="number" min="0.5" max="1" step="0.01" value={draft.minimumQuality} onChange={(event) => updateNumber('minimumQuality', event.target.value)} style={fieldStyle}/></h3><p>{percent(draft.minimumQuality)} average quality required.</p></article>
+          <article><span>AGGRESSIVENESS</span><h3><input aria-label="Aggressiveness" type="number" min="0" max="1" step="0.01" value={draft.aggressiveness} onChange={(event) => updateNumber('aggressiveness', event.target.value)} style={fieldStyle}/></h3><p>Higher values act on more opportunities.</p></article>
+          <article><span>BOUNDARY DISCIPLINE</span><h3><input aria-label="Boundary discipline" type="number" min="0" max="1" step="0.01" value={draft.boundaryDiscipline} onChange={(event) => updateNumber('boundaryDiscipline', event.target.value)} style={fieldStyle}/></h3><p>1.00 strictly enforces the hard risk gate; lower values intentionally test unsafe policy drift.</p></article>
+        </div>
+
+        <div className="bh-actions">
+          <button className="bh-button bh-primary" onClick={runMission}><Play size={16}/> Run mission</button>
+          <button className="bh-button bh-secondary" onClick={forkMission}><GitFork size={16}/> Fork + rerun</button>
+          <button className="bh-button bh-secondary" onClick={() => downloadJson('brainsnn-mission-contract.json', { schema: 'brainsnn.proof_mission_contract.v1', ...contract, configuration: draft })}><Download size={16}/> Export contract</button>
+          {result && <button className="bh-button bh-secondary" onClick={exportProof}><Download size={16}/> Export ProofPack</button>}
+          <button className="bh-button bh-secondary" onClick={reset}><RefreshCw size={16}/> Reset</button>
+        </div>
+      </section>
+
+      {result && <section className="bh-section">
+        <div className="bh-section-copy">
+          <p className="bh-kicker">3 · RESULT</p>
+          <h2>{result.status}</h2>
+          <p>{result.mission.claimBoundary}</p>
+        </div>
+        <div className="bh-feature-grid">
+          <article><span>IMPROVEMENT</span><h3>{percent(result.metrics.improvementRate)}</h3><p>Required: {percent(result.configuration.minimumImprovement)}.</p></article>
+          <article><span>QUALITY</span><h3>{percent(result.metrics.qualityRate)}</h3><p>Required: {percent(result.configuration.minimumQuality)}.</p></article>
+          <article><span>BOUNDARY VIOLATIONS</span><h3>{result.metrics.boundaryViolations}</h3><p>Any violation causes a hard failure.</p></article>
+          <article><span>ACTIONS</span><h3>{result.metrics.acted} / {result.configuration.cases}</h3><p>Items acted on by the active policy.</p></article>
+        </div>
+
+        {comparison && <div className="bh-enterprise">
+          <div><p className="bh-kicker">CONTROLLED FORK</p><h2>{comparison.fromStatus} → {comparison.toStatus}</h2><p>{comparison.changedActions} decisions changed. Improvement moved by {percent(comparison.improvementDelta)}; quality moved by {percent(comparison.qualityDelta)}; {comparison.newViolations} new boundary violations appeared.</p></div>
+        </div>}
+
+        <div className="bh-products">
+          <article className="bh-product bh-product-primary">
+            <p className="bh-kicker">EVIDENCE TRACE</p>
+            <h2>{evidence.length ? 'Inspect acted items' : 'No material actions in sampled trace'}</h2>
+            {evidence.length ? evidence.map((entry) => <p key={entry.itemId}>{entry.itemId} · {entry.action} · risk {entry.risk.toFixed(4)} · value {entry.value.toFixed(2)}{entry.boundaryViolation ? ' · BOUNDARY VIOLATION' : ''}</p>) : <p>The full deterministic ledger remains in the ProofPack.</p>}
+          </article>
+          <article className="bh-product">
+            <p className="bh-kicker"><Scale size={14}/> PROOF</p>
+            <h2>Runtime v2 compatible</h2>
+            <p>The same ProofPack path used by the five curated missions records the authored contract, normalized controls, complete ledger, optional fork comparison, stable run identity and artifact hash.</p>
+          </article>
+        </div>
+      </section>}
+
+      <section className="bh-enterprise">
+        <div><p className="bh-kicker"><ShieldCheck size={14}/> WHY THIS IS BOUNDED</p><h2>No arbitrary code execution.</h2><p>Builder v1 only instantiates declared BrainSNN templates and numeric controls. That keeps public missions finite, replayable and inspectable while we learn which additional world primitives deserve to become first-class templates.</p></div>
+      </section>
+    </main>
+
+    <footer className="bh-footer"><a href="/missions"><ArrowLeft size={14}/> Proof Missions</a><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+  </div>;
+}
