@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Download, GitFork, Goal, Play, RefreshCw, Scale, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Copy, Download, ExternalLink, GitFork, Goal, Play, RefreshCw, Scale, Share2, ShieldCheck } from 'lucide-react';
 import { buildMissionProofPack } from '../features/missions/missionRuntime.js';
+import { publishMission } from '../features/missions/missionMarketplaceApi.js';
 import {
   BUILDER_WORLD_TEMPLATES,
   DEFAULT_MISSION_DRAFT,
@@ -43,6 +44,10 @@ export function MissionBuilderPage() {
   const [result, setResult] = useState(null);
   const [baseline, setBaseline] = useState(null);
   const [hasFork, setHasFork] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(null);
+  const [publishError, setPublishError] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const contract = useMemo(() => buildMissionContract(draft), [draft]);
   const template = useMemo(() => getBuilderWorldTemplate(draft.worldTemplate), [draft.worldTemplate]);
@@ -55,11 +60,18 @@ export function MissionBuilderPage() {
     document.title = 'Mission Builder | BrainSNN';
   }, []);
 
+  function clearPublished() {
+    setPublished(null);
+    setPublishError('');
+    setCopied(false);
+  }
+
   function update(key, value) {
     setDraft((current) => ({ ...current, [key]: value }));
     setResult(null);
     setBaseline(null);
     setHasFork(false);
+    clearPublished();
   }
 
   function updateNumber(key, value) {
@@ -72,6 +84,7 @@ export function MissionBuilderPage() {
     setResult(next);
     setBaseline(null);
     setHasFork(false);
+    clearPublished();
   }
 
   function forkMission() {
@@ -82,6 +95,7 @@ export function MissionBuilderPage() {
     setDraft(next.configuration);
     setResult(next);
     setHasFork(true);
+    clearPublished();
   }
 
   async function exportProof() {
@@ -90,11 +104,33 @@ export function MissionBuilderPage() {
     downloadJson(`brainsnn-custom-proof-${result.configuration.seed}.json`, proof);
   }
 
+  async function publishCurrentMission() {
+    setPublishing(true);
+    setPublishError('');
+    setCopied(false);
+    try {
+      const response = await publishMission(draft);
+      setPublished(response);
+    } catch (error) {
+      setPublishError(error.message || 'Mission could not be published.');
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function copyPublishedLink() {
+    if (!published?.url) return;
+    const absolute = new URL(published.url, window.location.origin).toString();
+    await navigator.clipboard.writeText(absolute);
+    setCopied(true);
+  }
+
   function reset() {
     setDraft({ ...DEFAULT_MISSION_DRAFT });
     setResult(null);
     setBaseline(null);
     setHasFork(false);
+    clearPublished();
   }
 
   const evidence = result
@@ -203,9 +239,24 @@ export function MissionBuilderPage() {
         </div>
       </section>
 
+      <section className="bh-enterprise">
+        <div>
+          <p className="bh-kicker"><Share2 size={14}/> 3 · PUBLISH THE CHALLENGE</p>
+          <h2>Freeze the mission. Let other policies compete.</h2>
+          <p>Publishing makes the world, seed, hard boundary, judge and acceptance thresholds immutable. Participants may change only their policy identity, aggressiveness and boundary discipline. Submitted scores are recomputed server-side before entering the leaderboard.</p>
+          {publishError && <p className="bh-boundary">{publishError}</p>}
+          {published?.mission && <p><strong>Published:</strong> {published.mission.id} · {published.mission.submissionCount || 0} submissions</p>}
+        </div>
+        <div className="bh-actions">
+          {!published && <button className="bh-button bh-primary" disabled={publishing} onClick={publishCurrentMission}><Share2 size={16}/> {publishing ? 'Publishing…' : 'Publish mission'}</button>}
+          {published?.url && <button className="bh-button bh-secondary" onClick={copyPublishedLink}><Copy size={16}/> {copied ? 'Copied' : 'Copy challenge link'}</button>}
+          {published?.url && <a className="bh-button bh-primary" href={published.url}><ExternalLink size={16}/> Open challenge</a>}
+        </div>
+      </section>
+
       {result && <section className="bh-section">
         <div className="bh-section-copy">
-          <p className="bh-kicker">3 · RESULT</p>
+          <p className="bh-kicker">4 · RESULT</p>
           <h2>{result.status}</h2>
           <p>{result.mission.claimBoundary}</p>
         </div>
@@ -235,7 +286,7 @@ export function MissionBuilderPage() {
       </section>}
 
       <section className="bh-enterprise">
-        <div><p className="bh-kicker"><ShieldCheck size={14}/> WHY THIS IS BOUNDED</p><h2>No arbitrary code execution.</h2><p>Builder v1 only instantiates declared BrainSNN templates and numeric controls. That keeps public missions finite, replayable and inspectable while we learn which additional world primitives deserve to become first-class templates.</p></div>
+        <div><p className="bh-kicker"><ShieldCheck size={14}/> WHY THIS IS BOUNDED</p><h2>No arbitrary code execution.</h2><p>Builder v1 only instantiates declared BrainSNN templates and numeric controls. Published challenges freeze the environment and judge; the server recomputes every accepted submission rather than trusting a client-reported score.</p></div>
       </section>
     </main>
 
