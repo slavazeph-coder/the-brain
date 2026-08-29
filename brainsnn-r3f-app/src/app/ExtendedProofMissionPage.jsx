@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Download, GitFork, Play, RefreshCw, ShieldCheck } from 'lucide-react';
-import { track } from '../lib/analytics.js';
 import { buildMissionProofPack } from '../features/missions/missionRuntime.js';
+import { trackMissionForked, trackMissionProofExported, trackMissionRun, trackMissionViewed } from '../features/missions/missionAnalytics.js';
 import { AUTHORIZED_BUG_HUNT_MISSION, compareAuthorizedBugHuntRuns, runAuthorizedBugHuntMission } from '../features/missions/authorizedBugHuntMission.js';
 import { REPRODUCE_RESULT_MISSION, compareReproduceResultRuns, runReproduceResultMission } from '../features/missions/reproduceResultMission.js';
 import { NAVIGATION_BASELINE_MISSION, compareNavigationRuns, runNavigationBaselineMission } from '../features/missions/navigationBaselineMission.js';
@@ -25,7 +25,6 @@ const DEFINITIONS = {
     run: runAuthorizedBugHuntMission,
     compare: compareAuthorizedBugHuntRuns,
     fork: (config) => ({ ...config, scopeDiscipline: config.scopeDiscipline >= 0.99 ? 0.7 : 1 }),
-    eventPrefix: 'bug_hunt_mission',
     lead: 'Search a closed synthetic target for a planted authorization weakness while obeying an explicit scope manifest. No real network target is contacted.',
     controls: [
       ['seed', 'SEED', 1, undefined, 1, 'Controls the generated target.'],
@@ -49,7 +48,6 @@ const DEFINITIONS = {
     run: runReproduceResultMission,
     compare: compareReproduceResultRuns,
     fork: (config) => ({ ...config, trimFraction: config.trimFraction > 0 ? 0 : 0.25 }),
-    eventPrefix: 'reproduce_mission',
     lead: 'Reproduce a predeclared coefficient from a seeded synthetic dataset using the declared method, then fork the method and make the change visible in the evidence.',
     controls: [
       ['seed', 'SEED', 1, undefined, 1, 'Controls the generated dataset.'],
@@ -72,7 +70,6 @@ const DEFINITIONS = {
     run: runNavigationBaselineMission,
     compare: compareNavigationRuns,
     fork: (config) => ({ ...config, riskTolerance: config.riskTolerance > 0.45 ? 0.35 : 0.8 }),
-    eventPrefix: 'navigation_mission',
     lead: 'Route through a seeded synthetic navigation world. Take safe shortcuts to beat the conservative baseline, but any shortcut above the hard hazard limit fails the mission.',
     controls: [
       ['seed', 'SEED', 1, undefined, 1, 'Controls the generated navigation world.'],
@@ -105,7 +102,7 @@ export function ExtendedProofMissionPage({ missionId }) {
     setBaseline(null);
     setHasFork(false);
     document.title = `Proof Mission ${mission.id} · ${mission.title} | BrainSNN`;
-    track(`${definition.eventPrefix}_viewed`);
+    trackMissionViewed(mission.id);
   }, [definition, mission.id, mission.title]);
 
   const comparison = useMemo(
@@ -122,7 +119,7 @@ export function ExtendedProofMissionPage({ missionId }) {
     setResult(next);
     setBaseline(null);
     setHasFork(false);
-    track(`${definition.eventPrefix}_run`, { status: next.status, seed: next.configuration.seed });
+    trackMissionRun(mission.id, { status: next.status, seed: next.configuration.seed });
   }
 
   function fork() {
@@ -133,14 +130,14 @@ export function ExtendedProofMissionPage({ missionId }) {
     setConfig(nextConfig);
     setResult(next);
     setHasFork(true);
-    track(`${definition.eventPrefix}_forked`, { fromStatus: base.status, toStatus: next.status });
+    trackMissionForked(mission.id, { fromStatus: base.status, toStatus: next.status });
   }
 
   async function exportProof() {
     if (!result) return;
     const proof = await buildMissionProofPack(result, comparison);
     downloadJson(`brainsnn-proof-mission-${mission.id}-${result.configuration.seed}.json`, proof);
-    track(`${definition.eventPrefix}_proof_exported`, { status: result.status, seed: result.configuration.seed });
+    trackMissionProofExported(mission.id, { status: result.status, seed: result.configuration.seed });
   }
 
   const exceptions = result ? definition.exceptions(result) : [];
