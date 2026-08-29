@@ -74,6 +74,10 @@ export const ALLOWED_EVENTS = new Set([
   'refund_mission_run',
   'refund_mission_forked',
   'refund_mission_proof_exported',
+  'workflow_mission_viewed',
+  'workflow_mission_run',
+  'workflow_mission_forked',
+  'workflow_mission_proof_exported',
 ]);
 
 export const REDACTED_PROPERTIES = Object.freeze(['content', 'rawContent', 'text']);
