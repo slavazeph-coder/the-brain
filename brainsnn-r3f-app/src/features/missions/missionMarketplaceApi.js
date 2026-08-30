@@ -12,8 +12,8 @@ async function request(path, options = {}) {
   return body;
 }
 
-export async function publishMission(configuration) {
-  return request('/publish', { method: 'POST', body: JSON.stringify({ configuration }) });
+export async function publishMission(configuration, terms = {}) {
+  return request('/publish', { method: 'POST', body: JSON.stringify({ configuration, terms }) });
 }
 
 export async function getPublishedMission(id) {
@@ -22,6 +22,10 @@ export async function getPublishedMission(id) {
 
 export async function listPublishedMissions() {
   return request('/');
+}
+
+export async function listOwnedMissions() {
+  return request('/mine');
 }
 
 export async function getMissionLeaderboard(id) {
@@ -33,6 +37,18 @@ export async function submitMissionPolicy(id, participant, policy) {
     method: 'POST',
     body: JSON.stringify({ participant, policy }),
   });
+}
+
+export async function closeOwnedMission(id) {
+  return request(`/${encodeURIComponent(id)}/owner/close`, { method: 'POST', body: '{}' });
+}
+
+export async function reopenOwnedMission(id) {
+  return request(`/${encodeURIComponent(id)}/owner/reopen`, { method: 'POST', body: '{}' });
+}
+
+export async function selectMissionWinner(id) {
+  return request(`/${encodeURIComponent(id)}/owner/select-winner`, { method: 'POST', body: '{}' });
 }
 
 export function proofUrl(missionId, submissionId) {

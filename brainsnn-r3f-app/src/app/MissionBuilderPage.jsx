@@ -27,6 +27,21 @@ function downloadJson(name, value) {
   URL.revokeObjectURL(url);
 }
 
+function toLocalDateTimeInput(date) {
+  const value = date instanceof Date ? date : new Date(date);
+  if (!Number.isFinite(value.getTime())) return '';
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+}
+
+const DEFAULT_PUBLISH_TERMS = {
+  creatorLabel: 'Mission creator',
+  amount: '0',
+  currency: 'CAD',
+  deadline: '',
+  rules: 'Top verified MISSION SUCCESS submissions are eligible. The creator selects the winner.',
+};
+
 const fieldStyle = {
   width: '100%',
   padding: '11px 12px',
@@ -41,6 +56,7 @@ const textareaStyle = { ...fieldStyle, minHeight: 86, resize: 'vertical' };
 
 export function MissionBuilderPage() {
   const [draft, setDraft] = useState({ ...DEFAULT_MISSION_DRAFT });
+  const [publishTerms, setPublishTerms] = useState({ ...DEFAULT_PUBLISH_TERMS });
   const [result, setResult] = useState(null);
   const [baseline, setBaseline] = useState(null);
   const [hasFork, setHasFork] = useState(false);
@@ -78,6 +94,11 @@ export function MissionBuilderPage() {
     update(key, Number(value));
   }
 
+  function updatePublishTerm(key, value) {
+    setPublishTerms((current) => ({ ...current, [key]: value }));
+    clearPublished();
+  }
+
   function runMission() {
     const next = runBuiltMission(draft);
     setDraft(next.configuration);
@@ -109,7 +130,21 @@ export function MissionBuilderPage() {
     setPublishError('');
     setCopied(false);
     try {
-      const response = await publishMission(draft);
+      const amount = Number(publishTerms.amount || 0);
+      if (!Number.isFinite(amount) || amount < 0) throw new Error('Reward amount must be zero or greater.');
+      if (publishTerms.deadline) {
+        const deadline = new Date(publishTerms.deadline);
+        if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now()) {
+          throw new Error('Deadline must be a valid future date and time.');
+        }
+      }
+      const response = await publishMission(draft, {
+        creatorLabel: publishTerms.creatorLabel,
+        amountCents: Math.round(amount * 100),
+        currency: publishTerms.currency,
+        deadline: publishTerms.deadline ? new Date(publishTerms.deadline).toISOString() : null,
+        rules: publishTerms.rules,
+      });
       setPublished(response);
     } catch (error) {
       setPublishError(error.message || 'Mission could not be published.');
@@ -127,6 +162,7 @@ export function MissionBuilderPage() {
 
   function reset() {
     setDraft({ ...DEFAULT_MISSION_DRAFT });
+    setPublishTerms({ ...DEFAULT_PUBLISH_TERMS });
     setResult(null);
     setBaseline(null);
     setHasFork(false);
@@ -183,36 +219,15 @@ export function MissionBuilderPage() {
             </select></h3>
             <p>{template.description}</p>
           </article>
-          <article>
-            <span>MISSION TITLE</span>
-            <h3><input aria-label="Mission title" value={draft.title} onChange={(event) => update('title', event.target.value)} style={fieldStyle}/></h3>
-            <p>Short name stored in the mission contract.</p>
-          </article>
-          <article>
-            <span>MIND / POLICY</span>
-            <h3><input aria-label="Mind or policy" value={draft.mind} onChange={(event) => update('mind', event.target.value)} style={fieldStyle}/></h3>
-            <p>Name the policy, model or configuration being evaluated.</p>
-          </article>
-          <article>
-            <span>SEED</span>
-            <h3><input aria-label="Seed" type="number" min="1" max="2147483647" value={draft.seed} onChange={(event) => updateNumber('seed', event.target.value)} style={fieldStyle}/></h3>
-            <p>Replay the same generated world exactly.</p>
-          </article>
+          <article><span>MISSION TITLE</span><h3><input aria-label="Mission title" value={draft.title} onChange={(event) => update('title', event.target.value)} style={fieldStyle}/></h3><p>Short name stored in the mission contract.</p></article>
+          <article><span>MIND / POLICY</span><h3><input aria-label="Mind or policy" value={draft.mind} onChange={(event) => update('mind', event.target.value)} style={fieldStyle}/></h3><p>Name the policy, model or configuration being evaluated.</p></article>
+          <article><span>SEED</span><h3><input aria-label="Seed" type="number" min="1" max="2147483647" value={draft.seed} onChange={(event) => updateNumber('seed', event.target.value)} style={fieldStyle}/></h3><p>Replay the same generated world exactly.</p></article>
         </div>
 
         <div className="bh-products" style={{ marginTop: 20 }}>
-          <article className="bh-product bh-product-primary">
-            <p className="bh-kicker">MISSION</p>
-            <textarea aria-label="Mission objective" value={draft.objective} onChange={(event) => update('objective', event.target.value)} style={textareaStyle}/>
-          </article>
-          <article className="bh-product">
-            <p className="bh-kicker">HARD BOUNDARY</p>
-            <textarea aria-label="Mission boundary" value={draft.boundary} onChange={(event) => update('boundary', event.target.value)} style={textareaStyle}/>
-          </article>
-          <article className="bh-product">
-            <p className="bh-kicker">JUDGE</p>
-            <textarea aria-label="Mission judge" value={draft.judge} onChange={(event) => update('judge', event.target.value)} style={textareaStyle}/>
-          </article>
+          <article className="bh-product bh-product-primary"><p className="bh-kicker">MISSION</p><textarea aria-label="Mission objective" value={draft.objective} onChange={(event) => update('objective', event.target.value)} style={textareaStyle}/></article>
+          <article className="bh-product"><p className="bh-kicker">HARD BOUNDARY</p><textarea aria-label="Mission boundary" value={draft.boundary} onChange={(event) => update('boundary', event.target.value)} style={textareaStyle}/></article>
+          <article className="bh-product"><p className="bh-kicker">JUDGE</p><textarea aria-label="Mission judge" value={draft.judge} onChange={(event) => update('judge', event.target.value)} style={textareaStyle}/></article>
         </div>
       </section>
 
@@ -239,18 +254,51 @@ export function MissionBuilderPage() {
         </div>
       </section>
 
-      <section className="bh-enterprise">
-        <div>
-          <p className="bh-kicker"><Share2 size={14}/> 3 · PUBLISH THE CHALLENGE</p>
-          <h2>Freeze the mission. Let other policies compete.</h2>
-          <p>Publishing makes the world, seed, hard boundary, judge and acceptance thresholds immutable. Participants may change only their policy identity, aggressiveness and boundary discipline. Submitted scores are recomputed server-side before entering the leaderboard.</p>
-          {publishError && <p className="bh-boundary">{publishError}</p>}
-          {published?.mission && <p><strong>Published:</strong> {published.mission.id} · {published.mission.submissionCount || 0} submissions</p>}
+      <section className="bh-section">
+        <div className="bh-section-copy">
+          <p className="bh-kicker"><Share2 size={14}/> 3 · PUBLISH + SET THE ECONOMIC TERMS</p>
+          <h2>Freeze the challenge. Optionally attach a public reward pledge.</h2>
+          <p>The mission, world, seed, boundary, judge, acceptance thresholds and bounty terms become immutable when published. Participants may change only their declared policy fields.</p>
+          <p className="bh-boundary">A displayed reward is a creator pledge only. BrainSNN does not currently escrow, hold, charge or pay funds. Payment rail status remains NOT_CONNECTED until a real payment integration is added.</p>
         </div>
-        <div className="bh-actions">
-          {!published && <button className="bh-button bh-primary" disabled={publishing} onClick={publishCurrentMission}><Share2 size={16}/> {publishing ? 'Publishing…' : 'Publish mission'}</button>}
-          {published?.url && <button className="bh-button bh-secondary" onClick={copyPublishedLink}><Copy size={16}/> {copied ? 'Copied' : 'Copy challenge link'}</button>}
-          {published?.url && <a className="bh-button bh-primary" href={published.url}><ExternalLink size={16}/> Open challenge</a>}
+
+        <div className="bh-feature-grid">
+          <article><span>CREATOR LABEL</span><h3><input aria-label="Creator label" value={publishTerms.creatorLabel} onChange={(event) => updatePublishTerm('creatorLabel', event.target.value)} style={fieldStyle}/></h3><p>Public creator name. Ownership itself is bound to your private browser workspace.</p></article>
+          <article><span>REWARD PLEDGE</span><h3><input aria-label="Reward amount" type="number" min="0" max="1000000" step="1" value={publishTerms.amount} onChange={(event) => updatePublishTerm('amount', event.target.value)} style={fieldStyle}/></h3><p>Use 0 for a no-cash mission. This amount is not escrowed.</p></article>
+          <article><span>CURRENCY</span><h3><select aria-label="Reward currency" value={publishTerms.currency} onChange={(event) => updatePublishTerm('currency', event.target.value)} style={fieldStyle}><option value="CAD">CAD</option><option value="USD">USD</option></select></h3><p>Display currency for the public pledge.</p></article>
+          <article><span>DEADLINE · OPTIONAL</span><h3><input aria-label="Mission deadline" type="datetime-local" min={toLocalDateTimeInput(new Date(Date.now() + 60_000))} value={publishTerms.deadline} onChange={(event) => updatePublishTerm('deadline', event.target.value)} style={fieldStyle}/></h3><p>New verified submissions stop when the deadline is reached.</p></article>
+        </div>
+
+        <div className="bh-products" style={{ marginTop: 20 }}>
+          <article className="bh-product bh-product-primary">
+            <p className="bh-kicker">BOUNTY / WINNER RULES</p>
+            <textarea aria-label="Bounty rules" maxLength={700} value={publishTerms.rules} onChange={(event) => updatePublishTerm('rules', event.target.value)} style={textareaStyle}/>
+            <p>The creator can select a winner only from server-verified MISSION SUCCESS entries. The ranked top eligible run is selected by the current v1 workflow.</p>
+          </article>
+          <article className="bh-product">
+            <p className="bh-kicker">CREATOR CONTROL</p>
+            <h2>Close · reopen · award</h2>
+            <p>After publishing, this browser workspace can close submissions, reopen before the deadline, and select the verified winner. Ownership is not inferred from a public creator label.</p>
+            <a href="/missions#creator-dashboard">Open creator dashboard</a>
+          </article>
+        </div>
+
+        <div className="bh-enterprise" style={{ marginTop: 20 }}>
+          <div>
+            <p className="bh-kicker">PUBLISH IMMUTABLY</p>
+            <h2>Let other policies compete against exactly the same contract.</h2>
+            <p>Submitted scores are recomputed server-side before entering the leaderboard. A duplicate policy/run identity does not get a second leaderboard entry.</p>
+            {publishError && <p className="bh-boundary">{publishError}</p>}
+            {published?.mission && <>
+              <p><strong>Published:</strong> {published.mission.id} · {published.mission.submissionCount || 0} submissions · {published.mission.bounty?.lifecycle || 'OPEN'}</p>
+              <p><strong>Reward:</strong> {(Number(published.mission.bounty?.amountCents || 0) / 100).toLocaleString()} {published.mission.bounty?.currency || 'CAD'} · {published.mission.bounty?.fundingStatus || 'NOT_ESCROWED'}</p>
+            </>}
+          </div>
+          <div className="bh-actions">
+            {!published && <button className="bh-button bh-primary" disabled={publishing} onClick={publishCurrentMission}><Share2 size={16}/> {publishing ? 'Publishing…' : 'Publish mission'}</button>}
+            {published?.url && <button className="bh-button bh-secondary" onClick={copyPublishedLink}><Copy size={16}/> {copied ? 'Copied' : 'Copy challenge link'}</button>}
+            {published?.url && <a className="bh-button bh-primary" href={published.url}><ExternalLink size={16}/> Open challenge</a>}
+          </div>
         </div>
       </section>
 
@@ -290,6 +338,6 @@ export function MissionBuilderPage() {
       </section>
     </main>
 
-    <footer className="bh-footer"><a href="/missions"><ArrowLeft size={14}/> Proof Missions</a><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+    <footer className="bh-footer"><a href="/missions"><ArrowLeft size={14}/> Proof Missions</a><span>Mind + World + Mission + Boundaries + Judge + Proof + optional public bounty</span></footer>
   </div>;
 }
