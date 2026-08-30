@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, FlaskConical, Goal, Scale, ShieldCheck, Trophy } from 'lucide-react';
 import { track } from '../lib/analytics.js';
-import { listPublishedMissions } from '../features/missions/missionMarketplaceApi.js';
+import { listOwnedMissions, listPublishedMissions } from '../features/missions/missionMarketplaceApi.js';
 import '../styles/behaviour-home.css';
 
 const missions = [
@@ -12,16 +12,36 @@ const missions = [
   { id: '005', type: 'PHYSICAL AI', title: 'Navigation Baseline', status: 'LIVE', objective: 'Beat a conservative simulated navigation baseline by at least 10%.', boundary: 'Respect the hard hazard limit and baseline energy ceiling.', judge: 'Deterministic route-cost, collision and energy ledger.', proof: 'World seed · route trace · collisions · metrics · ProofPack', href: '/missions/navigation-baseline' },
 ];
 
+function money(amountCents, currency = 'CAD') {
+  const amount = Number(amountCents || 0) / 100;
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
+function deadline(value) {
+  if (!value) return 'No deadline';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'No deadline';
+}
+
 export function ProofMissionsPage() {
   const [published, setPublished] = useState([]);
+  const [owned, setOwned] = useState([]);
   const [marketError, setMarketError] = useState('');
 
   useEffect(() => {
     document.title = 'Proof Missions | BrainSNN';
     track('proof_missions_viewed');
     let live = true;
-    listPublishedMissions()
-      .then((response) => { if (live) setPublished(response.missions || []); })
+    Promise.all([listPublishedMissions(), listOwnedMissions()])
+      .then(([publicResponse, ownedResponse]) => {
+        if (!live) return;
+        setPublished(publicResponse.missions || []);
+        setOwned(ownedResponse.missions || []);
+      })
       .catch((error) => { if (live) setMarketError(error.message || 'Published missions are temporarily unavailable.'); });
     return () => { live = false; };
   }, []);
@@ -37,24 +57,25 @@ export function ProofMissionsPage() {
         <div className="bh-hero-copy">
           <p className="bh-kicker"><Trophy size={15}/> PROOF MISSIONS</p>
           <h1>Give intelligence<br/>a mission.<br/><span>Prove the result.</span></h1>
-          <p className="bh-lead">A Proof Mission turns an AI experiment into a bounded challenge with a valuable objective, explicit permissions, a measurable judge and replayable evidence.</p>
+          <p className="bh-lead">A Proof Mission turns an AI experiment into a bounded challenge with a valuable objective, explicit permissions, a measurable judge, replayable evidence and an optional public reward pledge.</p>
           <div className="bh-actions">
             <a className="bh-button bh-primary" href="/missions/build"><Goal size={17}/> Build a Mission</a>
             <a className="bh-button bh-secondary" href="#marketplace">Browse public missions <ArrowRight size={16}/></a>
+            <a className="bh-button bh-secondary" href="#creator-dashboard">Creator dashboard <ArrowRight size={16}/></a>
           </div>
-          <p className="bh-boundary">Mission results apply only to the declared mind, world, rules and tested conditions. Passing a mission is evidence of that run — not a universal guarantee.</p>
+          <p className="bh-boundary">Mission results apply only to the declared mind, world, rules and tested conditions. Passing a mission is evidence of that run — not a universal guarantee. Reward amounts are public creator pledges; BrainSNN does not currently escrow or process funds.</p>
         </div>
         <div className="bh-world">
           <div className="bh-world-top"><span><i/> MISSION CONTRACT</span><strong>5 CURATED · PUBLIC MARKETPLACE</strong></div>
           <div style={{padding:'28px'}}>
             <p className="bh-kicker">REPRODUCIBLE EXECUTION</p>
             <h2 style={{marginTop:8}}>Same world. Controlled policy. Stable proof.</h2>
-            <p>Curated missions and community-published challenges now share the same contract pattern. Public submissions are recomputed on the server before entering a leaderboard.</p>
+            <p>Curated missions and community-published challenges share the same contract pattern. Public submissions are recomputed on the server before entering a leaderboard.</p>
             <div className="bh-feature-grid" style={{marginTop:22}}>
               <article><span>MIND</span><h3>Versioned configuration</h3><p>Participants submit a declared policy.</p></article>
               <article><span>WORLD</span><h3>Seeded state</h3><p>Published challenge state stays immutable.</p></article>
               <article><span>JUDGE</span><h3>Deterministic ledger</h3><p>Objective rules decide the result.</p></article>
-              <article><span>PROOF</span><h3>ProofPack</h3><p>Verified run identity plus artifact hash.</p></article>
+              <article><span>PROOF + VALUE</span><h3>ProofPack + pledge</h3><p>Verified evidence can support a public bounty workflow.</p></article>
             </div>
           </div>
         </div>
@@ -73,25 +94,48 @@ export function ProofMissionsPage() {
       <section className="bh-section" id="marketplace">
         <div className="bh-section-copy">
           <p className="bh-kicker">PUBLIC MISSION MARKETPLACE</p>
-          <h2>Published challenges anyone can attempt.</h2>
-          <p>The mission contract is immutable after publication. Participants change only the declared policy fields, then BrainSNN recomputes the run server-side and attaches a verified ProofPack to the leaderboard entry.</p>
+          <h2>Published challenges with verified outcomes.</h2>
+          <p>The mission contract and economic terms are immutable after publication. Participants change only the declared policy fields, then BrainSNN recomputes the run server-side and attaches a verified ProofPack to the leaderboard entry.</p>
           {marketError && <p className="bh-boundary">{marketError}</p>}
         </div>
         <div className="bh-products">
           {published.length === 0 && !marketError ? <article className="bh-product bh-product-primary"><p className="bh-kicker">MARKETPLACE READY</p><h2>No public missions yet.</h2><p>Publish the first challenge from Mission Builder.</p><a href="/missions/build">Build + publish <ArrowRight size={16}/></a></article> : published.map((mission) => <article className="bh-product bh-product-primary" key={mission.id}>
-            <p className="bh-kicker">{mission.contract?.type || 'CUSTOM'} · {mission.submissionCount || 0} SUBMISSIONS</p>
+            <p className="bh-kicker">{mission.contract?.type || 'CUSTOM'} · {mission.bounty?.lifecycle || 'OPEN'} · {mission.submissionCount || 0} SUBMISSIONS</p>
             <h2>{mission.contract?.title || mission.id}</h2>
+            <p><strong>Creator:</strong> {mission.creator?.label || 'Mission creator'}</p>
+            <p><strong>Reward pledge:</strong> {money(mission.bounty?.amountCents, mission.bounty?.currency)} · {mission.bounty?.fundingStatus || 'NOT_ESCROWED'}</p>
+            <p><strong>Deadline:</strong> {deadline(mission.bounty?.deadline)}</p>
             <p><strong>Mission:</strong> {mission.contract?.mission}</p>
             <p><strong>Boundary:</strong> {mission.contract?.boundary}</p>
             <p><strong>Judge:</strong> {mission.contract?.judge}</p>
-            <a href={`/m/${mission.id}`}>Attempt mission <ArrowRight size={16}/></a>
+            <a href={`/m/${mission.id}`}>{mission.bounty?.lifecycle === 'OPEN' ? 'Attempt mission' : 'Inspect mission'} <ArrowRight size={16}/></a>
+          </article>)}
+        </div>
+      </section>
+
+      <section className="bh-section" id="creator-dashboard">
+        <div className="bh-section-copy">
+          <p className="bh-kicker">YOUR CREATOR DASHBOARD</p>
+          <h2>Own the challenge lifecycle from this browser workspace.</h2>
+          <p>Your private workspace cookie determines mission ownership. Public creator labels do not grant control. Open a mission to close/reopen submissions or select a verified winner.</p>
+          <p className="bh-boundary">Reward pledges shown here are not escrowed. Payment rail status remains NOT_CONNECTED; awarding a mission records the selected verified winner but does not move money.</p>
+        </div>
+        <div className="bh-products">
+          {owned.length === 0 ? <article className="bh-product"><p className="bh-kicker">NO OWNED MISSIONS YET</p><h2>Publish one from this browser.</h2><p>The resulting mission will appear here with creator controls.</p><a href="/missions/build">Build a mission <ArrowRight size={16}/></a></article> : owned.map((mission) => <article className="bh-product bh-product-primary" key={mission.id}>
+            <p className="bh-kicker">{mission.bounty?.lifecycle || 'OPEN'} · {mission.submissionCount || 0} SUBMISSIONS</p>
+            <h2>{mission.contract?.title || mission.id}</h2>
+            <p><strong>Reward pledge:</strong> {money(mission.bounty?.amountCents, mission.bounty?.currency)} · {mission.bounty?.fundingStatus || 'NOT_ESCROWED'}</p>
+            <p><strong>Deadline:</strong> {deadline(mission.bounty?.deadline)}</p>
+            <p><strong>Payment:</strong> {mission.bounty?.paymentStatus || 'NOT_CONNECTED'}</p>
+            {mission.bounty?.winnerSubmissionId && <p><strong>Selected winner:</strong> {mission.bounty.winnerSubmissionId}</p>}
+            <a href={`/m/${mission.id}`}>Open creator controls <ArrowRight size={16}/></a>
           </article>)}
         </div>
       </section>
 
       <section className="bh-section">
         <div className="bh-enterprise">
-          <div><p className="bh-kicker">MISSION BUILDER</p><h2>Turn your own bounded problem into a public challenge.</h2><p>Choose a finite world template, state the objective and hard boundary, set deterministic acceptance thresholds, then publish the immutable contract. Other policies can compete without changing the challenge.</p></div>
+          <div><p className="bh-kicker">MISSION BUILDER</p><h2>Turn your own bounded problem into a public challenge.</h2><p>Choose a finite world template, state the objective and hard boundary, set deterministic acceptance thresholds, optionally pledge a reward, then publish the immutable contract. Other policies can compete without changing the challenge.</p></div>
           <a className="bh-button bh-primary" href="/missions/build">Open Mission Builder <ArrowRight size={16}/></a>
         </div>
       </section>
@@ -116,10 +160,10 @@ export function ProofMissionsPage() {
       </section>
 
       <section className="bh-enterprise">
-        <div><p className="bh-kicker">MARKETPLACE PRIMITIVE</p><h2>Immutable challenge. Mutable policy. Verified result.</h2><p>This is the first real marketplace layer: persistent public missions, server-recomputed submissions, deterministic ranking and a ProofPack attached to every accepted run.</p></div>
+        <div><p className="bh-kicker">MARKETPLACE PROTOCOL</p><h2>Immutable challenge. Public value. Mutable policy. Verified result.</h2><p>BrainSNN now has persistent public missions, creator ownership, optional reward pledges, deadline/state enforcement, server-recomputed submissions, deterministic ranking, verified winner selection and a ProofPack attached to every accepted run.</p></div>
         <a className="bh-button bh-primary" href="/missions/build">Publish a mission <ArrowRight size={16}/></a>
       </section>
     </main>
-    <footer className="bh-footer"><a href="/"><ArrowLeft size={14}/> BrainSNN</a><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+    <footer className="bh-footer"><a href="/"><ArrowLeft size={14}/> BrainSNN</a><span>Mind + World + Mission + Boundaries + Judge + Proof + optional public value</span></footer>
   </div>;
 }
