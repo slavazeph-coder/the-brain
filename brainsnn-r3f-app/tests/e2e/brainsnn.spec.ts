@@ -143,9 +143,14 @@ async function mockBackend(page) {
 async function runScan(page) {
   await page.getByRole('button', { name: 'Paid ad' }).click();
   await page.getByRole('button', { name: /Run Brain Scan/ }).click();
-  await expect(page.getByRole('status').getByText('Reading the message').first()).toBeVisible();
+  // The progress copy is "Ingesting creative" and has been since ScanProgress
+  // was written; "Reading the message" never existed in the app. Racing a
+  // transient step is also the wrong assertion — the scan can finish before the
+  // check runs — so wait for the result the scan is meant to produce.
   await expect(page.getByTestId('results-workspace')).toBeVisible();
-  await expect(page.getByText('Demo model result').first()).toBeVisible();
+  // "Demo model result" is a Tooltip label attribute, never rendered text. The
+  // visible marker for a fallback result is the badge in the inspector rail.
+  await expect(page.getByText('Deterministic local result').first()).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -174,7 +179,8 @@ test('content reaction lab runs a fully local simulation on the homepage', async
   expect(analyzeRequests).toEqual([]);
 
   // Rewrite panel produces a scored alternative without leaving the page.
-  await page.getByRole('button', { name: 'Reduce manipulation' }).click();
+  // SegmentedControl renders its options as role="radio", not buttons.
+  await page.getByRole('radio', { name: 'Reduce manipulation' }).click();
   await expect(page.getByTestId('content-rewrite')).toBeVisible();
 
   // The escape hatch into the full analyst app carries the content along.
@@ -294,13 +300,18 @@ test('3D brain mounts or falls back cleanly without console errors', async ({ pa
 
 test('core analyze to export workflow works with deterministic fallback data', async ({ page }) => {
   await page.goto('/app');
-  await expect(page.getByRole('heading', { name: 'Know how it lands before you publish.' })).toBeVisible();
+  // The composer heading changed in b2f0914 ("Make BrainSNN analyzer the
+  // homepage") and this assertion was never updated, so the whole spec failed
+  // before reaching anything it was written to cover.
+  await expect(page.getByRole('heading', { name: /Paste what you.re about to publish/ })).toBeVisible();
 
   await runScan(page);
   await page.getByRole('tab', { name: /Advanced/ }).click();
   await expect(page.getByRole('heading', { name: 'Layers used in this scan' })).toBeVisible();
 
-  await page.getByRole('button', { name: /Improve This/ }).click();
+  // The primary action counts the fixes when the scan found any, and falls
+  // back to "Improve This" for a draft with nothing mechanical to correct.
+  await page.getByRole('button', { name: /Fix this draft|Improve This/ }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
   await page.getByRole('button', { name: /Score both versions/ }).click();
   await expect(page.getByText('Version 1 vs Version 2')).toBeVisible();
@@ -1039,4 +1050,52 @@ test('a visit through a tagged link reports where it came from, and keeps report
       expect(String(value)).not.toContain('?');
     }
   }
+});
+
+test('one-click fixes edit the draft and the copied result contains no coaching text', async ({ page }) => {
+  test.setTimeout(90_000);
+  const draft = 'Last chance to book a demo today. Act now before prices double. We measured a 42% drop in onboarding cost across 18 pilot customers.';
+
+  await page.goto('/app');
+  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill(draft);
+  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
+  await expect(page.getByTestId('results-workspace')).toBeVisible();
+
+  // The results rail counts the fixes rather than offering a vague next step.
+  await expect(page.getByText(/one-click fix/i).first()).toBeVisible();
+  await page.getByRole('button', { name: /Fix this draft/ }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+
+  const editor = page.getByRole('textbox').nth(1);
+  await expect(editor).toHaveValue(draft);
+
+  // Default goal is "Build trust", which owns the structural fix only — the
+  // pressure-phrase swaps belong to "Reduce manipulation". A goal offering
+  // every fix regardless would make the selector meaningless.
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+  await expect(editor).toHaveValue(/^We measured a 42% drop/);
+
+  // Undo restores the original exactly, because the draft is rebuilt from the
+  // source rather than reverse-edited.
+  await page.getByRole('button', { name: /^Undo:/ }).first().click();
+  await expect(editor).toHaveValue(draft);
+
+  // SegmentedControl renders its options as role="radio", not buttons.
+  await page.getByRole('radio', { name: 'Reduce manipulation' }).click();
+  await page.getByRole('button', { name: /Apply all/ }).click();
+  const fixed = await editor.inputValue();
+  expect(fixed).not.toMatch(/last chance/i);
+  expect(fixed).not.toMatch(/act now/i);
+
+  // The regression that motivated this feature: the rewrite used to prepend and
+  // append instructions addressed to the author, so anyone who copied the
+  // result shipped our coaching notes to their own reader.
+  expect(fixed).not.toMatch(/before you publish/i);
+  expect(fixed).not.toMatch(/Here is the clearest reason/i);
+  expect(fixed).not.toMatch(/Add one concrete proof point/i);
+  // No sentence is invented: the fixed draft has the same sentence count.
+  expect((fixed.match(/[.!?]/g) || []).length).toBe((draft.match(/[.!?]/g) || []).length);
+
+  await page.getByRole('button', { name: /^Reset$/ }).click();
+  await expect(editor).toHaveValue(draft);
 });

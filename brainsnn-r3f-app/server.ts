@@ -29,6 +29,8 @@ import {
 } from "./src/lib/neuralInputGateway.js";
 import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, routeTier } from "./src/lib/rateLimit.js";
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
+import { createEventStore } from "./src/lib/eventStore.js";
+import { spawn } from "node:child_process";
 
 dotenv.config();
 
@@ -581,18 +583,98 @@ app.post("/api/auth/magic-link", limit("magicLink", (req) => String(req.body?.em
 // ----------------------------------------------------
 //
 // track() forwards to VITE_ANALYTICS_URL, which was unset, so every call site
-// fed a function that sent nothing anywhere. This gives the events somewhere to
-// land that is already owned and already running: one JSON line per event on
-// stdout, which Railway retains and which is greppable for the prefix.
+// fed a function that sent nothing anywhere. Pointing it here fixed delivery
+// but not retention: the handler logged one JSON line per event to stdout and
+// returned. Railway retains those lines, but nothing aggregates them, so no
+// question about which features people actually use could be answered — and a
+// hundred catalogued layers were built without ever being able to ask.
+//
+// Events now land in Postgres. The log line remains as the fallback when no
+// DATABASE_URL is configured, which is the default locally.
+//
+// psql is shelled out to rather than adding a driver, matching how the mission
+// marketplace already talks to the same database.
 //
 // Validation lives in src/lib/eventSink.js and is re-applied here rather than
 // trusted from the client, because this endpoint is public — see that file.
 // 204 regardless of whether the event was kept: a rejected event is not the
 // visitor's problem, and sendBeacon ignores the body anyway.
+const EVENT_PSQL_TIMEOUT_MS = 8_000;
+
+function runEventSql(sql: string, variables: Record<string, string> = {}): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return Promise.reject(new Error("DATABASE_URL is not configured"));
+  const args = ["--no-psqlrc", "--set=ON_ERROR_STOP=1"];
+  for (const [key, value] of Object.entries(variables)) args.push("-v", `${key}=${value}`);
+  args.push("-Atq", databaseUrl);
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("psql", args, { stdio: ["pipe", "ignore", "pipe"], timeout: EVENT_PSQL_TIMEOUT_MS });
+    let stderr = "";
+    let settled = false;
+    const finish = (error: Error | null) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve();
+    };
+    child.on("error", finish);
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8").slice(0, 2000); });
+    child.on("close", (code) => finish(code === 0 ? null : new Error(stderr.trim().slice(0, 300) || `psql exited ${code}`)));
+    child.stdin.on("error", (error: any) => { if (error?.code !== "EPIPE") finish(error); });
+    child.stdin.end(`${sql}\n`);
+  });
+}
+
+// Read once at boot: this decides whether events are buffered for the database
+// or logged, and flipping it mid-process would strand a partly-filled buffer.
+const EVENTS_CONFIGURED = Boolean(process.env.DATABASE_URL);
+
+const eventStore = createEventStore({
+  execute: runEventSql,
+  // One warning line per failed batch, not per event, so an outage does not
+  // bury the log it is trying to report.
+  onError: (error: any) => console.warn(`[Warn] Event batch not stored: ${error?.message || error}`),
+});
+
+// A timer rather than a per-request flush: a beacon must return immediately,
+// and batching is the whole point. unref() keeps it from holding the process
+// open during a shutdown.
+const eventTimer = EVENTS_CONFIGURED ? setInterval(() => { void eventStore.flush(); }, 5_000) : null;
+eventTimer?.unref?.();
+
+if (EVENTS_CONFIGURED) {
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => {
+      // Railway restarts containers routinely. Without this the last few
+      // seconds of events are lost on every deploy.
+      void eventStore.flush({ force: true }).finally(() => process.exit(0));
+    });
+  }
+}
+
 app.post("/api/events", limit("events"), (req, res) => {
   const record = normalizeEvent(req.body, { path: req.path });
-  if (record) console.log(formatEventLine(record));
+  if (record) {
+    if (EVENTS_CONFIGURED) {
+      eventStore.record(record);
+      // Fire-and-forget: the beacon gets its 204 either way. An analytics write
+      // must never be able to fail the page it is measuring.
+      void eventStore.flush();
+    } else {
+      // No destination configured — the log line is the only visibility, and is
+      // what local development sees. Buffering here instead would retry a write
+      // that cannot succeed and warn once per tick forever.
+      console.log(formatEventLine(record));
+    }
+  }
   return res.status(204).end();
+});
+
+// Operational counter, not a dashboard: says whether events are reaching the
+// database at all, which is the first thing to check when a funnel looks empty.
+app.get("/api/events/status", (_req, res) => {
+  res.json({ configured: EVENTS_CONFIGURED, ...eventStore.stats() });
 });
 
 // ----------------------------------------------------

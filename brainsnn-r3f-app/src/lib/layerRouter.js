@@ -4,6 +4,7 @@ import { getBusinessMetrics } from './scoreMapping.js';
 import { computeSolitonField } from './solitonLayer.js';
 import { computeFirewall, detectTemplates } from './firewallLayer.js';
 import { computeAffect } from './affectLayer.js';
+import { createRewritePlan } from './draftRewrite.js';
 import { clampScore } from './formatters.js';
 
 export function stableHash(value = '') {
@@ -144,41 +145,31 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
   };
 }
 
+// Layers 41/42/68 are the rewrite layers that actually have an implementation.
+// The previous version of this list also cited 88 and 89, which exist only as
+// names in layerCatalog — citing them made the trace look deeper than the code.
+const REWRITE_LAYER_IDS = [41, 42, 68];
+
 export function createRewriteFromLayerStack(content, goal = 'trust') {
-  const text = String(content || '').replace(/\s+/g, ' ').trim();
-  if (!text) return { content: '', changes: [], layersUsed: layersByIds([41, 42, 68, 88, 89]) };
+  const plan = createRewritePlan(content, goal);
+  if (!plan.content) return { content: '', changes: [], patches: [], layersUsed: layersByIds(REWRITE_LAYER_IDS) };
 
-  const context = analyzeContentLocally({ content: text, forceFallback: true });
+  const context = analyzeContentLocally({ content: plan.content, forceFallback: true });
   const primary = context.recommendations?.[0];
-  const softened = text
-    .replace(/\blast chance\b/gi, 'a useful moment')
-    .replace(/\bact now\b/gi, 'see whether it fits')
-    .replace(/\bsecret\b/gi, 'practical signal')
-    .replace(/\bguaranteed\b/gi, 'designed to help');
-
-  const goalNote = goal === 'curiosity'
-    ? 'Layer 89 Cognitive Translator kept the unanswered question visible without inventing a new claim.'
-    : goal === 'reduce-risk'
-      ? 'Layer 42 Counter-Draft removed unsupported pressure while preserving the intended action.'
-      : goal === 'clarity'
-        ? 'Layer 68 Tone Shifter simplified the sequence without adding claims that were not in the source.'
-        : 'Layer 41 Refutation Library checked the strongest claim against the evidence already present.';
-
-  const contextualChange = primary
-    ? `${primary.title}: ${primary.rewriteHint}`
-    : 'No generic proof instruction was appended; verify the strongest claim against the evidence already in the draft.';
 
   return {
     // Keep the copy clean. Recommendations belong in the change log rather than
     // being pasted into the user's publishable text as a template sentence.
-    content: softened,
-    changes: [
-      contextualChange,
-      'Layer 42 Counter-Draft softened pressure language only where it was actually present.',
-      goalNote,
-      'Layer 88 Persona Simulator checked that the rewrite remains readable to a cautious buyer.',
-    ],
-    layersUsed: layersByIds([41, 42, 68, 88, 89]),
+    content: plan.content,
+    // Each entry describes an edit that was actually made to the text, so the
+    // change log can be checked against the diff rather than taken on faith.
+    changes: plan.changes,
+    patches: plan.patches,
+    appliedCount: plan.appliedCount,
+    note: plan.note,
+    // What the mechanical pass cannot do — the judgement call left for the user.
+    remaining: primary ? `${primary.title}: ${primary.rewriteHint}` : '',
+    layersUsed: layersByIds(REWRITE_LAYER_IDS),
   };
 }
 

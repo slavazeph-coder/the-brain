@@ -1,8 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Download, GitCompare, Save, Send, Share2, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
+import { buildPatchPlan } from '../../lib/draftPatch.js';
 import { ExecutiveVerdict } from './ExecutiveVerdict.jsx';
 import { BrainSignalView } from './BrainSignalView.jsx';
 import { DecisionScorecard } from './DecisionScorecard.jsx';
@@ -74,6 +75,9 @@ function TabPanel({ id, active, children }) {
 
 export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
   const verdict = deriveExecutiveVerdict(result);
+  // The scan already knows which edits it can make. Saying how many there are
+  // here turns "Improve This" from a vague next step into a countable one.
+  const fixCount = useMemo(() => buildPatchPlan(result?.rawContent || '').patches.length, [result?.rawContent]);
   const [status, setStatus] = useState('');
   const [tab, setTab] = useState('overview');
   const isVideoReadout = result?.contentType === 'video' && Boolean(result?.multimodal);
@@ -160,8 +164,16 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
               <span>Best next action</span>
               <p>{verdict.bestNextMove}</p>
             </div>
+            {fixCount > 0 ? (
+              <div className="inspector-callout inspector-fixes">
+                <span>Ready to apply</span>
+                <strong>{fixCount} one-click fix{fixCount === 1 ? '' : 'es'}</strong>
+              </div>
+            ) : null}
             <div className="inspector-actions">
-              <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
+              <Button variant="primary" onClick={() => onImprove(result)}>
+                <Sparkles size={16} aria-hidden="true" /> {fixCount > 0 ? `Fix this draft (${fixCount})` : 'Improve This'}
+              </Button>
               <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
               <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
               <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
