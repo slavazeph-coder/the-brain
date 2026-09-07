@@ -203,3 +203,24 @@ describe('overlapping swaps in one sentence', () => {
     expect(run.text).toBe('Take a look for the trial. Take a look for the upgrade.');
   });
 });
+
+describe('capitalisation of a moved opening sentence', () => {
+  it('capitalises a genuine lowercase sentence start', () => {
+    const draft = 'Book a call today. we measured a 42% drop in cost.';
+    const plan = buildPatchPlan(draft);
+    const move = plan.patches.find((entry) => entry.id === 'move-proof-to-ask');
+    expect(applyPatch(plan.draft, move).text).toBe('We measured a 42% drop in cost. Book a call today.');
+  });
+
+  it('leaves a deliberate lowercase brand alone', () => {
+    // "iPhone" is not a missing capital, and mangling it into "IPhone" would be
+    // a visible defect in the one artifact the user is about to send.
+    const draft = 'iPhone sales grew. Book a call today. We measured a 42% drop in cost.';
+    const plan = buildPatchPlan(draft);
+    const move = plan.patches.find((entry) => entry.id === 'move-proof-to-ask');
+    const result = applyPatch(plan.draft, move);
+    expect(result.ok).toBe(true);
+    expect(result.text).toContain('iPhone sales grew.');
+    expect(result.text).not.toContain('IPhone');
+  });
+});

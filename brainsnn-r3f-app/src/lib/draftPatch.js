@@ -147,7 +147,15 @@ function findPhraseSentence(blocks, patch, pattern) {
   return null;
 }
 
+/**
+ * Capitalise a sentence that has moved to the front of its paragraph.
+ *
+ * Skips a lowercase letter followed by an uppercase one, which is a deliberate
+ * lowercase brand rather than a missing capital — "iPhone sales grew" must not
+ * become "IPhone sales grew" just because another sentence moved past it.
+ */
 function capitalize(text) {
+  if (/^[a-z][A-Z]/.test(text)) return text;
   return text.replace(/^([a-z])/, (letter) => letter.toUpperCase());
 }
 
