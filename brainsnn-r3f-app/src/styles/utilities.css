@@ -4437,3 +4437,124 @@
 .inspector-fixes strong {
   color: #86efac;
 }
+
+/* The next step, given the top of the results rail. */
+.inspector-next {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--bsn-radius);
+  background: rgba(0, 245, 255, 0.06);
+  border: 1px solid var(--bsn-border-strong);
+}
+
+.inspector-next-lede {
+  margin: 0;
+  color: var(--bsn-text-secondary);
+  line-height: 1.5;
+  font-size: 0.92rem;
+}
+
+.inspector-next-lede strong {
+  color: var(--bsn-text);
+}
+
+/* Secondary workflow, folded away rather than deleted. */
+.inspector-more,
+.workflow-actions {
+  margin-top: 12px;
+}
+
+.inspector-more summary,
+.workflow-actions summary {
+  cursor: pointer;
+  color: var(--bsn-text-muted);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 0;
+}
+
+.inspector-more summary:hover,
+.workflow-actions summary:hover {
+  color: var(--bsn-text-secondary);
+}
+
+.inspector-more summary:focus-visible,
+.workflow-actions summary:focus-visible {
+  outline: 2px solid var(--bsn-cyan);
+  outline-offset: 3px;
+}
+
+/* Sentence-level diff. Status is carried by a text flag as well as colour, so
+   a moved sentence — identical words in a new place — is legible without
+   relying on hue alone. */
+.diff-summary {
+  color: var(--bsn-text-secondary);
+  font-family: var(--bsn-font-mono);
+  font-size: 0.78rem;
+}
+
+.diff-sentence {
+  border-radius: 4px;
+}
+
+.diff-flag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: var(--bsn-font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  vertical-align: 1px;
+}
+
+.diff-moved {
+  background: rgba(99, 102, 241, 0.16);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3) inset;
+}
+
+.diff-moved .diff-flag {
+  background: rgba(99, 102, 241, 0.3);
+  color: #c7d2fe;
+}
+
+.diff-edited {
+  background: rgba(234, 179, 8, 0.12);
+  box-shadow: 0 0 0 1px rgba(234, 179, 8, 0.28) inset;
+}
+
+.diff-edited .diff-flag {
+  background: rgba(234, 179, 8, 0.28);
+  color: #fde68a;
+}
+
+.diff-added {
+  background: rgba(34, 197, 94, 0.14);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3) inset;
+}
+
+.diff-added .diff-flag {
+  background: rgba(34, 197, 94, 0.3);
+  color: #bbf7d0;
+}
+
+.diff-removed {
+  background: rgba(239, 68, 68, 0.14);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3) inset;
+}
+
+.diff-removed .diff-flag {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+}
+
+.diff-columns mark {
+  background: rgba(0, 245, 255, 0.22);
+  color: var(--bsn-text);
+  border-radius: 3px;
+  padding: 0 2px;
+}

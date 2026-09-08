@@ -30,6 +30,38 @@ const MAX_PATCHES = 8;
 // Mirrors analysisEngine's own detectors so a patch lines up with the
 // recommendation the user is reading rather than describing a different edit.
 const PROOF_PATTERN = /(\$\s?\d|\b\d+(?:\.\d+)?%|\b\d{2,}\b|customer|client|tested|measured|case study|benchmark|source|data|pilot|revenue|conversion|roas|ctr|cpc|cpa)/i;
+
+// PROOF_PATTERN is a keyword net, and its weakest terms fire on sentences that
+// contain no evidence at all: "Last chance to join the pilot" matches on
+// `pilot`, "our customers love it" on `customer`. Taking the FIRST match as
+// the proof therefore picked the wrong sentence and silently withheld the
+// structural fix — the draft's real evidence was three sentences further down.
+// Rank instead, and only treat a sentence as proof worth moving when it
+// carries something checkable rather than a single soft noun.
+const EVIDENCE_TIERS = [
+  [/(\$\s?\d|\b\d+(?:\.\d+)?%)/, 3],
+  [/\b\d{2,}\b/, 2],
+  [/\b(measured|tested|case study|benchmark|revenue|conversion|roas|ctr|cpc|cpa)\b/i, 2],
+  [/\b(customer|client|source|data|pilot)\b/i, 1],
+];
+
+// One soft noun on its own is not evidence; a number, a measurement, or a soft
+// noun sitting beside one, is.
+const MIN_EVIDENCE_TO_MOVE = 2;
+
+export function evidenceStrength(text) {
+  return EVIDENCE_TIERS.reduce((total, [pattern, weight]) => (pattern.test(String(text || '')) ? total + weight : total), 0);
+}
+
+/** The strongest evidence sentence, earliest winning a tie. */
+function strongestProof(segments) {
+  let best = null;
+  for (const segment of segments) {
+    const strength = evidenceStrength(segment.text);
+    if (strength >= MIN_EVIDENCE_TO_MOVE && (!best || strength > best.strength)) best = { segment, strength };
+  }
+  return best?.segment || null;
+}
 const CTA_PATTERN = /\b(book|buy|reply|call|click|start|try|test|scan|compare|approve|apply|download|subscribe|sign up|schedule|send|share|publish|learn more|get started)\b/i;
 
 // [phrase, replacement, category, why]. Replacements are same-part-of-speech
@@ -274,7 +306,7 @@ export function buildPatchPlan(content) {
 
   const patches = [];
 
-  const proof = segments.find((segment) => PROOF_PATTERN.test(segment.text));
+  const proof = strongestProof(segments);
   const cta = segments.find((segment) => CTA_PATTERN.test(segment.text) && segment.text !== proof?.text);
 
   if (proof && cta && proof.blockIndex === cta.blockIndex && proof.indexInBlock > cta.indexInBlock) {

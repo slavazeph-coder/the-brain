@@ -3,6 +3,7 @@ import {
   applyPatch,
   applyPatches,
   buildPatchPlan,
+  evidenceStrength,
   locateSegments,
   normalizeDraft,
   usablePatches,
@@ -222,5 +223,35 @@ describe('capitalisation of a moved opening sentence', () => {
     expect(result.ok).toBe(true);
     expect(result.text).toContain('iPhone sales grew.');
     expect(result.text).not.toContain('IPhone');
+  });
+});
+
+describe('picking which sentence is the proof', () => {
+  it('ranks by evidence strength instead of taking the first keyword hit', () => {
+    // "Last chance to join the pilot" matches the proof keyword net on `pilot`
+    // alone. Taking the first match made it the proof, and because it already
+    // preceded the ask, the structural fix was silently withheld — while the
+    // draft's real evidence sat three sentences further down.
+    const draft = 'Last chance to join the pilot. Book a call before Friday. We cut review time by 42% across 18 pilot customers.';
+    const plan = buildPatchPlan(draft);
+    const move = plan.patches.find((entry) => entry.id === 'move-proof-to-ask');
+    expect(Boolean(move)).toBe(true);
+    expect(move.source.text).toContain('42%');
+  });
+
+  it('scores a checkable number above a bare soft noun', () => {
+    expect(evidenceStrength('We cut cost by 42%.') > evidenceStrength('Join the pilot.')).toBe(true);
+    expect(evidenceStrength('Join the pilot.')).toBe(1);
+    expect(evidenceStrength('Nothing measurable at all here.')).toBe(0);
+  });
+
+  it('will not move a sentence whose only claim to evidence is one soft noun', () => {
+    const plan = buildPatchPlan('Book a call today. Our customers like it.');
+    expect(plan.patches.some((entry) => entry.id === 'move-proof-to-ask')).toBe(false);
+  });
+
+  it('still moves genuine evidence that sits after the ask', () => {
+    const plan = buildPatchPlan('Book a call today. We measured a 42% drop in cost.');
+    expect(plan.patches.some((entry) => entry.id === 'move-proof-to-ask')).toBe(true);
   });
 });

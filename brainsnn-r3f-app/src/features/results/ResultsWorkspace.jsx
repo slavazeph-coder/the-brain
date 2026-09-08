@@ -148,38 +148,56 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
         ) : (
           <>
             <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Deterministic local result' : 'AI-estimated response'}</Badge>
+
+            {/* The actionable thing goes first. It used to sit below four
+                scorecards and above five competing buttons, which is a rail that
+                reads as "here are your options" rather than "here is the next
+                step". Scores did not get deleted — they moved below the action
+                they are supposed to motivate. */}
+            <div className="inspector-next">
+              {fixCount > 0 ? (
+                <p className="inspector-next-lede">
+                  <strong>{fixCount} fix{fixCount === 1 ? '' : 'es'}</strong> can be applied to this draft right now.
+                </p>
+              ) : (
+                <p className="inspector-next-lede">{verdict.bestNextMove}</p>
+              )}
+              <Button variant="primary" onClick={() => onImprove(result)}>
+                <Sparkles size={16} aria-hidden="true" /> {fixCount > 0 ? `Fix this draft (${fixCount})` : 'Improve this draft'}
+              </Button>
+            </div>
+
             <div className="inspector-score">
               <strong>{verdict.score}</strong>
               <span>Decision score</span>
-            </div>
-            <div className="inspector-callout inspector-viral">
-              <span>Viral pull</span>
-              <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
             </div>
             <div className="inspector-callout">
               <span>Primary risk</span>
               <strong>{verdict.primaryRisk}</strong>
             </div>
-            <div className="inspector-callout">
-              <span>Best next action</span>
-              <p>{verdict.bestNextMove}</p>
+            <div className="inspector-callout inspector-viral">
+              <span>Viral pull</span>
+              <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
             </div>
             {fixCount > 0 ? (
-              <div className="inspector-callout inspector-fixes">
-                <span>Ready to apply</span>
-                <strong>{fixCount} one-click fix{fixCount === 1 ? '' : 'es'}</strong>
+              <div className="inspector-callout">
+                <span>Best next action</span>
+                <p>{verdict.bestNextMove}</p>
               </div>
             ) : null}
+
             <div className="inspector-actions">
-              <Button variant="primary" onClick={() => onImprove(result)}>
-                <Sparkles size={16} aria-hidden="true" /> {fixCount > 0 ? `Fix this draft (${fixCount})` : 'Improve This'}
-              </Button>
-              <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
-              <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
-              <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
               <Button variant="secondary" onClick={() => onExport(result)}><Share2 size={16} aria-hidden="true" /> Share your score</Button>
-              <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
+              <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
             </div>
+            <details className="inspector-more">
+              <summary>Other actions</summary>
+              <div className="inspector-actions">
+                <Button variant="ghost" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
+                <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
+                <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
+              </div>
+            </details>
             {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
             <ResultFeedback key={result.id || result.timestamp} result={result} />
           </>

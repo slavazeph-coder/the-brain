@@ -200,16 +200,26 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
             />
           </label>
         </div>
+        {/* Three actions, not six. Someone sending an email in ten minutes needs
+            to take the draft, check it got better, or start over. Save / approval
+            / approve are a review workflow for a different person on a different
+            day, so they move into a disclosure rather than competing with the
+            one action this screen exists for. */}
         <div className="synapse-actions" style={{ marginTop: 14 }}>
           <Button variant="primary" onClick={copyDraft}><Clipboard size={16} aria-hidden="true" /> Copy final draft</Button>
           <Button variant="secondary" onClick={compare} disabled={busy === 'compare' || draft.text.trim().length < 12}>
             <GitCompare size={16} aria-hidden="true" /> {busy === 'compare' ? 'Scoring…' : 'Score both versions'}
           </Button>
           <Button variant="ghost" onClick={resetDraft} disabled={!changed}><RotateCcw size={16} aria-hidden="true" /> Reset</Button>
-          <Button variant="ghost" onClick={() => onSaveVersion(result, draft.text, comparison)}><Save size={16} aria-hidden="true" /> Save as version</Button>
-          <Button variant="ghost" onClick={() => onQueue(result, draft.text, comparison)}><Send size={16} aria-hidden="true" /> Mark for approval</Button>
-          <Button variant="ghost" onClick={() => onApprove(result, draft.text, comparison)}><CheckCircle2 size={16} aria-hidden="true" /> Approve</Button>
         </div>
+        <details className="workflow-actions">
+          <summary>Send this through review</summary>
+          <div className="synapse-actions">
+            <Button variant="ghost" onClick={() => onSaveVersion(result, draft.text, comparison)}><Save size={16} aria-hidden="true" /> Save as version</Button>
+            <Button variant="ghost" onClick={() => onQueue(result, draft.text, comparison)}><Send size={16} aria-hidden="true" /> Mark for approval</Button>
+            <Button variant="ghost" onClick={() => onApprove(result, draft.text, comparison)}><CheckCircle2 size={16} aria-hidden="true" /> Approve</Button>
+          </div>
+        </details>
         {message ? <p role="status" className="bsn-note synapse-message">{message}</p> : null}
       </section>
 

@@ -310,12 +310,15 @@ test('core analyze to export workflow works with deterministic fallback data', a
   await expect(page.getByRole('heading', { name: 'Layers used in this scan' })).toBeVisible();
 
   // The primary action counts the fixes when the scan found any, and falls
-  // back to "Improve This" for a draft with nothing mechanical to correct.
-  await page.getByRole('button', { name: /Fix this draft|Improve This/ }).click();
+  // back to "Improve this draft" for a draft with nothing mechanical to fix.
+  await page.getByRole('button', { name: /Fix this draft|Improve this draft/ }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
   await page.getByRole('button', { name: /Score both versions/ }).click();
   await expect(page.getByText('Version 1 vs Version 2')).toBeVisible();
 
+  // Review actions moved into a disclosure so they stop competing with "Copy
+  // final draft", which is what this screen is actually for. Still reachable.
+  await page.getByText('Send this through review').click();
   await page.getByRole('button', { name: /Save as version/ }).click();
   await page.getByRole('button', { name: /Mark for approval/ }).click();
   await expect(page.getByTestId('queue-workspace')).toBeVisible();
@@ -1061,8 +1064,8 @@ test('one-click fixes edit the draft and the copied result contains no coaching 
   await page.getByRole('button', { name: /Run Brain Scan/ }).click();
   await expect(page.getByTestId('results-workspace')).toBeVisible();
 
-  // The results rail counts the fixes rather than offering a vague next step.
-  await expect(page.getByText(/one-click fix/i).first()).toBeVisible();
+  // The results rail leads with the count rather than a vague next step.
+  await expect(page.getByText(/can be applied to this draft/i).first()).toBeVisible();
   await page.getByRole('button', { name: /Fix this draft/ }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
 
@@ -1098,4 +1101,43 @@ test('one-click fixes edit the draft and the copied result contains no coaching 
 
   await page.getByRole('button', { name: /^Reset$/ }).click();
   await expect(editor).toHaveValue(draft);
+});
+
+test('the diff shows a sentence move, which a word-set diff cannot', async ({ page }) => {
+  test.setTimeout(90_000);
+  // "Move the proof in front of the ask" changes no words, so the previous
+  // Set-based diff rendered the change completely unmarked: the user applied
+  // the headline fix and "What changed" showed nothing changed.
+  const draft = 'Book a call with our team today. We measured a 42% drop in onboarding cost across 18 pilot customers.';
+
+  await page.goto('/app');
+  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill(draft);
+  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
+  await expect(page.getByTestId('results-workspace')).toBeVisible();
+
+  // The next step leads the rail rather than sitting under four scorecards.
+  await page.getByRole('button', { name: /Fix this draft/ }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+
+  const diff = page.locator('.before-after-diff');
+  await expect(diff).toBeVisible();
+  await expect(diff.getByText('2 sentences moved')).toBeVisible();
+  await expect(diff.locator('.diff-moved').first()).toBeVisible();
+});
+
+test('the improve screen leads with one action, not six', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/app');
+  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill('Last chance to book a demo today. Act now before prices double.');
+  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
+  await expect(page.getByTestId('results-workspace')).toBeVisible();
+  await page.getByRole('button', { name: /Fix this draft|Improve this draft/ }).click();
+
+  await expect(page.getByRole('button', { name: /Copy final draft/ })).toBeVisible();
+  // The review workflow is folded away, not deleted — still reachable.
+  await expect(page.getByRole('button', { name: /Mark for approval/ })).toBeHidden();
+  await page.getByText('Send this through review').click();
+  await expect(page.getByRole('button', { name: /Mark for approval/ })).toBeVisible();
 });
