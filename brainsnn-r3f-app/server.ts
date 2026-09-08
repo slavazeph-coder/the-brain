@@ -29,10 +29,16 @@ import {
 } from "./src/lib/neuralInputGateway.js";
 import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, routeTier } from "./src/lib/rateLimit.js";
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
+import { createAgentLabFeed } from "./src/lib/agentLabFeed.js";
 
 dotenv.config();
 
 const app = express();
+const readAgentLabFeed = createAgentLabFeed();
+app.get('/api/agent-lab/summary', async (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=30');
+  res.json(await readAgentLabFeed());
+});
 
 // Railway terminates TLS at its edge and forwards, so without this every
 // request arrives from the proxy's address and the rate limiter below would key
