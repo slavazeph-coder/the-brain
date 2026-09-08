@@ -10,6 +10,17 @@ const EVIDENCE = buildHoldoutReport();
 /** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
 const ROUTES = [
   {
+    path: '/missions',
+    title: 'Proof Missions | BrainSNN',
+    description:
+      'Explore bounded objectives, explicit acceptance criteria and recorded attempts in the BrainSNN proof mission registry.',
+    heading: 'Give useful work a measurable test.',
+    body: [
+      'Proof Missions define an objective, an environment, permitted actions and a judge. Attempts preserve evidence so a result can be reviewed against the conditions that were actually tested.',
+      'The mission registry remains available as a tool within the BrainSNN working agent lab. A simulated or benchmark result is not a verified payment or accepted customer delivery.',
+    ],
+  },
+  {
     path: '/lab',
     title: 'Neuro Powder Lab | BrainSNN Arcade',
     description:
@@ -30,7 +41,7 @@ const ROUTES = [
     heading: 'GaugeGap Arcade',
     body: [
       'The Arcade is BrainSNN’s experimental playground: interactive models, neural simulations and small research experiences you can operate rather than only read about.',
-      'It sits behind the main BrainSNN analyzer so visitors can use the product first, then explore the science and experiments underneath it.',
+      'It remains available as a research department within the BrainSNN agent lab. Simulation results describe their tested conditions; they do not establish customer demand or commercial success.',
     ],
   },
   {
@@ -73,23 +84,26 @@ const ROUTES = [
   },
   {
     path: '/',
-    title: 'BrainSNN | Turn text, pages and video into decision intelligence',
+    title: 'BrainSNN | AI work that earns its keep.',
+    image: '/agent-lab-og.png',
     description:
-      'Paste content or upload a screen recording. BrainSNN surfaces attention, trust, evidence gaps, visual transitions, workflow steps and specific next actions.',
-    heading: 'Know what lands — and what happened',
+      'Watch agents test ideas, build useful tools, and improve from real outcomes. '
+      + 'A working agent lab where useful work earns more resources.',
+    heading: 'AI work that earns its keep.',
     body: [
-      'BrainSNN is the product on the homepage. Paste a draft, page, ad, email or script, or upload a local screen recording and run the analysis without first entering a separate app.',
-      'The current stack combines deterministic content signals with contextual recommendations. Video mode adds browser-local visual-change sampling and transcript-to-workflow extraction; neural mode accepts decoded text from an authorized decoder rather than raw brain signals.',
-      'Results are directional AI-estimated signals, not literal neurological measurement. GaugeGap Arcade and the research pages remain available underneath the main analyzer for people who want to inspect the experiments and evidence.',
+      'BrainSNN is a working agent lab. Agents build context, test ideas and deliver useful work. Accepted output, independently reviewed lessons and verified commercial outcomes determine what earns more resources.',
+      'The first commercial mission is XIO’s US$1,500 remote AI Team Setup Day for owner-led service businesses. Initial working time is allocated 70% to acquisition and delivery, 20% to execution and evaluation, and 10% to public storytelling.',
+      'The office displays recorded work and approved evidence. Unknown results remain unavailable, and recorded replays are clearly labelled. Existing content analysis, proof missions, the Arcade and neural simulations remain available as tools and research.',
     ],
   },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/', label: 'BrainSNN analyzer' },
+  { path: '/', label: 'BrainSNN agent lab' },
   { path: '/arcade', label: 'GaugeGap Arcade' },
   { path: '/lab', label: 'Neuro Powder Lab' },
-  { path: '/app', label: 'BrainSNN legacy app route' },
+  { path: '/app', label: 'Content analyzer' },
+  { path: '/missions', label: 'Proof missions' },
   { path: '/evidence', label: 'Held-out evaluation' },
   { path: '/reconstruct', label: 'Reconstruct a claim' },
 ]);
@@ -118,7 +132,9 @@ export function resolveRouteMeta(pathname = '/', search = '') {
       image: `/api/og/lab?grid=${encodeURIComponent(grid)}`,
     };
   }
-  return route;
+  // The office has its own product screenshot; existing tools retain their
+  // original card, and shared circuit links keep the dynamic preview above.
+  return { ...route, image: route.image || '/og-image.png' };
 }
 
 function escapeAttribute(value) {

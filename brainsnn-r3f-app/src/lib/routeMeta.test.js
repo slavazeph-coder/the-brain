@@ -23,21 +23,28 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('positions the homepage as BrainSNN decision intelligence', () => {
+  it('positions the homepage as a working agent lab', () => {
     const home = resolveRouteMeta('/');
     expect(home.title).toContain('BrainSNN');
-    expect(home.title).toContain('decision intelligence');
-    expect(home.description).toContain('screen recording');
+    expect(home.title).toContain('AI work that earns its keep.');
+    expect(home.description).toContain('real outcomes');
   });
 
-  it('keeps the legacy /app route aligned with the homepage product', () => {
-    expect(resolveRouteMeta('/app').title).toBe(resolveRouteMeta('/').title);
+  it('keeps the analyzer distinct from the agent lab homepage', () => {
+    expect(resolveRouteMeta('/app').title).not.toBe(resolveRouteMeta('/').title);
+    expect(resolveRouteMeta('/app').title).toContain('decision intelligence');
     expect(resolveRouteMeta('/app').description).toContain('workflow steps');
   });
 
   it('gives the Arcade a dedicated preview instead of making it the homepage', () => {
     expect(resolveRouteMeta('/arcade').title).toContain('GaugeGap Arcade');
     expect(resolveRouteMeta('/').title).not.toContain('GaugeGap Foundry');
+  });
+
+  it('keeps proof mission routes discoverable with their own evidence boundary', () => {
+    expect(resolveRouteMeta('/missions').title).toContain('Proof Missions');
+    expect(resolveRouteMeta('/missions/build').title).toContain('Proof Missions');
+    expect(resolveRouteMeta('/missions').body.join(' ')).toContain('not a verified payment');
   });
 
   it('matches the longest prefix, so /lab is not the homepage', () => {
@@ -65,7 +72,7 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('screen recording');
+    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('real outcomes');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -79,6 +86,13 @@ describe('per-route social previews', () => {
   it('keeps the site card for a route that declares no image of its own', () => {
     const html = applyRouteMeta(HTML, '/arcade', '', 'https://www.brainsnn.com');
     expect(html).toContain('og-image.png');
+  });
+
+  it('uses the new homepage screenshot while keeping existing tools on their own card', () => {
+    const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
+    expect(tagContent(html, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/agent-lab-og.png');
+    expect(resolveRouteMeta('/').image).toBe('/agent-lab-og.png');
+    expect(resolveRouteMeta('/arcade').image).toBe('/og-image.png');
   });
 
   it('never emits a second copy of a tag it rewrites', () => {

@@ -31,10 +31,17 @@ import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, r
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
 import { createEventStore } from "./src/lib/eventStore.js";
 import { spawn } from "node:child_process";
+import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.js";
 
 dotenv.config();
 
 const app = express();
+const readAgentLabFeed = createAgentLabFeed();
+app.get('/api/agent-lab/summary', async (_req, res) => {
+  const feed = await readAgentLabFeed();
+  res.setHeader('Cache-Control', `public, max-age=${agentLabCacheMaxAge(feed)}, must-revalidate`);
+  res.json(feed);
+});
 
 // Railway terminates TLS at its edge and forwards, so without this every
 // request arrives from the proxy's address and the rate limiter below would key

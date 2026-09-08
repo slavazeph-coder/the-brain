@@ -143,13 +143,11 @@ async function mockBackend(page) {
 async function runScan(page) {
   await page.getByRole('button', { name: 'Paid ad' }).click();
   await page.getByRole('button', { name: /Run Brain Scan/ }).click();
-  // The progress copy is "Ingesting creative" and has been since ScanProgress
-  // was written; "Reading the message" never existed in the app. Racing a
-  // transient step is also the wrong assertion — the scan can finish before the
-  // check runs — so wait for the result the scan is meant to produce.
+  await expect(page.getByRole('status').getByText('Ingesting creative').first()).toBeVisible();
   await expect(page.getByTestId('results-workspace')).toBeVisible();
-  // "Demo model result" is a Tooltip label attribute, never rendered text. The
-  // visible marker for a fallback result is the badge in the inspector rail.
+  // "Demo model result", asserted here until both branches fixed it, is a
+  // Tooltip *label* attribute and never rendered text. The visible marker for a
+  // fallback result is the badge in the inspector rail.
   await expect(page.getByText('Deterministic local result').first()).toBeVisible();
 }
 
@@ -159,13 +157,13 @@ test.beforeEach(async ({ page }) => {
   await mockBackend(page);
 });
 
-test('content reaction lab runs a fully local simulation on the homepage', async ({ page }) => {
+test('content reaction lab runs a fully local simulation in the Arcade', async ({ page }) => {
   const analyzeRequests: string[] = [];
   page.on('request', (request) => {
     if (request.url().includes('/api/analyze')) analyzeRequests.push(request.url());
   });
 
-  await page.goto('/?lab=content#playground');
+  await page.goto('/arcade?lab=content#playground');
   await expect(page.getByRole('heading', { name: /Do not just explain the idea/i })).toBeVisible();
   await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
 
@@ -175,7 +173,7 @@ test('content reaction lab runs a fully local simulation on the homepage', async
   // Four headline tiles fill with numeric values from the in-browser engine.
   await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
   await expect(page.locator('.gg-content-score')).toHaveCount(4);
-  await expect(page).toHaveURL(/\/\?lab=content/);
+  await expect(page).toHaveURL(/\/arcade\?lab=content/);
   expect(analyzeRequests).toEqual([]);
 
   // Rewrite panel produces a scored alternative without leaving the page.
@@ -190,7 +188,7 @@ test('content reaction lab runs a fully local simulation on the homepage', async
 });
 
 test('spiking network lab runs in a worker and shows the regimes', async ({ page }) => {
-  await page.goto('/?lab=spiking#playground');
+  await page.goto('/arcade?lab=spiking#playground');
   await expect(page.getByTestId('spiking-network-lab')).toBeVisible();
   // The first run is kicked off on mount and executes off the main thread.
   await expect(page.getByTestId('snn-hud')).toBeVisible({ timeout: 30_000 });
@@ -203,7 +201,7 @@ test('spiking network lab runs in a worker and shows the regimes', async ({ page
 });
 
 test('defend the brain mission is machine-checked and losable', async ({ page }) => {
-  await page.goto('/?lab=braingame#playground');
+  await page.goto('/arcade?lab=braingame#playground');
   await expect(page.getByTestId('brain-game-lab')).toBeVisible();
   await expect(page.getByTestId('brain-game-hud')).toContainText(/Hijack/i);
 
@@ -218,7 +216,7 @@ test('defend the brain mission is machine-checked and losable', async ({ page })
 });
 
 test('content lab shows per-sentence math with a jackknife band', async ({ page }) => {
-  await page.goto('/?lab=content#playground');
+  await page.goto('/arcade?lab=content#playground');
   await page.getByLabel('Content to simulate').fill(
     'Our team shipped a small update to the billing page this week. '
     + 'URGENT: verify your account within 24 hours or it will be permanently deleted, click immediately!',
@@ -243,13 +241,13 @@ test('content lab shows per-sentence math with a jackknife band', async ({ page 
 
 test('shared challenge link prefills and auto-runs the content lab', async ({ page }) => {
   const sample = 'Only forty were ever made. Private viewings close this week.';
-  await page.goto(`/?lab=content&state=${encodeURIComponent(sample)}#playground`);
+  await page.goto(`/arcade?lab=content&state=${encodeURIComponent(sample)}#playground`);
   await expect(page.getByLabel('Content to simulate')).toHaveValue(sample);
   await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
 });
 
 test('arcade selector opens the content lab from the featured row', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/arcade');
   await page.getByRole('tab', { name: /Mind-Hack Autopsy/ }).click();
   await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
   await expect(page).toHaveURL(/lab=content/);
@@ -267,12 +265,12 @@ test('reconstruct page renders from a direct route and links into the scanner', 
 
   await page.getByRole('button', { name: /Scan this pitch/ }).click();
   await expect(page).toHaveURL(/\/app$/);
-  await expect(page).toHaveTitle('BrainSNN | Decision Engine for Brand Content');
+  await expect(page).toHaveTitle('BrainSNN | Creative Decision Intelligence');
   await expect(page.locator('#brain-scan-input')).toHaveValue(/Reconstruct is the proof-first/);
 });
 
-test('landing deeper-tools card opens the Reconstruct page without a reload', async ({ page }) => {
-  await page.goto('/');
+test('Arcade deeper-tools card opens the Reconstruct page without a reload', async ({ page }) => {
+  await page.goto('/arcade');
   await page.getByRole('button', { name: /Build a defensible claim/ }).click();
   await expect(page).toHaveURL(/\/reconstruct$/);
   await expect(page.getByTestId('reconstruct-page')).toBeVisible();
@@ -287,7 +285,7 @@ test('3D brain mounts or falls back cleanly without console errors', async ({ pa
   // No force-2d flag on this navigation: clear it before load. The 3D brain
   // now lives inside the arcade's content lab.
   await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
-  await page.goto('/?lab=content#playground');
+  await page.goto('/arcade?lab=content#playground');
   await page.waitForTimeout(4000);
   const has3d = await page.locator('.brain3d canvas').count();
   const hasFallback = await page.locator('.brain-visualizer').count();
@@ -300,10 +298,7 @@ test('3D brain mounts or falls back cleanly without console errors', async ({ pa
 
 test('core analyze to export workflow works with deterministic fallback data', async ({ page }) => {
   await page.goto('/app');
-  // The composer heading changed in b2f0914 ("Make BrainSNN analyzer the
-  // homepage") and this assertion was never updated, so the whole spec failed
-  // before reaching anything it was written to cover.
-  await expect(page.getByRole('heading', { name: /Paste what you.re about to publish/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Paste what you’re about to publish — or show BrainSNN what happened.' })).toBeVisible();
 
   await runScan(page);
   await page.getByRole('tab', { name: /Advanced/ }).click();
@@ -383,7 +378,7 @@ test('defend the brain renders a real 3D board driven by detected techniques', a
   // The suite-wide beforeEach forces the 2D fallback to keep CI off software
   // WebGL; this test is specifically about the 3D board, so clear it.
   await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
-  await page.goto('/?lab=braingame#playground');
+  await page.goto('/arcade?lab=braingame#playground');
   await expect(page.getByTestId('brain-game-lab')).toBeVisible();
   await expect(page.locator('[data-testid="brain-game-3d"]')).toBeVisible({ timeout: 45_000 });
   await expect(page.locator('[data-testid="brain-game-3d"] canvas')).toBeVisible({ timeout: 45_000 });
@@ -412,7 +407,7 @@ test('defend the brain falls back to the 2D board without WebGL', async ({ page 
     };
   });
 
-  await page.goto('/?lab=braingame#playground');
+  await page.goto('/arcade?lab=braingame#playground');
   await expect(page.getByTestId('brain-game-lab')).toBeVisible();
   await expect(page.locator('[data-testid="brain-game-3d"]')).toHaveCount(0);
   await expect(page.locator('canvas.gg-brain-game-canvas')).toBeVisible();
@@ -421,7 +416,7 @@ test('defend the brain falls back to the 2D board without WebGL', async ({ page 
 
 test('a run proof carries no text from the level it was played on', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/?lab=braingame#playground');
+  await page.goto('/arcade?lab=braingame#playground');
   await expect(page.getByTestId('brain-game-lab')).toBeVisible();
 
   // Build a level from text with distinctive words, then export a proof and
@@ -448,14 +443,14 @@ test('a run proof carries no text from the level it was played on', async ({ pag
 test('a shared challenge link restores the level it was played on', async ({ page }) => {
   // braingame used to write ?state= and never read it back, so every shared
   // link opened the default level. Both halves of the round trip are covered.
-  await page.goto('/?lab=braingame&state=challenge~outrage-bait-post#playground');
+  await page.goto('/arcade?lab=braingame&state=challenge~outrage-bait-post#playground');
   await expect(page.getByTestId('brain-game-lab')).toBeVisible();
   await expect(page.getByTestId('brain-game-level')).toHaveValue('outrage-bait-post');
   await expect(page.locator('.gg-deep-toggle button.active')).toHaveText('Challenge');
 
   // A pasted passage travels with the link and rebuilds the same attack.
   const shared = 'mission~custom~Doors close tonight, and everyone else has already joined.';
-  await page.goto(`/?lab=braingame&state=${encodeURIComponent(shared)}#playground`);
+  await page.goto(`/arcade?lab=braingame&state=${encodeURIComponent(shared)}#playground`);
   await expect(page.getByTestId('brain-game-level')).toHaveValue('custom');
   await expect(page.getByTestId('brain-game-custom-text')).toHaveValue(/Doors close tonight/);
   await expect(page.getByTestId('brain-game-breakdown').locator('li').first()).toBeVisible();
@@ -514,20 +509,17 @@ test('the powder lab is reachable from the homepage, not just by typing the URL'
   test.setTimeout(60_000);
   await page.goto('/');
 
-  // The featured card is how most people will actually find it, and it is the
-  // only one of the two routes that exists on a narrow viewport — .gg-nav-links
-  // is display:none there.
-  const card = page.locator('.gg-lab-card', { hasText: 'Neuro Powder Lab' });
-  await card.scrollIntoViewIfNeeded();
-  await card.getByRole('button', { name: /Open the sandbox/ }).click();
+  // The office keeps existing research reachable from its Tools section at
+  // every breakpoint, even though the homepage now serves the agent company.
+  await page.locator('#tools a[href="/lab"]').click();
   await expect(page.getByTestId('powder-lab')).toBeVisible();
   await expect(page).toHaveURL(/\/lab$/);
 });
 
-test('the powder lab has a link in the desktop navigation', async ({ page }, testInfo) => {
+test('the powder lab retains its Arcade desktop navigation link', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'mobile', '.gg-nav-links is display:none below 900px');
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/arcade');
   await page.getByTestId('nav-powder-lab').click();
   await expect(page.getByTestId('powder-lab')).toBeVisible();
   await expect(page).toHaveURL(/\/lab$/);
@@ -686,7 +678,7 @@ test('a powder lab drawing survives a reload through the local save slot', async
   }).toPass({ timeout: 15_000 });
 });
 
-test('a visitor who wants to buy can find pricing from the landing page', async ({ page }, testInfo) => {
+test('existing analyzer pricing remains reachable from the Arcade', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
 
   // This test used to skip on mobile, on the grounds that .gg-nav-links is
@@ -695,7 +687,7 @@ test('a visitor who wants to buy can find pricing from the landing page', async 
   // here" and the only route to pricing was a footer link 22 screens down an
   // 18,900px page. The test now runs everywhere and takes whichever nav the
   // breakpoint actually offers.
-  await page.goto('/');
+  await page.goto('/arcade');
 
   const toggle = page.getByTestId('nav-menu-toggle');
   if (await toggle.isVisible()) {
@@ -710,9 +702,9 @@ test('a visitor who wants to buy can find pricing from the landing page', async 
   await expect(page).toHaveURL(/\/app/);
 });
 
-test('every primary destination is reachable at every breakpoint', async ({ page }) => {
+test('every Arcade destination remains reachable at every breakpoint', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/arcade');
 
   // The guarantee that matters is narrow and absolute: whatever the viewport,
   // at least one navigation is on screen. Both being hidden is the state that
@@ -733,7 +725,7 @@ test('every primary destination is reachable at every breakpoint', async ({ page
 
 test('the mobile menu can be dismissed without hitting the button again', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/');
+  await page.goto('/arcade');
   const toggle = page.getByTestId('nav-menu-toggle');
   test.skip(!(await toggle.isVisible()), 'Desktop shows the full bar and has no toggle.');
 
@@ -785,7 +777,7 @@ test('the lead form never confirms a lead the server did not take', async ({ pag
     body: JSON.stringify({ error: 'Lead capture is not configured.', status: 'not_configured', fallbackEmail: 'hello@brainsnn.com' }),
   }));
 
-  await page.goto('/');
+  await page.goto('/arcade');
   const form = page.getByTestId('lead-form');
   await form.scrollIntoViewIfNeeded();
   await page.getByTestId('lead-email').fill('buyer@example.com');
@@ -804,7 +796,7 @@ test('the lead form confirms only when the server accepts the lead', async ({ pa
     body: JSON.stringify({ ok: true, status: 'received' }),
   }));
 
-  await page.goto('/');
+  await page.goto('/arcade');
   const form = page.getByTestId('lead-form');
   await form.scrollIntoViewIfNeeded();
   await page.getByTestId('lead-email').fill('buyer@example.com');
@@ -832,7 +824,7 @@ test('real interaction reaches the analytics sink, and carries no pasted text', 
     await route.fulfill({ status: 204, body: '' });
   });
 
-  await page.goto('/');
+  await page.goto('/arcade');
   await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_landing_viewed');
 
   // A lab click is one of the sixteen names the allowlist used to drop on the
@@ -898,9 +890,7 @@ test('the evidence page is reachable from the landing page and has its own socia
   test.setTimeout(90_000);
 
   await page.goto('/');
-  const card = page.locator('.gg-lab-card', { hasText: 'never seen' });
-  await card.scrollIntoViewIfNeeded();
-  await card.getByRole('button').click();
+  await page.locator('#tools a[href="/evidence"]').click();
   await expect(page.getByTestId('evidence-page')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/evidence');
 
