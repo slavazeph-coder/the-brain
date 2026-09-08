@@ -23,9 +23,14 @@
 //     deliberately short and skips tempting-but-unsafe swaps (`secret`,
 //     `explode`, `guaranteed`) whose part of speech shifts with context.
 
-const MAX_BLOCKS = 40;
-const MAX_SENTENCES_PER_BLOCK = 60;
 const MAX_PATCHES = 8;
+
+// Caps bound how much of a draft is SCANNED for fixes. They must never bound
+// how much of it is kept: normalizeDraft's output is what Improve shows as
+// "Original" and what Copy final draft puts on the clipboard, so truncating
+// there silently hands the user an incomplete message. Scanning stops; the
+// text does not.
+const MAX_SEGMENTS_SCANNED = 400;
 
 // Mirrors analysisEngine's own detectors so a patch lines up with the
 // recommendation the user is reading rather than describing a different edit.
@@ -98,15 +103,51 @@ export function normalizeDraft(content) {
     .split(/\n\s*\n+/)
     .map(collapseInline)
     .filter(Boolean)
-    .slice(0, MAX_BLOCKS)
     .join('\n\n');
 }
 
+/**
+ * Split a block into sentences.
+ *
+ * A naive /[^.!?]+[.!?]+/ treats every period as a boundary, which is wrong for
+ * the copy this product exists to edit: "42.5%" split into "42." + "5%" and
+ * "example.com" into "example." + "com". Those fragments then behave as
+ * independent sentences — a structural patch could move one of them — so
+ * applying an unrelated fix scrambled untouched numbers and links in the
+ * finished draft.
+ *
+ * A terminator only ends a sentence when it is followed by whitespace or the
+ * end of the block, and never between two digits. That keeps decimals, domains
+ * and abbreviations whole. The invariant that matters is the round trip:
+ * joining the pieces back with a space must reproduce the block exactly.
+ */
 function splitSentences(block) {
-  return (block.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [block])
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
-    .slice(0, MAX_SENTENCES_PER_BLOCK);
+  const text = String(block || '');
+  const sentences = [];
+  let start = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (!'.!?'.includes(text[index])) continue;
+    let end = index;
+    while (end + 1 < text.length && '.!?'.includes(text[end + 1])) end += 1;
+
+    const before = text[index - 1];
+    const after = text[end + 1];
+    // 42.5 — a decimal, not two sentences.
+    if (text[index] === '.' && /\d/.test(before || '') && /\d/.test(after || '')) { index = end; continue; }
+    // example.com, e.g. — a terminator with no space after it does not end a
+    // sentence.
+    if (after !== undefined && !/\s/.test(after)) { index = end; continue; }
+
+    const piece = text.slice(start, end + 1).trim();
+    if (piece) sentences.push(piece);
+    start = end + 1;
+    index = end;
+  }
+
+  const tail = text.slice(start).trim();
+  if (tail) sentences.push(tail);
+  return sentences.length ? sentences : (text.trim() ? [text.trim()] : []);
 }
 
 /**
@@ -301,9 +342,13 @@ function patch(id, kind, fields) {
  */
 export function buildPatchPlan(content) {
   const draft = normalizeDraft(content);
-  const segments = locateSegments(draft);
-  if (!segments.length) return { draft, segments: [], patches: [] };
+  const allSegments = locateSegments(draft);
+  if (!allSegments.length) return { draft, segments: [], patches: [] };
 
+  // Scanning is bounded; the draft is not. Beyond this many sentences we stop
+  // looking for fixes, and every sentence still survives into the text the user
+  // copies.
+  const segments = allSegments.slice(0, MAX_SEGMENTS_SCANNED);
   const patches = [];
 
   const proof = strongestProof(segments);
@@ -343,7 +388,7 @@ export function buildPatchPlan(content) {
     if (patches.length >= MAX_PATCHES) break;
   }
 
-  return { draft, segments, patches: patches.slice(0, MAX_PATCHES) };
+  return { draft, segments: allSegments, patches: patches.slice(0, MAX_PATCHES) };
 }
 
 /**

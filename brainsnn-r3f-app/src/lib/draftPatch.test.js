@@ -255,3 +255,82 @@ describe('picking which sentence is the proof', () => {
     expect(plan.patches.some((entry) => entry.id === 'move-proof-to-ask')).toBe(true);
   });
 });
+
+describe('the draft survives intact (reported by review on #138)', () => {
+  it('round-trips any draft through split and join unchanged', () => {
+    // The invariant that would have caught the corruption below: whatever the
+    // splitter does, rejoining must reproduce the normalized draft exactly.
+    const drafts = [
+      'We cut cost by 42.5% last quarter. Read more at example.com today.',
+      'Version 1.2.3 shipped. It is fine.',
+      'Call us on 555.1234 now. Or do not.',
+      'No terminator at the end',
+      'Multiple!! Terminators?? Here.',
+      'One block.\n\nSecond block with 3.5 in it.\n\nThird.',
+      'e.g. this abbreviation stays. And so does i.e. that one.',
+    ];
+    for (const draft of drafts) {
+      const normalized = normalizeDraft(draft);
+      const rejoined = locateSegments(normalized)
+        .reduce((blocks, segment) => {
+          blocks[segment.blockIndex] = [...(blocks[segment.blockIndex] || []), segment.text];
+          return blocks;
+        }, [])
+        .map((sentences) => sentences.join(' '))
+        .join('\n\n');
+      expect(rejoined).toBe(normalized);
+    }
+  });
+
+  it('never splits a decimal into two sentences', () => {
+    const segments = locateSegments('We cut cost by 42.5% last quarter.');
+    expect(segments.length).toBe(1);
+    expect(segments[0].text).toContain('42.5%');
+  });
+
+  it('never splits a domain into two sentences', () => {
+    const segments = locateSegments('Read more at example.com today.');
+    expect(segments.length).toBe(1);
+    expect(segments[0].text).toContain('example.com');
+  });
+
+  it('keeps decimals and links whole when an unrelated patch is applied', () => {
+    // Before the fix this produced "5% and you can read more at example. Book a
+    // call today. We cut cost by 42. com now." — the fragments were treated as
+    // independent sentences and one of them was moved.
+    const draft = 'Book a call today. We cut cost by 42.5% and you can read more at example.com now.';
+    const plan = buildPatchPlan(draft);
+    const result = applyPatch(plan.draft, plan.patches[0]);
+    expect(result.ok).toBe(true);
+    expect(result.text).toContain('42.5%');
+    expect(result.text).toContain('example.com');
+    expect(result.text).not.toMatch(/42\.\s+5%/);
+    expect(result.text).not.toMatch(/example\.\s+com/);
+  });
+
+  it('keeps every paragraph of a long draft', () => {
+    // normalizeDraft used to slice to 40 blocks, and its output is both the
+    // "Original" pane and the source for Copy final draft — so a long message
+    // was silently truncated before the user copied it.
+    const many = Array.from({ length: 45 }, (_, index) => `Paragraph ${index + 1}.`).join('\n\n');
+    const normalized = normalizeDraft(many);
+    expect(normalized.split('\n\n').length).toBe(45);
+    expect(normalized).toContain('Paragraph 45.');
+  });
+
+  it('keeps every sentence of a very long paragraph', () => {
+    const long = Array.from({ length: 80 }, (_, index) => `Sentence ${index + 1}.`).join(' ');
+    expect(normalizeDraft(long)).toContain('Sentence 80.');
+  });
+
+  it('still bounds how much it scans for fixes', () => {
+    const huge = Array.from({ length: 600 }, (_, index) => `Filler sentence ${index + 1}.`).join(' ');
+    const plan = buildPatchPlan(`${huge} Last chance to act.`);
+    // The trailing pressure phrase sits past the scan window, so no swap is
+    // offered for it — but the draft still carries every sentence, which is the
+    // property that matters for what the user copies.
+    expect(plan.patches.some((patch) => /last-chance/.test(patch.id))).toBe(false);
+    expect(plan.draft).toContain('Last chance to act.');
+    expect(plan.segments.length).toBe(601);
+  });
+});

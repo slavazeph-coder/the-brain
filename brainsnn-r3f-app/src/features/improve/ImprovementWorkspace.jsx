@@ -45,8 +45,12 @@ function useDraft(original) {
       const result = applyPatch(manual, patch);
       if (result.ok) { setManual(result.text); setApplied((ids) => [...ids, patch.id]); }
     },
-    applyAll() {
-      const pending = plan.patches.filter((patch) => !applied.includes(patch.id));
+    // The caller passes the patches the goal actually offers. Falling back to
+    // plan.patches applied edits the user could not see and had not chosen:
+    // picking "Reduce manipulation" and clicking Apply all also moved evidence
+    // and rewrote vague claims, which made the goal selector a lie.
+    applyAll(available = plan.patches) {
+      const pending = available.filter((patch) => !applied.includes(patch.id));
       if (manual === null) { setApplied((ids) => [...ids, ...pending.map((patch) => patch.id)]); return; }
       const run = applyPatches(manual, pending);
       setManual(run.text);
@@ -107,7 +111,7 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
 
   function applyEverything() {
     const pending = offered.filter((patch) => !draft.applied.includes(patch.id)).length;
-    draft.applyAll();
+    draft.applyAll(offered);
     track('fix_applied_all', { goal, count: pending });
     setComparison(null);
     setMessage('Applied every available fix. Read it through before you send it.');

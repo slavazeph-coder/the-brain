@@ -92,3 +92,23 @@ describe('selectPatchesForGoal', () => {
     expect(selectPatchesForGoal(patches, 'not-a-goal').length).toBe(patches.length);
   });
 });
+
+describe('apply-all respects the selected goal (reported by review on #138)', () => {
+  it('never applies a fix the chosen goal does not offer', () => {
+    // useDraft.applyAll used to fall back to the whole plan, so picking
+    // "Reduce manipulation" and clicking Apply all also moved evidence and
+    // rewrote vague claims — edits the user could not see and had not chosen.
+    // The engine-level guarantee that keeps that honest is selectPatchesForGoal
+    // returning a strict subset, and the workspace passing it through.
+    const draft = 'Last chance to book a call. Everyone is switching to the massive new platform. We measured a 42% drop in cost.';
+    const { patches } = buildPatchPlan(draft);
+    const risk = selectPatchesForGoal(patches, 'reduce-risk');
+    const clarity = selectPatchesForGoal(patches, 'clarity');
+
+    expect(risk.length < patches.length).toBe(true);
+    expect(risk.some((patch) => patch.category === 'vague')).toBe(false);
+    expect(clarity.some((patch) => patch.category === 'urgency')).toBe(false);
+    // Every goal's set is drawn from the plan, never invented.
+    for (const patch of [...risk, ...clarity]) expect(patches.includes(patch)).toBe(true);
+  });
+});
