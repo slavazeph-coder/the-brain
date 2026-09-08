@@ -15,7 +15,7 @@ The initial commercial mission is XIO’s **US$1,500 remote AI Team Setup Day** 
 
 ## Public feed and evidence boundary
 
-The browser reads `GET /api/agent-lab/summary`. BrainSNN fetches only `https://www.xioai.co/api/agent-lab/summary` and copies an explicit allowlist. The source request rejects redirects, times out after four seconds and permits at most 64 KiB. Snapshots older than five minutes or over one minute in the future are rejected. Concurrent requests share one fetch; the relay and HTTP response allow 30 seconds of caching.
+The browser reads `GET /api/agent-lab/summary`. BrainSNN fetches only `https://www.xioai.co/api/agent-lab/summary` and copies an explicit allowlist. The source request rejects redirects, times out after four seconds and permits at most 64 KiB. Snapshots older than five minutes or over one minute in the future are rejected. Concurrent requests share one fetch. Relay and HTTP caching are capped at 30 seconds and expire no later than a recorded snapshot's five-minute freshness deadline; HTTP caches must revalidate after expiry.
 
 The version 1 public response contains:
 

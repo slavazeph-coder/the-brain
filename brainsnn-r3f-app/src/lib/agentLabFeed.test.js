@@ -1,5 +1,5 @@
 import { describe, it, expect } from '../test/tinyVitest.js';
-import { createAgentLabFeed, sanitizeAgentLabFeed } from './agentLabFeed.js';
+import { agentLabCacheMaxAge, createAgentLabFeed, sanitizeAgentLabFeed } from './agentLabFeed.js';
 
 const now = Date.parse('2026-09-08T12:00:00Z');
 const record = { schemaVersion: 1, mode: 'recorded', generatedAt: new Date(now).toISOString(), work: { ready: 0 }, evidence: { acceptedDeliveries: 1 }, events: [] };
@@ -38,5 +38,33 @@ describe('agent lab recorded feed', () => {
   it('rejects oversized source bodies', async () => {
     const feed = createAgentLabFeed({ fetchImpl: async () => new Response('x'.repeat(70000)) });
     expect((await feed()).mode).toBe('unavailable');
+  });
+  it('expires a nearly stale cached snapshot before its five-minute deadline', async () => {
+    let clock = now;
+    let calls = 0;
+    const agedRecord = { ...record, generatedAt: new Date(now - 290_000).toISOString() };
+    const feed = createAgentLabFeed({ now: () => clock, fetchImpl: async () => {
+      calls++;
+      return new Response(JSON.stringify(agedRecord));
+    } });
+    expect((await feed()).mode).toBe('recorded');
+    clock += 5_000;
+    expect((await feed()).mode).toBe('recorded');
+    expect(calls).toBe(1);
+    clock += 15_000;
+    const expired = await feed();
+    expect(calls).toBe(2);
+    expect(expired.mode).toBe('unavailable');
+    expect(expired.work.ready).toBe(null);
+    expect(expired.evidence.acceptedDeliveries).toBe(null);
+  });
+  it('caps cache lifetimes by remaining freshness and rounds down partial seconds', () => {
+    expect(agentLabCacheMaxAge(record, now)).toBe(30);
+    expect(agentLabCacheMaxAge(record, now + 290_000)).toBe(10);
+    expect(agentLabCacheMaxAge(record, now + 290_001)).toBe(9);
+    expect(agentLabCacheMaxAge(record, now + 300_000)).toBe(0);
+    expect(agentLabCacheMaxAge(record, now + 310_000)).toBe(0);
+    expect(agentLabCacheMaxAge({ ...record, generatedAt: 'invalid' }, now)).toBe(0);
+    expect(agentLabCacheMaxAge({ mode: 'unavailable' }, now)).toBe(30);
   });
 });

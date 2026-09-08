@@ -1,4 +1,6 @@
 const SOURCE = 'https://www.xioai.co/api/agent-lab/summary';
+const SNAPSHOT_MAX_AGE_MS = 5 * 60_000;
+const CACHE_MAX_AGE_SECONDS = 30;
 const EVENT_LABELS = Object.freeze({
   ACCEPTED: 'Work packet accepted by the owner',
   REJECTED: 'Work packet returned for revision',
@@ -22,7 +24,7 @@ export function sanitizeAgentLabFeed(value, now = Date.now()) {
   const empty = unavailableAgentLab();
   if (!value || value.schemaVersion !== 1 || value.mode !== 'recorded') return empty;
   const at = Date.parse(value.generatedAt);
-  if (!Number.isFinite(at) || at > now + 60_000 || now - at > 5 * 60_000) return empty;
+  if (!Number.isFinite(at) || at > now + 60_000 || now - at > SNAPSHOT_MAX_AGE_MS) return empty;
   const count = (n) => Number.isSafeInteger(n) && n >= 0 ? n : null;
   return {
     ...empty, mode: 'recorded', reason: undefined, generatedAt: new Date(at).toISOString(),
@@ -32,6 +34,14 @@ export function sanitizeAgentLabFeed(value, now = Date.now()) {
       .filter((event) => Object.hasOwn(EVENT_LABELS, event?.status) && Number.isFinite(Date.parse(event.at)))
       .map((event, index) => ({ id: `event-${index + 1}`, status: event.status, at: new Date(event.at).toISOString(), label: EVENT_LABELS[event.status] })),
   };
+}
+
+/** Neither the relay nor downstream caches may extend a snapshot's freshness. */
+export function agentLabCacheMaxAge(value, now = Date.now()) {
+  if (value?.mode !== 'recorded') return CACHE_MAX_AGE_SECONDS;
+  const remaining = Date.parse(value.generatedAt) + SNAPSHOT_MAX_AGE_MS - now;
+  if (!Number.isFinite(remaining)) return 0;
+  return Math.max(0, Math.min(CACHE_MAX_AGE_SECONDS, Math.floor(remaining / 1000)));
 }
 
 export function createAgentLabFeed({ fetchImpl = globalThis.fetch, now = Date.now } = {}) {
@@ -62,7 +72,8 @@ export function createAgentLabFeed({ fetchImpl = globalThis.fetch, now = Date.no
       } catch {
         cache = unavailableAgentLab();
       } finally {
-        expires = now() + 30_000;
+        const cachedAt = now();
+        expires = cachedAt + agentLabCacheMaxAge(cache, cachedAt) * 1000;
         pending = null;
       }
       return cache;
