@@ -145,6 +145,9 @@ async function runScan(page) {
   await page.getByRole('button', { name: /Run Brain Scan/ }).click();
   await expect(page.getByRole('status').getByText('Ingesting creative').first()).toBeVisible();
   await expect(page.getByTestId('results-workspace')).toBeVisible();
+  // "Demo model result", asserted here until both branches fixed it, is a
+  // Tooltip *label* attribute and never rendered text. The visible marker for a
+  // fallback result is the badge in the inspector rail.
   await expect(page.getByText('Deterministic local result').first()).toBeVisible();
 }
 
@@ -174,7 +177,8 @@ test('content reaction lab runs a fully local simulation in the Arcade', async (
   expect(analyzeRequests).toEqual([]);
 
   // Rewrite panel produces a scored alternative without leaving the page.
-  await page.getByRole('button', { name: 'Reduce manipulation' }).click();
+  // SegmentedControl renders its options as role="radio", not buttons.
+  await page.getByRole('radio', { name: 'Reduce manipulation' }).click();
   await expect(page.getByTestId('content-rewrite')).toBeVisible();
 
   // The escape hatch into the full analyst app carries the content along.
@@ -300,11 +304,16 @@ test('core analyze to export workflow works with deterministic fallback data', a
   await page.getByRole('tab', { name: /Advanced/ }).click();
   await expect(page.getByRole('heading', { name: 'Layers used in this scan' })).toBeVisible();
 
-  await page.getByRole('button', { name: /Improve This/ }).click();
+  // The primary action counts the fixes when the scan found any, and falls
+  // back to "Improve this draft" for a draft with nothing mechanical to fix.
+  await page.getByRole('button', { name: /Fix this draft|Improve this draft/ }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
   await page.getByRole('button', { name: /Score both versions/ }).click();
   await expect(page.getByText('Version 1 vs Version 2')).toBeVisible();
 
+  // Review actions moved into a disclosure so they stop competing with "Copy
+  // final draft", which is what this screen is actually for. Still reachable.
+  await page.getByText('Send this through review').click();
   await page.getByRole('button', { name: /Save as version/ }).click();
   await page.getByRole('button', { name: /Mark for approval/ }).click();
   await expect(page.getByTestId('queue-workspace')).toBeVisible();
@@ -1034,4 +1043,91 @@ test('a visit through a tagged link reports where it came from, and keeps report
       expect(String(value)).not.toContain('?');
     }
   }
+});
+
+test('one-click fixes edit the draft and the copied result contains no coaching text', async ({ page }) => {
+  test.setTimeout(90_000);
+  const draft = 'Last chance to book a demo today. Act now before prices double. We measured a 42% drop in onboarding cost across 18 pilot customers.';
+
+  await page.goto('/app');
+  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill(draft);
+  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
+  await expect(page.getByTestId('results-workspace')).toBeVisible();
+
+  // The results rail leads with the count rather than a vague next step.
+  await expect(page.getByText(/can be applied to this draft/i).first()).toBeVisible();
+  await page.getByRole('button', { name: /Fix this draft/ }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+
+  const editor = page.getByRole('textbox').nth(1);
+  await expect(editor).toHaveValue(draft);
+
+  // Default goal is "Build trust", which owns the structural fix only — the
+  // pressure-phrase swaps belong to "Reduce manipulation". A goal offering
+  // every fix regardless would make the selector meaningless.
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+  await expect(editor).toHaveValue(/^We measured a 42% drop/);
+
+  // Undo restores the original exactly, because the draft is rebuilt from the
+  // source rather than reverse-edited.
+  await page.getByRole('button', { name: /^Undo:/ }).first().click();
+  await expect(editor).toHaveValue(draft);
+
+  // SegmentedControl renders its options as role="radio", not buttons.
+  await page.getByRole('radio', { name: 'Reduce manipulation' }).click();
+  await page.getByRole('button', { name: /Apply all/ }).click();
+  const fixed = await editor.inputValue();
+  expect(fixed).not.toMatch(/last chance/i);
+  expect(fixed).not.toMatch(/act now/i);
+
+  // The regression that motivated this feature: the rewrite used to prepend and
+  // append instructions addressed to the author, so anyone who copied the
+  // result shipped our coaching notes to their own reader.
+  expect(fixed).not.toMatch(/before you publish/i);
+  expect(fixed).not.toMatch(/Here is the clearest reason/i);
+  expect(fixed).not.toMatch(/Add one concrete proof point/i);
+  // No sentence is invented: the fixed draft has the same sentence count.
+  expect((fixed.match(/[.!?]/g) || []).length).toBe((draft.match(/[.!?]/g) || []).length);
+
+  await page.getByRole('button', { name: /^Reset$/ }).click();
+  await expect(editor).toHaveValue(draft);
+});
+
+test('the diff shows a sentence move, which a word-set diff cannot', async ({ page }) => {
+  test.setTimeout(90_000);
+  // "Move the proof in front of the ask" changes no words, so the previous
+  // Set-based diff rendered the change completely unmarked: the user applied
+  // the headline fix and "What changed" showed nothing changed.
+  const draft = 'Book a call with our team today. We measured a 42% drop in onboarding cost across 18 pilot customers.';
+
+  await page.goto('/app');
+  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill(draft);
+  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
+  await expect(page.getByTestId('results-workspace')).toBeVisible();
+
+  // The next step leads the rail rather than sitting under four scorecards.
+  await page.getByRole('button', { name: /Fix this draft/ }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+
+  const diff = page.locator('.before-after-diff');
+  await expect(diff).toBeVisible();
+  await expect(diff.getByText('2 sentences moved')).toBeVisible();
+  await expect(diff.locator('.diff-moved').first()).toBeVisible();
+});
+
+test('the improve screen leads with one action, not six', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/app');
+  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill('Last chance to book a demo today. Act now before prices double.');
+  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
+  await expect(page.getByTestId('results-workspace')).toBeVisible();
+  await page.getByRole('button', { name: /Fix this draft|Improve this draft/ }).click();
+
+  await expect(page.getByRole('button', { name: /Copy final draft/ })).toBeVisible();
+  // The review workflow is folded away, not deleted — still reachable.
+  await expect(page.getByRole('button', { name: /Mark for approval/ })).toBeHidden();
+  await page.getByText('Send this through review').click();
+  await expect(page.getByRole('button', { name: /Mark for approval/ })).toBeVisible();
 });
