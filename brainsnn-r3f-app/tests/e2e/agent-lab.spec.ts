@@ -10,21 +10,36 @@ const snapshot = {
   events: [],
 };
 
-test('agent lab keeps unavailable evidence unknown and preserves all tool routes', async ({ page }) => {
+test('engine homepage leads with its tools and scopes unavailable XIO evidence', async ({ page }) => {
   await page.route(endpoint, (route) => route.fulfill({ status: 503, body: 'Unavailable' }));
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('AI work that earns its keep.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('An evidence engine for agent work.');
+  await expect(page.locator('.al-hero').getByRole('link', { name: 'Analyze your content' })).toHaveAttribute('href', '/app');
+  await expect(page.locator('.al-hero').getByRole('link', { name: 'Inspect the benchmark' })).toHaveAttribute('href', '/evidence');
+  await expect(page.locator('#office')).toContainText('not BrainSNN-wide usage');
+  await expect(page.locator('#roadmap')).toContainText('NEXT ENGINE WORK');
+  await expect(page.locator('#roadmap')).toContainText('not a claim of autonomous learning already running');
+  await expect(page.locator('#builders')).toContainText('POST /api/engine/compare');
+  await expect(page.locator('#builders')).toContainText('brain_compare');
+  await expect(page.locator('#builders')).toContainText('REVIEW_REQUIRED');
+  await expect(page.locator('#builders').getByRole('link', { name: 'Compare two drafts' })).toHaveAttribute('href', '/engine');
+  await expect(page.locator('#builders').getByRole('link', { name: 'Use the API and MCP tools' })).toHaveAttribute('href', '/engine#api');
   await expect(page.getByText('Recorded evidence unavailable', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Ready: unknown', { exact: true })).toHaveText('—');
   await expect(page.getByLabel('Verified paid deliveries: unknown', { exact: true })).toHaveText('—');
   await expect(page.getByRole('button', { name: 'Play recorded replay' })).toBeDisabled();
-  await expect(page.getByRole('link', { name: 'See the XIO offer' })).toHaveAttribute('href', 'https://www.xioai.co/ai-team-setup-day');
-  for (const path of ['/app', '/missions', '/arcade', '/lab']) {
+  await expect(page.getByRole('link', { name: 'View the existing XIO experiment' })).toHaveAttribute('href', 'https://www.xioai.co/ai-team-setup-day');
+  await expect(page.locator('.al-hero')).not.toContainText('XIO');
+  await expect(page.locator('.al-site')).not.toContainText('US$1,500');
+  for (const path of ['/app', '/missions', '/arcade', '/lab', '/evidence', '/reconstruct']) {
     await expect(page.locator(`#tools a[href="${path}"]`)).toBeVisible();
   }
-  await page.getByRole('button', { name: /Robotics simulator farm/ }).click();
-  await expect(page.getByRole('heading', { name: 'Keep the research. Earn the expansion.' })).toBeVisible();
-  await expect(page.locator('#al-department-detail')).toContainText('New farm spending stays at zero');
+  await page.getByRole('button', { name: /Improve Edits you can review/ }).click();
+  await expect(page.getByRole('heading', { name: 'Turn a finding into a specific edit.' })).toBeVisible();
+  await expect(page.locator('#al-department-detail')).toContainText('Run a scan in the workspace, then open Improve.');
+  await page.getByRole('button', { name: /Memory Scans and versions/ }).click();
+  await expect(page.getByRole('heading', { name: 'Keep the evidence behind an edit.' })).toBeVisible();
+  await expect(page.locator('#al-department-detail')).toContainText('browser-local history');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 

@@ -23,17 +23,31 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('positions the homepage as a working agent lab', () => {
+  it('positions the homepage around the available evidence engine and scopes the XIO example', () => {
     const home = resolveRouteMeta('/');
     expect(home.title).toContain('BrainSNN');
-    expect(home.title).toContain('AI work that earns its keep.');
-    expect(home.description).toContain('real outcomes');
+    expect(home.title).toContain('An evidence engine for agent work.');
+    expect(home.description).toContain('Analyze content, improve a draft, and test a decision.');
+    expect(home.body.join(' ')).toContain('browser-local scan history');
+    expect(home.body.join(' ')).toContain('planned integration');
+    expect(home.body.join(' ')).toContain('not BrainSNN-wide engine metrics');
+    expect(home.body.join(' ')).not.toContain('US$1,500');
+    expect(home.body.join(' ')).not.toContain('70%');
   });
 
-  it('keeps the analyzer distinct from the agent lab homepage', () => {
+  it('keeps the analyzer distinct from the engine homepage', () => {
     expect(resolveRouteMeta('/app').title).not.toBe(resolveRouteMeta('/').title);
     expect(resolveRouteMeta('/app').title).toContain('decision intelligence');
     expect(resolveRouteMeta('/app').description).toContain('workflow steps');
+  });
+
+  it('gives the comparison workbench a discoverable route with explicit review limits', () => {
+    const engine = resolveRouteMeta('/engine');
+    expect(engine.title).toBe('Compare two drafts | BrainSNN Engine');
+    expect(engine.body.join(' ')).toContain('REVIEW_REQUIRED');
+    expect(engine.body.join(' ')).toContain('does not verify facts');
+    expect(engine.body.join(' ')).toContain('POST /api/engine/compare');
+    expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/engine"');
   });
 
   it('gives the Arcade a dedicated preview instead of making it the homepage', () => {
@@ -72,7 +86,7 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('real outcomes');
+    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Analyze content, improve a draft');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -116,7 +130,7 @@ describe('content a crawler can read without running JavaScript', () => {
   });
 
   it('gives every major route a heading and real prose', () => {
-    for (const path of ['/', '/arcade', '/lab', '/app', '/evidence', '/reconstruct']) {
+    for (const path of ['/', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
       const heading = tagContent(html, '<h1[^>]*>([^<]*)</h1>');
       expect(heading.length).toBeGreaterThan(10);

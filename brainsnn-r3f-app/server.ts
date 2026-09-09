@@ -32,6 +32,7 @@ import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
 import { createEventStore } from "./src/lib/eventStore.js";
 import { spawn } from "node:child_process";
 import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.js";
+import { compareEngineInputs } from "./src/lib/engineComparison.js";
 
 dotenv.config();
 
@@ -57,6 +58,10 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handl
 // too, and that endpoint embeds the body in a Gemini prompt paid for with the
 // operator's key — 2 MB is roughly 500,000 tokens of attacker-chosen text.
 app.use("/api/analyze", express.json({ limit: BODY_LIMITS.analyze }));
+app.use("/api/engine/compare", (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+}, express.json({ limit: '64kb' }));
 app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
 app.use(express.json({ limit: BODY_LIMITS.general }));
 
@@ -364,6 +369,18 @@ app.get("/api/engines/tribe/scenarios", async (_req, res) => {
     return res.status(response.ok ? 200 : response.status).json(body);
   } catch (error: any) {
     return res.status(503).json({ error: error?.message || "TRIBE scenarios unavailable.", scenarios: [] });
+  }
+});
+
+// Runs two bounded local scans. The general API limiter applies; no paid model,
+// persistence, acceptance or promotion action is available through this route.
+app.post('/api/engine/compare', (req, res) => {
+  try {
+    return res.json(compareEngineInputs(req.body, { revision: process.env.RAILWAY_GIT_COMMIT_SHA || null }));
+  } catch (error) {
+    return res.status(error instanceof TypeError ? 400 : 500).json({
+      error: error instanceof TypeError ? error.message : 'The local comparison could not complete.',
+    });
   }
 });
 

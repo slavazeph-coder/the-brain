@@ -71,6 +71,18 @@ const ROUTES = [
     ],
   },
   {
+    path: '/engine',
+    title: 'Compare two drafts | BrainSNN Engine',
+    description:
+      'Compare original and candidate text with source hashes, exact evidence quotes and heuristic signal changes. Review the result or use the BrainSNN API and MCP tools.',
+    heading: 'Compare a change. Keep its evidence.',
+    body: [
+      'Compare two drafts with BrainSNN’s local content detector. The engine returns source hashes, exact quote offsets and heuristic signal changes so each finding can be inspected against its input.',
+      'Every comparison remains REVIEW_REQUIRED. A model-score change does not verify facts, predict market outcomes or establish an independently tested improvement.',
+      'Agent builders can use POST /api/engine/compare and the brain_compare MCP tool for the same bounded comparison. This interface produces review evidence; it does not execute general agent work.',
+    ],
+  },
+  {
     path: '/app',
     title: 'BrainSNN | Turn text, pages and video into decision intelligence',
     description:
@@ -84,25 +96,27 @@ const ROUTES = [
   },
   {
     path: '/',
-    title: 'BrainSNN | AI work that earns its keep.',
+    title: 'BrainSNN | An evidence engine for agent work.',
     image: '/agent-lab-og.png',
     description:
-      'Watch agents test ideas, build useful tools, and improve from real outcomes. '
-      + 'A working agent lab where useful work earns more resources.',
-    heading: 'AI work that earns its keep.',
+      'Analyze content, improve a draft, and test a decision. '
+      + 'Inspect sources, compare edits and evaluate results with BrainSNN.',
+    heading: 'An evidence engine for agent work.',
     body: [
-      'BrainSNN is a working agent lab. Agents build context, test ideas and deliver useful work. Accepted output, independently reviewed lessons and verified commercial outcomes determine what earns more resources.',
-      'The first commercial mission is XIO’s US$1,500 remote AI Team Setup Day for owner-led service businesses. Initial working time is allocated 70% to acquisition and delivery, 20% to execution and evaluation, and 10% to public storytelling.',
-      'The office displays recorded work and approved evidence. Unknown results remain unavailable, and recorded replays are clearly labelled. Existing content analysis, proof missions, the Arcade and neural simulations remain available as tools and research.',
+      'BrainSNN brings content analysis, reviewed draft improvements, browser-local scan history and proof missions into one product. Start with a passage, page or screen recording, inspect the evidence, and make a change you can test.',
+      'The public detector evaluation reports results on unseen passages, including missed cues and false alarms. Model scores are review signals, not measurements of a reader’s brain or predictions of market outcomes.',
+      'The engine roadmap connects versioned, reusable context with independent tests and evidence-based resource allocation. This is planned integration, not a claim of autonomous learning already running.',
+      'The office preserves a recorded window into XIO’s separate operational experiment. Its approved counts and events are not BrainSNN-wide engine metrics. Unknown results remain unavailable. Reconstruct, the Arcade and neural circuit simulations remain available as tools and research.',
     ],
   },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/', label: 'BrainSNN agent lab' },
+  { path: '/', label: 'BrainSNN evidence engine' },
   { path: '/arcade', label: 'GaugeGap Arcade' },
   { path: '/lab', label: 'Neuro Powder Lab' },
   { path: '/app', label: 'Content analyzer' },
+  { path: '/engine', label: 'Compare two drafts and use the engine API' },
   { path: '/missions', label: 'Proof missions' },
   { path: '/evidence', label: 'Held-out evaluation' },
   { path: '/reconstruct', label: 'Reconstruct a claim' },

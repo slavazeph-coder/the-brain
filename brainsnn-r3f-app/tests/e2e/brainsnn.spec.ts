@@ -177,8 +177,8 @@ test('content reaction lab runs a fully local simulation in the Arcade', async (
   expect(analyzeRequests).toEqual([]);
 
   // Rewrite panel produces a scored alternative without leaving the page.
-  // SegmentedControl renders its options as role="radio", not buttons.
-  await page.getByRole('radio', { name: 'Reduce manipulation' }).click();
+  // ContentReactionLab exposes each rewrite action as a native button.
+  await page.getByRole('button', { name: 'Reduce manipulation', exact: true }).click();
   await expect(page.getByTestId('content-rewrite')).toBeVisible();
 
   // The escape hatch into the full analyst app carries the content along.

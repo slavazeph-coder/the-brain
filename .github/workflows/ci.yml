@@ -51,6 +51,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Engine API smoke test
+        run: node scripts/engine-api-smoke.mjs
+
       - name: MCP server smoke test
         working-directory: brainsnn-r3f-app/mcp-server
         run: |
