@@ -2,6 +2,8 @@
 
 Prepared deployment files for Simon's interruptible RTX 4090 container. **Not a live deployment:** SSH access, driver/CUDA compatibility, model quality, persistence, and the authenticated production route still need verification. No model or Python ML dependency is downloaded by these scripts.
 
+If SSH times out or Vast reports `failed to inject CDI devices`, start with [host-recovery.md](host-recovery.md). It separates the host/container repair from application deployment and explains how to verify the complete current SSH endpoint.
+
 The public BrainSNN website stays on Railway. Its server calls an authenticated OpenAI-compatible `/v1` base over an operator-configured HTTPS tunnel; deterministic/local analysis remains available during container loss. This runtime binds both the gateway (`127.0.0.1:8787`) and vLLM (`127.0.0.1:8000`) to loopback. Never expose port 8000 or forward vLLM administrative endpoints.
 
 ## What runs
