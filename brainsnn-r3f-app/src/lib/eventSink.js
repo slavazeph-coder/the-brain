@@ -68,8 +68,6 @@ export const ALLOWED_EVENTS = new Set([
   'holdout_evidence_viewed',
   'holdout_evidence_cta_clicked',
   'behaviour_home_viewed',
-  'behaviour_nav_missions_clicked',
-  'behaviour_hero_missions_clicked',
   'survival_world_opened',
   'survival_world_external_clicked',
   'proof_missions_viewed',

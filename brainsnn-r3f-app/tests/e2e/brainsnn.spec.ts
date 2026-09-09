@@ -509,9 +509,8 @@ test('the powder lab is reachable from the homepage, not just by typing the URL'
   test.setTimeout(60_000);
   await page.goto('/');
 
-  // The office keeps existing research reachable from its Tools section at
-  // every breakpoint, even though the homepage now serves the agent company.
-  await page.locator('#tools a[href="/lab"]').click();
+  // Research remains reachable from the simplified homepage footer.
+  await page.getByRole('link', { name: 'Neuro Powder Lab', exact: true }).click();
   await expect(page.getByTestId('powder-lab')).toBeVisible();
   await expect(page).toHaveURL(/\/lab$/);
 });
@@ -890,7 +889,7 @@ test('the evidence page is reachable from the landing page and has its own socia
   test.setTimeout(90_000);
 
   await page.goto('/');
-  await page.locator('#tools a[href="/evidence"]').click();
+  await page.getByRole('link', { name: 'Inspect evidence', exact: true }).click();
   await expect(page.getByTestId('evidence-page')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/evidence');
 

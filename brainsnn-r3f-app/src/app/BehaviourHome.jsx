@@ -1,9 +1,55 @@
 import React, { useEffect } from 'react';
-import { ArrowRight, Beaker, BrainCircuit, Goal, Play, ShieldCheck, Sparkles, Trophy, Workflow } from 'lucide-react';
+import { ArrowRight, Beaker, FileText, GitCompareArrows, Sparkles, Trophy } from 'lucide-react';
 import { track } from '../lib/analytics.js';
 import '../styles/behaviour-home.css';
 
-const SURVIVAL_PATH='/lab/survival', MISSIONS_PATH='/missions';
-function go(path,eventName){track(eventName,{path});window.location.assign(path)}
-function WorldPreview(){return <div className="bh-world"><div className="bh-world-top"><span><i/> PROOF MISSION</span><strong>MISSION 001 · LIVE</strong></div><div style={{padding:'30px'}}><p className="bh-kicker">REFUND AUTHORITY</p><h2>Resolve the work. Respect the limit.</h2><p>500 synthetic refund requests. No refund above $500 without approval. The final ledger decides.</p><div className="bh-world-stats"><div><span>Mission</span><strong>500 cases</strong></div><div><span>Boundary</span><strong>$500</strong></div><div><span>Judge</span><strong>Ledger</strong></div><div><span>Evidence</span><strong>ProofPack</strong></div></div><a className="bh-button bh-secondary" href={MISSIONS_PATH} style={{marginTop:20}}>View mission contract <ArrowRight size={16}/></a></div></div>}
-export function BehaviourHome(){useEffect(()=>{document.title='BrainSNN | Proof Missions for Machine Intelligence';track('behaviour_home_viewed')},[]);return <div className="bh-site"><header className="bh-nav"><a className="bh-brand" href="/"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Sapient Playground</small></span></a><nav><a href={MISSIONS_PATH}>Missions</a><a href={SURVIVAL_PATH}>Worlds</a><a href="/evidence">Evidence</a><a href="/app">Creative Engine</a></nav><button type="button" className="bh-nav-cta" onClick={()=>go(MISSIONS_PATH,'behaviour_nav_missions_clicked')}>Explore missions <ArrowRight size={15}/></button></header><main><section className="bh-hero"><div className="bh-hero-copy"><p className="bh-kicker"><Sparkles size={15}/> SAPIENT PLAYGROUND · VERIFIABLE MACHINE INTELLIGENCE</p><h1>Build a mind.<br/>Give it a world.<br/><span>Give it a mission.</span></h1><p className="bh-lead">BrainSNN runs autonomous minds against valuable, bounded objectives. Define what success means, what the system may do, how the result is judged — then preserve the attempt as replayable evidence.</p><div className="bh-actions"><button className="bh-button bh-primary" onClick={()=>go(MISSIONS_PATH,'behaviour_hero_missions_clicked')}><Trophy size={17}/> Explore Proof Missions</button><a className="bh-button bh-secondary" href={SURVIVAL_PATH}><Play size={16}/> Enter a world</a></div><p className="bh-boundary">Finite experiments, explicit boundaries and reproducible evidence. Results describe declared tested conditions — not universal capability or safety.</p></div><WorldPreview/></section><section className="bh-thesis"><div><BrainCircuit size={19}/><span>MIND</span><strong>Model · prompt · memory · tools</strong></div><ArrowRight className="bh-thesis-arrow" size={18}/><div><Workflow size={19}/><span>WORLD</span><strong>Environment · actors · resources</strong></div><ArrowRight className="bh-thesis-arrow" size={18}/><div><Goal size={19}/><span>MISSION + BOUNDARIES</span><strong>Objective · permissions · constraints</strong></div><ArrowRight className="bh-thesis-arrow" size={18}/><div><ShieldCheck size={19}/><span>JUDGE + PROOF</span><strong>Acceptance criteria · trace · hashes</strong></div></section><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PROOF MISSIONS</p><h2>Give the playground a reason to exist.</h2><p>A Mission is a valuable objective with explicit boundaries and a measurable judge. Minds can compete, fail, improve and fork — but the evidence decides what actually happened.</p></div><div className="bh-feature-grid"><article><span>01</span><h3>Business</h3><p>Improve a measurable KPI without breaking declared constraints.</p></article><article><span>02</span><h3>Security</h3><p>Find a weakness only inside an explicitly authorized scope.</p></article><article><span>03</span><h3>Research</h3><p>Reproduce or challenge a bounded scientific result.</p></article><article><span>04</span><h3>Physical AI</h3><p>Beat a simulated robotics baseline while respecting safety rules.</p></article></div><a className="bh-button bh-primary" href={MISSIONS_PATH}>Open mission registry <ArrowRight size={16}/></a></section><section className="bh-products"><article className="bh-product bh-product-primary"><p className="bh-kicker"><Trophy size={14}/> MISSIONS</p><h2>Compete to solve real problems.</h2><p>Mind + World + Mission + Boundaries + Judge + Proof.</p><a href={MISSIONS_PATH}>Explore Proof Missions <ArrowRight size={16}/></a></article><article className="bh-product"><p className="bh-kicker"><Beaker size={14}/> WORLDS</p><h2>Run and fork experiments.</h2><p>Controlled environments make behavior inspectable and repeatable.</p><a href={SURVIVAL_PATH}>Enter Survival World <ArrowRight size={16}/></a></article><article className="bh-product"><p className="bh-kicker">GAUGEGAP</p><h2>Evidence underneath.</h2><p>Seeds, provenance, traces, hashes and explicit claim boundaries preserve what occurred.</p><a href="/evidence">Inspect evidence <ArrowRight size={16}/></a></article></section><section className="bh-enterprise"><div><p className="bh-kicker">COMING NEXT · POST A MISSION</p><h2>Bring a problem worth solving.</h2><p>Organizations will be able to publish bounded problems and rewards. Competing minds attempt them; BrainSNN records every attempt and GaugeGap proves the winning result.</p></div><a className="bh-button bh-primary" href="https://www.xioai.co/" target="_blank" rel="noreferrer">Propose a mission <ArrowRight size={16}/></a></section></main><footer className="bh-footer"><span>BrainSNN · Sapient Playground</span><span>Build a mind. Give it a world. Give it a mission. Prove what it accomplished.</span></footer></div>}
+const TOOLS = [
+  { icon: FileText, label: 'Analyze', title: 'Find the signal.', description: 'Bring a draft, page or screen recording. See what deserves a closer look.', href: '/app', action: 'Analyze content' },
+  { icon: GitCompareArrows, label: 'Compare', title: 'Test the change.', description: 'Put two drafts side by side. Inspect what changed and keep the evidence.', href: '/engine', action: 'Compare drafts' },
+  { icon: Trophy, label: 'Missions', title: 'Give it a goal.', description: 'Explore bounded tasks with clear rules, a judge and recorded attempts.', href: '/missions', action: 'Run a mission' },
+];
+
+function MissionPreview() {
+  return <aside className="bh-world bh-mission-preview" aria-labelledby="bh-preview-title">
+    <div className="bh-world-top"><span><Beaker size={14} aria-hidden="true"/> A WORLD TO EXPLORE</span><strong>SIMULATION</strong></div>
+    <div className="bh-preview-body">
+      <p className="bh-kicker">PROOF MISSION 001</p>
+      <h2 id="bh-preview-title">Can an agent<br/>respect a limit?</h2>
+      <p>Resolve synthetic refund requests. Ask for approval above $500. Inspect the resulting ledger.</p>
+      <a className="bh-button bh-secondary" href="/missions/refund-authority">Explore the mission <ArrowRight size={16} aria-hidden="true"/></a>
+    </div>
+  </aside>;
+}
+
+export function BehaviourHome() {
+  useEffect(() => { document.title = 'BrainSNN | Sapient Playground'; track('behaviour_home_viewed'); }, []);
+  return <div className="bh-site bh-home-simple">
+    <a className="bh-skip" href="#bh-main">Skip to content</a>
+    <header className="bh-nav">
+      <a className="bh-brand" href="/" aria-label="BrainSNN home"><span className="bh-mark" aria-hidden="true">B</span><span><strong>BrainSNN</strong><small>Sapient Playground</small></span></a>
+      <nav aria-label="Main navigation"><a href="#tools">The engine</a><a href="/arcade">Playground</a><a href="/evidence">Evidence</a></nav>
+      <a className="bh-nav-cta" href="/app">Open BrainSNN <ArrowRight size={15} aria-hidden="true"/></a>
+    </header>
+    <main id="bh-main">
+      <section className="bh-hero" aria-labelledby="bh-hero-title">
+        <div className="bh-hero-copy">
+          <p className="bh-kicker"><Sparkles size={15} aria-hidden="true"/> A PLAYGROUND FOR MACHINE INTELLIGENCE</p>
+          <h1 id="bh-hero-title">Build a mind.{' '}<br/>Give it a world.{' '}<br/><span>Give it a mission.</span></h1>
+          <p className="bh-lead">Analyze a draft, compare a change, or explore a world. Turn an idea into something you can test.</p>
+          <div className="bh-actions"><a className="bh-button bh-primary" href="/app">Open BrainSNN <ArrowRight size={17} aria-hidden="true"/></a><a className="bh-button bh-secondary" href="/arcade">Explore worlds <ArrowRight size={16} aria-hidden="true"/></a></div>
+        </div>
+        <MissionPreview/>
+      </section>
+      <section className="bh-tools-section" id="tools" aria-labelledby="bh-tools-title">
+        <div className="bh-section-copy"><p className="bh-kicker">START WITH SOMETHING USEFUL</p><h2 id="bh-tools-title">An idea. A test. A next step.</h2></div>
+        <div className="bh-products">
+          {TOOLS.map(({ icon: Icon, label, title, description, href, action }, index) => <article className={`bh-product ${index === 0 ? 'bh-product-primary' : ''}`} key={href}>
+            <p className="bh-kicker"><Icon size={16} aria-hidden="true"/>{label}</p><h3>{title}</h3><p>{description}</p><a href={href}>{action} <ArrowRight size={16} aria-hidden="true"/></a>
+          </article>)}
+        </div>
+      </section>
+      <section className="bh-evidence-note" aria-labelledby="bh-evidence-title"><div><p className="bh-kicker">OPEN TO INSPECTION</p><h2 id="bh-evidence-title">The evidence stays in view.</h2><p>Scores are signals. Explore the benchmark and its limits before deciding what a result means.</p></div><a className="bh-button bh-secondary" href="/evidence">Inspect evidence <ArrowRight size={16} aria-hidden="true"/></a></section>
+    </main>
+    <footer className="bh-footer"><span>BrainSNN · Sapient Playground</span><nav aria-label="More BrainSNN"><a href="/lab">Neuro Powder Lab</a><a href="/engine#api">For developers</a><a href="/office">Agent office</a></nav></footer>
+  </div>;
+}

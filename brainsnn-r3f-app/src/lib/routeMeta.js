@@ -95,12 +95,10 @@ const ROUTES = [
     ],
   },
   {
-    path: '/',
-    title: 'BrainSNN | An evidence engine for agent work.',
-    image: '/agent-lab-og.png',
+    path: '/office',
+    title: 'Agent office | BrainSNN',
     description:
-      'Analyze content, improve a draft, and test a decision. '
-      + 'Inspect sources, compare edits and evaluate results with BrainSNN.',
+      'Explore the BrainSNN agent-office concept, engine roadmap and recorded evidence from XIO’s separate operational experiment.',
     heading: 'An evidence engine for agent work.',
     body: [
       'BrainSNN brings content analysis, reviewed draft improvements, browser-local scan history and proof missions into one product. Start with a passage, page or screen recording, inspect the evidence, and make a change you can test.',
@@ -109,10 +107,22 @@ const ROUTES = [
       'The office preserves a recorded window into XIO’s separate operational experiment. Its approved counts and events are not BrainSNN-wide engine metrics. Unknown results remain unavailable. Reconstruct, the Arcade and neural circuit simulations remain available as tools and research.',
     ],
   },
+  {
+    path: '/',
+    title: 'BrainSNN | Sapient Playground',
+    image: '/agent-lab-og.png',
+    description:
+      'Analyze a draft, compare a change, or explore a world. A playground for machine intelligence, with evidence you can inspect.',
+    heading: 'Build a mind. Give it a world. Give it a mission.',
+    body: [
+      'Analyze content, compare two drafts, or explore a proof mission. BrainSNN brings its workspace, deterministic comparison engine and simulation worlds within reach.',
+      'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
+    ],
+  },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/', label: 'BrainSNN evidence engine' },
+  { path: '/', label: 'BrainSNN Sapient Playground' },
   { path: '/arcade', label: 'GaugeGap Arcade' },
   { path: '/lab', label: 'Neuro Powder Lab' },
   { path: '/app', label: 'Content analyzer' },
@@ -120,6 +130,7 @@ const CRAWL_LINKS = Object.freeze([
   { path: '/missions', label: 'Proof missions' },
   { path: '/evidence', label: 'Held-out evaluation' },
   { path: '/reconstruct', label: 'Reconstruct a claim' },
+  { path: '/office', label: 'Agent office' },
 ]);
 
 const SHARED_GRID = {
@@ -146,7 +157,7 @@ export function resolveRouteMeta(pathname = '/', search = '') {
       image: `/api/og/lab?grid=${encodeURIComponent(grid)}`,
     };
   }
-  // The office has its own product screenshot; existing tools retain their
+  // The homepage has its own product screenshot; existing tools retain their
   // original card, and shared circuit links keep the dynamic preview above.
   return { ...route, image: route.image || '/og-image.png' };
 }

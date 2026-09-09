@@ -1,5 +1,6 @@
 import { describe, expect, it } from '../test/tinyVitest.js';
 import { applyRouteMeta, renderContentBlock, resolveRouteMeta } from './routeMeta.js';
+import { LAB_TITLE } from '../features/agent-lab/agentLabModel.js';
 
 const HTML = `<!doctype html>
 <html lang="en">
@@ -23,19 +24,28 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('positions the homepage around the available evidence engine and scopes the XIO example', () => {
+  it('restores the Sapient Playground homepage around its available tools', () => {
     const home = resolveRouteMeta('/');
-    expect(home.title).toContain('BrainSNN');
-    expect(home.title).toContain('An evidence engine for agent work.');
-    expect(home.description).toContain('Analyze content, improve a draft, and test a decision.');
-    expect(home.body.join(' ')).toContain('browser-local scan history');
-    expect(home.body.join(' ')).toContain('planned integration');
-    expect(home.body.join(' ')).toContain('not BrainSNN-wide engine metrics');
+    expect(home.title).toBe('BrainSNN | Sapient Playground');
+    expect(home.heading).toBe('Build a mind. Give it a world. Give it a mission.');
+    expect(home.description).toBe('Analyze a draft, compare a change, or explore a world. A playground for machine intelligence, with evidence you can inspect.');
+    expect(home.body.join(' ')).toContain('deterministic comparison engine');
+    expect(home.body.join(' ')).not.toContain('XIO');
     expect(home.body.join(' ')).not.toContain('US$1,500');
     expect(home.body.join(' ')).not.toContain('70%');
   });
 
-  it('keeps the analyzer distinct from the engine homepage', () => {
+  it('keeps the office roadmap and operational evidence on their own route', () => {
+    const office = resolveRouteMeta('/office');
+    expect(office.title).toBe('Agent office | BrainSNN');
+    expect(office.title).toBe(LAB_TITLE);
+    expect(office.title).not.toBe(resolveRouteMeta('/').title);
+    expect(office.body.join(' ')).toContain('planned integration');
+    expect(office.body.join(' ')).toContain('not BrainSNN-wide engine metrics');
+    expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/office"');
+  });
+
+  it('keeps the analyzer distinct from the playground homepage', () => {
     expect(resolveRouteMeta('/app').title).not.toBe(resolveRouteMeta('/').title);
     expect(resolveRouteMeta('/app').title).toContain('decision intelligence');
     expect(resolveRouteMeta('/app').description).toContain('workflow steps');
@@ -86,7 +96,7 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Analyze content, improve a draft');
+    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Analyze a draft, compare a change, or explore a world');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -130,7 +140,7 @@ describe('content a crawler can read without running JavaScript', () => {
   });
 
   it('gives every major route a heading and real prose', () => {
-    for (const path of ['/', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
+    for (const path of ['/', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
       const heading = tagContent(html, '<h1[^>]*>([^<]*)</h1>');
       expect(heading.length).toBeGreaterThan(10);

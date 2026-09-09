@@ -24,7 +24,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
-→ [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective.
+→ [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective. Sept9: restore original cyan/violet Sapient Playground identity; keep the homepage simple.
 
 ## Active Work
 

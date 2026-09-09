@@ -1,4 +1,4 @@
-export const LAB_TITLE = 'BrainSNN | An evidence engine for agent work.';
+export const LAB_TITLE = 'Agent office | BrainSNN';
 export const LAB_DESCRIPTION = 'Analyze content, improve a draft, and test a decision. Keep the sources, edits and results visible so the next step has something to stand on.';
 export const SETUP_DAY_URL = 'https://www.xioai.co/ai-team-setup-day';
 
