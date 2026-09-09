@@ -1,5 +1,5 @@
-export const LAB_TITLE = 'BrainSNN | AI work that earns its keep.';
-export const LAB_DESCRIPTION = 'Watch agents test ideas, build useful tools, and improve from real outcomes.';
+export const LAB_TITLE = 'BrainSNN | An evidence engine for agent work.';
+export const LAB_DESCRIPTION = 'Analyze content, improve a draft, and test a decision. Keep the sources, edits and results visible so the next step has something to stand on.';
 export const SETUP_DAY_URL = 'https://www.xioai.co/ai-team-setup-day';
 
 export const WORK_STAGES = Object.freeze([

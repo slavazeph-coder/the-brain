@@ -10,7 +10,7 @@ const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 console.log('tools:', names.join(', '));
 
-const expected = ['brain_affect', 'brain_analyze', 'brain_decode', 'brain_firewall', 'brain_layers', 'brain_soliton', 'brain_soliton_explore'];
+const expected = ['brain_affect', 'brain_analyze', 'brain_compare', 'brain_decode', 'brain_firewall', 'brain_layers', 'brain_promotion_check', 'brain_soliton', 'brain_soliton_explore'];
 for (const name of expected) {
   if (!names.includes(name)) throw new Error(`missing tool: ${name}`);
 }
@@ -30,6 +30,20 @@ if (layers.total < 103) throw new Error('brain_layers total too low');
 const decode = JSON.parse((await client.callTool({ name: 'brain_decode', arguments: { decodedText: 'Customer proof makes this launch easier to trust.', confidence: 42 } })).content[0].text);
 console.log('brain_decode →', 'uncertainty', decode.uncertainty.band, '| firewall grade', decode.result.firewallSignals.grade);
 if (!decode.uncertainty.band || !decode.neuralInput.schemaVersion) throw new Error('brain_decode returned an incomplete envelope');
+
+const compared = JSON.parse((await client.callTool({ name: 'brain_compare', arguments: {
+  original: 'Guaranteed! Act now before this hidden threat ruins your business.',
+  candidate: 'Test the workflow with your team. Review the source and measured limitations.',
+} })).content[0].text);
+if (!compared.signalsWithinLimits || compared.decision !== 'REVIEW_REQUIRED' || compared.execution.providerCalls !== 0) throw new Error('brain_compare did not return a bounded review record');
+if (compared.evidence.workAccepted || compared.evidence.marketOutcomeMeasured) throw new Error('brain_compare invented an outcome');
+
+const missingScore = JSON.parse((await client.callTool({ name: 'brain_promotion_check', arguments: { candidate: {
+  id: 'missing-score', status: 'EVALUATED', model: { trained: true },
+  dataset: { id: 'fixture', split: 'held-out-validation' },
+  metrics: { meanPearson: null, latencyMs: 100 }, benchmarkValid: true, dataLeakageDetected: false,
+} } })).content[0].text);
+if (missingScore.promote !== false) throw new Error('brain_promotion_check accepted a missing benchmark');
 
 await client.close();
 console.log('SMOKE_OK');

@@ -15,6 +15,8 @@ import { computeSolitonField, exploreSolitonField } from '../src/lib/solitonLaye
 import { computeFirewall } from '../src/lib/firewallLayer.js';
 import { computeAffect } from '../src/lib/affectLayer.js';
 import { createReplayNeuralInput, deriveDecodeUncertainty } from '../src/lib/neuralInputGateway.js';
+import { compareEngineInputs, ENGINE_COMPARE_MAX_CHARS } from '../src/lib/engineComparison.js';
+import { evaluatePromotion } from '../src/lib/researchDirector.js';
 
 const json = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 const baseScan = (content, contentType = 'text') => analyzeContentLocally({ content, contentType, forceFallback: true });
@@ -23,7 +25,7 @@ const server = new McpServer({ name: 'brainsnn', version: '0.1.0' });
 
 server.tool(
   'brain_analyze',
-  'Run the full BrainSNN 103-layer scan of content (firewall, affect, TRIBE projection, soliton, receipt). Deterministic and offline.',
+  'Run the implemented local BrainSNN analysis stack (firewall, affect, simulated projection, soliton, receipt). Deterministic and offline; catalog size does not mean every named layer executes.',
   { content: z.string(), contentType: z.string().optional() },
   async ({ content, contentType }) => json(runLayerRouter({
     content,
@@ -89,5 +91,28 @@ server.tool(
 );
 
 const transport = new StdioServerTransport();
+server.tool(
+  'brain_compare',
+  'Compare original and candidate text with the same deterministic scorer. Returns exact text hashes, source spans, signal regressions and a review record. Does not verify facts, measure market outcomes, accept work or promote context.',
+  {
+    original: z.string().min(1).max(ENGINE_COMPARE_MAX_CHARS),
+    candidate: z.string().min(1).max(ENGINE_COMPARE_MAX_CHARS),
+    limits: z.object({ maxTrustDrop: z.number().min(0).max(100).optional(), maxPressureIncrease: z.number().min(0).max(1).optional() }).optional(),
+  },
+  async (input) => json(compareEngineInputs(input)),
+);
+
+server.tool(
+  'brain_promotion_check',
+  'Check supplied model benchmark records for completion, measured scores, compatible dataset/split and latency constraints. Returns eligibility only; it does not independently verify benchmark provenance, train, deploy or promote a model.',
+  {
+    candidate: z.record(z.unknown()),
+    champion: z.record(z.unknown()).nullable().optional(),
+    minDelta: z.number().min(0).max(2).optional(),
+    maxLatencyIncreaseFraction: z.number().min(0).optional(),
+  },
+  async (input) => json(evaluatePromotion(input)),
+);
+
 await server.connect(transport);
-console.error('BrainSNN MCP server ready on stdio (6 tools).');
+console.error('BrainSNN MCP server ready on stdio (9 tools).');

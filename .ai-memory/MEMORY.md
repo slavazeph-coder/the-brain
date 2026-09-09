@@ -22,6 +22,10 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 - Agents: main, imessage
 - Cron jobs: workspace-git-sync (3h), memory-cleanup-weekly, daily-self-review
 
+## Current BrainSNN direction
+
+→ [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective.
+
 ## Active Work
 
 <!-- Both AIs append notes here as they work -->
