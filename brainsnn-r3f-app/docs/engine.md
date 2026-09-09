@@ -4,6 +4,8 @@ BrainSNN analyzes content, helps revise it, and produces inspectable comparison 
 
 ## Available now
 
+- `/`: the simplified Sapient Playground homepage.
+- `/office`: the detailed agent-office concept, roadmap and recorded operational example.
 - `/app`: analyze and improve content; save scans and versions.
 - `/engine`: compare original and candidate text with the same deterministic scorer, inspect source-linked signals, and download a review record.
 - `/evidence`: inspect the current detector evaluation and its limitations.
