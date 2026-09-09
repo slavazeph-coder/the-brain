@@ -55,6 +55,16 @@ describe('BrainSNN layer router', () => {
     expect(status.engines.tribe.configured).toBe(true);
   });
 
+  it('reports GPU configuration as unverified until the server checks it', () => {
+    const status = getEngineStatusSnapshot({
+      GPU_INFERENCE_URL: 'https://private.example/v1', GPU_INFERENCE_KEY: 'secret-token', GPU_INFERENCE_MODEL: 'model',
+    });
+    expect(status.engines.gpu).toEqual({ configured: true, status: 'unverified' });
+    expect(JSON.stringify(status)).not.toContain('private.example');
+    expect(JSON.stringify(status)).not.toContain('secret-token');
+    expect(getEngineStatusSnapshot({ GPU_INFERENCE_URL: 'https://private.example/v1' }).engines.gpu.status).toBe('invalid_configuration');
+  });
+
   it('runs an autopsy comparison with layer evidence', () => {
     const autopsy = createAutopsyFromLayerStack(
       'Last chance to unlock the secret growth system before competitors win.',

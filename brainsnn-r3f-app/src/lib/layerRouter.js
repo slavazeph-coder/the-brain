@@ -70,6 +70,8 @@ function buildTribeProjection(result = {}, firewallSignals, affectProfile, tribe
 
 export function getEngineStatusSnapshot(env = {}) {
   const has = (key) => Boolean(env[key]);
+  const gpuConfigured = has('GPU_INFERENCE_URL') && has('GPU_INFERENCE_KEY') && has('GPU_INFERENCE_MODEL');
+  const gpuEnabled = has('GPU_INFERENCE_URL') || has('GPU_INFERENCE_KEY') || has('GPU_INFERENCE_MODEL');
   return {
     totalLayers: LAYER_CATALOG.length,
     coreLayers: layersByIds(CORE_LAYER_IDS),
@@ -79,6 +81,7 @@ export function getEngineStatusSnapshot(env = {}) {
       openai: { configured: has('OPENAI_API_KEY'), status: has('OPENAI_API_KEY') ? 'configured' : 'not_configured' },
       gemini: { configured: has('GEMINI_API_KEY'), status: has('GEMINI_API_KEY') ? 'configured' : 'not_configured' },
       gemma: { configured: has('GEMMA_API_ENDPOINT'), status: has('GEMMA_API_ENDPOINT') ? 'configured' : 'not_configured' },
+      gpu: { configured: gpuConfigured, status: gpuConfigured ? 'unverified' : gpuEnabled ? 'invalid_configuration' : 'not_configured' },
       tribe: { configured: has('TRIBE_API_URL'), status: has('TRIBE_API_URL') ? 'configured' : 'not_configured' },
     },
   };

@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CreditCard, Database, Layers, RadioTower, Sparkles } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { LAYER_CATALOG } from '../../lib/layerCatalog.js';
+import { analysisProviderReadiness } from './engineReadiness.js';
 
 function statusLabel(status) {
   if (!status) return 'checking';
@@ -35,11 +36,7 @@ export function EngineReadinessPanel() {
     return () => { cancelled = true; };
   }, []);
 
-  const modelStack = useMemo(() => {
-    const engines = status?.engines || {};
-    const configured = ['openai', 'gemini', 'gemma'].filter((key) => engines[key]?.configured);
-    return configured.length ? configured.map((key) => key.toUpperCase()).join(' + ') : 'deterministic local fallback';
-  }, [status]);
+  const modelProvider = analysisProviderReadiness(status);
 
   const persistenceReady = Boolean(status?.engines?.supabase?.configured);
   const billingReady = Boolean(status?.engines?.stripe?.configured);
@@ -50,8 +47,8 @@ export function EngineReadinessPanel() {
         <p className="bsn-eyebrow">Engine status</p>
         <h2 id="engine-readiness-heading">What powers this scan</h2>
         <p className="bsn-note">
-          Scans run on the built-in local engine by default — nothing leaves your browser.
-          Optional providers switch on automatically when they are connected.
+          Scans are sent to BrainSNN's server. Connected AI providers may process the content;
+          the built-in engine supplies a fallback when a provider is unavailable.
         </p>
       </div>
       <div className="readiness-grid">
@@ -64,8 +61,8 @@ export function EngineReadinessPanel() {
         <ReadinessItem
           icon={Sparkles}
           label="Model"
-          detail={modelStack.includes('fallback') ? 'local engine (offline)' : modelStack}
-          status={status ? 'ready' : 'checking'}
+          detail={modelProvider.detail}
+          status={modelProvider.status}
         />
         <ReadinessItem
           icon={RadioTower}

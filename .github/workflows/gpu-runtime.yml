@@ -1,0 +1,32 @@
+name: GPU Runtime
+
+on:
+  pull_request:
+    paths:
+      - 'ops/gpu/**'
+      - '.github/workflows/gpu-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ops/gpu/**'
+      - '.github/workflows/gpu-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supervisor-and-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile runtime
+        run: python -m compileall -q ops/gpu
+      - name: Exercise process recovery and gateway with CPU fixtures
+        run: python -m unittest discover -s ops/gpu/tests -v
+      - name: Verify evaluation checkpoints and preemption recovery
+        run: python -m unittest discover -s ops/gpu -p 'test_evaluate_queue.py' -v
