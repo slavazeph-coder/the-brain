@@ -35,6 +35,11 @@ on:
         type: string
         required: true
         default: "c9e90669eeb205d5af35c28a3e9983fc9293c2ec"
+      use_server_grammar:
+        description: "Pass the schema as a global --json-schema. Incompatible with the adapter's response_format; see run 34475494190."
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [codex/simon-4090-runtime]
     paths:
@@ -53,6 +58,7 @@ jobs:
       MODEL_FILE: ${{ inputs.model_file || 'Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf' }}
       MODEL_REVISION: ${{ inputs.model_revision || 'c9e90669eeb205d5af35c28a3e9983fc9293c2ec' }}
       PORT: "8080"
+      USE_SERVER_GRAMMAR: ${{ inputs.use_server_grammar && 'true' || 'false' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -99,12 +105,24 @@ jobs:
           # The digest is the model's real immutable identity for the llama.cpp
           # backend, which pins by content rather than by repo revision.
 
-      - name: Start llama-server with grammar-constrained decoding
+      - name: Start llama-server
         run: |
           set -euo pipefail
           KEY="ci-$(openssl rand -hex 16)"
           echo "GPU_INFERENCE_KEY=$KEY" >> "$GITHUB_ENV"
-          schema="$(tr -d '\n' < ops/gpu/ci/brainsnn-analysis.schema.json)"
+          # A GLOBAL --json-schema is incompatible with the per-request
+          # response_format=json_object that gpuInference.js always sends:
+          # llama-server then tries to build two grammars and fails sampler
+          # initialization with a 400 "Failed to initialize samplers", which the
+          # adapter reports as upstream_error and falls back on. Verified in run
+          # 34475494190 both directly and through the adapter, and NOT caused by
+          # grammar size (dropping every string maxLength did not change it).
+          # So the grammar is opt-in here, and off by default, which lets this
+          # workflow measure what the model can do unaided.
+          extra=()
+          if [ "${USE_SERVER_GRAMMAR}" = "true" ]; then
+            extra=(--json-schema "$(tr -d '\n' < ops/gpu/ci/brainsnn-analysis.schema.json)")
+          fi
           docker run -d --name llama \
             -p 127.0.0.1:${PORT}:${PORT} \
             -v "$PWD/models:/models:ro" \
@@ -116,8 +134,8 @@ jobs:
             --parallel 2 \
             --threads "$(nproc)" \
             --api-key "$KEY" \
-            --json-schema "$schema"
-          echo "container started"
+            "${extra[@]}"
+          echo "container started (server grammar: ${USE_SERVER_GRAMMAR})"
 
       - name: Wait for the model to become ready
         run: |
@@ -160,8 +178,14 @@ jobs:
             head -c 1200 direct.json; echo
           } | tee evidence/03-direct-completion.txt
           if [ "$code" != "200" ]; then
-            echo "::warning::direct completion returned $code - see server log"
             docker logs llama 2>&1 | tail -20
+            if [ "${USE_SERVER_GRAMMAR}" = "true" ]; then
+              # Known incompatibility, deliberately exercised - warn, do not fail.
+              echo "::warning::direct completion returned $code with the global grammar enabled (expected; see run 34475494190)"
+            else
+              echo "::error::direct completion returned $code with no server grammar - this is a real server or model fault"
+              exit 1
+            fi
           fi
 
       - name: Run the REAL production adapter against the model
