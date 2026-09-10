@@ -1,0 +1,63 @@
+name: GPU Host Keyscan (bootstrap only)
+
+# Bootstrap helper. Prints the SSH host keys and fingerprints that a
+# GitHub-hosted runner sees for Simon's container so an operator can compare
+# them against what they see from a trusted network before pinning them as
+# BRAINSNN_GPU_KNOWN_HOSTS. This workflow uses NO secrets and never connects
+# with a credential - it only reads the public host key the server advertises.
+#
+# Trust-on-first-use is NOT acceptable on its own: compare the fingerprint
+# printed here with the fingerprint Slava sees from his own machine
+#   ssh-keyscan -p 40008 142.179.227.252 | ssh-keygen -lf -
+# and only then store the known_hosts line as a repository secret.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keyscan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SSH_HOST: ${{ vars.BRAINSNN_GPU_SSH_HOST }}
+      SSH_PORT: ${{ vars.BRAINSNN_GPU_SSH_PORT }}
+    steps:
+      - name: Validate host variables
+        run: |
+          set -euo pipefail
+          : "${SSH_HOST:?set repository variable BRAINSNN_GPU_SSH_HOST}"
+          : "${SSH_PORT:?set repository variable BRAINSNN_GPU_SSH_PORT}"
+          echo "host=$SSH_HOST port=$SSH_PORT"
+
+      - name: Scan and fingerprint host keys
+        run: |
+          set -euo pipefail
+          umask 077
+          out="$RUNNER_TEMP/known_hosts.scanned"
+          if ! timeout 30 ssh-keyscan -T 15 -p "$SSH_PORT" -t ed25519,rsa,ecdsa "$SSH_HOST" > "$out" 2>"$RUNNER_TEMP/keyscan.err"; then
+            echo "::error::ssh-keyscan failed - the endpoint did not answer from a GitHub-hosted runner"
+            cat "$RUNNER_TEMP/keyscan.err"
+            exit 1
+          fi
+          if [ ! -s "$out" ]; then
+            echo "::error::ssh-keyscan returned no host keys (port closed, filtered, or wrong endpoint)"
+            cat "$RUNNER_TEMP/keyscan.err"
+            exit 1
+          fi
+          echo "===== FINGERPRINTS (compare these against a trusted local scan) ====="
+          ssh-keygen -lf "$out"
+          echo
+          echo "===== known_hosts lines - store the ed25519 line as BRAINSNN_GPU_KNOWN_HOSTS ====="
+          cat "$out"
+
+      - name: Upload scanned host keys
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-host-keyscan
+          path: ${{ runner.temp }}/known_hosts.scanned
+          if-no-files-found: warn
+          retention-days: 7
