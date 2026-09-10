@@ -77,7 +77,15 @@ jobs:
             echo "::error::model_revision must be an immutable 40-hex commit"; exit 1
           fi
 
+      - name: Cache the pinned GGUF
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: gguf-${{ inputs.model_revision || 'c9e90669eeb205d5af35c28a3e9983fc9293c2ec' }}-${{ inputs.model_file || 'Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf' }}
+
       - name: Download the pinned GGUF
+        if: steps.model-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p models
@@ -133,6 +141,28 @@ jobs:
             echo "WRONGKEY=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H 'Authorization: Bearer wrong' http://127.0.0.1:${PORT}/v1/models || echo fail)"
             echo "AUTHORIZED=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "Authorization: Bearer $GPU_INFERENCE_KEY" http://127.0.0.1:${PORT}/v1/models || echo fail)"
           } | tee evidence/02-gateway-auth.txt
+
+      - name: Direct completion (isolates grammar/sampler faults from the adapter)
+        run: |
+          set -euo pipefail
+          # The adapter sends response_format=json_object AND the server carries a
+          # global --json-schema grammar. This step exercises the same combination
+          # directly, so a sampler failure is attributed to the server rather than
+          # being reported as an adapter/model-quality problem.
+          body='{"model":"brainsnn-local","response_format":{"type":"json_object"},"max_tokens":2048,"temperature":0.2,"messages":[{"role":"system","content":"Return only a JSON object describing the content."},{"role":"user","content":"Officials refuse to answer questions about the missing funds."}]}'
+          code="$(curl -s -o direct.json -w '%{http_code}' -m 600 -X POST \
+            -H "Authorization: Bearer $GPU_INFERENCE_KEY" -H 'Content-Type: application/json' \
+            -d "$body" "http://127.0.0.1:${PORT}/v1/chat/completions" || echo curl_failed)"
+          {
+            echo "DIRECT_HTTP=$code"
+            echo "DIRECT_BYTES=$(stat -c %s direct.json 2>/dev/null || echo 0)"
+            echo "--- body (first 1200 chars) ---"
+            head -c 1200 direct.json; echo
+          } | tee evidence/03-direct-completion.txt
+          if [ "$code" != "200" ]; then
+            echo "::warning::direct completion returned $code - see server log"
+            docker logs llama 2>&1 | tail -20
+          fi
 
       - name: Run the REAL production adapter against the model
         run: |

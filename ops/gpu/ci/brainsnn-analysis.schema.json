@@ -23,37 +23,98 @@
     "confidence"
   ],
   "properties": {
-    "title": { "type": "string", "maxLength": 160 },
-    "fear": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "anger": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "urgency": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "trust": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "excitement": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "empathy": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "firingRate": { "type": "integer", "minimum": 20, "maximum": 120 },
-    "plasticity": { "type": "integer", "minimum": 10, "maximum": 100 },
+    "title": {
+      "type": "string"
+    },
+    "fear": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "anger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "urgency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "trust": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "excitement": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "empathy": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "firingRate": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 120
+    },
+    "plasticity": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 100
+    },
     "attentionCurve": {
       "type": "array",
       "minItems": 10,
       "maxItems": 10,
-      "items": { "type": "integer", "minimum": 0, "maximum": 100 }
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100
+      }
     },
-    "riskRating": { "enum": ["Low", "Medium", "High", "Critical"] },
-    "riskDescription": { "type": "string", "maxLength": 1600 },
-    "viralScore": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "gaugeGapScore": { "type": "integer", "minimum": 0, "maximum": 100 },
-    "summary": { "type": "string", "maxLength": 2000 },
+    "riskRating": {
+      "enum": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+      ]
+    },
+    "riskDescription": {
+      "type": "string"
+    },
+    "viralScore": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "gaugeGapScore": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "summary": {
+      "type": "string"
+    },
     "insights": {
       "type": "array",
       "minItems": 3,
       "maxItems": 3,
-      "items": { "type": "string", "maxLength": 800 }
+      "items": {
+        "type": "string"
+      }
     },
     "recommendations": {
       "type": "array",
       "minItems": 3,
       "maxItems": 3,
-      "items": { "type": "string", "maxLength": 800 }
+      "items": {
+        "type": "string"
+      }
     },
     "payloadType": {
       "enum": [
@@ -65,6 +126,10 @@
         "Sustained Baseline"
       ]
     },
-    "confidence": { "type": "integer", "minimum": 0, "maximum": 100 }
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    }
   }
 }

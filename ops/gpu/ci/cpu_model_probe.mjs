@@ -94,14 +94,22 @@ try {
   report.responseBytes = capturedBodyBytes;
 
   // Surface what the model actually emitted, for eyeballing coherence.
+  report.httpStatus = captured.status;
   try {
     const parsed = JSON.parse(captured.text);
     const content = parsed?.choices?.[0]?.message?.content;
     report.finishReason = parsed?.choices?.[0]?.finish_reason ?? null;
     report.modelJsonPreview =
       typeof content === "string" ? content.slice(0, 400) : null;
+    // A non-200, or a 200 carrying an error envelope, is a SERVER fault. Surface
+    // it verbatim rather than reporting a null preview, which reads as though the
+    // model simply produced nothing and sends debugging in the wrong direction.
+    if (captured.status !== 200 || parsed?.error) {
+      report.upstreamError = captured.text.slice(0, 600);
+    }
   } catch {
     report.modelJsonPreview = "<unparseable>";
+    report.upstreamError = captured.text.slice(0, 600);
   }
 
   const replaying = createGpuInferenceClient(env, { fetchImpl: replayFetch });
