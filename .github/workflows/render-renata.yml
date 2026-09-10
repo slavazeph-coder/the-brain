@@ -1,0 +1,58 @@
+name: Render Por Que Renata Episode 1
+
+on:
+  push:
+    branches:
+      - render/por-que-renata-episode1
+    paths:
+      - tools/renata_render.py
+      - tools/polish_renata_subtitles.py
+      - .github/workflows/render-renata.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/renata_render.py
+      - tools/polish_renata_subtitles.py
+      - .github/workflows/render-renata.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out render branch
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg and subtitle fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          ffmpeg -version
+
+      - name: Build full vertical episode
+        run: python3 tools/renata_render.py
+
+      - name: Polish mobile subtitles
+        run: python3 tools/polish_renata_subtitles.py
+
+      - name: Inspect rendered files
+        run: |
+          ls -lh render_output
+          ffprobe -v error -show_entries format=duration,size -of json render_output/Por-Que-Renata-Episode-1-Full-Post-Ready.mp4
+
+      - name: Upload final episode package
+        uses: actions/upload-artifact@v4
+        with:
+          name: por-que-renata-episode-1-full
+          path: |
+            render_output/Por-Que-Renata-Episode-1-Full-Post-Ready.mp4
+            render_output/Por-Que-Renata-Episode-1-Full-Clean.mp4
+            render_output/Por-Que-Renata-Episode-1-Full.srt
+            render_output/Por-Que-Renata-Episode-1-Timeline.json
+          retention-days: 7
+          if-no-files-found: error
