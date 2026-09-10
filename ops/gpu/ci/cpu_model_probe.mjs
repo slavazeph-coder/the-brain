@@ -33,6 +33,7 @@ const env = {
 };
 
 let captured = null;
+let capturePromise = null;
 let capturedBodyBytes = 0;
 let inferenceSeconds = null;
 
@@ -40,17 +41,25 @@ let inferenceSeconds = null;
 // parameters), forward it with no deadline, and cache the reply.
 async function capturingFetch(url, options) {
   const started = Date.now();
-  const response = await fetch(url, { ...options, signal: undefined });
-  const text = await response.text();
-  if (String(url).includes("chat/completions")) {
-    captured = { status: response.status, text };
-    capturedBodyBytes = Buffer.byteLength(text);
-    inferenceSeconds = (Date.now() - started) / 1000;
-  }
-  return new Response(text, {
-    status: response.status,
-    headers: { "content-type": "application/json" },
-  });
+  const work = (async () => {
+    const response = await fetch(url, { ...options, signal: undefined });
+    const text = await response.text();
+    if (String(url).includes("chat/completions")) {
+      captured = { status: response.status, text };
+      capturedBodyBytes = Buffer.byteLength(text);
+      inferenceSeconds = (Date.now() - started) / 1000;
+    }
+    return new Response(text, {
+      status: response.status,
+      headers: { "content-type": "application/json" },
+    });
+  })();
+  // The adapter's own 30s deadline will usually fire first on CPU, abandoning
+  // this call. Hold the promise so pass 1 can still wait for the real reply -
+  // otherwise `captured` is read while the request is in flight and the probe
+  // blames the model for what is only slowness.
+  if (String(url).includes("chat/completions")) capturePromise = work;
+  return work;
 }
 
 // Pass 2: replay the cached reply instantly so the adapter's own deadline is
@@ -87,6 +96,9 @@ try {
     contentType: "text",
     engineStatus: {},
   }).catch(() => null);
+
+  // Wait for the real generation even though the adapter already gave up on it.
+  if (capturePromise) await capturePromise.catch(() => null);
 
   if (!captured)
     throw new Error("no chat/completions response was captured from the model");
