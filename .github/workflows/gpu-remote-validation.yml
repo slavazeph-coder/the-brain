@@ -1,0 +1,808 @@
+name: GPU Remote Validation (Simon 4090)
+
+# Manual-only. This is the ONLY workflow that uses SSH credentials, and it is
+# deliberately kept out of pull_request/push triggers so a fork or a branch
+# cannot reach Simon's container. Evidence is uploaded as a sanitized artifact.
+#
+# What this proves (when the corresponding level runs and the marker appears):
+#   SSH_EXTERNAL_OK             external SSH from a GitHub-hosted runner
+#   GPU_VISIBLE_OK              the physical RTX 4090 is visible to the container
+#   GPU_COMPUTE_OK              PyTorch executed a real CUDA kernel
+#   WORKSPACE_PERSIST_OK        /workspace/slava survives an SSH reconnect
+#                               (NOT container stop/recreate - separate claim)
+#   RUNTIME_INSTALL_OK          the exact PR SHA's runtime installed remotely
+#   SUPERVISOR_PERSIST_OK       the supervisor survives SSH logout
+#   REAL_MODEL_READY            a pinned model loaded and the backend is ready
+#   BRAINSNN_REAL_GPU_INFERENCE_OK  the production gpuInference.js adapter
+#                               validated a real model response
+#   REAL_GPU_RECOVERY_OK        the supervisor restarted the real inference child
+#   BACKGROUND_CHECKPOINT_OK    the finite evaluation queue checkpointed
+#
+# What this workflow deliberately does NOT claim: container-restart
+# persistence, independent backup restoration, uptime, or sustained useful
+# GPU utilization. Those need host-side action or real operating history.
+
+on:
+  workflow_dispatch:
+    inputs:
+      level:
+        description: 'How far to go. Each level includes the earlier ones.'
+        type: choice
+        required: true
+        default: connectivity
+        options:
+          - connectivity          # phases 3-6
+          - install               # + phases 7-9 (no vLLM install unless enabled)
+          - model                 # + phases 10-13
+          - recovery-and-queue    # + phases 14-15
+      install_vllm:
+        description: 'Create /workspace/slava/vllm-venv and install a PINNED vLLM (large download).'
+        type: boolean
+        required: false
+        default: false
+      vllm_version:
+        description: 'Exact vLLM version to pin, e.g. 0.10.1. Required when install_vllm is true. No default on purpose.'
+        type: string
+        required: false
+        default: ''
+      model_repo:
+        description: 'Model repository. Candidate only - justify any change in the PR.'
+        type: string
+        required: false
+        default: 'Qwen/Qwen3-4B-Instruct-2507'
+      model_revision:
+        description: 'Immutable 40-hex model commit. Required for the model level.'
+        type: string
+        required: false
+        default: ''
+      allow_model_download:
+        description: 'Permit the container to download model weights (needs disk + egress).'
+        type: boolean
+        required: false
+        default: false
+      probe_iterations:
+        description: 'Real adapter analyses to run (1-10).'
+        type: string
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-remote-validation
+  cancel-in-progress: false
+
+jobs:
+  remote-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SSH_HOST: ${{ vars.BRAINSNN_GPU_SSH_HOST }}
+      SSH_PORT: ${{ vars.BRAINSNN_GPU_SSH_PORT }}
+      SSH_USER: ${{ vars.BRAINSNN_GPU_SSH_USER }}
+      SSH_KEY: ${{ runner.temp }}/id_ed25519
+      KNOWN: ${{ runner.temp }}/known_hosts
+      EVIDENCE: ${{ runner.temp }}/evidence
+      REMOTE_ROOT: /workspace/slava
+      REMOTE_SRC: /workspace/slava/pr143-src
+      RUNTIME_DIR: /workspace/slava/brainsnn-gpu-runtime
+      VENV_DIR: /workspace/slava/vllm-venv
+      MARKER_DIR: /workspace/slava/pr143-validation
+      LEVEL: ${{ inputs.level }}
+      MODEL_REPO: ${{ inputs.model_repo }}
+      MODEL_REVISION: ${{ inputs.model_revision }}
+      VLLM_VERSION: ${{ inputs.vllm_version }}
+      PROBE_ITERATIONS: ${{ inputs.probe_iterations }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ---------------------------------------------------------------- 00
+      - name: Record metadata and pin the SHA under test
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          {
+            echo "utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "pr=143"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "workflow_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "ref=${GITHUB_REF}"
+            echo "expected_sha=$(git rev-parse HEAD)"
+            echo "level=${LEVEL}"
+            echo "model_repo=${MODEL_REPO}"
+            echo "model_revision=${MODEL_REVISION}"
+            echo "install_vllm=${{ inputs.install_vllm }}"
+            echo "allow_model_download=${{ inputs.allow_model_download }}"
+            echo "runner_os=$(uname -a)"
+          } | tee "$EVIDENCE/00-metadata.txt"
+          echo "EXPECTED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Fail fast when SSH credentials or host variables are absent
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.BRAINSNN_GPU_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.BRAINSNN_GPU_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          fail=0
+          if [ -z "${SSH_PRIVATE_KEY:-}" ]; then
+            echo "::error::secret BRAINSNN_GPU_SSH_PRIVATE_KEY is not set - remote validation cannot run"; fail=1
+          fi
+          if [ -z "${KNOWN_HOSTS:-}" ]; then
+            echo "::error::secret BRAINSNN_GPU_KNOWN_HOSTS is not set - run the GPU Host Keyscan workflow, verify the fingerprint out of band, then store it. Host-key checking is NOT bypassed."; fail=1
+          fi
+          if [ -z "${SSH_HOST:-}" ] || [ -z "${SSH_PORT:-}" ] || [ -z "${SSH_USER:-}" ]; then
+            echo "::error::repository variables BRAINSNN_GPU_SSH_HOST / _PORT / _USER are required"; fail=1
+          fi
+          if [ "${{ inputs.install_vllm }}" = "true" ] && [ -z "${VLLM_VERSION}" ]; then
+            echo "::error::install_vllm requires an explicit vllm_version - this workflow will not install a floating latest ML package"; fail=1
+          fi
+          case "$LEVEL" in
+            model|recovery-and-queue)
+              if ! printf '%s' "$MODEL_REVISION" | grep -Eq '^[0-9a-f]{40}$'; then
+                echo "::error::level '$LEVEL' requires an immutable 40-hex model_revision"; fail=1
+              fi ;;
+          esac
+          exit $fail
+
+      - name: Install pinned SSH identity and known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.BRAINSNN_GPU_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.BRAINSNN_GPU_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$SSH_KEY"
+          printf '%s\n' "$KNOWN_HOSTS"    > "$KNOWN"
+          chmod 600 "$SSH_KEY" "$KNOWN"
+          # Parse-check the key WITHOUT printing it. Only the derived public
+          # fingerprint is logged, which is safe and useful evidence.
+          if ! ssh-keygen -y -P '' -f "$SSH_KEY" > "$RUNNER_TEMP/id_ed25519.pub" 2>"$RUNNER_TEMP/keyparse.err" < /dev/null; then
+            echo "::error::private key did not parse (wrong format, or it has a passphrase - CI keys must have none)"
+            sed -e 's/[A-Za-z0-9+/=]\{24,\}/<redacted>/g' "$RUNNER_TEMP/keyparse.err" || true
+            exit 1
+          fi
+          echo "CI key fingerprint (public half only):"
+          ssh-keygen -lf "$RUNNER_TEMP/id_ed25519.pub"
+          echo "Pinned host keys:"
+          ssh-keygen -lf "$KNOWN"
+
+          cat > "$RUNNER_TEMP/rsh" <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          exec ssh \
+            -i "$SSH_KEY" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$KNOWN" \
+            -o GlobalKnownHostsFile=/dev/null \
+            -o IdentitiesOnly=yes \
+            -o PasswordAuthentication=no \
+            -o KbdInteractiveAuthentication=no \
+            -o ControlMaster=no \
+            -o ControlPath=none \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=6 \
+            -o LogLevel=ERROR \
+            -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$@"
+          WRAPPER
+          chmod 700 "$RUNNER_TEMP/rsh"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # ---------------------------------------------------------------- 01
+      - name: 'Phase 3: prove external SSH from a GitHub-hosted runner'
+        run: |
+          set -euo pipefail
+          rsh 'bash -s' > "$EVIDENCE/01-ssh-system.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          echo "REMOTE_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "HOSTNAME=$(hostname)"
+          echo "ID=$(id)"
+          echo "PWD=$(pwd)"
+          echo "KERNEL=$(uname -a)"
+          echo "OS=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo unknown)"
+          echo "WORKSPACE_SLAVA_EXISTS=$([ -d /workspace/slava ] && echo YES || echo NO)"
+          echo "WORKSPACE_SLAVA_WRITABLE=$([ -w /workspace/slava ] && echo YES || echo NO)"
+          echo "PYTHON3=$(command -v python3 || echo absent) $(python3 -V 2>&1 || true)"
+          echo "GIT=$(git --version 2>&1 || echo absent)"
+          echo "--- disk ---"; df -h / /workspace /workspace/slava 2>&1 | sed 's/^/df: /'
+          echo "--- mount for /workspace/slava ---"
+          (findmnt -T /workspace/slava 2>/dev/null || grep -E ' /workspace' /proc/mounts || echo "no mount entry") | sed 's/^/mnt: /'
+          echo "--- container hints (no full environment dump) ---"
+          echo "IN_CONTAINER=$([ -f /.dockerenv ] && echo YES || echo UNKNOWN)"
+          echo "SSH_EXTERNAL_OK=YES"
+          REMOTE
+          cat "$EVIDENCE/01-ssh-system.txt"
+          if ! grep -q '^SSH_EXTERNAL_OK=YES' "$EVIDENCE/01-ssh-system.txt"; then
+            echo "::error::external SSH to the container did not succeed - nothing downstream may be marked verified"
+            exit 1
+          fi
+          echo "SSH_EXTERNAL_OK=YES" >> "$GITHUB_ENV"
+
+      # ---------------------------------------------------------------- 02
+      - name: 'Phase 4: prove the physical RTX 4090 (read-only)'
+        run: |
+          set -euo pipefail
+          rsh 'bash -s' > "$EVIDENCE/02-gpu-nvidia-smi.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          echo "REMOTE_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if ! command -v nvidia-smi >/dev/null 2>&1; then echo "NVIDIA_SMI=absent"; exit 0; fi
+          echo "--- nvidia-smi ---"; nvidia-smi 2>&1
+          echo "--- structured query ---"
+          nvidia-smi --query-gpu=index,uuid,name,driver_version,memory.total,memory.used,memory.free,utilization.gpu,utilization.memory,temperature.gpu,persistence_mode,compute_mode --format=csv,noheader 2>&1
+          echo "--- compute processes (read-only; unrelated jobs are never touched) ---"
+          nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader 2>&1 || true
+          REMOTE
+          cat "$EVIDENCE/02-gpu-nvidia-smi.txt"
+          if grep -qi '4090' "$EVIDENCE/02-gpu-nvidia-smi.txt"; then
+            echo "GPU_VISIBLE_OK=YES" | tee -a "$EVIDENCE/02-gpu-nvidia-smi.txt" >> "$GITHUB_ENV"
+          else
+            echo "::error::no RTX 4090 reported by nvidia-smi in this container"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------- 03
+      - name: 'Phase 5: prove real CUDA execution through the existing PyTorch'
+        run: |
+          set -euo pipefail
+          rsh 'bash -s' > "$EVIDENCE/03-pytorch-cuda.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          # Inspection and a bounded computation only. Nothing is installed,
+          # upgraded, or removed in Simon's Python environment.
+          python3 - <<'PY'
+          import json, time
+          try:
+              import torch
+          except Exception as error:
+              print('TORCH_IMPORT_FAILED=' + type(error).__name__); raise SystemExit(0)
+          info = {
+              'torch_version': torch.__version__,
+              'torch_cuda': torch.version.cuda,
+              'cuda_available': torch.cuda.is_available(),
+              'device_count': torch.cuda.device_count(),
+          }
+          if info['cuda_available'] and info['device_count']:
+              props = torch.cuda.get_device_properties(0)
+              info.update({
+                  'device_name': torch.cuda.get_device_name(0),
+                  'capability': f'{props.major}.{props.minor}',
+                  'total_memory_mb': round(props.total_memory / (1024 ** 2)),
+              })
+          print('TORCH_INFO=' + json.dumps(info))
+          if not (info['cuda_available'] and info['device_count']):
+              print('GPU_COMPUTE_OK=NO'); raise SystemExit(0)
+          # Bounded, short, and correctness-checked - not a burn loop.
+          size = 4096
+          a = torch.randn(size, size, device='cuda', dtype=torch.float16)
+          b = torch.randn(size, size, device='cuda', dtype=torch.float16)
+          torch.cuda.synchronize(); (a @ b); torch.cuda.synchronize()   # warmup
+          start = time.perf_counter()
+          c = a @ b
+          torch.cuda.synchronize()
+          elapsed = time.perf_counter() - start
+          reference = (a[:64].float().cpu() @ b.float().cpu())
+          delta = (c[:64].float().cpu() - reference).abs().max().item()
+          tflops = (2 * size ** 3) / elapsed / 1e12
+          print('MATMUL=' + json.dumps({'size': size, 'seconds': round(elapsed, 5),
+                                        'tflops_fp16': round(tflops, 2), 'max_abs_delta': delta,
+                                        'finite': bool(torch.isfinite(c).all().item())}))
+          print('PEAK_ALLOCATED_MB=%d' % round(torch.cuda.max_memory_allocated() / (1024 ** 2)))
+          ok = bool(torch.isfinite(c).all().item()) and delta < 5.0
+          del a, b, c
+          torch.cuda.empty_cache()
+          print('GPU_COMPUTE_OK=' + ('YES' if ok else 'NO'))
+          PY
+          REMOTE
+          cat "$EVIDENCE/03-pytorch-cuda.txt"
+          if ! grep -q '^GPU_COMPUTE_OK=YES' "$EVIDENCE/03-pytorch-cuda.txt"; then
+            echo "::error::PyTorch did not execute a verified CUDA computation"
+            exit 1
+          fi
+          echo "GPU_COMPUTE_OK=YES" >> "$GITHUB_ENV"
+
+      # ---------------------------------------------------------------- 04
+      - name: 'Phase 6: workspace persistence across a full SSH reconnect'
+        run: |
+          set -euo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          rsh "bash -s $stamp $EXPECTED_SHA" > "$EVIDENCE/04-workspace-reconnect.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          stamp="$1"; sha="$2"
+          mkdir -p /workspace/slava/pr143-validation
+          file="/workspace/slava/pr143-validation/marker-${stamp}.txt"
+          printf 'pr=143\nsha=%s\nwritten_utc=%s\n' "$sha" "$stamp" > "$file"
+          echo "SESSION1_FILE=$file"
+          echo "SESSION1_SHA256=$(sha256sum "$file" | awk '{print $1}')"
+          REMOTE
+          cat "$EVIDENCE/04-workspace-reconnect.txt"
+          file="$(sed -n 's/^SESSION1_FILE=//p' "$EVIDENCE/04-workspace-reconnect.txt")"
+          first="$(sed -n 's/^SESSION1_SHA256=//p' "$EVIDENCE/04-workspace-reconnect.txt")"
+          [ -n "$file" ] && [ -n "$first" ] || { echo "::error::marker was not created"; exit 1; }
+          # The first connection is fully closed here; the next rsh call is a new TCP+SSH session.
+          sleep 5
+          rsh "sha256sum '$file'" >> "$EVIDENCE/04-workspace-reconnect.txt" 2>&1 || true
+          second="$(tail -n 1 "$EVIDENCE/04-workspace-reconnect.txt" | awk '{print $1}')"
+          {
+            echo "SESSION2_SHA256=$second"
+            if [ "$first" = "$second" ]; then
+              echo "WORKSPACE_PERSIST_OK=YES"
+              echo "SCOPE=survives SSH session teardown only; container stop/recreate is NOT tested here"
+            else
+              echo "WORKSPACE_PERSIST_OK=NO"
+            fi
+          } | tee -a "$EVIDENCE/04-workspace-reconnect.txt"
+          grep -q '^WORKSPACE_PERSIST_OK=YES' "$EVIDENCE/04-workspace-reconnect.txt" || exit 1
+
+      # ---------------------------------------------------------------- 05
+      - name: 'Phase 7: deploy the exact PR SHA and install the runtime'
+        if: ${{ contains(fromJSON('["install","model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          # Transfer from the runner's checked-out SHA rather than cloning
+          # remotely: this works even if the container cannot reach GitHub, and
+          # it makes "what ran" identical to "what is in the PR" by construction.
+          git archive --format=tar "$EXPECTED_SHA" ops/gpu > "$RUNNER_TEMP/ops-gpu.tar"
+          local_manifest="$(git ls-tree -r "$EXPECTED_SHA" --name-only ops/gpu \
+            | grep -v '^ops/gpu/ci/' | sort \
+            | while read -r path; do printf '%s  %s\n' "$(git cat-file blob "$EXPECTED_SHA:$path" | sha256sum | awk '{print $1}')" "$path"; done \
+            | sha256sum | awk '{print $1}')"
+          echo "EXPECTED_SHA=$EXPECTED_SHA"                | tee    "$EVIDENCE/05-runtime-install.txt"
+          echo "LOCAL_TREE_MANIFEST_SHA256=$local_manifest"| tee -a "$EVIDENCE/05-runtime-install.txt"
+
+          rsh "rm -rf $REMOTE_SRC && mkdir -p $REMOTE_SRC && tar -x -C $REMOTE_SRC" < "$RUNNER_TEMP/ops-gpu.tar"
+
+          rsh "bash -s $EXPECTED_SHA" >> "$EVIDENCE/05-runtime-install.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          sha="$1"
+          src=/workspace/slava/pr143-src/ops/gpu
+          dest=/workspace/slava/brainsnn-gpu-runtime
+          printf '%s\n' "$sha" > /workspace/slava/pr143-src/DEPLOYED_SHA
+          echo "ACTUAL_SHA=$(cat /workspace/slava/pr143-src/DEPLOYED_SHA)"
+          echo "REMOTE_TREE_MANIFEST_SHA256=$(cd /workspace/slava/pr143-src && find ops/gpu -type f ! -path 'ops/gpu/ci/*' | sort | xargs -r sha256sum | sha256sum | awk '{print $1}')"
+          echo "RUNTIME_ENV_PRE_EXISTING=$([ -f "$dest/runtime.env" ] && echo YES || echo NO)"
+          pre=""
+          [ -f "$dest/runtime.env" ] && pre="$(sha256sum "$dest/runtime.env" | awk '{print $1}')"
+          echo "--- install.py ---"
+          python3 "$src/install.py" --destination "$dest" 2>&1
+          post="$(sha256sum "$dest/runtime.env" | awk '{print $1}')"
+          if [ -n "$pre" ]; then
+            echo "RUNTIME_ENV_PRESERVED=$([ "$pre" = "$post" ] && echo YES || echo NO)"
+          else
+            echo "RUNTIME_ENV_PRESERVED=n/a (created on this run)"
+          fi
+          echo "RUNTIME_ENV_MODE=$(stat -c '%a %U' "$dest/runtime.env")"
+          echo "RUNTIME_ENV_CONTENT=never printed by design"
+          echo "DIRS=$(ls -ld "$dest"/state "$dest"/logs "$dest"/checkpoints "$dest"/cache | awk '{print $1, $NF}' | tr '\n' ' ')"
+          echo "--- runtime.py check ---"
+          python3 "$dest/runtime.py" check 2>&1
+          echo "RUNTIME_INSTALL_OK=YES"
+          REMOTE
+          cat "$EVIDENCE/05-runtime-install.txt"
+          actual="$(sed -n 's/^ACTUAL_SHA=//p' "$EVIDENCE/05-runtime-install.txt")"
+          remote_manifest="$(sed -n 's/^REMOTE_TREE_MANIFEST_SHA256=//p' "$EVIDENCE/05-runtime-install.txt")"
+          if [ "$actual" != "$EXPECTED_SHA" ] || [ "$remote_manifest" != "$local_manifest" ]; then
+            echo "::error::deployed tree does not match the PR SHA (expected $EXPECTED_SHA / $local_manifest, got $actual / $remote_manifest)"
+            exit 1
+          fi
+          grep -q '^RUNTIME_INSTALL_OK=YES' "$EVIDENCE/05-runtime-install.txt" || exit 1
+
+      # ---------------------------------------------------------------- 06
+      - name: 'Phase 8: supervisor survives SSH logout (backend still unconfigured)'
+        if: ${{ contains(fromJSON('["install","model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          rsh "python3 $RUNTIME_DIR/runtime.py start && python3 $RUNTIME_DIR/runtime.py status" \
+            > "$EVIDENCE/06-model-startup.txt" 2>&1 || true
+          echo "--- connection closed; reconnecting ---" >> "$EVIDENCE/06-model-startup.txt"
+          sleep 10
+          rsh "python3 $RUNTIME_DIR/runtime.py status" >> "$EVIDENCE/06-model-startup.txt" 2>&1 || true
+          cat "$EVIDENCE/06-model-startup.txt"
+          python3 - "$EVIDENCE/06-model-startup.txt" <<'PY'
+          import json, re, sys, pathlib
+          text = pathlib.Path(sys.argv[1]).read_text()
+          blocks = re.findall(r'\{.*?\n\}', text, re.S)
+          if not blocks:
+              print('::error::no runtime status JSON captured'); sys.exit(1)
+          last = json.loads(blocks[-1])
+          print('supervisor_alive        =', last.get('running'))
+          print('backend_configured      =', last.get('inference_configured'))
+          print('backend_ready           =', last.get('backend_ready'))
+          gpu = last.get('gpu') or {}
+          print('gpu_telemetry_available =', bool(gpu.get('available')), '| devices =', len(gpu.get('devices') or []))
+          print('status_stale            =', last.get('status_stale'))
+          if not last.get('running'):
+              print('::error::supervisor did not survive SSH logout'); sys.exit(1)
+          if last.get('status_stale'):
+              print('::error::status file is stale - the supervisor loop is not running'); sys.exit(1)
+          print('SUPERVISOR_PERSIST_OK=YES')
+          print('NOTE: the supervisor being alive does NOT mean inference is operational.')
+          PY
+
+      # ---------------------------------------------------------------- 07
+      - name: 'Phase 9: model-runtime compatibility report (no installs)'
+        if: ${{ contains(fromJSON('["install","model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          rsh 'bash -s' > "$EVIDENCE/07-compatibility.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          echo "DRIVER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>&1)"
+          echo "NVIDIA_SMI_CUDA=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9.]*\).*/\1/p' | head -1)"
+          echo "PYTHON=$(python3 -V 2>&1)  ($(command -v python3))"
+          echo "ARCH=$(uname -m)"
+          python3 -c "import torch,sys;print('TORCH=%s TORCH_CUDA=%s' % (torch.__version__, torch.version.cuda))" 2>&1 || echo "TORCH=absent"
+          echo "VRAM=$(nvidia-smi --query-gpu=memory.total,memory.free --format=csv,noheader 2>&1)"
+          echo "DISK_WORKSPACE=$(df -BG --output=avail /workspace/slava 2>/dev/null | tail -1 | tr -d ' ')"
+          echo "VENV_PRESENT=$([ -x /workspace/slava/vllm-venv/bin/vllm ] && echo YES || echo NO)"
+          echo "HF_CACHE=$([ -d /workspace/slava/.cache/huggingface ] && du -sh /workspace/slava/.cache/huggingface 2>/dev/null || echo absent)"
+          REMOTE
+          cat "$EVIDENCE/07-compatibility.txt"
+
+      - name: 'Phase 9b: install the pinned vLLM into an isolated venv'
+        if: ${{ inputs.install_vllm && contains(fromJSON('["install","model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          rsh "bash -s $VLLM_VERSION" > "$EVIDENCE/07-vllm-install.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          version="$1"
+          # Isolated venv. Simon's system Python and his PyTorch are untouched.
+          if [ ! -x /workspace/slava/vllm-venv/bin/python ]; then
+            python3 -m venv /workspace/slava/vllm-venv || exit 1
+          fi
+          /workspace/slava/vllm-venv/bin/python -m pip install --upgrade pip setuptools wheel 2>&1 | tail -3
+          /workspace/slava/vllm-venv/bin/python -m pip install "vllm==${version}" 2>&1 | tail -25
+          echo "VLLM_EXECUTABLE=$([ -x /workspace/slava/vllm-venv/bin/vllm ] && echo present || echo missing)"
+          /workspace/slava/vllm-venv/bin/vllm --version 2>&1 || true
+          echo "--- lock artifact (pip freeze) ---"
+          /workspace/slava/vllm-venv/bin/python -m pip freeze 2>&1
+          REMOTE
+          tail -40 "$EVIDENCE/07-vllm-install.txt"
+          grep -q '^VLLM_EXECUTABLE=present' "$EVIDENCE/07-vllm-install.txt" || {
+            echo "::error::pinned vLLM install did not produce an executable"; exit 1; }
+
+      # ---------------------------------------------------------------- 08
+      - name: 'Phases 10-11: configure the pinned model and reach backend readiness'
+        if: ${{ contains(fromJSON('["model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          allow="0"; [ "${{ inputs.allow_model_download }}" = "true" ] && allow="1"
+          rsh "bash -s '$MODEL_REPO' '$MODEL_REVISION' '$allow'" > "$EVIDENCE/06-model-startup.remote.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          repo="$1"; revision="$2"; allow="$3"
+          dest=/workspace/slava/brainsnn-gpu-runtime
+          python3 - "$dest/runtime.env" "$repo" "$revision" "$allow" <<'PY'
+          # Rewrites only the named keys. The file is never printed, and the
+          # three generated API keys are left exactly as installed.
+          import os, sys, pathlib
+          path, repo, revision, allow = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+          updates = {
+              'INFERENCE_COMMAND': '["/workspace/slava/vllm-venv/bin/python","/workspace/slava/brainsnn-gpu-runtime/vllm_launch.py"]',
+              'VLLM_EXECUTABLE': '/workspace/slava/vllm-venv/bin/vllm',
+              'MODEL_PATH': repo,
+              'MODEL_REVISION': revision,
+              'SERVED_MODEL_NAME': 'brainsnn-local',
+              'MAX_MODEL_LEN': '8192',
+              'GPU_MEMORY_UTILIZATION': '0.60',
+              'ALLOW_MODEL_DOWNLOAD': allow,
+          }
+          lines, seen = [], set()
+          for line in path.read_text().splitlines():
+              key = line.split('=', 1)[0] if '=' in line and not line.startswith('#') else None
+              if key in updates:
+                  lines.append(f'{key}={updates[key]}'); seen.add(key)
+              else:
+                  lines.append(line)
+          for key, value in updates.items():
+              if key not in seen:
+                  lines.append(f'{key}={value}')
+          path.write_text('\n'.join(lines) + '\n')
+          os.chmod(path, 0o600)
+          print('CONFIG_UPDATED_KEYS=' + ','.join(sorted(updates)))
+          PY
+          echo "--- restart supervisor with inference configured ---"
+          python3 "$dest/runtime.py" stop 2>&1 || true
+          python3 "$dest/runtime.py" start 2>&1
+          key="$(sed -n 's/^GPU_API_KEY=//p' "$dest/runtime.env")"
+          deadline=$(( $(date +%s) + 900 ))
+          ready=NO
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -m 5 -H "Authorization: Bearer $key" http://127.0.0.1:8787/health || true)"
+            if [ "$code" = "200" ]; then ready=YES; break; fi
+            sleep 10
+          done
+          echo "GATEWAY_HEALTH_READY=$ready"
+          echo "--- runtime status ---"
+          python3 "$dest/runtime.py" status 2>&1
+          echo "--- nvidia-smi during residency ---"
+          nvidia-smi --query-gpu=memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu --format=csv,noheader 2>&1
+          echo "--- last supervisor log lines (sanitized) ---"
+          tail -n 25 "$dest/logs/runtime.log" 2>/dev/null | sed -E 's/[A-Za-z0-9_-]{32,}/<redacted>/g' || echo "no runtime.log"
+          if [ "$ready" = "YES" ]; then echo "REAL_MODEL_READY=YES"; else echo "REAL_MODEL_READY=NO"; fi
+          REMOTE
+          cat "$EVIDENCE/06-model-startup.remote.txt" >> "$EVIDENCE/06-model-startup.txt"
+          cat "$EVIDENCE/06-model-startup.remote.txt"; rm -f "$EVIDENCE/06-model-startup.remote.txt"
+          if ! grep -q '^REAL_MODEL_READY=YES' "$EVIDENCE/06-model-startup.txt"; then
+            echo "::error::the backend never reported ready - a running process is NOT a loaded model"
+            exit 1
+          fi
+
+      # ---------------------------------------------------------------- 09
+      - name: 'Phase 12a: gateway authentication and OpenAI surface (on-container)'
+        if: ${{ contains(fromJSON('["model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          rsh 'bash -s' > "$EVIDENCE/07-real-inference.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          dest=/workspace/slava/brainsnn-gpu-runtime
+          key="$(sed -n 's/^GPU_API_KEY=//p' "$dest/runtime.env")"
+          echo "UNAUTHENTICATED_MODELS_CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:8787/v1/models || echo curl_failed)"
+          echo "WRONGKEY_MODELS_CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H 'Authorization: Bearer wrong' http://127.0.0.1:8787/v1/models || echo curl_failed)"
+          echo "AUTHORIZED_MODELS_CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "Authorization: Bearer $key" http://127.0.0.1:8787/v1/models || echo curl_failed)"
+          echo "--- authorized model listing (proves reachability, NOT inference) ---"
+          curl -s -m 10 -H "Authorization: Bearer $key" http://127.0.0.1:8787/v1/models 2>&1 | head -c 800; echo
+          echo "--- vLLM port 8000 must be loopback-only ---"
+          (ss -ltnp 2>/dev/null || netstat -ltnp 2>/dev/null) | grep -E ':8000|:8787' | sed 's/users:.*//' || echo "no listener info"
+          echo "--- real chat completion through the gateway ---"
+          body='{"model":"brainsnn-local","messages":[{"role":"user","content":"Reply with the single word: ready"}],"max_tokens":16,"temperature":0}'
+          curl -s -m 60 -X POST -H "Authorization: Bearer $key" -H 'Content-Type: application/json' \
+            -d "$body" http://127.0.0.1:8787/v1/chat/completions 2>&1 | head -c 1200; echo
+          REMOTE
+          cat "$EVIDENCE/07-real-inference.txt"
+          grep -q '^UNAUTHENTICATED_MODELS_CODE=401' "$EVIDENCE/07-real-inference.txt" || {
+            echo "::error::gateway did not reject an unauthenticated request with 401"; exit 1; }
+          grep -q '^WRONGKEY_MODELS_CODE=401' "$EVIDENCE/07-real-inference.txt" || {
+            echo "::error::gateway did not reject a wrong bearer token with 401"; exit 1; }
+          grep -q '^AUTHORIZED_MODELS_CODE=200' "$EVIDENCE/07-real-inference.txt" || {
+            echo "::error::authorized model listing failed"; exit 1; }
+          if grep -qE '0\.0\.0\.0:8000|:::8000' "$EVIDENCE/07-real-inference.txt"; then
+            echo "::error::vLLM appears to be listening on a non-loopback address"; exit 1
+          fi
+
+      # ---------------------------------------------------------------- 10
+      - name: 'Phases 12b-13: real BrainSNN adapter over an SSH forward, with telemetry'
+        if: ${{ contains(fromJSON('["model","recovery-and-queue"]'), inputs.level) }}
+        run: |
+          set -euo pipefail
+          # The gateway stays bound to 127.0.0.1 on the container. The runner
+          # reaches it only through an authenticated SSH local forward, so the
+          # adapter runs against the real gateway with nothing exposed publicly.
+          GPU_API_KEY="$(rsh "sed -n 's/^GPU_API_KEY=//p' $RUNTIME_DIR/runtime.env")"
+          echo "::add-mask::$GPU_API_KEY"
+          [ -n "$GPU_API_KEY" ] || { echo "::error::could not read the gateway key"; exit 1; }
+
+          ssh -i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$KNOWN" -o IdentitiesOnly=yes -o ExitOnForwardFailure=yes \
+            -M -S "$RUNNER_TEMP/fwd.sock" -f -N -L 18787:127.0.0.1:8787 \
+            -p "$SSH_PORT" "$SSH_USER@$SSH_HOST"
+          trap 'ssh -S "$RUNNER_TEMP/fwd.sock" -O exit -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" 2>/dev/null || true' EXIT
+
+          # Sample GPU telemetry on the container for the duration of the probe.
+          rsh "nohup timeout 180 nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,memory.free,temperature.gpu,power.draw --format=csv -l 1 > /tmp/brainsnn-telemetry.csv 2>&1 &" || true
+
+          set +e
+          GPU_INFERENCE_URL="http://127.0.0.1:18787/v1" \
+          GPU_INFERENCE_KEY="$GPU_API_KEY" \
+          GPU_INFERENCE_MODEL="brainsnn-local" \
+          GPU_INFERENCE_TIMEOUT_MS="30000" \
+          PROBE_ITERATIONS="$PROBE_ITERATIONS" \
+            node ops/gpu/ci/adapter_probe.mjs > "$EVIDENCE/07-adapter-probe.json" 2>&1
+          probe_status=$?
+          set -e
+          cat "$EVIDENCE/07-adapter-probe.json"
+
+          rsh "cat /tmp/brainsnn-telemetry.csv" > "$EVIDENCE/08-gpu-telemetry.txt" 2>&1 || true
+          rsh "nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv 2>&1" >> "$EVIDENCE/08-gpu-telemetry.txt" || true
+          tail -20 "$EVIDENCE/08-gpu-telemetry.txt"
+          {
+            echo "NOTE: these samples cover a short bounded probe. They do NOT"
+            echo "support any claim about sustained utilization or uptime."
+          } >> "$EVIDENCE/08-gpu-telemetry.txt"
+
+          if [ "$probe_status" -ne 0 ] || ! grep -q '"BRAINSNN_REAL_GPU_INFERENCE_OK": true' "$EVIDENCE/07-adapter-probe.json"; then
+            echo "::error::the production gpuInference.js adapter did not validate a real model response"
+            exit 1
+          fi
+          cat "$EVIDENCE/07-adapter-probe.json" >> "$EVIDENCE/07-real-inference.txt"
+
+      # ---------------------------------------------------------------- 11
+      - name: 'Phase 14: real backend recovery on the RTX 4090'
+        if: ${{ inputs.level == 'recovery-and-queue' }}
+        run: |
+          set -euo pipefail
+          rsh 'bash -s' > "$EVIDENCE/09-recovery.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          dest=/workspace/slava/brainsnn-gpu-runtime
+          read_status() { python3 -c "import json,sys;d=json.load(open('$dest/state/status.json'));print(d.get('inference_pid'),d.get('backend_restarts'),d.get('backend_ready'),d.get('pid'))"; }
+          before="$(read_status)"; echo "BEFORE inference_pid backend_restarts backend_ready supervisor_pid = $before"
+          old_pid="$(echo "$before" | awk '{print $1}')"
+          old_restarts="$(echo "$before" | awk '{print $2}')"
+          supervisor="$(echo "$before" | awk '{print $4}')"
+          case "$old_pid" in ''|None) echo "RECOVERY_PRECONDITION=NO_INFERENCE_PID"; exit 0;; esac
+          # Safety: only terminate a process that is a child of our supervisor.
+          ppid="$(awk '{print $4}' /proc/$old_pid/stat 2>/dev/null || echo none)"
+          cmd="$(tr '\0' ' ' < /proc/$old_pid/cmdline 2>/dev/null | head -c 200)"
+          echo "TARGET_PID=$old_pid PPID=$ppid SUPERVISOR_PID=$supervisor"
+          echo "TARGET_CMD=$cmd"
+          if [ "$ppid" != "$supervisor" ]; then
+            echo "RECOVERY_ABORTED=target is not a child of the BrainSNN supervisor; refusing to signal it"
+            exit 0
+          fi
+          kill -TERM "$old_pid"
+          echo "SIGTERM_SENT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          key="$(sed -n 's/^GPU_API_KEY=//p' "$dest/runtime.env")"
+          deadline=$(( $(date +%s) + 900 )); recovered=NO
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            sleep 10
+            now="$(read_status)"; new_pid="$(echo "$now" | awk '{print $1}')"; new_restarts="$(echo "$now" | awk '{print $2}')"
+            code="$(curl -s -o /dev/null -w '%{http_code}' -m 5 -H "Authorization: Bearer $key" http://127.0.0.1:8787/health || true)"
+            if [ "$new_pid" != "$old_pid" ] && [ "$new_pid" != "None" ] && [ "$new_restarts" -gt "$old_restarts" ] && [ "$code" = "200" ]; then
+              recovered=YES; echo "AFTER inference_pid backend_restarts backend_ready supervisor_pid = $now"; break
+            fi
+          done
+          echo "NEW_PID_DIFFERS=$([ "$recovered" = YES ] && echo YES || echo NO)"
+          echo "--- inference after recovery ---"
+          body='{"model":"brainsnn-local","messages":[{"role":"user","content":"Reply with the single word: recovered"}],"max_tokens":16,"temperature":0}'
+          post_code="$(curl -s -o /dev/null -w '%{http_code}' -m 60 -X POST -H "Authorization: Bearer $key" -H 'Content-Type: application/json' -d "$body" http://127.0.0.1:8787/v1/chat/completions || true)"
+          echo "POST_RECOVERY_COMPLETION_CODE=$post_code"
+          if [ "$recovered" = YES ] && [ "$post_code" = "200" ]; then echo "REAL_GPU_RECOVERY_OK=YES"; else echo "REAL_GPU_RECOVERY_OK=NO"; fi
+          REMOTE
+          cat "$EVIDENCE/09-recovery.txt"
+          grep -q '^REAL_GPU_RECOVERY_OK=YES' "$EVIDENCE/09-recovery.txt" || {
+            echo "::error::real backend recovery was not demonstrated"; exit 1; }
+
+      # ---------------------------------------------------------------- 12
+      - name: 'Phase 15: finite evaluation queue, checkpoints and resume'
+        if: ${{ inputs.level == 'recovery-and-queue' }}
+        run: |
+          set -euo pipefail
+          rsh "bash -s $MODEL_REVISION" > "$EVIDENCE/10-background-checkpoint.txt" 2>&1 <<'REMOTE' || true
+          set -u
+          revision="$1"
+          dest=/workspace/slava/brainsnn-gpu-runtime
+          # Resolve the real interpreter rather than assuming /usr/bin/python3.
+          py3="$(command -v python3)"
+          echo "BACKGROUND_INTERPRETER=$py3"
+          python3 - "$dest/runtime.env" "$revision" "$py3" <<'PY'
+          import os, sys, pathlib
+          path, revision, py3 = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+          # Finite (no --watch) so completion, the ledger and resume are observable.
+          command = ('["%s","%s/evaluate_queue.py","--cases","%s/evaluation-cases.jsonl",'
+                     '"--model-revision","%s"]') % (py3, path.parent, path.parent, revision)
+          updates = {'BACKGROUND_COMMAND': command, 'BACKGROUND_LABEL': 'pr143-finite-evaluation'}
+          lines, seen = [], set()
+          for line in path.read_text().splitlines():
+              key = line.split('=', 1)[0] if '=' in line and not line.startswith('#') else None
+              if key in updates: lines.append(f'{key}={updates[key]}'); seen.add(key)
+              else: lines.append(line)
+          for key, value in updates.items():
+              if key not in seen: lines.append(f'{key}={value}')
+          path.write_text('\n'.join(lines) + '\n'); os.chmod(path, 0o600)
+          print('BACKGROUND_CONFIGURED=YES')
+          PY
+          python3 "$dest/runtime.py" stop 2>&1 || true
+          python3 "$dest/runtime.py" start 2>&1
+          ledger="$dest/checkpoints/gpu-evaluations.sqlite"
+          deadline=$(( $(date +%s) + 600 )); rows=0
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            sleep 20
+            if [ -f "$ledger" ]; then
+              rows="$(python3 -c "import sqlite3,sys;db=sqlite3.connect('file:'+sys.argv[1]+'?mode=ro',uri=True);print(len(db.execute('select name from sqlite_master').fetchall()))" "$ledger" 2>/dev/null || echo 0)"
+              [ "$rows" -gt 0 ] && break
+            fi
+          done
+          echo "LEDGER_PRESENT=$([ -f "$ledger" ] && echo YES || echo NO)"
+          echo "LEDGER_TABLES=$rows"
+          if [ -f "$ledger" ]; then
+            python3 - "$ledger" <<'PY'
+          import sqlite3, sys
+          db = sqlite3.connect('file:%s?mode=ro' % sys.argv[1], uri=True)
+          tables = [row[0] for row in db.execute("select name from sqlite_master where type='table'")]
+          print('TABLES=' + ','.join(tables))
+          for table in tables:
+              count = next(iter(db.execute('select count(*) from "%s"' % table)))[0]
+              print('ROWS[%s]=%d' % (table, count))
+              cols = [r[1] for r in db.execute('pragma table_info("%s")' % table)]
+              print('COLS[%s]=%s' % (table, ','.join(cols)))
+          PY
+          fi
+          echo "--- foreground preemption while background runs ---"
+          key="$(sed -n 's/^GPU_API_KEY=//p' "$dest/runtime.env")"
+          body='{"model":"brainsnn-local","messages":[{"role":"user","content":"Reply with the single word: foreground"}],"max_tokens":16,"temperature":0}'
+          echo "FOREGROUND_DURING_BACKGROUND_CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 60 -X POST -H "Authorization: Bearer $key" -H 'Content-Type: application/json' -d "$body" http://127.0.0.1:8787/v1/chat/completions || true)"
+          python3 "$dest/runtime.py" status 2>&1
+          REMOTE
+          cat "$EVIDENCE/10-background-checkpoint.txt"
+          if grep -q '^LEDGER_PRESENT=YES' "$EVIDENCE/10-background-checkpoint.txt" \
+             && grep -q '^FOREGROUND_DURING_BACKGROUND_CODE=200' "$EVIDENCE/10-background-checkpoint.txt"; then
+            echo "BACKGROUND_CHECKPOINT_OK=YES" >> "$EVIDENCE/10-background-checkpoint.txt"
+          else
+            echo "::error::background evaluation ledger or foreground preemption not demonstrated"; exit 1
+          fi
+
+      # ---------------------------------------------------------------- 13
+      - name: 'Phases 16-20: report what this workflow deliberately cannot prove'
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          cat > "$EVIDENCE/11-production-route.txt" <<'TXT'
+          NOT TESTED BY THIS WORKFLOW.
+          A production HTTPS edge in front of the 127.0.0.1:8787 gateway requires an
+          operator-approved external service (managed tunnel or reverse proxy with TLS,
+          rate limiting, and only /v1/models + /v1/chat/completions exposed).
+          No tunnel provider, account, or domain has been approved, so none was invented.
+          BLOCKED - requires Slava/Simon to authorize an edge provider.
+          TXT
+          cp "$EVIDENCE/11-production-route.txt" "$EVIDENCE/12-fallback-recovery.txt"
+          cat > "$EVIDENCE/13-container-restart.txt" <<'TXT'
+          NOT TESTED BY THIS WORKFLOW.
+          Container stop/recreate is a Vast host-side operation. GitHub has no
+          permission to restart Simon's container, and an SSH-session reconnect is a
+          DIFFERENT and weaker claim (see 04-workspace-reconnect.txt).
+          BLOCKED - REQUIRES HOST/VAST OPERATOR ACTION.
+          TXT
+          cat > "$EVIDENCE/14-backup-restore.txt" <<'TXT'
+          NOT TESTED BY THIS WORKFLOW.
+          An independently durable backup destination has not been provisioned, and a
+          same-container copy would not satisfy the requirement. SQLite state must be
+          captured with a proper backup API or a quiesced database, never by copying a
+          live WAL file. BLOCKED - requires an approved off-container destination.
+          TXT
+
+      # ---------------------------------------------------------------- 14
+      - name: Sanitize and summarize evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          # Defence in depth: strip anything shaped like one of the generated
+          # API keys (>=32 chars of urlsafe base64) from every evidence file.
+          for file in "$EVIDENCE"/*; do
+            [ -f "$file" ] || continue
+            sed -i -E 's/(Bearer )[A-Za-z0-9_-]{16,}/\1<redacted>/g; s/(API_KEY=)[^ ]*/\1<redacted>/g' "$file"
+          done
+          if grep -RIlE '(BEGIN [A-Z ]*PRIVATE KEY|GPU_API_KEY=[A-Za-z0-9_-]{16,})' "$EVIDENCE" >/dev/null 2>&1; then
+            echo "::error::evidence package appears to contain a credential - failing instead of publishing it"
+            exit 1
+          fi
+          {
+            echo "# PR #143 remote GPU validation"
+            echo
+            echo "- run: ${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
+            echo "- utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- commit under test: ${EXPECTED_SHA}"
+            echo "- level: ${LEVEL}"
+            echo "- model: ${MODEL_REPO} @ ${MODEL_REVISION:-<none>}"
+            echo
+            echo "## Markers actually observed"
+            echo '```'
+            grep -RhoE '^(SSH_EXTERNAL_OK|GPU_VISIBLE_OK|GPU_COMPUTE_OK|WORKSPACE_PERSIST_OK|RUNTIME_INSTALL_OK|SUPERVISOR_PERSIST_OK|REAL_MODEL_READY|REAL_GPU_RECOVERY_OK|BACKGROUND_CHECKPOINT_OK)=[A-Z]*' "$EVIDENCE" | sort -u || true
+            grep -ho '"BRAINSNN_REAL_GPU_INFERENCE_OK": [a-z]*' "$EVIDENCE"/*.json 2>/dev/null || true
+            echo '```'
+            echo
+            echo "## Not proven here"
+            echo "- container restart persistence (host/Vast operator action)"
+            echo "- independent backup restoration (no approved off-container destination)"
+            echo "- production HTTPS route and Railway integration (no approved edge)"
+            echo "- uptime and sustained useful GPU utilization (needs operating history)"
+          } > "$EVIDENCE/SUMMARY.md"
+          cat "$EVIDENCE/SUMMARY.md"
+
+      - name: Upload sanitized evidence package
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr143-gpu-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/evidence
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove credentials from the runner
+        if: always()
+        run: shred -u "$SSH_KEY" 2>/dev/null || rm -f "$SSH_KEY"
