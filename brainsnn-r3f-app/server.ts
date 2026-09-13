@@ -33,10 +33,16 @@ import { createEventStore } from "./src/lib/eventStore.js";
 import { spawn } from "node:child_process";
 import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.js";
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
+import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
+import { createGpuBridge } from "./src/server/gpuBridge.js";
 
 dotenv.config();
+const gpuBridge = createGpuBridge(process.env);
+const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
 
 const app = express();
+// Authenticate and bound worker bodies before the general JSON parser/limiter.
+app.use('/api/gpu-worker', gpuBridge.handle);
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
   const feed = await readAgentLabFeed();
@@ -335,6 +341,8 @@ app.get("/api/og/lab", (req, res) => {
 
 app.get("/api/engines/status", async (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
+  res.setHeader('Cache-Control', 'no-store');
+  status.engines.gpu = await gpuInference.health();
   if (status.engines.tribe.configured) {
     try {
       const health = await fetch(`${process.env.TRIBE_API_URL}/health`, { signal: AbortSignal.timeout(2500) }).then((r) => r.json());
@@ -845,8 +853,21 @@ app.post("/api/analyze", limit("analyze"), async (req, res) => {
   const { content, type, contentType } = req.body || {};
   const inputType = type || contentType || "text";
 
-  if (!content) {
-    return res.status(400).json({ error: "Content parameter is required." });
+  if (typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ error: "Content must be a non-empty string." });
+  }
+  if (typeof inputType !== 'string' || inputType.length > 80) {
+    return res.status(400).json({ error: "Content type must be a string of at most 80 characters." });
+  }
+
+  // The dedicated GPU is the first provider when opted in. Outage, saturation,
+  // timeout and invalid output all fall back locally within one bounded call.
+  // Keep /api/engine/compare deterministic and independent of remote providers.
+  if (gpuInference.enabled) {
+    return res.json(await analyzeContentWithGpu({
+      client: gpuInference, content, contentType: inputType,
+      engineStatus: getEngineStatusSnapshot(process.env),
+    }));
   }
 
   const now = Date.now();

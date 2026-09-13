@@ -1,0 +1,232 @@
+name: Model CPU Smoke Test (no GPU, no secrets)
+
+# Proves a candidate model can satisfy BrainSNN's production contract on a
+# GitHub-hosted CPU runner, before anyone waits on Simon's RTX 4090.
+#
+# This exists because the OBLITERATUS Qwen3-4B candidate shipped with its own
+# metadata declaring perplexity=inf, coherence=0.0 and degenerate_count=30 - a
+# model that would have failed validateAnalysis on every request, burned a full
+# timeout each time, and presented as a broken GPU rather than a broken model.
+# Structural checks (architecture, dtype, size, chat template) do NOT catch that.
+# Only running the thing does.
+#
+# Uses NO secrets and never touches the container, so it is safe on push.
+#
+# Proves : the model emits coherent output that the real gpuInference.js adapter
+#          and the real validateAnalysis accept, with grammar-constrained decoding.
+# Does NOT prove: anything about the RTX 4090, CUDA, or production latency.
+# CPU inference here is far slower than the GPU path and is not a latency signal.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_repo:
+        description: "GGUF repository on Hugging Face"
+        type: string
+        required: true
+        default: "mradermacher/Huihui-Qwen3-4B-Instruct-2507-abliterated-GGUF"
+      model_file:
+        description: "GGUF filename inside that repository"
+        type: string
+        required: true
+        default: "Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf"
+      model_revision:
+        description: "Immutable 40-hex revision of the GGUF repository"
+        type: string
+        required: true
+        default: "c9e90669eeb205d5af35c28a3e9983fc9293c2ec"
+      use_server_grammar:
+        description: "Pass the schema as a global --json-schema. Incompatible with the adapter's response_format; see run 34475494190."
+        type: boolean
+        required: false
+        default: false
+  push:
+    branches: [codex/simon-4090-runtime]
+    paths:
+      - "ops/gpu/ci/**"
+      - ".github/workflows/model-smoke-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODEL_REPO: ${{ inputs.model_repo || 'mradermacher/Huihui-Qwen3-4B-Instruct-2507-abliterated-GGUF' }}
+      MODEL_FILE: ${{ inputs.model_file || 'Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf' }}
+      MODEL_REVISION: ${{ inputs.model_revision || 'c9e90669eeb205d5af35c28a3e9983fc9293c2ec' }}
+      PORT: "8080"
+      USE_SERVER_GRAMMAR: ${{ inputs.use_server_grammar && 'true' || 'false' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Record what is under test
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          {
+            echo "utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "commit=$(git rev-parse HEAD)"
+            echo "model_repo=${MODEL_REPO}"
+            echo "model_file=${MODEL_FILE}"
+            echo "model_revision=${MODEL_REVISION}"
+            echo "runner=$(uname -srm) cores=$(nproc) mem=$(free -g | awk '/Mem:/{print $2}')GB"
+            echo "disk_free=$(df -BG --output=avail / | tail -1 | tr -d ' ')"
+          } | tee evidence/00-metadata.txt
+          if ! printf '%s' "$MODEL_REVISION" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::model_revision must be an immutable 40-hex commit"; exit 1
+          fi
+
+      - name: Cache the pinned GGUF
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: gguf-${{ inputs.model_revision || 'c9e90669eeb205d5af35c28a3e9983fc9293c2ec' }}-${{ inputs.model_file || 'Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf' }}
+
+      - name: Download the pinned GGUF
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          url="https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}"
+          echo "fetching ${url}"
+          curl -fL --retry 3 --retry-delay 5 -o "models/${MODEL_FILE}" "$url"
+          {
+            echo "bytes=$(stat -c %s "models/${MODEL_FILE}")"
+            echo "sha256=$(sha256sum "models/${MODEL_FILE}" | awk '{print $1}')"
+          } | tee evidence/01-model-file.txt
+          # The digest is the model's real immutable identity for the llama.cpp
+          # backend, which pins by content rather than by repo revision.
+
+      - name: Start llama-server
+        run: |
+          set -euo pipefail
+          KEY="ci-$(openssl rand -hex 16)"
+          echo "GPU_INFERENCE_KEY=$KEY" >> "$GITHUB_ENV"
+          # A GLOBAL --json-schema is incompatible with the per-request
+          # response_format=json_object that gpuInference.js always sends:
+          # llama-server then tries to build two grammars and fails sampler
+          # initialization with a 400 "Failed to initialize samplers", which the
+          # adapter reports as upstream_error and falls back on. Verified in run
+          # 34475494190 both directly and through the adapter, and NOT caused by
+          # grammar size (dropping every string maxLength did not change it).
+          # So the grammar is opt-in here, and off by default, which lets this
+          # workflow measure what the model can do unaided.
+          extra=()
+          if [ "${USE_SERVER_GRAMMAR}" = "true" ]; then
+            extra=(--json-schema "$(tr -d '\n' < ops/gpu/ci/brainsnn-analysis.schema.json)")
+          fi
+          docker run -d --name llama \
+            -p 127.0.0.1:${PORT}:${PORT} \
+            -v "$PWD/models:/models:ro" \
+            ghcr.io/ggml-org/llama.cpp:server \
+            --host 0.0.0.0 --port ${PORT} \
+            --model "/models/${MODEL_FILE}" \
+            --alias brainsnn-local \
+            --ctx-size 8192 \
+            --parallel 2 \
+            --threads "$(nproc)" \
+            --api-key "$KEY" \
+            "${extra[@]}"
+          echo "container started (server grammar: ${USE_SERVER_GRAMMAR})"
+
+      - name: Wait for the model to become ready
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -m 5 \
+              -H "Authorization: Bearer $GPU_INFERENCE_KEY" \
+              "http://127.0.0.1:${PORT}/v1/models" || true)"
+            if [ "$code" = "200" ]; then echo "ready after ${i}0s"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::model never became ready"
+          docker logs llama 2>&1 | tail -40
+          exit 1
+
+      - name: Gateway auth behaves correctly
+        run: |
+          set -euo pipefail
+          {
+            echo "UNAUTHENTICATED=$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://127.0.0.1:${PORT}/v1/models || echo fail)"
+            echo "WRONGKEY=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H 'Authorization: Bearer wrong' http://127.0.0.1:${PORT}/v1/models || echo fail)"
+            echo "AUTHORIZED=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "Authorization: Bearer $GPU_INFERENCE_KEY" http://127.0.0.1:${PORT}/v1/models || echo fail)"
+          } | tee evidence/02-gateway-auth.txt
+
+      - name: Direct completion (isolates grammar/sampler faults from the adapter)
+        run: |
+          set -euo pipefail
+          # The adapter sends response_format=json_object AND the server carries a
+          # global --json-schema grammar. This step exercises the same combination
+          # directly, so a sampler failure is attributed to the server rather than
+          # being reported as an adapter/model-quality problem.
+          body='{"model":"brainsnn-local","response_format":{"type":"json_object"},"max_tokens":2048,"temperature":0.2,"messages":[{"role":"system","content":"Return only a JSON object describing the content."},{"role":"user","content":"Officials refuse to answer questions about the missing funds."}]}'
+          code="$(curl -s -o direct.json -w '%{http_code}' -m 600 -X POST \
+            -H "Authorization: Bearer $GPU_INFERENCE_KEY" -H 'Content-Type: application/json' \
+            -d "$body" "http://127.0.0.1:${PORT}/v1/chat/completions" || echo curl_failed)"
+          {
+            echo "DIRECT_HTTP=$code"
+            echo "DIRECT_BYTES=$(stat -c %s direct.json 2>/dev/null || echo 0)"
+            echo "--- body (first 1200 chars) ---"
+            head -c 1200 direct.json; echo
+          } | tee evidence/03-direct-completion.txt
+          if [ "$code" != "200" ]; then
+            docker logs llama 2>&1 | tail -20
+            if [ "${USE_SERVER_GRAMMAR}" = "true" ]; then
+              # Known incompatibility, deliberately exercised - warn, do not fail.
+              echo "::warning::direct completion returned $code with the global grammar enabled (expected; see run 34475494190)"
+            else
+              echo "::error::direct completion returned $code with no server grammar - this is a real server or model fault"
+              exit 1
+            fi
+          fi
+
+      - name: Run the REAL production adapter against the model
+        run: |
+          set -euo pipefail
+          set +e
+          GPU_INFERENCE_URL="http://127.0.0.1:${PORT}/v1" \
+          GPU_INFERENCE_MODEL="brainsnn-local" \
+            node ops/gpu/ci/cpu_model_probe.mjs > evidence/03-cpu-model-probe.json 2>&1
+          status=$?
+          set -e
+          cat evidence/03-cpu-model-probe.json
+          docker logs llama 2>&1 | tail -25 > evidence/04-server-log.txt || true
+          if [ "$status" -ne 0 ]; then
+            echo "::error::the model did not satisfy BrainSNN's production contract"
+            exit 1
+          fi
+          echo "CPU_MODEL_PROBE_OK=YES"
+
+      - name: Summarize
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "# CPU model smoke test"
+            echo
+            echo "- model: ${MODEL_REPO}/${MODEL_FILE} @ ${MODEL_REVISION}"
+            echo "- commit: $(git rev-parse HEAD)"
+            echo
+            echo "Proves the model satisfies validateAnalysis via the real adapter."
+            echo "Proves NOTHING about the RTX 4090, CUDA, or production latency."
+          } > evidence/SUMMARY.md
+          cat evidence/SUMMARY.md
+
+      - name: Stop the server
+        if: always()
+        run: docker rm -f llama 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-smoke-${{ github.run_id }}
+          path: evidence
+          retention-days: 14
