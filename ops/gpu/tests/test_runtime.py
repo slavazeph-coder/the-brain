@@ -101,6 +101,35 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(instance.status()['inference_configured'])
         self.assertFalse(instance.status()['backend_ready'])
 
+    def test_bridge_worker_is_separate_supervised_and_stops_with_runtime(self):
+        fixture = self.root / 'bridge_fixture.py'
+        fixture.write_text('''import os,signal,time,json
+from pathlib import Path
+p=Path(os.environ['BRAINSNN_RUNTIME_DIR'])
+n=p/'bridge_count'
+count=int(n.read_text())+1 if n.exists() else 1
+n.write_text(str(count))
+if count == 1: raise SystemExit(1)
+(p/'bridge_pid').write_text(str(os.getpid()))
+(p/'bridge_env_names').write_text(json.dumps(sorted(os.environ)))
+while True: time.sleep(1)
+''')
+        self.update(BRIDGE_COMMAND=json.dumps([sys.executable, str(fixture)]),
+                    GPU_BRIDGE_URL='https://www.brainsnn.com/api/gpu-worker', GPU_BRIDGE_WORKER_KEY='d' * 40)
+        self.launch()
+        self.wait(lambda: (self.root / 'bridge_pid').exists())
+        self.assertGreaterEqual(int((self.root / 'bridge_count').read_text()), 2)
+        keys = json.loads((self.root / 'bridge_env_names').read_text())
+        self.assertIn('GPU_BRIDGE_WORKER_KEY', keys)
+        self.assertIn('GPU_API_KEY', keys)
+        self.assertNotIn('BACKEND_API_KEY', keys)
+        self.assertNotIn('BACKGROUND_API_KEY', keys)
+        pid = int((self.root / 'bridge_pid').read_text())
+        self.process.send_signal(signal.SIGTERM)
+        self.process.wait(timeout=10)
+        with self.assertRaises(ProcessLookupError): os.kill(pid, 0)
+        self.assertFalse(self.status()['bridge_running'])
+
     def test_crash_restarts_and_authenticated_allowlist(self):
         self.launch('crash-first')
         self.assertGreaterEqual(int((self.root / 'backend-starts').read_text()), 2)

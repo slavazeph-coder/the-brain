@@ -1,10 +1,20 @@
 # BrainSNN GPU runtime
 
-Prepared deployment files for Simon's interruptible RTX 4090 container. **Not a live deployment:** SSH access, driver/CUDA compatibility, model quality, persistence, and the authenticated production route still need verification. No model or Python ML dependency is downloaded by these scripts.
+Deployment package for Simon's interruptible RTX 4090 container: a supervised inference backend, authenticated gateway, optional outbound website worker and finite evaluation queue. The installer copies control files and creates private keys; it does not download a model or Python ML dependency. Production activation and uninterrupted operation require separate verification.
+
+September 13 validation reached Simon's RTX 4090 using CUDA 12.2.2 and a pinned
+llama.cpp build. Three direct adapter analyses completed in roughly 1.9 seconds.
+The compiled app, actual Python worker and HTTP broker also passed a private
+end-to-end GPU test: 1.882-second analysis, local fallback after worker loss, and
+1.784-second analysis after recovery. Killing the model child recovered under the
+same supervisor in 12 seconds. Seven of eight finite evaluation cases passed;
+one exact-evidence case failed on Unicode quotation and remains recorded. An
+off-container private backup restored with SQLite integrity verified. These
+bounded checks do not establish continuous uptime or production site activation.
 
 If SSH times out or Vast reports `failed to inject CDI devices`, start with [host-recovery.md](host-recovery.md). It separates the host/container repair from application deployment and explains how to verify the complete current SSH endpoint.
 
-The public BrainSNN website stays on Railway. Its server calls an authenticated OpenAI-compatible `/v1` base over an operator-configured HTTPS tunnel; deterministic/local analysis remains available during container loss. This runtime binds both the gateway (`127.0.0.1:8787`) and vLLM (`127.0.0.1:8000`) to loopback. Never expose port 8000 or forward vLLM administrative endpoints.
+The public BrainSNN website stays on Railway. Its server uses either a configured HTTPS inference base or the optional outbound HTTPS worker below; deterministic/local analysis remains available during container loss. Both the gateway (`127.0.0.1:8787`) and model backend (`127.0.0.1:8000`) bind to loopback. Never expose port 8000 or forward backend administrative endpoints.
 
 ## What runs
 
@@ -14,6 +24,7 @@ The public BrainSNN website stays on Railway. Its server calls an authenticated 
 - Logs rotate at 5 MiB plus three backups. Status contains actual read-only `nvidia-smi` utilization/memory/temperature samples. Missing GPU telemetry is reported as unavailable. No power limit, clock, persistence mode or another user's process is changed.
 - Low disk space or an excessive checkpoint directory pauses background work and prevents new model launches. Existing checkpoints are not silently deleted. This is an admission guard checked every poll, **not a filesystem quota**: each job must bound its own outputs and temporary model downloads must fit the disk.
 - A successful finite background job parks; it is not rerun to inflate utilization. Failed jobs retry with delay. An optional finite backup command is supervised separately and time-bounded.
+- An optional outbound worker maintains two authenticated HTTPS long polls to the existing Railway app. It restarts independently after crashes and reconnects with capped backoff. It never accepts a URL, command or arbitrary request headers in a job.
 
 ## Install after SSH access is restored
 
@@ -23,7 +34,7 @@ Run inside the container, from a transferred repository checkout:
 python3 ops/gpu/install.py --destination /workspace/slava/brainsnn-gpu-runtime
 ```
 
-This copies files and creates three distinct random keys in owner-only `runtime.env`. It does not start anything. It preserves an existing config when rerun. Keep this directory on the container's **verified persistent mount**; `/workspace` persistence has only been reported by email so far. Never copy SSH private keys into the container. Keep credentials out of Git and backup manifests.
+This copies files and creates three distinct random keys in owner-only `runtime.env`. It does not start anything. It preserves an existing config when rerun, so add new optional fields explicitly when upgrading. Keep this directory on a verified persistent mount; the September 13 container's `/workspace/slava` is currently on its overlay filesystem, with no separate persistent volume verified. Never copy SSH private keys into the container. Keep credentials out of Git and backup manifests.
 
 Verify `nvidia-smi`, Python version, free disk, container lifecycle and mount persistence before selecting an isolated vLLM environment. Pin the exact compatible vLLM package and model commit after that inspection, and record a package lock/file with hashes. Do not overwrite Simon's existing PyTorch environment. The launcher accepts a local model directory or, only with `ALLOW_MODEL_DOWNLOAD=1`, a model repository plus a full 40-character commit revision. It does not enable remote model code. Local model directories still require operator provenance/digest verification.
 
@@ -61,6 +72,10 @@ BACKEND_PARALLEL=2
 MAX_MODEL_LEN=8192
 INFERENCE_JSON_SCHEMA_FILE=
 ```
+
+`MAX_MODEL_LEN` is the per-request context length. llama.cpp divides context across
+parallel slots, so the launcher passes `MAX_MODEL_LEN * BACKEND_PARALLEL` as its
+total `--ctx-size`. Account for that combined KV cache when sizing VRAM.
 
 Use the actual Python and binary paths on the container. Build llama.cpp against
 a CUDA toolkit compatible with its driver; do not upgrade the host driver from
@@ -121,6 +136,89 @@ Every direct worker must handle SIGTERM, checkpoint frequently during training (
 
 ## Connect the website
 
+### Outbound HTTPS through the existing Railway application
+
+This option needs no inbound GPU port, public model endpoint, tunnel account or
+new DNS record. The GPU worker makes outbound requests to the app, receives only
+one of two fixed operations, calls its local gateway and posts the result back.
+The existing production adapter still performs the exact same full output
+validation, deadlines and deterministic fallback. `/api/engine/compare` is unchanged.
+
+The broker is **one Node process in one replica**. Railway configuration checked
+September 13 has one `us-west2` replica. Explicitly acknowledge this with the flag
+below; do not enable it for multiple replicas or clustered Node processes. Job
+state is deliberately ephemeral and contains at most two total queued/leased
+requests. Restart or rolling deployment can discard requests; those callers fall
+back locally. This is a transport for live requests, not a durable training ledger.
+
+Set these server-side Railway variables after deploying the bridge code:
+
+```ini
+GPU_INFERENCE_TRANSPORT=outbound
+GPU_INFERENCE_MODEL=brainsnn-local
+GPU_INFERENCE_TIMEOUT_MS=15000
+GPU_BRIDGE_SINGLE_REPLICA=1
+GPU_BRIDGE_WORKER_KEY=<new-random-secret-of-at-least-32-characters>
+```
+
+Generate a distinct random bridge key and store the same value privately in the
+GPU runtime config. It must differ from all three existing GPU keys. The worker
+key is never a `VITE_*` variable and never travels to the local model gateway.
+Outbound mode uses neither `GPU_INFERENCE_URL` nor `GPU_INFERENCE_KEY`.
+
+Add these literal lines to the GPU's owner-only `runtime.env`:
+
+```ini
+BRIDGE_COMMAND=["/usr/bin/python3","/workspace/slava/brainsnn-gpu-runtime/bridge_worker.py"]
+GPU_BRIDGE_URL=https://www.brainsnn.com/api/gpu-worker
+GPU_BRIDGE_WORKER_KEY=<same-private-Railway-worker-key>
+```
+
+Use the actual Python path, then stop/start the runtime to load the changed
+configuration. The supervisor passes only the worker URL/key and its fixed
+loopback gateway port/key to this child. It does not pass backend/background
+credentials or unrelated application variables. Existing configs without these
+fields keep working with bridge mode disabled.
+
+`https://www.brainsnn.com` and
+`https://the-brain-production.up.railway.app` passed TLS and `/healthz` checks.
+The bare `brainsnn.com` currently redirects only `/` through a different service;
+its `/healthz` returns 404. Use one of the verified hostnames as the worker base.
+The worker rejects non-HTTPS URLs, embedded credentials, query strings, redirects
+and any path other than `/api/gpu-worker`.
+
+Worker endpoints authenticate before parsing, bound result bodies to 64 KiB,
+and cap concurrent long polls at two. Jobs expire after 14 seconds, within the
+app's 15-second default deadline; adapter cancellation removes them immediately
+and late/duplicate results return 410. An offline worker becomes stale after
+30 seconds and subsequent requests fall back immediately. A request already
+computing may continue until the local gateway's 12-second deadline: broker
+cancellation discards its result, it does not claim immediate GPU cancellation.
+Two worker threads and gateway concurrency limits bound this tail. HTTP socket
+timers and a process watchdog also recover from slow responses or stalled DNS.
+
+Railway supports HTTPS long polling within its published request limits:
+[Public networking limits](https://docs.railway.com/networking/public-networking/specs-and-limits).
+The 20-second polls reconnect with capped backoff after outages. Supervisor
+restart, outer container startup and off-container recovery remain separate
+operational requirements; polling is not evidence of 24/7 uptime.
+
+Before production, exercise the actual worker and adapter through a private SSH
+forward to the GPU gateway. Set `GPU_API_KEY` privately in the test process env,
+point `GATEWAY_PORT` at the local forward and run:
+
+```sh
+node ops/gpu/ci/bridge_probe.mjs
+```
+
+The probe starts a temporary localhost HTTP broker, generates a separate worker
+key, launches the real Python worker, verifies unauthorized requests fail,
+executes three validated analyses and confirms fallback when the broker closes.
+It prints only result metadata. The worker's `GPU_BRIDGE_ALLOW_LOOPBACK_HTTP=1`
+exception is used by this local test only, and accepts literal `127.0.0.1` only.
+
+### Direct HTTPS inference endpoint
+
 Create a stable authenticated HTTPS route/tunnel to `127.0.0.1:8787` using the chosen operator account. TLS termination and request rate limits belong at that managed edge; do not publicly expose this stdlib HTTP listener directly. Only the gateway's allowlisted paths should traverse it. Use the gateway's `GPU_API_KEY` as the Railway server-side Bearer key, not the backend/background keys. Keep it out of browser `VITE_*` configuration. Set the adapter model to the exact `SERVED_MODEL_NAME` and its base URL to `https://<configured-host>/v1`.
 
 No tunnel account/domain or public mapping is guessed or created here. Validate external unauthorized requests fail, models/analysis succeed with the key, and killing/restarting the model makes BrainSNN fall back then recover. Keep the total client deadline above the gateway's 12-second inference deadline plus up to two seconds of background shutdown.
@@ -132,6 +230,7 @@ From the repository root:
 ```sh
 python3 -m unittest discover -s ops/gpu/tests -v
 python3 -m unittest discover -s ops/gpu -p 'test_evaluate_queue.py' -v
+node --test ops/gpu/test_bridge_transport.mjs
 ```
 
 The supervisor tests use temporary local HTTP servers/processes and no ML model/GPU load. They cover no-work configuration, backend crash recovery, authentication/endpoint and text-input restrictions, foreground checkpoint preemption, finite-worker completion, graceful process shutdown and atomic checkpoint preservation. Hardware, real model inference, tunnel availability, actual utilization, automatic container restart and off-container restoration require remote validation.

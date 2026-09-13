@@ -26,11 +26,19 @@ class GpuFailure extends Error {
   }
 }
 
-function configuration(env) {
-  const enabled = Boolean(env.GPU_INFERENCE_URL || env.GPU_INFERENCE_KEY || env.GPU_INFERENCE_MODEL);
+function configuration(env, transportAvailable = false) {
+  const outbound = env.GPU_INFERENCE_TRANSPORT === 'outbound';
+  const enabled = Boolean(outbound || env.GPU_INFERENCE_URL || env.GPU_INFERENCE_KEY || env.GPU_INFERENCE_MODEL);
   const key = String(env.GPU_INFERENCE_KEY || '').trim();
   const model = String(env.GPU_INFERENCE_MODEL || '').trim();
   try {
+    const requested = Number(env.GPU_INFERENCE_TIMEOUT_MS);
+    const timeoutMs = Number.isFinite(requested) && requested > 0
+      ? Math.min(30_000, Math.max(1_000, requested)) : 15_000;
+    if (outbound) {
+      if (!transportAvailable || !model || model.length > 200 || /[\r\n]/.test(model)) throw new Error('Invalid bridge');
+      return { enabled, configured: true, outbound: true, model, timeoutMs };
+    }
     const base = new URL(String(env.GPU_INFERENCE_URL || ''));
     const loopback = ['127.0.0.1', '[::1]', 'localhost'].includes(base.hostname);
     if ((base.protocol !== 'https:' && !(base.protocol === 'http:' && loopback))
@@ -38,9 +46,6 @@ function configuration(env) {
       || !key || /[\r\n]/.test(key) || !model || model.length > 200 || /[\r\n]/.test(model)) {
       throw new Error('Invalid configuration');
     }
-    const requested = Number(env.GPU_INFERENCE_TIMEOUT_MS);
-    const timeoutMs = Number.isFinite(requested) && requested > 0
-      ? Math.min(30_000, Math.max(1_000, requested)) : 15_000;
     return { enabled, configured: true, base: base.href.replace(/\/$/, ''), key, model, timeoutMs };
   } catch {
     return { enabled, configured: false };
@@ -126,8 +131,8 @@ async function readJson(response, byteLimit) {
 }
 
 /** @param {Record<string, string | undefined>} env */
-export function createGpuInferenceClient(env = {}, { fetchImpl = globalThis.fetch, timeoutMs, maxConcurrent = MAX_CONCURRENT, maxResponseBytes = MAX_RESPONSE_BYTES, healthTtlMs = HEALTH_TTL_MS } = {}) {
-  const config = configuration(env);
+export function createGpuInferenceClient(env = {}, { fetchImpl = globalThis.fetch, transport = null, timeoutMs, maxConcurrent = MAX_CONCURRENT, maxResponseBytes = MAX_RESPONSE_BYTES, healthTtlMs = HEALTH_TTL_MS } = {}) {
+  const config = configuration(env, Boolean(transport?.configured));
   let inFlight = 0;
   let lastInferenceStatus = 'not_tested';
   let lastSuccessAt = null;
@@ -146,7 +151,7 @@ export function createGpuInferenceClient(env = {}, { fetchImpl = globalThis.fetc
     try {
       return await Promise.race([
         (async () => {
-          const response = await fetchImpl(`${config.base}/${endpoint}`, {
+          const response = config.outbound ? await transport.request(endpoint, { ...options, signal: controller.signal }) : await fetchImpl(`${config.base}/${endpoint}`, {
             ...options,
             headers: { Authorization: `Bearer ${config.key}`, 'Content-Type': 'application/json', ...options.headers },
             redirect: 'error', signal: controller.signal,

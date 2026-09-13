@@ -51,7 +51,7 @@ class LlamaCppInstallTests(unittest.TestCase):
                                            check=True, capture_output=True, text=True, timeout=5)
                 argv = json.loads(completed.stdout)
                 for flag, expected in [('--host', '127.0.0.1'), ('--model', str(model)),
-                                       ('--n-gpu-layers', '37'), ('--parallel', '3'), ('--ctx-size', '4096')]:
+                                       ('--n-gpu-layers', '37'), ('--parallel', '3'), ('--ctx-size', '12288')]:
                     self.assertEqual(argv[argv.index(flag) + 1], expected)
                 self.assertNotIn('--json-schema', argv)
                 self.assertNotIn(config['BACKEND_API_KEY'], completed.stdout)

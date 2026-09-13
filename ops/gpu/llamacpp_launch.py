@@ -78,7 +78,9 @@ def command(env):
             '--host', '127.0.0.1', '--port', env['BACKEND_PORT'],
             '--model', str(model_path),
             '--alias', env['SERVED_MODEL_NAME'],
-            '--ctx-size', str(length),
+            # llama.cpp divides total context across parallel slots; preserve
+            # MAX_MODEL_LEN as the per-request limit used by the vLLM backend.
+            '--ctx-size', str(length * parallel),
             '--parallel', str(parallel),
             '--n-gpu-layers', str(layers),
             # Read from a 0600 file rather than argv: a key passed as a flag is

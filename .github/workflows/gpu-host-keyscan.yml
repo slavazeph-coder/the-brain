@@ -8,7 +8,7 @@ name: GPU Host Keyscan (bootstrap only)
 #
 # Trust-on-first-use is NOT acceptable on its own: compare the fingerprint
 # printed here with the fingerprint Slava sees from his own machine
-#   ssh-keyscan -p 40008 142.179.227.252 | ssh-keygen -lf -
+#   ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" | ssh-keygen -lf -
 # and only then store the known_hosts line as a repository secret.
 
 on:

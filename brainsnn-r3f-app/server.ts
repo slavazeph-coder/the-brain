@@ -34,11 +34,15 @@ import { spawn } from "node:child_process";
 import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.js";
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
 import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
+import { createGpuBridge } from "./src/server/gpuBridge.js";
 
 dotenv.config();
-const gpuInference = createGpuInferenceClient(process.env);
+const gpuBridge = createGpuBridge(process.env);
+const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
 
 const app = express();
+// Authenticate and bound worker bodies before the general JSON parser/limiter.
+app.use('/api/gpu-worker', gpuBridge.handle);
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
   const feed = await readAgentLabFeed();

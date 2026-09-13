@@ -41,13 +41,18 @@ def read_config(path):
             raise ValueError(f'{key} must be a generated secret with at least 32 characters')
     if len({result[k] for k in ('GPU_API_KEY', 'BACKEND_API_KEY', 'BACKGROUND_API_KEY')}) != 3:
         raise ValueError('Use separate gateway, backend and background keys')
-    for key in ('INFERENCE_COMMAND', 'BACKGROUND_COMMAND', 'BACKUP_COMMAND'):
+    for key in ('INFERENCE_COMMAND', 'BACKGROUND_COMMAND', 'BACKUP_COMMAND', 'BRIDGE_COMMAND'):
         value = json.loads(result.get(key, '[]'))
         if not isinstance(value, list) or any(not isinstance(v, str) or not v for v in value):
             raise ValueError(f'{key} must be a JSON array of nonempty arguments')
         if value and not Path(value[0]).is_absolute():
             raise ValueError(f'{key} executable must use an absolute path')
         result[key] = value
+    if result['BRIDGE_COMMAND']:
+        from bridge_worker import Worker
+        Worker(result)  # Validate endpoints and separate keys without making a connection.
+        if result['GPU_BRIDGE_WORKER_KEY'] in (result['BACKEND_API_KEY'], result['BACKGROUND_API_KEY']):
+            raise ValueError('Bridge key must differ from every GPU service key')
     for key in ('GATEWAY_PORT', 'BACKEND_PORT'):
         if not 1024 <= int(result[key]) <= 65535:
             raise ValueError(f'{key} must be in 1024..65535')
@@ -106,12 +111,16 @@ class Runtime:
         self.log.setLevel(logging.INFO)
         handler = RotatingFileHandler(self.root / 'logs/runtime.log', maxBytes=int(config['LOG_MAX_BYTES']),
                                       backupCount=int(config['LOG_BACKUPS']))
-        handler.addFilter(Redact([config[k] for k in ('GPU_API_KEY', 'BACKEND_API_KEY', 'BACKGROUND_API_KEY')]))
+        handler.addFilter(Redact([config[k] for k in ('GPU_API_KEY', 'BACKEND_API_KEY', 'BACKGROUND_API_KEY', 'GPU_BRIDGE_WORKER_KEY') if config.get(k)]))
         handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
         self.log.addHandler(handler)
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.inference = self.background = self.backup = None
+        self.bridge = None
+        self.next_bridge = 0
+        self.bridge_backoff = float(config['RESTART_MIN_SECONDS'])
+        self.bridge_started = 0
         self.backend_ready = False
         self.backend_was_ready = False
         self.backend_started = 0
@@ -151,6 +160,9 @@ class Runtime:
             env.update(BRAINSNN_GPU_BASE_URL=f"http://127.0.0.1:{self.c['GATEWAY_PORT']}/v1",
                        BRAINSNN_GPU_API_KEY=self.c['BACKGROUND_API_KEY'], BRAINSNN_GPU_MODEL=self.c['SERVED_MODEL_NAME'],
                        INFERENCE_MODEL=self.c['SERVED_MODEL_NAME'], BRAINSNN_GPU_MODEL_REVISION=self.c['MODEL_REVISION'])
+        elif kind == 'bridge':
+            for key in ('GPU_BRIDGE_URL', 'GPU_BRIDGE_WORKER_KEY', 'GATEWAY_PORT', 'GPU_API_KEY'):
+                env[key] = self.c[key]
         return env
 
     def launch(self, kind, command):
@@ -244,6 +256,20 @@ class Runtime:
                            and used < float(self.c['MAX_CHECKPOINT_MB']) * 1024**2)
         healthy = self.health() if self.inference and self.inference.poll() is None else False
         with self.lock:
+            if self.bridge and self.bridge.poll() is not None:
+                self.terminate(self.bridge, 0.1)
+                self.bridge = None
+                self.next_bridge = now + self.bridge_backoff
+                self.bridge_backoff = min(float(self.c['RESTART_MAX_SECONDS']), self.bridge_backoff * 2)
+                self.log.warning('bridge worker exited; restart scheduled')
+            if self.bridge and now - self.bridge_started > 60:
+                self.bridge_backoff = float(self.c['RESTART_MIN_SECONDS'])
+            if not self.bridge and self.c.get('BRIDGE_COMMAND') and now >= self.next_bridge:
+                self.bridge = self.launch('bridge', self.c['BRIDGE_COMMAND'])
+                self.bridge_started = now
+                self.next_bridge = now + self.bridge_backoff
+                if self.bridge is None:
+                    self.bridge_backoff = min(float(self.c['RESTART_MAX_SECONDS']), self.bridge_backoff * 2)
             if self.inference and (self.inference.poll() is not None or (
                     (self.backend_was_ready or now - self.backend_started > float(self.c['STARTUP_GRACE_SECONDS'])) and
                     not healthy and self.failures + 1 >= int(self.c['HEALTH_FAILURE_LIMIT']))):
@@ -313,6 +339,8 @@ class Runtime:
                 'background_configured': bool(self.c['BACKGROUND_COMMAND']),
                 'background_running': bool(self.background), 'background_complete': self.background_done,
                 'backup_configured': bool(self.c['BACKUP_COMMAND']), 'backup_running': bool(self.backup),
+                'bridge_configured': bool(self.c.get('BRIDGE_COMMAND')),
+                'bridge_running': bool(self.bridge and self.bridge.poll() is None),
                 'backup_last_exit_code': self.backup_last_exit_code,
                 'storage_ok': self.storage_ok, 'gpu': self.gpu}
 
@@ -340,6 +368,8 @@ class Runtime:
             gateway.server_close()
             with self.lock:
                 self.preempt_background()
+                self.terminate(self.bridge, 5)
+                self.bridge = None
                 self.terminate(self.backup, 2)
                 self.terminate(self.inference, 10)
                 self.inference = None

@@ -65,6 +65,16 @@ describe('BrainSNN layer router', () => {
     expect(getEngineStatusSnapshot({ GPU_INFERENCE_URL: 'https://private.example/v1' }).engines.gpu.status).toBe('invalid_configuration');
   });
 
+  it('reports an explicitly configured single-replica outbound GPU without claiming reachability', () => {
+    const env = { GPU_INFERENCE_TRANSPORT: 'outbound', GPU_INFERENCE_MODEL: 'brainsnn-local',
+      GPU_BRIDGE_WORKER_KEY: 'private-worker-key'.padEnd(40, 'k'), GPU_BRIDGE_SINGLE_REPLICA: '1' };
+    const status = getEngineStatusSnapshot(env);
+    expect(status.engines.gpu).toEqual({ configured: true, status: 'unverified' });
+    expect(JSON.stringify(status)).not.toContain(env.GPU_BRIDGE_WORKER_KEY);
+    expect(getEngineStatusSnapshot({ ...env, GPU_BRIDGE_SINGLE_REPLICA: '' }).engines.gpu.status).toBe('invalid_configuration');
+    expect(getEngineStatusSnapshot({ ...env, GPU_BRIDGE_WORKER_KEY: 'short' }).engines.gpu.status).toBe('invalid_configuration');
+  });
+
   it('runs an autopsy comparison with layer evidence', () => {
     const autopsy = createAutopsyFromLayerStack(
       'Last chance to unlock the secret growth system before competitors win.',

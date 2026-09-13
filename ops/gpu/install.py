@@ -12,7 +12,7 @@ args = parser.parse_args()
 os.umask(0o077)
 source, dest = Path(__file__).resolve().parent, Path(args.destination).resolve()
 dest.mkdir(parents=True, exist_ok=True)
-for name in ('runtime.py', 'vllm_launch.py', 'llamacpp_launch.py', 'checkpoint.py', 'evaluate_queue.py',
+for name in ('runtime.py', 'vllm_launch.py', 'llamacpp_launch.py', 'bridge_worker.py', 'checkpoint.py', 'evaluate_queue.py',
              'evaluation-cases.jsonl', 'runtime.env.example', 'README.md', 'host-recovery.md'):
     if source != dest:
         shutil.copy2(source / name, dest / name)

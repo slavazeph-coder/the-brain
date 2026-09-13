@@ -70,8 +70,13 @@ function buildTribeProjection(result = {}, firewallSignals, affectProfile, tribe
 
 export function getEngineStatusSnapshot(env = {}) {
   const has = (key) => Boolean(env[key]);
-  const gpuConfigured = has('GPU_INFERENCE_URL') && has('GPU_INFERENCE_KEY') && has('GPU_INFERENCE_MODEL');
-  const gpuEnabled = has('GPU_INFERENCE_URL') || has('GPU_INFERENCE_KEY') || has('GPU_INFERENCE_MODEL');
+  const outbound = env.GPU_INFERENCE_TRANSPORT === 'outbound';
+  const bridgeKey = String(env.GPU_BRIDGE_WORKER_KEY || '');
+  const gpuConfigured = outbound
+    ? env.GPU_BRIDGE_SINGLE_REPLICA === '1' && bridgeKey.length >= 32 && bridgeKey.length <= 256
+      && !/[\r\n]/.test(bridgeKey) && has('GPU_INFERENCE_MODEL')
+    : has('GPU_INFERENCE_URL') && has('GPU_INFERENCE_KEY') && has('GPU_INFERENCE_MODEL');
+  const gpuEnabled = outbound || has('GPU_INFERENCE_URL') || has('GPU_INFERENCE_KEY') || has('GPU_INFERENCE_MODEL');
   return {
     totalLayers: LAYER_CATALOG.length,
     coreLayers: layersByIds(CORE_LAYER_IDS),
