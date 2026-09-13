@@ -143,6 +143,10 @@ class Runtime:
             for key in ('MODEL_PATH', 'MODEL_REVISION', 'VLLM_EXECUTABLE', 'GPU_MEMORY_UTILIZATION', 'MAX_MODEL_LEN',
                         'ALLOW_MODEL_DOWNLOAD', 'SERVED_MODEL_NAME', 'BACKEND_PORT', 'BACKEND_API_KEY'):
                 env[key] = self.c[key]
+            for key in ('LLAMACPP_EXECUTABLE', 'MODEL_SHA256', 'GPU_LAYERS', 'BACKEND_PARALLEL',
+                        'INFERENCE_JSON_SCHEMA_FILE'):
+                if self.c.get(key):
+                    env[key] = self.c[key]
         elif kind == 'background':
             env.update(BRAINSNN_GPU_BASE_URL=f"http://127.0.0.1:{self.c['GATEWAY_PORT']}/v1",
                        BRAINSNN_GPU_API_KEY=self.c['BACKGROUND_API_KEY'], BRAINSNN_GPU_MODEL=self.c['SERVED_MODEL_NAME'],

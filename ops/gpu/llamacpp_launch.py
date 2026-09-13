@@ -13,10 +13,10 @@ enough to read the model's separate `chat_template.jinja`. llama.cpp builds
 against a much wider CUDA range and reads GGUF chat templates natively, which
 removes both risks.
 
-It also removes the dominant failure mode: gpuInference.js rejects any response
-that fails validateAnalysis, and every rejection costs a full request timeout
-before falling back. llama-server can constrain decoding to a JSON schema, which
-makes a schema violation structurally impossible rather than merely unlikely.
+gpuInference.js validates each response and falls back when validation fails.
+Do not enable the optional global JSON schema for BrainSNN: the adapter sends
+response_format=json_object, and combining both grammars failed sampler
+initialization in the real CPU smoke test. Output quality still needs evaluation.
 
 Model identity
 --------------
@@ -85,8 +85,8 @@ def command(env):
             # visible to any user who can read /proc or run ps.
             '--api-key-file', env['BACKEND_API_KEY_FILE']]
 
-    # Optional schema-constrained decoding. When set, the backend cannot emit
-    # output that fails BrainSNN's validateAnalysis.
+    # Optional global grammar for other callers. Leave unset for BrainSNN's
+    # per-request response_format=json_object; the two grammars conflict.
     schema_file = env.get('INFERENCE_JSON_SCHEMA_FILE', '').strip()
     if schema_file:
         schema_path = Path(schema_file)

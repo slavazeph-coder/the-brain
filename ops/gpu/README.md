@@ -47,6 +47,30 @@ GPU_MEMORY_UTILIZATION=0.60
 
 The 60% VRAM allocation and 8K context are initial conservative limits, not measured capacity guarantees. Tune based on real memory use, latency and queue throughput; a VRAM fraction is **not a GPU utilization target**. A model may still fail to fit. Explicit model loading is intentionally separate from installing this control package.
 
+For a compatible, separately installed `llama-server`, the installer also includes
+`llamacpp_launch.py`. Select it with the same supervisor and a verified local GGUF:
+
+```ini
+INFERENCE_COMMAND=["/usr/bin/python3","/workspace/slava/brainsnn-gpu-runtime/llamacpp_launch.py"]
+LLAMACPP_EXECUTABLE=/workspace/slava/llama.cpp/build/bin/llama-server
+MODEL_PATH=/workspace/slava/models/verified-model.gguf
+MODEL_SHA256=<verified-64-character-content-sha256>
+MODEL_REVISION=<same-verified-content-sha256>
+GPU_LAYERS=99
+BACKEND_PARALLEL=2
+MAX_MODEL_LEN=8192
+INFERENCE_JSON_SCHEMA_FILE=
+```
+
+Use the actual Python and binary paths on the container. Build llama.cpp against
+a CUDA toolkit compatible with its driver; do not upgrade the host driver from
+inside the container. Keep `INFERENCE_JSON_SCHEMA_FILE` empty for BrainSNN. Its
+adapter sends `response_format=json_object`; adding a global grammar caused a
+400 sampler initialization error in the real CPU model test. JSON syntax does
+not guarantee the complete analysis contract, so real inference validation remains
+required. The supervisor forwards only the named llama.cpp settings and the
+backend credential; the launcher keeps that credential in an owner-only file.
+
 ## Start, stop, health and container restart
 
 ```sh
