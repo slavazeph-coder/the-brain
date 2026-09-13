@@ -75,5 +75,29 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(len(cases), 8)
         self.assertEqual(len(set(c['id'] for c in cases)), 8)
 
+    def test_expanded_backlog_preserves_completed_seed_work_and_parks(self):
+        seed = list(q.read_cases(Path(__file__).with_name('evaluation-cases.jsonl')))
+        cases = list(q.read_cases(Path(__file__).with_name('regression-cases.jsonl')))
+        self.assertEqual(cases[:8], seed)
+        self.assertEqual(len(cases), 64)
+        self.assertEqual(len({c['id'] for c in cases}), 64)
+        self.assertGreaterEqual(sum(len(c['content']) > 1000 for c in cases), 4)
+        with tempfile.TemporaryDirectory() as folder, contextlib.redirect_stdout(io.StringIO()):
+            path = Path(folder) / 'jobs.sqlite'
+            db = q.connect(path)
+            def infer(_url, _key, _model, content, _timeout):
+                # Preserve a recorded failure as terminal; expansion must not hide
+                # or automatically rerun it to turn the summary green.
+                return self.completion(content, evidence='fabricated' if content == seed[6]['content'] else content)
+            self.assertEqual(q.run_pass(db, seed, 'alias', '', '', 3, infer, revision='c' * 40), 8)
+            db.close()
+            db = q.connect(path)
+            self.assertEqual(q.run_pass(db, cases, 'alias', '', '', 3, infer, revision='c' * 40), 56)
+            self.assertEqual(q.run_pass(db, cases, 'alias', '', '', 3, infer, revision='c' * 40), 0)
+            self.assertFalse(q.has_pending(db, cases, 'alias', 'c' * 40))
+            self.assertEqual(db.execute('select status,count(*) from jobs group by status order by status').fetchall(),
+                             [('failed', 1), ('passed', 63)])
+            db.close()
+
 if __name__ == '__main__':
     unittest.main()
