@@ -153,9 +153,12 @@ class Runtime:
                         'ALLOW_MODEL_DOWNLOAD', 'SERVED_MODEL_NAME', 'BACKEND_PORT', 'BACKEND_API_KEY'):
                 env[key] = self.c[key]
             for key in ('LLAMACPP_EXECUTABLE', 'MODEL_SHA256', 'GPU_LAYERS', 'BACKEND_PARALLEL',
-                        'INFERENCE_JSON_SCHEMA_FILE'):
+                        'INFERENCE_JSON_SCHEMA_FILE', 'MODEL_MANIFEST', 'CHAT_TEMPLATE_PATH', 'CHAT_TEMPLATE_SHA256',
+                        'VLLM_DTYPE', 'VLLM_MAX_NUM_SEQS', 'VLLM_MAX_BATCHED_TOKENS'):
                 if self.c.get(key):
                     env[key] = self.c[key]
+            if 'VLLM_LD_LIBRARY_PATH' in self.c:
+                env['VLLM_LD_LIBRARY_PATH'] = self.c['VLLM_LD_LIBRARY_PATH']
         elif kind == 'background':
             env.update(BRAINSNN_GPU_BASE_URL=f"http://127.0.0.1:{self.c['GATEWAY_PORT']}/v1",
                        BRAINSNN_GPU_API_KEY=self.c['BACKGROUND_API_KEY'], BRAINSNN_GPU_MODEL=self.c['SERVED_MODEL_NAME'],

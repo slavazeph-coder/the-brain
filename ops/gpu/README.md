@@ -10,7 +10,9 @@ end-to-end GPU test: 1.882-second analysis, local fallback after worker loss, an
 same supervisor in 12 seconds. Seven of eight finite evaluation cases passed;
 one exact-evidence case failed on Unicode quotation and remains recorded. An
 off-container private backup restored with SQLite integrity verified. These
-bounded checks do not establish continuous uptime or production site activation.
+bounded checks do not establish continuous uptime. Subsequent production checks
+on `https://www.brainsnn.com` passed two GPU analyses in approximately 2.3 and
+2.2 seconds after the outbound bridge deployment.
 
 If SSH times out or Vast reports `failed to inject CDI devices`, start with [host-recovery.md](host-recovery.md). It separates the host/container repair from application deployment and explains how to verify the complete current SSH endpoint.
 
@@ -36,7 +38,7 @@ python3 ops/gpu/install.py --destination /workspace/slava/brainsnn-gpu-runtime
 
 This copies files and creates three distinct random keys in owner-only `runtime.env`. It does not start anything. It preserves an existing config when rerun, so add new optional fields explicitly when upgrading. Keep this directory on a verified persistent mount; the September 13 container's `/workspace/slava` is currently on its overlay filesystem, with no separate persistent volume verified. Never copy SSH private keys into the container. Keep credentials out of Git and backup manifests.
 
-Verify `nvidia-smi`, Python version, free disk, container lifecycle and mount persistence before selecting an isolated vLLM environment. Pin the exact compatible vLLM package and model commit after that inspection, and record a package lock/file with hashes. Do not overwrite Simon's existing PyTorch environment. The launcher accepts a local model directory or, only with `ALLOW_MODEL_DOWNLOAD=1`, a model repository plus a full 40-character commit revision. It does not enable remote model code. Local model directories still require operator provenance/digest verification.
+Verify `nvidia-smi`, Python version, free disk, container lifecycle and mount persistence before selecting an isolated vLLM environment. Pin the exact compatible vLLM package and model commit after that inspection, and record a package lock/file with hashes. Do not overwrite Simon's existing PyTorch environment. The launcher accepts an absolute local model directory with a full 40-character model commit or, only with `ALLOW_MODEL_DOWNLOAD=1`, a model repository plus that commit. It does not enable remote model code. Local model directories require operator provenance; `MODEL_MANIFEST` additionally verifies all weight/configuration/tokenizer files at each launch.
 
 Current primary references reviewed September 9, 2026:
 
@@ -47,16 +49,88 @@ Current primary references reviewed September 9, 2026:
 Edit the private `runtime.env` as literal `KEY=VALUE` lines. It is not shell-sourced, supports no shell expansion, and command values are JSON argument arrays:
 
 ```ini
-INFERENCE_COMMAND=["/workspace/slava/vllm-venv/bin/python","/workspace/slava/brainsnn-gpu-runtime/vllm_launch.py"]
-VLLM_EXECUTABLE=/workspace/slava/vllm-venv/bin/vllm
-MODEL_PATH=/workspace/slava/models/verified-model-snapshot
-MODEL_REVISION=<verified-immutable-snapshot-digest>
+INFERENCE_COMMAND=["/workspace/slava/vllm-0.8.5.post1/bin/python","/workspace/slava/brainsnn-gpu-runtime/vllm_launch.py"]
+VLLM_EXECUTABLE=/workspace/slava/vllm-0.8.5.post1/bin/vllm
+MODEL_PATH=/workspace/slava/models/Huihui-Qwen3-4B-Instruct-2507-abliterated-bf16
+MODEL_REVISION=c9bd464550d4078c72af0dd22aa18d0437868ce3
+MODEL_MANIFEST=/workspace/slava/vllm-setup/verified-model-manifest.json
+CHAT_TEMPLATE_PATH=/workspace/slava/models/Huihui-Qwen3-4B-Instruct-2507-abliterated-bf16/chat_template.jinja
+CHAT_TEMPLATE_SHA256=65adea29f923a4eda2dad1f080cd6ac9458dea65bd581f9fc086e3e7d556d4db
 SERVED_MODEL_NAME=brainsnn-local
-MAX_MODEL_LEN=8192
-GPU_MEMORY_UTILIZATION=0.60
+MAX_MODEL_LEN=4096
+GPU_MEMORY_UTILIZATION=0.50
+VLLM_DTYPE=bfloat16
+VLLM_MAX_NUM_SEQS=1
+VLLM_MAX_BATCHED_TOKENS=4096
 ```
 
-The 60% VRAM allocation and 8K context are initial conservative limits, not measured capacity guarantees. Tune based on real memory use, latency and queue throughput; a VRAM fraction is **not a GPU utilization target**. A model may still fail to fit. Explicit model loading is intentionally separate from installing this control package.
+These September 13 candidate settings target the observed driver `535.183.01`.
+They do not switch the running backend by themselves. The isolated dependency
+selection is vLLM `0.8.5.post1`, PyTorch `2.6.0+cu124`, torchvision `0.21.0+cu124`,
+torchaudio `2.6.0+cu124`, transformers `4.51.3`, xformers `0.0.29.post2` and
+triton `3.2.0`; preserve the resolved package inventory and downloaded wheel
+hashes with the deployment receipt. Driver compatibility, GPU memory and the
+actual serving contract still require candidate inference tests before promotion.
+
+The checked-in [candidate inventory](requirements-vllm-cu124.freeze.txt) records
+the installed Linux x86_64 / Python 3.10 environment. It is an exact-version
+`pip freeze`, not a cryptographic wheel lock. The parent deployment receipt also
+retains the resolved wheel-hash lock. A reproduction recipe in a **new, empty**
+environment is:
+
+```sh
+apt-get install python3.10-venv python3.10-dev build-essential
+python3.10 -m venv /workspace/slava/vllm-0.8.5.post1
+/workspace/slava/vllm-0.8.5.post1/bin/python -m pip install pip==25.1.1
+/workspace/slava/vllm-0.8.5.post1/bin/python -m pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0+cu124 torchvision==0.21.0+cu124 torchaudio==2.6.0+cu124
+/workspace/slava/vllm-0.8.5.post1/bin/python -m pip install -r /workspace/slava/brainsnn-gpu-runtime/requirements-vllm-cu124.freeze.txt
+/workspace/slava/vllm-0.8.5.post1/bin/python -m pip check
+```
+
+Do not reuse that destination if an environment already exists. Python development
+headers and a C compiler are required even with eager mode: the first structured
+JSON request compiles Triton's CUDA helper. The real canary loaded the BF16 model
+and ran FlashAttention on driver 535 before exposing this missing-header failure;
+an ordinary health response alone would not have found it. Do not install a new
+host driver or put CUDA stub libraries on the runtime search path.
+
+The launcher fixes `VLLM_USE_V1=0`, `VLLM_ATTENTION_BACKEND=FLASH_ATTN`, eager
+execution, disabled custom all-reduce and vLLM generation defaults. It passes the
+backend secret only as `VLLM_API_KEY`, never `--api-key`. These behaviors use the
+pinned [vLLM server](https://github.com/vllm-project/vllm/blob/v0.8.5.post1/vllm/entrypoints/openai/api_server.py)
+and [engine arguments](https://github.com/vllm-project/vllm/blob/v0.8.5.post1/vllm/engine/arg_utils.py).
+Transformers 4.51.3 already supports a separate
+[chat_template.jinja file](https://github.com/huggingface/transformers/blob/v4.51.3/src/transformers/tokenization_utils_base.py);
+the explicit template option makes the selected bytes verifiable rather than
+working around an assumed lack of support.
+
+`MODEL_MANIFEST` is a JSON object with `revision` matching `MODEL_REVISION` and a
+`files` array of `{ "path": "relative/file", "sha256": "64-lowercase-hex" }`.
+The operator must obtain those hashes from the selected immutable repository
+snapshot, not bless unknown local weights after the fact. Extra metadata fields
+such as `repository` and file `size` are permitted. Include every local
+`.safetensors`, `.json`, `.jinja`, `.model`, `.txt`, `.bin` and `.py` file, including
+`config.json` and at least one safetensors shard. Keep the manifest **outside**
+the model directory to avoid trying to hash itself. Hash verification adds model
+read time to startup. The optional template requires its own full SHA256, with
+line endings preserved; a mismatch aborts launch.
+
+The vLLM child normally preserves the runtime's inherited library path. If that
+path includes the existing CUDA 12.2 toolkit or stub libraries, use an explicit
+`VLLM_LD_LIBRARY_PATH` in private config after verifying driver discovery. An empty
+value removes `LD_LIBRARY_PATH` for vLLM only; a nonempty value must be a list of
+existing absolute directories separated by colons, without `stubs`. Preserve any
+required real NVIDIA driver directory. Do not change the supervisor's shared
+library path to make vLLM work, because the existing llama.cpp backend uses it.
+
+The 50% allocation is a fraction of total VRAM, **not a GPU utilization target**.
+`MAX_MODEL_LEN` is per request and `VLLM_MAX_BATCHED_TOKENS` must be at least that
+large. Validate the application's largest allowed input plus its output budget;
+4096 tokens may be insufficient, in which case increase both limits together
+after measuring memory. Keep the current llama.cpp configuration available for
+rollback until real adapter, deadline, disconnect/preemption and crash-recovery
+tests pass against vLLM. Explicit model loading is separate from installing this
+control package.
 
 For a compatible, separately installed `llama-server`, the installer also includes
 `llamacpp_launch.py`. Select it with the same supervisor and a verified local GGUF:
@@ -127,6 +201,24 @@ python3 /workspace/slava/brainsnn-gpu-runtime/runtime.py stop
 python3 /workspace/slava/brainsnn-gpu-runtime/runtime.py resume-background
 python3 /workspace/slava/brainsnn-gpu-runtime/runtime.py start
 ```
+
+For a larger finite backlog, select `regression-cases.jsonl` in the same command.
+Its first eight entries preserve the seed case identities/content, followed by
+56 original synthetic additions: Unicode and multilingual exact quotations,
+embedded role/JSON instructions, numeric uncertainty, benign urgency versus
+pressure, source context and four longer documents. Existing terminal results,
+including failures, remain recorded and are not repeated for the same model
+revision. Upgrading the installer copies this optional corpus but preserves the
+active config and default eight-case queue.
+
+The tests measure five-field JSON validity and exact source evidence only; they
+do not assign a ground-truth persuasion score or replace the production adapter's
+larger output contract. This set does not change the detector's held-out corpus,
+train weights or automatically promote a model. A fresh model revision gets new
+ledger identities so backend quality can be compared without overwriting prior
+results. After 64 cases finish, `--watch` idles until approved work changes. Useful
+continuous load requires new evaluation or user jobs; repeating finished tests
+merely to report 99% utilization would add no new evidence.
 
 Direct GPU training is an **optional job contract**, not an installed training loop. It needs an approved dataset, objective, evaluation split and resumable implementation. Keep a resident inference model plus a training model within measured memory limits; otherwise plan explicit time-slicing/model release and website fallback during model reload. Do not set minimum free memory to zero for direct training. The free-memory gate applies at job start; the job must enforce its own allocation limit thereafter.
 
