@@ -41,6 +41,7 @@ export function OperationsWorkspace() {
   const submissionKey = useRef(crypto.randomUUID());
   const [credential, setCredential] = useState('');
   const [snapshot, setSnapshot] = useState(null);
+  const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -57,7 +58,7 @@ export function OperationsWorkspace() {
     key.current = '';
     for (const controller of activeRequests.current) controller.abort();
     activeRequests.current.clear();
-    setCredential(''); setSnapshot(null); setError(''); setMessage(''); setBusy(false);
+    setCredential(''); setSnapshot(null); setOnline(false); setError(''); setMessage(''); setBusy(false);
   }
 
   async function request(path, body, token = key.current) {
@@ -78,8 +79,15 @@ export function OperationsWorkspace() {
 
   async function refresh(epoch = generation.current) {
     const sequence = ++refreshSequence.current;
-    const result = await request('/status');
-    if (sequence === refreshSequence.current && epoch === generation.current && key.current) setSnapshot(result);
+    const current = () => sequence === refreshSequence.current && epoch === generation.current && key.current;
+    try {
+      const result = await request('/status');
+      if (current()) { setSnapshot(result); setOnline(true); setError(''); }
+      return true;
+    } catch (failure) {
+      if (current()) { setOnline(false); setError(failure.name === 'AbortError' ? 'Status refresh timed out.' : failure.message); }
+      return false;
+    }
   }
 
   useEffect(() => { document.title = 'Private operations | BrainSNN'; return () => { generation.current += 1; key.current = ''; for (const controller of activeRequests.current) controller.abort(); }; }, []);
@@ -89,7 +97,7 @@ export function OperationsWorkspace() {
     let stopped = false;
     let timer;
     const poll = async () => {
-      try { await refresh(); } catch (failure) { if (!stopped && failure.name !== 'AbortError') setError(failure.message); }
+      await refresh();
       if (!stopped) timer = setTimeout(poll, 3000);
     };
     timer = setTimeout(poll, 3000);
@@ -102,7 +110,7 @@ export function OperationsWorkspace() {
     try {
       const result = await request('/status', undefined, credential);
       if (epoch !== generation.current) return;
-      key.current = credential; setCredential(''); setSnapshot(result);
+      key.current = credential; setCredential(''); setSnapshot(result); setOnline(true);
     } catch (failure) { if (failure.name !== 'AbortError') setError(failure.message); }
     finally { setBusy(false); }
   }
@@ -114,7 +122,7 @@ export function OperationsWorkspace() {
     try {
       await request(path, body);
       if (epoch !== generation.current) return false;
-      setMessage('Recorded.'); await refresh(epoch); return true;
+      setMessage('Recorded.'); return await refresh(epoch);
     } catch (failure) { if (failure.name !== 'AbortError') setError(failure.message); return false; }
     finally { submitting.current = false; setBusy(false); }
   }
@@ -136,6 +144,17 @@ export function OperationsWorkspace() {
         <p className="ops-boundary">Artifacts and drafts await human review. Approval records do not send outreach, publish content, or spend money. External execution is disabled.</p>
         <section className="ops-panel" aria-labelledby="ops-control-title"><div className="ops-row"><h2 id="ops-control-title">Scheduler</h2><span className="ops-state">{control.kill ? 'killed' : control.hardwarePaused ? 'hardware hold' : control.gpuQuarantined ? 'quarantined' : control.paused ? 'paused' : 'accepting work'}</span></div>{control.idleResident && <p>Inference model resident and idle; video handoff drains it before rendering.</p>}<p>{control.reason || 'Video has priority at the next job boundary. One GPU job runs at a time.'}</p><label>Operator reason<input value={reason} maxLength={1000} onChange={(event) => setReason(event.target.value)} placeholder="Record the reason for this change"/></label><div className="ops-actions"><button disabled={busy || !reason.trim()} onClick={() => execute('/control', { action: 'pause', reason })}>Pause after current job</button><button disabled={busy || !reason.trim() || control.hardwarePaused || control.gpuQuarantined} onClick={() => execute('/control', { action: 'resume', reason })}>Resume scheduler</button><button className="ops-danger" disabled={busy || !reason.trim()} onClick={() => execute('/control', { action: 'kill', reason })}>Stop all work</button></div>
           {(control.hardwarePaused || control.gpuQuarantined) && <details className="ops-clear"><summary>Clear a verified hardware or lease hold</summary><p>First stop the worker and verify that all owned GPU processes are quiescent. Follow the runbook to clear the local runtime latch after host clearance. Record that evidence here; clearing this hold leaves the scheduler paused.</p><button disabled={busy || !reason.trim()} onClick={() => execute('/control', { action: 'clear-hardware', reason })}>Record verified clearance</button></details>}
+        </section>
+        <section className="ops-panel" aria-label="Operations evidence">
+          <h2>Deployment readiness: {online && snapshot.readiness?.ready === true ? 'assertions satisfied' : 'blocked'}</h2>
+          <p>Control plane: {online ? 'online' : 'unverified — refresh failed'}</p>
+          <p>GPU worker readiness: {online && snapshot.readiness?.ready === true ? 'assertions satisfied; physical checks still required' : 'unverified'}</p>
+          <p>Worker contact: {!online ? 'unverified' : snapshot.readiness?.checks?.find(item => item.id === 'workerContact')?.reason === 'authenticated_contact_only' ? 'recent (within 60 seconds); contact only' : snapshot.workerContacts?.length ? 'stale or conflicting' : 'absent'}</p>
+          <p>Read-only assessment. Missing evidence blocks readiness. Human assertions do not independently verify hardware or authorize cutover.</p>
+          <details><summary>Readiness reasons and evidence types</summary><ul>{snapshot.readiness?.checks?.map(item => <li key={item.id}><strong>{item.id}: {item.state}</strong> · {item.source === 'operator' ? 'human assertion' : 'machine check'}<br/>{item.reason}</li>)}</ul></details>
+          <h3>Persisted job outcomes</h3>
+          <p>Ready for review: {snapshot.metrics?.readyForReview ?? 'unknown'} · Failed: {snapshot.metrics?.failed ?? 'unknown'}</p>
+          <p>All retained jobs, excluding internal warmups. Completion does not mean approval. {online ? '' : 'Showing the last received snapshot.'}</p>
         </section>
         <section className="ops-panel"><h2>Queue work</h2><form onSubmit={submit} className="ops-submit"><label>Work type<select value={kind} onChange={(event) => changeSubmission(() => setKind(event.target.value))}><option value="video">Video render</option><option value="research">Research and draft</option></select></label>{kind === 'video' && <label>Configured workflow ID<input required value={workflow} maxLength={80} onChange={(event) => changeSubmission(() => setWorkflow(event.target.value))}/></label>}<label>{kind === 'video' ? 'Render prompt' : 'Research objective'}<textarea required value={prompt} maxLength={kind === 'video' ? 8000 : 2000} rows={3} onChange={(event) => changeSubmission(() => setPrompt(event.target.value))}/></label>{kind === 'research' && <label>Research engine<select value={engine} onChange={(event) => changeSubmission(() => setEngine(event.target.value))}><option value="crewai">CrewAI</option><option value="swarms-crewai">Swarms proposal/critique → CrewAI</option></select></label>}{kind === 'research' && <label>Evidence sources (JSON)<textarea value={sources} required rows={5} onChange={(event) => changeSubmission(() => setSources(event.target.value))} aria-describedby="ops-evidence-help"/><small id="ops-evidence-help">Supply 1–4 source objects with id, title, url (HTTPS), and content (up to 6,000 characters each). Only supplied evidence is available to the worker; links are not fetched.</small></label>}<button disabled={busy} type="submit">Queue {kind === 'video' ? 'render' : 'research'}</button></form></section>
         <section aria-labelledby="ops-jobs-title"><div className="ops-row"><h2 id="ops-jobs-title">Jobs <span>({jobs.length})</span></h2><label>Show status<select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All states</option>{STATES.map((state) => <option key={state} value={state}>{readable(state)} ({jobs.filter((job) => job.status === state).length})</option>)}</select></label></div>{jobs.length === 0 && <p>No jobs queued.</p>}{jobs.filter((job) => filter === 'all' || job.status === filter).map((job) => <JobRecord key={job.id} job={job} approvals={snapshot.approvals || []} execute={execute} busy={busy}/>)}</section>

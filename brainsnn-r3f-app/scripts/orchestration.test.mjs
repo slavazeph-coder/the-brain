@@ -337,3 +337,148 @@ test('L3 abandoned inference terminalizes only after matching quiescence and fre
   }
   await f.submit('capacity-restored');
 });
+
+test('owner visibility records only successful authenticated worker contact and persists aggregate outcomes', async t => {
+  const f = await fixture(t);
+  let s = (await f.call('owner', '/status')).body;
+  assert.deepEqual(s.workerContacts, []);
+  assert.equal(s.readiness.ready, false);
+  await f.call('worker', '/next', undefined, { Authorization: '' });
+  await f.call('worker', '/missing');
+  assert.deepEqual(f.scheduler().snapshot().workerContacts, []);
+  await f.call('worker', '/next');
+  s = f.scheduler().snapshot();
+  assert.equal(s.workerContacts[0].lastSeenAt, 100000);
+  assert.equal(s.readiness.checks.find(c => c.id === 'workerContact').state, 'pass');
+  assert.equal(s.readiness.ready, false);
+  const job = await f.submit('metrics'); const leased = (await f.call('worker', '/next')).body.job;
+  assert.equal((await f.call('worker', `/jobs/${job.id}/complete`, { token: leased.lease.token, quiescent: true, result: {}, artifacts: [{ sha256: SHA, uri: `sha256:${SHA}`, bytes: 4, mediaType: 'video/mp4' }] })).status, 200);
+  f.restart();
+  assert.equal(f.scheduler().snapshot().metrics.readyForReview, 1);
+  assert.equal(f.scheduler().snapshot().metrics.failed, 0);
+  const db = new DatabaseSync(f.env.ORCHESTRATION_DB_PATH);
+  for (let i = 0; i < 201; i++) db.prepare("INSERT INTO orchestration_jobs(id,idempotency_key,kind,payload,status,created_at,updated_at) VALUES(?,?,'research','{}','failed',100001,100001)").run(`metric-${i}`, `metric-${i}`);
+  db.prepare("INSERT INTO orchestration_jobs(id,idempotency_key,kind,payload,status,created_at,updated_at,warmup) VALUES('warm-metric','warm-metric','inference','{}','failed',100001,100001,1)").run();
+  db.close();
+  assert.equal(f.scheduler().snapshot().jobs.length, 200);
+  assert.equal(f.scheduler().snapshot().metrics.failed, 201);
+  assert.equal(f.scheduler().snapshot().metrics.readyForReview, 1);
+  f.clock(60001);
+  assert.equal(f.scheduler().snapshot().readiness.checks.find(c => c.id === 'workerContact').state, 'unknown');
+  assert.equal((await f.call('worker', '/status')).status, 404);
+});
+
+function rejectContactWrites(t, f, operation = 'INSERT') {
+  const db = new DatabaseSync(f.env.ORCHESTRATION_DB_PATH);
+  t.after(() => db.close());
+  assert.ok(['INSERT', 'UPDATE'].includes(operation));
+  db.exec(`CREATE TRIGGER reject_contact BEFORE ${operation} ON orchestration_worker_contacts BEGIN SELECT RAISE(ABORT,'synthetic_contact_failure'); END;`);
+  return db;
+}
+const degradedContact = { persisted: false, reason: 'contact_write_failed' };
+
+test('OPS-001 contact INSERT failure preserves a committed claim and usable lease token', async t => {
+  const f = await fixture(t); const job = await f.submit('contact-claim');
+  const db = rejectContactWrites(t, f);
+  const claim = await f.call('worker', '/next');
+  const saved = db.prepare('SELECT status,lease_token FROM orchestration_jobs WHERE id=?').get(job.id);
+  assert.equal(saved.status, 'generating');
+  assert.ok(saved.lease_token);
+  assert.equal(claim.status, 200);
+  assert.equal(claim.body.job.id, job.id);
+  assert.equal(claim.body.job.lease.token, saved.lease_token);
+  assert.deepEqual(claim.body.workerContact, degradedContact);
+  f.clock(500);
+  const heartbeat = await f.call('worker', `/jobs/${job.id}/heartbeat`, { token: claim.body.job.lease.token });
+  assert.equal(heartbeat.status, 200);
+  assert.equal(heartbeat.body.active, true);
+  assert.equal(heartbeat.body.lease.expiresAt, 101500);
+  assert.deepEqual(heartbeat.body.workerContact, degradedContact);
+  const checkpoint = await f.call('worker', `/jobs/${job.id}/checkpoint`, { token: claim.body.job.lease.token, stage: 'decoding', checkpoint: { step: 1 } });
+  assert.equal(checkpoint.status, 200);
+  assert.equal(checkpoint.body.accepted, true);
+  assert.deepEqual(checkpoint.body.workerContact, degradedContact);
+  const s = f.scheduler().snapshot();
+  assert.deepEqual(s.jobs[0].checkpoint, { step: 1 });
+  assert.equal(s.control.gpuQuarantined, false);
+  assert.deepEqual(s.workerContacts, []);
+  assert.equal(s.readiness.ready, false);
+  db.exec('DROP TRIGGER reject_contact');
+  const recovered = await f.call('worker', '/next');
+  assert.equal(recovered.status, 200);
+  assert.equal(recovered.body.job, null);
+  assert.equal(recovered.body.workerContact, undefined);
+  assert.equal(f.scheduler().snapshot().workerContacts[0].lastSeenAt, 100500);
+});
+
+test('OPS-001 contact UPDATE failure preserves committed completion and immutable artifacts', async t => {
+  const f = await fixture(t); await f.submit('contact-completion');
+  const job = (await f.call('worker', '/next')).body.job;
+  const db = rejectContactWrites(t, f, 'UPDATE');
+  f.clock(100);
+  const artifact = { sha256: SHA, uri: `sha256:${SHA}`, bytes: 4, mediaType: 'video/mp4' };
+  const payload = { token: job.lease.token, quiescent: true, result: { rendered: true }, artifacts: [artifact] };
+  const completed = await f.call('worker', `/jobs/${job.id}/complete`, payload);
+  assert.equal(db.prepare('SELECT status FROM orchestration_jobs WHERE id=?').get(job.id).status, 'ready-for-review');
+  assert.equal(completed.status, 200);
+  assert.equal(completed.body.accepted, true);
+  assert.deepEqual(completed.body.workerContact, degradedContact);
+  f.restart();
+  const s = f.scheduler().snapshot();
+  assert.deepEqual(s.jobs[0].result, payload.result);
+  assert.deepEqual(s.jobs[0].artifacts, [artifact]);
+  assert.equal(s.metrics.readyForReview, 1);
+  assert.equal(s.workerContacts[0].lastSeenAt, 100000);
+  assert.equal(s.control.gpuQuarantined, false);
+  assert.equal(s.control.externalExecution, false);
+  assert.deepEqual(s.approvals, []);
+  assert.equal((await f.call('worker', `/jobs/${job.id}/complete`, payload)).status, 409);
+});
+
+for (const action of ['fail', 'fault']) test(`OPS-001 contact failure preserves ${action} acknowledgement and durable hardware/ownership holds`, async t => {
+  const f = await fixture(t); await f.submit(`contact-${action}`);
+  const job = (await f.call('worker', '/next')).body.job;
+  const db = rejectContactWrites(t, f);
+  const path = action === 'fault' ? '/fault' : `/jobs/${job.id}/fail`;
+  const payload = { token: job.lease.token, category: 'hardware', message: 'synthetic NVML device lost', quiescent: true };
+  assert.equal((await f.call('worker', path, payload, { 'X-BrainSNN-Worker': 'other_worker' })).status, 409);
+  const failed = await f.call('worker', path, payload);
+  assert.equal(db.prepare('SELECT hardware,quarantine FROM orchestration_control').get().hardware, 1);
+  assert.equal(failed.status, 200);
+  assert.equal(failed.body.accepted, true);
+  assert.deepEqual(failed.body.workerContact, degradedContact);
+  assert.equal(failed.body.control.hardwarePaused, true);
+  assert.equal(failed.body.control.gpuQuarantined, true);
+  f.restart();
+  assert.equal(f.scheduler().snapshot().jobs[0].status, 'paused');
+  assert.equal(f.scheduler().snapshot().control.hardwarePaused, true);
+  assert.equal(f.scheduler().snapshot().control.gpuQuarantined, true);
+  assert.equal((await f.call('owner', '/control', { action: 'resume' })).status, 409);
+  assert.equal((await f.call('owner', `/jobs/${job.id}/resume`, {})).status, 409);
+  assert.equal((await f.call('worker', '/reconcile', { quiescent: true, reason: 'synthetic stopped' }, { 'X-BrainSNN-Worker': 'other_worker' })).status, 409);
+  const reconciled = await f.call('worker', '/reconcile', { quiescent: true, reason: 'synthetic stopped' });
+  assert.equal(reconciled.status, 200);
+  assert.equal(reconciled.body.reconciled, false);
+  assert.deepEqual(reconciled.body.workerContact, degradedContact);
+  assert.equal(reconciled.body.control.hardwarePaused, true);
+  assert.equal(reconciled.body.control.gpuQuarantined, true);
+});
+
+test('OPS-001 contact failures do not swallow safety write failures or rejected stale-lease quarantine', async t => {
+  const f = await fixture(t); const job = await f.submit('safety-write');
+  const db = rejectContactWrites(t, f);
+  db.exec("CREATE TRIGGER reject_lease BEFORE UPDATE OF lease_token ON orchestration_jobs BEGIN SELECT RAISE(ABORT,'synthetic_safety_failure'); END;");
+  const rejected = await f.call('worker', '/next');
+  assert.equal(rejected.status, 500);
+  assert.equal(rejected.body.error, 'orchestration_error');
+  assert.equal(rejected.body.workerContact, undefined);
+  assert.equal(db.prepare('SELECT status FROM orchestration_jobs WHERE id=?').get(job.id).status, 'queued');
+  assert.deepEqual(f.scheduler().snapshot().workerContacts, []);
+  db.exec('DROP TRIGGER reject_lease; DROP TRIGGER reject_contact;');
+  const leased = (await f.call('worker', '/next')).body.job;
+  db.exec("CREATE TRIGGER reject_contact BEFORE INSERT ON orchestration_worker_contacts BEGIN SELECT RAISE(ABORT,'synthetic_contact_failure'); END;");
+  f.clock(1001);
+  assert.equal((await f.call('worker', `/jobs/${job.id}/heartbeat`, { token: leased.lease.token })).status, 409);
+  assert.equal(db.prepare('SELECT quarantine FROM orchestration_control').get().quarantine, 1);
+  assert.equal(db.prepare('SELECT lease_token FROM orchestration_jobs WHERE id=?').get(job.id).lease_token, null);
+});

@@ -17,6 +17,11 @@ test('private operations require owner authentication, queue durably, and lock w
   await page.getByLabel('Owner credential').fill(owner);
   await page.getByRole('button', { name: 'Unlock operations' }).click();
   await expect(page.getByRole('heading', { name: 'Scheduler', exact: true })).toBeVisible();
+  await expect(page.getByText('Control plane: online', { exact: true })).toBeVisible();
+  await expect(page.getByText('GPU worker readiness: unverified', { exact: true })).toBeVisible();
+  await expect(page.getByText('Worker contact: absent', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Deployment readiness: blocked' })).toBeVisible();
+  await expect(page.getByText('Persisted job outcomes', { exact: true })).toBeVisible();
   await expect(page.getByText('External execution is disabled.', { exact: false })).toBeVisible();
   await page.getByLabel('Configured workflow ID').fill('controlled-local-video');
   const prompt = `Controlled browser test ${testInfo.project.name}`;
@@ -44,7 +49,7 @@ test('private operations require owner authentication, queue durably, and lock w
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   const accessibility = await new AxeBuilder({ page }).include('.ops-site').withTags(['wcag2a', 'wcag2aa']).analyze();
   expect(accessibility.violations.filter(({ impact }) => impact === 'critical' || impact === 'serious')).toEqual([]);
-  await page.screenshot({ path: `../outputs/orchestration-validation/ops-${testInfo.project.name}.png`, fullPage: true });
+  await page.screenshot({ path: `../outputs/overnight-ops-${testInfo.project.name}.png`, fullPage: true });
   expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie }))).not.toContain(owner);
   await page.getByRole('button', { name: 'Lock operations' }).click();
   await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();

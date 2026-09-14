@@ -311,3 +311,60 @@ from the immutable artifact and never overwrites a modified final latent file.
 The local regression tests exercise artifact/checkpoint restoration only;
 real off-container storage, ledger backup and disaster recovery remain cutover
 gates requiring operator evidence.
+
+## Read-only deployment readiness and private evidence visibility
+
+The owner-authenticated `GET /api/ops/status` adds `readiness`,
+`workerContacts` and `metrics`; existing fields and controls are unchanged.
+Only successful authenticated worker operations update the durable contact
+record, using server receipt time. One contact within 60 seconds establishes
+transport contact only, not physical GPU health, ownership, model readiness or
+continuous uptime. Absent/stale contacts are unknown; multiple recent workers
+or future timestamps block the assessment. Restart preserves contact timestamps
+without refreshing them. Worker credentials cannot read the owner status.
+The owner page marks the control plane unverified after a failed/timed-out poll
+and labels retained counts as the last snapshot. No telemetry is added publicly.
+
+`metrics.readyForReview` and `metrics.failed` count actual retained SQLite job
+rows across the entire ledger, excluding internal warmups. They are not limited
+to the latest 200 displayed jobs. Ready-for-review means protocol completion,
+not human approval, successful inference quality, or a proven GPU render.
+No historical utilization or uptime is inferred.
+
+`src/server/readiness.js` exports the pure function
+`assessReadiness(status, operatorEvidence, nowMilliseconds)`. It performs no I/O,
+clears no controls and never authorizes execution. For an offline review, supply
+a nonsecret status packet and these eight human assertions:
+
+- `hardwareClearance`: host repair and runtime clearance explicitly verified.
+- `exclusiveOwnership`: exact full-device allocation/UUID, process ownership,
+  visibility and stopped competing launchers reviewed by the responsible owner.
+- `maintenanceClear`: setup/maintenance lock released by its responsible owner.
+- `durableVolume`: private persistent local filesystem verified.
+- `singleReplica`: exactly one app process and replica verified.
+- `modelPinned`: exact reviewed model/revision and file hashes verified.
+- `workflowPinned`: real generation/decode graphs, hashes and node versions verified.
+- `backupRestoreVerified`: independent backup restored with ledger integrity and
+  artifact/checkpoint hashes verified.
+
+Each assertion has `{value: true|false, source: 'operator', observedAt,
+expiresAt, reference}`. Times are Unix milliseconds; `reference` is a nonsecret
+review record ID linking to the exact deployment/device/version evidence.
+Assertions must be no older than 24 hours, not future dated and not expired.
+Refresh review after any allocation, deployment, workflow or ownership change;
+the assessor cannot detect unreported changes. False assertions block; missing,
+malformed or stale assertions remain unknown and prevent `ready: true`.
+The output contains only allowlisted check IDs, states, source types and reason
+codes; it does not copy references, evidence payloads or environment values.
+
+The deployed status path supplies **no operator assertions**: all eight stay
+unknown until a separate offline operator review. There is intentionally no new
+HTTP evidence-write endpoint, automatic evidence lookup or clearance action.
+A pure assessment returning `ready: true` means the supplied checks/assertions
+are satisfied, not independently certified production readiness. It cannot
+supersede any runtime/host maintenance lock or the cutover sequence above.
+A supplied `status.maintenanceHold: true` blocks even a conflicting human
+maintenance-clear assertion. Absence of this field is not proof of release; the
+explicit maintenance-clear assertion is still required. Healthy NVML never
+overrides a scheduler hold or missing ownership evidence.
+`npm run test:orchestration` includes readiness and queue regressions.

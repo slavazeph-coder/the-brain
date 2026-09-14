@@ -1,3 +1,4 @@
+import { assessReadiness } from './readiness.js';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, dirname } from 'node:path';
@@ -103,6 +104,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
           id TEXT PRIMARY KEY, job_id TEXT NOT NULL, category TEXT NOT NULL, decision TEXT NOT NULL,
           artifact_sha256 TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL,
           FOREIGN KEY(job_id,artifact_sha256) REFERENCES orchestration_job_artifacts(job_id,sha256));
+        CREATE TABLE IF NOT EXISTS orchestration_worker_contacts (worker TEXT PRIMARY KEY, last_seen_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS orchestration_events (
           sequence INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, detail TEXT NOT NULL, created_at INTEGER NOT NULL);
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_update BEFORE UPDATE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
@@ -174,7 +176,22 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
   }
   function snapshot() {
     if (!configured || closed) return { enabled, configured: configured && !closed, jobs: [], approvals: [], control: { paused: true, kill: false, hardwarePaused: false, gpuQuarantined: true, externalExecution: false, reason: 'orchestration_unavailable' } };
-    return transaction(() => { reap(); return { enabled, configured, jobs: all('SELECT * FROM orchestration_jobs ORDER BY created_at DESC,rowid DESC LIMIT 200').map(row => jobView(row)), control: control(), approvals: all('SELECT id,job_id AS jobId,category,decision,artifact_sha256 AS artifactSha256,note,created_at AS createdAt FROM orchestration_approvals ORDER BY created_at DESC,rowid DESC LIMIT 1000') }; });
+    return transaction(() => {
+      reap();
+      const state = { enabled, configured,
+        jobs: all('SELECT * FROM orchestration_jobs ORDER BY created_at DESC,rowid DESC LIMIT 200').map(row => jobView(row)),
+        control: control(),
+        workerContacts: all('SELECT worker AS workerId,last_seen_at AS lastSeenAt FROM orchestration_worker_contacts ORDER BY last_seen_at DESC'),
+        metrics: {
+          source: 'persisted_jobs', scope: 'all_retained_jobs_excluding_internal_warmups',
+          readyForReview: get("SELECT COUNT(*) AS n FROM orchestration_jobs WHERE status='ready-for-review' AND warmup=0").n,
+          failed: get("SELECT COUNT(*) AS n FROM orchestration_jobs WHERE status='failed' AND warmup=0").n,
+        },
+        approvals: all('SELECT id,job_id AS jobId,category,decision,artifact_sha256 AS artifactSha256,note,created_at AS createdAt FROM orchestration_approvals ORDER BY created_at DESC,rowid DESC LIMIT 1000'),
+      };
+      // No operator evidence is inferred from environment flags or successful polls.
+      return { ...state, readiness: assessReadiness(state, {}, now()) };
+    });
   }
   function submit(value, deadline = null, warmup = false) {
     if (typeof value.idempotencyKey !== 'string' || !/^[\w.:-]{1,128}$/.test(value.idempotencyKey)) error('invalid_idempotency_key');
@@ -362,6 +379,11 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
       transaction(reap);
       const path = req.url.split('?')[0];
       const result = surface === 'owner' ? ownerAction(req.method, path, value) : { status: 200, body: workerAction(req.method, path, value, worker) };
+      if (surface === 'worker') {
+        // The worker action is already committed; advisory evidence cannot hide its result.
+        try { run('INSERT INTO orchestration_worker_contacts(worker,last_seen_at) VALUES(?,?) ON CONFLICT(worker) DO UPDATE SET last_seen_at=excluded.last_seen_at', worker, now()); }
+        catch { result.body.workerContact = { persisted: false, reason: 'contact_write_failed' }; }
+      }
       reply(res, result.status, result.body);
     } catch (err) { reply(res, err.status || 500, { error: err.status ? err.message : 'orchestration_error' }); }
   }
