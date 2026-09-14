@@ -10,6 +10,13 @@ import { createOrchestration } from '../src/server/orchestration.js';
 
 const OWNER = 'o'.repeat(40), WORKER = 'w'.repeat(40), SHA = 'a'.repeat(64);
 const RESEARCH = { objective: 'local', sources: [{ id: 's1', title: 'Fixture', url: 'https://example.invalid/evidence', content: 'Local evidence only.' }] };
+const HEARTBEAT_TRANSPORT_DIAGNOSTICS = [
+  'heartbeat_transport_timeout',
+  'heartbeat_transport_connection',
+  'heartbeat_transport_http_5xx',
+  'heartbeat_transport_http_429',
+  'heartbeat_transport_unknown',
+];
 async function fixture(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'brainsnn-scheduler-'));
   let now = 100000;
@@ -130,6 +137,47 @@ test('research cancellation diagnostics persist as terminal failures without ret
   assert.equal(stored.error, 'heartbeat_transport');
   assert.equal(stored.attempts, 1);
   assert.equal((await f.call('worker', '/next')).body.job, null);
+});
+
+test('heartbeat transport subtypes preserve terminal research cancellation across restart', async t => {
+  for (const message of HEARTBEAT_TRANSPORT_DIAGNOSTICS) {
+    const f = await fixture(t);
+    await f.submit(message, 'research', { ...RESEARCH, engine: 'swarms-crewai' });
+    const job = (await f.call('worker', '/next')).body.job;
+    assert.equal(job.attempts, 1, message);
+    const failed = await f.call('worker', `/jobs/${job.id}/fail`, {
+      token: job.lease.token, category: 'cancelled', message, quiescent: true,
+    });
+    assert.equal(failed.status, 200, message);
+    f.restart();
+    const stored = f.scheduler().snapshot().jobs.find(item => item.id === job.id);
+    assert.equal(stored.error, message);
+    assert.equal(stored.status, 'failed', message);
+    assert.equal(stored.attempts, 1, message);
+    assert.equal((await f.call('worker', '/next')).body.job, null, message);
+  }
+});
+
+test('heartbeat transport subtypes preserve exactly three video attempts across restarts', async t => {
+  for (const message of HEARTBEAT_TRANSPORT_DIAGNOSTICS) {
+    const f = await fixture(t);
+    const submitted = await f.submit(message);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const job = (await f.call('worker', '/next')).body.job;
+      assert.equal(job.id, submitted.id, message);
+      assert.equal(job.attempts, attempt, message);
+      const failed = await f.call('worker', `/jobs/${job.id}/fail`, {
+        token: job.lease.token, category: 'transport', message, quiescent: true,
+      });
+      assert.equal(failed.status, 200, message);
+      f.restart();
+      const stored = f.scheduler().snapshot().jobs.find(item => item.id === job.id);
+      assert.equal(stored.error, message);
+      assert.equal(stored.status, attempt < 3 ? 'queued' : 'failed', message);
+      assert.equal(stored.attempts, attempt, message);
+    }
+    assert.equal((await f.call('worker', '/next')).body.job, null, message);
+  }
 });
 
 test('cancellation diagnostics cannot bypass hardware or quiescence holds', async t => {

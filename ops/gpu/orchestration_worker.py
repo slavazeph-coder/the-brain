@@ -3,7 +3,7 @@
 Only Runtime starts this worker (a thread, never a second watchdog). Job data
 cannot select commands, endpoints, workflow code or enable external execution.
 """
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 import hashlib
 import http.client
 import json
@@ -29,8 +29,19 @@ class HardwareFault(RuntimeError):
     pass
 
 
+TRANSPORT_SUBTYPES = frozenset(('timeout', 'connection', 'http_5xx', 'http_429', 'unknown'))
+
+
 class TransportFault(RuntimeError):
-    pass
+    def __init__(self, message, *, subtype='unknown'):
+        super().__init__(message)
+        self.subtype = subtype if type(subtype) is str and subtype in TRANSPORT_SUBTYPES else 'unknown'
+
+
+def transport_subtype(error):
+    # Revalidate at the reporting boundary; exception attributes are mutable.
+    subtype = getattr(error, 'subtype', None)
+    return subtype if type(subtype) is str and subtype in TRANSPORT_SUBTYPES else 'unknown'
 
 
 HARDWARE_PATTERNS = tuple(re.compile(pattern, re.IGNORECASE) for pattern in (
@@ -133,12 +144,17 @@ def connection_deadline(connection, seconds):
         connection.connect()
         connected[0] = getattr(connection, 'sock', None)
         if expired.is_set():
-            raise TransportFault('Connection deadline expired')
+            raise TransportFault('Connection deadline expired', subtype='timeout')
         yield
         if expired.is_set():
-            raise TransportFault('Response deadline expired')
-    except (OSError, http.client.HTTPException) as error:
-        raise TransportFault(type(error).__name__) from error
+            raise TransportFault('Response deadline expired', subtype='timeout')
+    except (OSError, http.client.HTTPException, ValueError) as error:
+        # Shutdown may return EOF/partial JSON instead of raising a socket
+        # timeout. Preserve an observed expiry even when parsing then fails.
+        if isinstance(error, ValueError) and not expired.is_set():
+            raise
+        subtype = 'timeout' if expired.is_set() or isinstance(error, TimeoutError) else 'connection'
+        raise TransportFault('Transport request failed', subtype=subtype) from None
     finally:
         timer.cancel()
         connection.close()
@@ -157,24 +173,28 @@ class JsonClient:
                 body = json.dumps(value, allow_nan=False).encode() if value is not None else None
                 conn.request(method, self.base.path.rstrip('/') + path, body,
                              {'Content-Type': 'application/json', **self.headers})
-                response = conn.getresponse()
-                raw = response.read(max_bytes + 1)
-                if len(raw) > max_bytes:
-                    raise ValueError('Response exceeds byte budget')
-                if response.status in (401, 403, 409, 410):
-                    raise LeaseLost('Lease/authentication rejected')
-                if response.status != 200:
-                    if hardware_error(raw[:4096]):
-                        raise HardwareFault('GPU backend hardware fault')
-                    if response.status >= 500 or response.status == 429:
-                        raise TransportFault('Remote service unavailable')
-                    raise ValueError('Remote request rejected')
-                decoded = json.loads(raw)
-                if not isinstance(decoded, dict):
-                    raise ValueError('JSON object response required')
-                return decoded
+                # getresponse() can detach a Connection: close/HTTP1.0 response
+                # from conn. Close its file explicitly, including partial reads.
+                with closing(conn.getresponse()) as response:
+                    raw = response.read(max_bytes + 1)
+                    if len(raw) > max_bytes:
+                        raise ValueError('Response exceeds byte budget')
+                    if response.status in (401, 403, 409, 410):
+                        raise LeaseLost('Lease/authentication rejected')
+                    if response.status != 200:
+                        if hardware_error(raw[:4096]):
+                            raise HardwareFault('GPU backend hardware fault')
+                        if response.status >= 500 or response.status == 429:
+                            subtype = 'http_429' if response.status == 429 else 'http_5xx' if response.status < 600 else 'unknown'
+                            raise TransportFault('Remote service unavailable', subtype=subtype)
+                        raise ValueError('Remote request rejected')
+                    decoded = json.loads(raw)
+                    if not isinstance(decoded, dict):
+                        raise ValueError('JSON object response required')
+                    return decoded
         except (OSError, http.client.HTTPException) as error:
-            raise TransportFault(type(error).__name__) from error
+            subtype = 'timeout' if isinstance(error, TimeoutError) else 'connection'
+            raise TransportFault('Transport request failed', subtype=subtype) from None
 
 
 class ArtifactStore:
@@ -306,11 +326,11 @@ class ComfyAdapter:
                 conn = http.client.HTTPConnection(client.base.hostname, client.base.port, timeout=budget)
                 with connection_deadline(conn, budget):
                     conn.request('GET', '/view?' + query)
-                    response = conn.getresponse()
-                    limit = min(1024**3, int(runtime.c.get('COMFY_MAX_ARTIFACT_BYTES', str(256 * 1024**2))))
-                    data = response.read(limit + 1)
-                    if response.status != 200 or not data or len(data) > limit:
-                        raise ValueError('Comfy artifact missing or exceeds byte budget')
+                    with closing(conn.getresponse()) as response:
+                        limit = min(1024**3, int(runtime.c.get('COMFY_MAX_ARTIFACT_BYTES', str(256 * 1024**2))))
+                        data = response.read(limit + 1)
+                        if response.status != 200 or not data or len(data) > limit:
+                            raise ValueError('Comfy artifact missing or exceeds byte budget')
                 return self.artifacts.put(data, info['mediaType'])
             raise TransportFault('Comfy stage deadline exceeded')
         finally:
@@ -492,8 +512,11 @@ class OrchestrationWorker:
                 except (TransportFault, LeaseLost, ValueError, KeyError) as error:
                     # On any uncertainty stop now. The scheduler owns bounded retries.
                     reason = ('heartbeat_lease_lost' if isinstance(error, LeaseLost) else
-                              'heartbeat_transport' if isinstance(error, TransportFault) else 'heartbeat_invalid')
+                              'heartbeat_transport_' + transport_subtype(error) if isinstance(error, TransportFault) else 'heartbeat_invalid')
                     abort_owned(reason)
+                    # Keep local evidence even if /fail is unreachable. Stop
+                    # owned work first; never log exceptions or request data.
+                    runtime.log.warning('orchestration heartbeat failed (%s)', reason)
                     return
                 if time.time() >= deadline[0]:
                     abort_owned()

@@ -242,7 +242,7 @@ class AbortDiagnostics(unittest.TestCase):
     def test_research_cancellation_is_terminal_with_fixed_abort_reason(self):
         for heartbeat, expected in [
             (ow.LeaseLost(SECRET), 'heartbeat_lease_lost'),
-            (ow.TransportFault(SECRET), 'heartbeat_transport'),
+            (ow.TransportFault(SECRET), 'heartbeat_transport_unknown'),
             (ValueError(SECRET), 'heartbeat_invalid'),
             ({'control': {'kill': True}}, 'heartbeat_kill'),
             ({'control': {'hardwarePaused': True}}, 'heartbeat_hardware_paused'),
