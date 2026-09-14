@@ -4,7 +4,7 @@
 # is rooted at the repo root or at brainsnn-r3f-app/. The deployable app is the
 # TypeScript/Vite SPA served by the esbuild-bundled Express server.
 
-FROM node:20-slim
+FROM node:22.22.2-slim
 
 WORKDIR /app
 

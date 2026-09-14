@@ -26,7 +26,14 @@ const files = execFileSync('find', ['src', '-name', '*.test.js', '-o', '-name', 
   .filter(Boolean)
   .sort();
 
+// Optional, explicitly partial validation for sandboxes that prohibit socket
+// binding. The default npm test and Docker build still run every suite.
+const socketSuites = new Set(['src/server/gpuBridge.test.js', 'src/server/gpuInference.test.js']);
 for (const file of files) {
+  if (process.env.BRAINSNN_TEST_SCOPE === 'offline' && socketSuites.has(file)) {
+    console.log(`EXCLUDED (offline subset; not validated): ${file}`);
+    continue;
+  }
   await import(pathToFileURL(`${process.cwd()}/${file}`).href);
 }
 

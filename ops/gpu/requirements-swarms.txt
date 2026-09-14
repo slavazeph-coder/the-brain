@@ -1,0 +1,2 @@
+# Separate isolated interpreter, target Python 3.13. No extras.
+swarms==15.0.2

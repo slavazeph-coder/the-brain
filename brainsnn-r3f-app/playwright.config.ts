@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: 'ops.spec.ts', // Isolated owner/worker configuration: playwright.ops.config.ts.
   // 30s was the outlier, not the exceptions: 20 of the 34 specs already opted
   // into 60s or 90s, and the ones that had not were passing at 26s — inside the
   // limit alone, over it under parallel load. That produces failures that

@@ -13,5 +13,6 @@ env/
 *.egg-info/
 
 # Playwright artifacts
+node_modules
 brainsnn-r3f-app/test-results/
 brainsnn-r3f-app/playwright-report/

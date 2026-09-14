@@ -70,6 +70,8 @@ def read_config(path):
                 'BACKGROUND_IDLE_SECONDS', 'BACKGROUND_MAX_START_GPU_PERCENT'):
         if not math.isfinite(float(result[key])) or float(result[key]) < 0:
             raise ValueError(f'{key} must be nonnegative')
+    from orchestration_worker import validate_config
+    validate_config(result)
     return result
 
 
@@ -111,7 +113,7 @@ class Runtime:
         self.log.setLevel(logging.INFO)
         handler = RotatingFileHandler(self.root / 'logs/runtime.log', maxBytes=int(config['LOG_MAX_BYTES']),
                                       backupCount=int(config['LOG_BACKUPS']))
-        handler.addFilter(Redact([config[k] for k in ('GPU_API_KEY', 'BACKEND_API_KEY', 'BACKGROUND_API_KEY', 'GPU_BRIDGE_WORKER_KEY') if config.get(k)]))
+        handler.addFilter(Redact([config[k] for k in ('GPU_API_KEY', 'BACKEND_API_KEY', 'BACKGROUND_API_KEY', 'GPU_BRIDGE_WORKER_KEY', 'ORCHESTRATION_WORKER_KEY') if config.get(k)]))
         handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
         self.log.addHandler(handler)
         self.lock = threading.RLock()
@@ -140,6 +142,17 @@ class Runtime:
         self.gpu = {'available': False, 'devices': []}
         self.storage_ok = True
         self.slots = threading.BoundedSemaphore(int(config['INFERENCE_CONCURRENCY']))
+        self.orchestration_enabled = config.get('ORCHESTRATION_ENABLED', '0') == '1'
+        self.orchestration_children = {}
+        self.orchestration_job = None
+        self.orchestration_cancel = None
+        self.orchestration_worker = None
+        self.orchestration_warm_until = 0
+        self.orchestration_paused = bool(load_json(self.root / 'state/orchestration-pause.json', False))
+        if self.orchestration_enabled and load_json(self.root / 'state/orchestration-active.json', False):
+            self.orchestration_paused = True
+            save_json(self.root / 'state/orchestration-pause.json', {
+                'reason': 'Unclean restart: verify all prior child processes stopped before explicit clearance', 'at': time.time()})
 
     def child_env(self, kind):
         # Deliberately exclude inherited credentials and unrelated application env.
@@ -166,6 +179,11 @@ class Runtime:
         elif kind == 'bridge':
             for key in ('GPU_BRIDGE_URL', 'GPU_BRIDGE_WORKER_KEY', 'GATEWAY_PORT', 'GPU_API_KEY'):
                 env[key] = self.c[key]
+        elif kind in ('comfy_gpu', 'comfy_cpu'):
+            env['COMFY_PORT'] = self.c.get('COMFY_GPU_PORT' if kind == 'comfy_gpu' else 'COMFY_CPU_PORT',
+                                          '8190' if kind == 'comfy_gpu' else '8189')
+            if kind == 'comfy_cpu':
+                env['CUDA_VISIBLE_DEVICES'] = ''
         return env
 
     def launch(self, kind, command):
@@ -181,7 +199,12 @@ class Runtime:
                     chunk = process.stdout.readline(4096)
                     if not chunk:
                         break
-                    self.log.info('%s: %s', kind, chunk.decode('utf8', errors='replace').rstrip())
+                    text = chunk.decode('utf8', errors='replace').rstrip()
+                    self.log.info('%s: %s', kind, text)
+                    if self.orchestration_enabled and kind in ('inference', 'comfy_gpu', 'comfy_cpu'):
+                        from orchestration_worker import hardware_error
+                        if hardware_error(text):
+                            self.orchestration_hardware_fault('Hardware error in owned child log')
             finally:
                 process.stdout.close()
         threading.Thread(target=drain, daemon=True).start()
@@ -245,7 +268,212 @@ class Runtime:
             deadline.cancel()
             connection.close()
 
+    @staticmethod
+    def port_occupied(port):
+        with socket.socket() as sock:
+            sock.settimeout(0.2)
+            return sock.connect_ex(('127.0.0.1', int(port))) == 0
+
+    def orchestration_ownership_verified(self, allowed_groups=()):
+        # Container PID visibility is not host exclusivity. Only an explicit
+        # operator attestation establishes that outer allocation boundary.
+        if (self.c.get('GPU_OWNERSHIP_SCOPE') != 'exclusive-container' or
+                len(self.c.get('GPU_OWNERSHIP_BASIS', '').strip()) < 20):
+            return False
+        snapshot = gpu_snapshot()
+        if (not snapshot['available'] or len(snapshot['devices']) != 1 or
+                snapshot['devices'][0]['uuid'] != self.c.get('GPU_OWNERSHIP_UUID')):
+            return False
+        try:
+            result = subprocess.run(['nvidia-smi', 'pmon', '-c', '1'],
+                                    capture_output=True, text=True, timeout=3, check=True)
+            rows = [line.split() for line in result.stdout.splitlines()
+                    if line.strip() and not line.lstrip().startswith('#')]
+            if not rows:
+                return False
+            for row in rows:
+                if len(row) < 8 or row[0] != '0':
+                    return False
+                if row[1] == '-':
+                    if any(value != '-' for value in row[1:]):
+                        return False
+                    continue
+                if not row[1].isdigit() or os.getpgid(int(row[1])) not in allowed_groups:
+                    return False
+            return True
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return False
+
+    def orchestration_quiescent(self, allow_warm=False):
+        with self.lock:
+            warm = (allow_warm and set(self.orchestration_children) == {'inference'} and
+                    self.inference is self.orchestration_children['inference'] and
+                    self.inference.poll() is None and self.backend_ready and not self.orchestration_job)
+            if (self.orchestration_children or self.inference) and not warm:
+                return False
+            if self.active_foreground:
+                return False
+            endpoints = [('COMFY_GPU_PORT', '8190'), ('COMFY_CPU_PORT', '8189')]
+            if not warm:
+                endpoints.append(('BACKEND_PORT', '8000'))
+            return (not any(self.port_occupied(self.c.get(key, default)) for key, default in endpoints)
+                    and self.orchestration_ownership_verified([self.inference.pid] if warm else ()))
+
+    def orchestration_begin(self, job, cancel):
+        from orchestration_worker import LeaseLost
+        with self.lock:
+            if self.orchestration_paused or self.orchestration_job:
+                raise LeaseLost('GPU paused or already leased')
+            # A resident model has no authority to execute a request without the
+            # next lease token. Render transitions drain it before acquiring GPU.
+            if job.get('kind') == 'video' and self.orchestration_children:
+                self.orchestration_stop_child('inference')
+            allow_warm = job.get('kind') in ('inference', 'research', 'research_draft')
+            if not self.orchestration_quiescent(allow_warm=allow_warm):
+                raise LeaseLost('GPU not quiescent; no process takeover permitted')
+            if not isinstance(job['id'], str) or not all(ch.isalnum() or ch in '-_' for ch in job['id']):
+                raise ValueError('Invalid job identity')
+            self.orchestration_job, self.orchestration_cancel = job, cancel
+            save_json(self.root / 'state/orchestration-active.json', {'id': job['id'], 'kind': job['kind'], 'at': time.time()})
+
+    def orchestration_hardware_fault(self, reason):
+        with self.lock:
+            self.orchestration_paused = True
+            save_json(self.root / 'state/orchestration-pause.json', {'reason': reason, 'at': time.time()})
+            if self.orchestration_cancel:
+                self.orchestration_cancel.set()
+            self.backend_ready = False
+            for kind in list(self.orchestration_children):
+                self.orchestration_stop_child(kind)
+
+    def orchestration_start_child(self, kind, cancel):
+        from orchestration_worker import HardwareFault, LeaseLost, TransportFault, JsonClient
+        with self.lock:
+            if self.orchestration_paused or cancel.is_set() or self.stop.is_set():
+                raise LeaseLost('Runtime paused or lease cancelled')
+            if not self.orchestration_ownership_verified(
+                    [p.pid for p in self.orchestration_children.values()]):
+                raise LeaseLost('GPU ownership unverified; operator clearance required')
+            if (kind == 'inference' and set(self.orchestration_children) == {'inference'} and
+                    self.inference is self.orchestration_children['inference'] and
+                    self.inference.poll() is None and self.backend_ready):
+                return
+            if self.orchestration_children:
+                raise ValueError('GPU job overlap forbidden')
+            key = {'inference': 'INFERENCE_COMMAND', 'comfy_gpu': 'COMFY_GPU_COMMAND', 'comfy_cpu': 'COMFY_CPU_COMMAND'}[kind]
+            port = self.c.get({'inference': 'BACKEND_PORT', 'comfy_gpu': 'COMFY_GPU_PORT', 'comfy_cpu': 'COMFY_CPU_PORT'}[kind],
+                              '8190' if kind == 'comfy_gpu' else '8189')
+            if self.port_occupied(port):
+                raise ValueError('Configured port already owned; refusing process takeover')
+            self.storage_ok = shutil.disk_usage(self.root).free >= float(self.c['MIN_DISK_FREE_MB']) * 1024**2
+            if not self.storage_ok:
+                raise ValueError('Insufficient local storage for an owned GPU job')
+            command = self.c.get(key)
+            if not command:
+                raise ValueError('Operator-owned child command is not configured')
+            snapshot = gpu_snapshot()
+            if not snapshot['available']:
+                self.orchestration_hardware_fault('NVML unavailable before owned child launch')
+                raise HardwareFault('NVML unavailable')
+            if cancel.is_set() or self.stop.is_set() or self.orchestration_paused:
+                raise LeaseLost('Lease cancelled during hardware preflight')
+            process = self.launch(kind, command)
+            if not process:
+                raise TransportFault('Owned child launch failed')
+            self.orchestration_children[kind] = process
+            if kind == 'inference':
+                self.inference = process
+                self.backend_started = time.monotonic()
+        deadline = time.monotonic() + float(self.c['STARTUP_GRACE_SECONDS'])
+        client = JsonClient(f'http://127.0.0.1:{port}', allow_local_http=True)
+        while time.monotonic() < deadline:
+            if cancel.is_set() or self.stop.is_set() or self.orchestration_paused:
+                raise LeaseLost('Lease cancelled during child startup')
+            if process.poll() is not None:
+                raise TransportFault('Owned child exited during startup')
+            try:
+                healthy = self.health() if kind == 'inference' else isinstance(client.request('GET', '/system_stats', timeout=2), dict)
+            except (TransportFault, LeaseLost, ValueError):
+                healthy = False
+            if healthy:
+                if kind == 'inference':
+                    self.backend_ready = True
+                return
+            cancel.wait(0.2)
+        raise TransportFault('Owned child startup timed out')
+
+    def orchestration_stop_child(self, kind):
+        with self.lock:
+            process = self.orchestration_children.get(kind)
+            if process:
+                try:
+                    self.terminate(process, 2)
+                except (OSError, subprocess.SubprocessError):
+                    self.orchestration_paused = True
+                    save_json(self.root / 'state/orchestration-pause.json', {
+                        'reason': 'Owned process stop could not be confirmed; manual quiescence required', 'at': time.time()})
+                    raise
+                stopped = False
+                try:
+                    os.killpg(process.pid, 0)
+                except ProcessLookupError:
+                    stopped = True
+                except OSError:
+                    pass  # Permission/inspection failures are not proof of exit.
+                if not stopped:
+                    self.orchestration_paused = True
+                    save_json(self.root / 'state/orchestration-pause.json', {
+                        'reason': 'Owned process group termination unverified', 'at': time.time()})
+                    raise RuntimeError('Owned process group termination unverified')
+                del self.orchestration_children[kind]
+            if kind == 'inference':
+                self.inference = None
+                self.backend_ready = False
+
+    def orchestration_cancel_owned(self):
+        with self.lock:
+            if self.orchestration_cancel:
+                self.orchestration_cancel.set()
+            for kind in list(self.orchestration_children):
+                self.orchestration_stop_child(kind)
+
+    def orchestration_end(self, keep_inference=False):
+        with self.lock:
+            keep = (keep_inference and not self.stop.is_set() and not self.orchestration_paused and
+                    self.inference and self.inference.poll() is None and self.backend_ready and
+                    self.active_foreground == 0 and not (self.orchestration_cancel and self.orchestration_cancel.is_set()))
+            for kind in list(self.orchestration_children):
+                if not (keep and kind == 'inference'):
+                    self.orchestration_stop_child(kind)
+            self.orchestration_warm_until = time.monotonic() + float(self.c.get('ORCHESTRATION_WARM_IDLE_SECONDS', '300')) if keep else 0
+            self.orchestration_job = None
+            self.orchestration_cancel = None
+            if keep:
+                save_json(self.root / 'state/orchestration-active.json', {
+                    'kind': 'idle_inference', 'pid': self.inference.pid, 'at': time.time()})
+            else:
+                (self.root / 'state/orchestration-active.json').unlink(missing_ok=True)
+
+    def tick_orchestration(self):
+        self.gpu = gpu_snapshot()
+        with self.lock:
+            if self.orchestration_children and (not self.gpu['available'] or
+                    not self.orchestration_ownership_verified([p.pid for p in self.orchestration_children.values()])):
+                self.orchestration_hardware_fault('GPU ownership or NVML unavailable during active job')
+            if self.inference and not self.orchestration_job and (
+                    self.inference.poll() is not None or time.monotonic() >= self.orchestration_warm_until):
+                self.orchestration_end()
+                if self.orchestration_worker:
+                    self.orchestration_worker.reconciled = False
+            if self.orchestration_cancel and (self.orchestration_cancel.is_set() or self.stop.is_set()):
+                for kind in list(self.orchestration_children):
+                    self.orchestration_stop_child(kind)
+            save_json(self.root / 'state/status.json', self.status())
+
     def tick(self):
+        if self.orchestration_enabled:
+            self.tick_backup(time.monotonic())
+            return self.tick_orchestration()
         now = time.monotonic()
         self.gpu = gpu_snapshot()
         used = 0
@@ -318,6 +546,11 @@ class Runtime:
                     now >= self.background_next and now - self.last_foreground >= float(self.c['BACKGROUND_IDLE_SECONDS'])):
                 self.background = self.launch('background', self.c['BACKGROUND_COMMAND'])
                 self.background_next = now + float(self.c['RESTART_MAX_SECONDS'])
+            self.tick_backup(now)
+            save_json(self.root / 'state/status.json', self.status())
+
+    def tick_backup(self, now):
+        with self.lock:
             if self.backup and self.backup.poll() is not None:
                 self.backup_last_exit_code = self.backup.returncode
                 self.log.info('backup exited code=%d', self.backup.returncode)
@@ -331,7 +564,6 @@ class Runtime:
             if self.c['BACKUP_COMMAND'] and not self.backup and now - self.last_backup >= float(self.c['BACKUP_INTERVAL_SECONDS']):
                 self.backup = self.launch('backup', self.c['BACKUP_COMMAND'])
                 self.last_backup = self.backup_started = now
-            save_json(self.root / 'state/status.json', self.status())
 
     def status(self):
         return {'updated_at': time.time(), 'pid': os.getpid(), 'backend_ready': self.backend_ready,
@@ -345,7 +577,11 @@ class Runtime:
                 'bridge_configured': bool(self.c.get('BRIDGE_COMMAND')),
                 'bridge_running': bool(self.bridge and self.bridge.poll() is None),
                 'backup_last_exit_code': self.backup_last_exit_code,
-                'storage_ok': self.storage_ok, 'gpu': self.gpu}
+                'storage_ok': self.storage_ok, 'gpu': self.gpu,
+                'orchestration_enabled': self.orchestration_enabled,
+                'orchestration_paused': self.orchestration_paused,
+                'orchestration_job': self.orchestration_job['id'] if self.orchestration_job else None,
+                'orchestration_children': {kind: child.pid for kind, child in self.orchestration_children.items()}}
 
     def run(self):
         lockfile = open(self.root / 'state/runtime.lock', 'a')
@@ -361,12 +597,23 @@ class Runtime:
         thread = threading.Thread(target=gateway.serve_forever, daemon=True)
         thread.start()
         self.log.info('runtime started; gateway listens only on loopback')
+        orchestration_thread = None
+        if self.orchestration_enabled:
+            from orchestration_worker import OrchestrationWorker
+            self.orchestration_worker = OrchestrationWorker(self)
+            orchestration_thread = threading.Thread(target=self.orchestration_worker.run, daemon=True)
+            orchestration_thread.start()
         try:
             while not self.stop.is_set():
                 self.tick()
                 self.stop.wait(float(self.c['POLL_SECONDS']))
         finally:
             self.stop.set()
+            if self.orchestration_cancel:
+                self.orchestration_cancel.set()
+            if orchestration_thread:
+                orchestration_thread.join(timeout=15)
+                self.orchestration_end()
             gateway.shutdown()
             gateway.server_close()
             with self.lock:
@@ -476,9 +723,17 @@ class Handler(BaseHTTPRequestHandler):
                 body = json.dumps(body).encode()
             except (ValueError, OSError):
                 return self.reply(400, {'error': 'invalid_json'})
+        if runtime.orchestration_enabled:
+            job = runtime.orchestration_job
+            token = self.headers.get('X-BrainSNN-Orchestration-Token', '')
+            if (not job or job['kind'] not in ('inference', 'research', 'research_draft') or not token or
+                    not hmac.compare_digest(token.encode(), str(job['lease']['token']).encode()) or
+                    runtime.orchestration_paused or not runtime.orchestration_cancel or runtime.orchestration_cancel.is_set()):
+                return self.reply(503, {'error': 'orchestration_lease_required'})
         if not runtime.backend_ready or runtime.stop.is_set():
             return self.reply(503, {'error': 'backend_unavailable'})
         foreground = self.command == 'POST' and not background
+        counted_foreground = False
         slot = False
         connection = None
         deadline_timer = None
@@ -486,10 +741,15 @@ class Handler(BaseHTTPRequestHandler):
         canceled = threading.Event()
         try:
             with runtime.lock:
+                if runtime.orchestration_enabled and (
+                        runtime.orchestration_job is not job or runtime.orchestration_paused or
+                        not runtime.orchestration_cancel or runtime.orchestration_cancel.is_set()):
+                    return self.reply(503, {'error': 'orchestration_lease_required'})
                 if background and (runtime.active_foreground or runtime.background is None):
                     return self.reply(429, {'error': 'foreground_priority'})
                 if foreground:
                     runtime.active_foreground += 1
+                    counted_foreground = True
                     runtime.last_foreground = time.monotonic()
                     runtime.preempt_background()
             slot = runtime.slots.acquire(blocking=False)
@@ -544,7 +804,7 @@ class Handler(BaseHTTPRequestHandler):
                 if background and runtime.background_upstream is connection:
                     runtime.background_upstream = None
                     runtime.background_cancel = None
-                if foreground:
+                if counted_foreground:
                     runtime.active_foreground -= 1
                     runtime.last_foreground = time.monotonic()
 
@@ -573,7 +833,7 @@ def verified_pid(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', default=str(Path(__file__).resolve().parent / 'runtime.env'))
-    parser.add_argument('action', choices=('run', 'start', 'stop', 'status', 'check', 'resume-background'))
+    parser.add_argument('action', choices=('run', 'start', 'stop', 'status', 'check', 'resume-background', 'clear-orchestration-pause'))
     args = parser.parse_args()
     os.umask(0o077)
     config = read_config(args.config)
@@ -582,6 +842,22 @@ def main():
     if args.action == 'check':
         print(json.dumps({'config_valid': True, 'inference_configured': bool(config['INFERENCE_COMMAND']),
                           'background_configured': bool(config['BACKGROUND_COMMAND']), 'gpu': gpu_snapshot()}))
+        return
+    if args.action == 'clear-orchestration-pause':
+        (root / 'state').mkdir(parents=True, exist_ok=True, mode=0o700)
+        with (root / 'state/runtime.lock').open('a') as clearance_lock:
+            try:
+                fcntl.flock(clearance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise ValueError('Runtime lock held; stop runtime before explicit clearance') from None
+            if verified_pid(root):
+                raise ValueError('Stop runtime and verify orphan children before explicit hardware clearance')
+            instance = Runtime(config)
+            if not instance.orchestration_quiescent() or not gpu_snapshot()['available']:
+                raise ValueError('Clearance requires attested GPU ownership, verified processes, closed ports and healthy NVML')
+            (root / 'state/orchestration-active.json').unlink(missing_ok=True)
+            (root / 'state/orchestration-pause.json').unlink(missing_ok=True)
+        print('Local pause cleared; owner must separately clear scheduler hardware pause')
         return
     if args.action == 'resume-background':
         if verified_pid(root):

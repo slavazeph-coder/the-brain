@@ -6,7 +6,7 @@
 #   docker build -t brainsnn .
 #   docker run -p 8080:8080 --rm -e PORT=8080 brainsnn
 
-FROM node:22-slim
+FROM node:22.22.2-slim
 
 WORKDIR /app
 

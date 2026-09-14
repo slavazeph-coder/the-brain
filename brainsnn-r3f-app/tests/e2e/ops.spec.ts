@@ -1,0 +1,65 @@
+import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+const owner = 'local-browser-owner-fixture-0000000000000000';
+
+test('private operations require owner authentication, queue durably, and lock without retaining credentials', async ({ page, request }, testInfo) => {
+  const denied = await request.get('/api/ops/status');
+  expect(denied.status()).toBe(401);
+  const html = await page.goto('/ops');
+  expect(html?.headers()['x-robots-tag']).toBe('noindex, nofollow');
+  expect(html?.headers()['cache-control']).toBe('no-store');
+  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stop all work' })).toHaveCount(0);
+  await page.getByLabel('Owner credential').fill('invalid-owner-key');
+  await page.getByRole('button', { name: 'Unlock operations' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Owner authentication failed.');
+  await page.getByLabel('Owner credential').fill(owner);
+  await page.getByRole('button', { name: 'Unlock operations' }).click();
+  await expect(page.getByRole('heading', { name: 'Scheduler', exact: true })).toBeVisible();
+  await expect(page.getByText('External execution is disabled.', { exact: false })).toBeVisible();
+  await page.getByLabel('Configured workflow ID').fill('controlled-local-video');
+  const prompt = `Controlled browser test ${testInfo.project.name}`;
+  await page.getByLabel('Render prompt').fill(prompt);
+  const sent = page.waitForResponse((response) => response.url().endsWith('/api/ops/jobs') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Queue render', exact: true }).click();
+  expect((await sent).ok()).toBe(true);
+  await expect(page.locator('.ops-job').last()).toContainText('queued');
+  await page.getByLabel('Work type').selectOption('research');
+  await expect(page.getByLabel('Research engine')).toHaveValue('crewai');
+  await page.getByLabel('Research engine').selectOption('swarms-crewai');
+  await page.getByLabel('Research objective').fill(`Hybrid browser fixture ${testInfo.project.name}`);
+  await page.getByLabel('Evidence sources (JSON)').fill(JSON.stringify([{ id: 's1', title: 'Supplied evidence', url: 'https://example.org/evidence', content: 'An API exists.' }]));
+  const hybridSent = page.waitForResponse((response) => response.url().endsWith('/api/ops/jobs') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Queue research', exact: true }).click();
+  const hybridResponse = await hybridSent;
+  expect(hybridResponse.ok()).toBe(true);
+  expect(hybridResponse.request().postDataJSON().payload.engine).toBe('swarms-crewai');
+  await expect(page.locator('.ops-job').filter({ hasText: 'Engine: swarms-crewai' }).first()).toBeVisible();
+  await page.getByLabel('Operator reason').fill('Controlled local browser boundary pause');
+  await page.getByRole('button', { name: 'Pause after current job' }).click();
+  await expect(page.locator('.ops-panel').first().locator('.ops-state')).toHaveText('paused');
+  await page.getByRole('button', { name: 'Resume scheduler' }).click();
+  await expect(page.locator('.ops-panel').first().locator('.ops-state')).toHaveText('accepting work');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  const accessibility = await new AxeBuilder({ page }).include('.ops-site').withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(accessibility.violations.filter(({ impact }) => impact === 'critical' || impact === 'serious')).toEqual([]);
+  await page.screenshot({ path: `../outputs/orchestration-validation/ops-${testInfo.project.name}.png`, fullPage: true });
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, cookie: document.cookie }))).not.toContain(owner);
+  await page.getByRole('button', { name: 'Lock operations' }).click();
+  await expect(page.getByRole('heading', { name: 'Owner sign in' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Stop all work' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByLabel('Owner credential')).toHaveValue('');
+});
+
+test('homepage exposes no private controls and analysis comparison remains deterministic', async ({ page, request }) => {
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: /private operations/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Stop all work' })).toHaveCount(0);
+  const result = await request.post('/api/engine/compare', { data: { original: 'Act now!', candidate: 'Review the evidence.' } });
+  expect(result.status()).toBe(200);
+  const record = await result.json();
+  expect(record.decision).toBe('REVIEW_REQUIRED');
+  expect(record.execution.providerCalls).toBe(0);
+});

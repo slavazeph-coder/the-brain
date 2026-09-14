@@ -1,0 +1,412 @@
+import { DatabaseSync } from 'node:sqlite';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { isAbsolute, dirname } from 'node:path';
+import { chmodSync, existsSync } from 'node:fs';
+
+const MAX_BODY = 256 * 1024;
+const MAX_ATTEMPTS = 3;
+const MAX_PENDING = 200;
+const WARMUP_DEADLINE_MS = 180_000;
+const activeStatuses = new Set(['generating', 'decoding']);
+const json = value => JSON.stringify(value);
+const parse = value => value === null ? null : JSON.parse(value);
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+function error(message, status = 400) { throw Object.assign(new Error(message), { status }); }
+function response(body, status = 200) { return new Response(json(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }); }
+function reply(res, status, body) {
+  if (res.destroyed || res.writableEnded) return;
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(json(body));
+}
+function equalKey(actual, key) {
+  const supplied = Buffer.from(String(actual || '')), expected = Buffer.from(`Bearer ${key}`);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    if (req.headers['content-type']?.split(';')[0] !== 'application/json' || (req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity')) return reject(Object.assign(new Error('json_required'), { status: 415 }));
+    let chunks = [], size = 0, done = false;
+    const finish = (err, value) => {
+      if (done) return; done = true; clearTimeout(timer);
+      req.removeListener('data', data); req.removeListener('end', end); req.removeListener('aborted', abort); req.removeListener('error', abort);
+      chunks = []; if (err) { req.pause(); reject(err); } else resolve(value);
+    };
+    const data = chunk => { size += chunk.length; if (size > MAX_BODY) finish(Object.assign(new Error('body_too_large'), { status: 413 })); else chunks.push(chunk); };
+    const end = () => { try { const value = parse(Buffer.concat(chunks).toString('utf8')); if (!object(value)) error('object_required'); finish(null, value); } catch (err) { finish(Object.assign(err, { status: 400 })); } };
+    const abort = () => finish(Object.assign(new Error('request_closed'), { status: 400 }));
+    const timer = setTimeout(() => finish(Object.assign(new Error('body_timeout'), { status: 408 })), 2500); timer.unref();
+    req.on('data', data).once('end', end).once('aborted', abort).once('error', abort);
+  });
+}
+function stable(value) {
+  if (Array.isArray(value)) return value.map(stable);
+  if (object(value)) return Object.fromEntries(Object.keys(value).sort().map(k => [k, stable(value[k])]));
+  return value;
+}
+
+function validateResearch(payload) {
+  const exact = (value, keys) => object(value) && Object.keys(value).sort().join(',') === [...keys].sort().join(',');
+  const text = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !value.includes('\0');
+  if (!(exact(payload, ['objective', 'sources']) || (exact(payload, ['objective', 'sources', 'engine']) && ['crewai', 'swarms-crewai'].includes(payload.engine))) || !text(payload.objective, 2000) || !Array.isArray(payload.sources) || payload.sources.length < 1 || payload.sources.length > 4) error('invalid_research_payload');
+  const seen = new Set();
+  for (const source of payload.sources) {
+    if (!exact(source, ['id', 'title', 'url', 'content']) || typeof source.id !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(source.id)
+      || seen.has(source.id) || !text(source.title, 200) || !text(source.content, 6000) || !text(source.url, 1000)) error('invalid_research_payload');
+    seen.add(source.id);
+    let url; try { url = new URL(source.url); } catch { error('invalid_research_payload'); }
+    if (url.protocol !== 'https:' || !url.hostname || url.username || url.password) error('invalid_research_payload');
+  }
+  if (Buffer.byteLength(json(payload)) > 24_000) error('invalid_research_payload');
+}
+
+/**
+ * Canonical single-GPU scheduler. The DB must live on an operator-mounted durable
+ * local filesystem and be used by exactly one website replica. SQLite WAL +
+ * BEGIN IMMEDIATE protects dispatch against concurrent requests/connections;
+ * ORCHESTRATION_SINGLE_REPLICA is a deployment assertion, not a distributed lock.
+ * Lost leases quarantine the physical GPU: expiry never means it stopped running.
+ */
+export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000, deadlineMs = 14_000, responsePollMs = 40 } = {}) {
+  const enabled = env.ORCHESTRATION_ENABLED === '1';
+  const ownerKey = String(env.ORCHESTRATION_OWNER_KEY || ''), workerKey = String(env.ORCHESTRATION_WORKER_KEY || '');
+  const validKey = key => key.length >= 32 && key.length <= 256 && !/[\r\n]/.test(key);
+  const dbPath = String(env.ORCHESTRATION_DB_PATH || '');
+  let configured = enabled && validKey(ownerKey) && validKey(workerKey) && ownerKey !== workerKey
+    && env.ORCHESTRATION_SINGLE_REPLICA === '1' && isAbsolute(dbPath) && existsSync(dirname(dbPath));
+  let db = null, closed = false;
+  const pending = new Set();
+  if (configured) {
+    try {
+      db = new DatabaseSync(dbPath); chmodSync(dbPath, 0o600);
+      db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;
+        CREATE TABLE IF NOT EXISTS orchestration_control (
+          id INTEGER PRIMARY KEY CHECK(id=1), paused INTEGER NOT NULL DEFAULT 0,
+          killed INTEGER NOT NULL DEFAULT 0, hardware INTEGER NOT NULL DEFAULT 0,
+          quarantine INTEGER NOT NULL DEFAULT 0, quarantine_worker TEXT,
+          reason TEXT NOT NULL DEFAULT '', fence INTEGER NOT NULL DEFAULT 0,
+          resident_worker TEXT, warm_required INTEGER NOT NULL DEFAULT 1, warmup_job_id TEXT);
+        INSERT OR IGNORE INTO orchestration_control(id) VALUES(1);
+        CREATE TABLE IF NOT EXISTS orchestration_jobs (
+          id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, kind TEXT NOT NULL,
+          payload TEXT NOT NULL, status TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'generating',
+          checkpoint TEXT, result TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, deadline INTEGER,
+          lease_token TEXT, lease_expires INTEGER, worker TEXT, warmup INTEGER NOT NULL DEFAULT 0);
+        CREATE UNIQUE INDEX IF NOT EXISTS orchestration_one_gpu ON orchestration_jobs((1)) WHERE lease_token IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS orchestration_checkpoints (
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL REFERENCES orchestration_jobs(id),
+          stage TEXT NOT NULL, checkpoint TEXT NOT NULL, created_at INTEGER NOT NULL, fence TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS orchestration_artifacts (
+          sha256 TEXT PRIMARY KEY, uri TEXT NOT NULL UNIQUE, bytes INTEGER NOT NULL, media_type TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS orchestration_job_artifacts (
+          job_id TEXT NOT NULL REFERENCES orchestration_jobs(id), sha256 TEXT NOT NULL REFERENCES orchestration_artifacts(sha256), PRIMARY KEY(job_id,sha256));
+        CREATE TABLE IF NOT EXISTS orchestration_approvals (
+          id TEXT PRIMARY KEY, job_id TEXT NOT NULL, category TEXT NOT NULL, decision TEXT NOT NULL,
+          artifact_sha256 TEXT NOT NULL, note TEXT NOT NULL, created_at INTEGER NOT NULL,
+          FOREIGN KEY(job_id,artifact_sha256) REFERENCES orchestration_job_artifacts(job_id,sha256));
+        CREATE TABLE IF NOT EXISTS orchestration_events (
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, detail TEXT NOT NULL, created_at INTEGER NOT NULL);
+        CREATE TRIGGER IF NOT EXISTS artifacts_immutable_update BEFORE UPDATE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
+        CREATE TRIGGER IF NOT EXISTS artifacts_immutable_delete BEFORE DELETE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
+        CREATE TRIGGER IF NOT EXISTS approvals_immutable_update BEFORE UPDATE ON orchestration_approvals BEGIN SELECT RAISE(ABORT,'immutable_approval'); END;
+        CREATE TRIGGER IF NOT EXISTS approvals_immutable_delete BEFORE DELETE ON orchestration_approvals BEGIN SELECT RAISE(ABORT,'immutable_approval'); END;
+        CREATE TRIGGER IF NOT EXISTS checkpoints_immutable_update BEFORE UPDATE ON orchestration_checkpoints BEGIN SELECT RAISE(ABORT,'immutable_checkpoint'); END;
+        CREATE TRIGGER IF NOT EXISTS checkpoints_immutable_delete BEFORE DELETE ON orchestration_checkpoints BEGIN SELECT RAISE(ABORT,'immutable_checkpoint'); END;
+      `);
+      const controlColumns = db.prepare('PRAGMA table_info(orchestration_control)').all().map(row => row.name);
+      for (const [column, definition] of [['resident_worker', 'TEXT'], ['warm_required', 'INTEGER NOT NULL DEFAULT 1'], ['warmup_job_id', 'TEXT']]) {
+        if (!controlColumns.includes(column)) db.exec(`ALTER TABLE orchestration_control ADD COLUMN ${column} ${definition}`);
+      }
+      if (!db.prepare('PRAGMA table_info(orchestration_jobs)').all().some(row => row.name === 'warmup')) db.exec('ALTER TABLE orchestration_jobs ADD COLUMN warmup INTEGER NOT NULL DEFAULT 0');
+      // A restart requires a real backend health result before assuming warmth.
+      db.exec('UPDATE orchestration_control SET warm_required=1 WHERE id=1');
+    } catch { db?.close(); db = null; configured = false; }
+  }
+  const get = (sql, ...args) => db.prepare(sql).get(...args);
+  const all = (sql, ...args) => db.prepare(sql).all(...args).map(row => ({ ...row }));
+  const run = (sql, ...args) => db.prepare(sql).run(...args);
+  const event = (type, detail) => run('INSERT INTO orchestration_events(type,detail,created_at) VALUES(?,?,?)', type, json(detail), now());
+  const control = () => {
+    const row = get('SELECT * FROM orchestration_control WHERE id=1');
+    return { paused: !!row.paused, kill: !!row.killed, hardwarePaused: !!row.hardware, gpuQuarantined: !!row.quarantine, idleResident: !!row.resident_worker, warmRequired: !!row.warm_required, externalExecution: false, reason: row.reason };
+  };
+  const transaction = callback => {
+    db.exec('BEGIN IMMEDIATE');
+    try { const result = callback(); db.exec('COMMIT'); return result; } catch (err) { db.exec('ROLLBACK'); throw err; }
+  };
+  const rawJob = id => get('SELECT * FROM orchestration_jobs WHERE id=?', id);
+  function quarantine(job, reason, hardware = false) {
+    run('UPDATE orchestration_jobs SET status=?,error=?,lease_token=NULL,lease_expires=NULL,updated_at=? WHERE id=?', 'paused', reason, now(), job.id);
+    run('UPDATE orchestration_control SET quarantine=1,quarantine_worker=?,reason=?,hardware=MAX(hardware,?) WHERE id=1', job.worker, reason, hardware ? 1 : 0);
+    cold();
+    event('gpu_quarantined', { jobId: job.id, worker: job.worker, reason, hardware });
+  }
+  function cold({ stopped = false } = {}) {
+    run('UPDATE orchestration_control SET warm_required=1,resident_worker=CASE WHEN ? THEN NULL ELSE resident_worker END WHERE id=1', stopped ? 1 : 0);
+    const pointer = get('SELECT warmup_job_id FROM orchestration_control WHERE id=1').warmup_job_id;
+    if (pointer && rawJob(pointer)?.status === 'ready-for-review') run('UPDATE orchestration_control SET warmup_job_id=NULL WHERE id=1');
+  }
+  function ensureWarmup() {
+    if (!env.GPU_INFERENCE_MODEL || !get('SELECT warm_required FROM orchestration_control WHERE id=1').warm_required) return;
+    // Demand starts one durable warmup. Once started it survives a short web
+    // health timeout; an empty idle queue must never reload models in a loop.
+    if (!get("SELECT id FROM orchestration_jobs WHERE status='queued' AND kind='inference' AND warmup=0 LIMIT 1")) return;
+    const pointer = get('SELECT warmup_job_id FROM orchestration_control WHERE id=1').warmup_job_id;
+    // A failed/paused warmup stays visible for explicit owner recovery; polling
+    // never starts a fresh batch after the three transport attempts are spent.
+    if (pointer && rawJob(pointer)?.status !== 'ready-for-review') return;
+    const created = submit({ idempotencyKey: `warmup:${randomUUID()}`, kind: 'inference', payload: { operation: 'models', body: null } }, now() + WARMUP_DEADLINE_MS, true);
+    run('UPDATE orchestration_control SET warmup_job_id=? WHERE id=1', created.job.id);
+  }
+  function reap() {
+    const active = get('SELECT * FROM orchestration_jobs WHERE lease_token IS NOT NULL');
+    if (active && (active.lease_expires <= now() || (active.deadline !== null && active.deadline <= now()))) quarantine(active, active.deadline !== null && active.deadline <= now() ? 'request_deadline' : 'lease_expired');
+    run("UPDATE orchestration_jobs SET status='failed',error='request_deadline',updated_at=? WHERE status='queued' AND deadline IS NOT NULL AND deadline<=?", now(), now());
+  }
+  function jobView(row, includeLease = false) {
+    if (!row) return null;
+    const artifacts = all('SELECT a.sha256,a.uri,a.bytes,a.media_type AS mediaType FROM orchestration_artifacts a JOIN orchestration_job_artifacts j ON a.sha256=j.sha256 WHERE j.job_id=? ORDER BY a.sha256', row.id);
+    const job = { id: row.id, kind: row.kind, payload: parse(row.payload), status: row.status, stage: row.stage,
+      checkpoint: parse(row.checkpoint), result: parse(row.result), error: row.error, attempts: row.attempts,
+      createdAt: row.created_at, updatedAt: row.updated_at, internalWarmup: !!row.warmup, artifacts,
+      checkpoints: all('SELECT sequence,stage,checkpoint,created_at AS createdAt FROM orchestration_checkpoints WHERE job_id=? ORDER BY sequence', row.id).map(c => ({ ...c, checkpoint: parse(c.checkpoint) })) };
+    if (includeLease) job.lease = { token: row.lease_token, expiresAt: row.lease_expires };
+    return job;
+  }
+  function snapshot() {
+    if (!configured || closed) return { enabled, configured: configured && !closed, jobs: [], approvals: [], control: { paused: true, kill: false, hardwarePaused: false, gpuQuarantined: true, externalExecution: false, reason: 'orchestration_unavailable' } };
+    return transaction(() => { reap(); return { enabled, configured, jobs: all('SELECT * FROM orchestration_jobs ORDER BY created_at DESC,rowid DESC LIMIT 200').map(row => jobView(row)), control: control(), approvals: all('SELECT id,job_id AS jobId,category,decision,artifact_sha256 AS artifactSha256,note,created_at AS createdAt FROM orchestration_approvals ORDER BY created_at DESC,rowid DESC LIMIT 1000') }; });
+  }
+  function submit(value, deadline = null, warmup = false) {
+    if (typeof value.idempotencyKey !== 'string' || !/^[\w.:-]{1,128}$/.test(value.idempotencyKey)) error('invalid_idempotency_key');
+    if (!['video', 'research', 'inference'].includes(value.kind) || !object(value.payload)) error('invalid_job');
+    if (value.kind === 'video' && (typeof value.payload.workflowId !== 'string' || !/^[\w.-]{1,80}$/.test(value.payload.workflowId))) error('workflow_id_required');
+    if (value.kind === 'research') validateResearch(value.payload);
+    if (value.kind === 'inference' && !['models', 'chat/completions'].includes(value.payload.operation)) error('operation_not_allowed');
+    const payload = json(stable(value.payload));
+    if (Buffer.byteLength(payload) > MAX_BODY - 1024) error('body_too_large', 413);
+    const existing = get('SELECT * FROM orchestration_jobs WHERE idempotency_key=?', value.idempotencyKey);
+    if (existing) { if (existing.kind !== value.kind || existing.payload !== payload) error('idempotency_conflict', 409); return { job: jobView(existing), duplicate: true }; }
+    if (get("SELECT COUNT(*) AS n FROM orchestration_jobs WHERE status IN ('queued','generating','decoding','paused')").n >= MAX_PENDING) error('queue_full', 429);
+    const id = randomUUID();
+    run('INSERT INTO orchestration_jobs(id,idempotency_key,kind,payload,status,created_at,updated_at,deadline,warmup) VALUES(?,?,?,?,?,?,?,?,?)', id, value.idempotencyKey, value.kind, payload, 'queued', now(), now(), deadline, warmup ? 1 : 0);
+    event('job_submitted', { jobId: id, kind: value.kind }); return { job: jobView(rawJob(id)), duplicate: false };
+  }
+  function requireLease(id, token, worker) {
+    const row = rawJob(id), state = control();
+    if (!row || !activeStatuses.has(row.status) || !row.lease_token || typeof token !== 'string' || row.lease_token !== token || row.worker !== worker || row.lease_expires <= now() || state.kill || state.hardwarePaused || state.gpuQuarantined) error('lease_fenced', 409);
+    return row;
+  }
+  function validateArtifact(a) {
+    if (!object(a) || !/^[a-f0-9]{64}$/.test(a.sha256) || a.uri !== `sha256:${a.sha256}`
+      || !Number.isSafeInteger(a.bytes) || a.bytes < 1 || typeof a.mediaType !== 'string' || !/^[\w.+-]+\/[\w.+-]+$/.test(a.mediaType)) error('invalid_artifact');
+  }
+  function ownerAction(method, path, value) {
+    if (method === 'GET' && path === '/status') return { status: 200, body: snapshot() };
+    return transaction(() => {
+      reap();
+      if (method === 'POST' && path === '/jobs') { const result = submit(value); return { status: result.duplicate ? 200 : 201, body: result }; }
+      if (method === 'POST' && path === '/control') {
+        const reason = typeof value.reason === 'string' ? value.reason.slice(0, 1000) : '';
+        if (value.action === 'pause') run('UPDATE orchestration_control SET paused=1,reason=? WHERE id=1', reason || 'owner_pause');
+        else if (value.action === 'kill') {
+          const job = get('SELECT * FROM orchestration_jobs WHERE lease_token IS NOT NULL');
+          if (job) quarantine(job, 'owner_kill');
+          else {
+            const resident = get('SELECT resident_worker FROM orchestration_control WHERE id=1').resident_worker;
+            if (resident) {
+              run("UPDATE orchestration_control SET quarantine=1,quarantine_worker=?,reason='owner_kill' WHERE id=1", resident);
+              cold();
+            }
+          }
+          run('UPDATE orchestration_control SET paused=1,killed=1,reason=? WHERE id=1', reason || 'owner_kill');
+        } else if (value.action === 'resume') {
+          const state = control(); if (state.hardwarePaused || state.gpuQuarantined) error('clearance_required', 409);
+          run("UPDATE orchestration_control SET paused=0,killed=0,reason='' WHERE id=1");
+        } else if (value.action === 'clear-hardware') {
+          if (reason.trim().length < 8) error('clearance_reason_required');
+          if (get('SELECT id FROM orchestration_jobs WHERE lease_token IS NOT NULL')) error('active_lease', 409);
+          run('UPDATE orchestration_control SET hardware=0,quarantine=0,quarantine_worker=NULL,resident_worker=NULL,paused=1,reason=? WHERE id=1', reason);
+          cold({ stopped: true });
+        } else error('action_not_allowed');
+        event('owner_control', { action: value.action, reason }); return { status: 200, body: { control: control() } };
+      }
+      const match = /^\/jobs\/([0-9a-f-]{36})\/(resume|approvals)$/.exec(path);
+      if (method !== 'POST' || !match) error('not_found', 404);
+      const job = rawJob(match[1]); if (!job) error('job_not_found', 404);
+      if (match[2] === 'resume') {
+        const state = control(); if (state.hardwarePaused || state.gpuQuarantined || state.kill) error('clearance_required', 409);
+        if (!['paused', 'failed'].includes(job.status) || (job.kind === 'inference' && !job.warmup)) error('job_not_resumable', 409);
+        run("UPDATE orchestration_jobs SET status='queued',error=NULL,attempts=0,deadline=?,updated_at=? WHERE id=?", job.warmup ? now() + WARMUP_DEADLINE_MS : null, now(), job.id);
+        event('owner_resume', { jobId: job.id }); return { status: 200, body: { job: jobView(rawJob(job.id)) } };
+      }
+      if (job.status !== 'ready-for-review' || !['visual', 'outreach', 'publication', 'spend'].includes(value.category)
+        || !['approved', 'rejected'].includes(value.decision) || typeof value.artifactSha256 !== 'string'
+        || !get('SELECT 1 FROM orchestration_job_artifacts WHERE job_id=? AND sha256=?', job.id, value.artifactSha256)) error('invalid_approval');
+      if (value.category === 'visual' && job.kind !== 'video') error('visual_requires_video');
+      if (value.note !== undefined && (typeof value.note !== 'string' || value.note.length > 2000)) error('invalid_note');
+      const approval = { id: randomUUID(), jobId: job.id, category: value.category, decision: value.decision, artifactSha256: value.artifactSha256, note: value.note || '', createdAt: now() };
+      run('INSERT INTO orchestration_approvals(id,job_id,category,decision,artifact_sha256,note,created_at) VALUES(?,?,?,?,?,?,?)', approval.id, job.id, approval.category, approval.decision, approval.artifactSha256, approval.note, approval.createdAt);
+      return { status: 201, body: { approval, externalExecution: false } };
+    });
+  }
+  function workerAction(method, path, value, worker) {
+    return transaction(() => {
+      reap();
+      if (method === 'GET' && path === '/next') {
+        const state = control();
+        if (state.paused || state.kill || state.hardwarePaused || state.gpuQuarantined || get('SELECT id FROM orchestration_jobs WHERE lease_token IS NOT NULL')) return { job: null, control: state };
+        const resident = get('SELECT resident_worker FROM orchestration_control WHERE id=1').resident_worker;
+        if (resident && resident !== worker) return { job: null, control: state };
+        if (!get("SELECT id FROM orchestration_jobs WHERE status='queued' AND kind IN ('video','research') LIMIT 1")) ensureWarmup();
+        const row = get("SELECT * FROM orchestration_jobs WHERE status='queued' ORDER BY CASE WHEN kind='video' THEN 0 WHEN kind='research' THEN 1 WHEN warmup=1 THEN 2 ELSE 3 END,created_at,rowid LIMIT 1");
+        if (!row) return { job: null, control: state };
+        const warming = get('SELECT warm_required,warmup_job_id FROM orchestration_control WHERE id=1');
+        if (env.GPU_INFERENCE_MODEL && warming.warm_required && row.kind === 'inference' && !row.warmup
+          && ['failed', 'paused'].includes(rawJob(warming.warmup_job_id)?.status)) return { job: null, control: { ...state, reason: state.reason || 'warmup_recovery_required' } };
+        if (['video', 'research'].includes(row.kind)) {
+          // A long render must not consume the warmup deadline while it waits.
+          run("UPDATE orchestration_jobs SET status='failed',error='warmup_deferred',updated_at=? WHERE warmup=1 AND status='queued'", now());
+          run('UPDATE orchestration_control SET warmup_job_id=NULL WHERE id=1');
+        }
+        run('UPDATE orchestration_control SET fence=fence+1 WHERE id=1');
+        const token = `${get('SELECT fence FROM orchestration_control WHERE id=1').fence}:${randomUUID()}`;
+        const expires = Math.min(now() + leaseMs, row.deadline ?? Number.MAX_SAFE_INTEGER);
+        run('UPDATE orchestration_jobs SET status=stage,attempts=attempts+1,lease_token=?,lease_expires=?,worker=?,updated_at=? WHERE id=?', token, expires, worker, now(), row.id);
+        event('lease_granted', { jobId: row.id, worker, fence: token.split(':')[0] });
+        return { job: jobView(rawJob(row.id), true), control: state };
+      }
+      if (method === 'POST' && path === '/reconcile') {
+        if (value.quiescent !== true || typeof value.reason !== 'string' || !value.reason.trim()) error('quiescence_required');
+        if (get('SELECT id FROM orchestration_jobs WHERE lease_token IS NOT NULL')) error('active_lease', 409);
+        const state = get('SELECT * FROM orchestration_control WHERE id=1');
+        if ((state.quarantine_worker && state.quarantine_worker !== worker) || (state.resident_worker && state.resident_worker !== worker)) error('worker_mismatch', 409);
+        for (const job of all("SELECT id FROM orchestration_jobs WHERE kind='inference' AND warmup=0 AND status='paused' AND worker=?", worker)) {
+          run("UPDATE orchestration_jobs SET status='failed',updated_at=? WHERE id=?", now(), job.id);
+          event('inference_abandoned', { jobId: job.id, worker, reason: value.reason.slice(0, 1000) });
+        }
+        if (!state.hardware) {
+          run("UPDATE orchestration_control SET quarantine=0,quarantine_worker=NULL,reason=CASE WHEN paused=1 THEN reason ELSE '' END WHERE id=1");
+          cold({ stopped: true });
+        }
+        event('worker_quiescent', { worker, reason: value.reason.slice(0, 1000) }); return { reconciled: !state.hardware, control: control() };
+      }
+      if (method === 'POST' && path === '/fault') {
+        if (value.category !== 'hardware' || typeof value.message !== 'string' || !value.message.trim() || typeof value.quiescent !== 'boolean') error('invalid_hardware_fault');
+        const state = get('SELECT * FROM orchestration_control WHERE id=1');
+        const job = get('SELECT * FROM orchestration_jobs WHERE lease_token IS NOT NULL');
+        if ([state.resident_worker, state.quarantine_worker, job?.worker].some(identity => identity && identity !== worker)) error('worker_mismatch', 409);
+        const reason = value.message.slice(0, 2000);
+        if (job) quarantine(job, reason, true);
+        run('UPDATE orchestration_control SET hardware=1,quarantine=1,quarantine_worker=?,reason=? WHERE id=1', worker, reason);
+        cold({ stopped: value.quiescent });
+        event('worker_hardware_fault', { worker, reason, quiescent: value.quiescent });
+        return { accepted: true, control: control() };
+      }
+      const match = /^\/jobs\/([0-9a-f-]{36})\/(heartbeat|checkpoint|complete|fail)$/.exec(path);
+      if (method !== 'POST' || !match) error('not_found', 404);
+      const job = requireLease(match[1], value.token, worker);
+      if (match[2] === 'heartbeat') {
+        const expires = Math.min(now() + leaseMs, job.deadline ?? Number.MAX_SAFE_INTEGER);
+        run('UPDATE orchestration_jobs SET lease_expires=?,updated_at=? WHERE id=?', expires, now(), job.id);
+        return { active: true, lease: { token: job.lease_token, expiresAt: expires }, control: control() };
+      }
+      if (match[2] === 'checkpoint') {
+        if (!['generating', 'decoding'].includes(value.stage) || !object(value.checkpoint)) error('invalid_checkpoint');
+        if (job.stage === 'decoding' && value.stage !== 'decoding') error('stage_regression', 409);
+        run('INSERT INTO orchestration_checkpoints(job_id,stage,checkpoint,created_at,fence) VALUES(?,?,?,?,?)', job.id, value.stage, json(value.checkpoint), now(), job.lease_token);
+        run('UPDATE orchestration_jobs SET checkpoint=?,stage=?,status=?,updated_at=? WHERE id=?', json(value.checkpoint), value.stage, value.stage, now(), job.id);
+        return { accepted: true, control: control() };
+      }
+      if (match[2] === 'complete') {
+        const resident = value.idleResident === true && value.quiescent === false && ['inference', 'research'].includes(job.kind);
+        if (!(value.quiescent === true && value.idleResident !== true) && !resident) error('completion_quiescence_required');
+        if (job.warmup && !resident) error('warmup_requires_idle_resident');
+        if (!object(value.result) || !Array.isArray(value.artifacts) || value.artifacts.length > 32) error('invalid_completion');
+        if (job.kind !== 'inference' && value.artifacts.length === 0) error('artifact_required');
+        if (job.kind === 'inference' && (!Number.isInteger(value.result.status) || (value.result.status !== 200 && (value.result.status < 400 || value.result.status > 599)) || !object(value.result.body))) error('invalid_inference_result');
+        for (const artifact of value.artifacts) {
+          validateArtifact(artifact);
+          const existing = get('SELECT * FROM orchestration_artifacts WHERE sha256=? OR uri=?', artifact.sha256, artifact.uri);
+          if (existing && (existing.sha256 !== artifact.sha256 || existing.uri !== artifact.uri || existing.bytes !== artifact.bytes || existing.media_type !== artifact.mediaType)) error('immutable_artifact_conflict', 409);
+          run('INSERT OR IGNORE INTO orchestration_artifacts(sha256,uri,bytes,media_type) VALUES(?,?,?,?)', artifact.sha256, artifact.uri, artifact.bytes, artifact.mediaType);
+          run('INSERT OR IGNORE INTO orchestration_job_artifacts(job_id,sha256) VALUES(?,?)', job.id, artifact.sha256);
+        }
+        run("UPDATE orchestration_jobs SET status='ready-for-review',result=?,lease_token=NULL,lease_expires=NULL,updated_at=? WHERE id=?", json(value.result), now(), job.id);
+        run('UPDATE orchestration_control SET resident_worker=?,warm_required=? WHERE id=1', resident ? worker : null, resident ? 0 : 1);
+        if (!resident) cold({ stopped: true });
+        event('job_completed', { jobId: job.id, artifactCount: value.artifacts.length }); return { accepted: true, control: control() };
+      }
+      if (!['transport', 'hardware', 'invalid'].includes(value.category) || typeof value.message !== 'string' || !value.message.trim()) error('invalid_failure');
+      const message = value.message.slice(0, 2000);
+      // Hardware signatures dominate worker-provided classification: prompts cannot authorize retries.
+      const hardware = value.category === 'hardware' || /NVML|CUDA|Xid\s*\d*|device (?:lost|disconnected)|fallen off the bus/i.test(message);
+      if (hardware || value.quiescent !== true) quarantine(job, message, hardware);
+      else {
+        cold({ stopped: true });
+        const status = value.category === 'transport' && job.attempts < MAX_ATTEMPTS ? 'queued' : 'failed';
+        run('UPDATE orchestration_jobs SET status=?,error=?,lease_token=NULL,lease_expires=NULL,updated_at=? WHERE id=?', status, message, now(), job.id);
+      }
+      event('job_failed', { jobId: job.id, category: hardware ? 'hardware' : value.category, quiescent: value.quiescent === true }); return { accepted: true, control: control() };
+    });
+  }
+  async function handle(surface, req, res) {
+    if (!configured || closed) return reply(res, 503, { error: 'orchestration_unavailable' });
+    if (!equalKey(req.headers.authorization, surface === 'owner' ? ownerKey : workerKey)) { res.setHeader('Connection', 'close'); return reply(res, 401, { error: 'unauthorized' }); }
+    const worker = String(req.headers['x-brainsnn-worker'] || '');
+    if (surface === 'worker' && !/^[a-zA-Z0-9_-]{8,80}$/.test(worker)) return reply(res, 400, { error: 'worker_id_required' });
+    try {
+      const value = req.method === 'POST' ? await readBody(req) : {};
+      if (closed) error('orchestration_unavailable', 503);
+      // Commit expiry before validating a mutation: a rejected stale heartbeat
+      // must not roll the quarantine back together with the rejected write.
+      transaction(reap);
+      const path = req.url.split('?')[0];
+      const result = surface === 'owner' ? ownerAction(req.method, path, value) : { status: 200, body: workerAction(req.method, path, value, worker) };
+      reply(res, result.status, result.body);
+    } catch (err) { reply(res, err.status || 500, { error: err.status ? err.message : 'orchestration_error' }); }
+  }
+  function request(operation, options = {}) {
+    if (!configured || closed) return Promise.resolve(response({ error: 'orchestration_unavailable' }, 503));
+    if (!['models', 'chat/completions'].includes(operation) || options.method !== (operation === 'models' ? 'GET' : 'POST')) return Promise.resolve(response({ error: 'operation_not_allowed' }, 400));
+    if (options.signal?.aborted) return Promise.resolve(response({ error: 'cancelled' }, 504));
+    let body = null, submitted;
+    try {
+      if (operation !== 'models') { if (typeof options.body !== 'string' || Buffer.byteLength(options.body) > MAX_BODY - 2048) error('invalid_body'); body = parse(options.body); if (!object(body)) error('invalid_body'); }
+      transaction(reap);
+      submitted = transaction(() => {
+        const state = control(); if (state.paused || state.kill || state.hardwarePaused || state.gpuQuarantined) error('gpu_paused', 503);
+        const warming = get('SELECT warm_required,warmup_job_id FROM orchestration_control WHERE id=1');
+        if (env.GPU_INFERENCE_MODEL && warming.warm_required && ['failed', 'paused'].includes(rawJob(warming.warmup_job_id)?.status)) error('warmup_recovery_required', 503);
+        if (get("SELECT COUNT(*) AS n FROM orchestration_jobs WHERE kind='inference' AND status IN ('queued','generating','decoding')").n >= 2) error('busy', 429);
+        return submit({ idempotencyKey: `http:${randomUUID()}`, kind: 'inference', payload: { operation, body } }, now() + deadlineMs).job;
+      });
+    } catch (err) { return Promise.resolve(response({ error: err.status ? err.message : 'invalid_body' }, err.status || 400)); }
+    return new Promise(resolve => {
+      let finished = false, timer, poll;
+      const finish = result => { if (finished) return; finished = true; clearTimeout(timer); clearInterval(poll); options.signal?.removeEventListener('abort', abort); pending.delete(stop); resolve(result); };
+      const cancel = reason => {
+        if (!closed) transaction(() => {
+          const job = rawJob(submitted.id);
+          if (job.lease_token) quarantine(job, reason);
+          else if (job.status === 'queued') run("UPDATE orchestration_jobs SET status='failed',error=?,updated_at=? WHERE id=?", reason, now(), job.id);
+        });
+        finish(response({ error: reason }, 504));
+      };
+      const abort = () => cancel('cancelled');
+      const stop = () => finish(response({ error: 'orchestration_stopped' }, 503));
+      pending.add(stop); options.signal?.addEventListener('abort', abort, { once: true });
+      timer = setTimeout(() => cancel('request_deadline'), deadlineMs);
+      poll = setInterval(() => {
+        if (closed) return stop();
+        try {
+          const row = rawJob(submitted.id);
+          if (row.status === 'ready-for-review') { const result = parse(row.result); finish(response(result.body, result.status)); }
+          else if (['failed', 'paused'].includes(row.status)) finish(response({ error: row.error || 'worker_failed' }, row.error === 'request_deadline' ? 504 : 503));
+        } catch { finish(response({ error: 'orchestration_error' }, 503)); }
+      }, responsePollMs);
+      if (options.signal?.aborted) abort();
+    });
+  }
+  function close() { if (closed) return; closed = true; for (const stop of [...pending]) stop(); db?.close(); }
+  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close };
+}

@@ -35,14 +35,28 @@ import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
 import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
 import { createGpuBridge } from "./src/server/gpuBridge.js";
+import { createOrchestration } from "./src/server/orchestration.js";
 
-dotenv.config();
-const gpuBridge = createGpuBridge(process.env);
-const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
+if (process.env.BRAINSNN_LOAD_DOTENV !== '0') dotenv.config();
+const orchestration = createOrchestration(process.env);
+// Enabling orchestration selects one durable transport, even when its
+// configuration is incomplete. Never fall through to an unleased GPU route.
+const gpuBridge = createGpuBridge(orchestration.enabled ? {} : process.env);
+const gpuInference = createGpuInferenceClient(orchestration.enabled
+  ? { ...process.env, GPU_INFERENCE_TRANSPORT: 'outbound' } : process.env,
+{ transport: orchestration.enabled ? orchestration : gpuBridge });
 
 const app = express();
 // Authenticate and bound worker bodies before the general JSON parser/limiter.
 app.use('/api/gpu-worker', gpuBridge.handle);
+app.use('/api/ops', orchestration.handleOwner);
+app.use('/api/orchestration-worker', orchestration.handleWorker);
+app.use('/ops', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
   const feed = await readAgentLabFeed();
@@ -1088,8 +1102,9 @@ async function startServer() {
     console.log(`Serving static distribution assets from ${distPath}`);
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`BrainSNN Engine running on http://0.0.0.0:${PORT}`);
+  const bindHost = process.env.BRAINSNN_BIND_HOST || '0.0.0.0';
+  app.listen(PORT, bindHost, () => {
+    console.log(`BrainSNN Engine running on http://${bindHost}:${PORT}`);
   });
 }
 
