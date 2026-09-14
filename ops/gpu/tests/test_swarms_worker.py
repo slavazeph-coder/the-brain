@@ -152,13 +152,18 @@ class HybridProvider(BaseHTTPRequestHandler):
             self.send_header('Location', 'http://192.0.2.1/forbidden')
             self.end_headers()
             return
+        if self.server.http_status != 200:
+            self.send_response(self.server.http_status)
+            self.end_headers()
+            self.wfile.write(b'synthetic-secret-response https://private.invalid/key')
+            return
         content = json.dumps([HANDOFF['proposal'], HANDOFF['critique'], DRAFT][min(index, 2)])
         if index >= 2:
             content = 'Thought: I now know the final answer\nFinal Answer: ' + content
         if self.server.invalid:
             content = '{"unexpected":true}'
         data = json.dumps({'id': 'synthetic-hybrid-fixture', 'object': 'chat.completion', 'created': 0,
-                           'model': CONFIG['SERVED_MODEL_NAME'], 'choices': [{'index': 0, 'finish_reason': 'stop',
+                           'model': CONFIG['SERVED_MODEL_NAME'], 'choices': [{'index': 0, 'finish_reason': self.server.finish_reason,
                            'message': {'role': 'assistant', 'content': content}}],
                            'usage': {'prompt_tokens': 100, 'completion_tokens': 100, 'total_tokens': 200}}).encode()
         try:
@@ -189,6 +194,8 @@ class RealHybridIntegration(unittest.TestCase):
         self.server.requests = []
         self.server.invalid = self.server.redirect = False
         self.server.delay = 0
+        self.server.http_status = 200
+        self.server.finish_reason = 'stop'
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.config = CONFIG | {'SWARMS_PYTHON': self.swarm, 'CREWAI_PYTHON': self.crew,
@@ -218,15 +225,27 @@ class RealHybridIntegration(unittest.TestCase):
 
     def test_real_invalid_json_contract_never_reaches_crew(self):
         self.server.invalid = True
-        with self.assertRaises(ResearchError):
+        with self.assertRaisesRegex(ResearchError, '^research_contract_invalid$'):
             run_job(PAYLOAD | {'engine': ENGINE}, self.config)
         self.assertEqual(len(self.server.requests), 1)
 
     def test_real_redirect_is_denied(self):
         self.server.redirect = True
-        with self.assertRaises(ResearchError):
+        with self.assertRaisesRegex(ResearchError, '^inference_http_3xx$'):
             run_job(PAYLOAD | {'engine': ENGINE}, self.config)
         self.assertEqual(len(self.server.requests), 1)
+
+    def test_real_http_status_and_truncation_survive_framework_boundary(self):
+        for status, finish, expected in [(400, 'stop', 'inference_http_4xx'),
+                                         (503, 'stop', 'inference_http_5xx'),
+                                         (200, 'length', 'inference_output_truncated')]:
+            with self.subTest(status=status, finish=finish):
+                self.server.requests.clear()
+                self.server.http_status, self.server.finish_reason = status, finish
+                with self.assertRaises(ResearchError) as raised:
+                    run_job(PAYLOAD | {'engine': ENGINE}, self.config)
+                self.assertEqual(str(raised.exception), expected)
+                self.assertEqual(len(self.server.requests), 1)
 
     def test_real_timeout(self):
         self.server.delay = 3

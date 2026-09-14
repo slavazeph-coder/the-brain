@@ -29,6 +29,9 @@ ERROR_CODES = frozenset({
     'invalid_research_payload', 'invalid_research_config', 'crewai_unavailable',
     'research_timeout', 'research_cancelled', 'research_contract_invalid',
     'inference_unavailable', 'research_failed', 'swarms_unavailable',
+    'inference_http_3xx', 'inference_http_4xx', 'inference_http_5xx',
+    'inference_http_rejected', 'inference_timeout', 'inference_transport',
+    'inference_output_truncated',
 })
 
 
@@ -373,7 +376,7 @@ def main():
         reply = {'ok': True, 'result': result}
         code = 0
     except ResearchError as error:
-        reply, code = {'ok': False, 'error': error.code}, 1
+        reply, code = {'ok': False, 'error': ResearchError(error.code).code}, 1
     except Exception:
         reply, code = {'ok': False, 'error': 'research_failed'}, 1
     print(json.dumps(reply, ensure_ascii=False, allow_nan=False), flush=True)

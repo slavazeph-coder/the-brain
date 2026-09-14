@@ -116,6 +116,39 @@ test('checkpoint history and decoding stage survive restart and resume', async t
   assert.equal(f.scheduler().snapshot().jobs[0].checkpoints.length, 1);
 });
 
+test('research cancellation diagnostics persist as terminal failures without retries', async t => {
+  const f = await fixture(t);
+  await f.submit('cancelled-research', 'research', { ...RESEARCH, engine: 'swarms-crewai' });
+  const job = (await f.call('worker', '/next')).body.job;
+  const failed = await f.call('worker', `/jobs/${job.id}/fail`, {
+    token: job.lease.token, category: 'cancelled', message: 'heartbeat_transport', quiescent: true,
+  });
+  assert.equal(failed.status, 200);
+  f.restart();
+  const stored = f.scheduler().snapshot().jobs.find(item => item.id === job.id);
+  assert.equal(stored.status, 'failed');
+  assert.equal(stored.error, 'heartbeat_transport');
+  assert.equal(stored.attempts, 1);
+  assert.equal((await f.call('worker', '/next')).body.job, null);
+});
+
+test('cancellation diagnostics cannot bypass hardware or quiescence holds', async t => {
+  for (const hardware of [false, true]) {
+    const f = await fixture(t);
+    await f.submit('held-cancellation', 'research', RESEARCH);
+    const job = (await f.call('worker', '/next')).body.job;
+    const failed = await f.call('worker', `/jobs/${job.id}/fail`, {
+      token: job.lease.token, category: 'cancelled',
+      message: hardware ? 'NVML device lost' : 'research_cancelled', quiescent: hardware,
+    });
+    assert.equal(failed.status, 200);
+    f.restart();
+    assert.equal(f.scheduler().snapshot().control.gpuQuarantined, true);
+    assert.equal(f.scheduler().snapshot().control.hardwarePaused, hardware);
+    assert.equal((await f.call('worker', '/next')).body.job, null);
+  }
+});
+
 test('transport retries are bounded; hardware cannot retry or clear through general resume', async t => {
   const f = await fixture(t); await f.submit('transport');
   for (let n = 1; n <= 3; n++) { const job = (await f.call('worker', '/next')).body.job; assert.equal(job.attempts, n); await f.call('worker', `/jobs/${job.id}/fail`, { token: job.lease.token, category: 'transport', message: 'connection reset', quiescent: true }); }

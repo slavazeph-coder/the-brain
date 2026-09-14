@@ -2,6 +2,7 @@
 """Pinned, two-agent Swarms proposal/critique. No scheduler, tools, or delegation."""
 import contextlib
 import hashlib
+import http.client
 import importlib.metadata
 import inspect
 import json
@@ -10,6 +11,7 @@ from pathlib import Path
 import sys
 import time
 from urllib.request import Request, ProxyHandler, build_opener
+from urllib.error import HTTPError, URLError
 
 from crew_worker import (ResearchError, MAX_PACKET_BYTES, MAX_RESULT_BYTES, _keys, _text,
                          _run_child, _install_network_guard, validate_config,
@@ -99,12 +101,37 @@ class LoopbackModel:
         self.config, self.system = config, system
         self.validator = validator
         self.calls, self.output = 0, None
+        # The framework may swallow, replace, or retry an exception. Retain only
+        # the first allowlisted code; never retain its text or HTTP response.
+        self.failure_code = None
 
     def run(self, task=None, **kwargs):
         self.calls += 1
-        if self.calls > 1:
-            self.output = None
-            raise ResearchError('research_contract_invalid')
+        try:
+            if self.calls > 1:
+                raise ResearchError('research_contract_invalid')
+            return self._complete(task, **kwargs)
+        except ResearchError as error:
+            code = ResearchError(error.code).code
+        except HTTPError as error:
+            status = error.code
+            code = {3: 'inference_http_3xx', 4: 'inference_http_4xx',
+                    5: 'inference_http_5xx'}.get(status // 100, 'inference_http_rejected') \
+                if type(status) is int else 'inference_http_rejected'
+        except TimeoutError:
+            code = 'inference_timeout'
+        except URLError as error:
+            code = 'inference_timeout' if isinstance(error.reason, TimeoutError) else 'inference_transport'
+        except (OSError, http.client.HTTPException):
+            code = 'inference_transport'
+        except Exception:
+            code = 'inference_unavailable'
+        self.output = None
+        if self.failure_code is None:
+            self.failure_code = code
+        raise ResearchError(self.failure_code) from None
+
+    def _complete(self, task=None, **kwargs):
         c = self.config
         messages = [{'role': 'system', 'content': self.system}]
         if kwargs.get('messages') is not None:
@@ -122,14 +149,16 @@ class LoopbackModel:
         from urllib.request import HTTPRedirectHandler
         class NoRedirect(HTTPRedirectHandler):
             def redirect_request(self, *args, **kwargs):
-                raise ResearchError('inference_unavailable')
+                raise ResearchError('inference_http_3xx')
+        with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=min(30, c['CREWAI_TIMEOUT_SECONDS'])) as response:
+            raw = response.read(MAX_RESULT_BYTES * 2 + 1)
         try:
-            with build_opener(ProxyHandler({}), NoRedirect()).open(request, timeout=min(30, c['CREWAI_TIMEOUT_SECONDS'])) as response:
-                raw = response.read(MAX_RESULT_BYTES * 2 + 1)
             if len(raw) > MAX_RESULT_BYTES * 2:
                 raise ValueError()
-            reply = json.loads(raw)
+            reply = strict_json(raw.decode(), MAX_RESULT_BYTES * 2)
             choice = reply['choices'][0]
+            if choice['finish_reason'] == 'length':
+                raise ResearchError('inference_output_truncated')
             if choice['finish_reason'] != 'stop' or choice['message'].get('tool_calls'):
                 raise ValueError()
             content = choice['message']['content']
@@ -141,8 +170,8 @@ class LoopbackModel:
             return content
         except ResearchError:
             raise
-        except Exception:
-            raise ResearchError('inference_unavailable') from None
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+            raise ResearchError('research_contract_invalid') from None
 
 
 def _execute(payload, config):
@@ -173,11 +202,15 @@ def _execute(payload, config):
 
     def stage(name, instruction, data, validator):
         model = LoopbackModel(config, instruction, validator)
-        agent = BoundedAgent(agent_name=name, system_prompt=instruction, llm=model, **options)
         try:
+            agent = BoundedAgent(agent_name=name, system_prompt=instruction, llm=model, **options)
             agent.run(task=json.dumps(data, ensure_ascii=False))
+        except ResearchError as error:
+            raise ResearchError(model.failure_code or error.code) from None
         except Exception:
-            raise ResearchError('inference_unavailable') from None
+            raise ResearchError(model.failure_code or 'inference_unavailable') from None
+        if model.failure_code is not None:
+            raise ResearchError(model.failure_code)
         if model.calls != 1 or model.output is None:
             raise ResearchError('inference_unavailable')
         return strict_json(model.output)
@@ -240,7 +273,7 @@ def main():
             result = _execute(request['payload'], config)
         reply, code = {'ok': True, 'result': result}, 0
     except ResearchError as error:
-        reply, code = {'ok': False, 'error': error.code}, 1
+        reply, code = {'ok': False, 'error': ResearchError(error.code).code}, 1
     except Exception:
         reply, code = {'ok': False, 'error': 'research_failed'}, 1
     print(json.dumps(reply, ensure_ascii=False, allow_nan=False), flush=True)

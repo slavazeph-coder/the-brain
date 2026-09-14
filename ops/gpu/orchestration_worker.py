@@ -18,6 +18,7 @@ import time
 from urllib.parse import urlencode, urlsplit
 
 from checkpoint import load_json, save_json
+from crew_worker import ResearchError
 
 
 class LeaseLost(RuntimeError):
@@ -453,11 +454,14 @@ class OrchestrationWorker:
             raise
         completed = False
         heartbeat_stop = threading.Event()
+        abort_reason = [None]
         retain = job['kind'] in ('inference', 'research', 'research_draft')
-        def abort_owned():
+        def abort_owned(reason='lease_expired'):
             with completion_lock:
                 if finished.is_set():
                     return
+                if abort_reason[0] is None:
+                    abort_reason[0] = reason
                 cancel.set()
                 runtime.orchestration_cancel_owned()
         lease_timers = []
@@ -477,15 +481,19 @@ class OrchestrationWorker:
                         return
                     control = state.get('control', {})
                     if control.get('kill') or control.get('hardwarePaused') or runtime.stop.is_set():
-                        abort_owned()
+                        reason = ('heartbeat_kill' if control.get('kill') else
+                                  'heartbeat_hardware_paused' if control.get('hardwarePaused') else 'runtime_stopped')
+                        abort_owned(reason)
                         return
                     lease = state.get('lease') or (state.get('job') or {}).get('lease')
                     if lease:
                         deadline[0] = lease['expiresAt'] / 1000
                         arm_lease_deadline()
-                except (TransportFault, LeaseLost, ValueError, KeyError):
+                except (TransportFault, LeaseLost, ValueError, KeyError) as error:
                     # On any uncertainty stop now. The scheduler owns bounded retries.
-                    abort_owned()
+                    reason = ('heartbeat_lease_lost' if isinstance(error, LeaseLost) else
+                              'heartbeat_transport' if isinstance(error, TransportFault) else 'heartbeat_invalid')
+                    abort_owned(reason)
                     return
                 if time.time() >= deadline[0]:
                     abort_owned()
@@ -545,14 +553,24 @@ class OrchestrationWorker:
         except Exception as error:
             cancel.set()
             runtime.orchestration_end()
+            # Only fixed codes/classes cross the worker transport. An exception
+            # may carry a secret in .code, its class name, or its rendered text.
+            code = ResearchError(error.code).code if isinstance(error, ResearchError) else None
+            message = code or next((name for cls, name in (
+                (LeaseLost, 'LeaseLost'), (TransportFault, 'TransportFault'),
+                (HardwareFault, 'HardwareFault'), (ValueError, 'ValueError'),
+                (KeyError, 'KeyError')) if isinstance(error, cls)), 'worker_failed')
+            if abort_reason[0] and (code == 'research_cancelled' or isinstance(error, LeaseLost)):
+                message = abort_reason[0]
             if runtime.orchestration_paused or isinstance(error, HardwareFault) or hardware_error(error):
                 runtime.orchestration_hardware_fault('GPU hardware fault')
                 category = 'hardware'
             else:
-                category = 'transport' if isinstance(error, (TransportFault, LeaseLost)) else 'invalid'
+                category = ('cancelled' if code == 'research_cancelled' else
+                            'transport' if isinstance(error, (TransportFault, LeaseLost)) else 'invalid')
             try:
                 self.client.request('POST', base + '/fail', {'token': token, 'category': category,
-                    'message': getattr(error, 'code', type(error).__name__), 'quiescent': runtime.orchestration_quiescent()})
+                    'message': message, 'quiescent': runtime.orchestration_quiescent()})
             except (TransportFault, LeaseLost, ValueError):
                 self.reconciled = False
         finally:

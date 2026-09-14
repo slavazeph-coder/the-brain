@@ -15,6 +15,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import runtime
 import orchestration_worker as ow
+from crew_worker import ResearchError
 
 
 def emit(value):
@@ -66,6 +67,14 @@ c['COMFY_WORKFLOW_MANIFEST'] = str(manifest)
 
 png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
 counts = {'generate': 0, 'decode': 0}
+research_failures = []
+
+
+def controlled_research(payload, *args, **kwargs):
+    # Synthetic model/cancellation outcomes; real worker and scheduler transport.
+    code = 'research_cancelled' if payload['objective'] == 'controlled cancellation' else 'inference_timeout'
+    research_failures.append(code)
+    raise ResearchError(code)
 
 
 class ControlledClient:
@@ -139,14 +148,16 @@ try:
          patch.object(instance, 'orchestration_stop_child', side_effect=observed_stop), \
          patch('runtime.gpu_snapshot', return_value={'available': True, 'devices': [{'controlled': True}]}), \
          patch('orchestration_worker.JsonClient', ControlledClient), \
+         patch('swarms_worker.run_job', side_effect=controlled_research), \
          patch('orchestration_worker.http.client.HTTPConnection', ControlledDownload):
-        for _ in range(4):
+        for _ in range(6):
             worker.once()
         # Explicit fixture teardown drains a healthy model retained for reuse.
         instance.orchestration_end()
         worker.client.request('POST', '/reconcile', {'quiescent': True, 'reason': 'Controlled fixture drained all owned children'})
         assert instance.orchestration_quiescent()
         emit({'event': 'fixture_complete', 'counts': counts,
+              'researchFailures': research_failures,
               'artifacts': [p.name for p in worker.artifacts.root.iterdir()],
               'quiescent': True, 'controlledAdapters': True})
 finally:

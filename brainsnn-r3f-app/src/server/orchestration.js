@@ -353,7 +353,8 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         if (!resident) cold({ stopped: true });
         event('job_completed', { jobId: job.id, artifactCount: value.artifacts.length }); return { accepted: true, control: control() };
       }
-      if (!['transport', 'hardware', 'invalid'].includes(value.category) || typeof value.message !== 'string' || !value.message.trim()) error('invalid_failure');
+      // Cancellation is terminal like invalid work; only transport opts into retries.
+      if (!['transport', 'hardware', 'invalid', 'cancelled'].includes(value.category) || typeof value.message !== 'string' || !value.message.trim()) error('invalid_failure');
       const message = value.message.slice(0, 2000);
       // Hardware signatures dominate worker-provided classification: prompts cannot authorize retries.
       const hardware = value.category === 'hardware' || /NVML|CUDA|Xid\s*\d*|device (?:lost|disconnected)|fallen off the bus/i.test(message);

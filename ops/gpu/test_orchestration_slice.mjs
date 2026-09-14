@@ -31,8 +31,17 @@ try {
   const inference = await call('owner', 'POST', '/jobs', { idempotencyKey: 'slice-inference', kind: 'inference', payload: { operation: 'models' } });
   const video = await call('owner', 'POST', '/jobs', { idempotencyKey: 'slice-video', kind: 'video', payload: { workflowId: 'controlled-local', prompt: 'Controlled fixture only' } });
   assert.equal(inference.status, 201); assert.equal(video.status, 201);
+  const diagnosticJobs = [];
+  for (const objective of ['controlled cancellation', 'controlled timeout']) {
+    const submitted = await call('owner', 'POST', '/jobs', { idempotencyKey: objective.replaceAll(' ', '-'), kind: 'research', payload: {
+      engine: 'swarms-crewai', objective,
+      sources: [{ id: 's1', title: 'Synthetic fixture', url: 'https://example.invalid/source', content: 'Synthetic evidence.' }],
+    } });
+    assert.equal(submitted.status, 201);
+    diagnosticJobs.push(submitted.body.job.id);
+  }
   scheduler.close(); scheduler = createOrchestration(env);
-  assert.equal(scheduler.snapshot().jobs.length, 2, 'queue survives actual database close/reopen');
+  assert.equal(scheduler.snapshot().jobs.length, 4, 'queue survives actual database close/reopen');
   const runtimeDir = join(root, 'runtime'); mkdirSync(runtimeDir);
   child = spawn('python3', [resolve('ops/gpu/tests/orchestration_slice_fixture.py'), runtimeDir], { env: { PATH: process.env.PATH, PYTHONUNBUFFERED: '1' }, stdio: ['pipe', 'pipe', 'pipe'] });
   let stderr = '';
@@ -59,6 +68,14 @@ try {
   assert.deepEqual(fixture.counts, { generate: 1, decode: 2 }, `transport retry resumes decode without regenerating: ${JSON.stringify(scheduler.snapshot().jobs.map(job => ({ kind: job.kind, status: job.status, error: job.error })))}`);
   assert.equal(receipts.find(item => item.event === 'child_started').kind, 'comfy_gpu', 'video wins despite inference submitted first');
   const status = scheduler.snapshot();
+  assert.deepEqual(fixture.researchFailures, ['research_cancelled', 'inference_timeout']);
+  for (const [index, id] of diagnosticJobs.entries()) {
+    const failed = status.jobs.find(job => job.id === id);
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.attempts, 1, 'diagnostics must not introduce automatic research retries');
+    assert.equal(failed.error, fixture.researchFailures[index]);
+    assert.deepEqual(failed.artifacts, []);
+  }
   const result = status.jobs.find(job => job.id === video.body.job.id);
   assert.equal(result.status, 'ready-for-review'); assert.equal(result.result.visuallyApproved, false); assert.equal(result.result.sale, false);
   assert.equal(result.attempts, 2); assert.equal(result.artifacts.length, 2);
@@ -77,7 +94,7 @@ try {
   scheduler.close(); scheduler = createOrchestration(env);
   assert.equal(scheduler.snapshot().approvals.length, 4);
   assert.equal(scheduler.snapshot().control.externalExecution, false);
-  console.log(JSON.stringify({ passed: true, controlledAdapters: ['stdio scheduler transport', 'ComfyUI protocol', 'GPU health', 'OpenAI models'], realExecution: ['SQLite restart persistence', 'Node auth and scheduler handlers', 'Python outbound worker', 'owned subprocess start/stop/reap', 'pinned workflows', 'checkpoint and decode resume', 'SHA256 artifact files', 'separate durable approvals'], generateRuns: 1, decodeAttempts: 2, maxConcurrentOwnedChildren: 1, approvalRecords: 4, externalExecution: false, liveModelOrRenderValidated: false }, null, 2));
+  console.log(JSON.stringify({ passed: true, controlledAdapters: ['stdio scheduler transport', 'ComfyUI protocol', 'GPU health', 'OpenAI models', 'research failures'], realExecution: ['SQLite restart persistence', 'Node auth and scheduler handlers', 'Python outbound worker', 'owned subprocess start/stop/reap', 'pinned workflows', 'checkpoint and decode resume', 'SHA256 artifact files', 'separate durable approvals'], researchFailureCodes: fixture.researchFailures, researchAttemptsEach: 1, generateRuns: 1, decodeAttempts: 2, maxConcurrentOwnedChildren: 1, approvalRecords: 4, externalExecution: false, liveModelOrRenderValidated: false }, null, 2));
 } finally {
   if (child && child.exitCode === null) child.kill('SIGTERM');
   for (const pid of running) {
