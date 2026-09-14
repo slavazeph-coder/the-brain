@@ -160,6 +160,18 @@ def connection_deadline(connection, seconds):
         connection.close()
 
 
+HEARTBEAT_REQUEST_SECONDS = 5.0
+# Allow the bounded request to finish unwinding before treating a still-live
+# heartbeat thread (for example, blocked in DNS) as completion uncertainty.
+HEARTBEAT_DRAIN_SECONDS = HEARTBEAT_REQUEST_SECONDS + 0.1
+
+
+def heartbeat_request_budget(expires_at, now):
+    # Absorb short WAN stalls without extending ownership. The independent
+    # lease timer continues to stop children at the original expiry.
+    return max(0.001, min(HEARTBEAT_REQUEST_SECONDS, expires_at - now))
+
+
 class JsonClient:
     def __init__(self, base, headers=None, allow_local_http=False):
         self.base = endpoint(base, allow_local_http=allow_local_http)
@@ -462,7 +474,7 @@ class OrchestrationWorker:
         runtime = self.runtime
         cancel = threading.Event()
         finished = threading.Event()
-        completion_lock = threading.Lock()
+        completion_lock = threading.RLock()
         token = job['lease']['token']
         base = '/jobs/' + job['id']
         deadline = [job['lease']['expiresAt'] / 1000]
@@ -496,19 +508,26 @@ class OrchestrationWorker:
         def heartbeat():
             while not heartbeat_stop.wait(min(1, max(0.05, (deadline[0] - time.time()) / 3))):
                 try:
-                    state = self.client.request('POST', base + '/heartbeat', {'token': token}, timeout=2)
-                    if finished.is_set():
-                        return
-                    control = state.get('control', {})
-                    if control.get('kill') or control.get('hardwarePaused') or runtime.stop.is_set():
-                        reason = ('heartbeat_kill' if control.get('kill') else
-                                  'heartbeat_hardware_paused' if control.get('hardwarePaused') else 'runtime_stopped')
-                        abort_owned(reason)
-                        return
-                    lease = state.get('lease') or (state.get('job') or {}).get('lease')
-                    if lease:
-                        deadline[0] = lease['expiresAt'] / 1000
-                        arm_lease_deadline()
+                    state = self.client.request('POST', base + '/heartbeat', {'token': token},
+                                                timeout=heartbeat_request_budget(deadline[0], time.time()))
+                    with completion_lock:
+                        if finished.is_set() or cancel.is_set():
+                            return
+                        # A late response cannot renew ownership after local
+                        # expiry, including when the expiry thread is delayed.
+                        if time.time() >= deadline[0]:
+                            abort_owned()
+                            return
+                        control = state.get('control', {})
+                        if control.get('kill') or control.get('hardwarePaused') or runtime.stop.is_set():
+                            reason = ('heartbeat_kill' if control.get('kill') else
+                                      'heartbeat_hardware_paused' if control.get('hardwarePaused') else 'runtime_stopped')
+                            abort_owned(reason)
+                            return
+                        lease = state.get('lease') or (state.get('job') or {}).get('lease')
+                        if lease:
+                            deadline[0] = lease['expiresAt'] / 1000
+                            arm_lease_deadline()
                 except (TransportFault, LeaseLost, ValueError, KeyError) as error:
                     # On any uncertainty stop now. The scheduler owns bounded retries.
                     reason = ('heartbeat_lease_lost' if isinstance(error, LeaseLost) else
@@ -528,6 +547,16 @@ class OrchestrationWorker:
                 raise LeaseLost('Checkpoint after cancellation forbidden')
             save_json(runtime.root / 'checkpoints' / ('orchestration-' + job['id'] + '.json'), checkpoint)
             self.client.request('POST', base + '/checkpoint', {'token': token, 'stage': stage, 'checkpoint': checkpoint})
+        def end_owned(keep_inference=False):
+            try:
+                runtime.orchestration_end(keep_inference=keep_inference)
+            except Exception:
+                # Stop uncertainty already preserves the child/active marker and
+                # latches the runtime. Still report the nonquiescent failure;
+                # repeating the same cleanup error must not kill that report.
+                if not runtime.orchestration_paused:
+                    raise
+                runtime.log.warning('orchestration cleanup failed (%s)', 'runtime_pause_requires_clearance')
         try:
             if job['kind'] == 'video':
                 output = self.comfy.run(job, cancel, publish)
@@ -559,7 +588,7 @@ class OrchestrationWorker:
             else:
                 raise ValueError('Unsupported work kind')
             heartbeat_stop.set()
-            thread.join(timeout=3)
+            thread.join(timeout=HEARTBEAT_DRAIN_SECONDS)
             if thread.is_alive():
                 raise LeaseLost('Heartbeat did not stop before completion')
             with completion_lock:
@@ -575,7 +604,7 @@ class OrchestrationWorker:
             completed = True
         except Exception as error:
             cancel.set()
-            runtime.orchestration_end()
+            end_owned()
             # Only fixed codes/classes cross the worker transport. An exception
             # may carry a secret in .code, its class name, or its rendered text.
             code = ResearchError(error.code).code if isinstance(error, ResearchError) else None
@@ -585,7 +614,15 @@ class OrchestrationWorker:
                 (KeyError, 'KeyError')) if isinstance(error, cls)), 'worker_failed')
             if abort_reason[0] and (code == 'research_cancelled' or isinstance(error, LeaseLost)):
                 message = abort_reason[0]
-            if runtime.orchestration_paused or isinstance(error, HardwareFault) or hardware_error(error):
+            observed_hardware_failure = isinstance(error, HardwareFault) or hardware_error(error)
+            if runtime.orchestration_paused:
+                # "hardware" is the existing scheduler quarantine protocol,
+                # not evidence that an unclean/unverified stop is device failure.
+                # Preserve the original durable latch and its fixed reason.
+                category = 'hardware'
+                if not observed_hardware_failure:
+                    message = 'runtime_pause_requires_clearance'
+            elif observed_hardware_failure:
                 runtime.orchestration_hardware_fault('GPU hardware fault')
                 category = 'hardware'
             else:
@@ -601,7 +638,7 @@ class OrchestrationWorker:
             heartbeat_stop.set()
             for timer in lease_timers:
                 timer.cancel()
-            thread.join(timeout=3)
-            runtime.orchestration_end(keep_inference=completed and retain)
+            thread.join(timeout=HEARTBEAT_DRAIN_SECONDS)
+            end_owned(keep_inference=completed and retain)
             if not completed or (retain and not runtime.inference):
                 self.reconciled = False

@@ -264,7 +264,8 @@ class HeartbeatDiagnostics(unittest.TestCase):
                     heartbeat = [call for call in calls if call[0].endswith('/heartbeat')]
                     failures = [body for path, body, _ in calls if path.endswith('/fail')]
                     self.assertEqual(len(heartbeat), 1)
-                    self.assertEqual(heartbeat[0][2]['timeout'], 2)
+                    self.assertGreater(heartbeat[0][2]['timeout'], 0)
+                    self.assertLessEqual(heartbeat[0][2]['timeout'], 1)
                     self.assertEqual(len(failures), 1)
                     self.assertEqual(failures[0]['message'], 'heartbeat_transport_' + expected)
                     self.assertEqual(failures[0]['category'], 'transport' if kind == 'video' else 'cancelled')
@@ -276,6 +277,13 @@ class HeartbeatDiagnostics(unittest.TestCase):
                     self.assertNotIn(SECRET, json.dumps(warning.call_args.args))
                     self.assertNotIn(job['lease']['token'], json.dumps(warning.call_args.args))
 
+
+class LeaseBudgetTests(unittest.TestCase):
+    def test_request_budget_is_bounded_by_remaining_lease(self):
+        self.assertEqual(ow.heartbeat_request_budget(130, 100), 5)
+        self.assertEqual(ow.heartbeat_request_budget(103, 100), 3)
+        self.assertEqual(ow.heartbeat_request_budget(100.5, 100), 0.5)
+        self.assertEqual(ow.heartbeat_request_budget(99, 100), 0.001)
 
 if __name__ == '__main__':
     unittest.main()

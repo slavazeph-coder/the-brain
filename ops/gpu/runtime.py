@@ -154,9 +154,17 @@ class Runtime:
         self.warm_epoch = 0
         self.orchestration_paused = bool(load_json(self.root / 'state/orchestration-pause.json', False))
         if self.orchestration_enabled and load_json(self.root / 'state/orchestration-active.json', False):
+            # Preflight objects have no supervisor ownership. Stay fail-closed in
+            # memory, but only run() under the exclusive lock may latch a restart.
             self.orchestration_paused = True
-            save_json(self.root / 'state/orchestration-pause.json', {
-                'reason': 'Unclean restart: verify all prior child processes stopped before explicit clearance', 'at': time.time()})
+
+    def orchestration_pause(self, reason):
+        """Retain the first durable reason until explicit operator clearance."""
+        with self.lock:
+            self.orchestration_paused = True
+            path = self.root / 'state/orchestration-pause.json'
+            if not load_json(path, False):
+                save_json(path, {'reason': reason, 'at': time.time()})
 
     def child_env(self, kind):
         # Deliberately exclude inherited credentials and unrelated application env.
@@ -342,8 +350,7 @@ class Runtime:
 
     def orchestration_hardware_fault(self, reason):
         with self.lock:
-            self.orchestration_paused = True
-            save_json(self.root / 'state/orchestration-pause.json', {'reason': reason, 'at': time.time()})
+            self.orchestration_pause(reason)
             if self.orchestration_cancel:
                 self.orchestration_cancel.set()
             self.backend_ready = False
@@ -413,9 +420,7 @@ class Runtime:
                 try:
                     self.terminate(process, 2)
                 except (OSError, subprocess.SubprocessError):
-                    self.orchestration_paused = True
-                    save_json(self.root / 'state/orchestration-pause.json', {
-                        'reason': 'Owned process stop could not be confirmed; manual quiescence required', 'at': time.time()})
+                    self.orchestration_pause('Owned process stop could not be confirmed; manual quiescence required')
                     raise
                 stopped = False
                 try:
@@ -425,9 +430,7 @@ class Runtime:
                 except OSError:
                     pass  # Permission/inspection failures are not proof of exit.
                 if not stopped:
-                    self.orchestration_paused = True
-                    save_json(self.root / 'state/orchestration-pause.json', {
-                        'reason': 'Owned process group termination unverified', 'at': time.time()})
+                    self.orchestration_pause('Owned process group termination unverified')
                     raise RuntimeError('Owned process group termination unverified')
                 del self.orchestration_children[kind]
             if kind == 'inference':
@@ -629,52 +632,88 @@ class Runtime:
                 'orchestration_children': {kind: child.pid for kind, child in self.orchestration_children.items()}}
 
     def run(self):
-        lockfile = open(self.root / 'state/runtime.lock', 'a')
-        try:
-            fcntl.flock(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise ValueError('Runtime already running')
-        gateway = Gateway(('127.0.0.1', int(self.c['GATEWAY_PORT'])), Handler)
-        gateway.runtime = self
-        save_json(self.root / 'state/pid.json', {'pid': os.getpid(), 'script': str(Path(__file__).resolve())})
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            signal.signal(sig, lambda *_: self.stop.set())
-        thread = threading.Thread(target=gateway.serve_forever, daemon=True)
-        thread.start()
-        self.log.info('runtime started; gateway listens only on loopback')
-        orchestration_thread = None
-        if self.orchestration_enabled:
-            from orchestration_worker import OrchestrationWorker
-            self.orchestration_worker = OrchestrationWorker(self)
-            orchestration_thread = threading.Thread(target=self.orchestration_worker.run, daemon=True)
-            orchestration_thread.start()
-        try:
-            while not self.stop.is_set():
-                self.tick()
-                self.stop.wait(float(self.c['POLL_SECONDS']))
-        finally:
-            self.stop.set()
-            if self.orchestration_cancel:
-                self.orchestration_cancel.set()
-            if orchestration_thread:
-                orchestration_thread.join(timeout=15)
-                self.orchestration_end()
-            gateway.shutdown()
-            gateway.server_close()
-            with self.lock:
-                self.preempt_background()
-                self.terminate(self.bridge, 5)
-                self.bridge = None
-                self.terminate(self.backup, 2)
-                self.terminate(self.inference, 10)
-                self.inference = None
-                self.backend_ready = False
+        self.phase = 'startup'
+        with (self.root / 'state/runtime.lock').open('a') as lockfile:
+            try:
+                fcntl.flock(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise ValueError('Runtime already running') from None
+            prior_active = self.orchestration_enabled and bool(load_json(self.root / 'state/orchestration-active.json', False))
+            if prior_active:
+                self.orchestration_pause('Unclean restart: verify all prior child processes stopped before explicit clearance')
+            # Re-read a hold written after a preflight object was constructed.
+            self.orchestration_paused = bool(load_json(self.root / 'state/orchestration-pause.json', False))
+            gateway = thread = orchestration_thread = None
+            try:
                 state = self.status()
-                state['stopped'] = True
+                state['stopped'] = False
                 save_json(self.root / 'state/status.json', state)
-                (self.root / 'state/pid.json').unlink(missing_ok=True)
-            lockfile.close()
-            self.log.info('runtime stopped')
+                gateway = Gateway(('127.0.0.1', int(self.c['GATEWAY_PORT'])), Handler)
+                gateway.runtime = self
+                save_json(self.root / 'state/pid.json', {'pid': os.getpid(), 'script': str(Path(__file__).resolve())})
+                for sig in (signal.SIGTERM, signal.SIGINT):
+                    signal.signal(sig, lambda *_: self.stop.set())
+                candidate = threading.Thread(target=gateway.serve_forever, daemon=True)
+                candidate.start()
+                thread = candidate
+                self.log.info('runtime started; gateway listens only on loopback')
+                if self.orchestration_enabled:
+                    from orchestration_worker import OrchestrationWorker
+                    self.orchestration_worker = OrchestrationWorker(self)
+                    candidate = threading.Thread(target=self.orchestration_worker.run, daemon=True)
+                    candidate.start()
+                    orchestration_thread = candidate
+                self.phase = 'running'
+                while not self.stop.is_set():
+                    self.tick()
+                    self.stop.wait(float(self.c['POLL_SECONDS']))
+            except BaseException:
+                self.failure_phase = self.phase
+                raise
+            finally:
+                self.phase = 'shutdown'
+                try:
+                    cleanup_errors = []
+                    def cleanup(action, *args):
+                        try:
+                            action(*args)
+                        except BaseException as error:
+                            cleanup_errors.append(error)
+                    self.stop.set()
+                    if self.orchestration_cancel:
+                        self.orchestration_cancel.set()
+                    if gateway:
+                        if thread:
+                            cleanup(gateway.shutdown)
+                        cleanup(gateway.server_close)
+                    if orchestration_thread:
+                        cleanup(orchestration_thread.join, 15)
+                        if orchestration_thread.is_alive():
+                            cleanup(self.orchestration_pause, 'Orchestration worker stop unconfirmed; manual quiescence required')
+                            cleanup(self.orchestration_cancel_owned)
+                            cleanup_errors.append(RuntimeError('Orchestration worker stop unconfirmed'))
+                        elif not prior_active:
+                            cleanup(self.orchestration_end)
+                    with self.lock:
+                        cleanup(self.preempt_background)
+                        cleanup(self.terminate, self.bridge, 5)
+                        self.bridge = None
+                        cleanup(self.terminate, self.backup, 2)
+                        cleanup(self.terminate, self.inference, 10)
+                        self.inference = None
+                        self.backend_ready = False
+                        if cleanup_errors:
+                            # Other owned cleanup is still attempted, but neither
+                            # PID metadata nor a success receipt is cleared/written.
+                            raise cleanup_errors[0]
+                        state = self.status()
+                        state['stopped'] = True
+                        save_json(self.root / 'state/status.json', state)
+                        (self.root / 'state/pid.json').unlink(missing_ok=True)
+                    self.log.info('runtime stopped')
+                except BaseException:
+                    self.failure_phase = 'shutdown'
+                    raise
 
 
 class Gateway(ThreadingHTTPServer):
@@ -875,13 +914,63 @@ def verified_pid(root):
         return None
 
 
+def safe_exception_type(error):
+    # Never persist arbitrary exception messages, custom class names, traceback
+    # locals, paths or configuration. Unknown subclasses use a fixed fallback.
+    allowed = (ValueError, KeyError, OSError, RuntimeError, TypeError, AttributeError,
+               PermissionError, FileNotFoundError, TimeoutError, KeyboardInterrupt, SystemExit)
+    return type(error).__name__ if type(error) in allowed else 'OtherError'
+
+
+def run_runtime(config):
+    """One atomic, owner-only, bounded exit receipt, including startup failures."""
+    path = Path(config['RUNTIME_DIR']) / 'state/runtime-exit.json'
+    instance = None
+    try:
+        save_json(path, {'state': 'starting', 'pid': os.getpid(), 'at': time.time()})
+        instance = Runtime(config)
+        instance.run()
+    except BaseException as error:
+        phase = getattr(instance, 'failure_phase', getattr(instance, 'phase', 'initialization'))
+        save_json(path, {'state': 'exited', 'pid': os.getpid(), 'at': time.time(),
+                         'phase': phase, 'exit_code': 1, 'exception_type': safe_exception_type(error)})
+        if not isinstance(error, Exception):
+            raise RuntimeError('Runtime interrupted; inspect private exit receipt') from None
+        raise
+    else:
+        save_json(path, {'state': 'exited', 'pid': os.getpid(), 'at': time.time(),
+                         'phase': 'shutdown', 'exit_code': 0, 'exception_type': None})
+
+
+def confirm_stopped(root):
+    """PID disappearance alone is not evidence of completed owned cleanup."""
+    (root / 'state').mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (root / 'state/runtime.lock').open('a') as lockfile:
+        try:
+            fcntl.flock(lockfile, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError('Runtime cleanup unconfirmed: supervisor lock held') from None
+        if ((root / 'state/pid.json').exists() or (root / 'state/orchestration-active.json').exists()
+                or load_json(root / 'state/status.json', {}).get('stopped') is not True):
+            raise ValueError('Runtime cleanup unconfirmed: inspect local state; holds require explicit clearance')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', default=str(Path(__file__).resolve().parent / 'runtime.env'))
+    parser.add_argument('--startup-diagnostic', help=argparse.SUPPRESS)
     parser.add_argument('action', choices=('run', 'start', 'stop', 'status', 'check', 'resume-background', 'clear-orchestration-pause'))
     args = parser.parse_args()
     os.umask(0o077)
-    config = read_config(args.config)
+    try:
+        config = read_config(args.config)
+    except Exception as error:
+        # Detached start already validated the root. Record a config read/race
+        # failure there even when the child cannot construct a Runtime.
+        if args.action == 'run' and args.startup_diagnostic:
+            save_json(args.startup_diagnostic, {'state': 'exited', 'pid': os.getpid(), 'at': time.time(),
+                      'phase': 'configuration', 'exit_code': 1, 'exception_type': safe_exception_type(error)})
+        raise
     root = Path(config['RUNTIME_DIR']).resolve()
     root.mkdir(parents=True, exist_ok=True)
     if args.action == 'check':
@@ -913,6 +1002,7 @@ def main():
     if args.action == 'status':
         state = load_json(root / 'state/status.json', {})
         state['running'] = verified_pid(root) is not None
+        state['runtime_exit'] = load_json(root / 'state/runtime-exit.json')
         state['status_stale'] = time.time() - state.get('updated_at', 0) > max(20, float(config['POLL_SECONDS']) * 4)
         print(json.dumps(state, indent=2))
         return
@@ -925,28 +1015,46 @@ def main():
                 time.sleep(0.2)
             if verified_pid(root):
                 raise ValueError('Runtime did not stop within 25 seconds; inspect process state')
-        print('Runtime stopped')
+        confirm_stopped(root)
+        print('Runtime stopped' + ('; orchestration pause still requires explicit clearance'
+                                  if (root / 'state/orchestration-pause.json').exists() else ''))
         return
     if args.action == 'start':
         if verified_pid(root):
             print('Runtime already running')
             return
-        process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '--config', str(Path(args.config).resolve()), 'run'],
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        diagnostic = root / 'state/runtime-exit.json'
+        try:
+            process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '--config', str(Path(args.config).resolve()),
+                                        '--startup-diagnostic', str(diagnostic), 'run'],
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError as error:
+            save_json(diagnostic, {'state': 'exited', 'pid': None, 'at': time.time(),
+                                  'phase': 'spawn', 'exit_code': 1, 'exception_type': safe_exception_type(error)})
+            raise
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                raise ValueError('Runtime failed to start; run in foreground to inspect configuration/bind error')
-            if verified_pid(root):
+                raise ValueError('Runtime failed to start; inspect private state/runtime-exit.json and logs/runtime.log')
+            if verified_pid(root) == process.pid:
                 print('Runtime process started; use status to verify backend readiness')
                 return
             time.sleep(0.1)
         raise ValueError('Runtime startup not confirmed; inspect status before retrying')
-    Runtime(config).run()
+    run_runtime(config)
+
+
+def entrypoint():
+    try:
+        main()
+    except BaseException as error:
+        if isinstance(error, SystemExit) and error.code in (None, 0):
+            return 0  # argparse --help
+        # Foreground and detached startup use the same fixed-only error boundary.
+        print('Runtime command failed (' + safe_exception_type(error) + '); inspect private state/runtime-exit.json and logs/runtime.log', file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    except (ValueError, KeyError, OSError) as error:
-        sys.exit(str(error))
+    sys.exit(entrypoint())
