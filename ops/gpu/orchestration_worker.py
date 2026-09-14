@@ -84,11 +84,21 @@ def validate_config(c):
             raise ValueError(f'{name} executable must be absolute')
         c[name] = command
     for name, default, upper in [('ORCHESTRATION_WARM_IDLE_SECONDS', '300', 3600),
+                                 ('ORCHESTRATION_WARM_HEALTH_SECONDS', '30', 300),
                                  ('COMFY_STAGE_TIMEOUT_SECONDS', '3600', 7200),
                                  ('COMFY_MAX_ARTIFACT_BYTES', str(256 * 1024**2), 1024**3)]:
         value = float(c.get(name, default))
         if not math.isfinite(value) or not 0 < value <= upper:
             raise ValueError(f'{name} is outside its finite budget')
+    # Opt-in only. The finite idle budget above stays the default and is still
+    # validated, so an unset or malformed flag keeps the existing expiry.
+    if c.get('ORCHESTRATION_WARM_PERSISTENT', '0') not in ('0', '1'):
+        raise ValueError('ORCHESTRATION_WARM_PERSISTENT must be 0 or 1')
+    if c.get('ORCHESTRATION_WARM_PERSISTENT') == '1' and (
+            c.get('GPU_OWNERSHIP_SCOPE') != 'exclusive-container' or not c.get('GPU_OWNERSHIP_UUID') or
+            len(c.get('GPU_OWNERSHIP_BASIS', '').strip()) < 20):
+        raise ValueError('Persistent warm idle holds device memory indefinitely and requires the '
+                         'exclusive-container ownership attestation')
     ports = [int(c[k]) for k in ('GATEWAY_PORT', 'BACKEND_PORT')]
     for name, default in [('COMFY_GPU_PORT', '8190'), ('COMFY_CPU_PORT', '8189')]:
         number = int(c.get(name, default))

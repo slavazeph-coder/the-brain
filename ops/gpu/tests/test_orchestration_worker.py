@@ -345,6 +345,139 @@ class OrchestrationTests(unittest.TestCase):
                 self.assertFalse(instance.orchestration_worker.reconciled)
                 self.assertFalse((Path(tmp) / 'state/orchestration-active.json').exists())
 
+    def warm_config(self, root, **overrides):
+        """Attested single-owner fixture; a local attestation proves no host ownership."""
+        c = self.config(root)
+        c.update(INFERENCE_COMMAND=['/bin/sleep', '60'], GPU_OWNERSHIP_SCOPE='exclusive-container',
+                 GPU_OWNERSHIP_UUID='GPU-controlled-local-fixture',
+                 GPU_OWNERSHIP_BASIS='controlled local fixture attestation, not host evidence',
+                 ORCHESTRATION_WARM_HEALTH_SECONDS='0.01', **overrides)
+        validate_config(c)
+        return c
+
+    def warm_patches(self, instance, health=True):
+        return (patch.object(instance, 'orchestration_ownership_verified', return_value=True),
+                patch.object(instance, 'port_occupied', return_value=False),
+                patch('runtime.gpu_snapshot', return_value={'available': True, 'devices': []}),
+                patch.object(instance, 'health', return_value=health))
+
+    def retained(self, instance, job_id='persistent'):
+        """Bring an owned inference child to the retained idle state."""
+        cancel = threading.Event()
+        instance.orchestration_begin({'id': job_id, 'kind': 'inference', 'lease': {'token': 't' * 40}}, cancel)
+        instance.orchestration_start_child('inference', cancel)
+        pid = instance.inference.pid
+        instance.orchestration_end(keep_inference=True)
+        self.assertTrue(instance.warm_resident())
+        return cancel, pid
+
+    def test_persistent_warm_idle_keeps_healthy_model_past_an_elapsed_finite_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = self.warm_config(Path(tmp), ORCHESTRATION_WARM_IDLE_SECONDS='0.01',
+                                 ORCHESTRATION_WARM_PERSISTENT='1')
+            instance = runtime.Runtime(c)
+            instance.orchestration_worker = SimpleNamespace(reconciled=True)
+            ownership, ports, snapshot, health = self.warm_patches(instance)
+            with ownership, ports, snapshot, health:
+                _, pid = self.retained(instance)
+                probes = instance.health.call_count
+                time.sleep(0.05)
+                for _ in range(3):
+                    instance.tick()
+                # The finite budget lapsed long ago; only the clock was removed.
+                self.assertEqual(instance.inference.pid, pid)
+                self.assertTrue(instance.warm_resident())
+                self.assertTrue(instance.orchestration_worker.reconciled)
+                self.assertTrue((Path(tmp) / 'state/orchestration-active.json').exists())
+                state = json.loads((Path(tmp) / 'state/status.json').read_text())
+                self.assertTrue(state['orchestration_warm_persistent'] and state['orchestration_warm_resident'])
+                self.assertIsNone(state['orchestration_warm_idle_remaining'], 'no infinite budget in JSON')
+                # Retention is passive: liveness probes only, never a keepalive completion.
+                self.assertGreater(instance.health.call_count, probes)
+                self.assertEqual((instance.completed, instance.failed), (0, 0))
+                instance.orchestration_end()
+            self.assertIsNone(instance.inference)
+
+    def test_persistent_retention_still_releases_on_handoff_fault_and_operator_stop(self):
+        for case in ('video_handoff', 'cancellation', 'ownership_fault', 'operator_stop'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                c = self.warm_config(Path(tmp), ORCHESTRATION_WARM_PERSISTENT='1')
+                instance = runtime.Runtime(c)
+                ownership, ports, snapshot, health = self.warm_patches(instance)
+                with ownership, ports, snapshot, health:
+                    cancel, pid = self.retained(instance, case)
+                    if case == 'video_handoff':
+                        instance.orchestration_begin({'id': 'render', 'kind': 'video', 'lease': {'token': 'v' * 40}}, cancel)
+                    elif case == 'cancellation':
+                        instance.orchestration_cancel = cancel
+                        instance.orchestration_cancel_owned()
+                    elif case == 'ownership_fault':
+                        instance.orchestration_ownership_verified.return_value = False
+                        instance.tick()
+                        self.assertTrue(instance.orchestration_paused)
+                    else:
+                        instance.stop.set()
+                        instance.orchestration_end(keep_inference=True)  # Shutdown never re-retains.
+                    self.assertIsNone(instance.inference)
+                    self.assertFalse(instance.backend_ready)
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(pid, 0)
+                    if case == 'operator_stop':
+                        self.assertFalse((Path(tmp) / 'state/orchestration-active.json').exists())
+                    instance.orchestration_end()
+                    self.assertFalse((Path(tmp) / 'state/orchestration-active.json').exists())
+
+    def test_stale_idle_health_cannot_override_a_new_lease_epoch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = self.warm_config(Path(tmp), ORCHESTRATION_WARM_PERSISTENT='1')
+            instance = runtime.Runtime(c)
+            ownership, ports, snapshot, health = self.warm_patches(instance)
+            with ownership, ports, snapshot, health:
+                self.retained(instance)
+                def completed_during_probe():
+                    instance.orchestration_begin({'id': 'next-job', 'kind': 'inference'}, threading.Event())
+                    instance.orchestration_end(keep_inference=True)
+                    return False
+                instance.health.side_effect = completed_during_probe
+                instance.warm_health_next = 0
+                instance.tick()
+                self.assertEqual(instance.warm_health_failures, 0)
+                self.assertTrue(instance.warm_resident())
+                instance.orchestration_end()
+
+    def test_persistent_retention_releases_a_hung_backend_after_the_health_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = self.warm_config(Path(tmp), ORCHESTRATION_WARM_PERSISTENT='1')
+            instance = runtime.Runtime(c)
+            instance.orchestration_worker = SimpleNamespace(reconciled=True)
+            ownership, ports, snapshot, health = self.warm_patches(instance)
+            with ownership, ports, snapshot, health:
+                _, pid = self.retained(instance)
+                instance.health.return_value = False  # Process alive, backend wedged.
+                for _ in range(int(c['HEALTH_FAILURE_LIMIT'])):
+                    self.assertIsNotNone(instance.inference, 'a single blip must not unload the model')
+                    time.sleep(0.02)
+                    instance.tick()
+                self.assertIsNone(instance.inference)
+                self.assertEqual(instance.warm_health_failures, int(c['HEALTH_FAILURE_LIMIT']))
+                self.assertFalse(instance.orchestration_worker.reconciled)
+                self.assertFalse((Path(tmp) / 'state/orchestration-active.json').exists())
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(pid, 0)
+
+    def test_persistent_warm_idle_is_opt_in_and_requires_the_ownership_attestation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            c = self.warm_config(Path(tmp))
+            self.assertFalse(runtime.Runtime(c).orchestration_warm_persistent, 'default stays finite')
+            for change in [{'ORCHESTRATION_WARM_PERSISTENT': 'yes'}, {'ORCHESTRATION_WARM_PERSISTENT': '2'},
+                           {'ORCHESTRATION_WARM_PERSISTENT': '1', 'GPU_OWNERSHIP_SCOPE': 'shared'},
+                           {'ORCHESTRATION_WARM_PERSISTENT': '1', 'GPU_OWNERSHIP_UUID': ''},
+                           {'ORCHESTRATION_WARM_PERSISTENT': '1', 'GPU_OWNERSHIP_BASIS': 'short'},
+                           {'ORCHESTRATION_WARM_HEALTH_SECONDS': '0'},
+                           {'ORCHESTRATION_WARM_HEALTH_SECONDS': '301'},
+                           {'ORCHESTRATION_WARM_IDLE_SECONDS': '3601'}]:
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    validate_config(dict(c, **change))
 
     def test_hardware_classifier_ignores_healthy_startup_banners(self):
         for message in ('Using CUDA device: NVIDIA RTX4090', 'Initialized NVML',

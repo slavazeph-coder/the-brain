@@ -148,6 +148,10 @@ class Runtime:
         self.orchestration_cancel = None
         self.orchestration_worker = None
         self.orchestration_warm_until = 0
+        self.orchestration_warm_persistent = config.get('ORCHESTRATION_WARM_PERSISTENT', '0') == '1'
+        self.warm_health_next = 0
+        self.warm_health_failures = 0
+        self.warm_epoch = 0
         self.orchestration_paused = bool(load_json(self.root / 'state/orchestration-pause.json', False))
         if self.orchestration_enabled and load_json(self.root / 'state/orchestration-active.json', False):
             self.orchestration_paused = True
@@ -437,15 +441,34 @@ class Runtime:
             for kind in list(self.orchestration_children):
                 self.orchestration_stop_child(kind)
 
+    def warm_resident(self):
+        """Caller holds lock: exactly one retained, healthy, unleased inference child."""
+        child = self.orchestration_children.get('inference')
+        return (not self.orchestration_job and self.backend_ready and child is not None and
+                child is self.inference and child.poll() is None and
+                set(self.orchestration_children) == {'inference'})
+
     def orchestration_end(self, keep_inference=False):
         with self.lock:
+            self.warm_epoch += 1
             keep = (keep_inference and not self.stop.is_set() and not self.orchestration_paused and
                     self.inference and self.inference.poll() is None and self.backend_ready and
                     self.active_foreground == 0 and not (self.orchestration_cancel and self.orchestration_cancel.is_set()))
             for kind in list(self.orchestration_children):
                 if not (keep and kind == 'inference'):
                     self.orchestration_stop_child(kind)
-            self.orchestration_warm_until = time.monotonic() + float(self.c.get('ORCHESTRATION_WARM_IDLE_SECONDS', '300')) if keep else 0
+            # Persistent retention removes only the idle clock. Handoff, cancellation,
+            # health/ownership faults, operator stop and shutdown still release below.
+            now = time.monotonic()
+            if not keep:
+                self.orchestration_warm_until = 0
+            elif self.orchestration_warm_persistent:
+                self.orchestration_warm_until = math.inf
+            else:
+                self.orchestration_warm_until = now + float(self.c.get('ORCHESTRATION_WARM_IDLE_SECONDS', '300'))
+            if keep:
+                self.warm_health_next = now + float(self.c.get('ORCHESTRATION_WARM_HEALTH_SECONDS', '30'))
+                self.warm_health_failures = 0
             self.orchestration_job = None
             self.orchestration_cancel = None
             if keep:
@@ -457,11 +480,27 @@ class Runtime:
     def tick_orchestration(self):
         self.gpu = gpu_snapshot()
         with self.lock:
+            probe = self.orchestration_warm_persistent and self.warm_resident() and time.monotonic() >= self.warm_health_next
+            probe_child, probe_epoch = self.inference, self.warm_epoch
+        # HTTP liveness only, outside the lock; this does not prove generation.
+        # Productive jobs retain bounded deadlines and release children on failure.
+        # Never submit an unleased keepalive completion here.
+        healthy = self.health() if probe else None
+        now = time.monotonic()
+        with self.lock:
+            if (probe and self.warm_resident() and self.inference is probe_child
+                    and self.warm_epoch == probe_epoch):
+                self.warm_health_next = now + float(self.c.get('ORCHESTRATION_WARM_HEALTH_SECONDS', '30'))
+                self.warm_health_failures = 0 if healthy else self.warm_health_failures + 1
+                if self.warm_health_failures >= int(self.c['HEALTH_FAILURE_LIMIT']):
+                    self.log.warning('retained idle model failed %d health probes; releasing owned child',
+                                     self.warm_health_failures)
+                    self.orchestration_warm_until = 0
             if self.orchestration_children and (not self.gpu['available'] or
                     not self.orchestration_ownership_verified([p.pid for p in self.orchestration_children.values()])):
                 self.orchestration_hardware_fault('GPU ownership or NVML unavailable during active job')
             if self.inference and not self.orchestration_job and (
-                    self.inference.poll() is not None or time.monotonic() >= self.orchestration_warm_until):
+                    self.inference.poll() is not None or now >= self.orchestration_warm_until):
                 self.orchestration_end()
                 if self.orchestration_worker:
                     self.orchestration_worker.reconciled = False
@@ -581,6 +620,12 @@ class Runtime:
                 'orchestration_enabled': self.orchestration_enabled,
                 'orchestration_paused': self.orchestration_paused,
                 'orchestration_job': self.orchestration_job['id'] if self.orchestration_job else None,
+                'orchestration_warm_persistent': self.orchestration_warm_persistent,
+                'orchestration_warm_resident': self.warm_resident(),
+                'orchestration_warm_health_failures': self.warm_health_failures,
+                # Never serialize an infinite retention budget into JSON.
+                'orchestration_warm_idle_remaining': None if self.orchestration_warm_persistent or not self.warm_resident()
+                else round(max(0.0, self.orchestration_warm_until - time.monotonic()), 1),
                 'orchestration_children': {kind: child.pid for kind, child in self.orchestration_children.items()}}
 
     def run(self):

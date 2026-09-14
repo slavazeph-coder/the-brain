@@ -1,5 +1,16 @@
 # Private orchestration: local verification and coordinated cutover
 
+## Opt-in persistent idle model
+
+`ORCHESTRATION_WARM_PERSISTENT=1` retains the attested owned model after a successful
+lease instead of unloading on the idle clock. It creates no synthetic keepalive
+jobs. HTTP health checks establish liveness only, not successful generation.
+Productive jobs retain their timeouts, cancellation, and failure cleanup.
+Video handoff still drains inference. Ownership/NVML uncertainty still fails
+closed immediately; this is deliberately not weakened to increase apparent uptime.
+Unclean restart while resident preserves the manual reconciliation hold.
+This option reduces ordinary idle cold starts; it does not guarantee 24/7 recovery.
+
 This document describes a future operator action. This implementation session
 does not deploy, push, stop remote processes, inspect production credentials,
 or change host configuration. Local fixtures are not live GPU evidence.
