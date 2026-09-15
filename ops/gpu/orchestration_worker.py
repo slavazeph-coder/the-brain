@@ -161,9 +161,26 @@ def connection_deadline(connection, seconds):
 
 
 HEARTBEAT_REQUEST_SECONDS = 5.0
+# A single transient transport hiccup must not destroy a long-running render.
+# The independent local lease timer (arm_lease_deadline) remains the authority
+# on ownership: it still stops every owned child at the original expiry, so
+# tolerating a bounded run of failed RENEWALS never extends ownership past the
+# lease the server last granted. Long HQ renders issue thousands of heartbeats,
+# so aborting on the first failure made multi-minute jobs effectively
+# impossible.
+HEARTBEAT_FAILURE_BUDGET = 5
+# A renewal is only worth retrying when enough lease remains to fit another
+# full bounded request. With a production 30s lease a blip is absorbed; with a
+# lease already nearly spent a retry could not land in time, so we still stop
+# immediately rather than pretend to renew.
+HEARTBEAT_TOLERANCE_MIN_REMAINING = 2 * 5.0
 # Allow the bounded request to finish unwinding before treating a still-live
 # heartbeat thread (for example, blocked in DNS) as completion uncertainty.
 HEARTBEAT_DRAIN_SECONDS = HEARTBEAT_REQUEST_SECONDS + 0.1
+# An absent GPU is a host-level fault, not a transient one. Polling it at the
+# normal 1s cadence produced ~86k identical warnings per day and hid the cause;
+# a slow retry keeps the worker responsive to recovery without the noise.
+HARDWARE_RETRY_SECONDS = 30
 
 
 def heartbeat_request_budget(expires_at, now):
@@ -438,12 +455,29 @@ class OrchestrationWorker:
         self.pause_reported = False
 
     def run(self):
+        hardware_reported = False
         while not self.runtime.stop.is_set():
+            delay = 1
             try:
                 self.once()
+                hardware_reported = False
+            except HardwareFault:
+                # The device is gone (left the bus / unreadable). Retrying at
+                # 1 Hz only buries the cause under noise, so report the fault
+                # once and poll slowly until an operator restores the device.
+                if not hardware_reported:
+                    try:
+                        self.client.request('POST', '/fault', {'category': 'hardware',
+                            'message': 'GPU unavailable; ownership unverifiable',
+                            'quiescent': self.runtime.orchestration_quiescent()})
+                    except (TransportFault, LeaseLost, ValueError, KeyError, HardwareFault):
+                        pass  # Keep local evidence; never let reporting kill the loop.
+                    hardware_reported = True
+                    self.runtime.log.warning('orchestration hardware fault (%s)', 'gpu_absent')
+                delay = HARDWARE_RETRY_SECONDS
             except (TransportFault, LeaseLost, ValueError, KeyError) as error:
                 self.runtime.log.warning('orchestration poll failed (%s)', type(error).__name__)
-            self.runtime.stop.wait(1)
+            self.runtime.stop.wait(delay)
 
     def once(self):
         runtime = self.runtime
@@ -456,6 +490,11 @@ class OrchestrationWorker:
             return
         if not self.reconciled:
             if not runtime.orchestration_quiescent():
+                # An absent device is a host fault, not a state the worker can
+                # clear by retrying. Say so once and back off, instead of
+                # raising a ValueError that /run swallows every second.
+                if not runtime.orchestration_gpu_present():
+                    raise HardwareFault('GPU unavailable; ownership unverifiable')
                 raise ValueError('Worker must be quiescent before reconciliation')
             self.client.request('POST', '/reconcile', {'quiescent': True, 'reason': 'Owned processes stopped; runtime clean'})
             self.reconciled = True
@@ -486,6 +525,7 @@ class OrchestrationWorker:
             raise
         completed = False
         heartbeat_stop = threading.Event()
+        heartbeat_failures = [0]
         abort_reason = [None]
         retain = job['kind'] in ('inference', 'research', 'research_draft')
         def abort_owned(reason='lease_expired'):
@@ -529,6 +569,20 @@ class OrchestrationWorker:
                             deadline[0] = lease['expiresAt'] / 1000
                             arm_lease_deadline()
                 except (TransportFault, LeaseLost, ValueError, KeyError) as error:
+                    # A transient transport failure is NOT ownership loss: the
+                    # independent lease timer still stops every owned child at
+                    # the last granted expiry. So tolerate a bounded run of
+                    # failed renewals — one network blip must not destroy a
+                    # multi-hour render. Sustained failure, a non-transport
+                    # fault, or the local deadline all still abort immediately.
+                    if isinstance(error, TransportFault) and not isinstance(error, LeaseLost):
+                        heartbeat_failures[0] += 1
+                        if (heartbeat_failures[0] <= HEARTBEAT_FAILURE_BUDGET
+                                and time.time() < deadline[0]
+                                and deadline[0] - time.time() >= HEARTBEAT_TOLERANCE_MIN_REMAINING):
+                            runtime.log.warning('orchestration heartbeat retry (%s/%d)',
+                                                transport_subtype(error), heartbeat_failures[0])
+                            continue
                     # On any uncertainty stop now. The scheduler owns bounded retries.
                     reason = ('heartbeat_lease_lost' if isinstance(error, LeaseLost) else
                               'heartbeat_transport_' + transport_subtype(error) if isinstance(error, TransportFault) else 'heartbeat_invalid')
@@ -537,6 +591,7 @@ class OrchestrationWorker:
                     # owned work first; never log exceptions or request data.
                     runtime.log.warning('orchestration heartbeat failed (%s)', reason)
                     return
+                heartbeat_failures[0] = 0
                 if time.time() >= deadline[0]:
                     abort_owned()
                     return

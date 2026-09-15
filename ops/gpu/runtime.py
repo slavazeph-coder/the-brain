@@ -194,7 +194,7 @@ class Runtime:
         elif kind in ('comfy_gpu', 'comfy_cpu'):
             env['COMFY_PORT'] = self.c.get('COMFY_GPU_PORT' if kind == 'comfy_gpu' else 'COMFY_CPU_PORT',
                                           '8190' if kind == 'comfy_gpu' else '8189')
-            if kind == 'comfy_cpu':
+            if kind == 'comfy_cpu' and self.c.get('COMFY_GPU_DECODE', '0') != '1':
                 env['CUDA_VISIBLE_DEVICES'] = ''
         return env
 
@@ -315,6 +315,15 @@ class Runtime:
             return True
         except (OSError, subprocess.SubprocessError, ValueError):
             return False
+
+    def orchestration_gpu_present(self):
+        # A device that has left the bus reports available=False with no
+        # devices. That is a host-level fault the worker cannot reconcile its
+        # way out of, so it must be classified apart from ordinary
+        # non-quiescence -- otherwise the poll loop spins silently forever
+        # against an absent device instead of reporting a hardware fault.
+        snapshot = gpu_snapshot()
+        return bool(snapshot['available']) and len(snapshot['devices']) == 1
 
     def orchestration_quiescent(self, allow_warm=False):
         with self.lock:
