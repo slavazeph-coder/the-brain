@@ -8,6 +8,11 @@ const MAX_BODY = 256 * 1024;
 const MAX_ATTEMPTS = 3;
 const MAX_PENDING = 200;
 const WARMUP_DEADLINE_MS = 180_000;
+// How long a paid order may sit undelivered before it is reported as overdue.
+// The point of a deadline is that silence becomes visible without anyone
+// remembering to look: an order that is merely "old" is invisible, while an
+// order that is OVERDUE is a fact the owner view can count.
+const DELIVERY_DEADLINE_MS = 7 * 24 * 60 * 60 * 1000;
 const activeStatuses = new Set(['generating', 'decoding']);
 const json = value => JSON.stringify(value);
 const parse = value => value === null ? null : JSON.parse(value);
@@ -116,6 +121,12 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         CREATE TABLE IF NOT EXISTS billing_subscriptions (
           subscription_id TEXT PRIMARY KEY, customer TEXT, email TEXT, plan TEXT,
           status TEXT NOT NULL, updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS delivery_receipts (
+          operation_id TEXT PRIMARY KEY, session_id TEXT, kind TEXT NOT NULL,
+          promised_artifact TEXT NOT NULL, state TEXT NOT NULL,
+          evidence_locator TEXT, artifact_sha256 TEXT,
+          deadline_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL, delivered_at INTEGER);
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_update BEFORE UPDATE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_delete BEFORE DELETE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
         CREATE TRIGGER IF NOT EXISTS approvals_immutable_update BEFORE UPDATE ON orchestration_approvals BEGIN SELECT RAISE(ABORT,'immutable_approval'); END;
@@ -177,7 +188,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     }
     const obj = value?.data?.object ?? {};
     const meta = obj.metadata ?? {};
-    const out = { recorded: true, type, order: null, subscription: null };
+    const out = { recorded: true, type, order: null, subscription: null, delivery: null };
 
     transaction(() => {
       run('INSERT INTO billing_events(id,type,received_at) VALUES(?,?,?)', id, type, now());
@@ -203,6 +214,14 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
           sessionId, kind, email, String(obj.customer ?? '') || null, amount, currency,
           kind === 'video-order' ? 'paid_awaiting_assets' : 'paid', now(), now());
         out.order = { sessionId, kind, email, amount, currency, jobId: null };
+        // The promise opens in the SAME transaction as the payment record: there
+        // must be no window in which we hold money and nothing tracks what it
+        // bought.
+        const promised = String(meta.deliverable ?? (kind === 'video-order'
+          ? 'AI product b-roll video built from the buyer-supplied product photo'
+          : kind === 'subscription' ? 'subscription access' : 'purchased deliverable'));
+        out.delivery = openDeliveryReceipt({
+          operationId: `session:${sessionId}`, sessionId, kind, promisedArtifact: promised });
         if (obj.subscription) upsertSubscription(String(obj.subscription), obj.customer, email, meta.plan, 'active');
       } else if (type.startsWith('customer.subscription.')) {
         const subscriptionId = String(obj.id ?? '');
@@ -230,6 +249,94 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
                    FROM billing_orders ORDER BY created_at DESC LIMIT 10`),
     };
   }
+  // ----------------------------------------------------------------
+  // DELIVERY ATTESTATION
+  // ----------------------------------------------------------------
+  // Recording that a payment ARRIVED is only half the job. An operator who
+  // watches payment volume sees "18 confirmed transactions" and never notices
+  // that zero artifacts were produced -- the whole failure lives in the gap
+  // between payment accepted and work delivered. Settlement proves the money
+  // moved; it proves nothing about the thing that was sold.
+  //
+  // So every paid order opens a receipt naming what was promised and by when,
+  // and reconciliation counts the gap by operation id. Two deliberate rules:
+  // a receipt is never marked delivered without an evidence locator (an
+  // unverifiable claim of delivery is worth exactly as much as no claim), and
+  // deadlines are evaluated on READ, so a stalled order surfaces without a
+  // background timer anyone has to remember to keep alive.
+
+  function receiptView(row) {
+    if (!row) return null;
+    return { operationId: row.operation_id, sessionId: row.session_id, kind: row.kind,
+      promisedArtifact: row.promised_artifact, state: row.state,
+      evidenceLocator: row.evidence_locator, artifactSha256: row.artifact_sha256,
+      deadlineAt: row.deadline_at, createdAt: row.created_at, updatedAt: row.updated_at,
+      deliveredAt: row.delivered_at };
+  }
+
+  function openDeliveryReceipt({ operationId, sessionId, kind, promisedArtifact, deadlineAt = null }) {
+    if (!configured || closed) return null;
+    const id = String(operationId ?? '');
+    if (!id) return null;
+    const existing = get('SELECT * FROM delivery_receipts WHERE operation_id=?', id);
+    if (existing) return receiptView(existing);
+    run(`INSERT INTO delivery_receipts(operation_id,session_id,kind,promised_artifact,state,
+             evidence_locator,artifact_sha256,deadline_at,created_at,updated_at,delivered_at)
+         VALUES(?,?,?,?,'awaiting_assets',NULL,NULL,?,?,?,NULL)`,
+      id, sessionId ? String(sessionId) : null, String(kind ?? 'order'),
+      String(promisedArtifact ?? 'unspecified deliverable'),
+      Number.isFinite(deadlineAt) ? deadlineAt : now() + DELIVERY_DEADLINE_MS, now(), now());
+    event('delivery_opened', { operationId: id, kind: kind ?? null, sessionId: sessionId ?? null });
+    return receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id));
+  }
+
+  function claimDelivery(operationId, value = {}) {
+    if (!configured || closed) return { claimed: false, reason: 'unconfigured' };
+    const id = String(operationId ?? '');
+    const row = get('SELECT * FROM delivery_receipts WHERE operation_id=?', id);
+    if (!row) return { claimed: false, reason: 'unknown_operation' };
+    // Idempotent: a replayed webhook or a retried caller cannot double-deliver.
+    if (row.state === 'delivered') return { claimed: false, duplicate: true, receipt: receiptView(row) };
+    const locator = typeof value.evidenceLocator === 'string' ? value.evidenceLocator.trim() : '';
+    if (!locator) return { claimed: false, reason: 'evidence_required' };
+    const sha = typeof value.sha256 === 'string' ? value.sha256 : '';
+    if (sha && !/^[a-f0-9]{64}$/.test(sha)) return { claimed: false, reason: 'invalid_digest' };
+    run(`UPDATE delivery_receipts SET state='delivered', evidence_locator=?, artifact_sha256=?,
+             delivered_at=?, updated_at=? WHERE operation_id=?`,
+      locator.slice(0, 2000), sha || null, now(), now(), id);
+    event('delivery_claimed', { operationId: id, evidenceLocator: locator.slice(0, 2000), sha256: sha || null });
+    return { claimed: true, receipt: receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id)) };
+  }
+
+  // Intentionally NOT wrapped in transaction(): snapshot() already holds one, and
+  // a nested BEGIN throws. The UPDATE is a single atomic statement anyway.
+  function reconcileDeliveries(at = now()) {
+    if (!configured || closed) return { configured: false };
+    run(`UPDATE delivery_receipts SET state='overdue', updated_at=?
+         WHERE state IN ('awaiting_assets','in_production') AND deadline_at<=?`, at, at);
+    const counts = {};
+    for (const row of all('SELECT state, COUNT(*) AS n FROM delivery_receipts GROUP BY state')) counts[row.state] = row.n;
+    return counts;
+  }
+
+  // The number that matters: paid minus delivered. Counting payments alone is how
+  // an operator can take 18 of them, publish nothing, and not find out for days.
+  function deliveryLedger() {
+    if (!configured || closed) {
+      return { configured: false, paid: 0, delivered: 0, undelivered: 0, overdue: 0, states: {}, gap: [] };
+    }
+    const paid = get('SELECT COUNT(*) AS n FROM billing_orders').n;
+    const states = reconcileDeliveries();
+    const delivered = states.delivered ?? 0;
+    const gap = all(`SELECT operation_id AS operationId, session_id AS sessionId, kind,
+                            promised_artifact AS promisedArtifact, state,
+                            deadline_at AS deadlineAt, created_at AS createdAt
+                     FROM delivery_receipts WHERE state<>'delivered'
+                     ORDER BY deadline_at ASC LIMIT 50`);
+    return { configured: true, paid, delivered, undelivered: paid - delivered,
+             overdue: states.overdue ?? 0, states, gap };
+  }
+
   const rawJob = id => get('SELECT * FROM orchestration_jobs WHERE id=?', id);
   function quarantine(job, reason, hardware = false) {
     run('UPDATE orchestration_jobs SET status=?,error=?,lease_token=NULL,lease_expires=NULL,updated_at=? WHERE id=?', 'paused', reason, now(), job.id);
@@ -277,6 +384,10 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         // Orders/subscriptions ride along with the owner status, so the ops view
         // can show money that actually came in rather than only jobs that ran.
         billing: billingSummary(),
+        // Paid vs delivered, so the ops view can show the GAP rather than only
+        // the money that came in. A payment count with no delivery count is the
+        // blind spot that lets orders be taken and silently never fulfilled.
+        deliveries: deliveryLedger(),
         jobs: all('SELECT * FROM orchestration_jobs ORDER BY created_at DESC,rowid DESC LIMIT 200').map(row => jobView(row)),
         control: control(),
         workerContacts: all('SELECT worker AS workerId,last_seen_at AS lastSeenAt FROM orchestration_worker_contacts ORDER BY last_seen_at DESC'),
@@ -318,6 +429,8 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
   function ownerAction(method, path, value) {
     if (method === 'GET' && path === '/status') return { status: 200, body: snapshot() };
     if (method === 'GET' && path === '/billing') return { status: 200, body: billingSummary() };
+    if (method === 'GET' && path === '/deliveries') return { status: 200, body: deliveryLedger() };
+    if (method === 'GET' && path === '/deliveries/gap') return { status: 200, body: deliveryLedger().gap };
     return transaction(() => {
       reap();
       if (method === 'POST' && path === '/jobs') { const result = submit(value); return { status: result.duplicate ? 200 : 201, body: result }; }
@@ -530,5 +643,5 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     });
   }
   function close() { if (closed) return; closed = true; for (const stop of [...pending]) stop(); db?.close(); }
-  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close, recordBillingEvent, billingSummary };
+  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close, recordBillingEvent, billingSummary, openDeliveryReceipt, claimDelivery, deliveryLedger };
 }
