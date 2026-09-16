@@ -545,6 +545,47 @@ for (const action of ['fail', 'fault']) test(`OPS-001 contact failure preserves 
   assert.equal(reconciled.body.control.gpuQuarantined, true);
 });
 
+test('a superseded queued job can be retired instead of being rendered again', async t => {
+  const f = await fixture(t); const job = await f.submit('superseded');
+  const cancelled = await f.call('owner', `/jobs/${job.id}/cancel`, { reason: 'output already exists byte-identical and is published' });
+  assert.equal(cancelled.status, 200);
+  assert.equal(cancelled.body.cancelled, true);
+  assert.equal(cancelled.body.job.status, 'cancelled');
+  assert.match(cancelled.body.job.error, /^cancelled: /);
+  // It leaves the work queue rather than merely being hidden from the view...
+  assert.equal((await f.call('worker', '/next')).body.job, null);
+  // ...and it is not reported as a failure: work never attempted did not fail.
+  const snapshot = f.scheduler().snapshot();
+  assert.equal(snapshot.metrics.failed, 0);
+  assert.equal(snapshot.jobs[0].status, 'cancelled');
+});
+
+test('cancel refuses work that already started or already ran, and demands a reason', async t => {
+  const f = await fixture(t); const job = await f.submit('leased');
+  assert.equal((await f.call('owner', `/jobs/${job.id}/cancel`, { reason: 'short' })).status, 400);
+  const leased = (await f.call('worker', '/next')).body.job;
+  const refused = await f.call('owner', `/jobs/${job.id}/cancel`, { reason: 'racing the worker running it' });
+  assert.equal(refused.status, 409); assert.equal(refused.body.error, 'job_not_cancellable');
+  // A refused cancel must not disturb the worker holding the lease.
+  assert.equal((await f.call('worker', `/jobs/${job.id}/heartbeat`, { token: leased.lease.token })).status, 200);
+  await f.call('worker', `/jobs/${job.id}/complete`, { quiescent: true, token: leased.lease.token, result: { rendered: true }, artifacts: [{ sha256: SHA, uri: `sha256:${SHA}`, bytes: 10, mediaType: 'video/mp4' }] });
+  assert.equal((await f.call('owner', `/jobs/${job.id}/cancel`, { reason: 'work that already ran is not erasable' })).status, 409);
+});
+
+test('a worker is handed research work it can do while video waits behind it', async t => {
+  const f = await fixture(t);
+  const video = await f.submit('video-ahead');
+  const research = await f.submit('research-behind', 'research', RESEARCH);
+  assert.equal((await f.call('worker', '/next?kind=nonsense')).status, 400);
+  const claimed = (await f.call('worker', '/next?kind=research')).body.job;
+  assert.equal(claimed.id, research.id); assert.equal(claimed.kind, 'research');
+  // Claiming research must not consume the video job queued ahead of it.
+  assert.equal(f.scheduler().snapshot().jobs.find(j => j.id === video.id).status, 'queued');
+  await f.call('worker', `/jobs/${research.id}/complete`, { quiescent: true, token: claimed.lease.token, result: { kind: 'research_draft' }, artifacts: [{ sha256: SHA, uri: `sha256:${SHA}`, bytes: 12, mediaType: 'application/json' }] });
+  // Unfiltered behaviour is unchanged, so the GPU worker still gets video first.
+  assert.equal((await f.call('worker', '/next')).body.job.id, video.id);
+});
+
 test('OPS-001 contact failures do not swallow safety write failures or rejected stale-lease quarantine', async t => {
   const f = await fixture(t); const job = await f.submit('safety-write');
   const db = rejectContactWrites(t, f);

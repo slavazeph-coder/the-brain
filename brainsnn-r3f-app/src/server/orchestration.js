@@ -586,9 +586,24 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         } else error('action_not_allowed');
         event('owner_control', { action: value.action, reason }); return { status: 200, body: { control: control() } };
       }
-      const match = /^\/jobs\/([0-9a-f-]{36})\/(resume|approvals)$/.exec(path);
+      const match = /^\/jobs\/([0-9a-f-]{36})\/(resume|cancel|approvals)$/.exec(path);
       if (method !== 'POST' || !match) error('not_found', 404);
       const job = rawJob(match[1]); if (!job) error('job_not_found', 404);
+      // Retiring superseded work. A queued job whose output already exists -- a
+      // re-submission, or a clip superseded by a higher-quality re-render -- is
+      // otherwise immortal: no other route can remove it, so it is rendered
+      // again at full GPU cost the moment a worker returns. Only a job that has
+      // NOT started may be cancelled; retracting work under a lease would race
+      // the worker running it, and a job that already ran belongs in the
+      // failed/ready history rather than being quietly erased.
+      if (match[2] === 'cancel') {
+        if (job.lease_token || job.status !== 'queued') error('job_not_cancellable', 409);
+        if (typeof value?.reason !== 'string' || value.reason.trim().length < 8) error('cancel_reason_required');
+        const reason = value.reason.slice(0, 1000);
+        run("UPDATE orchestration_jobs SET status='cancelled',error=?,updated_at=? WHERE id=?", 'cancelled: ' + reason, now(), job.id);
+        event('job_cancelled', { jobId: job.id, reason });
+        return { status: 200, body: { cancelled: true, job: jobView(rawJob(job.id)) } };
+      }
       if (match[2] === 'resume') {
         const state = control(); if (state.hardwarePaused || state.gpuQuarantined || state.kill) error('clearance_required', 409);
         if (!['paused', 'failed'].includes(job.status) || (job.kind === 'inference' && !job.warmup)) error('job_not_resumable', 409);
@@ -615,7 +630,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
       return { status: 201, body: { approval, externalExecution: false } };
     });
   }
-  function workerAction(method, path, value, worker) {
+  function workerAction(method, path, value, worker, query = new URLSearchParams()) {
     return transaction(() => {
       reap();
       if (method === 'GET' && path === '/next') {
@@ -624,7 +639,13 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         const resident = get('SELECT resident_worker FROM orchestration_control WHERE id=1').resident_worker;
         if (resident && resident !== worker) return { job: null, control: state };
         if (!get("SELECT id FROM orchestration_jobs WHERE status='queued' AND kind IN ('video','research') LIMIT 1")) ensureWarmup();
-        const row = get("SELECT * FROM orchestration_jobs WHERE status='queued' ORDER BY CASE WHEN kind='video' THEN 0 WHEN kind='research' THEN 1 WHEN warmup=1 THEN 2 ELSE 3 END,created_at,rowid LIMIT 1");
+        // A worker may declare the KIND it can actually perform. Without this a
+        // worker with no GPU is always offered the first VIDEO job and can never
+        // reach the research work it is able to do, so the queue stays blocked
+        // on the one machine that happens to be holding the video lease.
+        const only = query.get('kind') || '';
+        if (only && !['video', 'research', 'inference'].includes(only)) error('invalid_kind_filter');
+        const row = get("SELECT * FROM orchestration_jobs WHERE status='queued' AND (?='' OR kind=?) ORDER BY CASE WHEN kind='video' THEN 0 WHEN kind='research' THEN 1 WHEN warmup=1 THEN 2 ELSE 3 END,created_at,rowid LIMIT 1", only, only);
         if (!row) return { job: null, control: state };
         const warming = get('SELECT warm_required,warmup_job_id FROM orchestration_control WHERE id=1');
         if (env.GPU_INFERENCE_MODEL && warming.warm_required && row.kind === 'inference' && !row.warmup
@@ -727,8 +748,9 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
       // Commit expiry before validating a mutation: a rejected stale heartbeat
       // must not roll the quarantine back together with the rejected write.
       transaction(reap);
-      const path = req.url.split('?')[0];
-      const result = surface === 'owner' ? ownerAction(req.method, path, value) : { status: 200, body: workerAction(req.method, path, value, worker) };
+      const [path, query] = req.url.split('?');
+      const result = surface === 'owner' ? ownerAction(req.method, path, value)
+        : { status: 200, body: workerAction(req.method, path, value, worker, new URLSearchParams(query || '')) };
       if (surface === 'worker') {
         // The worker action is already committed; advisory evidence cannot hide its result.
         try { run('INSERT INTO orchestration_worker_contacts(worker,last_seen_at) VALUES(?,?) ON CONFLICT(worker) DO UPDATE SET last_seen_at=excluded.last_seen_at', worker, now()); }
