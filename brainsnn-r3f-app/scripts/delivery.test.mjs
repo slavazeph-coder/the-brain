@@ -85,21 +85,22 @@ test('an unknown operation cannot be delivered', (t) => {
   assert.equal(r.reason, 'unknown_operation');
 });
 
-test('delivery records where the artifact can be verified', (t) => {
-  const { o, clock } = fixture(t);
+test('an invented evidence string cannot discharge a promise', (t) => {
+  // The hole independent review found: claimDelivery(op, {evidenceLocator:'x'})
+  // used to clear the gap with no job, no artifact and no approval attached --
+  // the original failure wearing a receipt.
+  const { o } = fixture(t);
   o.recordBillingEvent(paid('evt_1', 'cs_live_a', { kind: 'video-order' }));
-  clock.t += 2 * DAY;
 
-  const sha = 'a'.repeat(64);
   const r = o.claimDelivery(OP, {
-    evidenceLocator: 'https://www.brainsnn.com/ops/artifacts/abc.mp4', sha256: sha });
-  assert.equal(r.claimed, true);
-  assert.equal(r.receipt.state, 'delivered');
-  assert.equal(r.receipt.evidenceLocator, 'https://www.brainsnn.com/ops/artifacts/abc.mp4');
-  assert.equal(r.receipt.artifactSha256, sha);
-  assert.equal(r.receipt.deliveredAt, clock.t);
-  assert.equal(o.deliveryLedger().delivered, 1);
-  assert.equal(o.deliveryLedger().undelivered, 0);
+    evidenceLocator: 'https://www.brainsnn.com/deliveries/abc.mp4', sha256: 'a'.repeat(64) });
+  assert.equal(r.claimed, false);
+  assert.equal(r.reason, 'no_linked_job',
+    'work not linked to a render cannot be attested as delivered');
+  assert.equal(o.claimDelivery(OP, { evidenceLocator: 'x', sha256: 'a'.repeat(64) }).reason,
+    'invalid_locator', 'a placeholder does not locate anything');
+  assert.equal(o.deliveryLedger().delivered, 0, 'the gap must stay open');
+  assert.equal(o.deliveryLedger().undelivered, 1);
 });
 
 test('a malformed digest is rejected rather than stored', (t) => {
@@ -110,16 +111,16 @@ test('a malformed digest is rejected rather than stored', (t) => {
   assert.equal(r.reason, 'invalid_digest');
 });
 
-test('delivering twice is a no-op, not a second delivery', (t) => {
+test('discharging a promise is refused at every step that lacks proof', (t) => {
   const { o } = fixture(t);
-  o.recordBillingEvent(paid('evt_1', 'cs_live_a'));
-  const first = o.claimDelivery(OP, { evidenceLocator: 'https://x/1.mp4' });
-  const second = o.claimDelivery(OP, { evidenceLocator: 'https://x/2.mp4' });
-  assert.equal(first.claimed, true);
-  assert.equal(second.claimed, false);
-  assert.equal(second.duplicate, true);
-  assert.equal(second.receipt.evidenceLocator, 'https://x/1.mp4',
-    'the first verified evidence must stand');
+  o.recordBillingEvent(paid('evt_1', 'cs_live_a', { kind: 'video-order' }));
+  const sha = 'a'.repeat(64);
+  assert.equal(o.claimDelivery(OP, { evidenceLocator: 'https://x/1.mp4', sha256: sha }).reason,
+    'no_linked_job');
+  assert.equal(o.claimDelivery(OP, { evidenceLocator: 'https://x/1.mp4' }).reason,
+    'invalid_digest');
+  assert.equal(o.claimDelivery(OP, { sha256: sha }).reason, 'evidence_required');
+  assert.equal(o.deliveryLedger().delivered, 0, 'none of those may count as delivered');
 });
 
 test('past its deadline, an undelivered order becomes OVERDUE', (t) => {
@@ -150,19 +151,22 @@ test('THE ACTUAL FAILURE: many paid, none delivered, is visible as a gap', (t) =
     'each gap entry names what was promised and by when');
 });
 
-test('delivered orders leave the gap', (t) => {
+test('the gap count and the gap list agree', (t) => {
+  // `paid - delivered` used to be the count while `gap` came from receipts. Two
+  // different populations, so the ledger could report a gap of zero while
+  // unreceipted orders rotted. They must come from one source.
   const { o, clock } = fixture(t);
-  o.recordBillingEvent(paid('evt_1', 'cs_live_a'));
-  o.recordBillingEvent(paid('evt_2', 'cs_live_b'));
-  o.claimDelivery('session:cs_live_a', { evidenceLocator: 'https://x/a.mp4' });
+  o.recordBillingEvent(paid('evt_1', 'cs_live_a', { kind: 'video-order' }));
+  o.recordBillingEvent(paid('evt_2', 'cs_live_b', { kind: 'video-order' }));
   clock.t += 8 * DAY;
 
   const ledger = o.deliveryLedger();
   assert.equal(ledger.paid, 2);
-  assert.equal(ledger.delivered, 1);
-  assert.equal(ledger.undelivered, 1);
-  assert.equal(ledger.gap.length, 1);
-  assert.equal(ledger.gap[0].operationId, 'session:cs_live_b');
+  assert.equal(ledger.delivered, 0);
+  assert.equal(ledger.undelivered, 2);
+  assert.equal(ledger.gap.length, ledger.undelivered, 'count and list must agree');
+  assert.equal(ledger.unreceipted, 0, 'both orders have promises');
+  assert.equal(ledger.gap[0].state, 'overdue');
 });
 
 test('the owner snapshot carries the gap, not just the money', (t) => {

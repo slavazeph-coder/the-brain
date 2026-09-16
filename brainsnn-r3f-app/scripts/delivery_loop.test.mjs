@@ -50,8 +50,8 @@ const checkout = id => ({ id, type: 'checkout.session.completed', data: { object
 
 const ARTIFACT = { sha256: SHA, uri: `sha256:${SHA}`, bytes: 4, mediaType: 'video/mp4' };
 
-/** Pay, submit a render, link them, and produce a finished artifact. */
-async function render(f) {
+/** Pay, submit a render, link them, and produce artifacts. */
+async function render(f, artifacts = [ARTIFACT]) {
   const paid = f.o.recordBillingEvent(checkout('evt_1'));
   const op = paid.delivery.operationId;
   const job = (await f.call('owner', '/jobs', { idempotencyKey: 'order-1', kind: 'video',
@@ -60,31 +60,77 @@ async function render(f) {
   const lease = (await f.call('worker', '/next')).body.job;
   assert.equal(lease.id, job.id, 'the linked render is what the worker picks up');
   assert.equal((await f.call('worker', `/jobs/${job.id}/complete`,
-    { quiescent: true, token: lease.lease.token, result: { rendered: true }, artifacts: [ARTIFACT] })).status, 200);
+    { quiescent: true, token: lease.lease.token, result: { rendered: true }, artifacts })).status, 200);
   return { op, job };
 }
 
-test('pay -> link -> render -> approve discharges the promise with real evidence', async t => {
+test('approval marks READY and only a bound handoff delivers', async t => {
   const f = fixture(t);
   const { op, job } = await render(f);
   let ledger = f.o.deliveryLedger();
-  assert.equal(ledger.paid, 1); assert.equal(ledger.delivered, 0, 'not delivered before approval');
+  assert.equal(ledger.paid, 1); assert.equal(ledger.delivered, 0, 'not delivered before review');
   assert.equal(ledger.undelivered, 1);
 
+  // Approving clears INTERNAL review. It is not proof the buyer received
+  // anything, so the promise must still be open afterwards.
   const r = await f.call('owner', `/jobs/${job.id}/approvals`,
     { category: 'visual', decision: 'approved', artifactSha256: SHA, note: 'reviewed bytes' });
   assert.equal(r.status, 201);
-  assert.equal(r.body.approval.delivery.claimed, true, 'approval must discharge the promise');
+  assert.equal(r.body.approval.delivery.state, 'ready', 'approval marks ready, not delivered');
+  assert.equal(f.o.deliveryLedger().delivered, 0, 'internal review is not customer delivery');
+  assert.equal(f.o.deliveryLedger().undelivered, 1);
 
-  const receipt = f.o.deliveryLedger();
-  assert.equal(receipt.delivered, 1); assert.equal(receipt.undelivered, 0);
-  assert.equal(receipt.gap.length, 0, 'the gap closes');
-  const row = f.o.snapshot().deliveries.states.delivered;
-  assert.equal(row, 1);
+  // An invented locator must not discharge it.
+  const junk = await f.call('owner', '/deliveries/handoff',
+    { operationId: op, evidenceLocator: 'x', sha256: SHA });
+  assert.equal(junk.status, 400, 'a bare string is not evidence');
+
+  // The real handoff, bound to the approved final artifact.
+  const handoff = await f.call('owner', '/deliveries/handoff',
+    { operationId: op, evidenceLocator: 'https://www.brainsnn.com/deliveries/order-1.mp4', sha256: SHA });
+  assert.equal(handoff.status, 200);
+  assert.equal(handoff.body.claimed, true);
+
+  ledger = f.o.deliveryLedger();
+  assert.equal(ledger.delivered, 1); assert.equal(ledger.undelivered, 0);
+  assert.equal(ledger.gap.length, 0, 'the gap closes');
   const stored = f.o.linkDeliveryJob(op, job.id).receipt;
   assert.equal(stored.state, 'delivered');
   assert.equal(stored.artifactSha256, SHA, 'evidence is the approved artifact digest');
-  assert.equal(stored.evidenceLocator, `sha256:${SHA}`);
+  assert.equal(stored.evidenceLocator, 'https://www.brainsnn.com/deliveries/order-1.mp4');
+
+  const again = await f.call('owner', '/deliveries/handoff',
+    { operationId: op, evidenceLocator: 'https://elsewhere/other.mp4', sha256: SHA });
+  assert.equal(again.body.duplicate, true, 'a retried handoff cannot double-deliver');
+  assert.equal(f.o.deliveryLedger().delivered, 1);
+});
+
+test('handoff is refused when the artifact was never approved', async t => {
+  const f = fixture(t);
+  const { op } = await render(f);
+  const h = await f.call('owner', '/deliveries/handoff',
+    { operationId: op, evidenceLocator: 'https://x/1.mp4', sha256: SHA });
+  assert.equal(h.status, 400);
+  assert.equal(h.body.reason, 'artifact_not_approved',
+    'unreviewed work cannot be attested as delivered');
+  assert.equal(f.o.deliveryLedger().undelivered, 1);
+});
+
+test('an intermediate latent cannot discharge a video promise', async t => {
+  // The worker registers BOTH the generated latent and the rendered video.
+  // Approving the latent is not what the buyer paid for.
+  const f = fixture(t);
+  const LATENT = { sha256: 'b'.repeat(64), uri: `sha256:${'b'.repeat(64)}`,
+    bytes: 9, mediaType: 'application/octet-stream' };
+  const { op, job } = await render(f, [LATENT, ARTIFACT]);
+  await f.call('owner', `/jobs/${job.id}/approvals`,
+    { category: 'visual', decision: 'approved', artifactSha256: LATENT.sha256 });
+  const h = await f.call('owner', '/deliveries/handoff',
+    { operationId: op, evidenceLocator: 'https://x/latent.latent', sha256: LATENT.sha256 });
+  assert.equal(h.status, 400);
+  assert.equal(h.body.reason, 'not_final_deliverable',
+    'the video promise needs the video, not the latent');
+  assert.equal(f.o.deliveryLedger().undelivered, 1);
 });
 
 test('a REJECTED artifact attests nothing - the order stays in the gap', async t => {

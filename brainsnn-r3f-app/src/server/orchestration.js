@@ -339,8 +339,15 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     if (!row) return { linked: false, reason: 'unknown_operation' };
     if (!job || !get('SELECT id FROM orchestration_jobs WHERE id=?', job)) return { linked: false, reason: 'unknown_job' };
     // Refuse to repoint a promise at different work: silently swapping what an
-    // order is measured against is how a gap gets made to look closed.
-    if (row.job_id && row.job_id !== job) return { linked: false, reason: 'already_linked' };
+    // order is measured against is how a gap gets made to look closed. The one
+    // exception is a REJECTED attempt -- the operator has explicitly said that
+    // artifact is not acceptable, and trapping the order on it would make the
+    // promise impossible to ever honour.
+    if (row.job_id && row.job_id !== job) {
+      const rejected = get(`SELECT 1 AS ok FROM orchestration_approvals WHERE job_id=? AND decision='rejected'`, row.job_id);
+      const approved = get(`SELECT 1 AS ok FROM orchestration_approvals WHERE job_id=? AND decision='approved'`, row.job_id);
+      if (!rejected || approved) return { linked: false, reason: 'already_linked' };
+    }
     // ...and refuse to point a SECOND promise at the same job, which would
     // strand one of them (approval discharges only the first it finds).
     const bound = get('SELECT operation_id FROM delivery_receipts WHERE job_id=?', job);
@@ -350,6 +357,14 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     return { linked: true, receipt: receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id)) };
   }
 
+  // Discharging a promise requires PROOF bound to this specific order. A
+  // nonempty string is not proof: `claimDelivery(op, {evidenceLocator:'x'})`
+  // used to clear the gap with no job, no artifact and no approval attached --
+  // which is the original failure wearing a receipt. The evidence must be a
+  // persisted artifact of the LINKED job, one a human APPROVED, and the FINAL
+  // deliverable rather than an intermediate. That last clause matters because
+  // the worker registers both the generated latent and the rendered video, and
+  // approving the latent is not what the buyer paid for.
   function claimDelivery(operationId, value = {}) {
     if (!configured || closed) return { claimed: false, reason: 'unconfigured' };
     const id = String(operationId ?? '');
@@ -359,13 +374,41 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     if (row.state === 'delivered') return { claimed: false, duplicate: true, receipt: receiptView(row) };
     const locator = typeof value.evidenceLocator === 'string' ? value.evidenceLocator.trim() : '';
     if (!locator) return { claimed: false, reason: 'evidence_required' };
+    // A locator has to actually LOCATE the thing: a scheme-qualified URI or a
+    // content-addressed digest. A placeholder like 'x' names nothing, so it is
+    // rejected as input before any state is consulted.
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(locator)) return { claimed: false, reason: 'invalid_locator' };
     const sha = typeof value.sha256 === 'string' ? value.sha256 : '';
-    if (sha && !/^[a-f0-9]{64}$/.test(sha)) return { claimed: false, reason: 'invalid_digest' };
+    if (!/^[a-f0-9]{64}$/.test(sha)) return { claimed: false, reason: 'invalid_digest' };
+    if (!row.job_id) return { claimed: false, reason: 'no_linked_job' };
+    const artifact = get(`SELECT a.media_type AS mediaType FROM orchestration_artifacts a
+                          JOIN orchestration_job_artifacts j ON a.sha256=j.sha256
+                          WHERE j.job_id=? AND a.sha256=?`, row.job_id, sha);
+    if (!artifact) return { claimed: false, reason: 'unknown_artifact' };
+    const approved = get(`SELECT 1 AS ok FROM orchestration_approvals
+                          WHERE job_id=? AND artifact_sha256=? AND decision='approved'`, row.job_id, sha);
+    if (!approved) return { claimed: false, reason: 'artifact_not_approved' };
+    const wantsVideo = row.kind === 'video-order' || row.kind === 'video';
+    if (wantsVideo && !String(artifact.mediaType || '').startsWith('video/')) {
+      return { claimed: false, reason: 'not_final_deliverable' };
+    }
     run(`UPDATE delivery_receipts SET state='delivered', evidence_locator=?, artifact_sha256=?,
              delivered_at=?, updated_at=? WHERE operation_id=?`,
-      locator.slice(0, 2000), sha || null, now(), now(), id);
-    event('delivery_claimed', { operationId: id, evidenceLocator: locator.slice(0, 2000), sha256: sha || null });
+      locator.slice(0, 2000), sha, now(), now(), id);
+    event('delivery_claimed', { operationId: id, evidenceLocator: locator.slice(0, 2000), sha256: sha });
     return { claimed: true, receipt: receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id)) };
+  }
+
+  // Visual approval means the work is acceptable and ready to hand over. It is
+  // NOT evidence the buyer received anything, so it advances the receipt to
+  // 'ready' and stops there. Only an explicit handoff discharges a promise.
+  function markDeliveryReady(operationId) {
+    if (!configured || closed) return null;
+    const row = get('SELECT * FROM delivery_receipts WHERE operation_id=?', String(operationId ?? ''));
+    if (!row || row.state === 'delivered') return receiptView(row);
+    run("UPDATE delivery_receipts SET state='ready', updated_at=? WHERE operation_id=?", now(), row.operation_id);
+    event('delivery_ready', { operationId: row.operation_id });
+    return receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', row.operation_id));
   }
 
   // Intentionally NOT wrapped in transaction(): snapshot() already holds one, and
@@ -510,6 +553,13 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         const linked = linkDeliveryJob(value?.operationId, value?.jobId);
         return { status: linked.linked ? 200 : 400, body: linked };
       }
+      // The handoff: the one place a promise can be discharged, and only with an
+      // approved final artifact from the linked job as evidence.
+      if (method === 'POST' && path === '/deliveries/handoff') {
+        const claimed = claimDelivery(value?.operationId, {
+          evidenceLocator: value?.evidenceLocator, sha256: value?.sha256 });
+        return { status: claimed.claimed || claimed.duplicate ? 200 : 400, body: claimed };
+      }
       if (method === 'POST' && path === '/jobs') { const result = submit(value); return { status: result.duplicate ? 200 : 201, body: result }; }
       if (method === 'POST' && path === '/control') {
         const reason = typeof value.reason === 'string' ? value.reason.slice(0, 1000) : '';
@@ -552,20 +602,15 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
       if (value.note !== undefined && (typeof value.note !== 'string' || value.note.length > 2000)) error('invalid_note');
       const approval = { id: randomUUID(), jobId: job.id, category: value.category, decision: value.decision, artifactSha256: value.artifactSha256, note: value.note || '', createdAt: now() };
       run('INSERT INTO orchestration_approvals(id,job_id,category,decision,artifact_sha256,note,created_at) VALUES(?,?,?,?,?,?,?)', approval.id, job.id, approval.category, approval.decision, approval.artifactSha256, approval.note, approval.createdAt);
-      // Approving a visual artifact is the moment the work is cleared for
-      // handover, so that is where a linked promise is discharged -- with the
-      // approved artifact itself as the evidence. Jobs with no linked receipt
-      // (internal renders, evolution candidates) are untouched. A REJECTED
-      // artifact deliberately attests nothing: the order stays in the gap,
-      // which is the honest outcome when the work was not acceptable.
+      // Visual approval marks the work READY; it deliberately does NOT discharge
+      // the promise. Clearing internal review is not evidence that the buyer
+      // received anything, and conflating the two let one internal step silently
+      // close the gap. Only an explicit handoff (POST /deliveries/handoff with
+      // the approved artifact) can do that. Jobs with no linked receipt
+      // (internal renders, evolution candidates) are untouched.
       if (value.decision === 'approved' && value.category === 'visual') {
         const receipt = get('SELECT * FROM delivery_receipts WHERE job_id=?', job.id);
-        if (receipt && receipt.state !== 'delivered') {
-          const artifact = get('SELECT uri FROM orchestration_artifacts WHERE sha256=?', value.artifactSha256);
-          approval.delivery = claimDelivery(receipt.operation_id, {
-            evidenceLocator: artifact?.uri || ('sha256:' + value.artifactSha256),
-            sha256: value.artifactSha256 });
-        }
+        if (receipt) approval.delivery = markDeliveryReady(receipt.operation_id);
       }
       return { status: 201, body: { approval, externalExecution: false } };
     });
