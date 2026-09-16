@@ -16,7 +16,7 @@
     "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "test:run": "node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "test:offline": "BRAINSNN_TEST_SCOPE=offline node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
-    "test:orchestration": "node --test scripts/orchestration.test.mjs scripts/readiness.test.mjs scripts/ops-refresh.test.mjs",
+    "test:orchestration": "node --test scripts/orchestration.test.mjs scripts/readiness.test.mjs scripts/ops-refresh.test.mjs scripts/billing.test.mjs scripts/delivery.test.mjs scripts/delivery_loop.test.mjs",
     "test:ops": "playwright test --config playwright.ops.config.ts",
     "check:bundle": "node scripts/check-three-imports.mjs",
     "test:e2e": "playwright test"

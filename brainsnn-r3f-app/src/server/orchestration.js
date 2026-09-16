@@ -124,7 +124,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         CREATE TABLE IF NOT EXISTS delivery_receipts (
           operation_id TEXT PRIMARY KEY, session_id TEXT, kind TEXT NOT NULL,
           promised_artifact TEXT NOT NULL, state TEXT NOT NULL,
-          evidence_locator TEXT, artifact_sha256 TEXT,
+          evidence_locator TEXT, artifact_sha256 TEXT, job_id TEXT,
           deadline_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL, delivered_at INTEGER);
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_update BEFORE UPDATE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
@@ -139,6 +139,8 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         if (!controlColumns.includes(column)) db.exec(`ALTER TABLE orchestration_control ADD COLUMN ${column} ${definition}`);
       }
       if (!db.prepare('PRAGMA table_info(orchestration_jobs)').all().some(row => row.name === 'warmup')) db.exec('ALTER TABLE orchestration_jobs ADD COLUMN warmup INTEGER NOT NULL DEFAULT 0');
+      // Guarded so a database created before the link column existed still opens.
+      if (!db.prepare('PRAGMA table_info(delivery_receipts)').all().some(row => row.name === 'job_id')) db.exec('ALTER TABLE delivery_receipts ADD COLUMN job_id TEXT');
       // A restart requires a real backend health result before assuming warmth.
       db.exec('UPDATE orchestration_control SET warm_required=1 WHERE id=1');
     } catch { db?.close(); db = null; configured = false; }
@@ -270,6 +272,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     return { operationId: row.operation_id, sessionId: row.session_id, kind: row.kind,
       promisedArtifact: row.promised_artifact, state: row.state,
       evidenceLocator: row.evidence_locator, artifactSha256: row.artifact_sha256,
+      jobId: row.job_id,
       deadlineAt: row.deadline_at, createdAt: row.created_at, updatedAt: row.updated_at,
       deliveredAt: row.delivered_at };
   }
@@ -288,6 +291,23 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
       Number.isFinite(deadlineAt) ? deadlineAt : now() + DELIVERY_DEADLINE_MS, now(), now());
     event('delivery_opened', { operationId: id, kind: kind ?? null, sessionId: sessionId ?? null });
     return receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id));
+  }
+
+  // Which render is meant to satisfy this order. Without the link a receipt can
+  // only ever age: there would be nothing for a completed job to reconcile
+  // against, which is the original blindness wearing a different hat.
+  function linkDeliveryJob(operationId, jobId) {
+    if (!configured || closed) return { linked: false, reason: 'unconfigured' };
+    const id = String(operationId ?? ''), job = String(jobId ?? '');
+    const row = get('SELECT * FROM delivery_receipts WHERE operation_id=?', id);
+    if (!row) return { linked: false, reason: 'unknown_operation' };
+    if (!job || !get('SELECT id FROM orchestration_jobs WHERE id=?', job)) return { linked: false, reason: 'unknown_job' };
+    // Refuse to repoint a promise at different work: silently swapping what an
+    // order is measured against is how a gap gets made to look closed.
+    if (row.job_id && row.job_id !== job) return { linked: false, reason: 'already_linked' };
+    run('UPDATE delivery_receipts SET job_id=?, updated_at=? WHERE operation_id=?', job, now(), id);
+    event('delivery_linked', { operationId: id, jobId: job });
+    return { linked: true, receipt: receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id)) };
   }
 
   function claimDelivery(operationId, value = {}) {
@@ -433,6 +453,10 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     if (method === 'GET' && path === '/deliveries/gap') return { status: 200, body: deliveryLedger().gap };
     return transaction(() => {
       reap();
+      if (method === 'POST' && path === '/deliveries/link') {
+        const linked = linkDeliveryJob(value?.operationId, value?.jobId);
+        return { status: linked.linked ? 200 : 400, body: linked };
+      }
       if (method === 'POST' && path === '/jobs') { const result = submit(value); return { status: result.duplicate ? 200 : 201, body: result }; }
       if (method === 'POST' && path === '/control') {
         const reason = typeof value.reason === 'string' ? value.reason.slice(0, 1000) : '';
@@ -475,6 +499,21 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
       if (value.note !== undefined && (typeof value.note !== 'string' || value.note.length > 2000)) error('invalid_note');
       const approval = { id: randomUUID(), jobId: job.id, category: value.category, decision: value.decision, artifactSha256: value.artifactSha256, note: value.note || '', createdAt: now() };
       run('INSERT INTO orchestration_approvals(id,job_id,category,decision,artifact_sha256,note,created_at) VALUES(?,?,?,?,?,?,?)', approval.id, job.id, approval.category, approval.decision, approval.artifactSha256, approval.note, approval.createdAt);
+      // Approving a visual artifact is the moment the work is cleared for
+      // handover, so that is where a linked promise is discharged -- with the
+      // approved artifact itself as the evidence. Jobs with no linked receipt
+      // (internal renders, evolution candidates) are untouched. A REJECTED
+      // artifact deliberately attests nothing: the order stays in the gap,
+      // which is the honest outcome when the work was not acceptable.
+      if (value.decision === 'approved' && value.category === 'visual') {
+        const receipt = get('SELECT * FROM delivery_receipts WHERE job_id=?', job.id);
+        if (receipt && receipt.state !== 'delivered') {
+          const artifact = get('SELECT uri FROM orchestration_artifacts WHERE sha256=?', value.artifactSha256);
+          approval.delivery = claimDelivery(receipt.operation_id, {
+            evidenceLocator: artifact?.uri || ('sha256:' + value.artifactSha256),
+            sha256: value.artifactSha256 });
+        }
+      }
       return { status: 201, body: { approval, externalExecution: false } };
     });
   }
@@ -643,5 +682,5 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     });
   }
   function close() { if (closed) return; closed = true; for (const stop of [...pending]) stop(); db?.close(); }
-  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close, recordBillingEvent, billingSummary, openDeliveryReceipt, claimDelivery, deliveryLedger };
+  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close, recordBillingEvent, billingSummary, openDeliveryReceipt, claimDelivery, linkDeliveryJob, deliveryLedger };
 }
