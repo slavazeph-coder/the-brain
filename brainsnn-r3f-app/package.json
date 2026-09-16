@@ -12,7 +12,7 @@
     "start": "node mission-market-schema-bootstrap.cjs && node --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && node scripts/check-undef.mjs",
     "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "test:run": "node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "test:offline": "BRAINSNN_TEST_SCOPE=offline node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
