@@ -224,6 +224,17 @@ async function handleStripeWebhook(req: express.Request, res: express.Response) 
       subscription: event.data?.object?.subscription || event.data?.object?.id,
       status: event.data?.object?.status,
     });
+    // RECORD it. This branch used to log the event and do nothing else, so a
+    // completed payment left no trace anywhere in the application: the customer
+    // could be charged and the order would simply not exist. Answering 500 on
+    // failure makes Stripe RETRY instead of silently dropping the sale.
+    try {
+      const recorded = orchestration.recordBillingEvent(event);
+      return res.json({ received: true, recorded: recorded.recorded, duplicate: !!recorded.duplicate });
+    } catch (error: any) {
+      console.error("[Stripe] failed to record event", event.id, error?.message);
+      return res.status(500).json({ error: "Failed to record event." });
+    }
   }
   return res.json({ received: true });
 }

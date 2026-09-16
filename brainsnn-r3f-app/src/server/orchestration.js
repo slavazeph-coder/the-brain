@@ -107,6 +107,15 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         CREATE TABLE IF NOT EXISTS orchestration_worker_contacts (worker TEXT PRIMARY KEY, last_seen_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS orchestration_events (
           sequence INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, detail TEXT NOT NULL, created_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS billing_events (
+          id TEXT PRIMARY KEY, type TEXT NOT NULL, received_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS billing_orders (
+          session_id TEXT PRIMARY KEY, kind TEXT NOT NULL, email TEXT, customer TEXT,
+          amount INTEGER NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL, job_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS billing_subscriptions (
+          subscription_id TEXT PRIMARY KEY, customer TEXT, email TEXT, plan TEXT,
+          status TEXT NOT NULL, updated_at INTEGER NOT NULL);
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_update BEFORE UPDATE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_delete BEFORE DELETE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
         CREATE TRIGGER IF NOT EXISTS approvals_immutable_update BEFORE UPDATE ON orchestration_approvals BEGIN SELECT RAISE(ABORT,'immutable_approval'); END;
@@ -135,6 +144,92 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     db.exec('BEGIN IMMEDIATE');
     try { const result = callback(); db.exec('COMMIT'); return result; } catch (err) { db.exec('ROLLBACK'); throw err; }
   };
+
+  // ----------------------------------------------------------------
+  // BILLING
+  // ----------------------------------------------------------------
+  // The Stripe webhook verified its signature correctly and then only
+  // console.log'd the event, so a customer could pay and the application had no
+  // record that they had. Nothing here talks to Stripe: it records what Stripe
+  // already told us, so money that was taken can actually be honoured.
+  //
+  // Idempotency is structural rather than incidental. Stripe redelivers events,
+  // so the event id is the primary key, and a paid order's render job is keyed on
+  // the session id -- submit() already rejects a repeated idempotency key, so a
+  // redelivery can never queue a second render.
+
+  function upsertSubscription(subscriptionId, customer, email, plan, status) {
+    run(`INSERT INTO billing_subscriptions(subscription_id,customer,email,plan,status,updated_at)
+         VALUES(?,?,?,?,?,?)
+         ON CONFLICT(subscription_id) DO UPDATE SET
+           customer=excluded.customer, email=COALESCE(excluded.email,email),
+           plan=COALESCE(excluded.plan,plan), status=excluded.status, updated_at=excluded.updated_at`,
+      subscriptionId, customer ? String(customer) : null, email ? String(email) : null,
+      plan ? String(plan) : null, status, now());
+  }
+
+  function recordBillingEvent(value) {
+    if (!configured || closed) return { recorded: false, reason: 'unconfigured' };
+    const id = String(value?.id ?? ''), type = String(value?.type ?? '');
+    if (!id || !type) return { recorded: false, reason: 'malformed_event' };
+    if (get('SELECT id FROM billing_events WHERE id=?', id)) {
+      return { recorded: false, duplicate: true, type };
+    }
+    const obj = value?.data?.object ?? {};
+    const meta = obj.metadata ?? {};
+    const out = { recorded: true, type, order: null, subscription: null };
+
+    transaction(() => {
+      run('INSERT INTO billing_events(id,type,received_at) VALUES(?,?,?)', id, type, now());
+
+      if (type === 'checkout.session.completed') {
+        const sessionId = String(obj.id ?? '');
+        if (!sessionId) return;
+        const email = String(obj.customer_details?.email ?? obj.customer_email ?? '') || null;
+        const kind = String(meta.kind ?? (obj.mode === 'subscription' ? 'subscription' : 'one_off'));
+        const amount = Number.isFinite(obj.amount_total) ? obj.amount_total : 0;
+        const currency = String(obj.currency ?? '');
+        // NO render job is created here, deliberately. A video job needs a
+        // payload.workflowId, and that workflow cannot exist yet: it is built by
+        // order intake from the photo the buyer has not sent us. Inventing a job
+        // at payment time either threw (losing the payment record with it) or
+        // would have queued a render with nothing to render. The order is
+        // recorded as paid-and-awaiting-assets instead; fulfilment starts when
+        // the asset arrives, and job_id is linked then.
+        run(`INSERT INTO billing_orders(session_id,kind,email,customer,amount,currency,status,job_id,created_at,updated_at)
+             VALUES(?,?,?,?,?,?,?,NULL,?,?)
+             ON CONFLICT(session_id) DO UPDATE SET
+               status=excluded.status, updated_at=excluded.updated_at`,
+          sessionId, kind, email, String(obj.customer ?? '') || null, amount, currency,
+          kind === 'video-order' ? 'paid_awaiting_assets' : 'paid', now(), now());
+        out.order = { sessionId, kind, email, amount, currency, jobId: null };
+        if (obj.subscription) upsertSubscription(String(obj.subscription), obj.customer, email, meta.plan, 'active');
+      } else if (type.startsWith('customer.subscription.')) {
+        const subscriptionId = String(obj.id ?? '');
+        if (subscriptionId) {
+          const status = String(obj.status ?? 'unknown');
+          upsertSubscription(subscriptionId, obj.customer, obj.customer_email ?? null, meta.plan, status);
+          out.subscription = { subscriptionId, status };
+        }
+      }
+
+      event('billing_event', { type, eventId: id, order: out.order, subscription: out.subscription });
+    });
+    return out;
+  }
+
+  function billingSummary() {
+    if (!configured || closed) return { configured: false, orders: 0, activeSubscriptions: 0, recent: [] };
+    return {
+      configured: true,
+      orders: get('SELECT COUNT(*) AS n FROM billing_orders').n,
+      activeSubscriptions: get("SELECT COUNT(*) AS n FROM billing_subscriptions WHERE status='active'").n,
+      // Deliberately no customer email here: this rides in the owner snapshot,
+      // and there is no reason to spray personal data through it.
+      recent: all(`SELECT session_id, kind, amount, currency, status, job_id, created_at
+                   FROM billing_orders ORDER BY created_at DESC LIMIT 10`),
+    };
+  }
   const rawJob = id => get('SELECT * FROM orchestration_jobs WHERE id=?', id);
   function quarantine(job, reason, hardware = false) {
     run('UPDATE orchestration_jobs SET status=?,error=?,lease_token=NULL,lease_expires=NULL,updated_at=? WHERE id=?', 'paused', reason, now(), job.id);
@@ -179,6 +274,9 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     return transaction(() => {
       reap();
       const state = { enabled, configured,
+        // Orders/subscriptions ride along with the owner status, so the ops view
+        // can show money that actually came in rather than only jobs that ran.
+        billing: billingSummary(),
         jobs: all('SELECT * FROM orchestration_jobs ORDER BY created_at DESC,rowid DESC LIMIT 200').map(row => jobView(row)),
         control: control(),
         workerContacts: all('SELECT worker AS workerId,last_seen_at AS lastSeenAt FROM orchestration_worker_contacts ORDER BY last_seen_at DESC'),
@@ -219,6 +317,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
   }
   function ownerAction(method, path, value) {
     if (method === 'GET' && path === '/status') return { status: 200, body: snapshot() };
+    if (method === 'GET' && path === '/billing') return { status: 200, body: billingSummary() };
     return transaction(() => {
       reap();
       if (method === 'POST' && path === '/jobs') { const result = submit(value); return { status: result.duplicate ? 200 : 201, body: result }; }
@@ -431,5 +530,5 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     });
   }
   function close() { if (closed) return; closed = true; for (const stop of [...pending]) stop(); db?.close(); }
-  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close };
+  return { enabled, configured, handleOwner: (req, res) => handle('owner', req, res), handleWorker: (req, res) => handle('worker', req, res), request, snapshot, close, recordBillingEvent, billingSummary };
 }
