@@ -16,3 +16,8 @@ env/
 node_modules
 brainsnn-r3f-app/test-results/
 brainsnn-r3f-app/playwright-report/
+
+# Regenerable run output -- not source. Both are re-creatable by re-running the
+# thing that wrote them, so committing them would only add churn and bloat.
+outputs/
+neural-mirror/artifacts/

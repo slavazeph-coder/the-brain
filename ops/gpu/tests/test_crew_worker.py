@@ -9,6 +9,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import unittest
@@ -193,13 +194,17 @@ class ControlledOpenAIAdapter(BaseHTTPRequestHandler):
         self.server.requests.append({'path': self.path, 'body': request,
                                      'token_ok': self.headers.get('X-BrainSNN-Orchestration-Token') == CONFIG['ORCHESTRATION_TOKEN'],
                                      'key_ok': self.headers.get('Authorization') == 'Bearer ' + CONFIG['GPU_API_KEY']})
-        output = self.server.draft
-        data = {'id': 'controlled-adapter-completion', 'object': 'chat.completion', 'created': 0,
-                'model': 'controlled-test-model', 'choices': [{'index': 0, 'finish_reason': 'stop',
-                'message': {'role': 'assistant', 'content': 'Thought: I now know the final answer\nFinal Answer: ' + json.dumps(output)}}],
-                'usage': {'prompt_tokens': 100, 'completion_tokens': 150, 'total_tokens': 250}}
+        status = self.server.response_status
+        if status >= 300:
+            data = {'error': {'message': 'synthetic-provider-secret-must-not-leak',
+                              'type': 'controlled_adapter_error', 'code': 'controlled'}}
+        else:
+            data = {'id': 'controlled-adapter-completion', 'object': 'chat.completion', 'created': 0,
+                    'model': 'controlled-test-model', 'choices': [{'index': 0, 'finish_reason': 'stop',
+                    'message': {'role': 'assistant', 'content': self.server.response_content}}],
+                    'usage': {'prompt_tokens': 100, 'completion_tokens': 150, 'total_tokens': 250}}
         encoded = json.dumps(data).encode()
-        self.send_response(200)
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(encoded)))
         self.end_headers()
@@ -217,15 +222,22 @@ class RealCrewAIIntegrationTests(unittest.TestCase):
         if check.returncode or check.stdout.strip() != CREWAI_VERSION:
             raise RuntimeError('Requested real CrewAI interpreter lacks pinned dependency')
 
-    def test_real_crew_with_controlled_loopback_openai_adapter(self):
+    def _run_controlled(self, label, content, response_status=200):
         server = ThreadingHTTPServer(('127.0.0.1', 0), ControlledOpenAIAdapter)
-        server.requests, server.draft = [], copy.deepcopy(DRAFT)
+        server.requests = []
+        server.response_content = content
+        server.response_status = response_status
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            result = run_research(PAYLOAD, CONFIG | {'CREWAI_PYTHON': self.python, 'GATEWAY_PORT': server.server_port})
-            self.assertEqual(result['status'], 'pending_human_review')
-            self.assertEqual(result['draft'], DRAFT)
+            result, error_code = None, None
+            try:
+                result = run_research(PAYLOAD, CONFIG | {
+                    'CREWAI_PYTHON': self.python, 'GATEWAY_PORT': server.server_port})
+            except ResearchError as error:
+                error_code = error.code
+                self.assertEqual(str(error), error_code)
+                self.assertNotIn('synthetic-provider-secret', error_code)
             self.assertTrue(1 <= len(server.requests) <= 3)
             for request in server.requests:
                 self.assertEqual(request['path'], '/v1/chat/completions')
@@ -233,16 +245,122 @@ class RealCrewAIIntegrationTests(unittest.TestCase):
                 self.assertFalse(request['body'].get('tools'))
                 self.assertTrue(request['token_ok'])
                 self.assertTrue(request['key_ok'])
+            # Controlled-framework evidence only: never print generated content or provider text.
+            print(json.dumps({'controlled_crewai_case': label,
+                              'outcome': error_code or 'validated_draft',
+                              'request_count': len(server.requests)}, sort_keys=True))
+            return result, error_code
         finally:
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
 
+    def _assert_validated_draft(self, result):
+        self.assertEqual(result, validate_draft(copy.deepcopy(DRAFT), copy.deepcopy(PAYLOAD)))
+        self.assertEqual(result['status'], 'pending_human_review')
+        self.assertFalse(result['external_execution_enabled'])
+
+    def test_real_crew_with_controlled_loopback_openai_adapter(self):
+        result, error_code = self._run_controlled(
+            'final_answer_json', 'Thought: I now know the final answer\nFinal Answer: ' + json.dumps(DRAFT))
+        self.assertIsNone(error_code)
+        self._assert_validated_draft(result)
+
+    def test_real_crew_bare_json_records_actual_framework_outcome(self):
+        result, error_code = self._run_controlled('bare_json', json.dumps(DRAFT))
+        if error_code is None:
+            self._assert_validated_draft(result)
+        else:
+            # Bare-JSON rejection is a hypothesis until a pinned run supplies evidence.
+            self.assertIsNone(result)
+            self.assertEqual(error_code, 'inference_parser_error')
+
+    def test_real_crew_malformed_response_never_fabricates_success(self):
+        result, error_code = self._run_controlled('malformed_response', 'synthetic malformed output {')
+        self.assertIsNone(result)
+        self.assertIn(error_code, ('inference_parser_error', 'research_contract_invalid'))
+
+    def test_real_crew_malformed_final_answer_fails_strict_json(self):
+        result, error_code = self._run_controlled(
+            'malformed_final_answer', 'Thought: I now know the final answer\nFinal Answer: {"title":')
+        self.assertIsNone(result)
+        self.assertIn(error_code, ('inference_parser_error', 'research_contract_invalid'))
+
+    def test_real_crew_fabricated_quote_fails_evidence_validation(self):
+        draft = copy.deepcopy(DRAFT)
+        draft['claims'][0]['quote'] = 'This fabricated quote is absent from every supplied source.'
+        result, error_code = self._run_controlled(
+            'fabricated_quote', 'Thought: I now know the final answer\nFinal Answer: ' + json.dumps(draft))
+        self.assertIsNone(result)
+        self.assertEqual(error_code, 'research_contract_invalid')
+
+    def test_real_crew_http_statuses_survive_kickoff_wrapping(self):
+        for status in (400, 401, 403, 429, 500, 503):
+            with self.subTest(status=status):
+                result, error_code = self._run_controlled('http_' + str(status), '', status)
+                self.assertIsNone(result)
+                self.assertEqual(error_code, 'inference_http_' + str(status))
+
+    def test_real_pinned_parser_direct_controlled_probes(self):
+        # The candidate module is verified by the real pinned interpreter at run time;
+        # missing classes skip this probe instead of supplying a simulated parser.
+        probe = '''
+import contextlib, hashlib, importlib, inspect, json, os, sys
+def deny_network(event, args):
+    if event.startswith('socket.') or event in ('subprocess.Popen', 'os.system', 'os.posix_spawn'):
+        raise PermissionError('direct_parser_probe_network_denied')
+sys.addaudithook(deny_network)
+with open(os.devnull, 'w') as quiet, contextlib.redirect_stdout(quiet), contextlib.redirect_stderr(quiet):
+    try:
+        module = importlib.import_module('crewai.agents.parser')
+        parser_type = getattr(module, 'CrewAgentParser')
+        error_type = getattr(module, 'OutputParserException')
+    except (ImportError, AttributeError):
+        record = {'available': False}
+    else:
+        parser = parser_type()
+        value = sys.stdin.read()
+        cases = {'bare_json': value, 'malformed': 'synthetic malformed output {',
+                 'final_answer': 'Thought: I now know the final answer\\nFinal Answer: ' + value}
+        outcomes = {}
+        for label, content in cases.items():
+            try:
+                parsed = parser.parse(content)
+            except error_type:
+                outcomes[label] = 'parser_error'
+            else:
+                outcomes[label] = ('exact_final_output' if getattr(parsed, 'output', None) == value
+                                   else 'other_parser_result')
+        record = {'available': True, 'outcomes': outcomes,
+                  'parser_type': parser_type.__module__ + '.' + parser_type.__name__,
+                  'parser_error_type': error_type.__module__ + '.' + error_type.__name__,
+                  'parser_source_sha256': hashlib.sha256(inspect.getsource(module).encode()).hexdigest()}
+print(json.dumps(record, sort_keys=True), flush=True)
+os._exit(0)
+'''
+        with tempfile.TemporaryDirectory(prefix='brainsnn-parser-probe-') as scratch:
+            env = {'PATH': '/usr/bin:/bin', 'HOME': scratch, 'TMPDIR': scratch,
+                   'CREWAI_STORAGE_DIR': scratch, 'XDG_DATA_HOME': scratch,
+                   'LITELLM_LOCAL_MODEL_COST_MAP': 'True',
+                   'CREWAI_DISABLE_TELEMETRY': 'true', 'CREWAI_TELEMETRY_ENABLED': 'false',
+                   'CREWAI_TRACING_ENABLED': 'false', 'OTEL_SDK_DISABLED': 'true',
+                   'DO_NOT_TRACK': 'true', 'PYTHONNOUSERSITE': '1', 'PYTHONDONTWRITEBYTECODE': '1'}
+            result = subprocess.run([self.python, '-c', probe], input=json.dumps(DRAFT),
+                                    capture_output=True, text=True, timeout=30, cwd=scratch, env=env)
+        self.assertEqual(result.returncode, 0, 'Real pinned parser probe failed; no model was called')
+        record = json.loads(result.stdout)
+        if record.get('available') is not True:
+            self.skipTest('Pinned parser class/module unavailable; no direct-parser evidence')
+        self.assertEqual(record['outcomes']['final_answer'], 'exact_final_output')
+        self.assertIn(record['outcomes']['bare_json'], ('exact_final_output', 'parser_error'))
+        self.assertIn(record['outcomes']['malformed'], ('other_parser_result', 'parser_error'))
+        print(json.dumps({'controlled_crewai_parser': record}, sort_keys=True))
+
     def test_real_crew_unavailable_gateway_fails_without_fabricated_result(self):
         with socket.socket() as reservation:
             reservation.bind(('127.0.0.1', 0))
             port = reservation.getsockname()[1]
-        with self.assertRaisesRegex(ResearchError, '^inference_unavailable$'):
+        with self.assertRaisesRegex(ResearchError, '^inference_transport$'):
             run_research(PAYLOAD, CONFIG | {'CREWAI_PYTHON': self.python, 'GATEWAY_PORT': port})
 
 

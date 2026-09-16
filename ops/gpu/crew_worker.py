@@ -7,6 +7,7 @@ interpreter; no import/provider failure is converted into a successful draft.
 import argparse
 import contextlib
 import hashlib
+import http.client
 import importlib.metadata
 import json
 import os
@@ -18,6 +19,7 @@ import sys
 import tempfile
 import time
 from typing import Literal, TypedDict
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
 CREWAI_VERSION = '1.15.21'
@@ -31,8 +33,8 @@ ERROR_CODES = frozenset({
     'inference_unavailable', 'research_failed', 'swarms_unavailable',
     'inference_http_3xx', 'inference_http_4xx', 'inference_http_5xx',
     'inference_http_rejected', 'inference_timeout', 'inference_transport',
-    'inference_output_truncated',
-})
+    'inference_output_truncated', 'inference_parser_error',
+}) | frozenset(f'inference_http_{status}' for status in range(300, 600))
 
 
 class ResearchError(RuntimeError):
@@ -40,6 +42,66 @@ class ResearchError(RuntimeError):
     def __init__(self, code):
         self.code = code if isinstance(code, str) and code in ERROR_CODES else 'research_failed'
         super().__init__(self.code)
+
+
+def _error_attribute(value, name):
+    """Never let a diagnostic property replace the original safe failure."""
+    try:
+        return getattr(value, name, None)
+    except Exception:
+        return None
+
+
+def _loaded_error_type(error, module_name, name):
+    # CrewAI loads these dependencies. Use actual class identity, without adding
+    # SDK imports to the stdlib parent or trusting an exception's class name.
+    cls = _error_attribute(sys.modules.get(module_name), name)
+    return isinstance(cls, type) and isinstance(error, cls)
+
+
+def _kickoff_error_code(error):
+    """Classify typed failures only; never inspect messages, bodies or URLs.
+
+    Follow a bounded exception chain because framework wrappers can replace an
+    SDK error. An explicit cause takes precedence over incidental context.
+    Text-only wrappers remain unknown; diagnostics do not justify any retries.
+    """
+    seen = set()
+    for _ in range(8):
+        if not isinstance(error, BaseException) or id(error) in seen:
+            break
+        seen.add(id(error))
+        if isinstance(error, ResearchError):
+            return ResearchError(_error_attribute(error, 'code')).code
+        http_error = False
+        status = None
+        if isinstance(error, HTTPError):
+            http_error, status = True, _error_attribute(error, 'code')
+        elif _loaded_error_type(error, 'openai', 'APIStatusError'):
+            http_error, status = True, _error_attribute(error, 'status_code')
+        elif _loaded_error_type(error, 'httpx', 'HTTPStatusError'):
+            http_error = True
+            status = _error_attribute(_error_attribute(error, 'response'), 'status_code')
+        if http_error:
+            return (f'inference_http_{status}' if type(status) is int and 300 <= status <= 599
+                    else 'inference_http_rejected')
+        if (isinstance(error, TimeoutError)
+                or _loaded_error_type(error, 'openai', 'APITimeoutError')
+                or _loaded_error_type(error, 'httpx', 'TimeoutException')):
+            return 'inference_timeout'
+        if isinstance(error, URLError):
+            return ('inference_timeout' if isinstance(_error_attribute(error, 'reason'), TimeoutError)
+                    else 'inference_transport')
+        if (isinstance(error, (ConnectionError, http.client.HTTPException))
+                or _loaded_error_type(error, 'openai', 'APIConnectionError')
+                or _loaded_error_type(error, 'httpx', 'TransportError')):
+            return 'inference_transport'
+        if (isinstance(error, json.JSONDecodeError)
+                or _loaded_error_type(error, 'crewai.agents.parser', 'OutputParserException')):
+            return 'inference_parser_error'
+        cause = _error_attribute(error, '__cause__')
+        error = cause if isinstance(cause, BaseException) else _error_attribute(error, '__context__')
+    return 'inference_unavailable'
 
 
 class EvidenceClaim(TypedDict):
@@ -348,8 +410,8 @@ def _execute(payload, config, handoff=None):
                 cache=False, planning=False, verbose=False, tracing=False, share_crew=False)
     try:
         result = crew.kickoff()
-    except Exception:
-        raise ResearchError('inference_unavailable') from None
+    except Exception as error:
+        raise ResearchError(_kickoff_error_code(error)) from None
     try:
         value = json.loads(result.raw)
     except (ValueError, TypeError, AttributeError):
