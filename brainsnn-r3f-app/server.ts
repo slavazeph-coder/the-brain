@@ -216,6 +216,11 @@ async function handleStripeWebhook(req: express.Request, res: express.Response) 
     "customer.subscription.created",
     "customer.subscription.updated",
     "customer.subscription.deleted",
+    // Delayed payment methods (bank debits, vouchers) complete a Checkout
+    // Session BEFORE the money settles, reporting payment_status 'unpaid'. This
+    // is the event that says it finally did.
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed",
   ]);
   if (trackedEvents.has(event.type)) {
     console.log(`[Stripe] ${event.type}`, {
@@ -230,6 +235,15 @@ async function handleStripeWebhook(req: express.Request, res: express.Response) 
     // failure makes Stripe RETRY instead of silently dropping the sale.
     try {
       const recorded = orchestration.recordBillingEvent(event);
+      // A refusal can come back as a VALUE, not an exception. `unconfigured`
+      // and `malformed_event` return normally, so the catch below never fires
+      // for them — and answering 200 tells Stripe the event was delivered and
+      // it will never retry. That is the exact silent drop this branch exists
+      // to prevent, one layer up. Only a duplicate is a genuine success.
+      if (!recorded.recorded && !recorded.duplicate) {
+        console.error("[Stripe] NOT RECORDED", event.id, recorded.reason);
+        return res.status(503).json({ error: recorded.reason || "not recorded" });
+      }
       return res.json({ received: true, recorded: recorded.recorded, duplicate: !!recorded.duplicate });
     } catch (error: any) {
       console.error("[Stripe] failed to record event", event.id, error?.message);

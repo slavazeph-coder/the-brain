@@ -127,6 +127,11 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
           evidence_locator TEXT, artifact_sha256 TEXT, job_id TEXT,
           deadline_at INTEGER NOT NULL, created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL, delivered_at INTEGER);
+        -- One job satisfies at most one promise. Without this, two orders can
+        -- link to the same render: approval discharges whichever it finds first
+        -- and the other is stranded undelivered forever.
+        CREATE UNIQUE INDEX IF NOT EXISTS delivery_receipts_one_job
+          ON delivery_receipts(job_id) WHERE job_id IS NOT NULL;
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_update BEFORE UPDATE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
         CREATE TRIGGER IF NOT EXISTS artifacts_immutable_delete BEFORE DELETE ON orchestration_artifacts BEGIN SELECT RAISE(ABORT,'immutable_artifact'); END;
         CREATE TRIGGER IF NOT EXISTS approvals_immutable_update BEFORE UPDATE ON orchestration_approvals BEGIN SELECT RAISE(ABORT,'immutable_approval'); END;
@@ -185,6 +190,12 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     if (!configured || closed) return { recorded: false, reason: 'unconfigured' };
     const id = String(value?.id ?? ''), type = String(value?.type ?? '');
     if (!id || !type) return { recorded: false, reason: 'malformed_event' };
+    // A non-numeric amount is a payload we do not understand. Recording it as
+    // $0 files a real sale as worthless; refusing it instead lets Stripe retry.
+    const rawAmount = value?.data?.object?.amount_total;
+    if (rawAmount !== undefined && rawAmount !== null && !Number.isFinite(rawAmount)) {
+      return { recorded: false, reason: 'invalid_amount' };
+    }
     if (get('SELECT id FROM billing_events WHERE id=?', id)) {
       return { recorded: false, duplicate: true, type };
     }
@@ -195,40 +206,65 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     transaction(() => {
       run('INSERT INTO billing_events(id,type,received_at) VALUES(?,?,?)', id, type, now());
 
-      if (type === 'checkout.session.completed') {
+      // Delayed payment methods complete a Checkout Session BEFORE the money
+      // settles, reporting payment_status 'unpaid'. Recording one of those as a
+      // paid sale would open a promise for money that never arrived and then
+      // report it as an overdue paid delivery. The async event is what says it
+      // finally settled.
+      const settled = type === 'checkout.session.async_payment_succeeded'
+        || (type === 'checkout.session.completed' && obj.payment_status !== 'unpaid');
+
+      if (type === 'checkout.session.completed' || type === 'checkout.session.async_payment_succeeded') {
         const sessionId = String(obj.id ?? '');
         if (!sessionId) return;
         const email = String(obj.customer_details?.email ?? obj.customer_email ?? '') || null;
         const kind = String(meta.kind ?? (obj.mode === 'subscription' ? 'subscription' : 'one_off'));
-        const amount = Number.isFinite(obj.amount_total) ? obj.amount_total : 0;
+        const amount = Number.isFinite(rawAmount) ? rawAmount : null;
         const currency = String(obj.currency ?? '');
+        const status = settled ? (kind === 'video-order' ? 'paid_awaiting_assets' : 'paid') : 'awaiting_payment';
         // NO render job is created here, deliberately. A video job needs a
         // payload.workflowId, and that workflow cannot exist yet: it is built by
-        // order intake from the photo the buyer has not sent us. Inventing a job
-        // at payment time either threw (losing the payment record with it) or
-        // would have queued a render with nothing to render. The order is
+        // order intake from the photo the buyer has not sent us. The order is
         // recorded as paid-and-awaiting-assets instead; fulfilment starts when
         // the asset arrives, and job_id is linked then.
+        //
+        // Only a PENDING order may be advanced. A redelivered event must not
+        // rewind a status the intake path has already moved on from.
         run(`INSERT INTO billing_orders(session_id,kind,email,customer,amount,currency,status,job_id,created_at,updated_at)
              VALUES(?,?,?,?,?,?,?,NULL,?,?)
              ON CONFLICT(session_id) DO UPDATE SET
-               status=excluded.status, updated_at=excluded.updated_at`,
-          sessionId, kind, email, String(obj.customer ?? '') || null, amount, currency,
-          kind === 'video-order' ? 'paid_awaiting_assets' : 'paid', now(), now());
-        out.order = { sessionId, kind, email, amount, currency, jobId: null };
-        // The promise opens in the SAME transaction as the payment record: there
-        // must be no window in which we hold money and nothing tracks what it
-        // bought.
-        const promised = String(meta.deliverable ?? (kind === 'video-order'
-          ? 'AI product b-roll video built from the buyer-supplied product photo'
-          : kind === 'subscription' ? 'subscription access' : 'purchased deliverable'));
-        out.delivery = openDeliveryReceipt({
-          operationId: `session:${sessionId}`, sessionId, kind, promisedArtifact: promised });
-        if (obj.subscription) upsertSubscription(String(obj.subscription), obj.customer, email, meta.plan, 'active');
+               status=CASE WHEN billing_orders.status='awaiting_payment' THEN excluded.status
+                           ELSE billing_orders.status END,
+               updated_at=excluded.updated_at`,
+          sessionId, kind, email, String(obj.customer ?? '') || null, amount, currency, status, now(), now());
+        out.order = { sessionId, kind, email, amount, currency, jobId: null, settled };
+        // Only a SETTLED one-off sale opens a promise. Recurring access is not a
+        // one-shot deliverable: opening a receipt per subscription would put
+        // every subscriber permanently in the overdue list and destroy the
+        // signal the gap exists to provide.
+        if (settled && kind !== 'subscription') {
+          const promised = String(meta.deliverable ?? (kind === 'video-order'
+            ? 'AI product b-roll video built from the buyer-supplied product photo'
+            : 'purchased deliverable'));
+          out.delivery = openDeliveryReceipt({
+            operationId: `session:${sessionId}`, sessionId, kind, promisedArtifact: promised });
+        }
+        if (obj.subscription) {
+          // Do not stamp a fresh 'active' over a lifecycle already on record: a
+          // delayed checkout completing after a cancellation must not revive it.
+          const known = get('SELECT status FROM billing_subscriptions WHERE subscription_id=?', String(obj.subscription));
+          upsertSubscription(String(obj.subscription), obj.customer, email, meta.plan, known?.status ?? 'active');
+        }
       } else if (type.startsWith('customer.subscription.')) {
         const subscriptionId = String(obj.id ?? '');
         if (subscriptionId) {
-          const status = String(obj.status ?? 'unknown');
+          const incoming = String(obj.status ?? 'unknown');
+          const current = get('SELECT status FROM billing_subscriptions WHERE subscription_id=?', subscriptionId)?.status;
+          // Stripe does not guarantee event ordering, so a delayed 'active' can
+          // arrive after a cancellation. Cancellation is terminal for a given
+          // subscription id; a genuine reactivation comes back as a new one.
+          const terminal = current === 'canceled' || current === 'incomplete_expired';
+          const status = terminal && incoming !== 'canceled' ? current : incoming;
           upsertSubscription(subscriptionId, obj.customer, obj.customer_email ?? null, meta.plan, status);
           out.subscription = { subscriptionId, status };
         }
@@ -305,6 +341,10 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
     // Refuse to repoint a promise at different work: silently swapping what an
     // order is measured against is how a gap gets made to look closed.
     if (row.job_id && row.job_id !== job) return { linked: false, reason: 'already_linked' };
+    // ...and refuse to point a SECOND promise at the same job, which would
+    // strand one of them (approval discharges only the first it finds).
+    const bound = get('SELECT operation_id FROM delivery_receipts WHERE job_id=?', job);
+    if (bound && bound.operation_id !== id) return { linked: false, reason: 'job_already_linked' };
     run('UPDATE delivery_receipts SET job_id=?, updated_at=? WHERE operation_id=?', job, now(), id);
     event('delivery_linked', { operationId: id, jobId: job });
     return { linked: true, receipt: receiptView(get('SELECT * FROM delivery_receipts WHERE operation_id=?', id)) };
@@ -343,9 +383,19 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
   // an operator can take 18 of them, publish nothing, and not find out for days.
   function deliveryLedger() {
     if (!configured || closed) {
-      return { configured: false, paid: 0, delivered: 0, undelivered: 0, overdue: 0, states: {}, gap: [] };
+      return { configured: false, paid: 0, delivered: 0, undelivered: 0, unreceipted: 0, overdue: 0, states: {}, gap: [] };
     }
+    // Counted from RECEIPTS, not as `paid - delivered`. Those are two different
+    // populations (orders vs promises), so subtracting them lets the ledger
+    // report a gap of zero while unreceipted orders rot, or go negative.
+    const undelivered = get("SELECT COUNT(*) AS n FROM delivery_receipts WHERE state<>'delivered'").n;
     const paid = get('SELECT COUNT(*) AS n FROM billing_orders').n;
+    // Orders with no promise at all. Reported explicitly instead of folded into
+    // the arithmetic, so the two sources can never silently disagree.
+    const unreceipted = get(`SELECT COUNT(*) AS n FROM billing_orders o
+                             WHERE NOT EXISTS (SELECT 1 FROM delivery_receipts r
+                                               WHERE r.session_id=o.session_id)`).n;
+    // Runs the read-time deadline promotion, so overdue is a fact on read.
     const states = reconcileDeliveries();
     const delivered = states.delivered ?? 0;
     const gap = all(`SELECT operation_id AS operationId, session_id AS sessionId, kind,
@@ -353,7 +403,7 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
                             deadline_at AS deadlineAt, created_at AS createdAt
                      FROM delivery_receipts WHERE state<>'delivered'
                      ORDER BY deadline_at ASC LIMIT 50`);
-    return { configured: true, paid, delivered, undelivered: paid - delivered,
+    return { configured: true, paid, delivered, undelivered, unreceipted,
              overdue: states.overdue ?? 0, states, gap };
   }
 
@@ -449,10 +499,13 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
   function ownerAction(method, path, value) {
     if (method === 'GET' && path === '/status') return { status: 200, body: snapshot() };
     if (method === 'GET' && path === '/billing') return { status: 200, body: billingSummary() };
-    if (method === 'GET' && path === '/deliveries') return { status: 200, body: deliveryLedger() };
-    if (method === 'GET' && path === '/deliveries/gap') return { status: 200, body: deliveryLedger().gap };
     return transaction(() => {
       reap();
+      // Indoors on purpose: deliveryLedger() promotes overdue deadlines, which is
+      // a write. In autocommit that write can collide with the worker's
+      // BEGIN IMMEDIATE and fail an owner status read.
+      if (method === 'GET' && path === '/deliveries') return { status: 200, body: deliveryLedger() };
+      if (method === 'GET' && path === '/deliveries/gap') return { status: 200, body: deliveryLedger().gap };
       if (method === 'POST' && path === '/deliveries/link') {
         const linked = linkDeliveryJob(value?.operationId, value?.jobId);
         return { status: linked.linked ? 200 : 400, body: linked };
