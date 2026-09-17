@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { assessReadiness } from '../src/server/readiness.js';
 const now = 100000;
 const keys = ['hardwareClearance', 'exclusiveOwnership', 'maintenanceClear', 'durableVolume', 'singleReplica', 'modelPinned', 'workflowPinned', 'backupRestoreVerified'];
-const status = () => ({ configured: true, control: { paused: false, kill: false, hardwarePaused: false, gpuQuarantined: false, externalExecution: false }, workerContacts: [{ lastSeenAt: now }] });
+const status = () => ({ configured: true, control: { paused: false, kill: false, hardwarePaused: false, gpuQuarantined: false, externalExecution: false }, workerContacts: [{ lastSeenAt: now, kinds: ['video'] }] });
 const evidence = () => Object.fromEntries(keys.map(key => [key, { value: true, source: 'operator', observedAt: now - 1, expiresAt: now + 1000, reference: 'synthetic-reviewed-record' }]));
 test('absent evidence stays unknown and assessment does not mutate inputs or echo evidence', () => {
   const s = status(), e = evidence(); e.hardwareClearance.reference = 'never echo this';
@@ -37,4 +37,24 @@ test('absent, stale, future and multiple fresh worker contacts block; contact is
 test('a supplied runtime maintenance lock conflicts with human clearance and blocks', () => {
   const s = { ...status(), maintenanceHold: true };
   assert.equal(assessReadiness(s, evidence(), now).ready, false);
+});
+test('a fresh heartbeat that declares no kind cannot certify the machine', () => {
+  const bare = { ...status(), workerContacts: [{ lastSeenAt: now }] };
+  const r = assessReadiness(bare, evidence(), now);
+  assert.equal(r.ready, false);
+  assert.deepEqual(r.servableKinds, []);
+  assert.ok(r.reasons.includes('workerContact:worker_declares_no_servable_kinds'));
+});
+test('a research-only worker certifies nothing about video', () => {
+  const s = { ...status(), workerContacts: [{ lastSeenAt: now, kinds: ['research'] }] };
+  const r = assessReadiness(s, evidence(), now);
+  assert.equal(r.ready, true);
+  assert.deepEqual(r.servableKinds, ['research']);
+  assert.ok(!r.servableKinds.includes('video'));
+});
+test('a stale worker contributes no servable kinds', () => {
+  const s = { ...status(), workerContacts: [{ lastSeenAt: now - 60001, kinds: ['video'] }] };
+  const r = assessReadiness(s, evidence(), now);
+  assert.deepEqual(r.servableKinds, []);
+  assert.equal(r.ready, false);
 });

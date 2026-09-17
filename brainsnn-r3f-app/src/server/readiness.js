@@ -13,7 +13,21 @@ export function assessReadiness(status = {}, evidence = {}, now = Date.now()) {
   const contacts = Array.isArray(status.workerContacts) ? status.workerContacts : [];
   const fresh = contacts.filter(c => Number.isFinite(c?.lastSeenAt) && c.lastSeenAt <= now && now - c.lastSeenAt <= 60000);
   const future = contacts.some(c => Number.isFinite(c?.lastSeenAt) && c.lastSeenAt > now);
-  add('workerContact', future || fresh.length > 1 ? 'blocked' : fresh.length === 1 ? 'pass' : 'unknown', 'machine', future ? 'worker_clock_conflict' : fresh.length > 1 ? 'multiple_recent_workers' : fresh.length === 1 ? 'authenticated_contact_only' : contacts.length ? 'worker_contact_stale' : 'worker_contact_absent');
+  // A heartbeat proves liveness, not capability. Without a declared kind, a
+  // research-only worker on a laptop certifies the machine while the GPU box is
+  // gone -- the outage is then hidden by the very signal meant to reveal it.
+  const declared = fresh.filter(c => Array.isArray(c?.kinds) && c.kinds.length > 0);
+  const servableKinds = [...new Set(declared.flatMap(c => c.kinds))];
+  add('workerContact',
+    future || fresh.length > 1 ? 'blocked'
+      : fresh.length === 1 && declared.length === 1 ? 'pass'
+        : 'unknown',
+    'machine',
+    future ? 'worker_clock_conflict'
+      : fresh.length > 1 ? 'multiple_recent_workers'
+        : fresh.length === 1 && declared.length === 1 ? 'authenticated_contact_with_declared_kinds'
+          : fresh.length === 1 ? 'worker_declares_no_servable_kinds'
+            : contacts.length ? 'worker_contact_stale' : 'worker_contact_absent');
   for (const id of ASSERTIONS) {
     const item = evidence?.[id];
     const valid = item?.source === 'operator' && typeof item.reference === 'string' && item.reference.trim().length > 0
@@ -21,5 +35,5 @@ export function assessReadiness(status = {}, evidence = {}, now = Date.now()) {
       && item.observedAt <= now && now - item.observedAt <= MAX_ASSERTION_AGE_MS && item.expiresAt > now && item.expiresAt > item.observedAt;
     add(id, valid && item.value === true ? 'pass' : valid && item.value === false ? 'blocked' : 'unknown', 'operator', !valid ? 'assertion_missing_invalid_or_stale' : item.value === true ? 'human_assertion_not_independently_verified' : item.value === false ? 'operator_reports_blocker' : 'assertion_value_unknown');
   }
-  return { ready: checks.every(c => c.state === 'pass'), advisoryOnly: true, assessedAt: now, checks, reasons: checks.filter(c => c.state !== 'pass').map(c => `${c.id}:${c.reason}`) };
+  return { ready: checks.every(c => c.state === 'pass'), advisoryOnly: true, assessedAt: now, servableKinds, checks, reasons: checks.filter(c => c.state !== 'pass').map(c => `${c.id}:${c.reason}`) };
 }
