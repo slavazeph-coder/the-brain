@@ -149,7 +149,13 @@ export function OperationsWorkspace() {
           <h2>Deployment readiness: {online && snapshot.readiness?.ready === true ? 'assertions satisfied' : 'blocked'}</h2>
           <p>Control plane: {online ? 'online' : 'unverified — refresh failed'}</p>
           <p>GPU worker readiness: {online && snapshot.readiness?.ready === true ? 'assertions satisfied; physical checks still required' : 'unverified'}</p>
-          <p>Worker contact: {!online ? 'unverified' : snapshot.readiness?.checks?.find(item => item.id === 'workerContact')?.reason === 'authenticated_contact_only' ? 'recent (within 60 seconds); contact only' : snapshot.workerContacts?.length ? 'stale or conflicting' : 'absent'}</p>
+          <p>Worker contact: {!online ? 'unverified' : (() => {
+            const check = snapshot.readiness?.checks?.find(item => item.id === 'workerContact');
+            const kinds = snapshot.readiness?.servableKinds || [];
+            if (check?.reason === 'authenticated_contact_with_declared_kinds') return `recent (within 60 seconds); serves ${kinds.join(', ') || 'nothing declared'}`;
+            if (check?.reason === 'worker_declares_no_servable_kinds') return 'recent, but declares nothing it can serve';
+            return snapshot.workerContacts?.length ? 'stale or conflicting' : 'absent';
+          })()}</p>
           <p>Read-only assessment. Missing evidence blocks readiness. Human assertions do not independently verify hardware or authorize cutover.</p>
           <details><summary>Readiness reasons and evidence types</summary><ul>{snapshot.readiness?.checks?.map(item => <li key={item.id}><strong>{item.id}: {item.state}</strong> · {item.source === 'operator' ? 'human assertion' : 'machine check'}<br/>{item.reason}</li>)}</ul></details>
           <h3>Persisted job outcomes</h3>
