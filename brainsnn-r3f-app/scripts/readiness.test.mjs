@@ -91,3 +91,12 @@ test('a never-supplied assertion is labelled never supplied, not stale', () => {
   const r = assessReadiness(status(), {}, now);
   assert.equal(r.checks.find(x => x.id === 'hardwareClearance').reason, 'assertion_never_supplied');
 });
+test('machine readiness is answerable without any operator attestations', () => {
+  const r = assessReadiness(status(), {}, now);
+  assert.equal(r.ready, false, 'cutover still requires human attestations');
+  assert.equal(r.machineReady, true, 'the machine itself is fine');
+});
+test('machine readiness follows the machine checks, not the assertions', () => {
+  const s = { ...status(), gpu: { reachable: true, healthy: false } };
+  assert.equal(assessReadiness(s, {}, now).machineReady, false);
+});

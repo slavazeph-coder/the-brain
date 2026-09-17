@@ -59,5 +59,12 @@ export function assessReadiness(status = {}, evidence = {}, now = Date.now()) {
       && item.observedAt <= now && now - item.observedAt <= MAX_ASSERTION_AGE_MS && item.expiresAt > now && item.expiresAt > item.observedAt;
     add(id, valid && item.value === true ? 'pass' : valid && item.value === false ? 'blocked' : 'unknown', 'operator', !item ? 'assertion_never_supplied' : !valid ? 'assertion_invalid_or_stale' : item.value === true ? 'human_assertion_not_independently_verified' : item.value === false ? 'operator_reports_blocker' : 'assertion_value_unknown');
   }
-  return { ready: checks.every(c => c.state === 'pass'), advisoryOnly: true, assessedAt: now, servableKinds, checks, reasons: checks.filter(c => c.state !== 'pass').map(c => `${c.id}:${c.reason}`) };
+  // Two different questions were collapsed into one boolean. `ready` answers
+  // "may we cut over", which needs unfed human attestations and is therefore
+  // always false. `machineReady` answers "is the machine itself working",
+  // which is answerable from live checks alone. Reporting only the former is
+  // why the panel showed nothing but 'unknown'.
+  const machineChecks = checks.filter(c => c.source === 'machine');
+  const machineReady = machineChecks.length > 0 && machineChecks.every(c => c.state === 'pass');
+  return { ready: checks.every(c => c.state === 'pass'), machineReady, advisoryOnly: true, assessedAt: now, servableKinds, checks, reasons: checks.filter(c => c.state !== 'pass').map(c => `${c.id}:${c.reason}`) };
 }
