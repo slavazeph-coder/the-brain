@@ -38,12 +38,26 @@ export function assessReadiness(status = {}, evidence = {}, now = Date.now()) {
     gpu.healthy === true ? 'gpu_initialised'
       : gpu.reachable === true ? 'host_reachable_gpu_uninitialised'
         : 'gpu_not_reported');
+  // Machine-observable workload. The build produces work far faster than
+  // anything consumes it: 117 ready-for-review, 0 deliveries. That is the
+  // condition a dashboard must lead with -- not eight unfed attestations.
+  const jobs = Array.isArray(status.jobs) ? status.jobs : [];
+  const by = {};
+  for (const j of jobs) by[j.status] = (by[j.status] || 0) + 1;
+  const backlog = by['ready-for-review'] || 0;
+  const delivered = Array.isArray(status.deliveries) ? status.deliveries.length : 0;
+  add('workload',
+    delivered > 0 ? 'pass' : backlog > 0 ? 'blocked' : 'unknown',
+    'machine',
+    delivered > 0 ? 'output_is_being_delivered'
+      : backlog > 0 ? `backlog_unconsumed:${backlog}_ready_for_review_${delivered}_delivered`
+        : 'no_workload_reported');
   for (const id of ASSERTIONS) {
     const item = evidence?.[id];
     const valid = item?.source === 'operator' && typeof item.reference === 'string' && item.reference.trim().length > 0
       && Number.isFinite(item.observedAt) && Number.isFinite(item.expiresAt)
       && item.observedAt <= now && now - item.observedAt <= MAX_ASSERTION_AGE_MS && item.expiresAt > now && item.expiresAt > item.observedAt;
-    add(id, valid && item.value === true ? 'pass' : valid && item.value === false ? 'blocked' : 'unknown', 'operator', !valid ? 'assertion_missing_invalid_or_stale' : item.value === true ? 'human_assertion_not_independently_verified' : item.value === false ? 'operator_reports_blocker' : 'assertion_value_unknown');
+    add(id, valid && item.value === true ? 'pass' : valid && item.value === false ? 'blocked' : 'unknown', 'operator', !item ? 'assertion_never_supplied' : !valid ? 'assertion_invalid_or_stale' : item.value === true ? 'human_assertion_not_independently_verified' : item.value === false ? 'operator_reports_blocker' : 'assertion_value_unknown');
   }
   return { ready: checks.every(c => c.state === 'pass'), advisoryOnly: true, assessedAt: now, servableKinds, checks, reasons: checks.filter(c => c.state !== 'pass').map(c => `${c.id}:${c.reason}`) };
 }

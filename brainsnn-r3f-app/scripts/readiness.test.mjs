@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { assessReadiness } from '../src/server/readiness.js';
 const now = 100000;
 const keys = ['hardwareClearance', 'exclusiveOwnership', 'maintenanceClear', 'durableVolume', 'singleReplica', 'modelPinned', 'workflowPinned', 'backupRestoreVerified'];
-const status = () => ({ configured: true, control: { paused: false, kill: false, hardwarePaused: false, gpuQuarantined: false, externalExecution: false }, workerContacts: [{ lastSeenAt: now, kinds: ['video'] }], gpu: { reachable: true, healthy: true } });
+const status = () => ({ configured: true, control: { paused: false, kill: false, hardwarePaused: false, gpuQuarantined: false, externalExecution: false }, workerContacts: [{ lastSeenAt: now, kinds: ['video'] }], gpu: { reachable: true, healthy: true }, jobs: [{ status: 'ready-for-review' }], deliveries: [{ id: 'd1' }] });
 const evidence = () => Object.fromEntries(keys.map(key => [key, { value: true, source: 'operator', observedAt: now - 1, expiresAt: now + 1000, reference: 'synthetic-reviewed-record' }]));
 test('absent evidence stays unknown and assessment does not mutate inputs or echo evidence', () => {
   const s = status(), e = evidence(); e.hardwareClearance.reference = 'never echo this';
@@ -78,4 +78,16 @@ test('only an initialised driver passes gpuHealth', () => {
   const r = assessReadiness(s, evidence(), now);
   assert.equal(r.checks.find(c => c.id === 'gpuHealth').state, 'pass');
   assert.equal(r.ready, true);
+});
+test('an unconsumed backlog with no deliveries blocks', () => {
+  const s = { ...status(), deliveries: [], jobs: Array.from({ length: 117 }, () => ({ status: 'ready-for-review' })) };
+  const r = assessReadiness(s, evidence(), now);
+  const c = r.checks.find(x => x.id === 'workload');
+  assert.equal(c.state, 'blocked');
+  assert.ok(c.reason.startsWith('backlog_unconsumed:117_'), c.reason);
+  assert.equal(r.ready, false);
+});
+test('a never-supplied assertion is labelled never supplied, not stale', () => {
+  const r = assessReadiness(status(), {}, now);
+  assert.equal(r.checks.find(x => x.id === 'hardwareClearance').reason, 'assertion_never_supplied');
 });
