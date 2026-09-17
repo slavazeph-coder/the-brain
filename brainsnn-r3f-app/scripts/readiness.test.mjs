@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { assessReadiness } from '../src/server/readiness.js';
 const now = 100000;
 const keys = ['hardwareClearance', 'exclusiveOwnership', 'maintenanceClear', 'durableVolume', 'singleReplica', 'modelPinned', 'workflowPinned', 'backupRestoreVerified'];
-const status = () => ({ configured: true, control: { paused: false, kill: false, hardwarePaused: false, gpuQuarantined: false, externalExecution: false }, workerContacts: [{ lastSeenAt: now, kinds: ['video'] }] });
+const status = () => ({ configured: true, control: { paused: false, kill: false, hardwarePaused: false, gpuQuarantined: false, externalExecution: false }, workerContacts: [{ lastSeenAt: now, kinds: ['video'] }], gpu: { reachable: true, healthy: true } });
 const evidence = () => Object.fromEntries(keys.map(key => [key, { value: true, source: 'operator', observedAt: now - 1, expiresAt: now + 1000, reference: 'synthetic-reviewed-record' }]));
 test('absent evidence stays unknown and assessment does not mutate inputs or echo evidence', () => {
   const s = status(), e = evidence(); e.hardwareClearance.reference = 'never echo this';
@@ -57,4 +57,25 @@ test('a stale worker contributes no servable kinds', () => {
   const r = assessReadiness(s, evidence(), now);
   assert.deepEqual(r.servableKinds, []);
   assert.equal(r.ready, false);
+});
+test('a reachable host with an uninitialised GPU is blocked, not passed', () => {
+  const s = { ...status(), gpu: { reachable: true, healthy: false } };
+  const r = assessReadiness(s, evidence(), now);
+  const check = r.checks.find(c => c.id === 'gpuHealth');
+  assert.equal(check.state, 'blocked');
+  assert.equal(check.reason, 'host_reachable_gpu_uninitialised');
+  assert.equal(r.ready, false);
+});
+test('an unreported GPU is unknown, never a pass', () => {
+  const s = { ...status() };
+  delete s.gpu;
+  const r = assessReadiness(s, evidence(), now);
+  assert.equal(r.checks.find(c => c.id === 'gpuHealth').state, 'unknown');
+  assert.equal(r.ready, false);
+});
+test('only an initialised driver passes gpuHealth', () => {
+  const s = { ...status(), gpu: { reachable: true, healthy: true } };
+  const r = assessReadiness(s, evidence(), now);
+  assert.equal(r.checks.find(c => c.id === 'gpuHealth').state, 'pass');
+  assert.equal(r.ready, true);
 });

@@ -28,6 +28,16 @@ export function assessReadiness(status = {}, evidence = {}, now = Date.now()) {
         : fresh.length === 1 && declared.length === 1 ? 'authenticated_contact_with_declared_kinds'
           : fresh.length === 1 ? 'worker_declares_no_servable_kinds'
             : contacts.length ? 'worker_contact_stale' : 'worker_contact_absent');
+  // A reachable host is not a working card. Conflating the two queued 16 real
+  // jobs against a faulted GPU on 2026-09-17, so they are separate states:
+  // `reachable` only means SSH answered, `healthy` means the driver initialised.
+  const gpu = status.gpu || {};
+  add('gpuHealth',
+    gpu.healthy === true ? 'pass' : gpu.reachable === true ? 'blocked' : 'unknown',
+    'machine',
+    gpu.healthy === true ? 'gpu_initialised'
+      : gpu.reachable === true ? 'host_reachable_gpu_uninitialised'
+        : 'gpu_not_reported');
   for (const id of ASSERTIONS) {
     const item = evidence?.[id];
     const valid = item?.source === 'operator' && typeof item.reference === 'string' && item.reference.trim().length > 0
