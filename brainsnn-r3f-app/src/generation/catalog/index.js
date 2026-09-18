@@ -17,7 +17,11 @@ export function resolveWorkflows(entry, env = {}) {
   const keys = entry.workflowEnv || [];
   const missing = keys.filter((k) => !String(env[k] ?? "").trim());
   const bindings = Object.fromEntries(keys.map((k) => [k, env[k]]));
-  return { available: missing.length === 0, missing, bindings };
+  // The plane rejects a video job with no workflowId (orchestration.js:523), so
+  // the resolved id is part of the contract, not an optional extra: a literal id
+  // for pipelines that always exist, otherwise the pinned env value.
+  const workflowId = entry.workflowId || bindings[keys[0]] || null;
+  return { available: missing.length === 0, missing, bindings, workflowId };
 }
 
 export function availability(env = {}) {

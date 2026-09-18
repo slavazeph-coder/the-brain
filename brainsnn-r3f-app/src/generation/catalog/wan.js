@@ -52,4 +52,7 @@ export const reelAssemble = {
     aspectRatio: enumField(["16:9", "9:16"], "9:16"),
   },
   workflowEnv: [],
+  // The plane requires payload.workflowId on every video job, so a pipeline that
+  // always exists carries a literal id instead of an environment pin.
+  workflowId: "reel-assemble",
 };

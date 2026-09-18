@@ -99,6 +99,23 @@ test('every queue state maps to a status a client can render', () => {
   }
 });
 
+test('every submitted video job carries a workflowId the plane accepts', () => {
+  // orchestration.js:523 rejects a video job whose payload.workflowId is absent or
+  // malformed. Without this test the contract looked fine while queuing nothing.
+  const PATTERN = /^[\w.-]{1,80}$/;
+  const seen = [];
+  const sink = v => { seen.push(v); return { job: { id: 'j1' } }; };
+  assert.equal(submitGeneration('wan-2.2-i2v-14b-fp8', { prompt: 'p' }, { env: FULL, submit: sink }).status, 201);
+  assert.equal(submitGeneration('reel-assemble', { prompt: 'p' }, { env: {}, submit: sink }).status, 201, 'the assembler must need no environment at all');
+  assert.equal(seen.length, 2);
+  for (const call of seen) {
+    assert.equal(typeof call.payload.workflowId, 'string');
+    assert.match(call.payload.workflowId, PATTERN);
+  }
+  assert.equal(seen[0].payload.workflowId, 'wf-wan22-i2v');
+  assert.equal(seen[1].payload.workflowId, 'reel-assemble');
+});
+
 test('an unknown request id is a 404, not an empty success', () => {
   const res = readRequest('nope', { find: () => null });
   assert.equal(res.status, 404);

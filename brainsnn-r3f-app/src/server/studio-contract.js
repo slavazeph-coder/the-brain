@@ -40,7 +40,7 @@ export function submitGeneration(modelId, body, deps = {}) {
   if (typeof deps.submit !== "function") return { status: 500, body: { error: "control_plane_unavailable" } };
   const result = deps.submit({
     kind: "video",
-    payload: { prompt: plane.prompt.text, settings: plane.settings, bindings: wf.bindings },
+    payload: { workflowId: wf.workflowId, prompt: plane.prompt.text, settings: plane.settings, bindings: wf.bindings },
     idempotencyKey: body.idempotencyKey,
   });
   return { status: result && result.duplicate ? 200 : 201, body: result };
