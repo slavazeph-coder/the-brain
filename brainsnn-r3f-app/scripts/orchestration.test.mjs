@@ -430,7 +430,15 @@ test('owner visibility records only successful authenticated worker contact and 
   await f.call('worker', '/next');
   s = f.scheduler().snapshot();
   assert.equal(s.workerContacts[0].lastSeenAt, 100000);
-  assert.equal(s.readiness.checks.find(c => c.id === 'workerContact').state, 'pass');
+  // Kinds are deliberate (readiness.js): a heartbeat proves liveness, not
+  // capability. This worker has been assigned no work yet, so it must NOT be
+  // allowed to certify. The positive direction (kinds present -> pass) is proven
+  // in readiness.test.mjs. Deriving kinds from actually-assigned work is what
+  // makes this check passable at all: until that plumbing existed the contact row
+  // carried no kinds, so workerContact could never leave 'unknown' and
+  // readiness.ready was permanently false.
+  assert.equal(s.readiness.checks.find(c => c.id === 'workerContact').state, 'unknown');
+  assert.equal(s.readiness.checks.find(c => c.id === 'workerContact').reason, 'worker_declares_no_servable_kinds');
   assert.equal(s.readiness.ready, false);
   const job = await f.submit('metrics'); const leased = (await f.call('worker', '/next')).body.job;
   assert.equal((await f.call('worker', `/jobs/${job.id}/complete`, { token: leased.lease.token, quiescent: true, result: {}, artifacts: [{ sha256: SHA, uri: `sha256:${SHA}`, bytes: 4, mediaType: 'video/mp4' }] })).status, 200);

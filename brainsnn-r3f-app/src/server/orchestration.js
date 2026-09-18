@@ -505,7 +505,18 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         deliveries: deliveryLedger(),
         jobs: all('SELECT * FROM orchestration_jobs ORDER BY created_at DESC,rowid DESC LIMIT 200').map(row => jobView(row)),
         control: control(),
-        workerContacts: all('SELECT worker AS workerId,last_seen_at AS lastSeenAt FROM orchestration_worker_contacts ORDER BY last_seen_at DESC'),
+        // A heartbeat proves liveness, not capability. Kinds are therefore derived
+        // from work this worker has ACTUALLY been assigned, never asserted from a
+        // heartbeat: a worker given video work has demonstrated it can serve video,
+        // and one that never has stays honestly 'unknown' in the readiness check
+        // instead of certifying a machine it has never rendered on.
+        workerContacts: all(`SELECT c.worker AS workerId,c.last_seen_at AS lastSeenAt,
+          (SELECT GROUP_CONCAT(DISTINCT j.kind) FROM orchestration_jobs j WHERE j.worker=c.worker) AS kinds
+          FROM orchestration_worker_contacts c ORDER BY c.last_seen_at DESC`)
+          .map(row => ({
+            workerId: row.workerId, lastSeenAt: row.lastSeenAt,
+            kinds: row.kinds ? String(row.kinds).split(',').filter(Boolean) : [],
+          })),
         metrics: {
           source: 'persisted_jobs', scope: 'all_retained_jobs_excluding_internal_warmups',
           readyForReview: get("SELECT COUNT(*) AS n FROM orchestration_jobs WHERE status='ready-for-review' AND warmup=0").n,
