@@ -1,4 +1,6 @@
 import { assessReadiness } from './readiness.js';
+import { availability } from '../generation/catalog/index.js';
+import { readRequest, submitGeneration } from './studio-contract.js';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { isAbsolute, dirname } from 'node:path';
@@ -559,6 +561,30 @@ export function createOrchestration(env = {}, { now = Date.now, leaseMs = 30_000
         const claimed = claimDelivery(value?.operationId, {
           evidenceLocator: value?.evidenceLocator, sha256: value?.sha256 });
         return { status: claimed.claimed || claimed.duplicate ? 200 : 400, body: claimed };
+      }
+      // The studio contract: same shape as upstream's POST /{model} +
+      // GET /requests/{id}/status, served by OUR plane. These live on the owner
+      // surface so they inherit the existing credential check -- no new auth.
+      if (method === 'GET' && path === '/studio/models') {
+        return { status: 200, body: { models: availability(process.env) } };
+      }
+      if (method === 'GET' && path.startsWith('/studio/requests/')) {
+        const requestId = decodeURIComponent(path.slice('/studio/requests/'.length));
+        const found = requestId ? get('SELECT * FROM orchestration_jobs WHERE id=?', requestId) : null;
+        const result = readRequest(requestId, {
+          find: () => found && {
+            id: found.id, model: found.kind, status: found.status,
+            artifacts: parse(found.artifacts) || [],
+          },
+        });
+        return { status: result.status, body: result.body };
+      }
+      if (method === 'POST' && path.startsWith('/studio/')) {
+        // env comes from process.env, so an unpinned workflow refuses (503) here
+        // rather than being asserted available somewhere else in the stack.
+        const modelId = decodeURIComponent(path.slice('/studio/'.length));
+        const result = submitGeneration(modelId, value || {}, { env: process.env, submit });
+        return { status: result.status, body: result.body };
       }
       if (method === 'POST' && path === '/jobs') { const result = submit(value); return { status: result.duplicate ? 200 : 201, body: result }; }
       if (method === 'POST' && path === '/control') {
