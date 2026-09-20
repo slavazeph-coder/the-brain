@@ -8,7 +8,7 @@ const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const railway = read('railway.toml').match(/^startCommand\s*=\s*"([^"]+)"\s*$/m)?.[1];
 const docker = read('Dockerfile').match(/^CMD\s+(\[[^\n]+\])\s*$/m)?.[1];
 const npm = JSON.parse(read('package.json')).scripts.start;
-const required = ['--require', './brand-brain-preload.cjs', '--require', './mission-market-preload.cjs', '--require', './sponsorship/server.cjs'];
+const required = ['--require', './sponsorship/gt3/server.cjs', '--require', './brand-brain-preload.cjs', '--require', './mission-market-preload.cjs', '--require', './sponsorship/server.cjs'];
 const expected = ['node', ...required, 'dist/server.cjs'];
 
 test('Railway uses the complete production route chain, not only the old homepage', () => {
