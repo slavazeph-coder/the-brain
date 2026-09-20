@@ -3,13 +3,15 @@ import AxeBuilder from '@axe-core/playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { resolve4, resolve6, resolveCname } from 'node:dns/promises';
 
-// Public, read-only deployment verification. Never submit real applications,
-// sign in as the owner, create reservations, or contact Stripe from this test.
+// Read-only production verification: no customer records, sign-ins or charges.
+// Finish checking the canonical site even if an independent apex domain fails.
+// An apex failure is still reported and fails the overall verification at the end.
 const base = 'https://www.brainsnn.com';
 const out = path.resolve('sponsorship/reports/live');
 await fs.mkdir(out, { recursive: true });
-const evidence = { base, checkedAt: new Date().toISOString(), productionApplicationsSubmitted: 0, stripeChargesCreated: 0, http: [], screenshots: [], checks: [] };
+const evidence = { base, checkedAt: new Date().toISOString(), productionApplicationsSubmitted: 0, stripeChargesCreated: 0, http: [], screenshots: [], checks: [], canonicalVerified: false, warnings: [] };
 const get = async (url) => fetch(url, { signal: AbortSignal.timeout(20000), headers: { 'Cache-Control': 'no-cache' } });
 let browser;
 try {
@@ -31,15 +33,24 @@ try {
     if (endpoint === '/api/sponsors/status') { const state = await response.json(); evidence.storage = state.storage; evidence.payments = state.payments; assert.equal(state.storage, 'persistent_sqlite'); }
     if (endpoint === '/api/sponsors/catalog') { const catalog = await response.json(); evidence.zoneCount = catalog.zones.length; assert.equal(catalog.zones.length, 8); }
   }
-  const apex = await get('https://brainsnn.com/sponsor/');
-  assert.equal(apex.status, 200); assert.match(await apex.text(), /Your brand/);
-  evidence.http.push({ endpoint: 'https://brainsnn.com/sponsor/', status: apex.status });
+  try {
+    const apex = await get('https://brainsnn.com/sponsor/');
+    const text = await apex.text();
+    evidence.apex = { status: apex.status, finalUrl: apex.url, server: apex.headers.get('server'), ok: apex.status === 200 && /Your brand/.test(text) };
+    if (!evidence.apex.ok) evidence.apex.responsePreview = text.slice(0, 500);
+    evidence.http.push({ endpoint: 'https://brainsnn.com/sponsor/', status: apex.status });
+  } catch (error) { evidence.apex = { ok: false, error: error.message }; }
+  if (!evidence.apex.ok) evidence.warnings.push('The bare brainsnn.com domain does not serve the sponsor page. The canonical www.brainsnn.com site is checked separately; domain routing remains unresolved.');
+  evidence.dns = {};
+  for (const host of ['brainsnn.com', 'www.brainsnn.com']) {
+    const records = await Promise.allSettled([resolve4(host), resolve6(host), resolveCname(host)]);
+    evidence.dns[host] = Object.fromEntries(records.map((result, i) => [['A', 'AAAA', 'CNAME'][i], result.status === 'fulfilled' ? result.value : result.reason.code]));
+  }
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  // Guard the test itself against creating customer records or payments.
   await page.route('**/api/sponsors/**', async route => {
     if (!['GET', 'HEAD'].includes(route.request().method())) throw new Error('Live QA attempted a write request.');
     return route.continue();
@@ -93,7 +104,9 @@ try {
   }
   assert.equal(errors.length, 0, errors.join('; '));
   evidence.browserErrors = errors;
-  evidence.checks.push('Public HTTPS home, health, sponsor page, persistent API, catalogue and protected admin verified.', 'G1 reference geometry, logo upload, surface decals, back-view selection and fixed-price form verified.', 'Desktop and 390/320-pixel mobile checked without creating any customer record.');
+  evidence.checks.push('Canonical HTTPS home, health, sponsor page, persistent API, catalogue and protected admin verified.', 'G1 reference geometry, logo upload, surface decals, back-view selection and fixed-price form verified.', 'Desktop and 390/320-pixel mobile checked without creating any customer record.');
+  evidence.canonicalVerified = true;
+  assert.ok(evidence.apex.ok, 'Canonical www site passed, but bare brainsnn.com domain routing still needs correction.');
   evidence.ok = true;
 } catch (error) {
   evidence.ok = false; evidence.error = error.stack; process.exitCode = 1;
