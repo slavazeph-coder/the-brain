@@ -1,3 +1,5 @@
+import './launch.js?v=20260920-launch1';
+
 // Progressive navigation and pricing presentation only.
 // The approved robot model, applications and Stripe contracts remain in app.js.
 const menu = document.getElementById('menu-toggle');

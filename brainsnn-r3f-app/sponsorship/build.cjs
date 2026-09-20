@@ -59,6 +59,14 @@ async function main() {
   await fs.mkdir(OUT,{recursive:true});
   const styles=await Promise.all(['style.source.css','readability.css'].map(file=>fs.readFile(path.join(__dirname,file),'utf8')));
   await fs.writeFile(path.join(__dirname,'public/style.css'),styles.join('\n'));
+  // Bust the existing one-hour browser cache when the launch enhancement changes.
+  // This is deterministic across repeated builds and leaves all other scripts alone.
+  const launchSources=await Promise.all(['flow.js','launch.js','launch-utils.js'].map(file=>fs.readFile(path.join(__dirname,'public',file),'utf8')));
+  const launchRevision=crypto.createHash('sha256').update(launchSources.join('\n')).digest('hex').slice(0,16);
+  const pagePath=path.join(__dirname,'public/index.html');
+  const page=await fs.readFile(pagePath,'utf8');
+  if(!page.includes('/sponsor/flow.js?v='))throw new Error('Expected the versioned sponsor flow entrypoint.');
+  await fs.writeFile(pagePath,page.replace(/\/sponsor\/flow\.js\?v=[^"\s]+/g,'/sponsor/flow.js?v='+launchRevision));
   const urdf=await get(MODEL+'g1_23dof_mode_10.urdf');
   const model=parseUrdf(urdf.toString('utf8'));
   const unique=[...new Set(model.links.map(l=>l.filename))];
