@@ -1,0 +1,70 @@
+name: Sponsor Studio
+on:
+  push:
+    branches: [feat/brainsnn-sponsor-studio, main]
+    paths:
+      - 'brainsnn-r3f-app/sponsorship/**'
+      - 'brainsnn-r3f-app/Dockerfile'
+      - '.github/workflows/sponsor-studio.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sponsor-studio-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - name: Install existing app and server-only Stripe SDK
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --prefix sponsorship --omit=dev --no-audit --no-fund
+      - name: Build pinned G1 geometry and browser renderer
+        run: |
+          mkdir -p sponsorship/reports
+          node sponsorship/build.cjs 2>&1 | tee sponsorship/reports/model-build.log
+          node --input-type=module --check < sponsorship/public/app.js
+          node --input-type=module --check < sponsorship/public/admin.js
+          node --input-type=module --check < sponsorship/public/checkout.js
+      - name: Test private applications and signed payment flow
+        run: |
+          SPONSOR_SKIP_PRELOAD=true node --test sponsorship/tests/*.test.cjs 2>&1 | tee sponsorship/reports/server-tests.log
+      - name: Install browser
+        run: npx playwright install chromium --with-deps
+      - name: Desktop, mobile, robot decals and application QA
+        run: node sponsorship/tests/browser.mjs
+      - name: Existing BrainSNN regression checks
+        run: |
+          npm run lint
+          npm test
+          npm run build
+          cd mcp-server
+          npm ci --no-audit --no-fund
+          npm run smoke
+      - name: Package build and evidence without credentials or databases
+        if: always()
+        run: |
+          mkdir -p sponsorship/reports
+          tar --exclude='node_modules' --exclude='.data' --exclude='*.sqlite*' --exclude='.env' -czf sponsor-studio-build.tar.gz sponsorship
+      - name: Upload source, compiled assets and QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sponsor-studio-${{ github.run_number }}
+          path: |
+            brainsnn-r3f-app/sponsor-studio-build.tar.gz
+            brainsnn-r3f-app/sponsorship/reports/
+          retention-days: 14
+          if-no-files-found: warn
