@@ -1,17 +1,16 @@
 # Railway config for the BrainSNN app (TypeScript/Vite SPA + bundled Express).
 # This subdirectory is the Railway service root, so this file governs the
-# production build/deploy.
+# production build/deploy and overrides Dockerfile CMD.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Brand Brain persistence is installed by a Node preload that wraps Express
-# before server.cjs imports it. Keeping this command aligned with package.json
-# and the Docker CMD is required for the /api/v1/brand-brain/* routes to exist
-# in production.
-startCommand = "node --require ./brand-brain-preload.cjs dist/server.cjs"
+# All additive middleware must load before the bundled server imports Express.
+# Keep this command aligned with Dockerfile CMD; the sponsorship config test
+# verifies that a healthy SPA cannot silently hide missing sponsor routes.
+startCommand = "node --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/healthz"
