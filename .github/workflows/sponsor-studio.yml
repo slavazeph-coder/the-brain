@@ -1,10 +1,11 @@
 name: Sponsor Studio
 on:
   push:
-    branches: [feat/brainsnn-sponsor-studio, main]
+    branches: [feat/brainsnn-sponsor-studio, fix/sponsor-railway-entrypoint, main]
     paths:
       - 'brainsnn-r3f-app/sponsorship/**'
       - 'brainsnn-r3f-app/Dockerfile'
+      - 'brainsnn-r3f-app/railway.toml'
       - '.github/workflows/sponsor-studio.yml'
   workflow_dispatch:
 permissions:
@@ -38,7 +39,7 @@ jobs:
           node --input-type=module --check < sponsorship/public/app.js
           node --input-type=module --check < sponsorship/public/admin.js
           node --input-type=module --check < sponsorship/public/checkout.js
-      - name: Test private applications and signed payment flow
+      - name: Test private applications, payment flow and production configuration
         run: |
           SPONSOR_SKIP_PRELOAD=true node --test sponsorship/tests/*.test.cjs 2>&1 | tee sponsorship/reports/server-tests.log
       - name: Install browser
@@ -55,7 +56,7 @@ jobs:
           cd mcp-server
           npm ci --no-audit --no-fund
           npm run smoke
-      - name: Verify additive routes in the actual production entrypoint
+      - name: Verify additive routes using the effective Railway command
         env:
           NODE_ENV: test
           PORT: '8092'
@@ -66,7 +67,8 @@ jobs:
           SPONSOR_TAX_READY: 'false'
           BRAND_BRAIN_MEMORY_FALLBACK: 'true'
         run: |
-          node --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs > sponsorship/reports/runtime-smoke.log 2>&1 &
+          read -r -a RUNTIME_CMD <<< "$(sed -n 's/^startCommand = "\(.*\)"$/\1/p' railway.toml)"
+          "${RUNTIME_CMD[@]}" > sponsorship/reports/runtime-smoke.log 2>&1 &
           RUNTIME_PID=$!
           trap 'kill "$RUNTIME_PID" 2>/dev/null || true' EXIT
           node --input-type=module <<'NODE'
@@ -80,7 +82,7 @@ jobs:
           const status=await (await fetch(base+'/api/sponsors/status')).json();assert.equal(status.storage,'persistent_sqlite');assert.equal(status.payments,'not_enabled');
           const catalog=await (await fetch(base+'/api/sponsors/catalog')).json();assert.equal(catalog.zones.length,8);
           assert.equal((await fetch(base+'/api/sponsors/admin/applications')).status,401);
-          console.log('Existing health/homepage and new sponsor page, persistent API, catalogue and owner protection all pass.');
+          console.log('Existing health/homepage and new sponsor page, persistent API, catalogue and owner protection all pass using railway.toml.');
           NODE
       - name: Package build and evidence without credentials or databases
         if: always()
