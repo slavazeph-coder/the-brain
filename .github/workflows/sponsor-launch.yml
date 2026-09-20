@@ -1,0 +1,58 @@
+name: Sponsor launch readiness
+on:
+  pull_request:
+    paths:
+      - 'brainsnn-r3f-app/sponsorship/**'
+      - 'brainsnn-r3f-app/src/app/BehaviourHome.jsx'
+      - '.github/workflows/sponsor-launch.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'brainsnn-r3f-app/sponsorship/**'
+      - 'brainsnn-r3f-app/src/app/BehaviourHome.jsx'
+      - '.github/workflows/sponsor-launch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sponsor-launch-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - name: Install and build actual sponsor assets
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --prefix sponsorship --omit=dev --no-audit --no-fund
+          node sponsorship/build.cjs
+          node --input-type=module --check < sponsorship/public/launch.js
+          node --input-type=module --check < sponsorship/public/launch-utils.js
+          node --test sponsorship/tests/launch.test.cjs
+          npm run lint
+          npm run build
+      - name: Install Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Test real isolated application and private handoff
+        run: node sponsorship/tests/launch-browser.mjs
+      - name: Upload screenshots and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sponsor-launch-${{ github.run_number }}
+          path: |
+            brainsnn-r3f-app/sponsorship/reports/launch-*.png
+            brainsnn-r3f-app/sponsorship/reports/launch-evidence.json
+          retention-days: 14
+          if-no-files-found: warn

@@ -27,7 +27,7 @@ export function BehaviourHome() {
     <a className="bh-skip" href="#bh-main">Skip to content</a>
     <header className="bh-nav">
       <a className="bh-brand" href="/" aria-label="BrainSNN home"><span className="bh-mark" aria-hidden="true">B</span><span><strong>BrainSNN</strong><small>Sapient Playground</small></span></a>
-      <nav aria-label="Main navigation"><a href="#tools">The engine</a><a href="/arcade">Playground</a><a href="/evidence">Evidence</a></nav>
+      <nav aria-label="Main navigation"><a href="#tools">The engine</a><a href="/arcade">Playground</a><a href="/evidence">Evidence</a><a href="/sponsor/">Sponsor Robot 001</a></nav>
       <a className="bh-nav-cta" href="/app">Open BrainSNN <ArrowRight size={15} aria-hidden="true"/></a>
     </header>
     <main id="bh-main">
@@ -50,6 +50,6 @@ export function BehaviourHome() {
       </section>
       <section className="bh-evidence-note" aria-labelledby="bh-evidence-title"><div><p className="bh-kicker">OPEN TO INSPECTION</p><h2 id="bh-evidence-title">The evidence stays in view.</h2><p>Scores are signals. Explore the benchmark and its limits before deciding what a result means.</p></div><a className="bh-button bh-secondary" href="/evidence">Inspect evidence <ArrowRight size={16} aria-hidden="true"/></a></section>
     </main>
-    <footer className="bh-footer"><span>BrainSNN · Sapient Playground</span><nav aria-label="More BrainSNN"><a href="/lab">Neuro Powder Lab</a><a href="/engine#api">For developers</a><a href="/office">Agent office</a></nav></footer>
+    <footer className="bh-footer"><span>BrainSNN · Sapient Playground</span><nav aria-label="More BrainSNN"><a href="/sponsor/">Sponsor Robot 001</a><a href="/lab">Neuro Powder Lab</a><a href="/engine#api">For developers</a><a href="/office">Agent office</a></nav></footer>
   </div>;
 }
