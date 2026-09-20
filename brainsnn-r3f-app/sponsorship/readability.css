@@ -22,3 +22,6 @@
 .legal-shell p,.legal-shell li{color:#5d6574}
 .zone-button{min-height:44px}
 @media(max-width:650px){.hero-foot,.reference,.fact-strip span{font-size:10px}.hero-copy .eyebrow{font-size:9px}.showroom-mode{font-size:9px}.model-note,.fleet-note{font-size:10px}.icon-button{min-width:36px;min-height:36px}.segmented button{min-height:36px}.fleet-unit p,.fleet-unit .text-link{font-size:10px}.footer-bottom{font-size:10px}.art-label{gap:8px}.hero-art{height:500px}}
+/* Theme-aware supporting copy and browser overscroll without changing owner pages. */
+.sponsor-page[data-theme=midnight] .application-dialog .muted-copy,.sponsor-page[data-theme=midnight] .muted{color:var(--muted)}
+html:has(body.sponsor-page[data-theme=midnight]){background:#06111f;color-scheme:dark;scrollbar-color:#4a657d #06111f}
