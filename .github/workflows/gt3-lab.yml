@@ -12,10 +12,13 @@ on:
       - '.github/workflows/gt3-lab.yml'
 permissions:
   contents: read
+concurrency:
+  group: gt3-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   gt3:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: brainsnn-r3f-app
@@ -29,13 +32,21 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node --test sponsorship/tests/gt3.test.cjs
       - run: npx playwright install --with-deps chromium
-      - name: Isolated HTTP, UI and read-only provider check
-        env:
-          GT3_REAL_MODEL: 'true'
+      - name: Isolated HTTP and UI contracts
         run: node sponsorship/gt3/tests/browser.mjs
+      - name: Real external provider, no production submissions
+        run: node sponsorship/gt3/tests/provider-readonly.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gt3-lab-verification
           path: brainsnn-r3f-app/sponsorship/gt3/reports/
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gt3-final-source
+          path: |
+            brainsnn-r3f-app/sponsorship/gt3/public/
+            brainsnn-r3f-app/sponsorship/gt3/server.cjs
+            brainsnn-r3f-app/sponsorship/gt3/THIRD-PARTY.md
           retention-days: 7
