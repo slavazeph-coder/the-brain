@@ -12,7 +12,7 @@
 .sponsor-page .button:hover{transform:translateY(-1px)}
 .sponsor-page :is(a,button,summary,input,select,textarea):focus-visible{outline:3px solid #3c61e8;outline-offset:4px}
 .sponsor-page .nav{min-height:74px;padding-block:12px;gap:24px}
-.sponsor-page .nav nav{gap:26px}
+.sponsor-page .nav nav{display:flex;gap:26px}
 .sponsor-page .nav nav a{font-size:12px;line-height:1.4;padding:12px 0;position:relative;color:#565d6b}
 .sponsor-page .nav nav a[aria-current=location]{color:#2747b8}
 .sponsor-page .nav nav a[aria-current=location]::after{content:'';position:absolute;bottom:3px;left:0;right:0;height:2px;background:#4765db;border-radius:2px}
@@ -50,7 +50,7 @@
 .studio-journey p{font-size:12px;line-height:1.6;margin:3px 0 0;color:var(--flow-muted)}
 .sponsor-page .studio-grid{grid-template-columns:minmax(0,1.22fr) minmax(360px,.78fr);gap:24px}
 .sponsor-page .showroom{top:94px;border:1px solid #fff;border-radius:24px;box-shadow:0 18px 60px #21336306}
-.sponsor-page .showroom-top{padding:24px 26px}
+.sponsor-page .showroom-top{left:0;right:0;top:0;gap:8px;padding:24px 26px}
 .sponsor-page .studio-canvas{height:570px}
 .sponsor-page .showroom-title,.sponsor-page .showroom-mode{font-size:9px;letter-spacing:.08em}
 .showroom-subtitle{font-size:8px;color:#71798b;margin-left:5px}
@@ -65,7 +65,7 @@
 .sponsor-page .zone-picker{gap:7px;margin-top:13px}
 .sponsor-page .zone-button{min-height:52px;padding:9px 12px;border:1px solid #e9ebf0;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;border-radius:9px;transition:border-color .15s ease,background .15s ease}
 .sponsor-page .zone-name{font-size:11px;font-weight:600;color:#424c60}
-.sponsor-page .zone-price{font-size:10px;color:#637085;line-height:1.2}
+.sponsor-page .zone-price{font-size:10px;color:#536077;line-height:1.2}
 .sponsor-page .zone-button[aria-pressed=true]{background:#edf1ff;border-color:#4665e0;box-shadow:0 0 0 1px #4665e014}
 .sponsor-page .zone-button[aria-pressed=true] .zone-name{color:#2649bd}
 .sponsor-page .zone-button:hover{border-color:#9fafd9}
@@ -126,7 +126,10 @@
 .sponsor-page .mini-robot{transform:scale(.8);transform-origin:center}
 .sponsor-page .fleet-note{font-size:11px;line-height:1.7;max-width:830px;margin-top:17px}
 .sponsor-page .faq-section{grid-template-columns:.65fr 1.35fr;gap:65px;padding-top:60px;padding-bottom:50px}
+.sponsor-page .faq-list details{padding:0}
+.sponsor-page .faq-list details:first-child{padding-top:0}
 .sponsor-page .faq-list summary{font-size:13px;line-height:1.6;padding-block:20px}
+.sponsor-page .faq-list summary>span{display:none}
 .sponsor-page .faq-list details p{font-size:13px;line-height:1.8;padding-right:30px;padding-bottom:18px;max-width:650px}
 .sponsor-page .closing{padding-top:60px;padding-bottom:65px}
 .sponsor-page .closing h2{font-size:clamp(40px,4.2vw,58px)}
@@ -143,7 +146,7 @@
 .sponsor-page .nav{min-height:66px;padding-block:10px;gap:14px}.sponsor-page .wordmark{font-size:24px}.sponsor-page .wordmark>small{font-size:9px;margin-left:6px}.sponsor-page .nav>.button{min-height:36px;font-size:10px;padding-inline:12px;margin-left:auto}.sponsor-page .nav>.button>span{display:none}
 .menu-toggle{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:36px;min-height:40px;background:transparent;border:0;cursor:pointer}.menu-toggle>span{width:18px;height:1.5px;background:#252a37;border-radius:2px;transition:transform .18s ease}.menu-toggle[aria-expanded=true]>span:first-child{transform:translateY(3.25px) rotate(45deg)}.menu-toggle[aria-expanded=true]>span:last-child{transform:translateY(-3.25px) rotate(-45deg)}
 .sponsor-page .nav nav{display:none;position:absolute;top:65px;left:0;right:0;background:#f7f8fc;border-bottom:1px solid #dfe3ee;box-shadow:0 12px 30px #2732520c;padding:14px 22px;gap:2px;flex-direction:column}.sponsor-page .nav nav[data-open=true]{display:flex}.sponsor-page .nav nav a{padding:12px 8px;font-size:14px}.sponsor-page .nav nav a[aria-current=location]::after{display:none}
-.sponsor-page .hero{display:grid;grid-template-columns:1fr;min-height:0;padding-top:36px;padding-bottom:15px}.sponsor-page .hero h1{font-size:clamp(43px,10.5vw,68px);margin:20px 0}.sponsor-page .hero-copy .eyebrow{font-size:9px;letter-spacing:.1em}.sponsor-page .hero-description{font-size:16px;line-height:1.65}.sponsor-page .hero .actions{margin-top:22px;flex-direction:row;gap:14px 20px;align-items:center}.sponsor-page .hero .actions .button{font-size:12px;min-height:45px;padding-inline:19px}.sponsor-page .hero .actions .text-link{font-size:11px}.sponsor-page .hero-foot{font-size:10px;margin-top:21px;gap:7px}.sponsor-page .hero-art{height:390px;margin-top:12px}.sponsor-page .hero-index{font-size:185px;top:24px}.sponsor-page .art-label{bottom:0;gap:7px 12px}.sponsor-page .art-label .reference{font-size:9px}
+.sponsor-page .hero{display:grid;grid-template-columns:1fr;min-height:0;padding-top:36px;padding-bottom:15px}.sponsor-page .hero-copy{text-align:left}.sponsor-page .hero-copy .eyebrow{justify-content:flex-start}.sponsor-page .hero h1{font-size:clamp(43px,10.5vw,68px);margin:20px 0}.sponsor-page .hero-copy .eyebrow{font-size:9px;letter-spacing:.1em}.sponsor-page .hero-description{font-size:16px;line-height:1.65}.sponsor-page .hero .actions{margin-top:22px;flex-direction:row;gap:14px 20px;align-items:center}.sponsor-page .hero .actions .button{font-size:12px;min-height:45px;padding-inline:19px}.sponsor-page .hero .actions .text-link{font-size:11px}.sponsor-page .hero-foot{font-size:10px;margin-top:21px;gap:7px}.sponsor-page .hero-art{height:390px;margin-top:12px}.sponsor-page .hero-index{font-size:185px;top:24px}.sponsor-page .art-label{bottom:0;gap:7px 12px}.sponsor-page .art-label .reference{font-size:9px}
 .sponsor-page .fact-strip{padding-block:22px;grid-template-columns:.75fr 1.2fr 1.1fr}.sponsor-page .fact-strip>div{padding-inline:14px;min-height:64px}.sponsor-page .fact-strip strong{font-size:24px}.sponsor-page .fact-strip span{font-size:10px;line-height:1.5}.sponsor-page .studio-section{padding-top:44px;padding-bottom:28px}.sponsor-page .studio-heading{margin-bottom:20px}.sponsor-page .studio-heading h2{font-size:35px;max-width:300px}.sponsor-page .studio-heading .section-deck{font-size:14px;line-height:1.6;max-width:280px}
 .studio-journey{grid-template-columns:1fr;gap:0;margin-bottom:25px;border-top:1px solid #d9deea}.studio-journey li{border-top:0;padding-top:12px;gap:10px}.studio-journey strong{font-size:12px}.studio-journey p{font-size:11px;margin-top:1px}.studio-journey li>span{width:23px;height:23px;font-size:9px}
 /* Same mounted controls, in a natural phone sequence: choose, view, brand, apply. */
