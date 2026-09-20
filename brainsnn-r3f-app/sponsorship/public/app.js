@@ -29,7 +29,7 @@ async function catalog(){
   selectZone(state.zone);$('waitlist-button').disabled=!state.online;
 }
 async function prepareViewer(id,options){
-  try{const v=await createRobotViewer($(id),options);if(id==='hero-robot'){state.hero=v;}else{state.viewer=v;v.setZone(state.zone);paint();}return v;}
+  try{const v=await createRobotViewer($(id),{...options,dark:document.body.dataset.theme==='midnight'});if(id==='hero-robot'){state.hero=v;}else{state.viewer=v;v.setZone(state.zone);paint();}return v;}
   catch(e){const el=$(id).querySelector('.model-loading');if(el){el.replaceChildren();const text=document.createElement('span');text.textContent='3D preview unavailable on this device.';el.append(text);}if(id==='studio-robot'){$('model-warning').hidden=false;say('model-warning','You can still explore every placement and submit your application. A compatible WebGL browser is needed for the 3D preview.');$('save-preview').disabled=true;$('orbit-button').disabled=true;}}
 }
 $('year').textContent=new Date().getFullYear();
