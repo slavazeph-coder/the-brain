@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gt3:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: brainsnn-r3f-app
@@ -36,6 +36,9 @@ jobs:
         run: node sponsorship/gt3/tests/browser.mjs
       - name: Real external provider, no production submissions
         run: node sponsorship/gt3/tests/provider-readonly.mjs
+      - name: Public BrainSNN acceptance, read only
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node sponsorship/gt3/tests/production-readonly.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
