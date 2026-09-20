@@ -1,0 +1,39 @@
+name: GT3 live acceptance
+on:
+  workflow_run:
+    workflows: ['Deploy BrainSNN app to Railway']
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: gt3-live-readonly
+  cancel-in-progress: true
+jobs:
+  live:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Read-only published page, assets and proposal connection
+        run: node sponsorship/gt3/tests/production-readonly.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gt3-live-verification
+          path: brainsnn-r3f-app/sponsorship/gt3/reports/
+          retention-days: 7

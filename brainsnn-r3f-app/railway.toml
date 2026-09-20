@@ -6,10 +6,9 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Railway's startCommand overrides Docker CMD. Load each existing Express
-# preload, including the additive Sponsor Studio, before the bundled server.
-# sponsorship/tests/startup.test.cjs guards against these entrypoints drifting.
-startCommand = "node --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs"
+# GT3 handles its precise nested routes before the existing robot sponsor router.
+# Existing product routes and preloads stay intact. Startup tests guard ordering.
+startCommand = "node --require ./sponsorship/gt3/server.cjs --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/healthz"
