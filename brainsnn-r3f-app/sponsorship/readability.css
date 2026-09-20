@@ -1,0 +1,24 @@
+/* Finishing pass: readable supporting copy without losing the quiet visual hierarchy. */
+:root{--muted:#626976}
+.wordmark>small,.hero-description,.hero-foot,.reference,.drag-hint,.fact-strip span,.fact-caption,.eyebrow,.fine-print,.step-label,.showroom-title,.showroom-mode,.model-note,.field>small,.upload small,.range-row,.private-preview,.subtle-button,.summary-top .eyebrow,.price-line small,.price-line>span,.studio-disclosure p,.benefit p,.benefit small,.card-number,.process-grid p,.process-grid li>span,.unit-number,.fleet-unit p,.fleet-note,.faq-list details p,.closing>p:last-child,.footer-main>p,.footer-main>div a,.footer-bottom,.optional,.check,.owner-meta,.owner-panel pre,.owner-panel>p,.document-scope,.color-field,.upload b,.section-lead,.section-heading .eyebrow,.service-status,.field-error{color:#5d6574}
+.muted{color:#747a88}
+.fact-strip span,.hero-foot,.reference,.model-note,.step-label,.private-preview,.studio-disclosure p,.benefit small,.fleet-note,.footer-main>p,.footer-main>div a,.footer-bottom{font-size:11px}
+.showroom-mode,.summary-top .eyebrow,.price-line>span,.closing .eyebrow,.fleet-heading .eyebrow{font-size:10px}
+.range-row,.color-field,.subtle-button,.upload small,.field>small{font-size:11px}
+.placement-summary>.fine-print{font-size:11px}
+.fact-caption b{color:#4c5565}
+.open-state{color:#315d45}
+.segmented button{color:#566174}
+.icon-button{color:#455573}
+.model-loading{color:#626b7b}
+.upload-symbol,.upload-plus{color:#65738c}
+.field>input::placeholder,.field>textarea::placeholder{color:#6e7789;opacity:1}
+.application-dialog .muted-copy,.application-dialog #application-success p{color:#5d6574}
+.form-error,.field-error{color:#8c3934}
+.service-status{color:#8b5424}
+.formats-section .eyebrow,.formats-top p:not(.eyebrow),.format-grid article>span,.format-grid p{color:#a6afc1}
+.formats-section .eyebrow,.format-grid article>span{font-size:10px}
+.notice{color:#486393}
+.legal-shell p,.legal-shell li{color:#5d6574}
+.zone-button{min-height:44px}
+@media(max-width:650px){.hero-foot,.reference,.fact-strip span{font-size:10px}.hero-copy .eyebrow{font-size:9px}.showroom-mode{font-size:9px}.model-note,.fleet-note{font-size:10px}.icon-button{min-width:36px;min-height:36px}.segmented button{min-height:36px}.fleet-unit p,.fleet-unit .text-link{font-size:10px}.footer-bottom{font-size:10px}.art-label{gap:8px}.hero-art{height:500px}}

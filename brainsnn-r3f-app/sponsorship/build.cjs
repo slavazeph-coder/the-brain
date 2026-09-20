@@ -57,6 +57,8 @@ async function get(url) {
 }
 async function main() {
   await fs.mkdir(OUT,{recursive:true});
+  const styles=await Promise.all(['style.source.css','readability.css'].map(file=>fs.readFile(path.join(__dirname,file),'utf8')));
+  await fs.writeFile(path.join(__dirname,'public/style.css'),styles.join('\n'));
   const urdf=await get(MODEL+'g1_23dof_mode_10.urdf');
   const model=parseUrdf(urdf.toString('utf8'));
   const unique=[...new Set(model.links.map(l=>l.filename))];

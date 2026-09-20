@@ -3,6 +3,7 @@ node_modules/
 public/models/
 public/viewer.js
 public/catalog.json
+public/style.css
 reports/
 *.sqlite*
 .env
