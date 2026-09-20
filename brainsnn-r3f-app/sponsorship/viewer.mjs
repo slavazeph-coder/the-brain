@@ -28,7 +28,7 @@ export async function createRobotViewer(element, options = {}) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.65));
   renderer.outputColorSpace=THREE.SRGBColorSpace;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.45;
+  renderer.toneMappingExposure=.9;
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.domElement.setAttribute('aria-label','Interactive Unitree G1 reference model. Drag to rotate. Use the placement buttons for keyboard access.');
@@ -45,17 +45,20 @@ export async function createRobotViewer(element, options = {}) {
   const environment=pmrem.fromScene(room,.04);
   scene.environment=environment.texture;
   room.dispose();pmrem.dispose();
-  scene.add(new THREE.HemisphereLight(0xe7edff,0x657083,2.5));
-  const key=new THREE.DirectionalLight(0xffffff,4.5);key.position.set(2,4,4);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-2;key.shadow.camera.right=2;key.shadow.camera.top=2;key.shadow.camera.bottom=-2;key.shadow.bias=-.0005;scene.add(key);
-  const rim=new THREE.DirectionalLight(0x9aacff,2.6);rim.position.set(-3,2,-2);scene.add(rim);
+  scene.add(new THREE.HemisphereLight(0xe7edff,0x657083,1.4));
+  const key=new THREE.DirectionalLight(0xffffff,3);key.position.set(2,4,4);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-2;key.shadow.camera.right=2;key.shadow.camera.top=2;key.shadow.camera.bottom=-2;key.shadow.bias=-.0005;scene.add(key);
+  const rim=new THREE.DirectionalLight(0x9aacff,1.8);rim.position.set(-3,2,-2);scene.add(rim);
   const floor=new THREE.Mesh(new THREE.CircleGeometry(1.6,64),new THREE.ShadowMaterial({color:0x081020,opacity:.15}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;floor.position.y=-.018;scene.add(floor);
   const pedestal=new THREE.Mesh(new THREE.CylinderGeometry(.33,.35,.018,80),new THREE.MeshStandardMaterial({color:options.dark?0x20242d:0xe5e7eb,roughness:.25,metalness:.45}));pedestal.position.y=-.011;pedestal.receiveShadow=true;scene.add(pedestal);
   const manifest=await asset('/sponsor/models/manifest.json');
   const nodes=new Map();const meshes=new Map();
   const model=new THREE.Group();
   const reference=new THREE.Group();
-  // URDF x-forward/y-left/z-up becomes Three.js x-right/y-up/z-forward.
-  reference.setRotationFromMatrix(new THREE.Matrix4().set(0,-1,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,1));
+  // Proper right-handed basis: old X forward -> new Z, old Y left -> new X,
+  // old Z up -> new Y. A negative determinant would be a reflection, not a rotation.
+  const basis=new THREE.Matrix4().set(0,1,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,1);
+  if(Math.abs(basis.determinant()-1)>1e-6)throw new Error('Invalid reference model basis.');
+  reference.setRotationFromMatrix(basis);
   model.add(reference);scene.add(model);
   const node=name=>{if(!nodes.has(name)){const g=new THREE.Group();g.name=name;nodes.set(name,g);}return nodes.get(name);};
   await Promise.all(manifest.links.map(async link=>{
@@ -72,10 +75,13 @@ export async function createRobotViewer(element, options = {}) {
   let bounds=new THREE.Box3().setFromObject(model);const center=bounds.getCenter(new THREE.Vector3());
   model.position.set(-center.x,-bounds.min.y,-center.z);model.updateMatrixWorld(true);
   bounds=new THREE.Box3().setFromObject(model);const height=bounds.max.y;
+  const dimensions=bounds.getSize(new THREE.Vector3());
+  if(height<.9||height>1.8||dimensions.x>height*.8)throw new Error('Unexpected reference-model proportions.');
+  element.dataset.robotHeight=height.toFixed(3);element.dataset.robotWidth=dimensions.x.toFixed(3);
   controls.target.set(0,height*.52,0);
   camera.position.set(options.hero?.50:.05,height*.58,height*2.48);
   controls.update();
-  const decals=new Map();const brands=new Map();let chosen='chest';let disposed=false,visible=true,dirty=true;
+  const decals=new Map();const brands=new Map();let disposed=false,visible=true,dirty=true;
   const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let settleUntil=performance.now()+2000;let cameraTarget=null;
   const ray=new THREE.Raycaster();
@@ -105,7 +111,7 @@ export async function createRobotViewer(element, options = {}) {
   }
   function setBrand(id,brand){brands.set(id,{...brand});apply(id,brand);}
   function view(which){const angle=which==='back'?Math.PI:which==='side'?Math.PI/2:0;cameraTarget=new THREE.Vector3(Math.sin(angle)*height*2.48,height*.58,Math.cos(angle)*height*2.48);if(reduced){camera.position.copy(cameraTarget);cameraTarget=null;}settleUntil=performance.now()+1800;dirty=true;}
-  function select(id){chosen=id;view(config[id]?.face===-1?'back':'front');}
+  function select(id){view(config[id]?.face===-1?'back':'front');}
   let down=null;
   renderer.domElement.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};cameraTarget=null;});
   renderer.domElement.addEventListener('pointerup',e=>{
