@@ -1,11 +1,24 @@
-# Third-party viewer bridge
+# Porsche model and renderer attribution
 
-The beginning of public/engine.js contains the official @sketchfab/viewer-api 1.12.0 bridge, from https://github.com/sketchfab/viewer-api/blob/master/viewer-api.js, upstream blob d48f730e5532beb7502a249d032043c0979972e9. Upstream package.json declares the ISC licence and Sketchfab as author. The executable body is preserved; its source-map comment is omitted and an environment guard allows isolated tests to supply a mock. Our controllers follow the vendor body.
+Porsche GT3 RS by Black Snow (BlackSnow02).
+Original: https://sketchfab.com/3d-models/porsche-gt3-rs-e738eae819c34d19a31dd066c45e0f3d
+Author: https://sketchfab.com/BlackSnow02
+Licence: Creative Commons Attribution 4.0, https://creativecommons.org/licenses/by/4.0/
 
-ISC licence notice (Sketchfab):
+Downloaded files are pinned to DanielOgSimen/Prime-Wheels commit
+9fc8eda509b32313cc9c477f180eab08c44c4ea5, directory 3d/Porche/.
+Its license.txt credits the same original model and explicitly allows commercial
+use with attribution. build.cjs verifies every source file by its Git blob SHA.
+No Sketchfab protected download or session extraction is used.
 
-Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+Changes by BrainSNN: packed binary glTF, duplicate-image removal, transformed
+and merged draw geometry, mirrored winding correction, studio lighting and
+body-material restyling. Original model geometry is retained. User logos are
+optional local modifications, not endorsements or production wrap artwork.
 
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+Visible source, author and licence links remain in the page footer. The original
+license.txt is distributed at /sponsor/gt3/LICENSE-model.txt. Three.js is MIT
+licensed; its bundled legal notices remain in viewer.js. The current lockfile
+supplies Three.js and esbuild, with no new runtime dependencies.
 
-The car model is not included in this repository. It remains in the official Sketchfab viewer, separately attributed to Black Snow under the source model's CC Attribution terms. Model rights, trademarks and the bridge software licence are distinct.
+The older user-supplied studio photographs are not used as simulated 3D.

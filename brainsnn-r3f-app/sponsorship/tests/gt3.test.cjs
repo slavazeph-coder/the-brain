@@ -12,7 +12,7 @@ test('GT3 private HTTP service, storage, same-origin CSRF, replay and deletion',
  let handler;const server=http.createServer((q,r)=>handler.matches(q.url)?handler.handle(q,r):(r.writeHead(404),r.end()));await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  const config={env,dbPath:path.join(dir,'fixture.sqlite'),origin:base};handler=createHandler(config);
  try{
-  const r=await fetch(base+'/sponsor/gt3/');assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/frame-src https:\/\/sketchfab.com/);assert.match(await r.text(),/Your brand/);
+  const r=await fetch(base+'/sponsor/gt3/');assert.equal(r.status,200);assert.match(r.headers.get('content-security-policy'),/frame-src 'none'/);assert.match(r.headers.get('content-security-policy'),/connect-src 'self'/);const html=await r.text();assert.match(html,/Your brand/);assert(!html.includes('<iframe'));assert(!html.includes('static.sketchfab.com'));
   assert(!handler.matches('/lab'));assert(!handler.matches('/sponsor/'));assert(!handler.matches('/api/sponsors/catalog'));
   const s=await fetch(base+'/api/gt3/session'),session=await s.json(),cookie=s.headers.get('set-cookie').split(';')[0];assert.match(cookie,/^gt3_session=/);assert.match(s.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);
   const post=async(data,headers={})=>{const r=await fetch(base+'/api/gt3/proposals',{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json','X-CSRF-Token':session.csrf,...headers},body:JSON.stringify(data)});return {status:r.status,data:await r.json()};};

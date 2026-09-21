@@ -1,36 +1,13 @@
-// Post-deploy verification only. Does not submit proposals, artwork or payments.
-import { chromium } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
-const base='https://www.brainsnn.com',out=path.resolve('sponsorship/gt3/reports');fs.mkdirSync(out,{recursive:true});
-const report={scope:'Live BrainSNN read-only verification',endpoints:[],checks:[],errors:[],published:false};
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-async function get(url){const r=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});return {status:r.status,type:r.headers.get('content-type'),url:r.url,text:await r.text()};}
-let browser;
+// Live read-only acceptance. Never submits applications, artwork or payments.
+import {chromium} from '@playwright/test';import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';
+const base='https://www.brainsnn.com',out=path.resolve('sponsorship/gt3/reports');fs.mkdirSync(out,{recursive:true});const report={scope:'Published BrainSNN actual model, read-only',checks:[],requests:[],errors:[],published:false};
+const check=(name,value)=>{assert.ok(value,name);report.checks.push(name);console.log('PASS '+name);};let browser;
 try{
- for(let i=0;i<40;i++){
-  try{const r=await get(base+'/sponsor/gt3/app.js?verify='+Date.now());if(r.status===200&&r.text.includes('webgl_unavailable')&&r.text.includes('retry-3d')){report.published=true;break;}}
-  catch(e){report.lastPollError=e.message;}
-  await sleep(10000);
- }
- if(!report.published)throw Error('The expected GT3 release did not become public within the deployment window.');
- for(const route of ['/sponsor/gt3/','/sponsor/gt3/style.css','/sponsor/gt3/engine.js','/sponsor/gt3/side.webp','/api/gt3/status','/healthz','/','/sponsor/']){
-  const r=await get(base+route);report.endpoints.push({route,status:r.status,type:r.type,url:r.url});if(r.status!==200)throw Error('Public endpoint failed: '+route+' '+r.status);
-  if(route==='/api/gt3/status'){const s=JSON.parse(r.text);if(s.ok!==true||s.payments!=='disabled')throw Error('Unexpected GT3 status.');report.storage=s.storage;}
- }
- try{const r=await get('https://brainsnn.com/sponsor/gt3/');report.apex={status:r.status,url:r.url};}catch(e){report.apex={error:e.message};}
- browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000}});
- page.on('pageerror',e=>report.errors.push(e.message));
- await page.route('**/*',r=>['GET','HEAD'].includes(r.request().method())?r.continue():r.abort());
- await page.goto(base+'/sponsor/gt3/',{waitUntil:'networkidle'});
- if(await page.locator('.zone').count()!==8)throw Error('Eight placements did not render.');report.checks.push('Eight live placements render');
- if(!await page.locator('#poster').evaluate(e=>e.complete&&e.naturalWidth>0))throw Error('Studio poster did not load.');report.checks.push('Same-site studio poster loaded');
- await page.locator('[data-mode="advanced"]').click();if(!await page.locator('#brand-name').isVisible())throw Error('Advanced controls missing.');
- await page.locator('[data-mode="simple"]').click();report.checks.push('Simple/Advanced mode switch works');
- await page.screenshot({path:path.join(out,'live-desktop.png'),fullPage:true});
- await page.locator('.proposal').first().click();await page.waitForFunction(()=>!document.getElementById('submit').disabled,{},{timeout:20000});report.checks.push('Live CSRF session connects; no form was submitted');
- await page.keyboard.press('Escape');await page.setViewportSize({width:390,height:844});
- if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile overflow.');report.checks.push('390px mobile layout has no horizontal overflow');
- await page.screenshot({path:path.join(out,'live-mobile.png'),fullPage:true});
- if(report.errors.length)throw Error('Page JavaScript errors were recorded.');report.checks.push('No top-level JavaScript errors');
+ for(let i=0;i<30;i++){try{const r=await fetch(base+'/sponsor/gt3/viewer.js?verify='+Date.now(),{signal:AbortSignal.timeout(15000)});if(r.ok&&(await r.text()).includes('GT3_RENDER_STATUS')){report.published=true;break;}}catch{}await new Promise(r=>setTimeout(r,10000));}check('Expected self-hosted viewer published',report.published);
+ for(const route of ['/sponsor/gt3/','/sponsor/gt3/style.css','/sponsor/gt3/LICENSE-model.txt','/api/gt3/status','/healthz','/','/sponsor/']){const r=await fetch(base+route,{signal:AbortSignal.timeout(15000)});check('HTTP 200 '+route,r.status===200);if(route==='/api/gt3/status'){const s=await r.json();check('Sponsorship payments remain disabled',s.payments==='disabled');}}
+ browser=await chromium.launch({channel:'chromium',headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});const page=await browser.newPage({viewport:{width:1440,height:1050}});page.on('pageerror',e=>report.errors.push(e.message));page.on('request',r=>{if(/^https?:/.test(r.url()))report.requests.push(r.url());});await page.route('**/*',r=>['GET','HEAD'].includes(r.request().method())?r.continue():r.abort());
+ await page.goto(base+'/sponsor/gt3/',{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.GT3_RENDER_STATUS?.ready||window.GT3_RENDER_STATUS?.fail,{},{timeout:120000});report.render=await page.evaluate(()=>window.GT3_RENDER_STATUS);check('Live model rendered actual triangles',report.render.ready&&report.render.triangles>100000);check('No embedded provider',await page.locator('iframe').count()===0);check('All eight placements',await page.locator('#placement option').count()===8);await page.waitForTimeout(600);await page.screenshot({path:path.join(out,'live-desktop.png'),fullPage:true,timeout:60000});
+ const canvas=page.locator('#scene canvas');await canvas.scrollIntoViewIfNeeded();const box=await canvas.boundingBox(),start=await page.evaluate(()=>window.GT3_RENDER_STATUS.camera),before=await page.screenshot({timeout:60000});await page.mouse.move(box.x+box.width*.6,box.y+box.height*.5);await page.mouse.down();await page.mouse.move(box.x+box.width*.28,box.y+box.height*.52,{steps:6});await page.mouse.up();await page.mouse.move(5,5);await page.waitForTimeout(1000);report.afterDrag=await page.evaluate(()=>window.GT3_RENDER_STATUS);check('Pointer drag changes live 3D camera',JSON.stringify(start)!==JSON.stringify(report.afterDrag.camera));const after=await page.screenshot({path:path.join(out,'live-orbit.png'),timeout:60000});check('Live geometry image changes with orbit',!before.equals(after));
+ await page.locator('.proposal').click();await page.waitForFunction(()=>!document.getElementById('submit').disabled,{},{timeout:20000});check('Protected proposal connection works without a submission',true);await page.keyboard.press('Escape');
+ await page.setViewportSize({width:390,height:844});await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.GT3_RENDER_STATUS?.ready,{},{timeout:120000});await page.waitForTimeout(500);await page.screenshot({path:path.join(out,'live-mobile.png'),fullPage:true,timeout:60000});check('Real model renders on narrow viewport',await page.evaluate(()=>window.GT3_RENDER_STATUS.triangles>100000));check('No horizontal overflow',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));check('All runtime model requests are same-origin',report.requests.every(url=>url.startsWith(base+'/')));check('No top-level JavaScript exceptions',report.errors.length===0);
 }catch(e){report.failure=e.message;process.exitCode=1;}finally{if(browser)await browser.close();fs.writeFileSync(path.join(out,'production-readonly.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}
