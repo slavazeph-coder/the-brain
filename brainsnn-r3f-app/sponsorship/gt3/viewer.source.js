@@ -11,7 +11,7 @@ let renderer,camera,controls,scene,model,raf=0,visible=true,disposed=false;
 const vector=new THREE.Vector3(),target=new THREE.Vector3(0,.65,0),home=new THREE.Vector3();
 function fail(message){state.ready=false;state.fail=message;document.body.dataset.renderState='error';status.textContent=message;host.setAttribute('aria-busy','false');document.getElementById('place-logo').disabled=true;document.getElementById('retry').hidden=false;}
 function schedule(){if(!raf&&visible&&!document.hidden&&!disposed)raf=requestAnimationFrame(frame);}
-function frame(){raf=0;if(!renderer||!model||!visible||document.hidden||disposed)return;const moving=controls.update();renderer.render(scene,camera);state.frames++;state.triangles=renderer.info.render.triangles;state.drawCalls=renderer.info.render.calls;if(!state.ready&&state.triangles>1000){state.ready=true;document.getElementById('place-logo').disabled=false;document.body.dataset.renderState='ready';status.textContent='Drag to rotate · Pinch or scroll to zoom';host.setAttribute('aria-busy','false');}if(moving)schedule();}
+function frame(){raf=0;if(!renderer||!model||!visible||document.hidden||disposed)return;renderer.render(scene,camera);state.frames++;state.triangles=renderer.info.render.triangles;state.drawCalls=renderer.info.render.calls;if(!state.ready&&state.triangles>1000){state.ready=true;document.getElementById('place-logo').disabled=false;document.getElementById('loader').hidden=true;document.body.dataset.renderState='ready';status.textContent='Drag to rotate · Pinch or scroll to zoom';host.setAttribute('aria-busy','false');}}
 function resize(){if(!renderer||!camera)return;const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();schedule();}
 function fit(){const distance=Math.max(6.2,2.7/(Math.max(.65,camera.aspect)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))));home.set(1,.30,1.65).normalize().multiplyScalar(distance).add(target);camera.position.copy(home);controls.target.copy(target);controls.update();schedule();}
 function mergeCar(root){
@@ -19,20 +19,20 @@ function mergeCar(root){
  root.traverse(o=>{
   if(!o.isMesh)return;if(o.isSkinnedMesh||o.morphTargetInfluences||Array.isArray(o.material))throw Error('Unexpected animated mesh');
   let g=o.geometry.clone();if(g.index){const tmp=g.toNonIndexed();g.dispose();g=tmp;}
-  // Reflection reverses triangle winding. Correct all attributes before baking.
   if(o.matrixWorld.determinant()<0){for(const attr of Object.values(g.attributes)){for(let i=0;i<attr.count;i+=3){for(let k=0;k<attr.itemSize;k++){const a=(i+1)*attr.itemSize+k,b=(i+2)*attr.itemSize+k,tmp=attr.array[a];attr.array[a]=attr.array[b];attr.array[b]=tmp;}}}}
-  g.applyMatrix4(o.matrixWorld);
-  for(const name of Object.keys(g.attributes))if(!['position','normal','uv'].includes(name))g.deleteAttribute(name);
+  g.applyMatrix4(o.matrixWorld);for(const name of Object.keys(g.attributes))if(!['position','normal','uv'].includes(name))g.deleteAttribute(name);
   if(!g.attributes.normal)g.computeVertexNormals();if(!g.attributes.uv)g.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count*2),2));
   o.material.vertexColors=false;const key=o.material.uuid;if(!groups.has(key))groups.set(key,{material:o.material,list:[]});groups.get(key).list.push(g);
  });
  for(const {material,list}of groups.values()){const geometry=mergeGeometries(list,false);if(!geometry)throw Error('Model geometry could not be combined.');geometry.computeBoundingSphere();const mesh=new THREE.Mesh(geometry,material);mesh.name=material.name;result.add(mesh);list.forEach(g=>g.dispose());}return result;
 }
 async function init(){try{
- renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'default'});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+ renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'default'});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.25));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
  renderer.domElement.setAttribute('aria-label','Interactive Porsche GT3 RS. Drag to orbit; use reset or arrow keys.');renderer.domElement.tabIndex=0;host.prepend(renderer.domElement);
  renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();if(raf)cancelAnimationFrame(raf);raf=0;fail('The 3D connection paused. Reload the model to continue.');});
- scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(32,1,.05,100);controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.09;controls.enablePan=false;controls.minDistance=3.8;controls.maxDistance=15;controls.minPolarAngle=.18;controls.maxPolarAngle=Math.PI/2-.015;controls.rotateSpeed=.6;controls.zoomSpeed=.7;controls.addEventListener('change',schedule);
+ scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(32,1,.05,100);controls=new OrbitControls(camera,renderer.domElement);
+ // Direct manipulation: one frame per changed view, no hidden inertial loop.
+ controls.enableDamping=false;controls.enablePan=false;controls.minDistance=3.8;controls.maxDistance=15;controls.minPolarAngle=.18;controls.maxPolarAngle=Math.PI/2-.015;controls.rotateSpeed=.6;controls.zoomSpeed=.7;controls.addEventListener('change',schedule);
  const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();scene.environmentIntensity=.8;
  scene.add(new THREE.HemisphereLight(0xc5e7ff,0x27304c,.65));for(const [color,intensity,pos]of [[0xd5f3ff,1.4,[2,5,4]],[0x9065ff,1.1,[-3,3,-4]],[0x48d6ff,.8,[1,2,4]]]){const l=new THREE.DirectionalLight(color,intensity);l.position.set(...pos);scene.add(l);}
  resize();status.textContent='Loading Porsche geometry…';const response=await fetch('/sponsor/gt3/car.glb?v=native1',{cache:'force-cache',signal:AbortSignal.timeout(45000)});if(!response.ok)throw Error('Model download failed.');const buffer=await response.arrayBuffer();const gltf=await new GLTFLoader().parseAsync(buffer,'');model=mergeCar(gltf.scene);
@@ -47,7 +47,7 @@ document.getElementById('retry').addEventListener('click',()=>location.reload())
 host.addEventListener('keydown',e=>{if(!camera||!state.ready||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=camera.position.clone().sub(controls.target),s=new THREE.Spherical().setFromVector3(delta);s.theta+=(e.key==='ArrowLeft'?.15:e.key==='ArrowRight'?-.15:0);s.phi=THREE.MathUtils.clamp(s.phi+(e.key==='ArrowUp'?-.1:e.key==='ArrowDown'?.1:0),.2,Math.PI/2-.02);camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(s));controls.update();schedule();});
 new ResizeObserver(resize).observe(host);new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)schedule();},{rootMargin:'80px'}).observe(host);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});
 window.addEventListener('pagehide',e=>{if(e.persisted)return;disposed=true;if(raf)cancelAnimationFrame(raf);renderer?.dispose();controls?.dispose();});window.addEventListener('pageshow',schedule);
-// Local artwork, one texture and decal per placement. No uploads or tracking.
+// Local artwork: one texture and decal per placement, never uploaded.
 const designSlots=new Map();let armed=false,pointerStart=null,fileVersion=0;
 const el=id=>document.getElementById(id),artStatus=text=>{el('art-status').textContent=text;};
 const slot=()=>{const id=el('placement').value;if(!designSlots.has(id))designSlots.set(id,{brand:'',image:null,decal:null,canvas:null,texture:null});return designSlots.get(id);};
