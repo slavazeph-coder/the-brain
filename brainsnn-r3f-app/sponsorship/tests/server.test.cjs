@@ -86,3 +86,31 @@ test('approved checkout uses server price and verified idempotent Stripe webhook
   assert.equal((await f.call('/checkout',{token,acceptTerms:true})).r.status,409);
  }finally{await f.close();}
 });
+
+
+test('XIO checkout enforces return destination, product title, and prevents price/token leakage',async()=>{
+ const Stripe=require('stripe');const client=new Stripe('sk_test_fake_key_for_local_signature_tests');const wh='whsec_xio_test';let created;
+ const fake={webhooks:client.webhooks,checkout:{sessions:{create:async data=>{created=data;return {id:'cs_xio_001',url:'https://checkout.stripe.com/c/pay/cs_xio_001',expires_at:Math.floor(Date.now()/1000)+1800};}}}};
+ const f=await fixture({stripe:fake,webhookSecret:wh,paymentsEnabled:true});try{
+  const a=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;await f.call('/admin/login',{password:f.options.adminKey});
+  const q=await f.call(`/admin/applications/${a}/quote`,quote);const token=new URLSearchParams(new URL(q.data.invitationUrl).hash.slice(1)).get('token');
+  // Reject unsupported returnSite
+  assert.equal((await f.call('/checkout',{token,acceptTerms:true,returnSite:'https://evil.example'})).r.status,400);
+  // Accept XIO with exact URLs and product title
+  assert.equal((await f.call('/checkout',{token,acceptTerms:true,returnSite:'xio'})).r.status,200);
+  assert.ok(created.line_items[0].price_data.product_data.name.startsWith('XIO Robot 001 / Chest'));
+  assert.equal(created.success_url,'https://www.xioai.ca/robot-sponsorship/checkout/?payment=returned');
+  assert.equal(created.cancel_url,'https://www.xioai.ca/robot-sponsorship/checkout/?payment=cancelled');
+  assert.equal(created.line_items[0].price_data.unit_amount,quote.subtotalCents);
+  // Caller cannot override price via request
+  assert.equal((await f.call('/checkout',{token,acceptTerms:true,returnSite:'xio',subtotalCents:1})).r.status,200);
+  assert.equal(created.line_items[0].price_data.unit_amount,quote.subtotalCents);
+  // No token in metadata
+  assert.equal(JSON.stringify(created).includes(token),false);
+  // Idempotent retry uses same session
+  const resp1=await f.call('/checkout',{token,acceptTerms:true,returnSite:'xio'});const resp2=await f.call('/checkout',{token,acceptTerms:true,returnSite:'xio'});assert.equal(resp1.data.url,resp2.data.url);
+  // Invalid tokens rejected
+  assert.equal((await f.call('/checkout',{token:'x'.repeat(43),acceptTerms:true,returnSite:'xio'})).r.status,404);
+  assert.equal((await f.call('/checkout',{token:'invalid',acceptTerms:true,returnSite:'xio'})).r.status,404);
+ }finally{await f.close();}
+});

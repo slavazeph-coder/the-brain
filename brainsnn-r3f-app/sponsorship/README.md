@@ -60,3 +60,7 @@ Application confirmations appear on screen with a reference. There is no email-d
 ## Rollback
 
 Revert the sponsorship integration commit or remove only `--require ./sponsorship/server.cjs` from the runtime command, redeploy, and leave the existing BrainSNN preloads untouched. Do not delete the `/data` database when rolling back code. Existing non-sponsorship routes are intentionally unchanged.
+
+## XIO Sponsorship Checkout
+
+The checkout endpoint supports an optional `returnSite: 'xio'` parameter in POST requests. When set to `'xio'`, payment success and cancellation URLs resolve to `https://www.xioai.ca/robot-sponsorship/checkout/?payment=returned|cancelled` and the Stripe product title includes the placement name (e.g., `XIO Robot 001 / Chest`). No other return destinations are accepted; caller-supplied URLs are rejected with HTTP 400. All credential gates, session verification, payment approval requirements, and webhook behaviors remain unchanged. No production Stripe keys are required for this feature; tests use isolated fake Stripe instances.
