@@ -6,6 +6,7 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 const { CATALOG, TERMS, publicCatalog } = require('./catalog.cjs');
+const { resolveCheckoutDestination } = require('./checkout-destination.cjs');
 const API = '/api/sponsors';
 const MAX_BODY = 512 * 1024;
 const SHA = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -205,7 +206,7 @@ function createHandler(options = {}) {
       return send(res,200,{ok:true,reference:row.id,company:p.company,zone:CATALOG.find(z=>z.id===p.zone)?.name,quote:JSON.parse(row.quote),status:row.status,paymentsEnabled:paymentReady(),paidAt:row.paid_at,amountPaid:row.amount_paid});
     }
     if (route === '/checkout' && req.method === 'POST') {
-      limit(req,'checkout',20); const b=await readBody(req); const row=rowForInvite(b.token);
+      limit(req,'checkout',20); const b=await readBody(req); if(b.returnSite!==undefined && b.returnSite!=='xio') fail(400,'Unsupported return destination.'); const row=rowForInvite(b.token);
       if(row.status==='paid') fail(409,'This sponsorship has already been paid.');
       if(b.acceptTerms!==true) fail(400,'Accept the written campaign scope before continuing.');
       if(!paymentReady()) fail(503,'Online payment has not been enabled. Contact XIO to arrange payment against the approved agreement.');
@@ -215,7 +216,7 @@ function createHandler(options = {}) {
       d.exec('BEGIN IMMEDIATE'); let attempt;
       try { const current=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(row.id); if(current.status==='checkout_pending' && !current.checkout_id) fail(409,'Checkout is being prepared. Please retry in a moment.'); attempt=current.checkout_attempt+1; d.prepare("UPDATE sponsor_applications SET status='checkout_pending',accepted_at=?,checkout_attempt=? WHERE id=?").run(new Date().toISOString(),attempt,row.id); d.exec('COMMIT'); } catch(e) { d.exec('ROLLBACK'); throw e; }
       try {
-        const s=await getStripe().checkout.sessions.create({mode:'payment',customer_email:p.email,customer_creation:'always',billing_address_collection:'required',automatic_tax:{enabled:true},tax_id_collection:{enabled:true},line_items:[{price_data:{currency:'cad',unit_amount:quote.subtotalCents,tax_behavior:'exclusive',product_data:{name:`BrainSNN Robot 001 / ${CATALOG.find(z=>z.id===p.zone)?.name}`,description:'90-day campaign under the separately approved written agreement.'}},quantity:1}],metadata:{sponsor_application:row.id,agreement_reference:quote.agreementReference},client_reference_id:row.id,success_url:`${origin}/sponsor/checkout/?payment=returned`,cancel_url:`${origin}/sponsor/checkout/?payment=cancelled`,expires_at:Math.floor(Date.now()/1000)+1800,integration_identifier:'brainsnn_sponsor_bkspmxqt'},{idempotencyKey:`brainsnn-sponsor-${row.id}-${attempt}`});
+        const s=await getStripe().checkout.sessions.create({mode:'payment',customer_email:p.email,customer_creation:'always',billing_address_collection:'required',automatic_tax:{enabled:true},tax_id_collection:{enabled:true},line_items:[{price_data:{currency:'cad',unit_amount:quote.subtotalCents,tax_behavior:'exclusive',product_data:{name:b.returnSite==='xio'?`XIO Robot 001 / ${CATALOG.find(z=>z.id===p.zone)?.name}`:`BrainSNN Robot 001 / ${CATALOG.find(z=>z.id===p.zone)?.name}`,description:'90-day campaign under the separately approved written agreement.'}},quantity:1}],metadata:{sponsor_application:row.id,agreement_reference:quote.agreementReference},client_reference_id:row.id,success_url:`${resolveCheckoutDestination(origin,b.returnSite)}?payment=returned`,cancel_url:`${resolveCheckoutDestination(origin,b.returnSite)}?payment=cancelled`,expires_at:Math.floor(Date.now()/1000)+1800,integration_identifier:'brainsnn_sponsor_bkspmxqt'},{idempotencyKey:`brainsnn-sponsor-${row.id}-${attempt}`});
         if(!s.url || !/^https:\/\/checkout\.stripe\.com\//.test(s.url)) throw new Error('Unexpected checkout destination');
         d.prepare('UPDATE sponsor_applications SET checkout_id=?,checkout_url=?,checkout_expires=? WHERE id=? AND checkout_attempt=?').run(s.id,s.url,s.expires_at,row.id,attempt); audit(row.id,'checkout_created'); return send(res,200,{url:s.url});
       } catch(e) { d.prepare("UPDATE sponsor_applications SET status='approved' WHERE id=? AND checkout_attempt=? AND checkout_id IS NULL").run(row.id,attempt); console.error('[sponsor] checkout setup failed'); fail(503,'Checkout could not be prepared. No new charge was made by this request. Please contact XIO.'); }
