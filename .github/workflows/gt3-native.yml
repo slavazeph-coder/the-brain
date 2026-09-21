@@ -1,0 +1,40 @@
+name: GT3 real model
+on:
+  push:
+    branches: [main, fix/gt3-native-minimal]
+    paths: ['brainsnn-r3f-app/sponsorship/gt3/**', '.github/workflows/gt3-native.yml']
+  pull_request:
+    paths: ['brainsnn-r3f-app/sponsorship/gt3/**', '.github/workflows/gt3-native.yml']
+permissions:
+  contents: read
+concurrency:
+  group: native-gt3-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  actual-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: node sponsorship/gt3/build.cjs
+      - run: npx playwright install --with-deps chromium
+      - name: Actual WebGL render, orbit and isolated proposal storage
+        run: node sponsorship/gt3/tests/native.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gt3-native-review
+          path: |
+            brainsnn-r3f-app/sponsorship/gt3/public/
+            brainsnn-r3f-app/sponsorship/gt3/reports/
+            brainsnn-r3f-app/sponsorship/gt3/viewer.source.js
+          retention-days: 7
