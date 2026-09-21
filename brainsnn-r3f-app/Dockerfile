@@ -1,5 +1,4 @@
-# BrainSNN: existing TypeScript/Vite app plus the additive sponsor studio.
-# Railway builds this directory. Existing application routes stay unchanged.
+# BrainSNN: existing TypeScript/Vite app plus additive sponsor studios.
 FROM node:22-slim
 WORKDIR /app
 RUN apt-get update \
@@ -8,9 +7,11 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-# Sponsor SDK is server-only; geometry is pinned and self-hosted after build.
+# Both licensed model assets are verified and self-hosted during the build.
 RUN npm install --prefix sponsorship --omit=dev --no-audit --no-fund \
   && node sponsorship/build.cjs \
+  && node sponsorship/gt3/tidy-build.cjs \
+  && node sponsorship/gt3/build.cjs \
   && SPONSOR_SKIP_PRELOAD=true node --test sponsorship/tests/*.test.cjs \
   && npm run lint \
   && npm test \

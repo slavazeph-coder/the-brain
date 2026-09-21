@@ -1,0 +1,9 @@
+.model-cache/
+.data/
+reports/
+public/car.glb
+public/car.glb.gz
+public/viewer.js
+public/viewer.js.gz
+public/asset-manifest.json
+public/LICENSE-model.txt
