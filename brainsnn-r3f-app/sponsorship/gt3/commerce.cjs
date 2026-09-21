@@ -90,6 +90,7 @@ function createCommerce({database,env,origin,secret,csrf,admin,rate,json,readBod
  async function checkout(id,key,acceptedHash){
   let r=authorize(id,key);const ready=await readiness();if(!ready.open)error(503,'Checkout is not open yet. Your design is saved; no payment was taken.');
   if(acceptedHash!==ready.termsHash)error(409,'Review the current campaign terms before paying.');
+  if(r.terms_hash&&r.terms_hash!==ready.termsHash&&r.status!=='expired')error(409,'Campaign terms changed. Contact XIO to reconcile the earlier checkout before paying.');
   if(r.amount!==economics().zones.find(z=>z.id===r.zone).reserve)error(409,'The planning price changed. Request an updated offer.');
   if(r.session_id){r=await reconcile(id);if(['paid','review','processing'].includes(r.status))return {status:r.status};if(r.status==='checkout'){const s=await stripe().checkout.sessions.retrieve(r.session_id);if(!validSessionUrl(s.url))error(503,'Checkout link unavailable.');return {url:s.url,status:'checkout'};}}
   const held=db().prepare('SELECT order_id FROM gt3_inventory WHERE zone=?').get(r.zone);if(held&&held.order_id!==id){const other=get(held.order_id);if(other.session_id)await reconcile(other.id);}

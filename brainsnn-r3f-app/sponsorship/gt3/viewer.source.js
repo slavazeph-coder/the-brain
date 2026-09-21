@@ -75,11 +75,25 @@ function removeDecal(){if(artwork.decal){scene.remove(artwork.decal);artwork.dec
 function panelHit(a){model.updateMatrixWorld(true);const meshes=model.children.filter(m=>['wing','hood'].includes(artwork.zone)?/carbon_roof|carPaint/.test(m.name):m.name==='TwiXeR_992_carPaint.003');
  for(const offset of [0,-.05,.05,-.12,.12]){const from=new THREE.Vector3(...a.from);from.x+=offset;const ray=new THREE.Raycaster(from,new THREE.Vector3(...a.to));const hit=ray.intersectObjects(meshes,false).find(h=>h.face);if(hit)return hit;}return null;
 }
-function focusPanel(){if(!camera||!model)return;const a=anchors[artwork.zone],distance=Math.max(6.2,2.55/(Math.max(.65,camera.aspect)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))));camera.position.copy(new THREE.Vector3(...a.camera).normalize().multiplyScalar(distance).add(target));controls.target.copy(target);controls.update();schedule();}
+function focusPanel(){
+ if(!camera||!model)return;
+ const direction=new THREE.Vector3(...anchors[artwork.zone].camera).normalize();
+ const right=new THREE.Vector3().crossVectors(camera.up,direction).normalize();
+ const up=new THREE.Vector3().crossVectors(direction,right).normalize();
+ const bounds=new THREE.Box3().setFromObject(model),tan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+ let distance=controls.minDistance;
+ // Fit every corner in the selected camera's actual aspect ratio, including overhead views.
+ for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z]){
+  const point=new THREE.Vector3(x,y,z).sub(target),depth=point.dot(direction);
+  distance=Math.max(distance,depth+Math.abs(point.dot(right))/(tan*camera.aspect*.88),depth+Math.abs(point.dot(up))/(tan*.88));
+ }
+ camera.position.copy(direction.multiplyScalar(distance).add(target));controls.target.copy(target);controls.update();schedule();
+ if(matchMedia('(max-width:850px)').matches)host.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'center'});
+}
 function autoPlace(focus=true){if(!model||!renderer||!artwork.image&&!artwork.brand)return;try{
  const a=anchors[artwork.zone],hit=panelHit(a);if(!hit)throw Error('This panel could not be located. Select another placement.');
  const normal=hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
- const up=Math.abs(normal.y)>.8?new THREE.Vector3(-1,0,0):new THREE.Vector3(0,1,0);
+ const up=Math.abs(normal.y)>.8?new THREE.Vector3(artwork.zone==='wing'?1:-1,0,0):new THREE.Vector3(0,1,0);
  const right=new THREE.Vector3().crossVectors(up,normal).normalize();up.crossVectors(normal,right).normalize();
  const rotation=new THREE.Euler().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right,up,normal));
  const surfaces=['hood','wing'].includes(artwork.zone)?model.children.filter(m=>/carbon_roof|carPaint/.test(m.name)):[hit.object];
@@ -89,8 +103,8 @@ function autoPlace(focus=true){if(!model||!renderer||!artwork.image&&!artwork.br
  if(!geometry.attributes.position.count){geometry.dispose();throw Error('The selected surface could not be prepared.');}
  removeDecal();artwork.decal=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map:redrawArt(),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4}));artwork.decal.renderOrder=3;scene.add(artwork.decal);state.decals=1;state.placement=artwork.zone;el('remove-logo').disabled=false;if(focus)focusPanel();schedule();artStatus('Your logo is on the car. Preview only; final wrap artwork is approved separately.');
  document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:true,zone:artwork.zone}}));
- }catch(e){artStatus(e.message);document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:false}}));}}
-el('brand-name').addEventListener('input',()=>{artwork.brand=el('brand-name').value.trim().slice(0,28);clearTimeout(editTimer);editTimer=setTimeout(()=>{if(artwork.decal)redrawArt();else autoPlace();},140);});
+ }catch(e){removeDecal();state.placement=null;artStatus(e.message);document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:false}}));}}
+el('brand-name').addEventListener('input',()=>{artwork.brand=el('brand-name').value.trim().slice(0,28);clearTimeout(editTimer);editTimer=setTimeout(()=>{if(!artwork.image&&!artwork.brand){removeDecal();artStatus('Upload your logo or enter your brand name.');}else if(artwork.decal)redrawArt();else autoPlace();},140);});
 el('logo').addEventListener('change',async e=>{const file=e.target.files?.[0],v=++uploadVersion;if(!file)return;let url;try{
  if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2097152)throw Error('Use PNG, JPG or WebP under 2 MB.');
  url=URL.createObjectURL(file);const image=new Image();image.src=url;await image.decode();if(!image.width||Math.max(image.width,image.height)>4096)throw Error('Use a logo up to 4096 pixels per side.');if(v!==uploadVersion)return;
@@ -99,5 +113,5 @@ el('logo').addEventListener('change',async e=>{const file=e.target.files?.[0],v=
 el('remove-logo').addEventListener('click',()=>{uploadVersion++;removeDecal();artwork.image=null;artwork.brand='';artwork.texture?.dispose();artwork.texture=null;el('brand-name').value='';el('remove-logo').disabled=true;el('upload-label').textContent='Upload your logo';artStatus('Preview cleared. Choose another logo or type your brand.');document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:false}}));});
 document.addEventListener('gt3:placement',e=>{artwork.zone=anchors[e.detail]?e.detail:'driver-door';autoPlace();});
 el('logo-size').addEventListener('input',()=>{artwork.scale=Number(el('logo-size').value)/100;clearTimeout(editTimer);editTimer=setTimeout(()=>autoPlace(false),80);});
-window.GT3_DESIGN={snapshot(){if(!artwork.decal)throw Error('Upload a logo or enter a brand name first.');redrawArt();const c=document.createElement('canvas');c.width=512;c.height=256;c.getContext('2d').drawImage(artwork.canvas,0,0,512,256);return {zone:artwork.zone,brand:artwork.brand,scale:artwork.scale,png:c.toDataURL('image/png').split(',')[1]};},async restore(d){if(!d||!anchors[d.zone]||typeof d.png!=='string')return;const image=new Image();image.src='data:image/png;base64,'+d.png;await image.decode();artwork.zone=d.zone;artwork.brand=String(d.brand||'').slice(0,28);artwork.image=image;artwork.restored=true;artwork.scale=Math.min(1.4,Math.max(.6,Number(d.scale)||1));el('placement').value=d.zone;el('placement').dispatchEvent(new Event('change'));el('brand-name').value=artwork.brand;el('logo-size').value=artwork.scale*100;autoPlace();}};
+window.GT3_DESIGN={snapshot(){if(!state.ready||!artwork.decal||state.placement!==artwork.zone||!artwork.image&&!artwork.brand)throw Error('Upload a logo or enter a brand name, then wait for its preview.');redrawArt();const c=document.createElement('canvas');c.width=512;c.height=256;c.getContext('2d').drawImage(artwork.canvas,0,0,512,256);return {zone:artwork.zone,brand:artwork.brand,scale:artwork.scale,png:c.toDataURL('image/png').split(',')[1]};},async restore(d){if(!d||!anchors[d.zone]||typeof d.png!=='string')return;const image=new Image();image.src='data:image/png;base64,'+d.png;await image.decode();artwork.zone=d.zone;artwork.brand=String(d.brand||'').slice(0,28);artwork.image=image;artwork.restored=true;artwork.scale=Math.min(1.4,Math.max(.6,Number(d.scale)||1));el('placement').value=d.zone;el('placement').dispatchEvent(new Event('change'));el('brand-name').value=artwork.brand;el('logo-size').value=artwork.scale*100;autoPlace();}};
 init();

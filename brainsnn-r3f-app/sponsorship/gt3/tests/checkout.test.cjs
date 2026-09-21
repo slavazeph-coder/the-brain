@@ -37,3 +37,4 @@ test('HTTP saves a real design and validates raw signed webhook replays',async()
  assert.equal(f.c.db().prepare('SELECT COUNT(*) AS n FROM gt3_payment_events').get().n,1);assert.equal(f.c.authorize(a.order.id,a.token).status,'paid');
  res=await fetch(url+'/api/gt3/admin/artwork?id='+a.order.id);assert.equal(res.status,401);
  }finally{await new Promise(r=>server.close(r));f.close();}});
+test('an existing checkout never silently changes the accepted campaign terms',async()=>{const f=fixture();try{const a=f.c.record(body()),ready=await f.c.readiness();await f.c.checkout(a.order.id,a.token,ready.termsHash);const terms=JSON.parse(f.env.GT3_CAMPAIGN_JSON);terms.refundPolicy='Changed fixture terms';f.env.GT3_CAMPAIGN_JSON=JSON.stringify(terms);const changed=await f.c.readiness(true);await assert.rejects(f.c.checkout(a.order.id,a.token,changed.termsHash),/terms changed/);assert.equal(f.sessions.size,1);}finally{f.close();}});
