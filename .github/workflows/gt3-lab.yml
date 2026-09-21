@@ -35,6 +35,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Actual model, automatic logos and private SQLite; mocked Stripe independently
         run: node sponsorship/gt3/tests/native.mjs
+      - name: Glass layout, real WebGL and accessibility preferences
+        run: node sponsorship/gt3/tests/glass.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
