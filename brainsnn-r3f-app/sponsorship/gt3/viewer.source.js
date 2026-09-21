@@ -9,9 +9,9 @@ const state={ready:false,frames:0,triangles:0,drawCalls:0,modelMeshes:0,camera:[
 Object.defineProperty(window,'GT3_RENDER_STATUS',{get:()=>({...state,camera:camera?.position.toArray()||[]})});
 let renderer,camera,controls,scene,model,raf=0,visible=true,disposed=false;
 const vector=new THREE.Vector3(),target=new THREE.Vector3(0,.65,0),home=new THREE.Vector3();
-function fail(message){state.ready=false;state.fail=message;document.body.dataset.renderState='error';status.textContent=message;host.setAttribute('aria-busy','false');document.getElementById('place-logo').disabled=true;document.getElementById('retry').hidden=false;}
+function fail(message){state.ready=false;state.fail=message;document.body.dataset.renderState='error';status.textContent=message;host.setAttribute('aria-busy','false');document.getElementById('retry').hidden=false;}
 function schedule(){if(!raf&&visible&&!document.hidden&&!disposed)raf=requestAnimationFrame(frame);}
-function frame(){raf=0;if(!renderer||!model||!visible||document.hidden||disposed)return;renderer.render(scene,camera);state.frames++;state.triangles=renderer.info.render.triangles;state.drawCalls=renderer.info.render.calls;if(!state.ready&&state.triangles>1000){state.ready=true;document.getElementById('place-logo').disabled=false;document.getElementById('loader').hidden=true;document.body.dataset.renderState='ready';status.textContent='Drag to rotate · Pinch or scroll to zoom';host.setAttribute('aria-busy','false');}}
+function frame(){raf=0;if(!renderer||!model||!visible||document.hidden||disposed)return;renderer.render(scene,camera);state.frames++;state.triangles=renderer.info.render.triangles;state.drawCalls=renderer.info.render.calls;if(!state.ready&&state.triangles>1000){state.ready=true;document.getElementById('loader').hidden=true;document.body.dataset.renderState='ready';status.textContent='Drag to rotate · Pinch or scroll to zoom';host.setAttribute('aria-busy','false');}}
 function resize(){if(!renderer||!camera)return;const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/Math.max(1,h);camera.updateProjectionMatrix();schedule();}
 function fit(){const distance=Math.max(6.2,2.7/(Math.max(.65,camera.aspect)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))));home.set(1,.30,1.65).normalize().multiplyScalar(distance).add(target);camera.position.copy(home);controls.target.copy(target);controls.update();schedule();}
 function mergeCar(root){
@@ -40,27 +40,64 @@ async function init(){try{
  for(const m of model.children)if(m.material.name==='TwiXeR_992_carPaint.003'){m.material.color.setRGB(.095,.12,.15);m.material.metalness=.45;m.material.roughness=.32;}
  state.modelMeshes=model.children.length;scene.add(model);
  const disk=document.createElement('canvas');disk.width=disk.height=128;const cx=disk.getContext('2d'),gradient=cx.createRadialGradient(64,64,8,64,64,64);gradient.addColorStop(0,'rgba(0,0,0,.6)');gradient.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=gradient;cx.fillRect(0,0,128,128);const shadow=new THREE.Mesh(new THREE.PlaneGeometry(6,3.4),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(disk),transparent:true,depthWrite:false}));shadow.rotation.x=-Math.PI/2;shadow.position.y=-.02;scene.add(shadow);
- installPicking();fit();schedule();document.getElementById('reset-view').disabled=false;
+ fit();schedule();requestAnimationFrame(()=>autoPlace(false));document.getElementById('reset-view').disabled=false;
 }catch(e){fail(e.message.includes('WebGL')?'This browser cannot start 3D. Try Safari or Chrome with graphics enabled.':'The model could not load. Retry below; proposals still work.');console.error(e);}}
 document.getElementById('reset-view').addEventListener('click',()=>{if(!controls)return;camera.position.copy(home);controls.target.copy(target);controls.update();schedule();});
 document.getElementById('retry').addEventListener('click',()=>location.reload());
 host.addEventListener('keydown',e=>{if(!camera||!state.ready||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const delta=camera.position.clone().sub(controls.target),s=new THREE.Spherical().setFromVector3(delta);s.theta+=(e.key==='ArrowLeft'?.15:e.key==='ArrowRight'?-.15:0);s.phi=THREE.MathUtils.clamp(s.phi+(e.key==='ArrowUp'?-.1:e.key==='ArrowDown'?.1:0),.2,Math.PI/2-.02);camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(s));controls.update();schedule();});
 new ResizeObserver(resize).observe(host);new IntersectionObserver(entries=>{visible=entries[0].isIntersecting;if(visible)schedule();},{rootMargin:'80px'}).observe(host);document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule();});
 window.addEventListener('pagehide',e=>{if(e.persisted)return;disposed=true;if(raf)cancelAnimationFrame(raf);renderer?.dispose();controls?.dispose();});window.addEventListener('pageshow',schedule);
-// Local artwork: one texture and decal per placement, never uploaded.
-const designSlots=new Map();let armed=false,pointerStart=null,fileVersion=0;
+
+// A single private design, projected automatically onto the selected body panel.
+// No third-party image calls. A preview is saved only after explicit submission.
 const el=id=>document.getElementById(id),artStatus=text=>{el('art-status').textContent=text;};
-const slot=()=>{const id=el('placement').value;if(!designSlots.has(id))designSlots.set(id,{brand:'',image:null,decal:null,canvas:null,texture:null});return designSlots.get(id);};
-function paintArt(d){if(!d.canvas){d.canvas=document.createElement('canvas');d.canvas.width=1024;d.canvas.height=512;}const x=d.canvas.getContext('2d');x.clearRect(0,0,1024,512);if(d.image){const k=Math.min(960/d.image.width,440/d.image.height);x.drawImage(d.image,(1024-d.image.width*k)/2,(512-d.image.height*k)/2,d.image.width*k,d.image.height*k);}else{x.fillStyle='#eff9ff';let size=126;while(size>24){x.font='700 '+size+'px Arial';if(x.measureText(d.brand||'YOUR BRAND').width<960)break;size-=3;}x.textBaseline='middle';x.textAlign='center';x.fillText(d.brand||'YOUR BRAND',512,256);}if(!d.texture){d.texture=new THREE.CanvasTexture(d.canvas);d.texture.colorSpace=THREE.SRGBColorSpace;}d.texture.needsUpdate=true;schedule();return d.texture;}
-function dropArt(d){if(!d.decal)return;scene.remove(d.decal);d.decal.geometry.dispose();d.decal.material.dispose();d.texture?.dispose();d.texture=null;d.decal=null;state.decals=[...designSlots.values()].filter(s=>s.decal).length;schedule();}
-el('brand-name').addEventListener('input',()=>{const d=slot();d.brand=el('brand-name').value;if(d.decal&&el('art-rights').checked)paintArt(d);});
-el('logo').addEventListener('change',async e=>{const file=e.target.files?.[0],d=slot(),v=++fileVersion;if(!file)return;let url;try{if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2097152)throw Error('Use a PNG, JPG or WebP under 2 MB.');url=URL.createObjectURL(file);const image=new Image();image.src=url;await image.decode();if(!image.width||Math.max(image.width,image.height)>4096)throw Error('Use a logo up to 4096 pixels per side.');if(v!==fileVersion||d!==slot())return;const c=document.createElement('canvas'),s=Math.min(1,1024/Math.max(image.width,image.height));c.width=Math.round(image.width*s);c.height=Math.round(image.height*s);c.getContext('2d').drawImage(image,0,0,c.width,c.height);d.image=c;if(d.decal&&el('art-rights').checked)paintArt(d);artStatus('Logo ready. Click Place, then the intended body panel.');}catch(e){artStatus(e.message);}finally{if(url)URL.revokeObjectURL(url);e.target.value='';}});
-el('place-logo').addEventListener('click',()=>{if(!state.ready)return;if(!el('art-rights').checked)return artStatus('Confirm artwork permission first.');armed=!armed;el('place-logo').textContent=armed?'Click the panel · Cancel':'Place on the car';artStatus(armed?'Click the intended body panel. Avoid windows, lights and vents.':'Placement cancelled.');});
-el('art-rights').addEventListener('change',()=>{armed=false;el('place-logo').textContent='Place on the car';});
-el('remove-logo').addEventListener('click',()=>{fileVersion++;const d=slot();dropArt(d);d.image=null;el('remove-logo').disabled=true;artStatus('Preview removed. Artwork was never uploaded.');});
-document.addEventListener('gt3:placement',()=>{armed=false;fileVersion++;el('brand-name').value=slot().brand;el('remove-logo').disabled=!slot().decal;el('place-logo').textContent='Place on the car';});
-function installPicking(){
- renderer.domElement.addEventListener('pointerdown',e=>pointerStart={x:e.clientX,y:e.clientY});
- renderer.domElement.addEventListener('pointerup',e=>{if(!armed||!el('art-rights').checked||!pointerStart||Math.hypot(e.clientX-pointerStart.x,e.clientY-pointerStart.y)>7)return;const r=renderer.domElement.getBoundingClientRect(),p=new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),ray=new THREE.Raycaster();ray.setFromCamera(p,camera);const hit=ray.intersectObject(model,true).find(h=>h.face&&!h.object.material.transparent&&!/glass|window|light/i.test(h.object.name));if(!hit)return artStatus('Choose an opaque body panel, not the background or glass.');const normal=hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize(),rotation=new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),normal));const geometry=new DecalGeometry(hit.object,hit.point,rotation,new THREE.Vector3(.65,.32,.12));if(!geometry.attributes.position.count){geometry.dispose();return artStatus('That area cannot hold the preview. Try a flatter panel.');}const d=slot();dropArt(d);d.decal=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map:paintArt(d),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4}));d.decal.renderOrder=3;scene.add(d.decal);armed=false;state.decals=[...designSlots.values()].filter(s=>s.decal).length;el('place-logo').textContent='Place on the car';el('remove-logo').disabled=false;artStatus('Logo placed on the 3D surface. Preview only, not installation artwork.');schedule();});
+const artwork={brand:'',image:null,canvas:null,texture:null,decal:null,zone:el('placement').value||'driver-door',scale:1,restored:false};
+let uploadVersion=0,editTimer=0;
+const anchors={
+ 'driver-door':{from:[0,.58,3],to:[0,0,-1],size:[.78,.39,.20],camera:[.8,1.8,6]},
+ 'passenger-door':{from:[0,.58,-3],to:[0,0,1],size:[.78,.39,.20],camera:[.8,1.8,-6]},
+ 'driver-quarter':{from:[-1.35,.85,3],to:[0,0,-1],size:[.40,.20,.22],camera:[-3.8,2,5]},
+ 'passenger-quarter':{from:[-1.35,.85,-3],to:[0,0,1],size:[.40,.20,.22],camera:[-3.8,2,-5]},
+ 'driver-fender':{from:[1.38,.86,3],to:[0,0,-1],size:[.32,.16,.20],camera:[3.4,2.3,5.1]},
+ 'passenger-fender':{from:[1.38,.86,-3],to:[0,0,1],size:[.32,.16,.20],camera:[3.4,2.3,-5.1]},
+ hood:{from:[1.14,3,0],to:[0,-1,0],size:[.70,.35,.22],camera:[4.3,5.8,.4]},
+ wing:{from:[-1.91,3,0],to:[0,-1,0],size:[.70,.22,.18],camera:[-4.3,4.5,.6]}
+};
+function redrawArt(){if(!artwork.canvas){artwork.canvas=document.createElement('canvas');artwork.canvas.width=1024;artwork.canvas.height=512;}
+ const x=artwork.canvas.getContext('2d');x.clearRect(0,0,1024,512);
+ if(artwork.image&&artwork.restored){x.drawImage(artwork.image,0,0,1024,512);}
+ else if(artwork.image){const k=Math.min(960/artwork.image.width,440/artwork.image.height);x.drawImage(artwork.image,(1024-artwork.image.width*k)/2,(512-artwork.image.height*k)/2,artwork.image.width*k,artwork.image.height*k);}
+ else if(artwork.brand){x.fillStyle='#eff9ff';let size=126;while(size>24){x.font='700 '+size+'px Arial';if(x.measureText(artwork.brand).width<960)break;size-=3;}x.textBaseline='middle';x.textAlign='center';x.fillText(artwork.brand,512,256);}
+ if(!artwork.texture){artwork.texture=new THREE.CanvasTexture(artwork.canvas);artwork.texture.colorSpace=THREE.SRGBColorSpace;}
+ artwork.texture.needsUpdate=true;schedule();return artwork.texture;
 }
+function removeDecal(){if(artwork.decal){scene.remove(artwork.decal);artwork.decal.geometry.dispose();artwork.decal.material.dispose();artwork.decal=null;}state.decals=0;schedule();}
+function panelHit(a){model.updateMatrixWorld(true);const meshes=model.children.filter(m=>['wing','hood'].includes(artwork.zone)?/carbon_roof|carPaint/.test(m.name):m.name==='TwiXeR_992_carPaint.003');
+ for(const offset of [0,-.05,.05,-.12,.12]){const from=new THREE.Vector3(...a.from);from.x+=offset;const ray=new THREE.Raycaster(from,new THREE.Vector3(...a.to));const hit=ray.intersectObjects(meshes,false).find(h=>h.face);if(hit)return hit;}return null;
+}
+function focusPanel(){if(!camera||!model)return;const a=anchors[artwork.zone],distance=Math.max(6.2,2.55/(Math.max(.65,camera.aspect)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))));camera.position.copy(new THREE.Vector3(...a.camera).normalize().multiplyScalar(distance).add(target));controls.target.copy(target);controls.update();schedule();}
+function autoPlace(focus=true){if(!model||!renderer||!artwork.image&&!artwork.brand)return;try{
+ const a=anchors[artwork.zone],hit=panelHit(a);if(!hit)throw Error('This panel could not be located. Select another placement.');
+ const normal=hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize();
+ const up=Math.abs(normal.y)>.8?new THREE.Vector3(-1,0,0):new THREE.Vector3(0,1,0);
+ const right=new THREE.Vector3().crossVectors(up,normal).normalize();up.crossVectors(normal,right).normalize();
+ const rotation=new THREE.Euler().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right,up,normal));
+ const surfaces=['hood','wing'].includes(artwork.zone)?model.children.filter(m=>/carbon_roof|carPaint/.test(m.name)):[hit.object];
+ const pieces=surfaces.map(m=>new DecalGeometry(m,hit.point,rotation,new THREE.Vector3(...a.size).multiplyScalar(artwork.scale)));
+ const good=pieces.filter(g=>g.attributes.position.count>0);if(!good.length){pieces.forEach(g=>g.dispose());throw Error('The selected panel could not hold this preview.');}
+ const geometry=mergeGeometries(good,false);pieces.forEach(g=>g.dispose());
+ if(!geometry.attributes.position.count){geometry.dispose();throw Error('The selected surface could not be prepared.');}
+ removeDecal();artwork.decal=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({map:redrawArt(),transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-4}));artwork.decal.renderOrder=3;scene.add(artwork.decal);state.decals=1;state.placement=artwork.zone;el('remove-logo').disabled=false;if(focus)focusPanel();schedule();artStatus('Your logo is on the car. Preview only; final wrap artwork is approved separately.');
+ document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:true,zone:artwork.zone}}));
+ }catch(e){artStatus(e.message);document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:false}}));}}
+el('brand-name').addEventListener('input',()=>{artwork.brand=el('brand-name').value.trim().slice(0,28);clearTimeout(editTimer);editTimer=setTimeout(()=>{if(artwork.decal)redrawArt();else autoPlace();},140);});
+el('logo').addEventListener('change',async e=>{const file=e.target.files?.[0],v=++uploadVersion;if(!file)return;let url;try{
+ if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2097152)throw Error('Use PNG, JPG or WebP under 2 MB.');
+ url=URL.createObjectURL(file);const image=new Image();image.src=url;await image.decode();if(!image.width||Math.max(image.width,image.height)>4096)throw Error('Use a logo up to 4096 pixels per side.');if(v!==uploadVersion)return;
+ const c=document.createElement('canvas'),k=Math.min(1,1024/Math.max(image.width,image.height));c.width=Math.round(image.width*k);c.height=Math.round(image.height*k);c.getContext('2d').drawImage(image,0,0,c.width,c.height);artwork.image=c;artwork.restored=false;el('upload-label').textContent='Change logo';artStatus('Logo prepared. Applying to your selected spot…');autoPlace();
+ }catch(err){artStatus(err.message);}finally{if(url)URL.revokeObjectURL(url);e.target.value='';}});
+el('remove-logo').addEventListener('click',()=>{uploadVersion++;removeDecal();artwork.image=null;artwork.brand='';artwork.texture?.dispose();artwork.texture=null;el('brand-name').value='';el('remove-logo').disabled=true;el('upload-label').textContent='Upload your logo';artStatus('Preview cleared. Choose another logo or type your brand.');document.dispatchEvent(new CustomEvent('gt3:design',{detail:{placed:false}}));});
+document.addEventListener('gt3:placement',e=>{artwork.zone=anchors[e.detail]?e.detail:'driver-door';autoPlace();});
+el('logo-size').addEventListener('input',()=>{artwork.scale=Number(el('logo-size').value)/100;clearTimeout(editTimer);editTimer=setTimeout(()=>autoPlace(false),80);});
+window.GT3_DESIGN={snapshot(){if(!artwork.decal)throw Error('Upload a logo or enter a brand name first.');redrawArt();const c=document.createElement('canvas');c.width=512;c.height=256;c.getContext('2d').drawImage(artwork.canvas,0,0,512,256);return {zone:artwork.zone,brand:artwork.brand,scale:artwork.scale,png:c.toDataURL('image/png').split(',')[1]};},async restore(d){if(!d||!anchors[d.zone]||typeof d.png!=='string')return;const image=new Image();image.src='data:image/png;base64,'+d.png;await image.decode();artwork.zone=d.zone;artwork.brand=String(d.brand||'').slice(0,28);artwork.image=image;artwork.restored=true;artwork.scale=Math.min(1.4,Math.max(.6,Number(d.scale)||1));el('placement').value=d.zone;el('placement').dispatchEvent(new Event('change'));el('brand-name').value=artwork.brand;el('logo-size').value=artwork.scale*100;autoPlace();}};
 init();
