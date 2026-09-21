@@ -6,7 +6,7 @@ on:
       - 'brainsnn-r3f-app/sponsorship/tests/gt3.test.cjs'
       - '.github/workflows/gt3-lab.yml'
   push:
-    branches: [main, fix/gt3-native-minimal]
+    branches: [main]
     paths:
       - 'brainsnn-r3f-app/sponsorship/gt3/**'
       - '.github/workflows/gt3-lab.yml'
@@ -31,9 +31,9 @@ jobs:
           cache-dependency-path: brainsnn-r3f-app/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: node sponsorship/gt3/tidy-build.cjs && node sponsorship/gt3/build.cjs
-      - run: node --test sponsorship/tests/gt3.test.cjs
+      - run: node --test sponsorship/tests/gt3.test.cjs sponsorship/gt3/tests/checkout.test.cjs
       - run: npx playwright install --with-deps chromium
-      - name: Real WebGL, pointer input, decals and isolated SQLite
+      - name: Actual model, automatic logos and private SQLite; mocked Stripe independently
         run: node sponsorship/gt3/tests/native.mjs
       - uses: actions/upload-artifact@v4
         if: always()
