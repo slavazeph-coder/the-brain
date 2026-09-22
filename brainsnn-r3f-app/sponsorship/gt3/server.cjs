@@ -35,7 +35,7 @@ function createHandler(options={}){
  const cookie=req=>String(req.headers.cookie||'').split(';').map(s=>s.trim()).find(s=>s.startsWith('gt3_session='))?.slice(12)||'';
  const valid=s=>{const [n,t,h]=s.split('.');return /^[a-f0-9]{32}$/.test(n||'')&&/^\d{13}$/.test(t||'')&&Number(t)>Date.now()&&equal(h,mac(n+'.'+t));};
  const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
- function rate(req,name,max=20){const now=Date.now();for(const[k,v]of buckets)if(v.until<now)buckets.delete(k);if(buckets.size>10000)fail(429,'Try again later.');const key=name+sha(String(req.ip||req.socket?.remoteAddress||'unknown')),b=buckets.get(key)||{n:0,until:now+900000};b.n++;buckets.set(key,b);if(b.n>max)fail(429,'Too many attempts. Please try again later.');}
+ function rate(req,name,max=20){const now=Date.now();for(const[k,v]of buckets)if(v.until<now)buckets.delete(k);if(buckets.size>10000)fail(429,'Too many attempts. Please try again later.');const key=name+sha(String(req.ip||req.socket?.remoteAddress||'unknown')),b=buckets.get(key)||{n:0,until:now+900000};b.n++;buckets.set(key,b);if(b.n>max)fail(429,'Too many attempts. Please try again later.');}
  function csrf(req){const s=cookie(req);if(!origins.has(req.headers.origin)||!valid(s)||!equal(req.headers['x-csrf-token'],mac('csrf:'+s)))fail(403,'The form session expired. Refresh it before submitting.');}
  function admin(req){rate(req,'owner',30);if(owner.length<24||!equal(req.headers.authorization,'Bearer '+owner))fail(401,'Owner authorization required.');}
  async function body(req,maxBytes=16384){if(!String(req.headers['content-type']).includes('application/json'))fail(415,'JSON required.');let size=0;const chunks=[];for await(const c of req){size+=c.length;if(size>maxBytes)fail(413,'Proposal is too large.');chunks.push(c);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{fail(400,'Invalid JSON.');}}
@@ -61,7 +61,7 @@ function createHandler(options={}){
    if(!['GET','HEAD'].includes(req.method))fail(405,'Method not allowed.');
    if(p===ROOT){res.writeHead(308,{Location:ROOT+'/'+u.search});return res.end();}
    const name=p.slice((ROOT+'/').length)||'index.html';
-   const allowed=new Set(['index.html','app.js','style.css','model.js','engine.js','rear.webp','side.webp','admin.html','admin.js','viewer.js','car.glb','asset-manifest.json','LICENSE-model.txt']);
+   const allowed=new Set(['index.html','app.js','style.css','direct.js','direct.css','model.js','engine.js','rear.webp','side.webp','admin.html','admin.js','viewer.js','car.glb','asset-manifest.json','LICENSE-model.txt']);
    if(!allowed.has(name))fail(404,'Page not found.');
    res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-src 'none'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
    if(name==='admin.html')res.setHeader('X-Robots-Tag','noindex, nofollow');

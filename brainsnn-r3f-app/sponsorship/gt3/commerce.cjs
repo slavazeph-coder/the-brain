@@ -26,11 +26,14 @@ function png(encoded){
  if(!header||!ended)error(400,'Incomplete preview.');let raw;try{raw=zlib.inflateSync(Buffer.concat(data),{maxOutputLength:524544});}catch{error(400,'Invalid preview compression.');}
  if(raw.length!==524544)error(400,'Invalid preview dimensions.');for(let i=0;i<256;i++)if(raw[i*2049]>4)error(400,'Invalid preview filter.');return Buffer.concat(chunks);
 }
-function validateOrder(b){
+function validateOrder(b, contactMode='legacy'){
  if(!b||Array.isArray(b)||!uuid(b.requestId)||b.fax||b.consent!==true)error(400,'Confirm your details and artwork permission.');
  const text=(k,min,max)=>{const s=typeof b[k]==='string'?b[k].trim():'';if(s.length<min||s.length>max||/[\x00-\x1f]/.test(s))error(400,'Check '+k+'.');return s;};
- const name=text('name',2,100),company=text('company',2,140),email=text('email',5,254).toLowerCase(),brand=text('brand',0,28);
- if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))error(400,'Enter a valid email.');
+ // Only the guarded direct-design endpoint can request Stripe-collected contact.
+ const direct=contactMode==='stripe',compact=contactMode==='email';
+ const name=direct||compact?'':text('name',2,100),company=direct||compact?'':text('company',2,140);
+ const email=direct?'':text('email',5,254).toLowerCase(),brand=text('brand',0,28);
+ if(!direct&&!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))error(400,'Enter a valid email.');
  const zone=economics().zones.find(z=>z.id===b.zone);if(!zone)error(400,'Choose a placement.');
  if(!Number.isFinite(b.scale)||b.scale<.6||b.scale>1.4)error(400,'Check the preview size.');
  const image=png(b.png);return {requestId:b.requestId,contact:{name,company,email},design:{zone:zone.id,brand,scale:b.scale},image,artworkSha:sha(image),amount:zone.reserve};
@@ -65,7 +68,7 @@ function createCommerce({database,env,origin,secret,csrf,admin,rate,json,readBod
  function get(id){if(!uuid(id))error(404,'Design not found.');const r=db().prepare('SELECT * FROM gt3_orders WHERE id=?').get(id);if(!r)error(404,'Design not found.');return r;}
  function authorize(id,key){const r=get(id);if(!same(key,token(r)))error(404,'Design not found.');return r;}
  const brief=r=>({id:r.id,status:r.status,zone:r.zone,amount:r.amount,currency:'cad',design:{...JSON.parse(r.design),png:Buffer.from(r.artwork).toString('base64')},contact:JSON.parse(r.contact)});
- function record(b){const v=validateOrder(b),digest=sha(JSON.stringify({contact:v.contact,design:v.design,amount:v.amount,artworkSha:v.artworkSha}));return transaction(d=>{
+ function record(b,contactMode='legacy'){const v=validateOrder(b,contactMode),digest=sha(JSON.stringify({contact:v.contact,design:v.design,amount:v.amount,artworkSha:v.artworkSha}));return transaction(d=>{
   const old=d.prepare('SELECT * FROM gt3_orders WHERE request_id=?').get(v.requestId);if(old){if(old.digest!==digest)error(409,'This request was already used for another design. Review again.');return {order:brief(old),token:token(old),duplicate:true};}
   if(d.prepare("SELECT COUNT(*) AS n FROM gt3_orders WHERE status='draft'").get().n>=200)error(429,'Design inbox is full. Please contact XIO.');
   const id=crypto.randomUUID(),now=Date.now();d.prepare('INSERT INTO gt3_orders (id,request_id,digest,created_at,updated_at,status,zone,amount,artwork_sha,artwork,design,contact) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(id,v.requestId,digest,now,now,'draft',v.design.zone,v.amount,v.artworkSha,v.image,JSON.stringify(v.design),JSON.stringify(v.contact));const r=d.prepare('SELECT * FROM gt3_orders WHERE id=?').get(id);return {order:brief(r),token:token(r),duplicate:false};});}
@@ -82,8 +85,16 @@ function createCommerce({database,env,origin,secret,csrf,admin,rate,json,readBod
    if(!pi||typeof pi!=='object'||pi.status!=='succeeded'||pi.currency!=='cad'||pi.amount_received!==c.amount_total||!charge||typeof charge!=='object'||charge.paid!==true||c.automatic_tax?.enabled!==true||c.automatic_tax?.status!=='complete'||!Number.isSafeInteger(c.amount_total)||c.amount_total<r.amount)error(409,'Payment is not fully verified.');status='paid';
   }else if(c.status==='expired'&&c.payment_status==='unpaid')status='expired';
   else if(c.status==='complete')status='processing';else status='checkout';
+  // Customer details come from this exact verified Stripe session, never redirect fields.
+  const contact={...JSON.parse(r.contact)};
+  if(c.status==='complete'&&c.customer_details){
+   const details=c.customer_details,clean=(v,max)=>typeof v==='string'?v.replace(/[\x00-\x1f]/g,'').trim().slice(0,max):'';
+   const email=clean(details.email,254).toLowerCase();
+   if(/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email))contact.email=email;
+   const name=clean(details.name,100);if(name)contact.name=name;
+  }
   transaction(d=>{const current=d.prepare('SELECT status FROM gt3_orders WHERE id=?').get(id);if(current.status==='review')status='review';if(current.status==='paid'&&status!=='review')status='paid';
-   d.prepare('UPDATE gt3_orders SET status=?,payment_intent=?,updated_at=? WHERE id=?').run(status,(typeof pi==='object'?pi?.id:pi)||null,Date.now(),id);
+   d.prepare('UPDATE gt3_orders SET status=?,payment_intent=?,contact=?,updated_at=? WHERE id=?').run(status,(typeof pi==='object'?pi?.id:pi)||null,JSON.stringify(contact),Date.now(),id);
    if(status==='expired')d.prepare('DELETE FROM gt3_inventory WHERE order_id=?').run(id);
   });return get(id);
  }
@@ -101,7 +112,7 @@ function createCommerce({database,env,origin,secret,csrf,admin,rate,json,readBod
    const attempt=current.attempt+1,metadata={campaign:'brainsnn_gt3',order_id:id,artwork_sha:current.artwork_sha,terms_hash:ready.termsHash};
    const fragment='#order='+id+'&key='+token(current);
    const suffix=Array.from(crypto.randomBytes(8),v=>String.fromCharCode(97+v%26)).join('');
-   const params={mode:'payment',line_items:[{price_data:{currency:'cad',product:PRODUCT,unit_amount:current.amount,tax_behavior:'exclusive'},quantity:1}],client_reference_id:id,metadata,customer_email:JSON.parse(current.contact).email,success_url:origin+'/sponsor/gt3/?payment=return'+fragment,cancel_url:origin+'/sponsor/gt3/?payment=cancelled'+fragment,expires_at:Math.floor(Date.now()/1000)+3600,automatic_tax:{enabled:true},tax_id_collection:{enabled:true},payment_intent_data:{metadata},integration_identifier:'brainsnn_gt3_'+suffix,branding_settings:{display_name:'BrainSNN by XIO',background_color:'#080c12',button_color:'#7967dd'},custom_text:{submit:{message:'Your selected GT3 placement. Delivery, cancellation and funding conditions are governed by the campaign terms you accepted.'}}};
+   const params={mode:'payment',line_items:[{price_data:{currency:'cad',product:PRODUCT,unit_amount:current.amount,tax_behavior:'exclusive'},quantity:1}],client_reference_id:id,metadata,...(JSON.parse(current.contact).email?{customer_email:JSON.parse(current.contact).email}:{}),success_url:origin+'/sponsor/gt3/?payment=return'+fragment,cancel_url:origin+'/sponsor/gt3/?payment=cancelled'+fragment,expires_at:Math.floor(Date.now()/1000)+3600,automatic_tax:{enabled:true},tax_id_collection:{enabled:true},payment_intent_data:{metadata},integration_identifier:'brainsnn_gt3_'+suffix,branding_settings:{display_name:'BrainSNN by XIO',background_color:'#080c12',button_color:'#7967dd'},custom_text:{submit:{message:'Your selected GT3 placement. Delivery, cancellation and funding conditions are governed by the campaign terms you accepted.'}}};
    d.prepare('INSERT OR IGNORE INTO gt3_inventory VALUES(?,?,?)').run(current.zone,id,Date.now());
    d.prepare("UPDATE gt3_orders SET status='creating',attempt=?,terms=?,terms_hash=?,create_params=?,session_id=NULL,updated_at=? WHERE id=?").run(attempt,JSON.stringify(ready.terms),ready.termsHash,JSON.stringify(params),Date.now(),id);return d.prepare('SELECT * FROM gt3_orders WHERE id=?').get(id);
   });
@@ -128,8 +139,19 @@ function createCommerce({database,env,origin,secret,csrf,admin,rate,json,readBod
  }
  async function handle(req,res,p){
   if(p==='/api/gt3/catalog'&&req.method==='GET'){rate(req,'catalog',120);const ready=await readiness(),held=db().prepare('SELECT zone FROM gt3_inventory').all();json(res,200,{open:ready.open,terms:ready.terms,termsHash:ready.termsHash,zones:economics().zones.map(z=>({id:z.id,name:z.name,amount:z.reserve,state:held.some(h=>h.zone===z.id)?'unavailable':'available'}))});return true;}
+  if(p==='/api/gt3/designs'&&req.method==='POST'){
+   rate(req,'design-order',10);csrf(req);const b=await readBody(req,900000);
+   if(!b||!['pay','request'].includes(b.intent))error(400,'Choose a valid checkout action.');
+   if(b.intent==='pay'){
+    const ready=await readiness();
+    if(!ready.open)error(503,'Payments are not open yet. No payment was taken.');
+    if(b.termsHash!==ready.termsHash)error(409,'Campaign terms changed. Please read and accept the current terms.');
+   }
+   const result=record(b,b.intent==='pay'?'stripe':'email');
+   json(res,result.duplicate?200:201,result);return true;
+  }
   if(p==='/api/gt3/orders'&&req.method==='POST'){rate(req,'design-order',10);csrf(req);const result=record(await readBody(req,900000));json(res,result.duplicate?200:201,result);return true;}
-  if(p==='/api/gt3/order'&&req.method==='GET'){rate(req,'order-read',60);const u=new URL(req.url,origin),id=u.searchParams.get('id');let r=authorize(id,String(req.headers.authorization||'').replace(/^Bearer /,''));if(r.session_id&&env.GT3_STRIPE_KEY)r=await reconcile(r.id);json(res,200,{order:brief(r)});return true;}
+  if(p==='/api/gt3/order'&&req.method==='GET'){rate(req,'order-read',60);const u=new URL(req.url,origin),id=u.searchParams.get('id');let r=authorize(id,String(req.headers.authorization||'').replace(/^Bearer /,''));if(r.session_id&&(env.GT3_STRIPE_KEY||injected))r=await reconcile(r.id);json(res,200,{order:brief(r)});return true;}
   if(p==='/api/gt3/checkout'&&req.method==='POST'){rate(req,'checkout',12);csrf(req);const b=await readBody(req);json(res,200,await checkout(b.id,b.token,b.termsHash));return true;}
   if(p==='/api/gt3/stripe/webhook'&&req.method==='POST'){await webhook(req);json(res,200,{received:true});return true;}
   if(p==='/api/gt3/admin/orders'&&req.method==='GET'){admin(req);const rows=db().prepare('SELECT id,status,zone,amount,created_at,contact,artwork_sha,session_id FROM gt3_orders ORDER BY created_at DESC LIMIT 300').all();json(res,200,{readiness:await readiness(true),orders:rows.map(r=>({...r,contact:JSON.parse(r.contact)}))});return true;}
