@@ -4,7 +4,7 @@
 const $=id=>document.getElementById(id),q=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const {zones,economics,money}=globalThis.GT3,model=economics();
 const state={selected:'driver-door',catalog:null,csrf:null,busy:false,preview:false,order:null,dirty:false,restoring:false,sample:false};
-let connecting=null,requestId=crypto.randomUUID(),fingerprint='',refreshPreviewTimer;
+let connecting=null,requestId=crypto.randomUUID(),fingerprint='',refreshPreviewTimer,samplePng=null;
 const placementInfo={
  'driver-door':{fit:'Side-profile placement',description:'Your artwork on one driver-side door. The opposite door is a separate space.',short:'One side · Side-profile imagery'},
  'passenger-door':{fit:'Side-profile placement',description:'Your artwork on one passenger-side door. The opposite door is a separate space.',short:'One side · Side-profile imagery'},
@@ -85,14 +85,14 @@ function connect(){if(connecting)return connecting;connecting=(async()=>{try{
  if(state.catalog&&(state.catalog.termsHash!==c.termsHash||state.catalog.open!==c.open))$('art-rights').checked=false;
  state.csrf=s.csrf;state.catalog=c;setMode();$('refresh-session').hidden=true;
  }catch(e){state.csrf=null;say('form-status','Connection unavailable. Your preview still works. Reconnect to continue.',true);$('refresh-session').hidden=false;paint();}finally{connecting=null;}})();return connecting;}
-function preview(){try{const d=window.GT3_DESIGN?.snapshot();if(!d)throw Error('Not ready');$('logo-thumb').src='data:image/png;base64,'+d.png;$('logo-thumb').hidden=false;q('.upload-icon').hidden=true;state.preview=true;}catch{$('logo-thumb').hidden=true;q('.upload-icon').hidden=false;state.preview=false;}if(state.sample&&state.preview)say('art-status','Sample ad only. Upload your own artwork or type your brand before requesting this space.');$('try-example').hidden=state.preview;$('upload-label').textContent=state.preview?'Replace your artwork':'Upload your artwork';paint();}
+function preview(){try{const d=window.GT3_DESIGN?.snapshot();if(!d)throw Error('Not ready');if(state.sample){if(samplePng===null)samplePng=d.png;else if(d.png!==samplePng)state.sample=false;}$('logo-thumb').src='data:image/png;base64,'+d.png;$('logo-thumb').hidden=false;q('.upload-icon').hidden=true;state.preview=true;}catch{$('logo-thumb').hidden=true;q('.upload-icon').hidden=false;state.preview=false;}if(state.sample&&state.preview)say('art-status','Sample ad only. Upload your own artwork or type your brand before requesting this space.');$('try-example').hidden=state.preview;$('upload-label').textContent=state.preview?'Replace your artwork':'Upload your artwork';paint();}
 document.addEventListener('gt3:design',e=>{if(e.detail?.pending){state.preview=false;return;}preview();});
-for(const id of ['logo','brand-name','logo-size','email'])$(id).addEventListener(id==='logo'?'change':'input',()=>{state.dirty=true;clearTimeout(refreshPreviewTimer);if(['logo','brand-name'].includes(id))state.sample=false;if(id!=='email')refreshPreviewTimer=setTimeout(preview,220);paint();});
-$('remove-logo').addEventListener('click',()=>{state.dirty=true;queueMicrotask(preview);});
+for(const id of ['logo','brand-name','logo-size','email'])$(id).addEventListener(id==='logo'?'change':'input',()=>{state.dirty=true;clearTimeout(refreshPreviewTimer);if(id!=='email')refreshPreviewTimer=setTimeout(preview,220);paint();});
+$('remove-logo').addEventListener('click',()=>{state.dirty=true;state.sample=false;samplePng=null;queueMicrotask(preview);});
 $('try-example').addEventListener('click',()=>{
  if(state.preview||state.restoring||state.busy)return;
  if(!window.GT3_DESIGN){say('art-status','The car is preparing. Try the sample when it has loaded.');return;}
- state.dirty=true;$('brand-name').value='YOUR AD';$('brand-name').dispatchEvent(new Event('input',{bubbles:true}));state.sample=true;
+ state.dirty=true;samplePng=null;$('brand-name').value='YOUR AD';$('brand-name').dispatchEvent(new Event('input',{bubbles:true}));state.sample=true;
  say('art-status','Sample artwork only. Replace it with your own image before requesting a placement.');
 });
 function message(status){return status==='paid'?'Payment confirmed by Stripe. Your space is reserved, subject to the accepted campaign terms and final artwork approval.':status==='processing'?'Your payment is processing. Please do not pay again.':status==='review'?'This payment needs review. Contact XIO before paying again.':status==='expired'?'Your earlier checkout expired. The design is saved; availability is checked before another checkout.':status==='checkout'?'Your design is saved. Continue to your existing Stripe checkout, without starting another payment.':'Design saved privately. No payment or reservation has been made.';}
