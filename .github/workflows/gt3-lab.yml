@@ -35,6 +35,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Native model, glass menus, examples and isolated direct checkout
         run: node sponsorship/gt3/tests/native.mjs
+      - name: Advertiser clarity, sample-art safeguards and real model
+        run: node sponsorship/gt3/tests/buyer.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

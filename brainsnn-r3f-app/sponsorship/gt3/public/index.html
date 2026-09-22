@@ -1,84 +1,99 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en-CA">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#090d17">
-  <title>GT3 Studio | BrainSNN</title>
-  <meta name="description" content="Choose a space, upload your logo and preview it on the real 3D Porsche. Explore BrainSNN campaign concepts and secure checkout when sponsorships open.">
-  <link rel="canonical" href="https://www.brainsnn.com/sponsor/gt3/">
-  <link rel="stylesheet" href="/sponsor/gt3/style.css?v=glass1">
-  <link rel="stylesheet" href="/sponsor/gt3/direct.css?v=direct2">
-  <script defer src="/sponsor/gt3/model.js?v=checkout1"></script>
-  <script defer src="/sponsor/gt3/direct.js?v=direct2"></script>
-  <script type="module" src="/sponsor/gt3/viewer.js?v=direct2"></script>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<meta content="#090d17" name="theme-color"/>
+<title>GT3 Advertising Space | BrainSNN</title>
+<meta content="Preview your ad on a Porsche GT3 RS. Compare panel placements, see indicative campaign prices and review the details before requesting advertising space." name="description"/>
+<link href="https://www.brainsnn.com/sponsor/gt3/" rel="canonical"/>
+<link href="/sponsor/gt3/style.css?v=glass1" rel="stylesheet"/>
+<link href="/sponsor/gt3/direct.css?v=buyer1" rel="stylesheet"/>
+<script defer="" src="/sponsor/gt3/model.js?v=checkout1"></script>
+<script defer="" src="/sponsor/gt3/direct.js?v=buyer1"></script>
+<script src="/sponsor/gt3/viewer.js?v=direct2" type="module"></script>
 </head>
-<body data-render-state="loading" data-ui="glass-direct-v2">
+<body data-audience="advertiser-v1" data-render-state="loading" data-ui="glass-direct-v2">
 <a class="skip" href="#scene">Skip to the car</a>
 <header>
-  <a class="brand" href="/">Brain<span>SNN</span><small>by XIO</small></a>
-  <nav class="glass-nav" aria-label="Studio navigation">
-    <a href="#studio" aria-current="page">Studio</a><a href="#use-cases">Use cases</a>
-    <details class="nav-more"><summary aria-label="More pages"><span class="dots" aria-hidden="true">···</span></summary><div class="nav-sheet"><a href="/">About BrainSNN ↗</a><a href="/sponsor/">Robot studio ↗</a><a href="mailto:info@xioai.ca">Contact XIO ↗</a></div></details>
-  </nav>
+<a class="brand" href="/">Brain<span>SNN</span><small>by XIO</small></a>
+<nav aria-label="Studio navigation" class="glass-nav">
+<a aria-current="page" href="#studio">Ad spaces</a><a href="#use-cases">Ideas</a>
+<details class="nav-more"><summary aria-label="More pages"><span aria-hidden="true" class="dots">···</span></summary><div class="nav-sheet"><a href="#buyer-guide">Before you book</a><a href="/">About BrainSNN ↗</a><a href="/sponsor/">Robot studio ↗</a><a href="mailto:info@xioai.ca">Contact XIO ↗</a></div></details>
+</nav>
 </header>
 <main>
-  <section class="intro"><p class="eyebrow">THE GT3 EXPERIMENT <span id="campaign-badge">DESIGN PREVIEW</span></p><h1>Your brand. <span>On the GT3.</span></h1><p>A space for your brand. A canvas for something different.</p></section>
-  <section class="studio" id="studio" aria-label="Porsche sponsorship studio">
-    <div class="visual">
-      <div class="viewer-heading" aria-hidden="true"><span>PORSCHE 911 GT3 RS</span><span>YOUR LIVE PREVIEW</span></div>
-      <div id="scene" aria-label="Interactive 3D Porsche GT3 RS" aria-busy="true"><div class="loader" id="loader"><span class="loader-orbit" aria-hidden="true"></span><p>Preparing the car</p></div></div>
-      <div class="scene-bar"><p id="load-status" role="status">Loading 3D…</p><button id="reset-view" type="button" disabled>Reset view ↺</button><button id="retry" type="button" hidden>Retry</button></div>
-    </div>
-    <aside aria-label="Create your sponsorship">
-      <form id="checkout-form">
-        <div class="steps" aria-label="Three steps"><span><b>01</b> Space</span><span><b>02</b> Image</span><span><b>03</b> Pay</span></div>
-        <label id="spot-label" for="spot-trigger">Your space</label>
-        <div class="spot-picker" id="spot-picker">
-          <button class="spot-trigger" id="spot-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="spot-options" aria-labelledby="spot-label spot-name"><span id="spot-name">Driver door</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></button>
-          <div class="spot-options" id="spot-options" role="listbox" aria-label="Sponsorship spaces" hidden></div>
-          <select id="placement" class="sr-only" tabindex="-1" aria-hidden="true" aria-label="Selected sponsorship placement"></select>
-        </div>
-        <label class="upload" for="logo"><svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m-4 4 4-4 4 4M5 15v5h14v-5"/></svg><img id="logo-thumb" alt="Your logo preview" hidden><span id="upload-label">Upload your logo</span><small>PNG, JPG or WebP · Up to 2 MB</small><input id="logo" type="file" accept="image/png,image/jpeg,image/webp"></label>
-        <p class="fine" id="art-status" role="status">Appears on the car automatically. Nothing is uploaded until you continue.</p>
-        <details class="art-details"><summary>Adjust your design <span>+</span></summary><label for="brand-name">Or use your brand name</label><input id="brand-name" maxlength="28" placeholder="Your brand" autocomplete="organization"><label for="logo-size">Logo size</label><input id="logo-size" type="range" min="60" max="140" step="5" value="100"><button id="remove-logo" class="text" type="button" disabled>Clear preview</button></details>
-        <div class="price-block"><div><span class="eyebrow" id="price-label">PLANNING PRICE</span><strong id="price"></strong><p>CAD before applicable tax.</p></div><span id="space-state" class="space-state">Preview</span></div>
-        <div id="request-contact" hidden><label for="email">Email for your design request</label><input id="email" type="email" autocomplete="email" maxlength="254" placeholder="you@company.com" disabled></div>
-        <div class="honeypot" aria-hidden="true"><label>Fax<input name="fax" tabindex="-1" autocomplete="off"></label></div>
-        <label class="check compact-consent"><input id="art-rights" name="consent" type="checkbox" required><span id="consent-copy">I own or can use this artwork and agree to the <a href="#campaign-details">campaign terms</a> and private design storage.</span></label>
-        <button class="button" id="primary-cta" type="submit" disabled>Connecting…</button>
-        <p class="fine" id="checkout-note">Checking sponsorship availability. Previewing never charges you.</p>
-        <p class="fine" id="form-status" role="status"></p><button class="text" id="refresh-session" type="button" hidden>Reconnect</button>
-        <p class="fine" id="order-status" role="status" hidden></p>
-      </form>
-    </aside>
-  </section>
-  <details class="details" id="campaign-details">
-    <summary>Campaign details &amp; terms <span>+</span></summary>
-    <div class="detail-grid">
-      <div><h3>Your space, clearly defined.</h3><p id="campaign-copy">This is a prelaunch concept. Vehicle access and campaign delivery are not yet confirmed. Saving a design is not a payment or reservation.</p><div id="offer-terms" class="offer-terms"></div><p>When sales open, the approved dates, deliverables, funding conditions and refund policy appear here before you accept. Stripe collects payment details securely. The 3D preview is not final installation artwork.</p></div>
-      <div><h3>Private by design.</h3><p>Your image remains in your browser until you continue. With permission, BrainSNN saves a normalized preview and selected space privately. It does not publish your logo as a sponsor. Original print-resolution artwork is requested separately.</p><p>When checkout is open, contact and billing details are collected once by Stripe. During prelaunch, only an email is requested to follow up on your design. No automatic design-request email is sent.</p><p>Unpaid requests are scheduled for deletion after 180 days; transaction records are retained for accounting and support. For assistance or deletion, contact <a href="mailto:info@xioai.ca">info@xioai.ca</a>.</p><details><summary>Planning budget <span>+</span></summary><p id="funding-copy"></p></details></div>
-    </div>
-  </details>
-  <section class="use-cases" id="use-cases" aria-labelledby="use-title">
-    <div class="use-heading"><div><p class="eyebrow">BEYOND THE LOGO</p><h2 id="use-title">Give the attention a purpose.</h2></div><p>Three ways a BrainSNN partnership could work.<br>Illustrative concepts, not completed campaigns.</p></div>
-    <div class="use-grid">
-      <article class="use-card">
-        <div class="case-media"><img src="/sponsor/gt3/side.webp" width="640" height="360" loading="lazy" decoding="async" alt="Concept image of a Porsche in a cyan and violet launch studio"><span class="case-tag">01 / BRAND LAUNCH</span></div>
-        <div class="case-copy"><h3>Make an entrance.</h3><p>A product reveal with a distinctive physical centrepiece and a clear next step for your audience.</p><details class="case-example"><summary>Example: launch-day showcase <span>+</span></summary><p>A software brand sponsors the hood for an agreed launch activation. A dedicated landing page connects the reveal content to a product trial. Track visits and opted-in inquiries, not assumed impressions.</p></details><button class="case-action" data-case-zone="hood" type="button">Explore the hood <span aria-hidden="true">↗</span></button></div>
-      </article>
-      <article class="use-card">
-        <div class="case-media"><img src="/sponsor/gt3/side.webp" width="640" height="360" loading="lazy" decoding="async" alt="Concept side view of the Porsche, illustrating a door sponsorship"><span class="case-tag">02 / TECHNOLOGY DEMO</span><span class="demo-overlay" aria-hidden="true">AI + ROBOTICS<br><small>FROM ATTENTION TO ACTION</small></span></div>
-        <div class="case-copy"><h3>Show what you do.</h3><p>Pair a sponsor placement with a practical demonstration of your AI tool or service robot.</p><details class="case-example"><summary>Example: a showroom demo <span>+</span></summary><p>At an approved venue, demonstrate an AI assistant turning an inquiry into a booked consultation, or a robot performing an agreed task. Film the actual outcome and invite visitors to a follow-up demo.</p></details><button class="case-action" data-case-zone="driver-door" type="button">Explore a door <span aria-hidden="true">↗</span></button></div>
-      </article>
-      <article class="use-card">
-        <div class="case-media case-detail"><img src="/sponsor/gt3/side.webp" width="640" height="360" loading="lazy" decoding="async" alt="Concept crop of the Porsche for branded campaign photography"><span class="case-tag">03 / CAMPAIGN CONTENT</span><span class="frame-mark" aria-hidden="true"></span></div>
-        <div class="case-copy"><h3>Make it worth sharing.</h3><p>Turn a placement into a coordinated set of photographs, short films and a measurable campaign.</p><details class="case-example"><summary>Example: a content collaboration <span>+</span></summary><p>A technology or lifestyle partner sponsors the rear wing for an agreed content series. Define the shots, usage rights and campaign dates in advance. Report published views and attributable visits after release.</p></details><button class="case-action" data-case-zone="wing" type="button">Explore the rear wing <span aria-hidden="true">↗</span></button></div>
-      </article>
-    </div>
-    <p class="use-disclaimer">Concept imagery. Locations, vehicle access, production, dates and results are subject to a written agreement. No guaranteed reach or sales.</p>
-  </section>
+<section class="intro"><p class="eyebrow">GT3 ADVERTISING <span id="campaign-badge">DESIGN PREVIEW</span></p><h1>Your ad. <span>On the GT3.</span></h1><p id="buyer-intro">See your creative on the car. Compare spaces. Get the campaign details before you commit.</p></section>
+<section aria-label="Preview and choose your advertising space" class="studio" id="studio">
+<div class="visual">
+<div aria-hidden="true" class="viewer-heading"><span>PORSCHE 911 GT3 RS</span><span>YOUR LIVE PREVIEW</span></div>
+<div aria-busy="true" aria-label="Interactive 3D Porsche GT3 RS" id="scene"><div class="loader" id="loader"><span aria-hidden="true" class="loader-orbit"></span><p>Preparing the car</p></div></div>
+<div class="scene-bar"><p id="load-status" role="status">Loading 3D…</p><button disabled="" id="reset-view" type="button">Reset view ↺</button><button hidden="" id="retry" type="button">Retry</button></div>
+</div>
+<aside aria-label="Your advertising placement">
+<form id="checkout-form">
+<div aria-label="Three steps" class="steps"><span><b>01</b> Space</span><span><b>02</b> Your ad</span><span><b>03</b> Pay</span></div>
+<label for="spot-trigger" id="spot-label">Choose your ad space</label>
+<div class="spot-picker" id="spot-picker">
+<button aria-controls="spot-options" aria-describedby="placement-description" aria-expanded="false" aria-haspopup="listbox" aria-labelledby="spot-label spot-name" class="spot-trigger" id="spot-trigger" type="button"><span id="spot-name">Driver door</span><svg aria-hidden="true" viewbox="0 0 20 20"><path d="m5 8 5 5 5-5"></path></svg></button>
+<div aria-label="Sponsorship spaces" class="spot-options" hidden="" id="spot-options" role="listbox"></div>
+<select aria-hidden="true" aria-label="Selected sponsorship placement" class="sr-only" id="placement" tabindex="-1"></select>
+</div><div aria-live="polite" class="placement-brief"><p class="placement-fit" id="placement-fit">Side-profile placement</p><p id="placement-description">Your artwork on one door. The opposite side is a separate space.</p></div>
+<label class="upload" for="logo"><svg aria-hidden="true" class="upload-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4" viewbox="0 0 24 24"><path d="M12 15V3m-4 4 4-4 4 4M5 15v5h14v-5"></path></svg><img alt="Your logo preview" hidden="" id="logo-thumb"/><span id="upload-label">Upload your artwork</span><small>Logo or campaign image · PNG, JPG, WebP</small><input accept="image/png,image/jpeg,image/webp" id="logo" type="file"/></label>
+<p class="fine" id="art-status" role="status">Up to 2 MB. Preview privately, directly on the car.</p><button class="sample-action" id="try-example" type="button">Try a sample ad first ↗</button>
+<details class="art-details"><summary>Adjust artwork <span>+</span></summary><label for="brand-name">Or preview your brand name</label><input autocomplete="organization" id="brand-name" maxlength="28" placeholder="Your brand name"/><label for="logo-size">Logo size</label><input id="logo-size" max="140" min="60" step="5" type="range" value="100"/><button class="text" disabled="" id="remove-logo" type="button">Clear preview</button></details>
+<div class="price-block"><div><span class="eyebrow" id="price-label">INDICATIVE CAMPAIGN PRICE</span><strong id="price"></strong><p>CAD, before tax. Not a monthly rate.</p></div><span class="space-state" id="space-state">Preview</span></div><p class="price-context" id="price-context">Dates, locations and inclusions still need to be agreed. This is not a final quote.</p>
+<div hidden="" id="request-contact"><label for="email">Where should we contact you?</label><input autocomplete="email" disabled="" id="email" maxlength="254" placeholder="you@company.com" type="email"/></div>
+<div aria-hidden="true" class="honeypot"><label>Fax<input autocomplete="off" name="fax" tabindex="-1"/></label></div>
+<label class="check compact-consent"><input id="art-rights" name="consent" required="" type="checkbox"/><span id="consent-copy">I own or can use this artwork and agree to the <a href="#campaign-details">campaign terms</a> and private design storage.</span></label>
+<button class="button" disabled="" id="primary-cta" type="submit">Connecting…</button>
+<p class="fine" id="checkout-note">Checking sponsorship availability. Previewing never charges you.</p>
+<p class="fine" id="form-status" role="status"></p><button class="text" hidden="" id="refresh-session" type="button">Reconnect</button>
+<p class="fine" hidden="" id="order-status" role="status"></p>
+</form>
+</aside>
+</section>
+<section aria-labelledby="buyer-guide-title" class="buyer-guide" id="buyer-guide">
+<div class="buyer-heading"><div><p class="eyebrow">BEFORE YOU BOOK</p><h2 id="buyer-guide-title">Know the campaign.<br/>Not just the car.</h2></div><p id="buyer-guide-note">Previewing is open. Booking is not.<br/>Here is what still needs to be confirmed.</p></div>
+<div class="booking-facts">
+<article><span class="fact-label">DATES &amp; DURATION</span><strong id="fact-dates">Not scheduled</strong><p id="fact-dates-note">The campaign window and term are not confirmed.</p></article>
+<article><span class="fact-label">WHERE YOUR AD APPEARS</span><strong id="fact-locations">Media plan pending</strong><p>Venues, routes and appearances have not been published.</p></article>
+<article><span class="fact-label">AUDIENCE &amp; REPORTING</span><strong>No verified reach published</strong><p>Ask for the audience evidence and reporting plan, not an assumed impression count.</p></article>
+<article><span class="fact-label">PRINT &amp; CAMPAIGN SCOPE</span><strong id="fact-production">Inclusions to be agreed</strong><p>Final artwork area, installation, content and usage rights need a defined scope.</p></article>
+</div>
+<div class="buyer-next"><p id="buyer-next-copy">Request the campaign offer before committing your budget.</p><a href="#campaign-details">See terms &amp; privacy <span aria-hidden="true">↗</span></a></div>
+</section><details class="details" id="campaign-details">
+<summary>Written offer, terms &amp; privacy <span>+</span></summary>
+<div class="detail-grid">
+<div><h3>An ad placement, not a vehicle purchase.</h3><p id="campaign-copy">The campaign is still being planned. Your request identifies an ad space you are interested in; it does not reserve inventory or charge you.</p><div class="offer-terms" id="offer-terms"></div><p>When sales open, the approved dates, deliverables, funding conditions and refund policy appear here before you accept. Stripe collects payment details securely. The 3D preview is not final installation artwork.</p></div>
+<div><h3>Private by design.</h3><p>Your image remains in your browser until you continue. With permission, BrainSNN saves a normalized preview and selected space privately. It does not publish your logo as a sponsor. Original print-resolution artwork is requested separately.</p><p>When checkout is open, contact and billing details are collected once by Stripe. During prelaunch, only an email is requested to follow up on your design. No automatic design-request email is sent.</p><p>Unpaid requests are scheduled for deletion after 180 days; transaction records are retained for accounting and support. For assistance or deletion, contact <a href="mailto:info@xioai.ca">info@xioai.ca</a>.</p></div>
+</div>
+</details>
+<section aria-labelledby="use-title" class="use-cases" id="use-cases">
+<div class="use-heading"><div><p class="eyebrow">WAYS TO USE THE SPACE</p><h2 id="use-title">Start with your campaign goal.</h2></div><p>Illustrative concepts for advertisers.<br/>Not delivered campaigns or included extras.</p></div>
+<div class="use-grid">
+<article class="use-card">
+<div class="case-media"><img alt="Concept image of a Porsche in a cyan and violet launch studio" decoding="async" height="360" loading="lazy" src="/sponsor/gt3/side.webp" width="640"/><span class="case-tag">01 / BRAND LAUNCH</span></div>
+<div class="case-copy"><h3>Launch a product.</h3><p>Use a distinctive vehicle placement as part of a coordinated product reveal, with a clear way for people to learn more.</p><p class="case-measure">MEASURE / TRIAL-PAGE VISITS</p><details class="case-example"><summary>Example: drive product-trial visits <span>+</span></summary><p>A software launch could pair a hood placement with approved reveal content and a dedicated trial page. Agree the appearance, creative assets and usage rights first. Measure tracked visits and opt-in trial requests.</p></details><button class="case-action" data-case-zone="hood" type="button">Preview this launch space <span aria-hidden="true">↗</span></button></div>
+</article>
+<article class="use-card">
+<div class="case-media"><img alt="Concept side view of the Porsche, illustrating a door sponsorship" decoding="async" height="360" loading="lazy" src="/sponsor/gt3/side.webp" width="640"/><span class="case-tag">02 / TECHNOLOGY DEMO</span><span aria-hidden="true" class="demo-overlay">AI + ROBOTICS<br/><small>FROM ATTENTION TO ACTION</small></span></div>
+<div class="case-copy"><h3>Bring people to a demo.</h3><p>Give your ad one clear action: book a demonstration, visit your showroom or speak to your team.</p><p class="case-measure">MEASURE / OPT-IN DEMO BOOKINGS</p><details class="case-example"><summary>Example: turn interest into a demo <span>+</span></summary><p>For an agreed event or showroom activation, pair a door placement with a product demo and an opt-in booking link. Confirm the venue, staffing and demo scope separately. Measure relevant inquiries and booked demonstrations.</p></details><button class="case-action" data-case-zone="driver-door" type="button">Preview this demo space <span aria-hidden="true">↗</span></button></div>
+</article>
+<article class="use-card">
+<div class="case-media case-detail"><img alt="Concept crop of the Porsche for branded campaign photography" decoding="async" height="360" loading="lazy" src="/sponsor/gt3/side.webp" width="640"/><span class="case-tag">03 / CAMPAIGN CONTENT</span><span aria-hidden="true" class="frame-mark"></span></div>
+<div class="case-copy"><h3>Create branded content.</h3><p>Explore a visual setting for your campaign photos and short-form video, without assuming production is included.</p><p class="case-measure">MEASURE / CONTENT &amp; TRACKED VISITS</p><details class="case-example"><summary>Example: campaign photography <span>+</span></summary><p>A rear-wing placement could feature in a planned photo or video shoot. Your offer should specify the asset count, delivery dates, editing and reuse rights. Report actual published views and tracked website visits.</p></details><button class="case-action" data-case-zone="wing" type="button">Preview this content space <span aria-hidden="true">↗</span></button></div>
+</article>
+</div>
+<p class="use-disclaimer">Illustrative creative only. Examples do not add events, content production or reporting to a purchase. Confirm the written scope, audience evidence and any additional charges. No guaranteed reach or sales.</p>
+</section><section aria-labelledby="buyer-faq-title" class="buyer-faq"><div><p class="eyebrow">ADVERTISER QUESTIONS</p><h2 id="buyer-faq-title">Clear before you commit.</h2></div>
+<details><summary>What exactly am I requesting? <span>+</span></summary><p>Advertising on one selected panel of the proposed GT3 campaign. A door means one side, not both. This is not a share of a vehicle or an investment. During prelaunch, your artwork and email form a private, non-binding inquiry.</p></details>
+<details><summary>Does the price include the wrap, events and content? <span>+</span></summary><p>The accepted campaign offer determines what is included. Before buying, check installation and removal, agreed appearances, photo or video deliverables, usage rights, reporting and any extra charges. The use-case examples are ideas, not an included package.</p></details>
+<details><summary>How big will my ad be? <span>+</span></summary><p>The model shows the proposed location and a visual preview, not measured print dimensions. The final printable area and artwork layout must be approved separately. The size control changes your preview, not the purchased panel or price.</p></details>
+<details><summary>Can I try my artwork without paying or publishing it? <span>+</span></summary><p>Yes. You can upload artwork, compare panels and rotate the car privately in your browser. It is only sent to BrainSNN when you submit with permission. It is not automatically published as a confirmed sponsor.</p></details>
+</section>
 </main>
-<footer><p>Model: <a href="https://sketchfab.com/3d-models/porsche-gt3-rs-e738eae819c34d19a31dd066c45e0f3d" target="_blank" rel="noopener noreferrer">Porsche GT3 RS</a> by <a href="https://sketchfab.com/BlackSnow02" target="_blank" rel="noopener noreferrer">Black Snow</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a><br>Repacked and lit for BrainSNN. Independent concept, no Porsche or creator endorsement.</p><a href="mailto:info@xioai.ca">Contact XIO ↗</a></footer>
+<footer><p>Model: <a href="https://sketchfab.com/3d-models/porsche-gt3-rs-e738eae819c34d19a31dd066c45e0f3d" rel="noopener noreferrer" target="_blank">Porsche GT3 RS</a> by <a href="https://sketchfab.com/BlackSnow02" rel="noopener noreferrer" target="_blank">Black Snow</a> · <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener noreferrer" target="_blank">CC BY 4.0</a><br/>Repacked and lit for BrainSNN. Independent concept, no Porsche or creator endorsement.</p><a href="mailto:info@xioai.ca">Contact XIO ↗</a></footer>
 <noscript><p>Enable JavaScript to explore the model. Email info@xioai.ca to discuss a partnership.</p></noscript>
 </body></html>
