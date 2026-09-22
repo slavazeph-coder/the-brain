@@ -21,13 +21,14 @@ header { position: relative; z-index: 5; }
 .spot-trigger svg { width: 18px; height: 18px; stroke: #c0cde5; stroke-width: 1.5; fill: none; transition: transform .18s; }
 .spot-trigger[aria-expanded=true] { border-color: #a4cbf070; background-color: #d4e6ff09; }
 .spot-trigger[aria-expanded=true] svg { transform: rotate(180deg); }
-.spot-options { position: absolute; z-index: 10; inset-inline: -6px; top: calc(100% + 8px); max-height: 348px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; border: 1px solid rgba(219,234,255,.25); border-radius: 17px; background: #202a3d; box-shadow: var(--rim), 0 22px 65px #0009; scrollbar-width: thin; }
+.spot-options { position: absolute; z-index: 10; inset-inline: -6px; top: calc(100% + 8px); max-height: min(410px,calc(100dvh - 200px)); overflow-y: auto; overscroll-behavior: contain; padding: 6px; border: 1px solid rgba(219,234,255,.25); border-radius: 17px; background: #202a3d; box-shadow: var(--rim), 0 22px 65px #0009; scrollbar-width: thin; }
 .spot-options > button { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 7px; align-items: center; min-height: 46px; width: 100%; padding: 10px 8px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: #dae4f5; font-size: 11px; text-align: left; }
 .spot-options > button[aria-selected=true] { color: white; border-color: #a9cfff25; background: linear-gradient(100deg,#9ddeec18,#bb9ffa15); }
 .spot-options > button:hover, .spot-options > button:focus-visible { background-color: #d4e7ff0d; outline-offset: -2px; }
 .spot-index { color: #91a7c8; font-size: 8px; font-variant-numeric: tabular-nums; }
 .spot-options small { font-size: 9px; color: #b9c9e1; font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; min-height: 0 !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+.skip:not(:focus) { opacity: 0; pointer-events: none; }
 .upload { margin-top: 15px; }
 .upload > #logo-thumb { grid-column: 1; grid-row: 1/3; width: 37px; height: 37px; object-fit: contain; border-radius: 8px; background: #131c2c; border: 1px solid var(--line); padding: 3px; }
 #art-status { font-size: 10px; min-height: 33px; }
