@@ -123,6 +123,13 @@ function createHandler(options = {}) {
     if (row.status !== 'paid' && row.invitation_expires < new Date().toISOString()) fail(410,'This quote has expired. Please request an updated agreement.');
     return row;
   }
+  function canResumeCheckout(row) {
+    if (row.status !== 'checkout_pending' || !row.checkout_id || !Number.isFinite(row.checkout_expires) || row.checkout_expires <= Date.now()/1000+60) return false;
+    try {
+      const destination = new URL(row.checkout_url);
+      return destination.protocol === 'https:' && destination.hostname === 'checkout.stripe.com' && !destination.username && !destination.password && !destination.port && destination.pathname.startsWith('/c/');
+    } catch { return false; }
+  }
   function security(res) {
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     res.setHeader('Referrer-Policy','no-referrer');
@@ -140,6 +147,13 @@ function createHandler(options = {}) {
     d.exec('BEGIN IMMEDIATE');
     try {
       const row = obj?.id && d.prepare('SELECT * FROM sponsor_applications WHERE checkout_id=?').get(obj.id);
+      if (!row && obj?.id && ['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired','checkout.session.async_payment_failed'].includes(event.type) && isId(obj.metadata?.sponsor_application)) {
+        const pending = d.prepare('SELECT status,checkout_id FROM sponsor_applications WHERE id=?').get(obj.metadata.sponsor_application);
+        // Stripe can deliver a signed event before its create-session response is
+        // attached locally. Ask it to retry; do not permanently deduplicate an
+        // event that has not been applied, or bind a session from metadata alone.
+        if (pending?.status === 'checkout_pending' && !pending.checkout_id) fail(503,'Payment confirmation is awaiting checkout reconciliation. Retry this notification.');
+      }
       if (successful && row && row.accepted_at && obj.currency === 'cad' && obj.metadata?.sponsor_application === row.id) {
         const quote = JSON.parse(row.quote);
         if (obj.amount_subtotal !== quote.subtotalCents || !Number.isSafeInteger(obj.amount_total) || obj.amount_total < quote.subtotalCents) fail(400,'Payment amount does not match the agreement.');
@@ -208,23 +222,50 @@ function createHandler(options = {}) {
     }
     if (route === '/quote' && req.method === 'POST') {
       limit(req,'quote',100); const b=await readBody(req); const row=rowForInvite(b.token); const p=JSON.parse(row.payload);
-      return send(res,200,{ok:true,reference:row.id,company:p.company,zone:CATALOG.find(z=>z.id===p.zone)?.name,quote:JSON.parse(row.quote),status:row.status,paymentsEnabled:paymentReady(),paidAt:row.paid_at,amountPaid:row.amount_paid});
+      return send(res,200,{ok:true,reference:row.id,company:p.company,zone:CATALOG.find(z=>z.id===p.zone)?.name,quote:JSON.parse(row.quote),status:row.status,paymentsEnabled:paymentReady(),canResumeCheckout:canResumeCheckout(row),paidAt:row.paid_at,amountPaid:row.amount_paid});
     }
     if (route === '/checkout' && req.method === 'POST') {
       limit(req,'checkout',20); const b=await readBody(req); if(b.returnSite!==undefined && b.returnSite!=='xio') fail(400,'Unsupported return destination.'); const row=rowForInvite(b.token);
+      if(b.resumeOnly!==undefined && typeof b.resumeOnly!=='boolean') fail(400,'Invalid checkout resume request.');
       if(row.status==='paid') fail(409,'This sponsorship has already been paid.');
       if(b.acceptTerms!==true) fail(400,'Accept the written campaign scope before continuing.');
       if(!paymentReady()) fail(503,'Online payment has not been enabled. Contact XIO to arrange payment against the approved agreement.');
-      if(row.checkout_url && row.checkout_expires>Date.now()/1000+60) return send(res,200,{url:row.checkout_url});
       const d=database(); const p=JSON.parse(row.payload); const quote=JSON.parse(row.quote);
+      // A pending order can only reopen its existing session. In particular a
+      // direct order must never enter this legacy session-creation path with a
+      // different idempotency key, even if a client omits resumeOnly.
+      if(row.status==='checkout_pending' || b.resumeOnly===true || quote.purchaseType==='direct') {
+        if(canResumeCheckout(row)) return send(res,200,{url:row.checkout_url});
+        fail(409,'This checkout cannot be resumed yet. Refresh its status or contact XIO before attempting another payment.');
+      }
       // A transaction serializes concurrent creation attempts. Stripe's idempotency key also protects retries.
       d.exec('BEGIN IMMEDIATE'); let attempt;
-      try { const current=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(row.id); if(current.status==='checkout_pending' && !current.checkout_id) fail(409,'Checkout is being prepared. Please retry in a moment.'); attempt=current.checkout_attempt+1; d.prepare("UPDATE sponsor_applications SET status='checkout_pending',accepted_at=?,checkout_attempt=? WHERE id=?").run(new Date().toISOString(),attempt,row.id); d.exec('COMMIT'); } catch(e) { d.exec('ROLLBACK'); throw e; }
+      try {
+        const current=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(row.id);
+        // Another worker may have changed the order between the initial read and
+        // acquiring this write lock. Only the same valid approved agreement can
+        // transition to a new checkout; pending and paid states never regress.
+        if(!current || current.status!=='approved' || current.checkout_id || current.checkout_url) fail(409,'This checkout changed. Refresh its status before continuing.');
+        if(!equal(current.invitation_hash,SHA(b.token))) fail(404,'Invitation not found.');
+        if(current.invitation_expires < new Date().toISOString()) fail(410,'This quote has expired. Please request an updated agreement.');
+        if(JSON.parse(current.quote).purchaseType==='direct' || current.quote!==row.quote || current.payload!==row.payload || !current.reserved_slot || current.reserved_slot!==row.reserved_slot || current.checkout_attempt!==row.checkout_attempt) fail(409,'This agreement changed. Refresh its details before continuing.');
+        attempt=current.checkout_attempt+1;
+        const changed=d.prepare("UPDATE sponsor_applications SET status='checkout_pending',accepted_at=?,checkout_attempt=? WHERE id=? AND status='approved' AND checkout_attempt=?")
+          .run(new Date().toISOString(),attempt,row.id,current.checkout_attempt);
+        if(changed.changes!==1) fail(409,'This checkout changed. Refresh its status before continuing.');
+        d.exec('COMMIT');
+      } catch(e) { d.exec('ROLLBACK'); throw e; }
       try {
         const s=await getStripe().checkout.sessions.create({mode:'payment',customer_email:p.email,customer_creation:'always',billing_address_collection:'required',automatic_tax:{enabled:true},tax_id_collection:{enabled:true},line_items:[{price_data:{currency:'cad',unit_amount:quote.subtotalCents,tax_behavior:'exclusive',product_data:{name:b.returnSite==='xio'?`XIO Robot 001 / ${CATALOG.find(z=>z.id===p.zone)?.name}`:`BrainSNN Robot 001 / ${CATALOG.find(z=>z.id===p.zone)?.name}`,description:'90-day campaign under the separately approved written agreement.'}},quantity:1}],metadata:{sponsor_application:row.id,agreement_reference:quote.agreementReference},client_reference_id:row.id,success_url:`${resolveCheckoutDestination(origin,b.returnSite)}?payment=returned`,cancel_url:`${resolveCheckoutDestination(origin,b.returnSite)}?payment=cancelled`,expires_at:Math.floor(Date.now()/1000)+1800,integration_identifier:'brainsnn_sponsor_bkspmxqt'},{idempotencyKey:`brainsnn-sponsor-${row.id}-${attempt}`});
         if(!s.url || !/^https:\/\/checkout\.stripe\.com\//.test(s.url)) throw new Error('Unexpected checkout destination');
         d.prepare('UPDATE sponsor_applications SET checkout_id=?,checkout_url=?,checkout_expires=? WHERE id=? AND checkout_attempt=?').run(s.id,s.url,s.expires_at,row.id,attempt); audit(row.id,'checkout_created'); return send(res,200,{url:s.url});
-      } catch(e) { d.prepare("UPDATE sponsor_applications SET status='approved' WHERE id=? AND checkout_attempt=? AND checkout_id IS NULL").run(row.id,attempt); console.error('[sponsor] checkout setup failed'); fail(503,'Checkout could not be prepared. No new charge was made by this request. Please contact XIO.'); }
+      } catch(e) {
+        // A failed response does not prove Stripe did not create the session.
+        // Preserve the attempt and hold until reconciliation; a retry must not
+        // create another session under a new idempotency key.
+        console.error('[sponsor] checkout setup failed');
+        fail(503,'The checkout response could not be confirmed. Your order is retained. Check its status or contact XIO before attempting another payment.');
+      }
     }
     fail(404,'Route not found.');
   }

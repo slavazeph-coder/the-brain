@@ -114,3 +114,163 @@ test('XIO checkout enforces return destination, product title, and prevents pric
   assert.equal((await f.call('/checkout',{token:'invalid',acceptTerms:true,returnSite:'xio'})).r.status,404);
  }finally{await f.close();}
 });
+
+test('pending checkout resumes only its original session and fails closed near expiry',async()=>{
+ let creates=0;
+ const fake={checkout:{sessions:{create:async()=>{creates++;return{id:'cs_test_resume_only',url:'https://checkout.stripe.com/c/pay/cs_test_resume_only',expires_at:Math.floor(Date.now()/1000)+1800};}}}};
+ const f=await fixture({stripe:fake,webhookSecret:'whsec_resume_fixture',paymentsEnabled:true});
+ try{
+  const id=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;
+  await f.call('/admin/login',{password:f.options.adminKey});
+  const approved=await f.call(`/admin/applications/${id}/quote`,quote);
+  const token=new URLSearchParams(new URL(approved.data.invitationUrl).hash.slice(1)).get('token');
+  assert.equal((await f.call('/quote',{token})).data.canResumeCheckout,false);
+  assert.equal((await f.call('/checkout',{token,acceptTerms:true,resumeOnly:true})).r.status,409);
+  assert.equal(creates,0,'resumeOnly created a session for an approved order');
+  assert.equal((await f.call('/checkout',{token,acceptTerms:true,resumeOnly:'true'})).r.status,400);
+  const first=await f.call('/checkout',{token,acceptTerms:true,returnSite:'xio'});
+  assert.equal(first.r.status,200);
+  assert.equal((await f.call('/quote',{token})).data.canResumeCheckout,true);
+  const resumed=await f.call('/checkout',{token,acceptTerms:true,returnSite:'xio',resumeOnly:true});
+  assert.equal(resumed.data.url,first.data.url);assert.equal(creates,1);
+  const d=f.handler.database();const original=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);
+  const cases=[
+   {checkout_id:original.checkout_id,checkout_url:original.checkout_url,checkout_expires:Math.floor(Date.now()/1000)+30},
+   {checkout_id:null,checkout_url:null,checkout_expires:original.checkout_expires},
+   {checkout_id:original.checkout_id,checkout_url:'https://checkout.stripe.com.evil.example/c/pay/fixture',checkout_expires:original.checkout_expires},
+  ];
+  for(const data of cases){
+   d.prepare('UPDATE sponsor_applications SET checkout_id=?,checkout_url=?,checkout_expires=? WHERE id=?').run(data.checkout_id,data.checkout_url,data.checkout_expires,id);
+   assert.equal((await f.call('/quote',{token})).data.canResumeCheckout,false);
+   for(const body of [{},{resumeOnly:true}])assert.equal((await f.call('/checkout',{token,acceptTerms:true,...body})).r.status,409);
+  }
+  const after=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);
+  assert.equal(after.status,'checkout_pending');assert.equal(after.reserved_slot,original.reserved_slot);
+  assert.equal(after.checkout_attempt,original.checkout_attempt);assert.equal(creates,1);
+ }finally{await f.close();}
+});
+
+test('direct orders never enter legacy session creation, even without resumeOnly',async()=>{
+ let creates=0;const fake={checkout:{sessions:{create:async()=>{creates++;throw new Error('Must never create a second direct session');}}}};
+ const f=await fixture({stripe:fake,webhookSecret:'whsec_direct_resume_fixture',paymentsEnabled:true});
+ try{
+  const id=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;
+  await f.call('/admin/login',{password:f.options.adminKey});
+  const approved=await f.call(`/admin/applications/${id}/quote`,quote);
+  const token=new URLSearchParams(new URL(approved.data.invitationUrl).hash.slice(1)).get('token');
+  const d=f.handler.database(),stored=JSON.parse(d.prepare('SELECT quote FROM sponsor_applications WHERE id=?').get(id).quote);
+  d.prepare('UPDATE sponsor_applications SET quote=?,status=?,checkout_id=?,checkout_url=?,checkout_expires=? WHERE id=?')
+   .run(JSON.stringify({...stored,purchaseType:'direct'}),'checkout_pending','cs_test_direct_resume','https://checkout.stripe.com/c/pay/cs_test_direct_resume',Math.floor(Date.now()/1000)+1800,id);
+  assert.equal((await f.call('/quote',{token})).data.canResumeCheckout,true);
+  for(const body of [{},{resumeOnly:true}])assert.equal((await f.call('/checkout',{token,acceptTerms:true,...body})).data.url,'https://checkout.stripe.com/c/pay/cs_test_direct_resume');
+  d.prepare('UPDATE sponsor_applications SET checkout_expires=? WHERE id=?').run(Math.floor(Date.now()/1000)+30,id);
+  for(const body of [{},{resumeOnly:true}])assert.equal((await f.call('/checkout',{token,acceptTerms:true,...body})).r.status,409);
+  d.prepare('UPDATE sponsor_applications SET status=?,checkout_id=NULL,checkout_url=NULL WHERE id=?').run('approved',id);
+  assert.equal((await f.call('/checkout',{token,acceptTerms:true})).r.status,409);
+  assert.equal(creates,0);assert.equal(d.prepare('SELECT reserved_slot FROM sponsor_applications WHERE id=?').get(id).reserved_slot,'001:chest');
+ }finally{await f.close();}
+});
+
+test('signed early webhook retries until its session is attached, then applies exactly once',async t=>{
+ const Stripe=require('stripe');const client=new Stripe('sk_test_fake_key_for_local_signature_tests');
+ for(const eventType of ['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired','checkout.session.async_payment_failed'])await t.test(eventType,async()=>{
+  const secret='whsec_early_event_fixture';const f=await fixture({stripe:{webhooks:client.webhooks},webhookSecret:secret,paymentsEnabled:true});
+  try{
+   const id=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;
+   await f.call('/admin/login',{password:f.options.adminKey});
+   await f.call(`/admin/applications/${id}/quote`,quote);
+   const d=f.handler.database(),stored=JSON.parse(d.prepare('SELECT quote FROM sponsor_applications WHERE id=?').get(id).quote);
+   d.prepare('UPDATE sponsor_applications SET status=?,accepted_at=?,quote=? WHERE id=?').run('checkout_pending',new Date().toISOString(),JSON.stringify({...stored,purchaseType:'direct'}),id);
+   const event={id:'evt_test_early_fixture',object:'event',type:eventType,data:{object:{id:'cs_test_early_fixture',payment_status:'paid',currency:'cad',amount_subtotal:quote.subtotalCents,amount_total:932250,metadata:{sponsor_application:id}}}};
+   const notify=async(value,signature)=>{const payload=JSON.stringify(value);return fetch(f.url+'/api/sponsors/stripe/webhook',{method:'POST',headers:{'Content-Type':'application/json','stripe-signature':signature||signedHeader(payload,secret)},body:payload});};
+   assert.equal((await notify(event,'invalid')).status,400);
+   assert.equal((await notify(event)).status,503);
+   assert.equal(d.prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,0);
+   let row=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);
+   assert.equal(row.status,'checkout_pending');assert.equal(row.checkout_id,null);assert.equal(row.reserved_slot,'001:chest');assert.equal(row.paid_at,null);
+   d.prepare('UPDATE sponsor_applications SET checkout_id=? WHERE id=?').run('cs_test_early_fixture',id);
+   if(eventType.endsWith('completed')||eventType.endsWith('succeeded')){
+    const wrongAmount=structuredClone(event);wrongAmount.data.object.amount_subtotal=1;
+    assert.equal((await notify(wrongAmount)).status,400);assert.equal(d.prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,0);
+   }
+   assert.equal((await notify(event)).status,200);assert.equal((await notify(event)).status,200);
+   assert.equal(d.prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,1);
+   row=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);
+   const paid=eventType.endsWith('completed')||eventType.endsWith('succeeded');
+   assert.equal(row.status,paid?'paid':eventType.endsWith('expired')?'expired':'payment_failed');
+   assert.equal(row.reserved_slot,paid?'001:chest':null);
+   assert.equal(d.prepare('SELECT COUNT(*) AS n FROM sponsor_audit WHERE application_id=? AND action=?').get(id,paid?'stripe_payment_confirmed':'direct_session_closed').n,1);
+  }finally{await f.close();}
+ });
+});
+
+test('unrelated signed webhook remains acknowledged without creating sponsorship records',async()=>{
+ const Stripe=require('stripe');const client=new Stripe('sk_test_fake_key_for_local_signature_tests');const secret='whsec_unrelated_fixture';
+ const f=await fixture({stripe:{webhooks:client.webhooks},webhookSecret:secret,paymentsEnabled:true});
+ try{
+  const event={id:'evt_test_unrelated',type:'checkout.session.expired',data:{object:{id:'cs_test_unrelated',metadata:{sponsor_application:crypto.randomUUID()}}}};
+  const payload=JSON.stringify(event);const response=await fetch(f.url+'/api/sponsors/stripe/webhook',{method:'POST',headers:{'Content-Type':'application/json','stripe-signature':signedHeader(payload,secret)},body:payload});
+  assert.equal(response.status,200);assert.equal(f.handler.database().prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,1);
+  assert.equal(f.handler.database().prepare('SELECT COUNT(*) AS n FROM sponsor_applications').get().n,0);
+ }finally{await f.close();}
+});
+
+test('checkout revalidates under its write lock when another connection changes the order',async t=>{
+ const {DatabaseSync}=require('node:sqlite');
+ const cases=[
+  {name:'another worker attached a pending checkout',status:409,change:(d,id)=>d.prepare('UPDATE sponsor_applications SET status=?,checkout_id=?,checkout_url=?,checkout_attempt=? WHERE id=?').run('checkout_pending','cs_test_other_worker','https://checkout.stripe.com/c/pay/cs_test_other_worker',7,id)},
+  {name:'another worker confirmed payment',status:409,change:(d,id)=>d.prepare('UPDATE sponsor_applications SET status=?,paid_at=?,amount_paid=? WHERE id=?').run('paid',new Date().toISOString(),932250,id)},
+  {name:'agreement became a direct purchase',status:409,change:(d,id)=>{const q=JSON.parse(d.prepare('SELECT quote FROM sponsor_applications WHERE id=?').get(id).quote);d.prepare('UPDATE sponsor_applications SET quote=? WHERE id=?').run(JSON.stringify({...q,purchaseType:'direct'}),id);}},
+  {name:'invitation expired',status:410,change:(d,id)=>d.prepare('UPDATE sponsor_applications SET invitation_expires=? WHERE id=?').run('2000-01-01T00:00:00.000Z',id)},
+  {name:'invitation was revoked',status:404,change:(d,id)=>d.prepare('UPDATE sponsor_applications SET invitation_hash=? WHERE id=?').run('replaced-by-other-worker',id)},
+  {name:'agreement price changed',status:409,change:(d,id)=>{const q=JSON.parse(d.prepare('SELECT quote FROM sponsor_applications WHERE id=?').get(id).quote);d.prepare('UPDATE sponsor_applications SET quote=? WHERE id=?').run(JSON.stringify({...q,subtotalCents:q.subtotalCents+100}),id);}},
+ ];
+ for(const scenario of cases)await t.test(scenario.name,async()=>{
+  let creates=0;const fake={checkout:{sessions:{create:async()=>{creates++;throw new Error('Stale order must not create a session');}}}};
+  const f=await fixture({stripe:fake,webhookSecret:'whsec_interleaving_fixture',paymentsEnabled:true});
+  let competitor;
+  try{
+   const id=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;
+   await f.call('/admin/login',{password:f.options.adminKey});
+   const approved=await f.call(`/admin/applications/${id}/quote`,quote);
+   const token=new URLSearchParams(new URL(approved.data.invitationUrl).hash.slice(1)).get('token');
+   const d=f.handler.database(),exec=d.exec.bind(d);competitor=new DatabaseSync(f.dbPath);
+   let interleaved=false,committedRow;
+   d.exec=function(sql){
+    if(sql==='BEGIN IMMEDIATE'&&!interleaved){
+     interleaved=true;
+     // Deterministically commit through a separate real SQLite connection after
+     // the route's first read, immediately before it acquires its write lock.
+     scenario.change(competitor,id);
+     committedRow=competitor.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);
+    }
+    return exec(sql);
+   };
+   const result=await f.call('/checkout',{token,acceptTerms:true});
+   assert.equal(interleaved,true);assert.equal(result.r.status,scenario.status);assert.equal(creates,0);
+   assert.deepEqual(d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id),committedRow,'stale request overwrote the concurrent committed state');
+  }finally{competitor?.close();await f.close();}
+ });
+});
+
+test('ambiguous legacy session creation retains its attempt and defers early webhooks',async()=>{
+ const Stripe=require('stripe'),client=new Stripe('sk_test_fake_key_for_local_signature_tests');
+ const secret='whsec_ambiguous_fixture';let creates=0;
+ const fake={webhooks:client.webhooks,checkout:{sessions:{create:async()=>{creates++;throw new Error('Response lost after possible session creation');}}}};
+ const f=await fixture({stripe:fake,webhookSecret:secret,paymentsEnabled:true});
+ try{
+  const id=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;
+  await f.call('/admin/login',{password:f.options.adminKey});
+  const approved=await f.call(`/admin/applications/${id}/quote`,quote);
+  const token=new URLSearchParams(new URL(approved.data.invitationUrl).hash.slice(1)).get('token');
+  const first=await f.call('/checkout',{token,acceptTerms:true});assert.equal(first.r.status,503);assert.match(first.data.error,/could not be confirmed/);
+  const d=f.handler.database(),retained=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);
+  assert.equal(retained.status,'checkout_pending');assert.equal(retained.checkout_attempt,1);assert.equal(retained.checkout_id,null);assert.equal(retained.reserved_slot,'001:chest');
+  for(const body of [{},{resumeOnly:true}])assert.equal((await f.call('/checkout',{token,acceptTerms:true,...body})).r.status,409);
+  assert.equal(creates,1);assert.deepEqual(d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id),retained);
+  const event={id:'evt_test_after_ambiguous_create',type:'checkout.session.expired',data:{object:{id:'cs_test_lost_response',metadata:{sponsor_application:id}}}};
+  const payload=JSON.stringify(event),response=await fetch(f.url+'/api/sponsors/stripe/webhook',{method:'POST',headers:{'Content-Type':'application/json','stripe-signature':signedHeader(payload,secret)},body:payload});
+  assert.equal(response.status,503);assert.equal(d.prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,0);
+  assert.deepEqual(d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id),retained);
+ }finally{await f.close();}
+});
