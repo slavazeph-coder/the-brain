@@ -31,6 +31,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Published direct studio, real model and illustrated concepts, GET only
         run: node sponsorship/gt3/tests/production-readonly.mjs
+      - name: Published advertiser guidance and sample-art safeguards, GET only
+        run: node sponsorship/gt3/tests/buyer.mjs --live
       - uses: actions/upload-artifact@v4
         if: always()
         with:
