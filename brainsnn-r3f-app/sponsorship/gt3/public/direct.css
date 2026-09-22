@@ -157,3 +157,6 @@ header { position: relative; z-index: 5; }
 @media(max-width:480px){ .booking-facts{grid-template-columns:1fr}.booking-facts article+article{border-left:0;border-top:1px solid var(--line)}.booking-facts article{padding:19px 21px}.booking-facts p{font-size:12px}.booking-facts strong{margin-top:7px}.buyer-heading h2 br{display:none}.buyer-faq summary{font-size:13px}.buyer-faq details p{font-size:13px}.spot-hint{font-size:9px}.sample-action{min-height:40px;font-size:12px}.price-context{font-size:12px}.fact-label{font-size:9px}.placement-fit,#placement-description{font-size:12px}.price-block .eyebrow{font-size:9px}.buyer-next{font-size:12px} }
 @media(prefers-reduced-transparency:reduce){.booking-facts{background:#182238}}
 @media(forced-colors:active){.booking-facts{background:Canvas;color:CanvasText;border:1px solid CanvasText}.booking-facts strong,.booking-facts p,.fact-label{color:CanvasText}}
+
+/* Purpose-built advertiser illustrations: no repeated crop tricks or fake client photography. */
+.case-media img[src$='.svg']{object-fit:cover;transform:none;object-position:center}.case-media:has(img[src$='use-launch.svg'])::after,.case-media:has(img[src$='use-demo.svg'])::after,.case-media:has(img[src$='use-content.svg'])::after{background:linear-gradient(180deg,transparent 58%,#08101d38)}
