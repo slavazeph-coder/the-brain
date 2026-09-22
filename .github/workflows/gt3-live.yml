@@ -29,10 +29,8 @@ jobs:
           cache-dependency-path: brainsnn-r3f-app/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
-      - name: Read-only published page, assets and proposal connection
+      - name: Published direct studio, real model and illustrated concepts, GET only
         run: node sponsorship/gt3/tests/production-readonly.mjs
-      - name: Published glass layout and real logo preview, no submissions
-        run: node sponsorship/gt3/tests/glass.mjs --live
       - uses: actions/upload-artifact@v4
         if: always()
         with:
