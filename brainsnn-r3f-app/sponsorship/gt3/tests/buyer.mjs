@@ -31,6 +31,8 @@ try{
  check('The sample is clearly labelled',(await page.locator('#art-status').textContent()).includes('Sample'));
  await page.locator('#email').fill('qa@example.test');await page.locator('#art-rights').check();await page.locator('#primary-cta').click();
  check('Sample cannot accidentally become a real inquiry',(await page.locator('#art-status').textContent()).includes('Replace the sample'));
+ await page.locator('#logo').setInputFiles({name:'invalid.txt',mimeType:'text/plain',buffer:Buffer.from('not an image')});await page.waitForTimeout(300);await page.locator('#primary-cta').click();
+ check('An invalid upload cannot unlock submission of the sample',(await page.locator('#art-status').textContent()).includes('Replace the sample'));
  const image=Buffer.from(await page.evaluate(()=>{const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');x.fillStyle='#a9e6ed';x.fillRect(16,83,8,74);x.fillStyle='white';x.textAlign='center';x.font='600 47px Arial';x.fillText('YOUR BRAND',276,135);return c.toDataURL('image/png').split(',')[1];}),'base64');
  await page.locator('#logo').setInputFiles({name:'local-buyer-preview.png',mimeType:'image/png',buffer:image});await page.waitForFunction(()=>window.GT3_RENDER_STATUS.decals===1&&!document.getElementById('art-status').textContent.includes('Sample'));
  check('Customer upload replaces sample without new steps',await page.locator('#logo-thumb').evaluate(e=>!e.hidden&&e.complete&&e.naturalWidth===512));
