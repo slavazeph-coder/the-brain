@@ -87,7 +87,7 @@ jobs:
           for(let n=0;n<60;n++){try{const r=await fetch(base+'/healthz');if(r.ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,500));}
           assert.ok(ready,'Existing BrainSNN runtime did not become healthy.');
           const home=await fetch(base+'/');assert.ok(home.ok,'Existing homepage failed.');
-          const page=await fetch(base+'/sponsor/');assert.ok(page.ok,'Sponsor page failed inside full runtime.');assert.match(await page.text(),/Your brand/);
+          const page=await fetch(base+'/sponsor/',{redirect:'manual'});assert.equal(page.status,308);assert.equal(page.headers.get('location'),'https://www.xioai.ca/robot-sponsorship/');assert.equal(await page.text(),'');
           const status=await (await fetch(base+'/api/sponsors/status')).json();assert.equal(status.storage,'persistent_sqlite');assert.equal(status.payments,'not_enabled');
           const catalog=await (await fetch(base+'/api/sponsors/catalog')).json();assert.equal(catalog.zones.length,8);
           assert.equal((await fetch(base+'/api/sponsors/admin/applications')).status,401);

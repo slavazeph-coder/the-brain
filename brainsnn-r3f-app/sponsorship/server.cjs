@@ -252,9 +252,10 @@ function createHandler(options = {}) {
   return {handle,database,cleanup,close:()=>{if(db)db.close();},matches:req=>/^\/(?:sponsor(?:\/|$)|api\/sponsors(?:\/|$))/.test(req.url.split('?')[0])};
 }
 function register() {
+  const {retirePublicPage}=require('./public-retirement.cjs');
   // Additive middleware follows the production application's existing preload pattern.
   const original=require('express'); const location=require.resolve('express'); const appApi=createHandler();
-  function wrapper(...args) { const app=original(...args); app.use((req,res,next)=>appApi.matches(req)?void appApi.handle(req,res):next()); return app; }
+  function wrapper(...args) { const app=original(...args); app.use(retirePublicPage); app.use((req,res,next)=>appApi.matches(req)?void appApi.handle(req,res):next()); return app; }
   Object.assign(wrapper,original); require.cache[location].exports=wrapper;
   const timer=setInterval(()=>{try{appApi.cleanup();}catch{console.error('[sponsor] retention cleanup unavailable');}},86400000);timer.unref();
 }

@@ -1,3 +1,5 @@
+> Public-site retirement: The robot campaign now lives only on https://www.xioai.ca/robot-sponsorship/. The BrainSNN Express preload permanently redirects its old public index, checkout and privacy URLs, and the BrainSNN home no longer advertises Robot 001. The shared /api/sponsors service and owner admin remain in place for XIO. Source assets and standalone regression fixtures are retained for compatibility, not exposed as the production page. Payment settings, customer data and the separate GT3 campaign are unchanged.
+
 # BrainSNN Sponsor Studio
 
 Additive production route: `/sponsor/`. It does not replace BrainSNN's existing tools or homepage.
