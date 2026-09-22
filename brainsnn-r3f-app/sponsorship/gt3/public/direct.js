@@ -24,7 +24,7 @@ for(const [i,z]of zones.entries()){
 trigger.addEventListener('click',()=>menuOpen(menu.hidden));trigger.addEventListener('keydown',e=>{if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();menuOpen(true);}});
 menu.addEventListener('keydown',e=>{const buttons=[...menu.children],i=buttons.indexOf(document.activeElement);let n=i;if(e.key==='ArrowDown')n=(i+1)%buttons.length;else if(e.key==='ArrowUp')n=(i+buttons.length-1)%buttons.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=buttons.length-1;else if(e.key==='Escape'){e.preventDefault();menuOpen(false);trigger.focus();return;}else return;e.preventDefault();buttons[n].focus();});
 document.addEventListener('pointerdown',e=>{if(!$('spot-picker').contains(e.target))menuOpen(false,false);if(!e.target.closest('.nav-more'))q('.nav-more')?.removeAttribute('open');});
-$('spot-picker').addEventListener('focusout',()=>queueMicrotask(()=>{if(!$('spot-picker').contains(document.activeElement))menuOpen(false,false);}));
+$('spot-picker').addEventListener('focusout',e=>{if(e.relatedTarget&&$('spot-picker').contains(e.relatedTarget))return;setTimeout(()=>{if(!$('spot-picker').contains(document.activeElement))menuOpen(false,false);},0);});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){q('.nav-more')?.removeAttribute('open');if(!menu.hidden){menuOpen(false);trigger.focus();}}});
 // Mirrors are kept for the existing native 3D renderer, not as a second visible menu.
 $('placement').addEventListener('change',()=>{state.dirty=true;select($('placement').value);});
