@@ -61,12 +61,12 @@ function createHandler(options={}){
    if(!['GET','HEAD'].includes(req.method))fail(405,'Method not allowed.');
    if(p===ROOT){res.writeHead(308,{Location:ROOT+'/'+u.search});return res.end();}
    const name=p.slice((ROOT+'/').length)||'index.html';
-   const allowed=new Set(['index.html','app.js','style.css','direct.js','direct.css','model.js','engine.js','rear.webp','side.webp','admin.html','admin.js','viewer.js','car.glb','asset-manifest.json','LICENSE-model.txt']);
+   const allowed=new Set(['index.html','app.js','style.css','direct.js','direct.css','model.js','engine.js','rear.webp','side.webp','use-launch.svg','use-demo.svg','use-content.svg','admin.html','admin.js','viewer.js','car.glb','asset-manifest.json','LICENSE-model.txt']);
    if(!allowed.has(name))fail(404,'Page not found.');
    res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-src 'none'; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
    if(name==='admin.html')res.setHeader('X-Robots-Tag','noindex, nofollow');
    const file=path.join(publicDir,name),compressed=['car.glb','viewer.js'].includes(name)&&/\bgzip\b/.test(req.headers['accept-encoding']||'')&&fs.existsSync(file+'.gz');
-   const data=fs.readFileSync(compressed?file+'.gz':file),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.glb':'model/gltf-binary','.json':'application/json','.txt':'text/plain; charset=utf-8'};
+   const data=fs.readFileSync(compressed?file+'.gz':file),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.webp':'image/webp','.svg':'image/svg+xml','.glb':'model/gltf-binary','.json':'application/json','.txt':'text/plain; charset=utf-8'};
    if(compressed)res.setHeader('Content-Encoding','gzip');res.setHeader('Vary','Accept-Encoding');
    res.writeHead(200,{'Content-Type':mime[path.extname(name)],'Cache-Control':name.endsWith('.html')?'no-cache':'public, max-age=3600','Content-Length':data.length});res.end(req.method==='HEAD'?undefined:data);
   }catch(e){if(res.headersSent)return res.destroy();json(res,e.status||503,{error:e.status?e.message:'GT3 service unavailable. Please contact XIO.'});}
