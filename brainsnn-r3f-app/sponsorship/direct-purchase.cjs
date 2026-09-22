@@ -45,8 +45,8 @@ function createDirectPurchase({database, validateApplication, catalog, secret, p
       const quote={purchaseType:'direct',subtotalCents:zone.fixed,currency:'cad',durationDays:90,scope:c.scope+'\n\nChanges and cancellation\n'+c.cancellation,activationWindow:c.activationWindow,agreementReference:c.version,termsVersion:c.version};
       row={id,request_id:requestId,payload_hash:payloadHash};const token=inviteFor(row);
       try {
-        d.prepare("INSERT INTO sponsor_applications(id,request_id,payload_hash,created_at,status,payload,quote,invitation_hash,invitation_expires,reserved_slot,accepted_at,checkout_attempt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
-          .run(id,requestId,payloadHash,now,'checkout_pending',payload,JSON.stringify(quote),hash(token),new Date(Date.now()+14*86400000).toISOString(),'001:'+zone.id,now,1);
+        d.prepare("INSERT INTO sponsor_applications(id,request_id,payload_hash,created_at,status,payload,quote,invitation_hash,invitation_expires,reserved_slot,accepted_at,checkout_attempt,checkout_expires) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
+          .run(id,requestId,payloadHash,now,'checkout_pending',payload,JSON.stringify(quote),hash(token),new Date(Date.now()+14*86400000).toISOString(),'001:'+zone.id,now,1,Math.floor(Date.now()/1000)+1800);
       } catch(e) { if(String(e.message).includes('UNIQUE')) fail(409,'This space is already held or purchased. Please choose another space.'); throw e; }
       row=d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id);audit(id,'direct_terms_accepted');
     }
@@ -54,7 +54,7 @@ function createDirectPurchase({database, validateApplication, catalog, secret, p
     const operation=(async()=>{
       try {
         const q=JSON.parse(row.quote),p=JSON.parse(row.payload);
-        const session=await getStripe().checkout.sessions.create({mode:'payment',customer_email:p.email,customer_creation:'always',billing_address_collection:'required',automatic_tax:{enabled:true},tax_id_collection:{enabled:true},line_items:[{price_data:{currency:'cad',unit_amount:q.subtotalCents,tax_behavior:'exclusive',product_data:{name:'XIO Robot 001 / '+zone.name,description:'90-day advertising placement under published campaign '+q.termsVersion+'. Not ownership of the robot.'}},quantity:1}],metadata:{sponsor_application:row.id,agreement_reference:q.agreementReference,purchase_kind:'direct'},client_reference_id:row.id,success_url:DEST+'?payment=returned',cancel_url:DEST+'?payment=cancelled',expires_at:Math.floor(Date.now()/1000)+1800,integration_identifier:'xio_robot_direct_jkqspmnr'}, {idempotencyKey:'xio-robot-direct-'+row.id});
+        const session=await getStripe().checkout.sessions.create({mode:'payment',customer_email:p.email,customer_creation:'always',billing_address_collection:'required',automatic_tax:{enabled:true},tax_id_collection:{enabled:true},line_items:[{price_data:{currency:'cad',unit_amount:q.subtotalCents,tax_behavior:'exclusive',product_data:{name:'XIO Robot 001 / '+zone.name,description:'90-day advertising placement under published campaign '+q.termsVersion+'. Not ownership of the robot.'}},quantity:1}],metadata:{sponsor_application:row.id,agreement_reference:q.agreementReference,purchase_kind:'direct'},client_reference_id:row.id,success_url:DEST+'?payment=returned',cancel_url:DEST+'?payment=cancelled',expires_at:row.checkout_expires,integration_identifier:'xio_robot_direct_jkqspmnr'}, {idempotencyKey:'xio-robot-direct-'+row.id});
         const u=new URL(session.url);if(u.protocol!=='https:'||u.hostname!=='checkout.stripe.com'||u.username||u.password||u.port) throw new Error('Invalid destination');
         d.prepare('UPDATE sponsor_applications SET checkout_id=?,checkout_url=?,checkout_expires=? WHERE id=? AND status=?').run(session.id,session.url,session.expires_at,row.id,'checkout_pending');audit(row.id,'direct_checkout_created');
         return {ok:true,reference:row.id,token:inviteFor(row),url:session.url};
