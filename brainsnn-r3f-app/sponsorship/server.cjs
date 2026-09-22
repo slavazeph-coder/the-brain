@@ -6,6 +6,7 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 const { CATALOG, TERMS, publicCatalog } = require('./catalog.cjs');
+const {createDirectPurchase,releaseDirectSession}=require('./direct-purchase.cjs');
 const { resolveCheckoutDestination } = require('./checkout-destination.cjs');
 const API = '/api/sponsors';
 const MAX_BODY = 512 * 1024;
@@ -145,20 +146,24 @@ function createHandler(options = {}) {
         d.prepare("UPDATE sponsor_applications SET status='paid',paid_at=?,amount_paid=?,stripe_event_id=? WHERE id=? AND status!='paid'").run(new Date().toISOString(),obj.amount_total,event.id,row.id);
         audit(row.id,'stripe_payment_confirmed');
       }
-      if (event.type === 'checkout.session.expired' && row && row.status === 'checkout_pending') d.prepare("UPDATE sponsor_applications SET status='approved',checkout_id=NULL,checkout_url=NULL,checkout_expires=NULL WHERE id=?").run(row.id);
+      const directReleased=releaseDirectSession(d,row,event.type,audit);
+ if (!directReleased && event.type === 'checkout.session.expired' && row && row.status === 'checkout_pending') d.prepare("UPDATE sponsor_applications SET status='approved',checkout_id=NULL,checkout_url=NULL,checkout_expires=NULL WHERE id=?").run(row.id);
       d.prepare('INSERT INTO sponsor_events(id,received_at) VALUES(?,?)').run(event.id,new Date().toISOString());
       d.exec('COMMIT');
     } catch (e) { d.exec('ROLLBACK'); throw e; }
     send(res,200,{received:true});
   }
-  async function api(req,res,url) {
+  const directPurchase=createDirectPurchase({database,validateApplication,catalog:CATALOG,secret,paymentReady,getStripe,audit});
+ async function api(req,res,url) {
     const route = url.pathname.slice(API.length);
     if (route === '/stripe/webhook' && req.method === 'POST') return webhook(req,res);
-    if (req.method === 'GET' && route === '/session') return send(res,200,{csrf:session(req,res),termsVersion:TERMS.version});
+    if (req.method === 'GET' && route === '/purchase-options') return send(res,200,directPurchase.options());
+ if (req.method === 'GET' && route === '/session') return send(res,200,{csrf:session(req,res),termsVersion:TERMS.version});
     if (req.method === 'GET' && route === '/status') { let ready=false; try { database().prepare('SELECT 1').get(); ready=true; } catch {} return send(res,ready?200:503,{ok:ready,applications:ready?'accepting':'unavailable',payments:paymentReady()?'approval_gated':'not_enabled',storage:ready?'persistent_sqlite':'unavailable',version:TERMS.version}); }
     if (req.method === 'GET' && route === '/catalog') { const reserved=database().prepare('SELECT reserved_slot FROM sponsor_applications WHERE reserved_slot IS NOT NULL').all().map(r=>r.reserved_slot.split(':')[1]); return send(res,200,publicCatalog(reserved)); }
     if (req.method !== 'GET') { if (!String(req.headers['content-type'] || '').startsWith('application/json')) fail(415,'Use JSON for this request.'); checkCsrf(req); }
-    if (req.method === 'POST' && route === '/applications') {
+    if (req.method === 'POST' && route === '/purchase') { limit(req,'direct-purchase',12); const result=await directPurchase.purchase(await readBody(req),req.headers['x-request-id']); return send(res,200,result); }
+ if (req.method === 'POST' && route === '/applications') {
       limit(req,'applications',12);
       const raw=await readBody(req); const data=validateApplication(raw); const requestId=req.headers['x-request-id'];
       if (!isId(requestId)) fail(400,'A valid request identifier is required.');
