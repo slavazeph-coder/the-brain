@@ -160,3 +160,8 @@ header { position: relative; z-index: 5; }
 
 /* Purpose-built advertiser illustrations: no repeated crop tricks or fake client photography. */
 .case-media img[src$='.svg']{object-fit:cover;transform:none;object-position:center}.case-media:has(img[src$='use-launch.svg'])::after,.case-media:has(img[src$='use-demo.svg'])::after,.case-media:has(img[src$='use-content.svg'])::after{background:linear-gradient(180deg,transparent 58%,#08101d38)}
+
+/* Finished advertiser-use-case grid. Four distinct objectives, consistent glass treatment. */
+.use-grid-four{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.use-grid-four .use-card{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);min-height:330px}.use-grid-four .case-media{height:100%;min-height:330px}.use-grid-four .case-copy{display:flex;flex-direction:column}.use-grid-four .case-copy>.case-measure{margin-top:auto}.use-grid-four .case-media img{object-fit:cover;transform:none;object-position:center}.use-grid-four .case-media::after{background:linear-gradient(180deg,transparent 55%,#07101c45)}
+@media(max-width:1100px){.use-grid-four{grid-template-columns:1fr 1fr}.use-grid-four .use-card{display:block}.use-grid-four .case-media{height:auto;min-height:0;aspect-ratio:16/9}}
+@media(max-width:760px){.use-grid-four{grid-template-columns:1fr}.use-grid-four .case-media{aspect-ratio:16/8.4}}
