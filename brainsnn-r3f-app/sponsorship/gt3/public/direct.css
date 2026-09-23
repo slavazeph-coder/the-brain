@@ -165,3 +165,55 @@ header { position: relative; z-index: 5; }
 .use-grid-four{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.use-grid-four .use-card{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);min-height:330px}.use-grid-four .case-media{height:100%;min-height:330px}.use-grid-four .case-copy{display:flex;flex-direction:column}.use-grid-four .case-copy>.case-measure{margin-top:auto}.use-grid-four .case-media img{object-fit:cover;transform:none;object-position:center}.use-grid-four .case-media::after{background:linear-gradient(180deg,transparent 55%,#07101c45)}
 @media(max-width:1100px){.use-grid-four{grid-template-columns:1fr 1fr}.use-grid-four .use-card{display:block}.use-grid-four .case-media{height:auto;min-height:0;aspect-ratio:16/9}}
 @media(max-width:760px){.use-grid-four{grid-template-columns:1fr}.use-grid-four .case-media{aspect-ratio:16/8.4}}
+
+/* Professional v4: quieter luxury hierarchy, stronger buyer focus. */
+body{background:
+ radial-gradient(900px 520px at 12% -8%,rgba(42,112,164,.11),transparent 62%),
+ radial-gradient(800px 500px at 92% 4%,rgba(116,75,181,.09),transparent 65%),
+ #070b12}
+header{width:min(1240px,calc(100% - 64px));height:72px;border-bottom-color:rgba(220,235,255,.08)}
+main,footer{width:min(1240px,calc(100% - 64px))}
+.glass-nav>a,.nav-more summary{background:transparent;border-color:transparent;box-shadow:none}
+.glass-nav>a[aria-current=page]{background:rgba(222,237,255,.045);border-color:rgba(220,235,255,.10);box-shadow:none}
+.intro{position:relative;padding:62px 0 36px;max-width:850px}
+.intro .eyebrow{letter-spacing:.16em}.intro .eyebrow>span:first-child{color:var(--purple)}
+.intro h1{font-size:clamp(56px,7vw,92px);line-height:.94;max-width:780px;margin:22px 0 25px;letter-spacing:-.07em}
+.intro>p:last-of-type{max-width:620px;font-size:15px;line-height:1.75;color:#aab7ca}
+.intro-proof{display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:28px;padding-top:20px;border-top:1px solid rgba(215,230,250,.09);color:#8797ae;font-size:9px;letter-spacing:.07em;text-transform:uppercase}
+.studio{border-color:rgba(210,229,255,.14);border-radius:24px;background:rgba(11,17,28,.74);box-shadow:0 32px 90px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.035)}
+.visual{background:radial-gradient(ellipse at 20% 20%,rgba(35,107,145,.13),transparent 48%),radial-gradient(ellipse at 80% 80%,rgba(96,60,148,.11),transparent 52%),#080e17}
+#scene{height:560px}
+.viewer-heading{padding:18px 22px;color:#8293aa;letter-spacing:.13em;font-size:8px}
+aside{padding:30px 27px;border-left-color:rgba(215,232,255,.10);background:linear-gradient(160deg,rgba(255,255,255,.025),rgba(255,255,255,.006))}
+.steps{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(215,230,250,.08)}
+.steps span{color:#8999b0}.steps b{color:#d7e5f7}
+.spot-trigger{background:rgba(255,255,255,.025);border-color:rgba(216,233,255,.16);box-shadow:inset 0 1px rgba(255,255,255,.035)}
+.upload{background:rgba(255,255,255,.022);border-color:rgba(216,233,255,.18);border-radius:14px}
+.price-block{border-top:1px solid rgba(215,230,250,.08);margin-top:12px;padding-top:22px}
+.price-block strong{font-size:34px}
+.button{border-radius:12px;min-height:50px;box-shadow:0 8px 26px rgba(91,115,255,.12)}
+.buyer-guide{margin-top:78px}.buyer-heading{margin-bottom:28px}.buyer-heading h2,.use-heading h2{font-size:clamp(34px,4vw,48px);line-height:1.03;max-width:650px}
+.booking-facts{border-radius:22px;background:rgba(15,23,37,.64);box-shadow:inset 0 1px rgba(255,255,255,.025)}
+.booking-facts article{padding:27px 24px}.booking-facts strong{font-size:16px}
+.details{margin-top:16px}
+.use-cases{margin-top:92px}.use-heading{margin-bottom:32px}
+.use-grid-four{gap:20px}.use-grid-four .use-card{grid-template-columns:1fr;min-height:0;border-radius:20px;background:rgba(14,22,35,.72);box-shadow:0 20px 55px rgba(0,0,0,.16),inset 0 1px rgba(255,255,255,.025)}
+.use-grid-four .case-media{height:auto;min-height:0;aspect-ratio:16/8.7}
+.case-copy{padding:26px 25px 18px}.case-copy h3{font-size:25px}.case-copy>p:not(.case-measure){min-height:0}
+.case-tag{background:rgba(7,13,24,.78);backdrop-filter:blur(10px);border-color:rgba(229,241,255,.14)}
+.buyer-faq{margin-top:78px;padding-top:36px;border-top:1px solid rgba(215,230,250,.09)}
+.buyer-faq h2{font-size:36px}
+footer{margin-top:36px}
+@media(max-width:850px){
+ header,main,footer{width:calc(100% - 32px)}
+ .intro{padding:42px 0 28px}.intro h1{font-size:clamp(48px,13vw,68px)}
+ #scene{height:400px}.studio aside{padding:24px 21px}
+ .buyer-guide,.use-cases,.buyer-faq{margin-top:54px}
+ .use-grid-four{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+ .intro{padding-top:34px}.intro h1{font-size:48px}.intro-proof{display:grid;gap:8px}
+ #scene{height:330px}.viewer-heading{padding:13px 14px}
+ .buyer-heading h2,.use-heading h2{font-size:34px}
+ .use-grid-four .case-media{aspect-ratio:16/9}
+}

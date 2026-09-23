@@ -16,7 +16,7 @@ try{
  await page.waitForFunction(()=>window.GT3_RENDER_STATUS?.ready||window.GT3_RENDER_STATUS?.fail,{},{timeout:120000});
  report.render=await page.evaluate(()=>window.GT3_RENDER_STATUS);check('Actual Porsche geometry remains interactive',report.render.ready&&report.render.triangles>100000);
  await page.waitForFunction(()=>!document.getElementById('primary-cta').disabled);
- check('Page addresses ad-space buyers',await page.locator('h1').innerText()==='Your ad. On the GT3.');
+ check('Page addresses premium ad-space buyers',(await page.locator('h1').innerText()).includes('Your brand.')&&(await page.locator('h1').innerText()).includes('On an icon.'));
  check('One streamlined inquiry, not a new popup form',await page.locator('dialog').count()===0&&await page.locator('#name,#company').count()===0);
  check('Eight placements have useful comparison descriptions',await page.locator('.spot-hint').count()===8);
  check('Driver door is explicitly one side only',(await page.locator('#placement-description').textContent()).includes('opposite door is a separate space'));
