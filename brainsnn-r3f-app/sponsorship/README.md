@@ -11,7 +11,7 @@ Additive production route: `/sponsor/`. It does not replace BrainSNN's existing 
 - Three.js on-surface decals, per-placement brand text/logo, colour, sizing and rotation; front/back/side/orbit and concept PNG export.
 - Private applications stored in a separate SQLite database on Railway's `/data` persistent volume. No memory-storage fallback.
 - An access-controlled owner dashboard at `/sponsor/admin/`; it lists real applications, supports logo review, approval, decline and deletion.
-- Private, approval-gated Stripe Checkout. No public immediate charge and no invented bidders, logos, audience claims or deployed-fleet counts.
+- Stripe Checkout under either a merchant-published fixed-price campaign or a private approved agreement. No invented bidders, logos, audience claims or deployed-fleet counts.
 
 ## Local run
 
@@ -37,13 +37,59 @@ Set `SPONSOR_ADMIN_KEY` and `SPONSOR_SESSION_SECRET` to unique high-entropy valu
 
 Do not enable payments until all of these are verified:
 
-1. A restricted server-side Stripe API key under `SPONSOR_STRIPE_SECRET_KEY` has appropriate Checkout/customer permissions.
+1. A restricted server-side Stripe API key under `SPONSOR_STRIPE_SECRET_KEY` can create Checkout Sessions with the actual request payload. Start with Checkout Sessions write permission and validate the sandbox request as described below.
 2. A signed webhook endpoint is configured at `https://www.brainsnn.com/api/sponsors/stripe/webhook`, and its secret is in `SPONSOR_STRIPE_WEBHOOK_SECRET`.
 3. An active Stripe Tax registration and correct tax classification are confirmed by the merchant/accountant; only then set `SPONSOR_TAX_READY=true`.
 4. Test-mode success, decline, cancellation, duplicate delivery, asynchronous payment and invalid-signature scenarios are exercised before real customers pay.
 5. Set `SPONSOR_PAYMENTS_ENABLED=true` only after the preceding gates pass.
 
 A connected Stripe app account does not by itself give the web server an API key. Do not mark checkout live just because the app is connected.
+
+### Runtime configuration and local webhook verification
+
+The public XIO page relays to this service; configure these values on the BrainSNN service that owns `/api/sponsors`, not in a browser bundle:
+
+| Variable | Required value or purpose |
+| --- | --- |
+| `SPONSOR_DB_PATH` | `/data/brainsnn-sponsor.sqlite` on the existing durable volume; one replica |
+| `SPONSOR_PUBLIC_ORIGIN` | `https://www.brainsnn.com` |
+| `SPONSOR_ALLOWED_ORIGINS` | `https://www.xioai.ca,https://xioai.ca` |
+| `SPONSOR_SESSION_SECRET` | A stable, unique secret; changing it invalidates browser sessions and direct-purchase receipt tokens |
+| `SPONSOR_ADMIN_KEY` | A separate unique owner-access secret |
+| `SPONSOR_STRIPE_SECRET_KEY` | Restricted API key for the correct Stripe account and mode |
+| `SPONSOR_STRIPE_WEBHOOK_SECRET` | Signing secret for this endpoint and the same account/mode |
+| `SPONSOR_PAYMENTS_ENABLED` | Keep `false` until payment creation and signed events are verified; `true` enables the payment gate |
+| `SPONSOR_TAX_READY` | Keep `false` until the merchant's applicable tax setup is confirmed |
+| `SPONSOR_DIRECT_CAMPAIGN_JSON` | Actual published campaign configuration described below; empty disables direct purchasing |
+
+Register a snapshot-event webhook at `https://www.brainsnn.com/api/sponsors/stripe/webhook` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, and `checkout.session.async_payment_failed`. Use the integration's API version, `2026-07-29.dahlia`. Keep the endpoint and its signing secret active when payment creation is disabled so existing orders can settle.
+
+The webhook verifies signatures locally with the supported Stripe SDK verifier. It requires its signing secret and persistent storage, but makes no Stripe API call and requires no API key or enabled-payment flag. Invalid or missing signatures still fail with HTTP 400. A correctly signed unrelated event can verify endpoint delivery before payment credentials are provisioned; it does not prove Checkout creation or payment processing works.
+
+The runtime's only outgoing Stripe API operation is `checkout.sessions.create` (`POST /v1/checkout/sessions`), so its code-level API permission is **Checkout Sessions: Write**. Webhook verification requires no API permission. Configuring a webhook through an API is a separate operator action requiring **Webhook Endpoints: Write** on that operator's key, not on the deployed checkout key. The runtime does not call Product, Price, Customer, PaymentIntent, Refund, Payout, or Tax Registration APIs directly.
+
+Checkout creates its inline product/price and customer from the submitted session parameters. Test this exact payload in a Stripe sandbox with the restricted key; if Stripe reports an additional missing resource permission, add only that named permission and repeat the test. Stripe recommends mapping observed API operations to permissions and using sandbox request errors to establish the final permission set: https://docs.stripe.com/keys/restricted-api-keys. The source alone does not prove a live key's permissions or account readiness.
+
+### Published direct-purchase campaign
+
+`GET /api/sponsors/purchase-options` reports whether a valid campaign and payment configuration are present. The direct purchase endpoint accepts orders only when both gates are ready. Publishing a real standard offer replaces per-customer manual quote approval; it does not remove the requirement to define what is being sold.
+
+`SPONSOR_DIRECT_CAMPAIGN_JSON` must be one JSON object with these exact fields:
+
+| Field | Validation |
+| --- | --- |
+| `enabled` | Boolean `true` when the merchant is ready to publish |
+| `version` | 3–80 letters, digits, underscores, periods, or hyphens; changes must identify the terms accepted by the buyer |
+| `durationDays` | Number `90` |
+| `scope` | Actual campaign deliverables and scope, 80–4,000 characters |
+| `activationWindow` | Actual activation timing, 10–300 characters |
+| `cancellation` | Actual changes, cancellation, and refund terms, 30–2,000 characters |
+| `sellUntil` | Nonexpired `YYYY-MM-DD` date, compared against UTC |
+| `confirmed` | Object whose `hardware`, `venues`, `staffing`, `artwork`, `tax`, and `terms` fields are each Boolean `true` only after those facts are confirmed |
+
+No ready-to-publish campaign terms are supplied in this repository. The synthetic terms in tests are fixtures, not an approved offer. Keep the environment value empty until real scope, timing, cancellation terms, and confirmations are available. Do not copy test fixtures into production.
+
+Read-only checks after deployment: `/api/sponsors/status` confirms storage and the payment gate, while `/api/sponsors/purchase-options` confirms direct-purchase readiness. These configuration checks do not prove a real payment, tax calculation, or webhook round trip. Keep test and live credentials, webhook secrets, and databases separate.
 
 ## Review workflow
 

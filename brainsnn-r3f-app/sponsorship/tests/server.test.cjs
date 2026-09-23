@@ -274,3 +274,47 @@ test('ambiguous legacy session creation retains its attempt and defers early web
   assert.deepEqual(d.prepare('SELECT * FROM sponsor_applications WHERE id=?').get(id),retained);
  }finally{await f.close();}
 });
+
+test('local webhook verifier accepts signed events without an API key and rejects missing or bad signatures',async()=>{
+ const previous=process.env.SPONSOR_STRIPE_SECRET_KEY;delete process.env.SPONSOR_STRIPE_SECRET_KEY;
+ const secret='whsec_local_verifier_fixture';let f;
+ try{
+  f=await fixture({webhookSecret:secret,paymentsEnabled:false});
+  assert.equal((await f.call('/status')).data.payments,'not_enabled');
+  const event={id:'evt_local_verifier',type:'checkout.session.expired',data:{object:{id:'cs_unknown_local_fixture',metadata:{}}}};
+  const payload=JSON.stringify(event);
+  const notify=signature=>fetch(f.url+'/api/sponsors/stripe/webhook',{method:'POST',headers:{'Content-Type':'application/json',...(signature?{'stripe-signature':signature}:{})},body:payload});
+  assert.equal((await notify()).status,400);
+  assert.equal((await notify('invalid')).status,400);
+  assert.equal((await notify(signedHeader(payload,'whsec_wrong_local_fixture'))).status,400);
+  assert.equal(f.handler.database().prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,0);
+  assert.equal((await notify(signedHeader(payload,secret))).status,200);
+  assert.equal(f.handler.database().prepare('SELECT COUNT(*) AS n FROM sponsor_events').get().n,1);
+  assert.equal(f.handler.database().prepare('SELECT COUNT(*) AS n FROM sponsor_applications').get().n,0);
+ }finally{
+  if(f)await f.close();
+  if(previous===undefined)delete process.env.SPONSOR_STRIPE_SECRET_KEY;else process.env.SPONSOR_STRIPE_SECRET_KEY=previous;
+ }
+});
+
+test('signed matching payment settles an existing order while checkout and its API key are unavailable',async()=>{
+ const previous=process.env.SPONSOR_STRIPE_SECRET_KEY;delete process.env.SPONSOR_STRIPE_SECRET_KEY;
+ const secret='whsec_existing_order_fixture';let f;
+ try{
+  f=await fixture({webhookSecret:secret,paymentsEnabled:false});
+  const id=(await f.call('/applications',valid(),{'X-Request-ID':crypto.randomUUID()})).data.reference;
+  await f.call('/admin/login',{password:f.options.adminKey});
+  const approved=await f.call(`/admin/applications/${id}/quote`,quote);
+  const token=new URLSearchParams(new URL(approved.data.invitationUrl).hash.slice(1)).get('token');
+  const d=f.handler.database();
+  d.prepare('UPDATE sponsor_applications SET status=?,checkout_id=?,accepted_at=? WHERE id=?').run('checkout_pending','cs_existing_order_fixture',new Date().toISOString(),id);
+  const event={id:'evt_existing_order_fixture',type:'checkout.session.completed',data:{object:{id:'cs_existing_order_fixture',payment_status:'paid',currency:'cad',amount_subtotal:quote.subtotalCents,amount_total:932250,metadata:{sponsor_application:id}}}};
+  const payload=JSON.stringify(event);const response=await fetch(f.url+'/api/sponsors/stripe/webhook',{method:'POST',headers:{'Content-Type':'application/json','stripe-signature':signedHeader(payload,secret)},body:payload});
+  assert.equal(response.status,200);
+  const result=await f.call('/quote',{token});assert.equal(result.data.status,'paid');assert.equal(result.data.amountPaid,932250);assert.equal(result.data.paymentsEnabled,false);
+  assert.equal(d.prepare('SELECT reserved_slot FROM sponsor_applications WHERE id=?').get(id).reserved_slot,'001:chest');
+ }finally{
+  if(f)await f.close();
+  if(previous===undefined)delete process.env.SPONSOR_STRIPE_SECRET_KEY;else process.env.SPONSOR_STRIPE_SECRET_KEY=previous;
+ }
+});
