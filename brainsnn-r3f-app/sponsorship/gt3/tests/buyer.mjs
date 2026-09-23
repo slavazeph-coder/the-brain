@@ -45,7 +45,7 @@ try{
  await page.locator('#spot-trigger').click();await page.screenshot({path:path.join(out,live?'buyer-live-menu.png':'buyer-menu.png'),fullPage:true,timeout:60000});await page.keyboard.press('Escape');
  check('Frosted menu retains keyboard dismissal',await page.locator('#spot-options').isHidden()&&await page.locator('#spot-trigger').evaluate(e=>e===document.activeElement));
  await page.locator('#use-cases').scrollIntoViewIfNeeded();await page.waitForFunction(()=>[...document.querySelectorAll('.case-media img')].every(e=>e.complete&&e.naturalWidth>0));
- check('Three advertiser goals have loaded visuals and measurement examples',await page.locator('.use-card').count()===3&&await page.locator('.case-measure').count()===3);
+ check('Four advertiser goals have loaded visuals and measurement examples',await page.locator('.use-card').count()===4&&await page.locator('.case-measure').count()===4);
  check('Examples do not claim included or completed campaigns',(await page.locator('.use-heading').textContent()).includes('Not delivered campaigns or included extras'));
  check('Key scope, production, dimensions and privacy questions are answered',await page.locator('.buyer-faq > details').count()===4);
  await page.locator('.buyer-faq summary').first().click();check('FAQ opens without a blocking overlay',await page.locator('.buyer-faq details').first().evaluate(e=>e.open));
