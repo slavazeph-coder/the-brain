@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
+const stripeWebhooks = require('stripe').webhooks;
 const { DatabaseSync } = require('node:sqlite');
 const { CATALOG, TERMS, publicCatalog } = require('./catalog.cjs');
 const {createDirectPurchase,releaseDirectSession}=require('./direct-purchase.cjs');
@@ -137,9 +138,11 @@ function createHandler(options = {}) {
     res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');
   }
   async function webhook(req, res) {
-    if (!webhookSecret || !getStripe()) fail(503,'Payment notifications are not configured.');
+    if (!webhookSecret) fail(503,'Payment notifications are not configured.');
     const raw = await readBody(req,true); let event;
-    try { event = getStripe().webhooks.constructEvent(raw,req.headers['stripe-signature'],webhookSecret,300); } catch { fail(400,'Invalid payment notification.'); }
+    // Signature verification is local. Existing orders must still settle while
+    // checkout is disabled or its API key is being provisioned or rotated.
+    try { event = stripeWebhooks.constructEvent(raw,req.headers['stripe-signature'],webhookSecret,300); } catch { fail(400,'Invalid payment notification.'); }
     const d = database();
     if (d.prepare('SELECT id FROM sponsor_events WHERE id=?').get(event.id)) return send(res,200,{received:true});
     const obj = event.data?.object;
