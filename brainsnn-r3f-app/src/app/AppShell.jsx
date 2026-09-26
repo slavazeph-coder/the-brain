@@ -19,6 +19,7 @@ import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
 import { ReconstructPage } from './ReconstructPage.jsx';
 import { HoldoutEvidencePage } from '../features/research/HoldoutEvidencePage.jsx';
+import { CoherenceLanding } from './CoherenceLanding.jsx';
 
 // The powder lab is a full page of its own and pulls in a simulation engine, so
 // it is lazily loaded like any other heavy surface rather than bundled into the
@@ -32,6 +33,7 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/reconstruct')) return 'reconstruct';
   if (pathname.startsWith('/evidence')) return 'evidence';
   if (pathname.startsWith('/lab')) return 'lab';
+  if (pathname.startsWith('/coherence')) return 'coherence';
   // The product is now the homepage. The old GaugeGap landing experience lives
   // at /arcade so cold visitors can get to the BrainSNN decision engine without
   // an extra click.
@@ -270,6 +272,15 @@ export function AppShell() {
 
   if (route === 'evidence') {
     return <HoldoutEvidencePage onHome={openLanding} onStart={openWorkspace} />;
+  }
+
+  if (route === 'coherence') {
+    return (
+      <CoherenceLanding
+        onNavigate={navigate}
+        onStart={openWorkspace}
+      />
+    );
   }
 
   if (route === 'arcade') {

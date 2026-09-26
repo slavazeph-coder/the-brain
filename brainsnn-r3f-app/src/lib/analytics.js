@@ -89,6 +89,10 @@ const allowedEvents = new Set([
   'reconstruct_scan_copy_clicked',
   'holdout_evidence_viewed',
   'holdout_evidence_cta_clicked',
+  'coherence_landing_viewed',
+  'coherence_cta_clicked',
+  'coherence_demo_played',
+  'rescue_request_submitted',
 ]);
 
 /** Exported so eventSink.test.js can assert the two allowlists have not drifted
