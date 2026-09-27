@@ -22,6 +22,14 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 - Agents: main, imessage
 - Cron jobs: workspace-git-sync (3h), memory-cleanup-weekly, daily-self-review
 
+## Current BrainSNN direction
+
+→ [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective. Sept9: restore original cyan/violet Sapient Playground identity; keep the homepage simple.
+
+→ [GPU host recovery](brainsnn-gpu-host-recovery-2026-09.md). PR143 now includes a supervised outbound HTTPS GPU worker; private real RTX4090 tests verify inference, fallback and recovery. Single-replica website activation and durable container restart remain operational work.
+
+→ [vLLM candidate and finite GPU backlog](brainsnn-vllm-runtime-2026-09.md). Pinned local model/template verification, isolated cu124 child configuration and64-case checkpointed regression set; real promotion remains separately validated.
+
 ## Active Work
 
 <!-- Both AIs append notes here as they work -->

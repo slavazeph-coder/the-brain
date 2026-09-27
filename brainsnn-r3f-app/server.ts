@@ -30,10 +30,28 @@ import {
 import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, routeTier } from "./src/lib/rateLimit.js";
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
 import { createNeuralApiRouter } from "./src/server/neuralApi.js";
+import { createEventStore } from "./src/lib/eventStore.js";
+import { spawn } from "node:child_process";
+import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.js";
+import { compareEngineInputs } from "./src/lib/engineComparison.js";
+import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
+import { createGpuBridge } from "./src/server/gpuBridge.js";
+
 
 dotenv.config();
+const gpuBridge = createGpuBridge(process.env);
+const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
 
 export const app = express();
+// Authenticate and bound worker bodies before the general JSON parser/limiter.
+app.use('/api/gpu-worker', gpuBridge.handle);
+const readAgentLabFeed = createAgentLabFeed();
+app.get('/api/agent-lab/summary', async (_req, res) => {
+  const feed = await readAgentLabFeed();
+  res.setHeader('Cache-Control', `public, max-age=${agentLabCacheMaxAge(feed)}, must-revalidate`);
+  res.json(feed);
+});
+
 
 // Railway terminates TLS at its edge and forwards, so without this every
 // request arrives from the proxy's address and the rate limiter below would key
@@ -51,6 +69,11 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handl
 app.use("/api/analyze", express.json({ limit: BODY_LIMITS.analyze }));
 app.use("/api/v1/multimodal/ingest", express.json({ limit: BODY_LIMITS.neural }));
 app.use("/api/v1/neural/predict", express.json({ limit: BODY_LIMITS.neural }));
+app.use("/api/engine/compare", (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+}, express.json({ limit: '64kb' }));
+
 app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
 app.use(express.json({ limit: BODY_LIMITS.general }));
 
@@ -335,7 +358,10 @@ app.get("/api/og/lab", (req, res) => {
 
 app.get("/api/engines/status", async (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
+  res.setHeader('Cache-Control', 'no-store');
+  status.engines.gpu = await gpuInference.health();
   if (status.engines.tribe.configured && status.engines.tribe.enabled) {
+
     try {
       const health = await fetch(`${process.env.TRIBE_API_URL}/health`, { signal: AbortSignal.timeout(2500) }).then((r) => r.json());
       status.engines.tribe = { ...status.engines.tribe, status: "online", modelLoaded: Boolean(health.model_loaded) };
@@ -396,6 +422,18 @@ app.get("/api/engines/tribe/scenarios", async (_req, res) => {
     });
   } catch (error: any) {
     return res.status(503).json({ error: error?.message || "TRIBE scenarios unavailable.", scenarios: [] });
+  }
+});
+
+// Runs two bounded local scans. The general API limiter applies; no paid model,
+// persistence, acceptance or promotion action is available through this route.
+app.post('/api/engine/compare', (req, res) => {
+  try {
+    return res.json(compareEngineInputs(req.body, { revision: process.env.RAILWAY_GIT_COMMIT_SHA || null }));
+  } catch (error) {
+    return res.status(error instanceof TypeError ? 400 : 500).json({
+      error: error instanceof TypeError ? error.message : 'The local comparison could not complete.',
+    });
   }
 });
 
@@ -622,18 +660,98 @@ app.post("/api/auth/magic-link", limit("magicLink", (req) => String(req.body?.em
 // ----------------------------------------------------
 //
 // track() forwards to VITE_ANALYTICS_URL, which was unset, so every call site
-// fed a function that sent nothing anywhere. This gives the events somewhere to
-// land that is already owned and already running: one JSON line per event on
-// stdout, which Railway retains and which is greppable for the prefix.
+// fed a function that sent nothing anywhere. Pointing it here fixed delivery
+// but not retention: the handler logged one JSON line per event to stdout and
+// returned. Railway retains those lines, but nothing aggregates them, so no
+// question about which features people actually use could be answered — and a
+// hundred catalogued layers were built without ever being able to ask.
+//
+// Events now land in Postgres. The log line remains as the fallback when no
+// DATABASE_URL is configured, which is the default locally.
+//
+// psql is shelled out to rather than adding a driver, matching how the mission
+// marketplace already talks to the same database.
 //
 // Validation lives in src/lib/eventSink.js and is re-applied here rather than
 // trusted from the client, because this endpoint is public — see that file.
 // 204 regardless of whether the event was kept: a rejected event is not the
 // visitor's problem, and sendBeacon ignores the body anyway.
+const EVENT_PSQL_TIMEOUT_MS = 8_000;
+
+function runEventSql(sql: string, variables: Record<string, string> = {}): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return Promise.reject(new Error("DATABASE_URL is not configured"));
+  const args = ["--no-psqlrc", "--set=ON_ERROR_STOP=1"];
+  for (const [key, value] of Object.entries(variables)) args.push("-v", `${key}=${value}`);
+  args.push("-Atq", databaseUrl);
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("psql", args, { stdio: ["pipe", "ignore", "pipe"], timeout: EVENT_PSQL_TIMEOUT_MS });
+    let stderr = "";
+    let settled = false;
+    const finish = (error: Error | null) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve();
+    };
+    child.on("error", finish);
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf8").slice(0, 2000); });
+    child.on("close", (code) => finish(code === 0 ? null : new Error(stderr.trim().slice(0, 300) || `psql exited ${code}`)));
+    child.stdin.on("error", (error: any) => { if (error?.code !== "EPIPE") finish(error); });
+    child.stdin.end(`${sql}\n`);
+  });
+}
+
+// Read once at boot: this decides whether events are buffered for the database
+// or logged, and flipping it mid-process would strand a partly-filled buffer.
+const EVENTS_CONFIGURED = Boolean(process.env.DATABASE_URL);
+
+const eventStore = createEventStore({
+  execute: runEventSql,
+  // One warning line per failed batch, not per event, so an outage does not
+  // bury the log it is trying to report.
+  onError: (error: any) => console.warn(`[Warn] Event batch not stored: ${error?.message || error}`),
+});
+
+// A timer rather than a per-request flush: a beacon must return immediately,
+// and batching is the whole point. unref() keeps it from holding the process
+// open during a shutdown.
+const eventTimer = EVENTS_CONFIGURED ? setInterval(() => { void eventStore.flush(); }, 5_000) : null;
+eventTimer?.unref?.();
+
+if (EVENTS_CONFIGURED) {
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => {
+      // Railway restarts containers routinely. Without this the last few
+      // seconds of events are lost on every deploy.
+      void eventStore.flush({ force: true }).finally(() => process.exit(0));
+    });
+  }
+}
+
 app.post("/api/events", limit("events"), (req, res) => {
   const record = normalizeEvent(req.body, { path: req.path });
-  if (record) console.log(formatEventLine(record));
+  if (record) {
+    if (EVENTS_CONFIGURED) {
+      eventStore.record(record);
+      // Fire-and-forget: the beacon gets its 204 either way. An analytics write
+      // must never be able to fail the page it is measuring.
+      void eventStore.flush();
+    } else {
+      // No destination configured — the log line is the only visibility, and is
+      // what local development sees. Buffering here instead would retry a write
+      // that cannot succeed and warn once per tick forever.
+      console.log(formatEventLine(record));
+    }
+  }
   return res.status(204).end();
+});
+
+// Operational counter, not a dashboard: says whether events are reaching the
+// database at all, which is the first thing to check when a funnel looks empty.
+app.get("/api/events/status", (_req, res) => {
+  res.json({ configured: EVENTS_CONFIGURED, ...eventStore.stats() });
 });
 
 // ----------------------------------------------------
@@ -780,8 +898,21 @@ app.post("/api/analyze", limit("analyze"), async (req, res) => {
   const { content, type, contentType } = req.body || {};
   const inputType = type || contentType || "text";
 
-  if (!content) {
-    return res.status(400).json({ error: "Content parameter is required." });
+  if (typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ error: "Content must be a non-empty string." });
+  }
+  if (typeof inputType !== 'string' || inputType.length > 80) {
+    return res.status(400).json({ error: "Content type must be a string of at most 80 characters." });
+  }
+
+  // The dedicated GPU is the first provider when opted in. Outage, saturation,
+  // timeout and invalid output all fall back locally within one bounded call.
+  // Keep /api/engine/compare deterministic and independent of remote providers.
+  if (gpuInference.enabled) {
+    return res.json(await analyzeContentWithGpu({
+      client: gpuInference, content, contentType: inputType,
+      engineStatus: getEngineStatusSnapshot(process.env),
+    }));
   }
 
   const now = Date.now();

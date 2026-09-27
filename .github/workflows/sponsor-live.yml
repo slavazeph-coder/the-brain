@@ -1,0 +1,44 @@
+name: Sponsor live verification
+on:
+  workflow_run:
+    workflows: ['Deploy BrainSNN app to Railway']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sponsor-live-verification
+  cancel-in-progress: true
+jobs:
+  verify-public-site:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - name: Install browser test dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install chromium --with-deps
+      - name: Verify HTTPS routes, actual robot rendering and application UI
+        run: node sponsorship/tests/live.mjs
+      - name: Upload public-site evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sponsor-live-${{ github.run_number }}
+          path: brainsnn-r3f-app/sponsorship/reports/live/
+          retention-days: 14
+          if-no-files-found: error

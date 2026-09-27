@@ -1,8 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Download, GitCompare, Save, Send, Share2, Sparkles } from 'lucide-react';
 import { Button } from '../../components/ui/Button.jsx';
 import { Badge } from '../../components/ui/Badge.jsx';
 import { deriveExecutiveVerdict } from '../../lib/scoreMapping.js';
+import { buildPatchPlan } from '../../lib/draftPatch.js';
 import { ExecutiveVerdict } from './ExecutiveVerdict.jsx';
 import { BrainSignalView } from './BrainSignalView.jsx';
 import { DecisionScorecard } from './DecisionScorecard.jsx';
@@ -16,6 +17,10 @@ import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
 import { InputFusionPanel } from './InputFusionPanel.jsx';
 import { NeuralMirrorPanel } from './NeuralMirrorPanel.jsx';
+import { ResultFeedback } from './ResultFeedback.jsx';
+import { CreativeNeuralReadout } from './CreativeNeuralReadout.jsx';
+import { ClientMultimodalBrief } from './ClientMultimodalBrief.jsx';
+
 import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
@@ -70,10 +75,14 @@ function TabPanel({ id, active, children }) {
   );
 }
 
-export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
+export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, onExport, onOpenResearch }) {
   const verdict = deriveExecutiveVerdict(result);
+  // The scan already knows which edits it can make. Saying how many there are
+  // here turns "Improve This" from a vague next step into a countable one.
+  const fixCount = useMemo(() => buildPatchPlan(result?.rawContent || '').patches.length, [result?.rawContent]);
   const [status, setStatus] = useState('');
   const [tab, setTab] = useState('overview');
+  const isVideoReadout = result?.contentType === 'video' && Boolean(result?.multimodal);
 
   function selectTab(next) {
     setTab(next);
@@ -85,13 +94,26 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
     const record = onSave(result);
     setStatus(record ? 'Saved to local history.' : 'Could not save this scan.');
   }
+
   return (
     <div className="results-workbench" data-testid="results-workspace">
       <main className="results-main" aria-label="Brain Scan results">
-        <ExecutiveVerdict result={result} />
+        {isVideoReadout ? (
+          <>
+            <CreativeNeuralReadout
+              result={result}
+              media={media}
+              onCompare={onImprove}
+              onExport={onExport}
+            />
+            <ClientMultimodalBrief result={result} media={media} />
+          </>
+        ) : (
+          <ExecutiveVerdict result={result} />
+        )}
         <ResultsTabs active={tab} onChange={selectTab} />
         <TabPanel id="overview" active={tab}>
-          <InputFusionPanel result={result} />
+          {!isVideoReadout ? <InputFusionPanel result={result} /> : null}
           <NeuralMirrorPanel
             prediction={result.neural}
             modalityStatus={result.modalityStatus}
@@ -99,8 +121,10 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
             scanTrace={result.scanTrace}
             computeTrace={result.computeTrace}
           />
-          <BrainSignalView result={result} />
+          {!isVideoReadout ? <BrainSignalView result={result} /> : null}
+
           <DecisionScorecard result={result} />
+          {isVideoReadout ? <InputFusionPanel result={result} /> : null}
         </TabPanel>
         <TabPanel id="lines" active={tab}>
           <ContentHeatmap result={result} />
@@ -117,33 +141,77 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
           <TechnicalDetails result={result} onOpenResearch={onOpenResearch || (() => {})} />
         </TabPanel>
       </main>
-      <aside className="results-inspector" aria-label="Recommended next actions">
-        <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Demo model result' : 'AI-estimated response'}</Badge>
-        <div className="inspector-score">
-          <strong>{verdict.score}</strong>
-          <span>Decision score</span>
-        </div>
-        <div className="inspector-callout inspector-viral">
-          <span>Viral pull</span>
-          <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
-        </div>
-        <div className="inspector-callout">
-          <span>Primary risk</span>
-          <strong>{verdict.primaryRisk}</strong>
-        </div>
-        <div className="inspector-callout">
-          <span>Best next action</span>
-          <p>{verdict.bestNextMove}</p>
-        </div>
-        <div className="inspector-actions">
-          <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
-          <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
-          <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
-          <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
-          <Button variant="secondary" onClick={() => onExport(result)}><Share2 size={16} aria-hidden="true" /> Share your score</Button>
-          <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
-        </div>
-        {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
+      <aside className={`results-inspector${isVideoReadout ? ' results-inspector-video' : ''}`} aria-label="Recommended next actions">
+        {isVideoReadout ? (
+          <>
+            <Badge tone="cyan">Video workstation</Badge>
+            <p className="bsn-note">The Creative Neural Readout now owns the score, risk, timed moments and exact edit. Keep this rail for actions only.</p>
+            <div className="inspector-actions">
+              <Button variant="primary" onClick={() => onImprove(result)}><Sparkles size={16} aria-hidden="true" /> Improve This</Button>
+              <Button variant="secondary" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
+              <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
+              <Button variant="secondary" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
+            </div>
+            {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
+            <ResultFeedback key={result.id || result.timestamp} result={result} />
+          </>
+        ) : (
+          <>
+            <Badge tone={result.isFallback ? 'warning' : 'cyan'}>{result.isFallback ? 'Deterministic local result' : 'AI-estimated response'}</Badge>
+
+            {/* The actionable thing goes first. It used to sit below four
+                scorecards and above five competing buttons, which is a rail that
+                reads as "here are your options" rather than "here is the next
+                step". Scores did not get deleted — they moved below the action
+                they are supposed to motivate. */}
+            <div className="inspector-next">
+              {fixCount > 0 ? (
+                <p className="inspector-next-lede">
+                  <strong>{fixCount} fix{fixCount === 1 ? '' : 'es'}</strong> can be applied to this draft right now.
+                </p>
+              ) : (
+                <p className="inspector-next-lede">{verdict.bestNextMove}</p>
+              )}
+              <Button variant="primary" onClick={() => onImprove(result)}>
+                <Sparkles size={16} aria-hidden="true" /> {fixCount > 0 ? `Fix this draft (${fixCount})` : 'Improve this draft'}
+              </Button>
+            </div>
+
+            <div className="inspector-score">
+              <strong>{verdict.score}</strong>
+              <span>Decision score</span>
+            </div>
+            <div className="inspector-callout">
+              <span>Primary risk</span>
+              <strong>{verdict.primaryRisk}</strong>
+            </div>
+            <div className="inspector-callout inspector-viral">
+              <span>Viral pull</span>
+              <strong>{verdict.viralScore} — {verdict.viralLabel}</strong>
+            </div>
+            {fixCount > 0 ? (
+              <div className="inspector-callout">
+                <span>Best next action</span>
+                <p>{verdict.bestNextMove}</p>
+              </div>
+            ) : null}
+
+            <div className="inspector-actions">
+              <Button variant="secondary" onClick={() => onExport(result)}><Share2 size={16} aria-hidden="true" /> Share your score</Button>
+              <Button variant="ghost" onClick={handleSave}><Save size={16} aria-hidden="true" /> Save to History</Button>
+            </div>
+            <details className="inspector-more">
+              <summary>Other actions</summary>
+              <div className="inspector-actions">
+                <Button variant="ghost" onClick={() => onImprove(result)}><GitCompare size={16} aria-hidden="true" /> Compare Version</Button>
+                <Button variant="ghost" onClick={() => onQueue(result)}><Send size={16} aria-hidden="true" /> Add to Approvals</Button>
+                <Button variant="ghost" onClick={() => onExport(result)}><Download size={16} aria-hidden="true" /> Export</Button>
+              </div>
+            </details>
+            {status ? <p role="status" className="bsn-note results-action-status">{status}</p> : null}
+            <ResultFeedback key={result.id || result.timestamp} result={result} />
+          </>
+        )}
       </aside>
     </div>
   );

@@ -13,53 +13,51 @@ import { PricingWorkspace } from '../features/pricing/PricingWorkspace.jsx';
 import { ResearchWorkspaceV2 } from '../features/research/ResearchWorkspaceV2.jsx';
 import { ShareDialog } from '../features/export/ShareDialog.jsx';
 import { AppHeader } from './AppHeader.jsx';
+import { BehaviourHome } from './BehaviourHome.jsx';
+import { AgentLabHome } from '../features/agent-lab/AgentLabHome.jsx';
+import { ProofMissionsPage } from './ProofMissionsPage.jsx';
+import { MissionBuilderPage } from './MissionBuilderPage.jsx';
+import { PublishedMissionPage } from './PublishedMissionPage.jsx';
+import { RefundAuthorityMissionPage } from './RefundAuthorityMissionPage.jsx';
+import { WorkflowEfficiencyMissionPage } from './WorkflowEfficiencyMissionPage.jsx';
+import { ExtendedProofMissionPage } from './ExtendedProofMissionPage.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
 import { DesktopSidebar } from './DesktopSidebar.jsx';
 import { LandingPage } from './LandingPage.jsx';
 import { MobileNavigation } from './MobileNavigation.jsx';
 import { ReconstructPage } from './ReconstructPage.jsx';
+import { SurvivalWorldPage } from './SurvivalWorldPage.jsx';
 import { HoldoutEvidencePage } from '../features/research/HoldoutEvidencePage.jsx';
 import { CoherenceLanding } from './CoherenceLanding.jsx';
+import { EngineWorkspace } from '../features/engine/EngineWorkspace.jsx';
 
-// The powder lab is a full page of its own and pulls in a simulation engine, so
-// it is lazily loaded like any other heavy surface rather than bundled into the
-// shell every visitor pays for.
-const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx')
-  .then((module) => ({ default: module.PowderLabPage })));
+
+const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx').then((module) => ({ default: module.PowderLabPage })));
 
 function resolveRoute(pathname) {
+  if (pathname === '/office' || pathname.startsWith('/office/')) return 'office';
+  if (pathname === '/engine' || pathname.startsWith('/engine/')) return 'engine';
+  if (pathname.startsWith('/m/')) return 'published-mission';
+  if (pathname.startsWith('/missions/build')) return 'mission-builder';
+  if (pathname.startsWith('/missions/refund-authority')) return 'refund-mission';
+  if (pathname.startsWith('/missions/workflow-efficiency')) return 'workflow-mission';
+  if (pathname.startsWith('/missions/authorized-bug-hunt')) return 'mission-003';
+  if (pathname.startsWith('/missions/reproduce-result')) return 'mission-004';
+  if (pathname.startsWith('/missions/navigation-baseline')) return 'mission-005';
+  if (pathname.startsWith('/missions')) return 'missions';
+  if (pathname.startsWith('/lab/survival')) return 'survival';
   if (pathname.startsWith('/arcade')) return 'arcade';
   if (pathname.startsWith('/app')) return 'app';
   if (pathname.startsWith('/reconstruct')) return 'reconstruct';
   if (pathname.startsWith('/evidence')) return 'evidence';
   if (pathname.startsWith('/lab')) return 'lab';
   if (pathname.startsWith('/coherence')) return 'coherence';
-  // The product is now the homepage. The old GaugeGap landing experience lives
-  // at /arcade so cold visitors can get to the BrainSNN decision engine without
-  // an extra click.
-  return 'app';
+  return 'home';
+
 }
 
-/** Module scope so a remount cannot report a second arrival for one page load. */
 let visitTracked = false;
-
-function makeQueueItem(result, content, comparison, status = 'Draft') {
-  const sourceContent = content || result?.rawContent || '';
-  return {
-    id: `${result?.id || 'draft'}-${Date.now().toString(36)}`,
-    title: result?.title || 'Untitled draft',
-    excerpt: excerpt(sourceContent),
-    verdict: result?.summary || 'Pending review',
-    status,
-    currentVersion: content ? 2 : 1,
-    updatedAt: new Date().toISOString(),
-    versions: [
-      { id: 'v1', label: 'Original', content: result?.rawContent || '', result },
-      ...(content ? [{ id: 'v2', label: 'Improved', content, result: comparison || null }] : []),
-    ],
-    result: comparison || result,
-  };
-}
+function makeQueueItem(result, content, comparison, status = 'Draft') { const sourceContent = content || result?.rawContent || ''; return { id: `${result?.id || 'draft'}-${Date.now().toString(36)}`, title: result?.title || 'Untitled draft', excerpt: excerpt(sourceContent), verdict: result?.summary || 'Pending review', status, currentVersion: content ? 2 : 1, updatedAt: new Date().toISOString(), versions: [{ id: 'v1', label: 'Original', content: result?.rawContent || '', result }, ...(content ? [{ id: 'v2', label: 'Improved', content, result: comparison || null }] : [])], result: comparison || result }; }
 
 export function AppShell() {
   const scan = useScanEngine();
@@ -118,6 +116,16 @@ export function AppShell() {
 
   const navigate = useCallback((id) => {
     const aliases = { cortex: 'analyze', synapse: 'improve', memory: 'history' };
+    if (id === 'home') {
+      window.history.pushState({}, '', '/');
+      setRoute('home');
+      return;
+    }
+    if (id === 'worlds') {
+      window.history.pushState({}, '', '/lab/survival');
+      setRoute('survival');
+      return;
+    }
     if (id === 'arcade') {
       window.history.pushState({}, '', '/arcade');
       setRoute('arcade');
@@ -125,7 +133,7 @@ export function AppShell() {
       return;
     }
     if (route !== 'app') {
-      window.history.pushState({}, '', '/');
+      window.history.pushState({}, '', '/app');
       setRoute('app');
     }
     setActive(aliases[id] || id);
@@ -134,7 +142,7 @@ export function AppShell() {
 
   const openWorkspace = useCallback((prefill = '') => {
     if (typeof prefill === 'string') scan.setInput(prefill);
-    window.history.pushState({}, '', '/');
+    window.history.pushState({}, '', '/app');
     setRoute('app');
     setActive('analyze');
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -142,9 +150,7 @@ export function AppShell() {
 
   const openLanding = useCallback(() => {
     window.history.pushState({}, '', '/');
-    setRoute('app');
-    setActive('analyze');
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    setRoute('home');
   }, []);
 
   const openReconstruct = useCallback(() => {
@@ -257,6 +263,54 @@ export function AppShell() {
       />
     );
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
+
+  if (route === 'engine') {
+    return <EngineWorkspace />;
+  }
+
+  if (route === 'office') {
+    return <AgentLabHome />;
+  }
+
+  if (route === 'home') {
+    return <BehaviourHome />;
+  }
+
+  if (route === 'published-mission') {
+    return <PublishedMissionPage />;
+  }
+
+  if (route === 'mission-builder') {
+    return <MissionBuilderPage />;
+  }
+
+  if (route === 'refund-mission') {
+    return <RefundAuthorityMissionPage />;
+  }
+
+  if (route === 'workflow-mission') {
+    return <WorkflowEfficiencyMissionPage />;
+  }
+
+  if (route === 'mission-003') {
+    return <ExtendedProofMissionPage missionId="003" />;
+  }
+
+  if (route === 'mission-004') {
+    return <ExtendedProofMissionPage missionId="004" />;
+  }
+
+  if (route === 'mission-005') {
+    return <ExtendedProofMissionPage missionId="005" />;
+  }
+
+  if (route === 'missions') {
+    return <ProofMissionsPage />;
+  }
+
+  if (route === 'survival') {
+    return <SurvivalWorldPage />;
+  }
 
   if (route === 'lab') {
     return (

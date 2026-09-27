@@ -10,9 +10,14 @@ export function RewriteControls({ goal, onGoalChange, onGenerate, generating = f
       <div className="bsn-section-head">
         <div>
           <p className="bsn-eyebrow">Rewrite goal</p>
-          <h2 id="rewrite-controls-heading">Choose a rewrite goal</h2>
+          <h2 id="rewrite-controls-heading">What should this pass fix?</h2>
         </div>
-        <Button variant="primary" onClick={onGenerate} disabled={generating}><Wand2 size={16} aria-hidden="true" /> {generating ? 'Generating...' : 'Generate rewrite'}</Button>
+        {/* The fixes below apply live, so there is nothing to "generate" when
+            no handler is supplied. Rendering a dead button would imply the
+            draft is waiting on a step the user has not taken. */}
+        {onGenerate ? (
+          <Button variant="primary" onClick={onGenerate} disabled={generating}><Wand2 size={16} aria-hidden="true" /> {generating ? 'Generating...' : 'Generate rewrite'}</Button>
+        ) : null}
       </div>
       <SegmentedControl
         label=""

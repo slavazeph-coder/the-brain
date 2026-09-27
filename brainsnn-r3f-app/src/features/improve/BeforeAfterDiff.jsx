@@ -1,22 +1,37 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { diffDrafts, summarizeDiff } from '../../lib/draftDiff.js';
 
-function tokenize(text) {
-  return String(text || '').split(/(\s+)/).filter(Boolean);
+const STATUS_LABEL = {
+  moved: 'moved',
+  edited: 'reworded',
+  added: 'added',
+  removed: 'removed',
+};
+
+function Sentence({ row }) {
+  if (row.status === 'same') return <span className="diff-sentence">{row.text} </span>;
+  return (
+    <span className={`diff-sentence diff-${row.status}`}>
+      <span className="diff-flag" aria-hidden="true">{STATUS_LABEL[row.status]}</span>
+      {row.tokens
+        ? row.tokens.map((token, index) => (token.changed
+          ? <mark key={`${token.text}-${index}`}>{token.text}</mark>
+          : <React.Fragment key={`${token.text}-${index}`}>{token.text}</React.Fragment>))
+        : row.text}{' '}
+    </span>
+  );
 }
 
-function renderDiff(before, after, mode) {
-  const beforeWords = new Set(tokenize(before).map((word) => word.toLowerCase()));
-  const afterWords = new Set(tokenize(after).map((word) => word.toLowerCase()));
-  const words = tokenize(mode === 'before' ? before : after);
-  return words.map((word, index) => {
-    const key = word.toLowerCase();
-    const changed = mode === 'before' ? !afterWords.has(key) : !beforeWords.has(key);
-    if (!changed || /^\s+$/.test(word)) return <React.Fragment key={`${word}-${index}`}>{word}</React.Fragment>;
-    return <mark key={`${word}-${index}`} className={mode === 'before' ? 'removed' : 'added'}>{word}</mark>;
-  });
-}
-
+/**
+ * What changed, at sentence level.
+ *
+ * The status flag matters as much as the highlight: a moved sentence is
+ * identical text in a new place, so colour alone cannot say what happened to
+ * it — and colour alone is not available to everyone anyway.
+ */
 export function BeforeAfterDiff({ before, after }) {
+  const diff = useMemo(() => diffDrafts(before, after), [before, after]);
+
   return (
     <section className="before-after-diff" aria-labelledby="diff-heading">
       <div className="bsn-section-head">
@@ -24,15 +39,16 @@ export function BeforeAfterDiff({ before, after }) {
           <p className="bsn-eyebrow">Diff</p>
           <h2 id="diff-heading">What changed</h2>
         </div>
+        <span className="diff-summary">{summarizeDiff(diff)}</span>
       </div>
       <div className="diff-columns">
         <article>
           <h3>Original</h3>
-          <p>{renderDiff(before, after, 'before')}</p>
+          <p>{diff.before.map((row, index) => <Sentence key={`b-${index}`} row={row} />)}</p>
         </article>
         <article>
-          <h3>Improved version</h3>
-          <p>{renderDiff(before, after, 'after')}</p>
+          <h3>Your draft</h3>
+          <p>{diff.after.map((row, index) => <Sentence key={`a-${index}`} row={row} />)}</p>
         </article>
       </div>
     </section>

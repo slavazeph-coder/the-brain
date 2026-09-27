@@ -1,6 +1,11 @@
 import { describe, expect, it } from '../test/tinyVitest.js';
 import { NEURAL_PREDICTION_DISCLAIMER } from '../lib/neuralMirror/schema.js';
 
+// tinyVitest shares beforeEach hooks across files, and outcomeSync.test.js
+// clears global.fetch in its hook, so retain the native transport before any
+// test hook runs and use it for the real HTTP contract below.
+const nativeFetch = globalThis.fetch;
+
 function fixtureRequest(overrides = {}) {
   return {
     input: {
@@ -49,7 +54,7 @@ describe('Neural Mirror HTTP integration', () => {
     const address = server.address();
     const origin = `http://127.0.0.1:${address.port}`;
     try {
-      const models = await read(await fetch(`${origin}/api/v1/neural/models`));
+      const models = await read(await nativeFetch(`${origin}/api/v1/neural/models`));
       expect(models.response.status).toBe(200);
       const cpu = models.body.models.find((model) => model.id === 'brainsnn-cpu-baseline');
       expect(cpu.status).toBe('available');
@@ -58,7 +63,7 @@ describe('Neural Mirror HTTP integration', () => {
       expect(cpu.commercialUse).toBe(true);
 
       const fixture = fixtureRequest();
-      const ingest = await read(await fetch(`${origin}/api/v1/multimodal/ingest`, {
+      const ingest = await read(await nativeFetch(`${origin}/api/v1/multimodal/ingest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fixture),
@@ -69,7 +74,7 @@ describe('Neural Mirror HTTP integration', () => {
       expect(ingest.body.segments[0].startMs).toBe(0);
       expect(ingest.body.segments[1].endMs).toBe(3000);
 
-      const predictOnce = await read(await fetch(`${origin}/api/v1/neural/predict`, {
+      const predictOnce = await read(await nativeFetch(`${origin}/api/v1/neural/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fixture),
@@ -95,7 +100,7 @@ describe('Neural Mirror HTTP integration', () => {
         expect(frame.activations.every(Number.isFinite)).toBe(true);
       }
 
-      const predictAgain = await read(await fetch(`${origin}/api/v1/neural/predict`, {
+      const predictAgain = await read(await nativeFetch(`${origin}/api/v1/neural/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fixture),
@@ -107,7 +112,7 @@ describe('Neural Mirror HTTP integration', () => {
       const missingAudio = fixtureRequest({
         observations: { vision: [{ timestampMs: 0, luminance: 0.4, motion: 0.2 }] },
       });
-      const partial = await read(await fetch(`${origin}/api/v1/neural/predict`, {
+      const partial = await read(await nativeFetch(`${origin}/api/v1/neural/predict`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(missingAudio),
       }));
       expect(partial.response.status).toBe(200);
@@ -115,31 +120,31 @@ describe('Neural Mirror HTTP integration', () => {
       expect(partial.body.neural.schemaVersion).toBe('brainsnn.neural-prediction.v1');
 
       const invalidMime = fixtureRequest({ source: { type: 'video', filename: 'fixture.exe', mimeType: 'application/x-msdownload', durationMs: 3000 } });
-      const mimeError = await read(await fetch(`${origin}/api/v1/neural/predict`, {
+      const mimeError = await read(await nativeFetch(`${origin}/api/v1/neural/predict`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(invalidMime),
       }));
       expect(mimeError.response.status).toBe(400);
       expect(mimeError.body.error).toBe('invalid_prediction_request');
 
       const traversal = fixtureRequest({ source: { type: 'video', filename: '../../secret.webm', mimeType: 'video/webm', durationMs: 3000 } });
-      const traversalError = await read(await fetch(`${origin}/api/v1/multimodal/ingest`, {
+      const traversalError = await read(await nativeFetch(`${origin}/api/v1/multimodal/ingest`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(traversal),
       }));
       expect(traversalError.response.status).toBe(400);
 
       const unsafeUrl = fixtureRequest({ source: { type: 'video', url: 'http://127.0.0.1/private', durationMs: 3000, mimeType: 'video/webm' } });
-      const urlError = await read(await fetch(`${origin}/api/v1/multimodal/ingest`, {
+      const urlError = await read(await nativeFetch(`${origin}/api/v1/multimodal/ingest`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(unsafeUrl),
       }));
       expect(urlError.response.status).toBe(400);
 
-      const malformed = await read(await fetch(`${origin}/api/v1/neural/predict`, {
+      const malformed = await read(await nativeFetch(`${origin}/api/v1/neural/predict`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"input":',
       }));
       expect(malformed.response.status).toBe(400);
       expect(malformed.body.error).toBe('invalid_json');
 
-      const oversized = await read(await fetch(`${origin}/api/v1/neural/predict`, {
+      const oversized = await read(await nativeFetch(`${origin}/api/v1/neural/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { padding: 'x'.repeat(600_000) } }),
@@ -147,7 +152,7 @@ describe('Neural Mirror HTTP integration', () => {
       expect(oversized.response.status).toBe(413);
       expect(oversized.body.error).toBe('payload_too_large');
 
-      const experiments = await read(await fetch(`${origin}/api/v1/neural/experiments`));
+      const experiments = await read(await nativeFetch(`${origin}/api/v1/neural/experiments`));
       expect(experiments.response.status).toBe(200);
       expect(experiments.body.status).toBe('not_configured');
       expect(experiments.body.experiments).toEqual([]);

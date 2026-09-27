@@ -1,0 +1,135 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "fear",
+    "anger",
+    "urgency",
+    "trust",
+    "excitement",
+    "empathy",
+    "firingRate",
+    "plasticity",
+    "attentionCurve",
+    "riskRating",
+    "riskDescription",
+    "viralScore",
+    "gaugeGapScore",
+    "summary",
+    "insights",
+    "recommendations",
+    "payloadType",
+    "confidence"
+  ],
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "fear": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "anger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "urgency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "trust": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "excitement": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "empathy": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "firingRate": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 120
+    },
+    "plasticity": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 100
+    },
+    "attentionCurve": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100
+      }
+    },
+    "riskRating": {
+      "enum": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+      ]
+    },
+    "riskDescription": {
+      "type": "string"
+    },
+    "viralScore": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "gaugeGapScore": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "summary": {
+      "type": "string"
+    },
+    "insights": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "string"
+      }
+    },
+    "payloadType": {
+      "enum": [
+        "Sensory Burst",
+        "Fear Cascade",
+        "Emotional Salience",
+        "Organic Baseline",
+        "Outrage Vortex",
+        "Sustained Baseline"
+      ]
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    }
+  }
+}

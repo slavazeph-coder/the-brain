@@ -28,6 +28,19 @@ export const EXAMPLES = [
     label: 'Press statement',
     content: 'Today we are opening BrainSNN to early pilots: a content decision engine for teams that want sharper launches without manipulative copy.',
   },
+  {
+    // Every other example is deliberately clean copy, written to show off the
+    // scoring. The result was that no example in the front row produced a
+    // single applicable fix, so the one feature that edits your draft was
+    // invisible to anyone who started from a sample: they got "Nothing
+    // mechanical left to fix" on their very first scan. This one has the four
+    // problems the fixer can actually repair — buried evidence, manufactured
+    // urgency, an unverifiable universal, and a vague superlative — in copy
+    // that still reads like something a real person would send.
+    id: 'launch-email',
+    label: 'Launch email',
+    content: 'Last chance to join the pilot. Book a call before Friday and lock in the launch rate. Everyone is moving to this workflow, and it is a genuine game-changer for busy teams. We cut review time by 42% across 18 pilot customers.',
+  },
 ];
 
 const RISK_EXAMPLE = "They don't want you to know this. If you wait until tomorrow, your competitors will steal every customer and you will regret missing this limited secret forever.";

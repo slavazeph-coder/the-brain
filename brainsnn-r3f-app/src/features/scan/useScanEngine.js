@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { analyzeContentLocally } from '../../lib/analysisEngine.js';
 import { track } from '../../lib/analytics.js';
-import { buildMultimodalFusion } from '../../lib/mediaFusion.js';
+import { buildBeliefMultimodalFusion as buildMultimodalFusion } from '../../lib/beliefFusion.js';
 import { validateScanInput } from '../../lib/validation.js';
 
 export const initialScanState = {

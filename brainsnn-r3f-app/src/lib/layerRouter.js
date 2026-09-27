@@ -4,6 +4,7 @@ import { getBusinessMetrics } from './scoreMapping.js';
 import { computeSolitonField } from './solitonLayer.js';
 import { computeFirewall, detectTemplates } from './firewallLayer.js';
 import { computeAffect } from './affectLayer.js';
+import { createRewritePlan } from './draftRewrite.js';
 import { clampScore } from './formatters.js';
 import { analyzeEvidenceGaps } from './evidenceGapAnalyzer.js';
 
@@ -75,6 +76,14 @@ export function getEngineStatusSnapshot(env = {}) {
   const has = (key) => Boolean(env[key]);
   const tribeEnabled = String(env.ENABLE_TRIBE_RESEARCH || '').toLowerCase() === 'true';
   const tribeConfigured = has('TRIBE_API_URL');
+  const outbound = env.GPU_INFERENCE_TRANSPORT === 'outbound';
+  const bridgeKey = String(env.GPU_BRIDGE_WORKER_KEY || '');
+  const gpuConfigured = outbound
+    ? env.GPU_BRIDGE_SINGLE_REPLICA === '1' && bridgeKey.length >= 32 && bridgeKey.length <= 256
+      && !/[\r\n]/.test(bridgeKey) && has('GPU_INFERENCE_MODEL')
+    : has('GPU_INFERENCE_URL') && has('GPU_INFERENCE_KEY') && has('GPU_INFERENCE_MODEL');
+  const gpuEnabled = outbound || has('GPU_INFERENCE_URL') || has('GPU_INFERENCE_KEY') || has('GPU_INFERENCE_MODEL');
+
   return {
     totalLayers: LAYER_CATALOG.length,
     coreLayers: layersByIds(CORE_LAYER_IDS),
@@ -84,6 +93,7 @@ export function getEngineStatusSnapshot(env = {}) {
       openai: { configured: has('OPENAI_API_KEY'), status: has('OPENAI_API_KEY') ? 'configured' : 'not_configured' },
       gemini: { configured: has('GEMINI_API_KEY'), status: has('GEMINI_API_KEY') ? 'configured' : 'not_configured' },
       gemma: { configured: has('GEMMA_API_ENDPOINT'), status: has('GEMMA_API_ENDPOINT') ? 'configured' : 'not_configured' },
+      gpu: { configured: gpuConfigured, status: gpuConfigured ? 'unverified' : gpuEnabled ? 'invalid_configuration' : 'not_configured' },
       tribe: {
         configured: tribeConfigured,
         enabled: tribeEnabled,
@@ -91,6 +101,7 @@ export function getEngineStatusSnapshot(env = {}) {
         researchOnly: true,
         commercialUse: false,
       },
+
     },
   };
 }
@@ -181,34 +192,44 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
   };
 }
 
+// Layers 41/42/68 are the rewrite layers that actually have an implementation.
+// The previous version of this list also cited 88 and 89, which exist only as
+// names in layerCatalog — citing them made the trace look deeper than the code.
+const REWRITE_LAYER_IDS = [41, 42, 68];
+
 export function createRewriteFromLayerStack(content, goal = 'trust') {
-  const text = String(content || '').replace(/\s+/g, ' ').trim();
-  if (!text) return { content: '', changes: [], layersUsed: layersByIds([41, 42, 68, 88, 89]) };
-  const proofLine = goal === 'curiosity'
-    ? 'Open with the unanswered question, then earn the click with proof.'
-    : goal === 'reduce-risk'
-      ? 'Keep urgency only where there is a clear reason for it.'
-      : goal === 'clarity'
-        ? 'Name the audience, outcome and next action in one clean sequence.'
-        : 'Lead with proof before the ask.';
-  const softened = text
-    .replace(/\blast chance\b/gi, 'a useful moment')
-    .replace(/\bact now\b/gi, 'see whether it fits')
-    .replace(/\bsecret\b/gi, 'practical signal')
-    .replace(/\bguaranteed\b/gi, 'designed to help');
-  const evidence = analyzeEvidenceGaps({ content: text, context: detectGenre(text) });
-  const proofClose = evidence.topRecommendation
-    ? `${evidence.topRecommendation.recommendedEdit}\nMost valuable proof: ${evidence.topRecommendation.mostValuableProof.slice(0, 3).join(' ')}`
-    : 'Keep every commercial claim bounded, checkable, and adjacent to its supporting evidence.';
+  const plan = createRewritePlan(content, goal);
+  if (!plan.content) return { content: '', changes: [], patches: [], layersUsed: layersByIds(REWRITE_LAYER_IDS) };
+
+  const context = analyzeContentLocally({ content: plan.content, forceFallback: true });
+  const primary = context.recommendations?.[0];
+
+  // Merge decision, kept from the coherence-landing branch: a trust rewrite
+  // appends the ranked proof the evidence-gap analysis asks for when the
+  // strongest gap is a price claim — the one class where the missing proof is
+  // objectively nameable. Every other case keeps the clean copy; the judgement
+  // call stays in `remaining` rather than being pasted into the user's
+  // publishable text as a template sentence.
+  let finalContent = plan.content;
+  if (goal === 'trust') {
+    const evidence = analyzeEvidenceGaps({ content: plan.content, context: detectGenre(plan.content) });
+    const top = evidence.topRecommendation;
+    if (top && evidence.gaps?.[0]?.classification === 'price_claim') {
+      finalContent = `${plan.content}\n\n${top.recommendedEdit}\nMost valuable proof: ${top.mostValuableProof.slice(0, 3).join(' ')}`;
+    }
+  }
+
   return {
-    content: `${proofLine}\n\n${softened}\n\n${proofClose}`,
-    changes: [
-      'Layer 42 Counter-Draft softened pressure language.',
-      'Layer 41 Refutation Library preserved the claim but asked for evidence.',
-      'Layer 68 Tone Shifter kept the intent while reducing manipulation risk.',
-      'Layer 88 Persona Simulator checked that the rewrite remains readable to a cautious buyer.',
-    ],
-    layersUsed: layersByIds([41, 42, 68, 88, 89]),
+    content: finalContent,
+    // Each entry describes an edit that was actually made to the text, so the
+    // change log can be checked against the diff rather than taken on faith.
+    changes: plan.changes,
+    patches: plan.patches,
+    appliedCount: plan.appliedCount,
+    note: plan.note,
+    // What the mechanical pass cannot do — the judgement call left for the user.
+    remaining: primary ? `${primary.title}: ${primary.rewriteHint}` : '',
+    layersUsed: layersByIds(REWRITE_LAYER_IDS),
   };
 }
 

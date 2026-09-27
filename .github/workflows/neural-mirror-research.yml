@@ -1,0 +1,233 @@
+name: Neural Mirror Research
+
+on:
+  pull_request:
+    paths:
+      - 'neural-mirror/**'
+      - 'brainsnn-r3f-app/Dockerfile'
+      - 'brainsnn-r3f-app/railway.toml'
+      - 'brainsnn-r3f-app/package.json'
+      - 'brainsnn-r3f-app/package-lock.json'
+      - 'brainsnn-r3f-app/brand-brain-preload.cjs'
+      - 'brainsnn-r3f-app/src/features/results/OutcomeLearningPanel.jsx'
+      - 'brainsnn-r3f-app/src/lib/neuralMirror*'
+      - 'brainsnn-r3f-app/src/lib/researchDirector*'
+      - 'brainsnn-r3f-app/src/lib/outcomeLearning*'
+      - 'brainsnn-r3f-app/src/lib/outcomeSync*'
+      - '.github/workflows/neural-mirror-research.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'neural-mirror/**'
+      - 'brainsnn-r3f-app/Dockerfile'
+      - 'brainsnn-r3f-app/railway.toml'
+      - 'brainsnn-r3f-app/package.json'
+      - 'brainsnn-r3f-app/package-lock.json'
+      - 'brainsnn-r3f-app/brand-brain-preload.cjs'
+      - 'brainsnn-r3f-app/src/features/results/OutcomeLearningPanel.jsx'
+      - 'brainsnn-r3f-app/src/lib/neuralMirror*'
+      - 'brainsnn-r3f-app/src/lib/researchDirector*'
+      - 'brainsnn-r3f-app/src/lib/outcomeLearning*'
+      - 'brainsnn-r3f-app/src/lib/outcomeSync*'
+      - '.github/workflows/neural-mirror-research.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu-research-self-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: neural-mirror/requirements.txt
+      - name: Install research dependencies
+        run: python -m pip install -r neural-mirror/requirements.txt
+      - name: Compile research package
+        run: python -m compileall -q neural-mirror
+      - name: Run independent Neural Mirror CPU self-test
+        env:
+          PYTHONPATH: neural-mirror
+        run: python neural-mirror/scripts/self_test.py
+      - name: Verify Research Director proposal path
+        env:
+          PYTHONPATH: neural-mirror
+        run: |
+          tmpdir="$(mktemp -d)"
+          python neural-mirror/scripts/propose.py --registry "$tmpdir/experiments.sqlite" > "$tmpdir/proposal.json"
+          python - "$tmpdir/proposal.json" <<'PY'
+          import json, sys
+          proposal = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert proposal['requiresApproval'] is True
+          assert proposal['decisionAuthority'] == 'held-out benchmark'
+          assert proposal['proposedExperiment']['model']['family'] == 'ridge'
+          print('RESEARCH_DIRECTOR_SELF_TEST_OK')
+          PY
+
+  web-contract-and-fallback-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - name: Install web dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: MCP smoke
+        run: cd mcp-server && npm ci --no-audit --no-fund && npm run smoke
+      - name: Start production bundle with explicit ephemeral fallback
+        env:
+          NODE_ENV: production
+          PORT: '18080'
+          BRAND_BRAIN_MEMORY_FALLBACK: 'true'
+        run: |
+          npm start > /tmp/brainsnn-server.log 2>&1 &
+          echo $! > /tmp/brainsnn-server.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/brainsnn-server.log
+          exit 1
+      - name: Exercise Brand Brain HTTP contract
+        run: |
+          cookie=/tmp/brainsnn-ci-cookie.txt
+          status=$(curl -fsS -c "$cookie" -b "$cookie" http://127.0.0.1:18080/api/v1/brand-brain/status)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok) process.exit(1);" "$status"
+
+          record='{"record":{"id":"ci-brand-brain-record","schemaVersion":"brainsnn.outcome.v0.1","brandId":"ci","brandName":"CI","creativeLabel":"CI smoke","savedAt":"2026-08-24T12:00:00.000Z","metric":{"id":"roas","value":2.5},"signature":{"schemaVersion":"brainsnn.signature.v0.2","features":{}}}}'
+          created=$(curl -fsS -c "$cookie" -b "$cookie" -H 'content-type: application/json' -d "$record" http://127.0.0.1:18080/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.record?.id!=='ci-brand-brain-record') process.exit(1);" "$created"
+
+          listed=$(curl -fsS -c "$cookie" -b "$cookie" http://127.0.0.1:18080/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || !p.records?.some(r=>r.id==='ci-brand-brain-record')) process.exit(1);" "$listed"
+
+          deleted=$(curl -fsS -c "$cookie" -b "$cookie" -X DELETE http://127.0.0.1:18080/api/v1/brand-brain/outcomes/ci-brand-brain-record)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.id!=='ci-brand-brain-record') process.exit(1);" "$deleted"
+
+          listed_after=$(curl -fsS -c "$cookie" -b "$cookie" http://127.0.0.1:18080/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.records?.some(r=>r.id==='ci-brand-brain-record')) process.exit(1);" "$listed_after"
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/brainsnn-server.log || true
+
+  postgres-persistence-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: brainsnn_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d brainsnn_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/brainsnn_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Build exact production Docker image
+        run: docker build -t brainsnn-postgres-ci brainsnn-r3f-app
+      - name: Start production image against real Postgres
+        run: |
+          docker run -d --name brainsnn-postgres-ci --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e BRAND_BRAIN_MEMORY_FALLBACK=false \
+            -e NODE_ENV=production \
+            -e PORT=18082 \
+            brainsnn-postgres-ci
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18082/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs brainsnn-postgres-ci
+          exit 1
+      - name: Exercise durable Brand Brain persistence
+        run: |
+          set -euo pipefail
+          cookie=/tmp/brainsnn-postgres-cookie.txt
+          id="ci-postgres-$(date +%s%N)"
+
+          status=$(curl -fsS -c "$cookie" -b "$cookie" http://127.0.0.1:18082/api/v1/brand-brain/status)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.storage!=='postgres' || p.persistence!=='server-persistent') process.exit(1);" "$status"
+
+          record=$(node -e "console.log(JSON.stringify({record:{id:process.argv[1],schemaVersion:'brainsnn.outcome.v0.1',brandId:'ci-postgres',brandName:'CI Postgres',creativeLabel:\"Apostrophe's JSON smoke\",savedAt:new Date().toISOString(),metric:{id:'roas',value:2.5},signature:{schemaVersion:'brainsnn.signature.v0.2',features:{note:\"quote ' and colon : survive\"}}}}))" "$id")
+          created=$(curl -fsS -c "$cookie" -b "$cookie" -H 'content-type: application/json' -d "$record" http://127.0.0.1:18082/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.storage!=='postgres' || p.record?.id!==process.argv[2]) process.exit(1);" "$created" "$id"
+
+          listed=$(curl -fsS -c "$cookie" -b "$cookie" http://127.0.0.1:18082/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.storage!=='postgres' || !p.records?.some(r=>r.id===process.argv[2])) process.exit(1);" "$listed" "$id"
+
+          listed_fresh=$(curl -fsS -b "$cookie" http://127.0.0.1:18082/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.records?.some(r=>r.id===process.argv[2])) process.exit(1);" "$listed_fresh" "$id"
+
+          table=$(psql "$DATABASE_URL" -Atqc "SELECT to_regclass('public.brainsnn_brand_outcomes')::text")
+          test "$table" = "brainsnn_brand_outcomes"
+
+          deleted=$(curl -fsS -c "$cookie" -b "$cookie" -X DELETE "http://127.0.0.1:18082/api/v1/brand-brain/outcomes/$id")
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok || p.storage!=='postgres' || p.id!==process.argv[2]) process.exit(1);" "$deleted" "$id"
+
+          listed_after=$(curl -fsS -c "$cookie" -b "$cookie" http://127.0.0.1:18082/api/v1/brand-brain/outcomes)
+          node -e "const p=JSON.parse(process.argv[1]); if(p.records?.some(r=>r.id===process.argv[2])) process.exit(1);" "$listed_after" "$id"
+
+          remaining=$(psql "$DATABASE_URL" -Atqc "SELECT COUNT(*) FROM brainsnn_brand_outcomes WHERE record_id = '$(printf '%s' "$id" | sed "s/'/''/g")'")
+          test "$remaining" = "0"
+          echo "POSTGRES_PERSISTENCE_SMOKE_OK"
+      - name: Show Postgres-backed server log on failure
+        if: failure()
+        run: docker logs brainsnn-postgres-ci || true
+
+  production-container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard all Railway production preloads and Docker parity
+        run: node --test brainsnn-r3f-app/sponsorship/tests/startup.test.cjs
+      - name: Build production Docker image
+        run: docker build -t brainsnn-neural-mirror-ci brainsnn-r3f-app
+      - name: Verify psql runtime dependency exists
+        run: docker run --rm brainsnn-neural-mirror-ci psql --version
+      - name: Start production container
+        run: |
+          docker run -d --name brainsnn-ci -p 18081:8080 \
+            -e BRAND_BRAIN_MEMORY_FALLBACK=true \
+            brainsnn-neural-mirror-ci
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs brainsnn-ci
+          exit 1
+      - name: Verify Brand Brain preload route exists in container
+        run: |
+          payload=$(curl -fsS http://127.0.0.1:18081/api/v1/brand-brain/status)
+          node -e "const p=JSON.parse(process.argv[1]); if(!p.ok) process.exit(1);" "$payload"
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs brainsnn-ci || true

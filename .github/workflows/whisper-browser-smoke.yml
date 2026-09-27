@@ -1,0 +1,55 @@
+name: Whisper Browser Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'brainsnn-r3f-app/src/lib/localTranscription.js'
+      - 'brainsnn-r3f-app/src/lib/localTranscription.test.js'
+      - 'brainsnn-r3f-app/src/features/scan/MediaInputPanel.jsx'
+      - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.html'
+      - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.mjs'
+      - '.github/workflows/whisper-browser-smoke.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'brainsnn-r3f-app/src/lib/localTranscription.js'
+      - 'brainsnn-r3f-app/src/lib/localTranscription.test.js'
+      - 'brainsnn-r3f-app/src/features/scan/MediaInputPanel.jsx'
+      - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.html'
+      - 'brainsnn-r3f-app/scripts/browser-whisper-smoke.mjs'
+      - '.github/workflows/whisper-browser-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  whisper-browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Browser and runtime info
+        run: |
+          node --version
+          (google-chrome-stable --version || google-chrome --version || chromium --version || chromium-browser --version)
+
+      - name: Run real Whisper browser smoke
+        run: node scripts/browser-whisper-smoke.mjs

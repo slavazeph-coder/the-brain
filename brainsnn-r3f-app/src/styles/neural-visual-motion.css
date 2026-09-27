@@ -1,0 +1,27 @@
+/* Motion corrections and centered transforms for the BrainSNN visual pass. */
+
+@keyframes nv-core-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.92);
+    box-shadow: 0 0 0 0 rgba(89, 246, 255, 0), 0 0 32px rgba(89, 246, 255, 0.18);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.03);
+    box-shadow: 0 0 0 18px rgba(89, 246, 255, 0.03), 0 0 62px rgba(89, 246, 255, 0.42);
+  }
+}
+
+@keyframes nv-orbit-centered {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.creative-readout-brain::before {
+  animation: nv-orbit-centered 34s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creative-readout-brain::before {
+    animation: none !important;
+  }
+}

@@ -1,0 +1,52 @@
+name: GT3 lab verification
+on:
+  pull_request:
+    paths:
+      - 'brainsnn-r3f-app/sponsorship/gt3/**'
+      - 'brainsnn-r3f-app/sponsorship/tests/gt3.test.cjs'
+      - '.github/workflows/gt3-lab.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'brainsnn-r3f-app/sponsorship/gt3/**'
+      - '.github/workflows/gt3-lab.yml'
+permissions:
+  contents: read
+concurrency:
+  group: gt3-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gt3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: brainsnn-r3f-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: node sponsorship/gt3/tidy-build.cjs && node sponsorship/gt3/build.cjs
+      - run: node --test sponsorship/tests/gt3.test.cjs sponsorship/gt3/tests/checkout.test.cjs sponsorship/gt3/tests/direct.test.cjs
+      - run: npx playwright install --with-deps chromium
+      - name: Native model, glass menus, examples and isolated direct checkout
+        run: node sponsorship/gt3/tests/native.mjs
+      - name: Advertiser clarity, sample-art safeguards and real model
+        run: node sponsorship/gt3/tests/buyer.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gt3-native-review
+          path: |
+            brainsnn-r3f-app/sponsorship/gt3/public/
+            brainsnn-r3f-app/sponsorship/gt3/reports/
+            brainsnn-r3f-app/sponsorship/gt3/viewer.source.js
+            brainsnn-r3f-app/sponsorship/gt3/commerce.cjs
+            brainsnn-r3f-app/sponsorship/gt3/server.cjs
+            brainsnn-r3f-app/sponsorship/gt3/tests/
+            brainsnn-r3f-app/sponsorship/gt3/CHECKOUT-*.md
+          retention-days: 7
