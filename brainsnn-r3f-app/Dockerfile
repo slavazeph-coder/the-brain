@@ -1,5 +1,14 @@
-# BrainSNN: existing TypeScript/Vite app plus additive sponsor studios.
+# BrainSNN — TypeScript/Vite SPA served by a bundled Express server,
+# plus additive sponsor studios.
+#
+# Railway's service is rooted at this directory, so this Dockerfile is what
+# production builds. The repo-root Dockerfile mirrors it for repo-root builds.
+#
+#   docker build -t brainsnn .
+#   docker run -p 8080:8080 --rm -e PORT=8080 brainsnn
+
 FROM node:22-slim
+
 WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends postgresql-client \

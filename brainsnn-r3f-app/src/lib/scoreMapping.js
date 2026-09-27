@@ -54,6 +54,7 @@ export function deriveExecutiveVerdict(result = {}) {
       ? 'The promise needs clearer evidence.'
       : 'The close can be more specific.');
   const bestNextMove = firstRecommendation?.rewriteHint || (risk >= 62
+
     ? 'Keep the opening. Replace unsupported urgency with proof.'
     : trust < 55
       ? 'Add a concrete reason to believe the claim.'

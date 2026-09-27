@@ -53,7 +53,7 @@ export function LayerTracePanel({ result }) {
           </dl>
         </article>
         <article>
-          <h3>TRIBE projection</h3>
+          <h3>Broad-region compatibility view</h3>
           <dl>
             <div><dt>Status</dt><dd>{tribe?.status || tribe?.source || 'not_configured'}</dd></div>
             <div><dt>Scenario</dt><dd>{tribe?.scenario || 'Organic Baseline'}</dd></div>

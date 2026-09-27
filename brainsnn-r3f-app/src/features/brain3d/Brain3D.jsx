@@ -135,7 +135,7 @@ function Brain3DInner({ mode, result, presetName, paused, ariaLabel, onRegionSel
   }, [state.selectedRegion]);
 
   return (
-    <div ref={wrapRef} className={`brain3d brain3d-${mode}`} role="img" aria-label={ariaLabel || 'Animated 3D brain scan visualization'}>
+    <div ref={wrapRef} className={`brain3d brain3d-${mode}`} role="img" aria-label={ariaLabel || 'Animated reference brain response visualization'}>
       <BrainScene
         simulation={state}
         controls={controls}

@@ -24,4 +24,23 @@ describe('localStorage memory migration', () => {
     expect(cleared).toHaveLength(0);
     expect(loadMemory()).toHaveLength(0);
   });
+
+  it('does not duplicate the canonical dense result in the original version', () => {
+    const result = analyzeContentLocally({ content: 'A short creative with a deterministic response timeline.' });
+    result.neural = {
+      schemaVersion: 'brainsnn.neural-prediction.v1',
+      timeline: [{ startMs: 0, endMs: 1500, activations: Array.from({ length: 1000 }, (_, index) => index / 1000) }],
+    };
+    const [saved] = saveMemory([makeMemoryRecord(result)]);
+    expect(saved.result.neural.timeline[0].activations).toHaveLength(1000);
+    expect(saved.versions[0].result).toBe(undefined);
+  });
+
+  it('does not throw when browser persistence rejects a write', () => {
+    const original = window.localStorage.setItem;
+    window.localStorage.setItem = () => { throw new Error('quota'); };
+    const result = analyzeContentLocally({ content: 'Persistence failure must not interrupt a scan.' });
+    expect(saveMemory([makeMemoryRecord(result)])).toEqual([]);
+    window.localStorage.setItem = original;
+  });
 });

@@ -141,6 +141,10 @@ export class SpendCeiling {
 export const LIMITS = Object.freeze({
   // Billable: every allowed request can reach Gemini.
   analyze: { limit: 12, windowMs: 60_000 },
+  // CPU work today and a potentially billable remote worker later. Keeping a
+  // separate tier means enabling a GPU cannot silently inherit the generous
+  // local-only floor.
+  neural: { limit: 20, windowMs: 60_000 },
   // Sends mail to an address the caller chooses.
   magicLink: { limit: 3, windowMs: 60 * 60_000 },
   // Everything else: local computation only, but still worth bounding.
@@ -166,6 +170,9 @@ export const LIMITS = Object.freeze({
  */
 export const DEDICATED_ROUTES = Object.freeze({
   '/api/analyze': 'analyze',
+  '/api/v1/multimodal/ingest': 'neural',
+  '/api/v1/neural/predict': 'neural',
+  '/api/neural/decode': 'neural',
   '/api/auth/magic-link': 'magicLink',
   '/api/events': 'events',
 });
@@ -209,6 +216,10 @@ export function resolveGeminiCeiling(env = {}) {
  */
 export const BODY_LIMITS = Object.freeze({
   analyze: '64kb',
+  // Structured observations only. Raw/base64 media is deliberately rejected
+  // by the V1 schema, so this remains bounded without preventing a 1000-parcel
+  // fixture or a few hundred temporal observations.
+  neural: '512kb',
   events: '16kb',
   general: '256kb',
 });

@@ -16,9 +16,11 @@ import { AffectPanel } from './AffectPanel.jsx';
 import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
 import { InputFusionPanel } from './InputFusionPanel.jsx';
+import { NeuralMirrorPanel } from './NeuralMirrorPanel.jsx';
 import { ResultFeedback } from './ResultFeedback.jsx';
 import { CreativeNeuralReadout } from './CreativeNeuralReadout.jsx';
 import { ClientMultimodalBrief } from './ClientMultimodalBrief.jsx';
+
 import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
@@ -112,7 +114,15 @@ export function ResultsWorkspace({ result, media, onImprove, onSave, onQueue, on
         <ResultsTabs active={tab} onChange={selectTab} />
         <TabPanel id="overview" active={tab}>
           {!isVideoReadout ? <InputFusionPanel result={result} /> : null}
+          <NeuralMirrorPanel
+            prediction={result.neural}
+            modalityStatus={result.modalityStatus}
+            events={result.neuralEvents}
+            scanTrace={result.scanTrace}
+            computeTrace={result.computeTrace}
+          />
           {!isVideoReadout ? <BrainSignalView result={result} /> : null}
+
           <DecisionScorecard result={result} />
           {isVideoReadout ? <InputFusionPanel result={result} /> : null}
         </TabPanel>

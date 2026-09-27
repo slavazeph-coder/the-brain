@@ -174,6 +174,7 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
           Each fix below edits your text where the scan found the problem. Nothing is added
           that you did not write, so the finished draft is safe to paste straight into a send field.
         </p>
+
       </header>
 
       <RewriteControls

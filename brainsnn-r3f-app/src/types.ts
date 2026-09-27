@@ -25,13 +25,176 @@ export interface CrumbModelStats {
    perplexityDelta: number;   // % comparison to standard transformer
 }
 
+export type MultimodalSourceType = 'text' | 'video' | 'audio' | 'image' | 'mixed';
+export type NeuralModality = 'vision' | 'audio' | 'language';
+
+export interface ComputeDevice {
+  id?: string;
+  type: 'cpu' | 'cuda' | 'remote';
+  name: string;
+  memoryMb?: number;
+  capabilities?: string[];
+}
+
+export interface MultimodalObservation {
+  timestampMs: number;
+  speechPresent?: boolean;
+  [feature: string]: number | boolean | undefined;
+}
+
+export interface MultimodalInput {
+  schemaVersion: 'brainsnn.multimodal.v1';
+  id: string;
+  source: {
+    type: MultimodalSourceType;
+    filename?: string;
+    url?: string;
+    durationMs?: number;
+    mimeType?: string;
+  };
+  text?: {
+    transcript?: string;
+    language?: string;
+  };
+  temporal?: {
+    startMs: number;
+    endMs: number;
+    segments?: TemporalSegment[];
+  };
+  observations?: {
+    vision?: MultimodalObservation[];
+    audio?: MultimodalObservation[];
+  };
+  signals?: {
+    vision?: MultimodalObservation[];
+    audio?: MultimodalObservation[];
+  };
+  provenance: {
+    userProvided: boolean;
+    extractorVersions: Record<string, string>;
+  };
+}
+
+export interface TemporalSegment {
+  id?: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  text?: string;
+  features?: {
+    sceneChange?: number;
+    audioEnergy?: number;
+    speechPresent?: boolean;
+    visualChange?: number;
+  };
+}
+
+export interface NeuralTimelineFrame {
+  startMs: number;
+  endMs: number;
+  activations: number[];
+  confidence: number;
+  modalityContribution?: Partial<Record<NeuralModality, number>>;
+}
+
+export interface NeuralPrediction {
+  schemaVersion: 'brainsnn.neural-prediction.v1';
+  model: {
+    id: string;
+    version: string;
+    device: string | ComputeDevice;
+    status?: string;
+  };
+  modelStatus?: string;
+  referenceSpace: {
+    type: 'abstract' | 'parcel' | 'fsaverage' | 'mni152';
+    atlas?: string;
+    parcelCount?: number;
+  };
+  timeline: NeuralTimelineFrame[];
+  summary: {
+    meanActivation: number;
+    peakActivation: number;
+    peakTimestampMs: number;
+    temporalVariance: number;
+  };
+  evidence: {
+    method: string;
+    validatedAgainstNeuralData: boolean;
+    benchmarkId?: string;
+    confidenceMethod: string;
+  };
+  provenance: {
+    disclaimer: string;
+    commercialUse: boolean;
+    researchOnly: boolean;
+    [metadata: string]: unknown;
+  };
+  compatibilityViews?: {
+    broadRegions7?: {
+      mappingId: string;
+      sourceSpace: string;
+      derived: boolean;
+      regions: Record<string, number>;
+      provenance: Record<string, unknown>;
+      disclaimer: string;
+    };
+    [view: string]: unknown;
+  };
+  disclaimer: string;
+}
+
+export interface NeuralTemporalEvent {
+  timestampMs: number;
+  type: string;
+  confidence: number;
+  description: string;
+}
+
+export interface ModalityStatus {
+  status: 'available' | 'unavailable' | 'failed' | 'not_configured' | 'not_reported' | string;
+  reason?: string;
+  implementation?: string;
+  extractor?: string | Record<string, unknown>;
+  [metadata: string]: unknown;
+}
+
+export interface ComputeTraceEntry {
+  engine: string;
+  status: string;
+  [metadata: string]: unknown;
+}
+
+export interface StimulusSummary {
+  id: string;
+  source: MultimodalInput['source'];
+  temporal: {
+    startMs: number;
+    endMs: number;
+    segmentCount: number;
+    segments: TemporalSegment[];
+  };
+}
+
+export interface EvidenceGapResult {
+  schemaVersion: 'brainsnn.evidence-gaps.v1';
+  context: string;
+  claims: Array<Record<string, unknown>>;
+  evidenceInventory: Array<Record<string, unknown>>;
+  gaps: Array<Record<string, unknown>>;
+  recommendations: Array<Record<string, unknown>>;
+  topRecommendation: Record<string, unknown> | null;
+  summary: string;
+  limitations: string;
+}
+
 export interface AnalysisResult {
   id: string;
   timestamp: string;
   title: string;
   url?: string;
   rawContent: string;
-  contentType: 'text' | 'url' | 'video';
+  contentType: 'text' | 'url' | 'webpage' | 'video' | 'audio' | 'image' | 'mixed' | 'neural';
   metrics: BrainMetrics;
   attentionCurve: AttentionDatapoint[];
   riskRating: 'Low' | 'Medium' | 'High' | 'Critical';
@@ -39,12 +202,35 @@ export interface AnalysisResult {
   viralScore: number;         // 0-100
   gaugeGapScore: number;      // -50 to +50 or 0-100 (sentiment deviation/manipulatory intent)
   summary: string;
-  insights: string[];
-  recommendations: string[];
+  insights: Array<string | { label?: string; text?: string; timestampMs?: number }>;
+  recommendations: Array<string | {
+    id?: string;
+    goal?: string;
+    title?: string;
+    rewriteHint?: string;
+    rationale?: string;
+    text?: string;
+    recommendedEdit?: string;
+    mostValuableProof?: string[];
+    timestampMs?: number;
+  }>;
   payloadType: string;        // e.g. "Sensory Burst", "Sensory Salience", "Fear Cascade", "Organic Baseline"
   confidence: number;         // 0-100
   crumbModelStats: CrumbModelStats;
   isFallback?: boolean;
+  neural?: NeuralPrediction | null;
+  neuralStatus?: string | ({ status: string; reason?: string } & Record<string, unknown>);
+  modalityStatus?: Partial<Record<NeuralModality, ModalityStatus | string>>;
+  neuralEvents?: NeuralTemporalEvent[];
+  scanTrace?: Array<string | { stage?: string; event?: string; status?: string }>;
+  computeTrace?: ComputeTraceEntry[];
+  sourceLabels?: { neural?: string; creativeSignals?: string };
+  stimulus?: StimulusSummary;
+  multimodalInput?: MultimodalInput;
+  multimodal?: Record<string, unknown>;
+  creativeSignals?: Record<string, unknown>;
+  evidenceGaps?: EvidenceGapResult;
+  telemetry?: Record<string, unknown>;
   layersUsed?: Array<{ id: number; name: string; group: string; blurb: string }>;
   engineTrace?: Array<{ stage: string; status: string; provider?: string; note: string }>;
   firewallSignals?: {
@@ -115,10 +301,24 @@ export interface AnalysisResult {
     disclaimer: string;
   };
   receipt?: {
+    schemaVersion?: string;
     id: string;
-    contentHash: string;
-    resultHash: string;
+    inputHash?: string;
+    contentHash?: string;
+    resultHash?: string;
     solitonHash?: string;
+    featureHash?: string;
+    neuralPredictionHash?: string;
+    deterministicFingerprint?: string;
+    combinedReceiptId?: string;
+    legacyReceiptId?: string | null;
+    creativeReceiptId?: string | null;
+    modelVersion?: string;
+    model?: { id: string; version: string };
+    extractorVersions?: Record<string, string>;
+    device?: string | ComputeDevice;
+    pipelineVersion?: string;
+    randomSeed?: string | number;
     generatedAt: string;
     disclaimer: string;
   };

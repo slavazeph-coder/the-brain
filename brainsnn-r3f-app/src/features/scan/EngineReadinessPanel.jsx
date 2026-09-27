@@ -49,6 +49,7 @@ export function EngineReadinessPanel() {
         <p className="bsn-note">
           Scans are sent to BrainSNN's server. Connected AI providers may process the content;
           the built-in engine supplies a fallback when a provider is unavailable.
+
         </p>
       </div>
       <div className="readiness-grid">
@@ -66,8 +67,10 @@ export function EngineReadinessPanel() {
         />
         <ReadinessItem
           icon={RadioTower}
-          label="TRIBE projection"
-          detail={status?.engines?.tribe?.configured ? 'external service connected' : 'built-in projection layer'}
+          label="TRIBE research reference"
+          detail={status?.engines?.tribe?.enabled && status?.engines?.tribe?.configured
+            ? 'external research service enabled'
+            : 'disabled; commercial scans do not call it'}
           status={statusLabel(status?.engines?.tribe)}
         />
         <ReadinessItem

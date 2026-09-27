@@ -1,6 +1,6 @@
 import { describe, expect, it } from '../test/tinyVitest.js';
 import { LAYER_CATALOG } from './layerCatalog.js';
-import { createAutopsyFromLayerStack, getEngineStatusSnapshot, runLayerRouter } from './layerRouter.js';
+import { createAutopsyFromLayerStack, createRewriteFromLayerStack, getEngineStatusSnapshot, runLayerRouter } from './layerRouter.js';
 import { analyzeContentLocally } from './analysisEngine.js';
 
 describe('BrainSNN layer router', () => {
@@ -19,6 +19,7 @@ describe('BrainSNN layer router', () => {
     expect(enriched.firewallSignals.manipulationPressure).toBeGreaterThanOrEqual(0);
     expect(enriched.tribeProjection.regions.AMY).toBeGreaterThanOrEqual(0);
     expect(enriched.receipt.id).toMatch(/^bsnn-/);
+    expect(enriched.evidenceGapAnalysis.schemaVersion).toBe('brainsnn.evidence-gaps.v1');
   });
 
   it('attaches a deterministic 39 Hz soliton field to every scan', () => {
@@ -53,6 +54,18 @@ describe('BrainSNN layer router', () => {
     expect(status.totalLayers).toBe(103);
     expect(status.engines.stripe.configured).toBe(true);
     expect(status.engines.tribe.configured).toBe(true);
+    expect(status.engines.tribe.enabled).toBe(false);
+    expect(status.engines.tribe.researchOnly).toBe(true);
+    expect(status.engines.tribe.commercialUse).toBe(false);
+    expect(status.engines.tribe.status).toBe('disabled');
+  });
+
+  it('requires an explicit research flag before reporting TRIBE research configured', () => {
+    const status = getEngineStatusSnapshot({
+      TRIBE_API_URL: 'https://example.com',
+      ENABLE_TRIBE_RESEARCH: 'true',
+    });
+    expect(status.engines.tribe.status).toBe('configured_research_only');
   });
 
   it('reports GPU configuration as unverified until the server checks it', () => {
@@ -83,5 +96,15 @@ describe('BrainSNN layer router', () => {
     expect(['left', 'right', 'tie']).toContain(autopsy.winner);
     expect(autopsy.layersUsed.length).toBeGreaterThan(4);
     expect(autopsy.left.layersUsed.length).toBeGreaterThan(8);
+  });
+
+  it('turns a price claim into context-specific proof guidance instead of a template sentence', () => {
+    const rewrite = createRewriteFromLayerStack(
+      'Security companies could pay $300+ for footage labeling.',
+      'trust',
+    );
+    expect(rewrite.content).not.toContain('Add one specific proof point before publishing.');
+    expect(rewrite.content).toContain('Minutes or hours of footage processed');
+    expect(rewrite.content).toContain('Labeling accuracy or quality-control acceptance rate');
   });
 });

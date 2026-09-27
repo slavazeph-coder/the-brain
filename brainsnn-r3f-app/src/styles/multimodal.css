@@ -202,6 +202,335 @@
   padding-top: 2px;
 }
 
+.neural-mirror-panel {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 32%, transparent);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--bsn-purple, #9c7cff) 13%, transparent), transparent 35%),
+    linear-gradient(145deg, color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 7%, transparent), color-mix(in srgb, var(--bsn-surface, #111722) 96%, transparent));
+}
+
+.neural-mirror-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--bsn-cyan, #5ee7ff), var(--bsn-purple, #9c7cff), transparent);
+}
+
+.neural-mirror-header,
+.neural-mirror-title,
+.neural-mirror-badges,
+.neural-mirror-chart-heading,
+.neural-current-window {
+  display: flex;
+  align-items: center;
+}
+
+.neural-mirror-header,
+.neural-mirror-chart-heading {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.neural-mirror-title,
+.neural-mirror-badges {
+  gap: 10px;
+}
+
+.neural-mirror-title h2,
+.neural-mirror-events h3,
+.neural-mirror-traces h3 {
+  margin: 0;
+}
+
+.neural-mirror-title h2 {
+  margin-top: 2px;
+  font-family: var(--bsn-font-display, sans-serif);
+}
+
+.neural-mirror-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 30%, transparent);
+  border-radius: 13px;
+  color: var(--bsn-cyan, #5ee7ff);
+  background: color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 9%, transparent);
+}
+
+.neural-mirror-metadata {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.neural-mirror-metadata > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.neural-mirror-metadata span,
+.neural-mirror-chart-heading span,
+.neural-current-window span,
+.neural-current-window small {
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-size: .75rem;
+}
+
+.neural-mirror-metadata strong {
+  overflow-wrap: anywhere;
+  font-size: .86rem;
+}
+
+.neural-mirror-modalities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.neural-modality {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.neural-modality > span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bsn-text-muted, #9aa4b2);
+}
+
+.neural-modality.available > span {
+  background: var(--bsn-green, #22c55e);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--bsn-green, #22c55e) 55%, transparent);
+}
+
+.neural-modality.unavailable > span {
+  background: var(--bsn-yellow, #eab308);
+}
+
+.neural-modality div {
+  display: grid;
+  min-width: 0;
+}
+
+.neural-modality small {
+  overflow-wrap: anywhere;
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-size: .74rem;
+}
+
+.neural-mirror-chart-wrap {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 17%, transparent);
+  border-radius: 15px;
+  background: rgba(2, 6, 15, 0.58);
+}
+
+.neural-mirror-chart-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.neural-mirror-chart-heading > div:last-child {
+  text-align: right;
+}
+
+.neural-mirror-chart-heading strong {
+  font-family: var(--bsn-font-mono, monospace);
+  font-size: .85rem;
+}
+
+.neural-mirror-chart {
+  display: block;
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+}
+
+.neural-chart-axis {
+  stroke: rgba(255, 255, 255, 0.13);
+  stroke-width: 1;
+}
+
+.neural-chart-line {
+  fill: none;
+  stroke: url("#neural-mirror-line");
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.neural-chart-playhead {
+  stroke: rgba(241, 241, 246, 0.46);
+  stroke-dasharray: 4 5;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.neural-mirror-chart circle {
+  fill: #070a13;
+  stroke: var(--bsn-cyan, #5ee7ff);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.neural-mirror-chart circle.active {
+  fill: var(--bsn-cyan, #5ee7ff);
+  filter: drop-shadow(0 0 5px var(--bsn-cyan, #5ee7ff));
+}
+
+.neural-mirror-playhead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-size: .76rem;
+}
+
+.neural-mirror-playhead input {
+  width: 100%;
+  accent-color: var(--bsn-cyan, #5ee7ff);
+}
+
+.neural-mirror-playhead output {
+  font-family: var(--bsn-font-mono, monospace);
+}
+
+.neural-current-window {
+  flex-wrap: wrap;
+  gap: 7px;
+  padding-top: 3px;
+}
+
+.neural-current-window svg {
+  color: var(--bsn-cyan, #5ee7ff);
+}
+
+.neural-current-window small {
+  margin-left: auto;
+  font-family: var(--bsn-font-mono, monospace);
+}
+
+.neural-mirror-events,
+.neural-mirror-traces {
+  display: grid;
+  gap: 10px;
+}
+
+.neural-mirror-events ol,
+.neural-mirror-traces ol,
+.neural-mirror-errors {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.neural-mirror-events li {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 10px 11px;
+  border-left: 2px solid color-mix(in srgb, var(--bsn-cyan, #5ee7ff) 60%, transparent);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.neural-mirror-events time,
+.neural-mirror-events li > span {
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-family: var(--bsn-font-mono, monospace);
+  font-size: .74rem;
+}
+
+.neural-mirror-events p {
+  margin: 3px 0 0;
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-size: .82rem;
+}
+
+.neural-mirror-traces {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.neural-mirror-traces > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.neural-mirror-traces li {
+  overflow-wrap: anywhere;
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-family: var(--bsn-font-mono, monospace);
+  font-size: .73rem;
+}
+
+.neural-mirror-claim-boundary {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--bsn-yellow, #eab308) 28%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bsn-yellow, #eab308) 5%, transparent);
+}
+
+.neural-mirror-claim-boundary strong,
+.neural-mirror-not-measured {
+  color: var(--bsn-yellow, #eab308);
+  font-family: var(--bsn-font-mono, monospace);
+  font-size: .76rem;
+  letter-spacing: .06em;
+}
+
+.neural-mirror-disclaimer {
+  margin: 0;
+  color: var(--bsn-text-muted, #9aa4b2);
+  font-size: .82rem;
+}
+
+.neural-mirror-invalid {
+  border-color: color-mix(in srgb, var(--bsn-yellow, #eab308) 34%, transparent);
+}
+
+.neural-mirror-invalid > p,
+.neural-mirror-errors {
+  color: var(--bsn-text-muted, #9aa4b2);
+}
+
+.neural-mirror-errors {
+  padding-left: 20px;
+  list-style: disc;
+}
+
 .result-feedback {
   display: grid;
   gap: 12px;
@@ -305,6 +634,55 @@
 
   .fusion-result-card {
     padding: 16px;
+  }
+
+  .neural-mirror-panel {
+    padding: 16px;
+  }
+
+  .neural-mirror-header,
+  .neural-mirror-chart-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .neural-mirror-badges {
+    flex-wrap: wrap;
+  }
+
+  .neural-mirror-metadata,
+  .neural-mirror-modalities,
+  .neural-mirror-traces {
+    grid-template-columns: 1fr;
+  }
+
+  .neural-mirror-chart-heading > div:last-child {
+    text-align: left;
+  }
+
+  .neural-mirror-chart {
+    height: 170px;
+  }
+
+  .neural-mirror-playhead {
+    grid-template-columns: 1fr auto;
+  }
+
+  .neural-mirror-playhead span {
+    grid-column: 1 / -1;
+  }
+
+  .neural-current-window small {
+    width: 100%;
+    margin-left: 23px;
+  }
+
+  .neural-mirror-events li {
+    grid-template-columns: 78px minmax(0, 1fr);
+  }
+
+  .neural-mirror-events li > span {
+    grid-column: 2;
   }
 
   .result-feedback-options {

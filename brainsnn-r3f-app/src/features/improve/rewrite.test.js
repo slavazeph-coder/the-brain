@@ -111,4 +111,11 @@ describe('apply-all respects the selected goal (reported by review on #138)', ()
     // Every goal's set is drawn from the plan, never invented.
     for (const patch of [...risk, ...clarity]) expect(patches.includes(patch)).toBe(true);
   });
+
+  it('uses claim-specific proof guidance for a trust rewrite', () => {
+    const rewrite = createRewrite('Security companies could pay $300+ for footage labeling.', 'trust');
+    expect(rewrite).not.toContain('Add one concrete proof point');
+    expect(rewrite).toContain('Minutes or hours of footage processed');
+    expect(rewrite).toContain('visible example');
+  });
 });

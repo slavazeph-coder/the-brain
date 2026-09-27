@@ -15,13 +15,16 @@ import { computeSolitonField, exploreSolitonField } from '../src/lib/solitonLaye
 import { computeFirewall } from '../src/lib/firewallLayer.js';
 import { computeAffect } from '../src/lib/affectLayer.js';
 import { createReplayNeuralInput, deriveDecodeUncertainty } from '../src/lib/neuralInputGateway.js';
+import { createScanDirector } from '../src/lib/neuralMirror/index.js';
 import { compareEngineInputs, ENGINE_COMPARE_MAX_CHARS } from '../src/lib/engineComparison.js';
 import { evaluatePromotion } from '../src/lib/researchDirector.js';
+
 
 const json = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 const baseScan = (content, contentType = 'text') => analyzeContentLocally({ content, contentType, forceFallback: true });
 
-const server = new McpServer({ name: 'brainsnn', version: '0.1.0' });
+const server = new McpServer({ name: 'brainsnn', version: '0.2.0' });
+const scanDirector = createScanDirector({ env: process.env });
 
 server.tool(
   'brain_analyze',
@@ -90,6 +93,25 @@ server.tool(
   },
 );
 
+server.tool(
+  'brain_multimodal_scan',
+  'Run the CPU-first Scan Director on a bounded brainsnn.multimodal.v1 JSON input. Returns a canonical predicted Neural Mirror timeline plus separate deterministic creative signals. The default neural model is explicitly untrained and the result is not a measured brain scan.',
+  {
+    inputJson: z.string(),
+    ablation: z.enum(['vision', 'audio', 'language', 'vision+audio', 'vision+language', 'audio+language', 'all']).optional(),
+  },
+  async ({ inputJson, ablation }) => {
+    if (inputJson.length > 500_000) throw new Error('inputJson exceeds the 500,000-character MCP limit.');
+    let input;
+    try {
+      input = JSON.parse(inputJson);
+    } catch {
+      throw new Error('inputJson must be valid JSON.');
+    }
+    return json(await scanDirector.run(input, { ablation: ablation || 'all' }));
+  },
+);
+
 const transport = new StdioServerTransport();
 server.tool(
   'brain_compare',
@@ -115,4 +137,4 @@ server.tool(
 );
 
 await server.connect(transport);
-console.error('BrainSNN MCP server ready on stdio (9 tools).');
+console.error('BrainSNN MCP server ready on stdio (10 tools).');

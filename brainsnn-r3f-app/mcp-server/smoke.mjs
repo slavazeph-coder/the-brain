@@ -10,7 +10,8 @@ const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 console.log('tools:', names.join(', '));
 
-const expected = ['brain_affect', 'brain_analyze', 'brain_compare', 'brain_decode', 'brain_firewall', 'brain_layers', 'brain_promotion_check', 'brain_soliton', 'brain_soliton_explore'];
+const expected = ['brain_affect', 'brain_analyze', 'brain_compare', 'brain_decode', 'brain_firewall', 'brain_layers', 'brain_multimodal_scan', 'brain_promotion_check', 'brain_soliton', 'brain_soliton_explore'];
+
 for (const name of expected) {
   if (!names.includes(name)) throw new Error(`missing tool: ${name}`);
 }
@@ -31,6 +32,24 @@ const decode = JSON.parse((await client.callTool({ name: 'brain_decode', argumen
 console.log('brain_decode →', 'uncertainty', decode.uncertainty.band, '| firewall grade', decode.result.firewallSignals.grade);
 if (!decode.uncertainty.band || !decode.neuralInput.schemaVersion) throw new Error('brain_decode returned an incomplete envelope');
 
+const multimodal = JSON.parse((await client.callTool({
+  name: 'brain_multimodal_scan',
+  arguments: {
+    inputJson: JSON.stringify({
+      schemaVersion: 'brainsnn.multimodal.v1',
+      id: 'mcp-fixture',
+      source: { type: 'text', mimeType: 'text/plain', durationMs: 3000 },
+      text: { transcript: 'A working demonstration supports the product claim with a measured result.' },
+      provenance: { userProvided: true, extractorVersions: {} },
+    }),
+    ablation: 'language',
+  },
+})).content[0].text);
+console.log('brain_multimodal_scan →', multimodal.neural.model.id, '| windows', multimodal.neural.timeline.length);
+if (multimodal.neural.schemaVersion !== 'brainsnn.neural-prediction.v1') throw new Error('brain_multimodal_scan returned no canonical prediction');
+if (multimodal.neural.evidence.validatedAgainstNeuralData !== false) throw new Error('CPU fixture must remain explicitly unvalidated');
+if (!multimodal.neural.provenance.disclaimer) throw new Error('brain_multimodal_scan returned no machine-readable disclaimer');
+
 const compared = JSON.parse((await client.callTool({ name: 'brain_compare', arguments: {
   original: 'Guaranteed! Act now before this hidden threat ruins your business.',
   candidate: 'Test the workflow with your team. Review the source and measured limitations.',
@@ -44,6 +63,7 @@ const missingScore = JSON.parse((await client.callTool({ name: 'brain_promotion_
   metrics: { meanPearson: null, latencyMs: 100 }, benchmarkValid: true, dataLeakageDetected: false,
 } } })).content[0].text);
 if (missingScore.promote !== false) throw new Error('brain_promotion_check accepted a missing benchmark');
+
 
 await client.close();
 console.log('SMOKE_OK');

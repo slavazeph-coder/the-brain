@@ -55,11 +55,11 @@ export function ResearchDrawer() {
       <div className="research-summary">
         <article>
           <h3>Production</h3>
-          <p>Analyze, Improve, Autopsy, History, Pricing, layer traces, deterministic firewall signals, TRIBE projection, Context Memory and export.</p>
+          <p>Analyze, Improve, Autopsy, History, Pricing, layer traces, deterministic firewall signals, a broad-region compatibility view, Context Memory and export.</p>
         </article>
         <article>
           <h3>Experimental</h3>
-          <p>TRIBE live prediction, Gemma multimodal analysis, Crumb LLM physics, rule evolution, RAG, MCP bridge, EEG and benchmarks remain clearly labeled.</p>
+          <p>The manually enabled TRIBE research reference, Gemma multimodal analysis, Crumb LLM physics, rule evolution, RAG, MCP bridge, decoded-signal research adapters and benchmarks remain clearly labeled.</p>
         </article>
       </div>
       <LayerExplorer />
@@ -85,7 +85,7 @@ export function ResearchDrawer() {
           <li>Crumb LLM physics tuner and wave parameters</li>
           <li>Cognitive firewall and red-team demonstrations</li>
           <li>Legacy share-card experiments and browser extension demos</li>
-          <li>Experimental video/reel, benchmark, EEG and simulation surfaces</li>
+          <li>Experimental video/reel, benchmark, decoded-signal and simulation surfaces</li>
         </ul>
       </section>
     </div>
