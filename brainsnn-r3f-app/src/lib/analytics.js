@@ -92,6 +92,7 @@ const allowedEvents = new Set([
   'coherence_landing_viewed',
   'coherence_cta_clicked',
   'coherence_demo_played',
+  'coherence_half_switched',
   'rescue_request_submitted',
 ]);
 

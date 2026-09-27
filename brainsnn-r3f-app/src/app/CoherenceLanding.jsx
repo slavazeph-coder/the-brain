@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { track } from '../lib/analytics.js';
 
-// v3 — Apple-grade restructure per the 10-point critique (2026-09-26):
-// comparison in the first viewport; synchronized player; offer+form combined;
-// captions scrub (video plays naturally); restrained palette; honest labels.
+// v4 — frontend-design doctrine pass (2026-09-26):
+// one working comparison stage (poster play, pane labels clear of the burnt-in
+// captions, mobile half-switch on the square fixture halves), story beats
+// crossfade on a named view-timeline with mobile / reduced-motion flow fallback,
+// violet trust tag, footer nav cleanup. Honest labels and numbers unchanged from
+// v3; no merge — owner reviews previews first.
 const TERMS = [
   ['Price', '$99 per clip (USD), one round of review + processing'],
   ['Length', 'up to 60s per rescue; longer by quote'],
@@ -11,6 +14,11 @@ const TERMS = [
   ['If we cannot improve it', 'no charge, and we say why'],
 ];
 const PROCESS = ['Submit your clip', 'Review and payment', 'Receive your processed export'];
+const BEATS = [
+  'Watch the original first — the kind of accumulated drift that survives a finished render.',
+  'Now the processed pass: same timestamps, same framing, nothing regenerated.',
+  'Known limit: this targets brightness/color drift only. Identity or geometry changes are out of scope.',
+];
 
 export function CoherenceLanding({ onNavigate, onStart }) {
   const videoRef = useRef(null);
@@ -35,6 +43,11 @@ export function CoherenceLanding({ onNavigate, onStart }) {
     if (!v) return;
     v.currentTime = 0; v.play().catch(() => {});
   }
+  function showHalf(next) {
+    if (next === half) return;
+    setHalf(next);
+    track('coherence_half_switched', { half: next });
+  }
 
   function submit(e) {
     e.preventDefault();
@@ -45,23 +58,41 @@ export function CoherenceLanding({ onNavigate, onStart }) {
 
   return (
     <div className="min-h-screen bg-[#07090c] text-[#f5f7fa]" style={{ WebkitFontSmoothing: 'antialiased' }}>
-      {/* Caption scrub: native scroll-driven animation with static fallback (critique #9) */}
       <style>{`
+        .coh-display { font-family: var(--bsn-font-display); }
         .coh-beat { opacity: 1; transform: none; }
-        @supports (animation-timeline: scroll()) {
+        /* reduced motion: no pin, no runway, no scrubbed reveals — beats show in flow */
+        @media (prefers-reduced-motion: reduce) {
+          .coh-story { height: auto !important; }
+          .coh-sticky { position: static; }
+        }
+        /* scroll-driven choreography only where it is actually supported;
+           one beat visible at a time, timed to the pinned passage (cover 35% -> 81%) */
+        @supports (animation-timeline: view()) {
           @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
-            .coh-beat-a { animation: coh-in linear both; animation-timeline: view(); animation-range: entry 20% cover 35%; }
-            .coh-beat-b { animation: coh-in linear both; animation-timeline: view(); animation-range: cover 40% cover 60%; }
-            .coh-beat-c { animation: coh-in linear both; animation-timeline: view(); animation-range: cover 65% cover 85%; }
+            .coh-story { view-timeline-name: --coh-story; }
+            .coh-beats { display: grid; }
+            .coh-beats > .coh-beat { grid-area: 1 / 1; margin-top: 0; }
+            .coh-beat-a { animation: coh-out linear both; animation-timeline: --coh-story; animation-range: cover 46% cover 55%; }
+            .coh-beat-b { animation: coh-cross linear both; animation-timeline: --coh-story; animation-range: cover 53% cover 77%; }
+            .coh-beat-c { animation: coh-in linear both; animation-timeline: --coh-story; animation-range: cover 75% cover 83%; }
+            .coh-rail { display: block; }
+            .coh-rail-fill { animation: coh-rail linear both; animation-timeline: --coh-story; animation-range: cover 35% cover 83%; }
           }
         }
-        @keyframes coh-in { from { opacity: 0.25; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+        @keyframes coh-in { from { opacity: 0.02; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @keyframes coh-out { from { opacity: 1; transform: none; } to { opacity: 0.02; transform: translateY(-8px); } }
+        @keyframes coh-cross { 0% { opacity: 0.02; transform: translateY(10px); } 27% { opacity: 1; transform: none; } 67% { opacity: 1; transform: none; } 100% { opacity: 0.02; transform: translateY(-8px); } }
+        @keyframes coh-rail { from { transform: scaleX(0); } to { transform: scaleX(1); } }
       `}</style>
 
       {/* 1+2: compact intro immediately followed by the synchronized comparison */}
-      <section className="mx-auto w-full max-w-[1120px] px-6 lg:px-8 pt-12 lg:pt-16">
-        <p className="text-[13px] tracking-[0.02em] text-[#a5adba]">BrainSNN Coherence · Research preview</p>
-        <h1 className="mt-4 text-[clamp(2.75rem,5.5vw,5rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-[#f5f7fa]">
+      <section className="mx-auto w-full max-w-[1120px] px-6 pt-12 lg:px-8 lg:pt-16">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-[13px] tracking-[0.02em] text-[#a5adba]">BrainSNN Coherence</span>
+          <span className="rounded-full border border-[#a78bfa]/40 px-2.5 py-0.5 text-[12px] text-[#c4b5fd]">Research preview</span>
+        </div>
+        <h1 className="coh-display mt-4 text-[clamp(2.75rem,5.5vw,5rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-[#f5f7fa]">
           Less flicker.<br />Less color drift.
         </h1>
         <p className="mt-6 max-w-[46ch] text-[clamp(1.125rem,1.6vw,1.375rem)] leading-relaxed text-[#a5adba]">
@@ -75,29 +106,45 @@ export function CoherenceLanding({ onNavigate, onStart }) {
           <a href="#proof" className="text-[15px] text-[#a5adba] underline underline-offset-4 hover:text-[#f5f7fa]">See the evidence</a>
         </div>
 
-        {/* Comparison player — one video, shared controls, no independent clocks */}
-        <div id="proof" className="mt-10">
-          <div className={`relative overflow-hidden rounded-[20px] border border-white/10 bg-black ${half === 'processed' ? '' : ''}`}>
-            <video ref={videoRef} className="block w-full" preload="metadata" muted playsInline poster="/videos/coherence-poster.jpg"
+        {/* Comparison stage — one video, shared controls; halves stay in sync by construction */}
+        <div id="proof" className="mt-10 scroll-mt-8">
+          <div className="relative overflow-hidden rounded-[20px] border border-white/10 bg-black">
+            <video ref={videoRef}
+                   className={`block w-[200%] max-w-none cursor-pointer lg:w-full lg:translate-x-0 ${half === 'processed' ? '-translate-x-1/2' : 'translate-x-0'}`}
+                   preload="metadata" muted playsInline
+                   aria-label="Side-by-side comparison: the same clip before and after the correction pass"
+                   poster="/videos/coherence-poster.jpg"
+                   onClick={togglePlay}
                    onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)}>
               <source src="/videos/coherence-demo-scrub.mp4" type="video/mp4" />
               <source src="/videos/coherence-demo-scrub.webm" type="video/webm" />
             </video>
-            <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/60 px-3 py-1 text-[12px] text-[#f5f7fa]">{half === 'original' ? 'Original' : 'Processed'}</div>
+            {/* pane labels sit at the bottom edge, clear of the burnt-in captions */}
+            <div className="pointer-events-none absolute bottom-4 left-4 rounded-full bg-black/60 px-3 py-1 text-[12px] text-[#f5f7fa] lg:hidden">
+              {half === 'original' ? 'Original' : 'Processed'}
+            </div>
+            <div className="pointer-events-none absolute bottom-4 left-4 hidden rounded-full bg-black/60 px-3 py-1 text-[12px] text-[#f5f7fa] lg:block">Original</div>
+            <div className="pointer-events-none absolute bottom-4 left-1/2 ml-4 hidden rounded-full bg-black/60 px-3 py-1 text-[12px] text-[#f5f7fa] lg:block">Processed</div>
+            <button onClick={togglePlay}
+                    aria-label="Play the comparison video" aria-hidden={playing} tabIndex={playing ? -1 : 0}
+                    className={`absolute inset-0 z-10 m-auto flex h-16 w-16 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-black/60 backdrop-blur-sm transition-opacity duration-300 hover:bg-black/75 lg:h-20 lg:w-20 ${playing ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="ml-1 h-6 w-6 fill-[#f5f7fa] lg:h-8 lg:w-8"><path d="M8 5v14l11-7z" /></svg>
+            </button>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <button onClick={togglePlay} className="min-h-10 rounded-xl border border-white/15 px-4 text-[14px] text-[#f5f7fa] hover:border-white/30">{playing ? 'Pause' : 'Play'}</button>
-            <button onClick={restart} className="min-h-10 rounded-xl border border-white/15 px-4 text-[14px] text-[#f5f7fa] hover:border-white/30">Restart</button>
-            <div className="ml-auto flex gap-2">
-              <button aria-pressed={half === 'original'} onClick={() => setHalf('original')} className={`min-h-10 rounded-xl px-4 text-[14px] ${half === 'original' ? 'bg-[#f5f7fa] text-[#07090c]' : 'border border-white/15 text-[#a5adba]'}`}>Original</button>
-              <button aria-pressed={half === 'processed'} onClick={() => setHalf('processed')} className={`min-h-10 rounded-xl px-4 text-[14px] ${half === 'processed' ? 'bg-[#f5f7fa] text-[#07090c]' : 'border border-white/15 text-[#a5adba]'}`}>Processed</button>
+            <button onClick={togglePlay} className="min-h-11 cursor-pointer rounded-xl border border-white/15 px-4 text-[14px] text-[#f5f7fa] transition-colors hover:border-white/30 hover:bg-white/5">{playing ? 'Pause' : 'Play'}</button>
+            <button onClick={restart} className="min-h-11 cursor-pointer rounded-xl border border-white/15 px-4 text-[14px] text-[#f5f7fa] transition-colors hover:border-white/30 hover:bg-white/5">Restart</button>
+            <div className="ml-auto flex gap-2 lg:hidden" role="group" aria-label="Which half of the comparison to show">
+              <button aria-pressed={half === 'original'} onClick={() => showHalf('original')} className={`min-h-11 cursor-pointer rounded-xl px-4 text-[14px] transition-colors ${half === 'original' ? 'bg-[#f5f7fa] text-[#07090c]' : 'border border-white/15 text-[#a5adba] hover:border-white/30'}`}>Original</button>
+              <button aria-pressed={half === 'processed'} onClick={() => showHalf('processed')} className={`min-h-11 cursor-pointer rounded-xl px-4 text-[14px] transition-colors ${half === 'processed' ? 'bg-[#f5f7fa] text-[#07090c]' : 'border border-white/15 text-[#a5adba] hover:border-white/30'}`}>Processed</button>
             </div>
           </div>
 
           {/* 4: evidence caption + disclosure — trust cues, not disclaimers */}
           <p className="mt-4 text-[14px] leading-5 text-[#a5adba]">
-            Source: synthetic drift fixture, 256px, 21s, engine v0.4 (complex_mc). Targets unwanted brightness and color drift.
-            Not a general repair for changing identities, geometry, or missing detail.
+            Source: synthetic drift fixture, 256px, 21s, engine v0.4 (complex_mc). “Original” is the raw rollout;
+            “Processed” is after the correction pass. Targets unwanted brightness and color drift. Not a general
+            repair for changing identities, geometry, or missing detail.
           </p>
           <details className="mt-2 text-[14px] text-[#a5adba]">
             <summary className="cursor-pointer text-[#f5f7fa]">What this example proves</summary>
@@ -107,17 +154,29 @@ export function CoherenceLanding({ onNavigate, onStart }) {
               limits are documented above. No claims are made beyond tested conditions.
             </p>
           </details>
+
+          {/* mobile / reduced-motion: the same three beats in normal flow (the pinned section is desktop-only) */}
+          <div className="mt-8 rounded-[20px] border border-white/10 bg-black p-6 lg:hidden">
+            {BEATS.map((text, i) => (
+              <p key={text} className={`text-[16px] leading-relaxed text-[#f5f7fa] ${i ? 'mt-4' : ''}`}>{text}</p>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* 9: sticky story (desktop >=1024px): captions scrub, video keeps natural pace */}
+      {/* 9: sticky story (desktop >=1024px): one beat at a time, video keeps its natural pace */}
       <section className="coh-story mx-auto hidden w-full max-w-[1120px] px-6 lg:block lg:px-8" style={{ height: '160svh' }}>
-        <div className="sticky top-20">
+        <div className="coh-sticky sticky top-20">
           <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
-            <div className="rounded-[20px] border border-white/10 bg-black p-6">
-              <p className="coh-beat coh-beat-a text-[18px] leading-relaxed text-[#f5f7fa]">Watch the original first — the kind of accumulated drift that survives a finished render.</p>
-              <p className="coh-beat coh-beat-b mt-4 text-[18px] leading-relaxed text-[#f5f7fa]">Now the processed pass: same timestamps, same framing, nothing regenerated.</p>
-              <p className="coh-beat coh-beat-c mt-4 text-[18px] leading-relaxed text-[#f5f7fa]">Known limit: this targets brightness/color drift only. Identity or geometry changes are out of scope.</p>
+            <div className="relative overflow-hidden rounded-[20px] border border-white/10 bg-black p-6">
+              <div className="coh-beats">
+                {BEATS.map((text, i) => (
+                  <p key={text} className={`coh-beat coh-beat-${['a', 'b', 'c'][i]} text-[18px] leading-relaxed text-[#f5f7fa] ${i ? 'mt-4' : ''}`}>{text}</p>
+                ))}
+              </div>
+              <div className="coh-rail absolute inset-x-0 bottom-0 hidden h-[3px] bg-white/10" aria-hidden="true">
+                <div className="coh-rail-fill h-full w-full origin-left bg-[#a78bfa]" />
+              </div>
             </div>
             <div className="rounded-[20px] border border-white/10 bg-[#10141b] p-6 text-[14px] leading-6 text-[#a5adba]">
               The player above stays at its natural cadence — scrolling never changes playback speed. You judge the video, not your scroll.
@@ -127,10 +186,10 @@ export function CoherenceLanding({ onNavigate, onStart }) {
       </section>
 
       {/* 3: offer + form = one buying decision */}
-      <section id="rescue" className="mx-auto w-full max-w-[1120px] px-6 pb-20 pt-20 lg:px-8 lg:pt-32">
+      <section id="rescue" className="mx-auto w-full max-w-[1120px] scroll-mt-8 px-6 pb-20 pt-20 lg:px-8 lg:pt-32">
         <div className="grid gap-8 lg:grid-cols-2">
           <div className="rounded-[20px] border border-white/10 bg-[#10141b] p-6 lg:p-8">
-            <h2 className="text-[28px] font-semibold tracking-[-0.02em] text-[#f5f7fa]">Your clip. A defined correction. $99.</h2>
+            <h2 className="coh-display text-balance text-[28px] font-semibold tracking-[-0.02em] text-[#f5f7fa]">Your clip. A defined correction. $99.</h2>
             <ul className="mt-6 space-y-3 text-[15px] leading-6 text-[#a5adba]">
               {TERMS.map(([k, v]) => (<li key={k}><span className="text-[#f5f7fa]">{k}:</span> {v}</li>))}
             </ul>
@@ -145,16 +204,19 @@ export function CoherenceLanding({ onNavigate, onStart }) {
             ) : (
               <>
                 <label htmlFor="coh-email" className="block text-[14px] text-[#f5f7fa]">Email</label>
-                <input id="coh-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                <input id="coh-email" name="email" type="email" required autoComplete="email" inputMode="email" spellCheck={false}
+                       value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                        className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#07090c] px-4 text-[15px] text-[#f5f7fa] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]" />
 
                 <label htmlFor="coh-clip" className="mt-5 block text-[14px] text-[#f5f7fa]">Clip link <span className="text-[#a5adba]">(Drive, Dropbox, WeTransfer)</span></label>
-                <input id="coh-clip" type="url" value={form.clip} onChange={(e) => setForm({ ...form, clip: e.target.value })}
+                <input id="coh-clip" name="clipUrl" type="url" autoComplete="off" inputMode="url" spellCheck={false}
+                       value={form.clip} onChange={(e) => setForm({ ...form, clip: e.target.value })}
                        className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#07090c] px-4 text-[15px] text-[#f5f7fa] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]" />
                 <label htmlFor="coh-notes" className="mt-5 block text-[14px] text-[#f5f7fa]">Notes <span className="text-[#a5adba]">(optional — what bothers you, timestamps)</span></label>
-                <textarea id="coh-notes" rows="3" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                       className="mt-2 w-full rounded-xl border border-white/15 bg-[#07090c] px-4 py-3 text-[15px] text-[#f5f7fa] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]" />
-                <button type="submit" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#22d3ee] text-[16px] font-semibold text-[#062126] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]">
+                <textarea id="coh-notes" name="notes" rows="3" autoComplete="off"
+                          value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                          className="mt-2 w-full rounded-xl border border-white/15 bg-[#07090c] px-4 py-3 text-[15px] text-[#f5f7fa] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]" />
+                <button type="submit" className="mt-6 inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-full bg-[#22d3ee] text-[16px] font-semibold text-[#062126] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]">
                   Check my clip
                 </button>
                 <p className="mt-3 text-[13px] leading-5 text-[#a5adba]">We review eligibility first. If your clip is a fit, we send payment details and process it within 24-48h.</p>
@@ -168,13 +230,11 @@ export function CoherenceLanding({ onNavigate, onStart }) {
       <footer className="mx-auto w-full max-w-[1120px] px-6 pb-16 lg:px-8">
         <div className="border-t border-white/10 pt-8 text-[14px] leading-6 text-[#a5adba]">
           <p>Where this goes: coherence from the start — a streaming engine for multi-minute shots. Research preview, built in the open.</p>
-          <p className="mt-3">
+          <nav aria-label="Explore" className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
             <a href="/arcade" className="underline underline-offset-4 hover:text-[#f5f7fa]">The lab</a>
-            <span className="mx-3 text-white/20">·</span>
             <a href="/app" className="underline underline-offset-4 hover:text-[#f5f7fa]">The decision engine</a>
-            <span className="mx-3 text-white/20">·</span>
-            <span>Operator: BrainSNN — contact via the form above</span>
-          </p>
+          </nav>
+          <p className="mt-3">Run by BrainSNN. Reach us via the form above.</p>
         </div>
       </footer>
     </div>
