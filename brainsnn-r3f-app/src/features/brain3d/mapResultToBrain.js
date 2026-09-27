@@ -14,12 +14,17 @@ function fromScore(value, fallback = 0.4) {
   return clamp01(number / 100);
 }
 
-// tribeProjection.regions {CTX,HPC,THL,AMY,BG,PFC,CBL} 0-100 -> activities 0-1.
-// Falls back to a metrics-derived estimate when the projection is missing.
+// An explicit canonical Neural Mirror compatibility view is the preferred
+// source. Older scans can still supply the legacy deterministic projection,
+// and metrics remain the final backwards-compatible visual fallback. None of
+// these seven broad values is the canonical neural representation.
 export function mapResultToActivities(result = {}) {
   // Explicit null bypasses the default parameter.
   const safeResult = result || {};
-  const regions = safeResult.tribeProjection?.regions;
+  const canonicalCompatibility = safeResult.neural?.schemaVersion === 'brainsnn.neural-prediction.v1'
+    ? safeResult.neural?.compatibilityViews?.broadRegions7
+    : null;
+  const regions = canonicalCompatibility?.regions || safeResult.tribeProjection?.regions;
   if (regions && typeof regions === 'object') {
     const activities = {};
     for (const region of BRAIN_REGIONS) {

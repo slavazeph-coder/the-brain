@@ -101,7 +101,7 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
     <div className="synapse-workspace" data-testid="synapse-workspace">
       <header className="synapse-header">
         <p className="bsn-kicker">Improve · Synapse</p>
-        <h1>Turn the diagnosis into a stronger draft.</h1>
+        <h1>Turn the analysis into a stronger draft.</h1>
         <p>Edit the rewrite, compare versions, then save, approve or export only when the scores move in the right direction.</p>
       </header>
       <RewriteControls goal={goal} onGoalChange={(value) => { setGoal(value); track('rewrite_goal_selected', { goal: value }); }} onGenerate={generate} generating={busy === 'generate'} />

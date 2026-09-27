@@ -134,6 +134,9 @@ describe('exactly one limiter governs each route', () => {
   it('routes a dedicated path to its own tier, not the floor', () => {
     expect(routeTier('/api/events')).toBe('events');
     expect(routeTier('/api/analyze')).toBe('analyze');
+    expect(routeTier('/api/v1/multimodal/ingest')).toBe('neural');
+    expect(routeTier('/api/v1/neural/predict')).toBe('neural');
+    expect(routeTier('/api/neural/decode')).toBe('neural');
     expect(routeTier('/api/auth/magic-link')).toBe('magicLink');
   });
 

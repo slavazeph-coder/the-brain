@@ -19,7 +19,7 @@ export function BrainSignalView({ result }) {
         <div>
           <p className="bsn-eyebrow">Neural view</p>
           <h2 id="brain-signal-heading">BrainSNN signal map</h2>
-          <p className="bsn-note">A visual metaphor tied to displayed content signals, not a literal brain measurement.</p>
+          <p className="bsn-note">A broad-region compatibility view of modelled content signals, not a measured brain scan.</p>
         </div>
         {synchrony ? (
           <span className="brain-signal-sync" style={{ color: palette.edge }}>
@@ -31,7 +31,7 @@ export function BrainSignalView({ result }) {
         mode="result"
         result={result}
         fallback={<BrainVisualizer result={result} />}
-        ariaLabel="Interactive 3D brain showing how this content activates seven cognitive regions."
+        ariaLabel="Interactive reference brain showing a seven-region compatibility view of modelled content signals."
         onRegionSelect={setSelectedRegion}
       />
       <div className="brain-signal-legend" aria-label="Brain regions in this scan">
@@ -47,8 +47,9 @@ export function BrainSignalView({ result }) {
         ))}
       </div>
       <p className="brain-summary">
-        Drag to orbit, click a region to focus it. Region intensity comes from this scan's 7-region projection; particle
-        speed and color follow the 39 Hz soliton field.
+        Drag to orbit, click a region to focus it. When available, region intensity is derived from the canonical predicted
+        parcel timeline; older results use the deterministic compatibility projection. Particle speed and color follow the
+        separate 39 Hz soliton field.
       </p>
     </section>
   );

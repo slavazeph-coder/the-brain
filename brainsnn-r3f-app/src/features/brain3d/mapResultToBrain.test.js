@@ -19,6 +19,23 @@ function assertActivities(activities) {
 }
 
 describe('mapResultToActivities', () => {
+  it('prefers the explicit compatibility view derived from the canonical prediction', () => {
+    const activities = mapResultToActivities({
+      neural: {
+        schemaVersion: 'brainsnn.neural-prediction.v1',
+        compatibilityViews: {
+          broadRegions7: {
+            mappingId: 'fixture-map',
+            regions: { CTX: 80, HPC: 70, THL: 60, AMY: 50, BG: 40, PFC: 30, CBL: 20 },
+          },
+        },
+      },
+      tribeProjection: { regions: { CTX: 5, HPC: 5, THL: 5, AMY: 5, BG: 5, PFC: 5, CBL: 5 } },
+    });
+    expect(activities.CTX).toBe(0.8);
+    expect(activities.CBL).toBe(0.2);
+  });
+
   it('maps tribe regions to clamped activities', () => {
     const activities = mapResultToActivities({
       tribeProjection: { regions: { CTX: 72, HPC: 64, THL: 48, AMY: 620, BG: -5, PFC: 55, CBL: 'x' } },

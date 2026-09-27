@@ -38,4 +38,11 @@ describe('createRewrite', () => {
     expect(rewrite.startsWith('Here is why this matters right now')).toBe(true);
     expect(rewrite).toContain('real deadline or cost of waiting');
   });
+
+  it('uses claim-specific proof guidance for a trust rewrite', () => {
+    const rewrite = createRewrite('Security companies could pay $300+ for footage labeling.', 'trust');
+    expect(rewrite).not.toContain('Add one concrete proof point');
+    expect(rewrite).toContain('Minutes or hours of footage processed');
+    expect(rewrite).toContain('visible example');
+  });
 });

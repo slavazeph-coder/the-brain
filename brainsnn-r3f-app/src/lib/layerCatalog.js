@@ -8,7 +8,7 @@ export const LAYER_GROUPS = {
 };
 
 const layerNames = [
-  ['3D Brain Viewer', 'view'], ['Neural Flow Grid', 'view'], ['TRIBE v2 Frames', 'backend'],
+  ['3D Brain Viewer', 'view'], ['Neural Flow Grid', 'view'], ['TRIBE v2 Research Reference', 'backend'],
   ['Cognitive Firewall', 'firewall'], ['Gemma 4 Engine', 'firewall'], ['Snapshots', 'data'],
   ['Analytics Dashboard', 'data'], ['Narrative Engine', 'data'], ['Toast Notifications', 'view'],
   ['Keyboard Shortcuts', 'view'], ['Share & Embed', 'share'], ['Onboarding Walkthrough', 'view'],
@@ -48,7 +48,7 @@ const layerNames = [
 const TOTAL_LAYERS = layerNames.length;
 
 const blurbs = {
-  3: 'TRIBE v2 and scenario projections mapped to the 7-region BrainSNN model.',
+  3: 'Deterministic broad-region compatibility view; TRIBE v2 remains a separate, manually enabled research reference.',
   4: 'Deterministic pressure scoring across urgency, outrage, certainty, fear and trust erosion.',
   5: 'Gemma endpoint support for deep multimodal analysis when configured server-side.',
   29: '12-affect trigger decoding across threat, reward, social and cognitive clusters.',

@@ -29,10 +29,11 @@ import {
 } from "./src/lib/neuralInputGateway.js";
 import { BODY_LIMITS, LIMITS, RateLimiter, SpendCeiling, resolveGeminiCeiling, routeTier } from "./src/lib/rateLimit.js";
 import { formatEventLine, normalizeEvent } from "./src/lib/eventSink.js";
+import { createNeuralApiRouter } from "./src/server/neuralApi.js";
 
 dotenv.config();
 
-const app = express();
+export const app = express();
 
 // Railway terminates TLS at its edge and forwards, so without this every
 // request arrives from the proxy's address and the rate limiter below would key
@@ -48,6 +49,8 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handl
 // too, and that endpoint embeds the body in a Gemini prompt paid for with the
 // operator's key — 2 MB is roughly 500,000 tokens of attacker-chosen text.
 app.use("/api/analyze", express.json({ limit: BODY_LIMITS.analyze }));
+app.use("/api/v1/multimodal/ingest", express.json({ limit: BODY_LIMITS.neural }));
+app.use("/api/v1/neural/predict", express.json({ limit: BODY_LIMITS.neural }));
 app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
 app.use(express.json({ limit: BODY_LIMITS.general }));
 
@@ -56,6 +59,7 @@ const APP_URL = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://ww
 const STRIPE_API_BASE = "https://api.stripe.com/v1";
 /** Shown to a visitor whenever a lead could not be delivered, so the trail never dead-ends. */
 const LEADS_FALLBACK_EMAIL = process.env.LEADS_FALLBACK_EMAIL || "hello@brainsnn.com";
+const tribeResearchEnabled = () => String(process.env.ENABLE_TRIBE_RESEARCH || "").toLowerCase() === "true";
 
 // Initialize Gemini safely
 let ai: GoogleGenAI | null = null;
@@ -204,6 +208,7 @@ async function handleStripeWebhook(req: express.Request, res: express.Response) 
 
 const limiters = {
   analyze: new RateLimiter(LIMITS.analyze),
+  neural: new RateLimiter(LIMITS.neural),
   magicLink: new RateLimiter(LIMITS.magicLink),
   general: new RateLimiter(LIMITS.general),
   events: new RateLimiter(LIMITS.events),
@@ -236,6 +241,15 @@ function limit(name: keyof typeof limiters, keyOf?: (req: express.Request) => st
     });
   };
 }
+
+// Stable CPU-first Neural Mirror API. The router owns only V1 multimodal and
+// neural routes; legacy decoded-communication endpoints below remain separate.
+const neuralApi = createNeuralApiRouter({
+  env: process.env,
+  fetchImpl: globalThis.fetch,
+  limiter: limit("neural"),
+});
+app.use("/api/v1", neuralApi.router);
 
 // ----------------------------------------------------
 // API ENDPOINTS
@@ -321,7 +335,7 @@ app.get("/api/og/lab", (req, res) => {
 
 app.get("/api/engines/status", async (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
-  if (status.engines.tribe.configured) {
+  if (status.engines.tribe.configured && status.engines.tribe.enabled) {
     try {
       const health = await fetch(`${process.env.TRIBE_API_URL}/health`, { signal: AbortSignal.timeout(2500) }).then((r) => r.json());
       status.engines.tribe = { ...status.engines.tribe, status: "online", modelLoaded: Boolean(health.model_loaded) };
@@ -333,26 +347,53 @@ app.get("/api/engines/status", async (_req, res) => {
 });
 
 app.get("/api/engines/tribe/health", async (_req, res) => {
+  if (!tribeResearchEnabled()) {
+    return res.status(403).json({
+      error: "TRIBE research access is disabled (set ENABLE_TRIBE_RESEARCH=true explicitly).",
+      status: "disabled",
+      researchOnly: true,
+      commercialUse: false,
+    });
+  }
   if (!process.env.TRIBE_API_URL) {
-    return res.status(501).json({ error: "TRIBE_API_URL is not configured.", status: "not_configured" });
+    return res.status(501).json({ error: "TRIBE_API_URL is not configured.", status: "not_configured", researchOnly: true, commercialUse: false });
   }
   try {
     const response = await fetch(`${process.env.TRIBE_API_URL}/health`, { signal: AbortSignal.timeout(4000) });
     const body = await response.json();
-    return res.status(response.ok ? 200 : response.status).json(body);
+    return res.status(response.ok ? 200 : response.status).json({
+      ...body,
+      provider: "TRIBE v2 reference",
+      researchOnly: true,
+      commercialUse: false,
+    });
   } catch (error: any) {
     return res.status(503).json({ error: error?.message || "TRIBE health check failed.", status: "unreachable" });
   }
 });
 
 app.get("/api/engines/tribe/scenarios", async (_req, res) => {
+  if (!tribeResearchEnabled()) {
+    return res.status(403).json({
+      error: "TRIBE research access is disabled (set ENABLE_TRIBE_RESEARCH=true explicitly).",
+      status: "disabled",
+      scenarios: [],
+      researchOnly: true,
+      commercialUse: false,
+    });
+  }
   if (!process.env.TRIBE_API_URL) {
-    return res.status(501).json({ error: "TRIBE_API_URL is not configured.", scenarios: [] });
+    return res.status(501).json({ error: "TRIBE_API_URL is not configured.", status: "not_configured", scenarios: [], researchOnly: true, commercialUse: false });
   }
   try {
     const response = await fetch(`${process.env.TRIBE_API_URL}/scenarios`, { signal: AbortSignal.timeout(5000) });
     const body = await response.json();
-    return res.status(response.ok ? 200 : response.status).json(body);
+    return res.status(response.ok ? 200 : response.status).json({
+      ...body,
+      provider: "TRIBE v2 reference",
+      researchOnly: true,
+      commercialUse: false,
+    });
   } catch (error: any) {
     return res.status(503).json({ error: error?.message || "TRIBE scenarios unavailable.", scenarios: [] });
   }
@@ -489,7 +530,7 @@ app.post("/api/neural/analyze", (req, res) => {
   }
 });
 
-app.post("/api/neural/decode", async (req, res) => {
+app.post("/api/neural/decode", limit("neural"), async (req, res) => {
   const decoderUrl = process.env.NEURAL_DECODER_URL;
   if (!decoderUrl) {
     return res.status(501).json({ error: "No external neural decoder configured (set NEURAL_DECODER_URL).", status: "not_configured" });
@@ -770,7 +811,7 @@ app.post("/api/analyze", limit("analyze"), async (req, res) => {
 
       Analyze and return a JSON object aligning with this schema exactly. Make sure values range from 0 to 100 where requested:
       {
-        "title": "A short, viral, punchy diagnostic classification title for this analysis",
+        "title": "A short, punchy content classification title for this analysis",
         "fear": 0-100 score indicating panic, FOMO, risk warnings, or safety concerns,
         "anger": 0-100 score indicating aggression, indignation, or high emotional charge,
         "urgency": 0-100 score indicating scarcity, direct commands, immediacy,
@@ -920,12 +961,37 @@ app.post("/api/analyze", limit("analyze"), async (req, res) => {
   }
 });
 
+// Body-parser failures happen before a route handler runs. Return the same
+// bounded, machine-readable error shape as the V1 handlers instead of
+// Express's default HTML page (which may include implementation detail).
+app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (!req.originalUrl.startsWith("/api/")) return next(error);
+  if (error?.type === "entity.too.large" || error?.status === 413) {
+    return res.status(413).json({
+      schemaVersion: "brainsnn.error.v1",
+      error: "payload_too_large",
+      message: "The request exceeds the bounded input size for this endpoint.",
+    });
+  }
+  if (error instanceof SyntaxError || error?.type === "entity.parse.failed") {
+    return res.status(400).json({
+      schemaVersion: "brainsnn.error.v1",
+      error: "invalid_json",
+      message: "The request body must be valid JSON.",
+    });
+  }
+  return next(error);
+});
+
 
 // ----------------------------------------------------
 // VITE DEV SERVER / STATIC FILE SERVING MIDDLEWARE
 // ----------------------------------------------------
 
-async function startServer() {
+// Keep the app importable for real HTTP integration tests. Production and the
+// normal dev command still start automatically; tests opt out with the single
+// explicit environment flag below and listen on an ephemeral port themselves.
+export async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     // Dynamically load Vite to avoid loading client-side dependencies in production bundle
     const { createServer: createViteServer } = await import("vite");
@@ -961,9 +1027,11 @@ async function startServer() {
     console.log(`Serving static distribution assets from ${distPath}`);
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  return app.listen(PORT, "0.0.0.0", () => {
     console.log(`BrainSNN Engine running on http://0.0.0.0:${PORT}`);
   });
 }
 
-startServer();
+if (process.env.BRAINSNN_SKIP_START !== "1") {
+  startServer();
+}

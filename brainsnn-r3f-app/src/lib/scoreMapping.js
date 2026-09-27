@@ -125,11 +125,13 @@ export function deriveExecutiveVerdict(result = {}) {
     : trust < 55
       ? 'The promise needs clearer evidence.'
       : 'The close can be more specific.';
-  const bestNextMove = risk >= 62
+  const evidenceSpecificMove = result.evidenceGapAnalysis?.topRecommendation?.recommendedEdit
+    || result.evidenceGapAnalysis?.recommendations?.[0]?.recommendedEdit;
+  const bestNextMove = evidenceSpecificMove || (risk >= 62
     ? 'Keep the opening. Replace unsupported urgency with proof.'
     : trust < 55
       ? 'Add a concrete reason to believe the claim.'
-      : 'Tighten the ask and preserve the strongest sentence.';
+      : 'Tighten the ask and preserve the strongest sentence.');
 
   const viralScore = clampScore(result.viralScore, 45);
   const viralLabel = viralScore >= 75

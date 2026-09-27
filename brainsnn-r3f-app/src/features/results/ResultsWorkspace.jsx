@@ -15,6 +15,7 @@ import { AffectPanel } from './AffectPanel.jsx';
 import { SolitonFieldPanel } from './SolitonFieldPanel.jsx';
 import { TechnicalDetails } from './TechnicalDetails.jsx';
 import { InputFusionPanel } from './InputFusionPanel.jsx';
+import { NeuralMirrorPanel } from './NeuralMirrorPanel.jsx';
 import { track } from '../../lib/analytics.js';
 
 const RESULT_TABS = [
@@ -91,6 +92,13 @@ export function ResultsWorkspace({ result, onImprove, onSave, onQueue, onExport,
         <ResultsTabs active={tab} onChange={selectTab} />
         <TabPanel id="overview" active={tab}>
           <InputFusionPanel result={result} />
+          <NeuralMirrorPanel
+            prediction={result.neural}
+            modalityStatus={result.modalityStatus}
+            events={result.neuralEvents}
+            scanTrace={result.scanTrace}
+            computeTrace={result.computeTrace}
+          />
           <BrainSignalView result={result} />
           <DecisionScorecard result={result} />
         </TabPanel>

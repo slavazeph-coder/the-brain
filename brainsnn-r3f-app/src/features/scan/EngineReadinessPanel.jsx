@@ -50,8 +50,8 @@ export function EngineReadinessPanel() {
         <p className="bsn-eyebrow">Engine status</p>
         <h2 id="engine-readiness-heading">What powers this scan</h2>
         <p className="bsn-note">
-          Scans run on the built-in local engine by default — nothing leaves your browser.
-          Optional providers switch on automatically when they are connected.
+          Scans run on the built-in BrainSNN server engine by default. Optional commercial
+          providers are configuration-gated; research-only references require explicit enablement.
         </p>
       </div>
       <div className="readiness-grid">
@@ -69,8 +69,10 @@ export function EngineReadinessPanel() {
         />
         <ReadinessItem
           icon={RadioTower}
-          label="TRIBE projection"
-          detail={status?.engines?.tribe?.configured ? 'external service connected' : 'built-in projection layer'}
+          label="TRIBE research reference"
+          detail={status?.engines?.tribe?.enabled && status?.engines?.tribe?.configured
+            ? 'external research service enabled'
+            : 'disabled; commercial scans do not call it'}
           status={statusLabel(status?.engines?.tribe)}
         />
         <ReadinessItem

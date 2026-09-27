@@ -5,6 +5,7 @@ import { computeSolitonField } from './solitonLayer.js';
 import { computeFirewall, detectTemplates } from './firewallLayer.js';
 import { computeAffect } from './affectLayer.js';
 import { clampScore } from './formatters.js';
+import { analyzeEvidenceGaps } from './evidenceGapAnalyzer.js';
 
 export function stableHash(value = '') {
   let hash = 2166136261;
@@ -57,18 +58,23 @@ function buildTribeProjection(result = {}, firewallSignals, affectProfile, tribe
     CBL: clampScore(38 + (Number(result.confidence) || 60) * 0.22, 50),
   };
   return {
-    source: tribeStatus.configured ? 'TRIBE-ready projection' : 'TRIBE-informed local projection',
-    status: tribeStatus.status || (tribeStatus.configured ? 'configured' : 'not_configured'),
+    source: 'BrainSNN deterministic broad-region compatibility view',
+    status: 'compatibility_only',
     scenario: pressure > 0.62 ? 'Content Pressure Cascade' : trust > 0.68 ? 'Emotional Salience & Trust' : 'Organic Baseline',
     regions,
-    note: tribeStatus.configured
-      ? 'TRIBE service can be used for media/text prediction; this scan shows the mapped BrainSNN projection.'
-      : 'TRIBE v2 service is not configured, so BrainSNN used the local 7-region projection layer.',
+    mappingId: 'brainsnn-commercial-signals-to-seven-regions-v1',
+    modelled: true,
+    measured: false,
+    note: tribeStatus.enabled
+      ? 'This compatibility view is still derived only from BrainSNN deterministic content signals. The research-only TRIBE adapter is never invoked by this commercial route.'
+      : 'Derived from BrainSNN deterministic content signals for the legacy seven-region display. No TRIBE model or measured neural data was used.',
   };
 }
 
 export function getEngineStatusSnapshot(env = {}) {
   const has = (key) => Boolean(env[key]);
+  const tribeEnabled = String(env.ENABLE_TRIBE_RESEARCH || '').toLowerCase() === 'true';
+  const tribeConfigured = has('TRIBE_API_URL');
   return {
     totalLayers: LAYER_CATALOG.length,
     coreLayers: layersByIds(CORE_LAYER_IDS),
@@ -78,7 +84,13 @@ export function getEngineStatusSnapshot(env = {}) {
       openai: { configured: has('OPENAI_API_KEY'), status: has('OPENAI_API_KEY') ? 'configured' : 'not_configured' },
       gemini: { configured: has('GEMINI_API_KEY'), status: has('GEMINI_API_KEY') ? 'configured' : 'not_configured' },
       gemma: { configured: has('GEMMA_API_ENDPOINT'), status: has('GEMMA_API_ENDPOINT') ? 'configured' : 'not_configured' },
-      tribe: { configured: has('TRIBE_API_URL'), status: has('TRIBE_API_URL') ? 'configured' : 'not_configured' },
+      tribe: {
+        configured: tribeConfigured,
+        enabled: tribeEnabled,
+        status: tribeConfigured && tribeEnabled ? 'configured_research_only' : tribeConfigured ? 'disabled' : 'not_configured',
+        researchOnly: true,
+        commercialUse: false,
+      },
     },
   };
 }
@@ -90,7 +102,16 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
   const affectProfile = computeAffect({ content: rawContent, metrics: result.metrics, firewallSignals });
   const solitonField = computeSolitonField({ content: rawContent, contentType, firewallSignals, affectProfile, metrics: result.metrics });
   const contextTriggers = buildContextTriggers(rawContent, result);
-  const tribeProjection = buildTribeProjection(result, firewallSignals, affectProfile, engineStatus.tribe || {});
+  const evidenceGapAnalysis = analyzeEvidenceGaps({
+    content: rawContent,
+    context: contentType === 'video' ? 'video_script' : contextTriggers.genre,
+  });
+  const tribeProjection = buildTribeProjection(
+    result,
+    firewallSignals,
+    affectProfile,
+    engineStatus.tribe || engineStatus.engines?.tribe || {},
+  );
   const receipt = {
     id: `bsnn-${stableHash(`${rawContent}|${result.timestamp || ''}`)}`,
     contentHash: stableHash(rawContent),
@@ -114,24 +135,40 @@ export function runLayerRouter({ content, contentType = 'text', baseResult, prov
     { stage: 'L102 Lobster Trap', status: 'local_preflight', note: 'PII/prompt-risk safety preflight is represented in the engine trace.' },
     { stage: 'L4 Cognitive Firewall', status: 'completed', note: `${firewallSignals.templates.length} template signal(s) evaluated.` },
     { stage: 'L29 Affective Decoder', status: 'completed', note: `Dominant affect: ${affectProfile.dominantAffect}.` },
+    { stage: 'Evidence Gap Analyzer', status: 'completed', note: evidenceGapAnalysis.summary },
     { stage: 'L103 39 Hz Soliton Field', status: 'completed', note: `Gamma coherence ${solitonField.gammaCoherence} at ${solitonField.effectiveFrequencyHz} Hz (${solitonField.synchrony}); ${solitonField.leapfrogEvents} leapfrog event(s); theta-gamma PAC ${solitonField.thetaGammaPAC}.` },
-    { stage: 'L3 TRIBE v2 Projection', status: tribeProjection.status, note: tribeProjection.note },
+    { stage: 'L3 Broad-region compatibility view', status: tribeProjection.status, note: tribeProjection.note },
     ...providerTrace,
     { stage: 'L46 Firewall Receipt', status: 'completed', note: receipt.id },
   ];
+  const specificRecommendation = evidenceGapAnalysis.topRecommendation
+    ? {
+        id: evidenceGapAnalysis.topRecommendation.id,
+        goal: 'Proof',
+        title: evidenceGapAnalysis.topRecommendation.title,
+        rationale: evidenceGapAnalysis.topRecommendation.rationale,
+        rewriteHint: `${evidenceGapAnalysis.topRecommendation.recommendedEdit} Most valuable proof: ${evidenceGapAnalysis.topRecommendation.mostValuableProof.slice(0, 3).join(' ')}`,
+      }
+    : null;
   return {
     ...result,
+    recommendations: specificRecommendation
+      ? [specificRecommendation, ...(Array.isArray(result.recommendations) ? result.recommendations : [])].slice(0, 3)
+      : result.recommendations,
     contentType,
     firewallSignals,
     affectProfile,
     solitonField,
     contextTriggers,
+    evidenceGapAnalysis,
+    evidenceGaps: evidenceGapAnalysis.gaps,
     tribeProjection,
     layersUsed,
     engineTrace,
     receipt,
     researchNotes: [
-      'TRIBE v2 is used as a BrainSNN projection layer unless the external prediction service is configured.',
+      'TRIBE v2 is a separate CC BY-NC research reference and is never used by the automatic commercial scan route.',
+      'The seven-region compatibility view is derived from deterministic BrainSNN commercial signals, not from TRIBE or measured neural data.',
       'Gemma, Gemini and OpenAI are treated as model providers inside the layer stack, not as literal brain measurement.',
       'The Cognitive Firewall, Affective Decoder and Context Memory layers are deterministic enough to support regression tests.',
     ],
@@ -159,8 +196,12 @@ export function createRewriteFromLayerStack(content, goal = 'trust') {
     .replace(/\bact now\b/gi, 'see whether it fits')
     .replace(/\bsecret\b/gi, 'practical signal')
     .replace(/\bguaranteed\b/gi, 'designed to help');
+  const evidence = analyzeEvidenceGaps({ content: text, context: detectGenre(text) });
+  const proofClose = evidence.topRecommendation
+    ? `${evidence.topRecommendation.recommendedEdit}\nMost valuable proof: ${evidence.topRecommendation.mostValuableProof.slice(0, 3).join(' ')}`
+    : 'Keep every commercial claim bounded, checkable, and adjacent to its supporting evidence.';
   return {
-    content: `${proofLine}\n\n${softened}\n\nAdd one specific proof point before publishing.`,
+    content: `${proofLine}\n\n${softened}\n\n${proofClose}`,
     changes: [
       'Layer 42 Counter-Draft softened pressure language.',
       'Layer 41 Refutation Library preserved the claim but asked for evidence.',

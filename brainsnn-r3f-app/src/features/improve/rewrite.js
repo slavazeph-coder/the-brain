@@ -1,4 +1,5 @@
 import { analyzeContentLocally } from '../../lib/analysisEngine.js';
+import { analyzeEvidenceGaps } from '../../lib/evidenceGapAnalyzer.js';
 
 export const REWRITE_GOALS = [
   { id: 'curiosity', label: 'Increase curiosity', description: 'Open with tension, contrast, or a useful unanswered question.' },
@@ -52,7 +53,11 @@ export function createRewrite(content, goal = 'trust') {
     clarity: 'Name the audience, the outcome, and the action in one clean sequence.',
     resonance: 'Show that you understand the reader before asking them to act.',
   };
-  return `${openers[goal] || openers.trust}\n\n${softened}\n\n${closers[goal] || closers.trust}`;
+  const evidence = analyzeEvidenceGaps({ content: text, context: 'social_post' });
+  const evidenceClose = evidence.topRecommendation
+    ? `${evidence.topRecommendation.recommendedEdit} Most valuable proof: ${evidence.topRecommendation.mostValuableProof.slice(0, 3).join(' ')}`
+    : closers[goal] || closers.trust;
+  return `${openers[goal] || openers.trust}\n\n${softened}\n\n${goal === 'trust' ? evidenceClose : closers[goal] || evidenceClose}`;
 }
 
 export function analyzeRewrite(originalResult, rewriteContent) {

@@ -18,6 +18,79 @@ function normalizeContentType(contentType) {
   return contentType === 'script' ? 'video' : (contentType || 'text');
 }
 
+function stableBrowserHash(value = '') {
+  let hash = 2166136261;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function safeBrowserFilename(value = '') {
+  const basename = String(value).normalize('NFKC').split(/[\\/]/).pop() || 'local-video';
+  return basename
+    .replace(/\.{2,}/g, '_')
+    .replace(/[^\p{L}\p{N} ._()-]+/gu, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180) || 'local-video';
+}
+
+function finiteObservation(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function buildNeuralMirrorRequest({ input = '', media = null } = {}) {
+  const filename = media?.fileName ? safeBrowserFilename(media.fileName) : '';
+  const durationMs = Math.max(0, Math.round(finiteObservation(media?.duration) * 1000));
+  const mimeType = media?.mimeType ? String(media.mimeType).slice(0, 120) : '';
+  const identity = JSON.stringify({
+    type: 'video',
+    filename,
+    durationMs,
+    mimeType,
+    fileSize: Math.max(0, Math.round(finiteObservation(media?.fileSize))),
+  });
+  const vision = (Array.isArray(media?.signals) ? media.signals : []).map((signal) => ({
+    timestampMs: Math.max(0, Math.round(finiteObservation(signal.timestamp) * 1000)),
+    luminance: finiteObservation(signal.luminance),
+    motion: finiteObservation(signal.motion),
+    red: finiteObservation(signal.red),
+    green: finiteObservation(signal.green),
+    blue: finiteObservation(signal.blue),
+  }));
+  const audio = (Array.isArray(media?.audioSignals) ? media.audioSignals : []).map((signal) => ({
+    timestampMs: Math.max(0, Math.round(finiteObservation(signal.timestamp) * 1000)),
+    audioEnergy: finiteObservation(signal.energy),
+  }));
+
+  return {
+    input: {
+      schemaVersion: 'brainsnn.multimodal.v1',
+      id: `browser-${stableBrowserHash(identity)}`,
+      source: {
+        type: 'video',
+        ...(filename ? { filename } : {}),
+        ...(durationMs > 0 ? { durationMs } : {}),
+        ...(mimeType ? { mimeType } : {}),
+      },
+      text: {
+        transcript: String(input || '').trim(),
+        language: 'en',
+      },
+      observations: { vision, audio },
+      provenance: {
+        userProvided: true,
+        extractorVersions: { browserSampler: '1.0.0' },
+      },
+    },
+    options: { ablation: 'all' },
+  };
+}
+
 export function scanReducer(state, action) {
   switch (action.type) {
     case 'set-input': {
@@ -100,10 +173,10 @@ export function useScanEngine() {
       if (contentType === 'video') {
         fusion = buildMultimodalFusion({ text: input, media: state.media });
         analysisContent = fusion.packet;
-        response = await fetch('/api/analyze', {
+        response = await fetch('/api/v1/neural/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: analysisContent, contentType: 'video', type: 'video' }),
+          body: JSON.stringify(buildNeuralMirrorRequest({ input, media: state.media })),
           signal: controller.signal,
         });
       } else if (contentType === 'neural') {
@@ -129,9 +202,22 @@ export function useScanEngine() {
         });
       }
 
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Analysis service unavailable.');
+      const responsePayload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const apiMessage = responsePayload.message
+          || (typeof responsePayload.error === 'string' ? responsePayload.error : responsePayload.error?.message);
+        throw new Error(apiMessage || 'Analysis service unavailable.');
+      }
       if (requestRef.current !== requestId) return null;
+
+      // The V1 prediction endpoint returns the combined scan directly. Accept a
+      // `{ result }` wrapper defensively for local fixtures without changing the
+      // canonical browser contract.
+      const payload = contentType === 'video'
+        && responsePayload?.result
+        && typeof responsePayload.result === 'object'
+        ? responsePayload.result
+        : responsePayload;
 
       const result = contentType === 'neural'
         ? {
