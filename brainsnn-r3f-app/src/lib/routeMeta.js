@@ -10,6 +10,42 @@ const EVIDENCE = buildHoldoutReport();
 /** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
 const ROUTES = [
   {
+    path: '/toys/fool-the-detector',
+    title: 'Fool the Detector | BrainSNN',
+    image: '/og/toy-fool.png',
+    description:
+      'Can you fool our AI detector? Five rounds: slip a manipulation trick past the same detector the BrainSNN analyzer runs, whose blind spots are published.',
+    heading: 'Can you fool our AI detector?',
+    body: [
+      'Write a line that uses a persuasion trick — a deadline, a crowd, a threat — without the detector naming it. Five rounds, escalating from one trick to three at once, scored out of 100 with a rank at the end.',
+      'The detector is the real one, running in your browser. Its published evaluation reports that it missed all four techniques written in paraphrase on held-out text. Model scores describe their tested conditions; they do not establish universal capability.',
+    ],
+  },
+  {
+    path: '/toys/draft-duel',
+    title: 'Draft Duel | BrainSNN',
+    image: '/og/toy-duel.png',
+    description:
+      'Make two drafts fight. Paste two versions and watch them trade blows on trust, calm, clean play, warmth and spark — scored locally by BrainSNN’s deterministic engine.',
+    heading: 'Make two drafts fight.',
+    body: [
+      'Paste two versions of an email, post or pitch. Five rounds — trust, calm, clean play, warmth and spark — scored by the same deterministic engine as the BrainSNN comparison workbench, entirely in the browser.',
+      'A win is a game result from heuristic signals, not a verdict on quality, truth or what readers will do.',
+    ],
+  },
+  {
+    path: '/toys/defend-the-brain',
+    title: 'Defend the Brain | BrainSNN',
+    image: '/og/toy-defend.png',
+    description:
+      'Persuasion packets from real text attack a live seven-region brain model. Cut pathways, silence the threat loop and keep judgment online.',
+    heading: 'Can you keep the brain from getting hijacked?',
+    body: [
+      'Defend the Brain turns the persuasion techniques found in real text into attacks on a seven-region spiking model. Intervene on a budget to keep the hijack index down, or paste your own writing to make it the level.',
+      'Scores are 0–100 indices, not probabilities. Results describe tested conditions, not universal capability. The model is a simulation, not a measurement of any human brain.',
+    ],
+  },
+  {
     path: '/missions',
     title: 'Proof Missions | BrainSNN',
     description:
@@ -110,12 +146,13 @@ const ROUTES = [
   {
     path: '/',
     title: 'BrainSNN | Sapient Playground',
-    image: '/agent-lab-og.png',
+    image: '/og/toy-poke.png',
     description:
-      'Analyze a draft, compare a change, or explore a world. A playground for machine intelligence, with evidence you can inspect.',
-    heading: 'Build a mind. Give it a world. Give it a mission.',
+      'Poke the brain and watch the signal travel. A jelly brain wrapped around a seven-region spiking model — then build a mind, give it a world, give it a mission.',
+    heading: 'Poke the brain and watch the signal travel.',
     body: [
-      'Analyze content, compare two drafts, or explore a proof mission. BrainSNN brings its workspace, deterministic comparison engine and simulation worlds within reach.',
+      'Poke, drag or shake a jelly brain. Every poke drives the seven-region spiking model BrainSNN’s analyzer runs on, and the signal travels its pathways. It is a simulation, not a recording of anyone’s brain.',
+      'Then build a mind, give it a world, give it a mission: analyze content, compare two drafts with the deterministic comparison engine, or explore a proof mission.',
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
     ],
   },
@@ -123,6 +160,9 @@ const ROUTES = [
 
 const CRAWL_LINKS = Object.freeze([
   { path: '/', label: 'BrainSNN Sapient Playground' },
+  { path: '/toys/fool-the-detector', label: 'Fool the Detector' },
+  { path: '/toys/draft-duel', label: 'Draft Duel' },
+  { path: '/toys/defend-the-brain', label: 'Defend the Brain' },
   { path: '/arcade', label: 'GaugeGap Arcade' },
   { path: '/lab', label: 'Neuro Powder Lab' },
   { path: '/app', label: 'Content analyzer' },

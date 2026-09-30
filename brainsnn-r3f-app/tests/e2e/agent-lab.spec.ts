@@ -18,10 +18,13 @@ test('playground homepage keeps navigation simple and never fetches XIO evidence
   });
   await page.goto('/');
   await expect(page).toHaveTitle('BrainSNN | Sapient Playground');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Build a mind. Give it a world. Give it a mission.');
-  await expect(page.locator('.bh-site main > section')).toHaveCount(3);
+  // The toy is the front door; the tools the homepage used to lead with sit right under it.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Poke the brain and watch the signal travel.');
+  await expect(page.getByRole('heading', { level: 2, name: 'Build a mind. Give it a world. Give it a mission.' })).toBeVisible();
+  // Poke hero, more toys, tools, evidence note, what-BrainSNN-is strip.
+  await expect(page.locator('.bh-site main > section')).toHaveCount(5);
   await expect(page.locator('.bh-nav').getByRole('link', { name: 'Open BrainSNN', exact: true })).toHaveAttribute('href', '/app');
-  await expect(page.locator('.bh-hero').getByRole('link', { name: 'Explore worlds', exact: true })).toHaveAttribute('href', '/arcade');
+  await expect(page.locator('#tools').getByRole('link', { name: 'Explore worlds', exact: true })).toHaveAttribute('href', '/arcade');
   for (const [name, href] of [
     [/^Analyze content/, '/app'],
     [/^Compare drafts/, '/engine'],

@@ -33,8 +33,20 @@ import { EngineWorkspace } from '../features/engine/EngineWorkspace.jsx';
 
 
 const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx').then((module) => ({ default: module.PowderLabPage })));
+// Toy pages load on demand; the homepage toy (Poke the Brain) is part of the
+// home route itself and lazy-loads its own WebGL scene.
+const FoolTheDetector = React.lazy(() => import('../features/toys/fool/FoolTheDetector.jsx').then((module) => ({ default: module.FoolTheDetector })));
+const DraftDuel = React.lazy(() => import('../features/toys/duel/DraftDuel.jsx').then((module) => ({ default: module.DraftDuel })));
+const DefendTheBrainToy = React.lazy(() => import('../features/toys/defend/DefendTheBrainToy.jsx').then((module) => ({ default: module.DefendTheBrainToy })));
 
-function resolveRoute(pathname) {
+function ToyBoot() {
+  return <div className="bh-site bh-home-simple"><div className="toy-loading" role="status">Loading the toy…</div></div>;
+}
+
+export function resolveRoute(pathname) {
+  if (pathname === '/toys/fool-the-detector' || pathname.startsWith('/toys/fool-the-detector/')) return 'toy-fool';
+  if (pathname === '/toys/draft-duel' || pathname.startsWith('/toys/draft-duel/')) return 'toy-duel';
+  if (pathname === '/toys/defend-the-brain' || pathname.startsWith('/toys/defend-the-brain/')) return 'toy-defend';
   if (pathname === '/office' || pathname.startsWith('/office/')) return 'office';
   if (pathname === '/engine' || pathname.startsWith('/engine/')) return 'engine';
   if (pathname.startsWith('/m/')) return 'published-mission';
@@ -263,6 +275,15 @@ export function AppShell() {
       />
     );
   }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
+
+  if (route === 'toy-fool' || route === 'toy-duel' || route === 'toy-defend') {
+    const Toy = route === 'toy-fool' ? FoolTheDetector : route === 'toy-duel' ? DraftDuel : DefendTheBrainToy;
+    return (
+      <React.Suspense fallback={<ToyBoot />}>
+        <Toy />
+      </React.Suspense>
+    );
+  }
 
   if (route === 'engine') {
     return <EngineWorkspace />;
