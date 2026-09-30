@@ -52,7 +52,7 @@ function layoutRegions(width, height) {
   }]));
 }
 
-export function BrainGameLab({ onAchievement }) {
+export function BrainGameLab({ onAchievement, onRunComplete }) {
   const [mode, setMode] = useState('mission');
   const [paused, setPaused] = useState(false);
   const [interventions, setInterventions] = useState(EMPTY);
@@ -189,6 +189,29 @@ export function BrainGameLab({ onAchievement }) {
     if (evaluation.status === 'won') audioRef.current?.play('win');
     else if (evaluation.status === 'lost') audioRef.current?.play('lose');
   }, [evaluation.status]);
+
+  // One report per finished run, for hosts that build a score card from it
+  // (the Defend the Brain toy page). Keyed by the reset counter so a replay
+  // reports again, and a re-render of the same finished run does not.
+  const reportedRunRef = useRef('');
+  useEffect(() => {
+    if (!onRunComplete || mode === 'sandbox') return;
+    if (evaluation.status !== 'won' && evaluation.status !== 'lost') return;
+    const key = `${resetKey}-${evaluation.status}`;
+    if (reportedRunRef.current === key) return;
+    reportedRunRef.current = key;
+    onRunComplete({
+      status: evaluation.status,
+      mode,
+      levelId,
+      levelTitle: level.title,
+      scores: evaluation.scores,
+      hijack: evaluation.hijack,
+      control: evaluation.control,
+      blocked: resolution.blocked,
+      resolved: resolution.resolved,
+    });
+  }, [onRunComplete, mode, evaluation.status, evaluation.scores, evaluation.hijack, evaluation.control, resetKey, levelId, level.title, resolution.blocked, resolution.resolved]);
 
   // XP for an actual accomplishment rather than for opening the lab. Fires once
   // per outcome; recordAchievement is itself idempotent.
