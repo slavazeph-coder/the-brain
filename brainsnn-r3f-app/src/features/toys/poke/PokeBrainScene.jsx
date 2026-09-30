@@ -123,7 +123,9 @@ const FRAGMENT = /* glsl */ `
     vec3 L = normalize(vec3(0.35, 0.85, 0.55));
     vec3 H = normalize(L + v);
     float diff = max(dot(n, L), 0.0);
-    float spec = pow(max(dot(n, H), 0.0), 72.0) * (0.3 + 0.7 * fold);
+    // Broad, juicy specular: the wet highlight that sells the jelly. It rides
+    // the dent-tilted normals above, so highlights stretch as you poke.
+    float spec = pow(max(dot(n, H), 0.0), 56.0) * (0.4 + 0.95 * fold);
 
     // 1 at the bottom of a sulcus, 0 on a gyrus crest.
     float groove = 1.0 - smoothstep(0.0, 0.7, fold);
@@ -152,7 +154,9 @@ const FRAGMENT = /* glsl */ `
     vec3 glowCol = mix(uCyan, vec3(0.93, 0.99, 1.0), 0.3);
     col += glowCol * glow * 1.25;
     col += vec3(0.85, 0.97, 1.0) * spec;
-    col += uCyan * clamp(abs(vDent), 0.0, 1.0) * 0.22;
+    // Dents glow faintly cyan: translucency faking the light scattering
+    // through the jelly where it is thinnest.
+    col += uCyan * clamp(abs(vDent), 0.0, 1.0) * 0.3;
 
     float alpha = 0.1 + fres * 0.7 * (0.5 + 0.5 * fold) + glow * 0.5 + spec * 0.55 + groove * 0.16;
     if (uFront < 0.5) alpha *= 0.4;
@@ -232,6 +236,7 @@ function Controller({
   detail,
   reducedMotion,
   seed,
+  soundRef,
 }) {
   const { camera, gl, size, invalidate } = useThree();
   const cfg = useMemo(() => motionConfig(reducedMotion), [reducedMotion]);
@@ -279,6 +284,7 @@ function Controller({
   const rotationRef = useRef({ yaw: -0.5, pitch: 0.12, velocity: 0, lastInput: -10 });
   const dragRef = useRef(null);
   const pendingShakeRef = useRef([]);
+  const helloRef = useRef(false);
   const ambientRef = useRef({ at: 0.6 - AMBIENT_EVERY, index: 0 });
   const lastFiredRef = useRef(0);
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -353,6 +359,11 @@ function Controller({
     state = { ...state, fired: state.fired + 1 };
     if (!held) {
       state = { ...state, squash: { axis: hit.inward, amount: Math.min(cfg.squashMax, (amplitude ?? cfg.pokeAmplitude) * cfg.squashGain), at: now } };
+      soundRef?.current?.poke(Math.min(1, (amplitude ?? cfg.pokeAmplitude) / cfg.pokeAmplitude));
+    } else {
+      // A grab starts with a soft bloop; the drag then stretches audibly.
+      soundRef?.current?.poke(0.25);
+      soundRef?.current?.stretchStart();
     }
     jellyRef.current = state;
     flashRef.current[region] = 1;
@@ -367,6 +378,8 @@ function Controller({
       if (event.button !== undefined && event.button !== 0) return;
       const now = clockRef.current;
       rotationRef.current.lastInput = now;
+      // Browsers only allow audio after a user gesture: this is that gesture.
+      soundRef?.current?.unlock();
       const hit = hitTest(event.clientX, event.clientY);
       if (hit) {
         const id = poke(hit, now, { held: true });
@@ -402,6 +415,8 @@ function Controller({
         scratch.rotation.setFromMatrix4(scratch.inverse);
         scratch.delta.applyMatrix3(scratch.rotation);
         jellyRef.current = dragHeldVector(jellyRef.current, drag.id, [scratch.delta.x, scratch.delta.y, scratch.delta.z], cfg);
+        // The stretch hisses louder the faster the handful moves.
+        soundRef?.current?.stretchMove(Math.min(1, scratch.delta.length() * 6));
         element.style.cursor = 'grabbing';
       } else {
         const dx = event.clientX - drag.lastX;
@@ -415,6 +430,10 @@ function Controller({
       const drag = dragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
       if (drag.kind === 'poke') {
+        // The release wobble's pitch follows how far the surface was pulled.
+        const held = jellyRef.current.impulses.find((impulse) => impulse.id === drag.id);
+        const strength = Math.min(1, Math.abs(held?.amplitude ?? 0) / cfg.maxPull + 0.3);
+        soundRef?.current?.release(strength);
         jellyRef.current = releaseHeld(jellyRef.current, drag.id, clockRef.current, cfg);
       }
       dragRef.current = null;
@@ -483,6 +502,32 @@ function Controller({
           poke({ origin, inward }, now, { amplitude: entry.amplitude });
         }
       }
+    }
+
+    // The invitation: one gentle jiggle shortly after load, before anyone has
+    // touched it, so the first thing a visitor learns is that it squishes.
+    // Silent (no gesture has happened yet, so audio is locked anyway) and not
+    // counted — only real pokes fire signals.
+    if (!reducedMotion && !helloRef.current && now > 1.1 && rotationRef.current.lastInput < 0) {
+      helloRef.current = true;
+      const dx = 0.12;
+      const dy = 0.42;
+      const dz = 1;
+      const [rx, ry, rz] = SHELL.radii;
+      const k = 1 / Math.hypot(dx / rx, dy / ry, dz / rz);
+      const origin = [SHELL.center[0] + dx * k, SHELL.center[1] + dy * k, SHELL.center[2] + dz * k];
+      const added = addImpulse(jellyRef.current, {
+        origin,
+        dir: [-dx / (rx * rx), -dy / (ry * ry), -dz / (rz * rz)],
+        amplitude: 0.55,
+        radius: cfg.pokeRadius,
+        at: now,
+      }, cfg);
+      const impulse = added.state.impulses.find((entry) => entry.id === added.id);
+      jellyRef.current = {
+        ...added.state,
+        squash: { axis: impulse.dir, amount: Math.min(cfg.squashMax, 0.55 * cfg.squashGain), at: now },
+      };
     }
 
     // An idle brain is not a dead one: now and then a faint ring rises from
@@ -599,7 +644,7 @@ function Controller({
  * and none of that should reach the WebGL tree. Everything live flows in
  * through refs.
  */
-function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reducedMotion = false, active = true, onReady, seed = 'poke' }) {
+function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reducedMotion = false, active = true, onReady, seed = 'poke', soundRef = null }) {
   const dpr = detail === 'high' ? [1, 1.8] : [1, 1.35];
   return (
     <Canvas
@@ -618,6 +663,7 @@ function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reduced
         detail={detail}
         reducedMotion={reducedMotion}
         seed={seed}
+        soundRef={soundRef}
       />
     </Canvas>
   );

@@ -5,7 +5,7 @@
 // below renders immediately, is already pokeable, and hands over to the jelly
 // when it arrives. The counter carries across the handover.
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clapperboard, Copy, ImageDown, RotateCcw, Share2, Vibrate, X } from 'lucide-react';
+import { Check, Clapperboard, Copy, ImageDown, RotateCcw, Share2, Vibrate, Volume2, VolumeX, X } from 'lucide-react';
 import { track } from '../../../lib/analytics.js';
 import { useReducedMotion } from '../../../hooks/useReducedMotion.js';
 import { useBrainSimulation } from '../../brain3d/useBrainSimulation.js';
@@ -23,6 +23,7 @@ function canRecordClip() {
 import { SponsorSlot } from '../ToyChrome.jsx';
 import { Brain3DErrorBoundary } from '../../brain3d/Brain3DErrorBoundary.jsx';
 import { probePokeTier } from './pokeTier.js';
+import { createSquishSound } from './squishSound.js';
 
 const PokeBrainScene = React.lazy(() => import('./PokeBrainScene.jsx'));
 
@@ -237,6 +238,10 @@ export function PokeBrain() {
   const [pageVisible, setPageVisible] = useState(true);
   const stageRef = useRef(null);
   const apiRef = useRef(null);
+  // The squish synth: created once, unlocked on the first real gesture.
+  const soundRef = useRef(null);
+  if (soundRef.current === null) soundRef.current = createSquishSound();
+  const [muted, setMuted] = useState(() => soundRef.current.muted);
   const loadStartedRef = useRef(typeof performance !== 'undefined' ? performance.now() : 0);
 
   useEffect(() => {
@@ -305,6 +310,8 @@ export function PokeBrain() {
   const poke2d = useCallback(() => {
     setCount2d((value) => value + 1);
     stimulate('THL', 0.3);
+    soundRef.current.unlock();
+    soundRef.current.poke(0.5);
     firstPoke('2d');
   }, [firstPoke, stimulate]);
 
@@ -313,8 +320,20 @@ export function PokeBrain() {
 
   function shake() {
     track('toy_shake', { toy: TOY.id });
+    soundRef.current.unlock();
     if (showing3d) apiRef.current?.shake();
     else for (let index = 0; index < 5; index += 1) window.setTimeout(poke2d, index * 110);
+  }
+
+  function toggleMute() {
+    const next = soundRef.current.toggle();
+    setMuted(next);
+    track('toy_sound_toggled', { toy: TOY.id, muted: next });
+    // Unmuting should be instantly gratifying: a little bloop proves it worked.
+    if (!next) {
+      soundRef.current.unlock();
+      soundRef.current.poke(0.4);
+    }
   }
 
   function reset() {
@@ -336,6 +355,7 @@ export function PokeBrain() {
     detail: tier === 'high' ? 'high' : 'low',
     reducedMotion,
     seed: 'poke-the-brain',
+    soundRef,
   }), [tier, reducedMotion]);
 
   return (
@@ -377,6 +397,9 @@ export function PokeBrain() {
         <div className="poke-actions">
           <button type="button" className="bh-button bh-secondary" onClick={shake} data-testid="poke-shake">
             <Vibrate size={16} aria-hidden="true" /> Shake
+          </button>
+          <button type="button" className="bh-button bh-secondary" onClick={toggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute squish sounds' : 'Mute squish sounds'} data-testid="poke-mute">
+            {muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />} {muted ? 'Muted' : 'Sound'}
           </button>
           <button type="button" className="bh-button bh-secondary" onClick={reset} data-testid="poke-reset">
             <RotateCcw size={16} aria-hidden="true" /> Reset

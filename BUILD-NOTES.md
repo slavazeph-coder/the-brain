@@ -57,7 +57,7 @@ No vertex is simulated on the CPU. Each frame the CPU writes a few `vec4` unifor
 
 | What | Where | Knobs |
 |---|---|---|
-| Wobble speed and length | `JELLY` in `jellyPhysics.js` | `omega` (stiffness, ~2.3 wobbles/s now) and `zeta` (damping; 0.15 means a long, satisfying tail, 0.3 means a quick settle) |
+| Wobble speed and length | `JELLY` in `jellyPhysics.js` | `omega` (stiffness, ~2 wobbles/s now) and `zeta` (damping; 0.155 means a long, satisfying tail, 0.3 means a quick settle). Keep `zeta * omega` above ~1.96 or the "gone-ish by 1 s, gone by 3 s" unit tests fail |
 | Poke size | `JELLY` | `pokeAmplitude`, `pokeRadius`, `grabRadius` |
 | Drag feel | `JELLY` | `dragGain`, `maxPull`, `maxPush` |
 | Whole-body squash | `JELLY` | `squashGain`, `squashMax`, `squashOmega`, `squashDecay` |
@@ -65,11 +65,22 @@ No vertex is simulated on the CPU. Each frame the CPU writes a few `vec4` unifor
 | Cascade | `JELLY` | `hopSeconds`, `cascadeDepth` |
 | Glow intensity | `FRAGMENT` in `PokeBrainScene.jsx` | `glow = 1.0 - exp(-glow * 1.3)` (saturating, so ten overlapping pulses don't white out), then `col += glowCol * glow * 1.25` |
 | Colours | `PokeBrainScene.jsx` constants | `CYAN #68eaff`, `VIOLET #947cff`, `MINT #73efba`, `INHIBIT #fb7185`, the same tokens as `behaviour-home.css`. The shell blends cyan → violet front to back (`smoothstep(-5.4, 5.4, x)`). |
-| Idle behaviour | `PokeBrainScene.jsx` | `IDLE_ROTATE_AFTER` (2.4 s), `AMBIENT_EVERY` (3.4 s; ambient flickers are not counted) |
+| Idle behaviour | `PokeBrainScene.jsx` | `IDLE_ROTATE_AFTER` (2.4 s), `AMBIENT_EVERY` (3.4 s; ambient flickers are not counted). The hello-wobble: one gentle silent jiggle ~1.1 s after load if untouched — the invitation to poke. Skipped under reduced motion |
 | Framing | `PokeBrainScene.jsx` camera fit | `halfWidth 5.9`, `halfHeight 4.2` |
 | Reduced motion | `motionConfig()` | Critically damped, no overshoot, no squash |
+| Squish sound | `squishSound.js` | `SQUISH` — bloop pitch/gain, squelch cutoff, stretch band, wobble tail. All synthesized in Web Audio, zero assets. `createSquishSound()` no-ops without an AudioContext so unit tests run in Node |
 
 The unit tests pin the behaviour, not the exact numbers: overshoot exists, the wobble is mostly gone in 1 s and fully gone by 3 s, and the caps hold. Retune freely and run `npm test`.
+
+### Sound design (the other half of the jelly)
+
+The viral jelly toys are half audio — the squish sells the squash. `squishSound.js` synthesizes everything at poke time, no audio files:
+
+- **Poke bloop** — a sine falling ~400 → 68 Hz plus a short burst of lowpassed noise (the wet "squelch"). Harder pokes start higher and last longer.
+- **Stretch hiss** — looped bandpassed noise whose gain tracks drag speed while a grab is held.
+- **Release wobble** — a quiet low sine with a dying pitch wobble, like the surface settling.
+
+Rules: the `AudioContext` is only created inside `unlock()`, called from the first real pointerdown (browsers refuse audio before a gesture). The module never imports three.js, so `check-three-imports` stays green and the synth rides the main chunk, not `vendor-three`. The mute toggle in the HUD persists to `localStorage['poke-sound-muted']` and fires `toy_sound_toggled` (in both analytics allowlists). Reduced-motion users still get sound — motion and audio are separate concerns — but the toggle is one tap away.
 
 ### Swapping or reshaping the brain mesh
 
