@@ -33,6 +33,9 @@ const UTM_PARAMS = Object.freeze(['utm_source', 'utm_medium', 'utm_campaign']);
 /** Short on purpose: it rides along on every shared URL. See share.ts. */
 export const SHARE_PARAM = 's';
 
+/** The toys tag their shared links `?src=`; read it as the same field. */
+export const SHARE_PARAM_ALIAS = 'src';
+
 /** Fields allowed out of this module. The server re-checks against this list. */
 export const ATTRIBUTION_FIELDS = Object.freeze([...UTM_PARAMS, 'share', 'ref']);
 
@@ -91,7 +94,9 @@ export function readAttribution(search = '', referrer = '', currentHost = '') {
   // `s=lab` is ours, set by the share buttons. Kept distinct from utm_source
   // rather than folded into it, because claiming the visitor's own campaign tag
   // said something it did not say is how attribution data starts lying.
-  const share = clean(params.get(SHARE_PARAM));
+  // `src=toy1-share` is the playground toys' spelling of the same thing; `s`
+  // wins when both are present so an existing share link never changes meaning.
+  const share = clean(params.get(SHARE_PARAM)) || clean(params.get(SHARE_PARAM_ALIAS));
   if (share) found.share = share;
 
   const ref = referrerHost(referrer, currentHost);

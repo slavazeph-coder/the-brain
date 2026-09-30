@@ -15,6 +15,8 @@ export class Brain3DErrorBoundary extends React.Component {
 
   componentDidCatch(error) {
     track('brain3d_fallback_used', { reason: error?.name || 'render-error' });
+    // Lets a caller that owns its own fallback (Poke the Brain) switch to it.
+    this.props.onError?.(error);
   }
 
   render() {

@@ -28,6 +28,7 @@ const SRC = join(ROOT, 'src');
 const THREE_IMPORTERS = new Set([
   'src/features/brain3d/BrainScene.jsx',
   'src/features/brain3d/GameScene.jsx',
+  'src/features/toys/poke/PokeBrainScene.jsx',
 ]);
 
 const THREE_IMPORT = /from\s+['"](three|@react-three\/[a-z-]+)['"]|import\s*\(\s*['"](three|@react-three\/[a-z-]+)['"]/;

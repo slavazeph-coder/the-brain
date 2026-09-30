@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from '../test/tinyVitest.js';
 import { applyRouteMeta, renderContentBlock, resolveRouteMeta } from './routeMeta.js';
 import { LAB_TITLE } from '../features/agent-lab/agentLabModel.js';
@@ -24,15 +26,37 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('restores the Sapient Playground homepage around its available tools', () => {
+  it('leads the Sapient Playground homepage with the poke toy and keeps its tools', () => {
     const home = resolveRouteMeta('/');
     expect(home.title).toBe('BrainSNN | Sapient Playground');
-    expect(home.heading).toBe('Build a mind. Give it a world. Give it a mission.');
-    expect(home.description).toBe('Analyze a draft, compare a change, or explore a world. A playground for machine intelligence, with evidence you can inspect.');
-    expect(home.body.join(' ')).toContain('deterministic comparison engine');
-    expect(home.body.join(' ')).not.toContain('XIO');
-    expect(home.body.join(' ')).not.toContain('US$1,500');
-    expect(home.body.join(' ')).not.toContain('70%');
+    expect(home.heading).toBe('Poke the brain and watch the signal travel.');
+    expect(home.description).toContain('Poke the brain and watch the signal travel.');
+    expect(home.image).toBe('/og/toy-poke.png');
+    const body = home.body.join(' ');
+    // The owner's line survives, now introducing the tools under the toy.
+    expect(body).toContain('build a mind, give it a world, give it a mission');
+    expect(body).toContain('deterministic comparison engine');
+    // The toy is a simulation and must say so where crawlers read it.
+    expect(body).toContain('not a recording of anyone’s brain');
+    expect(body).not.toContain('XIO');
+    expect(body).not.toContain('US$1,500');
+    expect(body).not.toContain('70%');
+  });
+
+  it('gives every toy its own preview, hook and honest boundary', () => {
+    const fool = resolveRouteMeta('/toys/fool-the-detector');
+    expect(fool.heading).toBe('Can you fool our AI detector?');
+    expect(fool.image).toBe('/og/toy-fool.png');
+    expect(fool.body.join(' ')).toContain('do not establish universal capability');
+    const duel = resolveRouteMeta('/toys/draft-duel');
+    expect(duel.heading).toBe('Make two drafts fight.');
+    expect(duel.body.join(' ')).toContain('not a verdict on quality');
+    const defend = resolveRouteMeta('/toys/defend-the-brain');
+    expect(defend.body.join(' ')).toContain('not probabilities');
+    expect(defend.image).toBe('/og/toy-defend.png');
+    // A shared toy link carries ?src=; the preview must not care.
+    expect(resolveRouteMeta('/toys/draft-duel', '?src=toy3-share').title).toBe(duel.title);
+    expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/toys/fool-the-detector"');
   });
 
   it('keeps the office roadmap and operational evidence on their own route', () => {
@@ -96,7 +120,7 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Analyze a draft, compare a change, or explore a world');
+    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Poke the brain and watch the signal travel.');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -112,11 +136,18 @@ describe('per-route social previews', () => {
     expect(html).toContain('og-image.png');
   });
 
-  it('uses the new homepage screenshot while keeping existing tools on their own card', () => {
+  it('uses the rendered toy screenshot for the homepage while keeping existing tools on their own card', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
-    expect(tagContent(html, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/agent-lab-og.png');
-    expect(resolveRouteMeta('/').image).toBe('/agent-lab-og.png');
+    expect(tagContent(html, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/toy-poke.png');
+    expect(resolveRouteMeta('/').image).toBe('/og/toy-poke.png');
     expect(resolveRouteMeta('/arcade').image).toBe('/og-image.png');
+  });
+
+  it('points every toy preview at an image that actually ships in public/', () => {
+    for (const path of ['/', '/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain']) {
+      const image = resolveRouteMeta(path).image;
+      expect(existsSync(join(process.cwd(), 'public', image))).toBe(true);
+    }
   });
 
   it('never emits a second copy of a tag it rewrites', () => {

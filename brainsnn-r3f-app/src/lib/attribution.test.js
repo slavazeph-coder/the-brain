@@ -52,6 +52,13 @@ describe('readAttribution', () => {
     expect(found.utm_source).toBe(undefined);
   });
 
+  it('reads the toys\' src tag as the same share field, with s taking precedence', () => {
+    expect(readAttribution('?src=toy1-share')).toEqual({ share: 'toy1-share' });
+    // An existing `s` link keeps its meaning even if a src is appended to it.
+    expect(readAttribution('?s=lab&src=toy2-share').share).toBe('lab');
+    expect(readAttribution('?src=').share).toBe(undefined);
+  });
+
   it('combines a referrer with tags', () => {
     const found = readAttribution('?s=lab', 'https://x.com/someone/status/1', 'brainsnn.com');
     expect(found.share).toBe('lab');

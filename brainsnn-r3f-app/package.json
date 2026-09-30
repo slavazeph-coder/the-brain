@@ -16,7 +16,8 @@
     "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "test:run": "node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "check:bundle": "node scripts/check-three-imports.mjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "og:toys": "node scripts/render-toy-og.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
