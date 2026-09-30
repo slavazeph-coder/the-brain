@@ -155,6 +155,17 @@ export function GaugeGapLanding({ onStart, onNavigate, onOpenReconstruct, onOpen
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // The homepage's "Enterprise builds" CTA lands on /arcade#brief. The page is
+  // client-rendered, so the browser's own fragment scroll runs before the form
+  // exists; do it once the section is on the page.
+  useEffect(() => {
+    if (window.location.hash !== '#brief') return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('brief')?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   function scrollToPlayground() {
     track('gaugegap_hero_play_clicked');
     scrollTo('playground');
