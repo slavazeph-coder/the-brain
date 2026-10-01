@@ -323,6 +323,10 @@ function Controller({
   const pinchEaseRef = useRef({ axis: [0, 1, 0], amount: 0 });
   const sliceRef = useRef(0); // eased 0..SLICE.maxGap
   const sliceInitRef = useRef(false);
+  // Authoritative slice flag for the frame loop. Updated synchronously via
+  // the imperative API (and synced from the prop), so the knife + separation
+  // never depend on the useFrame closure seeing a fresh React prop.
+  const slicedRef = useRef(sliced);
   // The knife: a chop swing 0..1 down the midline when Slice is tapped.
   const knifeRef = useRef({ t: 1, active: false });
   const knifeGroupRef = useRef();
@@ -558,7 +562,10 @@ function Controller({
 
   // Slicing: a knife chops down the midline, then the halves slide apart as
   // clean slabs. Structural, not a poke — it doesn't fire signals or count.
+  // The frame loop reads slicedRef (kept in sync here and via the imperative
+  // API), so the animation can't go stale if a React prop update is delayed.
   useEffect(() => {
+    slicedRef.current = sliced;
     if (!sliceInitRef.current) {
       sliceInitRef.current = true;
       return;
@@ -604,6 +611,13 @@ function Controller({
         if (!hit) return false;
         poke(hit, clockRef.current);
         return true;
+      },
+      setSliced(next) {
+        // Imperative slice toggle: updates the frame-loop flag synchronously
+        // and (re)triggers the knife chop, bypassing React prop timing.
+        slicedRef.current = next;
+        if (next) knifeRef.current = { t: 0, active: true };
+        else knifeRef.current = { t: 1, active: false };
       },
       canvas: gl.domElement,
     };
@@ -701,20 +715,23 @@ function Controller({
     // Slice: the knife chops down the midline first; the hemispheres slide
     // apart only once the blade has bitten, so the cut is visibly done by
     // the knife. Unslicing just slides them shut — no second chop.
+    // Reads slicedRef (not the prop) so a stale useFrame closure can't wedge
+    // the slice shut.
+    const slicedNow = slicedRef.current;
     const knife = knifeRef.current;
     if (knife.active) {
       knife.t = Math.min(1, knife.t + dt / KNIFE.chopTime);
       if (knife.t >= 1) knife.active = false;
     }
-    const knifeT = sliced ? knife.t : 1;
+    const knifeT = slicedNow ? knife.t : 1;
     if (knifeGroupRef.current) {
       knifeGroupRef.current.position.y = knifeY(knifeT);
-      knifeGroupRef.current.visible = sliced && knifeOpacity(knifeT) > 0.01;
+      knifeGroupRef.current.visible = slicedNow && knifeOpacity(knifeT) > 0.01;
     }
-    const bladeOpacity = sliced ? knifeOpacity(knifeT) : 0;
+    const bladeOpacity = slicedNow ? knifeOpacity(knifeT) : 0;
     if (knifeBladeRef.current) knifeBladeRef.current.opacity = bladeOpacity;
     if (knifeHandleRef.current) knifeHandleRef.current.opacity = bladeOpacity;
-    sliceRef.current = sliceStep(sliceRef.current, sliceTargetFor(sliced, knifeT), dt);
+    sliceRef.current = sliceStep(sliceRef.current, sliceTargetFor(slicedNow, knifeT), dt);
     sharedUniforms.uSlice.value = sliceRef.current;
 
     // Rotation: drag with inertia, then an idle drift once hands are off.
