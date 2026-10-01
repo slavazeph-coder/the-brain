@@ -358,6 +358,9 @@ export function PokeBrain() {
     setSliced((value) => {
       const next = !value;
       track('toy_slice_toggled', { toy: TOY.id, sliced: next });
+      // Drive the 3D slice imperatively too — the frame loop reads a ref, so
+      // the knife chop + separation can't wedge on a stale React prop.
+      apiRef.current?.setSliced?.(next);
       return next;
     });
     firstPoke('3d');
