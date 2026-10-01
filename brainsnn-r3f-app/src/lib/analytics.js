@@ -80,6 +80,8 @@ const allowedEvents = new Set([
   'toy_first_poke',
   'toy_shake',
   'toy_sound_toggled',
+  'toy_slice_toggled',
+  'toy_palette_changed',
   'toy_share_opened',
   'toy_clip_saved',
   'toy_card_saved',

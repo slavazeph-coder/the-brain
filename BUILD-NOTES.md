@@ -69,6 +69,9 @@ No vertex is simulated on the CPU. Each frame the CPU writes a few `vec4` unifor
 | Framing | `PokeBrainScene.jsx` camera fit | `halfWidth 5.9`, `halfHeight 4.2` |
 | Reduced motion | `motionConfig()` | Critically damped, no overshoot, no squash |
 | Squish sound | `squishSound.js` | `SQUISH` — bloop pitch/gain, squelch cutoff, stretch band, wobble tail. All synthesized in Web Audio, zero assets. `createSquishSound()` no-ops without an AudioContext so unit tests run in Node |
+| Pinch / stretch | `PINCH` in `jellyGestures.js` | `gain` 0.55 (finger-distance ratio → whole-body amount), `max` 0.32 (the body can never invert). Negative = squash along the pinch axis, positive = stretch. Two-finger only; the first pointer decides the gesture, a second finger only joins as a grab on the brain. `touch-action: none` on the canvas so the browser never steals the pinch for zoom |
+| Slice | `SLICE` in `jellyGestures.js` | `maxGap` 0.8 world units per hemisphere, `rate` 7/s ease. The hemispheres peel apart along z in the vertex shader; the fissure floor stays put so the cut opens as a V, and the cut band glows with the palette's `cut` colour. Structural — doesn't fire signals |
+| Jelly colours | `POKE_PALETTES` in `jellyGestures.js` | Five presets (Brain, Watermelon, Grape, Ocean, Sunset): frontal `cyan`, occipital `violet`, fresh-slice `cut`. Persisted in `localStorage['poke-palette']`; the 2D fallback gradient follows the same palette |
 
 The unit tests pin the behaviour, not the exact numbers: overshoot exists, the wobble is mostly gone in 1 s and fully gone by 3 s, and the caps hold. Retune freely and run `npm test`.
 

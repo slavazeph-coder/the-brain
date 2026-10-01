@@ -30,6 +30,7 @@ import {
   shakeSchedule,
   writeUniforms,
 } from './jellyPhysics.js';
+import { PINCH, pinchAmount, pinchAxis, paletteById, sliceStep, SLICE } from './jellyGestures.js';
 
 const CYAN = '#68eaff';
 const VIOLET = '#947cff';
@@ -49,12 +50,15 @@ const VERTEX = /* glsl */ `
   uniform vec3 uCenter;
   uniform float uTime;
   uniform float uBreath;
+  uniform vec4 uPinch;
+  uniform float uSlice;
   attribute float aFold;
   varying vec3 vRest;
   varying vec3 vNormalV;
   varying vec3 vViewPos;
   varying float vFold;
   varying float vDent;
+  varying float vCut;
 
   void main() {
     vec3 p = position;
@@ -75,10 +79,20 @@ const VERTEX = /* glsl */ `
     }
     n = normalize(n - (grad - dot(grad, n) * n));
 
+    // Slice: the hemispheres peel apart along z, the brain's left/right axis.
+    // The fissure floor stays put so the cut opens as a V, not a shear.
+    float sliceMask = smoothstep(0.05, 1.4, abs(position.z));
+    p.z += sign(position.z) * uSlice * sliceMask;
+    vCut = (1.0 - smoothstep(0.0, 1.6, abs(position.z))) * step(0.001, uSlice);
+
     // Squash and stretch the whole body about its centre along the poke axis.
     vec3 q = p - uCenter;
     float along = dot(q, uSquash.xyz);
     q += uSquash.xyz * along * uSquash.w - (q - uSquash.xyz * along) * (uSquash.w * 0.5);
+    // Pinch: the same whole-body math along the two-finger axis — negative
+    // squashes (fingers together), positive stretches (fingers apart).
+    float palong = dot(q, uPinch.xyz);
+    q += uPinch.xyz * palong * uPinch.w - (q - uPinch.xyz * palong) * (uPinch.w * 0.5);
     q *= 1.0 + uBreath * sin(uTime * 1.25);
     p = uCenter + q;
 
@@ -96,6 +110,7 @@ const FRAGMENT = /* glsl */ `
   #define MAX_PULSE ${JELLY.maxPulses}
   uniform vec3 uCyan;
   uniform vec3 uViolet;
+  uniform vec3 uCutColor;
   uniform vec4 uPulse[MAX_PULSE];
   uniform float uPulseSpeed;
   uniform float uPulseWidth;
@@ -106,6 +121,7 @@ const FRAGMENT = /* glsl */ `
   varying vec3 vViewPos;
   varying float vFold;
   varying float vDent;
+  varying float vCut;
 
   void main() {
     vec3 n = normalize(vNormalV);
@@ -135,6 +151,8 @@ const FRAGMENT = /* glsl */ `
     col += body * fres * 1.15 * (0.45 + 0.55 * fold);
     // Sulci read as dark creases, which is most of what makes it a brain.
     col *= 1.0 - groove * 0.6;
+    // A fresh slice glows like cut jelly.
+    col = mix(col, uCutColor * (0.55 + 0.45 * fold), vCut * 0.85);
 
     float glow = 0.0;
     for (int i = 0; i < MAX_PULSE; i++) {
@@ -158,7 +176,7 @@ const FRAGMENT = /* glsl */ `
     // through the jelly where it is thinnest.
     col += uCyan * clamp(abs(vDent), 0.0, 1.0) * 0.3;
 
-    float alpha = 0.1 + fres * 0.7 * (0.5 + 0.5 * fold) + glow * 0.5 + spec * 0.55 + groove * 0.16;
+    float alpha = 0.1 + fres * 0.7 * (0.5 + 0.5 * fold) + glow * 0.5 + spec * 0.55 + groove * 0.16 + vCut * 0.35;
     if (uFront < 0.5) alpha *= 0.4;
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.95));
     #include <colorspace_fragment>
@@ -205,13 +223,13 @@ function makeShellMaterial(side, sharedUniforms) {
 }
 
 /** Pathway axons, drawn from the same curve helper the rest of the site uses. */
-function Axons() {
+function Axons({ color }) {
   const lines = useMemo(() => PATHWAYS.map((pathway) => ({
     id: pathway.id,
-    color: pathway.inhibitory ? INHIBIT : CYAN,
+    color: pathway.inhibitory ? INHIBIT : color,
     points: [REGION_MAP[pathway.from].position, pathwayControlPoint(pathway), REGION_MAP[pathway.to].position]
       .map((point) => new THREE.Vector3(...point)),
-  })), []);
+  })), [color]);
   return (
     <group>
       {lines.map((line) => (
@@ -237,6 +255,8 @@ function Controller({
   reducedMotion,
   seed,
   soundRef,
+  palette,
+  sliced,
 }) {
   const { camera, gl, size, invalidate } = useThree();
   const cfg = useMemo(() => motionConfig(reducedMotion), [reducedMotion]);
@@ -252,6 +272,9 @@ function Controller({
     uImp: { value: uniformTarget.impulses },
     uImpDir: { value: uniformTarget.dirs },
     uSquash: { value: new THREE.Vector4(0, 1, 0, 0) },
+    uPinch: { value: new THREE.Vector4(0, 1, 0, 0) },
+    uSlice: { value: 0 },
+    uCutColor: { value: new THREE.Color(palette.cut) },
     uCenter: { value: new THREE.Vector3(...SHELL.center) },
     uTime: { value: 0 },
     uBreath: { value: reducedMotion ? 0 : 0.006 },
@@ -273,6 +296,14 @@ function Controller({
     frontMaterial.dispose();
   }, [geometry, proxyGeometry, glowTexture, backMaterial, frontMaterial]);
 
+  // A palette change re-tints the live uniforms in place — no geometry or
+  // material rebuild, so the jelly never flickers.
+  useEffect(() => {
+    sharedUniforms.uCyan.value.set(palette.cyan);
+    sharedUniforms.uViolet.value.set(palette.violet);
+    sharedUniforms.uCutColor.value.set(palette.cut);
+  }, [palette, sharedUniforms]);
+
   const groupRef = useRef();
   const proxyRef = useRef();
   const nodeRefs = useRef({});
@@ -282,7 +313,15 @@ function Controller({
   const clockRef = useRef(0);
   const flashRef = useRef(Object.fromEntries(BRAIN_REGIONS.map((region) => [region.code, 0])));
   const rotationRef = useRef({ yaw: -0.5, pitch: 0.12, velocity: 0, lastInput: -10 });
-  const dragRef = useRef(null);
+  // Multi-touch: every active pointer gets its own drag. The first pointer
+  // decides the gesture — a second finger only joins as a grab, and only on
+  // the brain. Two grabs make a pinch: fingers together squash the whole
+  // body along the axis between the handfuls, apart stretch it.
+  const dragsRef = useRef(new Map());
+  const pinchRef = useRef(null); // { startDist, axis, amount } while pinching
+  const pinchEaseRef = useRef({ axis: [0, 1, 0], amount: 0 });
+  const sliceRef = useRef(0); // eased 0..SLICE.maxGap
+  const sliceInitRef = useRef(false);
   const pendingShakeRef = useRef([]);
   const helloRef = useRef(false);
   const ambientRef = useRef({ at: 0.6 - AMBIENT_EVERY, index: 0 });
@@ -374,36 +413,76 @@ function Controller({
   useEffect(() => {
     const element = gl.domElement;
 
+    function grabAt(clientX, clientY, pointerId) {
+      const now = clockRef.current;
+      const hit = hitTest(clientX, clientY);
+      if (!hit) return null;
+      const id = poke(hit, now, { held: true });
+      const drag = {
+        kind: 'poke',
+        id,
+        x: clientX,
+        y: clientY,
+        world: hit.world,
+        depth: hit.depth,
+        origin: hit.origin,
+        pointerId,
+      };
+      dragsRef.current.set(pointerId, drag);
+      return drag;
+    }
+
     function onPointerDown(event) {
       if (event.button !== undefined && event.button !== 0) return;
+      if (dragsRef.current.has(event.pointerId)) return;
       const now = clockRef.current;
       rotationRef.current.lastInput = now;
       // Browsers only allow audio after a user gesture: this is that gesture.
       soundRef?.current?.unlock();
-      const hit = hitTest(event.clientX, event.clientY);
-      if (hit) {
-        const id = poke(hit, now, { held: true });
-        dragRef.current = { kind: 'poke', id, x: event.clientX, y: event.clientY, world: hit.world, depth: hit.depth, pointerId: event.pointerId };
-      } else {
-        dragRef.current = { kind: 'rotate', x: event.clientX, y: event.clientY, lastX: event.clientX, pointerId: event.pointerId };
+      if (dragsRef.current.size === 0) {
+        // The first pointer decides the gesture.
+        const drag = grabAt(event.clientX, event.clientY, event.pointerId);
+        if (!drag) {
+          dragsRef.current.set(event.pointerId, {
+            kind: 'rotate', x: event.clientX, y: event.clientY, lastX: event.clientX, pointerId: event.pointerId,
+          });
+        }
+        return;
+      }
+      // A second finger only joins as a grab, and only on the brain — a
+      // rotate gesture stays single-finger and is never hijacked.
+      const first = dragsRef.current.values().next().value;
+      if (first.kind !== 'poke') return;
+      const grabs = [...dragsRef.current.values()].filter((entry) => entry.kind === 'poke');
+      if (grabs.length >= 2) return; // two handfuls are plenty
+      const before = grabs[0];
+      const drag = grabAt(event.clientX, event.clientY, event.pointerId);
+      if (!drag) return;
+      // Two grabs: the pinch begins, along the line between the handfuls.
+      const startDist = Math.hypot(before.x - drag.x, before.y - drag.y);
+      if (startDist >= PINCH.minStartDist) {
+        const axis = pinchAxis(before.origin, drag.origin);
+        pinchRef.current = { startDist, axis, amount: 0 };
+        pinchEaseRef.current.axis = axis;
       }
     }
 
     function onPointerMove(event) {
-      const drag = dragRef.current;
+      const drag = dragsRef.current.get(event.pointerId);
       if (!drag) {
         // Cheap hover feedback against the coarse proxy only.
-        if (event.pointerType === 'mouse' && event.target === element) {
+        if (dragsRef.current.size === 0 && event.pointerType === 'mouse' && event.target === element) {
           element.style.cursor = raycastProxy(event.clientX, event.clientY) ? 'grab' : 'default';
         }
         return;
       }
-      if (drag.pointerId !== event.pointerId) return;
       rotationRef.current.lastInput = clockRef.current;
       if (drag.kind === 'poke') {
         // Where the pointer is now, at the depth of the grabbed point: the
         // handful follows it in the screen plane. Convert that world-space
         // pull into the brain's own (rotated) space for the shader.
+        drag.x = event.clientX;
+        drag.y = event.clientY;
         const rect = element.getBoundingClientRect();
         scratch.world.set(
           ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -415,8 +494,21 @@ function Controller({
         scratch.rotation.setFromMatrix4(scratch.inverse);
         scratch.delta.applyMatrix3(scratch.rotation);
         jellyRef.current = dragHeldVector(jellyRef.current, drag.id, [scratch.delta.x, scratch.delta.y, scratch.delta.z], cfg);
+        // The stretch loop must be running while any handful is held — a
+        // finger that lifted earlier may have stopped it.
+        soundRef?.current?.stretchStart();
         // The stretch hisses louder the faster the handful moves.
         soundRef?.current?.stretchMove(Math.min(1, scratch.delta.length() * 6));
+        // Two handfuls: the pinch ratio drives the whole-body squash.
+        const pinch = pinchRef.current;
+        if (pinch) {
+          const grabs = [...dragsRef.current.values()].filter((entry) => entry.kind === 'poke');
+          if (grabs.length >= 2) {
+            pinch.amount = pinchAmount(pinch.startDist, Math.hypot(grabs[0].x - grabs[1].x, grabs[0].y - grabs[1].y));
+          } else {
+            pinchRef.current = null;
+          }
+        }
         element.style.cursor = 'grabbing';
       } else {
         const dx = event.clientX - drag.lastX;
@@ -427,16 +519,20 @@ function Controller({
     }
 
     function onPointerUp(event) {
-      const drag = dragRef.current;
-      if (!drag || drag.pointerId !== event.pointerId) return;
+      const drag = dragsRef.current.get(event.pointerId);
+      if (!drag) return;
       if (drag.kind === 'poke') {
         // The release wobble's pitch follows how far the surface was pulled.
         const held = jellyRef.current.impulses.find((impulse) => impulse.id === drag.id);
         const strength = Math.min(1, Math.abs(held?.amplitude ?? 0) / cfg.maxPull + 0.3);
         soundRef?.current?.release(strength);
         jellyRef.current = releaseHeld(jellyRef.current, drag.id, clockRef.current, cfg);
+        if (pinchRef.current) {
+          const grabs = [...dragsRef.current.values()].filter((entry) => entry.kind === 'poke');
+          if (grabs.length < 2) pinchRef.current = null;
+        }
       }
-      dragRef.current = null;
+      dragsRef.current.delete(event.pointerId);
       if (event.pointerType === 'mouse') element.style.cursor = 'grab';
     }
 
@@ -454,6 +550,32 @@ function Controller({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, camera, cfg]);
 
+  // Slicing shoves the hemispheres: two opposing dents at the fissure so the
+  // cut opens with a wobble instead of sliding apart dead. Structural, not a
+  // poke — it doesn't fire signals or count.
+  useEffect(() => {
+    if (!sliceInitRef.current) {
+      sliceInitRef.current = true;
+      return;
+    }
+    const now = clockRef.current;
+    const [cx, cy] = SHELL.center;
+    for (const side of [1, -1]) {
+      const origin = [cx, cy + 1.2, side * 1.2];
+      const added = addImpulse(jellyRef.current, {
+        origin,
+        dir: [0, 0.25, sliced ? side : -side * 0.6],
+        amplitude: sliced ? 0.55 : 0.4,
+        radius: cfg.pokeRadius * 1.2,
+        at: now,
+      }, cfg);
+      jellyRef.current = addPulse(added.state, origin, now, cfg);
+    }
+    soundRef?.current?.unlock();
+    soundRef?.current?.poke(sliced ? 0.65 : 0.45);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliced]);
+
   // --- imperative API for the HUD ------------------------------------------
   useEffect(() => {
     apiRef.current = {
@@ -465,6 +587,8 @@ function Controller({
       reset() {
         jellyRef.current = createJellyState();
         pendingShakeRef.current = [];
+        dragsRef.current.clear();
+        pinchRef.current = null;
         for (const code of Object.keys(flashRef.current)) flashRef.current[code] = 0;
         lastFiredRef.current = 0;
         callbacksRef.current.onFired?.(0);
@@ -557,9 +681,25 @@ function Controller({
     const [sx, sy, sz, sw] = uniformTarget.squash;
     sharedUniforms.uSquash.value.set(sx, sy, sz, sw);
 
+    // Pinch: ease the whole-body squash toward the live two-finger amount,
+    // then relax back to nothing once the fingers lift.
+    const pinchTarget = pinchRef.current ? pinchRef.current.amount : 0;
+    const ease = pinchEaseRef.current;
+    ease.amount += (pinchTarget - ease.amount) * Math.min(1, dt * 10);
+    if (Math.abs(ease.amount) > 0.0005) {
+      sharedUniforms.uPinch.value.set(ease.axis[0], ease.axis[1], ease.axis[2], ease.amount);
+    } else {
+      sharedUniforms.uPinch.value.set(0, 1, 0, 0);
+    }
+
+    // Slice: ease the hemispheres toward open or closed.
+    sliceRef.current = sliceStep(sliceRef.current, sliced ? SLICE.maxGap : 0, dt);
+    sharedUniforms.uSlice.value = sliceRef.current;
+
     // Rotation: drag with inertia, then an idle drift once hands are off.
     const rotation = rotationRef.current;
-    if (!dragRef.current || dragRef.current.kind !== 'rotate') {
+    const rotating = [...dragsRef.current.values()].some((entry) => entry.kind === 'rotate');
+    if (!rotating) {
       rotation.yaw += rotation.velocity * dt;
       rotation.velocity *= Math.pow(0.04, dt);
       if (!reducedMotion && now - rotation.lastInput > IDLE_ROTATE_AFTER) rotation.yaw += 0.16 * dt;
@@ -608,7 +748,7 @@ function Controller({
 
   return (
     <group ref={groupRef}>
-      <Axons />
+      <Axons color={palette.cyan} />
       {BRAIN_REGIONS.map((region) => (
         <group key={region.code} position={region.position}>
           <mesh ref={(node) => { nodeRefs.current[region.code] = node; }}>
@@ -630,7 +770,7 @@ function Controller({
         <meshBasicMaterial />
       </mesh>
       <sprite position={SHELL.center} scale={[18, 13, 1]} renderOrder={-1}>
-        <spriteMaterial map={glowTexture} color={VIOLET} transparent opacity={0.1} depthWrite={false} blending={THREE.AdditiveBlending} />
+        <spriteMaterial map={glowTexture} color={palette.violet} transparent opacity={0.1} depthWrite={false} blending={THREE.AdditiveBlending} />
       </sprite>
       <sprite position={[SHELL.center[0] + 2.5, SHELL.center[1] + 0.5, SHELL.center[2]]} scale={[10, 8, 1]} renderOrder={-1}>
         <spriteMaterial map={glowTexture} color={MINT} transparent opacity={0.05} depthWrite={false} blending={THREE.AdditiveBlending} />
@@ -644,8 +784,9 @@ function Controller({
  * and none of that should reach the WebGL tree. Everything live flows in
  * through refs.
  */
-function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reducedMotion = false, active = true, onReady, seed = 'poke', soundRef = null }) {
+function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reducedMotion = false, active = true, onReady, seed = 'poke', soundRef = null, palette = null, sliced = false }) {
   const dpr = detail === 'high' ? [1, 1.8] : [1, 1.35];
+  const jellyPalette = palette || paletteById('brain');
   return (
     <Canvas
       className="poke-canvas"
@@ -664,6 +805,8 @@ function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reduced
         reducedMotion={reducedMotion}
         seed={seed}
         soundRef={soundRef}
+        palette={jellyPalette}
+        sliced={sliced}
       />
     </Canvas>
   );

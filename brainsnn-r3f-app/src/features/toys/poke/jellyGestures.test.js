@@ -1,0 +1,90 @@
+import { describe, expect, it } from '../../../test/tinyVitest.js';
+import {
+  PALETTE_STORAGE_KEY,
+  pinchAmount,
+  pinchAxis,
+  PINCH,
+  paletteById,
+  POKE_PALETTES,
+  readStoredPalette,
+  sliceStep,
+  SLICE,
+  storePalette,
+} from './jellyGestures.js';
+
+describe('pinch', () => {
+  it('jelly: fingers together squash (negative), apart stretch (positive), still is zero', () => {
+    expect(pinchAmount(200, 200)).toBe(0);
+    expect(pinchAmount(200, 100)).toBeLessThan(0);
+    expect(pinchAmount(200, 300)).toBeGreaterThan(0);
+  });
+
+  it('jelly: the pinch amount can never invert the body', () => {
+    expect(pinchAmount(200, 0)).toBe(-PINCH.max);
+    expect(pinchAmount(200, 2000)).toBe(PINCH.max);
+  });
+
+  it('jelly: a degenerate start distance pinches to nothing, not NaN', () => {
+    expect(pinchAmount(0, 100)).toBe(0);
+    expect(pinchAmount(-5, 100)).toBe(0);
+  });
+
+  it('jelly: the pinch axis is the normalized line between the two grabs', () => {
+    expect(pinchAxis([0, 0, 0], [3, 0, 0])).toEqual([1, 0, 0]);
+    const diagonal = pinchAxis([1, 1, 1], [2, 2, 2]);
+    expect(Math.hypot(...diagonal)).toBeLessThan(1.0001);
+    expect(Math.hypot(...diagonal)).toBeGreaterThan(0.9999);
+  });
+});
+
+describe('slice', () => {
+  it('jelly: the slice eases toward its target and never overshoots', () => {
+    let value = 0;
+    for (let i = 0; i < 120; i += 1) {
+      const next = sliceStep(value, SLICE.maxGap, 1 / 60);
+      expect(next).toBeGreaterThanOrEqual(value);
+      expect(next).toBeLessThanOrEqual(SLICE.maxGap);
+      value = next;
+    }
+    expect(value).toBeGreaterThan(SLICE.maxGap * 0.99);
+    // …and back again.
+    for (let i = 0; i < 120; i += 1) value = sliceStep(value, 0, 1 / 60);
+    expect(value).toBeLessThan(0.01);
+  });
+
+  it('jelly: a zero timestep holds still', () => {
+    expect(sliceStep(0.4, SLICE.maxGap, 0)).toBe(0.4);
+  });
+});
+
+describe('palettes', () => {
+  it('jelly: every palette carries the three colours the shader needs', () => {
+    const hex = /^#[0-9a-f]{6}$/i;
+    for (const palette of POKE_PALETTES) {
+      expect(hex.test(palette.cyan)).toBe(true);
+      expect(hex.test(palette.violet)).toBe(true);
+      expect(hex.test(palette.cut)).toBe(true);
+    }
+  });
+
+  it('jelly: an unknown palette id falls back to Brain', () => {
+    expect(paletteById('nope').id).toBe('brain');
+    expect(paletteById(undefined).id).toBe('brain');
+  });
+
+  it('jelly: the stored palette round-trips, and garbage reads as Brain', () => {
+    const realWindow = globalThis.window;
+    const store = {};
+    globalThis.window = { localStorage: { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } } };
+    try {
+      expect(readStoredPalette()).toBe('brain');
+      storePalette('watermelon');
+      expect(store[PALETTE_STORAGE_KEY]).toBe('watermelon');
+      expect(readStoredPalette()).toBe('watermelon');
+      store[PALETTE_STORAGE_KEY] = 'mouldy';
+      expect(readStoredPalette()).toBe('brain');
+    } finally {
+      globalThis.window = realWindow;
+    }
+  });
+});
