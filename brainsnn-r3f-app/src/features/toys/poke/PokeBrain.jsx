@@ -75,6 +75,10 @@ function FallbackBrain({ onPoke, loading, palette }) {
           </radialGradient>
         </defs>
         <ellipse cx="210" cy="150" rx="190" ry="140" fill="url(#poke-core)" />
+        {/* specimen tray under the jelly */}
+        <ellipse cx="200" cy="262" rx="170" ry="24" fill="#5b6673" opacity="0.55" />
+        <ellipse cx="200" cy="256" rx="170" ry="24" fill="#aeb9c5" opacity="0.9" />
+        <ellipse cx="200" cy="256" rx="142" ry="17" fill="#6b7684" opacity="0.9" />
         <path className="poke-fallback-body" d="M70 170 C55 120 90 70 150 60 C185 40 245 42 280 62 C330 72 360 115 352 160 C348 190 330 205 300 210 C290 230 265 236 245 228 C225 240 190 238 170 226 C140 234 105 222 95 205 C75 200 66 188 70 170 Z" fill="url(#poke-fill)" />
         <path className="poke-fallback-body" d="M252 228 C262 250 292 256 312 244 C330 232 326 212 305 210 C290 222 268 228 252 228 Z" fill="url(#poke-fill)" />
         <path d="M232 232 C236 254 234 272 229 288 L217 288 C221 270 221 252 218 234 Z" fill="rgba(148,124,255,.2)" />
