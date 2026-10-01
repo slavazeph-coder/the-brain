@@ -1,5 +1,8 @@
 import { describe, expect, it } from '../../../test/tinyVitest.js';
 import {
+  KNIFE,
+  knifeOpacity,
+  knifeY,
   PALETTE_STORAGE_KEY,
   pinchAmount,
   pinchAxis,
@@ -8,6 +11,7 @@ import {
   POKE_PALETTES,
   readStoredPalette,
   sliceStep,
+  sliceTargetFor,
   SLICE,
   storePalette,
 } from './jellyGestures.js';
@@ -57,6 +61,28 @@ describe('slice', () => {
   });
 });
 
+describe('knife cut', () => {
+  it('jelly: the blade starts above the brain and ends through it', () => {
+    expect(knifeY(0)).toBe(KNIFE.topY);
+    expect(knifeY(1)).toBe(KNIFE.bottomY);
+    expect(knifeY(0.3)).toBeLessThan(KNIFE.topY);
+    expect(knifeY(0.3)).toBeGreaterThan(KNIFE.bottomY);
+  });
+
+  it('jelly: the blade fades in fast and out at the end', () => {
+    expect(knifeOpacity(0)).toBe(0);
+    expect(knifeOpacity(0.05)).toBeGreaterThan(0);
+    expect(knifeOpacity(0.5)).toBe(1);
+    expect(knifeOpacity(1)).toBe(0);
+  });
+
+  it('jelly: the cut waits for the blade to bite, and closes without it', () => {
+    expect(sliceTargetFor(true, 0)).toBe(0);
+    expect(sliceTargetFor(true, KNIFE.biteAt + 0.01)).toBe(SLICE.maxGap);
+    expect(sliceTargetFor(false, 1)).toBe(0);
+  });
+});
+
 describe('palettes', () => {
   it('jelly: every palette carries the three colours the shader needs', () => {
     const hex = /^#[0-9a-f]{6}$/i;
@@ -65,6 +91,13 @@ describe('palettes', () => {
       expect(hex.test(palette.violet)).toBe(true);
       expect(hex.test(palette.cut)).toBe(true);
     }
+  });
+
+  it('jelly: the zombie palette exists for Halloween', () => {
+    expect(POKE_PALETTES.length).toBe(6);
+    const zombie = paletteById('zombie');
+    expect(zombie.name).toBe('Zombie');
+    expect(zombie.cut).toBe('#e11d48');
   });
 
   it('jelly: an unknown palette id falls back to Brain', () => {

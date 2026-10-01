@@ -30,7 +30,7 @@ import {
   shakeSchedule,
   writeUniforms,
 } from './jellyPhysics.js';
-import { PINCH, pinchAmount, pinchAxis, paletteById, sliceStep, SLICE } from './jellyGestures.js';
+import { KNIFE, knifeOpacity, knifeY, PINCH, pinchAmount, pinchAxis, paletteById, sliceStep, sliceTargetFor, SLICE } from './jellyGestures.js';
 
 const CYAN = '#68eaff';
 const VIOLET = '#947cff';
@@ -79,11 +79,12 @@ const VERTEX = /* glsl */ `
     }
     n = normalize(n - (grad - dot(grad, n) * n));
 
-    // Slice: the hemispheres peel apart along z, the brain's left/right axis.
-    // The fissure floor stays put so the cut opens as a V, not a shear.
-    float sliceMask = smoothstep(0.05, 1.4, abs(position.z));
+    // Slice: a knife cut — each hemisphere slides apart along z (the brain's
+    // left/right axis) as a rigid slab. Only a thin band at the midline
+    // stretches, so the cut reads as a clean split, never a hinge or a turn.
+    float sliceMask = smoothstep(0.02, 0.5, abs(position.z));
     p.z += sign(position.z) * uSlice * sliceMask;
-    vCut = (1.0 - smoothstep(0.0, 1.6, abs(position.z))) * step(0.001, uSlice);
+    vCut = (1.0 - smoothstep(0.0, 1.2, abs(position.z))) * step(0.001, uSlice);
 
     // Squash and stretch the whole body about its centre along the poke axis.
     vec3 q = p - uCenter;
@@ -322,6 +323,11 @@ function Controller({
   const pinchEaseRef = useRef({ axis: [0, 1, 0], amount: 0 });
   const sliceRef = useRef(0); // eased 0..SLICE.maxGap
   const sliceInitRef = useRef(false);
+  // The knife: a chop swing 0..1 down the midline when Slice is tapped.
+  const knifeRef = useRef({ t: 1, active: false });
+  const knifeGroupRef = useRef();
+  const knifeBladeRef = useRef();
+  const knifeHandleRef = useRef();
   const pendingShakeRef = useRef([]);
   const helloRef = useRef(false);
   const ambientRef = useRef({ at: 0.6 - AMBIENT_EVERY, index: 0 });
@@ -344,11 +350,11 @@ function Controller({
   useEffect(() => {
     const aspect = size.width / Math.max(1, size.height);
     const halfWidth = 5.9;
-    const halfHeight = 4.2;
+    const halfHeight = 4.7; // room below for the tray and the lab bench
     const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const distance = Math.max(halfHeight / tan, halfWidth / (tan * aspect));
     camera.position.set(0.4, 1.4, distance);
-    camera.lookAt(SHELL.center[0], SHELL.center[1] - 0.1, SHELL.center[2]);
+    camera.lookAt(SHELL.center[0], SHELL.center[1] - 0.45, SHELL.center[2]);
     camera.updateProjectionMatrix();
     invalidate();
   }, [camera, size.width, size.height, invalidate]);
@@ -550,14 +556,14 @@ function Controller({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, camera, cfg]);
 
-  // Slicing shoves the hemispheres: two opposing dents at the fissure so the
-  // cut opens with a wobble instead of sliding apart dead. Structural, not a
-  // poke — it doesn't fire signals or count.
+  // Slicing: a knife chops down the midline, then the halves slide apart as
+  // clean slabs. Structural, not a poke — it doesn't fire signals or count.
   useEffect(() => {
     if (!sliceInitRef.current) {
       sliceInitRef.current = true;
       return;
     }
+    if (sliced) knifeRef.current = { t: 0, active: true };
     const now = clockRef.current;
     const [cx, cy] = SHELL.center;
     for (const side of [1, -1]) {
@@ -692,8 +698,23 @@ function Controller({
       sharedUniforms.uPinch.value.set(0, 1, 0, 0);
     }
 
-    // Slice: ease the hemispheres toward open or closed.
-    sliceRef.current = sliceStep(sliceRef.current, sliced ? SLICE.maxGap : 0, dt);
+    // Slice: the knife chops down the midline first; the hemispheres slide
+    // apart only once the blade has bitten, so the cut is visibly done by
+    // the knife. Unslicing just slides them shut — no second chop.
+    const knife = knifeRef.current;
+    if (knife.active) {
+      knife.t = Math.min(1, knife.t + dt / KNIFE.chopTime);
+      if (knife.t >= 1) knife.active = false;
+    }
+    const knifeT = sliced ? knife.t : 1;
+    if (knifeGroupRef.current) {
+      knifeGroupRef.current.position.y = knifeY(knifeT);
+      knifeGroupRef.current.visible = sliced && knifeOpacity(knifeT) > 0.01;
+    }
+    const bladeOpacity = sliced ? knifeOpacity(knifeT) : 0;
+    if (knifeBladeRef.current) knifeBladeRef.current.opacity = bladeOpacity;
+    if (knifeHandleRef.current) knifeHandleRef.current.opacity = bladeOpacity;
+    sliceRef.current = sliceStep(sliceRef.current, sliceTargetFor(sliced, knifeT), dt);
     sharedUniforms.uSlice.value = sliceRef.current;
 
     // Rotation: drag with inertia, then an idle drift once hands are off.
@@ -747,7 +768,29 @@ function Controller({
   });
 
   return (
-    <group ref={groupRef}>
+    <>
+      {/* The lab: lights for the bench and tray, then the static bench the
+          brain's specimen tray sits on. The brain spins inside its tray. */}
+      <ambientLight intensity={0.75} />
+      <directionalLight position={[6, 12, 8]} intensity={1.1} />
+      <directionalLight position={[-7, 5, -6]} intensity={0.35} color="#8fb4ff" />
+      <group position={[SHELL.center[0], 0, SHELL.center[2]]}>
+        <mesh position={[0, -5.15, 0]}>
+          <boxGeometry args={[34, 0.9, 22]} />
+          <meshStandardMaterial color="#1c2531" roughness={0.9} metalness={0.1} />
+        </mesh>
+        <gridHelper args={[34, 34, '#3b4b63', '#2a3547']} position={[0, -4.68, 0]} />
+        {/* steel specimen tray: the jelly rests in the dish */}
+        <mesh position={[0, -4.45, 0]}>
+          <cylinderGeometry args={[6.4, 5.9, 0.5, 48]} />
+          <meshStandardMaterial color="#9aa7b4" roughness={0.35} metalness={0.9} />
+        </mesh>
+        <mesh position={[0, -3.85, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[6.4, 0.28, 16, 72]} />
+          <meshStandardMaterial color="#c7d0db" roughness={0.28} metalness={0.95} />
+        </mesh>
+      </group>
+      <group ref={groupRef}>
       <Axons color={palette.cyan} />
       {BRAIN_REGIONS.map((region) => (
         <group key={region.code} position={region.position}>
@@ -775,7 +818,20 @@ function Controller({
       <sprite position={[SHELL.center[0] + 2.5, SHELL.center[1] + 0.5, SHELL.center[2]]} scale={[10, 8, 1]} renderOrder={-1}>
         <spriteMaterial map={glowTexture} color={MINT} transparent opacity={0.05} depthWrite={false} blending={THREE.AdditiveBlending} />
       </sprite>
-    </group>
+      {/* The knife: lives in the brain's frame so it always meets the
+          midline, chops down when Slice is tapped, then fades away. */}
+      <group ref={knifeGroupRef} position={[SHELL.center[0], 9, SHELL.center[2]]} visible={false}>
+        <mesh>
+          <boxGeometry args={[3.6, 3.4, 0.14]} />
+          <meshStandardMaterial ref={knifeBladeRef} color="#dfe6ef" metalness={0.95} roughness={0.25} transparent opacity={0} />
+        </mesh>
+        <mesh position={[0, 2.5, 0]}>
+          <boxGeometry args={[0.55, 1.7, 0.55]} />
+          <meshStandardMaterial ref={knifeHandleRef} color="#4a3226" metalness={0.1} roughness={0.8} transparent opacity={0} />
+        </mesh>
+      </group>
+      </group>
+    </>
   );
 }
 

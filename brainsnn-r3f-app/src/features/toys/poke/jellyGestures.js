@@ -49,6 +49,40 @@ export function sliceStep(current, target, dt) {
   return current + (target - current) * t;
 }
 
+export const KNIFE = Object.freeze({
+  // Seconds for the full chop-and-fade swing.
+  chopTime: 0.8,
+  // The cut starts opening once the blade is this far through the swing.
+  biteAt: 0.35,
+  // Fraction of the swing spent chopping down (the rest is the fade).
+  chopEnd: 0.55,
+  topY: 7.5,
+  bottomY: -3.5,
+});
+
+/** Blade height during the chop: eases down through the brain, then rests. */
+export function knifeY(t, cfg = KNIFE) {
+  const chopT = Math.min(1, Math.max(0, t) / cfg.chopEnd);
+  return cfg.topY + (cfg.bottomY - cfg.topY) * chopT * chopT;
+}
+
+/** Blade opacity: snaps in fast, fades out at the end of the swing. */
+export function knifeOpacity(t, cfg = KNIFE) {
+  const clamped = Math.min(1, Math.max(0, t));
+  if (clamped < 0.1) return clamped / 0.1;
+  if (clamped > 0.75) return Math.max(0, 1 - (clamped - 0.75) / 0.25);
+  return 1;
+}
+
+/**
+ * The cut opens only once the blade has bitten — before that the hemispheres
+ * hold shut so the knife visibly does the cutting, not the shader.
+ */
+export function sliceTargetFor(sliced, knifeT, cfg = KNIFE) {
+  if (!sliced) return 0;
+  return knifeT > cfg.biteAt ? SLICE.maxGap : 0;
+}
+
 // Jelly colours. `cyan` is the frontal pole, `violet` the occipital pole —
 // the shader blends between them — and `cut` is the fresh-slice interior.
 export const POKE_PALETTES = Object.freeze([
@@ -57,6 +91,7 @@ export const POKE_PALETTES = Object.freeze([
   { id: 'grape', name: 'Grape', cyan: '#c4b5fd', violet: '#7c3aed', cut: '#f1e8ff' },
   { id: 'ocean', name: 'Ocean', cyan: '#7dd3fc', violet: '#2563eb', cut: '#e2f3fe' },
   { id: 'sunset', name: 'Sunset', cyan: '#fdba74', violet: '#f43f5e', cut: '#fff0e2' },
+  { id: 'zombie', name: 'Zombie', cyan: '#9ae66e', violet: '#6d28d9', cut: '#e11d48' },
 ]);
 
 /** Unknown ids fall back to Brain — a stored id is never allowed to break the shader. */

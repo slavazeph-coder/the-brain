@@ -66,12 +66,13 @@ No vertex is simulated on the CPU. Each frame the CPU writes a few `vec4` unifor
 | Glow intensity | `FRAGMENT` in `PokeBrainScene.jsx` | `glow = 1.0 - exp(-glow * 1.3)` (saturating, so ten overlapping pulses don't white out), then `col += glowCol * glow * 1.25` |
 | Colours | `PokeBrainScene.jsx` constants | `CYAN #68eaff`, `VIOLET #947cff`, `MINT #73efba`, `INHIBIT #fb7185`, the same tokens as `behaviour-home.css`. The shell blends cyan → violet front to back (`smoothstep(-5.4, 5.4, x)`). |
 | Idle behaviour | `PokeBrainScene.jsx` | `IDLE_ROTATE_AFTER` (2.4 s), `AMBIENT_EVERY` (3.4 s; ambient flickers are not counted). The hello-wobble: one gentle silent jiggle ~1.1 s after load if untouched — the invitation to poke. Skipped under reduced motion |
-| Framing | `PokeBrainScene.jsx` camera fit | `halfWidth 5.9`, `halfHeight 4.2` |
+| Framing | `PokeBrainScene.jsx` camera fit | `halfWidth 5.9`, `halfHeight 4.7` (room below for the tray and bench), lookAt dropped 0.45 |
 | Reduced motion | `motionConfig()` | Critically damped, no overshoot, no squash |
 | Squish sound | `squishSound.js` | `SQUISH` — bloop pitch/gain, squelch cutoff, stretch band, wobble tail. All synthesized in Web Audio, zero assets. `createSquishSound()` no-ops without an AudioContext so unit tests run in Node |
 | Pinch / stretch | `PINCH` in `jellyGestures.js` | `gain` 0.55 (finger-distance ratio → whole-body amount), `max` 0.32 (the body can never invert). Negative = squash along the pinch axis, positive = stretch. Two-finger only; the first pointer decides the gesture, a second finger only joins as a grab on the brain. `touch-action: none` on the canvas so the browser never steals the pinch for zoom |
-| Slice | `SLICE` in `jellyGestures.js` | `maxGap` 0.8 world units per hemisphere, `rate` 7/s ease. The hemispheres peel apart along z in the vertex shader; the fissure floor stays put so the cut opens as a V, and the cut band glows with the palette's `cut` colour. Structural — doesn't fire signals |
-| Jelly colours | `POKE_PALETTES` in `jellyGestures.js` | Five presets (Brain, Watermelon, Grape, Ocean, Sunset): frontal `cyan`, occipital `violet`, fresh-slice `cut`. Persisted in `localStorage['poke-palette']`; the 2D fallback gradient follows the same palette |
+| Slice | `SLICE` + `KNIFE` in `jellyGestures.js` | A knife chops down the brain's midline (`knifeY`/`knifeOpacity`, `chopTime` 0.8 s), then the hemispheres slide apart as rigid slabs along z (`maxGap` 0.8, `rate` 7/s ease) — a clean cut, never a hinge. The cut band glows with the palette's `cut` colour. Structural — doesn't fire signals |
+| Jelly colours | `POKE_PALETTES` in `jellyGestures.js` | Six presets (Brain, Watermelon, Grape, Ocean, Sunset, Zombie): frontal `cyan`, occipital `violet`, fresh-slice `cut`. Zombie is rotten green / bruise purple with a blood-red cut. Persisted in `localStorage['poke-palette']`; the 2D fallback gradient follows the same palette |
+| Lab set | `PokeBrainScene.jsx` | The brain sits in a steel specimen tray (tray floor + torus rim) on a dark lab bench with a grid. Static world — the brain spins inside its dish. The 2D fallback draws a matching tray in SVG |
 
 The unit tests pin the behaviour, not the exact numbers: overshoot exists, the wobble is mostly gone in 1 s and fully gone by 3 s, and the caps hold. Retune freely and run `npm test`.
 
