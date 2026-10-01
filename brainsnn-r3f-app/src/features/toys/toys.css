@@ -22,14 +22,19 @@
 .poke-counter strong{font-family:var(--toy-mono);font-size:clamp(2.6rem,4.3vw,3.7rem);line-height:1.05;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--bh-text)}
 .poke-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 .poke-actions .bh-button{min-height:44px}
+.poke-palettes{display:flex;gap:10px;align-items:center;margin-top:12px}
+.poke-swatch{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,.28);padding:0;cursor:pointer;transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.poke-swatch:hover{transform:scale(1.12)}
+.poke-swatch.is-active{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18)}
 .bh-site .bh-button:focus-visible,.bh-site button:focus-visible{outline:2px solid var(--bh-cyan);outline-offset:3px}
 .bh-site .bh-button[disabled]{opacity:.55;cursor:progress}
 
 .poke-webgl{position:absolute;inset:0;opacity:0;transition:opacity .45s ease}
 .poke-webgl.is-ready{opacity:1}
 .poke-canvas{position:absolute!important;inset:0}
-/* Vertical pans still scroll the page on phones; taps and sideways drags poke. */
-.poke-canvas canvas{touch-action:pan-y;cursor:grab}
+/* The toy owns every gesture on the canvas — including two-finger pinch, which
+   the browser would otherwise steal for page zoom. Scroll from outside the stage. */
+.poke-canvas canvas{touch-action:none;cursor:grab}
 
 .poke-fallback{position:absolute;inset:0;display:grid;place-items:center}
 .poke-fallback svg{width:min(92%,640px);height:auto;cursor:pointer;touch-action:manipulation;filter:drop-shadow(0 0 40px rgba(104,234,255,.12))}

@@ -24,24 +24,29 @@ export const JELLY = Object.freeze({
   maxImpulses: 8,
   maxPulses: 8,
   // A tap pushes the surface in this far (world units) before it springs back.
-  pokeAmplitude: 0.7,
-  pokeRadius: 1.55,
+  // Tuned for the stress-toy feel: deep enough to feel like a handful of
+  // jelly, not a prod at a balloon.
+  pokeAmplitude: 0.9,
+  pokeRadius: 1.7,
   // Dragging on the surface pulls or pushes it, capped so it cannot tear.
-  maxPull: 1.8,
+  maxPull: 2.2,
   maxPush: 1.0,
   dragGain: 0.0115,
   // A grab is wider than a tap: you are stretching a handful, not prodding a point.
-  grabRadius: 1.85,
-  // The spring: ~2.3 wobbles a second. Most of the motion is gone within a
+  grabRadius: 2.0,
+  // The spring: ~2 wobbles a second. Most of the motion is gone within a
   // second; the last visible shiver settles by about three. The long tail is
   // the point — it is what makes a clip of it satisfying to watch.
-  omega: 14.5,
-  zeta: 0.15,
-  // Whole-body squash-and-stretch on release.
-  squashGain: 0.1,
-  squashMax: 0.16,
-  squashOmega: 10.5,
-  squashDecay: 3.0,
+  // zeta * omega stays above ~1.96 so the envelope promises in the unit suite
+  // (gone-ish by one second, gone by three) keep holding.
+  omega: 13.0,
+  zeta: 0.155,
+  // Whole-body squash-and-stretch on release. Generous: this is what makes it
+  // read as one soft object instead of a dented sheet.
+  squashGain: 0.15,
+  squashMax: 0.24,
+  squashOmega: 9.0,
+  squashDecay: 2.2,
   // Surface ring pulses.
   pulseSpeed: 4.4,
   pulseWidth: 0.45,

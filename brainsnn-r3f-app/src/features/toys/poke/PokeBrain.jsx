@@ -5,7 +5,7 @@
 // below renders immediately, is already pokeable, and hands over to the jelly
 // when it arrives. The counter carries across the handover.
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clapperboard, Copy, ImageDown, RotateCcw, Share2, Vibrate, X } from 'lucide-react';
+import { Check, Clapperboard, Copy, ImageDown, RotateCcw, Share2, Slice, Vibrate, Volume2, VolumeX, X } from 'lucide-react';
 import { track } from '../../../lib/analytics.js';
 import { useReducedMotion } from '../../../hooks/useReducedMotion.js';
 import { useBrainSimulation } from '../../brain3d/useBrainSimulation.js';
@@ -23,6 +23,8 @@ function canRecordClip() {
 import { SponsorSlot } from '../ToyChrome.jsx';
 import { Brain3DErrorBoundary } from '../../brain3d/Brain3DErrorBoundary.jsx';
 import { probePokeTier } from './pokeTier.js';
+import { createSquishSound } from './squishSound.js';
+import { POKE_PALETTES, paletteById, readStoredPalette, storePalette } from './jellyGestures.js';
 
 const PokeBrainScene = React.lazy(() => import('./PokeBrainScene.jsx'));
 
@@ -45,7 +47,7 @@ const SULCI = [
   'M280 176 C292 188 312 186 322 198',
 ];
 
-function FallbackBrain({ onPoke, loading }) {
+function FallbackBrain({ onPoke, loading, palette }) {
   const [ripples, setRipples] = useState([]);
   const nextId = useRef(1);
 
@@ -64,12 +66,12 @@ function FallbackBrain({ onPoke, loading }) {
       <svg viewBox="0 0 400 300" onPointerDown={handlePointerDown} role="img" aria-label="A stylised brain. Tap it to fire a signal.">
         <defs>
           <linearGradient id="poke-fill" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0" stopColor="#947cff" stopOpacity="0.32" />
-            <stop offset="1" stopColor="#68eaff" stopOpacity="0.3" />
+            <stop offset="0" stopColor={palette.violet} stopOpacity="0.32" />
+            <stop offset="1" stopColor={palette.cyan} stopOpacity="0.3" />
           </linearGradient>
           <radialGradient id="poke-core" cx="0.55" cy="0.45" r="0.6">
-            <stop offset="0" stopColor="#68eaff" stopOpacity="0.2" />
-            <stop offset="1" stopColor="#68eaff" stopOpacity="0" />
+            <stop offset="0" stopColor={palette.cyan} stopOpacity="0.2" />
+            <stop offset="1" stopColor={palette.cyan} stopOpacity="0" />
           </radialGradient>
         </defs>
         <ellipse cx="210" cy="150" rx="190" ry="140" fill="url(#poke-core)" />
@@ -235,8 +237,15 @@ export function PokeBrain() {
   const [shareOpen, setShareOpen] = useState(false);
   const [visible, setVisible] = useState(true);
   const [pageVisible, setPageVisible] = useState(true);
+  const [paletteId, setPaletteId] = useState(() => readStoredPalette());
+  const [sliced, setSliced] = useState(false);
+  const palette = paletteById(paletteId);
   const stageRef = useRef(null);
   const apiRef = useRef(null);
+  // The squish synth: created once, unlocked on the first real gesture.
+  const soundRef = useRef(null);
+  if (soundRef.current === null) soundRef.current = createSquishSound();
+  const [muted, setMuted] = useState(() => soundRef.current.muted);
   const loadStartedRef = useRef(typeof performance !== 'undefined' ? performance.now() : 0);
 
   useEffect(() => {
@@ -305,6 +314,8 @@ export function PokeBrain() {
   const poke2d = useCallback(() => {
     setCount2d((value) => value + 1);
     stimulate('THL', 0.3);
+    soundRef.current.unlock();
+    soundRef.current.poke(0.5);
     firstPoke('2d');
   }, [firstPoke, stimulate]);
 
@@ -313,15 +324,46 @@ export function PokeBrain() {
 
   function shake() {
     track('toy_shake', { toy: TOY.id });
+    soundRef.current.unlock();
     if (showing3d) apiRef.current?.shake();
     else for (let index = 0; index < 5; index += 1) window.setTimeout(poke2d, index * 110);
+  }
+
+  function toggleMute() {
+    const next = soundRef.current.toggle();
+    setMuted(next);
+    track('toy_sound_toggled', { toy: TOY.id, muted: next });
+    // Unmuting should be instantly gratifying: a little bloop proves it worked.
+    if (!next) {
+      soundRef.current.unlock();
+      soundRef.current.poke(0.4);
+    }
   }
 
   function reset() {
     apiRef.current?.reset();
     setCount2d(0);
     setCount3d(0);
+    setSliced(false);
     controlsRef.current.reset();
+  }
+
+  function toggleSlice() {
+    // The click is the audio gesture: unlock first so the slice bloop sounds.
+    soundRef.current.unlock();
+    setSliced((value) => {
+      const next = !value;
+      track('toy_slice_toggled', { toy: TOY.id, sliced: next });
+      return next;
+    });
+    firstPoke('3d');
+  }
+
+  function setPalette(id) {
+    const next = paletteById(id).id;
+    storePalette(next);
+    setPaletteId(next);
+    track('toy_palette_changed', { toy: TOY.id, palette: next });
   }
 
   function openShare() {
@@ -336,7 +378,10 @@ export function PokeBrain() {
     detail: tier === 'high' ? 'high' : 'low',
     reducedMotion,
     seed: 'poke-the-brain',
-  }), [tier, reducedMotion]);
+    soundRef,
+    palette,
+    sliced,
+  }), [tier, reducedMotion, palette, sliced]);
 
   return (
     <section className="poke-hero" aria-labelledby="poke-title" data-testid="poke-hero" data-render={showing3d ? '3d' : '2d'}>
@@ -361,9 +406,9 @@ export function PokeBrain() {
             </Brain3DErrorBoundary>
           </div>
         ) : null}
-        {!showing3d ? <FallbackBrain onPoke={poke2d} loading={tier !== '2d'} /> : null}
+        {!showing3d ? <FallbackBrain onPoke={poke2d} loading={tier !== '2d'} palette={palette} /> : null}
         <p className={`poke-hint ${poked ? 'is-hidden' : ''}`} aria-hidden={poked ? 'true' : undefined}>
-          {tier === '2d' ? 'Tap the brain' : 'Tap, drag or shake the brain'}
+          {tier === '2d' ? 'Tap the brain' : 'Tap, drag, pinch or shake the brain'}
           {tier === 'high' ? null : <span> · best on a computer</span>}
         </p>
         <SponsorSlot toyId={TOY.id} className="poke-sponsor" />
@@ -378,14 +423,36 @@ export function PokeBrain() {
           <button type="button" className="bh-button bh-secondary" onClick={shake} data-testid="poke-shake">
             <Vibrate size={16} aria-hidden="true" /> Shake
           </button>
+          <button type="button" className="bh-button bh-secondary" onClick={toggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute squish sounds' : 'Mute squish sounds'} data-testid="poke-mute">
+            {muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />} {muted ? 'Muted' : 'Sound'}
+          </button>
           <button type="button" className="bh-button bh-secondary" onClick={reset} data-testid="poke-reset">
             <RotateCcw size={16} aria-hidden="true" /> Reset
           </button>
+          {showing3d ? (
+            <button type="button" className="bh-button bh-secondary" onClick={toggleSlice} aria-pressed={sliced} data-testid="poke-slice">
+              <Slice size={16} aria-hidden="true" /> {sliced ? 'Unslice' : 'Slice'}
+            </button>
+          ) : null}
           <button type="button" className="bh-button bh-primary" onClick={openShare} aria-expanded={shareOpen} data-testid="poke-share-button">
             {shareOpen ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />} Share this brain
           </button>
         </div>
         <ShareSheet open={shareOpen} onClose={() => setShareOpen(false)} count={count} apiRef={apiRef} can3d={showing3d} />
+        <div className="poke-palettes" role="group" aria-label="Jelly colour">
+          {POKE_PALETTES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`poke-swatch${option.id === paletteId ? ' is-active' : ''}`}
+              style={{ background: `linear-gradient(135deg, ${option.cyan}, ${option.violet})` }}
+              aria-label={`${option.name} jelly`}
+              aria-pressed={option.id === paletteId}
+              onClick={() => setPalette(option.id)}
+              data-testid={`poke-palette-${option.id}`}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
