@@ -590,6 +590,21 @@ function Controller({
   }, [sliced]);
 
   // --- imperative API for the HUD ------------------------------------------
+  // Slice events: the Slice button dispatches a DOM event that this listener
+  // catches synchronously. This bypasses React props, memo, and the R3F
+  // Canvas update path entirely — the frame loop's slicedRef is updated
+  // directly, so the knife + separation can't wedge on a stale closure.
+  useEffect(() => {
+    const onSliceEvent = (event) => {
+      const next = !!event?.detail?.sliced;
+      slicedRef.current = next;
+      if (next) knifeRef.current = { t: 0, active: true };
+      else knifeRef.current = { t: 1, active: false };
+    };
+    window.addEventListener('poke:slice', onSliceEvent);
+    return () => window.removeEventListener('poke:slice', onSliceEvent);
+  }, []);
+
   useEffect(() => {
     apiRef.current = {
       shake() {
