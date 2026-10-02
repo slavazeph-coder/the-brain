@@ -13,3 +13,9 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/healthz"
 healthcheckTimeout = 30
+# Idempotent schema bootstrap (CREATE TABLE/INDEX IF NOT EXISTS) before the new
+# deployment takes traffic, so a missing or reset database self-heals on merge.
+# Exits 0 when DATABASE_URL is unset (build contexts); ON_ERROR_STOP=1 means a
+# real schema failure blocks the deploy while the previous deployment keeps
+# serving.
+preDeployCommand = "node mission-market-schema-bootstrap.cjs"
