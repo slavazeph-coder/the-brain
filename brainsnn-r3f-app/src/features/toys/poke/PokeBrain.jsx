@@ -362,7 +362,6 @@ export function PokeBrain() {
       // (backup). The frame loop reads slicedRef, updated synchronously by
       // the event listener, so the knife chop + separation can't wedge on
       // a stale React prop or memo-blocked update.
-      console.log('[poke:slice] dispatching, sliced =', next);
       window.dispatchEvent(new CustomEvent('poke:slice', { detail: { sliced: next } }));
       apiRef.current?.setSliced?.(next);
       return next;
