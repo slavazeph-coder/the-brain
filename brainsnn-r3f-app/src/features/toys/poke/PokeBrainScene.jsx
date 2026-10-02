@@ -324,10 +324,9 @@ function Controller({
   const sliceRef = useRef(0); // eased 0..SLICE.maxGap
   const sliceInitRef = useRef(false);
   // Authoritative slice flag for the frame loop. Updated synchronously via
-  // the imperative API (and synced from the prop), so the knife + separation
+  // the DOM event listener and imperative API, so the knife + separation
   // never depend on the useFrame closure seeing a fresh React prop.
   const slicedRef = useRef(sliced);
-  const sliceDbgRef = useRef(0); // DEBUG: throttles frame-loop slice logging
   // The knife: a chop swing 0..1 down the midline when Slice is tapped.
   const knifeRef = useRef({ t: 1, active: false });
   const knifeGroupRef = useRef();
@@ -598,13 +597,11 @@ function Controller({
   useEffect(() => {
     const onSliceEvent = (event) => {
       const next = !!event?.detail?.sliced;
-      console.log('[poke:slice] event received, sliced =', next);
       slicedRef.current = next;
       if (next) knifeRef.current = { t: 0, active: true };
       else knifeRef.current = { t: 1, active: false };
     };
     window.addEventListener('poke:slice', onSliceEvent);
-    console.log('[poke:slice] listener attached');
     return () => window.removeEventListener('poke:slice', onSliceEvent);
   }, []);
 
@@ -736,11 +733,6 @@ function Controller({
     // Reads slicedRef (not the prop) so a stale useFrame closure can't wedge
     // the slice shut.
     const slicedNow = slicedRef.current;
-    // DEBUG: throttled log to verify the frame loop sees the slice state.
-    if (slicedNow && now - (sliceDbgRef.current || 0) > 2) {
-      sliceDbgRef.current = now;
-      console.log('[poke:slice] frame loop sees sliced=true, uSlice =', sliceRef.current.toFixed(3));
-    }
     const knife = knifeRef.current;
     if (knife.active) {
       knife.t = Math.min(1, knife.t + dt / KNIFE.chopTime);
