@@ -10,6 +10,7 @@ Zero ad spend. Each week: record four short clips, one per toy. Post each clip e
 | 02 Fool the Detector | **can you fool our AI detector?** | brainsnn.com/toys/fool-the-detector |
 | 03 Draft Duel | **make two drafts fight** | brainsnn.com/toys/draft-duel |
 | 04 Defend the Brain | **can you keep the brain from getting hijacked?** | brainsnn.com/toys/defend-the-brain |
+| 05 Feed the Fly Brain | **will the fly eat it?** | brainsnn.com/toys/fly-brain |
 
 The hook must be the first words on screen, the first line of the caption, and the first thing said if there is voice-over.
 
@@ -19,6 +20,7 @@ The hook must be the first words on screen, the first line of the caption, and t
 - **The detector is beatable, and we say so.** Its published evaluation says it missed every paraphrased technique on held-out text. That is the game. Never caption it "unbeatable" or "catches all manipulation".
 - **A Duel win is a game result from heuristic signals.** It is not proof one draft is better or will perform better.
 - **Defend scores are 0–100 indices, not probabilities.** Results describe tested conditions, not universal capability.
+- **The fly's wiring is real; its activity is not.** Say "a slice of the published FlyWire fruit-fly connectome, simulated" — never "a real fly brain", "a whole brain", "brain upload" or anything implying a recording. Credit FlyWire and Shiu et al. on every fly post. Don't post the fly until its data licence is confirmed (see `brainsnn-r3f-app/public/fly/ATTRIBUTION.md`).
 - **No invented numbers.** Do not claim a user count, "10k people tried it" or a sponsor you don't have.
 
 ## Links (tag every one)
@@ -32,6 +34,7 @@ The in-app Share buttons already tag links `?src=toyN-share` (a visitor sharing)
 | Fool post | `https://www.brainsnn.com/toys/fool-the-detector?src=toy2-post` |
 | Duel post | `https://www.brainsnn.com/toys/draft-duel?src=toy3-post` |
 | Defend post | `https://www.brainsnn.com/toys/defend-the-brain?src=toy4-post` |
+| Fly post | `https://www.brainsnn.com/toys/fly-brain?src=toy5-post` |
 
 Visitors are recorded first-touch in `from.share`. Read the numbers in the Monday review below.
 
