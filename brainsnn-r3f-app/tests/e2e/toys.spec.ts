@@ -61,6 +61,20 @@ test('slice chops the jelly in two, a swipe re-cuts it, and heal puts it back', 
   await expect(slice).toHaveText(/Slice/);
   await expect(slice).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.poke-hint.is-knife')).toHaveCount(0);
+  // The guide moves on to the next thing worth trying.
+  await expect(page.getByTestId('poke-guide')).toHaveText('Now shake it');
+});
+
+test('the guide starts with a tap and one dock button cycles the jelly colour', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('poke-guide')).toHaveText('Tap the brain');
+  const colour = page.getByTestId('poke-colour');
+  await expect(colour).toHaveAttribute('aria-label', /^Brain jelly/);
+  await colour.click();
+  await expect(colour).toHaveAttribute('aria-label', /^Watermelon jelly/);
+  // The choice persists across visits.
+  await page.reload();
+  await expect(page.getByTestId('poke-colour')).toHaveAttribute('aria-label', /^Watermelon jelly/);
 });
 
 test('share this brain saves a watermarked poster and copies a tagged caption', async ({ page, context, browserName }) => {

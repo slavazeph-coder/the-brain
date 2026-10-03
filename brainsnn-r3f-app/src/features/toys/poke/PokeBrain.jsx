@@ -25,6 +25,7 @@ import { Brain3DErrorBoundary } from '../../brain3d/Brain3DErrorBoundary.jsx';
 import { probePokeTier } from './pokeTier.js';
 import { createSquishSound } from './squishSound.js';
 import { POKE_PALETTES, paletteById, readStoredPalette, storePalette } from './jellyGestures.js';
+import { completeQuest, currentQuest } from './pokeQuest.js';
 
 const PokeBrainScene = React.lazy(() => import('./PokeBrainScene.jsx'));
 
@@ -237,7 +238,6 @@ export function PokeBrain() {
   const [ready3d, setReady3d] = useState(false);
   const [count2d, setCount2d] = useState(0);
   const [count3d, setCount3d] = useState(0);
-  const [poked, setPoked] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [visible, setVisible] = useState(true);
   const [pageVisible, setPageVisible] = useState(true);
@@ -245,6 +245,9 @@ export function PokeBrain() {
   // `cut` mirrors the scene: a slash can cut the brain without the button.
   const [cut, setCut] = useState(false);
   const [knife, setKnife] = useState(false);
+  // What the visitor has tried, so the guide can suggest what's next.
+  const [questDone, setQuestDone] = useState(() => new Set());
+  const markQuest = useCallback((id) => setQuestDone((done) => completeQuest(done, id)), []);
   const palette = paletteById(paletteId);
   const stageRef = useRef(null);
   const apiRef = useRef(null);
@@ -298,7 +301,6 @@ export function PokeBrain() {
   const firstPoke = useCallback((mode) => {
     if (pokedRef.current) return;
     pokedRef.current = true;
-    setPoked(true);
     track('toy_first_poke', { toy: TOY.id, mode, ms: Math.round(performance.now() - loadStartedRef.current) });
   }, []);
 
@@ -308,6 +310,10 @@ export function PokeBrain() {
       stimulate(region, 0.34);
       controlsRef.current.triggerBurst();
       firstPoke('3d');
+      markQuest('poke');
+    },
+    onStretch() {
+      markQuest('stretch');
     },
     onArrive(region, depth, inhibitory) {
       if (!inhibitory && depth === 0) stimulate(region, 0.16);
@@ -318,6 +324,8 @@ export function PokeBrain() {
     onCutChange(isCut, via) {
       setCut(isCut);
       track('toy_slice_toggled', { toy: TOY.id, sliced: isCut, via });
+      if (isCut) markQuest(via === 'swipe' ? 'swipe' : 'slice');
+      else markQuest('heal');
     },
   };
 
@@ -327,7 +335,8 @@ export function PokeBrain() {
     soundRef.current.unlock();
     soundRef.current.poke(0.5);
     firstPoke('2d');
-  }, [firstPoke, stimulate]);
+    markQuest('poke');
+  }, [firstPoke, stimulate, markQuest]);
 
   const showing3d = tier !== '2d' && ready3d;
   const count = count2d + count3d;
@@ -338,6 +347,7 @@ export function PokeBrain() {
 
   function shake() {
     track('toy_shake', { toy: TOY.id });
+    markQuest('shake');
     soundRef.current.unlock();
     if (showing3d) apiRef.current?.shake();
     else for (let index = 0; index < 5; index += 1) shakeTimers.current.push(window.setTimeout(poke2d, index * 110));
@@ -385,8 +395,10 @@ export function PokeBrain() {
     firstPoke('3d');
   }
 
-  function setPalette(id) {
-    const next = paletteById(id).id;
+  // One button, every flavour: each tap moves to the next jelly colour.
+  function cyclePalette() {
+    const index = POKE_PALETTES.findIndex((option) => option.id === paletteId);
+    const next = POKE_PALETTES[(index + 1) % POKE_PALETTES.length].id;
     storePalette(next);
     setPaletteId(next);
     track('toy_palette_changed', { toy: TOY.id, palette: next });
@@ -408,14 +420,17 @@ export function PokeBrain() {
     palette,
   }), [tier, reducedMotion, palette]);
 
+  const step = currentQuest(questDone, { has3d: showing3d, knife });
+  const nextPalette = POKE_PALETTES[(POKE_PALETTES.findIndex((option) => option.id === paletteId) + 1) % POKE_PALETTES.length];
+
   return (
     <section className="poke-hero" aria-labelledby="poke-title" data-testid="poke-hero" data-render={showing3d ? '3d' : '2d'}>
       <div className="poke-head">
         <p className="bh-kicker">A PLAYGROUND FOR MACHINE INTELLIGENCE</p>
         <h1 id="poke-title">Poke the brain and <span>watch the signal travel.</span></h1>
         <p className="poke-lead">
-          Every poke drives the seven-region spiking model the analyzer runs on.{' '}
-          <span className="poke-lead-extra">Drag to stretch it. Shake it.</span>{' '}
+          Every poke fires the seven-region spiking model the analyzer runs on.{' '}
+          <span className="poke-lead-extra">Stretch it, slice it, shake it.</span>{' '}
           It is a simulation — not a recording of anyone&apos;s brain.
         </p>
       </div>
@@ -432,56 +447,65 @@ export function PokeBrain() {
           </div>
         ) : null}
         {!showing3d ? <FallbackBrain onPoke={poke2d} loading={tier !== '2d'} palette={palette} /> : null}
-        {knife && showing3d ? (
-          <p className="poke-hint is-knife" role="status">Swipe through the brain to slice it</p>
-        ) : (
-          <p className={`poke-hint ${poked ? 'is-hidden' : ''}`} aria-hidden={poked ? 'true' : undefined}>
-            {tier === '2d' ? 'Tap the brain' : 'Tap, drag, pinch or slice the brain'}
-            {tier === 'high' ? null : <span> · best on a computer</span>}
-          </p>
-        )}
+        {/* The guide: one line, always the next thing worth trying. */}
+        <p
+          className={`poke-hint${step?.needsKnife ? ' is-knife' : ''}${step ? '' : ' is-hidden'}`}
+          role="status"
+          aria-hidden={step ? undefined : 'true'}
+          data-testid="poke-guide"
+        >
+          {step?.text ?? ''}
+        </p>
+        <div className="poke-dock" role="toolbar" aria-label="Play with the brain">
+          {showing3d ? (
+            <button type="button" className={`poke-dock-button is-main${cut ? ' is-on' : ''}`} onClick={toggleSlice} aria-pressed={cut} data-testid="poke-slice">
+              {cut ? <Bandage size={17} aria-hidden="true" /> : <Slice size={17} aria-hidden="true" />} <span>{cut ? 'Heal' : 'Slice'}</span>
+            </button>
+          ) : null}
+          <button type="button" className="poke-dock-button" onClick={shake} data-testid="poke-shake">
+            <Vibrate size={17} aria-hidden="true" /> <span>Shake</span>
+          </button>
+          <span className="poke-dock-rule" aria-hidden="true" />
+          <button
+            type="button"
+            className="poke-dock-button is-icon"
+            onClick={cyclePalette}
+            aria-label={`${palette.name} jelly. Switch to ${nextPalette.name}`}
+            title={`${palette.name} jelly — tap for ${nextPalette.name}`}
+            data-testid="poke-colour"
+          >
+            <i className="poke-dock-swatch" style={{ background: `linear-gradient(135deg, ${palette.cyan}, ${palette.violet})` }} />
+          </button>
+          <button
+            type="button"
+            className="poke-dock-button is-icon"
+            onClick={toggleMute}
+            aria-pressed={muted}
+            aria-label={muted ? 'Unmute squish sounds' : 'Mute squish sounds'}
+            title={muted ? 'Sound off' : 'Sound on'}
+            data-testid="poke-mute"
+          >
+            {muted ? <VolumeX size={17} aria-hidden="true" /> : <Volume2 size={17} aria-hidden="true" />}
+          </button>
+          <button type="button" className="poke-dock-button is-icon" onClick={reset} aria-label="Reset the brain" title="Reset" data-testid="poke-reset">
+            <RotateCcw size={17} aria-hidden="true" />
+          </button>
+        </div>
         <SponsorSlot toyId={TOY.id} className="poke-sponsor" />
       </div>
 
       <div className="poke-controls">
         <div className="poke-counter">
+          {/* Re-keyed on every signal so the number pops as it climbs. */}
+          <strong key={count} className={count ? 'is-pop' : undefined} data-testid="poke-count">{String(count).padStart(4, '0')}</strong>
           <span>Signals fired</span>
-          <strong data-testid="poke-count">{String(count).padStart(4, '0')}</strong>
         </div>
         <div className="poke-actions">
-          <button type="button" className="bh-button bh-secondary" onClick={shake} data-testid="poke-shake">
-            <Vibrate size={16} aria-hidden="true" /> Shake
-          </button>
-          <button type="button" className="bh-button bh-secondary" onClick={toggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute squish sounds' : 'Mute squish sounds'} data-testid="poke-mute">
-            {muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />} {muted ? 'Muted' : 'Sound'}
-          </button>
-          <button type="button" className="bh-button bh-secondary" onClick={reset} data-testid="poke-reset">
-            <RotateCcw size={16} aria-hidden="true" /> Reset
-          </button>
-          {showing3d ? (
-            <button type="button" className="bh-button bh-secondary" onClick={toggleSlice} aria-pressed={cut} data-testid="poke-slice">
-              {cut ? <Bandage size={16} aria-hidden="true" /> : <Slice size={16} aria-hidden="true" />} {cut ? 'Heal' : 'Slice'}
-            </button>
-          ) : null}
           <button type="button" className="bh-button bh-primary" onClick={openShare} aria-expanded={shareOpen} data-testid="poke-share-button">
             {shareOpen ? <Check size={16} aria-hidden="true" /> : <Share2 size={16} aria-hidden="true" />} Share this brain
           </button>
         </div>
         <ShareSheet open={shareOpen} onClose={() => setShareOpen(false)} count={count} apiRef={apiRef} can3d={showing3d} />
-        <div className="poke-palettes" role="group" aria-label="Jelly colour">
-          {POKE_PALETTES.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={`poke-swatch${option.id === paletteId ? ' is-active' : ''}`}
-              style={{ background: `linear-gradient(135deg, ${option.cyan}, ${option.violet})` }}
-              aria-label={`${option.name} jelly`}
-              aria-pressed={option.id === paletteId}
-              onClick={() => setPalette(option.id)}
-              data-testid={`poke-palette-${option.id}`}
-            />
-          ))}
-        </div>
       </div>
     </section>
   );
