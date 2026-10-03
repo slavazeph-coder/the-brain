@@ -29,6 +29,40 @@ test('the homepage brain is pokeable straight away and counts the signals it fir
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
+test('slice chops the jelly in two, a swipe re-cuts it, and heal puts it back', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/');
+  // Slicing is a 3D-only control; a browser without WebGL keeps the 2D brain.
+  const has3d = await page.locator('[data-testid="poke-hero"][data-render="3d"]').waitFor({ timeout: 60_000 }).then(() => true, () => false);
+  test.skip(!has3d, 'no WebGL in this browser');
+
+  const slice = page.getByTestId('poke-slice');
+  await expect(slice).toHaveText(/Slice/);
+  await slice.click();
+  // The cut lands once the blade bites; then the button offers to heal it.
+  await expect(slice).toHaveText(/Heal/, { timeout: 15_000 });
+  await expect(slice).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.poke-hint.is-knife')).toHaveText('Swipe through the brain to slice it');
+
+  // With the knife out, a swipe from off the brain straight through it cuts again.
+  const stage = await page.locator('.poke-stage').boundingBox();
+  if (!stage) throw new Error('poke stage has no box');
+  const from = [stage.x + stage.width * 0.62, stage.y + stage.height * 0.06];
+  const to = [stage.x + stage.width * 0.4, stage.y + stage.height * 0.8];
+  await page.mouse.move(from[0], from[1]);
+  await page.mouse.down();
+  for (let step = 1; step <= 14; step += 1) {
+    await page.mouse.move(from[0] + (to[0] - from[0]) * step / 14, from[1] + (to[1] - from[1]) * step / 14);
+  }
+  await page.mouse.up();
+  await expect(slice).toHaveText(/Heal/);
+
+  await slice.click();
+  await expect(slice).toHaveText(/Slice/);
+  await expect(slice).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('.poke-hint.is-knife')).toHaveCount(0);
+});
+
 test('share this brain saves a watermarked poster and copies a tagged caption', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'clipboard permissions are chromium-only in Playwright');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

@@ -5,6 +5,8 @@
 //   - poke:    a pitch-dropping "bloop" plus a short squelch of filtered noise
 //   - stretch: looped noise through a bandpass whose gain follows drag speed
 //   - release: a soft low wobble tail, like the surface settling
+//   - slice:   a blade swish (a falling noise sweep) into a wet squelch
+//   - heal:    a rising slurp as the halves suck back together
 //
 // No audio files, no dependencies, no three.js import (this module must stay
 // out of scripts/check-three-imports.mjs's allowlist).
@@ -35,6 +37,15 @@ export const SQUISH = Object.freeze({
   wobbleLfo: 7,
   wobbleDur: 0.55,
   wobbleGain: 0.1,
+  // The slice swish: bandpassed noise sweeping down from `swishFrom` to
+  // `swishTo`, then a squelch as the halves part.
+  swishFrom: 3200,
+  swishTo: 520,
+  swishDur: 0.16,
+  // The heal slurp: a sine sliding up as the halves rejoin.
+  slurpFrom: 90,
+  slurpTo: 260,
+  slurpDur: 0.24,
 });
 
 function clamp01(value) {
@@ -69,6 +80,20 @@ export function wobbleParams(strength = 0.5) {
   };
 }
 
+/** Pure: slice swish parameters for a cut of the given strength (0..1). */
+export function sliceParams(strength = 0.7) {
+  const s = clamp01(strength);
+  return {
+    fromHz: SQUISH.swishFrom,
+    toHz: SQUISH.swishTo,
+    duration: SQUISH.swishDur,
+    gain: 0.12 + 0.2 * s,
+    // The squelch lands as the swish ends: the blade is through.
+    squelchAt: SQUISH.swishDur * 0.7,
+    squelchStrength: 0.45 + 0.45 * s,
+  };
+}
+
 function readMuted() {
   try {
     return typeof localStorage !== 'undefined' && localStorage.getItem(SQUISH.storageKey) === '1';
@@ -98,6 +123,8 @@ function createStub(muted) {
     stretchMove: noop,
     stretchEnd: noop,
     release: noop,
+    slice: noop,
+    heal: noop,
     toggle() { m = !m; writeMuted(m); return m; },
   };
 }
@@ -187,6 +214,41 @@ export function createSquishSound() {
     lfo.stop(t + duration + 0.02);
   }
 
+  function playSwish(strength) {
+    const { fromHz, toHz, duration, gain, squelchAt, squelchStrength } = sliceParams(strength);
+    const t = ctx.currentTime;
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer(duration + 0.04);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 2.2;
+    filter.frequency.setValueAtTime(fromHz, t);
+    filter.frequency.exponentialRampToValueAtTime(toHz, t + duration);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + duration * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    noise.connect(filter).connect(g).connect(master);
+    noise.start(t);
+    noise.stop(t + duration + 0.04);
+    window.setTimeout(() => { try { playBloop(squelchStrength); } catch { /* no-op */ } }, squelchAt * 1000);
+  }
+
+  function playSlurp() {
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(SQUISH.slurpFrom, t);
+    osc.frequency.exponentialRampToValueAtTime(SQUISH.slurpTo, t + SQUISH.slurpDur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.28, t + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + SQUISH.slurpDur);
+    osc.connect(g).connect(master);
+    osc.start(t);
+    osc.stop(t + SQUISH.slurpDur + 0.02);
+  }
+
   return {
     supported: true,
     get muted() { return muted; },
@@ -237,6 +299,14 @@ export function createSquishSound() {
       this.stretchEnd();
       if (muted) return;
       try { playWobble(strength); } catch { /* no-op */ }
+    },
+    slice(strength = 0.7) {
+      if (muted) return;
+      try { playSwish(strength); } catch { /* no-op */ }
+    },
+    heal() {
+      if (muted) return;
+      try { playSlurp(); } catch { /* no-op */ }
     },
     toggle() {
       muted = !muted;

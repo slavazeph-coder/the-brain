@@ -1,5 +1,6 @@
 // Gesture-layer helpers for the jelly lab: two-finger pinch/stretch, the
-// hemisphere slice, and the jelly colour palettes.
+// knife's chop, and the jelly colour palettes. The cut itself — planes,
+// pieces, droplets — lives in jellySlice.js.
 //
 // Pure functions only — the scene owns pointer tracking and uniforms — so the
 // maths is testable here in bare Node, like jellyPhysics.js.
@@ -36,19 +37,6 @@ export function pinchAxis(originA, originB) {
   return [dx / length, dy / length, dz / length];
 }
 
-export const SLICE = Object.freeze({
-  // World units each hemisphere travels when the slice is fully open.
-  maxGap: 0.8,
-  // How fast the cut eases open/closed (per second).
-  rate: 7,
-});
-
-/** Ease the slice toward its target. Frame-rate independent, no overshoot. */
-export function sliceStep(current, target, dt) {
-  const t = Math.min(1, Math.max(0, dt) * SLICE.rate);
-  return current + (target - current) * t;
-}
-
 export const KNIFE = Object.freeze({
   // Seconds for the full chop-and-fade swing.
   chopTime: 0.8,
@@ -56,14 +44,19 @@ export const KNIFE = Object.freeze({
   biteAt: 0.35,
   // Fraction of the swing spent chopping down (the rest is the fade).
   chopEnd: 0.55,
-  topY: 7.5,
-  bottomY: -3.5,
+  // Height of the knife's origin above the brain's centre, top and bottom of
+  // the swing. The cutting edge sits `edgeBelow` under the origin, so at the
+  // bottom it just kisses the tray.
+  topY: 8,
+  bottomY: -2.45,
+  edgeBelow: 0.95,
 });
 
 /** Blade height during the chop: eases down through the brain, then rests. */
 export function knifeY(t, cfg = KNIFE) {
   const chopT = Math.min(1, Math.max(0, t) / cfg.chopEnd);
-  return cfg.topY + (cfg.bottomY - cfg.topY) * chopT * chopT;
+  const k = chopT * chopT;
+  return cfg.topY * (1 - k) + cfg.bottomY * k;
 }
 
 /** Blade opacity: snaps in fast, fades out at the end of the swing. */
@@ -72,15 +65,6 @@ export function knifeOpacity(t, cfg = KNIFE) {
   if (clamped < 0.1) return clamped / 0.1;
   if (clamped > 0.75) return Math.max(0, 1 - (clamped - 0.75) / 0.25);
   return 1;
-}
-
-/**
- * The cut opens only once the blade has bitten — before that the hemispheres
- * hold shut so the knife visibly does the cutting, not the shader.
- */
-export function sliceTargetFor(sliced, knifeT, cfg = KNIFE) {
-  if (!sliced) return 0;
-  return knifeT > cfg.biteAt ? SLICE.maxGap : 0;
 }
 
 // Jelly colours. `cyan` is the frontal pole, `violet` the occipital pole —

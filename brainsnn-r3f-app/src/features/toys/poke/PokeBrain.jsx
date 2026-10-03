@@ -5,7 +5,7 @@
 // below renders immediately, is already pokeable, and hands over to the jelly
 // when it arrives. The counter carries across the handover.
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clapperboard, Copy, ImageDown, RotateCcw, Share2, Slice, Vibrate, Volume2, VolumeX, X } from 'lucide-react';
+import { Bandage, Check, Clapperboard, Copy, ImageDown, RotateCcw, Share2, Slice, Vibrate, Volume2, VolumeX, X } from 'lucide-react';
 import { track } from '../../../lib/analytics.js';
 import { useReducedMotion } from '../../../hooks/useReducedMotion.js';
 import { useBrainSimulation } from '../../brain3d/useBrainSimulation.js';
@@ -242,7 +242,9 @@ export function PokeBrain() {
   const [visible, setVisible] = useState(true);
   const [pageVisible, setPageVisible] = useState(true);
   const [paletteId, setPaletteId] = useState(() => readStoredPalette());
-  const [sliced, setSliced] = useState(false);
+  // `cut` mirrors the scene: a slash can cut the brain without the button.
+  const [cut, setCut] = useState(false);
+  const [knife, setKnife] = useState(false);
   const palette = paletteById(paletteId);
   const stageRef = useRef(null);
   const apiRef = useRef(null);
@@ -313,6 +315,10 @@ export function PokeBrain() {
     onFired(total) {
       setCount3d(total);
     },
+    onCutChange(isCut, via) {
+      setCut(isCut);
+      track('toy_slice_toggled', { toy: TOY.id, sliced: isCut, via });
+    },
   };
 
   const poke2d = useCallback(() => {
@@ -325,12 +331,16 @@ export function PokeBrain() {
 
   const showing3d = tier !== '2d' && ready3d;
   const count = count2d + count3d;
+  // The 2D shake is a burst of timed pokes; Reset must cancel any still due,
+  // or they land after the counter was zeroed.
+  const shakeTimers = useRef([]);
+  useEffect(() => () => shakeTimers.current.forEach((timer) => window.clearTimeout(timer)), []);
 
   function shake() {
     track('toy_shake', { toy: TOY.id });
     soundRef.current.unlock();
     if (showing3d) apiRef.current?.shake();
-    else for (let index = 0; index < 5; index += 1) window.setTimeout(poke2d, index * 110);
+    else for (let index = 0; index < 5; index += 1) shakeTimers.current.push(window.setTimeout(poke2d, index * 110));
   }
 
   function toggleMute() {
@@ -345,27 +355,33 @@ export function PokeBrain() {
   }
 
   function reset() {
+    shakeTimers.current.forEach((timer) => window.clearTimeout(timer));
+    shakeTimers.current = [];
     apiRef.current?.reset();
     setCount2d(0);
     setCount3d(0);
-    setSliced(false);
+    setCut(false);
+    setKnife(false);
     controlsRef.current.reset();
   }
 
   function toggleSlice() {
-    // The click is the audio gesture: unlock first so the slice bloop sounds.
+    // The click is the audio gesture: unlock first so the swish sounds.
     soundRef.current.unlock();
-    setSliced((value) => {
-      const next = !value;
-      track('toy_slice_toggled', { toy: TOY.id, sliced: next });
-      // Drive the 3D slice via DOM event (primary) and imperative API
-      // (backup). The frame loop reads slicedRef, updated synchronously by
-      // the event listener, so the knife chop + separation can't wedge on
-      // a stale React prop or memo-blocked update.
-      window.dispatchEvent(new CustomEvent('poke:slice', { detail: { sliced: next } }));
-      apiRef.current?.setSliced?.(next);
-      return next;
-    });
+    const api = apiRef.current;
+    if (!api) return;
+    if (cut) {
+      // Heal: the pieces slide back together and the knife is put away.
+      api.heal();
+      api.setKnife(false);
+      setKnife(false);
+    } else {
+      // Slice: a blade chops it in two, and the knife stays out so a swipe
+      // through the brain cuts it again wherever you like.
+      api.chop();
+      api.setKnife(true);
+      setKnife(true);
+    }
     firstPoke('3d');
   }
 
@@ -390,8 +406,7 @@ export function PokeBrain() {
     seed: 'poke-the-brain',
     soundRef,
     palette,
-    sliced,
-  }), [tier, reducedMotion, palette, sliced]);
+  }), [tier, reducedMotion, palette]);
 
   return (
     <section className="poke-hero" aria-labelledby="poke-title" data-testid="poke-hero" data-render={showing3d ? '3d' : '2d'}>
@@ -417,10 +432,14 @@ export function PokeBrain() {
           </div>
         ) : null}
         {!showing3d ? <FallbackBrain onPoke={poke2d} loading={tier !== '2d'} palette={palette} /> : null}
-        <p className={`poke-hint ${poked ? 'is-hidden' : ''}`} aria-hidden={poked ? 'true' : undefined}>
-          {tier === '2d' ? 'Tap the brain' : 'Tap, drag, pinch or shake the brain'}
-          {tier === 'high' ? null : <span> · best on a computer</span>}
-        </p>
+        {knife && showing3d ? (
+          <p className="poke-hint is-knife" role="status">Swipe through the brain to slice it</p>
+        ) : (
+          <p className={`poke-hint ${poked ? 'is-hidden' : ''}`} aria-hidden={poked ? 'true' : undefined}>
+            {tier === '2d' ? 'Tap the brain' : 'Tap, drag, pinch or slice the brain'}
+            {tier === 'high' ? null : <span> · best on a computer</span>}
+          </p>
+        )}
         <SponsorSlot toyId={TOY.id} className="poke-sponsor" />
       </div>
 
@@ -440,8 +459,8 @@ export function PokeBrain() {
             <RotateCcw size={16} aria-hidden="true" /> Reset
           </button>
           {showing3d ? (
-            <button type="button" className="bh-button bh-secondary" onClick={toggleSlice} aria-pressed={sliced} data-testid="poke-slice">
-              <Slice size={16} aria-hidden="true" /> {sliced ? 'Unslice' : 'Slice'}
+            <button type="button" className="bh-button bh-secondary" onClick={toggleSlice} aria-pressed={cut} data-testid="poke-slice">
+              {cut ? <Bandage size={16} aria-hidden="true" /> : <Slice size={16} aria-hidden="true" />} {cut ? 'Heal' : 'Slice'}
             </button>
           ) : null}
           <button type="button" className="bh-button bh-primary" onClick={openShare} aria-expanded={shareOpen} data-testid="poke-share-button">

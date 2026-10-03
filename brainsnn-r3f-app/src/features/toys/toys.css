@@ -51,6 +51,7 @@
 .poke-hint{position:absolute;left:50%;bottom:20px;z-index:2;transform:translateX(-50%);margin:0;padding:8px 14px;border:1px solid var(--bh-line);border-radius:999px;background:rgba(5,7,11,.6);font-size:.74rem;color:#c9d4e1;white-space:nowrap;pointer-events:none;transition:opacity .5s ease,transform .5s ease}
 .poke-hint span{color:var(--bh-muted)}
 .poke-hint.is-hidden{opacity:0;transform:translate(-50%,8px)}
+.poke-hint.is-knife{border-color:rgba(104,234,255,.45);color:#e8fbff;box-shadow:0 0 18px rgba(104,234,255,.18)}
 .poke-sponsor{position:absolute;right:18px;bottom:20px;z-index:2;margin:0}
 
 /* Share sheet */
