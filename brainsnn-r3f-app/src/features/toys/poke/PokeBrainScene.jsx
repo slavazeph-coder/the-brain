@@ -13,10 +13,10 @@
 // each open face with a cross-section of the folded jelly; and both pieces
 // fall open about a hinge at the bottom of the cut. Nodes, axons and signals
 // ride along with the piece they sit in.
-import React, { memo, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Line } from '@react-three/drei';
+import { Line, PerformanceMonitor } from '@react-three/drei';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { BRAIN_REGIONS, PATHWAYS, REGION_MAP, pathwayControlPoint, pointOnPathway } from '../../brain3d/brainRegions.js';
 import { buildBrainShell, SHELL, SHELL_DETAIL, silhouette, surfacePointToward } from './brainShell.js';
@@ -70,6 +70,7 @@ const AXON_POINTS = 25;
 const TRAIL_POINTS = 18;
 const TRAIL_LIFE = 0.16; // seconds a slash point lingers behind the pointer
 const CAP_SIZE = 6.4; // half-width of the cross-section quad, world units
+const DPR_FLOOR = 0.85; // the lowest resolution a struggling device drops to
 
 // --- shaders ------------------------------------------------------------------
 // Body deformation, shared by the shell and the cut caps so a cap's rim moves
@@ -1139,6 +1140,8 @@ function Controller({
         const held = jellyRef.current.impulses.find((impulse) => impulse.id === drag.id);
         const strength = Math.min(1, Math.abs(held?.amplitude ?? 0) / cfg.maxPull + 0.3);
         soundRef?.current?.release(strength);
+        // A real pull, not a tap: tell the HUD so its guide can move on.
+        if (Math.abs(held?.amplitude ?? 0) > 0.5) callbacksRef.current.onStretch?.();
         jellyRef.current = releaseHeld(jellyRef.current, drag.id, clockRef.current, cfg);
         if (pinchRef.current) {
           const grabs = [...dragsRef.current.values()].filter((entry) => entry.kind === 'poke');
@@ -1641,7 +1644,13 @@ function writeLine(line, points) {
  * through refs.
  */
 function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reducedMotion = false, active = true, onReady, seed = 'poke', soundRef = null, palette = null }) {
-  const dpr = detail === 'high' ? [1, 1.8] : [1, 1.35];
+  // Resolution follows the device: start sharp, and if the frame rate can't
+  // hold, trade pixels for smoothness (and win them back if it recovers).
+  // A cut brain draws twice the jelly, so this matters most mid-slice.
+  const maxDpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, detail === 'high' ? 1.8 : 1.35);
+  const [dpr, setDpr] = useState(maxDpr);
+  const decline = useCallback(() => setDpr((value) => Math.max(DPR_FLOOR, Math.round((value - 0.25) * 100) / 100)), []);
+  const incline = useCallback(() => setDpr((value) => Math.min(maxDpr, Math.round((value + 0.25) * 100) / 100)), [maxDpr]);
   const jellyPalette = palette || paletteById('brain');
   return (
     <Canvas
@@ -1653,6 +1662,7 @@ function PokeBrainScene({ simRef, apiRef, callbacksRef, detail = 'high', reduced
       gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
       onCreated={() => onReady?.()}
     >
+      <PerformanceMonitor onDecline={decline} onIncline={incline} flipflops={4} onFallback={() => setDpr(DPR_FLOOR)} />
       <Controller
         simRef={simRef}
         apiRef={apiRef}

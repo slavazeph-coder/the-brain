@@ -37,3 +37,11 @@ description: BrainSNN playground toys (Sept 2026) — poke-the-brain homepage he
 - Graphics: analytic studio reflection (`studio()` in LOOK) on skin + caps; steel/droplets use three `RoomEnvironment` (drei Lightformer env rendered black under SwiftShader — don't go back to it without checking). Tray raised so the jelly rests in it (`STAGE.trayTop` −3.4).
 - Also fixed: 2D-fallback Shake timers survived Reset (counter read 0004 after reset) — the intermittent e2e failure.
 - Visual verification works here: Chromium at /opt/pw-browsers/chromium-1194 with `--use-angle=swiftshader --enable-unsafe-swiftshader` renders the scene; promo clip captured frame-by-frame with `page.clock` (element screenshots hang under a fake clock — use page screenshots).
+- Merged as PR #177 (`54855b9`), deployed by run 139 (Railway "Deploy complete", live healthcheck 200). brainsnn.com is blocked by this cloud environment's egress policy (curl and WebFetch both 403), so live checks rely on the deploy job's healthcheck.
+
+## 2026-10-03 — hero cleanup (branch `feat/poke-hero-ui`)
+
+- Controls moved into an on-stage dock (Slice/Heal gradient main, Shake, colour cycle, sound, reset); left column = hook + popping counter + Share. Swatch row removed (testids `poke-palette-*` gone; `poke-colour` cycles).
+- Guide line (`pokeQuest.js`, tested) replaces the static hint: tap → stretch → slice → swipe → heal → shake, follows the visitor, then hides. `poke-guide` testid; knife steps keep `.is-knife`.
+- Scene edges faded with a CSS mask; adaptive DPR via drei `PerformanceMonitor` (floor 0.85).
+- Capture tip: SwiftShader runs ~3 fps here, so e2e/flow checks must poll, not sleep.
