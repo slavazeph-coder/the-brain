@@ -257,3 +257,54 @@
   .duel-score{gap:10px}
 }
 .poke-share-ready{border-color:rgba(104,234,255,.45);background:rgba(104,234,255,.07)}
+
+/* ---------------------------------------------------------------------------
+   Feed the Fly Brain — toy 05
+   --------------------------------------------------------------------------- */
+.fly-panel{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.9fr);gap:22px;align-items:stretch}
+.fly-stage{position:relative;min-height:480px;border-radius:26px;background:radial-gradient(70% 60% at 50% 45%,rgba(148,124,255,.14),rgba(104,234,255,.05) 55%,transparent 100%);overflow:hidden;isolation:isolate}
+.fly-canvas{position:absolute!important;inset:0}
+.fly-canvas canvas{touch-action:none;cursor:grab}
+.fly-stage-note{position:absolute;inset:auto 0 50% 0;margin:0;text-align:center;font-size:.8rem;color:var(--bh-muted)}
+.fly-legend{position:absolute;left:16px;bottom:14px;display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none;font-size:.72rem;color:#c9d4e1;pointer-events:none}
+.fly-legend li{display:inline-flex;align-items:center;gap:6px}
+.fly-legend i{width:9px;height:9px;border-radius:50%}
+.fly-legend .is-sugar{background:#ffcf5a}
+.fly-legend .is-bitter{background:#fb7185}
+.fly-legend .is-mn9{background:#73efba;box-shadow:0 0 10px #73efba}
+.fly-controls{display:flex;flex-direction:column;gap:16px}
+.fly-feed{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+.fly-feed-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 16px;border:1px solid var(--bh-line);border-radius:999px;background:rgba(255,255,255,.04);color:var(--bh-text);font:inherit;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .15s ease,border-color .15s ease,transform .12s ease}
+.fly-feed-button:hover:not(:disabled){background:rgba(255,255,255,.08)}
+.fly-feed-button:active:not(:disabled){transform:scale(.96)}
+.fly-feed-button:disabled{opacity:.45;cursor:not-allowed}
+.fly-feed-button.is-sugar.is-on{background:rgba(255,207,90,.16);border-color:rgba(255,207,90,.6);color:#ffe7a8}
+.fly-feed-button.is-bitter.is-on{background:rgba(251,113,133,.14);border-color:rgba(251,113,133,.6);color:#ffd0d8}
+.fly-feed-button.is-stop{padding:0 18px;color:#c9d4e1}
+.fly-dot{width:11px;height:11px;border-radius:50%;flex:none}
+.fly-dot.is-sugar{background:#ffcf5a;box-shadow:0 0 10px rgba(255,207,90,.7)}
+.fly-dot.is-bitter{background:#fb7185;box-shadow:0 0 10px rgba(251,113,133,.6)}
+.fly-feed-button:focus-visible,.fly-strength button:focus-visible{outline:2px solid var(--bh-cyan);outline-offset:2px}
+.fly-strength{display:flex;gap:4px;padding:4px;border:1px solid var(--bh-line);border-radius:999px;background:rgba(255,255,255,.02)}
+.fly-strength button{flex:1;height:36px;border:0;border-radius:999px;background:transparent;color:#aab6c5;font:inherit;font-size:.8rem;font-weight:650;cursor:pointer}
+.fly-strength button.is-on{background:rgba(104,234,255,.14);color:#e8fbff}
+.fly-readout{flex:1;contain:layout paint;display:flex;flex-direction:column;gap:6px;padding:20px;border:1px solid var(--bh-line);border-radius:22px;background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.015));transition:border-color .3s ease,box-shadow .3s ease}
+.fly-readout>span{font-size:.62rem;font-weight:850;letter-spacing:.15em;text-transform:uppercase;color:var(--bh-muted)}
+.fly-readout strong{font-family:var(--toy-mono);font-size:clamp(2.6rem,5vw,3.6rem);line-height:1;font-variant-numeric:tabular-nums;color:var(--bh-text)}
+.fly-readout strong small{font-size:.4em;color:var(--bh-muted)}
+.fly-readout p{margin:6px 0 0;font-size:1rem;line-height:1.45;color:#dbe4ee}
+.fly-readout>small{margin-top:auto;font-size:.72rem;color:var(--bh-muted)}
+.fly-readout.is-eating{border-color:rgba(115,239,186,.55);box-shadow:0 0 40px rgba(115,239,186,.12)}
+.fly-readout.is-eating strong{color:#73efba}
+.fly-readout.is-tempted{border-color:rgba(255,207,90,.45)}
+.fly-limits-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.fly-limits-grid h3{margin:0 0 8px;font-size:.95rem}
+.fly-limits-grid p{margin:0;color:#aab6c5;font-size:.9rem;line-height:1.6}
+.fly-limits-grid a{color:var(--bh-cyan)}
+@media (prefers-reduced-motion:reduce){.fly-feed-button,.fly-readout{transition:none}}
+@media(max-width:960px){
+  .fly-panel{grid-template-columns:1fr}
+  .fly-stage{min-height:0;aspect-ratio:1/.82}
+  .fly-limits-grid{grid-template-columns:1fr}
+}
+.fly-limits{max-width:none}

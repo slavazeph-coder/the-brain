@@ -222,3 +222,17 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:4180 npx playwright test tests/e2e/toys.spe
 - Fool the Detector links the published evaluation, and it states that the detector missed every paraphrased technique on held-out text. It keeps "Model scores describe their tested conditions; they do not establish universal capability."
 - Defend the Brain keeps verbatim: "Scores are 0–100 indices, not probabilities." and "Results describe tested conditions, not universal capability."
 - The playbook's positioning ("neural-data software layer, EEG dashboards, open neural-data benchmark, vendor partnerships") is **not** used on the site, because none of those exist yet. The strip says "A software layer for neural-style models." Phase 4 (the benchmark leaderboard) needs real consent flows, storage and a published schema before any of that copy can ship.
+
+
+## Feed the Fly Brain (toy 05)
+
+Real wiring, simulated signals. `/toys/fly-brain` runs the Shiu et al. (Nature 2024) leaky integrate-and-fire model on a 2,621-neuron, 195,759-connection slice of the FlyWire v783 fruit-fly connectome, in the browser. The visitor feeds sugar or bitter at three strengths; MN9 (the motor neuron that extends the proboscis) fires for sugar and stays silent for bitter. Why this resource and not Brain2Qwerty, TRIBE v2 or EEG models: `reports/Open brain resources for BrainSNN.md`.
+
+| What | Where | Notes |
+|---|---|---|
+| The slice | `scripts/fly/build-fly-circuit.py` → `public/fly/feeding-circuit.bin.gz` (412 KB) | Everything within two strong hops (≥5 synapses) downstream of the 21 sugar + 21 bitter receptor neurons and MN9, plus every connection among them, neuron positions (Codex) and a 2,400-triangle whole-brain outline. The script documents its inputs and the binary layout |
+| The model | `parseFlyCircuit` / `createFlySim` in `fly/flyCircuit.js` | Event-driven port of Shiu `model.py` (`SHIU` constants), ~22 µs per 0.1 ms step in Node. Pure, so the unit suite runs it: sugar 150 Hz → MN9 ~117 Hz, bitter → 0, no input → silence. **That test is the guard against a plausible-looking broken port** — the research's first build paired weights with the wrong connections and looked busy everywhere except MN9 |
+| The scene | `fly/FlyBrainScene.jsx` (three allowlist) | Dots at real FlyWire positions in a glass outline; a spike glows for `FLASH_MS` of model time; stepped at `SLOW_MOTION` 0.25 so a signal can be followed; framing fits any aspect |
+| The page | `fly/FlyBrainToy.jsx` | Loads the circuit on open (DecompressionStream; tolerates a server that already unwrapped the gzip). Copy states what is real (wiring) and simulated (activity) and credits FlyWire and Shiu et al. |
+
+**Licence gate:** FlyWire data is described as CC BY-NC 4.0 by several sources and CC BY 4.0 by one; the primary licence page was unreachable from the build environment. Confirm with FlyWire (or rebuild on Janelia's MaleCNS, reported CC BY 4.0, and re-pass the MN9 test) before this route ships on the commercial site. See `public/fly/ATTRIBUTION.md`.

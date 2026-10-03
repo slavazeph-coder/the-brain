@@ -57,6 +57,16 @@ export const TOYS = Object.freeze([
     shareSource: 'toy4-share',
     cta: 'Hold the line',
   },
+  {
+    id: 'fly',
+    number: '05',
+    title: 'Feed the Fly Brain',
+    hook: 'will the fly eat it?',
+    blurb: 'A 2,621-neuron slice of a real fruit fly’s wiring, simulated. Give it sugar or bitter and watch it decide.',
+    path: '/toys/fly-brain',
+    shareSource: 'toy5-share',
+    cta: 'Feed it',
+  },
 ]);
 
 const BY_ID = new Map(TOYS.map((toy) => [toy.id, toy]));

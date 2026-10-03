@@ -87,7 +87,19 @@ async function defend() {
   await context.close();
 }
 
-for (const [name, render] of [['poke', poke], ['fool', fool], ['duel', duel], ['defend', defend]]) {
+async function fly() {
+  const { tab, context } = await page('/toys/fly-brain', '.toy-hero .toy-lead{display:none!important}');
+  await tab.waitForSelector('[data-testid="fly-panel"][data-state="ready"]', { timeout: 60_000 });
+  await tab.click('[data-testid="fly-sugar"]');
+  await tab.waitForFunction(() => document.querySelector('[data-testid="fly-verdict"]').textContent.startsWith('It’s eating'), null, { timeout: 60_000 });
+  await tab.waitForTimeout(1500);
+  await scrollToHeading(tab);
+  await tab.screenshot({ path: join(OUT, 'toy-fly.png') });
+  await context.close();
+}
+
+const only = process.argv[2];
+for (const [name, render] of [['poke', poke], ['fool', fool], ['duel', duel], ['defend', defend], ['fly', fly]].filter(([name]) => !only || name === only)) {
   await render();
   console.log(`rendered public/og/toy-${name}.png`);
 }

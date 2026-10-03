@@ -91,6 +91,7 @@ const allowedEvents = new Set([
   'toy_fool_finished',
   'toy_duel_finished',
   'toy_defend_finished',
+  'toy_fly_fed',
   'survival_world_opened',
   'survival_world_external_clicked',
   'proof_missions_viewed',

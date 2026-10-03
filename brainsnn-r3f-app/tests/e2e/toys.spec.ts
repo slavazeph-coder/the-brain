@@ -77,6 +77,22 @@ test('the guide starts with a tap and one dock button cycles the jelly colour', 
   await expect(page.getByTestId('poke-colour')).toHaveAttribute('aria-label', /^Watermelon jelly/);
 });
 
+test('feed the fly brain: sugar makes the fly eat, bitter does not', async ({ page }) => {
+  test.setTimeout(150_000);
+  await page.goto('/toys/fly-brain');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Will the fly eat it?');
+  // What is real and what is simulated is stated on the page, every time.
+  await expect(page.getByText('No fly was recorded.', { exact: false })).toBeVisible();
+  const ready = await page.locator('[data-testid="fly-panel"][data-state="ready"]').waitFor({ timeout: 90_000 }).then(() => true, () => false);
+  test.skip(!ready, 'no WebGL in this browser');
+  await expect(page.getByTestId('fly-verdict')).toHaveText('Waiting for a taste.');
+  await page.getByTestId('fly-sugar').click();
+  await expect(page.getByTestId('fly-verdict')).toHaveText(/It’s eating/, { timeout: 60_000 });
+  await page.getByTestId('fly-bitter').click();
+  await expect(page.getByTestId('fly-verdict')).toHaveText(/Not eating/, { timeout: 60_000 });
+  await expect(page.getByTestId('fly-mn9')).toHaveText(/^0/);
+});
+
 test('share this brain saves a watermarked poster and copies a tagged caption', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'clipboard permissions are chromium-only in Playwright');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -103,7 +119,7 @@ test('share this brain saves a watermarked poster and copies a tagged caption', 
 test('more toys and both CTAs sit under the hero', async ({ page }) => {
   await page.goto('/');
   const toys = page.locator('#toys');
-  for (const path of ['/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain']) {
+  for (const path of ['/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain', '/toys/fly-brain']) {
     await expect(toys.locator(`a[href="${path}"]`)).toBeVisible();
   }
   await expect(page.getByRole('link', { name: 'Sponsor BrainSNN' })).toHaveAttribute('href', '/sponsor/gt3/');
@@ -152,6 +168,7 @@ test('each toy unfurls as its own rendered screenshot', async ({ request }) => {
     ['/toys/fool-the-detector', '/og/toy-fool.png'],
     ['/toys/draft-duel', '/og/toy-duel.png'],
     ['/toys/defend-the-brain', '/og/toy-defend.png'],
+    ['/toys/fly-brain', '/og/toy-fly.png'],
   ]) {
     const html = await (await request.get(path)).text();
     expect(html).toContain(`<meta property="og:image" content="https://www.brainsnn.com${image}"`);

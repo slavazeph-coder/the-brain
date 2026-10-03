@@ -46,6 +46,18 @@ const ROUTES = [
     ],
   },
   {
+    path: '/toys/fly-brain',
+    title: 'Feed the Fly Brain | BrainSNN',
+    image: '/og/toy-fly.png',
+    description:
+      'Will the fly eat it? Feed sugar or bitter to a 2,621-neuron slice of the published FlyWire fruit-fly connectome and watch a simulated signal decide whether the feeding neuron fires.',
+    heading: 'Will the fly eat it?',
+    body: [
+      'Feed the Fly Brain runs the Shiu et al. (Nature 2024) spiking model on a 2,621-neuron slice of the FlyWire fruit-fly connectome, in your browser. Give it sugar or bitter and watch whether MN9, the motor neuron that extends the proboscis to eat, starts firing.',
+      'The wiring is real: neurons, positions and connections from FlyWire v783 (Dorkenwald et al. and Schlegel et al., Nature 2024). The activity is simulated — no fly was recorded — and the slice leaves out the rest of the brain.',
+    ],
+  },
+  {
     path: '/missions',
     title: 'Proof Missions | BrainSNN',
     description:
@@ -163,6 +175,7 @@ const CRAWL_LINKS = Object.freeze([
   { path: '/toys/fool-the-detector', label: 'Fool the Detector' },
   { path: '/toys/draft-duel', label: 'Draft Duel' },
   { path: '/toys/defend-the-brain', label: 'Defend the Brain' },
+  { path: '/toys/fly-brain', label: 'Feed the Fly Brain' },
   { path: '/arcade', label: 'GaugeGap Arcade' },
   { path: '/lab', label: 'Neuro Powder Lab' },
   { path: '/app', label: 'Content analyzer' },

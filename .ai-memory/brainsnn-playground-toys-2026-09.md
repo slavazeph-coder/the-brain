@@ -45,3 +45,10 @@ description: BrainSNN playground toys (Sept 2026) — poke-the-brain homepage he
 - Guide line (`pokeQuest.js`, tested) replaces the static hint: tap → stretch → slice → swipe → heal → shake, follows the visitor, then hides. `poke-guide` testid; knife steps keep `.is-knife`.
 - Scene edges faded with a CSS mask; adaptive DPR via drei `PerformanceMonitor` (floor 0.85).
 - Capture tip: SwiftShader runs ~3 fps here, so e2e/flow checks must poll, not sleep.
+
+## 2026-10-03 — research + Feed the Fly Brain (branch `feat/brain-research-build`)
+
+- Deep research: `reports/Open brain resources for BrainSNN.md` (+ notes in `research_notes/`). Verdict: Brain2Qwerty/TRIBE v2/EEG models can't honestly or legally drive the toy (no weights / CC BY-NC / need real recordings); connectomes + atlases fit ("real wiring, simulated activity").
+- Built toy 05 `/toys/fly-brain`: FlyWire v783 2,621-neuron feeding slice + Shiu LIF port (`fly/flyCircuit.js`, MN9 sugar/bitter unit tests), scene, page, OG card, e2e. **Not merged: FlyWire data licence unconfirmed (likely CC BY-NC).**
+- FlyWire public buckets are reachable from the sandbox (storage.googleapis.com/flywire-data/codex/data/fafb/783/, flywire_neuropil_meshes); codex.flywire.ai and flywire.ai are not.
+- SwiftShader gotcha: lucide SVG icons in the fly feed buttons + an 8 Hz-updating readout produced grey tile banding across the panel in headless screenshots; replaced with CSS dots and `contain: layout paint` on the readout.
