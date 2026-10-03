@@ -10,11 +10,9 @@ import {
   paletteById,
   POKE_PALETTES,
   readStoredPalette,
-  sliceStep,
-  sliceTargetFor,
-  SLICE,
   storePalette,
 } from './jellyGestures.js';
+import { SHELL } from './brainShell.js';
 
 describe('pinch', () => {
   it('jelly: fingers together squash (negative), apart stretch (positive), still is zero', () => {
@@ -41,26 +39,6 @@ describe('pinch', () => {
   });
 });
 
-describe('slice', () => {
-  it('jelly: the slice eases toward its target and never overshoots', () => {
-    let value = 0;
-    for (let i = 0; i < 120; i += 1) {
-      const next = sliceStep(value, SLICE.maxGap, 1 / 60);
-      expect(next).toBeGreaterThanOrEqual(value);
-      expect(next).toBeLessThanOrEqual(SLICE.maxGap);
-      value = next;
-    }
-    expect(value).toBeGreaterThan(SLICE.maxGap * 0.99);
-    // …and back again.
-    for (let i = 0; i < 120; i += 1) value = sliceStep(value, 0, 1 / 60);
-    expect(value).toBeLessThan(0.01);
-  });
-
-  it('jelly: a zero timestep holds still', () => {
-    expect(sliceStep(0.4, SLICE.maxGap, 0)).toBe(0.4);
-  });
-});
-
 describe('knife cut', () => {
   it('jelly: the blade starts above the brain and ends through it', () => {
     expect(knifeY(0)).toBe(KNIFE.topY);
@@ -76,10 +54,11 @@ describe('knife cut', () => {
     expect(knifeOpacity(1)).toBe(0);
   });
 
-  it('jelly: the cut waits for the blade to bite, and closes without it', () => {
-    expect(sliceTargetFor(true, 0)).toBe(0);
-    expect(sliceTargetFor(true, KNIFE.biteAt + 0.01)).toBe(SLICE.maxGap);
-    expect(sliceTargetFor(false, 1)).toBe(0);
+  it('jelly: the cut opens when the edge is inside the brain, not before it arrives', () => {
+    const edge = (t) => knifeY(t) - KNIFE.edgeBelow;
+    expect(edge(0)).toBeGreaterThan(SHELL.radii[1]);
+    expect(edge(KNIFE.biteAt)).toBeLessThan(SHELL.radii[1]);
+    expect(edge(KNIFE.biteAt)).toBeGreaterThan(-SHELL.radii[1]);
   });
 });
 

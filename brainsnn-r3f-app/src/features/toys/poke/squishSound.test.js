@@ -2,6 +2,7 @@ import { describe, expect, it } from '../../../test/tinyVitest.js';
 import {
   bloopParams,
   createSquishSound,
+  sliceParams,
   SQUISH,
   stretchParams,
   wobbleParams,
@@ -19,6 +20,16 @@ describe('squish sound parameters', () => {
     // The bloop always falls: start above end.
     expect(soft.freqStart).toBeGreaterThan(soft.freqEnd);
     expect(hard.freqStart).toBeGreaterThan(hard.freqEnd);
+  });
+
+  it('squish: the slice swish falls in pitch and the squelch lands before it ends', () => {
+    const soft = sliceParams(0);
+    const hard = sliceParams(1);
+    expect(soft.fromHz).toBeGreaterThan(soft.toHz);
+    expect(hard.gain).toBeGreaterThan(soft.gain);
+    expect(hard.squelchStrength).toBeLessThanOrEqual(1);
+    expect(soft.squelchAt).toBeLessThan(soft.duration);
+    expect(sliceParams(4)).toEqual(sliceParams(1));
   });
 
   it('squish: strengths clamp to 0..1 so a wild drag cannot blow out the gain', () => {
@@ -57,6 +68,8 @@ describe('squish sound stub', () => {
     sound.stretchMove(0.5);
     sound.stretchEnd();
     sound.release(0.8);
+    sound.slice(0.9);
+    sound.heal();
   });
 
   it('squish: the mute toggle works and persists even with no audio', () => {
