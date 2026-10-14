@@ -53,6 +53,17 @@ try {
     const docs = await get('/arena/worker-setup.html'); assert.equal(docs.status, 200); assert.match(docs.headers.get('content-type'), /text\/html/);
     const kit = await get('/arena/downloads/brainsnn-arena-worker.zip', { method: 'HEAD' }); assert.equal(kit.status, 200); assert.match(kit.headers.get('content-type'), /(?:zip|octet-stream)/);
   });
+  await test('site testing viewer and private-worker setup are published as isolated assets', async () => {
+    for (const name of ['site-renderer.js', 'site-core.js', 'site-plan-worker.js', 'site-workspace.js', 'site-workspace.css', 'site-scan-worker.html', 'downloads/brainsnn-site-scan-worker.zip']) {
+      const response = await get('/arena/' + name, { method: 'HEAD' });
+      assert.equal(response.status, 200, name);
+      assert(Number(response.headers.get('content-length')) > 100, name);
+      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    }
+    // Reconstruction uses an authenticated private worker. No upload API or
+    // private capture data is exposed through the public static arena route.
+    assert.equal((await get('/arena/site-scans', { method: 'POST' })).status, 405);
+  });
   await test('missing assets, unknown arena routes and directories remain 404s', async () => {
     for (const url of ['/arena/missing.js', '/arena/missing.css', '/arena/unknown-page', '/arena/assets/robots/']) {
       const r = await get(url); assert.equal(r.status, 404, url); assert.equal(await r.text(), 'Arena asset not found.');

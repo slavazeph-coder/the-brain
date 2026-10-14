@@ -83,7 +83,10 @@ jobs:
           cache: npm
           cache-dependency-path: brainsnn-r3f-app/package-lock.json
       - name: Install web dependencies
-        run: npm ci --no-audit --no-fund
+        run: |
+          npm ci --no-audit --no-fund
+          # npm start preloads the sponsorship server, as the production image does.
+          npm ci --prefix sponsorship --omit=dev --no-audit --no-fund
       - name: Typecheck
         run: npm run lint
       - name: Unit tests
