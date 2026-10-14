@@ -9,7 +9,7 @@ const base = path.resolve(__dirname, '../dist');
 const clone = value => JSON.parse(JSON.stringify(value));
 const g1 = { robotId: 'g1', modelId: 'groot', task: 'Supported reach', seed: '42', view: 'site' };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
-async function flush() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
+async function flush(turns = 40) { for (let i = 0; i < turns; i++) await Promise.resolve(); }
 
 function setup(selection = g1) {
   const e = makeEnv();
@@ -68,12 +68,81 @@ function bytesResponse(text, type = 'application/octet-stream', status = 200) {
   return {
     ok: status >= 200 && status < 300, status,
     headers: { get(name) { return name.toLowerCase() === 'content-length' ? String(bytes.length) : name.toLowerCase() === 'content-type' ? type : null; } },
-    body: { getReader() { let read = false; return { async read() { if (read) return { done: true }; read = true; return { done: false, value: bytes }; }, async cancel() {}, releaseLock() {} }; } },
+    body: { async cancel() {}, getReader() { let read = false; return { async read() { if (read) return { done: true }; read = true; return { done: false, value: bytes }; }, async cancel() {}, releaseLock() {} }; } },
     json: async () => JSON.parse(text), text: async () => text, arrayBuffer: async () => bytes.buffer,
   };
 }
 const response = (data, status = 200) => bytesResponse(JSON.stringify(data), 'application/json', status);
 const capabilities = { version: 1, available: true, acceptedTypes: ['video/mp4', 'application/zip'], maxUploadBytes: 1024 * 1024 };
+
+const MiB = 1024 * 1024;
+const maxArtifactBytes = 3 * 1024 * MiB;
+// Reuse one real chunk for arbitrarily long streams. These tests exercise the
+// complete transfer protocol without allocating or retaining a multi-GiB file.
+function artifactStream(totalBytes, options = {}) {
+  const chunk = new Uint8Array(options.chunkBytes || MiB);
+  const observed = { reads: 0, cancels: 0, releases: 0, bytes: 0, chunk };
+  const reader = {
+    async read() {
+      observed.reads++;
+      if (options.read) return options.read(observed);
+      if (observed.bytes >= totalBytes) return { done: true };
+      const size = Math.min(chunk.byteLength, totalBytes - observed.bytes);
+      observed.bytes += size;
+      return { done: false, value: size === chunk.byteLength ? chunk : chunk.subarray(0, size) };
+    },
+    async cancel(reason) { observed.cancels++; observed.cancelReason = reason; if (options.cancel) await options.cancel(reason); },
+    releaseLock() { observed.releases++; },
+  };
+  const headers = { 'content-type': 'application/octet-stream', ...(options.length === null ? {} : { 'content-length': String(options.length ?? totalBytes) }), ...options.headers };
+  return {
+    observed,
+    response: {
+      ok: (options.status ?? 200) >= 200 && (options.status ?? 200) < 300,
+      status: options.status ?? 200,
+      headers: { get: name => headers[name.toLowerCase()] ?? null },
+      body: { getReader: () => reader, async cancel(reason) { await reader.cancel(reason); } },
+      arrayBuffer() { throw new Error('Artifact downloads must not buffer the response'); },
+      text() { throw new Error('Artifact downloads must not decode the entire response'); },
+      blob() { throw new Error('Artifact downloads must not accumulate a Blob'); },
+    },
+  };
+}
+
+function fileDestination(e, options = {}) {
+  const observed = { pickerCalls: 0, opened: 0, writes: 0, bytes: 0, closed: 0, aborted: 0, released: 0 };
+  const writer = {
+    async write(chunk) {
+      observed.writes++; observed.bytes += chunk.byteLength;
+      if (options.write) await options.write(chunk, observed);
+    },
+    async close() { observed.closed++; if (options.close) await options.close(); },
+    async abort(reason) { observed.aborted++; observed.abortReason = reason; if (options.abort) await options.abort(reason); },
+    releaseLock() { observed.released++; },
+  };
+  const writable = { getWriter: () => writer, abort: reason => writer.abort(reason) };
+  const handle = { async createWritable() { observed.opened++; return options.createWritable ? options.createWritable(writable) : writable; } };
+  e.ctx.showSaveFilePicker = pickerOptions => {
+    observed.pickerCalls++; observed.pickerOptions = pickerOptions;
+    return options.picker ? options.picker(handle) : Promise.resolve(handle);
+  };
+  return { observed, writer, handle };
+}
+
+async function completedArtifact(e, options = {}) {
+  const artifact = { name: 'scene.ply', url: 'https://untrusted.example/collect', ...(options.artifact || {}) };
+  e.respond((url, request) => {
+    if (url.endsWith('/capabilities')) return response({ ...capabilities, maxJobBytes: maxArtifactBytes, ...(options.capabilities || {}) });
+    if (request.method === 'POST') return response({ version: 1, id: 'stream_scan', status: 'queued' }, 202);
+    return response({ version: 1, id: 'stream_scan', status: 'complete', artifacts: [artifact] });
+  });
+  await e.connect(); e.file('site-worker-file', new e.ctx.File(['video'], 'capture.mp4', { type: 'video/mp4' }));
+  e.action('reconstruct'); await flush(); await e.timer(2000);
+  e.requests.length = 0;
+  return artifact;
+}
+
+function forbidBlob(e) { e.ctx.Blob = class { constructor() { assert.fail('Streaming download must never create an in-memory Blob'); } }; }
 
 test('G1 + GR00T remain selected while the actual path is labelled as a planning proxy', () => {
   const e = setup();
@@ -360,4 +429,333 @@ test('editable scenario roundtrip preserves the reviewed planning body without r
   assert.equal(Number(e.el('site-body-operationWidth').value), 0.6);
   assert.equal(e.state().scene.scaleConfirmed, false);
   assert.equal(e.state().selection.robotId, 'g1'); assert.equal(e.state().selection.modelId, 'groot');
+});
+
+test('artifacts over 64 MiB stream directly to disk with authorization and without buffering', async () => {
+  const e = setup(); await completedArtifact(e, { artifact: { sizeBytes: 65 * MiB } });
+  const source = artifactStream(65 * MiB), destination = fileDestination(e, { write(chunk) { assert.equal(chunk, source.observed.chunk); } });
+  forbidBlob(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]');
+  // A save picker must be invoked before the click returns, retaining activation.
+  assert.equal(destination.observed.pickerCalls, 1);
+  await flush(2000);
+  assert.equal(destination.observed.pickerOptions.suggestedName, 'scene.ply');
+  assert.equal(destination.observed.bytes, 65 * MiB); assert.equal(destination.observed.closed, 1);
+  assert.equal(destination.observed.aborted, 0); assert.equal(destination.observed.released, 1);
+  assert.equal(source.observed.releases, 1); assert.equal(e.downloadAnchors.length, 0);
+  assert.equal(e.requests.length, 1);
+  const request = e.requests[0];
+  assert.equal(request.url, 'https://scan-worker.example/v1/site-scans/stream_scan/artifacts/scene.ply');
+  assert.equal(request.options.headers.Authorization, 'Bearer private-test-token-do-not-export');
+  assert.equal(request.options.credentials, 'omit'); assert.equal(request.options.redirect, 'error'); assert.equal(request.options.cache, 'no-store');
+  assert.equal(e.state().scene.source.kind, 'sample'); assert.equal(e.state().policyExecuted, false);
+});
+
+test('a complete synthetic 3 GiB artifact uses one reusable chunk and commits successfully', async () => {
+  const e = setup(); await completedArtifact(e);
+  const source = artifactStream(maxArtifactBytes, { length: null });
+  const destination = fileDestination(e, { write(chunk) { assert.equal(chunk, source.observed.chunk); } });
+  forbidBlob(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(60000);
+  assert.equal(destination.observed.writes, 3072); assert.equal(destination.observed.bytes, maxArtifactBytes);
+  assert.equal(destination.observed.closed, 1); assert.equal(destination.observed.aborted, 0);
+  assert.equal(source.observed.reads, 3073); assert.equal(e.downloadAnchors.length, 0);
+});
+
+test('disk backpressure prevents reading another chunk and prevents concurrent downloads', async () => {
+  const e = setup(); await completedArtifact(e);
+  const pendingWrite = deferred(), source = artifactStream(2 * MiB);
+  const destination = fileDestination(e, { write(_chunk, observed) { if (observed.writes === 1) return pendingWrite.promise; } });
+  e.respond(() => source.response); e.click('[data-site-artifact="0"]'); await flush(50);
+  assert.equal(source.observed.reads, 1); assert.equal(destination.observed.writes, 1);
+  assert.equal(e.root.querySelector('[data-site-artifact="0"]').disabled, true);
+  assert.equal(e.root.querySelector('[data-site-action="reconstruct"]').disabled, true);
+  e.click('[data-site-artifact="0"]'); await flush(); assert.equal(destination.observed.pickerCalls, 1); assert.equal(e.requests.length, 1);
+  pendingWrite.resolve(); await flush(100);
+  assert.equal(destination.observed.closed, 1); assert.equal(destination.observed.bytes, 2 * MiB);
+  assert.equal(e.root.querySelector('[data-site-artifact="0"]').disabled, false);
+});
+
+test('picker cancellation never fetches an artifact or opens a partial destination', async () => {
+  const e = setup(); await completedArtifact(e);
+  const destination = fileDestination(e, { picker() { return Promise.reject(new DOMException('User dismissed the picker', 'AbortError')); } });
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  assert.equal(e.requests.length, 0); assert.equal(destination.observed.opened, 0);
+  assert.equal(e.root.querySelector('[data-site-artifact="0"]').disabled, false);
+});
+
+test('cancelling while the picker is open prevents a late selection from fetching or saving', async () => {
+  const e = setup(); await completedArtifact(e);
+  const picker = deferred(), destination = fileDestination(e, { picker: () => picker.promise });
+  e.click('[data-site-artifact="0"]'); await flush(); e.action('cancel-download');
+  picker.resolve(destination.handle); await flush(100);
+  assert.equal(e.requests.length, 0); assert.equal(destination.observed.opened, 0);
+  assert.equal(destination.observed.closed, 0);
+});
+
+test('a destination opened after cancellation is aborted before network access', async () => {
+  const e = setup(); await completedArtifact(e);
+  const opened = deferred(); let writable;
+  const destination = fileDestination(e, { createWritable(value) { writable = value; return opened.promise; } });
+  e.click('[data-site-artifact="0"]'); await flush(30); assert.equal(destination.observed.opened, 1);
+  e.action('cancel-download'); opened.resolve(writable); await flush(100);
+  assert.equal(e.requests.length, 0); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+});
+
+test('cancellation aborts a blocked network read and discards the partial destination', async () => {
+  const e = setup(); await completedArtifact(e);
+  const pendingRead = deferred(), source = artifactStream(MiB, { read: () => pendingRead.promise, cancel: () => pendingRead.resolve({ done: true }) });
+  const destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(50); e.action('cancel-download'); await flush(100);
+  assert.equal(e.requests[0].options.signal.aborted, true); assert(source.observed.cancels >= 1);
+  assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.equal(e.root.querySelector('[data-site-artifact="0"]').disabled, false);
+});
+
+test('cancellation aborts the source and destination while a disk write is blocked', async () => {
+  const e = setup(); await completedArtifact(e);
+  const write = deferred(), source = artifactStream(2 * MiB);
+  const destination = fileDestination(e, { write: () => write.promise, abort: () => write.reject(new DOMException('Cancelled disk write', 'AbortError')) });
+  e.respond(() => source.response); e.click('[data-site-artifact="0"]'); await flush(50);
+  e.action('cancel-download'); await flush(100);
+  assert.equal(e.requests[0].options.signal.aborted, true); assert(source.observed.cancels >= 1);
+  assert.equal(source.observed.reads, 1); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+});
+
+test('active downloads use a resettable idle deadline instead of a total 30-second deadline', async () => {
+  const e = setup(); await completedArtifact(e);
+  const blocked = deferred(), source = artifactStream(MiB, { read: () => blocked.promise, cancel: () => blocked.resolve({ done: true }) });
+  const destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(50);
+  assert.equal([...e.timers.values()].some(timer => timer.delay === 30000), false);
+  assert.equal([...e.timers.values()].filter(timer => timer.delay === 60000).length, 1);
+  await e.timer(60000); await flush(100);
+  assert.equal(e.requests[0].options.signal.aborted, true); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.match(e.el('site-worker-status').textContent, /timed out|inactiv|stalled/i);
+});
+
+test('successful network and disk progress renew the download inactivity deadline', async () => {
+  const e = setup(); await completedArtifact(e);
+  const firstRead = deferred(), secondRead = deferred(), write = deferred();
+  const source = artifactStream(MiB, { read(observed) { return observed.reads === 1 ? firstRead.promise : secondRead.promise; } });
+  const destination = fileDestination(e, { write: () => write.promise }); e.respond(() => source.response);
+  const idleTimer = () => [...e.timers].find(([, timer]) => timer.delay === 60000)?.[0];
+  e.click('[data-site-artifact="0"]'); await flush(50); const waitingForNetwork = idleTimer(); assert(waitingForNetwork);
+  firstRead.resolve({ done: false, value: source.observed.chunk }); await flush(50);
+  const waitingForDisk = idleTimer(); assert(waitingForDisk); assert.notEqual(waitingForDisk, waitingForNetwork); assert.equal(e.timers.has(waitingForNetwork), false);
+  write.resolve(); await flush(50);
+  assert.notEqual(idleTimer(), waitingForDisk); assert.equal(e.timers.has(waitingForDisk), false);
+  secondRead.resolve({ done: true }); await flush(100);
+  assert.equal(destination.observed.closed, 1); assert.equal(idleTimer(), undefined);
+});
+
+test('leaving the workspace cancels a download and stale completion cannot replace a new connection status', async () => {
+  const e = setup(); await completedArtifact(e);
+  const read = deferred(), source = artifactStream(MiB, { read: () => read.promise, cancel: () => read.resolve({ done: true }) });
+  const destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(50); e.api.suspend();
+  e.api.mount(e.root, g1); e.respond(() => response(capabilities)); await e.connect('https://new-worker.example');
+  await flush(100);
+  assert.equal(e.requests[0].options.signal.aborted, true); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.equal(e.state().workerConnected, true); assert.match(e.el('site-worker-status').textContent, /ready/);
+});
+
+test('remounting the same completed scan re-enables downloads after the old transfer is cancelled', async () => {
+  const e = setup(); await completedArtifact(e);
+  const pendingRead = deferred(), source = artifactStream(MiB, { read: () => pendingRead.promise });
+  const destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(50);
+  e.api.suspend(); e.api.mount(e.root, g1); await flush(100);
+  assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.equal(e.root.querySelector('[data-site-artifact="0"]').disabled, false);
+  assert.equal(e.root.querySelector('[data-site-action="reconstruct"]').disabled, false);
+  pendingRead.resolve({ done: true }); await flush();
+});
+
+test('reconnecting during a download uses the edited worker URL and token before cancellation repaints inputs', async () => {
+  const e = setup(); await completedArtifact(e);
+  const pendingRead = deferred(), source = artifactStream(MiB, { read: () => pendingRead.promise });
+  const destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(50);
+  e.el('site-worker-url').value = 'https://replacement-worker.example';
+  e.el('site-worker-token').value = 'replacement-private-token';
+  e.respond(() => response(capabilities)); e.el('site-worker-form').dispatch('submit'); await flush(100);
+  assert.equal(e.requests[0].options.signal.aborted, true); assert.equal(destination.observed.aborted, 1); assert.equal(destination.observed.closed, 0);
+  assert.equal(e.requests[1].url, 'https://replacement-worker.example/v1/site-scans/capabilities');
+  assert.equal(e.requests[1].options.headers.Authorization, 'Bearer replacement-private-token');
+  assert.equal(e.state().workerConnected, true); assert.equal(e.state().reconstruction, null);
+  assert.equal(e.el('site-worker-url').value, 'https://replacement-worker.example');
+  assert.match(e.el('site-worker-status').textContent, /ready/);
+  pendingRead.resolve({ done: true }); await flush();
+});
+
+test('disconnecting during a pending fetch aborts it and cannot report a successful saved artifact', async () => {
+  const e = setup(); await completedArtifact(e);
+  const fetchResult = deferred(), destination = fileDestination(e);
+  e.respond((_url, request) => { request.signal.addEventListener('abort', () => fetchResult.reject(new DOMException('Disconnected', 'AbortError'))); return fetchResult.promise; });
+  e.click('[data-site-artifact="0"]'); await flush(50); e.action('disconnect-worker'); await flush(100);
+  assert.equal(e.requests[0].options.signal.aborted, true); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.equal(e.state().workerConnected, false); assert.match(e.el('site-worker-status').textContent, /Disconnected/);
+});
+
+test('actual streamed bytes enforce the 3 GiB ceiling even when Content-Length is absent or dishonest', async t => {
+  for (const length of [null, 1]) await t.test(length === null ? 'missing header' : 'dishonest header', async () => {
+    const e = setup(); await completedArtifact(e);
+    const source = artifactStream(maxArtifactBytes + MiB, { length });
+    const destination = fileDestination(e); forbidBlob(e); e.respond(() => source.response);
+    e.click('[data-site-artifact="0"]'); await flush(60000);
+    assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+    assert(destination.observed.bytes <= maxArtifactBytes); assert(source.observed.cancels >= 1);
+    assert.match(e.el('site-worker-status').textContent, /limit|exceed|length|size/i);
+  });
+});
+
+test('the smaller worker artifact ceiling is enforced without reading oversized headers', async () => {
+  const e = setup(); await completedArtifact(e, { capabilities: { artifactDownloads: { maxArtifactBytes: 2 * MiB } } });
+  const source = artifactStream(3 * MiB), destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  assert.equal(source.observed.reads, 0); assert.equal(destination.observed.writes, 0);
+  assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+});
+
+test('truncated identity-encoded responses cannot commit a partial artifact', async () => {
+  const e = setup(); await completedArtifact(e);
+  const source = artifactStream(MiB, { length: 2 * MiB }), destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  assert.equal(destination.observed.bytes, MiB); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.match(e.el('site-worker-status').textContent, /length|incomplete|truncat|size|before the complete/i);
+});
+
+test('encoded response lengths are not confused with the decoded stream length', async () => {
+  const e = setup(); await completedArtifact(e);
+  const source = artifactStream(2 * MiB, { length: MiB, headers: { 'content-encoding': 'gzip' } }), destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  assert.equal(destination.observed.bytes, 2 * MiB); assert.equal(destination.observed.closed, 1); assert.equal(destination.observed.aborted, 0);
+});
+
+test('malformed lengths and unexpected partial responses cannot commit artifacts', async t => {
+  for (const options of [{ length: '-1' }, { length: 'invalid' }, { length: '9007199254740992' }, { status: 206 }]) await t.test(JSON.stringify(options), async () => {
+    const e = setup(); await completedArtifact(e);
+    const source = artifactStream(MiB, options), destination = fileDestination(e); e.respond(() => source.response);
+    e.click('[data-site-artifact="0"]'); await flush(100);
+    assert.equal(source.observed.reads, 0); assert.equal(destination.observed.writes, 0);
+    assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+    assert.match(e.el('site-worker-status').textContent, /length|complete artifact|206/i);
+  });
+});
+
+test('worker artifact metadata protects integrity when Content-Length is absent', async t => {
+  for (const actual of [MiB, 3 * MiB]) await t.test(actual < 2 * MiB ? 'truncated artifact' : 'oversized artifact', async () => {
+    const e = setup(); await completedArtifact(e, { artifact: { sizeBytes: 2 * MiB } });
+    const source = artifactStream(actual, { length: null }), destination = fileDestination(e); e.respond(() => source.response);
+    e.click('[data-site-artifact="0"]'); await flush(150);
+    assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1); assert(destination.observed.bytes <= 2 * MiB);
+  });
+});
+
+test('authentication failures discard the destination and surface a bounded actionable error', async t => {
+  for (const status of [401, 403]) await t.test(String(status), async () => {
+    const e = setup(); await completedArtifact(e);
+    const destination = fileDestination(e); e.respond(() => response({ detail: 'Token or allowed website origin rejected.' }, status));
+    e.click('[data-site-artifact="0"]'); await flush(150);
+    assert.equal(destination.observed.writes, 0); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+    assert.match(e.el('site-worker-status').textContent, new RegExp(String(status))); assert.match(e.el('site-worker-status').textContent, /Token|token|origin/);
+    assert(!e.el('site-worker-status').textContent.includes('private-test-token-do-not-export'));
+  });
+});
+
+test('oversized error responses are rejected before buffering or writing error pages as artifacts', async () => {
+  const e = setup(); await completedArtifact(e);
+  const source = artifactStream(9 * MiB, { status: 500 }), destination = fileDestination(e); e.respond(() => source.response);
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  assert.equal(source.observed.reads, 0); assert.equal(destination.observed.writes, 0);
+  assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.match(e.el('site-worker-status').textContent, /limit|exceed|500/i);
+});
+
+test('non-JSON worker errors remain actionable without committing an HTML error page', async () => {
+  const e = setup(); await completedArtifact(e);
+  const destination = fileDestination(e); e.respond(() => bytesResponse('<html>Bad gateway</html>', 'text/html', 502));
+  e.click('[data-site-artifact="0"]'); await flush(150);
+  assert.equal(destination.observed.writes, 0); assert.equal(destination.observed.closed, 0); assert.equal(destination.observed.aborted, 1);
+  assert.match(e.el('site-worker-status').textContent, /502/);
+});
+
+test('network, disk write, and disk close failures never claim a saved artifact', async t => {
+  for (const stage of ['network', 'write', 'close']) await t.test(stage, async () => {
+    const e = setup(); await completedArtifact(e);
+    const source = artifactStream(MiB), failure = new Error(stage + ' failed');
+    const destination = fileDestination(e, { [stage]: () => { throw failure; } });
+    e.respond(() => { if (stage === 'network') throw failure; return source.response; });
+    e.click('[data-site-artifact="0"]'); await flush(150);
+    assert.equal(destination.observed.aborted, 1); assert.match(e.el('site-worker-status').textContent, new RegExp(stage + ' failed'));
+    if (stage !== 'close') assert.equal(destination.observed.closed, 0);
+    if (stage === 'write') assert(source.observed.cancels >= 1);
+  });
+});
+
+test('large preview JSON retains its 8 MiB limit and cannot replace reviewed geometry', async () => {
+  const e = setup(); await completedArtifact(e, { artifact: { name: 'point-cloud.json', sizeBytes: 9 * MiB } });
+  const original = e.state().scene, source = artifactStream(9 * MiB); e.respond(() => source.response);
+  e.action('open-reconstruction'); await flush(100);
+  assert.deepEqual(e.state().scene, original); assert.equal(source.observed.reads, 0);
+  assert.equal(e.renderCalls.some(call => call.name === 'setPointCloud'), false);
+  assert.match(e.el('site-worker-status').textContent, /limit|exceed|large/i);
+});
+
+test('unsupported browsers use a short-lived POST ticket without exposing the worker token', async () => {
+  const e = setup(); await completedArtifact(e, { artifact: { sizeBytes: 128 * MiB }, capabilities: { artifactDownloads: { nativePost: true } } });
+  const ticket = 't'.repeat(43); e.respond(() => response({ version: 1, ticket, expiresInSeconds: 60 }));
+  forbidBlob(e); e.click('[data-site-artifact="0"]'); await flush(150);
+  assert.equal(e.requests.length, 1);
+  const request = e.requests[0];
+  assert.equal(request.url, 'https://scan-worker.example/v1/site-scans/stream_scan/artifacts/scene.ply/download-ticket');
+  assert.equal(request.options.method, 'POST'); assert.equal(request.options.headers.Authorization, 'Bearer private-test-token-do-not-export');
+  assert.equal(request.options.redirect, 'error'); assert.equal(request.options.credentials, 'omit'); assert.equal(request.options.cache, 'no-store');
+  const form = e.el('site-native-download'), hidden = form.querySelector('[name="ticket"]');
+  assert.equal(form.getAttribute('method').toLowerCase(), 'post');
+  assert.equal(form.getAttribute('action'), 'https://scan-worker.example/v1/site-scans/stream_scan/artifacts/scene.ply/download');
+  assert.equal(form.getAttribute('target'), '_blank'); assert.equal(hidden.value, ticket);
+  assert(!form.innerHTML.includes('private-test-token-do-not-export'));
+  assert(!request.url.includes(ticket)); assert.equal(e.downloadAnchors.length, 0);
+  assert(!e.el('site-worker-status').textContent.match(/saved|download complete/i));
+  await e.timer(60000);
+  assert.equal(e.root.querySelector('#site-native-download'), null);
+  assert.equal(hidden.value, '');
+});
+
+test('native ticket errors cannot create a download form or leak authentication', async () => {
+  const e = setup(); await completedArtifact(e, { capabilities: { artifactDownloads: { nativePost: true } } });
+  e.respond(() => response({ detail: 'Invalid authentication token' }, 401));
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  assert.equal(e.root.querySelector('#site-native-download'), null); assert.match(e.el('site-worker-status').textContent, /401/);
+  assert.equal(e.requests.length, 1); assert(!e.requests[0].url.includes('private-test-token-do-not-export'));
+});
+
+test('leaving the workspace clears the native ticket and prevents submission of a stale form', async () => {
+  const e = setup(); await completedArtifact(e, { capabilities: { artifactDownloads: { nativePost: true } } });
+  e.respond(() => response({ version: 1, ticket: 'x'.repeat(43), expiresInSeconds: 60 }));
+  e.click('[data-site-artifact="0"]'); await flush(100);
+  const form = e.el('site-native-download'), ticket = form.querySelector('[name="ticket"]');
+  e.api.suspend(); assert.equal(ticket.value, ''); assert.equal(ticket.getAttribute('value'), '');
+  assert.equal(form.isConnected, false); assert.equal(e.root.querySelector('#site-native-download'), null);
+  let prevented = false; form.dispatch('submit', { preventDefault() { prevented = true; } }); await flush();
+  assert.equal(prevented, true); assert.equal(e.requests.length, 1);
+  assert.equal([...e.timers.values()].some(timer => timer.delay === 60000 || timer.delay === 0), false);
+});
+
+test('older workers keep a bounded small-file fallback and reject large artifacts with upgrade guidance', async t => {
+  await t.test('known oversized artifact', async () => {
+    const e = setup(); await completedArtifact(e, { artifact: { sizeBytes: 65 * MiB } });
+    e.click('[data-site-artifact="0"]'); await flush(100);
+    assert.equal(e.requests.length, 0); assert.equal(e.downloadAnchors.length, 0);
+    assert.match(e.el('site-worker-status').textContent, /Chrome|Edge|upgrade|update/i);
+  });
+  await t.test('unknown size still bounded during the response', async () => {
+    const e = setup(); await completedArtifact(e);
+    const source = artifactStream(65 * MiB, { length: null }); e.respond(() => source.response);
+    e.click('[data-site-artifact="0"]'); await flush(2000);
+    assert.equal(e.downloadAnchors.length, 0); assert(source.observed.cancels >= 1);
+    assert.match(e.el('site-worker-status').textContent, /limit|exceed|Chrome|Edge|upgrade/i);
+  });
 });

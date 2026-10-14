@@ -42,3 +42,20 @@ it preserves robot/model/task/seed and does not replace the real Arena adapter.
   worker. Do not put captures or tokens in public assets, reports or Git.
 - See `robotics/arena/docs/site-tests.md` and `site-scan-worker.md` for the user
   flow, deployment constraints and the RTX 4090 continuation instructions.
+
+## Large scan artifact downloads
+
+- The artifact Download action has a separate backpressured disk stream, capped at
+  3 GiB or the smaller advertised worker limit. Keep JSON/preview buffering at
+  8 MiB, error bodies at 64 KiB, and the legacy Blob fallback at 64 MiB.
+- Updated scan workers advertise `artifactDownloads.nativePost`: a bearer-authenticated
+  POST mints a 60-second one-use artifact ticket; a second native form POST streams
+  an attachment without putting the worker bearer token in a URL or form. The
+  browser download manager owns native transfer progress/cancellation after handoff.
+- The two-phase native download requires HTTPS worker access from the public site.
+  Old workers still support direct-to-disk saving; update the scan kit for native
+  downloads in browsers without showSaveFilePicker. Rebuild the kit after API/tests/docs
+  edits with `python robotics/arena/scripts/build-site-scan-kit.py`.
+- Regression coverage includes reusable-chunk 3 GiB streams and sparse 3 GiB
+  worker responses. Real browser download UI and GPU reconstruction are separate
+  validations, not implied by these CPU/DOM contracts.

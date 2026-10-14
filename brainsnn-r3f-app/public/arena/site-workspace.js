@@ -12,6 +12,9 @@
   let message = 'Sample space loaded. Run a path preview, or bring your own space.', messageError = false, generation = 0;
   let worker = null, workerJob = null, workerFile = null, pollTimer = 0, workerStatus = '', workerBusy = false;
   const requests = new Set();
+  const JSON_LIMIT = 8 * 1024 * 1024, BLOB_LIMIT = 64 * 1024 * 1024, ARTIFACT_LIMIT = 3 * 1024 * 1024 * 1024;
+  const ERROR_LIMIT = 64 * 1024, DOWNLOAD_IDLE_MS = 60000;
+  let activeDownload = null, nativeDownload = null, nativeDownloadTimer = 0;
   const $ = id => host?.querySelector('#' + id);
   const core = () => window.BrainSNNSiteCore;
   const robot = () => ({ ...core()?.robotPreset(proxy === 'cleaner' ? 'cleaner' : selection.robotId || 'g1'), ...(body || {}) });
@@ -105,14 +108,24 @@
   function workerPanel() {
     const job = workerJob;
     return '<details class="site-help site-worker" ' + (worker || workerBusy ? 'open' : '') + '><summary>Reconstruct on my worker <span>GPU</span></summary><p>Send a capture to your own reconstruction worker. No compute is rented by this page.</p><form id="site-worker-form"><label class="site-field">Worker URL<input id="site-worker-url" type="url" placeholder="https://your-worker.example" value="' + esc(worker?.url || '') + '" autocomplete="off" required></label><label class="site-field">Private token<input id="site-worker-token" type="password" placeholder="Worker token" value="' + esc(worker?.token || '') + '" autocomplete="off" required></label><button type="submit" class="site-button site-wide" ' + (workerBusy ? 'disabled' : '') + '>' + (worker ? 'Check connection' : 'Connect worker') + '</button></form>' +
-      (worker ? '<label class="site-field">Capture to reconstruct<input id="site-worker-file" type="file" accept=".mp4,.mov,.zip,video/mp4,video/quicktime,application/zip"></label><p class="site-note">' + (workerFile ? esc(workerFile.name) + ' · ' + (workerFile.size / 1024 / 1024).toFixed(1) + ' MB' : 'Select a video or a ZIP of images. This upload is separate from local references.') + '</p><button class="site-button site-primary site-wide" data-site-action="reconstruct" ' + (!workerFile || !worker.capabilities.available || workerBusy || job && !terminalJob(job.status) ? 'disabled' : '') + '>Send capture & reconstruct</button>' : '') +
-      (job ? '<div class="site-worker-job"><strong>' + esc(job.stage || job.status) + '</strong><progress max="100" value="' + Math.max(0, Math.min(100, (job.progress || 0) <= 1 ? (job.progress || 0) * 100 : job.progress)) + '"></progress><span>' + esc(jobError(job.error)) + '</span>' + ((job.artifacts || []).some(a => a.name === 'point-cloud.json') ? '<button class="site-button site-primary site-wide" data-site-action="open-reconstruction">Open as a new 3D space ↗</button>' : '') + (job.artifacts || []).map((a, i) => '<button class="site-link" data-site-artifact="' + i + '">Download ' + esc(a.name) + ' ↓</button>').join('') + '<button class="site-link site-danger" data-site-action="cancel-reconstruction">Cancel / delete scan job</button></div>' : '') +
+      (worker ? '<label class="site-field">Capture to reconstruct<input id="site-worker-file" type="file" accept=".mp4,.mov,.zip,video/mp4,video/quicktime,application/zip"></label><p class="site-note">' + (workerFile ? esc(workerFile.name) + ' · ' + (workerFile.size / 1024 / 1024).toFixed(1) + ' MB' : 'Select a video or a ZIP of images. This upload is separate from local references.') + '</p><button class="site-button site-primary site-wide" data-site-action="reconstruct" ' + (!workerFile || !worker.capabilities.available || workerBusy || activeDownload || job && !terminalJob(job.status) ? 'disabled' : '') + '>Send capture & reconstruct</button>' : '') +
+      (job ? '<div class="site-worker-job"><strong>' + esc(job.stage || job.status) + '</strong><progress max="100" value="' + Math.max(0, Math.min(100, (job.progress || 0) <= 1 ? (job.progress || 0) * 100 : job.progress)) + '"></progress><span>' + esc(jobError(job.error)) + '</span>' + ((job.artifacts || []).some(a => a.name === 'point-cloud.json') ? '<button class="site-button site-primary site-wide" data-site-action="open-reconstruction">Open as a new 3D space ↗</button>' : '') + (job.artifacts || []).map((a, i) => '<button class="site-link" data-site-artifact="' + i + '" ' + (activeDownload ? 'disabled' : '') + '>Download ' + esc(a.name) + ' ↓</button>').join('') + '<button class="site-link site-danger" data-site-action="cancel-reconstruction">Cancel / delete scan job</button></div>' : '') +
+      (activeDownload ? '<button class="site-button site-wide" data-site-action="cancel-download">Cancel download</button>' : '') +
+      (nativeDownload ? '<form id="site-native-download" action="' + esc(nativeDownload.url) + '" method="post" target="_blank" rel="noopener"><input type="hidden" name="ticket" value="' + esc(nativeDownload.ticket) + '"><button type="submit" class="site-button site-primary site-wide">Save in browser ↓</button><p class="site-note">One-use download, valid for 60 seconds. Check progress or cancel in your browser’s downloads. Errors open in a new tab.</p></form>' : '') +
       '<p class="site-worker-links"><a href="site-scan-worker.html" target="_blank" rel="noopener noreferrer">Worker setup ↗</a><a href="downloads/brainsnn-site-scan-worker.zip" download>Download kit ↓</a></p><p class="site-note" id="site-worker-status">' + esc(workerStatus || 'Credentials stay in memory. Reconstruction outputs must be reviewed and scaled before simulation.') + '</p>' + (worker ? '<button class="site-link" data-site-action="disconnect-worker">Disconnect worker</button>' : '') + '</details>';
   }
   function renderInspector() {
     const panel = $('site-inspector'); if (!panel || !scene) return;
+    const oldTicket = panel.querySelector('#site-native-download input');
+    if (oldTicket) { oldTicket.value = ''; oldTicket.setAttribute('value', ''); }
     panel.innerHTML = step === 'capture' ? capturePanel() : step === 'review' ? reviewPanel() : testPanel();
     panel.querySelector('#site-worker-form')?.addEventListener('submit', connectWorker);
+    const pending = nativeDownload;
+    panel.querySelector('#site-native-download')?.addEventListener('submit', event => {
+      if (!pending || pending !== nativeDownload) { event.preventDefault(); return; }
+      // Let the native submit capture the ticket before removing it from the DOM.
+      setTimeout(() => { if (nativeDownload === pending) { clearNativeDownload(); workerStatus = 'Download handed to your browser. Check its downloads for progress and completion; cancel it there.'; if (host) renderInspector(); } }, 0);
+    });
     updateButtons();
   }
   function updateButtons() {
@@ -270,8 +283,9 @@
       case 'open-reconstruction': openReconstruction(); break;
       case 'frame-asset': renderer?.frameAsset?.(); break;
       case 'block-route': { const point = result?.trace?.[Math.floor(result.trace.length / 2)]; if (!point) break; mutate(next => { const id = 'surprise-' + Date.now().toString(36); const r = robot(); next.obstacles.push({ id, label: 'Route blocker', x: point.x, z: point.z, width: Math.min(scene.width * 0.25, r.width + 0.4), depth: Math.min(scene.depth * 0.25, r.depth + 0.4), height: 0.9 }); selectedObstacle = id; }, 'A surprise now blocks the previous route. Run again to find out whether the robot can get around it.'); setStep('test'); break; }
+      case 'cancel-download': cancelDownload(); break;
       case 'cancel-reconstruction': cancelReconstruction(); break;
-      case 'disconnect-worker': workerEpoch++; clearTimeout(pollTimer); requests.forEach(c => c.abort()); worker = null; workerJob = null; workerFile = null; workerBusy = false; workerStatus = 'Disconnected. Any already running job remains on your worker until cancelled there.'; renderInspector(); break;
+      case 'disconnect-worker': cancelDownload(); workerEpoch++; clearTimeout(pollTimer); requests.forEach(c => c.abort()); worker = null; workerJob = null; workerFile = null; workerBusy = false; workerStatus = 'Disconnected. Any already running job remains on your worker until cancelled there.'; renderInspector(); break;
     }
   }
   function clearAppearance() { assetEpoch++; asset = null; pointCloud = null; assetMeta = null; renderer?.clearAsset(); }
@@ -313,34 +327,92 @@
     if (u.username || u.password || u.search || u.hash || (u.protocol !== 'https:' && !(u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)))) throw new Error('Use an HTTPS worker URL, or HTTP on localhost. Do not include credentials, query strings or fragments in the URL.');
     return u.href.replace(/\/$/, '');
   }
+  function abortError(signal) { return signal.reason || new DOMException('Download cancelled.', 'AbortError'); }
+  function checkAborted(signal) { if (signal.aborted) throw abortError(signal); }
+  function abortable(promise, signal) {
+    if (signal.aborted) { Promise.resolve(promise).catch(() => {}); return Promise.reject(abortError(signal)); }
+    return new Promise((resolve, reject) => {
+      const abort = () => { cleanup(); reject(abortError(signal)); };
+      const cleanup = () => signal.removeEventListener('abort', abort);
+      signal.addEventListener('abort', abort, { once: true });
+      Promise.resolve(promise).then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
+    });
+  }
+  function workerRequest(path, options, connection, signal) {
+    return fetch(connection.url + path, { ...options, headers: { ...options.headers, Authorization: 'Bearer ' + connection.token }, signal, redirect: 'error', credentials: 'omit', cache: 'no-store' });
+  }
+  function contentLength(response) {
+    const value = response.headers?.get('content-length');
+    if (value == null) return null;
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) throw new Error('The worker returned an invalid Content-Length.');
+    return Number(value);
+  }
+  async function readBounded(response, limit, signal) {
+    let reader, complete = false;
+    try {
+      if (contentLength(response) > limit) throw new Error('The worker response exceeds the browser size limit.');
+      if (!response.body?.getReader) throw new Error('This browser cannot safely read worker responses. Use a browser with streaming downloads.');
+      reader = response.body.getReader();
+      const chunks = []; let length = 0;
+      while (true) {
+        checkAborted(signal);
+        const next = await abortable(reader.read(), signal); if (next.done) break;
+        length += next.value.byteLength;
+        if (length > limit) throw new Error('The worker response exceeds the browser size limit.');
+        chunks.push(next.value);
+      }
+      checkAborted(signal); complete = true; return { chunks, length };
+    } finally {
+      if (!complete) Promise.resolve(reader ? reader.cancel() : response.body?.cancel()).catch(() => {});
+      reader?.releaseLock();
+    }
+  }
+  function parseJSON({ chunks, length }) {
+    const bytes = new Uint8Array(length); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    try { return length ? JSON.parse(new TextDecoder().decode(bytes)) : {}; }
+    catch { throw new Error('The worker returned unreadable JSON.'); }
+  }
+  async function workerError(response, signal) {
+    let detail = '';
+    try { const data = parseJSON(await readBounded(response, ERROR_LIMIT, signal)); detail = typeof data?.detail === 'string' ? data.detail : jobError(data?.error); }
+    catch (error) { checkAborted(signal); /* Keep HTTP status even for oversized or non-JSON error bodies. */ }
+    return new Error('Worker returned ' + response.status + (detail ? ': ' + detail.slice(0, 240) : '. Check its token and allowed website origin.'));
+  }
   async function workerFetch(path, options = {}, connection = worker, responseType = 'json') {
     if (!connection) throw new Error('Connect your worker first.');
     const controller = new AbortController(); requests.add(controller);
+    const external = options.signal, abort = () => controller.abort(external.reason);
+    external?.addEventListener('abort', abort, { once: true }); if (external?.aborted) abort();
     const timeout = setTimeout(() => controller.abort(), options.body instanceof File ? 120000 : 30000);
-    const limit = responseType === 'blob' ? 64 * 1024 * 1024 : 8 * 1024 * 1024;
     try {
-      const response = await fetch(connection.url + path, { ...options, headers: { Authorization: 'Bearer ' + connection.token, ...options.headers }, signal: controller.signal, redirect: 'error', credentials: 'omit' });
-      if (Number(response.headers?.get('content-length')) > limit) throw new Error('The worker response exceeds the browser size limit.');
-      const chunks = []; let length = 0;
-      if (response.body?.getReader) {
-        const reader = response.body.getReader();
-        while (true) { const next = await reader.read(); if (next.done) break; length += next.value.byteLength; if (length > limit) { await reader.cancel(); throw new Error('The worker response exceeds the browser size limit.'); } chunks.push(next.value); }
-      } else { const bytes = new Uint8Array(await response.arrayBuffer()); length = bytes.byteLength; if (length > limit) throw new Error('The worker response exceeds the browser size limit.'); chunks.push(bytes); }
-      if (controller.signal.aborted) throw new DOMException('Request cancelled.', 'AbortError');
-      const bytes = new Uint8Array(length); let offset = 0; for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-      let data = null;
-      if (responseType === 'json' || !response.ok) { try { data = length ? JSON.parse(new TextDecoder().decode(bytes)) : {}; } catch { if (response.ok) throw new Error('The worker returned unreadable JSON.'); } }
-      if (!response.ok) { const detail = typeof data?.detail === 'string' ? data.detail : jobError(data?.error); throw new Error('Worker returned ' + response.status + (detail ? ': ' + detail.slice(0, 240) : '. Check its token and allowed website origin.')); }
-      return responseType === 'blob' ? new Blob([bytes], { type: response.headers?.get('content-type') || 'application/octet-stream' }) : data;
-    } finally { clearTimeout(timeout); requests.delete(controller); }
+      const response = await abortable(workerRequest(path, options, connection, controller.signal), controller.signal);
+      if (!response.ok) throw await workerError(response, controller.signal);
+      const data = await readBounded(response, responseType === 'blob' ? BLOB_LIMIT : JSON_LIMIT, controller.signal);
+      return responseType === 'blob' ? new Blob(data.chunks, { type: response.headers?.get('content-type') || 'application/octet-stream' }) : parseJSON(data);
+    } catch (error) { controller.abort(); throw error; }
+    finally { clearTimeout(timeout); external?.removeEventListener('abort', abort); requests.delete(controller); }
+  }
+  function clearNativeDownload() {
+    clearTimeout(nativeDownloadTimer); nativeDownloadTimer = 0; nativeDownload = null;
+    const form = $('site-native-download');
+    if (form) { const ticket = form.querySelector('input'); if (ticket) { ticket.value = ''; ticket.setAttribute('value', ''); } form.remove(); }
+  }
+  function cancelDownload() {
+    const previous = activeDownload; activeDownload = null;
+    previous?.controller.abort(); clearNativeDownload();
+    if (previous && host) { workerStatus = 'Download cancelled.'; renderInspector(); }
   }
   async function connectWorker(event) {
-    event.preventDefault(); const version = generation, operation = ++workerEpoch;
+    event.preventDefault();
+    // Cancellation can repaint the inspector, so capture the edited credentials first.
+    const enteredURL = $('site-worker-url')?.value.trim(), enteredToken = $('site-worker-token')?.value.trim();
+    cancelDownload(); const version = generation, operation = ++workerEpoch;
     clearTimeout(pollTimer); requests.forEach(c => c.abort());
     let connection;
     const current = () => operation === workerEpoch && version === generation && Boolean(host) && worker === connection;
     try {
-      const url = safeWorkerURL($('site-worker-url')?.value.trim()), token = $('site-worker-token')?.value.trim(); if (!token) throw new Error('Enter the private worker token.');
+      const url = safeWorkerURL(enteredURL), token = enteredToken; if (!token) throw new Error('Enter the private worker token.');
       if (!worker || worker.url !== url) workerJob = null;
       connection = { url, token, capabilities: {} }; worker = connection; workerBusy = true; workerStatus = 'Checking reconstruction capabilities…'; renderInspector();
       const data = await workerFetch('/v1/site-scans/capabilities', {}, connection); if (!current()) return;
@@ -353,7 +425,8 @@
     } finally { if (operation === workerEpoch && version === generation && host) { workerBusy = false; renderInspector(); } }
   }
   async function reconstruct() {
-    if (!worker || !workerFile || workerBusy) return;
+    if (!worker || !workerFile || workerBusy || activeDownload) return;
+    clearNativeDownload();
     const version = generation, operation = workerEpoch, connection = worker, chosen = workerFile;
     const current = () => operation === workerEpoch && version === generation && worker === connection && Boolean(host);
     try {
@@ -389,11 +462,96 @@
     if (!/^[a-zA-Z0-9_.-]{1,100}$/.test(artifact?.name || '') || artifact.name.includes('..')) throw new Error('Worker artifact name is invalid.');
     return '/v1/site-scans/' + encodeURIComponent(jobId) + '/artifacts/' + encodeURIComponent(artifact.name);
   }
+  async function streamArtifact(path, artifact, connection, controller, current, handle) {
+    let writer, reader, response, idleTimer = 0, committed = false;
+    const signal = controller.signal;
+    const touch = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => controller.abort(new Error('Download stalled for 60 seconds. Try again.')), DOWNLOAD_IDLE_MS); };
+    const valid = () => { checkAborted(signal); if (!current()) throw new DOMException('Download cancelled.', 'AbortError'); };
+    const maximum = Math.min(ARTIFACT_LIMIT, Number(connection.capabilities.artifactDownloads?.maxArtifactBytes) || ARTIFACT_LIMIT);
+    try {
+      // Do not race this against abort: if permission resolves after cancellation,
+      // we must still acquire and abort the eventual writable temporary file.
+      const writable = await handle.createWritable(); writer = writable.getWriter(); valid(); touch();
+      response = await abortable(workerRequest(path, {}, connection, signal), signal); valid(); touch();
+      if (!response.ok) throw await workerError(response, signal);
+      if (response.status !== 200) throw new Error('The worker did not return a complete artifact (HTTP ' + response.status + ').');
+      const declared = contentLength(response), expected = artifact.sizeBytes ?? null;
+      if (declared > maximum) throw new Error('The artifact exceeds the 3 GiB download limit or the worker storage limit.');
+      // Fetch decodes compressed bodies. A cross-origin legacy worker may not
+      // expose Content-Encoding, so use its artifact metadata for integrity.
+      const identity = !response.headers?.get('content-encoding') || response.headers.get('content-encoding') === 'identity';
+      const checkLength = identity && (response.type !== 'cors' || connection.capabilities.artifactDownloads?.nativePost);
+      if (!response.body?.getReader) throw new Error('Streaming downloads are unavailable in this browser.');
+      reader = response.body.getReader(); let length = 0, reportedMiB = -1;
+      while (true) {
+        valid(); const next = await abortable(reader.read(), signal); valid(); touch(); if (next.done) break;
+        length += next.value.byteLength;
+        if (length > maximum || expected !== null && length > expected || checkLength && declared !== null && length > declared) throw new Error('The artifact exceeds its declared size or the download limit.');
+        // Await each disk write before pulling the next chunk. No full-file Blob,
+        // arrayBuffer or collection of chunks is retained by the page.
+        await abortable(writer.write(next.value), signal); valid(); touch();
+        const miB = Math.floor(length / 1024 / 1024);
+        if (miB !== reportedMiB) { reportedMiB = miB; workerStatus = 'Saving ' + artifact.name + ': ' + miB + ' MiB received…'; text('site-worker-status', workerStatus); }
+      }
+      if (expected !== null && length !== expected || checkLength && declared !== null && length !== declared) throw new Error('The download ended before the complete artifact arrived. Try again.');
+      valid(); await abortable(writer.close(), signal); committed = true;
+      return length;
+    } catch (error) {
+      controller.abort(error);
+      throw error;
+    } finally {
+      clearTimeout(idleTimer);
+      if (!committed) {
+        // Aborting a FileSystemWritableFileStream discards its temporary file.
+        // Do not block UI cleanup on a failing disk or a stalled network reader.
+        Promise.resolve(reader ? reader.cancel() : response?.body?.cancel()).catch(() => {});
+        if (writer) Promise.resolve(writer.abort(abortError(signal))).catch(() => {});
+      }
+      reader?.releaseLock(); writer?.releaseLock();
+    }
+  }
   async function downloadArtifact(index) {
-    const artifact = workerJob?.artifacts?.[index], jobId = workerJob?.id, connection = worker, operation = workerEpoch, version = generation; if (!artifact || !connection) return;
-    const current = () => operation === workerEpoch && version === generation && connection === worker && jobId === workerJob?.id && Boolean(host);
-    try { const blob = await workerFetch(artifactPath(artifact, jobId), {}, connection, 'blob'); if (current()) download(artifact.name, blob); }
-    catch (error) { if (current()) { workerStatus = error.message; renderInspector(); } }
+    const artifact = workerJob?.artifacts?.[index], jobId = workerJob?.id, connection = worker, operation = workerEpoch, version = generation;
+    if (!artifact || !connection || activeDownload) return;
+    const controller = new AbortController(), task = { controller }; activeDownload = task; requests.add(controller); clearNativeDownload();
+    const contextCurrent = () => operation === workerEpoch && version === generation && connection === worker && jobId === workerJob?.id && Boolean(host);
+    const current = () => activeDownload === task && contextCurrent();
+    try {
+      const path = artifactPath(artifact, jobId), size = artifact.sizeBytes;
+      if (size !== undefined && (!Number.isSafeInteger(size) || size < 0)) throw new Error('The worker returned an invalid artifact size.');
+      const maximum = Math.min(ARTIFACT_LIMIT, Number(connection.capabilities.artifactDownloads?.maxArtifactBytes) || ARTIFACT_LIMIT);
+      if (size > maximum) throw new Error('The artifact exceeds the 3 GiB download limit or the worker storage limit.');
+      if (typeof window.showSaveFilePicker === 'function') {
+        // Invoke before the first await so the picker retains user activation.
+        const picking = window.showSaveFilePicker({ suggestedName: artifact.name });
+        workerStatus = 'Choose where to save ' + artifact.name + '.'; renderInspector();
+        const handle = await abortable(picking, controller.signal); checkAborted(controller.signal); if (!current()) return;
+        await streamArtifact(path, artifact, connection, controller, current, handle);
+        if (current()) workerStatus = 'Saved ' + artifact.name + '.';
+      } else if (connection.capabilities.artifactDownloads?.nativePost) {
+        if (location.protocol === 'https:' && new URL(connection.url).protocol !== 'https:') throw new Error('Use an HTTPS worker for browser downloads, or use Chrome / Edge with direct-to-disk saving.');
+        workerStatus = 'Preparing a private browser download…'; renderInspector();
+        const data = await workerFetch(path + '/download-ticket', { method: 'POST', signal: controller.signal }, connection);
+        checkAborted(controller.signal); if (!current()) return;
+        if (data.version !== 1 || !/^[A-Za-z0-9_-]{43}$/.test(data.ticket || '') || data.expiresInSeconds !== 60) throw new Error('The worker returned an invalid download ticket.');
+        const prepared = { ticket: data.ticket, url: connection.url + path + '/download' }; nativeDownload = prepared;
+        nativeDownloadTimer = setTimeout(() => { if (nativeDownload !== prepared) return; clearNativeDownload(); if (contextCurrent()) { workerStatus = 'Download link expired. Click Download to prepare a new one.'; renderInspector(); } }, 60000);
+        workerStatus = 'Ready to save ' + artifact.name + '. Choose Save in browser to start the download.';
+      } else {
+        // Compatibility with older workers only. Never turn a multi-GiB response
+        // into a Blob when a browser lacks the disk API or native worker support.
+        if (size > BLOB_LIMIT) throw new Error('For files over 64 MiB, update your scan worker with the latest kit or use Chrome / Edge for direct-to-disk saving.');
+        workerStatus = 'Downloading ' + artifact.name + ' (64 MiB legacy browser limit)…'; renderInspector();
+        let blob;
+        try { blob = await workerFetch(path, { signal: controller.signal }, connection, 'blob'); }
+        catch (error) {
+          if (error.message.includes('browser size limit')) throw new Error('This download exceeds the 64 MiB legacy browser limit. Update your scan worker or use Chrome / Edge for direct-to-disk saving.');
+          throw error;
+        }
+        checkAborted(controller.signal); if (current()) { download(artifact.name, blob); workerStatus = 'Download handed to your browser: ' + artifact.name + '.'; }
+      }
+    } catch (error) { if (current()) workerStatus = error.name === 'AbortError' ? 'Download cancelled.' : error.message; }
+    finally { const refresh = current(); requests.delete(controller); if (activeDownload === task) activeDownload = null; if (refresh) renderInspector(); }
   }
   async function openReconstruction() {
     const artifact = workerJob?.artifacts?.find(a => a.name === 'point-cloud.json'), jobId = workerJob?.id, connection = worker;
@@ -411,6 +569,7 @@
     } catch (error) { if (current()) { workerStatus = error.message; renderInspector(); tell('Reconstruction preview: ' + error.message, true); } }
   }
   async function cancelReconstruction() {
+    cancelDownload();
     const connection = worker, jobId = workerJob?.id, operation = ++workerEpoch, version = generation; if (!connection || !jobId) return;
     clearTimeout(pollTimer); requests.forEach(c => c.abort());
     const current = () => operation === workerEpoch && version === generation && connection === worker && jobId === workerJob?.id && Boolean(host);
@@ -419,6 +578,7 @@
     if (operation === workerEpoch && version === generation && host) { workerBusy = false; renderInspector(); }
   }
   function suspend() {
+    cancelDownload();
     generation++; stop(); planningEpoch++; planCancel?.(); planCancel = null; planner?.terminate(); planner = null; planning = false; clearTimeout(pollTimer); requests.forEach(c => c.abort()); requests.clear(); workerBusy = false;
     if (host) { host.removeEventListener('click', handleClick); host.removeEventListener('change', handleChange); host.removeEventListener('input', handleInput); host.querySelectorAll('video').forEach(video => video.pause()); }
     document.removeEventListener('keydown', keyDown); document.removeEventListener('visibilitychange', visibility);
