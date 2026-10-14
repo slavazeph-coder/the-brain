@@ -8,7 +8,8 @@ The page previously presented synthetic drift/detail/motion percentages and
 called a locally prepared form “Received.” The form had no intake POST or
 persistence. The corrected flow prepares an owner email draft containing the
 clip link, reply email, problem and proposed US$99 acceptance terms. The user
-reviews and sends it in their mail app. Preparing the draft is not a submitted
+reviews and sends it in their mail app. Scope is one clip up to 15 seconds,
+with eligibility checked first. Preparing the draft is not a submitted
 lead, customer acceptance or payment.
 
 `/coherence-evidence.html` separates post-process fixtures from learned-memory
@@ -17,10 +18,15 @@ baselines; identifies hardware, sample/seed scope and trained status; and
 records failed native-resolution gates. Exact hardware or seed metadata that
 was not saved remains unknown.
 
-The later owned 1280×720 house clip passes detail but fails motion (0.516330
-against a 0.90 floor). Its unmodified receipt is served at
+The earlier 1080p sources were rendered math reels, not natural or client footage.
+The later owned generated 1280×720 house clip passes the pre-encoding detail measure
+but fails the pre-encoding motion measure (0.516330 against a 0.90 floor). Its unmodified receipt is served at
 `/research/video/native-720-house-20261013.json`. It is not a stranger clip or
-customer result. Failed outputs are ineligible for paid rescue fulfillment.
+customer result. An independent complete native RGB decode of the identically encoded
+A/B also fails the motion-measure gate: 0.488231 or 2.048211 depending on the unrevealed
+role order, both outside [0.90,1.10]. Encoded detail was not remeasured. The sanitized
+verification is at `/research/video/native-720-house-delivery-verification-20261013.json`.
+These measures do not identify intended motion. Failed outputs are ineligible for paid rescue fulfillment.
 
 The 417× video-token claim, untrained-stream coherence, global synthetic
 quality percentages and superiority over deployed linear models are retired.

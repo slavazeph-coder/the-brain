@@ -10,6 +10,7 @@ export function buildRescueMailto({ email = '', clip = '', notes = '' } = {}) {
     `Clip share link: ${clip.trim() || '(add a link before sending)'}`,
     `Problem and timestamps: ${notes.trim() || '(describe the unwanted change)'}`,
     '',
+    'Requested scope: one clip up to 15 seconds; brightness or color correction, eligibility checked first.',
     'Proposed budget: US$99 for one clip, only if the result is useful and I accept it.',
     'Please confirm scope and eligibility before processing or payment.',
     'I understand this is a pilot and native HD quality gates have not passed.',

@@ -10,7 +10,7 @@ import { buildRescueMailto } from '../lib/coherenceRequest.js';
 // v3; no merge — owner reviews previews first.
 const TERMS = [
   ['Pilot price', 'US$99 for one clip, only for a useful result you accept'],
-  ['Scope', 'up to 60s; brightness or color correction, eligibility checked first'],
+  ['Scope', 'up to 15s; brightness or color correction, eligibility checked first'],
   ['Quality gate', 'native HD motion/detail tests have failed; each clip needs a frozen-settings review'],
   ['Before payment', 'review the comparison and agree whether it is useful'],
 ];
@@ -151,8 +151,9 @@ export function CoherenceLanding({ onNavigate, onStart }) {
             <summary className="cursor-pointer text-[#f5f7fa]">Evidence and current limits</summary>
             <p className="mt-2 max-w-[70ch] leading-6">
               Simple exposure averaging is competitive on the easy synthetic scenario. In the initial M0 comparison,
-              every engine missed the harder phase-drift gate. Two native 1080p clips failed motion preservation, and one also failed
-              detail preservation. A later owned native 720p house clip also failed motion preservation. A successful
+              every engine missed the harder phase-drift gate. Two native 1080p rendered math reels failed the motion-measure gate,
+              and one also failed detail preservation. A later owned generated native 720p house clip also failed that motion gate,
+              both before encoding and in an independent full-frame encoded A/B check. A successful
               low-resolution example does not establish HD or general video quality. Failed outputs are ineligible
               for paid rescue fulfillment.
               {' '}<a href="/coherence-evidence.html" className="underline underline-offset-4">Read the baselines, hardware and failed gates.</a>

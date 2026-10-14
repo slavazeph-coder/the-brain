@@ -14,6 +14,7 @@ describe('manual video rescue request', () => {
     expect(body).toContain('https://example.com/clip?part=1&quality=1080');
     expect(body).toContain('Color jumps at 00:12\nKeep the camera movement.');
     expect(body).toContain('only if the result is useful and I accept it');
+    expect(body).toContain('one clip up to 15 seconds');
     expect(body).toContain('native HD quality gates have not passed');
   });
   it('encodes user-supplied query characters as draft text, not another mail header', () => {

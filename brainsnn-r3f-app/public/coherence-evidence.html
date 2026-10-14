@@ -27,9 +27,10 @@
   <h1>Video research evidence</h1>
   <p>The clip rescue is a service evaluation. The learned memory engine is a separate research track.
      Current results do not establish general restoration, HD rescue or multi-minute coherence.</p>
-  <div class="note"><strong>Native-resolution quality gates failed.</strong> Two earlier 1080p clips failed motion preservation;
-    one also failed detail. An owned native 720p house clip later retained detail but cut motion to 0.516 of its input,
-    below the 0.90 acceptance floor. Failed outputs are ineligible for paid rescue fulfillment.</div>
+  <div class="note"><strong>Native-resolution quality gates failed.</strong> Two earlier 1080p rendered math reels failed the motion-measure gate;
+    one also failed detail. An owned generated native 720p house clip later passed the pre-encoding detail measure but failed the motion-measure gate,
+    both before encoding and in an independent complete encoded A/B check. These measures do not identify intended motion.
+    Failed outputs are ineligible for paid rescue fulfillment.</div>
 
   <h2>Post-process quality and baselines</h2>
   <div class="table"><table>
@@ -42,14 +43,18 @@
       <tr><td>Initial M0 mean-preserving phase drift</td><td>EMA, spectral magnitude and spectral complex all miss that experiment's registered 60% gate.
         The complex engine reaches 50.2% on that scenario.</td><td>Same fixed-engine CPU experiment; no learned weights.
         One scenario, not a diverse-video benchmark. <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/M0_RESULTS.md">Methods and failures</a>.</td></tr>
-      <tr><td>Two native 1080p clips</td><td>Compared with each raw input: motion ratios 0.699 and 0.536, below the [0.90,1.10] gate.
+      <tr><td>Two native 1080p rendered math reels</td><td>Compared with each raw input: motion-measure ratios 0.699 and 0.536, below the [0.90,1.10] gate.
         Detail medians 0.982 and 0.957; the second misses 0.97.</td><td>Two clips; frozen analytic ENG-1 operator, no trained weights.
+        Sources are rendered math reels, not natural or client footage.
         Exact processor is not recorded. <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/reports/ENG1_1080.md">Failed HD gate</a>.</td></tr>
-      <tr><td>Owned native 720p house clip</td><td>1280×720, 16fps, 121 frames; same-encoding A/B against the raw input.
-        Detail 0.991998 passes; motion 0.516330 fails. Processing time 5.185s.
+      <tr><td>Owned native 720p house clip</td><td>1280×720, 16fps, 121 frames. Pre-encoding operator measures:
+        detail 0.991998 passes; motion 0.516330 fails. Processing time 5.185s.
+        Independent complete native RGB decoding of the identically encoded A/B gives motion-measure ratios
+        0.488231 or 2.048211 depending on the unrevealed role order; either misses [0.90,1.10]. Encoded detail was not remeasured.
         Human review remains pending.</td><td>One owned generated clip, not a stranger submission.
         macOS arm64 CPU, one thread, PyTorch 2.12.0; frozen analytic ENG-1 operator, no trained weights.
-        No learned initialization-seed comparison. <a href="/research/video/native-720-house-20261013.json">Exact receipt</a>.</td></tr>
+        No learned initialization-seed comparison. <a href="/research/video/native-720-house-20261013.json">Original operator receipt</a>;
+        <a href="/research/video/native-720-house-delivery-verification-20261013.json">Encoded delivery verification</a>.</td></tr>
     </tbody>
   </table></div>
 
