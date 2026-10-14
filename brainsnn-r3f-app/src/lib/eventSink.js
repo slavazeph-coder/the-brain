@@ -71,7 +71,6 @@ export const ALLOWED_EVENTS = new Set([
   'coherence_cta_clicked',
   'coherence_demo_played',
   'coherence_half_switched',
-  'rescue_request_submitted',
   'behaviour_home_viewed',
   'toy_opened',
   'toy_first_poke',

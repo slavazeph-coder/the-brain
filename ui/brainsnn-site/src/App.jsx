@@ -805,8 +805,8 @@ export default function App() {
               <dl className="stats-row" aria-label="Product signals">
                 <SignalCard
                   label="Pipeline"
-                  value="Crumb"
-                  detail="Wave-field LLM pass feeds the affective scan."
+                  value="Local"
+                  detail="Deterministic detector; wave-field research is separate."
                 />
                 <SignalCard
                   label="Signals"

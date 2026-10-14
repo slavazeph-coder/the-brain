@@ -12,5 +12,6 @@ for (const name of [
   'brainsnn-experiment-review.cjs', 'brainsnn-sensor-camera.cjs',
   'brainsnn-skill-connector.cjs', 'arena-runtime.test.cjs',
   'arena-integration-ui.cjs', 'arena-campaign-math.cjs', 'arena-campaign-flow.cjs', 'arena-game.test.cjs',
+  'site-core.test.cjs', 'site-route.test.cjs', 'site-workspace.test.cjs',
 ]) run([`tests/${name}`]);
-console.log('ARENA_LOGIC_OK: selection, observations, session lifecycle, replay, campaign planning and Beat the bot.');
+console.log('ARENA_LOGIC_OK: selection, observations, sessions, replay, campaigns, site planning and Beat the bot.');

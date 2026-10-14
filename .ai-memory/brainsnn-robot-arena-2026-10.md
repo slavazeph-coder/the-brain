@@ -18,6 +18,31 @@ The owner requested the playable BrainSNN Arena concept be improved, pushed to t
 
 Production Railway project `c7f26b12-f812-4785-bbaf-a49b9caeb228`, environment `96828263-a5d4-442f-ae6f-df7bff99aab8`, service `924291ad-28bb-4a28-91d4-1d639739550f` (`the-brain`), source `slavazeph-coder/the-brain` main, service root `brainsnn-r3f-app`. Both brainsnn.com and www.brainsnn.com are mapped to this service. Check the actual release/deployment status independently.
 
+## Customer site layer
+
+The owner requested the Prevu3D-inspired phone capture layer inside the existing
+G1/GR00T playground. **Test your space** is `view=site` in the existing fragment;
+it preserves robot/model/task/seed and does not replace the real Arena adapter.
+
+- Source is `public/arena/site-{core,workspace,plan-worker}.js` and a deferred
+  Three.js bundle compiled from `src/arena/site-renderer.js`. Keep it outside the
+  homepage import graph. `npm run build` regenerates the committed bundle.
+- Browser planning is bounded geometric A*/coverage on a reviewed metric floor,
+  with conservative footprint clearance. It is not physics, GR00T execution or
+  proof of cleaning quality. Sample scenes and assumed dimensions are labelled.
+- CapturedRoom JSON requires a supported single level floor polygon. GLB and
+  ASCII USDZ appearance is separate from collision geometry. Binary RoomPlan
+  USDZ is unsupported in Three's installed parser. Do not claim universal USDZ.
+- Private scan worker `workers/site_scan/` uses actual FFmpeg/COLMAP processing;
+  its browser-viewable output is an unscaled sparse cloud requiring review. The
+  optional dense visual adapter is operator-configured, not a bundled model.
+- Worker port 8082 is separate from existing model/physics services. Website
+  deployment does not start it, rent compute or install CUDA dependencies.
+- Source photos/videos remain local until explicitly sent to a configured
+  worker. Do not put captures or tokens in public assets, reports or Git.
+- See `robotics/arena/docs/site-tests.md` and `site-scan-worker.md` for the user
+  flow, deployment constraints and the RTX 4090 continuation instructions.
+
 ## 2026-10-14 — Beat the bot (branch `feat/arena-beat-the-bot`)
 
 - Why: the practice arm is a screensaver (visitor only presses Run), and the scripted controller finishes identically on starter/clutter/moving/night (259 steps, 0 contacts; seeds barely matter). `Move obstacle` can freeze it until the 1600-step limit (~139 s). Not fixed here.
