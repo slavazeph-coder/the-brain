@@ -2,7 +2,7 @@
 // "More toys" row, BrainSNN strip and sponsor slot, in the restored cyan/violet
 // Sapient Playground identity (behaviour-home.css tokens).
 import React, { useEffect } from 'react';
-import { ArrowRight, Building2, Gauge } from 'lucide-react';
+import { ArrowRight, Bot, Building2, Gauge } from 'lucide-react';
 import { track } from '../../lib/analytics.js';
 import { otherToys, sponsorFor } from './toyConfig.js';
 import '../../styles/behaviour-home.css';
@@ -23,8 +23,9 @@ export function BhNav() {
         <a href="/#tools">The engine</a>
         <a href="/arcade">Playground</a>
         <a href="/evidence">Evidence</a>
+        <a href="/app">Open BrainSNN</a>
       </nav>
-      <a className="bh-nav-cta" href="/app">Open BrainSNN <ArrowRight size={15} aria-hidden="true" /></a>
+      <a className="bh-nav-cta bh-arena-nav-cta" href="/arena/"><Bot size={16} aria-hidden="true" /> Robot Arena <ArrowRight size={15} aria-hidden="true" /></a>
     </header>
   );
 }

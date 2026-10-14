@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ArrowRight, FileText, GitCompareArrows, Trophy } from 'lucide-react';
+import { ArrowRight, Bot, FileText, GitCompareArrows, RotateCcw, Trophy } from 'lucide-react';
 import { track } from '../lib/analytics.js';
 import { PokeBrain } from '../features/toys/poke/PokeBrain.jsx';
 import { BhFooter, BhNav, BrainsnnStrip, MoreToys } from '../features/toys/ToyChrome.jsx';
@@ -20,6 +20,21 @@ export function BehaviourHome() {
     <BhNav />
     <main id="bh-main">
       <PokeBrain />
+      <section className="bh-arena-entry" aria-labelledby="bh-arena-title">
+        <div className="bh-arena-entry-copy">
+          <p className="bh-kicker"><Bot size={16} aria-hidden="true" /> THE ROBOT ARENA</p>
+          <h2 id="bh-arena-title">A brain. A body. <span>A world to test them in.</span></h2>
+          <p>Play a practice mission, introduce a surprise and rewind the response. Connect a matched simulation worker to test a robot and its policy together.</p>
+          <a className="bh-button bh-primary" href="/arena/">Enter Robot Arena <ArrowRight size={16} aria-hidden="true" /></a>
+          <small>Local practice is scripted. Named robot policies run through connected workers.</small>
+        </div>
+        <div className="bh-arena-entry-preview" aria-hidden="true">
+          <div className="bh-arena-preview-grid" />
+          <img src="/arena/assets/robots/panda.png" alt="" loading="lazy" width="250" height="250" />
+          <div className="bh-arena-preview-caption"><span>CHOOSE · RUN · REPLAY</span><RotateCcw size={15} /></div>
+          <span className="bh-arena-preview-label">Explore the arena</span>
+        </div>
+      </section>
       <MoreToys currentId="poke" />
       <section className="bh-tools-section" id="tools" aria-labelledby="bh-tools-title">
         <div className="bh-section-copy bh-tools-head">

@@ -36,6 +36,7 @@ import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
 import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
 import { createGpuBridge } from "./src/server/gpuBridge.js";
+import { createArenaRouter } from "./src/server/arenaStatic.js";
 
 
 dotenv.config();
@@ -43,6 +44,11 @@ const gpuBridge = createGpuBridge(process.env);
 const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
 
 export const app = express();
+// The arena is a standalone application with relative assets. Keep both its
+// documents and its missing-file responses ahead of Vite/the SPA catch-all.
+app.use('/arena', createArenaRouter({
+  directory: path.join(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/arena' : 'public/arena'),
+}));
 // Authenticate and bound worker bodies before the general JSON parser/limiter.
 app.use('/api/gpu-worker', gpuBridge.handle);
 const readAgentLabFeed = createAgentLabFeed();

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#05070b">
+<meta name="brainsnn-arena-release" content="2026-10-14-production-1">
+<link rel="canonical" href="https://www.brainsnn.com/arena/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="description" content="Test robot intelligence in an interactive arena. Run practice missions, connect matched physics workers, replay failures and save evidence.">
+<title>BrainSNN Arena · Put your robot’s brain to the test</title>
+<link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="challenges.css"><link rel="stylesheet" href="brand.css"><link rel="stylesheet" href="catalog.css"><link rel="stylesheet" href="experiment.css"><link rel="stylesheet" href="arena-workspace.css"><link rel="stylesheet" href="arena-campaign.css">
+</head>
+<body>
+<svg class="svg-defs" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 2.3 6M4 4v7h7"/></symbol>
+<symbol id="i-connect" viewBox="0 0 24 24"><path d="m9 15 6-6m-7 9-1 1a4.2 4.2 0 0 1-6-6l4-4a4.2 4.2 0 0 1 6 0m2 6a4.2 4.2 0 0 0 6 0l4-4a4.2 4.2 0 0 0-6-6l-1 1" transform="translate(1 0) scale(.92)"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h3l3-7 6 14 3-7h3"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+</defs></svg>
+<a class="skip" href="#experiment-heading">Skip to arena</a>
+<header class="app-header">
+ <a class="brand" href="/" aria-label="BrainSNN home"><span class="original-brand-mark" aria-hidden="true">B</span><span class="brand-label"><strong>BrainSNN</strong><small>Arena</small></span></a>
+ <nav class="app-nav" aria-label="Workspace"><button class="nav-tab active" data-page="playground" aria-pressed="true">Arena</button><button class="nav-tab" data-page="catalog" aria-pressed="false">Discover</button><button class="nav-tab" data-page="campaigns" aria-pressed="false">Campaigns</button><button class="nav-tab" data-page="compute" aria-pressed="false">Compute</button></nav>
+ <div class="header-end"><span class="prototype">Early access</span><button class="help-button" data-modal="research" aria-label="About BrainSNN Robot Hub">?</button></div>
+</header>
+<main class="workspace">
+<section id="playground" class="workspace-page" aria-labelledby="page-title">
+ <h1 id="page-title" class="playground-accessible-title">Robot intelligence playground</h1>
+ <div id="experiment-root"></div>
+ <div id="demo-workspace" hidden>
+ <div class="workbench">
+ <aside class="setup-panel" aria-label="Set up your test">
+  <div class="current-robot"><span class="mini-arm" aria-hidden="true"><svg><use href="#i-cube"/></svg></span><span><strong>BrainSNN demo arm</strong><small>Kinematic sandbox</small></span><button class="text-button" data-page="catalog" data-catalog-tab="robots" aria-label="Browse the robot garage">Robots ↗</button></div>
+  <section class="setup-group worlds"><div class="group-label"><span class="step-number">1</span><h2>Choose a challenge</h2></div><div class="mission-list challenge-list" role="group" aria-label="Challenge">
+<button class="mission selected" data-challenge="starter" aria-pressed="true"><span class="mission-icon cyan"><svg><use href="#i-cube"/></svg></span><span><strong>First moves</strong><small>Three blocks. One destination.</small></span><span class="selection-dot"></span></button>
+<button class="mission " data-challenge="clutter" aria-pressed="false"><span class="mission-icon violet"><svg><use href="#i-grid"/></svg></span><span><strong>Clutter course</strong><small>Find room to move.</small></span><span class="selection-dot"></span></button>
+<button class="mission " data-challenge="moving" aria-pressed="false"><span class="mission-icon mint"><svg><use href="#i-wave"/></svg></span><span><strong>Moving world</strong><small>Work around moving obstacles.</small></span><span class="selection-dot"></span></button>
+<button class="mission " data-challenge="night" aria-pressed="false"><span class="mission-icon violet"><svg><use href="#i-eye"/></svg></span><span><strong>Night shift</strong><small>Test with lower camera lighting.</small></span><span class="selection-dot"></span></button>
+<button class="mission " data-challenge="surprise" aria-pressed="false"><span class="mission-icon cyan"><svg><use href="#i-reset"/></svg></span><span><strong>Plot twist</strong><small>The destination moves at 6 s.</small></span><span class="selection-dot"></span></button>
+</div></section>
+  <section class="setup-group brain-group"><div class="group-label"><span class="step-number">2</span><h2>Select your brain</h2></div>
+   <div class="brain-card"><div class="brain-orb" aria-hidden="true"><span></span><i></i></div><div><strong id="model-name">Demo controller</strong><p id="model-subtitle">Scripted baseline · ready to try</p></div><span id="connection-state" class="connection-state">Demo</span></div>
+   <button id="connect-real" class="button ghost full"><svg><use href="#i-connect"/></svg>Connect your model<svg class="button-arrow"><use href="#i-arrow"/></svg></button>
+   <p id="model-status" class="model-status">No model connected</p><button class="text-button model-browse" data-page="catalog" data-catalog-tab="models">Explore robot models <span>↗</span></button>
+  </section>
+  <details class="advanced-settings"><summary>World settings <svg><use href="#i-chevron"/></svg></summary><div class="advanced-content">
+   <label class="toggle-row" for="clutter"><span>Static clutter<small>Place obstacles in the scene</small></span><span class="switch"><input id="clutter" type="range" min="0" max="1" step="1" value="0" aria-label="Static clutter, zero off and one on"><output id="clutter-value">Off</output></span></label>
+   <label class="toggle-row" for="slip"><span>Moving obstacle<small>Add a challenge over time</small></span><span class="switch"><input id="slip" type="range" min="0" max="1" step="1" value="0" aria-label="Moving obstacle, zero off and one on"><output id="slip-value">Off</output></span></label>
+   <div class="seed-row"><label for="seed">Scenario seed</label><input id="seed" type="number" min="1" max="2147483646" value="42"><button id="shuffle" class="icon-button" aria-label="Shuffle world" title="Shuffle world"><svg><use href="#i-reset"/></svg></button></div>
+  </div></details>
+  <div class="setup-footer"><span class="step-number">3</span><p><span id="challenge-badge">Ready for a challenge</span><br><span id="mission-best">Press <kbd>Space</kbd> or Run mission.</span></p></div>
+ </aside>
+ <div class="stage-panel">
+  <div class="stage-header"><div><div class="stage-title-row"><h2 id="mission-title">Table reset</h2><span class="stage-badge">3D sandbox</span></div><p id="mission-description">Move three blocks into the target bin.</p></div><div class="stage-header-actions"><button id="run-header" class="button primary">Run mission</button><button id="export-episode" class="icon-button" aria-label="Export this episode" title="Export episode"><svg><use href="#i-download"/></svg></button></div></div>
+  <div class="mission-progress"><span id="task-progress">Block 1 of 3 · Reach</span><div role="list" aria-label="Task progress"><span role="listitem" id="progress-reach" data-state="current">Reach</span><i></i><span role="listitem" id="progress-grasp">Grasp</span><i></i><span role="listitem" id="progress-lift">Lift</span><i></i><span role="listitem" id="progress-place">Place</span></div></div>
+  <div class="canvas-box">
+   <canvas id="world" width="1440" height="960" role="img" aria-label="Interactive 3D robot arm. Drag to orbit, scroll to zoom. Use camera buttons for fixed views."></canvas>
+   <div class="scene-topline"><span class="scene-label"><span class="pulse-dot"></span><span id="scene-mode">Demo controller</span></span><span id="world-name" class="scene-version">TABLE RESET</span></div>
+   <div class="camera-tools" role="group" aria-label="Camera controls"><button id="camera-reset" class="camera-button" aria-label="Reset perspective view" title="Perspective view"><svg><use href="#i-cube"/></svg></button><button id="camera-top" class="camera-button" aria-label="Top view" title="Top view"><svg><use href="#i-grid"/></svg></button><span></span><button id="toggle-trail" class="camera-button active" aria-label="Show movement trail" aria-pressed="true" title="Movement trail"><svg><use href="#i-wave"/></svg></button></div>
+   <div class="scene-floor-caption"><span id="seed-caption">SEED 42</span><span>Drag to orbit <i>·</i> Scroll to zoom</span></div>
+   <div id="completion" class="completion" hidden><div class="completion-icon"><svg><use href="#i-cube"/></svg></div><h3 id="completion-title">Mission complete</h3><p id="completion-copy"></p><button id="again" class="button primary">Run again <svg><use href="#i-reset"/></svg></button><button id="next-challenge" class="button ghost">Next challenge <svg><use href="#i-arrow"/></svg></button></div>
+  </div>
+  <div class="playback-console"><div class="game-toolbar"><button id="run-live" class="button primary">▶ Run mission</button><button id="step-live" class="button subtle">Step →</button><button id="reset-live" class="icon-button" aria-label="Reset mission" title="Reset mission (R)"><svg><use href="#i-reset"/></svg></button><div class="playback-status"><span id="run-status" aria-live="polite">Ready for your first move</span></div><label class="speed-label" for="speed">Speed<select id="speed"><option value="100">1×</option><option value="50" selected>2×</option><option value="20">5×</option></select></label></div>
+   <div class="time-bar"><span class="time-label"><svg><use href="#i-wave"/></svg><label for="timeline">Timeline</label></span><input id="timeline" type="range" min="0" max="0" value="0" aria-label="Replay timeline"><output id="timeline-label">0.0 s</output><button id="live-time" class="live-time">Live</button></div>
+  </div>
+ </div>
+ </div>
+ <div class="evidence-strip"><div class="live-stats"><div><span>Blocks delivered</span><strong id="live-delivered">0 <i>/ 3</i></strong></div><div><span>Simulation steps</span><strong id="live-steps">0</strong></div><div><span>Contact events</span><strong id="live-collisions">0</strong></div><div><span>Help requests</span><strong id="live-retries">0</strong></div></div><details class="activity-disclosure"><summary><span><svg><use href="#i-wave"/></svg>Activity log</span><svg><use href="#i-chevron"/></svg></summary><button id="first-problem" class="text-button" disabled>Replay first issue ↗</button><div id="trail" class="trail" aria-label="Episode activity"><p>Your robot’s next move appears here.</p></div></details></div>
+ <div class="workspace-footnote"><p id="scene-evidence">Kinematic sandbox · scripted demo or compatible skill-agent endpoint · no physical robot connected.</p><button class="text-button" data-modal="meaning">What this measures <span>↗</span></button></div>
+ </div>
+</section>
+<section id="catalog" hidden class="workspace-page secondary-page" aria-label="Robot and model hub"><div id="catalog-root"></div></section>
+<section id="campaigns" class="workspace-page secondary-page" hidden aria-label="Matched robot campaigns">
+ <div id="arena-campaign-root"></div>
+ <details class="legacy-campaign"><summary>Explore the separate toy-grid comparison</summary>
+ <div class="page-heading"><div><p class="eyebrow">REPEAT. COMPARE. UNDERSTAND.</p><h1 id="campaign-title">One run is a beginning.</h1><p class="intro">Explore the campaign workflow with repeatable, lightweight tests.</p></div><span class="stage-badge violet-badge">Browser demo</span></div>
+ <div class="secondary-layout"><div class="settings-card"><div class="card-icon violet"><svg><use href="#i-grid"/></svg></div><h2>Compare three scripts.</h2><p>Run the same seeded toy-grid worlds for each script. Inspect completion rates and export the results.</p><div class="callout">This lane uses 2D toy-grid scripts. These results are separate from your 3D model episode.</div><label class="field-label" for="trials">Worlds per script</label><select id="trials"><option value="100">100 · quick check</option><option value="1000">1,000 · regression</option><option value="10000">10,000 · stress test</option><option value="100000">100,000 · full campaign</option></select><button id="run-batch" class="button primary full">Run comparison <svg><use href="#i-arrow"/></svg></button><button id="cancel-batch" class="button ghost full" hidden>Cancel campaign</button><div class="progress" hidden id="batch-progress"><div id="progress-fill"></div></div><p id="batch-status" class="tiny" aria-live="polite">Uses your browser. No cloud charge.</p></div>
+ <div class="results-card"><div class="card-title"><h2>Campaign results</h2><button id="export" class="text-button" disabled><svg><use href="#i-download"/></svg>Export</button></div><div id="empty-score" class="empty-score"><div class="empty-graphic"><span></span><span></span><span></span><i></i></div><h3>A clearer picture, run by run.</h3><p>Start a comparison to see your results here.</p></div><div id="score-results" hidden><div class="table-scroll"><table><thead><tr><th>Script</th><th>Completed</th><th>Avg. steps</th><th>Contacts / run</th></tr></thead><tbody id="score-rows"></tbody></table></div><div id="failure-preview" class="failure-preview" hidden><div><p class="eyebrow">ONE FAILURE TO INSPECT</p><h3 id="failure-title"></h3><p id="failure-copy"></p></div></div><p class="tiny">Scripts use different route and retry rules. This comparison illustrates the workflow; it does not measure a learned AI advantage.</p></div></div></div>
+</details>
+</section>
+<section id="compute" class="workspace-page secondary-page" hidden aria-labelledby="compute-title">
+ <div class="page-heading"><div><p class="eyebrow">SCALE AT YOUR PACE</p><h1 id="compute-title">More worlds. One budget.</h1><p class="intro">Explore how a larger simulation campaign could be priced.</p></div><span class="stage-badge violet-badge">Planning only</span></div>
+ <div class="secondary-layout compute-layout"><div class="compute-story"><div class="compute-art" aria-hidden="true"><div class="compute-core"><svg><use href="#i-cube"/></svg></div><div class="compute-satellite s1"></div><div class="compute-satellite s2"></div><div class="compute-satellite s3"></div><div class="compute-satellite s4"></div></div><h2>Start small.<br><span>Scale when it matters.</span></h2><p>The planned cloud workflow measures a pilot batch, shows its cost, and runs a larger campaign within your spending limit.</p><ol class="compute-steps"><li><span>1</span><div><strong>Calibrate</strong><p>Measure the exact scene and model.</p></div></li><li><span>2</span><div><strong>Set a ceiling</strong><p>Choose total trials and a spending limit.</p></div></li><li><span>3</span><div><strong>Run, then release</strong><p>Keep the evidence. Release the workers.</p></div></li></ol></div>
+ <div class="calculator settings-card"><div class="card-title"><h2>Campaign estimate</h2><span class="stage-badge">Illustrative</span></div><label class="field-label" for="cloud-trials">Total trials</label><select id="cloud-trials"><option value="1000">1,000</option><option value="10000">10,000</option><option value="100000" selected>100,000</option></select><label class="field-label" for="throughput">Assumed trials per worker-hour</label><select id="throughput"><option value="10000">10,000 · lightweight</option><option value="500" selected>500 · moderate</option><option value="50">50 · heavy</option></select><div class="calc-pair"><label class="field-label" for="hour-rate">Worker US$ / hour<input id="hour-rate" type="number" min="0.05" max="100" step="0.05" value="0.60"></label><label class="field-label" for="margin">Gross margin %<input id="margin" type="number" min="0" max="75" step="5" value="30"></label></div><div class="calc-total"><span>Runtime-only customer price</span><strong id="cloud-price">$171.43</strong><span id="cloud-detail">200 worker-hours · $120 runtime cost</span></div><p class="tiny">Assumed throughput and rates, not a quote. Loading, storage, transfer, retries and external model calls add cost. This prototype starts no workers and takes no payment.</p><button class="button ghost full" data-modal="compute">Explore the planned workflow <svg><use href="#i-arrow"/></svg></button></div></div>
+</section>
+</main>
+<footer class="app-footer"><span>BrainSNN <i>·</i> The proving ground for robot intelligence.</span><a href="https://www.brainsnn.com/" target="_blank" rel="noopener">Research playground ↗</a></footer>
+<dialog id="modal" aria-label="BrainSNN details"><button id="close-modal" class="close-modal" aria-label="Close dialog">×</button><div id="modal-content"></div></dialog><div id="toast" class="toast" role="status" hidden></div>
+<script src="arena-core.js"></script><script src="studio-ui.js"></script><script src="arena-3d.js"></script><script src="app-3d.js"></script><script src="robots-data.js"></script><script src="models-data.js"></script><script src="arena-profiles.js"></script><script src="arena-runtime.js"></script><script src="arena-workspace.js"></script><script src="experiment.js"></script><script src="catalog.js"></script><script src="arena-campaign.js"></script>
+</body>
+</html>

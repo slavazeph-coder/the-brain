@@ -54,6 +54,9 @@ jobs:
       - name: Engine API smoke test
         run: node scripts/engine-api-smoke.mjs
 
+      - name: Robot Arena routes and published assets
+        run: node scripts/test-arena-route.mjs --dist
+
       - name: MCP server smoke test
         working-directory: brainsnn-r3f-app/mcp-server
         run: |
