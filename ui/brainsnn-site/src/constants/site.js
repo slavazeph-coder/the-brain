@@ -339,7 +339,7 @@ export const CRUMB_PIPELINE = [
   },
   {
     label: "Crumb LLM",
-    detail: "Wave-field processing mixes context in O(N log N)",
+    detail: "Separate experimental wave-field language-model research",
     intensity: 0.68,
   },
   {
@@ -366,7 +366,7 @@ export const RESEARCH_CARDS = [
   {
     title: "Crumb LLM",
     label: "Physics-first AI",
-    body: "Wave-field language processing for long context, fixed field-cache behavior, and BrainSNN's affective analysis pipeline.",
+    body: "Separate experimental language-model research with bounded benchmark results. It is not the production BrainSNN content detector.",
     href: "/crumb-llm",
   },
   {
@@ -455,8 +455,8 @@ export const PRODUCT_WORKFLOW = [
     "Paste a URL, text, post, ad, script, or uploaded clip. Preloaded demos keep the scan experience working even before every backend is configured.",
   ],
   [
-    "Crumb LLM wave processing",
-    "The physics-based Crumb layer mixes context through wave-field processing, then hands a structured affective signal to BrainSNN.",
+    "Local content detector",
+    "BrainSNN's current detector produces deterministic content signals. Experimental Crumb LLM and video-memory research are separate projects.",
   ],
   [
     "Spiking neural analysis",

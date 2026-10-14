@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { track } from '../lib/analytics.js';
+import { buildRescueMailto } from '../lib/coherenceRequest.js';
 
 // v4 — frontend-design doctrine pass (2026-09-26):
 // one working comparison stage (poster play, pane labels clear of the burnt-in
@@ -8,12 +9,12 @@ import { track } from '../lib/analytics.js';
 // violet trust tag, footer nav cleanup. Honest labels and numbers unchanged from
 // v3; no merge — owner reviews previews first.
 const TERMS = [
-  ['Price', '$99 per clip (USD), one round of review + processing'],
-  ['Length', 'up to 60s per rescue; longer by quote'],
-  ['Turnaround', '24-48h for eligible clips'],
-  ['If we cannot improve it', 'no charge, and we say why'],
+  ['Pilot price', 'US$99 for one clip, only for a useful result you accept'],
+  ['Scope', 'up to 15s; brightness or color correction, eligibility checked first'],
+  ['Quality gate', 'native HD motion/detail tests have failed; each clip needs a frozen-settings review'],
+  ['Before payment', 'review the comparison and agree whether it is useful'],
 ];
-const PROCESS = ['Submit your clip', 'Review and payment', 'Receive your processed export'];
+const PROCESS = ['Prepare an email request', 'Agree scope and review a comparison', 'Accept a useful result before payment'];
 const BEATS = [
   'Watch the original first — the kind of accumulated drift that survives a finished render.',
   'Now the processed pass: same timestamps, same framing, nothing regenerated.',
@@ -28,7 +29,7 @@ export function CoherenceLanding({ onNavigate, onStart }) {
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    document.title = 'BrainSNN Coherence — less flicker, less color drift';
+    document.title = 'BrainSNN Coherence — video rescue pilot';
     track('coherence_landing_viewed');
   }, []);
 
@@ -52,7 +53,7 @@ export function CoherenceLanding({ onNavigate, onStart }) {
   function submit(e) {
     e.preventDefault();
     if (!form.email.trim()) return;
-    track('rescue_request_submitted', { clip: form.clip ? 'link' : 'none', notes: form.notes ? 'yes' : 'none' });
+    track('coherence_cta_clicked', { where: 'email_draft_prepared' });
     setSent(true);
   }
 
@@ -93,10 +94,10 @@ export function CoherenceLanding({ onNavigate, onStart }) {
           <span className="rounded-full border border-[#a78bfa]/40 px-2.5 py-0.5 text-[12px] text-[#c4b5fd]">Research preview</span>
         </div>
         <h1 className="coh-display mt-4 text-[clamp(2.75rem,5.5vw,5rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-[#f5f7fa]">
-          Less flicker.<br />Less color drift.
+          Video rescue pilot.<br />Review before you pay.
         </h1>
         <p className="mt-6 max-w-[46ch] text-[clamp(1.125rem,1.6vw,1.375rem)] leading-relaxed text-[#a5adba]">
-          A $99 rescue service for eligible AI-generated video. We stabilize the correction pass — no regeneration.
+          Request a frozen-settings review of one clip. US$99 only for a useful result you accept.
         </p>
         <div className="mt-6 flex items-center gap-5">
           <a href="#rescue" onClick={() => track('coherence_cta_clicked', { where: 'hero' })}
@@ -142,16 +143,20 @@ export function CoherenceLanding({ onNavigate, onStart }) {
 
           {/* 4: evidence caption + disclosure — trust cues, not disclaimers */}
           <p className="mt-4 text-[14px] leading-5 text-[#a5adba]">
-            Source: synthetic drift fixture, 256px, 21s, engine v0.4 (complex_mc). “Original” is the raw rollout;
-            “Processed” is after the correction pass. Targets unwanted brightness and color drift. Not a general
-            repair for changing identities, geometry, or missing detail.
+            Synthetic drift fixture, 256px, 21s; fixed post-process engine v0.4 (complex_mc), with no trained weights.
+            “Original” and “Processed” show the same fixture before and after that pass. This is not a real customer
+            result or a repair for identity, geometry or missing detail.
           </p>
           <details className="mt-2 text-[14px] text-[#a5adba]">
-            <summary className="cursor-pointer text-[#f5f7fa]">What this example proves</summary>
+            <summary className="cursor-pointer text-[#f5f7fa]">Evidence and current limits</summary>
             <p className="mt-2 max-w-[70ch] leading-6">
-              On the lab fixture, the pass removed 64.0% of low-frequency positional drift while retaining 99.5% detail and 99.7% motion.
-              Measured against the clean reference; methodology in the repo. Independent real-footage validation is in progress; the current
-              limits are documented above. No claims are made beyond tested conditions.
+              Simple exposure averaging is competitive on the easy synthetic scenario. In the initial M0 comparison,
+              every engine missed the harder phase-drift gate. Two native 1080p rendered math reels failed the motion-measure gate,
+              and one also failed detail preservation. A later owned generated native 720p house clip also failed that motion gate,
+              both before encoding and in an independent full-frame encoded A/B check. A successful
+              low-resolution example does not establish HD or general video quality. Failed outputs are ineligible
+              for paid rescue fulfillment.
+              {' '}<a href="/coherence-evidence.html" className="underline underline-offset-4">Read the baselines, hardware and failed gates.</a>
             </p>
           </details>
 
@@ -189,17 +194,19 @@ export function CoherenceLanding({ onNavigate, onStart }) {
       <section id="rescue" className="mx-auto w-full max-w-[1120px] scroll-mt-8 px-6 pb-20 pt-20 lg:px-8 lg:pt-32">
         <div className="grid gap-8 lg:grid-cols-2">
           <div className="rounded-[20px] border border-white/10 bg-[#10141b] p-6 lg:p-8">
-            <h2 className="coh-display text-balance text-[28px] font-semibold tracking-[-0.02em] text-[#f5f7fa]">Your clip. A defined correction. $99.</h2>
+            <h2 className="coh-display text-balance text-[28px] font-semibold tracking-[-0.02em] text-[#f5f7fa]">One clip. A reviewed pilot result.</h2>
             <ul className="mt-6 space-y-3 text-[15px] leading-6 text-[#a5adba]">
               {TERMS.map(([k, v]) => (<li key={k}><span className="text-[#f5f7fa]">{k}:</span> {v}</li>))}
             </ul>
             <p className="mt-6 text-[14px] text-[#a5adba]">{PROCESS.join(' \u2192 ')}</p>
-            <p className="mt-4 text-[14px] leading-6 text-[#a5adba]">Research preview. Eligibility reviewed before payment; nothing is charged for clips we cannot improve.</p>
+            <p className="mt-4 text-[14px] leading-6 text-[#a5adba]">This is a service evaluation. The learned long-horizon engine remains separate research.</p>
           </div>
           <form onSubmit={submit} className="rounded-[20px] border border-white/10 bg-[#10141b] p-6 lg:p-8">
             {sent ? (
               <div className="rounded-xl border border-[#22d3ee]/30 bg-[#22d3ee]/10 p-5 text-[15px] text-[#c8f7ff]">
-                Received. We will reply to the email you left within one business day with an eligibility decision.
+                <p>Your email draft is ready. Nothing has been sent from this page.</p>
+                <a href={buildRescueMailto(form)} className="mt-3 inline-block underline underline-offset-4">Open email draft</a>
+                <p className="mt-3">Your mail app opens a request you can review and send yourself. No payment is collected here.</p>
               </div>
             ) : (
               <>
@@ -217,9 +224,9 @@ export function CoherenceLanding({ onNavigate, onStart }) {
                           value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
                           className="mt-2 w-full rounded-xl border border-white/15 bg-[#07090c] px-4 py-3 text-[15px] text-[#f5f7fa] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]" />
                 <button type="submit" className="mt-6 inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-full bg-[#22d3ee] text-[16px] font-semibold text-[#062126] outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#22d3ee]">
-                  Check my clip
+                  Prepare clip request
                 </button>
-                <p className="mt-3 text-[13px] leading-5 text-[#a5adba]">We review eligibility first. If your clip is a fit, we send payment details and process it within 24-48h.</p>
+                <p className="mt-3 text-[13px] leading-5 text-[#a5adba]">This prepares an email draft to the pilot owner. Review and send it in your mail app; this page does not submit or charge you.</p>
               </>
             )}
           </form>
@@ -229,12 +236,12 @@ export function CoherenceLanding({ onNavigate, onStart }) {
       {/* quiet closing: vision + lab access */}
       <footer className="mx-auto w-full max-w-[1120px] px-6 pb-16 lg:px-8">
         <div className="border-t border-white/10 pt-8 text-[14px] leading-6 text-[#a5adba]">
-          <p>Where this goes: coherence from the start — a streaming engine for multi-minute shots. Research preview, built in the open.</p>
+          <p>Research question: can learned memory improve long video against frozen frames, explicit reference memory and deployed linear baselines? Multi-minute coherence is not established.</p>
           <nav aria-label="Explore" className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
             <a href="/arcade" className="underline underline-offset-4 hover:text-[#f5f7fa]">The lab</a>
             <a href="/app" className="underline underline-offset-4 hover:text-[#f5f7fa]">The decision engine</a>
           </nav>
-          <p className="mt-3">Run by BrainSNN. Reach us via the form above.</p>
+          <p className="mt-3">Run by BrainSNN. The form above prepares a manual email request.</p>
         </div>
       </footer>
     </div>
