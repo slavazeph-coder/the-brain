@@ -1,0 +1,46 @@
+name: Robot Arena contracts
+
+on:
+  pull_request:
+    paths:
+      - "brainsnn-r3f-app/public/arena/**"
+      - "robotics/arena/**"
+      - ".github/workflows/arena-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "brainsnn-r3f-app/public/arena/**"
+      - "robotics/arena/**"
+      - ".github/workflows/arena-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arena-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: robotics/arena
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install API test dependencies
+        run: python -m pip install -r workers/arena/requirements-api.txt httpx==0.28.1
+      - name: Browser logic and session regressions
+        run: node scripts/check-arena.cjs
+      - name: Worker API and isolation contracts
+        run: python -m unittest discover -s tests -p 'test_arena_worker*.py' -v
+      - name: Cross-language profile agreement
+        run: node tests/arena-integration-worker-contract.cjs
+      - name: Verify published worker kit matches source
+        run: |
+          python scripts/build-worker-kit.py
+          git diff --exit-code -- ../../brainsnn-r3f-app/public/arena/downloads/brainsnn-arena-worker.zip ../../brainsnn-r3f-app/public/arena/worker-setup.html

@@ -32,6 +32,10 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [vLLM candidate and finite GPU backlog](brainsnn-vllm-runtime-2026-09.md). Pinned local model/template verification, isolated cu124 child configuration and64-case checkpointed regression set; real promotion remains separately validated.
 
+## Robot Arena production integration
+
+→ [Robot Arena and RTX 4090 handoff](brainsnn-robot-arena-2026-10.md). Production browser source lives in `brainsnn-r3f-app/public/arena/`; GPU worker source and handoff live in `robotics/arena/`.
+
 ## Active Work
 
 <!-- Both AIs append notes here as they work -->
