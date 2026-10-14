@@ -82,3 +82,11 @@
 @media(min-width:1000px){#experiment-root{padding-top:22px}.experiment-selection{padding:12px 16px}.experiment-selection select,.experiment-selection input{height:41px}.experiment-selection-status{padding-bottom:12px}}
 
 .legacy-campaign{margin-top:28px;border:1px solid var(--bh-line);border-radius:18px;padding:18px}.legacy-campaign>summary{color:var(--bh-muted);cursor:pointer;min-height:32px;font-size:13px}.legacy-campaign[open]>summary{margin-bottom:24px}
+/* Site testing is a first-class destination in the existing arena. */
+.experiment-tabs{flex-wrap:wrap}
+.experiment-new{display:inline-block;font-size:8px;font-weight:750;letter-spacing:.09em;color:#68eaff;background:#68eaff10;border:1px solid #68eaff32;border-radius:4px;padding:2px 4px;margin-left:5px;vertical-align:middle}
+.experiment-site-entry{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 22px;margin:0 0 16px;border:1px solid #68eaff25;border-radius:14px;background:linear-gradient(115deg,#68eaff08,#947cff08)}
+.experiment-site-entry strong{display:block;font-size:15px;font-weight:550;color:#f4f7fb;letter-spacing:-.02em}
+.experiment-site-entry span{display:block;font-size:12px;color:#98a8bd;margin-top:5px;line-height:1.5}
+.experiment-site-entry .experiment-button{flex-shrink:0;min-height:44px}
+@media(max-width:640px){.experiment-site-entry{align-items:flex-start;flex-direction:column;padding:16px}.experiment-site-entry .experiment-button{width:100%}.experiment-tabs{gap:4px}.experiment-tabs button{font-size:11px;padding:10px 12px}}

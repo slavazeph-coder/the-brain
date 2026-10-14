@@ -14,6 +14,23 @@
   let state = { robotId: null, modelId: null, task: '', seed: '42', note: '', mode: 'robot-preview', view: 'arena' };
   let viewerTimer = null;
   let lastNamedState = null;
+  let renderGeneration = 0;
+  let siteRendererPromise = null;
+
+  function loadSiteRenderer() {
+    if (window.BrainSNNSiteRenderer) return Promise.resolve();
+    if (siteRendererPromise) return siteRendererPromise;
+    siteRendererPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'site-renderer.js';
+      script.async = true;
+      const timeout = setTimeout(() => { script.remove(); siteRendererPromise = null; reject(new Error('The 3D viewer timed out. Please retry.')); }, 25000);
+      script.onload = () => { clearTimeout(timeout); if (window.BrainSNNSiteRenderer) resolve(); else { siteRendererPromise = null; reject(new Error('The 3D viewer could not initialize.')); } };
+      script.onerror = () => { clearTimeout(timeout); script.remove(); siteRendererPromise = null; reject(new Error('The 3D viewer could not load. Check your connection and retry.')); };
+      document.body.appendChild(script);
+    });
+    return siteRendererPromise;
+  }
 
   function describe() {
     const robot = findRobot(state.robotId), model = findModel(state.modelId);
@@ -43,7 +60,8 @@
       referenceCheckpoint: state.mode === 'demo' ? null : d.model?.checkpoint || null,
       executionTrack: state.mode === 'demo' ? 'scripted-kinematic-demo' : d.executionTrack,
       viewerUrl: state.mode === 'demo' ? null : d.viewerURL || null,
-      runtimeConnected: Boolean(arena?.runtimeConnected), policyExecuted: Boolean(arena?.policyExecuted) });
+      runtimeConnected: Boolean(arena?.runtimeConnected), policyExecuted: Boolean(arena?.policyExecuted),
+      siteTest: state.view === 'site' ? window.BrainSNNSiteWorkspace?.getState?.() || null : null });
   }
 
   function remember(writeURL = true) {
@@ -119,8 +137,10 @@
   }
 
   function render() {
+    const generation = ++renderGeneration;
     clearTimeout(viewerTimer);
     window.BrainSNNArena?.suspend?.();
+    window.BrainSNNSiteWorkspace?.suspend?.();
     const root = $('experiment-root');
     if (!root) return;
     const demo = state.mode === 'demo', d = describe();
@@ -136,8 +156,19 @@
       '<div class="experiment-selection-status"><span class="experiment-pair-status">' + esc(d.pairStatus) + '</span><span id="experiment-runtime-summary">Select a profile or try local practice</span></div>' +
       (d.error ? '<div class="experiment-error" id="experiment-error" role="alert">' + esc(d.error) + (d.world && state.robotId ? '<button class="experiment-text-button" data-experiment-action="clear-robot">Use world setup without a robot →</button>' : '') + '</div>' : '') +
       (state.note ? '<p class="experiment-selection-note">' + esc(state.note) + '</p>' : '') +
-      '<div class="experiment-layout' + (state.view === 'arena' ? ' experiment-arena-layout' : '') + '"><section class="experiment-main"><div class="experiment-tabs" role="group" aria-label="Experiment view"><button data-experiment-view="arena" class="' + (state.view === 'arena' ? 'active' : '') + '" aria-pressed="' + (state.view === 'arena') + '"' + (d.world ? ' disabled' : '') + '>Arena</button><button data-experiment-view="robot" class="' + (state.view === 'robot' ? 'active' : '') + '" aria-pressed="' + (state.view === 'robot') + '"' + (d.world ? ' disabled' : '') + '>Robot asset</button><button data-experiment-view="setup" class="' + (state.view === 'setup' ? 'active' : '') + '" aria-pressed="' + (state.view === 'setup') + '">Model setup</button></div>' +
-      (state.view === 'arena' ? '<div id="arena-workspace-root"></div>' : state.view === 'setup' ? setupHTML(d) : previewHTML(d)) + '</section>' + (state.view === 'arena' ? '' : readinessHTML(d)) + '</div>';
+      '<div class="experiment-layout' + (['arena', 'site'].includes(state.view) ? ' experiment-arena-layout' : '') + '"><section class="experiment-main"><div class="experiment-tabs" role="group" aria-label="Experiment view"><button data-experiment-view="arena" class="' + (state.view === 'arena' ? 'active' : '') + '" aria-pressed="' + (state.view === 'arena') + '"' + (d.world ? ' disabled' : '') + '>Arena</button><button data-experiment-view="site" class="' + (state.view === 'site' ? 'active' : '') + '" aria-pressed="' + (state.view === 'site') + '">Test your space <span class="experiment-new">NEW</span></button><button data-experiment-view="robot" class="' + (state.view === 'robot' ? 'active' : '') + '" aria-pressed="' + (state.view === 'robot') + '"' + (d.world ? ' disabled' : '') + '>Robot asset</button><button data-experiment-view="setup" class="' + (state.view === 'setup' ? 'active' : '') + '" aria-pressed="' + (state.view === 'setup') + '">Model setup</button></div>' +
+      (state.view === 'arena' ? '<div class="experiment-site-entry"><div><strong>Bring your world into the arena.</strong><span>Import a scan, review the map and explore robot routes in your own space.</span></div><button class="experiment-button" data-experiment-view="site">Test your space ↗</button></div><div id="arena-workspace-root"></div>' : state.view === 'site' ? '<div id="site-workspace-root"><div class="experiment-empty" role="status">Preparing your space…</div></div>' : state.view === 'setup' ? setupHTML(d) : previewHTML(d)) + '</section>' + (['arena', 'site'].includes(state.view) ? '' : readinessHTML(d)) + '</div>';
+    if (state.view === 'site') {
+      loadSiteRenderer().then(() => {
+        if (generation !== renderGeneration || state.view !== 'site') return;
+        if (!window.BrainSNNSiteWorkspace?.mount) throw new Error('The site workspace could not load. Please reload.');
+        window.BrainSNNSiteWorkspace.mount($('site-workspace-root'), { ...state, robot: d.robot, model: d.model });
+      }).catch(error => {
+        if (generation !== renderGeneration || state.view !== 'site') return;
+        const host = $('site-workspace-root');
+        if (host) host.innerHTML = '<div class="experiment-empty" role="alert"><h3>Your space could not open.</h3><p>' + esc(error.message) + '</p><button class="experiment-button" data-experiment-action="reload-viewer">Retry</button></div>';
+      });
+    }
     if (state.view === 'arena' && !d.world) {
       if (window.BrainSNNArena?.mount) window.BrainSNNArena.mount($('arena-workspace-root'), { ...state, error: d.error, matchingCheckpoint: d.matchingCheckpoint, robot: d.robot, model: d.model, viewerUrl: d.viewerURL });
       else $('arena-workspace-root').innerHTML = '<div class="experiment-empty"><h3>The arena could not load.</h3><p>Reload the page, or open the Robot asset tab to inspect your selected body.</p><button class="experiment-button" data-experiment-action="reload-viewer">Retry</button></div>';
@@ -160,7 +191,7 @@
     const robot = findRobot(robotId), world = pureWorld(model);
     state = { robotId, modelId, task: String(input.task ?? robot?.tasks?.[0] ?? model?.tasks?.[0] ?? '').slice(0, 300),
       seed: String(input.seed ?? '42').slice(0, 64), note: String(input.note ?? '').slice(0, 1200),
-      mode: world ? 'world-setup' : 'robot-preview', view: world ? 'setup' : ['setup', 'robot'].includes(input.view) ? input.view : 'arena' };
+      mode: world ? 'world-setup' : 'robot-preview', view: input.view === 'site' ? 'site' : world ? 'setup' : ['setup', 'robot'].includes(input.view) ? input.view : 'arena' };
     lastNamedState = clone(state);
     try { localStorage.setItem(STORAGE_KEY + '.named', JSON.stringify(lastNamedState)); } catch { /* Optional resume state. */ }
     window.BrainSNN3DClient?.pause?.();
@@ -192,7 +223,7 @@
     if (page !== 'playground') return getState();
     const p = new URLSearchParams(query);
     if (p.get('mode') === 'demo') return showDemo({ challenge: p.get('challenge') || 'starter', run: false });
-    if (p.has('robot') || p.has('model') || p.has('task') || p.has('seed')) {
+    if (p.has('robot') || p.has('model') || p.has('task') || p.has('seed') || p.has('view')) {
       const input = { modelId: p.get('model'), task: p.has('task') ? p.get('task') : undefined,
         seed: p.get('seed') || '42', note: p.get('note') || '', view: p.get('view') };
       // The explicit empty robot parameter is preserved for a deliberate unpaired selection.
@@ -234,6 +265,7 @@
       if (id !== 'experiment-task' && id !== 'experiment-seed') return;
       state[id === 'experiment-task' ? 'task' : 'seed'] = event.target.value.slice(0, id === 'experiment-task' ? 300 : 64);
       window.BrainSNNArena?.updateSelection?.({ ...state, error: describe().error });
+      window.BrainSNNSiteWorkspace?.updateSelection?.({ ...state, robot: describe().robot, model: describe().model });
       remember();
     }
     root.addEventListener('input', syncField);
@@ -267,16 +299,18 @@
   }
 
   function suspend() {
+    renderGeneration++;
     clearTimeout(viewerTimer);
     viewerTimer = null;
     window.BrainSNNArena?.suspend?.();
+    window.BrainSNNSiteWorkspace?.suspend?.();
     $('experiment-viewer')?.remove();
     return getState();
   }
 
   window.BrainSNNExperiment = Object.freeze({ open, showDemo, getState, restoreFromURL, suspend, syncRoute: () => { remember(); return getState(); } });
   window.addEventListener('hashchange', restoreFromURL);
-  window.addEventListener('pagehide', () => { clearTimeout(viewerTimer); window.BrainSNNArena?.suspend?.(); });
+  window.addEventListener('pagehide', suspend);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
   else bind();
 })();
