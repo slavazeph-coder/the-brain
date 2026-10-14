@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Video research evidence | BrainSNN</title>
+  <meta name="description" content="Baselines, hardware, trained status and failed quality gates for BrainSNN's video rescue pilot and separate memory research." />
+  <meta name="theme-color" content="#05070b" />
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #05070b; color: #edf5ff; }
+    body { margin: 0 auto; padding: 40px 24px 64px; max-width: 1000px; line-height: 1.65; }
+    a { color: #68eaff; text-underline-offset: 3px; }
+    h1,h2 { line-height: 1.2; letter-spacing: -.02em; }
+    h1 { font-size: clamp(2rem,5vw,3rem); } h2 { margin-top: 2.5rem; }
+    .tag { display: inline-block; color: #c4b5fd; border: 1px solid #947cff66; border-radius: 999px; padding: 3px 12px; }
+    .table { overflow-x: auto; border: 1px solid #ffffff22; border-radius: 20px; }
+    table { border-collapse: collapse; min-width: 680px; width: 100%; font-size: .94rem; }
+    th,td { padding: 16px; text-align: left; vertical-align: top; border-bottom: 1px solid #ffffff18; }
+    th { color: #68eaff; } tr:last-child td { border: 0; }
+    .note { border: 1px solid #947cff44; border-radius: 20px; background: #10141b; padding: 20px; }
+    .muted { color: #a5adba; } code { overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <a href="/coherence">Back to the video rescue pilot</a>
+  <p><span class="tag">Research evidence · October 13, 2026</span></p>
+  <h1>Video research evidence</h1>
+  <p>The clip rescue is a service evaluation. The learned memory engine is a separate research track.
+     Current results do not establish general restoration, HD rescue or multi-minute coherence.</p>
+  <div class="note"><strong>Native-resolution quality gates failed.</strong> Two earlier 1080p clips failed motion preservation;
+    one also failed detail. An owned native 720p house clip later retained detail but cut motion to 0.516 of its input,
+    below the 0.90 acceptance floor. Failed outputs are ineligible for paid rescue fulfillment.</div>
+
+  <h2>Post-process quality and baselines</h2>
+  <div class="table"><table>
+    <thead><tr><th>Test</th><th>Baseline and result</th><th>Hardware, samples and weights</th></tr></thead>
+    <tbody>
+      <tr><td>Initial M0 synthetic gain drift</td><td>A 24-byte exposure EMA is competitive with the spectral engine.
+        The often-quoted drift/detail/motion percentages describe this fixture, not customer footage.</td>
+        <td>CPU; one procedural scenario. Fixed analytic engines, no trained weights or training-seed experiment.
+        Processor model is not recorded. <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/M0_RESULTS.md">M0 results</a>.</td></tr>
+      <tr><td>Initial M0 mean-preserving phase drift</td><td>EMA, spectral magnitude and spectral complex all miss that experiment's registered 60% gate.
+        The complex engine reaches 50.2% on that scenario.</td><td>Same fixed-engine CPU experiment; no learned weights.
+        One scenario, not a diverse-video benchmark. <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/M0_RESULTS.md">Methods and failures</a>.</td></tr>
+      <tr><td>Two native 1080p clips</td><td>Compared with each raw input: motion ratios 0.699 and 0.536, below the [0.90,1.10] gate.
+        Detail medians 0.982 and 0.957; the second misses 0.97.</td><td>Two clips; frozen analytic ENG-1 operator, no trained weights.
+        Exact processor is not recorded. <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/reports/ENG1_1080.md">Failed HD gate</a>.</td></tr>
+      <tr><td>Owned native 720p house clip</td><td>1280×720, 16fps, 121 frames; same-encoding A/B against the raw input.
+        Detail 0.991998 passes; motion 0.516330 fails. Processing time 5.185s.
+        Human review remains pending.</td><td>One owned generated clip, not a stranger submission.
+        macOS arm64 CPU, one thread, PyTorch 2.12.0; frozen analytic ENG-1 operator, no trained weights.
+        No learned initialization-seed comparison. <a href="/research/video/native-720-house-20261013.json">Exact receipt</a>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Compute receipts are not coherence receipts</h2>
+  <p>The historical 417× figure timed one unwarmed CPU mixing operation; it did not measure token savings.
+    A warmed receipt gives 0.968ms FFT versus 857.605ms full scaled dot-product attention at N=16,384 (886×):
+    x86_64 CPU, four threads, fp32, one 64-channel head, two warmups and median of five repetitions.
+    No weights were trained for this timing, and its CPU model/RNG seed are unrecorded.
+    <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/results_long_horizon/bench_scaling_cpu.json">Raw operation receipt</a>.</p>
+  <p>That comparison does not establish GPU speed, end-to-end generation cost or superiority over deployed windowed,
+    state-space or factorized spatial/temporal attention. The VAE sets the token count for both arms.</p>
+  <p>The 7,200-frame constant-state stream used <strong>untrained weights</strong> and froze at frame zero.
+    It measures streaming cost. A seed-0 CPU clean-write probe learns a 128-frame blank-background recall task;
+    this is not textured-video memory or three-seed 256-frame learned recall.
+    <a href="https://github.com/XioAISolutions/crumb-format/blob/8c1a63bc0e69af10a3e678714e719839f12e97ba/experiments/wavefield_video/LONG_HORIZON.md">Training protocol and limits</a>.</p>
+
+  <h2>What would support a stronger result</h2>
+  <p>Train the same 256-frame dependency on at least three initialization seeds. Compare explicit reference/latch memory,
+    frozen frames, bounded-window attention, generic SSM and factorized attention under declared resource budgets.
+    Verify no future/oracle inputs, actual state-erasure and donor dependence, no-event false presence and held-out source separation.</p>
+  <p>A frozen pretrained VAE is a codec, not a generative prior. Validate encoder causality, decode held-out predictions,
+    report the first collapse, and obtain blind native-resolution review before claiming better generated video.</p>
+  <p class="muted">A customer result additionally needs an authorized independent clip, a useful accepted output and a recorded payment.
+    Drafts, owned footage, analytics and AI-authored reviews do not establish demand or replace independent human research review.</p>
+  <p><a href="/">BrainSNN Playground</a> · <a href="/engine">Content comparison engine</a> · <a href="/coherence">Pilot evaluation request</a></p>
+</body>
+</html>
