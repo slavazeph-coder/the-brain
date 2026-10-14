@@ -369,6 +369,30 @@
     return renderer;
   }
 
+  // Orbiting spectator view shared by rendering and pointer picking.
+  function spectatorCamera(view, aspect) {
+    view = view || {};
+    var yaw = typeof view.yaw === 'number' ? view.yaw : -0.95;
+    var pitch = clamp(typeof view.pitch === 'number' ? view.pitch : 0.62, 0.15, 1.4);
+    var radius = clamp(typeof view.distance === 'number' ? view.distance : 5.1, 2.1, 9);
+    // Keep the full platform comfortably framed on narrow screens.
+    radius *= Math.max(1, 1.12 / aspect);
+    var target = [0, 0, 0.48];
+    return { target: target, fovY: 0.76, eye: [Math.cos(yaw) * Math.cos(pitch) * radius,
+      Math.sin(yaw) * Math.cos(pitch) * radius, target[2] + Math.sin(pitch) * radius] };
+  }
+  // Maps a point on the canvas (CSS pixels from its top-left) to the
+  // horizontal plane at height z, or null when the ray misses it.
+  function pickPlane(view, width, height, x, y, z) {
+    if (!(width > 0 && height > 0) || ![x, y].every(Number.isFinite)) return null;
+    var cam = spectatorCamera(view, width / height), f = Math.tan(cam.fovY / 2);
+    var back = norm(sub(cam.eye, cam.target)), right = norm(cross([0, 0, 1], back)), up = cross(back, right);
+    var nx = (x / width) * 2 - 1, ny = 1 - (y / height) * 2;
+    var ray = norm(add(add(mul(back, -1), mul(right, nx * f * width / height)), mul(up, ny * f)));
+    if (ray[2] > -1e-6) return null;
+    var t = ((typeof z === 'number' ? z : 0) - cam.eye[2]) / ray[2];
+    return t > 0 ? [cam.eye[0] + ray[0] * t, cam.eye[1] + ray[1] * t] : null;
+  }
   function renderScene(canvas, state, view, sensor) {
     view = view || {};
     var r = caches && caches.get(canvas);
@@ -384,14 +408,9 @@
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     gl.viewport(0, 0, w, h); gl.clearColor(0.0235, 0.0235, 0.0392, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(r.program); gl.enableVertexAttribArray(r.pos); gl.enableVertexAttribArray(r.normal);
-    var yaw = typeof view.yaw === 'number' ? view.yaw : -0.95;
-    var pitch = clamp(typeof view.pitch === 'number' ? view.pitch : 0.62, 0.15, 1.4);
-    var radius = clamp(typeof view.distance === 'number' ? view.distance : 5.1, 2.1, 9);
-    // Keep the full platform comfortably framed on narrow screens.
-    radius *= Math.max(1, 1.12 / (w / h));
-    var target = sensor ? SENSOR_CAMERA.target.slice() : [0, 0, 0.48];
-    var eye = sensor ? SENSOR_CAMERA.eye.slice() : [Math.cos(yaw) * Math.cos(pitch) * radius,
-      Math.sin(yaw) * Math.cos(pitch) * radius, target[2] + Math.sin(pitch) * radius];
+    var spectator = spectatorCamera(view, w / h);
+    var target = sensor ? SENSOR_CAMERA.target.slice() : spectator.target;
+    var eye = sensor ? SENSOR_CAMERA.eye.slice() : spectator.eye;
     var vp = matMultiply(perspective(sensor ? SENSOR_CAMERA.fovY : 0.76, w / h, 0.05, 40), lookAt(eye, target));
     gl.uniform3fv(r.eye, eye);
     var night = state.opts && state.opts.challenge === 'night';
@@ -542,6 +561,27 @@
     box([ee[0]-opening/2+.012,ee[1],ee[2]-.023],[.006,.052,.036],graphite,matte);
     box([ee[0]+opening/2-.012,ee[1],ee[2]-.023],[.006,.052,.036],graphite,matte);
     ball([ee[0],ee[1]-.048,ee[2]+.058],.018,cyan,accent);
+    // Optional game overlays: a straight-down beam that shows where the claw
+    // will land, and a translucent replay of the scripted bot's gripper.
+    if(!sensor && view.claw && view.claw.beam){
+      var beamColor=view.claw.color||[.83,.88,.96];
+      gl.depthMask(false);
+      tube([ee[0],ee[1],Math.max(.02,ee[2]-.06)],[ee[0],ee[1],.012],.011,beamColor,[.3,30,0,.9]);
+      draw(model([ee[0],ee[1],.009],[.19,.19,1]),beamColor,'ring',[.85,40,0,.35]);
+      draw(model([ee[0],ee[1],.008],[.3,.3,1]),beamColor,'ring',[.25+pulse*.1,40,0,.2]);
+      gl.depthMask(true);
+    }
+    if(!sensor && view.ghost && Array.isArray(view.ghost.position)){
+      var gpos=view.ghost.position, ghostStyle=[.34,30,.05,.55];
+      gl.depthMask(false);
+      draw(model([gpos[0],gpos[1],.007],[.24,.24,1]),purple,'ring',[.38,40,0,.3]);
+      ball([gpos[0],gpos[1],gpos[2]+.07],.1,purple,ghostStyle);
+      box([gpos[0]-.05,gpos[1],gpos[2]],[.024,.07,.11],purple,ghostStyle);
+      box([gpos[0]+.05,gpos[1],gpos[2]],[.024,.07,.11],purple,ghostStyle);
+      tube([gpos[0],gpos[1],gpos[2]+.11],[gpos[0],gpos[1],gpos[2]+.32],.05,purple,[.18,30,0,.4]);
+      if(view.ghost.carrying)box(gpos,[.14,.14,.16],purple,[.22,30,0,.4]);
+      gl.depthMask(true);
+    }
     // Target halo and a fine spatial trail support replay without covering tasks.
     if(!sensor && view.showTarget!==false){
       var tp=state.robot.target;
@@ -574,6 +614,11 @@
   }
 
   function render(canvas, state, view) { return renderScene(canvas, state, view, false); }
+  function pick(canvas, view, clientX, clientY, z) {
+    var rect = canvas && canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+    if (!rect) return null;
+    return pickPlane(view, rect.width, rect.height, clientX - rect.left, clientY - rect.top, z);
+  }
   function renderSensor(canvas, state, options) {
     options = options || {};
     var width = options.width === undefined ? 256 : options.width;
@@ -585,5 +630,5 @@
   }
 
   root.BrainArena3D = Object.freeze({ create: create, step: step, demoAction: demoAction,
-    render: render, renderSensor: renderSensor });
+    render: render, renderSensor: renderSensor, pick: pick, pickPlane: pickPlane, spectatorCamera: spectatorCamera });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
