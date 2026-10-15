@@ -42,3 +42,20 @@ it preserves robot/model/task/seed and does not replace the real Arena adapter.
   worker. Do not put captures or tokens in public assets, reports or Git.
 - See `robotics/arena/docs/site-tests.md` and `site-scan-worker.md` for the user
   flow, deployment constraints and the RTX 4090 continuation instructions.
+
+## Gym operating estimates
+
+- `public/arena/site-operations.js` calculates time, modelled human help and
+  per-run costs from a current complete cleaner coverage plan. It rejects stale,
+  unscaled, blocked or navigation-only plans. Assumptions and source provenance
+  are retained in reports and editable scenarios.
+- Cost rates default to unknown. An explicit zero is allowed; do not manufacture
+  a free operation from absent labour, robot or consumable rates.
+- Assistance and service counts are entered assumptions. Grid traversal is not
+  an optimized commercial cleaning controller, and results do not execute GR00T.
+- Public guide `gym-pilot.html` and source `robotics/arena/docs/gym-pilot.md`
+  distinguish a supported measured map from raw video/visual references. A real
+  gym pilot still needs an actual scan/map and measured robot configuration.
+- Researched next inserts: commercial-compatible DA3 BASE/Metric checkpoints,
+  Open3D map proposals, Nav2/Fields2Cover swaths and nvblox depth/pose mapping.
+  These are recommendations, not installed workers or validated gym trials.
