@@ -38,7 +38,7 @@ function setup(selection = g1) {
   renderer.setPointCloud = cloud => { renderCalls.push({ name: 'setPointCloud', args: [clone(cloud)] }); return { pointCount: cloud.positions.length / 3, visualOnly: true }; };
   renderer.importAsset = async file => ({ name: file.name, visualOnly: true });
   e.ctx.BrainSNNSiteRenderer = { create(_host, options) { rendererOptions = options; return renderer; } };
-  for (const name of ['site-core.js', 'site-workspace.js']) vm.runInContext(fs.readFileSync(path.join(base, name), 'utf8'), e.ctx, { filename: name });
+  for (const name of ['site-core.js', 'site-operations.js', 'site-workspace.js']) vm.runInContext(fs.readFileSync(path.join(base, name), 'utf8'), e.ctx, { filename: name });
   const root = e.document.createElement('div'); root.setAttribute('id', 'test-site-root'); e.document.body.appendChild(root);
   const api = e.ctx.BrainSNNSiteWorkspace;
   api.mount(root, selection);
@@ -360,4 +360,172 @@ test('editable scenario roundtrip preserves the reviewed planning body without r
   assert.equal(Number(e.el('site-body-operationWidth').value), 0.6);
   assert.equal(e.state().scene.scaleConfirmed, false);
   assert.equal(e.state().selection.robotId, 'g1'); assert.equal(e.state().selection.modelId, 'groot');
+});
+
+
+// This is a synthetic fixture of one gym-shaped floor. It exercises real map
+// import, coverage planning and estimates, not a claim of an actual gym trial.
+async function importSyntheticGym(e) {
+  const incoming = e.state().scene;
+  Object.assign(incoming, {
+    name: 'Synthetic gym floor for controller tests',
+    source: { kind: 'manual', name: 'Synthetic measured floor fixture', warnings: ['Synthetic fixture, not an actual gym capture.'] },
+    obstacles: [{ id: 'equipment-fixture', label: 'Equipment fixture', x: 6, z: 4.5, width: 2, depth: 1.5, height: 1.5 }],
+  });
+  e.step('capture'); e.file('site-map-input', e.jsonFile({ scene: incoming })); await flush();
+  return incoming;
+}
+function confirmScale(e) {
+  e.step('review'); e.el('site-scale-confirmed').checked = true; e.el('site-scale-confirmed').dispatch('change');
+}
+async function estimateGym(e) { e.step('test'); e.action('gym-estimate'); await flush(); }
+function setCostRates(e, labor, robot, consumables) {
+  for (const [name, value] of [['laborHourlyRate', labor], ['robotHourlyCost', robot], ['consumablesPerM2', consumables]]) {
+    e.change('site-ops-' + name, value);
+  }
+}
+
+test('gym cleaning entry runs actual cleaner coverage while preserving the exact G1 and GR00T selection', async () => {
+  const e = setup(); const before = e.state().scene;
+  assert(e.root.querySelector('[data-site-action="gym-estimate"]'), 'Gym estimate must be discoverable on the initial test view');
+  await estimateGym(e);
+  const state = e.state();
+  assert.deepEqual(state.selection, { robotId: 'g1', modelId: 'groot', task: 'Supported reach', seed: '42' });
+  assert.deepEqual(state.scene, before); assert.equal(state.proxy, 'cleaner'); assert.equal(state.mode, 'coverage');
+  assert.equal(state.result.status, 'complete'); assert.equal(state.result.mode, 'coverage');
+  assert(state.result.trace.length > 1); assert.equal(state.policyExecuted, false);
+  assert(state.operations.estimate, 'Actual coverage should produce an operations estimate');
+  assert.match(e.el('site-operations-output').textContent, /SAMPLE FLOOR/);
+  assert.match(e.el('site-operations-output').textContent, /Human help/);
+  assert.match(e.el('site-operations-output').textContent, /Enter your rates/);
+});
+
+test('an imported non-sample gym map cannot show a cleaning estimate before measured scale is confirmed', async () => {
+  const e = setup(); await importSyntheticGym(e);
+  assert.equal(e.state().scene.source.kind, 'manual'); assert.equal(e.state().scene.scaleConfirmed, false);
+  await estimateGym(e);
+  assert.equal(e.state().result, null); assert.equal(e.state().operations.estimate, null);
+  assert.equal(e.state().scene.scaleConfirmed, false); assert.match(e.el('site-status').textContent, /Confirm|dimensions|scale/);
+  assert(e.root.querySelector('[data-site-step="review"]'), 'Scale review must remain available');
+  assert.equal(e.el('site-run').disabled, true);
+  confirmScale(e); await estimateGym(e);
+  const state = e.state(); assert.equal(state.result.status, 'complete');
+  assert(state.operations.estimate.timing.robotRunMinutes > 0);
+  assert(state.operations.estimate.timing.humanHelpMinutes >= 0);
+  assert.equal(state.operations.estimate.costs.total, null);
+  assert.match(e.el('site-operations-output').textContent, /REVIEWED MAP/);
+  assert(!e.el('site-operations-output').textContent.includes('SAMPLE FLOOR'));
+});
+
+test('cost stays unavailable until all user rates are entered and intentional zero rates remain valid', async () => {
+  const e = setup(); await importSyntheticGym(e); confirmScale(e); await estimateGym(e);
+  assert.equal(e.state().operations.estimate.costs.total, null);
+  e.change('site-ops-laborHourlyRate', 30);
+  assert.equal(e.state().operations.estimate.costs.total, null);
+  e.change('site-ops-robotHourlyCost', 0);
+  assert.equal(e.state().operations.estimate.costs.total, null);
+  e.change('site-ops-consumablesPerM2', 0);
+  let estimate = e.state().operations.estimate;
+  assert(estimate.costs.total > 0); assert.equal(estimate.costs.robot, 0); assert.equal(estimate.costs.consumables, 0);
+  assert.equal(estimate.costs.total, estimate.costs.labor); assert.match(e.el('site-ops-total').textContent, /CAD/);
+  setCostRates(e, 0, 0, 0); estimate = e.state().operations.estimate;
+  assert.equal(estimate.costs.total, 0); assert.match(e.el('site-ops-total').textContent, /0\.00/);
+  e.change('site-ops-laborHourlyRate', '');
+  assert.equal(e.state().operations.assumptions.laborHourlyRate, null);
+  assert.equal(e.state().operations.estimate.costs.total, null); assert.match(e.el('site-ops-total').textContent, /Enter your rates/);
+});
+
+test('changing cost rates recalculates the estimate without replacing the route, scene digest or playback cursor', async () => {
+  const e = setup(); await estimateGym(e); e.action('run');
+  const target = Math.floor(e.state().result.trace.length / 3);
+  e.el('site-scrubber').value = String(target); e.el('site-scrubber').dispatch('input');
+  const before = e.state();
+  setCostRates(e, 25, 8, 0.015);
+  const after = e.state();
+  assert.deepEqual(after.scene, before.scene); assert.deepEqual(after.result, before.result);
+  assert.equal(after.result.sceneDigest, before.result.sceneDigest); assert.equal(after.cursor, target);
+  assert.equal(after.running, false); assert.equal(after.planning, false);
+  assert(after.operations.estimate.costs.total > 0);
+  assert.deepEqual(after.operations.estimate.timing, before.operations.estimate.timing);
+  assert.notEqual(after.operations.estimate.estimateDigest, before.operations.estimate.estimateDigest);
+});
+
+test('geometry and measured speed edits clear both the coverage trace and its operations estimate', async () => {
+  const e = setup(); await estimateGym(e);
+  assert(e.state().operations.estimate);
+  e.selectObstacle(e.state().scene.obstacles[0].id); e.change('site-obstacle-x', 4.2);
+  assert.equal(e.state().result, null); assert.equal(e.state().operations.estimate, null);
+  await estimateGym(e); assert(e.state().operations.estimate);
+  const speedBefore = Number(e.el('site-body-speed').value);
+  e.change('site-body-speed', speedBefore / 2);
+  assert.equal(e.state().result, null); assert.equal(e.state().operations.estimate, null);
+  assert.equal(e.state().running, false); assert.equal(e.state().selection.robotId, 'g1');
+  await estimateGym(e); assert(e.state().operations.estimate.timing.robotRunMinutes > 0);
+});
+
+test('a saved gym scenario roundtrips operations assumptions but requires fresh confirmation and planning', async () => {
+  const e = setup(); await importSyntheticGym(e); confirmScale(e); await estimateGym(e);
+  e.change('site-ops-passes', 2); e.change('site-ops-setupMinutes', 7); e.change('site-ops-expectedInterventions', 3);
+  e.change('site-ops-minutesPerIntervention', 4); e.change('site-ops-currency', 'USD');
+  setCostRates(e, 40, 0, 0.02);
+  const assumptions = e.state().operations.assumptions;
+  e.action('export-scene'); const saved = JSON.parse(e.downloads.at(-1));
+  assert.equal(saved.schema, 'brainsnn.site.scenario.v1');
+  assert.deepEqual(saved.operations.assumptions, assumptions); assert.equal(saved.scene.source.kind, 'manual');
+  e.change('site-ops-passes', 1); e.change('site-ops-laborHourlyRate', 99);
+  e.step('capture'); e.file('site-map-input', e.jsonFile(saved)); await flush();
+  let state = e.state();
+  assert.equal(state.scene.scaleConfirmed, false); assert.equal(state.result, null); assert.equal(state.operations.estimate, null);
+  assert.deepEqual(state.operations.assumptions, assumptions);
+  assert.equal(state.selection.robotId, 'g1'); assert.equal(state.selection.modelId, 'groot');
+  confirmScale(e); await estimateGym(e); state = e.state();
+  assert.equal(state.result.status, 'complete'); assert.equal(state.operations.estimate.costs.currency, 'USD');
+  assert(state.operations.estimate.costs.total > 0); assert.deepEqual(state.operations.assumptions, assumptions);
+});
+
+test('the gym report binds operations and source geometry without leaking private worker credentials', async () => {
+  const e = setup(), url = 'https://private-gym-worker.example', token = 'private-gym-secret-do-not-export';
+  e.respond(() => response(capabilities)); await e.connect(url, token);
+  await importSyntheticGym(e); confirmScale(e); await estimateGym(e); setCostRates(e, 30, 5, 0);
+  e.action('export-report'); const report = JSON.parse(e.downloads.at(-1)); const state = e.state();
+  assert.deepEqual(report.operations, state.operations.estimate);
+  assert.deepEqual(report.operationsAssumptions, state.operations.assumptions);
+  assert.equal(report.scene.source.kind, 'manual'); assert.match(report.scene.source.name, /Synthetic/);
+  assert.equal(report.result.sceneDigest, state.result.sceneDigest);
+  assert.equal(report.operations.sceneDigest, state.result.sceneDigest);
+  assert.equal(report.execution.policyExecuted, false); assert.equal(report.execution.physicsValidated, false);
+  assert.equal(report.selected.robotId, 'g1'); assert.equal(report.selected.modelId, 'groot');
+  for (const output of [...e.downloads, JSON.stringify(state), ...e.storageRecords.values()]) {
+    assert(!output.includes(url)); assert(!output.includes(token));
+  }
+});
+
+test('entered human-help assumptions change the allowance and cost while retaining the planned coverage route', async () => {
+  const e = setup(); await estimateGym(e); const planned = e.state().result;
+  for (const [key, value] of [['setupMinutes', 4], ['finishMinutes', 2], ['expectedInterventions', 2], ['minutesPerIntervention', 3], ['serviceAreaM2', 0]]) {
+    e.change('site-ops-' + key, value);
+  }
+  e.el('site-ops-includeUncovered').checked = false; e.el('site-ops-includeUncovered').dispatch('change');
+  setCostRates(e, 60, 0, 0);
+  const state = e.state(), estimate = state.operations.estimate;
+  assert.deepEqual(state.result, planned);
+  assert.equal(estimate.timing.interventionMinutes, 6); assert.equal(estimate.timing.manualFollowupMinutes, 0);
+  assert.equal(estimate.timing.humanHelpMinutes, 12); assert.equal(estimate.costs.labor, 12);
+  assert.equal(estimate.costs.total, 12);
+  assert.equal(estimate.timing.sequentialElapsedMinutes, estimate.timing.robotRunMinutes + 12);
+  assert.match(e.el('site-ops-help-time').textContent, /12 min/);
+  assert(estimate.warnings.some(value => /assistance|assumption/i.test(value)));
+});
+
+test('an invalid imported operations scenario cannot partially replace the current map, body or valid estimate', async () => {
+  const e = setup(); await estimateGym(e); setCostRates(e, 30, 4, 0.02);
+  e.action('export-scene'); const saved = JSON.parse(e.downloads.at(-1)); const before = e.state();
+  saved.scene.name = 'Rejected synthetic floor'; saved.planning.body = { width: 1.2, speed: 0.3 };
+  saved.operations.assumptions.laborHourlyRate = -1;
+  e.step('capture'); e.file('site-map-input', e.jsonFile(saved)); await flush();
+  const after = e.state();
+  assert.deepEqual(after.scene, before.scene); assert.deepEqual(after.body, before.body);
+  assert.deepEqual(after.result, before.result); assert.deepEqual(after.operations, before.operations);
+  assert.equal(after.proxy, before.proxy); assert.equal(after.mode, before.mode);
+  assert.match(e.el('site-status').textContent, /Map import:/);
 });

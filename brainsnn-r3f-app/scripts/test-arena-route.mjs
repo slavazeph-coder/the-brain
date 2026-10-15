@@ -54,7 +54,7 @@ try {
     const kit = await get('/arena/downloads/brainsnn-arena-worker.zip', { method: 'HEAD' }); assert.equal(kit.status, 200); assert.match(kit.headers.get('content-type'), /(?:zip|octet-stream)/);
   });
   await test('site testing viewer and private-worker setup are published as isolated assets', async () => {
-    for (const name of ['site-renderer.js', 'site-core.js', 'site-plan-worker.js', 'site-workspace.js', 'site-workspace.css', 'site-scan-worker.html', 'downloads/brainsnn-site-scan-worker.zip']) {
+    for (const name of ['site-renderer.js', 'site-core.js', 'site-operations.js', 'site-plan-worker.js', 'site-workspace.js', 'site-workspace.css', 'site-scan-worker.html', 'gym-pilot.html', 'downloads/brainsnn-site-scan-worker.zip']) {
       const response = await get('/arena/' + name, { method: 'HEAD' });
       assert.equal(response.status, 200, name);
       assert(Number(response.headers.get('content-length')) > 100, name);

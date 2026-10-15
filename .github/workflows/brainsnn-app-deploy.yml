@@ -126,7 +126,7 @@ jobs:
             else
               home_marker="missing"
             fi
-            if [ "$arena" = "200" ] && grep -Fq '2026-10-14-site-tests-1' /tmp/brainsnn-arena.html; then
+            if [ "$arena" = "200" ] && grep -Fq '2026-10-15-gym-estimate-1' /tmp/brainsnn-arena.html; then
               arena_marker="ok"
             else
               arena_marker="missing"
