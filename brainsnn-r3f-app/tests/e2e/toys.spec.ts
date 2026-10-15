@@ -5,8 +5,17 @@ import AxeBuilder from '@axe-core/playwright';
 // WebGL may not exist in CI, so these assert on what every tier shares — the
 // counter, the controls, the share sheet — rather than on the 3D canvas.
 
-test('the homepage brain is pokeable straight away and counts the signals it fires', async ({ page }) => {
+test('the lobby offers a mission and a draft before the toys', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('See the moment');
+  await expect(page.getByRole('link', { name: 'Enter Arena' })).toHaveAttribute('href', '/arena/');
+  await expect(page.getByRole('link', { name: 'Open Review' })).toHaveAttribute('href', '/office');
+  await expect(page.getByRole('link', { name: 'Inspect evidence', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Neuro Powder Lab', exact: true })).toBeVisible();
+});
+
+test('the homepage brain is pokeable straight away and counts the signals it fires', async ({ page }) => {
+  await page.goto('/play');
   const hero = page.getByTestId('poke-hero');
   // The 3-second rule: something to poke, with no signup, modal or tutorial in the way.
   await expect(hero).toBeVisible({ timeout: 3_000 });
@@ -31,7 +40,7 @@ test('the homepage brain is pokeable straight away and counts the signals it fir
 
 test('slice chops the jelly in two, a swipe re-cuts it, and heal puts it back', async ({ page }) => {
   test.setTimeout(120_000);
-  await page.goto('/');
+  await page.goto('/play');
   // Slicing is a 3D-only control; a browser without WebGL keeps the 2D brain.
   const has3d = await page.locator('[data-testid="poke-hero"][data-render="3d"]').waitFor({ timeout: 60_000 }).then(() => true, () => false);
   test.skip(!has3d, 'no WebGL in this browser');
@@ -66,7 +75,7 @@ test('slice chops the jelly in two, a swipe re-cuts it, and heal puts it back', 
 });
 
 test('the guide starts with a tap and one dock button cycles the jelly colour', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/play');
   await expect(page.getByTestId('poke-guide')).toHaveText('Tap the brain');
   const colour = page.getByTestId('poke-colour');
   await expect(colour).toHaveAttribute('aria-label', /^Brain jelly/);
@@ -80,7 +89,7 @@ test('the guide starts with a tap and one dock button cycles the jelly colour', 
 test('share this brain saves a watermarked poster and copies a tagged caption', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'clipboard permissions are chromium-only in Playwright');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto('/');
+  await page.goto('/play');
   const stage = await page.locator('.poke-stage').boundingBox();
   if (!stage) throw new Error('poke stage has no box');
   await page.mouse.click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.5);
@@ -101,7 +110,7 @@ test('share this brain saves a watermarked poster and copies a tagged caption', 
 });
 
 test('more toys and both CTAs sit under the hero', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/play');
   const toys = page.locator('#toys');
   for (const path of ['/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain']) {
     await expect(toys.locator(`a[href="${path}"]`)).toBeVisible();
@@ -148,7 +157,8 @@ test('defend the brain has its own route with the game and its disclaimers verba
 // same as the social-card tests in brainsnn.spec.ts.
 test('each toy unfurls as its own rendered screenshot', async ({ request }) => {
   for (const [path, image] of [
-    ['/', '/og/toy-poke.png'],
+    ['/play', '/og/toy-poke.png'],
+    ['/', '/og-image.png'],
     ['/toys/fool-the-detector', '/og/toy-fool.png'],
     ['/toys/draft-duel', '/og/toy-duel.png'],
     ['/toys/defend-the-brain', '/og/toy-defend.png'],

@@ -26,21 +26,26 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('leads the Sapient Playground homepage with the poke toy and keeps its tools', () => {
+  it('leads the homepage with the break and keeps the poke toy on /play', () => {
     const home = resolveRouteMeta('/');
-    expect(home.title).toBe('BrainSNN | Sapient Playground');
-    expect(home.heading).toBe('Poke the brain and watch the signal travel.');
-    expect(home.description).toContain('Poke the brain and watch the signal travel.');
-    expect(home.image).toBe('/og/toy-poke.png');
+    expect(home.title).toBe('BrainSNN | See the moment it breaks');
+    expect(home.heading).toBe('See the moment it breaks.');
+    expect(home.description).toContain('Both runs stay');
+    expect(home.description).toMatch(/0\.\d+/);
+    expect(home.image).toBe('/og-image.png');
     const body = home.body.join(' ');
-    // The owner's line survives, now introducing the tools under the toy.
-    expect(body).toContain('build a mind, give it a world, give it a mission');
-    expect(body).toContain('deterministic comparison engine');
-    // The toy is a simulation and must say so where crawlers read it.
-    expect(body).toContain('not a recording of anyone’s brain');
+    expect(body).toContain('does not score a named policy');
+    expect(body).toContain('do not establish universal capability');
     expect(body).not.toContain('XIO');
     expect(body).not.toContain('US$1,500');
     expect(body).not.toContain('70%');
+
+    const play = resolveRouteMeta('/play');
+    expect(play.title).toBe('BrainSNN | Sapient Playground');
+    expect(play.heading).toBe('Poke the brain and watch the signal travel.');
+    expect(play.image).toBe('/og/toy-poke.png');
+    expect(play.body.join(' ')).toContain('build a mind, give it a world, give it a mission');
+    expect(play.body.join(' ')).toContain('not a recording of anyone’s brain');
   });
 
   it('gives every toy its own preview, hook and honest boundary', () => {
@@ -120,7 +125,7 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Poke the brain and watch the signal travel.');
+    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Both runs stay');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -136,15 +141,18 @@ describe('per-route social previews', () => {
     expect(html).toContain('og-image.png');
   });
 
-  it('uses the rendered toy screenshot for the homepage while keeping existing tools on their own card', () => {
-    const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
-    expect(tagContent(html, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/toy-poke.png');
-    expect(resolveRouteMeta('/').image).toBe('/og/toy-poke.png');
+  it('uses the rendered toy screenshot for /play and the site card for the lobby', () => {
+    const playHtml = applyRouteMeta(HTML, '/play', '', 'https://www.brainsnn.com');
+    expect(tagContent(playHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/toy-poke.png');
+    expect(resolveRouteMeta('/play').image).toBe('/og/toy-poke.png');
+    const homeHtml = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
+    expect(tagContent(homeHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og-image.png');
+    expect(resolveRouteMeta('/').image).toBe('/og-image.png');
     expect(resolveRouteMeta('/arcade').image).toBe('/og-image.png');
   });
 
   it('points every toy preview at an image that actually ships in public/', () => {
-    for (const path of ['/', '/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain']) {
+    for (const path of ['/play', '/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain']) {
       const image = resolveRouteMeta(path).image;
       expect(existsSync(join(process.cwd(), 'public', image))).toBe(true);
     }

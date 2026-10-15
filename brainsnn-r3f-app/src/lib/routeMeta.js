@@ -144,7 +144,7 @@ const ROUTES = [
     ],
   },
   {
-    path: '/',
+    path: '/play',
     title: 'BrainSNN | Sapient Playground',
     image: '/og/toy-poke.png',
     description:
@@ -156,10 +156,25 @@ const ROUTES = [
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
     ],
   },
+  {
+    path: '/',
+    title: 'BrainSNN | See the moment it breaks',
+    description:
+      'Change one thing in a robot mission or a draft. Both runs stay. '
+      + `Rank agreement on ${EVIDENCE.corpusSize} unseen passages is ${EVIDENCE.outOfSample.rho}. `
+      + `${EVIDENCE.falseAlarmCount} false alarms are listed.`,
+    heading: 'See the moment it breaks.',
+    body: [
+      'Change one thing in a robot mission or a draft. Both runs stay: the original, and the one after the change.',
+      'Enter the robot arena to run a practice mission, disturb it, and replay the break. Open Review to put a passage through the detector and keep the comparison.',
+      `Rank agreement on ${EVIDENCE.corpusSize} passages the detector had never seen is ${EVIDENCE.outOfSample.rho}. ${EVIDENCE.falseAlarmCount} false alarms are listed. Local arena practice is scripted and does not score a named policy. Model scores describe their tested conditions; they do not establish universal capability.`,
+    ],
+  },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/', label: 'BrainSNN Sapient Playground' },
+  { path: '/', label: 'See the moment it breaks' },
+  { path: '/play', label: 'Poke the brain' },
   { path: '/toys/fool-the-detector', label: 'Fool the Detector' },
   { path: '/toys/draft-duel', label: 'Draft Duel' },
   { path: '/toys/defend-the-brain', label: 'Defend the Brain' },

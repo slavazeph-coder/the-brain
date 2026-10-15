@@ -14,6 +14,7 @@ import { ResearchWorkspaceV2 } from '../features/research/ResearchWorkspaceV2.js
 import { ShareDialog } from '../features/export/ShareDialog.jsx';
 import { AppHeader } from './AppHeader.jsx';
 import { BehaviourHome } from './BehaviourHome.jsx';
+import { LobbyHome } from './LobbyHome.jsx';
 import { AgentLabHome } from '../features/agent-lab/AgentLabHome.jsx';
 import { ProofMissionsPage } from './ProofMissionsPage.jsx';
 import { MissionBuilderPage } from './MissionBuilderPage.jsx';
@@ -33,8 +34,8 @@ import { EngineWorkspace } from '../features/engine/EngineWorkspace.jsx';
 
 
 const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx').then((module) => ({ default: module.PowderLabPage })));
-// Toy pages load on demand; the homepage toy (Poke the Brain) is part of the
-// home route itself and lazy-loads its own WebGL scene.
+// Toy pages load on demand. The jelly brain lives at /play and lazy-loads
+// its own WebGL scene. `/` is the lobby.
 const FoolTheDetector = React.lazy(() => import('../features/toys/fool/FoolTheDetector.jsx').then((module) => ({ default: module.FoolTheDetector })));
 const DraftDuel = React.lazy(() => import('../features/toys/duel/DraftDuel.jsx').then((module) => ({ default: module.DraftDuel })));
 const DefendTheBrainToy = React.lazy(() => import('../features/toys/defend/DefendTheBrainToy.jsx').then((module) => ({ default: module.DefendTheBrainToy })));
@@ -64,6 +65,7 @@ export function resolveRoute(pathname) {
   if (pathname.startsWith('/evidence')) return 'evidence';
   if (pathname.startsWith('/lab')) return 'lab';
   if (pathname.startsWith('/coherence')) return 'coherence';
+  if (pathname === '/play' || pathname.startsWith('/play/')) return 'play';
   return 'home';
 
 }
@@ -293,8 +295,12 @@ export function AppShell() {
     return <AgentLabHome />;
   }
 
-  if (route === 'home') {
+  if (route === 'play') {
     return <BehaviourHome />;
+  }
+
+  if (route === 'home') {
+    return <LobbyHome />;
   }
 
   if (route === 'published-mission') {

@@ -72,6 +72,7 @@ export const ALLOWED_EVENTS = new Set([
   'coherence_demo_played',
   'coherence_half_switched',
   'behaviour_home_viewed',
+  'lobby_home_viewed',
   'toy_opened',
   'toy_first_poke',
   'toy_shake',
