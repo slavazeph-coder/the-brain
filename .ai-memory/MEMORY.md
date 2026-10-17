@@ -24,7 +24,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
-→ [Arena-led lobby and unified Review](brainsnn-reposition-2026-10.md). Owner-approved October direction supersedes the older toy-homepage and engine-product positioning below; #186/#187 merged, final navigation follow-up and deployment verification tracked here.
+→ [Arena-led lobby and unified Review](brainsnn-reposition-2026-10.md). October17 owner correction restores the interactive arcade with robot/model selection before Run; this overrides the earlier hidden-control restraint. #186/#187 merged; current restoration and verification tracked here.
 
 
 → [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective. Sept9: restore original cyan/violet Sapient Playground identity; keep the homepage simple.

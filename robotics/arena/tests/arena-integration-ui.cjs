@@ -20,14 +20,15 @@ function experimentEnv(selection, {hash='#catalog',saved}={}){
 }
 function test(name,fn){try{fn();console.log('PASS',name)}catch(e){console.error('FAIL',name,e.stack);process.exitCode=1}}
 function visible(element){for(let p=element;p;p=p.parentElement)if(p.hidden)return false;return true}
-test('first mission is paused with one Run button and no setup or replay controls',()=>{
+test('first mission is paused with robot, model and mission choices available before running',()=>{
  const e=experimentEnv({});const root=e.$('experiment-root');
  assert.equal(e.state().mode,'practice');assert.equal(e.state().running,false);assert.equal(e.state().currentSnapshot.state.steps,0);
- const buttons=root.querySelectorAll('button').filter(visible);assert.equal(buttons.length,1);assert.equal(buttons[0].id,'arena-run');assert.equal(buttons[0].textContent,'Run');
- assert(!visible(e.$('experiment-robot')));assert(!visible(e.$('experiment-model')));assert(!visible(e.$('arena-scrubber')));
+ assert(visible(e.$('arena-run')));assert(!e.$('arena-run').disabled);
+ for(const id of ['experiment-robot','experiment-model','experiment-task','experiment-seed'])assert(visible(e.$(id)),id+' must be available before running');
+ assert.equal(root.querySelectorAll('[data-arena-profile]').filter(visible).length,4);assert(!visible(e.$('arena-scrubber')));
  assert(visible(e.$('arena-runtime-badge')));assert(e.$('arena-runtime-badge').textContent.includes('LOCAL PRACTICE · NOT A MODEL SCORE'));
  assert(!root.textContent.includes('Benchmark'));assert(!root.textContent.includes('benchmark score'));
- e.action('run');e.tick();e.action('run');assert.equal(e.state().completedRun,false);assert(!visible(e.$('experiment-robot')));assert(!visible(e.$('arena-scrubber')));
+ e.action('run');e.tick();e.action('run');assert.equal(e.state().completedRun,false);assert(visible(e.$('experiment-robot')));assert(!visible(e.$('arena-scrubber')));
 });
 for(const source of ['URL','saved storage'])test(source+' restored named selection offers explicit local practice before connecting or completing a run',()=>{
  const selected={robotId:'g1',modelId:'sonic',task:'Track a reference motion',seed:'73'};
@@ -35,7 +36,7 @@ for(const source of ['URL','saved storage'])test(source+' restored named selecti
  const e=experimentEnv(undefined,options);const practice=e.q('[data-arena-action="practice"]');
  assert.equal(e.state().mode,'named');assert.equal(e.state().completedRun,false);assert.equal(e.state().policyExecuted,false);
  assert(visible(practice),'Local practice must be reachable without opening the worker form');assert(e.$('arena-connect-panel').hidden);
- assert(!visible(e.$('experiment-robot')));assert(!visible(e.$('experiment-model')));assert(!visible(e.$('arena-scrubber')));
+ assert(visible(e.$('experiment-robot')));assert(visible(e.$('experiment-model')));assert(!visible(e.$('arena-scrubber')));
  assert.equal(e.evidence().local,null);assert.equal(e.evidence().execution.kind,'worker');
  practice.click();assert.equal(e.state().mode,'practice');assert.equal(e.state().running,false);assert.equal(e.state().currentSnapshot.state.steps,0);
  assert.equal(e.evidence().selected.robotId,selected.robotId);assert.equal(e.evidence().selected.modelId,selected.modelId);assert.equal(e.evidence().selected.task,selected.task);assert.equal(String(e.evidence().selected.seed),selected.seed);
@@ -44,7 +45,7 @@ for(const source of ['URL','saved storage'])test(source+' restored named selecti
  const named=e.q('[data-arena-action="named"]');assert(visible(named),'The preserved named selection must remain reachable');named.click();
  assert.equal(e.state().mode,'named');assert.equal(e.state().selection.robotId,'g1');assert.equal(e.state().selection.modelId,'sonic');assert.equal(e.state().policyExecuted,false);
 });
-test('a completed bounded practice run reveals setup and replay without inventing policy results',()=>{
+test('a completed bounded practice run enables replay while preserving upfront setup and truthful policy status',()=>{
  const e=experimentEnv({});e.action('run');for(let i=0;i<500&&!e.state().currentSnapshot.state.done;i++)e.tick();
  assert(e.state().currentSnapshot.state.done,'Real bounded script must terminate');assert.equal(e.state().running,false);assert.equal(e.state().completedRun,true);
  assert(visible(e.$('experiment-robot')));assert(visible(e.$('experiment-model')));assert(visible(e.$('arena-scrubber')));

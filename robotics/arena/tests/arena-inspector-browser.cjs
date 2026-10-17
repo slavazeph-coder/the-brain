@@ -39,7 +39,10 @@ async function fixture(api, action = .2, changes = {}) {
     const errors = [], requests = []; page.on('pageerror', error => errors.push(error.message)); page.on('request', request => requests.push({url:request.url(),method:request.method()}));
     await page.addInitScript(() => { window.__ticks = new Map(); let id=0; window.setInterval=fn=>{window.__ticks.set(++id,fn);return id;};window.clearInterval=id=>window.__ticks.delete(id); });
     await page.goto(base + '/test.html'); await page.evaluate(() => BrainSNNArena.mount(document.querySelector('#experiment-root'), {}));
-    assert.equal(await page.locator('#experiment-root button:visible').count(), 1, 'one initial Run button');
+    assert.equal(await page.locator('#arena-run').isVisible(), true, 'paused mission remains runnable beside upfront setup controls');
+    assert.equal(await page.locator('[data-arena-profile]:visible').count(), 4, 'starter robot/model profiles are available before a run');
+    assert.equal(await page.locator('#arena-scrubber').isVisible(), false, 'replay still requires recorded run data');
+    assert.equal(await page.evaluate(() => BrainSNNArena.getState().running), false);
     await page.locator('.arena-recording-tools summary').click(); await page.getByText('Open a recording',{exact:true}).click();
     await page.locator('#ai-file').setInputFiles(upload(candidate)); await page.getByText('Schema valid · hashes match',{exact:true}).waitFor().catch(async error=>{throw new Error(error.message+'\n'+await page.locator('dialog').innerText()+'\n'+errors.join('\n'));});
     await page.locator('#ai-event-id').fill('state'); await page.getByRole('button',{name:'Go to event',exact:true}).click();

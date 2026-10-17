@@ -85,10 +85,10 @@ const ROUTES = [
   {
     path: '/arena/',
     title: 'Arena | BrainSNN',
-    description: 'Run one paused robot mission, change one thing and inspect what breaks. Local practice is scripted and is not a model score.',
-    heading: 'Run a mission. Inspect the break.',
+    description: 'Pick a robot and a model, choose a challenge and play with the world. Try local practice or connect a matched model worker, then replay your run.',
+    heading: 'Pick a robot. Choose its brain.',
     body: [
-      'Start with one paused mission and one Run button. After the run, inspect the replay and explore robot and model controls.',
+      'Choose your robot and model before you run. Explore challenges, move the camera, change the world and replay what happened.',
       'Local practice — not a model score. The scripted arm does not score a named policy. A model result requires a named model that actually ran and inspectable execution evidence.',
     ],
   },
