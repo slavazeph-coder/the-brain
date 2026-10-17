@@ -71,6 +71,14 @@ jobs:
         # Fixture commerce/provider only; actual browser image serialization is
         # checked by the production evidence validator. No paid calls are made.
         run: node tests/arena-analysis-browser.cjs
+      - name: Retain paid analysis synthetic desktop and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-paid-analysis-browser-fixtures
+          path: /tmp/arena-paid-analysis-*.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Verify published worker kit matches source
         run: |
           python scripts/build-worker-kit.py
