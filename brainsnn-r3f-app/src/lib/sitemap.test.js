@@ -19,6 +19,16 @@ describe('buildSitemap', () => {
     expect(buildSitemap(ORIGIN)).toContain('http://www.sitemaps.org/schemas/sitemap/0.9');
   });
 
+  it('lists canonical destinations rather than retired product routes', () => {
+    const xml = buildSitemap(ORIGIN);
+    for (const path of ['/arena/', '/office', '/evidence', '/lab', '/lab/powder', '/play']) {
+      expect(xml).toContain(`<loc>${ORIGIN}${path}</loc>`);
+    }
+    for (const path of ['/app', '/engine', '/reconstruct', '/missions']) {
+      expect(xml).not.toContain(`<loc>${ORIGIN}${path}</loc>`);
+    }
+  });
+
   it('is well-formed enough to parse as XML', () => {
     const xml = buildSitemap(ORIGIN);
     expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);

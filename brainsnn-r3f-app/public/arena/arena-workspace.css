@@ -10,3 +10,16 @@
 @media(max-width:1100px) and (min-width:761px){.arena-main{grid-template-columns:minmax(0,1fr) 270px}.arena-transport-note{display:none}.arena-pair .arena-badge{display:none}.arena-stage-top strong{font-size:14px}.arena-camera-controls>span{display:none}.arena-mode-switch button{font-size:11px}}
 @media(max-width:760px){.arena-main{grid-template-columns:1fr}.arena-profile-bar button{min-height:44px;font-size:12px}.arena-profile-bar b{margin-left:3px}.arena-mode-switch button,.arena-protocol button{min-height:44px;font-size:12px}.arena-field input,.arena-field select,.arena-connect-panel .arena-field input{font-size:16px;min-height:44px}.arena-camera-controls button{min-height:44px;font-size:12px}.arena-panel-label h3{font-size:13px}.arena-transport{flex-wrap:wrap}.arena-clock{padding-left:10px}.arena-disturbances button{min-height:84px;font-size:12px}.arena-metrics>div{font-size:12px}.arena-timeline-title strong{font-size:12px}.arena-timeline-footer{font-size:10px}.arena-integrity{font-size:11px}.arena-status-message{font-size:12px}.arena-export{margin-top:15px}.arena-canvas-hint{font-size:10px}.arena-policy-eye>span,.arena-policy-eye b{font-size:8px}.arena-pair>strong{font-size:12px}}
 @media(max-width:420px){.arena-button{font-size:12px;padding:10px 12px}.arena-stage-top strong{font-size:14px}.arena-live-pill{font-size:9px}.arena-profile-bar{gap:5px}.arena-profile-bar button{font-size:11px;padding:8px 10px}.arena-timeline-title .arena-button{font-size:11px}.arena-timeline-footer>span:nth-child(2){max-width:200px}.arena-evidence-panel{display:block}}
+
+/* The opening mission stays paused and exposes a single run control. */
+.arena-first-run .arena-main{grid-template-columns:minmax(0,1fr)}
+.arena-first-run .arena-pair{max-width:100%}
+.arena-pair .arena-badge{display:inline-block;white-space:normal;line-height:1.5;color:var(--aw-cyan);border-color:#68eaff40}
+.arena-first-run .arena-viewport{height:clamp(290px,43vh,480px);min-height:290px;flex:auto}
+.arena-first-run .arena-viewport>canvas{min-height:290px}
+.arena-first-run .arena-transport{padding:16px 22px}
+.arena-first-run #arena-run{min-width:128px;font-size:15px}
+.arena-first-run .arena-transport-note{display:block;max-width:none}
+@media(max-width:560px){.arena-first-run .arena-session-bar{padding:12px 14px}.arena-first-run .arena-pair>strong{font-size:12px}.arena-first-run .arena-viewport,.arena-first-run .arena-viewport>canvas{height:clamp(170px,calc(100svh - 550px),290px);min-height:170px}.arena-first-run .arena-transport{padding:14px}.arena-first-run .arena-clock{margin-left:0}.arena-first-run .arena-transport-note{font-size:9px;max-width:100px}}
+
+.arena-first-run .arena-local-sensor{display:none}

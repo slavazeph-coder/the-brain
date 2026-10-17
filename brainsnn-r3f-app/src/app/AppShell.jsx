@@ -1,396 +1,96 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { track } from '../lib/analytics.js';
-import { excerpt } from '../lib/formatters.js';
-import { loadQueue, saveQueue } from '../lib/storage.js';
-import { useScanEngine } from '../features/scan/useScanEngine.js';
-import { useScanHistory } from '../features/memory/useScanHistory.js';
-import { ScanWorkspace } from '../features/scan/ScanWorkspace.jsx';
-import { ImprovementWorkspace } from '../features/improve/ImprovementWorkspace.jsx';
-import { AutopsyWorkspace } from '../features/autopsy/AutopsyWorkspace.jsx';
-import { ScanHistory } from '../features/memory/ScanHistory.jsx';
-import { ApprovalQueue } from '../features/approvals/ApprovalQueue.jsx';
-import { PricingWorkspace } from '../features/pricing/PricingWorkspace.jsx';
-import { ResearchWorkspaceV2 } from '../features/research/ResearchWorkspaceV2.jsx';
-import { ShareDialog } from '../features/export/ShareDialog.jsx';
-import { AppHeader } from './AppHeader.jsx';
+import { LobbyHome } from './LobbyHome.jsx';
 import { BehaviourHome } from './BehaviourHome.jsx';
-import { AgentLabHome } from '../features/agent-lab/AgentLabHome.jsx';
-import { ProofMissionsPage } from './ProofMissionsPage.jsx';
-import { MissionBuilderPage } from './MissionBuilderPage.jsx';
-import { PublishedMissionPage } from './PublishedMissionPage.jsx';
-import { RefundAuthorityMissionPage } from './RefundAuthorityMissionPage.jsx';
-import { WorkflowEfficiencyMissionPage } from './WorkflowEfficiencyMissionPage.jsx';
-import { ExtendedProofMissionPage } from './ExtendedProofMissionPage.jsx';
+import { LabIndex } from './LabIndex.jsx';
+import { PublicNav, PublicFooter } from './PublicNav.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
-import { DesktopSidebar } from './DesktopSidebar.jsx';
-import { LandingPage } from './LandingPage.jsx';
-import { MobileNavigation } from './MobileNavigation.jsx';
-import { ReconstructPage } from './ReconstructPage.jsx';
-import { SurvivalWorldPage } from './SurvivalWorldPage.jsx';
-import { HoldoutEvidencePage } from '../features/research/HoldoutEvidencePage.jsx';
-import { CoherenceLanding } from './CoherenceLanding.jsx';
-import { EngineWorkspace } from '../features/engine/EngineWorkspace.jsx';
+import { getNavItem } from './navigation.js';
+import { legacyRedirect } from './legacyRoutes.js';
+import { resolveRouteMeta } from '../lib/routeMeta.js';
 
-
-const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx').then((module) => ({ default: module.PowderLabPage })));
-// Toy pages load on demand; the homepage toy (Poke the Brain) is part of the
-// home route itself and lazy-loads its own WebGL scene.
-const FoolTheDetector = React.lazy(() => import('../features/toys/fool/FoolTheDetector.jsx').then((module) => ({ default: module.FoolTheDetector })));
-const DraftDuel = React.lazy(() => import('../features/toys/duel/DraftDuel.jsx').then((module) => ({ default: module.DraftDuel })));
-const DefendTheBrainToy = React.lazy(() => import('../features/toys/defend/DefendTheBrainToy.jsx').then((module) => ({ default: module.DefendTheBrainToy })));
-
-function ToyBoot() {
-  return <div className="bh-site bh-home-simple"><div className="toy-loading" role="status">Loading the toy…</div></div>;
-}
+const CoherenceLanding = React.lazy(() => import('./CoherenceLanding.jsx').then(m => ({ default: m.CoherenceLanding })));
+const ReviewWorkbench = React.lazy(() => import('./ReviewWorkbench.jsx').then(m => ({ default: m.ReviewWorkbench })));
+const ArenaTasks = React.lazy(() => import('./ArenaTasks.jsx').then(m => ({ default: m.ArenaTasks })));
+const LandingPage = React.lazy(() => import('./LandingPage.jsx').then(m => ({ default: m.LandingPage })));
+const SurvivalWorldPage = React.lazy(() => import('./SurvivalWorldPage.jsx').then(m => ({ default: m.SurvivalWorldPage })));
+const HoldoutEvidencePage = React.lazy(() => import('../features/research/HoldoutEvidencePage.jsx').then(m => ({ default: m.HoldoutEvidencePage })));
+const PowderLabPage = React.lazy(() => import('../features/powder/PowderLabPage.tsx').then(m => ({ default: m.PowderLabPage })));
+const FoolTheDetector = React.lazy(() => import('../features/toys/fool/FoolTheDetector.jsx').then(m => ({ default: m.FoolTheDetector })));
+const DraftDuel = React.lazy(() => import('../features/toys/duel/DraftDuel.jsx').then(m => ({ default: m.DraftDuel })));
+const DefendTheBrainToy = React.lazy(() => import('../features/toys/defend/DefendTheBrainToy.jsx').then(m => ({ default: m.DefendTheBrainToy })));
 
 export function resolveRoute(pathname) {
-  if (pathname === '/toys/fool-the-detector' || pathname.startsWith('/toys/fool-the-detector/')) return 'toy-fool';
-  if (pathname === '/toys/draft-duel' || pathname.startsWith('/toys/draft-duel/')) return 'toy-duel';
-  if (pathname === '/toys/defend-the-brain' || pathname.startsWith('/toys/defend-the-brain/')) return 'toy-defend';
-  if (pathname === '/office' || pathname.startsWith('/office/')) return 'office';
-  if (pathname === '/engine' || pathname.startsWith('/engine/')) return 'engine';
-  if (pathname.startsWith('/m/')) return 'published-mission';
-  if (pathname.startsWith('/missions/build')) return 'mission-builder';
-  if (pathname.startsWith('/missions/refund-authority')) return 'refund-mission';
-  if (pathname.startsWith('/missions/workflow-efficiency')) return 'workflow-mission';
-  if (pathname.startsWith('/missions/authorized-bug-hunt')) return 'mission-003';
-  if (pathname.startsWith('/missions/reproduce-result')) return 'mission-004';
-  if (pathname.startsWith('/missions/navigation-baseline')) return 'mission-005';
-  if (pathname.startsWith('/missions')) return 'missions';
-  if (pathname.startsWith('/lab/survival')) return 'survival';
-  if (pathname.startsWith('/arcade')) return 'arcade';
-  if (pathname.startsWith('/app')) return 'app';
-  if (pathname.startsWith('/reconstruct')) return 'reconstruct';
-  if (pathname.startsWith('/evidence')) return 'evidence';
-  if (pathname.startsWith('/lab')) return 'lab';
-  if (pathname.startsWith('/coherence')) return 'coherence';
-  return 'home';
+  const path = pathname.replace(/\/+$/, '') || '/';
+  if (path.startsWith('/toys/fool-the-detector')) return 'toy-fool';
+  if (path.startsWith('/toys/draft-duel')) return 'toy-duel';
+  if (path.startsWith('/toys/defend-the-brain')) return 'toy-defend';
+  if (path === '/office' || path.startsWith('/office/')) return 'review';
+  if (path === '/arena/tasks' || path.startsWith('/arena/tasks/')) return 'tasks';
+  if (path === '/lab/powder') return 'powder';
+  if (path === '/lab/survival') return 'survival';
+  if (path === '/lab') return 'lab';
+  if (path === '/arcade') return 'arcade';
+  if (path === '/evidence') return 'evidence';
+  if (path === '/play') return 'play';
+  if (path === '/coherence') return 'coherence';
+  if (path === '/') return 'home';
+  return 'missing';
+}
 
+function currentRoute() {
+  const redirect = legacyRedirect(window.location.pathname, window.location.search);
+  if (redirect) {
+    if (redirect.startsWith('/arena/') && !redirect.startsWith('/arena/tasks')) {
+      window.location.replace(redirect + window.location.hash);
+      return 'redirect';
+    }
+    window.history.replaceState({}, '', redirect + window.location.hash);
+  }
+  return resolveRoute(window.location.pathname);
 }
 
 let visitTracked = false;
-function makeQueueItem(result, content, comparison, status = 'Draft') { const sourceContent = content || result?.rawContent || ''; return { id: `${result?.id || 'draft'}-${Date.now().toString(36)}`, title: result?.title || 'Untitled draft', excerpt: excerpt(sourceContent), verdict: result?.summary || 'Pending review', status, currentVersion: content ? 2 : 1, updatedAt: new Date().toISOString(), versions: [{ id: 'v1', label: 'Original', content: result?.rawContent || '', result }, ...(content ? [{ id: 'v2', label: 'Improved', content, result: comparison || null }] : [])], result: comparison || result }; }
-
 export function AppShell() {
-  const scan = useScanEngine();
-  const history = useScanHistory();
-  const [route, setRoute] = useState(() => resolveRoute(window.location.pathname));
-  const [active, setActive] = useState('analyze');
-  const [collapsed, setCollapsed] = useState(false);
+  const [route, setRoute] = useState(currentRoute);
   const [commandOpen, setCommandOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exportResult, setExportResult] = useState(null);
-  const [queue, setQueue] = useState([]);
-
+  const [initialInput, setInitialInput] = useState('');
   useEffect(() => {
-    setQueue(loadQueue());
-  }, []);
-
-  // One arrival, recorded once. Every other event in the app describes
-  // something a visitor did after getting here; this is the one that says how
-  // they got here at all, and it is what the rest of the funnel is measured
-  // against. `track` attaches the first-touch source itself.
-  useEffect(() => {
-    if (visitTracked) return; // StrictMode mounts effects twice in development
-    visitTracked = true;
-    track('visit', { route: resolveRoute(window.location.pathname) });
-  }, []);
-
-  useEffect(() => {
-    function syncRoute() {
-      setRoute(resolveRoute(window.location.pathname));
+    if (!visitTracked) { visitTracked = true; track('visit', { route }); }
+    function sync() { setRoute(currentRoute()); }
+    function shortcut(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen(true); }
     }
-    window.addEventListener('popstate', syncRoute);
-    return () => window.removeEventListener('popstate', syncRoute);
+    window.addEventListener('popstate', sync);
+    window.addEventListener('keydown', shortcut);
+    return () => { window.removeEventListener('popstate', sync); window.removeEventListener('keydown', shortcut); };
   }, []);
-
-  useEffect(() => {
-    if (route === 'app') {
-      document.title = 'BrainSNN | Creative Decision Intelligence';
-    }
+  // Establish a fallback before page effects run. A resolved lazy page mounts
+  // in the same commit as the shell, so a parent passive effect would otherwise
+  // overwrite its more specific tab/task title on history navigation.
+  useLayoutEffect(() => {
+    document.title = resolveRouteMeta(window.location.pathname, window.location.search).title;
   }, [route]);
-
-  useEffect(() => {
-    function handleKeyDown(event) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setCommandOpen(true);
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const persistQueue = useCallback((next) => {
-    const saved = saveQueue(next);
-    setQueue(saved);
-  }, []);
-
-  const navigate = useCallback((id) => {
-    const aliases = { cortex: 'analyze', synapse: 'improve', memory: 'history' };
-    if (id === 'home') {
-      window.history.pushState({}, '', '/');
-      setRoute('home');
-      return;
-    }
-    if (id === 'worlds') {
-      window.history.pushState({}, '', '/lab/survival');
-      setRoute('survival');
-      return;
-    }
-    if (id === 'arcade') {
-      window.history.pushState({}, '', '/arcade');
-      setRoute('arcade');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    if (route !== 'app') {
-      window.history.pushState({}, '', '/app');
-      setRoute('app');
-    }
-    setActive(aliases[id] || id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [route]);
-
-  const openWorkspace = useCallback((prefill = '') => {
-    if (typeof prefill === 'string') scan.setInput(prefill);
-    window.history.pushState({}, '', '/app');
-    setRoute('app');
-    setActive('analyze');
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  }, [scan]);
-
-  const openLanding = useCallback(() => {
-    window.history.pushState({}, '', '/');
-    setRoute('home');
-  }, []);
-
-  const openReconstruct = useCallback(() => {
-    window.history.pushState({}, '', '/reconstruct');
-    setRoute('reconstruct');
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  }, []);
-
-  const openEvidence = useCallback(() => {
-    window.history.pushState({}, '', '/evidence');
-    setRoute('evidence');
-    window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
-  }, []);
-
-  const saveResult = useCallback((result) => {
-    const record = history.addResult(result);
-    track('memory_saved');
-    return record;
-  }, [history]);
-
-  const addToQueue = useCallback((result, content, comparison, status = 'Ready') => {
-    if (!result) return null;
-    const item = makeQueueItem(result, content, comparison, status);
-    persistQueue([item, ...queue]);
-    track('queue_added');
-    return item;
-  }, [persistQueue, queue]);
-
-  const approve = useCallback((result, content, comparison) => {
-    const item = addToQueue(result, content, comparison, 'Approved');
-    track('content_approved');
-    navigate('queue');
-    return item;
-  }, [addToQueue, navigate]);
-
-  const openExport = useCallback((result) => {
-    const target = result?.result || result || scan.state.result;
-    if (!target) return;
-    setExportResult(target);
-    setExportOpen(true);
-    track('export_opened');
-  }, [scan.state.result]);
-
-  const openMemoryItem = useCallback((item) => {
-    if (item?.result) {
-      scan.loadResult(item.result);
-      navigate('analyze');
-    }
-  }, [navigate, scan]);
-
-  const duplicateMemoryItem = useCallback((item) => {
-    scan.setInput(item.result?.rawContent || item.excerpt || '');
-    navigate('analyze');
-  }, [navigate, scan]);
-
-  const content = useMemo(() => {
-    if (active === 'improve') {
-      return (
-        <ImprovementWorkspace
-          result={scan.state.result}
-          onGoToCortex={() => navigate('analyze')}
-          onSaveVersion={(result, contentValue, comparison) => { history.addVersion(result, contentValue, comparison); track('version_created'); }}
-          onQueue={(result, contentValue, comparison) => { addToQueue(result, contentValue, comparison, 'Ready'); navigate('queue'); }}
-          onApprove={approve}
-        />
-      );
-    }
-    if (active === 'autopsy') {
-      return (
-        <AutopsyWorkspace
-          onSendToImprove={(result, contentValue) => {
-            scan.loadResult(result);
-            if (contentValue) scan.setInput(contentValue);
-            navigate('improve');
-          }}
-        />
-      );
-    }
-    if (active === 'history') {
-      return <ScanHistory history={history} onOpen={openMemoryItem} onDuplicate={duplicateMemoryItem} onGoToCortex={() => navigate('analyze')} />;
-    }
-    if (active === 'pricing') {
-      return <PricingWorkspace />;
-    }
-    if (active === 'queue') {
-      return (
-        <ApprovalQueue
-          queue={queue}
-          onGoToCortex={() => navigate('analyze')}
-          onOpen={(item) => { if (item.result) scan.loadResult(item.result); navigate('analyze'); }}
-          onApprove={(item) => persistQueue(queue.map((entry) => entry.id === item.id ? { ...entry, status: 'Approved', updatedAt: new Date().toISOString() } : entry))}
-          onReturn={(item) => { if (item.versions?.[0]?.result) scan.loadResult(item.versions[0].result); navigate('improve'); }}
-          onExport={(item) => {
-            persistQueue(queue.map((entry) => entry.id === item.id ? { ...entry, status: 'Exported', updatedAt: new Date().toISOString() } : entry));
-            openExport(item.result || item.versions?.[0]?.result);
-          }}
-        />
-      );
-    }
-    if (active === 'research') {
-      return <ResearchWorkspaceV2 />;
-    }
-    return (
-      <ScanWorkspace
-        scan={scan}
-        onImprove={(result) => { scan.loadResult(result); navigate('improve'); }}
-        onSave={saveResult}
-        onQueue={(result) => { addToQueue(result); navigate('queue'); }}
-        onExport={openExport}
-      />
-    );
-  }, [active, addToQueue, approve, duplicateMemoryItem, history, navigate, openExport, openMemoryItem, persistQueue, queue, saveResult, scan]);
-
-  if (route === 'toy-fool' || route === 'toy-duel' || route === 'toy-defend') {
-    const Toy = route === 'toy-fool' ? FoolTheDetector : route === 'toy-duel' ? DraftDuel : DefendTheBrainToy;
-    return (
-      <React.Suspense fallback={<ToyBoot />}>
-        <Toy />
-      </React.Suspense>
-    );
+  function openReview(input = '') {
+    setInitialInput(typeof input === 'string' ? input : '');
+    window.history.pushState({}, '', '/office?tab=passage'); setRoute('review');
+    window.scrollTo(0, 0);
   }
-
-  if (route === 'engine') {
-    return <EngineWorkspace />;
-  }
-
-  if (route === 'office') {
-    return <AgentLabHome />;
-  }
-
-  if (route === 'home') {
-    return <BehaviourHome />;
-  }
-
-  if (route === 'published-mission') {
-    return <PublishedMissionPage />;
-  }
-
-  if (route === 'mission-builder') {
-    return <MissionBuilderPage />;
-  }
-
-  if (route === 'refund-mission') {
-    return <RefundAuthorityMissionPage />;
-  }
-
-  if (route === 'workflow-mission') {
-    return <WorkflowEfficiencyMissionPage />;
-  }
-
-  if (route === 'mission-003') {
-    return <ExtendedProofMissionPage missionId="003" />;
-  }
-
-  if (route === 'mission-004') {
-    return <ExtendedProofMissionPage missionId="004" />;
-  }
-
-  if (route === 'mission-005') {
-    return <ExtendedProofMissionPage missionId="005" />;
-  }
-
-  if (route === 'missions') {
-    return <ProofMissionsPage />;
-  }
-
-  if (route === 'survival') {
-    return <SurvivalWorldPage />;
-  }
-
-  if (route === 'lab') {
-    return (
-      <React.Suspense fallback={<div className="powder-boot">Loading the lab…</div>}>
-        <PowderLabPage />
-      </React.Suspense>
-    );
-  }
-
-  if (route === 'reconstruct') {
-    return <ReconstructPage onHome={openLanding} onStart={openWorkspace} />;
-  }
-
-  if (route === 'evidence') {
-    return <HoldoutEvidencePage onHome={openLanding} onStart={openWorkspace} />;
-  }
-
-  if (route === 'coherence') {
-    return (
-      <CoherenceLanding
-        onNavigate={navigate}
-        onStart={openWorkspace}
-      />
-    );
-  }
-
-  if (route === 'arcade') {
-    return (
-      <LandingPage
-        onStart={openWorkspace}
-        onNavigate={navigate}
-        onOpenReconstruct={openReconstruct}
-        onOpenEvidence={openEvidence}
-      />
-    );
-  }
-
-  return (
-    <div className="brain-app">
-      <DesktopSidebar
-        active={active}
-        onNavigate={navigate}
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((value) => !value)}
-        onUpgrade={() => navigate('pricing')}
-      />
-      <div className="brain-main-shell">
-        <AppHeader
-          active={active}
-          onOpenCommand={() => setCommandOpen(true)}
-          onExport={() => openExport(scan.state.result)}
-          onUpgrade={() => navigate('pricing')}
-          hasResult={Boolean(scan.state.result)}
-        />
-        <main className="brain-content">{content}</main>
-      </div>
-      <MobileNavigation active={active} onNavigate={navigate} />
-      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} onNavigate={navigate} />
-      <ShareDialog open={exportOpen} onClose={() => setExportOpen(false)} result={exportResult || scan.state.result} />
-    </div>
-  );
+  function navigate(id) { window.location.assign(getNavItem(id).href); }
+  let content;
+  if (route === 'home') content = <LobbyHome />;
+  else if (route === 'coherence') content = <CoherenceLanding onNavigate={navigate} onStart={openReview} />;
+  else if (route === 'review') content = <div className="bh-site"><a className="bh-skip" href="#review-main">Skip to content</a><PublicNav active="review" /><ReviewWorkbench initialInput={initialInput} /><PublicFooter /></div>;
+  else if (route === 'tasks') content = <ArenaTasks />;
+  else if (route === 'lab') content = <LabIndex />;
+  else if (route === 'powder') content = <div className="bh-site"><PublicNav active="lab" /><PowderLabPage /><PublicFooter /></div>;
+  else if (route === 'survival') content = <div className="bh-site"><PublicNav active="lab" /><SurvivalWorldPage /><PublicFooter /></div>;
+  else if (route === 'arcade') content = <LandingPage onStart={openReview} />;
+  else if (route === 'play') content = <BehaviourHome />;
+  else if (route === 'evidence') content = <div className="bh-site"><PublicNav active="evidence" /><HoldoutEvidencePage onHome={() => window.location.assign('/')} onStart={openReview} /><PublicFooter /></div>;
+  else if (route === 'toy-fool') content = <FoolTheDetector />;
+  else if (route === 'toy-duel') content = <DraftDuel />;
+  else if (route === 'toy-defend') content = <DefendTheBrainToy />;
+  else content = <div className="bh-site"><PublicNav /><main className="lab-index"><h1>{route === 'redirect' ? 'Opening Arena…' : 'Page unavailable'}</h1><a href="/">Return to BrainSNN</a></main></div>;
+  return <><React.Suspense fallback={<div className="bh-site"><PublicNav /><main className="lab-index" role="status">Loading…</main></div>}>{content}</React.Suspense><CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} onNavigate={navigate} /></>;
 }

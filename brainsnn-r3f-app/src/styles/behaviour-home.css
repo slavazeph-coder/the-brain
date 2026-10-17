@@ -45,3 +45,15 @@
 @media(max-width:1050px){.bh-nav{gap:16px}.bh-nav nav{gap:15px}.bh-arena-entry{gap:25px;padding:29px}}
 @media(max-width:760px){.bh-arena-entry{grid-template-columns:minmax(0,1fr) 180px;padding:25px;gap:15px}.bh-arena-entry-preview{min-height:240px}.bh-arena-entry-preview>img{height:200px}.bh-arena-preview-caption{font-size:.5rem;letter-spacing:.08em}.bh-arena-entry h2{font-size:1.9rem}}
 @media(max-width:570px){.bh-arena-entry{grid-template-columns:1fr;padding:25px 23px;border-radius:22px}.bh-arena-entry-preview{display:none}.bh-arena-entry h2{font-size:1.9rem}.bh-home-simple .bh-arena-nav-cta{font-size:.72rem;padding:10px 12px;gap:6px}.bh-arena-nav-cta>svg:last-child{display:none}.bh-arena-entry-copy>p:not(.bh-kicker){font-size:.93rem}.bh-arena-entry small{font-size:.73rem}.bh-arena-entry .bh-button{width:100%}}
+
+/* Lobby: two doors, proof under them. The three nav words stay visible on a phone. */
+.bh-lobby .bh-lobby-hero{align-items:stretch}
+.bh-lobby-slice{display:flex;flex-direction:column;min-height:320px;color:inherit}
+.bh-lobby-slice .bh-world-field{flex:1;height:auto;min-height:260px;margin-top:15px;display:grid;place-items:end center}
+.bh-lobby-slice img{width:min(78%,230px);height:auto;object-fit:contain;filter:drop-shadow(0 18px 28px rgba(104,234,255,.12))}
+.bh-lobby-caption{margin:14px 2px 2px;color:#9aabbe;font-size:.78rem;line-height:1.55}
+.bh-lobby .bh-boundary{font-size:.78rem;max-width:640px}
+.bh-lobby .bh-boundary a{color:var(--bh-cyan)}
+.bh-lobby .bh-boundary a:hover{color:#fff}
+@media(max-width:960px){.bh-lobby .bh-nav nav{display:flex;gap:14px}}
+@media(max-width:620px){.bh-lobby .bh-nav{gap:12px}.bh-lobby .bh-nav nav{gap:12px}.bh-lobby .bh-nav nav a{font-size:.68rem}.bh-lobby .bh-actions .bh-button{width:100%}}

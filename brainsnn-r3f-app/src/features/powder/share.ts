@@ -192,6 +192,7 @@ export const SOURCE_VALUE = 'lab';
 export function buildShareUrl(engine: PowderEngine, base: string): string {
   const url = new URL(base);
   url.hash = '';
+  url.pathname = '/lab/powder';
   url.searchParams.set(SHARE_PARAM, encodeGrid(engine));
   url.searchParams.set(SOURCE_PARAM, SOURCE_VALUE);
   return url.toString();

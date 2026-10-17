@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#05070b">
-<meta name="brainsnn-arena-release" content="2026-10-15-gym-estimate-1">
+<meta name="brainsnn-arena-release" content="2026-10-16-arena-review-1">
 <link rel="canonical" href="https://www.brainsnn.com/arena/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<meta name="description" content="Bring your space into the robot arena. Import a scan, review the map, explore robot routes, connect physics workers and replay the evidence.">
-<title>BrainSNN Arena · Put your robot’s brain to the test</title>
+<meta name="description" content="See the moment it breaks. Run one paused local practice mission, then inspect the evidence. Named models require a connected worker.">
+<title>Arena · BrainSNN</title>
 <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="challenges.css"><link rel="stylesheet" href="brand.css"><link rel="stylesheet" href="catalog.css"><link rel="stylesheet" href="experiment.css"><link rel="stylesheet" href="arena-workspace.css"><link rel="stylesheet" href="arena-campaign.css"><link rel="stylesheet" href="site-workspace.css">
 </head>
 <body>
@@ -25,12 +25,13 @@
 <a class="skip" href="#experiment-heading">Skip to arena</a>
 <header class="app-header">
  <a class="brand" href="/" aria-label="BrainSNN home"><span class="original-brand-mark" aria-hidden="true">B</span><span class="brand-label"><strong>BrainSNN</strong><small>Arena</small></span></a>
- <nav class="app-nav" aria-label="Workspace"><button class="nav-tab active" data-page="playground" aria-pressed="true">Arena</button><button class="nav-tab" data-page="catalog" aria-pressed="false">Discover</button><button class="nav-tab" data-page="campaigns" aria-pressed="false">Campaigns</button><button class="nav-tab" data-page="compute" aria-pressed="false">Compute</button></nav>
- <div class="header-end"><span class="prototype">Early access</span><button class="help-button" data-modal="research" aria-label="About BrainSNN Robot Hub">?</button></div>
+ <nav class="app-nav" aria-label="Main navigation"><a class="nav-tab active" href="/arena/" aria-current="page">Arena</a><a class="nav-tab" href="/office">Review</a><a class="nav-tab" href="/evidence">Evidence</a></nav>
+ <div class="header-end"><details class="arena-overflow"><summary aria-label="More destinations">More</summary><a href="/lab">Lab</a></details></div>
 </header>
 <main class="workspace">
+<nav class="arena-tools" data-arena-after-run hidden aria-label="More Arena tools"><button class="nav-tab active" data-page="playground" aria-pressed="true">Current mission</button><a class="nav-tab" href="/arena/tasks">More tasks</a><button class="nav-tab" data-page="catalog" aria-pressed="false">Robots & models</button><button class="nav-tab" data-page="campaigns" aria-pressed="false">Campaign plans</button><button class="nav-tab" data-page="compute" aria-pressed="false">Compute estimates</button></nav>
 <section id="playground" class="workspace-page" aria-labelledby="page-title">
- <h1 id="page-title" class="playground-accessible-title">Robot intelligence playground</h1>
+ <h1 id="page-title" class="playground-accessible-title">Arena</h1>
  <div id="experiment-root"></div>
  <div id="demo-workspace" hidden>
  <div class="workbench">
@@ -89,7 +90,7 @@
  <div class="calculator settings-card"><div class="card-title"><h2>Campaign estimate</h2><span class="stage-badge">Illustrative</span></div><label class="field-label" for="cloud-trials">Total trials</label><select id="cloud-trials"><option value="1000">1,000</option><option value="10000">10,000</option><option value="100000" selected>100,000</option></select><label class="field-label" for="throughput">Assumed trials per worker-hour</label><select id="throughput"><option value="10000">10,000 · lightweight</option><option value="500" selected>500 · moderate</option><option value="50">50 · heavy</option></select><div class="calc-pair"><label class="field-label" for="hour-rate">Worker US$ / hour<input id="hour-rate" type="number" min="0.05" max="100" step="0.05" value="0.60"></label><label class="field-label" for="margin">Gross margin %<input id="margin" type="number" min="0" max="75" step="5" value="30"></label></div><div class="calc-total"><span>Runtime-only customer price</span><strong id="cloud-price">$171.43</strong><span id="cloud-detail">200 worker-hours · $120 runtime cost</span></div><p class="tiny">Assumed throughput and rates, not a quote. Loading, storage, transfer, retries and external model calls add cost. This prototype starts no workers and takes no payment.</p><button class="button ghost full" data-modal="compute">Explore the planned workflow <svg><use href="#i-arrow"/></svg></button></div></div>
 </section>
 </main>
-<footer class="app-footer"><span>BrainSNN <i>·</i> The proving ground for robot intelligence.</span><a href="https://www.brainsnn.com/" target="_blank" rel="noopener">Research playground ↗</a></footer>
+<footer class="app-footer"><span>BrainSNN <i>·</i> See the moment it breaks.</span><a href="/evidence">Evidence ↗</a></footer>
 <dialog id="modal" aria-label="BrainSNN details"><button id="close-modal" class="close-modal" aria-label="Close dialog">×</button><div id="modal-content"></div></dialog><div id="toast" class="toast" role="status" hidden></div>
 <script src="arena-core.js"></script><script src="studio-ui.js"></script><script src="arena-3d.js"></script><script src="app-3d.js"></script><script src="robots-data.js"></script><script src="models-data.js"></script><script src="arena-profiles.js"></script><script src="arena-runtime.js"></script><script src="arena-workspace.js"></script><script src="site-core.js"></script><script src="site-operations.js"></script><script src="site-workspace.js"></script><script src="experiment.js"></script><script src="catalog.js"></script><script src="arena-campaign.js"></script>
 </body>

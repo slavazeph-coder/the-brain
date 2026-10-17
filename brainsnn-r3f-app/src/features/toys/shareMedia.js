@@ -351,7 +351,7 @@ export function drawScoreCard(ctx, { width = 1080, height = 1350, toyTitle, head
   const pad = 88;
   const accentColor = accent === 'violet' ? VIOLET : CYAN;
 
-  paintBrand(ctx, pad, pad, 64, { label: 'BrainSNN', sub: 'Sapient Playground' });
+  paintBrand(ctx, pad, pad, 64, { label: 'BrainSNN', sub: 'BrainSNN Lab' });
 
   ctx.fillStyle = accentColor;
   ctx.font = `800 30px ${SANS}`;

@@ -1,23 +1,20 @@
 import React from 'react';
-import { BrainCircuit, ChevronLeft, ChevronRight, CreditCard } from 'lucide-react';
+import { BrainCircuit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { IconButton } from '../components/ui/IconButton.jsx';
-import { NAV_ITEMS } from './navigation.js';
+import { NAV_ITEMS, OVERFLOW_ITEMS } from './navigation.js';
 
-const WORKFLOW_IDS = ['analyze', 'improve', 'autopsy', 'queue'];
-const LIBRARY_IDS = ['history', 'arcade', 'research'];
 
 function NavButton({ item, active, collapsed, onNavigate }) {
   return (
-    <button type="button" className={active === item.id ? 'active' : ''} onClick={() => onNavigate(item.id)}>
+    <button type="button" aria-label={item.label} className={active === item.id ? 'active' : ''} onClick={() => onNavigate(item.id)}>
       <item.icon size={18} aria-hidden="true" />
       {!collapsed ? <span>{item.label}</span> : null}
     </button>
   );
 }
 
-export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgrade }) {
-  const workflowItems = WORKFLOW_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)).filter(Boolean);
-  const libraryItems = LIBRARY_IDS.map((id) => NAV_ITEMS.find((item) => item.id === id)).filter(Boolean);
+export function DesktopSidebar({ active, onNavigate, collapsed, onToggle }) {
+  const workflowItems = NAV_ITEMS;
   return (
     <aside className={`desktop-sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Primary navigation">
       <div className="sidebar-brand">
@@ -25,7 +22,7 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgr
         {!collapsed ? (
           <span>
             <strong>BrainSNN</strong>
-            <small>Decision Engine</small>
+            <small>See the moment it breaks</small>
           </span>
         ) : null}
       </div>
@@ -35,13 +32,7 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle, onUpgr
         ))}
       </nav>
       <div className="sidebar-bottom">
-        {libraryItems.map((item) => (
-          <NavButton key={item.id} item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />
-        ))}
-        <button type="button" className={active === 'pricing' ? 'active' : ''} onClick={onUpgrade}>
-          <CreditCard size={18} aria-hidden="true" />
-          {!collapsed ? <span>Pricing</span> : null}
-        </button>
+        <details><summary aria-label="More navigation">More</summary>{OVERFLOW_ITEMS.map((item) => <NavButton key={item.id} item={item} active={active} collapsed={collapsed} onNavigate={onNavigate} />)}</details>
         <IconButton label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={onToggle}>
           {collapsed ? <ChevronRight size={18} aria-hidden="true" /> : <ChevronLeft size={18} aria-hidden="true" />}
         </IconButton>

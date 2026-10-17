@@ -175,9 +175,9 @@ export function MissionBuilderPage() {
 
   return <div className="bh-site">
     <header className="bh-nav">
-      <a className="bh-brand" href="/missions"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Mission Builder</small></span></a>
-      <nav><a href="/missions">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
-      <a className="bh-nav-cta" href="/missions"><ArrowLeft size={15}/> Registry</a>
+      <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Mission Builder</small></span></a>
+      <nav><a href="/arena/tasks">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
+      <a className="bh-nav-cta" href="/arena/tasks"><ArrowLeft size={15}/> Registry</a>
     </header>
 
     <main>
@@ -279,7 +279,7 @@ export function MissionBuilderPage() {
             <p className="bh-kicker">CREATOR CONTROL</p>
             <h2>Close · reopen · award</h2>
             <p>After publishing, this browser workspace can close submissions, reopen before the deadline, and select the verified winner. Ownership is not inferred from a public creator label.</p>
-            <a href="/missions#creator-dashboard">Open creator dashboard</a>
+            <a href="/arena/tasks#creator-dashboard">Open creator dashboard</a>
           </article>
         </div>
 
@@ -338,6 +338,6 @@ export function MissionBuilderPage() {
       </section>
     </main>
 
-    <footer className="bh-footer"><a href="/missions"><ArrowLeft size={14}/> Proof Missions</a><span>Mind + World + Mission + Boundaries + Judge + Proof + optional public bounty</span></footer>
+    <footer className="bh-footer"><a href="/arena/tasks"><ArrowLeft size={14}/> Arena Tasks</a><span>Mind + World + Mission + Boundaries + Judge + Proof + optional public bounty</span></footer>
   </div>;
 }

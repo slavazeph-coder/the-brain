@@ -1,6 +1,6 @@
 {
-  "name": "Remix: BrainSNN",
-  "description": "Affective Intelligence for Online Content powered by Spiking Neural Networks and Crumb LLM.",
+  "name": "BrainSNN",
+  "description": "See the moment it breaks. Arena missions, one Review workbench, and evidence you can inspect.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

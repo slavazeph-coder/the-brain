@@ -6,9 +6,9 @@ import { BhFooter, BhNav, BrainsnnStrip, MoreToys } from '../features/toys/ToyCh
 import '../styles/behaviour-home.css';
 
 const TOOLS = [
-  { icon: FileText, label: 'Analyze', title: 'Find the signal.', description: 'Bring a draft, page or screen recording. See what deserves a closer look.', href: '/app', action: 'Analyze content' },
-  { icon: GitCompareArrows, label: 'Compare', title: 'Test the change.', description: 'Put two drafts side by side. Inspect what changed and keep the evidence.', href: '/engine', action: 'Compare drafts' },
-  { icon: Trophy, label: 'Missions', title: 'Give it a goal.', description: 'Explore bounded tasks with clear rules, a judge and recorded attempts.', href: '/missions', action: 'Run a mission' },
+  { icon: FileText, label: 'Analyze', title: 'Find the signal.', description: 'Bring a draft, page or screen recording. See what deserves a closer look.', href: '/office', action: 'Analyze content' },
+  { icon: GitCompareArrows, label: 'Compare', title: 'Test the change.', description: 'Put two drafts side by side. Inspect what changed and keep the evidence.', href: '/office?tab=drafts', action: 'Compare drafts' },
+  { icon: Trophy, label: 'Missions', title: 'Give it a goal.', description: 'Explore bounded tasks with clear rules, a judge and recorded attempts.', href: '/arena/', action: 'Run a mission' },
 ];
 
 // Toys are the front door; the Sapient Playground workspace is one scroll

@@ -152,7 +152,7 @@ describe('share urls', () => {
     engine.setCell(4, 4, Material.NEURO);
     const url = buildShareUrl(engine, 'https://brainsnn.com/lab');
     const parsed = new URL(url);
-    expect(parsed.pathname).toBe('/lab');
+    expect(parsed.pathname).toBe('/lab/powder');
 
     const param = readShareParam(parsed.search);
     expect(param !== null).toBe(true);
