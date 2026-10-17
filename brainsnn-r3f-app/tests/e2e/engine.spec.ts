@@ -9,7 +9,7 @@ const candidate = 'Review the source material and compare alternatives before de
 
 test('real comparison preserves inputs, measured signals and downloadable evidence', async ({ page }) => {
   await page.goto('/engine');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test the edit.Inspect the evidence.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Follow the signal.Check the source.');
   await expect(page.getByText(/Running a comparison sends both texts to BrainSNN/)).toBeVisible();
   await page.getByLabel('Original text', { exact: true }).fill(original);
   await page.getByLabel('Candidate text', { exact: true }).fill(candidate);
@@ -56,6 +56,7 @@ test('empty input is rejected and an illustrative sample never invents a result'
   let requests = 0;
   page.on('request', (request) => { if (request.url().endsWith('/api/engine/compare')) requests += 1; });
   await page.goto('/engine');
+  await expect(page.getByTestId('review-workbench')).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to content' })).toBeFocused();
   await page.getByRole('button', { name: 'Run comparison', exact: true }).click();

@@ -90,3 +90,14 @@
 .experiment-site-entry span{display:block;font-size:12px;color:#98a8bd;margin-top:5px;line-height:1.5}
 .experiment-site-entry .experiment-button{flex-shrink:0;min-height:44px}
 @media(max-width:640px){.experiment-site-entry{align-items:flex-start;flex-direction:column;padding:16px}.experiment-site-entry .experiment-button{width:100%}.experiment-tabs{gap:4px}.experiment-tabs button{font-size:11px;padding:10px 12px}}
+
+/* Public navigation stays small; setup tools appear after a completed mission. */
+[data-arena-after-run][hidden]{display:none!important}
+.app-nav a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.arena-overflow{position:relative;font-size:13px}
+.arena-overflow summary{padding:10px;cursor:pointer;color:#99a6b7}
+.arena-overflow>a{position:absolute;right:0;top:100%;z-index:20;padding:14px 24px;border:1px solid #283447;border-radius:10px;background:#101620;color:#68eaff}
+.arena-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-top:18px}
+.arena-tools a{text-decoration:none}
+.arena-tools .nav-tab{font-size:12px;min-height:40px}
+@media(max-width:560px){.app-header{gap:10px}.app-nav .nav-tab{font-size:12px;padding:10px}.brand-label small{display:none}.arena-overflow summary{font-size:12px;padding:7px}.arena-tools{gap:4px}}

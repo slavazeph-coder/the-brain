@@ -8,10 +8,13 @@ import AxeBuilder from '@axe-core/playwright';
 test('the lobby offers a mission and a draft before the toys', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('See the moment');
-  await expect(page.getByRole('link', { name: 'Enter Arena' })).toHaveAttribute('href', '/arena/');
-  await expect(page.getByRole('link', { name: 'Open Review' })).toHaveAttribute('href', '/office');
+  await expect(page.getByRole('link', { name: 'Enter Arena', exact: true })).toHaveAttribute('href', '/arena/');
+  await expect(page.getByRole('link', { name: 'Open Review', exact: true })).toHaveAttribute('href', '/office');
   await expect(page.getByRole('link', { name: 'Inspect evidence', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Neuro Powder Lab', exact: true })).toBeVisible();
+  await page.getByLabel('More navigation').click();
+  await page.getByRole('link', { name: 'Lab', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'Lab', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Neuro Powder Lab/ })).toBeVisible();
 });
 
 test('the homepage brain is pokeable straight away and counts the signals it fires', async ({ page }) => {
@@ -89,6 +92,7 @@ test('the guide starts with a tap and one dock button cycles the jelly colour', 
 test('share this brain saves a watermarked poster and copies a tagged caption', async ({ page, context, browserName }) => {
   test.skip(browserName !== 'chromium', 'clipboard permissions are chromium-only in Playwright');
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.addInitScript(() => Object.defineProperty(navigator, 'canShare', { value: () => false, configurable: true }));
   await page.goto('/play');
   const stage = await page.locator('.poke-stage').boundingBox();
   if (!stage) throw new Error('poke stage has no box');
@@ -100,7 +104,7 @@ test('share this brain saves a watermarked poster and copies a tagged caption', 
   await page.getByTestId('poke-copy').click();
   const caption = await page.evaluate(() => navigator.clipboard.readText());
   expect(caption.split('\n')[0]).toBe('Poke the brain and watch the signal travel');
-  expect(caption).toContain('https://www.brainsnn.com/?src=toy1-share');
+  expect(caption).toContain('https://www.brainsnn.com/play?src=toy1-share');
 
   // The poster is a frame of the 3D scene, so it is offered only where WebGL runs.
   if (await page.getByTestId('poke-poster').count()) {
@@ -115,8 +119,8 @@ test('more toys and both CTAs sit under the hero', async ({ page }) => {
   for (const path of ['/toys/fool-the-detector', '/toys/draft-duel', '/toys/defend-the-brain']) {
     await expect(toys.locator(`a[href="${path}"]`)).toBeVisible();
   }
-  await expect(page.getByRole('link', { name: 'Sponsor BrainSNN' })).toHaveAttribute('href', '/sponsor/gt3/');
-  await expect(page.getByRole('link', { name: 'Enterprise builds' })).toHaveAttribute('href', '/arcade#brief');
+  await expect(page.getByRole('link', { name: 'Enter Arena', exact: true })).toHaveAttribute('href', '/arena/');
+  await expect(page.getByRole('link', { name: 'Open Review', exact: true })).toHaveAttribute('href', '/office');
   // Sponsor slots are wired but empty until a sponsor is signed.
   await expect(page.locator('[data-sponsor-slot]').first()).toBeHidden();
   const results = await new AxeBuilder({ page }).include('.bh-site').withTags(['wcag2a', 'wcag2aa']).analyze();

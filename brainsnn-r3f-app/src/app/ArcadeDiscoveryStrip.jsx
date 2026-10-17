@@ -15,7 +15,7 @@ export function ArcadeDiscoveryStrip() {
         <Gamepad2 size={24} />
       </div>
       <div className="arcade-discovery-copy">
-        <p className="bsn-kicker"><Sparkles size={14} aria-hidden="true" /> GaugeGap Arcade</p>
+        <p className="bsn-kicker"><Sparkles size={14} aria-hidden="true" /> Arcade</p>
         <h2 id="arcade-discovery-heading">Done analyzing? Go play with the science.</h2>
         <p>Interactive brain games, simulations and experimental labs live one step away from the publishing engine.</p>
         <div className="arcade-discovery-labs" aria-label="Featured arcade experiences">

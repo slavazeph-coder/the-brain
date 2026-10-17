@@ -29,7 +29,7 @@ export function WorkflowEfficiencyMissionPage() {
   const [baseline, setBaseline] = useState(null);
 
   useEffect(() => {
-    document.title = 'Proof Mission 002 · Workflow Efficiency | BrainSNN';
+    document.title = 'Arena Task 002 · Workflow Efficiency | BrainSNN';
     track('workflow_mission_viewed');
   }, []);
 
@@ -79,15 +79,15 @@ export function WorkflowEfficiencyMissionPage() {
 
   return <div className="bh-site">
     <header className="bh-nav">
-      <a className="bh-brand" href="/missions"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Proof Mission 002</small></span></a>
-      <nav><a href="/missions">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
-      <a className="bh-nav-cta" href="/missions"><ArrowLeft size={15}/> Mission registry</a>
+      <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Arena Task 002</small></span></a>
+      <nav><a href="/arena/tasks">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
+      <a className="bh-nav-cta" href="/arena/tasks"><ArrowLeft size={15}/> Mission registry</a>
     </header>
     <main>
       <section className="bh-hero">
         <div className="bh-hero-copy">
           <p className="bh-kicker"><ShieldCheck size={15}/> LIVE · DETERMINISTIC WORKFLOW JUDGE</p>
-          <h1>Workflow Efficiency<br/><span>Proof Mission 002</span></h1>
+          <h1>Workflow Efficiency<br/><span>Arena Task 002</span></h1>
           <p className="bh-lead">Route a seeded synthetic work queue through fast-path or full review. Reduce cost by at least 20%, keep quality at or above 95%, and never fast-path a critical case.</p>
           <p className="bh-boundary">{WORKFLOW_EFFICIENCY_MISSION.claimBoundary}</p>
         </div>
@@ -160,6 +160,6 @@ export function WorkflowEfficiencyMissionPage() {
         </div>
       </section>}
     </main>
-    <footer className="bh-footer"><span>BrainSNN Proof Mission 002</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+    <footer className="bh-footer"><span>BrainSNN Arena Task 002</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
   </div>;
 }

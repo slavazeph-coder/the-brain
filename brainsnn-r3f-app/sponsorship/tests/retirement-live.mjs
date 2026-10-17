@@ -33,7 +33,11 @@ try{
     await page.setViewportSize({width,height:1000});await page.goto(base+'/',{waitUntil:'domcontentloaded',timeout:90000});await page.locator('.bh-nav').waitFor();
     assert.equal(await page.locator('.bh-nav a[href^="/sponsor"],.bh-footer a[href^="/sponsor"]').count(),0);
     assert.equal(await page.getByRole('link',{name:'Sponsor Robot 001',exact:true}).count(),0);
-    assert.ok(await page.locator('.bh-nav a[href="/app"]').count()>0);assert.ok(await page.locator('.bh-footer a[href="/engine#api"]').count()>0);
+    assert.deepEqual(await page.locator('.public-nav nav > a').evaluateAll(links=>links.map(link=>({label:link.textContent.trim(),href:link.getAttribute('href')}))),[
+      {label:'Arena',href:'/arena/'},{label:'Review',href:'/office'},{label:'Evidence',href:'/evidence'},
+    ]);
+    assert.equal(await page.locator('.public-nav .public-overflow a[href="/lab"]').count(),1);
+    assert.equal(await page.locator('.bh-footer a[href="/lab"]').count(),1);
     const name='brainsnn-home-'+width+'.png';await page.screenshot({path:path.join(out,name),timeout:90000});evidence.screenshots.push(name);
   }
   await page.goto(base+'/sponsor/?placement=back#studio',{waitUntil:'domcontentloaded',timeout:90000});const landing=new URL(page.url());assert.equal(landing.origin,'https://www.xioai.ca');assert.equal(landing.pathname,'/robot-sponsorship/');assert.equal(landing.search,'?placement=back');assert.equal(landing.hash,'#studio');

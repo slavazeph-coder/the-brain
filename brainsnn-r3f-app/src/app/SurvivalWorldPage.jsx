@@ -7,16 +7,16 @@ const LAB_URL = 'https://xioaisolutions.github.io/gaugegap-foundry/brainsnn-lab/
 
 export function SurvivalWorldPage() {
   useEffect(() => {
-    document.title = 'Survival World | BrainSNN Behaviour Lab';
+    document.title = 'Survival World | BrainSNN Lab';
     track('survival_world_opened');
   }, []);
 
   return (
     <div className="bh-lab-shell">
       <header className="bh-lab-bar">
-        <a href="/"><ArrowLeft size={15} /> BrainSNN</a>
+        <a href="/lab"><ArrowLeft size={15} /> BrainSNN</a>
         <strong>Survival World · Lab 001</strong>
-        <span>Finite synthetic simulation · GaugeGap evidence</span>
+        <span>Finite synthetic simulation · recorded evidence</span>
         <a href={LAB_URL} target="_blank" rel="noreferrer" onClick={() => track('survival_world_external_clicked')}>Open full screen <ExternalLink size={13} /></a>
       </header>
       <iframe

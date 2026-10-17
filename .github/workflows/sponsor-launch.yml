@@ -4,12 +4,18 @@ on:
     paths:
       - 'brainsnn-r3f-app/sponsorship/**'
       - 'brainsnn-r3f-app/src/app/BehaviourHome.jsx'
+      - 'brainsnn-r3f-app/src/app/LobbyHome.jsx'
+      - 'brainsnn-r3f-app/src/app/PublicNav.jsx'
+      - 'brainsnn-r3f-app/src/app/navigation.js'
       - '.github/workflows/sponsor-launch.yml'
   push:
     branches: [main]
     paths:
       - 'brainsnn-r3f-app/sponsorship/**'
       - 'brainsnn-r3f-app/src/app/BehaviourHome.jsx'
+      - 'brainsnn-r3f-app/src/app/LobbyHome.jsx'
+      - 'brainsnn-r3f-app/src/app/PublicNav.jsx'
+      - 'brainsnn-r3f-app/src/app/navigation.js'
       - '.github/workflows/sponsor-launch.yml'
   workflow_run:
     workflows: ['Deploy BrainSNN app to Railway']
@@ -44,7 +50,7 @@ jobs:
           node sponsorship/build.cjs
           node --input-type=module --check < sponsorship/public/launch.js
           node --input-type=module --check < sponsorship/public/launch-utils.js
-          node --test sponsorship/tests/launch.test.cjs
+          node --test sponsorship/tests/launch.test.cjs sponsorship/tests/public-retirement.test.cjs
           npm run lint
           npm run build
       - name: Install Chromium

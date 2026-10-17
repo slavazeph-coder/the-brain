@@ -43,7 +43,7 @@ function dateTime(value) {
 }
 
 function missionIdFromPath() {
-  const match = window.location.pathname.match(/^\/m\/([a-zA-Z0-9_-]+)/);
+  const match = window.location.pathname.match(/^\/arena\/tasks\/published\/([a-zA-Z0-9_-]+)/);
   return match?.[1] || '';
 }
 
@@ -172,7 +172,7 @@ export function PublishedMissionPage() {
   }
 
   if (loading) return <div className="bh-site"><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Loading mission…</h2></div></section></main></div>;
-  if (error && !mission) return <div className="bh-site"><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Mission unavailable</h2><p>{error}</p><a className="bh-button bh-secondary" href="/missions"><ArrowLeft size={15}/> Back to missions</a></div></section></main></div>;
+  if (error && !mission) return <div className="bh-site"><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Mission unavailable</h2><p>{error}</p><a className="bh-button bh-secondary" href="/arena/tasks"><ArrowLeft size={15}/> Back to missions</a></div></section></main></div>;
 
   const lifecycle = mission.bounty?.lifecycle || 'OPEN';
   const submissionsOpen = lifecycle === 'OPEN';
@@ -182,9 +182,9 @@ export function PublishedMissionPage() {
 
   return <div className="bh-site">
     <header className="bh-nav">
-      <a className="bh-brand" href="/missions"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Published Mission</small></span></a>
-      <nav><a href="/missions">Missions</a><a href="/missions/build">Build</a><a href="/evidence">Evidence</a></nav>
-      <a className="bh-nav-cta" href="/missions/build">Build your own</a>
+      <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Published Mission</small></span></a>
+      <nav><a href="/arena/tasks">Missions</a><a href="/arena/tasks/build">Build</a><a href="/evidence">Evidence</a></nav>
+      <a className="bh-nav-cta" href="/arena/tasks/build">Build your own</a>
     </header>
 
     <main>
@@ -282,6 +282,6 @@ export function PublishedMissionPage() {
       </section>
     </main>
 
-    <footer className="bh-footer"><a href="/missions"><ArrowLeft size={14}/> Proof Missions</a><span>Immutable mission · public pledge · mutable policy · server-verified result</span></footer>
+    <footer className="bh-footer"><a href="/arena/tasks"><ArrowLeft size={14}/> Arena Tasks</a><span>Immutable mission · public pledge · mutable policy · server-verified result</span></footer>
   </div>;
 }
