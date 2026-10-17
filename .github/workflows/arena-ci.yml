@@ -67,6 +67,25 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Native inspector desktop and mobile browser flows
         run: node tests/arena-inspector-browser.cjs
+      - name: Retain native inspector browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-inspector-browser
+          path: /tmp/arena-inspector-*.*
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Upfront robot and model selection on desktop and mobile
+        # Synthetic worker responses verify exact selection dispatch, not model execution.
+        run: node tests/arena-selection-browser.cjs
+      - name: Retain arcade desktop and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-selection-browser
+          path: /tmp/arena-selection-startup-*.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Robot campaign report desktop and mobile browser flows
         run: node tests/arena-campaign-browser.cjs
       - name: Paid analysis preview, wallet and evidence browser flows

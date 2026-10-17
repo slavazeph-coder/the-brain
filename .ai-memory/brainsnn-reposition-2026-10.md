@@ -5,6 +5,30 @@ description: Arena-led lobby and unified Review implementation following PR 186;
 
 # BrainSNN repositioning, October 2026
 
+## Latest owner correction — October 17
+
+The owner rejected the restrained Arena: “I like the previous arcade style
+better it seemed more interactive and fun. You could pick desired robot and
+LLM to test.” This supersedes the original rule below that hid controls until
+the first completed run. Robot/model selection, starter profiles, challenges,
+camera and world controls should be available immediately. Preserve selected
+pairs and truthful worker readiness; do not silently substitute a scripted arm.
+Replay and inspection still depend on actual recorded evidence. The follow-up
+is developed on `codex/restore-arena-selection`, with release marker
+`arena-arcade-selection-2026-10-17-v1`.
+
+The restoration also adds five visible practice challenge chips, an accessible
+Run/Pause control above the scene, a desktop setup column and compact mobile
+tool strips. Worker readiness, exact profile validation, native recording and
+the disabled paid-analysis release remain intact. Browser contracts cover
+1280px and 390px startup choices, selection persistence, mismatched-profile
+refusal, explicit worker requests and separately labeled scripted practice.
+`npm run lint`, 1,068 application checks, 73 analysis checks, Arena logic,
+selection/inspection/paid-analysis browser flows and ten HTTP route checks
+passed locally. CI retains the startup screenshots as an artifact.
+
+## Earlier approved implementation
+
 Owner approved an Arena-led lobby rather than making the simulator the homepage.
 Implementation was developed on `codex/arena-review-consolidation` atop PR #186
 (`lobby-home`). PR #187 was merged into `lobby-home` as `6f62616c` on October17 UTC.

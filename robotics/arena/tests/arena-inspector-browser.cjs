@@ -16,6 +16,18 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', name.endsWith('.js') ? 'application/javascript' : 'text/css'); res.end(fs.readFileSync(path.join(assets, name)));
 });
 function upload(bundle) { return { name: 'recording.json', mimeType: 'application/json', buffer: Buffer.from(typeof bundle === 'string' ? bundle : JSON.stringify(bundle)) }; }
+async function inspectButtonDiagnostics(page) {
+  const dom = await page.evaluate(() => {
+    const button = document.querySelector('#arena-inspect'), ancestors = [];
+    for (let element = button; element; element = element.parentElement) {
+      const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+      ancestors.push({tag:element.tagName,id:element.id,className:element.className,hidden:element.hidden,inert:element.inert,role:element.getAttribute('role'),ariaHidden:element.getAttribute('aria-hidden'),ariaLabel:element.getAttribute('aria-label'),display:style.display,visibility:style.visibility,contentVisibility:style.contentVisibility,opacity:style.opacity,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},clientRects:element.getClientRects().length});
+    }
+    const state = BrainSNNArena.getState();
+    return {button:button?.outerHTML,buttonText:button?.textContent,ancestors,dialogs:[...document.querySelectorAll('dialog')].map(element=>({open:element.open,modal:element.matches(':modal'),html:element.outerHTML.slice(0,500)})),activeElement:document.activeElement?.outerHTML.slice(0,500),visibilityState:document.visibilityState,running:state.running,completedRun:state.completedRun,steps:state.currentSnapshot?.state.steps,done:state.currentSnapshot?.state.done,remainingTimers:window.__ticks.size};
+  });
+  return {...dom,idCount:await page.locator('#arena-inspect').count(),visibleByLocator:await page.locator('#arena-inspect').isVisible(),roleCount:await page.getByRole('button',{name:'Inspect run',exact:true}).count(),roleCountIncludingHidden:await page.getByRole('button',{name:'Inspect run',exact:true,includeHidden:true}).count()};
+}
 async function fixture(api, action = .2, changes = {}) {
   const artifact = id => ({ id, path: id + '.rgb', mediaType: 'application/octet-stream', retention: 'included', dtype: 'uint8', shape: [2, 2, 3], endianness: 'not-applicable' });
   const event = (id, seq, kind, data, refs = [], artifactIds = []) => ({ id, seq, kind, simTime: seq / 10, refs, artifactIds, data });
@@ -39,7 +51,10 @@ async function fixture(api, action = .2, changes = {}) {
     const errors = [], requests = []; page.on('pageerror', error => errors.push(error.message)); page.on('request', request => requests.push({url:request.url(),method:request.method()}));
     await page.addInitScript(() => { window.__ticks = new Map(); let id=0; window.setInterval=fn=>{window.__ticks.set(++id,fn);return id;};window.clearInterval=id=>window.__ticks.delete(id); });
     await page.goto(base + '/test.html'); await page.evaluate(() => BrainSNNArena.mount(document.querySelector('#experiment-root'), {}));
-    assert.equal(await page.locator('#experiment-root button:visible').count(), 1, 'one initial Run button');
+    assert.equal(await page.locator('#arena-run').isVisible(), true, 'paused mission remains runnable beside upfront setup controls');
+    assert.equal(await page.locator('[data-arena-profile]:visible').count(), 4, 'starter robot/model profiles are available before a run');
+    assert.equal(await page.locator('#arena-scrubber').isVisible(), false, 'replay still requires recorded run data');
+    assert.equal(await page.evaluate(() => BrainSNNArena.getState().running), false);
     await page.locator('.arena-recording-tools summary').click(); await page.getByText('Open a recording',{exact:true}).click();
     await page.locator('#ai-file').setInputFiles(upload(candidate)); await page.getByText('Schema valid · hashes match',{exact:true}).waitFor().catch(async error=>{throw new Error(error.message+'\n'+await page.locator('dialog').innerText()+'\n'+errors.join('\n'));});
     await page.locator('#ai-event-id').fill('state'); await page.getByRole('button',{name:'Go to event',exact:true}).click();
@@ -105,8 +120,28 @@ async function fixture(api, action = .2, changes = {}) {
     assert.match(await page.locator('#ai-content').innerText(),/Original source files, including MCAP or Parquet, may still contain images, prompts/);
     assert.equal(requests.filter(item=>item.method!=='GET'||(!item.url.startsWith(base)&&!item.url.startsWith('blob:'))).length,0,'imports and inspection never issue worker requests');
     await page.keyboard.press('Escape'); assert.equal(await page.locator('dialog').count(),0); assert.equal(await page.locator('[data-arena-action="open-recording"]').evaluate(element=>element===document.activeElement),true);
-    await page.locator('#arena-run').click(); await page.evaluate(()=>{for(let i=0;i<500&&!BrainSNNArena.getState().currentSnapshot.state.done;i++)for(const tick of [...window.__ticks.values()])tick();});
-    await page.getByRole('button',{name:'Inspect run',exact:true}).click(); await page.getByText('Scripted local practice. No named model ran; this is not a model score.',{exact:true}).waitFor();
+    await page.locator('#arena-run').click();
+    const practiceCompletion = await page.evaluate(()=>{
+      const before = BrainSNNArena.getState();
+      const initialTimers = window.__ticks.size;
+      let iterations = 0;
+      for(;iterations<500&&!BrainSNNArena.getState().currentSnapshot.state.done;iterations++)for(const tick of [...window.__ticks.values()])tick();
+      const state = BrainSNNArena.getState();
+      return {before:{running:before.running,steps:before.currentSnapshot.state.steps,done:before.currentSnapshot.state.done},initialTimers,iterations,running:state.running,completedRun:state.completedRun,steps:state.currentSnapshot.state.steps,done:state.currentSnapshot.state.done,remainingTimers:window.__ticks.size,mode:state.mode,event:state.currentSnapshot.state.event,seed:state.currentSnapshot.state.seed};
+    });
+    assert.equal(practiceCompletion.done, true, 'practice completes before opening the inspector: '+JSON.stringify(practiceCompletion));
+    assert.equal(practiceCompletion.completedRun, true, JSON.stringify(practiceCompletion));
+    const beforeInspect = await inspectButtonDiagnostics(page);
+    try { await page.getByRole('button',{name:'Inspect run',exact:true}).click(); }
+    catch (error) {
+      const diagnostics = {practiceCompletion,beforeInspect,afterFailure:await inspectButtonDiagnostics(page),pageErrors:errors};
+      fs.writeFileSync('/tmp/arena-inspector-failure-dom.json',JSON.stringify(diagnostics,null,2));
+      fs.writeFileSync('/tmp/arena-inspector-failure.html',await page.content());
+      await page.screenshot({path:'/tmp/arena-inspector-failure.png',fullPage:true});
+      console.error('ARENA_INSPECTOR_FAILURE_DIAGNOSTICS: '+JSON.stringify(diagnostics));
+      throw error;
+    }
+    await page.getByText('Scripted local practice. No named model ran; this is not a model score.',{exact:true}).waitFor();
     assert.match(await page.locator('.ai-summary').innerText(),/partial evidence/); assert.equal(await page.locator('#ai-practice-candidate').count(),1); assert.match(await page.locator('#ai-content').innerText(),/unknown tail/);
     await page.getByRole('button',{name:'Save local review',exact:true}).click(); await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'Inspect run',exact:true}).click(); await page.waitForFunction(()=>document.querySelector('#ai-reviews')?.textContent.includes('Current'));

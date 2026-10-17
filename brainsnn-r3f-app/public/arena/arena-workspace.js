@@ -9,6 +9,13 @@
   const stamp = () => new Date().toISOString();
   const number = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
   const safeURL = value => { try { const u = new URL(value); return u.protocol === 'https:' ? u.href : ''; } catch { return ''; } };
+  const practiceMissions = [
+    ['starter','First moves','◇','Three blocks. One destination.'],
+    ['clutter','Clutter course','▧','Find room to move.'],
+    ['moving','Moving world','↔','Dodge a moving obstacle.'],
+    ['night','Night shift','◐','Turn down the lights.'],
+    ['surprise','Plot twist','⌖','The destination moves at 6 s.']
+  ];
   let completedRun = false;
   let inspectedLegacy = null;
   let host = null, selection = {}, mode = 'named', protocol = 'practice', client = null;
@@ -106,21 +113,20 @@
     if (!host) return;
     cleanup.forEach(fn => fn()); cleanup = [];
     const r = robot(), m = model(), p = profile();
-    // Restored named setups need a direct, explicit practice choice even before
-    // a worker can run. Fresh visitors keep the single paused mission + Run.
-    const hasNamedSelection = Boolean(selection.robotId || selection.modelId);
+    // Setup and play controls are available before the first run. A named
+    // selection still requires its exact worker profile; no demo fallback.
     host.classList.add('arena-workspace');
-    host.innerHTML = '<p class="arena-welcome" data-arena-after-run hidden>Run a mission. Change the world. Replay the moment it stops working.</p>' +
-      '<div class="arena-profile-bar" data-arena-after-run hidden aria-label="Starter profiles"><span>Jump into a setup</span><button data-arena-profile="panda:pi05">Panda <b>π₀.₅</b></button><button data-arena-profile="panda:molmo">Panda <b>MolmoAct2</b></button><button data-arena-profile="g1:sonic">G1 <b>SONIC</b></button><button data-arena-profile="so101:act">SO-101 <b>ACT</b></button></div>' +
+    host.innerHTML = '<div class="arena-profile-bar" aria-label="Starter profiles"><span>Quick picks <small>worker required</small></span><button data-arena-profile="panda:pi05">Panda <b>π₀.₅</b></button><button data-arena-profile="panda:molmo">Panda <b>MolmoAct2</b></button><button data-arena-profile="g1:sonic">G1 <b>SONIC</b></button><button data-arena-profile="so101:act">SO-101 <b>ACT</b></button></div>' +
       '<div class="arena-shell"><div class="arena-session-bar"><div class="arena-pair"><span class="arena-status-dot" id="arena-dot"></span><strong id="arena-pair-title">' + esc(mode === 'practice' ? 'Generic demo arm · scripted practice' : (r?.name || 'Choose robot') + ' + ' + (m?.name || 'Choose brain')) + '</strong><span id="arena-runtime-badge" class="arena-badge"></span></div>' +
-      '<div class="arena-mode-switch"' + (hasNamedSelection ? '' : ' data-arena-after-run hidden') + ' aria-label="Execution mode"><button data-arena-action="named" aria-pressed="' + (mode === 'named') + '">Selected robot</button><button data-arena-action="practice" aria-label="Try local practice: scripted, not a model score" aria-pressed="' + (mode === 'practice') + '">Try local practice</button></div></div>' +
-      '<div class="arena-main"><section class="arena-stage" aria-label="Interactive arena"><div class="arena-stage-top"><div><span class="arena-micro" id="arena-camera-title">' + (mode === 'practice' ? 'SPECTATOR CAMERA' : 'ROBOT BODY PREVIEW') + '</span><strong id="arena-mission">' + esc(mode === 'practice' ? 'Sort three blocks into the tray' : selection.task || 'Choose a mission, connect a worker') + '</strong></div><span class="arena-live-pill" id="arena-live-pill">SETUP</span></div>' +
+      '<div class="arena-mode-switch" aria-label="Execution mode"><button data-arena-action="named" aria-pressed="' + (mode === 'named') + '">Selected robot</button><button data-arena-action="practice" aria-label="Try local practice: scripted, not a model score" aria-pressed="' + (mode === 'practice') + '">Try local practice</button></div></div>' +
+      (mode === 'practice' ? '<div class="arena-mission-ribbon"><div class="arena-mission-label"><strong>Pick your challenge</strong><span>Local practice · press Run to begin</span></div><div class="arena-mission-picks" role="group" aria-label="Practice missions">' + practiceMissions.map(([id,label,icon,hint]) => '<button type="button" data-arena-challenge="' + id + '" aria-pressed="' + (challenge === id) + '" title="' + hint + '"><span aria-hidden="true">' + icon + '</span><strong>' + label + '</strong><small>' + hint + '</small></button>').join('') + '</div></div>' : '') +
+      '<div class="arena-main"><section class="arena-stage" aria-label="Interactive arena"><div class="arena-stage-top"><div><span class="arena-micro" id="arena-camera-title">' + (mode === 'practice' ? 'SPECTATOR CAMERA' : 'ROBOT BODY PREVIEW') + '</span><strong id="arena-mission">' + esc(mode === 'practice' ? 'Sort three blocks into the tray' : selection.task || 'Choose a mission, connect a worker') + '</strong></div><div class="arena-stage-actions"><span class="arena-live-pill" id="arena-live-pill">SETUP</span><button type="button" class="arena-button arena-primary" id="arena-run-top" data-arena-action="run">Run</button></div></div>' +
       '<div class="arena-viewport" id="arena-viewport">' + (mode === 'practice' ? '<canvas id="arena-canvas" tabindex="0" aria-label="Generic demo arm practice arena. Drag to orbit, scroll to zoom. Use arrow keys to orbit, plus and minus to zoom."></canvas><div class="arena-canvas-hint">Drag to orbit <span>·</span> Scroll to zoom</div>' : namedViewer()) +
       '<img id="arena-worker-image" class="arena-worker-image" hidden alt="Authoritative simulator spectator camera"><div id="arena-frame-placeholder" class="arena-frame-placeholder" hidden>Waiting for a spectator frame from the worker.</div>' +
       '<aside class="arena-policy-eye" id="arena-policy-eye" hidden><span>POLICY CAMERA <b id="arena-policy-id"></b></span><img id="arena-policy-image" alt="Actual observation supplied by the worker to its policy"></aside>' + (mode === 'practice' ? '<aside class="arena-policy-eye arena-local-sensor" id="arena-local-sensor"><span>FIXED DEMO CAMERA · NO AI</span><canvas id="arena-sensor-canvas" width="256" height="256" aria-label="Fixed camera view of the generic scripted demo, independent of your spectator camera"></canvas></aside>' : '') + '</div>' +
-      '<div class="arena-camera-controls" data-arena-after-run hidden><div><button data-arena-action="orbit" title="Orbit the spectator camera">Orbit</button><button data-arena-action="top" title="View arena from above">Top view</button><button data-arena-action="camera-reset">Reset view</button></div><span id="arena-camera-note">' + (mode === 'practice' ? 'Fixed demo camera stays independent of your view' : 'Explore with the body viewer controls') + '</span></div>' +
-      '<div class="arena-transport"><button class="arena-button arena-primary" id="arena-run" data-arena-action="run">Connect worker</button><button class="arena-button" id="arena-step" data-arena-after-run hidden data-arena-action="step">Step</button><button class="arena-icon-button" id="arena-reset" data-arena-after-run hidden data-arena-action="reset" title="Reset this run" aria-label="Reset this run">↺</button><div class="arena-clock"><strong id="arena-time">0.0<span>s</span></strong><small>simulation time</small></div><span class="arena-transport-note" id="arena-transport-note"></span></div></section>' +
-      '<aside class="arena-inspector" data-arena-after-run hidden><div class="arena-panel-section"><div class="arena-panel-label"><h3>Mission control</h3><span class="arena-badge">01</span></div><div class="arena-protocol"><button data-arena-protocol="practice" aria-pressed="' + (protocol === 'practice') + '">Practice</button><button data-arena-protocol="benchmark" aria-pressed="' + (protocol === 'benchmark') + '">Locked run</button></div><p id="arena-protocol-note" class="arena-muted"></p>' +
+      '<div class="arena-camera-controls"><div><button data-arena-action="orbit" title="Orbit the spectator camera">Orbit</button><button data-arena-action="top" title="View arena from above">Top view</button><button data-arena-action="camera-reset">Reset view</button></div><span id="arena-camera-note">' + (mode === 'practice' ? 'Fixed demo camera stays independent of your view' : 'Explore with the body viewer controls') + '</span></div>' +
+      '<div class="arena-transport"><button class="arena-button arena-primary" id="arena-run" data-arena-action="run">Connect worker</button><button class="arena-button" id="arena-step" data-arena-action="step">Step</button><button class="arena-icon-button" id="arena-reset" data-arena-action="reset" title="Reset this run" aria-label="Reset this run">↺</button><div class="arena-clock"><strong id="arena-time">0.0<span>s</span></strong><small>simulation time</small></div><span class="arena-transport-note" id="arena-transport-note"></span></div></section>' +
+      '<aside class="arena-inspector"><div class="arena-panel-section"><div class="arena-panel-label"><h3>Mission control</h3><span class="arena-badge">01</span></div><div class="arena-protocol"><button data-arena-protocol="practice" aria-pressed="' + (protocol === 'practice') + '">Practice</button><button data-arena-protocol="benchmark" aria-pressed="' + (protocol === 'benchmark') + '">Locked run</button></div><p id="arena-protocol-note" class="arena-muted"></p>' +
       '<div id="arena-local-options"' + (mode === 'practice' ? '' : ' hidden') + '><label class="arena-field">World<select id="arena-world"><option value="starter">Open tabletop</option><option value="clutter">Cluttered workspace</option><option value="moving">Moving obstacle</option><option value="night">Low light</option><option value="surprise">Moving destination</option></select></label><label class="arena-field">World seed<input id="arena-seed" type="text" maxlength="64" value="' + esc(selection.seed ?? '42') + '"></label><button class="arena-text-button" data-arena-action="new-world">Create this world ↗</button></div>' +
       '<div id="arena-profile-summary"' + (mode === 'practice' ? ' hidden' : '') + '><span class="arena-micro">EXECUTION PROFILE</span><strong id="arena-profile-name">' + esc(p?.name || p?.title || (p ? p.id : 'Custom robot + model')) + '</strong><p class="arena-muted">' + esc(selection.error || (p ? 'Connect a worker advertising this exact body, checkpoint and controller contract.' : 'This pair needs a matching execution profile. Your robot and model selection stays intact.')) + '</p><button class="arena-text-button" data-arena-action="connect">Connect your worker ↗</button></div></div>' +
       '<div class="arena-panel-section"><div class="arena-panel-label"><h3>Change the world</h3><span class="arena-small-glyph" aria-hidden="true">✧</span></div><p id="arena-disturbance-note" class="arena-muted"></p><div class="arena-disturbances"><button id="arena-add-obstacle" data-arena-action="add-obstacle"><span aria-hidden="true">▧</span>Add obstacle</button><button id="arena-move-obstacle" data-arena-action="move-obstacle"><span aria-hidden="true">↔</span>Move obstacle</button><button id="arena-lighting" data-arena-action="lighting"><span aria-hidden="true">◐</span>Change light</button><button id="arena-target" data-arena-action="target"><span aria-hidden="true">⌖</span>Move target</button><button id="arena-occlusion" data-arena-action="camera-occlusion"><span aria-hidden="true">◒</span>Obscure camera</button><button id="arena-clear-camera" data-arena-action="clear-camera"><span aria-hidden="true">◉</span>Clear camera</button></div></div>' +
@@ -142,12 +148,16 @@
     }
     host.classList.toggle('arena-first-run', !completedRun);
     document.querySelectorAll('[data-arena-after-run]').forEach(el => { el.hidden = !completedRun; });
+    host.querySelectorAll('[data-arena-challenge]').forEach(el => el.setAttribute('aria-pressed', String(el.dataset.arenaChallenge === challenge)));
+    if (local) text('arena-mission', (practiceMissions.find(item => item[0] === challenge)?.[1] || 'Local practice') + ' · Sort three blocks into the tray');
     const live = local ? running : connection.status === 'running';
     const terminal = !local && ['succeeded', 'failed', 'error'].includes(connection.status);
     text('arena-runtime-badge', local ? 'LOCAL PRACTICE · NOT A MODEL SCORE' : connected() ? 'WORKER CONNECTED' : 'POLICY DISCONNECTED');
     $('arena-dot')?.classList.toggle('is-ready', local || connected());
     text('arena-live-pill', !local && remoteCursor >= 0 ? 'RECORDED FRAME' : live ? 'RUNNING' : local ? (s?.done ? 'COMPLETE' : cursor < snapshots.length - 1 ? 'REPLAY' : 'PAUSED') : connected() ? connection.status.toUpperCase() : 'BODY PREVIEW');
     text('arena-run', local ? (running ? 'Ⅱ Pause' : cursor < snapshots.length - 1 ? 'Branch & run' : s?.done ? '↺ Run again' : 'Run') : connected() ? (terminal ? '↺ Reset mission' : live ? 'Ⅱ Pause' : 'Run') : connection.status === 'connected' ? 'Choose worker mission' : 'Connect worker');
+    text('arena-run-top', $('arena-run')?.textContent || 'Run');
+    attr('arena-run-top', 'disabled', !local && connected() && !supports(terminal ? 'reset' : live ? 'pause' : 'run'));
     attr('arena-run', 'disabled', !local && connected() && !supports(terminal ? 'reset' : live ? 'pause' : 'run'));
     attr('arena-step', 'disabled', local ? running || Boolean(s?.done) : !supports('step') || live || terminal);
     attr('arena-reset', 'disabled', !local && !supports('reset'));
@@ -386,6 +396,12 @@
     on(host, 'click', ev => {
       const action = ev.target.closest?.('[data-arena-action]');
       if (action && !action.disabled && !action.hasAttribute('disabled')) { if (action.tagName === 'A') ev.preventDefault(); return handleAction(action.dataset.arenaAction); }
+      const mission = ev.target.closest?.('[data-arena-challenge]');
+      if (mission && mode === 'practice' && practiceMissions.some(item => item[0] === mission.dataset.arenaChallenge)) {
+        challenge = mission.dataset.arenaChallenge; makeWorld($('arena-seed')?.value || selection.seed || '42');
+        if ($('arena-world')) $('arena-world').value = challenge;
+        message = 'New practice mission ready. Press Run when you are ready.'; refresh(); draw(); return;
+      }
       const quick = ev.target.closest?.('[data-arena-profile]');
       if (quick) { const [robotId, modelId] = quick.dataset.arenaProfile.split(':'); window.BrainSNNExperiment?.open?.({ robotId, modelId, seed: selection.seed ?? 42 }); return; }
       const toggle = ev.target.closest?.('[data-arena-protocol]');
