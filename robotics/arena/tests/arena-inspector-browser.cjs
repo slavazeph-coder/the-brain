@@ -108,7 +108,17 @@ async function fixture(api, action = .2, changes = {}) {
     assert.match(await page.locator('#ai-content').innerText(),/Original source files, including MCAP or Parquet, may still contain images, prompts/);
     assert.equal(requests.filter(item=>item.method!=='GET'||(!item.url.startsWith(base)&&!item.url.startsWith('blob:'))).length,0,'imports and inspection never issue worker requests');
     await page.keyboard.press('Escape'); assert.equal(await page.locator('dialog').count(),0); assert.equal(await page.locator('[data-arena-action="open-recording"]').evaluate(element=>element===document.activeElement),true);
-    await page.locator('#arena-run').click(); await page.evaluate(()=>{for(let i=0;i<500&&!BrainSNNArena.getState().currentSnapshot.state.done;i++)for(const tick of [...window.__ticks.values()])tick();});
+    await page.locator('#arena-run').click();
+    const practiceCompletion = await page.evaluate(()=>{
+      const before = BrainSNNArena.getState();
+      const initialTimers = window.__ticks.size;
+      let iterations = 0;
+      for(;iterations<500&&!BrainSNNArena.getState().currentSnapshot.state.done;iterations++)for(const tick of [...window.__ticks.values()])tick();
+      const state = BrainSNNArena.getState();
+      return {before:{running:before.running,steps:before.currentSnapshot.state.steps,done:before.currentSnapshot.state.done},initialTimers,iterations,running:state.running,completedRun:state.completedRun,steps:state.currentSnapshot.state.steps,done:state.currentSnapshot.state.done,remainingTimers:window.__ticks.size,mode:state.mode,event:state.currentSnapshot.state.event,seed:state.currentSnapshot.state.seed};
+    });
+    assert.equal(practiceCompletion.done, true, 'practice completes before opening the inspector: '+JSON.stringify(practiceCompletion));
+    assert.equal(practiceCompletion.completedRun, true, JSON.stringify(practiceCompletion));
     await page.getByRole('button',{name:'Inspect run',exact:true}).click(); await page.getByText('Scripted local practice. No named model ran; this is not a model score.',{exact:true}).waitFor();
     assert.match(await page.locator('.ai-summary').innerText(),/partial evidence/); assert.equal(await page.locator('#ai-practice-candidate').count(),1); assert.match(await page.locator('#ai-content').innerText(),/unknown tail/);
     await page.getByRole('button',{name:'Save local review',exact:true}).click(); await page.keyboard.press('Escape');
