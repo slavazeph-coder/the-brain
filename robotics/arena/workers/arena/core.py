@@ -122,10 +122,18 @@ class Episode:
     request_cache: Any = field(default_factory=collections.OrderedDict)
     occlusion: float = 0.0
     closed: bool = False
+    archive: Any = None
+    recording_shutdown_timeout: float = 5.0
 
     def __post_init__(self):
         self.created_at = self.clock()
         self.episode_number = 0
+        self.recorder = None
+        self.previous_recorders = []
+        self.current_chunk_id = self.current_observation_id = None
+        self.chunk_index = 0
+        self.inference_attempts = 0
+        self.inference_completions = self.controller_submissions = 0
         self.reset()
         self.status = "ready"
 
@@ -137,11 +145,61 @@ class Episode:
         # Uses the simulator's own authoritative time, not browser animation time.
         return float(self.env.sim.data.time)
 
+    def record(self, kind, **kwargs):
+        if self.recorder is None:
+            return None
+        try:
+            return self.recorder.record(kind, sim_time=self.sim_time(), **kwargs)
+        except Exception:
+            # Instrumentation failure cannot change the controller's action.
+            self.recorder._lose("capture_failed")
+            return None
+
+    def discard_chunk(self, reason):
+        if self.action_plan:
+            self.record("chunk-discarded", refs=[self.current_chunk_id], data={
+                "chunkId": self.current_chunk_id, "indices": list(range(self.chunk_index, self.chunk_index + len(self.action_plan))),
+                "reason": reason})
+        self.action_plan.clear()
+
+    def finish_recording(self, reason):
+        if self.recorder is None or not self.recorder.accepting:
+            return
+        self.discard_chunk(reason)
+        outcome = {"status": self.status if self.status in ("succeeded", "failed") else "interrupted",
+                   "reason": reason, "success": bool(getattr(self, "success", False)),
+                   "judge": "LIBERO check_success", "judgeRevision": LIBERO_REVISION,
+                   "controlSteps": self.steps, "inferenceAttempts": self.inference_attempts,
+                   "controllerInputsSubmitted": self.controller_submissions,
+                   "inferenceCompletions": self.inference_completions, "validActionChunks": self.inference_count}
+        self.record("outcome", data=outcome)
+        self.recorder.finish(outcome, reason)
+
+    def record_observation(self, inputs, *, initial=False):
+        return self.record("observation", arrays={
+            "agentview": (inputs["observation/image"], True),
+            "wrist": (inputs["observation/wrist_image"], True), "policy-state": inputs["observation/state"]},
+            texts={"prompt": inputs["prompt"]}, data=lambda eid, artifacts: {
+                "cameras": [{"id": camera, "artifactId": artifacts[camera]} for camera in ("agentview", "wrist")],
+                "state": inputs["observation/state"].tolist(), "stateArtifactId": artifacts["policy-state"],
+                "promptArtifactId": artifacts["prompt"], "controlStep": self.steps,
+                "interface": "openpi-client-input", "initialOnly": initial,
+                "boundary": "Prepared worker input, before policy-server internal transforms."})
+
     def reset(self):
+        self.finish_recording("reset")
+        if self.recorder is not None:
+            self.previous_recorders.append(self.recorder)
+        self.previous_recorders = [writer for writer in self.previous_recorders if not writer.finished.is_set()]
+        self.recorder = None
         self.status = "paused"
         self.action_plan.clear()
         self.occlusion = 0.0
         self.steps = self.inference_count = self.interventions = 0
+        self.inference_attempts = 0
+        self.inference_completions = self.controller_submissions = 0
+        self.current_chunk_id = self.current_observation_id = None
+        self.chunk_index = 0
         self.latencies = []
         self.trace = []
         self.events = []
@@ -160,6 +218,40 @@ class Episode:
         self.started_at = self.clock()
         self.sim_started_at = self.sim_time()
         self.success = bool(self.env.check_success())
+        if self.archive is not None:
+            # This is the state after ten settling actions, not the suite state.
+            state = np.asarray(self.env.get_sim_state(), dtype=np.float64).copy()
+            self.recorder = self.archive.create({"sessionId": self.session_id,
+                "episodeId": self.session_id + "-" + str(self.episode_number), "episode": self.episode_number,
+                "source": {"kind": "simulator-policy", "identityStatus": "declared",
+                           "producer": "brainsnn-libero-v1", "profile": copy.deepcopy(self.profile)},
+                "context": {"taskId": self.request["task"], "taskRevision": LIBERO_REVISION,
+                            "judgeRevision": LIBERO_REVISION, "judge": "LIBERO check_success",
+                            "environment": copy.deepcopy(self.profile["simulator"]),
+                            "actionSemantics": copy.deepcopy(self.profile["action"]),
+                            "stateSemantics": {"policy": copy.deepcopy(self.profile["state"]),
+                                               "simulator": "LIBERO flattened MuJoCo state; not controller or policy RNG state"},
+                            "units": {"position": "metres", "orientation": "radians", "simTime": "seconds",
+                                      "controllerInput": "OSC_POSE cartesian-delta-gripper input, before controller clipping/scaling"},
+                            "preprocessingRevision": "brainsnn-libero-v1:" + OPENPI_REVISION,
+                            "seed": self.request["seed"], "protocol": self.request["protocol"],
+                            "initialState": {"suiteStateId": self.initial_state_id,
+                                             "suiteStateSha256": hashlib.sha256(np.asarray(self.initial_state).tobytes()).hexdigest(),
+                                             "policyStartStateSha256": hashlib.sha256(state.tobytes()).hexdigest(),
+                                             "policyStart": "post-settling", "settleSteps": SETTLE_STEPS,
+                                             "initializationCoverage": "Settling actions excluded; suite source and post-settling state retained."}},
+                "clocks": [{"id": "simulator", "unit": "seconds", "epoch": "environment reset", "policyStart": self.sim_time()},
+                           {"id": "host-monotonic", "unit": "nanoseconds", "epoch": "host boot", "mapping": "unknown"}],
+                "limitations": ["Recorded worker-interface inputs and controller inputs, not motor execution.",
+                                "Producer model identity is declared, not independently authenticated.",
+                                "Initialization settling steps and internal policy transforms are outside coverage.",
+                                "No policy RNG/controller restore state; inspection is not executable branching."]})
+            self.record("episode-start", arrays={"policy-start-state": state, "suite-state": self.initial_state},
+                        data=lambda eid, artifacts: {"state": state.tolist(),
+                            "stateArtifactId": artifacts["policy-start-state"], "sourceStateArtifactId": artifacts["suite-state"],
+                            "initialization": {"settleSteps": SETTLE_STEPS, "coverage": "excluded"}, "controlStep": 0})
+            inputs, _ = prepare_observation(self.obs, self.prompt, self.image_tools)
+            self.record_observation(inputs, initial=True)
         self.emit("reset", episode=self.episode_number, seed=self.request["seed"],
                   initialStateId=self.initial_state_id, settleSteps=SETTLE_STEPS)
         self.seq += 1
@@ -172,9 +264,40 @@ class Episode:
         try:
             if not self.action_plan:
                 inputs, images = prepare_observation(self.obs, self.prompt, self.image_tools, self.occlusion)
+                self.current_observation_id = self.record_observation(inputs)
+                self.inference_attempts += 1
+                attempt = f"attempt-{self.episode_number}-{self.inference_attempts}"
+                start_id = self.record("inference-start", refs=[self.current_observation_id], data={
+                    "observationId": self.current_observation_id, "attemptId": attempt,
+                    "adapter": self.profile.get("adapter"), "modelId": self.profile.get("modelId"),
+                    "checkpointRevision": self.profile.get("checkpointRevision")})
                 start = self.clock()
-                result = self.policy.infer(inputs)
+                try:
+                    result = self.policy.infer(inputs)
+                except Exception:
+                    self.record("inference-error", refs=[start_id, self.current_observation_id], data={
+                        "attemptId": attempt, "observationId": self.current_observation_id,
+                        "durationMs": (self.clock() - start) * 1000, "code": "policy_inference_failed"})
+                    raise
                 latency = (self.clock() - start) * 1000
+                self.inference_completions += 1
+                # Preserve the returned array before float64 controller coercion.
+                returned = np.asarray(result.get("actions"))
+                numeric = returned.dtype.kind in "biuf"
+                recordable = numeric and 0 < returned.ndim <= 8 and all(size > 0 for size in returned.shape)
+                finite = numeric and np.isfinite(returned).all()
+                valid_shape = returned.ndim == 2 and returned.shape[0] >= REPLAN_STEPS and returned.shape[1] == 7
+                self.current_chunk_id = self.record("inference-result", refs=[start_id, self.current_observation_id],
+                    arrays={"returned-actions": returned} if recordable else {},
+                    data=lambda eid, artifacts: {"observationId": self.current_observation_id, "attemptId": attempt,
+                        "chunkId": eid, "actions": returned.tolist() if finite else None,
+                        "actionsArtifactId": artifacts.get("returned-actions"), "durationMs": latency,
+                        "queuedCount": REPLAN_STEPS if finite and valid_shape else 0,
+                        "unusedCount": max(0, len(returned) - REPLAN_STEPS) if returned.ndim else 0,
+                        "unusedReason": "Only the first five predictions are queued by the native evaluator.",
+                        "artifactLimitation": None if recordable else "Malformed/non-array output has no numeric array artifact.",
+                        "validShape": bool(valid_shape), "finite": bool(finite)})
+                self.chunk_index = 0
                 actions = np.asarray(result.get("actions"), dtype=np.float64)
                 if actions.ndim != 2 or actions.shape[0] < REPLAN_STEPS or actions.shape[1] != 7:
                     raise ArenaError("invalid_actions", "The policy must return at least five seven-dimensional actions.", 502)
@@ -189,28 +312,44 @@ class Episode:
                 self.last_inference_step = self.steps
                 self.last_inference_images = {k: v.copy() for k, v in images.items()}
             action = self.action_plan.popleft()
+            action_id = self.record("controller-input", refs=[self.current_chunk_id, self.current_observation_id],
+                arrays={"controller-input": action}, data={"vector": action.tolist(), "controlStep": self.steps + 1,
+                    "chunkId": self.current_chunk_id, "chunkIndex": self.chunk_index,
+                    "observationId": self.current_observation_id, "boundary": "Argument to env.step; not measured motor output."})
+            self.chunk_index += 1
+            self.controller_submissions += 1
+            control_started = self.clock()
             self.obs, reward, done, _ = self.env.step(action.tolist())
+            control_duration = (self.clock() - control_started) * 1000
             self.steps += 1
             self.success = bool(self.env.check_success())
             state = np.asarray(self.env.get_sim_state(), dtype=np.float64)
+            self.record("state", refs=[action_id], arrays={"simulator-state": state}, data={
+                "state": state.tolist(), "controlStep": self.steps, "reward": float(reward),
+                "success": self.success, "controllerInputId": action_id, "judge": "LIBERO check_success",
+                "controlDurationMs": control_duration})
             self.trace.append({"step": self.steps, "simTime": self.sim_time(), "action": action.tolist(),
                                "state": state.tolist(), "stateSha256": hashlib.sha256(state.tobytes()).hexdigest(),
                                "reward": float(reward), "success": self.success})
             if self.success:
                 self.status = "succeeded"
-                self.action_plan.clear()
+                self.discard_chunk("task_success")
                 self.emit("task_success", evaluator="LIBERO check_success")
             elif done or self.steps >= MAX_STEPS:
                 self.status = "failed"
-                self.action_plan.clear()
+                self.discard_chunk("episode_finished")
                 self.emit("episode_finished", reason="environment_done" if done else "horizon_reached")
             self.seq += 1
+            if self.status in ("succeeded", "failed"):
+                self.finish_recording(self.status)
         except Exception as error:
             self.status = "error"
-            self.action_plan.clear()
+            self.discard_chunk("runtime_error")
             self.last_error = error.as_dict() if isinstance(error, ArenaError) else {
                 "code": "runtime_failure", "message": "The physics or policy worker failed. Inspect the worker log and reset."}
             self.emit("runtime_error", **self.last_error)
+            self.record("runtime-error", data=self.last_error)
+            self.finish_recording("runtime_error")
             self.seq += 1
             raise
 
@@ -231,10 +370,12 @@ class Episode:
                 raise ArenaError("episode_finished", "Reset the episode before starting again.", 409)
             self.status = "running"
             self.emit("run")
+            self.record("run", data={"controlStep": self.steps})
         elif kind == "pause":
             if self.status not in ("succeeded", "failed", "error"):
                 self.status = "paused"
             self.emit("pause")
+            self.record("pause", data={"controlStep": self.steps})
         elif kind == "step":
             if self.status == "running":
                 raise ArenaError("pause_required", "Pause before stepping one control tick.", 409)
@@ -254,9 +395,11 @@ class Episode:
             if isinstance(fraction, bool) or not isinstance(fraction, (float, int)) or not math.isfinite(fraction) or not 0 <= fraction <= 0.7:
                 raise ArenaError("invalid_intervention", "Occlusion fraction must be between 0 and 0.7.")
             self.occlusion = float(fraction) if payload["enabled"] else 0.0
-            self.action_plan.clear()  # The changed sensor is observed on the next tick.
+            self.discard_chunk("camera_occlusion")  # The changed sensor is observed on the next tick.
             self.interventions += 1
             self.emit("camera_occlusion", fraction=self.occlusion, changesPolicyObservation=True)
+            self.record("intervention", data={"kind": "camera-occlusion", "fraction": self.occlusion,
+                        "changesPolicyObservation": True, "controlStep": self.steps})
         else:
             raise ArenaError("unsupported_command", "This worker does not support that command.")
         self.request_cache[request_id] = fingerprint
@@ -283,6 +426,8 @@ class Episode:
                                "quaternion": np.asarray(self.env.sim.data.body_xquat[index]).tolist()})
         latencies = np.asarray(self.latencies)
         metrics = {"steps": self.steps, "success": self.success, "inferenceCount": self.inference_count,
+                   "inferenceAttempts": self.inference_attempts, "inferenceCompletions": self.inference_completions,
+                   "controllerInputsSubmitted": self.controller_submissions,
                    "interventions": self.interventions, "wallTime": round(self.clock() - self.started_at, 3),
                    "episodeSimTime": self.sim_time() - self.sim_started_at,
                    "actionQueueDepth": len(self.action_plan), "controlHz": CONTROL_HZ}
@@ -296,6 +441,7 @@ class Episode:
                 "task": {"id": self.request["task"], "instruction": self.prompt},
                 "protocol": self.request["protocol"], "episode": self.episode_number,
                 "intervention": {"kind": "camera-occlusion", "fraction": self.occlusion},
+                "recording": self.recorder.summary() if self.recorder else None,
                 "error": self.last_error}
 
     def evidence(self):
@@ -305,16 +451,23 @@ class Episode:
                 "initialStateSha256": hashlib.sha256(np.asarray(self.initial_state).tobytes()).hexdigest(),
                 "events": copy.deepcopy(self.events), "steps": copy.deepcopy(self.trace),
                 "metrics": self.frame()["metrics"], "policyExecuted": self.inference_count > 0,
+                "recording": self.recorder.summary() if self.recorder else None,
                 "reproducibility": "Recorded action/state evidence; exact policy-RNG branching is not implemented.",
                 "benchmarkClaim": "Single BrainSNN episode using the LIBERO success checker; not an official aggregate score."}
 
     def close(self):
         if self.closed:
             return
+        self.finish_recording("session_closed")
         self.closed = True
         self.status = "closed"
         self.action_plan.clear()
         try:
             self.policy.close()
         finally:
-            self.env.close()
+            try:
+                self.env.close()
+            finally:
+                deadline = time.monotonic() + self.recording_shutdown_timeout
+                for recorder in self.previous_recorders + ([self.recorder] if self.recorder else []):
+                    recorder.wait(max(0, deadline - time.monotonic()))

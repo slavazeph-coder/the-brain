@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from .core import (ArenaError, CHECKPOINT, CONTROL_HZ, Episode, LIBERO_REVISION,
                    OPENPI_REVISION, PROFILE_ID, profile_contract)
+from .recording import RecordingArchive, SCHEMA, MAX_BUNDLE_BYTES
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +32,14 @@ class Settings:
     idle_ttl: int = 120
     inference_timeout: float = 20.0
     startup_timeout: float = 90.0
+    read_token: str = ""
+    recording_dir: str = "~/.local/share/brainsnn-arena/recordings"
+    recording_queue_size: int = 64
+    recording_max_bytes: int = 64 * 1024 * 1024
+    recording_max_count: int = 50
+    recording_total_bytes: int = 1024 * 1024 * 1024
+    recording_retention_seconds: int = 7 * 86400
+    recording_shutdown_timeout: float = 5.0
 
     @classmethod
     def from_env(cls):
@@ -40,11 +49,28 @@ class Settings:
                    checkpoint_revision=os.getenv("ARENA_CHECKPOINT_REVISION", ""),
                    policy_api_key=os.getenv("ARENA_POLICY_API_KEY", ""),
                    session_ttl=int(os.getenv("ARENA_SESSION_TTL", "900")),
-                   idle_ttl=int(os.getenv("ARENA_IDLE_TTL", "120")))
+                   idle_ttl=int(os.getenv("ARENA_IDLE_TTL", "120")),
+                   read_token=os.getenv("ARENA_READ_TOKEN", ""),
+                   recording_dir=os.getenv("ARENA_RECORDING_DIR", "~/.local/share/brainsnn-arena/recordings"),
+                   recording_queue_size=int(os.getenv("ARENA_RECORDING_QUEUE_SIZE", "64")),
+                   recording_max_bytes=int(os.getenv("ARENA_RECORDING_MAX_BYTES", str(64 * 1024 * 1024))),
+                   recording_max_count=int(os.getenv("ARENA_RECORDING_MAX_COUNT", "50")),
+                   recording_total_bytes=int(os.getenv("ARENA_RECORDING_TOTAL_BYTES", str(1024 * 1024 * 1024))),
+                   recording_retention_seconds=int(os.getenv("ARENA_RECORDING_RETENTION_SECONDS", str(7 * 86400))),
+                   recording_shutdown_timeout=float(os.getenv("ARENA_RECORDING_SHUTDOWN_TIMEOUT", "5")))
 
     def validate(self):
         if len(self.token) < 32:
             raise ValueError("ARENA_TOKEN must be a secret of at least 32 characters.")
+        if self.read_token and (len(self.read_token) < 32 or self.read_token == self.token):
+            raise ValueError("ARENA_READ_TOKEN must be a distinct secret of at least 32 characters.")
+        if (not self.recording_dir or not 1 <= self.recording_queue_size <= 512
+                or not 1024 * 1024 <= self.recording_max_bytes <= 80 * 1024 * 1024
+                or not 1 <= self.recording_max_count <= 1000
+                or not self.recording_max_bytes <= self.recording_total_bytes <= 100 * 1024 ** 3
+                or not 60 <= self.recording_retention_seconds <= 365 * 86400
+                or not 0.1 <= self.recording_shutdown_timeout <= 30):
+            raise ValueError("Recording storage, retention and shutdown limits are outside their supported bounds.")
         if not self.origins:
             raise ValueError("Set ARENA_ALLOWED_ORIGINS to the exact HTTPS arena origin.")
         for origin in self.origins:
@@ -61,6 +87,11 @@ class Settings:
             raise ValueError("ARENA_CHECKPOINT_REVISION must be sha256:<checkpoint manifest digest>.")
         if not 30 <= self.session_ttl <= 3600 or not 15 <= self.idle_ttl <= 600:
             raise ValueError("Session TTL must be 30–3600 seconds and idle TTL 15–600 seconds.")
+
+    def recording_archive(self):
+        return RecordingArchive(self.recording_dir, queue_size=self.recording_queue_size,
+                                recording_max_bytes=self.recording_max_bytes, max_recordings=self.recording_max_count,
+                                max_bytes=self.recording_total_bytes, retention_seconds=self.recording_retention_seconds)
 
 
 def dependencies_ready(settings):
@@ -155,7 +186,8 @@ def create_episode(request, settings, session_id):
         profile = profile_contract(settings.checkpoint_revision)
         profile["ready"] = True
         return Episode(env, policy, image_tools, initial_states[state_id], str(task.language), request,
-                       profile, session_id, initial_state_id=state_id)
+                       profile, session_id, initial_state_id=state_id, archive=settings.recording_archive(),
+                       recording_shutdown_timeout=settings.recording_shutdown_timeout)
     except Exception:
         policy.close()
         if env is not None:
@@ -173,6 +205,7 @@ def child_loop(pipe, request, settings, session_id):
         while True:
             now = time.monotonic()
             if now - created > settings.session_ttl or now - last_access > settings.idle_ttl:
+                episode.finish_recording("session_expired")
                 break
             running = episode.status == "running"
             wait = max(0, min(0.1, next_step - now)) if running else 0.1
@@ -273,7 +306,11 @@ class SessionProcess:
             if self.process.is_alive():
                 try:
                     self.pipe.send(("close", None))
-                    self.process.join(timeout=2)
+                    # The child can be inside bounded inference. Give it that
+                    # budget plus the recorder's explicit durability barrier.
+                    # If it still fails to exit, missing final markers recover
+                    # as unknown-tail partial recordings, never complete ones.
+                    self.process.join(timeout=self.settings.inference_timeout + self.settings.recording_shutdown_timeout + 3)
                 except (BrokenPipeError, OSError):
                     pass
             if self.process.is_alive():
@@ -295,6 +332,7 @@ class SessionManager:
         self.lock = threading.RLock()
         self.probe_at = 0.0
         self.probe_result = None
+        self.archive = settings.recording_archive()
 
     def capabilities(self):
         profile = profile_contract(self.settings.checkpoint_revision or None)
@@ -321,6 +359,12 @@ class SessionManager:
         return {"version": 1, "wireProtocol": "brainsnn.arena.v1", "server": {"name": "BrainSNN LIBERO worker", "version": "1.0.0"},
                 "profiles": [profile], "limits": {"maxSessions": 1, "sessionTtlSeconds": self.settings.session_ttl,
                                                      "idleTtlSeconds": self.settings.idle_ttl},
+                "recordings": {"schema": SCHEMA, "readOnly": True, "listPath": "/v1/recordings",
+                               "bundlePath": "/v1/recordings/{id}/bundle", "maxBundleBytes": MAX_BUNDLE_BYTES,
+                               "retentionSeconds": self.settings.recording_retention_seconds,
+                               "maxRecordings": self.settings.recording_max_count,
+                               "maxRecordingBytes": self.settings.recording_max_bytes,
+                               "coverage": "Post-settling policy interface, controller inputs and observed states; no policy internals."},
                 "validation": "Dependencies and policy identity checked; renderer/task initialization checked when creating the session."}
 
     def create(self, request):
