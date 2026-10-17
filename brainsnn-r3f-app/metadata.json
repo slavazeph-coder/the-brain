@@ -1,6 +1,6 @@
 {
   "name": "BrainSNN",
-  "description": "Pick a robot and model, try a challenge and replay the result. Explore the first 10-episode robot-policy test pack. Local practice is open; hosted policy tests are not yet available.",
+  "description": "Explore robot-policy test packs from 10 to 100,000 episodes, with transparent runtime-price estimates and visible assumptions. Try the arcade today; hosted testing is pending qualification.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

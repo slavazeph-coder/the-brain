@@ -3,6 +3,7 @@
 // do not execute JavaScript.
 
 import { buildHoldoutReport } from './holdoutReport.js';
+import { DEFAULT_RUNTIME_ESTIMATE, formatUSD } from './arenaPricing.js';
 
 const SITE_NAME = 'BrainSNN';
 const EVIDENCE = buildHoldoutReport();
@@ -171,11 +172,12 @@ const ROUTES = [
     path: '/',
     image: '/og/robot-testing.png',
     title: 'BrainSNN | Robot policy testing',
-    description: 'Pick a robot and model, try a challenge and replay the result. Explore the first 10-episode robot-policy test pack. Local practice is open; hosted policy tests are not yet available.',
+    description: `Explore robot-policy test packs from 10 to 100,000 episodes. The illustrative runtime price for 100,000 episodes is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)}. Assumptions shown; hosted policy testing is pending qualification.`,
     heading: 'Test your robot. See where it fails.',
     body: [
       'Choose a robot and model in the arcade, try a challenge and replay what happened. Local practice uses a scripted arm and does not score a named policy.',
-      'The first planned test pack is one policy and ten episodes: Panda + π₀.₅ on ten LIBERO Spatial tasks in simulation. Each episode is one task attempt, with outcomes and retained camera, action and state evidence.',
+      `Plan 10 to 100,000 total task attempts, with visible runtime pricing. The default illustration is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)} for 100,000 episodes, based on 500 episodes per worker-hour, US$0.60 per worker-hour and a 30% gross margin. These are assumed inputs, not measured policy throughput or a quote.`,
+      'The first execution kit covers ten Panda + π₀.₅ / LIBERO Spatial episodes. Larger counts are budget forecasts. Startup, storage, transfers, retries, external inference, operator support and taxes are excluded from the runtime price example.',
       'Hosted policy tests are not yet available. The first real-policy GPU run still needs verification. Larger packs follow measured runtime and cost.',
     ],
   },
@@ -183,7 +185,7 @@ const ROUTES = [
 
 const CRAWL_LINKS = Object.freeze([
   { path: '/arena/', label: 'Robot arcade' },
-  { path: '/arena/#campaigns', label: 'Test packs' },
+  { path: '/arena/#campaigns', label: 'Pricing' },
 ]);
 
 const SHARED_GRID = {
@@ -282,24 +284,24 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
   const url = origin ? escapeAttribute(`${origin.replace(/\/$/, '')}${meta.canonicalPath}`) : null;
 
   let out = html
-    .replace(/<title>[\s\S]*?<\/title>/, `<title>${title}</title>`)
-    .replace(/(<meta\s+name="description"\s+content=")[\s\S]*?(")/, `$1${description}$2`)
-    .replace(/(<meta\s+property="og:title"\s+content=")[\s\S]*?(")/, `$1${title}$2`)
-    .replace(/(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/, `$1${description}$2`)
-    .replace(/(<meta\s+name="twitter:title"\s+content=")[\s\S]*?(")/, `$1${title}$2`)
-    .replace(/(<meta\s+name="twitter:description"\s+content=")[\s\S]*?(")/, `$1${description}$2`);
+    .replace(/<title>[\s\S]*?<\/title>/, () => `<title>${title}</title>`)
+    .replace(/(<meta\s+name="description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`)
+    .replace(/(<meta\s+property="og:title"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${title}${close}`)
+    .replace(/(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`)
+    .replace(/(<meta\s+name="twitter:title"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${title}${close}`)
+    .replace(/(<meta\s+name="twitter:description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`);
 
   if (url) {
     out = out
-      .replace(/(<meta\s+property="og:url"\s+content=")[\s\S]*?(")/, `$1${url}$2`)
-      .replace(/(<link\s+rel="canonical"\s+href=")[\s\S]*?(")/, `$1${url}$2`);
+      .replace(/(<meta\s+property="og:url"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${url}${close}`)
+      .replace(/(<link\s+rel="canonical"\s+href=")[\s\S]*?(")/, (_match, open, close) => `${open}${url}${close}`);
   }
 
   if (meta.image && origin) {
     const image = escapeAttribute(`${origin.replace(/\/$/, '')}${meta.image}`);
     out = out
-      .replace(/(<meta\s+property="og:image"\s+content=")[\s\S]*?(")/, `$1${image}$2`)
-      .replace(/(<meta\s+name="twitter:image"\s+content=")[\s\S]*?(")/, `$1${image}$2`);
+      .replace(/(<meta\s+property="og:image"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${image}${close}`)
+      .replace(/(<meta\s+name="twitter:image"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${image}${close}`);
   }
 
   const structuredData = JSON.stringify({

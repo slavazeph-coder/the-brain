@@ -1,7 +1,7 @@
 import { Bot, FileSearch, FlaskConical, Microscope, Layers } from 'lucide-react';
 export const NAV_ITEMS = [
   { id: 'arena', label: 'Robot arcade', mobileLabel: 'Arcade', href: '/arena/', icon: Bot, description: 'Choose a robot and model, try a challenge and replay a run.' },
-  { id: 'test-packs', label: 'Test packs', mobileLabel: 'Test packs', href: '/arena/#campaigns', icon: Layers, description: 'Explore repeatable robot-policy test packs and their readiness.' },
+  { id: 'test-packs', label: 'Pricing', mobileLabel: 'Pricing', href: '/arena/#campaigns', icon: Layers, description: 'Estimate robot test-pack prices and inspect their assumptions.' },
 ];
 export const OVERFLOW_ITEMS = [
   { id: 'review', label: 'Review', mobileLabel: 'Review', href: '/office', icon: FileSearch, description: 'Review passages, drafts, claims and timestamped cues.' },

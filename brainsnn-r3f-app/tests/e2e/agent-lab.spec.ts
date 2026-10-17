@@ -8,18 +8,24 @@ test('homepage leads with robotics and keeps other tools in overflow', async ({ 
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test your robot.See where it fails.');
   const navigation = page.getByRole('navigation', { name: 'Main navigation', exact: true });
-  await expect(navigation.locator('> a')).toHaveText(['Robot arcade', 'Test packs']);
+  await expect(navigation.locator('> a')).toHaveText(['Robot arcade', 'Pricing']);
   for (const name of ['Review', 'Evidence', 'Lab']) await expect(navigation.getByRole('link', { name, exact: true })).not.toBeVisible();
   await navigation.getByLabel('More navigation').click();
   await expect(navigation.getByRole('link', { name: 'Lab', exact: true })).toBeVisible();
   await expect(page.locator('.bh-lobby-slice')).toContainText('Local practice · no AI model running');
   await expect(page.getByText('Local scripted practice is open now. Hosted policy tests are not yet available.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'See test packs', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
+  await expect(page.getByRole('link', { name: 'See pricing', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
+  await expect(page.locator('.bh-price-preview')).toContainText('US$171.43');
   await expect(page.locator('canvas')).toHaveCount(0);
   expect(feedRequests).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
-  await page.getByRole('link', { name: 'See test packs', exact: true }).click();
+  await page.getByRole('link', { name: 'See pricing', exact: true }).click();
   await expect(page.getByRole('heading', { name: '10-episode test pack', exact: true })).toBeVisible();
+  await expect(page.locator('[data-pricing-total]')).toHaveText('US$171.43');
+  await page.getByRole('button', { name: '1,000 episodes', exact: true }).click();
+  await expect(page.locator('[data-pricing-total]')).toHaveText('US$1.71');
+  await page.getByRole('button', { name: '100,000 episodes', exact: true }).click();
+  await expect(page.locator('[data-pricing-total]')).toHaveText('US$171.43');
   await expect(page.locator('[data-campaign-tools]')).not.toHaveAttribute('open');
   await expect(page.locator('[data-campaign-profile]')).not.toBeVisible();
   await page.getByRole('button', { name: 'Try the arcade' }).click();
@@ -172,7 +178,7 @@ async function expectSingleTaskShell(page) {
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.locator('footer')).toHaveCount(1);
   await expect(page.locator('footer.bh-footer')).toHaveCount(1);
-  await expect(page.locator('.public-nav nav > a')).toHaveText(['Robot arcade', 'Test packs']);
+  await expect(page.locator('.public-nav nav > a')).toHaveText(['Robot arcade', 'Pricing']);
   await expect(page.locator('.task-context a[href="/arena/tasks"]')).toBeVisible();
 }
 
