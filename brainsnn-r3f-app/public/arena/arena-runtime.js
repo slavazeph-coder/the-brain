@@ -57,6 +57,7 @@
     if (!object(raw) || raw.version !== 1 || !Array.isArray(raw.profiles) || raw.profiles.length > 500) fail('invalid_capabilities', 'This endpoint does not provide BrainSNN Arena protocol v1 capabilities.');
     const result = { ...raw, profiles: raw.profiles.map(validateProfile) };
     if (new Set(result.profiles.map(p => p.id)).size !== result.profiles.length) fail('invalid_capabilities', 'The worker returned duplicate profile IDs.');
+    if (raw.recordings != null && (!object(raw.recordings) || raw.recordings.schema !== 'brainsnn.arena.recording.v1' || raw.recordings.readOnly !== true)) fail('invalid_capabilities', 'The worker advertised an unsupported recording contract.');
     return result;
   }
   function findProfile(capabilities, selection) {
@@ -105,15 +106,28 @@
       try {
         return await Promise.race([(async () => {
           const response = await fetcher(base + path, { method: settings.method || 'GET', headers, signal: controller.signal, credentials: 'omit', cache: 'no-store', redirect: 'error', ...(settings.body != null ? { body: JSON.stringify(settings.body) } : {}) });
-          const text = await response.text();
-          if (text.length > 16 * 1024 * 1024) fail('response_too_large', 'The worker response exceeds the Arena frame size limit.');
+          const limit = settings.maxBytes || 16 * 1024 * 1024;
+          const declaredBytes = Number(response.headers?.get?.('content-length'));
+          if (declaredBytes > limit) fail('response_too_large', 'The worker response exceeds the Arena size limit.');
+          let text;
+          if (response.body?.getReader && typeof TextDecoder !== 'undefined') {
+            const reader = response.body.getReader(), decoder = new TextDecoder();
+            let bytes = 0; const parts = [];
+            try {
+              while (true) { const part = await reader.read(); if (part.done) break; bytes += part.value.byteLength;
+                if (bytes > limit) { await reader.cancel(); fail('response_too_large', 'The worker response exceeds the Arena size limit.'); }
+                parts.push(decoder.decode(part.value, { stream: true })); }
+              parts.push(decoder.decode()); text = parts.join('');
+            } finally { reader.releaseLock(); }
+          } else text = await response.text();
+          if (text.length > limit) fail('response_too_large', 'The worker response exceeds the Arena size limit.');
           let data;
           try { data = JSON.parse(text); } catch { fail('invalid_json', 'The worker returned a non-JSON response. Check its API URL and server logs.'); }
           if (!response.ok) {
             const message = object(data.error) ? data.error.message : data.message;
             fail(response.status === 401 || response.status === 403 ? 'unauthorized' : 'http_error', nonempty(message) ? (secret ? message.split(secret).join('[redacted]') : message) : 'The worker rejected this request (HTTP ' + response.status + ').');
           }
-          if (!object(data) || data.version !== 1) fail('protocol_mismatch', 'The worker response must use Arena protocol version 1.');
+          if (!object(data) || (settings.schema ? data.schema !== settings.schema : data.version !== 1)) fail('protocol_mismatch', 'The worker returned an unsupported Arena response schema.');
           if (controller.signal.aborted && settings.onLateData) await settings.onLateData(data);
           return data;
         })(), timeout, aborted]);
@@ -235,7 +249,29 @@
       update({ status: 'disconnected', message: 'Worker disconnected. Connect a matched runtime to begin.', profile: null, capabilities: null, sessionId: null, selection: null, lastFrame: null, error: null });
       await cleanup(old); return clone(state);
     }
-    return Object.freeze({ connect, start, command, disconnect, getState: () => clone(state) });
+    // Recording reads never enter the command queue or change simulation state.
+    // Construct paths locally: an advertised URL must never receive a bearer token.
+    async function getRecording(recordingId = state.lastFrame?.recording?.recordingId) {
+      const generation = epoch;
+      if (!state.capabilities?.recordings) fail('recording_unavailable', 'This worker does not advertise durable recordings. Only incomplete browser evidence is available.');
+      if (typeof recordingId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(recordingId)) fail('recording_unavailable', 'The worker has not supplied a recording identity yet.');
+      try {
+        const data = await request('/v1/recordings/' + encodeURIComponent(recordingId) + '/bundle', { schema: 'brainsnn.arena.bundle.v1', maxBytes: 128 * 1024 * 1024, timeout: Math.max(timeoutMs, 60000) });
+        if (!current(generation)) fail('cancelled', 'The worker connection changed while loading this recording.');
+        if (typeof data.manifestText !== 'string' || data.manifestText.length > 8 * 1024 * 1024) fail('invalid_recording', 'The worker recording manifest is missing or too large.');
+        let manifest; try { manifest = JSON.parse(data.manifestText); } catch { fail('invalid_recording', 'The worker recording manifest is not JSON.'); }
+        if (manifest.recordingId !== recordingId) fail('recording_mismatch', 'The worker returned a different recording identity.');
+        return data;
+      } catch (error) { throw new RuntimeError(error.code || 'recording_error', token ? String(error.message).split(token).join('[redacted]') : error.message); }
+    }
+    async function getEvidence() {
+      const generation = epoch, id = state.sessionId;
+      if (!id) fail('session_required', 'Create a worker session before reading its evidence.');
+      const data = await request('/v1/sessions/' + encodeURIComponent(id) + '/evidence');
+      if (!current(generation)) fail('cancelled', 'The worker connection changed while loading evidence.');
+      return data;
+    }
+    return Object.freeze({ connect, start, command, disconnect, getRecording, getEvidence, getState: () => clone(state) });
   }
   window.BrainSNNRuntime = Object.freeze({ createClient, normalizeSelection });
 })();

@@ -121,7 +121,7 @@ Create a practice session and step once before running an episode. A frame shoul
 
 ## HTTP contract
 
-Every endpoint requires `Authorization: Bearer <ARENA_TOKEN>`. A request with an `Origin` header must match the configured origin exactly. JSON request bodies are bounded to 64 KiB before parsing, including chunked input.
+Operator endpoints require `Authorization: Bearer <ARENA_TOKEN>`. Archived recording reads and capabilities also accept the optional distinct `ARENA_READ_TOKEN`; this viewer credential cannot create, control or delete sessions. A request with an `Origin` header must match the configured origin exactly. JSON request bodies are bounded to 64 KiB before parsing, including chunked input.
 
 | Request | Result |
 | --- | --- |
@@ -154,7 +154,7 @@ Repeated identical command IDs are idempotent. Reusing an ID for a different ope
 
 One session is admitted per worker. It expires after 15 minutes or two minutes without client activity by default; expiry closes the environment and policy socket. Failed or stuck startup/inference has a bounded timeout and a terminated session process. Run Uvicorn with **one** API worker; scale with a session-aware router to independent instances, not multiple Uvicorn workers sharing an in-memory manager.
 
-Evidence is the current episode only and lives in worker memory. Export it before reset/deletion. Flattened state/action evidence enables diagnosis and recorded replay; it does not capture policy RNG, all solver state, or promise exact fresh-inference branching. A single successful task is not an official aggregate LIBERO benchmark result.
+The legacy evidence endpoint contains the current episode in worker memory. Native recordings are also saved to the bounded private archive and survive reset/deletion until their configured retention expires. Use the recording bundle endpoint to retain exact input artifacts; see `docs/arena-inspection.md` in this kit for storage, read-only credentials, inspection and interchange. Flattened state/action evidence enables diagnosis and recorded replay; it does not capture policy RNG, all solver state, or promise exact fresh-inference branching. A single successful task is not an official aggregate LIBERO benchmark result.
 
 ## Validation performed and remaining
 

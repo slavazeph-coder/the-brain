@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brainsnn.com/schemas/recording-event.v1.json",
+  "title": "BrainSNN recording event",
+  "description": "Events are producer-ordered, with globally unique IDs. refs resolve to events; artifactIds resolve to artifact descriptors. Numeric large timestamps are prohibited. Kind is extensible; an unknown kind is displayed as inert data, never executed. Event/reference graphs must be acyclic.",
+  "type": "object",
+  "required": ["id", "seq", "kind", "refs", "artifactIds", "data"],
+  "properties": {
+    "id": {"$ref": "#/$defs/id"},
+    "seq": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "kind": {"$ref": "#/$defs/id"},
+    "episodeId": {"$ref": "#/$defs/id"},
+    "simTime": {"type": "number", "minimum": 0},
+    "monotonicNs": {"type": "string", "pattern": "^[0-9]{1,30}$"},
+    "refs": {"type": "array", "maxItems": 20000, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "artifactIds": {"type": "array", "maxItems": 4096, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "data": {"type": "object"}
+  },
+  "$defs": {"id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$"}}
+}

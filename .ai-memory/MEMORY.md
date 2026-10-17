@@ -39,7 +39,9 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [Robot Arena and RTX 4090 handoff](brainsnn-robot-arena-2026-10.md). Production browser source lives in `brainsnn-r3f-app/public/arena/`; GPU worker source and handoff live in `robotics/arena/`.
 
-→ [TViz and Arena inspection research](brainsnn-inspection-layer-2026-10.md). October16 source audit; proposed native synchronized observations and recording, optional ROS/SSH viewer. Research only, not built.
+→ [Native Arena inspection implementation](brainsnn-arena-inspection-2026-10-17.md). Owner-approved recorder, native viewer, portable evidence, comparison/reviews and bounded local LeRobot/MCAP tools; live GPU rollout requires verified host access.
+
+→ [TViz and Arena inspection research](brainsnn-inspection-layer-2026-10.md). October16 source audit and historical proposal; native implementation now tracked above, ROS/SSH viewer remains optional.
 
 ## Active Work
 

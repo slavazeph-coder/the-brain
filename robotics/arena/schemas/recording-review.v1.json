@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brainsnn.com/schemas/recording-review.v1.json",
+  "title": "BrainSNN local artifact-bound review",
+  "type": "object",
+  "required": ["schema", "manifestSha256", "findingId", "findingSnapshot", "decision", "reviewer", "createdAt"],
+  "properties": {
+    "schema": {"const": "brainsnn.arena.review.v1"},
+    "manifestSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "findingId": {"type": ["string", "null"]},
+    "findingSnapshot": {"type": ["object", "null"]},
+    "decision": {"enum": ["accept", "reject", "needs-evidence"]},
+    "reviewer": {
+      "type": "object", "required": ["label", "authenticated"],
+      "properties": {"label": {"type": "string", "maxLength": 160}, "authenticated": {"const": false}}
+    },
+    "createdAt": {"type": "string"}
+  }
+}
