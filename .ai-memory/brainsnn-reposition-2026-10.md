@@ -23,3 +23,18 @@ Implementation branch `codex/arena-review-consolidation` builds on open PR #186 
 - `scripts/test-arena-route.mjs`: 10 HTTP checks pass. `robotics/arena/scripts/check-arena.cjs`: complete suite passes, including first-run restraint and worker failure behavior.
 - Saved reviews, versions, manual approvals, JSON downloads, suggested edits/undo and sentence-move diffs remain inside Review. Existing local data keys are unchanged.
 - The prior Coherence pilot is now a Lab research preview; its real fixture and failed-gate evidence remain, while the price and capture form are removed.
+
+## Merge authorization and release gates
+
+- Owner authorized merging when ready on October16. Combine #187 into its
+  parent `lobby-home` first, then merge the complete #186 into main after its
+  checks pass. This avoids deploying #186's intermediate review findings.
+- The three #186 review findings (poke registry/share route, obsolete toy nav,
+  and homepage browser expectations) are addressed by the consolidation.
+- Pre-merge review found stale deployment checks: old Sapient homepage title,
+  old Arena release marker and post-deploy links to /app and /engine#api.
+  Updated to the lobby title, `2026-10-16-arena-review-1`, and Arena/Review/Evidence
+  with Lab overflow/footer. Production boot/redirect checks and desktop/mobile
+  navigation assertions pass. Sponsor gates now cover LobbyHome/PublicNav/nav.
+- The TViz/inspection document is research only; merging it does not implement
+  the proposed inspection layer or establish a named-policy GPU run.

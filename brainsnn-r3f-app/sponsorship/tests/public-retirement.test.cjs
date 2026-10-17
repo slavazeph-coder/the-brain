@@ -30,8 +30,10 @@ test('retirement uses bodyless permanent redirects and never redirects a POST',(
   let delegated=0;retirePublicPage({method:'POST',url:'/sponsor/'},{},()=>delegated++);retirePublicPage({method:'GET',url:'/api/sponsors/status'},{},()=>delegated++);assert.equal(delegated,2);
 });
 test('homepage no longer promotes robots and production startup installs retirement before the shared handler',()=>{
-  const home=fs.readFileSync(path.resolve(__dirname,'../../src/app/BehaviourHome.jsx'),'utf8');
-  assert.doesNotMatch(home,/Sponsor Robot|href=["']\/sponsor\//);
+  for(const file of ['LobbyHome.jsx','PublicNav.jsx','navigation.js','BehaviourHome.jsx']){
+    const source=fs.readFileSync(path.resolve(__dirname,'../../src/app',file),'utf8');
+    assert.doesNotMatch(source,/Sponsor Robot|href=["']\/sponsor\//,file);
+  }
   const server=fs.readFileSync(path.resolve(__dirname,'../server.cjs'),'utf8');
   const registration=server.slice(server.indexOf('function register()'));
   assert.match(registration,/app\.use\(retirePublicPage\)/);

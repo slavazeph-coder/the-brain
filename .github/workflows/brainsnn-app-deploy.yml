@@ -69,7 +69,7 @@ jobs:
             sleep 1
           done
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
-          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Sapient Playground"
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | See the moment it breaks"
           kill $SRV 2>/dev/null || true
 
   deploy:
@@ -112,7 +112,7 @@ jobs:
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
           # The SPA shell carries the current BrainSNN product title. Checking it
-          # proves the engine positioning build rolled out, not merely that an
+          # proves the Arena-led lobby build rolled out, not merely that an
           # older container is still answering health checks.
           HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
           ARENA_URL: https://www.brainsnn.com/arena/
@@ -121,12 +121,12 @@ jobs:
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
             arena="$(curl -L -s -o /tmp/brainsnn-arena.html -w '%{http_code}' "$ARENA_URL" || true)"
-            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Sapient Playground" /tmp/brainsnn-home.html; then
+            if [ "$home" = "200" ] && grep -Fq "BrainSNN | See the moment it breaks" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
             fi
-            if [ "$arena" = "200" ] && grep -Fq '2026-10-15-gym-estimate-1' /tmp/brainsnn-arena.html; then
+            if [ "$arena" = "200" ] && grep -Fq '2026-10-16-arena-review-1' /tmp/brainsnn-arena.html; then
               arena_marker="ok"
             else
               arena_marker="missing"
