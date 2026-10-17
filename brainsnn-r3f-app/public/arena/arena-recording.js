@@ -240,7 +240,7 @@
         }
       }
       for (const key of ['stateArtifactId', 'sourceStateArtifactId', 'promptArtifactId', 'actionsArtifactId']) {
-        if (event.data[key] !== undefined) requireThat(event.artifactIds.includes(event.data[key]), 'missing_reference', 'Typed artifact locator must be declared by its event.');
+        if (event.data[key] !== undefined && event.data[key] !== null) requireThat(event.artifactIds.includes(event.data[key]), 'missing_reference', 'Typed artifact locator must be declared by its event.');
       }
       for (const key of ['observationId', 'controllerInputId', 'chunkId', 'discardedChunkId']) {
         if (event.data[key] !== undefined && event.data[key] !== null) requireThat(eventIds.has(event.data[key]), 'missing_reference', 'Typed event locator must resolve.');
@@ -325,9 +325,16 @@
   }
   function comparisonCompatibility(left, right) {
     const a = manifestOf(left), b = manifestOf(right), issues = [], differences = [];
-    for (const key of ['taskId', 'taskRevision', 'judgeRevision', 'environment', 'actionSemantics', 'stateSemantics', 'units', 'preprocessingRevision']) {
+    const known = value => {
+      if (value == null) return false;
+      if (typeof value === 'string') return value.trim() !== '' && !['unknown', 'unavailable', 'unrecorded'].includes(value.trim().toLowerCase());
+      if (Array.isArray(value)) return value.length > 0 && value.some(known);
+      if (object(value)) return Object.keys(value).length > 0 && Object.values(value).some(known);
+      return true;
+    };
+    for (const key of ['taskId', 'taskRevision', 'judgeRevision', 'environment', 'actionSemantics', 'stateSemantics', 'units', 'preprocessingRevision', 'initialState']) {
       const av = a.context?.[key], bv = b.context?.[key];
-      if (av == null || bv == null || av === '' || bv === '') issues.push({ field: key, reason: 'unknown', baseline: av ?? null, candidate: bv ?? null });
+      if (!known(av) || !known(bv)) issues.push({ field: key, reason: 'unknown', baseline: av ?? null, candidate: bv ?? null });
       else if (comparable(av) !== comparable(bv)) issues.push({ field: key, reason: 'incompatible', baseline: av, candidate: bv });
     }
     for (const key of new Set([...Object.keys(a.context || {}), ...Object.keys(b.context || {})])) {
@@ -395,7 +402,7 @@
     };
     for (const event of manifest.events) {
       if (event.kind === 'gap') add(event, 'The recorder reports unavailable evidence here.', ['The missing interval cannot be reconstructed from this record.']);
-      else if (event.kind === 'error') add(event, 'The producer recorded an error.', ['An error record alone does not locate the underlying cause.']);
+      else if (['error', 'runtime-error', 'inference-error'].includes(event.kind)) add(event, 'The producer recorded an error.', ['An error record alone does not locate the underlying cause.']);
       else if (event.kind === 'intervention') add(event, 'A recorded intervention changed this run.', ['This records the intervention, not its causal effect.']);
       else if (event.kind === 'outcome') add(event, 'Task checker outcome: ' + String(event.data.status ?? event.data.success ?? 'unknown') + '.', ['This is the recorded task checker result.']);
       else if (event.kind === 'observation' && (event.data.stale === true || event.data.missing === true)) add(event, 'The producer marked this observation stale or unavailable.');
@@ -440,12 +447,21 @@
     const old = typeof input === 'string' ? parseJSON(input) : copy(input);
     requireThat(old?.schema === 'brainsnn.arena.evidence.v1', 'unsupported_legacy', 'Unsupported legacy evidence schema.');
     const practice = old.execution?.kind === 'scripted-kinematic-demo';
+    const snapshots = practice ? old.local?.snapshots || [] : [];
+    const firstState = snapshots[0]?.state || null, lastState = snapshots.at(-1)?.state || null;
+    const challenge = typeof firstState?.opts?.challenge === 'string' ? firstState.opts.challenge : null;
+    const suppliedContext = practice && object(old.local?.recordingContext) ? old.local.recordingContext : {};
+    const outcomeStatus = practice && lastState?.done === true && typeof lastState.success === 'boolean' ? (lastState.success ? 'succeeded' : 'failed') : 'unknown';
     const manifest = createManifest({ recordingId: 'legacy-' + (await sha256(JSON.stringify(old))).slice(0, 32),
       source: { kind: practice ? 'scripted-practice' : 'imported', identityStatus: 'declared', originalSchema: old.schema,
         limitation: practice ? 'Scripted kinematic practice; no named model executed.' : 'Browser metadata export; original policy inputs and full state are unavailable.' },
-      context: { taskId: old.execution?.task || old.selected?.task || 'legacy-practice', selectedRobot: old.selected?.robotId || null, selectedModel: old.selected?.modelId || null,
+      context: { taskId: practice ? 'scripted-sort:' + (challenge || 'unspecified') : old.execution?.task || old.selected?.task || 'legacy-recording',
+        ...(practice ? { taskLabel: 'Local practice' + (challenge ? ' / ' + challenge : ''), taskRevision: null, judgeRevision: null, initialState: firstState, ...suppliedContext } : {}),
+        selectedRobot: old.selected?.robotId || null, selectedModel: old.selected?.modelId || null,
         seed: old.execution?.seed ?? old.selected?.seed ?? null, legacyProfile: old.worker?.profile || null },
-      clocks: [{ id: 'sim', kind: 'simulation', unit: 'seconds' }] });
+      clocks: [{ id: 'sim', kind: 'simulation', unit: 'seconds' }],
+      outcome: { status: outcomeStatus, ...(practice ? { judge: 'Recorded scripted practice outcome',
+        judgeRevision: suppliedContext.judgeRevision ?? null, policyExecuted: false, reason: lastState?.failureReason || null } : {}) } });
     let seq = 0;
     const append = (kind, time, data) => {
       const event = { id: 'legacy-e' + (++seq), seq, kind, refs: [], artifactIds: [], data };
@@ -453,13 +469,17 @@
       manifest.events.push(event);
     };
     if (practice) {
-      for (const snapshot of old.local?.snapshots || []) {
+      for (const snapshot of snapshots) {
         if (snapshot.controllerInput !== undefined) append('controller-input', snapshot.state?.time, { vector: snapshot.controllerInput, originalId: snapshot.id, coverage: 'scripted controller input; no model inference' });
         const previous = manifest.events.at(-1);
         append('state', snapshot.state?.time, { state: snapshot.state, originalId: snapshot.id, branch: snapshot.branch || null, coverage: 'scripted snapshot' });
         if (snapshot.controllerInput !== undefined && previous) manifest.events.at(-1).refs = [previous.id];
       }
+      const finalStateEvent = manifest.events.at(-1);
       for (const event of old.local?.events || []) append(event.kind === 'intervention' ? 'intervention' : 'legacy-event', event.simTime, { original: event });
+      if (outcomeStatus !== 'unknown' && finalStateEvent) {
+        append('outcome', lastState.time, copy(manifest.outcome)); manifest.events.at(-1).refs = [finalStateEvent.id];
+      }
     } else for (const frame of old.worker?.frames || (old.worker ? [old.worker] : [])) append('preview-metadata', frame.simTime, { frame, coverage: 'metadata only; image and physics state absent' });
     manifest.completion = { status: 'partial', committedSequence: seq, lastObservedSequence: seq, gapCount: Math.max(0, Math.floor(Number(old.worker?.droppedFrames) || 0)), unknownTail: true, reason: 'Legacy preview coverage cannot establish a complete archival recording.' };
     manifest.findings = deriveFindings(manifest);

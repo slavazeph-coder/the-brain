@@ -183,6 +183,27 @@ test('scripted legacy snapshots keep actual controller inputs without asserting 
   assert.equal(data.manifest.context.selectedModel, 'pi05');
 });
 
+test('practice outcome comes from recorded final state and only supplied revisions enable compatibility', async () => {
+  const old = { schema: 'brainsnn.arena.evidence.v1', execution: { kind: 'scripted-kinematic-demo' },
+    local: { events: [], snapshots: [
+      { id: 1, state: { time: 0, opts: { mission: 'table', challenge: 'clutter' }, done: false, success: false } },
+      { id: 2, controllerInput: { skill: 'drop' }, state: { time: 0.1, opts: { challenge: 'clutter' }, done: true, success: true } }
+    ] } };
+  let data = await R.importBundle(old, { allowLegacy: true });
+  assert.equal(data.manifest.context.taskId, 'scripted-sort:clutter');
+  assert.equal(data.manifest.outcome.status, 'succeeded'); assert.equal(data.manifest.outcome.policyExecuted, false);
+  assert.equal(data.manifest.context.judgeRevision, null); assert.equal(data.manifest.completion.status, 'partial');
+  assert.equal(data.manifest.events.at(-1).kind, 'outcome');
+  assert.equal(R.comparisonCompatibility(data, data).compatible, false);
+  old.local.recordingContext = { ...clone(contextFields), initialState: clone(old.local.snapshots[0].state) };
+  data = await R.importBundle(old, { allowLegacy: true });
+  assert.equal(R.comparisonCompatibility(data, data).compatible, true);
+  assert.equal(data.manifest.outcome.judgeRevision, 'judge-v1');
+  old.local.snapshots[1].state.success = false; old.local.snapshots[1].state.failureReason = 'step-limit';
+  data = await R.importBundle(old, { allowLegacy: true });
+  assert.equal(data.manifest.outcome.status, 'failed'); assert.equal(data.manifest.outcome.reason, 'step-limit');
+});
+
 test('legacy worker preview metadata never becomes reconstructed camera or action evidence', async () => {
   const old = { schema: 'brainsnn.arena.evidence.v1', execution: { kind: 'worker', policyExecuted: true, task: 'libero:0' },
     worker: { droppedFrames: 4, frames: [{ seq: 12, simTime: 0.6, cameraIds: [{ id: 'agentview' }], policyExecuted: true }] } };
@@ -194,11 +215,23 @@ test('legacy worker preview metadata never becomes reconstructed camera or actio
 
 test('compatibility refuses unknown/different semantics and does not confuse checkpoint changes with task incompatibility', async () => {
   const left = await fixture(), right = clone(left.manifest);
-  right.context.checkpoint = 'new-policy'; right.context.initialState = 'state-b';
-  let result = R.comparisonCompatibility(left, right); assert.equal(result.compatible, true); assert.equal(result.differences.length, 2);
+  right.context.checkpoint = 'new-policy';
+  let result = R.comparisonCompatibility(left, right); assert.equal(result.compatible, true); assert.equal(result.differences.length, 1);
   delete right.context.judgeRevision;
   result = R.comparisonCompatibility(left, right); assert.equal(result.compatible, false); assert.equal(result.issues[0].reason, 'unknown');
   right.context.judgeRevision = 'other'; assert.equal(R.comparisonCompatibility(left, right).issues[0].reason, 'incompatible');
+});
+
+test('comparison requires the same known policy-start state; two missing states are not compatible', async () => {
+  const left = clone((await fixture()).manifest), right = clone(left);
+  right.context.initialState = 'state-b';
+  assert.equal(R.comparisonCompatibility(left, right).compatible, false);
+  delete left.context.initialState; delete right.context.initialState;
+  const result = R.comparisonCompatibility(left, right);
+  assert.equal(result.compatible, false); assert.equal(result.issues[0].field, 'initialState'); assert.equal(result.issues[0].reason, 'unknown');
+  assert.equal(R.compareRecordings(left, right, { alignment: { kind: 'simTime' } }).firstDivergence, null);
+  left.context.initialState = {}; right.context.initialState = {};
+  assert.equal(R.comparisonCompatibility(left, right).compatible, false);
 });
 
 test('comparison aligns explicit events and identifies observed controller-input difference, not a cause', async () => {
@@ -229,6 +262,18 @@ test('imported dataset-action labels do not become execution evidence', async ()
   }));
   assert.equal(imported.verification.execution, 'not-recorded');
   assert.equal(R.comparisonCompatibility(data, imported).compatible, false);
+});
+
+test('malformed policy outputs remain inspectable with an explicit unavailable artifact and sourced error', async () => {
+  const data = await fixture();
+  const result = await R.importBundle(await altered(data, m => {
+    m.events[1].data.actions = null; m.events[1].data.actionsArtifactId = null;
+    m.events[1].data.artifactLimitation = 'Non-numeric output has no numeric artifact.';
+    m.events[2].kind = 'runtime-error'; m.events[2].data = { code: 'invalid_actions' };
+    m.outcome.status = 'interrupted';
+  }));
+  assert.equal(result.manifest.events[1].data.actionsArtifactId, null);
+  assert(R.deriveFindings(result).some(f => f.refs[0] === 'e3' && f.summary.includes('error')));
 });
 
 test('rule findings cite events, avoid duplicate materialization, and reviews become stale', async () => {

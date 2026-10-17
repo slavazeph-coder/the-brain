@@ -15,7 +15,7 @@
         "identityStatus": {"const": "declared"}
       }
     },
-    "context": {"type": "object", "description": "Optional/null context fields represent unknown information. Compatibility checks require known taskId, taskRevision, judgeRevision, environment, actionSemantics, stateSemantics, units and preprocessingRevision. initialState, seed, checkpoint and changed parameters are displayed separately."},
+    "context": {"type": "object", "description": "Optional/null context fields represent unknown information. Compatibility checks require known and matching taskId, taskRevision, judgeRevision, environment, actionSemantics, stateSemantics, units, preprocessingRevision and initialState. The initialState must identify the actual policy-start state, not only a seed. Checkpoint and changed parameters are displayed separately."},
     "clocks": {"type": "array", "maxItems": 256, "items": {"type": "object"}},
     "events": {"type": "array", "maxItems": 20000, "items": {"$ref": "recording-event.v1.json"}},
     "artifacts": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/artifact"}},
