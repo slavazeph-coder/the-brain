@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Simple robotics testing offer](brainsnn-simple-robot-testing-2026-10-17.md). Owner requests a simpler robotics front door: Arcade + Test packs, one planned10-episode offer, secondary operator tools; keep interactive selection.
+
 → [Arena-led lobby and unified Review](brainsnn-reposition-2026-10.md). October17 owner correction restores the interactive arcade with robot/model selection before Run; this overrides the earlier hidden-control restraint. #186/#187 merged; current restoration and verification tracked here.
 
 

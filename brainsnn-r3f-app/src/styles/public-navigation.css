@@ -22,3 +22,6 @@
   .public-nav .bh-mark { display: none; }
   .lab-cards { grid-template-columns: 1fr; }
 }
+
+.public-overflow > div { display: grid; gap: 6px; min-width: 150px; }
+.public-overflow > div a { display: block; padding: 9px 4px; }

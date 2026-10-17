@@ -57,3 +57,23 @@
 .bh-lobby .bh-boundary a:hover{color:#fff}
 @media(max-width:960px){.bh-lobby .bh-nav nav{display:flex;gap:14px}}
 @media(max-width:620px){.bh-lobby .bh-nav{gap:12px}.bh-lobby .bh-nav nav{gap:12px}.bh-lobby .bh-nav nav a{font-size:.68rem}.bh-lobby .bh-actions .bh-button{width:100%}}
+
+/* The front door has one robotics offer; operator controls live inside Arena. */
+.bh-robot-home .bh-lobby-hero{padding:72px 0 66px;gap:44px}
+.bh-robot-home .bh-hero h1{font-size:clamp(2.8rem,4.8vw,4.6rem);line-height:1.05;letter-spacing:-.055em}
+.bh-robot-home .bh-lead{max-width:470px}
+.bh-robot-home .bh-boundary{color:#aab6c5;max-width:460px}
+.bh-robot-home .bh-world-top{font-size:.64rem;letter-spacing:0;flex-wrap:wrap;line-height:1.6}
+.bh-test-pack{border-top:1px solid var(--bh-line);padding:52px 0 62px}
+.bh-pack-intro{max-width:640px}
+.bh-pack-intro h2{font-size:clamp(2rem,4vw,3rem);font-weight:550;letter-spacing:-.045em;line-height:1.1;margin:0}
+.bh-pack-intro>p:last-child,.bh-pack-next p{color:var(--bh-muted);line-height:1.65}
+.bh-pack-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:0;margin:30px 0;gap:22px;list-style:none}
+.bh-pack-steps li{border-top:1px solid var(--bh-line);padding-top:20px;display:flex;gap:14px}
+.bh-pack-steps li>span{font-size:.7rem;color:var(--bh-cyan);padding-top:4px}
+.bh-pack-steps h3{font-size:1rem;margin:0 0 10px;font-weight:650}
+.bh-pack-steps p{color:var(--bh-muted);font-size:.88rem;line-height:1.65;margin:0}
+.bh-pack-next{display:flex;align-items:center;justify-content:space-between;gap:28px}
+.bh-pack-next p{max-width:580px;font-size:.85rem;margin:0}
+.bh-pack-next a{flex-shrink:0}
+@media(max-width:760px){.bh-pack-steps{grid-template-columns:1fr;gap:20px}.bh-pack-next{align-items:flex-start;flex-direction:column;gap:20px}.bh-robot-home .bh-lobby-hero{padding:44px 0;gap:28px}.bh-robot-home .bh-hero h1{font-size:clamp(2.8rem,8vw,4.6rem)}}
