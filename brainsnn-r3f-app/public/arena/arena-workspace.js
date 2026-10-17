@@ -24,6 +24,10 @@
   let world = null, snapshots = [], events = [], branches = [], cursor = 0, branchId = 'main', counter = 0;
   let timer = null, cleanup = [], camera = { yaw: -0.95, pitch: 0.62, distance: 5.1 }, drag = null;
   let challenge = 'starter', message = '', renderFailure = false, mountedAt = null, generation = 0, workerTask = '', sensorCamera = null, sessionDraft = null;
+  // "Beat the bot" controller (arena-game-ui.js). It borrows the practice canvas
+  // and camera while a race runs; the scripted practice timeline is untouched.
+  let game = null;
+  const playing = () => mode === 'practice' && Boolean(game?.active());
   const $ = id => host?.querySelector('#' + id);
   const robot = () => (window.BrainSNNRobots || []).find(x => x.id === selection.robotId);
   const model = () => (window.BrainSNNModels || []).find(x => x.id === selection.modelId);
@@ -101,7 +105,7 @@
       profileId: connection.profile?.id || null }, policyExecuted: mode === 'named' && liveFrame?.policyExecuted === true,
       cursor, snapshotCount: snapshots.length, branchId, branches, message, remoteFrameCount: remoteFrames.length, remoteCursor, droppedFrames,
       currentSnapshot: mode === 'practice' ? snapshots[cursor] || null : null,
-      events: mode === 'practice' ? events : liveFrame?.events || [] });
+      events: mode === 'practice' ? events : liveFrame?.events || [], game: game?.state?.() || null });
   }
   function namedViewer() {
     const r = robot(); let url = safeURL(r?.viewer);
@@ -119,7 +123,7 @@
     host.innerHTML = '<div class="arena-profile-bar" aria-label="Starter profiles"><span>Quick picks <small>worker required</small></span><button data-arena-profile="panda:pi05">Panda <b>π₀.₅</b></button><button data-arena-profile="panda:molmo">Panda <b>MolmoAct2</b></button><button data-arena-profile="g1:sonic">G1 <b>SONIC</b></button><button data-arena-profile="so101:act">SO-101 <b>ACT</b></button></div>' +
       '<div class="arena-shell"><div class="arena-session-bar"><div class="arena-pair"><span class="arena-status-dot" id="arena-dot"></span><strong id="arena-pair-title">' + esc(mode === 'practice' ? 'Generic demo arm · scripted practice' : (r?.name || 'Choose robot') + ' + ' + (m?.name || 'Choose brain')) + '</strong><span id="arena-runtime-badge" class="arena-badge"></span></div>' +
       '<div class="arena-mode-switch" aria-label="Execution mode"><button data-arena-action="named" aria-pressed="' + (mode === 'named') + '">Selected robot</button><button data-arena-action="practice" aria-label="Try local practice: scripted, not a model score" aria-pressed="' + (mode === 'practice') + '">Try local practice</button></div></div>' +
-      (mode === 'practice' ? '<div class="arena-mission-ribbon"><div class="arena-mission-label"><strong>Pick your challenge</strong><span>Local practice · press Run to begin</span></div><div class="arena-mission-picks" role="group" aria-label="Practice missions">' + practiceMissions.map(([id,label,icon,hint]) => '<button type="button" data-arena-challenge="' + id + '" aria-pressed="' + (challenge === id) + '" title="' + hint + '"><span aria-hidden="true">' + icon + '</span><strong>' + label + '</strong><small>' + hint + '</small></button>').join('') + '</div></div>' : '') +
+      (mode === 'practice' ? '<div class="arena-mission-ribbon"><div class="arena-mission-label"><strong>Pick your challenge</strong><span>Local practice · press Run to begin</span></div><div class="arena-mission-picks" role="group" aria-label="Practice missions">' + practiceMissions.map(([id,label,icon,hint]) => '<button type="button" data-arena-challenge="' + id + '" aria-pressed="' + (challenge === id) + '" title="' + hint + '"><span aria-hidden="true">' + icon + '</span><strong>' + label + '</strong><small>' + hint + '</small></button>').join('') + '</div></div><section class="arena-game-bar" id="arena-game-bar" aria-label="Beat the bot"></section>' : '') +
       '<div class="arena-main"><section class="arena-stage" aria-label="Interactive arena"><div class="arena-stage-top"><div><span class="arena-micro" id="arena-camera-title">' + (mode === 'practice' ? 'SPECTATOR CAMERA' : 'ROBOT BODY PREVIEW') + '</span><strong id="arena-mission">' + esc(mode === 'practice' ? 'Sort three blocks into the tray' : selection.task || 'Choose a mission, connect a worker') + '</strong></div><div class="arena-stage-actions"><span class="arena-live-pill" id="arena-live-pill">SETUP</span><button type="button" class="arena-button arena-primary" id="arena-run-top" data-arena-action="run">Run</button></div></div>' +
       '<div class="arena-viewport" id="arena-viewport">' + (mode === 'practice' ? '<canvas id="arena-canvas" tabindex="0" aria-label="Generic demo arm practice arena. Drag to orbit, scroll to zoom. Use arrow keys to orbit, plus and minus to zoom."></canvas><div class="arena-canvas-hint">Drag to orbit <span>·</span> Scroll to zoom</div>' : namedViewer()) +
       '<img id="arena-worker-image" class="arena-worker-image" hidden alt="Authoritative simulator spectator camera"><div id="arena-frame-placeholder" class="arena-frame-placeholder" hidden>Waiting for a spectator frame from the worker.</div>' +
@@ -137,35 +141,65 @@
       '<section id="arena-connect-panel" class="arena-connect-panel" hidden aria-labelledby="arena-connect-title"><div class="arena-connect-header"><div><span class="arena-eyebrow">BRING YOUR COMPUTE</span><h3 id="arena-connect-title">Connect a simulation worker.</h3></div><button class="arena-icon-button" data-arena-action="close-connect" aria-label="Close worker connection panel">×</button></div><p>Use an already running worker with a matching physics and policy profile. The worker must accept this site’s origin. Connecting does not rent a GPU.</p><form id="arena-connect-form"><label class="arena-field">Worker URL<input id="arena-worker-url" type="url" placeholder="https://your-worker.example" required autocomplete="off" spellcheck="false"></label><label class="arena-field">Session token<input id="arena-worker-token" type="password" placeholder="Optional worker token" autocomplete="off"></label><div class="arena-connect-actions"><button class="arena-button arena-primary" type="submit" id="arena-connect-submit">Connect & check profile</button><button class="arena-button" type="button" data-arena-action="disconnect">Disconnect</button></div></form><div id="arena-worker-task-panel" hidden><label class="arena-field">Available worker mission<select id="arena-worker-task"></select></label><button class="arena-button arena-primary" data-arena-action="create-session" id="arena-create-session">Create session</button></div><p class="arena-worker-links"><a href="worker-setup.html" target="_blank" rel="noopener noreferrer">Set up a physics worker ↗</a><a href="downloads/brainsnn-arena-worker.zip" download>Download worker kit ↓</a></p><p class="arena-muted">Credentials stay in memory and are excluded from exports. A successful connection checks the exact robot, checkpoint and control contract.</p><p id="arena-connect-message" role="status"></p><button class="arena-text-button" data-arena-action="practice">Switch to local practice · not a model score</button></section>';
     if ($('arena-world')) $('arena-world').value = challenge;
     if (mode === 'practice' && world && $('arena-seed')) $('arena-seed').value = String(world.seed);
-    wire(); refresh(); draw();
+    wire(); mountGame(); refresh(); draw();
+  }
+  function mountGame() {
+    if (!window.BrainSNNArenaGameUI || !window.BrainSNNArenaGame || !$('arena-game-bar')) return;
+    game = window.BrainSNNArenaGameUI.create({
+      bar: $('arena-game-bar'), viewport: () => $('arena-viewport'), canvas: () => $('arena-canvas'), camera: () => camera,
+      // The race uses whatever challenge and seed the practice world has now.
+      level: () => challenge, seed: () => String(world?.seed ?? selection.seed ?? '42'),
+      // "Next level" picks the next challenge exactly as its ribbon chip does.
+      selectLevel: id => {
+        if (!practiceMissions.some(item => item[0] === id)) return;
+        challenge = id; makeWorld($('arena-seed')?.value || selection.seed || '42');
+        if ($('arena-world')) $('arena-world').value = challenge;
+      },
+      onStart: () => { pause(); message = ''; refresh(); },
+      onStop: () => { message = ''; refresh(); draw(); },
+      watchBot: (level, seed) => {
+        // Same replacement as picking a challenge: the practice timeline restarts.
+        const replaced = snapshots.length > 1;
+        challenge = level; makeWorld(seed);
+        if ($('arena-world')) $('arena-world').value = challenge;
+        if ($('arena-seed') && world) $('arena-seed').value = String(world.seed);
+        run(); message = 'Watching the scripted arm on the world you just raced. It always climbs before it crosses.' + (replaced ? ' Your previous practice run was replaced.' : ''); refresh();
+      },
+      tryModel: () => {
+        window.BrainSNNExperiment?.showDemo?.({ challenge, note: 'Connect a compatible skill-agent endpoint. It drives this generic demo arm through the same move, pick and place commands you just used.' });
+        window.BrainSNN3DClient?.showConnector?.();
+      }
+    });
+    cleanup.push(() => { game?.destroy(); game = null; });
   }
   function refresh() {
     if (!host) return;
-    const local = mode === 'practice', s = local ? active() : null, f = local ? null : viewedFrame();
+    const local = mode === 'practice', s = local ? active() : null, f = local ? null : viewedFrame(), racing = playing();
     if (!completedRun && (local ? world?.done : liveFrame?.policyExecuted === true && ['succeeded', 'failed'].includes(liveFrame.status))) {
       completedRun = true;
       window.dispatchEvent(new Event('brainsnn:arena-completed'));
     }
     host.classList.toggle('arena-first-run', !completedRun);
     document.querySelectorAll('[data-arena-after-run]').forEach(el => { el.hidden = !completedRun; });
-    host.querySelectorAll('[data-arena-challenge]').forEach(el => el.setAttribute('aria-pressed', String(el.dataset.arenaChallenge === challenge)));
-    if (local) text('arena-mission', (practiceMissions.find(item => item[0] === challenge)?.[1] || 'Local practice') + ' · Sort three blocks into the tray');
+    host.querySelectorAll('[data-arena-challenge]').forEach(el => { el.setAttribute('aria-pressed', String(el.dataset.arenaChallenge === challenge)); el.disabled = racing; });
+    game?.sync?.();
+    if (local) text('arena-mission', (practiceMissions.find(item => item[0] === challenge)?.[1] || 'Local practice') + (racing ? ' · Beat the bot: three blocks before the violet ghost' : ' · Sort three blocks into the tray'));
     const live = local ? running : connection.status === 'running';
     const terminal = !local && ['succeeded', 'failed', 'error'].includes(connection.status);
     text('arena-runtime-badge', local ? 'LOCAL PRACTICE · NOT A MODEL SCORE' : connected() ? 'WORKER CONNECTED' : 'POLICY DISCONNECTED');
     $('arena-dot')?.classList.toggle('is-ready', local || connected());
-    text('arena-live-pill', !local && remoteCursor >= 0 ? 'RECORDED FRAME' : live ? 'RUNNING' : local ? (s?.done ? 'COMPLETE' : cursor < snapshots.length - 1 ? 'REPLAY' : 'PAUSED') : connected() ? connection.status.toUpperCase() : 'BODY PREVIEW');
-    text('arena-run', local ? (running ? 'Ⅱ Pause' : cursor < snapshots.length - 1 ? 'Branch & run' : s?.done ? '↺ Run again' : 'Run') : connected() ? (terminal ? '↺ Reset mission' : live ? 'Ⅱ Pause' : 'Run') : connection.status === 'connected' ? 'Choose worker mission' : 'Connect worker');
+    text('arena-live-pill', racing ? 'BEAT THE BOT' : !local && remoteCursor >= 0 ? 'RECORDED FRAME' : live ? 'RUNNING' : local ? (s?.done ? 'COMPLETE' : cursor < snapshots.length - 1 ? 'REPLAY' : 'PAUSED') : connected() ? connection.status.toUpperCase() : 'BODY PREVIEW');
+    text('arena-run', racing ? 'Racing…' : local ? (running ? 'Ⅱ Pause' : cursor < snapshots.length - 1 ? 'Branch & run' : s?.done ? '↺ Run again' : 'Run') : connected() ? (terminal ? '↺ Reset mission' : live ? 'Ⅱ Pause' : 'Run') : connection.status === 'connected' ? 'Choose worker mission' : 'Connect worker');
     text('arena-run-top', $('arena-run')?.textContent || 'Run');
-    attr('arena-run-top', 'disabled', !local && connected() && !supports(terminal ? 'reset' : live ? 'pause' : 'run'));
-    attr('arena-run', 'disabled', !local && connected() && !supports(terminal ? 'reset' : live ? 'pause' : 'run'));
-    attr('arena-step', 'disabled', local ? running || Boolean(s?.done) : !supports('step') || live || terminal);
-    attr('arena-reset', 'disabled', !local && !supports('reset'));
+    attr('arena-run-top', 'disabled', racing || (!local && connected() && !supports(terminal ? 'reset' : live ? 'pause' : 'run')));
+    attr('arena-run', 'disabled', racing || (!local && connected() && !supports(terminal ? 'reset' : live ? 'pause' : 'run')));
+    attr('arena-step', 'disabled', racing || (local ? running || Boolean(s?.done) : !supports('step') || live || terminal));
+    attr('arena-reset', 'disabled', racing || (!local && !supports('reset')));
     text('arena-time', (number(local ? s?.time : f?.simTime) ?? 0).toFixed(1) + ' s');
     text('arena-transport-note', local ? 'Local · no GPU usage' : f?.policyExecuted ? 'Policy execution reported by worker' : 'No policy execution recorded');
     text('arena-protocol-note', local ? 'Explore freely. Every change is recorded in your practice timeline.' : protocol === 'benchmark' ? 'Versions, seed and conditions lock at session creation. Manual disturbances are disabled.' : 'Test recovery with recorded interventions supported by your worker.');
     text('arena-disturbance-note', local ? 'Introduce a surprise. Then replay the response.' : protocol === 'benchmark' ? 'Conditions are locked for this session.' : supports('intervene') ? 'Changes are sent to the worker and recorded by its simulation.' : 'Connect an intervention-capable worker to change this world.');
-    ['add-obstacle', 'move-obstacle', 'lighting', 'target'].forEach(id => { attr('arena-' + id, 'disabled', !local && !canIntervene(id)); if ($('arena-' + id)) $('arena-' + id).hidden = !local && !canIntervene(id); });
+    ['add-obstacle', 'move-obstacle', 'lighting', 'target'].forEach(id => { attr('arena-' + id, 'disabled', racing || (!local && !canIntervene(id))); if ($('arena-' + id)) $('arena-' + id).hidden = !local && !canIntervene(id); });
     ['arena-occlusion', 'arena-clear-camera'].forEach(id => { if ($(id)) $(id).hidden = local || !canIntervene('camera-occlusion'); attr(id, 'disabled', !canIntervene('camera-occlusion')); });
     host.querySelectorAll('[data-arena-protocol]').forEach(el => { el.setAttribute('aria-pressed', String(el.dataset.arenaProtocol === protocol)); el.disabled = (local && el.dataset.arenaProtocol === 'benchmark') || Boolean(!local && profile()?.protocols && !profile().protocols.includes(el.dataset.arenaProtocol)); });
     host.querySelectorAll('[data-arena-action]').forEach(el => { if (['orbit', 'top', 'camera-reset'].includes(el.dataset.arenaAction)) el.disabled = !local; });
@@ -177,18 +211,18 @@
     text('arena-interventions', local ? s?.interventions ?? 0 : number(f?.metrics?.interventions) ?? '—');
     text('arena-latency', !local && number(f?.metrics?.latencyMs) !== null ? f.metrics.latencyMs.toFixed(1) + ' ms' : '—');
     const scrub = $('arena-scrubber');
-    if (scrub) { scrub.max = String(Math.max(0, (local ? snapshots.length : remoteFrames.length) - 1)); scrub.value = String(local ? cursor : remoteCursor >= 0 ? remoteCursor : Math.max(0, remoteFrames.length - 1)); scrub.disabled = local ? snapshots.length < 2 : remoteFrames.length < 2 || live; }
+    if (scrub) { scrub.max = String(Math.max(0, (local ? snapshots.length : remoteFrames.length) - 1)); scrub.value = String(local ? cursor : remoteCursor >= 0 ? remoteCursor : Math.max(0, remoteFrames.length - 1)); scrub.disabled = racing || (local ? snapshots.length < 2 : remoteFrames.length < 2 || live); }
     text('arena-timeline-label', local ? (cursor < snapshots.length - 1 ? 'Replaying' : 'Recording') + ' · ' + (cursor + 1) + ' / ' + snapshots.length + ' states · ' + branchId : f ? 'Recorded frames · ' + remoteFrames.length + ' retained' + (droppedFrames ? ' · ' + droppedFrames + ' expired' : '') + ' · frame ' + f.seq : 'Make a run. Keep the evidence.');
     if ($('arena-return-live')) $('arena-return-live').hidden = local || remoteCursor < 0;
     text('arena-timeline-end', (local ? world?.time ?? 0 : f?.simTime ?? 0).toFixed(1) + ' s');
     text('arena-timeline-start', !local && remoteFrames.length ? remoteFrames[0].simTime.toFixed(1) + ' s' : '0.0 s');
     text('arena-branch-note', local ? 'Scrub to any state. Branch keeps the original run as evidence.' : live ? 'Pause to inspect recorded frames. Frames do not restore physics state.' : supports('branch') ? 'Recorded frames. This worker also supports branching from a recorded sequence.' : 'Recorded frames only, not state restoration. Branch needs worker support.');
-    attr('arena-branch', 'disabled', local ? !snapshots.length : !supports('branch') || !f || protocol === 'benchmark');
+    attr('arena-branch', 'disabled', racing || (local ? !snapshots.length : !supports('branch') || !f || protocol === 'benchmark'));
     const items = local ? events.filter(x => x.branch === branchId).slice(-5) : (f?.events || []).slice(-5);
     if ($('arena-events')) $('arena-events').innerHTML = items.map(x => '<span><b>' + esc(number(x.simTime) !== null ? x.simTime.toFixed(1) + 's' : '•') + '</b> ' + esc(x.kind || x.type || x.event || 'Worker event') + '</span>').join('');
     const draftNotice = !local && draftChanged() && (connection.sessionId || connection.status === 'creating') ? ' Task and seed edits apply to the next session. This session keeps its original settings.' : '';
-    text('arena-status-message', (message || (local ? running ? 'Local practice running. The scripted arm is not executing an AI model.' : s?.done ? 'Run complete. Inspect the timeline or change a condition.' : 'Mission paused. Run the scripted arm, then inspect what happened.' : selection.error || (connected() ? connection.message || 'Worker ready.' : 'Your selected robot is shown as a body preview. Connect a matching worker to test its policy.'))) + draftNotice);
-    text('arena-integrity', local ? 'LOCAL PRACTICE · NOT A MODEL SCORE. This generic arm follows a script. It does not run ' + (model()?.name || 'an AI model') + ' or simulate rigid-body dynamics.' : 'REAL ROBOT + SOFTWARE TESTING · Policy execution, sensor images and results appear only after a matching worker reports them. Body preview physics does not run the selected AI model.');
+    text('arena-status-message', racing ? 'Beat the bot is running on its own copy of this world. Quit the race to return to scripted practice and its timeline.' : (message || (local ? running ? 'Local practice running. The scripted arm is not executing an AI model.' : s?.done ? 'Run complete. Inspect the timeline or change a condition.' : 'Mission paused. Run the scripted arm, then inspect what happened.' : selection.error || (connected() ? connection.message || 'Worker ready.' : 'Your selected robot is shown as a body preview. Connect a matching worker to test its policy.'))) + draftNotice);
+    text('arena-integrity', racing ? 'BEAT THE BOT · NOT A MODEL SCORE. You and the scripted arm drive the same generic demo arm through the same move, pick and place commands on the same seeded world. Times are simulation seconds, played at 2× speed.' : local ? 'LOCAL PRACTICE · NOT A MODEL SCORE. This generic arm follows a script. It does not run ' + (model()?.name || 'an AI model') + ' or simulate rigid-body dynamics.' : 'REAL ROBOT + SOFTWARE TESTING · Policy execution, sensor images and results appear only after a matching worker reports them. Body preview physics does not run the selected AI model.');
     if (mode === 'named') showFrame();
   }
   function showFrame() {
@@ -207,6 +241,7 @@
     if (hasFrame) { text('arena-camera-title', (remoteCursor >= 0 ? 'RECORDED FRAME' : 'WORKER') + ' · SPECTATOR CAMERA'); text('arena-camera-note', policyCamera ? 'Policy camera is independent of the spectator view' : 'Worker has not supplied a policy camera'); }
   }
   function draw() {
+    if (playing()) return game.draw();
     if (mode !== 'practice' || !world || !$('arena-canvas')) return;
     const result = window.BrainArena3D.render($('arena-canvas'), active(), camera);
     if ($('arena-sensor-canvas') && window.BrainArena3D.renderSensor) {
@@ -412,6 +447,7 @@
     });
     on($('arena-connect-form'), 'submit', connectWorker);
     on($('arena-scrubber'), 'input', ev => {
+      if (playing()) return;
       const requested = Number(ev.target.value) || 0;
       if (mode !== 'practice') {
         if (connection.status === 'running' || !remoteFrames.length) return;
@@ -424,7 +460,7 @@
     on(canvas, 'pointermove', ev => { if (!drag) return; camera.yaw -= (ev.clientX - drag.x) * 0.008; camera.pitch = clamp(camera.pitch + (ev.clientY - drag.y) * 0.006, 0.15, 1.4); drag = { x: ev.clientX, y: ev.clientY }; draw(); });
     on(canvas, 'pointerup', () => { drag = null; }); on(canvas, 'pointercancel', () => { drag = null; });
     on(canvas, 'wheel', ev => { ev.preventDefault(); camera.distance = clamp(camera.distance + ev.deltaY * 0.005, 2.1, 9); draw(); }, { passive: false });
-    on(canvas, 'keydown', ev => { if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '='].includes(ev.key)) return; ev.preventDefault(); if (ev.key === 'ArrowLeft') camera.yaw -= 0.12; if (ev.key === 'ArrowRight') camera.yaw += 0.12; if (ev.key === 'ArrowUp') camera.pitch = clamp(camera.pitch + 0.1, 0.15, 1.4); if (ev.key === 'ArrowDown') camera.pitch = clamp(camera.pitch - 0.1, 0.15, 1.4); if (ev.key === '+' || ev.key === '=') camera.distance = clamp(camera.distance - 0.2, 2.1, 9); if (ev.key === '-') camera.distance = clamp(camera.distance + 0.2, 2.1, 9); draw(); });
+    on(canvas, 'keydown', ev => { if (playing() || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '-', '='].includes(ev.key)) return; ev.preventDefault(); if (ev.key === 'ArrowLeft') camera.yaw -= 0.12; if (ev.key === 'ArrowRight') camera.yaw += 0.12; if (ev.key === 'ArrowUp') camera.pitch = clamp(camera.pitch + 0.1, 0.15, 1.4); if (ev.key === 'ArrowDown') camera.pitch = clamp(camera.pitch - 0.1, 0.15, 1.4); if (ev.key === '+' || ev.key === '=') camera.distance = clamp(camera.distance - 0.2, 2.1, 9); if (ev.key === '-') camera.distance = clamp(camera.distance + 0.2, 2.1, 9); draw(); });
     on(window, 'resize', draw);
     on(document, 'visibilitychange', () => { if (!document.hidden) return; if (mode === 'practice') pause('page-hidden'); else if (connection.status === 'running' && supports('pause')) remote('pause'); });
   }
@@ -438,9 +474,13 @@
     host = null; drag = null;
   }
   function mount(element, nextSelection = {}) {
-    suspend(); host = element; selection = clone(nextSelection); mode = selection.robotId || selection.modelId ? 'named' : 'practice'; protocol = 'practice';
+    // A shared "Beat the bot" link opens local practice on its level, keeping
+    // any saved robot + model selection for later.
+    const link = window.BrainSNNArenaGameUI?.pendingLink?.();
+    suspend(); host = element; selection = clone(nextSelection); mode = link || !(selection.robotId || selection.modelId) ? 'practice' : 'named'; protocol = 'practice';
+    if (link) challenge = link.level;
     world = null; snapshots = []; events = []; branches = []; cursor = 0; branchId = 'main'; counter = 0;
-    message = ''; workerTask = ''; mountedAt = stamp(); if (mode === 'practice') makeWorld(); render(); return getState();
+    message = ''; workerTask = ''; mountedAt = stamp(); if (mode === 'practice') makeWorld(link ? link.seed : undefined); render(); return getState();
   }
   function updateSelection(nextSelection) {
     const next = { ...selection, ...clone(nextSelection) };

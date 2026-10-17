@@ -1,0 +1,68 @@
+/* BrainSNN Arena "Beat the bot": game bar, in-canvas HUD and result card. */
+.arena-game-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 20px;border-bottom:1px solid #2b3c52;background:linear-gradient(110deg,#0c2230 0%,#121530 60%,#1a1032 100%)}
+.arena-game-bar:empty{display:none}
+.game-bar-copy{display:grid;gap:3px;min-width:0}
+.game-kicker{font-size:9px;font-weight:750;letter-spacing:.18em;color:var(--aw-cyan,#68eaff)}
+.game-bar-copy strong{font-size:16px;line-height:1.25;letter-spacing:-.02em;font-weight:600;color:#f3f8ff}
+.game-bar-copy small{font-size:11px;line-height:1.5;color:#9bb0c8;max-width:560px}
+.game-bar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+.game-play{background:linear-gradient(135deg,#68eaff,#947cff);color:#04121a;border:0;border-radius:12px;padding:12px 18px;font-size:13px;font-weight:700;letter-spacing:-.01em;box-shadow:0 8px 30px #68eaff30;white-space:nowrap}
+.arena-workspace .game-play:not(:disabled):hover{background:linear-gradient(135deg,#9af1ff,#b0a0ff)}
+.game-best{font-size:10px;line-height:1.5;color:#8ea3bb;max-width:210px}
+.game-chip{background:#111b28;border:1px solid #2c3b4c;border-radius:9px;color:#dce8f6;padding:9px 12px;font-size:11px;font-weight:550;white-space:nowrap}
+.game-chip kbd{font:inherit;font-size:9px;color:#8ea3bb;border:1px solid #33465a;border-radius:4px;padding:1px 4px;margin-left:4px}
+.arena-viewport.is-game .arena-local-sensor,.arena-viewport.is-game .arena-canvas-hint{display:none!important}
+.arena-viewport.is-game canvas{cursor:crosshair}
+.game-hud{position:absolute;inset:0;pointer-events:none;z-index:3}
+.game-hud button{pointer-events:auto}
+.game-hud-top{position:absolute;top:12px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.game-clock,.game-race,.game-icon{background:#05070bcc;border:1px solid #2a3a4c;border-radius:12px;backdrop-filter:blur(6px)}
+.game-clock{display:flex;align-items:baseline;gap:4px;padding:8px 12px}
+.game-clock strong{font-size:30px;line-height:1;font-weight:650;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#f3f8ff}
+.game-clock>span{font-size:13px;color:#8ea3bb}
+.game-clock small{margin-left:10px;font-size:10px;font-weight:650;color:#b9a9ff;white-space:nowrap}
+.game-race{display:grid;gap:5px;padding:8px 12px;margin-left:auto}
+.game-lane{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#9fb3c9}
+.game-lane span{width:30px}
+.game-lane i{width:18px;height:8px;border-radius:3px;background:#1b2634;border:1px solid #2c3b4c;transition:background .2s,box-shadow .2s}
+.game-lane.you i.is-done{background:#64ffd2;border-color:#64ffd2;box-shadow:0 0 10px #64ffd266}
+.game-lane.bot i.is-done{background:#947cff;border-color:#947cff;box-shadow:0 0 10px #947cff66}
+.game-lane.bot.is-finished span{color:#947cff}
+.game-icon{width:36px;height:36px;color:#c9d6e6;font-size:14px}
+.game-countdown{position:absolute;inset:0;display:grid;place-items:center;font-size:92px;font-weight:800;letter-spacing:-.06em;color:#f3f8ff;text-shadow:0 0 40px #68eaff88;opacity:0}
+.game-countdown.is-on{animation:game-pop .42s ease-out forwards}
+@keyframes game-pop{0%{opacity:0;transform:scale(1.6)}30%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.92)}}
+.game-toast{position:absolute;left:50%;top:74px;transform:translateX(-50%);background:#05070bdd;border:1px solid #2a3a4c;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:650;color:#e7f1fb;opacity:0;white-space:nowrap}
+.game-toast.is-on{animation:game-toast 1.4s ease-out forwards}
+.game-toast[data-kind=bonk],.game-toast[data-kind=miss],.game-toast[data-kind=drop]{color:#ffb4c0;border-color:#5a2a38}
+.game-toast[data-kind=deliver]{color:#64ffd2;border-color:#1f5a4b}
+.game-toast[data-kind=twist]{color:#c9b8ff;border-color:#47387a}
+@keyframes game-toast{0%{opacity:0;transform:translate(-50%,8px)}15%{opacity:1;transform:translate(-50%,0)}75%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,0)}}
+.game-hint{position:absolute;left:14px;bottom:14px;max-width:min(430px,62%);margin:0;font-size:10px;line-height:1.5;color:#a9bbd0;background:#05070bb3;border:1px solid #233142;border-radius:10px;padding:8px 11px;transition:opacity .6s}
+.game-hint.is-faded{opacity:0}
+.game-hud.is-ended .game-drop,.game-hud.is-ended .game-hint{display:none}
+.game-drop{position:absolute;right:16px;bottom:16px;width:84px;height:84px;border-radius:50%;border:2px solid #68eaff;background:radial-gradient(circle at 35% 30%,#2a5f72,#0d2633);color:#eafcff;font-size:13px;font-weight:750;box-shadow:0 0 0 6px #68eaff14,0 10px 30px #0008;touch-action:manipulation}
+.arena-workspace .game-drop:not(:disabled):hover{background:radial-gradient(circle at 35% 30%,#367a90,#11313f);border-color:#9af1ff}
+.game-drop:not(:disabled):active{transform:scale(.94)}
+.game-paused{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:12px;background:#05070bb8;pointer-events:auto}
+.game-paused p{margin:0;font-size:20px;font-weight:650;color:#f3f8ff}
+.game-result{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(450px,calc(100% - 28px));max-height:calc(100% - 24px);overflow:auto;pointer-events:auto;background:linear-gradient(160deg,#0f1d2a,#141228);border:1px solid #39506a;border-radius:18px;padding:18px 22px;box-shadow:0 30px 80px #000a;text-align:center}
+.game-stars{font-size:28px;letter-spacing:6px;color:#2a3646}
+.game-stars .on{color:#ffd66b;text-shadow:0 0 16px #ffd66b88}
+.game-result h3{font-size:22px;line-height:1.2;letter-spacing:-.03em;font-weight:650;margin:6px 0 8px;color:#f3f8ff}
+.game-times{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;font-size:12px;color:#9fb3c9;margin:0 0 6px}
+.game-times b{color:#64ffd2;font-weight:650}
+.game-friend{font-size:12px;color:#c9b8ff;margin:4px 0}
+.game-stats{font-size:10px;color:#7d91a8;margin:4px 0 14px}
+.game-result-actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.game-legend{font-size:9px;color:#6f849c;margin:12px 0 6px}
+.game-result-links{display:flex;flex-direction:column;gap:2px;align-items:center}
+.arena-workspace .game-link{background:none;border:0;color:var(--aw-cyan,#68eaff);font-size:11px;padding:4px}
+.arena-workspace .game-link:not(:disabled):hover{background:none;text-decoration:underline}
+.game-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;margin:0}
+@media(max-width:760px){.arena-game-bar{flex-direction:column;align-items:stretch;padding:12px 14px;gap:10px}.game-bar-copy small{display:none}.game-bar-actions{justify-content:space-between}.game-clock strong{font-size:23px}.game-clock small{margin-left:6px}.game-drop{width:72px;height:72px;right:12px;bottom:12px}.game-hint{left:10px;bottom:10px;max-width:calc(100% - 104px);font-size:9px}.game-race{padding:6px 9px}.game-lane i{width:13px}.game-hud-top{left:10px;right:10px;top:10px}.game-countdown{font-size:70px}
+.game-result{top:56px;transform:translateX(-50%);max-height:calc(100% - 64px);padding:12px 14px}.game-stars{font-size:22px}.game-result h3{font-size:18px;margin:2px 0 6px}.game-stats{margin-bottom:10px}.game-legend{display:none}.game-result-links{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:0 10px;margin-top:8px}}
+@media(max-width:420px){.game-clock small{display:none}}
+/* studio.css turns every animation off under reduced motion; show the cues
+   statically instead. Timers in arena-game-ui.js clear them. */
+@media(prefers-reduced-motion:reduce){.game-countdown.is-on,.game-toast.is-on{opacity:1}.game-lane i{transition:none}}

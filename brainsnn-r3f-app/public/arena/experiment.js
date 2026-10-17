@@ -235,7 +235,14 @@
     }
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      const usable = saved && typeof saved === 'object' && !Array.isArray(saved);
+      // A Beat the bot link opens the arena on load, whatever demo or tab was
+      // saved last time. Any saved robot + model pair is kept for later.
+      if (window.BrainSNNArenaGameUI?.pendingLink?.()) {
+        const pair = usable && saved.mode !== 'demo' ? saved : lastNamedState || {};
+        return open({ ...(pureWorld(findModel(pair.modelId)) ? {} : pair), view: 'arena' }, { focus: false });
+      }
+      if (usable) {
         if (saved.mode === 'demo') return showDemo({ challenge: saved.challenge, run: false });
         return open(saved, { focus: false });
       }
@@ -307,6 +314,9 @@
     });
     render();
     restoreFromURL();
+    // The load-time restore has honoured any challenge link; from here on robot
+    // and model picks are not forced back into practice.
+    window.BrainSNNArenaGameUI?.consumeLink?.();
   }
 
   function suspend() {

@@ -11,8 +11,8 @@ for (const name of readdirSync(path.join(root, 'dist')).filter(name => name.ends
 for (const name of [
   'brainsnn-experiment-review.cjs', 'brainsnn-sensor-camera.cjs',
   'brainsnn-skill-connector.cjs', 'arena-runtime.test.cjs',
-  'arena-integration-ui.cjs', 'arena-campaign-math.cjs', 'arena-campaign-flow.cjs', 'arena-campaign-report.cjs',
+  'arena-integration-ui.cjs', 'arena-campaign-math.cjs', 'arena-campaign-flow.cjs', 'arena-campaign-report.cjs', 'arena-game.test.cjs',
   'arena-recording.test.cjs',
   'site-core.test.cjs', 'site-operations.test.cjs', 'site-route.test.cjs', 'site-workspace.test.cjs',
 ]) run([`tests/${name}`]);
-console.log('ARENA_LOGIC_OK: selection, observations, sessions, replay, campaigns and site planning.');
+console.log('ARENA_LOGIC_OK: selection, observations, sessions, replay, campaigns, site planning and Beat the bot.');
