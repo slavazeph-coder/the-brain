@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brainsnn.com/schemas/run-manifest.v1.json",
+  "title": "BrainSNN bounded recording manifest",
+  "description": "One immutable manifest text binds events, artifacts and findings. Hash integrity is not authenticated execution or scientific truth. All integers must fit JavaScript's safe integer domain or be strings. All numbers must be finite; Unicode must be scalar values. Implementations additionally enforce byte limits, path safety, uniqueness, reference resolution, acyclic lineage and completion invariants.",
+  "type": "object",
+  "required": ["schema", "recordingId", "source", "context", "clocks", "events", "artifacts", "findings", "completion", "outcome"],
+  "properties": {
+    "schema": {"const": "brainsnn.arena.recording.v1"},
+    "recordingId": {"$ref": "#/$defs/id"},
+    "source": {
+      "type": "object", "required": ["kind", "identityStatus"],
+      "properties": {
+        "kind": {"enum": ["scripted-practice", "simulator-policy", "robot-observed", "imported"]},
+        "identityStatus": {"const": "declared"}
+      }
+    },
+    "context": {"type": "object", "description": "Optional/null context fields represent unknown information. Compatibility checks require known taskId, taskRevision, judgeRevision, environment, actionSemantics, stateSemantics, units and preprocessingRevision. initialState, seed, checkpoint and changed parameters are displayed separately."},
+    "clocks": {"type": "array", "maxItems": 256, "items": {"type": "object"}},
+    "events": {"type": "array", "maxItems": 20000, "items": {"$ref": "recording-event.v1.json"}},
+    "artifacts": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/artifact"}},
+    "findings": {"type": "array", "maxItems": 4000, "items": {"$ref": "#/$defs/finding"}},
+    "completion": {
+      "type": "object", "required": ["status", "committedSequence", "lastObservedSequence", "gapCount", "unknownTail"],
+      "description": "Start incomplete. Complete requires a producer durability barrier, contiguous covered sequences, no gaps/unknown tail and all declared artifacts included. On crash or missing finalization an unknown tail remains; a full disk may prevent gap-counter persistence.",
+      "properties": {
+        "status": {"enum": ["recording", "partial", "complete"]},
+        "committedSequence": {"$ref": "#/$defs/count"},
+        "lastObservedSequence": {"$ref": "#/$defs/count"},
+        "gapCount": {"$ref": "#/$defs/count"},
+        "unknownTail": {"type": "boolean"},
+        "reason": {"type": "string"}
+      }
+    },
+    "outcome": {"type": "object", "required": ["status"], "properties": {"status": {"enum": ["succeeded", "failed", "interrupted", "unknown"]}}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "artifact": {
+      "type": "object", "required": ["id", "path", "sha256", "byteLength", "mediaType", "retention"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "path": {"type": "string", "maxLength": 240, "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$", "description": "No empty, dot or parent segment; no trailing dot, backslash, URL, percent encoding, symlink or case-colliding path."},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "byteLength": {"$ref": "#/$defs/count"},
+        "mediaType": {"type": "string"},
+        "retention": {"enum": ["included", "omitted"]},
+        "omissionReason": {"type": "string"},
+        "shape": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}},
+        "dtype": {"enum": ["uint8", "int8", "uint16", "int16", "uint32", "int32", "uint64", "int64", "float16", "float32", "float64", "bool"]},
+        "endianness": {"enum": ["little", "big", "not-applicable"]},
+        "derivedFrom": {"type": "array", "uniqueItems": true, "maxItems": 4096, "items": {"$ref": "#/$defs/id"}},
+        "url": false,
+        "linkTarget": false
+      },
+      "dependentRequired": {"shape": ["dtype", "endianness"], "dtype": ["shape", "endianness"], "endianness": ["shape", "dtype"]},
+      "allOf": [{"if": {"properties": {"retention": {"const": "included"}}}, "then": {"properties": {"byteLength": {"maximum": 33554432}}}}]
+    },
+    "finding": {
+      "type": "object", "required": ["id", "origin", "summary", "refs"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "origin": {"enum": ["fact", "rule", "hypothesis", "human"]},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 10000},
+        "refs": {"type": "array", "minItems": 1, "maxItems": 20000, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "limitations": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

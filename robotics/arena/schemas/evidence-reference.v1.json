@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brainsnn.com/schemas/evidence-reference.v1.json",
+  "title": "BrainSNN exact evidence locator",
+  "description": "A locator binds one recording's exact manifest bytes and an event or artifact ID. Frame/row/PTS details may refine that source; they never substitute for source identity. No source is fetched automatically.",
+  "type": "object",
+  "required": ["manifestSha256", "sourceId"],
+  "properties": {
+    "manifestSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "sourceId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$"},
+    "frameIndex": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "rowIndex": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "pts": {"type": "string", "pattern": "^-?[0-9]{1,30}$"},
+    "timebase": {
+      "type": "object", "required": ["numerator", "denominator"],
+      "properties": {"numerator": {"type": "integer", "minimum": 1}, "denominator": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

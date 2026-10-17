@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brainsnn.com/schemas/recording-bundle.v1.json",
+  "title": "BrainSNN inert portable recording bundle",
+  "description": "manifestSha256 hashes the exact UTF-8 bytes of manifestText. Parse only after strict duplicate-key/depth/size checks. Preserve this text on round trip; do not reserialize it for verification. Payload values are canonical base64 raw bytes, keyed by the corresponding local artifact path. No URL fetches, archive links or executable semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "manifestText", "manifestSha256", "payloads"],
+  "properties": {
+    "schema": {"const": "brainsnn.arena.bundle.v1"},
+    "manifestText": {"type": "string", "maxLength": 8388608},
+    "manifestSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "payloads": {
+      "type": "object", "maxProperties": 4096,
+      "additionalProperties": {"type": "string", "maxLength": 44739244}
+    }
+  }
+}
