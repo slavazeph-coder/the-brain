@@ -25,6 +25,8 @@ MAX_ORIGINAL_BYTES = 4 * 1024 * 1024
 MAX_ROWS = 512
 MAX_MESSAGES = 4000
 MAX_MCAP_BYTES = 48 * 1024 * 1024
+MAX_VIDEO_PIXELS = 4096 * 2160
+VIDEO_DECODERS = ("h264", "mpeg4", "libdav1d")
 BUNDLE_SCHEMA = "brainsnn.arena.bundle.v1"
 MANIFEST_SCHEMA = "brainsnn.arena.recording.v1"
 NATIVE_ATTACHMENT = "brainsnn/manifest.json"
@@ -177,20 +179,44 @@ def integer(value, field):
 def video_frames(path, targets, start, end, fps):
     """Nearest actual decoded PTS within one declared frame interval and episode bounds."""
     import av
+    try:
+        yield from _decode_video_frames(path, targets, start, end, fps)
+    except av.FFmpegError as error:
+        raise ImportError("Video decoder refused the source under the configured limits") from error
+
+
+def _decode_video_frames(path, targets, start, end, fps):
+    import av
     def refuse_external_io(url, flags, options):
         raise OSError("External video tracks and nested sources are unsupported")
     tolerance = 1 / fps + 1e-6
+    decoder_options = {"max_pixels": str(MAX_VIDEO_PIXELS), "threads": "1"}
     # Autodetection accepts playlists disguised as .mp4, whose nested paths
     # bypass dataset containment and source provenance. Decode only this opened
     # MP4/MOV file; deny external tracks and every secondary I/O request.
     with path.open("rb") as source, av.open(source, format="mov",
-            options={"enable_drefs": "0", "use_absolute_path": "0"},
+            options={"enable_drefs": "0", "use_absolute_path": "0",
+                     "codec_whitelist": ",".join(VIDEO_DECODERS), **decoder_options},
             io_open=refuse_external_io) as container:
         if len(container.streams.video) != 1:
             raise ImportError("A camera shard must have one video stream")
         stream = container.streams.video[0]
-        if not stream.time_base or stream.width * stream.height > 4096 * 2160:
+        if not stream.time_base or not 0 < stream.width * stream.height <= MAX_VIDEO_PIXELS:
             raise ImportError("Unsupported video time base or dimensions")
+        decoder = stream.codec_context
+        if decoder is None or decoder.name not in VIDEO_DECODERS:
+            raise ImportError("Only software H.264, MPEG-4 and libdav1d AV1 video decoders are supported")
+        # PyAV passes av.open options to stream-info probing, then creates a
+        # fresh codec context. Set the same limits before that context opens:
+        # a later resolution change must fail in FFmpeg before frame buffers
+        # are allocated, not just before Python converts an already-made frame.
+        if decoder.is_open:
+            raise ImportError("Video decoder opened before its limits were configured")
+        decoder.options = {**decoder.options, **decoder_options}
+        decoder.thread_count = 1
+        decoder.open()
+        if any(key in decoder.options for key in decoder_options):
+            raise ImportError("Video decoder did not accept the required allocation limits")
         container.seek(max(0, int(start / float(stream.time_base))), stream=stream, backward=True)
         decoded = container.decode(stream)
         previous = None
@@ -206,6 +232,8 @@ def video_frames(path, targets, start, end, fps):
                 except StopIteration:
                     current = None
                     break
+                except av.FFmpegError as error:
+                    raise ImportError("Video decoder rejected a frame under the configured limits") from error
                 count += 1
                 if count > 20000:
                     raise ImportError("Video decode exceeds bounded frame limit")
@@ -224,7 +252,7 @@ def video_frames(path, targets, start, end, fps):
                 yield None
                 continue
             t, frame = selected
-            if frame.width * frame.height > 4096 * 2160:
+            if not 0 < frame.width * frame.height <= MAX_VIDEO_PIXELS:
                 raise ImportError("Decoded video dimensions exceed the import limit")
             image = frame.to_image()
             output = io.BytesIO()

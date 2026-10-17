@@ -7,8 +7,9 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from fractions import Fraction
 from unittest.mock import patch
-from inspection.interop import BundleBuilder, ImportError, export_mcap, import_lerobot, import_mcap, json_bytes, parse_json, parquet_rows
+from inspection.interop import BundleBuilder, ImportError, export_mcap, import_lerobot, import_mcap, json_bytes, parse_json, parquet_rows, video_frames
 from workers.arena.recording import verify_bundle, RecordingError
 
 
@@ -49,6 +50,43 @@ def fixture(root):
             for packet in stream.encode(frame): output.mux(packet)
         for packet in stream.encode(): output.mux(packet)
     return info, episodes, rows
+
+
+def changing_resolution_video(path, codec='h264'):
+    """Real sequence-header dimension change inside one MP4 video stream."""
+    import av
+    import numpy as np
+    if codec == 'av1':
+        # Locally generated black 64x64 then 128x128 frames, encoded by SVT-AV1
+        # and remuxed into MP4. Embed the 879-byte source so running the test
+        # needs only the decoder, not an optional AV1 encoder installation.
+        path.write_bytes(base64.b64decode(
+            'AAAAIGZ0eXBpc29tAAACAGlzb21hdjAxaXNvMm1wNDEAAAAIZnJlZQAAAEZtZGF0CgsCAAAFFX/8SvkAQDIPEACmggQQIIEAAAMlAJSACgsCAAAFGb//Er5AEDIREACJoIEECCBAAAADJQCVDq8AAAMBbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAABJPgAAB1MAAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAix0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAB1MAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAABAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAdTAAAAAAAABAAAAAAGkbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAABJPgAAB1MBVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABT21pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAQ9zdGJsAAAAo3N0c2QAAAAAAAAAAQAAAJNhdjAxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAQABIAAAASAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAGWF2MUOBAAwACgsCAAAFFX/8SvkAQAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABNgAAATYAAAABhzdHRzAAAAAAAAAAEAAAACAADqYAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAB4AAAAgAAAAFHN0Y28AAAAAAAAAAQAAADAAAABhdWR0YQAAAFltZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAACxpbHN0AAAAJKl0b28AAAAcZGF0YQAAAAEAAAAATGF2ZjYzLjEuMTAy'))
+        return
+    bitstream = bytearray()
+    for size in (16, 64):
+        encoder = av.CodecContext.create('libx264', 'w')
+        encoder.width = encoder.height = size
+        encoder.pix_fmt = 'yuv420p'
+        encoder.time_base = Fraction(1, 2)
+        encoder.framerate = Fraction(2, 1)
+        encoder.thread_count = 1
+        encoder.options = {'preset': 'ultrafast', 'tune': 'zerolatency', 'x264-params': 'keyint=1:repeat-headers=1'}
+        for index in range(2):
+            frame = av.VideoFrame.from_ndarray(np.full((size, size, 3), 100, dtype=np.uint8), format='rgb24')
+            frame.pts = index
+            for packet in encoder.encode(frame): bitstream.extend(bytes(packet))
+        for packet in encoder.encode(): bitstream.extend(bytes(packet))
+    with av.open(io.BytesIO(bitstream), format='h264') as source, av.open(str(path), 'w') as output:
+        stream = output.add_stream_from_template(source.streams.video[0])
+        stream.time_base = Fraction(1, 2)
+        for index, packet in enumerate(source.demux(video=0)):
+            if not packet.size: continue
+            packet.pts = packet.dts = index
+            packet.duration = 1
+            packet.time_base = Fraction(1, 2)
+            packet.stream = stream
+            output.mux(packet)
 
 
 class InterchangeTests(unittest.TestCase):
@@ -111,8 +149,9 @@ if(r.manifest.source.kind!=='imported')throw Error('wrong source'); console.log(
             private.write_bytes(video.read_bytes())
             (video.parent / 'secret.mp4').symlink_to(private)
             video.write_text('ffconcat version 1.0\nfile secret.mp4\n')
-            with self.assertRaises(av.error.InvalidDataError):
+            with self.assertRaisesRegex(ImportError, 'decoder refused') as raised:
                 import_lerobot(self.root, 1)
+            self.assertIsInstance(raised.exception.__cause__, av.FFmpegError)
 
     def test_wrong_offsets_rejected(self):
         import pyarrow as pa
@@ -250,6 +289,77 @@ if(r.manifest.source.kind!=='imported')throw Error('wrong source'); console.log(
         with patch('pyarrow.parquet.ParquetFile', return_value=parquet):
             with self.assertRaisesRegex(ImportError, 'before decompression'):
                 list(parquet_rows(self.root / 'unused.parquet', columns=['action']))
+
+    def test_native_decoder_rejects_midstream_resolution_before_large_frame_return(self):
+        import av
+        path = self.root / 'changing.mp4'
+        changing_resolution_video(path)
+        with av.open(str(path), format='mov') as source:
+            self.assertEqual([(frame.width, frame.height) for frame in source.decode(video=0)],
+                             [(16, 16), (16, 16), (64, 64), (64, 64)])
+        with patch('inspection.interop.MAX_VIDEO_PIXELS', 1024):
+            frames = video_frames(path, [0, 0.5, 1, 1.5], 0, 2, 2)
+            self.assertEqual(next(frames)['shape'], [16, 16, 3])
+            self.assertEqual(next(frames)['shape'], [16, 16, 3])
+            with self.assertRaisesRegex(ImportError, 'decoder rejected') as raised:
+                next(frames)
+        # The native decoder, not the post-decode Python dimension check,
+        # rejected the changed SPS before returning an oversized VideoFrame.
+        self.assertIsInstance(raised.exception.__cause__, av.FFmpegError)
+
+    def test_video_probe_has_native_pixel_limit_before_stream_metadata_check(self):
+        import av
+        path = self.root / 'changing.mp4'
+        changing_resolution_video(path)
+        previous_level = av.logging.get_level()
+        av.logging.set_level(av.logging.ERROR)
+        try:
+            with av.logging.Capture() as logs, patch('inspection.interop.MAX_VIDEO_PIXELS', 128):
+                with self.assertRaisesRegex(ImportError, 'time base or dimensions'):
+                    list(video_frames(path, [0], 0, 1, 2))
+        finally:
+            av.logging.set_level(previous_level)
+        # av.open probes the input before our metadata check. Native FFmpeg
+        # must already reject allocation under that stage's pixel budget.
+        self.assertTrue(any('max pixel count 128' in message for _, _, message in logs), logs)
+
+    def test_libdav1d_enforces_native_limit_on_midstream_av1_resolution_change(self):
+        import av
+        path = self.root / 'changing-av1.mp4'
+        changing_resolution_video(path, codec='av1')
+        with av.open(str(path), format='mov') as source:
+            self.assertEqual(source.streams.video[0].codec_context.name, 'libdav1d')
+            self.assertEqual([(frame.width, frame.height) for frame in source.decode(video=0)],
+                             [(64, 64), (128, 128)])
+        self.assertEqual([frame['shape'] for frame in video_frames(path, [0, 0.05], 0, 0.1, 20)],
+                         [[64, 64, 3], [128, 128, 3]])
+        with patch('inspection.interop.MAX_VIDEO_PIXELS', 4096):
+            frames = video_frames(path, [0, 0.05], 0, 0.1, 20)
+            self.assertEqual(next(frames)['shape'], [64, 64, 3])
+            with self.assertRaisesRegex(ImportError, 'decoder rejected') as raised:
+                next(frames)
+        self.assertIsInstance(raised.exception.__cause__, av.FFmpegError)
+
+    def test_unsupported_video_decoder_is_refused_cleanly_by_cli(self):
+        import av
+        import numpy as np
+        fixture(self.root)
+        path = self.root / 'videos/observation.images.front/chunk-000/file-000.mp4'
+        with av.open(str(path), 'w') as output:
+            stream = output.add_stream('mjpeg', rate=2)
+            stream.width = stream.height = 16
+            stream.pix_fmt = 'yuvj420p'
+            frame = av.VideoFrame.from_ndarray(np.zeros((16, 16, 3), dtype=np.uint8), format='rgb24')
+            for packet in stream.encode(frame): output.mux(packet)
+            for packet in stream.encode(): output.mux(packet)
+        import sys
+        result = subprocess.run([sys.executable, '-m', 'inspection.interop', 'lerobot', str(self.root),
+                                 '--episode', '0', '--out', str(self.root / 'rejected.json')],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('Import refused:', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+        self.assertFalse((self.root / 'rejected.json').exists())
 
     def test_existing_destination_not_overwritten(self):
         path = self.root / 'keep.mcap'
