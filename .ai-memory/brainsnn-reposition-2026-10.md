@@ -6,7 +6,9 @@ description: Arena-led lobby and unified Review implementation following PR 186;
 # BrainSNN repositioning, October 2026
 
 Owner approved an Arena-led lobby rather than making the simulator the homepage.
-Implementation branch `codex/arena-review-consolidation` builds on open PR #186 (`lobby-home`). Do not describe the branch as deployed without deployment evidence.
+Implementation was developed on `codex/arena-review-consolidation` atop PR #186
+(`lobby-home`). PR #187 was merged into `lobby-home` as `6f62616c` on October17 UTC.
+Check #186 for the final main merge and the deployment workflow for rollout status.
 
 - Public navigation: Arena, Review, Evidence; Lab in overflow. Near-black/cyan/violet identity retained.
 - `/office?tab=passage|drafts|claims|video` is the Review workbench. `/app`, `/engine`, `/reconstruct` redirect there. The previous Reconstruct route was a separate project landing page; Claim split now identifies source-anchored wording cues, not factual verification.
@@ -38,3 +40,9 @@ Implementation branch `codex/arena-review-consolidation` builds on open PR #186 
   navigation assertions pass. Sponsor gates now cover LobbyHome/PublicNav/nav.
 - The TViz/inspection document is research only; merging it does not implement
   the proposed inspection layer or establish a named-policy GPU run.
+- A late automated review found that AppShell's passive title effect can
+  overwrite nested Review-tab and Arena-task titles during hydration. Fixed
+  with a query-aware layout-effect fallback before child title effects. The
+  two regression cases fail on the old compiled build and all four desktop/
+  mobile cases pass on the corrected production build, including task-index
+  and unavailable-task fallback titles.

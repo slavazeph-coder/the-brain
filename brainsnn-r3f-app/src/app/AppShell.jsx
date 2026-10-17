@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { track } from '../lib/analytics.js';
 import { LobbyHome } from './LobbyHome.jsx';
 import { BehaviourHome } from './BehaviourHome.jsx';
@@ -65,7 +65,12 @@ export function AppShell() {
     window.addEventListener('keydown', shortcut);
     return () => { window.removeEventListener('popstate', sync); window.removeEventListener('keydown', shortcut); };
   }, []);
-  useEffect(() => { document.title = resolveRouteMeta(window.location.pathname).title; }, [route]);
+  // Establish a fallback before page effects run. A resolved lazy page mounts
+  // in the same commit as the shell, so a parent passive effect would otherwise
+  // overwrite its more specific tab/task title on history navigation.
+  useLayoutEffect(() => {
+    document.title = resolveRouteMeta(window.location.pathname, window.location.search).title;
+  }, [route]);
   function openReview(input = '') {
     setInitialInput(typeof input === 'string' ? input : '');
     window.history.pushState({}, '', '/office?tab=passage'); setRoute('review');

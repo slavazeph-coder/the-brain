@@ -31,6 +31,60 @@ test('old review links select addressable tabs, browser Back keeps a draft', asy
   await expect(page.getByLabel('Passage to review')).toHaveValue('Keep this draft while switching tabs.');
 });
 
+// Keep the document alive so React.lazy has resolved before the page remounts.
+// A full page.goto would reload the modules and mask the parent/child effect race.
+async function openLabWithinDocument(page) {
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/lab');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByRole('heading', { name: 'Lab', exact: true })).toBeVisible();
+}
+
+async function finishPageEffects(page) {
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
+test('Review tab titles survive warm remounts and query history navigation', async ({ page }) => {
+  await page.goto('/office?tab=video');
+  await expect(page.getByLabel('Timestamped captions')).toBeVisible();
+  await finishPageEffects(page);
+  await expect(page).toHaveTitle('Video cues · Review | BrainSNN');
+  await openLabWithinDocument(page);
+  await page.goBack();
+  await expect(page.getByLabel('Timestamped captions')).toBeVisible();
+  await finishPageEffects(page);
+  await expect(page).toHaveTitle('Video cues · Review | BrainSNN');
+  await page.getByRole('link', { name: 'Claim split', exact: true }).click();
+  await expect(page).toHaveTitle('Claim split · Review | BrainSNN');
+  await page.goBack();
+  await expect(page.getByLabel('Timestamped captions')).toBeVisible();
+  await finishPageEffects(page);
+  await expect(page).toHaveTitle('Video cues · Review | BrainSNN');
+});
+
+test('Arena task title survives a warm remount while index and unavailable tasks keep a fallback', async ({ page }) => {
+  await page.goto('/arena/tasks/refund-authority');
+  await expect(page.getByRole('button', { name: 'Run mission', exact: true })).toBeVisible();
+  await finishPageEffects(page);
+  await expect(page).toHaveTitle('Arena Task 001 · Refund Authority | BrainSNN');
+  await openLabWithinDocument(page);
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Run mission', exact: true })).toBeVisible();
+  await finishPageEffects(page);
+  await expect(page).toHaveTitle('Arena Task 001 · Refund Authority | BrainSNN');
+  for (const [path, heading] of [['/arena/tasks', 'Arena tasks'], ['/arena/tasks/not-implemented', 'Task unavailable']]) {
+    await openLabWithinDocument(page);
+    await page.evaluate(pathname => {
+      window.history.pushState({}, '', pathname);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, path);
+    await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+    await finishPageEffects(page);
+    await expect(page).toHaveTitle('Arena tasks | BrainSNN');
+  }
+});
+
 test('passage findings highlight exact source text with misses beside the score', async ({ page }) => {
   await page.goto('/office');
   await page.getByLabel('Passage to review').fill('Act now! This guaranteed solution will change everything.');
