@@ -63,6 +63,14 @@ async function fixture(api, action = .2, changes = {}) {
     assert.match(await page.locator('.ai-comparison').innerText(), /First supported difference/);
     assert.match(await page.locator('.ai-comparison').innerText(), /inference-result values differ/);
     assert.equal(await page.locator('#ai-baseline-detail .ai-image canvas').count(), 2);
+    const baselineOriginals=await api.importBundle(baseline), baselineCameraManifest=JSON.parse(baseline.manifestText), baselineCameraBytes=new Uint8Array(12).fill(33);
+    delete baselineCameraManifest.artifacts[0].sha256;delete baselineCameraManifest.artifacts[0].byteLength;
+    await page.locator('#ai-baseline').setInputFiles(upload(await api.seal(baselineCameraManifest,{...baselineOriginals.payloads,'camera-a.rgb':baselineCameraBytes})));
+    await page.getByRole('button',{name:'Compare aligned evidence',exact:true}).click();
+    const baselineOriginalDownload=page.waitForEvent('download');await page.locator('#ai-baseline-detail [data-baseline-artifact="camera-a"]').first().click();
+    assert.deepEqual(fs.readFileSync(await(await baselineOriginalDownload).path()),Buffer.from(baselineCameraBytes),'baseline artifact link resolves baseline bytes despite colliding candidate artifact ID');
+    const candidateOriginalDownload=page.waitForEvent('download');await page.locator('#ai-selection [data-artifact="camera-a"]').first().click();
+    assert.deepEqual(fs.readFileSync(await(await candidateOriginalDownload).path()),Buffer.from((await api.importBundle(candidate)).payloads['camera-a.rgb']),'candidate artifact link still resolves candidate original');
     await page.locator('#ai-alignment').selectOption('event'); await page.locator('#ai-baseline-event').fill('missing'); await page.locator('#ai-candidate-event').fill('state'); await page.getByRole('button',{name:'Compare aligned evidence',exact:true}).click();
     assert.match(await page.locator('#ai-error').innerText(), /exact recorded event IDs/);
     const incompatible = await fixture(api,.1,{context:{taskId:'other'}}); await page.locator('#ai-baseline').setInputFiles(upload(incompatible)); await page.getByText('Comparison blocked · incompatible or unknown context',{exact:true}).waitFor();
@@ -84,6 +92,10 @@ async function fixture(api, action = .2, changes = {}) {
     const largeArtifact=oversizedManifest.artifacts[0];Object.assign(largeArtifact,{mediaType:'image/png'});for(const key of ['dtype','shape','endianness','sha256','byteLength'])delete largeArtifact[key];
     await page.locator('#ai-file').setInputFiles(upload(await api.seal(oversizedManifest,{...originals.payloads,'camera-a.rgb':png}))); await page.waitForFunction(()=>document.querySelector('.ai-summary')?.textContent.includes('simulator-policy'));
     await page.locator('#ai-event-id').fill('observation'); await page.getByRole('button',{name:'Go to event',exact:true}).click();assert.match(await page.locator('#ai-image-candidate-0').innerText(),/exceed the display limit/);assert.equal(await page.locator('#ai-image-candidate-0 img').count(),0,'oversized PNG is rejected before assigning image src');
+    const plotManifest=api.createManifest({recordingId:'plot-edge-fixture',events:[[Number.MAX_SAFE_INTEGER,2],[-Number.MAX_SAFE_INTEGER],[]].map((state,index)=>({id:'plot-'+index,seq:index+1,kind:'state',simTime:index,refs:[],artifactIds:[],data:{state}})),completion:{status:'complete',committedSequence:3,lastObservedSequence:3,gapCount:0,unknownTail:false}});
+    await page.locator('#ai-file').setInputFiles(upload(await api.seal(plotManifest,{})));await page.waitForFunction(()=>document.querySelector('.ai-summary')?.textContent.includes('plot-edge-fixture'));
+    assert.equal(await page.locator('.ai-chart svg').count(),2,'ragged and empty vectors do not create empty dimensions');
+    assert.equal(await page.locator('.ai-chart circle').evaluateAll(points=>points.every(point=>Number.isFinite(Number(point.getAttribute('cx')))&&Number.isFinite(Number(point.getAttribute('cy'))))),true,'large supported values have finite plot coordinates');
     assert.equal(requests.filter(item=>item.method!=='GET'||(!item.url.startsWith(base)&&!item.url.startsWith('blob:'))).length,0,'imports and inspection never issue worker requests');
     await page.keyboard.press('Escape'); assert.equal(await page.locator('dialog').count(),0); assert.equal(await page.locator('[data-arena-action="open-recording"]').evaluate(element=>element===document.activeElement),true);
     await page.locator('#arena-run').click(); await page.evaluate(()=>{for(let i=0;i<500&&!BrainSNNArena.getState().currentSnapshot.state.done;i++)for(const tick of [...window.__ticks.values()])tick();});

@@ -61,7 +61,8 @@
   }
   function reference(id, recording = candidate, prefix = '') {
     if (recording.manifest.events.some(event => event.id === id)) return `<button type="button" class="ai-ref" data-${prefix}event="${esc(id)}">${esc(id)}</button>`;
-    if (recording.manifest.artifacts.some(artifact => artifact.id === id)) return `<button type="button" class="ai-ref" data-artifact="${esc(id)}">${esc(id)} · original</button>`;
+    const artifact = recording.manifest.artifacts.find(item => item.id === id);
+    if (artifact) return artifact.retention === 'included' ? `<button type="button" class="ai-ref" data-${prefix}artifact="${esc(id)}">${esc(id)} · original</button>` : `<code>${esc(id)} · original omitted</code>`;
     return `<code>${esc(id)}</code>`;
   }
   function revoke(scope) { urls = urls.filter(item => { if (!scope || item.scope === scope) { URL.revokeObjectURL(item.url); return false; } return true; }); }
@@ -149,7 +150,7 @@
     return `<section class="ai-section"><h3>${scope === 'baseline' ? 'Baseline · ' : ''}${isDataset ? 'Dataset camera frames' : 'Recorded camera evidence'}</h3><p class="ai-muted">${obs ? `Linked observation ${esc(obs.id)}${observations.length > 1 ? ' · multiple linked observations; showing first reference' : ''}` : 'No observation linked by recorded event IDs. Camera timing is not guessed.'}${isDataset ? ' · Dataset pixels; policy consumption is unverified.' : ''}</p>
       <div class="ai-cameras">${expected.map((id, index) => {
         const camera = cameras.find(item => item.id === id), artifact = recording.manifest.artifacts.find(item => item.id === camera?.artifactId);
-        return `<figure class="ai-camera"><figcaption>${esc(id)} <span>${camera?.role === 'spectator' ? 'spectator · not policy input' : isDataset ? 'dataset frame' : recording.manifest.source.kind === 'simulator-policy' ? 'declared policy input' : 'policy consumption unverified'}</span></figcaption><div class="ai-image" id="ai-image-${scope}-${index}" data-camera-scope="${scope}" data-camera-index="${index}">${artifact ? esc(artifact.retention === 'included' ? 'Decoding checked artifact…' : 'Original omitted · ' + (artifact.omissionReason || 'No pixels available')) : 'No recorded pixels available'}</div>${artifact ? `<p><code>${esc(artifact.id)}</code> · ${esc(artifact.mediaType)}</p>` : ''}${camera ? `<details><summary>Frame provenance and clock</summary><pre>${esc(pretty(camera))}</pre></details>` : ''}</figure>`;
+        return `<figure class="ai-camera"><figcaption>${esc(id)} <span>${camera?.role === 'spectator' ? 'spectator · not policy input' : isDataset ? 'dataset frame' : recording.manifest.source.kind === 'simulator-policy' ? 'declared policy input' : 'policy consumption unverified'}</span></figcaption><div class="ai-image" id="ai-image-${scope}-${index}" data-camera-scope="${scope}" data-camera-index="${index}">${artifact ? esc(artifact.retention === 'included' ? 'Decoding checked artifact…' : 'Original omitted · ' + (artifact.omissionReason || 'No pixels available')) : 'No recorded pixels available'}</div>${artifact ? `<p>${reference(artifact.id, recording, scope === 'baseline' ? 'baseline-' : '')} · ${esc(artifact.mediaType)}</p>` : ''}${camera ? `<details><summary>Frame provenance and clock</summary><pre>${esc(pretty(camera))}</pre></details>` : ''}</figure>`;
       }).join('')}</div>${recording.manifest.source.kind === 'scripted-practice' && event?.kind === 'state' && event.data.state && !Array.isArray(event.data.state) ? `<figure class="ai-camera ai-practice"><figcaption>Recorded scripted state <span>Re-rendered view · not a captured policy input</span></figcaption><canvas id="ai-practice-${scope}" width="720" height="400" aria-label="Re-rendered scripted practice state"></canvas></figure>` : ''}</section>`;
   }
   function details(recording, event, scope = 'candidate') {
@@ -158,6 +159,7 @@
     const chosen = chunk ? recording.manifest.events.filter(item => ['controller-input', 'action'].includes(item.kind) && (item.data.chunkId === chunk.id || item.refs.includes(chunk.id))) : [];
     return `<section class="ai-section"><h3>${scope === 'baseline' ? 'Baseline event' : 'Selected event'} · ${esc(event.id)}</h3><p>${esc(event.kind)}${event.kind === 'controller-input' ? ' · chosen input to the controller, not measured motor output' : event.kind === 'dataset-action' ? ' · dataset label; execution unverified' : ''}</p>
       <p class="ai-links">Recorded references: ${event.refs.length ? event.refs.map(id => reference(id, recording, scope === 'baseline' ? 'baseline-' : '')).join(' ') : 'none'}</p>
+      <p class="ai-links">Original artifacts: ${event.artifactIds.length ? event.artifactIds.map(id => reference(id, recording, scope === 'baseline' ? 'baseline-' : '')).join(' ') : 'none attached to this event'}</p>
       ${vector(event) ? `<p class="ai-vector"><strong>${event.kind === 'state' || event.kind === 'observation' ? 'State' : event.kind === 'dataset-action' ? 'Dataset action' : 'Controller input'}:</strong> ${esc(vector(event).map(n => Number(n.toPrecision(6))).join(', '))}</p>` : ''}
       ${chunk ? `<div class="ai-chunk"><h4>Predicted chunk · ${esc(chunk.id)}</h4><p>${Array.isArray(chunk.data.actions) ? chunk.data.actions.length : 'Unknown'} predicted vectors · ${esc(chunk.data.queuedCount ?? 'unknown')} queued · ${esc(chunk.data.unusedCount ?? 'unknown')} initially unused</p><p>Recorded chosen inputs: ${chosen.length ? chosen.slice(0, 100).map(item => reference(item.id, recording, scope === 'baseline' ? 'baseline-' : '')).join(' ') : 'none linked'}</p><p class="ai-muted">Predictions are not execution. Each chosen input retains its recorded chunk index.</p><details><summary>Predicted vectors and chunk metadata</summary><pre>${esc(pretty(chunk.data))}</pre></details></div>` : ''}
       <details open><summary>Recorded event data</summary><pre>${esc(pretty(event))}</pre></details></section>`;
@@ -171,8 +173,9 @@
       const stride = Math.max(1, Math.ceil(total / 600)); samples = samples.filter((_, index) => index % stride === 0);
       const dimensions = Math.min(16, Math.max(...samples.map(event => vector(event).length)));
       return `<h3>${title}</h3>${stride > 1 ? `<p class="ai-muted">Plot samples every ${stride}th vector; all ${total} vectors remain in the event timeline.</p>` : ''}${Array.from({ length: dimensions }, (_, dimension) => {
-        const values = samples.map(event => vector(event)[dimension]).filter(finite), min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
-        return `<div class="ai-chart"><span>[${dimension}]</span><svg viewBox="0 0 600 48" role="img" aria-label="${esc(title)} component ${dimension}, range ${min} to ${max}"><path d="M0 44H600" class="ai-axis"/>${samples.map((event, index) => { const value = vector(event)[dimension]; return finite(value) ? `<circle data-event="${esc(event.id)}" cx="${((index / Math.max(1, samples.length - 1)) * 592 + 4).toFixed(2)}" cy="${(40 - (value - min) / span * 34).toFixed(2)}" r="${event.id === candidate.manifest.events[selected]?.id ? '4' : '2'}"><title>${esc(event.id)}: ${value}</title></circle>` : ''; }).join('')}</svg><small>${Number(min.toPrecision(4))}…${Number(max.toPrecision(4))}</small></div>`;
+        const values = samples.map(event => vector(event)[dimension]).filter(finite); if (!values.length) return '';
+        const min = Math.min(...values), max = Math.max(...values), scale = Math.max(Math.abs(min), Math.abs(max), 1), scaledMin = min / scale, span = max / scale - scaledMin || 1;
+        return `<div class="ai-chart"><span>[${dimension}]</span><svg viewBox="0 0 600 48" role="img" aria-label="${esc(title)} component ${dimension}, range ${min} to ${max}"><path d="M0 44H600" class="ai-axis"/>${samples.map((event, index) => { const value = vector(event)[dimension]; return finite(value) ? `<circle data-event="${esc(event.id)}" cx="${((index / Math.max(1, samples.length - 1)) * 592 + 4).toFixed(2)}" cy="${(40 - (value / scale - scaledMin) / span * 34).toFixed(2)}" r="${event.id === candidate.manifest.events[selected]?.id ? '4' : '2'}"><title>${esc(event.id)}: ${value}</title></circle>` : ''; }).join('')}</svg><small>${Number(min.toPrecision(4))}…${Number(max.toPrecision(4))}</small></div>`;
       }).join('')}`;
     }).join('')}<details><summary>Recorded vector semantics</summary><pre>${esc(pretty({ action: candidate.manifest.context.actionSemantics, state: candidate.manifest.context.stateSemantics, units: candidate.manifest.context.units }))}</pre></details></section>`;
   }
@@ -281,11 +284,11 @@
   }
   function handleChange(event) { if (event.target.id === 'ai-file') readFile(event.target.files?.[0], false); if (event.target.id === 'ai-baseline') readFile(event.target.files?.[0], true); }
   function handleClick(event) {
-    const target = event.target.closest('[data-action],[data-event],[data-baseline-event],[data-artifact],[data-review]'); if (!target) return;
+    const target = event.target.closest('[data-action],[data-event],[data-baseline-event],[data-artifact],[data-baseline-artifact],[data-review]'); if (!target) return;
     if (target.dataset.event) return jump(target.dataset.event);
     if (target.dataset.baselineEvent) return showBaseline(target.dataset.baselineEvent);
     if (target.dataset.review) { $('#ai-review-finding').value = target.dataset.review; $('#ai-review-section').scrollIntoView({ block: 'nearest' }); $('#ai-review-decision').focus(); return; }
-    if (target.dataset.artifact && candidate) { const artifact = candidate.manifest.artifacts.find(item => item.id === target.dataset.artifact); if (artifact?.retention === 'included') download(candidate.payloads[artifact.path], artifact.id + '.bin', 'application/octet-stream'); return; }
+    if (target.dataset.artifact || target.dataset.baselineArtifact) { const recording = target.dataset.baselineArtifact ? baseline : candidate, id = target.dataset.baselineArtifact || target.dataset.artifact; const artifact = recording?.manifest.artifacts.find(item => item.id === id); if (artifact?.retention === 'included') download(recording.payloads[artifact.path], artifact.id + '.bin', 'application/octet-stream'); return; }
     switch (target.dataset.action) {
       case 'close': return close(); case 'reload': return reload(); case 'previous': return selectEvent(selected - 1); case 'next': return selectEvent(selected + 1);
       case 'export': if (candidate) download(api().exportBundle(candidate), 'brainsnn-recording.json'); break;
