@@ -255,6 +255,19 @@ test('comparison ignores unrelated source shard bytes and withholds missing came
   assert.equal(result.firstDivergence, null); assert(result.limitations.some(t => t.includes('retained events')));
 });
 
+test('comparison withholds a prompt difference when either original prompt is omitted', async () => {
+  const data = await fixture(), manifest = clone(data.manifest);
+  manifest.artifacts.push({ id: 'artifact-1', path: 'artifacts/input.txt', mediaType: 'text/plain', retention: 'included' });
+  manifest.events[0].data.promptArtifactId = 'artifact-1'; manifest.events[0].artifactIds.push('artifact-1');
+  const baseline = await R.importBundle(await R.seal(manifest, { ...data.payloads, 'artifacts/input.txt': 'first instruction' }));
+  const candidate = await R.importBundle(await R.seal(manifest, { ...data.payloads, 'artifacts/input.txt': 'other instruction' }));
+  const options = { alignment: { kind: 'simTime', candidateOffset: 0 } };
+  assert.equal(R.compareRecordings(baseline, candidate, options).firstDivergence.kind, 'observation');
+  const omitted = await R.importBundle(await R.redactBundle(candidate, { omitPrompts: true }));
+  assert.equal(R.compareRecordings(baseline, omitted, options).firstDivergence, null);
+  assert.equal(R.compareRecordings(omitted, baseline, options).firstDivergence, null);
+});
+
 test('imported dataset-action labels do not become execution evidence', async () => {
   const data = await fixture();
   const imported = await R.importBundle(await altered(data, m => {
@@ -297,15 +310,16 @@ test('redaction produces a distinct identity, explicit exclusions and stale revi
   assert.equal(data.manifest.artifacts[0].retention, 'included');
 });
 
-test('prompt redaction removes bytes while retaining a resolvable omitted-artifact locator', async () => {
+test('prompt redaction follows typed locators regardless of artifact naming', async () => {
   const data = await fixture(), manifest = clone(data.manifest);
   manifest.context.prompt = 'Private instruction';
-  manifest.artifacts.push({ id: 'prompt', path: 'artifacts/prompt.txt', kind: 'prompt', mediaType: 'text/plain', retention: 'included' });
-  manifest.events[0].data.promptArtifactId = 'prompt'; manifest.events[0].artifactIds.push('prompt');
-  const input = await R.importBundle(await R.seal(manifest, { ...data.payloads, 'artifacts/prompt.txt': 'Private instruction' }));
+  manifest.artifacts.push({ id: 'artifact-1', path: 'artifacts/input.txt', mediaType: 'text/plain', retention: 'included' });
+  manifest.events[0].data.promptArtifactId = 'artifact-1'; manifest.events[0].artifactIds.push('artifact-1');
+  const input = await R.importBundle(await R.seal(manifest, { ...data.payloads, 'artifacts/input.txt': 'Private instruction' }));
   const result = await R.importBundle(await R.redactBundle(input, { omitPrompts: true }));
-  assert.equal(result.manifest.events[0].data.promptArtifactId, 'prompt');
+  assert.equal(result.manifest.events[0].data.promptArtifactId, 'artifact-1');
   assert.equal(result.manifest.artifacts[1].retention, 'omitted');
+  assert.equal(result.payloads['artifacts/input.txt'], undefined);
   assert.equal(result.manifest.context.prompt, '[redacted]');
   assert.equal(R.exportBundle(result).includes('Private instruction'), false);
 });

@@ -352,7 +352,9 @@
       }).sort((a, b) => a.id.localeCompare(b.id));
       if (cameras.some(camera => camera.sha256 === null)) return null;
       if (!cameras.length && event.data.state == null) return null;
-      return { cameras, state: event.data.state ?? null, prompt: descriptors.get(event.data.promptArtifactId)?.sha256 ?? null };
+      const prompt = descriptors.get(event.data.promptArtifactId);
+      if (event.data.promptArtifactId != null && prompt?.retention !== 'included') return null;
+      return { cameras, state: event.data.state ?? null, prompt: prompt?.sha256 ?? null };
     }
     if (['action', 'controller-input', 'dataset-action'].includes(event.kind)) return event.data.vector ?? event.data.action ?? null;
     if (['chunk', 'inference-result'].includes(event.kind)) return event.data.actions ?? null;
@@ -429,9 +431,10 @@
   async function redactBundle(validated, options = {}) {
     const input = validated?.bundle ? await importBundle(validated.bundle) : await importBundle(validated);
     const manifest = copy(input.manifest), payloads = {}, omitted = new Set(options.omitArtifacts || []);
+    const promptIds = new Set(manifest.events.map(event => event.data.promptArtifactId).filter(id => typeof id === 'string'));
     for (const artifact of manifest.artifacts) {
       const omit = omitted.has(artifact.id) || (options.omitImages && (artifact.mediaType.startsWith('image/') || artifact.mediaType.startsWith('video/') || artifact.shape?.length === 3))
-        || (options.omitPrompts && (artifact.kind === 'prompt' || /prompt/i.test(artifact.id)));
+        || (options.omitPrompts && (promptIds.has(artifact.id) || artifact.kind === 'prompt' || /prompt/i.test(artifact.id)));
       if (omit && artifact.retention === 'included') { artifact.retention = 'omitted'; artifact.omissionReason = 'Excluded by local export selection.'; }
       if (artifact.retention === 'included') payloads[artifact.path] = input.payloads[artifact.path];
     }
