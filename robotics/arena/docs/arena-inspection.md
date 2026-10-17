@@ -28,11 +28,15 @@ Old `brainsnn.arena.evidence.v1` exports remain readable. Their preview metadata
 
 Exports can contain prompts, camera images and source files. Inspect them before sharing. The website does not upload a local import. Worker endpoint credentials are not part of recordings. A redacted export has different bound contents and explicit omissions; its original source remains unchanged. Saved review notes bind to the exact manifest hash and become stale if attached to changed content.
 
+The omission controls select known image/video or prompt artifacts. They do not inspect or scrub original Parquet, MCAP or other opaque source containers, which may embed the same content. A selected export is not a guarantee that sensitive content has been removed.
+
 ## Worker storage and viewer access
 
 See `.env.example` in `workers/arena` for the current defaults and ranges. Set `ARENA_RECORDING_DIR` to a persistent private volume outside the checkout and model cache. Recorded episodes survive live-session reset, deletion and TTL expiry, subject to the explicit archive retention limits. A website deployment does not provision or start this GPU worker.
 
 The asynchronous writer copies input buffers before enqueueing them. It commits a contiguous sequence and writes the complete marker only after durable artifacts/events. Queue overflow, storage failure or interrupted finalization leaves a partial recording with gaps or an unknown tail. A full disk can prevent a gap-counter write too, so missing finalization never means no loss. Retention is bounded; export important episodes before expiry.
+
+Journal bytes, manifest size/complexity and artifact count are checked before advancing the durable sequence. At most two recording writers may remain pending per worker session/process. If previous writes are still finishing, reset returns `recording_busy` (409) before changing the live episode; retry after finalization.
 
 `ARENA_READ_TOKEN` is an optional distinct viewer secret of at least 32 characters. It can read capabilities and archived recordings but cannot create sessions, control them or delete them. `ARENA_TOKEN` retains existing operator access. Never put either token in Git, URLs, public environment variables or an exported case.
 
