@@ -460,12 +460,17 @@ def run_campaign(request, output, pilot, *, plan=None, resume=False, max_seconds
             return report
 
         def finish(case, status, code=None):
-            case["status"], case["taskSuccess"] = status, (status == "task_success") if status in COMPLETE else None
+            final_case = {**case, "status": status,
+                          "taskSuccess": (status == "task_success") if status in COMPLETE else None}
             if code:
-                case["errorCode"] = code
-            case["resultPath"] = f"cases/{case['index']:02d}/result.json"
-            result = {"schema": "brainsnn.campaign.case.v1", **case}
-            store.save(case["resultPath"], result)
+                final_case["errorCode"] = code
+            final_case["resultPath"] = f"cases/{case['index']:02d}/result.json"
+            result = {"schema": "brainsnn.campaign.case.v1", **final_case}
+            # Keep the durable case in-flight throughout the result write's
+            # intent and file commits. A crash before the acknowledgement then
+            # resumes as interrupted, without replaying the spent attempt.
+            store.save(final_case["resultPath"], result)
+            case.update(final_case)
             store.commit()
             return persist_report()
 

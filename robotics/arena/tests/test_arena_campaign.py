@@ -151,6 +151,41 @@ class CampaignTests(unittest.TestCase):
         self.assertEqual(len(self.manager.created), before)
         self.assertEqual(report["cases"][0]["status"], "interrupted")
 
+    def assert_terminal_result_crash_recovers(self, *, after_atomic):
+        class PowerLoss(BaseException):
+            pass
+
+        original = campaign.Store.atomic
+        def crash(store, relative, raw):
+            if relative == "cases/00/result.json":
+                if after_atomic:
+                    original(store, relative, raw)
+                raise PowerLoss()
+            return original(store, relative, raw)
+
+        with patch.object(campaign.Store, "atomic", crash):
+            with self.assertRaises(PowerLoss):
+                self.run_campaign(plan=plan())
+        ledger = json.loads((self.output / "ledger.json").read_text())
+        self.assertEqual(ledger["cases"][0]["status"], "inflight")
+        self.assertIsNone(ledger["cases"][0]["resultPath"])
+        self.assertEqual(ledger["pendingWrite"]["path"], "cases/00/result.json")
+        self.assertEqual((self.output / "cases/00/result.json").exists(), after_atomic)
+        self.assertEqual(self.manager.cases, [("libero_spatial:0", 7)])
+
+        resumed = self.run_campaign(plan=plan(), resume=True)
+        self.assertEqual(self.manager.cases, [("libero_spatial:0", 7), ("libero_spatial:0", 8)])
+        self.assertEqual([case["status"] for case in resumed["cases"]], ["interrupted", "task_success"])
+        self.assertEqual(resumed["completedEpisodes"], 1)
+        self.assertIsNone(resumed["cases"][0]["taskSuccess"])
+        self.assertIsNone(self.manager.session)
+
+    def test_crash_before_terminal_result_file_commit_resumes_without_replay(self):
+        self.assert_terminal_result_crash_recovers(after_atomic=False)
+
+    def test_crash_after_terminal_result_file_before_ack_resumes_without_replay(self):
+        self.assert_terminal_result_crash_recovers(after_atomic=True)
+
     def test_partial_archive_is_never_counted_as_completed_and_later_cases_continue(self):
         def partial(method, path, value):
             if path.startswith("/v1/recordings/") and not path.endswith("/bundle"):
