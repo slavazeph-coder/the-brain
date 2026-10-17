@@ -633,14 +633,15 @@ test('a powder lab drawing survives a reload through the local save slot', async
 test('public navigation contains no paid action before the model gate', async ({ page }) => {
   for (const path of ['/', '/office', '/arcade', '/lab']) {
     await page.goto(path); await expect(page.locator('.public-nav')).toBeVisible();
-    await expect(page.getByRole('link', { name: /Pricing/ })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Pricing|Upgrade|Pro \/ Pilot/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Pricing', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
+    await expect(page.getByRole('link', { name: /Buy now|Checkout|Purchase/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Buy now|Checkout|Upgrade|Pro \/ Pilot/ })).toHaveCount(0);
   }
 });
 
 test('Arcade exposes the same primary destinations at every breakpoint', async ({ page }) => {
   await page.goto('/arcade');
-  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('> a')).toHaveText(['Robot arcade', 'Test packs']);
+  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('> a')).toHaveText(['Robot arcade', 'Pricing']);
 });
 
 test('Lab overflow closes on Escape and outside click', async ({ page }) => {

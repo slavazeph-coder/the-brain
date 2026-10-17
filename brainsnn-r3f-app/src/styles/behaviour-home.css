@@ -77,3 +77,9 @@
 .bh-pack-next p{max-width:580px;font-size:.85rem;margin:0}
 .bh-pack-next a{flex-shrink:0}
 @media(max-width:760px){.bh-pack-steps{grid-template-columns:1fr;gap:20px}.bh-pack-next{align-items:flex-start;flex-direction:column;gap:20px}.bh-robot-home .bh-lobby-hero{padding:44px 0;gap:28px}.bh-robot-home .bh-hero h1{font-size:clamp(2.8rem,8vw,4.6rem)}}
+
+.bh-price-preview{display:grid;grid-template-columns:1fr auto;align-items:center;gap:7px 18px;max-width:470px;margin-top:24px;padding:16px 18px;border:1px solid #68eaff38;border-radius:16px;background:linear-gradient(110deg,#68eaff0b,#947cff10)}
+.bh-price-preview>span:first-child{font-size:.91rem;font-weight:600}.bh-price-preview strong{font-size:1.7rem;letter-spacing:-.045em;color:var(--bh-cyan)}
+.bh-price-preview>span:last-child{grid-column:1/-1;display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--bh-muted);line-height:1.5}
+.bh-price-preview:hover{border-color:var(--bh-cyan)}
+@media(max-width:420px){.bh-price-preview{padding:14px;gap:6px 8px}.bh-price-preview strong{font-size:1.55rem}.bh-price-preview>span:first-child{font-size:.83rem}}

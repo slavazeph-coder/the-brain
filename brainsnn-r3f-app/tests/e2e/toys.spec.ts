@@ -9,7 +9,7 @@ test('robotics leads and the toys remain under More', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Test your robot.');
   await expect(page.getByRole('link', { name: 'Try the robot arcade', exact: true })).toHaveAttribute('href', '/arena/');
-  await expect(page.getByRole('link', { name: 'See test packs', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
+  await expect(page.getByRole('link', { name: 'See pricing', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
   await page.getByLabel('More navigation').click();
   await page.getByRole('link', { name: 'Lab', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Lab', exact: true })).toBeVisible();

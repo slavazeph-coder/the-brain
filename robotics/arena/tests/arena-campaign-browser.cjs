@@ -5,7 +5,7 @@ const { createRequire } = require('node:module');
 const { makeReport } = require('./arena-campaign-report-fixture.cjs');
 const app = path.resolve(__dirname, '../../../brainsnn-r3f-app'), assets = path.join(app, 'public/arena');
 const { chromium } = createRequire(path.join(app, 'package.json'))('@playwright/test');
-const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Campaign import fixture</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/arena-campaign.css"><style>body{margin:0;background:#080c12;color:#f4f7fb}main{max-width:1160px;margin:auto;padding:0 22px}button,input,select{font:inherit}</style></head><body><main><div id="arena-campaign-root"></div></main><script>window.__campaignNavigation=[];window.BrainSNNExperiment={restoreFromURL:()=>window.__campaignNavigation.push('restore'),getState:()=>({robotId:'panda',modelId:'pi05',task:'libero_spatial:0',seed:'7',mode:'robot-preview',protocol:'benchmark'})};window.BrainSNNWorkspace={showPage:id=>{window.__campaignPage=id;window.__campaignNavigation.push(id)}}</script><script src="/arena-profiles.js"></script><script src="/arena-campaign.js"></script></body></html>`;
+const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Campaign import fixture</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/arena-campaign.css"><style>body{margin:0;background:#080c12;color:#f4f7fb}main{max-width:1160px;margin:auto;padding:0 22px}button,input,select{font:inherit}</style></head><body><main><div id="arena-campaign-root"></div></main><script>window.__campaignNavigation=[];window.BrainSNNExperiment={restoreFromURL:()=>window.__campaignNavigation.push('restore'),getState:()=>({robotId:'panda',modelId:'pi05',task:'libero_spatial:0',seed:'7',mode:'robot-preview',protocol:'benchmark'})};window.BrainSNNWorkspace={showPage:id=>{window.__campaignPage=id;window.__campaignNavigation.push(id)}}</script><script src="/arena-profiles.js"></script><script src="/arena-pricing.js"></script><script src="/arena-campaign.js"></script></body></html>`;
 const server = http.createServer((req, res) => {
   if (req.url === '/test.html') { res.setHeader('Content-Type', 'text/html'); res.end(html); return; }
   const name = req.url.slice(1);
@@ -29,7 +29,7 @@ const upload = report => ({ name: 'campaign-report.json', mimeType: 'application
     assert.equal(await page.locator('[data-campaign-export]').isVisible(), false, 'advanced planning stays in closed operator tools');
     assert.equal(await page.locator('[data-campaign-tools]').getAttribute('open'), null);
     assert.match(await page.locator('.campaign-pack').innerText(), /Each episode is one task attempt/);
-    assert.equal(await page.locator('[data-campaign-readiness]').innerText(), 'Real-policy testing is not yet available. The Panda + π0.5 pilot still needs a verified GPU run.');
+    assert.equal(await page.locator('[data-campaign-readiness]').innerText(), 'Current kit: up to ten sequential Panda + π0.5 episodes, after a verified GPU pilot.');
     assert.match(await page.locator('.campaign-pack').innerText(), /Each qualified pack includes/);
     assert.match(await page.locator('.campaign-pack-actions').innerText(), /Demo available now/);
     await page.getByRole('button', { name: 'Try the arcade', exact: false }).click();

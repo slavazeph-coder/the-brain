@@ -10,9 +10,9 @@ Current bundled execution is Panda / π₀.₅ LIBERO behind the pinned OpenPI i
 
 ## Simple customer offer
 
-The public site has two primary choices: **Robot arcade** and **Test packs**. Keep robot/model selection and practice challenges visible. Review, text-detector Evidence, Lab, the catalogue and extra space tools remain secondary destinations.
+The public site has two primary choices: **Robot arcade** and **Pricing**. Keep robot/model selection and practice challenges visible. Review, text-detector Evidence, Lab, the catalogue and extra space tools remain secondary destinations.
 
-Lead with one planned product: **one policy, ten episodes, an outcome report and retained evidence**. One episode is one task attempt; task successes, completed task misses and execution errors stay separate. The initial recipe is Panda + π₀.₅ on the ten LIBERO Spatial tasks. Public hosted testing remains unavailable until the real GPU pilot is verified. There is no public price or purchase action yet.
+Lead with one planned product: **one policy, ten episodes, an outcome report and retained evidence**. One episode is one task attempt; task successes, completed task misses and execution errors stay separate. The initial recipe is Panda + π₀.₅ on the ten LIBERO Spatial tasks. Public hosted testing remains unavailable until the real GPU pilot is verified. A visible illustrative runtime price and its assumptions help visitors plan; it is not an executable quote or purchase action.
 
 Customers should not need to choose providers, calculate worker-hours, enter a spending model, upload operator JSON or run a CLI to understand this offer. Those existing tools stay under a closed **Operator tools** disclosure. Larger packs are a short future-capacity note, not competing products to buy today. Do not attach the text detector’s holdout statistics to robotics claims.
 
@@ -46,7 +46,11 @@ Our proposed differentiation is a small managed release gate: a pinned checkpoin
 
 ## Pricing rule
 
-No unmeasured public per-episode rate is proposed. Let `C` be all-in expected compute, startup/idle time, evidence storage/transfer, execution failures, support/operator time and payment costs. Quote only after measuring the exact recipe. A target contribution margin `m` requires a price above `C / (1 - m)` when all proportional fees have already been included consistently; add monthly overhead allocation to assess net operating profitability.
+The owner explicitly restored public pricing transparency after the first simplification pass hid the commercial scale and price anchor. Keep the 10 / 1,000 / 100,000 episode choices and visible, editable example pricing. The historical illustration is in **USD**: `100,000 / 500 × US$0.60 / (1 − 0.30) = US$171.43`. That is US$120 of assumed runtime plus US$51.43 service margin allowance, a 30% gross margin (not a 30% markup). It assumes 500 episodes per worker-hour, equivalent to 7.2 seconds per episode. This has not been measured for Panda/π₀.₅ or any named local policy.
+
+The illustration excludes startup, storage, transfers, retries, external inference, operator support and taxes. It is a runtime-price scenario, not an all-in quote, a delivery-time promise or available 100,000-episode capacity. Keep hypothetical estimates separate from measured pilot reports and executable plans. The owner correction supersedes the earlier blanket removal of public example prices, but does not establish performance, costs, margins or availability.
+
+For an executable delivery quote, let `C` be all-in expected compute, startup/idle time, evidence storage/transfer, execution failures, support/operator time and payment costs. Quote only after measuring the exact recipe. A target contribution margin `m` requires a price above `C / (1 - m)` when all proportional fees have already been included consistently; add monthly overhead allocation to assess net operating profitability.
 
 The owner reports C$0 monthly revenue and approximately C$100 monthly cash costs. One profitable small robotics campaign could cover that carrying cost; throughput and buyer willingness to pay remain unknown. Buying another GPU, dropping the resident model or offering unlimited trials is not required to build the narrow runner.
 

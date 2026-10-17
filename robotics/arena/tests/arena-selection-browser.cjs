@@ -50,7 +50,7 @@ const server = http.createServer((req, res) => {
       });
       await page.goto(base + '/arena/', {waitUntil:'domcontentloaded'});
       await page.locator('#experiment-robot').waitFor({state:'visible'});
-      assert.deepEqual(await page.locator('.app-nav button').allTextContents(), ['Arcade', 'Test packs']);
+      assert.deepEqual(await page.locator('.app-nav button').allTextContents(), ['Arcade', 'Pricing']);
       await page.screenshot({path:`/tmp/arena-selection-startup-${viewport.width}.png`,fullPage:true});
       assert.equal(await page.locator('.arena-overflow a[href="/office"]').isVisible(), false, 'Review stays in the public overflow');
       assert.equal(await page.locator('.arena-overflow').getAttribute('open'), null);
@@ -77,7 +77,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#arena-scrubber').isVisible(), false);
       assert.equal(requests.length, 0, 'startup never contacts a worker');
       await page.locator('.app-nav [data-page="campaigns"]').click();
-      await page.getByRole('heading', { name: 'Robot testing, with evidence.', level: 1 }).waitFor();
+      await page.getByRole('heading', { name: 'Test packs & pricing', level: 1 }).waitFor();
       await page.locator('[data-campaign-tools]').waitFor({state:'visible'});
       await page.getByRole('button', { name: 'Try the arcade', exact: false }).click();
       await page.locator('[data-arena-challenge="clutter"]').click();

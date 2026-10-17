@@ -30,8 +30,9 @@ describe('per-route social previews', () => {
     const home = resolveRouteMeta('/');
     expect(home.title).toBe('BrainSNN | Robot policy testing');
     expect(home.heading).toBe('Test your robot. See where it fails.');
-    expect(home.description).toContain('10-episode robot-policy test pack');
-    expect(home.description).toContain('hosted policy tests are not yet available');
+    expect(home.description).toContain('100,000 episodes');
+    expect(home.description).toContain('US$171.43');
+    expect(home.description).toContain('pending qualification');
     expect(home.image).toBe('/og/robot-testing.png');
     const body = home.body.join(' ');
     expect(body).toContain('does not score a named policy');
@@ -132,7 +133,11 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('10-episode robot-policy test pack');
+    const description = resolveRouteMeta('/').description;
+    for (const attribute of ['name="description"', 'property="og:description"', 'name="twitter:description"']) {
+      expect(tagContent(html, `${attribute} content="([^"]*)"`)).toBe(description);
+    }
+    expect(description).toContain('US$171.43');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });

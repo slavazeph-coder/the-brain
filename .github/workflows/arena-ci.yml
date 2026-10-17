@@ -88,6 +88,8 @@ jobs:
           if-no-files-found: warn
       - name: Robot campaign report desktop and mobile browser flows
         run: node tests/arena-campaign-browser.cjs
+      - name: Transparent pricing preview and assumption isolation
+        run: node tests/arena-pricing-browser.cjs
       - name: Paid analysis preview, wallet and evidence browser flows
         # Fixture commerce/provider only; actual browser image serialization is
         # checked by the production evidence validator. No paid calls are made.
