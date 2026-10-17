@@ -62,6 +62,28 @@ class RecordingTests(unittest.TestCase):
         self.assertTrue(writer.wait(5))
         return self.archive.manifest(writer.id)
 
+    def test_manifest_finalizing_between_marker_and_active_checks_stays_complete(self):
+        writer = self.archive.create(metadata())
+        self.addCleanup(writer.finish, {"status": "interrupted"}, "cleanup")
+        original_active = self.archive._active
+        checks = 0
+
+        def finish_during_read(directory):
+            nonlocal checks
+            checks += 1
+            if checks == 2:
+                # _directory already checked activity and manifest() observed
+                # no final marker. Publish it before the fallback activity read.
+                writer.finish({"status": "interrupted"}, "test")
+                self.assertTrue(writer.wait(5))
+            return original_active(directory)
+
+        with patch.object(self.archive, "_active", side_effect=finish_during_read):
+            manifest = self.archive.manifest(writer.id)
+        self.assertEqual(manifest["completion"]["status"], "complete")
+        self.assertFalse(manifest["completion"]["unknownTail"])
+        self.assertEqual(manifest["outcome"]["status"], "interrupted")
+
     def test_exact_policy_inputs_all_chunk_elements_and_controller_inputs(self):
         item = self.recorded_episode()
         item.policy.actions = np.arange(49, dtype=np.float32).reshape(7, 7) / 100

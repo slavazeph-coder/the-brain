@@ -78,6 +78,8 @@ jobs:
           path: /tmp/arena-selection-startup-*.png
           retention-days: 7
           if-no-files-found: warn
+      - name: Robot campaign report desktop and mobile browser flows
+        run: node tests/arena-campaign-browser.cjs
       - name: Paid analysis preview, wallet and evidence browser flows
         # Fixture commerce/provider only; actual browser image serialization is
         # checked by the production evidence validator. No paid calls are made.
@@ -90,8 +92,16 @@ jobs:
           path: /tmp/arena-paid-analysis-*.png
           retention-days: 7
           if-no-files-found: warn
+      - name: Retain robot campaign browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-campaign-browser-fixtures
+          path: /tmp/arena-campaign-*.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Verify published worker kit matches source
         run: |
           python scripts/build-worker-kit.py
           python scripts/build-site-scan-kit.py
-          git diff --exit-code -- ../../brainsnn-r3f-app/public/arena/downloads/ ../../brainsnn-r3f-app/public/arena/worker-setup.html ../../brainsnn-r3f-app/public/arena/site-scan-worker.html
+          git diff --exit-code -- ../../brainsnn-r3f-app/public/arena/downloads/ ../../brainsnn-r3f-app/public/arena/worker-setup.html ../../brainsnn-r3f-app/public/arena/evaluation-setup.html ../../brainsnn-r3f-app/public/arena/site-scan-worker.html
