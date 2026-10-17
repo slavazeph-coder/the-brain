@@ -101,6 +101,8 @@ test('references must resolve, IDs must be unique, and hypothetical evidence can
   await rejectsCode(R.importBundle(await altered(data, m => m.findings[0].refs = ['f1'])), 'reference_cycle');
   await rejectsCode(R.importBundle(await altered(data, m => m.findings[0].refs = [])), 'invalid_reference');
   await rejectsCode(R.importBundle(await altered(data, m => m.events[1].refs = ['e1', 'e1'])), 'invalid_reference');
+  await rejectsCode(R.importBundle(await altered(data, m => m.events[0].data.cameras[0].artifactId = 'absent')), 'missing_reference');
+  await rejectsCode(R.importBundle(await altered(data, m => m.events[1].data.observationId = 'absent')), 'missing_reference');
 });
 
 test('a long valid dependency chain uses bounded iterative graph validation', async () => {
@@ -209,6 +211,17 @@ test('comparison aligns explicit events and identifies observed controller-input
   assert.equal(result.firstDivergence.baselineEventId, 'e3'); assert(result.limitations[0].includes('does not establish a cause'));
 });
 
+test('comparison ignores unrelated source shard bytes and withholds missing camera comparisons', async () => {
+  const data = await fixture(), other = clone(data.manifest);
+  other.artifacts.push({ id: 'source-shard', path: 'sources/table.parquet', sha256: 'c'.repeat(64), byteLength: 200,
+    mediaType: 'application/vnd.apache.parquet', retention: 'omitted' });
+  other.events[0].artifactIds.push('source-shard'); other.completion.status = 'partial';
+  assert.equal(R.compareRecordings(data, other, { alignment: { kind: 'simTime' } }).firstDivergence, null);
+  other.artifacts[0].retention = 'omitted'; other.artifacts[0].sha256 = 'd'.repeat(64);
+  const result = R.compareRecordings(data, other, { alignment: { kind: 'simTime' } });
+  assert.equal(result.firstDivergence, null); assert(result.limitations.some(t => t.includes('retained events')));
+});
+
 test('imported dataset-action labels do not become execution evidence', async () => {
   const data = await fixture();
   const imported = await R.importBundle(await altered(data, m => {
@@ -237,6 +250,19 @@ test('redaction produces a distinct identity, explicit exclusions and stale revi
   assert.equal(selected.manifest.source.derivation.manifestSha256, data.bundle.manifestSha256);
   assert.equal(selected.verification.complete, false); assert.equal(R.reviewStatus(review, selected).current, false);
   assert.equal(data.manifest.artifacts[0].retention, 'included');
+});
+
+test('prompt redaction removes bytes while retaining a resolvable omitted-artifact locator', async () => {
+  const data = await fixture(), manifest = clone(data.manifest);
+  manifest.context.prompt = 'Private instruction';
+  manifest.artifacts.push({ id: 'prompt', path: 'artifacts/prompt.txt', kind: 'prompt', mediaType: 'text/plain', retention: 'included' });
+  manifest.events[0].data.promptArtifactId = 'prompt'; manifest.events[0].artifactIds.push('prompt');
+  const input = await R.importBundle(await R.seal(manifest, { ...data.payloads, 'artifacts/prompt.txt': 'Private instruction' }));
+  const result = await R.importBundle(await R.redactBundle(input, { omitPrompts: true }));
+  assert.equal(result.manifest.events[0].data.promptArtifactId, 'prompt');
+  assert.equal(result.manifest.artifacts[1].retention, 'omitted');
+  assert.equal(result.manifest.context.prompt, '[redacted]');
+  assert.equal(R.exportBundle(result).includes('Private instruction'), false);
 });
 
 test('resealing changed bytes cannot silently reuse a previous artifact identity', async () => {

@@ -228,6 +228,23 @@
     }
     for (const event of manifest.events) {
       requireThat(event.refs.every(id => eventIds.has(id)) && event.artifactIds.every(id => artifactIds.has(id)), 'missing_reference', 'Event references unavailable IDs.');
+      // Typed UI locators must agree with the declared reference graph. Merely
+      // having a valid refs array must not conceal a dangling camera link.
+      if (event.data.cameras !== undefined) {
+        list(event.data.cameras, 32, 'event.data.cameras'); const cameraIds = new Set();
+        for (const camera of event.data.cameras) {
+          requireThat(object(camera) && typeof camera.id === 'string' && camera.id.length > 0 && camera.id.length <= 160 && !cameraIds.has(camera.id), 'invalid_reference', 'Camera source IDs must be unique.'); cameraIds.add(camera.id);
+          if (camera.artifactId !== undefined) requireThat(event.artifactIds.includes(camera.artifactId), 'missing_reference', 'Camera locator must refer to an artifact declared by this event.');
+          else requireThat(camera.available === false, 'missing_reference', 'Camera without an artifact must be explicitly unavailable.');
+          if (camera.sourceArtifactId !== undefined) requireThat(artifactIds.has(camera.sourceArtifactId), 'missing_reference', 'Camera source artifact is unavailable.');
+        }
+      }
+      for (const key of ['stateArtifactId', 'sourceStateArtifactId', 'promptArtifactId', 'actionsArtifactId']) {
+        if (event.data[key] !== undefined) requireThat(event.artifactIds.includes(event.data[key]), 'missing_reference', 'Typed artifact locator must be declared by its event.');
+      }
+      for (const key of ['observationId', 'controllerInputId', 'chunkId', 'discardedChunkId']) {
+        if (event.data[key] !== undefined && event.data[key] !== null) requireThat(eventIds.has(event.data[key]), 'missing_reference', 'Typed event locator must resolve.');
+      }
     }
     for (const artifact of manifest.artifacts) requireThat((artifact.derivedFrom || []).every(id => artifactIds.has(id)), 'missing_reference', 'Artifact lineage references unavailable IDs.');
     for (const finding of manifest.findings) requireThat(finding.refs.every(id => allIds.has(id)), 'missing_reference', 'Finding references unavailable IDs.');
@@ -321,7 +338,15 @@
   }
   function eventValue(event, manifest) {
     const descriptors = new Map(manifest.artifacts.map(a => [a.id, a]));
-    if (event.kind === 'observation') return { artifacts: event.artifactIds.map(id => descriptors.get(id)?.sha256), state: event.data.state ?? null };
+    if (event.kind === 'observation') {
+      const cameras = (event.data.cameras || []).map(camera => {
+        const artifact = descriptors.get(camera.artifactId);
+        return { id: camera.id, sha256: artifact?.retention === 'included' ? artifact.sha256 : null };
+      }).sort((a, b) => a.id.localeCompare(b.id));
+      if (cameras.some(camera => camera.sha256 === null)) return null;
+      if (!cameras.length && event.data.state == null) return null;
+      return { cameras, state: event.data.state ?? null, prompt: descriptors.get(event.data.promptArtifactId)?.sha256 ?? null };
+    }
     if (['action', 'controller-input', 'dataset-action'].includes(event.kind)) return event.data.vector ?? event.data.action ?? null;
     if (['chunk', 'inference-result'].includes(event.kind)) return event.data.actions ?? null;
     if (event.kind === 'state') return event.data.state ?? event.data.qpos ?? null;
@@ -404,7 +429,7 @@
       if (artifact.retention === 'included') payloads[artifact.path] = input.payloads[artifact.path];
     }
     if (options.omitPrompts) {
-      const scrub = item => { if (item && typeof item === 'object') for (const key of Object.keys(item)) { if (/prompt|instruction/i.test(key) && typeof item[key] === 'string') item[key] = '[redacted]'; else scrub(item[key]); } };
+      const scrub = item => { if (item && typeof item === 'object') for (const key of Object.keys(item)) { if (/prompt|instruction/i.test(key) && !/Id$/i.test(key) && typeof item[key] === 'string') item[key] = '[redacted]'; else scrub(item[key]); } };
       scrub(manifest.context); manifest.events.forEach(event => scrub(event.data));
     }
     manifest.source.derivation = { kind: 'selected-export', manifestSha256: input.bundle.manifestSha256 };
