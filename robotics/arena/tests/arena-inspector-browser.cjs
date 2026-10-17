@@ -96,6 +96,13 @@ async function fixture(api, action = .2, changes = {}) {
     await page.locator('#ai-file').setInputFiles(upload(await api.seal(plotManifest,{})));await page.waitForFunction(()=>document.querySelector('.ai-summary')?.textContent.includes('plot-edge-fixture'));
     assert.equal(await page.locator('.ai-chart svg').count(),2,'ragged and empty vectors do not create empty dimensions');
     assert.equal(await page.locator('.ai-chart circle').evaluateAll(points=>points.every(point=>Number.isFinite(Number(point.getAttribute('cx')))&&Number.isFinite(Number(point.getAttribute('cy'))))),true,'large supported values have finite plot coordinates');
+    const preparedManifest=JSON.parse(candidate.manifestText);preparedManifest.recordingId='prepared-observation-fixture';preparedManifest.events=preparedManifest.events.slice(0,2);preparedManifest.events.find(event=>event.id==='observation').data.initialOnly=true;
+    preparedManifest.findings=[];preparedManifest.outcome={status:'unknown'};preparedManifest.completion={status:'partial',committedSequence:2,lastObservedSequence:2,gapCount:0,unknownTail:true};
+    await page.locator('#ai-file').setInputFiles(upload(await api.seal(preparedManifest,originals.payloads)));await page.waitForFunction(()=>document.querySelector('.ai-summary')?.textContent.includes('prepared-observation-fixture'));
+    await page.locator('#ai-event-id').fill('observation');await page.getByRole('button',{name:'Go to event',exact:true}).click();
+    assert.equal(await page.locator('#ai-selection .ai-camera figcaption').filter({hasText:'prepared input · not submitted to policy'}).count(),2);
+    assert(!/declared policy input/.test(await page.locator('#ai-selection').innerText()),'prepared initial images are never labelled submitted policy inputs');
+    assert.match(await page.locator('#ai-content').innerText(),/Original source files, including MCAP or Parquet, may still contain images, prompts/);
     assert.equal(requests.filter(item=>item.method!=='GET'||(!item.url.startsWith(base)&&!item.url.startsWith('blob:'))).length,0,'imports and inspection never issue worker requests');
     await page.keyboard.press('Escape'); assert.equal(await page.locator('dialog').count(),0); assert.equal(await page.locator('[data-arena-action="open-recording"]').evaluate(element=>element===document.activeElement),true);
     await page.locator('#arena-run').click(); await page.evaluate(()=>{for(let i=0;i<500&&!BrainSNNArena.getState().currentSnapshot.state.done;i++)for(const tick of [...window.__ticks.values()])tick();});
