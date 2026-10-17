@@ -16,6 +16,18 @@ const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', name.endsWith('.js') ? 'application/javascript' : 'text/css'); res.end(fs.readFileSync(path.join(assets, name)));
 });
 function upload(bundle) { return { name: 'recording.json', mimeType: 'application/json', buffer: Buffer.from(typeof bundle === 'string' ? bundle : JSON.stringify(bundle)) }; }
+async function inspectButtonDiagnostics(page) {
+  const dom = await page.evaluate(() => {
+    const button = document.querySelector('#arena-inspect'), ancestors = [];
+    for (let element = button; element; element = element.parentElement) {
+      const style = getComputedStyle(element), rect = element.getBoundingClientRect();
+      ancestors.push({tag:element.tagName,id:element.id,className:element.className,hidden:element.hidden,inert:element.inert,role:element.getAttribute('role'),ariaHidden:element.getAttribute('aria-hidden'),ariaLabel:element.getAttribute('aria-label'),display:style.display,visibility:style.visibility,contentVisibility:style.contentVisibility,opacity:style.opacity,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},clientRects:element.getClientRects().length});
+    }
+    const state = BrainSNNArena.getState();
+    return {button:button?.outerHTML,buttonText:button?.textContent,ancestors,dialogs:[...document.querySelectorAll('dialog')].map(element=>({open:element.open,modal:element.matches(':modal'),html:element.outerHTML.slice(0,500)})),activeElement:document.activeElement?.outerHTML.slice(0,500),visibilityState:document.visibilityState,running:state.running,completedRun:state.completedRun,steps:state.currentSnapshot?.state.steps,done:state.currentSnapshot?.state.done,remainingTimers:window.__ticks.size};
+  });
+  return {...dom,idCount:await page.locator('#arena-inspect').count(),visibleByLocator:await page.locator('#arena-inspect').isVisible(),roleCount:await page.getByRole('button',{name:'Inspect run',exact:true}).count(),roleCountIncludingHidden:await page.getByRole('button',{name:'Inspect run',exact:true,includeHidden:true}).count()};
+}
 async function fixture(api, action = .2, changes = {}) {
   const artifact = id => ({ id, path: id + '.rgb', mediaType: 'application/octet-stream', retention: 'included', dtype: 'uint8', shape: [2, 2, 3], endianness: 'not-applicable' });
   const event = (id, seq, kind, data, refs = [], artifactIds = []) => ({ id, seq, kind, simTime: seq / 10, refs, artifactIds, data });
@@ -119,7 +131,17 @@ async function fixture(api, action = .2, changes = {}) {
     });
     assert.equal(practiceCompletion.done, true, 'practice completes before opening the inspector: '+JSON.stringify(practiceCompletion));
     assert.equal(practiceCompletion.completedRun, true, JSON.stringify(practiceCompletion));
-    await page.getByRole('button',{name:'Inspect run',exact:true}).click(); await page.getByText('Scripted local practice. No named model ran; this is not a model score.',{exact:true}).waitFor();
+    const beforeInspect = await inspectButtonDiagnostics(page);
+    try { await page.getByRole('button',{name:'Inspect run',exact:true}).click(); }
+    catch (error) {
+      const diagnostics = {practiceCompletion,beforeInspect,afterFailure:await inspectButtonDiagnostics(page),pageErrors:errors};
+      fs.writeFileSync('/tmp/arena-inspector-failure-dom.json',JSON.stringify(diagnostics,null,2));
+      fs.writeFileSync('/tmp/arena-inspector-failure.html',await page.content());
+      await page.screenshot({path:'/tmp/arena-inspector-failure.png',fullPage:true});
+      console.error('ARENA_INSPECTOR_FAILURE_DIAGNOSTICS: '+JSON.stringify(diagnostics));
+      throw error;
+    }
+    await page.getByText('Scripted local practice. No named model ran; this is not a model score.',{exact:true}).waitFor();
     assert.match(await page.locator('.ai-summary').innerText(),/partial evidence/); assert.equal(await page.locator('#ai-practice-candidate').count(),1); assert.match(await page.locator('#ai-content').innerText(),/unknown tail/);
     await page.getByRole('button',{name:'Save local review',exact:true}).click(); await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'Inspect run',exact:true}).click(); await page.waitForFunction(()=>document.querySelector('#ai-reviews')?.textContent.includes('Current'));
