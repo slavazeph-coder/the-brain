@@ -60,7 +60,7 @@ async function downloadProof(missionId, submissionId) {
   URL.revokeObjectURL(url);
 }
 
-export function PublishedMissionPage() {
+export function PublishedMissionPage({ embedded = false }) {
   const missionId = useMemo(missionIdFromPath, []);
   const [mission, setMission] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -171,8 +171,8 @@ export function PublishedMissionPage() {
     }
   }
 
-  if (loading) return <div className="bh-site"><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Loading mission…</h2></div></section></main></div>;
-  if (error && !mission) return <div className="bh-site"><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Mission unavailable</h2><p>{error}</p><a className="bh-button bh-secondary" href="/arena/tasks"><ArrowLeft size={15}/> Back to missions</a></div></section></main></div>;
+  if (loading) return <div className={embedded ? 'arena-task-content' : 'bh-site'}><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Loading mission…</h2></div></section></main></div>;
+  if (error && !mission) return <div className={embedded ? 'arena-task-content' : 'bh-site'}><main><section className="bh-section"><div className="bh-section-copy"><p className="bh-kicker">PUBLISHED MISSION</p><h2>Mission unavailable</h2><p>{error}</p><a className="bh-button bh-secondary" href="/arena/tasks"><ArrowLeft size={15}/> Back to missions</a></div></section></main></div>;
 
   const lifecycle = mission.bounty?.lifecycle || 'OPEN';
   const submissionsOpen = lifecycle === 'OPEN';
@@ -180,12 +180,12 @@ export function PublishedMissionPage() {
   const topEligible = leaderboard.find((entry) => entry.status === 'MISSION SUCCESS');
   const winner = leaderboard.find((entry) => entry.isWinner);
 
-  return <div className="bh-site">
-    <header className="bh-nav">
+  return <div className={embedded ? 'arena-task-content' : 'bh-site'}>
+    {!embedded && <header className="bh-nav">
       <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Published Mission</small></span></a>
       <nav><a href="/arena/tasks">Missions</a><a href="/arena/tasks/build">Build</a><a href="/evidence">Evidence</a></nav>
       <a className="bh-nav-cta" href="/arena/tasks/build">Build your own</a>
-    </header>
+    </header>}
 
     <main>
       <section className="bh-hero">
@@ -282,6 +282,6 @@ export function PublishedMissionPage() {
       </section>
     </main>
 
-    <footer className="bh-footer"><a href="/arena/tasks"><ArrowLeft size={14}/> Arena Tasks</a><span>Immutable mission · public pledge · mutable policy · server-verified result</span></footer>
+    {!embedded && <footer className="bh-footer"><a href="/arena/tasks"><ArrowLeft size={14}/> Arena Tasks</a><span>Immutable mission · public pledge · mutable policy · server-verified result</span></footer>}
   </div>;
 }
