@@ -102,6 +102,18 @@ if(r.manifest.source.kind!=='imported')throw Error('wrong source'); console.log(
         result = subprocess.run(['node', '-e', script, str(js), str(source)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_disguised_playlist_cannot_read_external_video(self):
+        import av
+        fixture(self.root)
+        video = self.root / 'videos/observation.images.front/chunk-000/file-000.mp4'
+        with tempfile.TemporaryDirectory() as outside:
+            private = Path(outside) / 'private.mp4'
+            private.write_bytes(video.read_bytes())
+            (video.parent / 'secret.mp4').symlink_to(private)
+            video.write_text('ffconcat version 1.0\nfile secret.mp4\n')
+            with self.assertRaises(av.error.InvalidDataError):
+                import_lerobot(self.root, 1)
+
     def test_wrong_offsets_rejected(self):
         import pyarrow as pa
         import pyarrow.parquet as pq

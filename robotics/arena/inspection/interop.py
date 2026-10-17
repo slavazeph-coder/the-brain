@@ -177,8 +177,15 @@ def integer(value, field):
 def video_frames(path, targets, start, end, fps):
     """Nearest actual decoded PTS within one declared frame interval and episode bounds."""
     import av
+    def refuse_external_io(url, flags, options):
+        raise OSError("External video tracks and nested sources are unsupported")
     tolerance = 1 / fps + 1e-6
-    with av.open(str(path)) as container:
+    # Autodetection accepts playlists disguised as .mp4, whose nested paths
+    # bypass dataset containment and source provenance. Decode only this opened
+    # MP4/MOV file; deny external tracks and every secondary I/O request.
+    with path.open("rb") as source, av.open(source, format="mov",
+            options={"enable_drefs": "0", "use_absolute_path": "0"},
+            io_open=refuse_external_io) as container:
         if len(container.streams.video) != 1:
             raise ImportError("A camera shard must have one video stream")
         stream = container.streams.video[0]
@@ -217,6 +224,8 @@ def video_frames(path, targets, start, end, fps):
                 yield None
                 continue
             t, frame = selected
+            if frame.width * frame.height > 4096 * 2160:
+                raise ImportError("Decoded video dimensions exceed the import limit")
             image = frame.to_image()
             output = io.BytesIO()
             image.save(output, format="PNG")
