@@ -59,11 +59,11 @@ The comparison locates observed differences and links the corresponding source e
 
 ## Optional local LeRobot and MCAP tools
 
-These tools operate on local files only. Install their isolated optional dependencies using a Python version supported by `inspection/requirements.txt`; they are not required to run the website or the existing policy worker:
+These tools operate on local files only. Install their isolated optional dependencies using Python 3.12 or newer (required by PyAV 19); they are not required to run the website or the existing policy worker:
 
 ```bash
 cd robotics/arena
-python3 -m venv /path/to/inspection-venv
+python3.12 -m venv /path/to/inspection-venv
 /path/to/inspection-venv/bin/python -m pip install -r inspection/requirements.txt
 /path/to/inspection-venv/bin/python -m inspection.interop lerobot /path/to/dataset --episode 3 --out /path/to/episode.json
 /path/to/inspection-venv/bin/python -m inspection.interop verify /path/to/episode.json

@@ -1,4 +1,4 @@
-# Optional offline import/export tools, isolated from the policy runtime.
+# Optional offline import/export tools, Python >=3.12, isolated from the policy runtime.
 pyarrow==26.0.0
 av==19.0.1
 mcap==1.5.0
