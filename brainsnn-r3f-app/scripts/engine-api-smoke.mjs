@@ -55,9 +55,12 @@ try {
   const oversized = await post({ ...input, original: 'x'.repeat(70_000) });
   assert.equal(oversized.status, 413);
   assert.match(oversized.headers.get('cache-control'), /no-store/);
+  const redirect = await fetch(`${origin}/engine`, { redirect: 'manual' });
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers.get('location'), '/office?tab=drafts');
   const page = await fetch(`${origin}/engine`);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /Compare two drafts \| BrainSNN Engine/);
+  assert.match(await page.text(), /Review: Two drafts \| BrainSNN/);
   console.log('ENGINE_API_SMOKE_OK: compiled route, repeatable identities, source spans, regression, validation, body cap, metadata; zero provider calls.');
 } finally {
   server.kill('SIGTERM');
