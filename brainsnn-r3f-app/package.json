@@ -13,11 +13,13 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
+    "test": "node --check brand-brain-preload.cjs && node --check mission-market-preload.cjs && node --check mission-market-schema-bootstrap.cjs && node scripts/check-three-imports.mjs && node --experimental-strip-types --no-warnings scripts/test-runner.mjs && npm run test:analysis",
     "test:run": "node --experimental-strip-types --no-warnings scripts/test-runner.mjs",
     "check:bundle": "node scripts/check-three-imports.mjs",
     "test:e2e": "playwright test",
-    "og:toys": "node scripts/render-toy-og.mjs"
+    "og:toys": "node scripts/render-toy-og.mjs",
+    "test:analysis": "node --test arena-analysis/tests/*.test.cjs",
+    "analysis:admin": "node arena-analysis/admin.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -32,6 +34,7 @@
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "stripe": "22.6.0",
     "three": "^0.182.0",
     "vite": "^6.2.3"
   },

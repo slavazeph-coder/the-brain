@@ -1,6 +1,6 @@
 /* BrainSNN Arena "Beat the bot": input, HUD, sound and the result card.
- * Rules live in arena-game.js. The workspace owns the canvas and its camera
- * and hands them over through the context passed to create(). */
+ * Rules live in arena-game.js. The workspace owns the canvas, its camera and
+ * the practice challenge + seed, and hands them over through create(ctx). */
 (() => {
   'use strict';
   const STORE = 'brainsnn.arena.game.v1', SOUND = 'brainsnn.arena.sound';
@@ -8,12 +8,38 @@
   const TICK_MS = 50, MAX_CATCH_UP = 5;
   const MINT = [0.392, 1, 0.824];
   const KEYS = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+  // Space keeps its normal job on controls; it only drops the claw elsewhere.
+  const CONTROL_TAGS = /^(BUTTON|A|SUMMARY|SELECT|INPUT|TEXTAREA)$/;
+  const onControl = node => { for (let el = node; el; el = el.parentElement) if (CONTROL_TAGS.test(el.tagName || '') || el.getAttribute?.('role') === 'button') return true; return false; };
+  const RACE_LABEL = 'Beat the bot race. Arrow keys or W A S D move the claw, Space drops it, Escape quits.';
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const G = () => window.BrainSNNArenaGame;
   const s1 = n => (Math.round(n * 10) / 10).toFixed(1);
   const reducedMotion = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
-  let pendingLink = null;
-  try { pendingLink = G()?.parseLink?.(location.search) || null; } catch { pendingLink = null; }
+  const dialogOpen = () => Boolean(document.querySelector?.('dialog[open]'));
+
+  // A challenge link (?play=&seed=&t=) has two lives. Its level, seed and the
+  // sender's claimed time stay on offer for the whole page view. Its power to
+  // force the arena into local practice ends once the page's first restore is
+  // done (consumeLink), so later robot or model picks behave normally.
+  let link = null, linkForcing = false;
+  try { link = G()?.parseLink?.(location.search) || null; linkForcing = Boolean(link); } catch { link = null; }
+  function consumeLink() {
+    if (!linkForcing) return;
+    linkForcing = false;
+    try {
+      const params = new URLSearchParams(location.search);
+      ['play', 'seed', 't'].forEach(key => params.delete(key));
+      const query = params.toString();
+      history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+    } catch { /* URL cleanup is cosmetic. */ }
+  }
+  // The friend's time only counts on the exact world their link names.
+  function friendFor(level, seed) {
+    if (!link || link.friend === null || level !== link.level) return null;
+    if (link.worldSeed === undefined) link.worldSeed = G().worldSeed(link.seed);
+    return seed === link.seed || seed === link.worldSeed ? link.friend : null;
+  }
 
   function readStore() {
     try { const v = JSON.parse(localStorage.getItem(STORE) || 'null'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
@@ -57,41 +83,42 @@
   };
   const buzz = ms => { try { navigator.vibrate?.(ms); } catch { /* Haptics are optional. */ } };
 
-  /* ctx: { bar, viewport(), canvas(), camera(), level(), seed(), redraw(), onStart(), onStop(), watchBot(level, seed), tryModel() } */
+  /* ctx: { bar, viewport(), canvas(), camera(), level(), seed(), selectLevel(id), onStart(), onStop(), watchBot(level, seed), tryModel() } */
   function create(ctx) {
-    const link = pendingLink;
-    let level = G().level(link?.level || ctx.level?.() || 'starter').id;
-    let seed = String(link?.seed ?? ctx.seed?.() ?? '42');
-    let friend = link?.friend ?? null;
-    let game = null, raf = 0, last = 0, acc = 0, paused = false, ended = false, seen = 0, timers = [];
+    let game = null, raf = 0, last = 0, acc = 0, paused = false, ended = false, seen = 0, timers = [], barKey = '';
     let held = new Set(), dropQueued = false, tapQueued = null, pointer = null, inputOff = [];
-    let hud = null;
+    let hud = null, canvasLabel = null;
     const $h = sel => hud?.querySelector(sel);
     const active = () => Boolean(game);
-
-    function clearLink() {
-      if (!pendingLink) return;
-      pendingLink = null; friend = null;
-      try { history.replaceState(null, '', location.pathname + location.hash); } catch { /* URL cleanup is cosmetic. */ }
-    }
+    const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
+    // A new race always starts on the workspace's current world; while one runs,
+    // its own world is what the bar and result describe.
+    const workspaceWorld = () => ({ level: G().level(ctx.level?.() || 'starter').id, seed: String(ctx.seed?.() ?? '42') });
+    const target = () => game ? { level: game.challenge, seed: game.seed } : workspaceWorld();
 
     function renderBar() {
       if (!ctx.bar) return;
-      const current = G().level(level);
+      const { level, seed } = target(), info = G().level(level);
       // Keep the compact bar until the race is dismissed so the result card
       // does not jump when the intro returns above the stage.
       if (game) {
-        ctx.bar.innerHTML = '<div class="game-bar-copy"><span class="game-kicker">BEAT THE BOT · ' + esc(current.name.toUpperCase()) + '</span><strong>Race the violet ghost to the tray.</strong></div>' +
+        barKey = '';
+        ctx.bar.innerHTML = '<div class="game-bar-copy"><span class="game-kicker">BEAT THE BOT · ' + esc(info.name.toUpperCase()) + '</span><strong>Race the violet ghost to the tray.</strong></div>' +
           '<div class="game-bar-actions"><button class="game-chip" data-game="sound" aria-pressed="' + soundOn() + '">' + (soundOn() ? 'Sound on' : 'Sound off') + '</button><button class="game-chip" data-game="restart">Restart</button><button class="game-chip" data-game="quit">Quit <kbd>Esc</kbd></button></div>';
         return;
       }
-      const lead = friend !== null ? 'A friend finished ' + esc(current.name) + ' in ' + s1(friend) + ' s. Your turn.' : 'You be the brain.';
-      ctx.bar.innerHTML = '<div class="game-bar-copy"><span class="game-kicker">BEAT THE BOT</span><strong>' + lead + '</strong><small>Drive the demo arm yourself and race the scripted controller to the tray. Same arm, same speed limit, same world. It never cuts corners. You can.</small></div>' +
-        '<div class="game-levels" role="group" aria-label="Choose a level">' + G().LEVELS.map(l => {
-          const best = bestFor(l.id, seed);
-          return '<button data-game-level="' + l.id + '" aria-pressed="' + (l.id === level) + '" title="' + esc(l.blurb) + '"><span>' + esc(l.name) + '</span><small>' + (best !== null ? 'Best ' + s1(best) + ' s' : 'Not played') + '</small></button>';
-        }).join('') + '</div>' +
-        '<div class="game-bar-actions"><button class="game-play" data-game="play">▶ Play ' + esc(current.name) + '</button><span class="game-blurb">' + esc(current.blurb) + '</span></div>';
+      const best = bestFor(level, seed), friend = friendFor(level, seed);
+      barKey = [level, seed, best, friend].join('|');
+      ctx.bar.innerHTML = '<div class="game-bar-copy"><span class="game-kicker">BEAT THE BOT · ' + esc(info.name.toUpperCase()) + '</span><strong>' +
+        (friend !== null ? 'A friend finished this in ' + s1(friend) + ' s. Your turn.' : 'You be the brain.') + '</strong>' +
+        '<small>Drive the arm yourself and race the scripted arm to the tray. Same arm, same speed limit, same world. It never cuts corners. You can.</small></div>' +
+        '<div class="game-bar-actions"><button class="game-play" data-game="play">▶ Race the bot</button><span class="game-best">' + (best !== null ? 'Your best here: ' + s1(best) + ' s' : esc(info.blurb)) + '</span></div>';
+    }
+    // Called on every workspace refresh: re-render only when the offer changed.
+    function sync() {
+      if (game) return;
+      const { level, seed } = target();
+      if ([level, seed, bestFor(level, seed), friendFor(level, seed)].join('|') !== barKey) renderBar();
     }
 
     function mountHUD() {
@@ -112,14 +139,18 @@
         '<div class="game-result" role="dialog" aria-modal="false" aria-labelledby="game-result-title" hidden></div>';
       viewport.appendChild(hud);
       hud.addEventListener('click', onClick);
-      timers.push(setTimeout(() => $h('.game-hint')?.classList.add('is-faded'), 7000));
+      later(() => $h('.game-hint')?.classList.add('is-faded'), 7000);
     }
 
     function announce(text) { const sr = $h('.game-sr'); if (sr) sr.textContent = text; }
-    function toast(text, kind) {
-      const el = $h('.game-toast'); if (!el) return;
-      el.textContent = text; el.dataset.kind = kind || ''; el.classList.remove('is-on'); void el.offsetWidth; el.classList.add('is-on');
+    // Classes are removed by timers as well as by the animation, so the cues
+    // still appear and clear when reduced motion turns animations off.
+    function flash(el, text, ms) {
+      if (!el) return;
+      el.textContent = text; el.classList.remove('is-on'); void el.offsetWidth; el.classList.add('is-on');
+      clearTimeout(el._gameTimer); el._gameTimer = later(() => el.classList.remove('is-on'), ms);
     }
+    function toast(text, kind) { const el = $h('.game-toast'); if (el) el.dataset.kind = kind || ''; flash(el, text, 1400); }
 
     function keyDir() {
       const x = (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0), y = (held.has('up') ? 1 : 0) - (held.has('down') ? 1 : 0);
@@ -147,20 +178,24 @@
       const on = (el, type, fn, opts) => { if (!el) return; el.addEventListener(type, fn, opts); inputOff.push(() => el.removeEventListener(type, fn, opts)); };
       const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
       on(window, 'keydown', e => {
-        if (!game || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+        // An open dialog (help, worker setup) owns the keyboard, Escape included.
+        if (!game || e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || dialogOpen()) return;
         if (e.key === 'Escape') { e.preventDefault(); quit(); return; }
-        if (ended) return;
+        if (ended || paused) return;
         const k = KEYS[e.code] || KEYS[e.key];
         if (k) { e.preventDefault(); held.add(k); return; }
-        if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); if (!e.repeat) dropQueued = true; }
+        if ((e.code === 'Space' || e.key === ' ') && !onControl(e.target)) { e.preventDefault(); if (!e.repeat) dropQueued = true; }
       }, true);
-      on(window, 'keyup', e => { const k = KEYS[e.code] || KEYS[e.key]; if (k) held.delete(k); if (e.code === 'Space' && !ended) e.preventDefault(); }, true);
+      on(window, 'keyup', e => {
+        const k = KEYS[e.code] || KEYS[e.key]; if (k) held.delete(k);
+        if (e.code === 'Space' && game && !ended && !paused && !dialogOpen() && !onControl(e.target)) e.preventDefault();
+      }, true);
       on(window, 'blur', () => held.clear());
       const canvas = ctx.canvas?.();
       on(canvas, 'pointerdown', e => { pointer = { x: e.clientX, y: e.clientY, at: performance.now() }; });
       on(canvas, 'pointerup', e => {
         const p = pointer; pointer = null;
-        if (!p || !game || ended || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8 || performance.now() - p.at > 600) return;
+        if (!p || !game || ended || paused || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8 || performance.now() - p.at > 600) return;
         const point = window.BrainArena3D?.pick?.(canvas, ctx.camera?.(), e.clientX, e.clientY, 0.1);
         if (point) tapQueued = snapTap(point);
       });
@@ -169,30 +204,32 @@
     function unbindInput() { inputOff.forEach(fn => fn()); inputOff = []; held.clear(); pointer = null; }
 
     function setPaused(value) {
-      paused = value; const el = $h('.game-paused'); if (el) el.hidden = !value;
+      paused = value; held.clear(); dropQueued = false; tapQueued = null;
+      const el = $h('.game-paused'); if (el) el.hidden = !value;
       if (!value) last = performance.now();
-      if (value) held.clear();
+      if (value) announce('Paused.');
     }
 
     function play() {
-      if (!G() || !window.BrainArena3D) return;
-      if (ctx.beforePlay && ctx.beforePlay(level, seed) === false) return;
-      clearLink(); stopLoop(); clearTimers();
+      if (!G() || !window.BrainArena3D || !ctx.canvas?.()) return;
+      stopLoop(); clearTimers();
+      const { level, seed } = workspaceWorld();
       game = G().create({ challenge: level, seed });
       ended = false; paused = false; seen = 0; acc = 0; dropQueued = false; tapQueued = null;
       ctx.onStart?.();
       mountHUD(); renderBar(); bindInput();
-      const canvas = ctx.canvas?.();
-      canvas?.focus?.({ preventScroll: true });
+      const canvas = ctx.canvas();
+      if (canvasLabel === null) canvasLabel = canvas.getAttribute?.('aria-label') ?? '';
+      canvas.setAttribute?.('aria-label', RACE_LABEL);
+      canvas.focus?.({ preventScroll: true });
       ctx.viewport?.()?.scrollIntoView?.({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
       $h('#game-par').textContent = 'Bot ' + s1(game.bot.time) + ' s';
-      announce('Beat the bot: ' + G().level(level).name + '. The scripted controller takes ' + s1(game.bot.time) + ' seconds. Starting in three.');
-      const show = (text, i) => timers.push(setTimeout(() => {
-        const el = $h('.game-countdown'); if (!el) return;
-        el.textContent = text; el.classList.remove('is-on'); void el.offsetWidth; el.classList.add('is-on');
-        if (text === 'GO') { SFX.go(); G().start(game); last = performance.now(); } else SFX.tick();
+      const quick = reducedMotion();
+      announce('Beat the bot: ' + G().level(level).name + '. The scripted arm takes ' + s1(game.bot.time) + ' seconds. ' + (quick ? 'Go!' : 'Starting in three.'));
+      (quick ? ['GO'] : ['3', '2', '1', 'GO']).forEach((text, i) => later(() => {
+        flash($h('.game-countdown'), text, text === 'GO' ? 700 : 400);
+        if (text === 'GO') { SFX.go(); G().start(game); last = performance.now(); if (!quick) announce('Go!'); } else SFX.tick();
       }, i * 420));
-      (reducedMotion() ? ['GO'] : ['3', '2', '1', 'GO']).forEach(show);
       loop();
     }
 
@@ -201,6 +238,7 @@
       const frame = now => {
         raf = requestAnimationFrame(frame);
         if (!game) return;
+        if (game.phase === 'play' && !paused && dialogOpen()) setPaused(true);
         if (game.phase === 'play' && !paused) {
           acc += Math.min(250, Math.max(0, now - last)); last = now;
           let n = 0;
@@ -255,7 +293,7 @@
 
     function finish() {
       ended = true; held.clear(); hud?.classList.add('is-ended');
-      const r = G().result(game), saved = saveBest(r), current = G().level(r.challenge), next = G().nextLevel(r.challenge);
+      const r = G().result(game), saved = saveBest(r), next = G().nextLevel(r.challenge), friend = friendFor(r.challenge, r.seed);
       const headline = !r.finished ? 'Time’s up' : r.delta < 0 ? 'You beat the bot by ' + s1(-r.delta) + ' s' : r.delta === 0 ? 'Dead heat' : 'The bot wins by ' + s1(r.delta) + ' s';
       (r.beatBot ? SFX.win : SFX.lose)(); if (r.beatBot) buzz(60);
       const stars = [1, 2, 3].map(i => '<span class="' + (i <= r.stars ? 'on' : '') + '">★</span>').join('');
@@ -264,17 +302,16 @@
         box.innerHTML = '<div class="game-stars" role="img" aria-label="' + r.stars + ' of 3 stars">' + stars + '</div>' +
           '<h3 id="game-result-title">' + headline + '</h3>' +
           '<p class="game-times"><b>You ' + (r.finished ? s1(r.time) + ' s' : r.delivered + ' / 3 blocks') + '</b><span>Bot ' + s1(r.botTime) + ' s</span>' + (saved.best !== null ? '<span>' + (saved.isNew ? 'New best' : 'Best ' + s1(saved.best) + ' s') + '</span>' : '') + '</p>' +
-          (friend !== null && r.finished ? '<p class="game-friend">' + (r.time < friend ? 'You beat your friend’s ' + s1(friend) + ' s.' : 'Your friend’s ' + s1(friend) + ' s still stands.') + '</p>' : '') +
+          (friend !== null && r.finished ? '<p class="game-friend">' + (r.time < friend ? 'You beat your friend’s ' + s1(friend) + ' s.' : r.time === friend ? 'You matched your friend’s ' + s1(friend) + ' s.' : 'Your friend’s ' + s1(friend) + ' s still stands.') + '</p>' : '') +
           '<p class="game-stats">' + r.contacts + ' bonks · ' + r.misses + ' missed grabs · ' + r.drops + ' dropped blocks</p>' +
           '<div class="game-result-actions"><button class="game-play" data-game="play">↺ Play again</button><button class="game-chip" data-game="next">' + esc(next.name) + ' →</button><button class="game-chip" data-game="share">Share</button></div>' +
           '<p class="game-legend">★ finish · ★★ beat the bot · ★★★ beat it by ' + G().THREE_STAR_MARGIN + ' s with no bonks</p>' +
           '<div class="game-result-links"><button class="game-link" data-game="watch">Watch the bot’s run</button><button class="game-link" data-game="model">Think a model can beat you? Connect one →</button></div>';
         box.hidden = false;
-        timers.push(setTimeout(() => box.querySelector('[data-game="play"]')?.focus({ preventScroll: true }), 60));
+        later(() => box.querySelector('[data-game="play"]')?.focus({ preventScroll: true }), 60);
       }
       announce(headline + '. You ' + (r.finished ? s1(r.time) + ' seconds' : 'did not finish') + ', bot ' + s1(r.botTime) + ' seconds.');
-      renderBar();
-      game.lastResult = { ...r, levelName: current.name };
+      game.lastResult = r;
     }
 
     async function share() {
@@ -287,31 +324,32 @@
       catch { window.prompt?.('Copy this link', url); }
     }
 
-    function quit() {
+    function quit(refocus = true) {
       if (!game) return;
       stopLoop(); clearTimers(); unbindInput();
       game = null; ended = false; paused = false;
       hud?.remove(); hud = null;
       ctx.viewport?.()?.classList.remove('is-game');
+      const canvas = ctx.canvas?.();
+      if (canvas && canvasLabel !== null) canvas.setAttribute?.('aria-label', canvasLabel);
+      canvasLabel = null;
       renderBar();
       ctx.onStop?.();
+      if (refocus) ctx.bar?.querySelector('[data-game="play"]')?.focus?.({ preventScroll: true });
     }
 
     function onClick(e) {
-      const levelButton = e.target.closest?.('[data-game-level]');
-      if (levelButton) { level = G().level(levelButton.dataset.gameLevel).id; if (pendingLink && level !== pendingLink.level) clearLink(); renderBar(); ctx.bar?.querySelector('[data-game-level="' + level + '"]')?.focus({ preventScroll: true }); return; }
       const action = e.target.closest?.('[data-game]')?.dataset.game;
       if (!action) return;
-      if (action === 'play') play();
-      else if (action === 'restart') play();
+      if (action === 'play' || action === 'restart') play();
       else if (action === 'quit') quit();
-      else if (action === 'drop') { dropQueued = true; ctx.canvas?.()?.focus?.({ preventScroll: true }); }
+      else if (action === 'drop') { if (!paused && !ended) dropQueued = true; ctx.canvas?.()?.focus?.({ preventScroll: true }); }
       else if (action === 'resume') { setPaused(false); ctx.canvas?.()?.focus?.({ preventScroll: true }); }
-      else if (action === 'sound') { setSound(!soundOn()); renderBar(); }
-      else if (action === 'next') { level = G().nextLevel(level).id; play(); }
+      else if (action === 'sound') { setSound(!soundOn()); renderBar(); if (game) ctx.canvas?.()?.focus?.({ preventScroll: true }); }
+      else if (action === 'next') { ctx.selectLevel?.(G().nextLevel(target().level).id); play(); }
       else if (action === 'share') share();
-      else if (action === 'watch') { const l = level, s = seed; quit(); ctx.watchBot?.(l, s); }
-      else if (action === 'model') { quit(); ctx.tryModel?.(); }
+      else if (action === 'watch') { const { level, seed } = target(); quit(false); ctx.watchBot?.(level, seed); ctx.canvas?.()?.focus?.({ preventScroll: true }); }
+      else if (action === 'model') { quit(false); ctx.tryModel?.(); }
     }
 
     ctx.bar?.addEventListener('click', onClick);
@@ -319,19 +357,17 @@
 
     return {
       active,
+      sync,
       draw: () => { if (game) draw(performance.now()); },
       play,
       quit,
-      destroy() { quit(); ctx.bar?.removeEventListener('click', onClick); if (ctx.bar) ctx.bar.innerHTML = ''; },
+      destroy() { quit(false); ctx.bar?.removeEventListener('click', onClick); if (ctx.bar) ctx.bar.innerHTML = ''; },
       state: () => game ? { active: true, phase: game.phase, level: game.challenge, seed: game.seed, time: game.world.time, delivered: game.world.delivered,
         botTime: game.bot.time, claw: game.claw, robot: game.world.robot.position.slice(), carrying: game.world.robot.carrying != null,
-        paused, ended, result: game.lastResult || null } : { active: false, level, seed, friend },
-      // Test hooks: drive the simulation without animation frames.
-      _game: () => game,
-      _input: input => { if (input?.drop) dropQueued = true; if (input?.tap) tapQueued = input.tap; if (input?.keys) held = new Set(input.keys); },
-      _step: () => { if (game?.phase === 'play') stepOnce(); if (game && !ended && ['won', 'timeout'].includes(game.phase)) finish(); }
+        tray: game.world.goal.position.slice(0, 2), blocks: game.world.objects.filter(o => !o.delivered).map(o => o.position.slice(0, 2)),
+        paused, ended, result: game.lastResult || null } : { active: false, ...target(), friend: friendFor(target().level, target().seed) }
     };
   }
 
-  window.BrainSNNArenaGameUI = Object.freeze({ create, pendingLink: () => pendingLink });
+  window.BrainSNNArenaGameUI = Object.freeze({ create, pendingLink: () => linkForcing ? link : null, consumeLink });
 })();

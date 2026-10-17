@@ -44,6 +44,8 @@ Use one OpenPI policy process and one arena physics worker. They can share a sui
 
 Commands below run from `robotics/arena` in [slavazeph-coder/the-brain](https://github.com/slavazeph-coder/the-brain), or from the extracted worker kit root. Replace `/srv/brainsnn-arena` with that absolute **kit directory** in your deployment. Read [the RTX 4090 handoff](https://github.com/slavazeph-coder/the-brain/blob/main/robotics/arena/docs/rtx4090-handoff.md) before installing on the existing BrainSNN GPU host. Use a Linux NVIDIA machine with a compatible driver, NVIDIA Container Toolkit, and enough memory for the actual checkpoint plus rendering. Hardware throughput and combined GPU memory have not been measured by this implementation. Keep the existing `ops/gpu` text service, environment, driver and ports intact. This worker uses separate loopback ports 8010 (policy) and 8081 (physics); verify they are free before launch. Docker is an optional host deployment route, not a requirement to install Docker inside an existing Vast container.
 
+Proceed only when a suitable host and an authorized validation window are available. GB10 remains an unqualified target: read `docs/gb10-qualification.md` before assuming this installation recipe applies to its architecture or software stack. Local tests and recording inspection require neither GPU.
+
 ### 1. Install the pinned model server environment
 
 Install `uv` using its official installation instructions, then create the upstream environment on the GPU host:
@@ -60,12 +62,14 @@ GIT_LFS_SKIP_SMUDGE=1 uv pip install -e .
 Obtain the official `pi05_libero` checkpoint with the upstream downloader. It prints the local checkpoint directory:
 
 ```bash
-uv run python -c "from openpi.shared import download; print(download.maybe_download('gs://openpi-assets/checkpoints/pi05_libero'))"
+uv run --project /opt/brainsnn-openpi python -c "from openpi.shared import download; print(download.maybe_download('gs://openpi-assets/checkpoints/pi05_libero'))"
 ```
 
-Copy that directory, including all processor/normalization files, to `/models/pi05_libero`. Keep the model directory read-only while serving. Create the manifest outside the model directory:
+For a later authorized host setup, copy the complete returned directory, including processor/normalization files, into a **new** destination. Replace the source below with the exact downloaded path. The destination must not exist; this avoids merging a new checkpoint with old files. The copy materializes symlink targets because the manifest rejects remaining symlinks. Keep the completed model directory read-only while serving. Create the manifest outside it:
 
 ```bash
+python -c "import shutil; shutil.copytree('/absolute/downloaded/pi05_libero', '/models/pi05_libero', symlinks=False)"
+chmod -R a-w /models/pi05_libero
 python /srv/brainsnn-arena/workers/arena/checkpoint_manifest.py \
   --checkpoint /models/pi05_libero \
   --output /models/pi05_libero.manifest.json
@@ -74,7 +78,7 @@ python /srv/brainsnn-arena/workers/arena/checkpoint_manifest.py \
 Record the printed `sha256:...` value in the worker's `ARENA_CHECKPOINT_REVISION`. Start the verified policy wrapper from the OpenPI environment:
 
 ```bash
-XLA_PYTHON_CLIENT_PREALLOCATE=false uv run python /srv/brainsnn-arena/workers/arena/serve_openpi.py \
+XLA_PYTHON_CLIENT_PREALLOCATE=false uv run --project /opt/brainsnn-openpi python /srv/brainsnn-arena/workers/arena/serve_openpi.py \
   --checkpoint /models/pi05_libero \
   --manifest /models/pi05_libero.manifest.json \
   --host 127.0.0.1 --port 8010
@@ -88,10 +92,12 @@ Return to `robotics/arena` or the extracted kit root:
 
 ```bash
 docker build -f workers/arena/Dockerfile -t brainsnn-libero-worker .
-cp workers/arena/.env.example .env.arena
+install -d -m 700 /absolute/private/brainsnn-arena
+cp -n workers/arena/.env.example /absolute/private/brainsnn-arena/arena.env
+chmod 600 /absolute/private/brainsnn-arena/arena.env
 ```
 
-Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Edit `.env.arena` on the deployment host and set:
+Replace `/absolute/private/brainsnn-arena` with a private path **outside the checkout** on the eventual host. Preserve any existing environment file. Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(32))"` and store it privately. Edit `arena.env` and set:
 
 ```dotenv
 ARENA_TOKEN=<your-generated-secret>
@@ -100,20 +106,46 @@ ARENA_POLICY_URL=ws://127.0.0.1:8010
 ARENA_CHECKPOINT_REVISION=sha256:<the-verified-manifest-digest>
 ARENA_SESSION_TTL=900
 ARENA_IDLE_TTL=120
+ARENA_RECORDING_DIR=/var/lib/brainsnn-arena/recordings
+ARENA_RECORDING_MAX_BYTES=67108864
+ARENA_RECORDING_MAX_COUNT=50
+ARENA_RECORDING_TOTAL_BYTES=1073741824
+ARENA_RECORDING_RETENTION_SECONDS=604800
 ```
 
-Set `.env.arena` permissions to `0600`. Do not commit the real `.env.arena` or paste its token into reports. These are two exact origins, without path or trailing slash. Add a preview origin only when explicitly needed; never use `*`. On a Linux GPU host, host networking lets the physics container reach the policy on loopback:
+Keep `arena.env` at `0600`; do not commit it, source it as arbitrary shell code, or paste its token into reports. These are two exact origins, without path or trailing slash. Add a preview origin only when explicitly needed; never use `*`.
+
+Choose a new private persistent archive directory on the host. The image runs as UID/GID **10001**; create the dedicated directory with that owner (using the host's existing administrator access if needed). Do not change ownership of a shared directory. On a Linux GPU host, host networking lets the physics container reach the policy on loopback:
 
 ```bash
+install -d -m 700 -o 10001 -g 10001 /absolute/persistent/brainsnn-arena-recordings
 docker run --rm --name brainsnn-libero --gpus all --network host \
-  --env-file .env.arena brainsnn-libero-worker
+  --env-file /absolute/private/brainsnn-arena/arena.env \
+  --mount type=bind,src=/absolute/persistent/brainsnn-arena-recordings,dst=/var/lib/brainsnn-arena/recordings \
+  brainsnn-libero-worker
 ```
+
+The environment path is inside the container; the bind source is on the host. `--rm` removes the container, not that mounted directory. Without the mount, the default archive is inside the container home and is lost with the container. For a non-container worker, set `ARENA_RECORDING_DIR` to its actual absolute private persistent host directory. Session reset/deletion/TTL do not delete finalized recordings; the independent age/count/byte retention policy does. Export important bundles before expiry. Container/host replacement survival still depends on the selected storage and must be verified separately.
 
 The host-network container listens on **127.0.0.1:8081**, with NVIDIA graphics capability enabled for EGL. Terminate TLS at an operator-controlled reverse proxy and configure its request-body limit to 64 KiB and startup request timeout to at least 100 seconds. Keep port 8081 private to the proxy. For a different container-network arrangement, configure its listener and private proxy route explicitly; publishing a Docker port alone does not change the loopback listener. Configure the proxy to pass the `Authorization` and `Origin` headers. Use an HTTPS endpoint in the published arena; a browser will block HTTP mixed content from an HTTPS page.
 
 This same layout can run on a separately rented Vast machine. Provisioning, GPU choice, hourly cost, storage billing, process supervision, and shutdown remain operator responsibilities. The source kit does not create provider accounts or purchase compute.
 
-### 3. Connect from the arena
+### 3. Run the bounded pilot before browser connection
+
+Follow `docs/rtx4090-handoff.md` for the acceptance sequence. Use the installed physics/API environment's Python and supply `ARENA_TOKEN` privately to the probe process. From the kit directory, choose a new output directory outside Git:
+
+```bash
+/absolute/physics-venv/bin/python scripts/probe-worker.py \
+  --url http://127.0.0.1:8081 \
+  --origin https://www.brainsnn.com \
+  --out /absolute/private/arena-evidence/first-run \
+  --max-seconds 600
+```
+
+This first checks one practice step and archive persistence across reset/deletion, then one formal task-0/seed-7 episode to checker success or the 220-step horizon. It saves JPEG previews, traces and full hash-verified recording bundles. Partial/tampered archives and early non-success termination fail acceptance. A full-horizon task miss can pass execution acceptance while remaining a failed task. Inspect the private evidence before proceeding; see the handoff for time limits and the separate storage-restart check. Do not scale to ten or more episodes before this bounded evidence is sound.
+
+### 4. Connect from the arena
 
 Choose **Panda → π0.5 LIBERO**, open **Connect worker**, enter the worker's HTTPS base URL and token, then connect. Capabilities verify installed package pins and the policy metadata. The session-creation request additionally initializes the real task and EGL renderer. If either fails, the UI reports a concrete error; it does not switch to a demonstration controller.
 
@@ -121,7 +153,7 @@ Create a practice session and step once before running an episode. A frame shoul
 
 ## HTTP contract
 
-Every endpoint requires `Authorization: Bearer <ARENA_TOKEN>`. A request with an `Origin` header must match the configured origin exactly. JSON request bodies are bounded to 64 KiB before parsing, including chunked input.
+Operator endpoints require `Authorization: Bearer <ARENA_TOKEN>`. Archived recording reads and capabilities also accept the optional distinct `ARENA_READ_TOKEN`; this viewer credential cannot create, control or delete sessions. A request with an `Origin` header must match the configured origin exactly. JSON request bodies are bounded to 64 KiB before parsing, including chunked input.
 
 | Request | Result |
 | --- | --- |
@@ -150,21 +182,25 @@ Change the actual policy sensor in practice:
 {"version":1,"type":"intervene","payload":{"kind":"camera-occlusion","enabled":true,"fraction":0.35},"requestId":"occlusion-1"}
 ```
 
-Repeated identical command IDs are idempotent. Reusing an ID for a different operation fails. Frame sequence numbers do not rewind on reset. A running session must be paused before a manual single step. After success, the horizon, or an error, reset before another run. Reset clears the active intervention and pending action queue.
+Repeated identical command IDs are idempotent. Reusing an ID for a different operation fails. Frame sequence numbers do not rewind on reset. A running session must be paused before a manual single step. After success, the horizon, or an error, reset before another run. Reset clears the active intervention, pending action queue and current legacy episode view, finalizes the old recording, and starts a distinct recording ID. It does **not** delete that archived episode. If two writers remain pending, reset returns `recording_busy` (409) before changing the live episode; retry after finalization.
 
 One session is admitted per worker. It expires after 15 minutes or two minutes without client activity by default; expiry closes the environment and policy socket. Failed or stuck startup/inference has a bounded timeout and a terminated session process. Run Uvicorn with **one** API worker; scale with a session-aware router to independent instances, not multiple Uvicorn workers sharing an in-memory manager.
 
-Evidence is the current episode only and lives in worker memory. Export it before reset/deletion. Flattened state/action evidence enables diagnosis and recorded replay; it does not capture policy RNG, all solver state, or promise exact fresh-inference branching. A single successful task is not an official aggregate LIBERO benchmark result.
+The legacy evidence endpoint contains the current episode in worker memory. Native recordings are also saved to the bounded private archive and survive reset/deletion until their configured retention expires. Use the recording bundle endpoint to retain exact input artifacts; see `docs/arena-inspection.md` in this kit for storage, read-only credentials, inspection and interchange. Flattened state/action evidence enables diagnosis and recorded replay; it does not capture policy RNG, all solver state, or promise exact fresh-inference branching. A single successful task is not an official aggregate LIBERO benchmark result.
+
+## Ten-episode evaluation pack
+
+After the saved real-policy pilot passes, use the kit's `scripts/run-campaign.py` to run ten sequential episodes, retain independently verified bundles and import the resulting `report.json` in Arena → Evaluation packs. Read [the evaluation pack guide](https://www.brainsnn.com/arena/evaluation-setup.html) for the exact command, resume rules, task/seed coverage and limits. No provider is provisioned, and 1,000/100,000-episode drafts are not executable by this bounded runner.
 
 ## Validation performed and remaining
 
 The code is exercised using injected environment/policy doubles and actual FastAPI ASGI HTTP requests. These tests cover camera rotation/resize/state construction, action chunk cadence, action application, actual sensor-mask inputs, benchmark locks, terminal success, reset, cleanup, idempotence, verified checkpoint identity, token/CORS enforcement and body limits. They do not run the downloaded model, real MuJoCo/EGL, or the Docker image.
 
-Run the lightweight tests without downloading model weights:
+Run the lightweight tests without downloading model weights. Node 22 is required for the included Python/browser recording-verifier check; use the physics/API test environment for Python:
 
 ```bash
 python -m pip install -r workers/arena/requirements-api.txt httpx==0.28.1
-python -m unittest discover -s tests -p 'test_arena_worker*.py' -v
+python -m unittest discover -s tests -p 'test_arena*.py' -v
 ```
 
 Before making claims about the hosted service, build the container, initialize the real environment, validate the pinned OpenPI checkpoint on a GPU, compare several fixed initial-state episodes with the native upstream evaluator, and measure total GPU memory/throughput. No successful GPU run or production availability is claimed by this source implementation.

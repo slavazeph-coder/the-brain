@@ -62,7 +62,7 @@ function useDraft(original) {
   };
 }
 
-export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQueue, onApprove }) {
+export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQueue, onApprove, embedded = false, onCompare }) {
   const [goal, setGoal] = useState('trust');
   const [comparison, setComparison] = useState(null);
   const [busy, setBusy] = useState('');
@@ -133,6 +133,7 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
   }
 
   async function compare() {
+    if (embedded && onCompare) { onCompare(original, draft.text); return; }
     if (draft.text.trim().length < 12) return;
     setBusy('compare');
     setMessage('');
@@ -169,10 +170,10 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
     <div className="synapse-workspace" data-testid="synapse-workspace">
       <header className="synapse-header">
         <p className="bsn-kicker">Improve</p>
-        <h1>Fix the draft, then take it with you.</h1>
+        <h2>Fix the draft, then take it with you.</h2>
         <p>
           Each fix below edits your text where the scan found the problem. Nothing is added
-          that you did not write, so the finished draft is safe to paste straight into a send field.
+          that you did not write, so you can inspect each change before using it.
         </p>
 
       </header>
@@ -228,9 +229,9 @@ export function ImprovementWorkspace({ result, onGoToCortex, onSaveVersion, onQu
         {message ? <p role="status" className="bsn-note synapse-message">{message}</p> : null}
       </section>
 
-      <VersionComparison originalResult={result} revisedResult={comparison} />
+      {!embedded && <VersionComparison originalResult={result} revisedResult={comparison} />}
       {changed ? <BeforeAfterDiff before={original} after={draft.text} /> : null}
-      <RecommendationCards result={result} />
+      {!embedded && <RecommendationCards result={result} />}
     </div>
   );
 }

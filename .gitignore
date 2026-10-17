@@ -15,3 +15,7 @@ env/
 # Playwright artifacts
 brainsnn-r3f-app/test-results/
 brainsnn-r3f-app/playwright-report/
+
+# Local browser inspection artifacts
+.playwright-cli/
+output/playwright/

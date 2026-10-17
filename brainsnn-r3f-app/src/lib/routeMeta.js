@@ -7,8 +7,34 @@ import { buildHoldoutReport } from './holdoutReport.js';
 const SITE_NAME = 'BrainSNN';
 const EVIDENCE = buildHoldoutReport();
 
+const REVIEW = {
+  title: 'Review | BrainSNN',
+  description: 'Review a passage, compare two drafts, split a claim or inspect video cues. Trace each finding to a span or timestamp, with known detector misses beside the score.',
+  heading: 'Review the evidence behind a signal.',
+  body: [
+    'One workbench, four tabs: Passage, Two drafts, Claim split and Video cues. Inspect a source span or timestamp before deciding what to change.',
+    'Known misses and false alarms from the held-out evaluation stay alongside the score. Those evaluation results describe the test corpus, not a verdict on your input.',
+    'Text scores are heuristic review signals. Video cues mark visual changes and supplied notes; they do not recognize objects, people or actions. Neither measures a reader or predicts a market.',
+  ],
+};
+
+const REVIEW_TABS = {
+  passage: 'Passage',
+  drafts: 'Two drafts',
+  claims: 'Claim split',
+  video: 'Video cues',
+};
+
+const LEGACY_ROUTES = {
+  '/app': { path: '/office', tab: 'passage' },
+  '/engine': { path: '/office', tab: 'drafts' },
+  '/reconstruct': { path: '/office', tab: 'claims' },
+  '/missions': { path: '/arena/' },
+};
+
 /** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
 const ROUTES = [
+  { path: '/coherence', title: 'Video research preview | BrainSNN', heading: 'Inspect the correction pass.', description: 'Inspect a synthetic video correction fixture, published baselines and failed native-resolution quality gates.', body: ['Fixed post-process engine v0.4, with no trained weights. The low-resolution synthetic example does not establish HD or general video quality.', 'Native motion gates failed. Multi-minute coherence remains unestablished.'] },
   {
     path: '/toys/fool-the-detector',
     title: 'Fool the Detector | BrainSNN',
@@ -46,19 +72,29 @@ const ROUTES = [
     ],
   },
   {
-    path: '/missions',
-    title: 'Proof Missions | BrainSNN',
+    path: '/arena/tasks',
+    title: 'Arena tasks | BrainSNN',
     description:
-      'Explore bounded objectives, explicit acceptance criteria and recorded attempts in the BrainSNN proof mission registry.',
-    heading: 'Give useful work a measurable test.',
+      'Inspect bounded Arena tasks with explicit acceptance criteria, recorded attempts and a judge.',
+    heading: 'A task needs a judge.',
     body: [
-      'Proof Missions define an objective, an environment, permitted actions and a judge. Attempts preserve evidence so a result can be reviewed against the conditions that were actually tested.',
-      'The mission registry remains available as a tool within the BrainSNN working agent lab. A simulated or benchmark result is not a verified payment or accepted customer delivery.',
+      'Each task defines an objective, an environment, permitted actions and a judge. Recorded attempts preserve evidence against the conditions that were actually tested.',
+      'Synthetic task results describe local practice. They do not establish performance by a named model, a verified payment or an accepted customer delivery. Tasks without an implementation remain unavailable.',
     ],
   },
   {
-    path: '/lab',
-    title: 'Neuro Powder Lab | BrainSNN Arcade',
+    path: '/arena/',
+    title: 'Arena | BrainSNN',
+    description: 'Pick a robot and a model, choose a challenge and play with the world. Try local practice or connect a matched model worker, then replay your run.',
+    heading: 'Pick a robot. Choose its brain.',
+    body: [
+      'Choose your robot and model before you run. Explore challenges, move the camera, change the world and replay what happened.',
+      'Local practice — not a model score. The scripted arm does not score a named policy. A model result requires a named model that actually ran and inspectable execution evidence.',
+    ],
+  },
+  {
+    path: '/lab/powder',
+    title: 'Neuro Powder Lab | BrainSNN',
     description:
       'A falling-sand sandbox where four materials are a spiking neuron model. '
       + 'Draw a circuit, watch it learn, and inspect its firing regime.',
@@ -70,25 +106,32 @@ const ROUTES = [
     ],
   },
   {
-    path: '/arcade',
-    title: 'GaugeGap Arcade | Playable BrainSNN experiments',
-    description:
-      'Explore BrainSNN’s interactive research playground: neural circuits, fractals, cognitive experiments and shareable simulations.',
-    heading: 'GaugeGap Arcade',
+    path: '/lab',
+    title: 'Lab | BrainSNN',
+    description: 'Explore BrainSNN experiments: the jelly brain, Neuro Powder Lab, Arcade and three playable detector toys.',
+    heading: 'Experiments live here.',
     body: [
-      'The Arcade is BrainSNN’s experimental playground: interactive models, neural simulations and small research experiences you can operate rather than only read about.',
-      'It remains available as a research department within the BrainSNN agent lab. Simulation results describe their tested conditions; they do not establish customer demand or commercial success.',
+      'The Lab gathers the jelly brain at /play, the Neuro Powder Lab, Arcade and three toys: Fool the Detector, Draft Duel and Defend the Brain.',
+      'These are simulations and local experiments. Use Arena for a task with a judge, Review for your own material and Evidence to inspect the detector’s known misses.',
+    ],
+    links: [
+      { path: '/play', label: 'Sapient Playground' },
+      { path: '/lab/powder', label: 'Neuro Powder Lab' },
+      { path: '/arcade', label: 'Arcade' },
+      { path: '/toys/fool-the-detector', label: 'Fool the Detector' },
+      { path: '/toys/draft-duel', label: 'Draft Duel' },
+      { path: '/toys/defend-the-brain', label: 'Defend the Brain' },
     ],
   },
   {
-    path: '/reconstruct',
-    title: 'Reconstruct a Stronger Claim | BrainSNN',
+    path: '/arcade',
+    title: 'Arcade | BrainSNN',
     description:
-      'Separate what the evidence supports from what the story merely implies, then rebuild the claim responsibly.',
-    heading: 'Reconstruct a stronger claim',
+      'Explore BrainSNN’s interactive research playground: neural circuits, fractals, cognitive experiments and shareable simulations.',
+    heading: 'Arcade experiments',
     body: [
-      'Most weak claims are not lies. They are a supported finding and an unsupported implication welded together in one sentence.',
-      'Reconstruct pulls the two apart: what the evidence actually carries, what the framing adds on top, and what a version that keeps only the supported part would sound like.',
+      'The Arcade is BrainSNN’s experimental playground: interactive models, neural simulations and small research experiences you can operate rather than only read about.',
+      'The Arcade is part of Lab. Simulation results describe their tested conditions; they do not establish customer demand or commercial success.',
     ],
   },
   {
@@ -107,44 +150,11 @@ const ROUTES = [
     ],
   },
   {
-    path: '/engine',
-    title: 'Compare two drafts | BrainSNN Engine',
-    description:
-      'Compare original and candidate text with source hashes, exact evidence quotes and heuristic signal changes. Review the result or use the BrainSNN API and MCP tools.',
-    heading: 'Compare a change. Keep its evidence.',
-    body: [
-      'Compare two drafts with BrainSNN’s local content detector. The engine returns source hashes, exact quote offsets and heuristic signal changes so each finding can be inspected against its input.',
-      'Every comparison remains REVIEW_REQUIRED. A model-score change does not verify facts, predict market outcomes or establish an independently tested improvement.',
-      'Agent builders can use POST /api/engine/compare and the brain_compare MCP tool for the same bounded comparison. This interface produces review evidence; it does not execute general agent work.',
-    ],
-  },
-  {
-    path: '/app',
-    title: 'BrainSNN | Turn text, pages and video into decision intelligence',
-    description:
-      'Paste content or upload a screen recording. BrainSNN surfaces attention, trust, evidence gaps, visual transitions, workflow steps and specific next actions.',
-    heading: 'Analyze what you are about to publish — or show BrainSNN what happened',
-    body: [
-      'BrainSNN accepts text, page copy, local video or screen recordings, and decoded neural-model transcripts. It turns those inputs into structured attention, trust, risk, evidence and workflow signals.',
-      'Video mode adaptively samples low-resolution visual changes in the browser and fuses those timestamps with optional transcript or operator notes. The raw video is not uploaded by this V0.1 path.',
-      'Recommendations point back to the actual claim, proof line, workflow step or timestamp that caused them. Visual transitions are review cues, not object, person or action recognition.',
-    ],
-  },
-  {
     path: '/office',
-    title: 'Agent office | BrainSNN',
-    description:
-      'Explore the BrainSNN agent-office concept, engine roadmap and recorded evidence from XIO’s separate operational experiment.',
-    heading: 'An evidence engine for agent work.',
-    body: [
-      'BrainSNN brings content analysis, reviewed draft improvements, browser-local scan history and proof missions into one product. Start with a passage, page or screen recording, inspect the evidence, and make a change you can test.',
-      'The public detector evaluation reports results on unseen passages, including missed cues and false alarms. Model scores are review signals, not measurements of a reader’s brain or predictions of market outcomes.',
-      'The engine roadmap connects versioned, reusable context with independent tests and evidence-based resource allocation. This is planned integration, not a claim of autonomous learning already running.',
-      'The office preserves a recorded window into XIO’s separate operational experiment. Its approved counts and events are not BrainSNN-wide engine metrics. Unknown results remain unavailable. Reconstruct, the Arcade and neural circuit simulations remain available as tools and research.',
-    ],
+    ...REVIEW,
   },
   {
-    path: '/',
+    path: '/play',
     title: 'BrainSNN | Sapient Playground',
     image: '/og/toy-poke.png',
     description:
@@ -152,25 +162,30 @@ const ROUTES = [
     heading: 'Poke the brain and watch the signal travel.',
     body: [
       'Poke, drag or shake a jelly brain. Every poke drives the seven-region spiking model BrainSNN’s analyzer runs on, and the signal travels its pathways. It is a simulation, not a recording of anyone’s brain.',
-      'Then build a mind, give it a world, give it a mission: analyze content, compare two drafts with the deterministic comparison engine, or explore a proof mission.',
+      'Explore more toys in Lab, open Review to inspect a passage or compare two drafts, or enter Arena for a task with a judge.',
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
+    ],
+  },
+  {
+    path: '/',
+    title: 'BrainSNN | See the moment it breaks',
+    description:
+      'Change one thing in a robot mission or a draft. Both runs stay. '
+      + `Rank agreement on ${EVIDENCE.corpusSize} unseen passages is ${EVIDENCE.outOfSample.rho}. `
+      + `${EVIDENCE.falseAlarmCount} false alarms are listed.`,
+    heading: 'See the moment it breaks.',
+    body: [
+      'Change one thing in a robot mission or a draft. Both runs stay: the original, and the one after the change.',
+      'Enter the robot arena to run a practice mission, disturb it, and replay the break. Open Review to put a passage through the detector and keep the comparison.',
+      `Rank agreement on ${EVIDENCE.corpusSize} passages the detector had never seen is ${EVIDENCE.outOfSample.rho}. ${EVIDENCE.falseAlarmCount} false alarms are listed. Local arena practice is scripted and does not score a named policy. Model scores describe their tested conditions; they do not establish universal capability.`,
     ],
   },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/', label: 'BrainSNN Sapient Playground' },
-  { path: '/toys/fool-the-detector', label: 'Fool the Detector' },
-  { path: '/toys/draft-duel', label: 'Draft Duel' },
-  { path: '/toys/defend-the-brain', label: 'Defend the Brain' },
-  { path: '/arcade', label: 'GaugeGap Arcade' },
-  { path: '/lab', label: 'Neuro Powder Lab' },
-  { path: '/app', label: 'Content analyzer' },
-  { path: '/engine', label: 'Compare two drafts and use the engine API' },
-  { path: '/missions', label: 'Proof missions' },
-  { path: '/evidence', label: 'Held-out evaluation' },
-  { path: '/reconstruct', label: 'Reconstruct a claim' },
-  { path: '/office', label: 'Agent office' },
+  { path: '/arena/', label: 'Arena' },
+  { path: '/office', label: 'Review' },
+  { path: '/evidence', label: 'Evidence' },
 ]);
 
 const SHARED_GRID = {
@@ -185,21 +200,43 @@ const SHARED_GRID = {
 };
 
 export function resolveRouteMeta(pathname = '/', search = '') {
+  const params = new URLSearchParams(search.replace(/^\?/, ''));
+  const legacy = LEGACY_ROUTES[pathname.replace(/\/$/, '')];
+  const targetPath = pathname.startsWith('/missions/') ? pathname.replace('/missions/', '/arena/tasks/') : legacy?.path || pathname;
+  const normalizedPath = targetPath.replace(/\/$/, '') || '/';
   const route = ROUTES.find((entry) => (
-    entry.path === '/' ? pathname === '/' : pathname.startsWith(entry.path)
+    entry.path === '/' ? normalizedPath === '/' : (
+      normalizedPath === entry.path.replace(/\/$/, '')
+      || normalizedPath.startsWith(`${entry.path.replace(/\/$/, '')}/`)
+    )
   )) || ROUTES[ROUTES.length - 1];
 
-  if (route.path === '/lab' && /(^|[?&])grid=/.test(search)) {
-    const grid = new URLSearchParams(search.replace(/^\?/, '')).get('grid') || '';
+  if ((route.path === '/lab/powder' || normalizedPath === '/lab') && params.has('grid')) {
+    const grid = params.get('grid') || '';
+    return {
+      ...ROUTES.find((entry) => entry.path === '/lab/powder'),
+      ...SHARED_GRID,
+      path: '/lab/powder',
+      canonicalPath: '/lab/powder',
+      image: `/api/og/lab?grid=${encodeURIComponent(grid)}`,
+    };
+  }
+  if (route.path === '/office') {
+    const tab = legacy?.tab || params.get('tab');
     return {
       ...route,
-      ...SHARED_GRID,
-      image: `/api/og/lab?grid=${encodeURIComponent(grid)}`,
+      canonicalPath: '/office',
+      title: Object.hasOwn(REVIEW_TABS, tab) ? `Review: ${REVIEW_TABS[tab]} | BrainSNN` : route.title,
+      image: '/og-image.png',
     };
   }
   // The homepage has its own product screenshot; existing tools retain their
   // original card, and shared circuit links keep the dynamic preview above.
-  return { ...route, image: route.image || '/og-image.png' };
+  return {
+    ...route,
+    canonicalPath: targetPath === '/arena' ? '/arena/' : targetPath,
+    image: route.image || '/og-image.png',
+  };
 }
 
 function escapeAttribute(value) {
@@ -217,16 +254,23 @@ export function renderContentBlock(meta, currentPath = '/') {
     .map((text) => `<p style="margin:0 0 1rem">${escapeAttribute(text)}</p>`)
     .join('');
 
-  const links = CRAWL_LINKS
+  const renderLinks = (items) => items
     .filter((link) => link.path !== currentPath)
     .map((link) => `<li style="margin:0 0 .5rem"><a href="${escapeAttribute(link.path)}" style="color:#7dd3fc">${escapeAttribute(link.label)}</a></li>`)
     .join('');
+  const links = renderLinks(CRAWL_LINKS);
+  const experiments = meta.links
+    ? `<section aria-label="Lab experiments"><ul>${renderLinks(meta.links)}</ul></section>`
+    : '';
+  const overflow = currentPath === '/lab' ? ''
+    : '<details><summary>More</summary><a href="/lab" style="color:#7dd3fc">Lab</a></details>';
 
   return '<main data-prerendered="1" style="max-width:44rem;margin:0 auto;padding:3rem 1.5rem;'
     + 'font-family:Inter,system-ui,sans-serif;color:#e2e8f0;background:#030308;line-height:1.6">'
     + `<h1 style="font-size:1.9rem;line-height:1.25;margin:0 0 1.25rem">${escapeAttribute(meta.heading)}</h1>`
     + paragraphs
-    + `<nav aria-label="Sections"><ul style="list-style:none;padding:0;margin:2rem 0 0">${links}</ul></nav>`
+    + experiments
+    + `<nav aria-label="Sections"><ul style="list-style:none;padding:0;margin:2rem 0 0">${links}</ul>${overflow}</nav>`
     + '</main>';
 }
 
@@ -234,7 +278,7 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
   const meta = resolveRouteMeta(pathname, search);
   const title = escapeAttribute(meta.title);
   const description = escapeAttribute(meta.description);
-  const url = origin ? escapeAttribute(`${origin}${pathname}`) : null;
+  const url = origin ? escapeAttribute(`${origin.replace(/\/$/, '')}${meta.canonicalPath}`) : null;
 
   let out = html
     .replace(/<title>[\s\S]*?<\/title>/, `<title>${title}</title>`)
@@ -256,6 +300,21 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
       .replace(/(<meta\s+property="og:image"\s+content=")[\s\S]*?(")/, `$1${image}$2`)
       .replace(/(<meta\s+name="twitter:image"\s+content=")[\s\S]*?(")/, `$1${image}$2`);
   }
+
+  const structuredData = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: SITE_NAME,
+    applicationCategory: 'BusinessApplication',
+    description: meta.description,
+    url: origin ? `${origin.replace(/\/$/, '')}${meta.canonicalPath}` : undefined,
+    operatingSystem: 'Web',
+    isAccessibleForFree: true,
+  }).replace(/</g, '\\u003c');
+  out = out.replace(
+    /(<script id="site-schema" type="application\/ld\+json">)[\s\S]*?(<\/script>)/,
+    (_match, open, close) => `${open}${structuredData}${close}`,
+  );
 
   const block = renderContentBlock(meta, pathname);
   if (block) {

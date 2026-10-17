@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BrainSNN · Plan one gym floor</title>
+  <meta name="description" content="Bring a measured gym floor into BrainSNN Arena and estimate a cleaner route, robot time, human help and cost per run.">
+  <style>
+    :root{color-scheme:dark;font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#edf4fc;background:#05070b}
+    *{box-sizing:border-box}body{margin:0}header,main,footer{max-width:1000px;margin:auto;padding:28px}header{display:flex;align-items:center;gap:12px;border-bottom:1px solid #25313f}header>a:last-child{margin-left:auto}.mark{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,#68eaff,#947cff);color:#041016;font-weight:900}a{color:#68eaff;text-underline-offset:4px}a:focus-visible{outline:2px solid #68eaff;outline-offset:5px}h1{font-size:clamp(36px,6vw,60px);line-height:1.05;letter-spacing:-.05em;font-weight:550;margin:24px 0}h1 span{color:#94a3ba}h2{font-size:25px;letter-spacing:-.03em;font-weight:550;margin-top:42px}p,li,td{color:#aab9cc}.eyebrow{color:#68eaff;letter-spacing:.13em;font-size:10px;font-weight:650}.lead{font-size:18px;max-width:760px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:11px 20px;background:#68eaff;color:#041016;text-decoration:none;border-radius:10px;font-weight:600}.notice{padding:20px 24px;background:#947cff0b;border:1px solid #947cff40;border-radius:14px;margin:26px 0}.notice p{margin:0}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:32px 0}.steps>div{border:1px solid #25313f;border-radius:15px;padding:22px;background:#0d131c}.steps b{font-size:11px;color:#68eaff}.steps h2{margin:12px 0;font-size:22px}.steps p{font-size:13px;margin:0}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:15px 12px;text-align:left;vertical-align:top;border-bottom:1px solid #25313f}th{color:#edf4fc;font-weight:550}code{color:#c5b8ff;font-size:13px;overflow-wrap:anywhere}footer{border-top:1px solid #25313f;font-size:12px;color:#8fa2ba}strong{color:#edf4fc}li{margin:7px 0}@media(max-width:660px){header,main,footer{padding:20px}.steps{grid-template-columns:1fr;gap:10px}.steps>div{padding:19px}.lead{font-size:16px}header strong{font-size:13px}header a:last-child{font-size:12px}table{min-width:620px}.notice{padding:18px}}
+  </style>
+</head>
+<body>
+  <header><span class="mark" aria-hidden="true">B</span><strong>BrainSNN Arena</strong><a href="./#playground?robot=g1&amp;model=groot&amp;task=Supported+reach&amp;seed=42&amp;view=site">Open the workspace ↗</a></header>
+  <main>
+    <p class="eyebrow">ONE FLOOR. A REVIEWABLE PLAN.</p>
+    <h1>From your gym<br><span>to a working estimate.</span></h1>
+    <p class="lead">Bring a measured floor map. Review the equipment and passages. Explore a cleaner route, estimated robot time, human help and cost per run.</p>
+    <a class="button" href="./#playground?robot=g1&amp;model=groot&amp;task=Supported+reach&amp;seed=42&amp;view=site">Plan your gym floor ↗</a>
+    <div class="notice"><p><strong>Choose the right starting point.</strong> A supported RoomPlan JSON or measured map can be planned in your browser. Phone video needs a configured reconstruction worker and map review. A video or 3D visual does not automatically become a measured collision map.</p></div>
+    <div class="steps">
+      <div><b>01 / CAPTURE</b><h2>Bring one floor.</h2><p>Import a supported single-floor RoomPlan JSON, restore a BrainSNN scenario, or draw a measured map with photos and video as a reference.</p></div>
+      <div><b>02 / REVIEW</b><h2>Check the real space.</h2><p>Confirm dimensions. Mark machines, mats, stairs and unsuitable zones. Set the start at the dock and check the cleaner's full footprint.</p></div>
+      <div><b>03 / ESTIMATE</b><h2>See the work ahead.</h2><p>Choose Estimate gym cleaning, enter the actual body and working assumptions, then run. Replay the route and inspect time, human help and costs.</p></div>
+    </div>
+    <h2>What to bring for the first gym</h2>
+    <ul>
+      <li>A map or walkthrough of <strong>one empty, level floor zone</strong>, plus a dimensioned sketch if no supported map export is available.</li>
+      <li><strong>Two measured distances</strong> to check scale. For RoomPlan, the capture app must export CapturedRoom JSON with a floor polygon; a USDZ-only export is insufficient.</li>
+      <li>Machine and rack footprints, free weights, mats, mirrors, glass, ramps and stairs. Exclude floor that should not be cleaned by this robot.</li>
+      <li>The cleaner's measured width, depth, cleaning width and working speed, including attachments.</li>
+      <li>Setup/finish time, expected assistance, manual cleaning rate and refill/service needs.</li>
+      <li>Your labour/hour, robot/hour and consumables/m² rates. <strong>The cost stays blank until you enter your rates.</strong></li>
+    </ul>
+    <h2>Read the result correctly</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Output</th><th>How it is estimated</th></tr></thead>
+      <tbody>
+        <tr><td>Robot run</td><td>The planned route at your entered speed, plus modelled turn delays and configured service stops.</td></tr>
+        <tr><td>Human help</td><td>Setup, finishing, entered assistance events, service labour and optional manual follow-up for uncovered open floor.</td></tr>
+        <tr><td>Sequential completion</td><td>Robot work plus human work under a serial assumption, counting shared servicing once. It does not predict parallel staff scheduling.</td></tr>
+        <tr><td>Cost per run</td><td>Human hours × labour rate + robot run hours × robot rate + worked area × consumables rate.</td></tr>
+        <tr><td>Uncovered floor</td><td>Grid-estimated open floor outside the planned cleaning swath. Inspect these areas before deciding who cleans them.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The route is a bounded geometric preview. It is not an optimized cleaning controller or a measured robot trial. Assistance is modelled from your inputs; it is not a learned failure prediction. The selected GR00T model does not execute in this estimate.</p>
+    <h2>Useful next integrations</h2>
+    <p>These are researched candidates. Their models and services are not installed by this page.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Component</th><th>What it adds</th><th>What still needs review</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://developer.apple.com/augmented-reality/roomplan/" target="_blank" rel="noopener noreferrer">RoomPlan</a></td><td>Structured capture and dimensions on a LiDAR iPhone/iPad.</td><td>Native capture/export app, gym equipment, mirrors and glass.</td></tr>
+        <tr><td><a href="https://www.open3d.org/docs/release/tutorial/geometry/pointcloud.html" target="_blank" rel="noopener noreferrer">COLMAP + Open3D</a></td><td>Reconstruction plus proposed floor planes and obstacle clusters.</td><td>Scale, point density and uncertain or missing geometry.</td></tr>
+        <tr><td><a href="https://github.com/ByteDance-Seed/Depth-Anything-3" target="_blank" rel="noopener noreferrer">DA3-BASE + METRIC-LARGE</a></td><td>AI depth/pose proposals from ordinary phone images.</td><td>New adapter, intrinsics and measured anchors. These checkpoints use Apache 2.0; larger/Nested weights have noncommercial terms.</td></tr>
+        <tr><td><a href="https://github.com/facebookresearch/sam3" target="_blank" rel="noopener noreferrer">SAM 3</a></td><td>Proposed image masks for floor, mats and equipment.</td><td>Register masks to measured geometry and review exclusions. Requires model access and Meta's custom SAM licence.</td></tr>
+        <tr><td><a href="https://github.com/open-navigation/opennav_coverage" target="_blank" rel="noopener noreferrer">Nav2 + Fields2Cover</a></td><td>Swath planning and more efficient coverage routes.</td><td>Indoor voids, turning space, dock transitions and real controller compatibility.</td></tr>
+        <tr><td><a href="https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_nvblox/index.html" target="_blank" rel="noopener noreferrer">NVIDIA nvblox</a></td><td>Robot-oriented mapping from depth and camera poses.</td><td>Metric registered input and a compatible navigation worker.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Start with one reviewed gym map. Compare the first observed cleaning run against its exported estimate, then use those measurements to improve the next prediction.</p>
+    <p><a href="site-scan-worker.html">Set up a private phone reconstruction worker ↗</a></p>
+  </main>
+  <footer>Private references · Editable operating assumptions · Cost estimate, not a service quote</footer>
+</body>
+</html>

@@ -40,8 +40,8 @@ describe('toy registry', () => {
     expect(getToy('duel').hook).toBe('make two drafts fight');
   });
 
-  it('toys: the poke toy lives on the homepage and the others on their own routes', () => {
-    expect(getToy('poke').path).toBe('/');
+  it('toys: the poke toy lives at /play and the others on their own routes', () => {
+    expect(getToy('poke').path).toBe('/play');
     for (const toy of otherToys('poke')) expect(toy.path.startsWith('/toys/')).toBe(true);
     expect(otherToys('duel').some((toy) => toy.id === 'duel')).toBe(false);
     expect(getToy('nope')).toBe(null);
@@ -52,7 +52,7 @@ describe('toy share links', () => {
   it('toys: share links carry the per-toy src tag', () => {
     const url = new URL(toyShareUrl('poke'));
     expect(url.origin).toBe('https://www.brainsnn.com');
-    expect(url.pathname).toBe('/');
+    expect(url.pathname).toBe('/play');
     expect(url.searchParams.get('src')).toBe('toy1-share');
     expect(new URL(toyShareUrl('fool')).searchParams.get('src')).toBe('toy2-share');
   });

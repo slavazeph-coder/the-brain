@@ -6,6 +6,7 @@ let worker=null,report=null,toastTimer=null;
 function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').hidden=false;toastTimer=setTimeout(()=>$('toast').hidden=true,4000);}
 function showPage(id){
  id=String(id||'').split('?')[0];
+ if(id==='compute')id='campaigns';
  if(!['playground','catalog','campaigns','compute'].includes(id))id='playground';
  window.BrainSNN3DClient?.pause?.();
  if(id!=='playground')window.BrainSNNExperiment?.suspend?.();
@@ -16,7 +17,6 @@ function showPage(id){
  if(id==='campaigns')window.BrainSNNCampaign?.refreshSelection?.();
 }
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{showPage(b.dataset.page);if(b.dataset.page==='playground')window.BrainSNNExperiment?.restoreFromURL?.();if(b.dataset.catalogTab){window.BrainSNNCatalog?.showTab(b.dataset.catalogTab);document.getElementById('catalog-tab-'+b.dataset.catalogTab)?.focus();}});
-document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();showPage('playground');window.BrainSNNExperiment?.restoreFromURL?.();});
 window.BrainSNNWorkspace=Object.freeze({showPage});
 window.addEventListener('hashchange',()=>showPage(location.hash.slice(1)));
 window.addEventListener('DOMContentLoaded',()=>showPage(location.hash.slice(1)||'playground'));
@@ -46,17 +46,11 @@ function showReport(){
  $('export').disabled=false;
 }
 $('export').onclick=()=>{if(!report)return;const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='BrainSNN_toy_grid_scorecard.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
-function calculate(){
- const trials=Number($('cloud-trials').value),throughput=Number($('throughput').value),rate=Math.min(100,Math.max(.05,Number($('hour-rate').value)||.6)),margin=Math.min(75,Math.max(0,Number($('margin').value)||0)),hours=trials/throughput,cost=hours*rate,price=cost/(1-margin/100);
- $('cloud-price').textContent=price.toLocaleString('en-US',{style:'currency',currency:'USD'});
- $('cloud-detail').textContent=hours.toLocaleString('en-US',{maximumFractionDigits:1})+' worker-hours · '+cost.toLocaleString('en-US',{style:'currency',currency:'USD'})+' runtime cost';
-}
-['cloud-trials','throughput','hour-rate','margin'].forEach(id=>$(id).oninput=calculate);
 const content={
  compute:'<div class="modal-label">THE PLANNED CLOUD WORKFLOW</div><h2>Scale with a clear spending limit.</h2><ol><li>Measure a small batch with your exact scene and model.</li><li>Review the estimate and set a spending ceiling.</li><li>Run versioned batches on available workers.</li><li>Save results and failure replays, then release workers.</li></ol><p>100,000 means total episodes across a campaign. The number of active environments and model replicas is a separate choice.</p><p>Vast, Runpod, or another provider could supply compute. Loading, idle time, storage and external model inference can add cost. This prototype makes no cloud purchase.</p>',
- research:'<div class="modal-label">BRAINSNN ARENA</div><h2>Find a brain. Test the match.</h2><p>Start with one mission. Watch a compatible agent make decisions in a changing 3D scene. Inspect the result and save the evidence.</p><h3>Where the product goes next</h3><p>Matched physics and model adapters, repeatable evaluation suites, private campaigns, and supervised physical robot tests. An adaptive failure finder could select useful challenges from previous outcomes; that research advantage still needs to be demonstrated.</p><h3>Try it here</h3><p><b>Explore:</b> Robot and model discovery, comparison, saved items and draft test plans. Saved items stay on this browser.<br><b>Arena:</b> Interactive practice, fixed policy-camera views, interventions, replay and branches. Connect a matched worker to execute a named robot policy and inspect its real sensor frames.<br><b>Campaigns:</b> matched-profile plans with measured-pilot estimates, budgets and portable seed sets. A separate toy-grid comparison remains available.<br><b>Compute:</b> an illustrative cost planner.</p><p>Space runs or pauses. R resets. T toggles the movement trail. Use the camera controls or drag the scene to explore.</p><p><a href="https://www.brainsnn.com/" target="_blank" rel="noopener">Explore the original BrainSNN research playground ↗</a></p>'
+ research:'<div class="modal-label">BRAINSNN ARENA</div><h2>Find a brain. Test the match.</h2><p>Start with one mission. Watch a compatible agent make decisions in a changing 3D scene. Inspect the result and save the evidence.</p><h3>Where the product goes next</h3><p>Matched physics and model adapters, repeatable evaluation suites, private campaigns, and supervised physical robot tests. An adaptive failure finder could select useful challenges from previous outcomes; that research advantage still needs to be demonstrated.</p><h3>Try it here</h3><p><b>Explore:</b> Robot and model discovery, comparison, saved items and draft test plans. Saved items stay on this browser.<br><b>Arena:</b> Interactive practice, fixed policy-camera views, interventions, replay and branches. Connect a matched worker to execute a named robot policy and inspect its real sensor frames.<br><b>Evaluation packs:</b> a ten-episode operator runner, imported campaign reports and larger draft plans with measured-pilot estimates. A separate toy-grid comparison remains available.</p><p>Space runs or pauses. R resets. T toggles the movement trail. Use the camera controls or drag the scene to explore.</p><p><a href="https://www.brainsnn.com/" target="_blank" rel="noopener">Explore the original BrainSNN research playground ↗</a></p>'
 };
 document.querySelectorAll('[data-modal]').forEach(b=>{if(content[b.dataset.modal])b.onclick=()=>{window.BrainSNN3DClient?.pause?.();$('modal-content').innerHTML=content[b.dataset.modal];$('modal').showModal();};});
 window.addEventListener('pagehide',()=>{if(worker)worker.terminate();clearTimeout(toastTimer);});
-calculate();
+
 })();

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "brainsnn-r3f-app/public/arena/**"
+      - "brainsnn-r3f-app/arena-analysis/**"
       - "brainsnn-r3f-app/src/arena/**"
       - "brainsnn-r3f-app/scripts/build-site-renderer.mjs"
       - "robotics/arena/**"
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - "brainsnn-r3f-app/public/arena/**"
+      - "brainsnn-r3f-app/arena-analysis/**"
       - "brainsnn-r3f-app/src/arena/**"
       - "brainsnn-r3f-app/scripts/build-site-renderer.mjs"
       - "robotics/arena/**"
@@ -24,7 +26,7 @@ permissions:
 jobs:
   arena-contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: robotics/arena
@@ -41,15 +43,73 @@ jobs:
       - name: Browser logic and session regressions
         run: node scripts/check-arena.cjs
       - name: Worker API and isolation contracts
-        run: python -m unittest discover -s tests -p 'test_arena_worker*.py' -v
+        run: python -m unittest discover -s tests -p 'test_arena*.py' -v
       - name: Private site scan API and reconstruction contracts
         run: |
           python -m pip install -r workers/site_scan/requirements.txt
           python -m unittest discover -s tests -p 'test_site_scan*.py' -v
+      - name: Offline recording interchange (real local Parquet, video and MCAP fixtures)
+        # PyAV 19 requires Python >=3.12. Keep the worker API gate above on
+        # its own interpreter/dependencies; optional converters are separate.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test optional offline recording interchange
+        run: |
+          python -m pip install -r inspection/requirements.txt
+          python -m unittest discover -s tests -p 'test_inspection_interop.py' -v
       - name: Cross-language profile agreement
         run: node tests/arena-integration-worker-contract.cjs
+      - name: Install browser contract dependencies
+        working-directory: brainsnn-r3f-app
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Native inspector desktop and mobile browser flows
+        run: node tests/arena-inspector-browser.cjs
+      - name: Retain native inspector browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-inspector-browser
+          path: /tmp/arena-inspector-*.*
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Upfront robot and model selection on desktop and mobile
+        # Synthetic worker responses verify exact selection dispatch, not model execution.
+        run: node tests/arena-selection-browser.cjs
+      - name: Retain arcade desktop and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-selection-browser
+          path: /tmp/arena-selection-startup-*.png
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Robot campaign report desktop and mobile browser flows
+        run: node tests/arena-campaign-browser.cjs
+      - name: Paid analysis preview, wallet and evidence browser flows
+        # Fixture commerce/provider only; actual browser image serialization is
+        # checked by the production evidence validator. No paid calls are made.
+        run: node tests/arena-analysis-browser.cjs
+      - name: Retain paid analysis synthetic desktop and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-paid-analysis-browser-fixtures
+          path: /tmp/arena-paid-analysis-*.png
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Retain robot campaign browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-campaign-browser-fixtures
+          path: /tmp/arena-campaign-*.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Verify published worker kit matches source
         run: |
           python scripts/build-worker-kit.py
           python scripts/build-site-scan-kit.py
-          git diff --exit-code -- ../../brainsnn-r3f-app/public/arena/downloads/ ../../brainsnn-r3f-app/public/arena/worker-setup.html ../../brainsnn-r3f-app/public/arena/site-scan-worker.html
+          git diff --exit-code -- ../../brainsnn-r3f-app/public/arena/downloads/ ../../brainsnn-r3f-app/public/arena/worker-setup.html ../../brainsnn-r3f-app/public/arena/evaluation-setup.html ../../brainsnn-r3f-app/public/arena/site-scan-worker.html

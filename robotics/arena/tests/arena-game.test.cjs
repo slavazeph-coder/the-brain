@@ -141,6 +141,18 @@ test('share links round-trip and treat the time as an unverified friend claim', 
   assert(!G.shareURL('https://x.test', 'night', '1', null).includes('&t='));
   assert.match(G.shareText({ challenge: 'night', finished: true, beatBot: true, delta: -3.24, time: 22.7 }), /beat the BrainSNN bot by 3\.2 s on Night shift/);
 });
+test('Plot twist announces the tray jump once, when it happens', () => {
+  const g = fresh('surprise');
+  while (g.world.time < 6.5) G.tick(g, {});
+  const twists = g.feed.filter(x => x.kind === 'twist');
+  assert.equal(twists.length, 1); assert(Math.abs(twists[0].time - 6) < 0.11);
+  for (let i = 0; i < 30; i++) G.tick(g, {});
+  assert.equal(g.feed.filter(x => x.kind === 'twist').length, 1);
+});
+test('a dead heat is shared as a tie, and link seeds match the practice world seed', () => {
+  assert.match(G.shareText({ challenge: 'starter', finished: true, beatBot: false, delta: 0, time: 25.9 }), /^I tied the BrainSNN bot on First moves \(25\.9 s\)/);
+  assert.equal(G.worldSeed('7'), '7'); assert.equal(G.worldSeed('abc'), String(A.create('abc', {}).seed));
+});
 test('tap picking inverts the spectator projection on the table plane', () => {
   const view = { yaw: -0.95, pitch: 0.62, distance: 5.1 }, W = 960, H = 540, cam = A.spectatorCamera(view, W / H);
   const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -156,12 +168,13 @@ test('tap picking inverts the spectator projection on the table plane', () => {
 });
 
 /* Real workspace + UI in the DOM fixture. */
-function uiEnv({ search = '', selection = { seed: '42' } } = {}) {
-  const e = makeEnv();
+function uiEnv({ search = '', selection = { seed: '42' }, hash = '#catalog', saved = null, experiment = false } = {}) {
+  const e = makeEnv('{}', false, hash);
   let now = 1000, rafs = [], timers = [];
-  e.ctx.location.search = search; e.ctx.location.pathname = '/arena/';
-  const replace = e.ctx.history.replaceState;
-  e.ctx.history.replaceState = (a, b, url) => { replace(a, b, url); if (!String(url).includes('?play=')) e.ctx.location.search = ''; };
+  const loc = e.ctx.location;
+  loc.search = search; loc.pathname = '/arena/';
+  // Resolve like a browser: a bare "#..." keeps the current path and query.
+  e.ctx.history.replaceState = (_a, _b, url) => { const u = new URL(url, 'https://example.test' + loc.pathname + (loc.search || '')); loc.pathname = u.pathname; loc.search = u.search; loc.hash = u.hash; };
   e.ctx.performance = { now: () => now };
   e.ctx.requestAnimationFrame = fn => { rafs.push(fn); return rafs.length; };
   e.ctx.cancelAnimationFrame = () => { rafs = []; };
@@ -169,33 +182,64 @@ function uiEnv({ search = '', selection = { seed: '42' } } = {}) {
   e.ctx.clearTimeout = () => {};
   e.ctx.matchMedia = () => ({ matches: false });
   e.ctx.setInterval = () => 1; e.ctx.clearInterval = () => {};
-  const root = e.document.createElement('div'); root.setAttribute('id', 'arena-test-root'); e.document.body.appendChild(root);
-  for (const f of ['arena-3d.js', 'arena-game.js', 'arena-game-ui.js', 'arena-profiles.js', 'arena-workspace.js']) vm.runInContext(fs.readFileSync(path.join(dist, f), 'utf8'), e.ctx, { filename: f });
-  e.ctx.BrainSNNArena.mount(root, selection);
-  const key = (type, code) => { for (const f of [...(e.ctx.handlers[type] || [])]) f({ type, code, key: code === 'Space' ? ' ' : code, target: e.document.body, preventDefault() {}, repeat: false }); };
-  return { ...e, root, key,
+  if (saved) e.storageRecords.set('brainsnn.experiment.v1', JSON.stringify(saved));
+  let root;
+  if (experiment) {
+    const page = e.document.createElement('section'); page.setAttribute('id', 'playground');
+    page.innerHTML = '<div id="experiment-root"></div><div id="demo-workspace"></div>'; e.document.body.appendChild(page);
+  } else { root = e.document.createElement('div'); root.setAttribute('id', 'arena-test-root'); e.document.body.appendChild(root); }
+  const files = ['arena-3d.js', 'arena-game.js', 'arena-game-ui.js', 'arena-profiles.js', 'arena-workspace.js'].concat(experiment ? ['experiment.js'] : []);
+  for (const f of files) vm.runInContext(fs.readFileSync(path.join(dist, f), 'utf8'), e.ctx, { filename: f });
+  if (!experiment) e.ctx.BrainSNNArena.mount(root, selection);
+  const host = () => root || e.$('arena-workspace-root');
+  const key = (type, code, target = e.document.body) => { for (const f of [...(e.ctx.handlers[type] || [])]) f({ type, code, key: code === 'Space' ? ' ' : code, target, preventDefault() {}, repeat: false }); };
+  return { ...e, host, key,
     state: () => e.ctx.BrainSNNArena.getState(),
-    flushTimers() { const t = timers.splice(0); t.forEach(fn => fn()); },
+    flushTimers() { for (let i = 0; i < 4 && timers.length; i++) timers.splice(0).forEach(fn => fn()); },
     frame(ms = 50) { now += ms; const f = rafs.splice(0); f.forEach(fn => fn(now)); },
-    click(sel) { const b = root.querySelector(sel); assert(b, 'missing ' + sel); b.click(); return b; } };
+    click(sel) { const b = host().querySelector(sel); assert(b, 'missing ' + sel); b.click(); return b; } };
 }
+// Holds the arrow combination that best points at the target, like a person would.
+function driveToFinish(e, maxFrames = 3000) {
+  const yaw = -0.95, f = [-Math.cos(yaw), -Math.sin(yaw)], r = [-Math.sin(yaw), Math.cos(yaw)], combos = [];
+  for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) if (x || y) { const d = [r[0] * x + f[0] * y, r[1] * x + f[1] * y], m = Math.hypot(...d); combos.push({ x, y, d: [d[0] / m, d[1] / m] }); }
+  let held = [], frames = 0;
+  const hold = keys => { for (const k of held) if (!keys.includes(k)) e.key('keyup', k); for (const k of keys) if (!held.includes(k)) e.key('keydown', k); held = keys; };
+  while (!e.state().game.ended && frames++ < maxFrames) {
+    const s = e.state().game, p = s.robot, goal = s.carrying ? s.tray : s.blocks[0];
+    const d = [goal[0] - p[0], goal[1] - p[1]], dist = Math.hypot(...d);
+    if (s.claw === 'hover' && dist < 0.05) { hold([]); e.key('keydown', 'Space'); }
+    else if (s.claw === 'hover') {
+      const best = combos.reduce((a, c) => (c.d[0] * d[0] + c.d[1] * d[1]) > (a.d[0] * d[0] + a.d[1] * d[1]) ? c : a);
+      hold([...(best.x > 0 ? ['ArrowRight'] : best.x < 0 ? ['ArrowLeft'] : []), ...(best.y > 0 ? ['ArrowUp'] : best.y < 0 ? ['ArrowDown'] : [])]);
+    } else hold([]);
+    e.frame();
+  }
+  hold([]);
+  return e.state().game;
+}
+const startRace = e => { e.click('[data-game="play"]'); e.flushTimers(); assert.equal(e.state().game.phase, 'play'); };
 
-test('the game bar offers five levels and a Play button above local practice', () => {
+test('the race strip sits under the practice challenge ribbon and follows its pick', () => {
   const e = uiEnv();
   assert.equal(e.state().mode, 'practice');
-  assert.equal(e.root.querySelectorAll('[data-game-level]').length, 5);
-  assert(e.$('arena-game-bar').textContent.includes('You be the brain.'));
-  e.click('[data-game-level="night"]');
-  assert.equal(e.root.querySelector('[data-game-level="night"]').getAttribute('aria-pressed'), 'true');
-  assert.equal(e.state().game.level, 'night');
+  const bar = e.$('arena-game-bar'); assert(bar && bar.textContent.includes('You be the brain.'));
+  assert.equal(e.host().querySelectorAll('[data-game-level]').length, 0, 'one level picker: the ribbon');
+  e.click('[data-arena-challenge="night"]');
+  assert.equal(e.state().game.level, 'night'); assert(e.$('arena-game-bar').textContent.includes('NIGHT SHIFT'));
+  startRace(e); assert.equal(e.state().game.level, 'night');
+  const named = uiEnv({ selection: { robotId: 'g1', modelId: 'sonic', seed: '42' } });
+  assert.equal(named.state().mode, 'named'); assert.equal(named.$('arena-game-bar'), null, 'no race strip over a named robot');
 });
 test('a race borrows the canvas without touching the practice timeline, and Escape hands it back', () => {
   const e = uiEnv(); const before = e.state().snapshotCount;
   e.click('[data-game="play"]');
   assert.equal(e.state().game.phase, 'ready'); e.flushTimers(); assert.equal(e.state().game.phase, 'play');
-  for (const id of ['arena-run', 'arena-step', 'arena-reset', 'arena-branch', 'arena-add-obstacle', 'arena-scrubber']) assert(e.$(id).disabled, id + ' must be disabled during a race');
-  assert(e.$('arena-integrity').textContent.includes('not a benchmark'));
+  for (const id of ['arena-run', 'arena-run-top', 'arena-step', 'arena-reset', 'arena-branch', 'arena-add-obstacle', 'arena-scrubber']) assert(e.$(id).disabled, id + ' must be disabled during a race');
+  assert(e.host().querySelectorAll('[data-arena-challenge]').every(b => b.disabled), 'challenge chips are locked mid-race');
+  assert(e.$('arena-integrity').textContent.includes('NOT A MODEL SCORE'));
   assert(e.$('arena-viewport').className.includes('is-game'));
+  assert.equal(e.$('arena-canvas').getAttribute('aria-label').startsWith('Beat the bot race.'), true);
   const start = e.state().game.robot.slice();
   e.key('keydown', 'ArrowRight'); for (let i = 0; i < 6; i++) e.frame(); e.key('keyup', 'ArrowRight');
   const moved = e.state().game.robot; assert(Math.hypot(moved[0] - start[0], moved[1] - start[1]) > 0.2, 'arrow key moves the claw');
@@ -204,48 +248,63 @@ test('a race borrows the canvas without touching the practice timeline, and Esca
   assert.equal(e.state().snapshotCount, before, 'practice timeline untouched');
   e.key('keydown', 'Escape');
   assert.equal(e.state().game.active, false); assert(!e.$('arena-run').disabled); assert(!e.$('arena-viewport').className.includes('is-game'));
-  const listeners = (e.ctx.handlers.keydown || []).length; assert.equal(listeners, 0, 'race key handlers are removed after quitting');
+  assert(!e.$('arena-canvas').getAttribute('aria-label').startsWith('Beat the bot race.'), 'canvas label restored');
+  assert.equal(e.document.activeElement, e.host().querySelector('[data-game="play"]'), 'focus returns to Race the bot');
+  assert.equal((e.ctx.handlers.keydown || []).length, 0, 'race key handlers are removed after quitting');
+});
+test('Space presses a focused button instead of dropping, and nothing drops while paused', () => {
+  const e = uiEnv(); startRace(e);
+  const button = e.host().querySelector('[data-game="restart"]');
+  e.key('keydown', 'Space', button); e.frame(); assert.equal(e.state().game.claw, 'hover', 'Space on a button is that button\'s');
+  e.ctx.document.hidden = true; for (const f of e.document.handlers.visibilitychange || []) f({});
+  assert.equal(e.state().game.paused, true);
+  const frozen = e.state().game.time, at = e.state().game.robot.slice();
+  e.key('keydown', 'Space'); e.key('keydown', 'ArrowRight'); e.frame(); e.frame();
+  assert.equal(e.state().game.claw, 'hover'); assert.equal(e.state().game.time, frozen, 'the clock stops while paused');
+  assert.deepEqual(e.state().game.robot, at, 'keys do nothing while paused');
+  e.click('[data-game="resume"]'); e.frame(); assert.equal(e.state().game.claw, 'hover', 'a drop queued while paused is discarded');
 });
 test('keyboard-only race to the finish: result card, stars, saved best and share link', () => {
-  const e = uiEnv();
-  e.click('[data-game="play"]'); e.flushTimers();
-  // Hold the arrow combination that best points at the target, like a person would.
-  const yaw = -0.95, f = [-Math.cos(yaw), -Math.sin(yaw)], r = [-Math.sin(yaw), Math.cos(yaw)];
-  const combos = [];
-  for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) if (x || y) { const d = [r[0] * x + f[0] * y, r[1] * x + f[1] * y], m = Math.hypot(...d); combos.push({ x, y, d: [d[0] / m, d[1] / m] }); }
-  const world = A.create(42, { challenge: 'starter' });
-  let held = [], frames = 0;
-  const hold = keys => { for (const k of held) if (!keys.includes(k)) e.key('keyup', k); for (const k of keys) if (!held.includes(k)) e.key('keydown', k); held = keys; };
-  while (!e.state().game.ended && frames++ < 3000) {
-    const s = e.state().game, p = s.robot;
-    const goal = s.carrying ? world.goal.position : world.objects.find((o, i) => i >= s.delivered).position;
-    const d = [goal[0] - p[0], goal[1] - p[1]], dist = Math.hypot(...d);
-    if (s.claw === 'hover' && dist < 0.05) { hold([]); e.key('keydown', 'Space'); }
-    else if (s.claw === 'hover' && dist >= 0.05) {
-      const best = combos.reduce((a, c) => (c.d[0] * d[0] + c.d[1] * d[1]) > (a.d[0] * d[0] + a.d[1] * d[1]) ? c : a);
-      hold([...(best.x > 0 ? ['ArrowRight'] : best.x < 0 ? ['ArrowLeft'] : []), ...(best.y > 0 ? ['ArrowUp'] : best.y < 0 ? ['ArrowDown'] : [])]);
-    } else hold([]);
-    e.frame();
-  }
-  const s = e.state().game;
+  const e = uiEnv(); startRace(e);
+  const s = driveToFinish(e);
   assert.equal(s.ended, true); assert.equal(s.result.finished, true); assert.equal(s.result.delivered, 3);
   assert(s.result.stars >= 1); assert.equal(typeof s.result.delta, 'number');
-  const card = e.root.querySelector('.game-result'); assert(card && !card.hidden); assert(card.textContent.includes('Bot ' + s.result.botTime.toFixed(1) + ' s'));
+  const card = e.host().querySelector('.game-result'); assert(card && !card.hidden); assert(card.textContent.includes('Bot ' + s.result.botTime.toFixed(1) + ' s'));
   const best = JSON.parse(e.storageRecords.get('brainsnn.arena.game.v1')).best['starter:42']; assert.equal(best, s.result.time);
   // share() reaches the clipboard synchronously when the Web Share API is absent.
   e.ctx.navigator.share = undefined; e.click('[data-game="share"]');
   assert(e.copied.at(-1).includes('/arena/?play=starter&seed=42&t=' + s.result.time.toFixed(1)));
+  e.click('[data-game="next"]'); e.flushTimers();
+  assert.equal(e.state().game.level, 'clutter'); assert.equal(e.host().querySelector('[data-arena-challenge="clutter"]').getAttribute('aria-pressed'), 'true', 'Next level moves the ribbon too');
 });
-test('a shared link opens practice on its level with the friend time, keeping a saved robot pair', () => {
-  const e = uiEnv({ search: '?play=surprise&seed=7&t=19.5', selection: { robotId: 'g1', modelId: 'sonic', seed: '42' } });
+test('a shared link opens practice on its world, shows and then judges the friend time', () => {
+  const e = uiEnv({ search: '?play=starter&seed=7&t=19.5&source=home', selection: { robotId: 'g1', modelId: 'sonic', seed: '42' } });
   assert.equal(e.state().mode, 'practice'); assert.equal(e.state().selection.robotId, 'g1');
-  assert.equal(e.state().game.level, 'surprise'); assert.equal(e.state().game.seed, '7');
-  assert(e.$('arena-game-bar').textContent.includes('A friend finished Plot twist in 19.5 s'));
-  e.click('[data-game="play"]'); e.flushTimers();
-  assert.equal(e.state().game.seed, '7'); assert.equal(e.ctx.location.search, '', 'the link is consumed once a race starts');
+  assert.equal(e.state().game.level, 'starter'); assert.equal(e.state().game.seed, '7'); assert.equal(e.state().game.friend, 19.5);
+  assert(e.$('arena-game-bar').textContent.includes('A friend finished this in 19.5 s'));
+  startRace(e); assert.equal(e.state().game.seed, '7');
+  const s = driveToFinish(e);
+  assert(e.host().querySelector('.game-friend').textContent.includes('19.5 s'), 'friend comparison renders: ' + JSON.stringify(s.result));
+});
+test('a link forces practice only until the load-time restore finishes', () => {
+  const e = uiEnv({ search: '?play=night&seed=7&t=20&source=home' });
+  assert.equal(e.ctx.BrainSNNArenaGameUI.pendingLink().level, 'night');
+  e.ctx.BrainSNNArenaGameUI.consumeLink();
+  assert.equal(e.ctx.location.search, '?source=home', 'only the challenge parameters are stripped');
+  assert.equal(e.ctx.BrainSNNArenaGameUI.pendingLink(), null);
+  e.ctx.BrainSNNArena.mount(e.host(), { robotId: 'panda', modelId: 'pi05', seed: '42' });
+  assert.equal(e.state().mode, 'named', 'a later robot pick is not forced back into practice');
+});
+test('on load, a link beats a saved classic demo and reaches the arena with the saved pair kept', () => {
+  const e = uiEnv({ search: '?play=surprise&seed=7', hash: '#playground', experiment: true,
+    saved: { mode: 'demo', view: 'robot', challenge: 'starter', seed: '42' } });
+  assert(e.$('arena-workspace-root'), 'the arena view mounted instead of the classic demo');
+  assert.equal(e.state().mode, 'practice'); assert.equal(e.state().game.level, 'surprise');
+  assert(e.$('arena-game-bar'), 'the race strip is on screen');
+  assert.equal(e.ctx.location.search, '', 'the link was consumed after the restore');
 });
 test('suspending the arena mid-race tears the game down', () => {
-  const e = uiEnv(); e.click('[data-game="play"]'); e.flushTimers();
+  const e = uiEnv(); startRace(e);
   assert((e.ctx.handlers.keydown || []).length > 0);
   e.ctx.BrainSNNArena.suspend();
   assert.equal((e.ctx.handlers.keydown || []).length, 0); assert.equal((e.ctx.handlers.keyup || []).length, 0);

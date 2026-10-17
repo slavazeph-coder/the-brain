@@ -189,4 +189,43 @@ test('changing to invalid selection still deletes old active session', async () 
   await client.start({ ...e.selection, robotId: 'g1' }); assert(e.calls.some(c => c.method === 'DELETE')); await client.disconnect();
 });
 
+test('durable recording read uses its fixed origin and does not mutate session state or issue commands', async () => {
+  const e = fixture(), client = e.create();
+  const bundle = { schema: 'brainsnn.arena.bundle.v1', manifestText: JSON.stringify({recordingId:'r1'}), manifestSha256:'0'.repeat(64), payloads:{} };
+  e.hook(call => call.url.endsWith('/capabilities') ? response({...e.caps(),recordings:{schema:'brainsnn.arena.recording.v1',readOnly:true,bundlePath:'https://attacker.invalid/{id}'}}) : call.url.endsWith('/v1/recordings/r1/bundle') ? response(bundle) : null);
+  try {
+    await connect(client,e); await client.start(e.selection); const before=JSON.stringify(client.getState()), count=e.calls.length;
+    assert.deepEqual(clone(await client.getRecording('r1')),bundle); assert.equal(JSON.stringify(client.getState()),before);
+    assert.equal(e.calls.length,count+1); assert.equal(e.calls.at(-1).method,'GET'); assert.equal(e.calls.at(-1).url,'https://worker.example/v1/recordings/r1/bundle');
+    await assert.rejects(client.getRecording('../bad'),error=>error.code==='recording_unavailable'); assert.equal(e.calls.length,count+1);
+  } finally { await client.disconnect(); }
+});
+
+test('older worker has an explicit incomplete-recording boundary without extra network calls', async () => {
+  const e=fixture(),client=e.create(); try { await connect(client,e); const count=e.calls.length;
+    await assert.rejects(client.getRecording('r1'),error=>error.code==='recording_unavailable'); assert.equal(e.calls.length,count);
+  } finally { await client.disconnect(); }
+});
+
+test('recording identity mismatch and oversized declared response reject without poisoning live state', async () => {
+  for(const mode of ['wrong-id','large']) {
+    const e=fixture(),client=e.create();
+    e.hook(call=>call.url.endsWith('/capabilities') ? response({...e.caps(),recordings:{schema:'brainsnn.arena.recording.v1',readOnly:true}}) : call.url.endsWith('/bundle') ? mode==='large' ? {...response({}),headers:{get:()=>String(129*1024*1024)}} : response({schema:'brainsnn.arena.bundle.v1',manifestText:'{"recordingId":"another"}'}) : null);
+    try { await connect(client,e); const before=JSON.stringify(client.getState()); await assert.rejects(client.getRecording('r1'),error=>error.code===(mode==='large'?'response_too_large':'recording_mismatch')); assert.equal(JSON.stringify(client.getState()),before); }
+    finally {await client.disconnect();}
+  }
+});
+
+test('streaming recording read cancels at byte bound before decoding or retaining the payload', async () => {
+  let cancelled=false,reads=0;const e=fixture({TextDecoder}),client=e.create();
+  e.hook(call=>call.url.endsWith('/capabilities')?response({...e.caps(),recordings:{schema:'brainsnn.arena.recording.v1',readOnly:true}}):call.url.endsWith('/bundle')?{ok:true,status:200,body:{getReader:()=>({read:async()=>{reads++;return{done:false,value:{byteLength:129*1024*1024}};},cancel:async()=>{cancelled=true;},releaseLock(){}})}}:null);
+  try{await connect(client,e);await assert.rejects(client.getRecording('r1'),error=>error.code==='response_too_large');assert.equal(reads,1);assert.equal(cancelled,true);}finally{await client.disconnect();}
+});
+
+test('archive read failure redacts access tokens and leaves live commands usable', async () => {
+  const e=fixture(),client=e.create();
+  e.hook(call=>call.url.endsWith('/capabilities')?response({...e.caps(),recordings:{schema:'brainsnn.arena.recording.v1',readOnly:true}}):call.url.endsWith('/bundle')?response({error:{message:'private-test-token archive still finalizing'}},409):null);
+  try{await connect(client,e);await client.start(e.selection);await assert.rejects(client.getRecording('r1'),error=>!error.message.includes('private-test-token')&&error.message.includes('finalizing'));await client.command('step');assert.equal(client.getState().status,'ready');}finally{await client.disconnect();}
+});
+
 (async () => { let failed = 0; for (const { name, run } of tests) { try { await run(); console.log('PASS', name); } catch (error) { failed++; console.error('FAIL', name, error.stack); } } console.log(`${tests.length - failed}/${tests.length} runtime checks passed`); if (failed) process.exitCode = 1; })();

@@ -48,6 +48,9 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Paid analysis accounting, evidence and service contracts
+        run: npm run test:analysis
+
       - name: Build
         run: npm run build
 
@@ -69,7 +72,8 @@ jobs:
             sleep 1
           done
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
-          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Sapient Playground"
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | See the moment it breaks"
+          curl -sf http://127.0.0.1:8080/api/arena/analysis/capabilities | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const c=JSON.parse(s);if(c.build!=="paid-analysis-2026-10-17-v1"||c.analysisEnabled!==false||c.purchaseEnabled!==false)process.exit(1);})'
           kill $SRV 2>/dev/null || true
 
   deploy:
@@ -112,27 +116,36 @@ jobs:
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
           # The SPA shell carries the current BrainSNN product title. Checking it
-          # proves the engine positioning build rolled out, not merely that an
+          # proves the Arena-led lobby build rolled out, not merely that an
           # older container is still answering health checks.
           HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
           ARENA_URL: https://www.brainsnn.com/arena/
+          ANALYSIS_CAPABILITIES_URL: https://www.brainsnn.com/api/arena/analysis/capabilities
+          ANALYSIS_ASSET_URL: https://www.brainsnn.com/arena/arena-analysis.js
         run: |
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
             arena="$(curl -L -s -o /tmp/brainsnn-arena.html -w '%{http_code}' "$ARENA_URL" || true)"
-            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Sapient Playground" /tmp/brainsnn-home.html; then
+            analysis="$(curl -L -s -o /tmp/brainsnn-analysis.json -w '%{http_code}' "$ANALYSIS_CAPABILITIES_URL" || true)"
+            analysis_asset="$(curl -L -s -o /tmp/brainsnn-analysis.js -w '%{http_code}' "$ANALYSIS_ASSET_URL" || true)"
+            if [ "$home" = "200" ] && grep -Fq "BrainSNN | See the moment it breaks" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
             fi
-            if [ "$arena" = "200" ] && grep -Fq '2026-10-14-site-tests-1' /tmp/brainsnn-arena.html; then
+            if [ "$arena" = "200" ] && grep -Fq '2026-10-17-arena-inspection-1' /tmp/brainsnn-arena.html && grep -Fq 'arena-arcade-selection-2026-10-17-v1' /tmp/brainsnn-arena.html; then
               arena_marker="ok"
             else
               arena_marker="missing"
             fi
-            echo "attempt $i → healthz $health, home $home/$home_marker, arena $arena/$arena_marker"
-            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ] && [ "$arena_marker" = "ok" ]; then
+            if [ "$analysis" = "200" ] && node -e 'const c=require("/tmp/brainsnn-analysis.json");if(c.build!=="paid-analysis-2026-10-17-v1"||typeof c.analysisEnabled!=="boolean"||typeof c.purchaseEnabled!=="boolean")process.exit(1)' && [ "$analysis_asset" = "200" ] && grep -Fq 'paid-analysis-2026-10-17-v1' /tmp/brainsnn-analysis.js; then
+              analysis_marker="ok"
+            else
+              analysis_marker="missing"
+            fi
+            echo "attempt $i → healthz $health, home $home/$home_marker, arena $arena/$arena_marker, analysis $analysis/$analysis_marker"
+            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ] && [ "$arena_marker" = "ok" ] && [ "$analysis_marker" = "ok" ]; then
               echo "Live service is healthy and serving the current BrainSNN build."
               exit 0
             fi

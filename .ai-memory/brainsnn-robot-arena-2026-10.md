@@ -43,12 +43,30 @@ it preserves robot/model/task/seed and does not replace the real Arena adapter.
 - See `robotics/arena/docs/site-tests.md` and `site-scan-worker.md` for the user
   flow, deployment constraints and the RTX 4090 continuation instructions.
 
+## Gym operating estimates
+
+- `public/arena/site-operations.js` calculates time, modelled human help and
+  per-run costs from a current complete cleaner coverage plan. It rejects stale,
+  unscaled, blocked or navigation-only plans. Assumptions and source provenance
+  are retained in reports and editable scenarios.
+- Cost rates default to unknown. An explicit zero is allowed; do not manufacture
+  a free operation from absent labour, robot or consumable rates.
+- Assistance and service counts are entered assumptions. Grid traversal is not
+  an optimized commercial cleaning controller, and results do not execute GR00T.
+- Public guide `gym-pilot.html` and source `robotics/arena/docs/gym-pilot.md`
+  distinguish a supported measured map from raw video/visual references. A real
+  gym pilot still needs an actual scan/map and measured robot configuration.
+- Researched next inserts: commercial-compatible DA3 BASE/Metric checkpoints,
+  Open3D map proposals, Nav2/Fields2Cover swaths and nvblox depth/pose mapping.
+  These are recommendations, not installed workers or validated gym trials.
+
 ## 2026-10-14 — Beat the bot (branch `feat/arena-beat-the-bot`)
 
 - Why: the practice arm is a screensaver (visitor only presses Run), and the scripted controller finishes identically on starter/clutter/moving/night (259 steps, 0 contacts; seeds barely matter). `Move obstacle` can freeze it until the 1600-step limit (~139 s). Not fixed here.
 - What: visitor drives the same generic demo arm claw-machine style (move; Drop = descend, auto pick/place, rise to carry height 0.62) and races a translucent replay of `demoAction` on the same seed. Same skill contract and per-step speed cap as the bot; the human wins only by steering while the claw rises/falls (diagonals the script never takes). Bonk = 0.5 s stun + straight-up recovery.
 - Files: `public/arena/arena-game.js` (pure rules, Node-testable), `arena-game-ui.js` (bar, HUD, sound, result card, best times in `brainsnn.arena.game.v1`, sound pref `brainsnn.arena.sound`), `arena-game.css`; `arena-3d.js` gained `spectatorCamera`/`pickPlane`/`pick` and opt-in `view.claw`/`view.ghost` overlays (default render unchanged). Tests: `robotics/arena/tests/arena-game.test.cjs` (in check-arena.cjs).
 - Calibration (seed 42): bot 25.9 s (24.7 s on surprise). Tap-and-wait with 0.4 s reactions loses by ~3.6 s; glide play wins by 4–7 s. 3 stars = beat the bot by 4 s with no bonks (2 s let a naive script earn 3).
-- Links: `/arena/?play=<level>&seed=<n>&t=<friend time>#playground` force practice on mount and keep any saved robot pair; the `t` value is shown as a friend's claim only. Consumed (query stripped) when a race starts or the level changes.
+- Links: `/arena/?play=<level>&seed=<n>&t=<friend time>#playground` force practice (and win over a saved classic-demo/tab state in `experiment.restoreFromURL`) only until `experiment.bind()` finishes its load-time restore, which calls `BrainSNNArenaGameUI.consumeLink()` and strips play/seed/t. The friend time stays on offer for that page view, only for the exact level + world seed, and is shown as a claim.
+- Oct 17 merge with the arcade restoration (#193): the race strip lives under the practice "Pick your challenge" ribbon (`#arena-game-bar`, practice mode only) and has no level picker of its own; races start on the workspace's current challenge and world seed; ribbon chips, Run/Run-top, step, reset, branch, disturbances and the scrubber are disabled mid-race. Review fixes: Space on focused controls stays native, open dialogs pause the race, reduced-motion cues show statically, Plot twist cue keys off `targetShifted`, ties share as ties, quit restores canvas label and focus.
 - Races run at 2× (one 0.1 s sim step per 50 ms). Copy must keep saying it is a game against a scripted controller, not a benchmark of any AI model.
 - Follow-ups ranked by the Oct 14 audit: arena analytics (arena sends none; needs both allowlists + coverage test extended to public/arena), land casual visitors in practice and hide builder chrome, stall detection for the frozen-arm case, versioned level modifiers so levels differ, Poke "Signal Sprint" with a best score, beat-my-score links for Fool/Defend.

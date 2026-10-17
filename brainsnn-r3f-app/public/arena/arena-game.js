@@ -10,7 +10,7 @@
   var XY_LIMIT = [[-1.3, 1.3], [-0.8, 0.8]];
   var LEVELS = Object.freeze([
     Object.freeze({ id: 'starter', name: 'First moves', blurb: 'Three blocks, one tray. Cut corners the bot will not.' }),
-    Object.freeze({ id: 'clutter', name: 'Clutter course', blurb: 'Crates on the table. Clip one and you lose half a second.' }),
+    Object.freeze({ id: 'clutter', name: 'Clutter course', blurb: 'Crates on the table. Clip one and you lose about a second.' }),
     Object.freeze({ id: 'moving', name: 'Moving world', blurb: 'A crate slides across your path. Time your dives.' }),
     Object.freeze({ id: 'night', name: 'Night shift', blurb: 'Same job, lights down. The bot does not need to see. You do.' }),
     Object.freeze({ id: 'surprise', name: 'Plot twist', blurb: 'The tray jumps at 6 s. React faster than the script.' })
@@ -107,7 +107,7 @@
         action = { skill: 'move_to', position: t };
       }
     }
-    var delivered = w.delivered, collisions = w.collisions;
+    var delivered = w.delivered, collisions = w.collisions, shifted = w.targetShifted;
     A.step(w, action);
     if (action.skill === 'pick' || action.skill === 'place') {
       if (w.event === 'pick') note(game, 'grab', 'Got it');
@@ -122,7 +122,8 @@
     } else if (game.claw === 'dropping' && w.robot.position[2] <= (w.robot.carrying != null ? PLACE_Z : PICK_Z) + 0.002) {
       game.claw = 'acting'; game.pending = w.robot.carrying != null ? 'place' : 'pick';
     } else if ((game.claw === 'rising' || game.claw === 'recovering') && w.robot.position[2] >= CARRY_Z - 0.002) game.claw = 'hover';
-    if (w.event === 'target-moved') note(game, 'twist', 'The tray moved!');
+    // The engine keeps the step's action event when the tray jumps, so watch the flag.
+    if (!shifted && w.targetShifted) note(game, 'twist', 'The tray moved!');
     if (w.success) game.phase = 'won';
     else if (w.time >= TIME_LIMIT || w.done) game.phase = 'timeout';
     return game;
@@ -146,6 +147,8 @@
       delta: delta, beatBot: beat, stars: stars, delivered: w.delivered, contacts: game.contacts, misses: game.misses, drops: game.drops };
   }
 
+  // The engine's own seed for a link or input seed, as the practice world reports it.
+  function worldSeed(seed) { return String(engine().create(engineSeed(seedOf(seed)), {}).seed); }
   function bestKey(challenge, seed) { return level(challenge).id + ':' + seedOf(seed); }
   function shareURL(origin, challenge, seed, time) {
     var t = Number(time), friend = Number.isFinite(t) && t > 0 && t <= TIME_LIMIT ? '&t=' + t.toFixed(1) : '';
@@ -163,11 +166,12 @@
   function shareText(r) {
     var name = level(r.challenge).name;
     if (!r.finished) return 'The BrainSNN bot beat me on ' + name + '. Think you can beat it?';
+    if (r.delta === 0) return 'I tied the BrainSNN bot on ' + name + ' (' + r.time.toFixed(1) + ' s). Your turn:';
     return (r.beatBot ? 'I beat the BrainSNN bot by ' + Math.abs(r.delta).toFixed(1) + ' s' : 'The BrainSNN bot beat me by ' + r.delta.toFixed(1) + ' s') +
       ' on ' + name + ' (' + r.time.toFixed(1) + ' s). Your turn:';
   }
 
   root.BrainSNNArenaGame = Object.freeze({ LEVELS: LEVELS, CARRY_Z: CARRY_Z, PICK_Z: PICK_Z, PLACE_Z: PLACE_Z, TIME_LIMIT: TIME_LIMIT, DT: DT, THREE_STAR_MARGIN: THREE_STAR_MARGIN,
     level: level, nextLevel: nextLevel, create: create, start: start, tick: tick, underClaw: underClaw, botAt: botAt, result: result,
-    simulateBot: simulateBot, bestKey: bestKey, shareURL: shareURL, shareText: shareText, parseLink: parseLink });
+    simulateBot: simulateBot, worldSeed: worldSeed, bestKey: bestKey, shareURL: shareURL, shareText: shareText, parseLink: parseLink });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

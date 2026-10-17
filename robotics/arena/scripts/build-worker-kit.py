@@ -65,7 +65,10 @@ if not source.is_file():
     raise SystemExit('Worker documentation must be complete before packaging.')
 files = sorted(p for p in (ROOT / 'workers/arena').rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
 files += [source, ROOT / 'docs/arena-runtime-protocol.md', ROOT / 'docs/rtx4090-handoff.md', ROOT / 'scripts/probe-worker.py']
-files += sorted((ROOT / 'tests').glob('test_arena_worker*.py'))
+files += sorted((ROOT / 'tests').glob('test_arena*.py'))
+files += [ROOT / 'docs/arena-inspection.md', ROOT / 'docs/gb10-qualification.md', ROOT / 'tests/test_inspection_interop.py']
+files += [ROOT / 'docs/arena-evaluation-packs.md', ROOT / 'scripts/run-campaign.py']
+files += sorted(p for directory in ('schemas', 'inspection') for p in (ROOT / directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
 zip_path = ROOT / 'dist/downloads/brainsnn-arena-worker.zip'
 zip_path.parent.mkdir(exist_ok=True, parents=True)
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
@@ -75,6 +78,12 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as ar
         info.compress_type = zipfile.ZIP_DEFLATED
         info.external_attr = 0o644 << 16
         archive.writestr(info, path.read_bytes())
+    # Keep the cross-language tests runnable from the extracted kit, without
+    # requiring the application checkout on a GPU/inspection host.
+    viewer = zipfile.ZipInfo('viewer/arena-recording.js', (2026, 10, 14, 0, 0, 0))
+    viewer.compress_type = zipfile.ZIP_DEFLATED
+    viewer.external_attr = 0o644 << 16
+    archive.writestr(viewer, (ROOT / 'dist/arena-recording.js').read_bytes())
     readme_info = zipfile.ZipInfo('README.txt', (2026, 10, 14, 0, 0, 0))
     readme_info.compress_type = zipfile.ZIP_DEFLATED
     readme_info.external_attr = 0o644 << 16
@@ -83,4 +92,6 @@ style = '''*{box-sizing:border-box}body{margin:0;background:#05070b;color:#f4f7f
 body = markdown(source.read_text())
 page = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BrainSNN · Set up a physics worker</title><style>' + style + '</style></head><body><header><span class="mark" aria-hidden="true">B</span><strong>BrainSNN Arena</strong><a href="./#playground?robot=panda&amp;model=pi05">Back to the arena ↗</a></header><main><a class="download" href="downloads/brainsnn-arena-worker.zip" download>Download worker kit ↓</a><div class="notice"><p><strong>Bring your compute.</strong> This kit provides the Panda + π₀.₅ LIBERO adapter. It does not provision a server or install other robot policies. A real checkpoint run and GPU rendering still need validation on your worker.</p></div>' + body + '</main><footer>Original BrainSNN colours and mark. Worker identity and results are reported by your configured runtime.</footer></body></html>'
 (ROOT / 'dist/worker-setup.html').write_text(page)
-print(json.dumps({'archive':str(zip_path.relative_to(ROOT)), 'files':len(files)+1, 'bytes':zip_path.stat().st_size, 'sha256':hashlib.sha256(zip_path.read_bytes()).hexdigest(), 'guideBytes':len(page.encode())}))
+evaluation_page = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BrainSNN · Run a ten-episode evaluation</title><style>' + style + '</style></head><body><header><span class="mark" aria-hidden="true">B</span><strong>BrainSNN Arena</strong><a href="./#campaigns">Evaluation packs ↗</a></header><main><a class="download" href="downloads/brainsnn-arena-worker.zip" download>Download worker kit ↓</a><div class="notice"><p><strong>One real worker, ten episodes.</strong> Complete the saved policy pilot first. Larger packs remain plans until their execution and costs are qualified.</p></div>' + markdown((ROOT / 'docs/arena-evaluation-packs.md').read_text()) + '</main><footer>BrainSNN · Sequential policy evaluation with inspectable per-episode evidence.</footer></body></html>'
+(ROOT / 'dist/evaluation-setup.html').write_text(evaluation_page)
+print(json.dumps({'archive':str(zip_path.relative_to(ROOT)), 'files':len(files)+2, 'bytes':zip_path.stat().st_size, 'sha256':hashlib.sha256(zip_path.read_bytes()).hexdigest(), 'guideBytes':len(page.encode()), 'evaluationGuideBytes':len(evaluation_page.encode())}))

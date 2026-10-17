@@ -144,20 +144,22 @@
     const root = $('experiment-root');
     if (!root) return;
     const demo = state.mode === 'demo', d = describe();
+    root.classList.toggle('experiment-playground', !demo && state.view === 'arena');
     if ($('demo-workspace')) $('demo-workspace').hidden = !demo;
-    root.innerHTML = '<div class="experiment-heading"><div><div class="experiment-kicker">BRAINSNN ARENA</div><h2 id="experiment-heading" tabindex="-1">' + (demo ? 'Scripted demo' : d.world ? 'Build a world-model experiment.' : 'Put your robot’s brain to the test.') + '</h2><p>' + (demo ? 'A separate, generic arm sandbox. Your catalog robot and model are not running here.' : 'Run a mission. Change the conditions. Replay what happened.') + '</p></div><button class="experiment-text-button" data-experiment-action="' + (demo ? 'leave-demo' : 'demo') + '">' + (demo ? 'Back to the arena' : 'Classic skill connector') + '</button></div>';
+    root.innerHTML = '<div class="experiment-heading"><div><div class="experiment-kicker">BRAINSNN ARENA</div><h2 id="experiment-heading" tabindex="-1">' + (demo ? 'Scripted demo' : d.world ? 'Build a world-model experiment.' : 'Your robot. <span>Your rules.</span>') + '</h2><p>' + (demo ? 'A separate, generic arm sandbox. Your catalog robot and model are not running here.' : 'Pick a robot and a model. Run a mission, throw in a surprise, and replay the result.') + '</p></div><button class="experiment-text-button" data-experiment-action="' + (demo ? 'leave-demo' : 'demo') + '">' + (demo ? 'Back to the arena' : 'Classic skill connector') + '</button></div>';
     if (demo) {
       root.innerHTML += '<div class="experiment-demo-banner" role="status"><strong>Generic demo arm · scripted controller</strong><span>' + esc(state.note || 'Run a challenge below, or connect a compatible skill-agent endpoint explicitly.') + '</span></div>';
+      syncProgressiveControls();
       return;
     }
-    root.innerHTML += '<div class="experiment-selection" aria-label="Experiment selection"><label>Robot<select id="experiment-robot">' + options(robots(), state.robotId, d.world ? 'No robot · world generation' : 'Choose a robot', [...(d.model?.documentedRobotIds || []), ...(d.model?.robotIds || [])], 'Bodies for ' + (d.model?.name || 'this model')) + '</select></label>' +
-      '<label>Brain<select id="experiment-model">' + options(models(), state.modelId, 'Choose a model', d.robot ? models().filter(m => (m.robotIds || []).includes(d.robot.id)).map(m => m.id) : [], 'Routes for ' + (d.robot?.name || 'this robot')) + '</select></label>' +
-      '<label class="experiment-task-label">Task<input id="experiment-task" maxlength="300" value="' + esc(state.task) + '" placeholder="What should it do?"></label><label class="experiment-seed-label">Seed<input id="experiment-seed" maxlength="64" value="' + esc(state.seed) + '" placeholder="42"></label></div>' +
+    root.innerHTML += '<div class="experiment-selection" aria-label="Experiment selection"><label class="experiment-robot-picker"><span>01 · Choose your robot</span><select id="experiment-robot">' + options(robots(), state.robotId, d.world ? 'No robot · world generation' : 'Choose a robot', [...(d.model?.documentedRobotIds || []), ...(d.model?.robotIds || [])], 'Bodies for ' + (d.model?.name || 'this model')) + '</select></label>' +
+      '<label class="experiment-model-picker"><span>02 · Model / LLM</span><select id="experiment-model">' + options(models(), state.modelId, 'Choose a model', d.robot ? models().filter(m => (m.robotIds || []).includes(d.robot.id)).map(m => m.id) : [], 'Routes for ' + (d.robot?.name || 'this robot')) + '</select></label>' +
+      '<label class="experiment-task-label"><span>03 · Give it a mission</span><input id="experiment-task" maxlength="300" value="' + esc(state.task) + '" placeholder="What should it do?"></label><label class="experiment-seed-label"><span>World seed</span><input id="experiment-seed" maxlength="64" value="' + esc(state.seed) + '" placeholder="42"></label></div>' +
       '<div class="experiment-selection-status"><span class="experiment-pair-status">' + esc(d.pairStatus) + '</span><span id="experiment-runtime-summary">Select a profile or try local practice</span></div>' +
       (d.error ? '<div class="experiment-error" id="experiment-error" role="alert">' + esc(d.error) + (d.world && state.robotId ? '<button class="experiment-text-button" data-experiment-action="clear-robot">Use world setup without a robot →</button>' : '') + '</div>' : '') +
       (state.note ? '<p class="experiment-selection-note">' + esc(state.note) + '</p>' : '') +
       '<div class="experiment-layout' + (['arena', 'site'].includes(state.view) ? ' experiment-arena-layout' : '') + '"><section class="experiment-main"><div class="experiment-tabs" role="group" aria-label="Experiment view"><button data-experiment-view="arena" class="' + (state.view === 'arena' ? 'active' : '') + '" aria-pressed="' + (state.view === 'arena') + '"' + (d.world ? ' disabled' : '') + '>Arena</button><button data-experiment-view="site" class="' + (state.view === 'site' ? 'active' : '') + '" aria-pressed="' + (state.view === 'site') + '">Test your space <span class="experiment-new">NEW</span></button><button data-experiment-view="robot" class="' + (state.view === 'robot' ? 'active' : '') + '" aria-pressed="' + (state.view === 'robot') + '"' + (d.world ? ' disabled' : '') + '>Robot asset</button><button data-experiment-view="setup" class="' + (state.view === 'setup' ? 'active' : '') + '" aria-pressed="' + (state.view === 'setup') + '">Model setup</button></div>' +
-      (state.view === 'arena' ? '<div class="experiment-site-entry"><div><strong>Bring your world into the arena.</strong><span>Import a scan, review the map and explore robot routes in your own space.</span></div><button class="experiment-button" data-experiment-view="site">Test your space ↗</button></div><div id="arena-workspace-root"></div>' : state.view === 'site' ? '<div id="site-workspace-root"><div class="experiment-empty" role="status">Preparing your space…</div></div>' : state.view === 'setup' ? setupHTML(d) : previewHTML(d)) + '</section>' + (['arena', 'site'].includes(state.view) ? '' : readinessHTML(d)) + '</div>';
+      (state.view === 'arena' ? '<div id="arena-workspace-root"></div><div class="experiment-site-entry"><div><strong>Bring your world into the arena.</strong><span>Import a scan, review the map and explore robot routes in your own space.</span></div><button class="experiment-button" data-experiment-view="site">Test your space ↗</button></div>' : state.view === 'site' ? '<div id="site-workspace-root"><div class="experiment-empty" role="status">Preparing your space…</div></div>' : state.view === 'setup' ? setupHTML(d) : previewHTML(d)) + '</section>' + (['arena', 'site'].includes(state.view) ? '' : readinessHTML(d)) + '</div>';
     if (state.view === 'site') {
       loadSiteRenderer().then(() => {
         if (generation !== renderGeneration || state.view !== 'site') return;
@@ -173,6 +175,7 @@
       if (window.BrainSNNArena?.mount) window.BrainSNNArena.mount($('arena-workspace-root'), { ...state, error: d.error, matchingCheckpoint: d.matchingCheckpoint, robot: d.robot, model: d.model, viewerUrl: d.viewerURL });
       else $('arena-workspace-root').innerHTML = '<div class="experiment-empty"><h3>The arena could not load.</h3><p>Reload the page, or open the Robot asset tab to inspect your selected body.</p><button class="experiment-button" data-experiment-action="reload-viewer">Retry</button></div>';
     }
+    syncProgressiveControls();
     const iframe = $('experiment-viewer');
     if (iframe) {
       iframe.addEventListener('load', () => { clearTimeout(viewerTimer); const status = $('experiment-viewer-status'); if (status) status.textContent = 'Viewer page loaded. Its own controls show model and simulation status. AI runtime remains disconnected.'; });
@@ -232,7 +235,14 @@
     }
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      const usable = saved && typeof saved === 'object' && !Array.isArray(saved);
+      // A Beat the bot link opens the arena on load, whatever demo or tab was
+      // saved last time. Any saved robot + model pair is kept for later.
+      if (window.BrainSNNArenaGameUI?.pendingLink?.()) {
+        const pair = usable && saved.mode !== 'demo' ? saved : lastNamedState || {};
+        return open({ ...(pureWorld(findModel(pair.modelId)) ? {} : pair), view: 'arena' }, { focus: false });
+      }
+      if (usable) {
         if (saved.mode === 'demo') return showDemo({ challenge: saved.challenge, run: false });
         return open(saved, { focus: false });
       }
@@ -251,6 +261,14 @@
     const a = document.createElement('a'); a.href = url; a.download = 'BrainSNN_experiment_' + (state.robotId || 'world') + '_' + (state.modelId || 'unselected') + '.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     return config;
+  }
+
+  function syncProgressiveControls() {
+    const reveal = Boolean(window.BrainSNNArena?.getState?.().completedRun);
+    document.querySelectorAll('[data-arena-after-run]').forEach(el => { el.hidden = !reveal; });
+    if (state.mode === 'demo' || state.view !== 'arena') {
+      $('experiment-root')?.querySelectorAll('[data-arena-after-run]').forEach(el => { el.hidden = false; });
+    }
   }
 
   function bind() {
@@ -296,6 +314,9 @@
     });
     render();
     restoreFromURL();
+    // The load-time restore has honoured any challenge link; from here on robot
+    // and model picks are not forced back into practice.
+    window.BrainSNNArenaGameUI?.consumeLink?.();
   }
 
   function suspend() {
@@ -309,6 +330,7 @@
   }
 
   window.BrainSNNExperiment = Object.freeze({ open, showDemo, getState, restoreFromURL, suspend, syncRoute: () => { remember(); return getState(); } });
+  window.addEventListener('brainsnn:arena-completed', syncProgressiveControls);
   window.addEventListener('hashchange', restoreFromURL);
   window.addEventListener('pagehide', suspend);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

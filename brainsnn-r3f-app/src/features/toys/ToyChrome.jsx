@@ -2,7 +2,8 @@
 // "More toys" row, BrainSNN strip and sponsor slot, in the restored cyan/violet
 // Sapient Playground identity (behaviour-home.css tokens).
 import React, { useEffect } from 'react';
-import { ArrowRight, Bot, Building2, Gauge } from 'lucide-react';
+import { PublicNav, PublicFooter } from '../../app/PublicNav.jsx';
+import { ArrowRight } from 'lucide-react';
 import { track } from '../../lib/analytics.js';
 import { otherToys, sponsorFor } from './toyConfig.js';
 import '../../styles/behaviour-home.css';
@@ -11,37 +12,8 @@ import './toys.css';
 export const SPONSOR_URL = '/sponsor/gt3/';
 export const ENTERPRISE_URL = '/arcade#brief';
 
-export function BhNav() {
-  return (
-    <header className="bh-nav">
-      <a className="bh-brand" href="/" aria-label="BrainSNN home">
-        <span className="bh-mark" aria-hidden="true">B</span>
-        <span><strong>BrainSNN</strong><small>Sapient Playground</small></span>
-      </a>
-      <nav aria-label="Main navigation">
-        <a href="/#toys">Toys</a>
-        <a href="/#tools">The engine</a>
-        <a href="/arcade">Playground</a>
-        <a href="/evidence">Evidence</a>
-        <a href="/app">Open BrainSNN</a>
-      </nav>
-      <a className="bh-nav-cta bh-arena-nav-cta" href="/arena/"><Bot size={16} aria-hidden="true" /> Robot Arena <ArrowRight size={15} aria-hidden="true" /></a>
-    </header>
-  );
-}
-
-export function BhFooter() {
-  return (
-    <footer className="bh-footer">
-      <span>BrainSNN · Sapient Playground</span>
-      <nav aria-label="More BrainSNN">
-        <a href="/lab">Neuro Powder Lab</a>
-        <a href="/engine#api">For developers</a>
-        <a href="/office">Agent office</a>
-      </nav>
-    </footer>
-  );
-}
+export const BhNav = PublicNav;
+export const BhFooter = PublicFooter;
 
 /**
  * "Brought to you by" — wired on every toy, empty until a sponsor is added in
@@ -103,12 +75,8 @@ export function BrainsnnStrip() {
         </p>
       </div>
       <div className="toy-strip-actions">
-        <a className="bh-button bh-primary" href={SPONSOR_URL} onClick={() => track('toy_cta_clicked', { cta: 'sponsor' })}>
-          <Gauge size={16} aria-hidden="true" /> Sponsor BrainSNN <ArrowRight size={16} aria-hidden="true" />
-        </a>
-        <a className="bh-button bh-secondary" href={ENTERPRISE_URL} onClick={() => track('toy_cta_clicked', { cta: 'enterprise' })}>
-          <Building2 size={16} aria-hidden="true" /> Enterprise builds <ArrowRight size={16} aria-hidden="true" />
-        </a>
+        <a className="bh-button bh-primary" href="/arena/">Enter Arena <ArrowRight size={16} aria-hidden="true" /></a>
+        <a className="bh-button bh-secondary" href="/office">Open Review <ArrowRight size={16} aria-hidden="true" /></a>
       </div>
     </section>
   );

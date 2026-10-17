@@ -11,9 +11,11 @@
   let references = [], asset = null, assetMeta = null, assetTransform = { scale: 1, x: 0, y: 0, z: 0, rotation: 0, rotationX: 0, rotationZ: 0 };
   let message = 'Sample space loaded. Run a path preview, or bring your own space.', messageError = false, generation = 0;
   let worker = null, workerJob = null, workerFile = null, pollTimer = 0, workerStatus = '', workerBusy = false;
+  let operationsAssumptions = null, operationsEstimate = null, operationsOpen = false, operationsRenderKey = '';
   const requests = new Set();
   const $ = id => host?.querySelector('#' + id);
   const core = () => window.BrainSNNSiteCore;
+  const operations = () => window.BrainSNNSiteOperations;
   const robot = () => ({ ...core()?.robotPreset(proxy === 'cleaner' ? 'cleaner' : selection.robotId || 'g1'), ...(body || {}) });
   const hasAppearance = () => Boolean(asset || pointCloud);
   const appearanceName = () => asset?.name || (pointCloud ? 'Reconstructed point cloud' : '');
@@ -24,6 +26,18 @@
   const signature = s => JSON.stringify([s.robotId, s.modelId, s.task, s.seed]);
   const text = (id, value) => { const el = $(id); if (el) el.textContent = value; };
   const time = seconds => Number.isFinite(seconds) ? seconds >= 60 ? Math.floor(seconds / 60) + 'm ' + Math.round(seconds % 60) + 's' : seconds.toFixed(1) + 's' : '—';
+  const minutes = value => Number.isFinite(value) ? (value === 0 ? '0 min' : value < 1 ? '<1 min' : Math.round(value) + ' min') : '—';
+  function assumptions() {
+    if (!operationsAssumptions && operations()) operationsAssumptions = operations().defaults();
+    return operationsAssumptions;
+  }
+  function recalculateOperations() {
+    operationsEstimate = null;
+    if (!operations() || !scene?.scaleConfirmed || proxy !== 'cleaner' || mode !== 'coverage' || result?.status !== 'complete') return;
+    try { operationsEstimate = operations().estimate(scene, result, assumptions()); }
+    catch (error) { tell('Cleaning estimate: ' + error.message, true); }
+  }
+  function money(value, currency) { return value === null || !Number.isFinite(value) ? 'Enter your rates' : currency + ' ' + value.toFixed(2); }
   function tell(value, error = false) { message = value; messageError = error; text('site-status', value); $('site-status')?.classList.toggle('is-error', error); }
   function save() { try { localStorage.setItem(STORE, JSON.stringify(scene)); } catch { /* Geometry remains in memory when storage is unavailable. */ } }
   function initialScene() {
@@ -32,7 +46,7 @@
     if (!scene) scene = core().sampleScene();
   }
   function stop() { running = false; cancelAnimationFrame(timer); timer = 0; lastTime = 0; }
-  function invalidate() { stop(); planningEpoch++; planCancel?.(); planCancel = null; planner?.terminate(); planner = null; planning = false; result = null; resultSelection = null; cursor = 0; simTime = 0; renderer?.setTrace([], 0); renderer?.setCoverage?.(null); }
+  function invalidate() { stop(); planningEpoch++; planCancel?.(); planCancel = null; planner?.terminate(); planner = null; planning = false; result = null; resultSelection = null; operationsEstimate = null; cursor = 0; simTime = 0; renderer?.setTrace([], 0); renderer?.setCoverage?.(null); }
   function applyScene(next, note) {
     const normalized = core().normalizeScene(next);
     scene = normalized; mapEpoch++; sceneId++; invalidate(); save(); renderer?.setScene(scene); renderer?.setRobot(robot());
@@ -46,15 +60,16 @@
   function setStep(next) { step = next; if (host) host.dataset.siteStep = step; placement = ''; renderInspector(); update(); }
   function fields(items) { return '<div class="site-fields">' + items.map(([label, id, value, min, max, increment]) => '<label>' + label + '<input id="' + id + '" type="number" value="' + esc(value) + '" min="' + min + '" max="' + max + '" step="' + (increment || '0.1') + '"></label>').join('') + '</div>'; }
   function render() {
-    host.classList.add('site-workspace'); host.dataset.siteStep = step;
+    host.classList.add('site-workspace'); host.dataset.siteStep = step; operationsRenderKey = '';
     host.innerHTML = '<header class="site-heading"><div><span class="site-eyebrow">REAL WORLD → ROBOT WORLD</span><h2>Your space.<br><span>Their proving ground.</span></h2><p>Bring a place. Review the map. Find out what gets in the way.</p></div><div class="site-local-badge"><span></span> Local first <small>Your files stay here until you send them to your worker.</small></div></header>' +
       '<div class="site-shell"><nav class="site-steps" aria-label="Site test steps"><button data-site-step="capture"><b>01</b><span>Capture<small>Bring your space</small></span><i>↗</i></button><button data-site-step="review"><b>02</b><span>Review<small>Make the map testable</small></span><i>↗</i></button><button data-site-step="test"><b>03</b><span>Test<small>Explore the route</small></span><i>↗</i></button></nav>' +
       '<div class="site-main"><aside id="site-inspector" class="site-inspector"></aside><section class="site-stage" aria-label="Interactive site test"><div class="site-stage-bar"><div><span class="site-micro" id="site-scene-source">SAMPLE SPACE</span><strong id="site-scene-name"></strong></div><span class="site-preview-badge">PLANNING PREVIEW</span></div>' +
       '<div class="site-view-toolbar"><div class="site-segment" aria-label="Scene layers"><button data-site-view="reality">Reality</button><button data-site-view="geometry">Geometry</button><button data-site-view="robot">Robot view</button></div><div class="site-camera"><button data-site-camera="orbit" aria-label="Orbit camera">3D</button><button data-site-camera="top" aria-label="Top down camera">Top</button></div></div>' +
       '<div class="site-viewport" id="site-viewport"><div id="site-renderer" class="site-renderer"></div><div class="site-map-hint" id="site-map-hint">Drag to orbit · Scroll to zoom</div><div class="site-canvas-label"><span id="site-canvas-robot"></span><small id="site-canvas-model"></small></div><div id="site-placement" class="site-placement" hidden></div></div>' +
+      '<div class="site-operations-output" id="site-operations-output" aria-live="polite"></div>' +
       '<div class="site-transport"><button id="site-run" class="site-button site-primary" data-site-action="run">▶ Run path preview</button><button class="site-button site-icon" data-site-action="reset" aria-label="Reset playback">↺</button><label class="site-speed">Replay<select id="site-speed" aria-label="Replay speed"><option value="1">1×</option><option value="8" selected>8×</option><option value="32">32×</option></select></label><div class="site-clock"><strong id="site-time">0.0s</strong><small>estimated travel time</small></div></div>' +
       '<div class="site-timeline"><input id="site-scrubber" type="range" min="0" max="0" value="0" disabled aria-label="Replay planned robot route"><div><span id="site-replay-note">Run once to explore the route frame by frame.</span><span id="site-replay-end">—</span></div></div>' +
-      '<div class="site-metrics"><div><span id="site-area-label">Reachable area</span><strong id="site-area">—</strong><small>planning estimate</small></div><div><span>Route length</span><strong id="site-distance">—</strong><small>collision-aware path</small></div><div><span>Est. completion</span><strong id="site-duration">—</strong><small>constant-speed estimate</small></div><div><span>Test outcome</span><strong id="site-outcome">Ready</strong><small id="site-outcome-note">No model executed</small></div></div></section></div>' +
+      '<div class="site-metrics"><div><span id="site-area-label">Reachable area</span><strong id="site-area">—</strong><small>planning estimate</small></div><div><span>Route length</span><strong id="site-distance">—</strong><small>collision-aware path</small></div><div><span>Travel only</span><strong id="site-duration">—</strong><small>constant-speed estimate</small></div><div><span>Test outcome</span><strong id="site-outcome">Ready</strong><small id="site-outcome-note">No model executed</small></div></div></section></div>' +
       '<div class="site-status" id="site-status" role="status" aria-live="polite"></div></div><p class="site-integrity">This layer previews routes against reviewed floor geometry. Robot dimensions and speeds are illustrative. It does not execute the selected AI, validate balance or manipulation, or measure cleaning quality.</p>';
     host.addEventListener('click', handleClick); host.addEventListener('change', handleChange); host.addEventListener('input', handleInput);
     renderInspector();
@@ -70,13 +85,14 @@
   }
   function capturePanel() {
     const media = references.map((ref, i) => '<div class="site-reference">' + (ref.type.startsWith('video/') ? '<video src="' + esc(ref.url) + '" controls playsinline preload="metadata"></video>' : '<img src="' + esc(ref.url) + '" alt="Local capture reference">') + '<div><span>' + esc(ref.file.name) + '</span><button data-site-remove-ref="' + i + '" aria-label="Remove ' + esc(ref.file.name) + '">×</button></div></div>').join('');
-    return '<div class="site-panel-title"><span class="site-micro">01 / CAPTURE</span><h3>Start somewhere real.</h3><p>A walkthrough, a room scan, or a quick map. Bring what you have.</p></div>' +
+    return '<div class="site-panel-title"><span class="site-micro">01 / CAPTURE</span><h3>Start with your gym.</h3><p>Import a measured floor map today. Add a scan as a visual reference, review the map, then estimate a cleaning run.</p></div>' +
+      '<div class="site-gym-guide"><b>Scan → reviewed map → route → time & cost</b><p>A supported floor-map JSON goes straight to review. A phone video or 3D visual still needs a measured floor map.</p><button class="site-link" data-site-action="gym-estimate">Estimate gym cleaning →</button></div>' +
       '<label class="site-dropzone"><span class="site-upload-icon">↑</span><strong>Add a capture reference</strong><small>Phone video or photos · local preview</small><input id="site-reference-input" type="file" accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp" multiple></label>' +
       '<p class="site-note">References help you draw the map. They do not automatically generate geometry.</p>' + media +
       '<div class="site-import-grid"><label class="site-button">Import floor map<input id="site-map-input" type="file" accept=".json,application/json"></label><label class="site-button">Add 3D visual<input id="site-asset-input" type="file" accept=".glb,.usdz"></label></div><p class="site-note">Floor map: BrainSNN or RoomPlan JSON. Visual: GLB or ASCII USDZ. Binary RoomPlan USDZ needs GLB conversion.</p>' +
       (hasAppearance() ? '<div class="site-asset-row"><span><b>Visual only</b>' + esc(appearanceName()) + '</span><button class="site-link" data-site-action="remove-asset">Remove</button></div>' : '') +
       '<button class="site-button site-wide" data-site-action="new-map">Draw my floor map →</button><button class="site-link" data-site-action="sample">Explore the sample space</button>' +
-      '<details class="site-help"><summary>How to capture a useful space</summary><ol><li>Walk slowly around the usable floor and through doorways.</li><li>Capture obstacles from more than one angle. Avoid motion blur.</li><li>Measure at least one known distance. Review every passage before testing.</li></ol><p>LiDAR RoomPlan JSON can provide a stronger starting map on supported Apple devices.</p></details>' + workerPanel();
+      '<details class="site-help"><summary>How to capture a useful gym</summary><ol><li>Capture one floor, walking slowly along usable aisles and through doorways.</li><li>Measure floor dimensions and narrow passages. Mark equipment, mats, stairs, drains and areas the robot must avoid.</li><li>Mirrors, glass and repetitive equipment can confuse reconstruction. Check the map against the actual gym.</li><li>Confirm one real measurement and the robot dimensions before estimating. Keep people out of the capture where possible.</li></ol><p>Supported RoomPlan JSON can provide a starting floor map. A raw video requires your connected reconstruction worker and manual floor review. Reconstruction produces an unscaled visual reference, not a ready collision map.</p><a href="gym-pilot.html" target="_blank" rel="noopener noreferrer">One-gym pilot checklist ↗</a></details>' + workerPanel();
   }
   function reviewPanel() {
     const obstacle = scene.obstacles.find(o => o.id === selectedObstacle);
@@ -94,13 +110,42 @@
   function testPanel() {
     const r = robot();
     return '<div class="site-panel-title"><span class="site-micro">03 / TEST</span><h3>See where it gets stuck.</h3><p>Run a route. Change the space. Replay the difference.</p></div>' +
+      '<button class="site-button site-primary site-wide site-gym-action" data-site-action="gym-estimate">Estimate gym cleaning ↗</button><p class="site-note">Uses your reviewed map and an editable generic cleaner. Your Arena selection stays selected.</p>' +
       '<div class="site-selected-pair"><span>YOUR ARENA SELECTION</span><strong>' + esc(robotName()) + '</strong><p>' + esc(modelName()) + ' <b>not executed</b></p></div>' +
       '<label class="site-field">Planning body<select id="site-proxy"><option value="selected" ' + (proxy === 'selected' ? 'selected' : '') + '>' + esc(robotName()) + ' · footprint proxy</option><option value="cleaner" ' + (proxy === 'cleaner' ? 'selected' : '') + '>Generic cleaning robot · coverage proxy</option></select></label>' +
       '<label class="site-field">Test<select id="site-test-mode"><option value="navigation" ' + (mode === 'navigation' ? 'selected' : '') + '>Reach a destination</option><option value="coverage" ' + (mode === 'coverage' ? 'selected' : '') + ' ' + (proxy !== 'cleaner' ? 'disabled' : '') + '>Cover the reachable floor</option></select></label>' +
       '<details class="site-help"><summary>Set robot dimensions & speed</summary><p>Enter measured values to replace the illustrative planning envelope.</p>' + fields([['Width · m', 'site-body-width', r.width, 0.1, 5], ['Depth · m', 'site-body-depth', r.depth, 0.1, 5], ['Speed · m/s', 'site-body-speed', r.speed, 0.05, 3, 0.05], ...(proxy === 'cleaner' ? [['Cleaning width · m', 'site-body-operationWidth', r.operationWidth, 0.1, 5]] : [])]) + '</details><div class="site-body-specs"><span>Envelope <b>' + Number(r.width).toFixed(2) + ' × ' + Number(r.depth).toFixed(2) + ' m</b></span><span>Travel speed <b>' + Number(r.speed).toFixed(2) + ' m/s</b></span></div><p class="site-note">' + (proxy === 'cleaner' ? 'Illustrative cleaning footprint. Coverage is a route estimate, not proof of cleaning quality.' : 'A clearance proxy for this body. The selected policy and “' + esc(selection.task || 'mission') + '” task do not execute in this preview.') + '</p>' +
+      (proxy === 'cleaner' && mode === 'coverage' ? operationsPanel() : '') +
       (!scene.scaleConfirmed ? '<div class="site-callout"><strong>Confirm scale first.</strong><p>Review floor dimensions before calculating a route.</p><button class="site-link" data-site-step="review">Review the map →</button></div>' : '') +
       '<div class="site-section-label"><h4>Change the challenge</h4></div><div class="site-challenges"><button data-site-action="challenge-obstacle"><span>▧</span> Add a blocker<small>Then place it in the scene</small></button><button data-site-action="change-goal"><span>⚑</span> Move the goal<small>Try another route</small></button></div>' +
       (result?.trace?.length > 2 ? '<button class="site-button site-wide" data-site-action="block-route">Surprise: block this route ↗</button>' : '') + '<div class="site-report-actions"><button class="site-button site-wide" id="site-export-report" data-site-action="export-report" ' + (!result ? 'disabled' : '') + '>Export route report ↓</button><button class="site-link" data-site-action="export-scene">Save editable scenario ↓</button></div><details class="site-help"><summary>What this result means</summary><p>The planner uses static 2D clearance and a constant speed. Results are estimates on your reviewed geometry. It does not run GR00T or another named policy, evaluate humanoid balance, or predict dynamic crowds.</p><p>Real learned-policy tests remain in Arena with a compatible connected worker.</p></details>';
+  }
+  function operationsPanel() {
+    const a = assumptions();
+    if (!a) return '<p class="site-note">Cleaning estimates did not load. Reload the page; floor planning remains available.</p>';
+    return '<details id="site-operations-assumptions" class="site-help site-operations-assumptions" ' + (operationsOpen ? 'open' : '') + '><summary>Cleaning assumptions & your rates</summary><p>Illustrative planning inputs. Replace them with measured gym and robot values. Rates are yours, not market quotes.</p>' +
+      fields([['Passes', 'site-ops-passes', a.passes, 1, 10, 1], ['Seconds per turn', 'site-ops-turnSeconds', a.turnSeconds, 0, 120, 1], ['Setup · min', 'site-ops-setupMinutes', a.setupMinutes, 0, 1440, 1], ['Finish · min', 'site-ops-finishMinutes', a.finishMinutes, 0, 1440, 1], ['Expected help events', 'site-ops-expectedInterventions', a.expectedInterventions, 0, 1000, 1], ['Minutes per event', 'site-ops-minutesPerIntervention', a.minutesPerIntervention, 0, 1440, 1], ['Service every · m²', 'site-ops-serviceAreaM2', a.serviceAreaM2, 0, 1000000, 1], ['Service stop · min', 'site-ops-serviceMinutes', a.serviceMinutes, 0, 1440, 1]]) +
+      '<p class="site-note">Service every 0 m² disables service stops. Expected help is a user assumption, not a predicted failure rate.</p>' +
+      '<label class="site-checkbox"><input id="site-ops-includeUncovered" type="checkbox" ' + (a.includeUncovered ? 'checked' : '') + '><span>Allow human follow-up for uncovered floor<small>Includes the free floor outside the coverage estimate. Verify that it is safe and accessible for people.</small></span></label>' +
+      fields([['Manual work · m²/hour', 'site-ops-manualM2PerHour', a.manualM2PerHour, 0.1, 1000000, 1]]) +
+      '<div class="site-section-label"><h4>Your cost assumptions</h4></div><label class="site-field">Currency label<input id="site-ops-currency" value="' + esc(a.currency) + '" maxlength="3" pattern="[A-Z]{3}" autocomplete="off"></label>' +
+      fields([['Labour · ' + esc(a.currency) + '/hour', 'site-ops-laborHourlyRate', a.laborHourlyRate, 0, 1000000, 0.01], ['Robot · ' + esc(a.currency) + '/hour', 'site-ops-robotHourlyCost', a.robotHourlyCost, 0, 1000000, 0.01], ['Consumables · ' + esc(a.currency) + '/m²', 'site-ops-consumablesPerM2', a.consumablesPerM2, 0, 1000000, 0.001]]) +
+      '<p class="site-note">Enter all three rates to see a total. Enter 0 for a cost you intentionally exclude. Robot cost applies to run time; labour applies to help time. No currency conversion is performed.</p></details>';
+  }
+  function updateOperationsOutput() {
+    const output = $('site-operations-output'); if (!output) return;
+    const estimate = operationsEstimate;
+    const key = JSON.stringify([estimate?.estimateDigest || null, scene?.source?.kind, scene?.scaleConfirmed, proxy, mode, planning, Boolean(operations())]);
+    if (key === operationsRenderKey) return; operationsRenderKey = key;
+    if (!estimate) {
+      output.innerHTML = '<div class="site-operations-intro"><div><span class="site-micro">ONE GYM FLOOR</span><strong>Plan the work before the first clean.</strong><p>' + (!operations() ? 'Cleaning estimates are unavailable. Reload this page to try again.' : !scene.scaleConfirmed ? 'Import or draw a floor map, check equipment and aisles, then confirm real dimensions.' : proxy === 'cleaner' && mode === 'coverage' ? planning ? 'Calculating coverage. Time, help and cost will use this route and your assumptions.' : 'Run coverage to estimate robot time, human help and your operating cost.' : 'Use a generic cleaner on this map to estimate coverage, time, human help and cost.') + '</p></div><button class="site-button" data-site-action="gym-estimate" ' + (!operations() || planning ? 'disabled' : '') + '>Estimate gym cleaning ↗</button></div>';
+      return;
+    }
+    const t = estimate.timing, c = estimate.costs, area = estimate.coverage;
+    output.innerHTML = '<div class="site-operations-heading"><div><span class="site-micro">' + (scene.source?.kind === 'sample' ? 'SAMPLE FLOOR · ASSUMPTION-BASED ESTIMATE' : 'REVIEWED MAP · ASSUMPTION-BASED ESTIMATE') + '</span><strong>What this cleaning run could take</strong></div><button class="site-link" data-site-action="edit-operations">Edit assumptions ↗</button></div>' +
+      '<div class="site-operations-metrics"><div><span>Robot run</span><strong id="site-ops-robot-time">' + minutes(t.robotRunMinutes) + '</strong><small>travel, turns & service</small></div><div><span>Human help</span><strong id="site-ops-help-time">' + minutes(t.humanHelpMinutes) + '</strong><small>setup, service & follow-up</small></div><div><span>Elapsed estimate</span><strong id="site-ops-elapsed-time">' + minutes(t.sequentialElapsedMinutes) + '</strong><small>sequential schedule</small></div><div><span>Operating cost</span><strong class="' + (c.total === null ? 'site-ops-missing' : '') + '" id="site-ops-total">' + esc(money(c.total, c.currency)) + '</strong><small>' + (c.total === null ? 'your 3 cost rates are required' : 'per planned cleaning run') + '</small></div></div>' +
+      '<div class="site-operations-foot"><span>' + Number(area.coveredAreaM2).toFixed(1) + ' m² covered · ' + Number(area.manualFollowupAreaM2).toFixed(1) + ' m² human follow-up · ' + area.passes + (area.passes === 1 ? ' pass' : ' passes') + '</span><span>Labour ' + esc(money(c.labor, c.currency)) + ' · Robot ' + esc(money(c.robot, c.currency)) + ' · Supplies ' + esc(money(c.consumables, c.currency)) + '</span></div>' +
+      '<details class="site-operations-limits"><summary>Estimate limits & assumptions</summary><p>Uses this route, reviewed geometry and your inputs. Actual cleaning quality, crowds, battery limits and learned robot policies have not been tested. Human help is a planning allowance.</p>' + (estimate.warnings?.length ? '<ul>' + estimate.warnings.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul>' : '') + '</details>';
   }
   function workerPanel() {
     const job = workerJob;
@@ -113,6 +158,8 @@
     const panel = $('site-inspector'); if (!panel || !scene) return;
     panel.innerHTML = step === 'capture' ? capturePanel() : step === 'review' ? reviewPanel() : testPanel();
     panel.querySelector('#site-worker-form')?.addEventListener('submit', connectWorker);
+    const operationsDetails = panel.querySelector('#site-operations-assumptions');
+    operationsDetails?.addEventListener('toggle', () => { if (host?.contains(operationsDetails)) operationsOpen = operationsDetails.open; });
     updateButtons();
   }
   function updateButtons() {
@@ -141,6 +188,7 @@
     text('site-replay-note', result?.trace?.length ? 'Planned route · ' + (cursor + 1) + ' / ' + result.trace.length + ' positions · ' + speed + '× replay' : result ? 'No traversable route found. Review the map and planning envelope.' : 'Run once to explore the route frame by frame.');
     text('site-replay-end', metrics ? time(metrics.durationSeconds) : '—');
     if ($('site-export-report')) $('site-export-report').disabled = !result;
+    updateOperationsOutput();
     updateButtons();
   }
   function tick(now) {
@@ -180,7 +228,7 @@
       try {
         const planned = await calculatePlan(clone(scene), robot(), mode, operation);
         if (operation !== planningEpoch || version !== generation || !host) return;
-        result = planned; resultSelection = selected; planning = false;
+        result = planned; resultSelection = selected; planning = false; recalculateOperations();
         cursor = 0; simTime = 0; renderer?.setTrace(result.trace, 0); renderer?.setCoverage?.(mode === 'coverage' ? result.grid : null); renderInspector(); update();
         if (result.status !== 'complete' || !result.trace.length) { tell(result.reason || 'No route found. Review start, goal and robot clearance.', true); return; }
       } catch (error) {
@@ -201,10 +249,10 @@
     }, 'Map updated. Run again to calculate the new route.');
     placement = ''; if (kind === 'obstacle') step = 'review'; renderInspector(); update();
   }
-  function exportScene() { download('brainsnn-site-scenario.json', { schema: 'brainsnn.site.scenario.v1', scene, planning: { proxy, mode, body }, selected: { robotId: selection.robotId, modelId: selection.modelId, task: selection.task, seed: selection.seed }, appearance: hasAppearance() ? { filename: appearanceName(), transform: assetTransform, included: false } : null }); }
+  function exportScene() { download('brainsnn-site-scenario.json', { schema: 'brainsnn.site.scenario.v1', scene, planning: { proxy, mode, body }, operations: assumptions() ? { assumptions: assumptions() } : null, selected: { robotId: selection.robotId, modelId: selection.modelId, task: selection.task, seed: selection.seed }, appearance: hasAppearance() ? { filename: appearanceName(), transform: assetTransform, included: false } : null }); }
   function exportReport() {
     if (!result) return;
-    download('brainsnn-site-route-report.json', { schema: 'brainsnn.site.report.v1', createdAt: new Date().toISOString(), execution: { kind: 'deterministic-2d-planning-preview', policyExecuted: false, benchmarkResult: null, physicsValidated: false, capturedRealityValidated: false }, selected: resultSelection, planningBody: robot(), scene, mode, result, visualAsset: hasAppearance() ? { filename: appearanceName(), included: false, collisionGeometry: false, transform: assetTransform } : null, notes: ['Imported appearance is separate from collision geometry.', 'Speeds and body envelopes are illustrative. Confirm them against the actual robot.', 'Coverage does not measure cleaning quality.'] }); tell('Route report downloaded. It identifies the selected policy as not executed.');
+    download('brainsnn-site-route-report.json', { schema: 'brainsnn.site.report.v1', createdAt: new Date().toISOString(), execution: { kind: 'deterministic-2d-planning-preview', policyExecuted: false, benchmarkResult: null, physicsValidated: false, capturedRealityValidated: false }, selected: resultSelection, planningBody: robot(), scene, mode, result, operations: operationsEstimate, operationsAssumptions: assumptions(), visualAsset: hasAppearance() ? { filename: appearanceName(), included: false, collisionGeometry: false, transform: assetTransform } : null, notes: ['Imported appearance is separate from collision geometry.', 'Speeds and body envelopes are illustrative. Confirm them against the actual robot.', 'Coverage does not measure cleaning quality.', 'Cleaning time, human help and cost are estimates from user supplied assumptions; rates are not market quotes.'] }); tell('Route report downloaded with map-bound estimates and selected policy marked as not executed.');
   }
   async function importMap(file) {
     if (!file) return; const version = generation, operation = ++mapEpoch;
@@ -212,19 +260,26 @@
     try {
       if (file.size > 2 * 1024 * 1024) throw new Error('Map JSON must be under 2 MB.');
       const raw = JSON.parse(await file.text()); if (!current()) return;
-      let imported;
+      let imported, restoredPlanning = null, restoredOperations;
       if (raw.scene) imported = core().normalizeScene(raw.scene);
       else if (raw.schemaVersion === 'brainsnn.site.v1' || raw.width && raw.depth && raw.start && raw.goal) imported = core().normalizeScene(raw);
       else imported = core().importRoomPlan(raw);
-      imported.scaleConfirmed = false; selectedObstacle = '';
+      imported.scaleConfirmed = false;
       if (raw.schema === 'brainsnn.site.scenario.v1' && raw.planning) {
         const plan = raw.planning, restored = {};
         if (!['selected', 'cleaner'].includes(plan.proxy) || !['navigation', 'coverage'].includes(plan.mode)) throw new Error('The saved planning configuration is invalid.');
         const limits = { width: [0.1, 5], depth: [0.1, 5], height: [0.1, 5], speed: [0.05, 3], operationWidth: [0.05, 5] };
         for (const [key, value] of Object.entries(plan.body || {})) { if (key === 'provenance') continue; if (!limits[key] || typeof value !== 'number' || !Number.isFinite(value) || value < limits[key][0] || value > limits[key][1]) throw new Error('The saved robot dimension or speed is invalid.'); restored[key] = value; }
-        proxy = plan.proxy; mode = proxy === 'cleaner' ? plan.mode : 'navigation';
-        body = proxy === 'cleaner' || raw.selected?.robotId === selection.robotId ? (Object.keys(restored).length ? { ...restored, provenance: 'User supplied planning assumptions.' } : null) : null;
+        restoredPlanning = { proxy: plan.proxy, mode: plan.proxy === 'cleaner' ? plan.mode : 'navigation', body: plan.proxy === 'cleaner' || raw.selected?.robotId === selection.robotId ? (Object.keys(restored).length ? { ...restored, provenance: 'User supplied planning assumptions.' } : null) : null };
       }
+      if (raw.schema === 'brainsnn.site.scenario.v1' && raw.operations != null) {
+        if (!operations()) throw new Error('The cleaning-estimate module must load before restoring these assumptions.');
+        if (typeof raw.operations !== 'object' || Array.isArray(raw.operations) || !raw.operations.assumptions || typeof raw.operations.assumptions !== 'object' || Array.isArray(raw.operations.assumptions)) throw new Error('The saved cleaning assumptions are invalid.');
+        restoredOperations = operations().normalizeAssumptions(raw.operations.assumptions);
+      }
+      if (restoredPlanning) { proxy = restoredPlanning.proxy; mode = restoredPlanning.mode; body = restoredPlanning.body; }
+      if (restoredOperations) { operationsAssumptions = restoredOperations; operationsOpen = true; }
+      selectedObstacle = '';
       applyScene(imported, 'Map imported. Check dimensions, obstacles and scale before running.'); setStep('review');
     } catch (error) { if (current()) tell('Map import: ' + error.message, true); }
   }
@@ -247,6 +302,14 @@
     }
     renderInspector();
   }
+  function estimateGym() {
+    if (!operations()) { tell('The cleaning-estimate module did not load. Reload the page and try again.', true); return; }
+    if (proxy !== 'cleaner' || mode !== 'coverage') { proxy = 'cleaner'; mode = 'coverage'; body = null; invalidate(); renderer?.setRobot(robot()); }
+    operationsOpen = true; setStep('test');
+    if (!scene.scaleConfirmed) { tell('Review your gym map and confirm measured dimensions, then run coverage. Your map and Arena selection are preserved.', true); return; }
+    if (!result) run();
+    else { recalculateOperations(); update(); tell('Cleaning estimates use this coverage route. Edit assumptions and enter your own rates below.'); }
+  }
   function handleClick(event) {
     const button = event.target.closest('button'); if (!button || !host.contains(button) || button.disabled) return;
     if (button.dataset.siteStep) { setStep(button.dataset.siteStep); return; }
@@ -256,6 +319,8 @@
     if (button.dataset.siteRemoveRef !== undefined) { const removed = references.splice(Number(button.dataset.siteRemoveRef), 1)[0]; if (removed) URL.revokeObjectURL(removed.url); renderInspector(); return; }
     if (button.dataset.siteArtifact !== undefined) { downloadArtifact(Number(button.dataset.siteArtifact)); return; }
     switch (button.dataset.siteAction) {
+      case 'gym-estimate': estimateGym(); break;
+      case 'edit-operations': operationsOpen = true; setStep('test'); $('site-operations-assumptions')?.scrollIntoView?.({ behavior: 'auto', block: 'nearest' }); break;
       case 'run': run(); break;
       case 'reset': if (planning) { invalidate(); update(); tell('Planning cancelled. Your reviewed map is unchanged.'); break; } stop(); cursor = 0; simTime = 0; renderer?.setTrace(result?.trace || [], 0); update(); tell('Playback reset. Your map and route are unchanged.'); break;
       case 'sample': clearAppearance(); selectedObstacle = ''; proxy = 'selected'; body = null; mode = 'navigation'; applyScene(core().sampleScene(), 'Sample space loaded. This is an authored example, not a customer scan.'); setStep('test'); break;
@@ -277,6 +342,15 @@
   function clearAppearance() { assetEpoch++; asset = null; pointCloud = null; assetMeta = null; renderer?.clearAsset(); }
   function handleChange(event) {
     const el = event.target, id = el.id;
+    if (id.startsWith('site-ops-')) {
+      const a = assumptions(), key = id.replace('site-ops-', '');
+      if (!a || !Object.prototype.hasOwnProperty.call(a, key)) return;
+      const isRate = ['laborHourlyRate', 'robotHourlyCost', 'consumablesPerM2'].includes(key);
+      const value = key === 'includeUncovered' ? el.checked : key === 'currency' ? el.value.trim().toUpperCase() : el.value.trim() === '' ? (isRate ? null : NaN) : Number(el.value);
+      try { operationsAssumptions = operations().normalizeAssumptions({ ...a, [key]: value }); operationsOpen = true; recalculateOperations(); renderInspector(); update(); tell('Cleaning assumptions updated. Your existing coverage route is reused.'); }
+      catch (error) { tell('Cleaning assumptions: ' + error.message, true); renderInspector(); }
+      return;
+    }
     if (id === 'site-reference-input') { addReferences(el.files); return; }
     if (id === 'site-map-input') { importMap(el.files?.[0]); return; }
     if (id === 'site-asset-input') { loadAsset(el.files?.[0]); return; }
@@ -433,6 +507,6 @@
     if (!core()) { host.innerHTML = '<p class="site-status is-error">The site planning layer did not load. Reload to try again.</p>'; return; }
     initialScene(); render(); document.addEventListener('keydown', keyDown); document.addEventListener('visibilitychange', visibility); schedulePoll();
   }
-  function getState() { return clone({ selection: { robotId: selection.robotId, modelId: selection.modelId, task: selection.task, seed: selection.seed }, scene, step, view, placement, mode, proxy, body, running, cursor, policyExecuted: false, result, resultSelection, planning, referenceCount: references.length, visualAsset: hasAppearance() ? { name: appearanceName(), metadata: assetMeta, transform: assetTransform } : null, reconstruction: workerJob ? { id: workerJob.id, status: workerJob.status, stage: workerJob.stage } : null, workerConnected: Boolean(worker), message }); }
+  function getState() { return clone({ selection: { robotId: selection.robotId, modelId: selection.modelId, task: selection.task, seed: selection.seed }, scene, step, view, placement, mode, proxy, body, running, cursor, policyExecuted: false, result, resultSelection, planning, operations: { assumptions: assumptions(), estimate: operationsEstimate }, referenceCount: references.length, visualAsset: hasAppearance() ? { name: appearanceName(), metadata: assetMeta, transform: assetTransform } : null, reconstruction: workerJob ? { id: workerJob.id, status: workerJob.status, stage: workerJob.stage } : null, workerConnected: Boolean(worker), message }); }
   window.BrainSNNSiteWorkspace = { mount, suspend, updateSelection, getState };
 })();

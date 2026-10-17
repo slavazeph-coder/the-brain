@@ -24,6 +24,9 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Arena-led lobby and unified Review](brainsnn-reposition-2026-10.md). October17 owner correction restores the interactive arcade with robot/model selection before Run; this overrides the earlier hidden-control restraint. #186/#187 merged; current restoration and verification tracked here.
+
+
 → [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective. Sept9: restore original cyan/violet Sapient Playground identity; keep the homepage simple.
 
 → [GPU host recovery](brainsnn-gpu-host-recovery-2026-09.md). PR143 now includes a supervised outbound HTTPS GPU worker; private real RTX4090 tests verify inference, fallback and recovery. Single-replica website activation and durable container restart remain operational work.
@@ -34,7 +37,17 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Robot Arena production integration
 
+→ [Robot evaluation packs](brainsnn-evaluation-packs-2026-10-17.md). Owner refocuses on the robot arcade and paid testing; resumable real ten-episode runner, report UI and measured scale gates replace the generic-audit recommendation.
+
+→ [Paid Arena analysis](brainsnn-paid-analysis-2026-10-17.md). C$50 prepaid, fixed cost-bounded quotes, optional Gemini evidence sidecars and durable ledger; dedicated credential and live-validation gates remain required.
+
 → [Robot Arena and RTX 4090 handoff](brainsnn-robot-arena-2026-10.md). Production browser source lives in `brainsnn-r3f-app/public/arena/`; GPU worker source and handoff live in `robotics/arena/`.
+
+→ [Native Arena inspection implementation](brainsnn-arena-inspection-2026-10-17.md). Owner-approved recorder, native viewer, portable evidence, comparison/reviews and bounded local LeRobot/MCAP tools; live GPU rollout requires verified host access.
+
+→ [Local-first delivery and hardware availability](brainsnn-local-first-2026-10-17.md). Owner confirms 4090 unavailable and GB10 future only; durable pilot acceptance corrections and a separate GB10 qualification plan. Commercial direction is a recommendation, not validated demand.
+
+→ [TViz and Arena inspection research](brainsnn-inspection-layer-2026-10.md). October16 source audit and historical proposal; native implementation now tracked above, ROS/SSH viewer remains optional.
 
 ## Active Work
 

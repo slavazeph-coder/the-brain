@@ -4,6 +4,8 @@ The production repository is `https://github.com/slavazeph-coder/the-brain`. Are
 
 This source has CPU contract coverage. The CUDA model, actual LIBERO/EGL rendering, Docker image and combined RTX 4090 memory still need validation on the host. No cloud allocation or live worker is created by the website deployment.
 
+Treat the commands and copied prompt below as an operator handoff for an available, authorized host window. GB10 remains unqualified; read `docs/gb10-qualification.md` before attempting this recipe on that platform. Local recording inspection and CPU contract tests require neither host.
+
 ## Copy this prompt to the agent on the 4090
 
 ```text
@@ -34,11 +36,15 @@ Use the existing host/container facilities; Docker-in-Docker is not required.
 
 Run lightweight worker tests, then the real GPU policy wrapper and EGL physics.
 The synthetic warm-up is only compilation, not evidence of robot execution.
-Run scripts/probe-worker.py from robotics/arena with ARENA_TOKEN supplied privately
+Run scripts/probe-worker.py with the installed physics/API Python environment,
+from robotics/arena with ARENA_TOKEN supplied privately
 and a new persistent evidence directory. It must verify authentication, exact
 origins, a real Panda step with policyExecuted=true and consumed policy camera
-frames, then a complete bounded LIBERO Spatial episode. Inspect the saved JPEGs
-and action/state trace. Report actual task success or failure honestly. Confirm
+frames, then a complete bounded LIBERO Spatial episode. Verify and save the full
+hash-bound recording bundles after reset and session deletion, including both
+lossless input cameras, state, prompt, returned chunks and chosen controller inputs.
+Inspect the saved JPEG previews, durable originals and action/state trace. Report
+actual task success or failure honestly. Confirm
 benchmark interventions are blocked and session deletion releases the renderer.
 Check existing BrainSNN text inference still works afterwards.
 
@@ -101,25 +107,33 @@ Follow `docs/arena-worker.md` from this kit directory. Keep weights, virtual env
 3. Install the pinned OpenPI checkout's `packages/openpi-client` with `pip install --no-deps`. The full OpenPI model remains in its separate `uv` environment.
 4. Reproduce the Dockerfile's LIBERO `config.yaml` with actual absolute BDDL, assets and initialization paths. Set `LIBERO_CONFIG_PATH` to that config directory. Set `ARENA_LIBERO_REVISION` and `ARENA_OPENPI_REVISION` to the pins above.
 5. Verify the host exposes NVIDIA EGL/graphics libraries. Set `MUJOCO_GL=egl` and `PYOPENGL_PLATFORM=egl` for the physics process. If the surrounding container lacks graphics driver mounts, the host operator must correct that; a successful `nvidia-smi` alone does not establish working EGL.
-6. Supply the literal private values from `.env.arena` through the existing process manager's environment facility, plus the variables above. Run the dedicated environment's `uvicorn workers.arena.app:create_app --factory --host 127.0.0.1 --port 8081 --workers 1` from the kit directory. Do not evaluate arbitrary env-file text as shell code.
+6. Supply literal private values from an environment file outside the checkout through the existing process manager's environment facility, plus the variables above. Set `ARENA_RECORDING_DIR` to an absolute private persistent directory writable by this process. Run the dedicated environment's `uvicorn workers.arena.app:create_app --factory --host 127.0.0.1 --port 8081 --workers 1` from the kit directory. Do not evaluate arbitrary env-file text as shell code.
 
 The Dockerfile is the canonical simulation dependency recipe. Its NVIDIA driver capabilities include `graphics`; Docker host networking and its loopback listener are specifically for a Linux host with an existing container toolkit. Neither environment route upgrades a host NVIDIA driver.
+
+Follow the worker guide's **complete checkpoint copy** into a new destination, with symlinks dereferenced, then create the manifest outside it. Copying only weight files or merging into an old directory is insufficient. Run the wrapper with `uv run --project /opt/brainsnn-openpi python .../serve_openpi.py --checkpoint /models/pi05_libero --manifest /models/pi05_libero.manifest.json --host 127.0.0.1 --port 8010`; the explicit project selects the pinned environment regardless of shell directory.
+
+For Docker, mount the private host archive at the absolute `ARENA_RECORDING_DIR` configured inside the container, writable by UID/GID 10001. The worker guide includes that mount. `docker run --rm` without it loses the container's archive on removal. Reset finalizes the prior recording and starts a new ID; session deletion and TTL end live resources but leave recordings subject to independent age/count/byte retention. They do not erase the archived episode. A pending writer can cause a safe `recording_busy` reset rejection; wait for it to finish and retry.
 
 ## Real acceptance run
 
 Start the verified policy wrapper first and wait for its synthetic warm-up and listening message. The warm-up uses the native eight-state/two-image contract, but runs no simulator and consumes a policy RNG sample. Upstream reset does not rewind that RNG. This worker does not claim exact fresh-inference replay.
 
-With the private `ARENA_TOKEN` supplied to the probe process, from the kit directory:
+With the private `ARENA_TOKEN` supplied to the probe process, from the kit directory, use the installed physics environment's Python (or a separate environment with `workers/arena/requirements-api.txt`, including NumPy and Pillow). Replace the interpreter path below with that absolute path. The probe does not install dependencies or start a model:
 
 ```bash
-python scripts/probe-worker.py \
+/absolute/physics-venv/bin/python scripts/probe-worker.py \
   --url http://127.0.0.1:8081 \
   --origin https://www.brainsnn.com \
   --out /path/outside-git/arena-evidence/first-run \
   --max-seconds 600
 ```
 
-The output directory must be new. The probe checks unauthorized/origin rejection, saves capabilities, creates a practice session, validates one policy step, saves three JPEG camera views and the action/state evidence, then deletes it. Next it creates a locked benchmark session, runs task 0 / seed 7 until success or the 220-step horizon, saves evidence and deletes that session in `finally`. A horizon failure can pass the execution probe and is still a failed task. A timeout, renderer error, invalid frame or missing policy execution fails the probe. The configured runtime expires abandoned sessions; a broken connection may prevent immediate cleanup, so confirm no orphan remains.
+The output directory must be new and stays private. The probe checks unauthorized/origin rejection, the pinned profile and recording capability, then validates one practice policy step and saves three JPEG previews plus the legacy trace. It resets to a distinct unstepped recording, verifies the old complete bundle, deletes the session and verifies the same original bundle again. Reset does not delete an archived episode.
+
+Next it creates a locked `benchmark` protocol session for task `libero_spatial:0`, seed 7, verifies that interventions are rejected, and runs to checker success or exactly 220 policy steps. It deletes the session before fetching and verifying the formal archive. The bundles in `practice-recording.json` and `benchmark-recording.json` include exact lossless inputs and bound event relationships; the probe checks SHA-256, completeness, inference/chosen-input/state counts, and consumption links. Finalization polls check a 30-second deadline between requests. Each response has a byte limit (128 MiB for a bundle) and a 60-second body deadline checked between reads; a blocked read can additionally consume the socket timeout (60 seconds, or 100 for session creation). `--max-seconds` bounds episode polling between requests, not the entire invocation including startup, requests, finalization and cleanup. A complete recording means retained coverage, not a successful task.
+
+A 220-step horizon miss can pass transport/execution/archive acceptance while `taskSuccess` remains false. Early environment termination without checker success, partial/unreadable/tampered archives, timeout, renderer error or absent consumption evidence fail acceptance. The probe attempts deletion in `finally` on failure; a broken connection can prevent cleanup, so confirm no orphan remains. It does not prove storage survival across process/container/host replacement: validate the configured persistent mount separately during a later authorized host window.
 
 Inspect the images and evidence manually as well. A health response or claimed JSON field alone does not demonstrate correct policy behavior. Measure GPU memory while this real run executes and verify latency stays below the worker's 20-second inference deadline under the intended load. The synthetic compilation pass reduces first-call delay but does not guarantee later latency. Compare additional fixed episodes with the pinned native evaluator before publishing model-performance comparisons.
 
@@ -133,7 +147,7 @@ The worker has one session, a 900-second hard TTL, a 120-second idle TTL and bou
 
 ## Evidence to return
 
-Return the exact Git commit, source/checkpoint pins, manifest digest, GPU/driver, free and peak VRAM, real frame paths, action/state trace, measured latency, outcome, HTTP/auth/CORS checks, and existing text-service health before/after. Include the new service's startup/stop/restart instructions and HTTPS URL without credentials. Keep weights and tokens private. G1 support, multiworker orchestration, 100k-episode scheduling and paid-compute provisioning remain separate work.
+Return the exact Git commit, source/checkpoint pins, checkpoint manifest digest, GPU/driver, free and peak VRAM, preview paths, both verified recording bundles and their manifest hashes, action/state trace, measured latency, actual task outcome, HTTP/auth/origin checks, and existing text-service health before/after. Confirm the reset/deletion archive checks separately from any later storage-restart test. Include the new service's startup/stop/restart instructions and HTTPS URL without credentials. Keep weights, recordings and tokens private. G1 support, multiworker orchestration, 100k-episode scheduling and paid-compute provisioning remain separate work.
 
 ## Sources
 
