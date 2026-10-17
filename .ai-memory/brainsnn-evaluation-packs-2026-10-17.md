@@ -21,3 +21,7 @@ Owner explicitly corrected the revenue direction: focus on the robot arcade beco
 A read-only GB10 preflight on17October found ARM64, driver580.159.03, an active resident loopback text service, approximately101GiB available system RAM and11GiB free on50GiB overlay storage. Default Python had no Torch/JAX/MuJoCo/LIBERO. No packages/files/services were changed. Robotics runtime/EGL and durable checkpoint storage remain unqualified; preserve Hermes/Ollama, drivers and existing ports. 4090 remains unavailable.
 
 The first10episodes qualify the system; they do not establish customer demand, a score, a price or fleet-scale capacity. Paid private-checkpoint regression and paired baseline/candidate support require compatibility checks and measured delivery costs. A paired comparison consumes two policy episodes per condition.
+
+## Terminal-result recovery follow-up
+
+PR192 merged as58a305c0. A final power-loss regression exposed a narrow receipt-write window: a terminal case could reach the ledger before its result file was committed, causing resume to refuse the missing receipt. Terminal status now commits only after the result file is durable. Crashes before or after the atomic file write remain interrupted and never replay the spent attempt; the next case proceeds. Source and extracted-kit worker/API suites pass91tests, including25campaign tests. No real policy was run.
