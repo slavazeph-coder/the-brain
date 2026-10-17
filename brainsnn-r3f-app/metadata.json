@@ -1,6 +1,6 @@
 {
   "name": "BrainSNN",
-  "description": "See the moment it breaks. Arena missions, one Review workbench, and evidence you can inspect.",
+  "description": "Pick a robot and model, try a challenge and replay the result. Explore the first 10-episode robot-policy test pack. Local practice is open; hosted policy tests are not yet available.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

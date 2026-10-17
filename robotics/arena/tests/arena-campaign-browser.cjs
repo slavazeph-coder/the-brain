@@ -5,7 +5,7 @@ const { createRequire } = require('node:module');
 const { makeReport } = require('./arena-campaign-report-fixture.cjs');
 const app = path.resolve(__dirname, '../../../brainsnn-r3f-app'), assets = path.join(app, 'public/arena');
 const { chromium } = createRequire(path.join(app, 'package.json'))('@playwright/test');
-const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Campaign import fixture</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/arena-campaign.css"><style>body{margin:0;background:#080c12;color:#f4f7fb}main{max-width:1160px;margin:auto;padding:0 22px}button,input,select{font:inherit}</style></head><body><main><div id="arena-campaign-root"></div></main><script>window.BrainSNNExperiment={getState:()=>({robotId:'panda',modelId:'pi05',task:'libero_spatial:0',seed:'7',mode:'robot-preview',protocol:'benchmark'})}</script><script src="/arena-profiles.js"></script><script src="/arena-campaign.js"></script></body></html>`;
+const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Campaign import fixture</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/arena-campaign.css"><style>body{margin:0;background:#080c12;color:#f4f7fb}main{max-width:1160px;margin:auto;padding:0 22px}button,input,select{font:inherit}</style></head><body><main><div id="arena-campaign-root"></div></main><script>window.__campaignNavigation=[];window.BrainSNNExperiment={restoreFromURL:()=>window.__campaignNavigation.push('restore'),getState:()=>({robotId:'panda',modelId:'pi05',task:'libero_spatial:0',seed:'7',mode:'robot-preview',protocol:'benchmark'})};window.BrainSNNWorkspace={showPage:id=>{window.__campaignPage=id;window.__campaignNavigation.push(id)}}</script><script src="/arena-profiles.js"></script><script src="/arena-campaign.js"></script></body></html>`;
 const server = http.createServer((req, res) => {
   if (req.url === '/test.html') { res.setHeader('Content-Type', 'text/html'); res.end(html); return; }
   const name = req.url.slice(1);
@@ -24,6 +24,23 @@ const upload = report => ({ name: 'campaign-report.json', mimeType: 'application
     await page.goto(origin + '/test.html'); await page.waitForLoadState('networkidle');
     const baselineRequests = requests.length, input = page.getByRole('textbox', { name: 'Open campaign report JSON' });
     const picker = page.locator('[data-campaign-report-file]'), report = page.locator('[data-campaign-report]'), status = page.locator('[data-campaign-report-status]');
+    await page.getByRole('heading', { name: '10-episode test pack', exact: true }).waitFor();
+    assert.equal(await picker.isVisible(), false, 'report import stays in closed operator tools');
+    assert.equal(await page.locator('[data-campaign-export]').isVisible(), false, 'advanced planning stays in closed operator tools');
+    assert.equal(await page.locator('[data-campaign-tools]').getAttribute('open'), null);
+    assert.match(await page.locator('.campaign-pack').innerText(), /Each episode is one task attempt/);
+    assert.equal(await page.locator('[data-campaign-readiness]').innerText(), 'Real-policy testing is not yet available. The Panda + π0.5 pilot still needs a verified GPU run.');
+    assert.match(await page.locator('.campaign-pack').innerText(), /Each qualified pack includes/);
+    assert.match(await page.locator('.campaign-pack-actions').innerText(), /Demo available now/);
+    await page.getByRole('button', { name: 'Try the arcade', exact: false }).click();
+    assert.equal(await page.evaluate(() => window.__campaignPage), 'playground', 'new dynamic CTA uses existing workspace navigation');
+    assert.deepEqual(await page.evaluate(() => window.__campaignNavigation), ['playground', 'restore'], 'returning to the arcade remounts its suspended controls');
+    await page.screenshot({ path: '/tmp/arena-test-packs-overview-desktop.png', fullPage: true });
+    for (const width of [390, 320]) { await page.setViewportSize({ width, height: 844 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'overview has no overflow at ' + width); }
+    await page.screenshot({ path: '/tmp/arena-test-packs-overview-mobile.png', fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.locator('[data-campaign-tools] > summary').click();
+    assert.equal(await picker.isVisible(), true);
     assert.equal(await page.locator('[data-campaign-field="totalTrials"]').inputValue(), '10');
     assert.equal(await page.locator('[data-campaign-field="protocol"]').inputValue(), 'benchmark');
     await picker.setInputFiles(upload(makeReport()));

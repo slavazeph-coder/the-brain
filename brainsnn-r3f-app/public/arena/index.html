@@ -7,8 +7,20 @@
 <meta name="brainsnn-arena-experience" content="arena-arcade-selection-2026-10-17-v1">
 <link rel="canonical" href="https://www.brainsnn.com/arena/">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<meta name="description" content="Choose your robot and model, pick a challenge, and change the world. Race the scripted arm yourself, or connect a matching policy worker, then inspect every run.">
-<title>Arena · BrainSNN</title>
+<meta name="description" content="Try the robot arcade, choose a robot and model, and explore ten-episode test packs. Replay each result with its evidence. Local practice is scripted; model testing requires a matching worker.">
+<meta name="brainsnn-service-experience" content="robot-testing-simple-v1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="BrainSNN">
+<meta property="og:title" content="Robot arcade · BrainSNN">
+<meta property="og:description" content="Choose a robot and model, try a challenge and replay the result. Local practice is open; real-policy test packs are in qualification.">
+<meta property="og:url" content="https://www.brainsnn.com/arena/">
+<meta property="og:image" content="https://www.brainsnn.com/og/robot-testing.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Robot arcade · BrainSNN">
+<meta name="twitter:description" content="Choose a robot and model, try a challenge and replay the result. Local practice is open; real-policy test packs are in qualification.">
+<meta name="twitter:image" content="https://www.brainsnn.com/og/robot-testing.png">
+<title>Robot arcade · BrainSNN</title>
 <link rel="stylesheet" href="studio.css"><link rel="stylesheet" href="challenges.css"><link rel="stylesheet" href="brand.css"><link rel="stylesheet" href="catalog.css"><link rel="stylesheet" href="experiment.css"><link rel="stylesheet" href="arena-workspace.css"><link rel="stylesheet" href="arena-inspector.css"><link rel="stylesheet" href="arena-analysis.css"><link rel="stylesheet" href="arena-campaign.css"><link rel="stylesheet" href="site-workspace.css"><link rel="stylesheet" href="arena-game.css">
 </head>
 <body>
@@ -25,14 +37,13 @@
 </defs></svg>
 <a class="skip" href="#experiment-heading">Skip to arena</a>
 <header class="app-header">
- <a class="brand" href="/" aria-label="BrainSNN home"><span class="original-brand-mark" aria-hidden="true">B</span><span class="brand-label"><strong>BrainSNN</strong><small>Arena</small></span></a>
- <nav class="app-nav" aria-label="Main navigation"><a class="nav-tab active" href="/arena/" aria-current="page">Arena</a><a class="nav-tab" href="/office">Review</a><a class="nav-tab" href="/evidence">Evidence</a></nav>
- <div class="header-end"><details class="arena-overflow"><summary aria-label="More destinations">More</summary><a href="/lab">Lab</a></details></div>
+ <a class="brand" href="/" aria-label="BrainSNN home"><span class="original-brand-mark" aria-hidden="true">B</span><span class="brand-label"><strong>BrainSNN</strong><small>Robot testing</small></span></a>
+ <nav class="app-nav" aria-label="Main navigation"><button class="nav-tab active" data-page="playground" aria-pressed="true">Arcade</button><button class="nav-tab" data-page="campaigns" aria-pressed="false">Test packs</button></nav>
+ <div class="header-end"><details class="arena-overflow"><summary aria-label="More destinations">More</summary><div class="arena-overflow-links"><button class="nav-tab" data-page="catalog" aria-pressed="false">Robots & models</button><a href="/arena/tasks">More tasks</a><a href="/office">Review</a><a href="/evidence">Evidence</a><a href="/lab">Lab</a></div></details></div>
 </header>
 <main class="workspace">
-<nav class="arena-tools" aria-label="More Arena tools"><button class="nav-tab active" data-page="playground" aria-pressed="true">Playground</button><a class="nav-tab" href="/arena/tasks">More tasks</a><button class="nav-tab" data-page="catalog" aria-pressed="false">Robots & models</button><button class="nav-tab" data-page="campaigns" aria-pressed="false">Evaluation packs</button></nav>
 <section id="playground" class="workspace-page" aria-labelledby="page-title">
- <h1 id="page-title" class="playground-accessible-title">Arena</h1>
+ <h1 id="page-title" class="playground-accessible-title">Robot arcade</h1>
  <div id="experiment-root"></div>
  <div id="demo-workspace" hidden>
  <div class="workbench">

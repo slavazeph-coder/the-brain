@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { NAV_ITEMS } from './navigation.js';
+import { NAV_ITEMS, OVERFLOW_ITEMS } from './navigation.js';
 import '../styles/behaviour-home.css';
 import '../styles/public-navigation.css';
 
@@ -15,7 +15,7 @@ export function PublicNav({ active }) {
     <a className="bh-brand" href="/" aria-label="BrainSNN home"><span className="bh-mark" aria-hidden="true">B</span><strong>BrainSNN</strong></a>
     <nav aria-label="Main navigation">
       {NAV_ITEMS.map((item) => <a key={item.id} href={item.href} aria-current={active === item.id ? 'page' : undefined}>{item.label}</a>)}
-      <details className="public-overflow" ref={overflow}><summary aria-label="More navigation">More</summary><div><a href="/lab">Lab</a></div></details>
+      <details className="public-overflow" ref={overflow}><summary aria-label="More navigation">More</summary><div>{OVERFLOW_ITEMS.map((item) => <a key={item.id} href={item.href} aria-current={active === item.id ? 'page' : undefined}>{item.label}</a>)}</div></details>
     </nav>
   </header>;
 }

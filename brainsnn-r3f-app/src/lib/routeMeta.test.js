@@ -26,16 +26,16 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('leads the homepage with the break and keeps the poke toy on /play', () => {
+  it('leads with robot testing and keeps the poke toy on /play', () => {
     const home = resolveRouteMeta('/');
-    expect(home.title).toBe('BrainSNN | See the moment it breaks');
-    expect(home.heading).toBe('See the moment it breaks.');
-    expect(home.description).toContain('Both runs stay');
-    expect(home.description).toMatch(/0\.\d+/);
-    expect(home.image).toBe('/og-image.png');
+    expect(home.title).toBe('BrainSNN | Robot policy testing');
+    expect(home.heading).toBe('Test your robot. See where it fails.');
+    expect(home.description).toContain('10-episode robot-policy test pack');
+    expect(home.description).toContain('hosted policy tests are not yet available');
+    expect(home.image).toBe('/og/robot-testing.png');
     const body = home.body.join(' ');
     expect(body).toContain('does not score a named policy');
-    expect(body).toContain('do not establish universal capability');
+    expect(body).toContain('first real-policy GPU run still needs verification');
     expect(body).not.toContain('XIO');
     expect(body).not.toContain('US$1,500');
     expect(body).not.toContain('70%');
@@ -132,7 +132,7 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
     const title = tagContent(html, '<title>([^<]*)</title>');
     expect(title).toContain('BrainSNN');
-    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('Both runs stay');
+    expect(tagContent(html, 'name="description" content="([^"]*)"')).toContain('10-episode robot-policy test pack');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -155,8 +155,8 @@ describe('per-route social previews', () => {
     expect(tagContent(playHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/toy-poke.png');
     expect(resolveRouteMeta('/play').image).toBe('/og/toy-poke.png');
     const homeHtml = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
-    expect(tagContent(homeHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og-image.png');
-    expect(resolveRouteMeta('/').image).toBe('/og-image.png');
+    expect(tagContent(homeHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/robot-testing.png');
+    expect(resolveRouteMeta('/').image).toBe('/og/robot-testing.png');
     expect(resolveRouteMeta('/arcade').image).toBe('/og-image.png');
   });
 
@@ -201,8 +201,9 @@ describe('content a crawler can read without running JavaScript', () => {
     expect(html).toMatch(/Rank agreement[^<]*0\.\d+/);
     const report = buildHoldoutReport();
     const home = resolveRouteMeta('/');
-    expect(home.description).toContain(`${report.corpusSize} unseen passages is ${report.outOfSample.rho}`);
-    expect(home.description).toContain(`${report.falseAlarmCount} false alarms`);
+    expect(html).toContain(`${report.falseAlarmCount} false alarms`);
+    expect(home.description).not.toContain('rank agreement');
+    expect(home.description).not.toContain('unseen passages');
   });
 
   it('puts experiments under Lab and limits lobby navigation to the public destinations', () => {
@@ -238,7 +239,7 @@ describe('static application metadata', () => {
   it('brands the initial document as BrainSNN and gives structured data the served route description', () => {
     const template = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
     expect(template).not.toContain('Sapient Playground');
-    expect(template).toContain('<title>BrainSNN | See the moment it breaks</title>');
+    expect(template).toContain('<title>BrainSNN | Robot policy testing</title>');
     const html = applyRouteMeta(template, '/office', '?tab=video', 'https://www.brainsnn.com');
     const structured = JSON.parse(html.match(/<script id="site-schema" type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
     expect(structured.name).toBe('BrainSNN');

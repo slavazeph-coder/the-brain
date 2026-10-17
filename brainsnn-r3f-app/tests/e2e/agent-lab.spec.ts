@@ -2,20 +2,29 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { buildMissionContract, DEFAULT_MISSION_DRAFT } from '../../src/features/missions/missionBuilder.js';
 
-test('lobby has three primary routes, Lab overflow and an honest paused preview', async ({ page }) => {
+test('homepage leads with robotics and keeps other tools in overflow', async ({ page }) => {
   let feedRequests = 0;
   page.on('request', request => { if (request.url().includes('/api/agent-lab/summary')) feedRequests++; });
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('See the moment it breaks.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test your robot.See where it fails.');
   const navigation = page.getByRole('navigation', { name: 'Main navigation', exact: true });
-  await expect(navigation.locator('> a')).toHaveText(['Arena', 'Review', 'Evidence']);
-  await expect(navigation.getByRole('link', { name: 'Lab', exact: true })).not.toBeVisible();
+  await expect(navigation.locator('> a')).toHaveText(['Robot arcade', 'Test packs']);
+  for (const name of ['Review', 'Evidence', 'Lab']) await expect(navigation.getByRole('link', { name, exact: true })).not.toBeVisible();
   await navigation.getByLabel('More navigation').click();
   await expect(navigation.getByRole('link', { name: 'Lab', exact: true })).toBeVisible();
-  await expect(page.locator('.bh-lobby-slice')).toContainText('Paused · local practice — not a model score');
+  await expect(page.locator('.bh-lobby-slice')).toContainText('Local practice · no AI model running');
+  await expect(page.getByText('Local scripted practice is open now. Hosted policy tests are not yet available.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'See test packs', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
   await expect(page.locator('canvas')).toHaveCount(0);
   expect(feedRequests).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.getByRole('link', { name: 'See test packs', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '10-episode test pack', exact: true })).toBeVisible();
+  await expect(page.locator('[data-campaign-tools]')).not.toHaveAttribute('open');
+  await expect(page.locator('[data-campaign-profile]')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Try the arcade' }).click();
+  await expect(page.getByLabel('01 · Choose your robot')).toBeVisible();
+  await expect(page.getByLabel('02 · Model / LLM')).toBeVisible();
 });
 
 test('old review links select addressable tabs, browser Back keeps a draft', async ({ page }) => {
@@ -163,7 +172,7 @@ async function expectSingleTaskShell(page) {
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.locator('footer')).toHaveCount(1);
   await expect(page.locator('footer.bh-footer')).toHaveCount(1);
-  await expect(page.locator('.public-nav nav > a')).toHaveText(['Arena', 'Review', 'Evidence']);
+  await expect(page.locator('.public-nav nav > a')).toHaveText(['Robot arcade', 'Test packs']);
   await expect(page.locator('.task-context a[href="/arena/tasks"]')).toBeVisible();
 }
 
