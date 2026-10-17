@@ -8,7 +8,7 @@
   const display = value => value == null ? 'unavailable' : typeof value === 'string' ? value : JSON.stringify(value);
   const pretty = value => JSON.stringify(value, null, 2);
   const maxFileBytes = 128 * 1024 * 1024, reviewsKey = 'brainsnn.arena.recording-reviews.v1';
-  let dialog = null, trigger = null, load = null, generation = 0, candidate = null, baseline = null, selected = 0, comparison = null, busy = false, error = '', notice = '', urls = [];
+  let dialog = null, trigger = null, load = null, generation = 0, candidate = null, baseline = null, selected = 0, comparison = null, busy = false, error = '', notice = '', urls = [], analysisPanel = null;
   const api = () => window.BrainSNNArenaRecording;
   const $ = selector => dialog?.querySelector(selector);
   const eventMap = recording => new Map(recording.manifest.events.map(event => [event.id, event]));
@@ -72,6 +72,7 @@
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function close() {
+    analysisPanel?.destroy(); analysisPanel = null;
     generation++; revoke(); const restore = trigger;
     if (dialog) { dialog.close?.(); dialog.remove(); }
     dialog = null; candidate = baseline = comparison = null; load = null; trigger = null; busy = false;
@@ -201,8 +202,30 @@
   }
   function render() {
     if (!dialog) return; revoke();
-    $('#ai-content').innerHTML = candidate ? summary(candidate) + `<div id="ai-timeline">${timeline()}</div><div id="ai-selection"></div>` + charts() + findingsPanel() + comparisonPanel() + reviewPanel() + exportPanel() : '<section class="ai-empty"><h2>Open the evidence behind a run.</h2><p>Choose an Arena recording bundle or an older Arena evidence JSON file. Originals and event relationships are checked before display. Legacy exports retain their known gaps.</p><p>Maximum file size: 128 MiB. Imported content is data only; no worker is connected or controlled.</p></section>';
+    analysisPanel?.destroy(); analysisPanel = null;
+    $('#ai-content').innerHTML = candidate ? summary(candidate) + `<div id="ai-timeline">${timeline()}</div><div id="ai-selection"></div><div id="ai-paid-analysis"></div>` + charts() + findingsPanel() + comparisonPanel() + reviewPanel() + exportPanel() : '<section class="ai-empty"><h2>Open the evidence behind a run.</h2><p>Choose an Arena recording bundle or an older Arena evidence JSON file. Originals and event relationships are checked before display. Legacy exports retain their known gaps.</p><p>Maximum file size: 128 MiB. Imported content is data only; no worker is connected or controlled.</p></section>';
+    if (candidate && window.BrainSNNPaidAnalysis) { const recording = candidate; analysisPanel = window.BrainSNNPaidAnalysis.mount($('#ai-paid-analysis'), { recording, selectedEventId: recording.manifest.events[selected]?.id, decodeArtifact: artifact => decodeAnalysisArtifact(recording, artifact), navigate: jump }); }
     if (candidate) renderSelection(); status();
+  }
+  // Only the checked recording's local payloads enter this decoder. No URL or
+  // imported executable content is accepted. Share the inspector's size guards.
+  async function decodeAnalysisArtifact(recording, artifact) {
+    if (!recording.manifest.artifacts.includes(artifact) || artifact.retention !== 'included') throw new Error('Original camera artifact is unavailable.');
+    const raw = recording.payloads[artifact.path]; if (!raw) throw new Error('Camera pixels are missing.');
+    const canvas = document.createElement('canvas');
+    if (['image/png', 'image/jpeg', 'image/webp'].includes(artifact.mediaType)) {
+      const dimensions = imageDimensions(raw, artifact.mediaType), declared = artifact.shape;
+      if (!dimensions || dimensions.some(n => !Number.isSafeInteger(n) || n < 1 || n > 8192) || dimensions[0] * dimensions[1] > 16777216 || (declared && (declared.length !== 3 || declared[0] !== dimensions[1] || declared[1] !== dimensions[0]))) throw new Error('Camera dimensions exceed the supported limit.');
+      const bitmap = await createImageBitmap(new Blob([raw], { type: artifact.mediaType }));
+      try { if (bitmap.width !== dimensions[0] || bitmap.height !== dimensions[1]) throw new Error('Decoded camera dimensions do not match.'); canvas.width = bitmap.width; canvas.height = bitmap.height; canvas.getContext('2d').drawImage(bitmap, 0, 0); } finally { bitmap.close(); }
+    } else if (artifact.dtype === 'uint8' && artifact.shape?.length === 3 && [3, 4].includes(artifact.shape[2])) {
+      const [height, width, channels] = artifact.shape;
+      if (width > 4096 || height > 4096 || width * height > 4194304 || raw.byteLength !== height * width * channels) throw new Error('Raw camera dimensions are unsupported.');
+      canvas.width = width; canvas.height = height; const context = canvas.getContext('2d'), pixels = context.createImageData(width, height);
+      for (let i = 0, p = 0; i < raw.length; i += channels, p += 4) { pixels.data[p] = raw[i]; pixels.data[p + 1] = raw[i + 1]; pixels.data[p + 2] = raw[i + 2]; pixels.data[p + 3] = channels === 4 ? raw[i + 3] : 255; }
+      context.putImageData(pixels, 0, 0);
+    } else throw new Error('This camera encoding has no supported image decoder.');
+    return canvas;
   }
   function renderSelection() {
     const event = candidate.manifest.events[selected];
@@ -242,6 +265,7 @@
     // Keep focus on the range during keyboard and pointer scrubbing.
     const focused = document.activeElement?.id, selectionStart = $('#ai-event-id')?.value;
     $('#ai-timeline').innerHTML = timeline(); renderSelection();
+    analysisPanel?.setSelectedEvent(candidate.manifest.events[selected]?.id);
     dialog.querySelectorAll('.ai-chart circle[data-event]').forEach(point => point.setAttribute('r', point.dataset.event === candidate.manifest.events[selected]?.id ? '4' : '2'));
     if (focused === 'ai-position') $('#ai-position')?.focus(); if (selectionStart) $('#ai-event-id').value = selectionStart; status();
   }

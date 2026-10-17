@@ -37,6 +37,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Robot Arena production integration
 
+→ [Paid Arena analysis](brainsnn-paid-analysis-2026-10-17.md). C$50 prepaid, fixed cost-bounded quotes, optional Gemini evidence sidecars and durable ledger; dedicated credential and live-validation gates remain required.
+
 → [Robot Arena and RTX 4090 handoff](brainsnn-robot-arena-2026-10.md). Production browser source lives in `brainsnn-r3f-app/public/arena/`; GPU worker source and handoff live in `robotics/arena/`.
 
 → [Native Arena inspection implementation](brainsnn-arena-inspection-2026-10-17.md). Owner-approved recorder, native viewer, portable evidence, comparison/reviews and bounded local LeRobot/MCAP tools; live GPU rollout requires verified host access.
