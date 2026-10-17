@@ -6,6 +6,7 @@ description: Native Arena inspection implementation, durable recording contract,
 # Native Arena inspection — 2026-10-17
 
 Owner approved building and deploying the inspection research, including merge.
+Release PR: https://github.com/slavazeph-coder/the-brain/pull/189.
 Implementation branch: `codex/arena-inspection-layer`; based on the already
 merged lobby/Review/nav work (#186–188, main `329602b2`).
 
@@ -37,5 +38,11 @@ merged lobby/Review/nav work (#186–188, main `329602b2`).
   they do not prove CUDA/EGL, π0.5 or hardware behavior.
 - Website and worker-kit release verification is recorded in the release PR.
   Live GPU worker rollout needs authenticated host access and real policy checks.
-  At implementation time the saved SSH endpoint timed out and the GPU validation
-  workflow lacked its trusted-host secret; no host-key bypass was used.
+  The saved SSH endpoint timed out locally. Its missing trusted-host secret was
+  restored from a pre-existing trusted local known_hosts entry (no keyscan or
+  host-key bypass). Connectivity run `38999587948` then failed with TCP connection
+  refused from GitHub, before any remote computation, file or service changes.
+  Current SSH access/forwarding is still needed for a live worker deployment.
+
+- Optional PyAV 19 tools need Python >=3.12. CI retains worker API tests on3.11
+  and switches interpreters for isolated import/export dependencies.
