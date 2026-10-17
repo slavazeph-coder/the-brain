@@ -97,6 +97,8 @@ ctx.BrainSNNArenaRecording.importBundle(fs.readFileSync(process.argv[2],'utf8'))
 if(r.manifest.source.kind!=='imported')throw Error('wrong source'); console.log(r.manifest.recordingId);
 }).catch(e=>{console.error(e);process.exitCode=1;});"""
         js = Path(__file__).resolve().parents[3] / 'brainsnn-r3f-app/public/arena/arena-recording.js'
+        if not js.is_file():
+            js = Path(__file__).resolve().parents[1] / 'viewer/arena-recording.js'
         result = subprocess.run(['node', '-e', script, str(js), str(source)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
 

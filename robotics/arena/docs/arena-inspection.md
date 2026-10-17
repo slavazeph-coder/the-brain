@@ -79,4 +79,6 @@ MCAP input is limited to 48 MiB and 4,000 messages. Compressed chunks are explic
 
 Tests use injected worker doubles and real locally encoded Parquet/MP4/MCAP fixtures. They check frame/episode offsets, reference integrity, tampering, archive lifecycle, read-only authorization and browser compatibility. They do not execute π0.5, prove CUDA/EGL works, or establish physical-robot performance.
 
+The extracted worker kit includes the browser recording validator for cross-language checks. Run tests from the kit root with Node 22 available and the API test dependencies installed (`workers/arena/requirements-api.txt` plus `httpx==0.28.1`): `python -m unittest discover -s tests -p 'test_arena*.py'`. Run the optional interchange tests in a separate environment with `inspection/requirements.txt`: `python -m unittest discover -s tests -p 'test_inspection_interop.py'`.
+
 Deploy the website through the existing main-branch Railway workflow. The downloadable worker kit includes the recorder, schemas, offline tools and tests. Updating an existing GPU worker requires its authenticated host access, persistent archive volume and real policy validation in `rtx4090-handoff.md`. Keep existing inference services running. No paid GPU or physical-robot action is triggered by opening inspection.

@@ -77,6 +77,12 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as ar
         info.compress_type = zipfile.ZIP_DEFLATED
         info.external_attr = 0o644 << 16
         archive.writestr(info, path.read_bytes())
+    # Keep the cross-language tests runnable from the extracted kit, without
+    # requiring the application checkout on a GPU/inspection host.
+    viewer = zipfile.ZipInfo('viewer/arena-recording.js', (2026, 10, 14, 0, 0, 0))
+    viewer.compress_type = zipfile.ZIP_DEFLATED
+    viewer.external_attr = 0o644 << 16
+    archive.writestr(viewer, (ROOT / 'dist/arena-recording.js').read_bytes())
     readme_info = zipfile.ZipInfo('README.txt', (2026, 10, 14, 0, 0, 0))
     readme_info.compress_type = zipfile.ZIP_DEFLATED
     readme_info.external_attr = 0o644 << 16
@@ -85,4 +91,4 @@ style = '''*{box-sizing:border-box}body{margin:0;background:#05070b;color:#f4f7f
 body = markdown(source.read_text())
 page = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BrainSNN · Set up a physics worker</title><style>' + style + '</style></head><body><header><span class="mark" aria-hidden="true">B</span><strong>BrainSNN Arena</strong><a href="./#playground?robot=panda&amp;model=pi05">Back to the arena ↗</a></header><main><a class="download" href="downloads/brainsnn-arena-worker.zip" download>Download worker kit ↓</a><div class="notice"><p><strong>Bring your compute.</strong> This kit provides the Panda + π₀.₅ LIBERO adapter. It does not provision a server or install other robot policies. A real checkpoint run and GPU rendering still need validation on your worker.</p></div>' + body + '</main><footer>Original BrainSNN colours and mark. Worker identity and results are reported by your configured runtime.</footer></body></html>'
 (ROOT / 'dist/worker-setup.html').write_text(page)
-print(json.dumps({'archive':str(zip_path.relative_to(ROOT)), 'files':len(files)+1, 'bytes':zip_path.stat().st_size, 'sha256':hashlib.sha256(zip_path.read_bytes()).hexdigest(), 'guideBytes':len(page.encode())}))
+print(json.dumps({'archive':str(zip_path.relative_to(ROOT)), 'files':len(files)+2, 'bytes':zip_path.stat().st_size, 'sha256':hashlib.sha256(zip_path.read_bytes()).hexdigest(), 'guideBytes':len(page.encode())}))
