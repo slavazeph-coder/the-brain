@@ -194,6 +194,106 @@ class RecordingTests(unittest.TestCase):
         self.assertTrue(manifest["completion"]["unknownTail"])
         self.assertEqual(manifest["completion"]["status"], "partial")
 
+    def test_journal_and_manifest_limits_preserve_readable_prefix_before_commit(self):
+        from workers.arena import recording
+        for limit, value in (("MAX_MANIFEST_BYTES", "x" * (110 * 1024)),
+                             ("MAX_JSON_NODES", [0] * 2500)):
+            with self.subTest(limit=limit), patch.object(recording, limit, 256 * 1024 if limit == "MAX_MANIFEST_BYTES" else 6000):
+                writer = self.archive.create(metadata())
+                writer.record("durable", data={"large": value})
+                writer.queue.join()
+                self.assertEqual(writer.committed, 1)
+                writer.record("over-limit", data={"large": value}, refs=["e1"])
+                writer.queue.join()
+                final = self.finish(writer)
+                self.assertEqual(final["completion"]["status"], "partial")
+                self.assertEqual(final["completion"]["committedSequence"], 1)
+                self.assertEqual(final["completion"]["lastObservedSequence"], 2)
+                self.assertTrue(final["completion"]["unknownTail"])
+                self.assertTrue((writer.directory / "finalized.json").is_file())
+                verify_bundle(self.archive.bundle(writer.id))
+                # Simulate dying before the final marker: the same watermark
+                # and bounded journal must remain readable by recovery too.
+                (writer.directory / "finalized.json").unlink()
+                recovered = verify_bundle(self.archive.bundle(writer.id))
+                self.assertEqual([e["seq"] for e in recovered["events"]], [1])
+                self.assertTrue(recovered["completion"]["unknownTail"])
+
+    def test_descriptor_limit_rejects_whole_event_before_writing_its_artifacts(self):
+        from workers.arena import recording
+        with patch.object(recording, "MAX_ARTIFACTS", 2):
+            writer = self.archive.create(metadata())
+            writer.record("durable", arrays={"one": np.asarray([1]), "two": np.asarray([2])})
+            writer.queue.join()
+            writer.record("over-limit", arrays={"three": np.asarray([3])})
+            writer.queue.join()
+            final = self.finish(writer)
+            self.assertEqual(final["completion"]["committedSequence"], 1)
+            self.assertEqual(final["completion"]["status"], "partial")
+            self.assertEqual(len(final["artifacts"]), 2)
+            self.assertEqual(len(list((writer.directory / "artifacts").iterdir())), 2)
+            verify_bundle(self.archive.bundle(writer.id))
+
+    def test_total_recording_budget_includes_journal_manifest_and_artifacts(self):
+        self.archive.recording_max_bytes = 128 * 1024
+        writer = self.archive.create(metadata())
+        writer.record("durable", data={"large": "x" * (20 * 1024)})
+        writer.queue.join()
+        writer.record("over-limit", data={"large": "x" * (20 * 1024)})
+        writer.queue.join()
+        manifest = self.finish(writer)
+        self.assertEqual(manifest["completion"]["committedSequence"], 1)
+        self.assertEqual(manifest["completion"]["status"], "partial")
+        size = sum(path.stat().st_size for path in writer.directory.rglob("*") if path.is_file())
+        self.assertLessEqual(size, self.archive.recording_max_bytes)
+        verify_bundle(self.archive.bundle(writer.id))
+
+    def test_reset_limits_pending_writers_and_refuses_before_changing_episode(self):
+        entered, release = threading.Event(), threading.Event()
+        original = RecordingWriter._write_item
+        def blocked(writer, *args):
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError("fixture release timed out")
+            return original(writer, *args)
+        with patch.object(RecordingWriter, "_write_item", blocked):
+            item = self.recorded_episode()
+            try:
+                self.assertTrue(entered.wait(2))
+                first = item.recorder
+                item.command(command("reset", 1))
+                current = item.recorder
+                before = (item.episode_number, item.seq, item.status, item.sim_time(), len(item.env.actions))
+                with self.assertRaises(Exception) as rejected:
+                    item.command(command("reset", 2))
+                self.assertEqual(rejected.exception.code, "recording_busy")
+                self.assertEqual(rejected.exception.status, 409)
+                self.assertEqual((item.episode_number, item.seq, item.status, item.sim_time(), len(item.env.actions)), before)
+                self.assertIs(item.recorder, current)
+                self.assertTrue(current.accepting)
+                self.assertEqual(item.previous_recorders, [first])
+                release.set()
+                self.assertTrue(first.wait(5))
+                item.command(command("reset", 2))  # Rejected command was not cached.
+                self.assertNotEqual(item.recorder.id, current.id)
+            finally:
+                release.set()
+                item.close()
+        self.assertEqual(len(self.archive.list()["recordings"]), 3)
+
+    def test_large_final_outcome_cannot_invalidate_durable_prefix(self):
+        writer = self.archive.create(metadata())
+        writer.record("durable")
+        writer.queue.join()
+        writer.finish({"status": "interrupted", "details": "x" * (64 * 1024)})
+        self.assertTrue(writer.wait(5))
+        manifest = verify_bundle(self.archive.bundle(writer.id))
+        self.assertEqual(manifest["completion"]["committedSequence"], 1)
+        self.assertEqual(manifest["completion"]["status"], "partial")
+        self.assertEqual(manifest["completion"]["reason"], "outcome_limit")
+        self.assertEqual(manifest["outcome"]["status"], "unknown")
+        self.assertTrue((writer.directory / "finalized.json").is_file())
+
     def test_full_disk_including_failure_to_write_final_counter_never_means_complete(self):
         from workers.arena import recording
         writer = self.archive.create(metadata())
@@ -394,6 +494,9 @@ Promise.all(process.argv.slice(2).map(path=>ctx.BrainSNNArenaRecording.verifyBun
  console.log(JSON.stringify({count:results.length,complete:results.every(result=>result.verification.complete)}));
 });"""
         js = Path(__file__).resolve().parents[3] / "brainsnn-r3f-app/public/arena/arena-recording.js"
+        if not js.is_file():
+            js = Path(__file__).resolve().parents[1] / "viewer/arena-recording.js"
+        self.assertTrue(js.is_file(), "The cross-language test requires the repository or kit browser verifier.")
         result = subprocess.run(["node", "-e", script, str(js), str(source), str(invalid_source)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(json.loads(result.stdout)["complete"])

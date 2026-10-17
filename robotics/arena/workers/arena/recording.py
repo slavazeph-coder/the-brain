@@ -34,6 +34,9 @@ MAX_ARTIFACT_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_ARTIFACT_BYTES = 96 * 1024 * 1024
 MAX_EVENTS = 20000
 MAX_ARTIFACTS = 4096
+MAX_JSON_NODES = 500000
+FINALIZATION_RESERVE_BYTES = 64 * 1024
+FINALIZATION_RESERVE_NODES = 2048
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$")
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
@@ -52,7 +55,7 @@ def _json_safe(value, depth=0):
             ancestors.remove(id(item))
             continue
         nodes += 1
-        if level > 32 or nodes > 500000:
+        if level > 32 or nodes > MAX_JSON_NODES:
             raise RecordingError("limit_exceeded", "JSON exceeds depth or element limits.")
         if isinstance(item, str):
             if any(0xD800 <= ord(char) <= 0xDFFF for char in item):
@@ -79,6 +82,7 @@ def _json_safe(value, depth=0):
             stack.extend((child, level + 1, False) for child in children)
         else:
             raise RecordingError("invalid_json", "Recording values must be plain JSON data.")
+    return nodes
 
 
 def canonical_json(value):
@@ -371,6 +375,13 @@ class RecordingWriter:
     def __init__(self, archive, manifest, queue_size=64, max_bytes=64 * 1024 * 1024):
         self.archive = archive
         self.manifest = copy.deepcopy(manifest)
+        self.header_bytes = canonical_json(self.manifest)
+        self.manifest_nodes = _json_safe(self.manifest)
+        self.journal_bytes = 0
+        if (len(self.header_bytes) + FINALIZATION_RESERVE_BYTES > MAX_MANIFEST_BYTES
+                or self.manifest_nodes + FINALIZATION_RESERVE_NODES > MAX_JSON_NODES
+                or 2 * len(self.header_bytes) + FINALIZATION_RESERVE_BYTES + 8192 > max_bytes):
+            raise RecordingError("recording_too_large", "Recording metadata leaves no room for a durable manifest.")
         self.id = _identifier(manifest["recordingId"])
         self.directory = archive.root / self.id
         self.directory.mkdir(mode=0o700)
@@ -394,7 +405,7 @@ class RecordingWriter:
             # Publish ownership before the header so another finishing writer's
             # retention sweep cannot mistake this new directory for an archive.
             _atomic(self.directory / "active.json", canonical_json({"pid": os.getpid()}))
-            _atomic(self.directory / "header.json", canonical_json(self.manifest))
+            _atomic(self.directory / "header.json", self.header_bytes)
             _atomic(self.directory / "progress.json", canonical_json({"committedSequence": 0, "gapCount": 0}))
             _fsync_dir(archive.root)
         except OSError:
@@ -469,6 +480,16 @@ class RecordingWriter:
             self.error = reason
 
     def finish(self, outcome, reason="episode_finished"):
+        # Reserve final metadata before committing any event. Even a caller's
+        # unexpectedly large outcome cannot make the durable prefix unreadable.
+        try:
+            footer = {"outcome": outcome, "reason": reason}
+            if (len(canonical_json(footer)) > FINALIZATION_RESERVE_BYTES // 2
+                    or _json_safe(footer, depth=1) > FINALIZATION_RESERVE_NODES // 2):
+                raise RecordingError("recording_too_large", "Final outcome exceeds its reserved size.")
+        except Exception:
+            self._lose("outcome_limit")
+            outcome, reason = {"status": "unknown"}, "outcome_limit"
         with self.lock:
             if not self.accepting:
                 return
@@ -486,7 +507,9 @@ class RecordingWriter:
                 "manifestPath": f"/v1/recordings/{self.id}", "bundlePath": f"/v1/recordings/{self.id}/bundle"}
 
     def _write_item(self, event, owned, journal):
-        descriptions = []
+        if len(self.artifacts) + len(owned) > MAX_ARTIFACTS:
+            raise RecordingError("recording_too_large", "Recording artifact count limit reached.")
+        descriptions, payloads = [], []
         for item in owned:
             raw = item["raw"]
             if item.get("image"):
@@ -496,7 +519,7 @@ class RecordingWriter:
                 raw = stream.getvalue()
             extension = "png" if item.get("image") else "txt" if item.get("text") else "bin"
             path = "artifacts/" + item["id"] + "." + extension
-            if len(raw) > MAX_ARTIFACT_BYTES or self.total_bytes + len(raw) > self.max_bytes:
+            if len(raw) > MAX_ARTIFACT_BYTES:
                 raise RecordingError("recording_too_large", "Recording storage limit reached.")
             description = {"id": item["id"], "path": path, "sha256": hashlib.sha256(raw).hexdigest(),
                            "byteLength": len(raw), "mediaType": "image/png" if item.get("image") else
@@ -505,10 +528,23 @@ class RecordingWriter:
             for key in ("shape", "dtype", "endianness"):
                 if key in item:
                     description[key] = item[key]
-            _atomic(self.directory / path, raw)
-            self.total_bytes += len(raw)
             descriptions.append(description)
-        entry = canonical_json({"event": event, "artifacts": descriptions}) + b"\n"
+            payloads.append((path, raw))
+        entry_value = {"event": event, "artifacts": descriptions}
+        entry_nodes = _json_safe(entry_value, depth=1)
+        entry = canonical_json(entry_value) + b"\n"
+        next_journal_bytes = self.journal_bytes + len(entry)
+        next_artifact_bytes = self.total_bytes + sum(len(raw) for _, raw in payloads)
+        # The JSONL entry includes more punctuation than its final manifest
+        # representation. This conservative cumulative bound protects both
+        # finalization and crash recovery before acknowledging a watermark.
+        if (len(self.header_bytes) + next_journal_bytes + FINALIZATION_RESERVE_BYTES > MAX_MANIFEST_BYTES
+                or self.manifest_nodes + entry_nodes + FINALIZATION_RESERVE_NODES > MAX_JSON_NODES
+                or next_artifact_bytes + 2 * next_journal_bytes + 2 * len(self.header_bytes)
+                   + FINALIZATION_RESERVE_BYTES + 8192 > self.max_bytes):
+            raise RecordingError("recording_too_large", "Recording journal or total storage limit reached.")
+        for path, raw in payloads:
+            _atomic(self.directory / path, raw)
         journal.write(entry)
         journal.flush()
         os.fsync(journal.fileno())
@@ -517,6 +553,9 @@ class RecordingWriter:
                                                                  "gapCount": self.gaps}))
         self.events.append(event)
         self.artifacts.extend(descriptions)
+        self.total_bytes = next_artifact_bytes
+        self.journal_bytes = next_journal_bytes
+        self.manifest_nodes += entry_nodes
         self.committed = event["seq"]
 
     def _run(self):

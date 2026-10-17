@@ -187,6 +187,13 @@ class Episode:
                 "boundary": "Prepared worker input, before policy-server internal transforms."})
 
     def reset(self):
+        # At most two writers may own queued copies in this worker process.
+        # Reject before changing the live episode if a slow disk still owns
+        # both; retries can proceed once a previous prefix has finalized.
+        self.previous_recorders = [writer for writer in self.previous_recorders if not writer.finished.is_set()]
+        pending = len(self.previous_recorders) + int(self.recorder is not None and not self.recorder.finished.is_set())
+        if self.archive is not None and pending >= 2:
+            raise ArenaError("recording_busy", "Previous recording is still finalizing. Retry reset after it finishes.", 409)
         self.finish_recording("reset")
         if self.recorder is not None:
             self.previous_recorders.append(self.recorder)
