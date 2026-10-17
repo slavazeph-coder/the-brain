@@ -188,6 +188,10 @@ One session is admitted per worker. It expires after 15 minutes or two minutes w
 
 The legacy evidence endpoint contains the current episode in worker memory. Native recordings are also saved to the bounded private archive and survive reset/deletion until their configured retention expires. Use the recording bundle endpoint to retain exact input artifacts; see `docs/arena-inspection.md` in this kit for storage, read-only credentials, inspection and interchange. Flattened state/action evidence enables diagnosis and recorded replay; it does not capture policy RNG, all solver state, or promise exact fresh-inference branching. A single successful task is not an official aggregate LIBERO benchmark result.
 
+## Ten-episode evaluation pack
+
+After the saved real-policy pilot passes, use the kit's `scripts/run-campaign.py` to run ten sequential episodes, retain independently verified bundles and import the resulting `report.json` in Arena → Evaluation packs. Read [the evaluation pack guide](https://www.brainsnn.com/arena/evaluation-setup.html) for the exact command, resume rules, task/seed coverage and limits. No provider is provisioned, and 1,000/100,000-episode drafts are not executable by this bounded runner.
+
 ## Validation performed and remaining
 
 The code is exercised using injected environment/policy doubles and actual FastAPI ASGI HTTP requests. These tests cover camera rotation/resize/state construction, action chunk cadence, action application, actual sensor-mask inputs, benchmark locks, terminal success, reset, cleanup, idempotence, verified checkpoint identity, token/CORS enforcement and body limits. They do not run the downloaded model, real MuJoCo/EGL, or the Docker image.

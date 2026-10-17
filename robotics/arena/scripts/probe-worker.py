@@ -96,7 +96,8 @@ def recording_id(frame):
     return value
 
 
-def verify_execution_bundle(bundle, *, recording, session, profile, protocol, steps, outcome):
+def verify_execution_bundle(bundle, *, recording, session, profile, protocol, steps, outcome,
+                            task="libero_spatial:0", seed=7):
     """Verify original bytes and the claimed worker-interface execution chain."""
     manifest = verify_bundle(bundle)
     if (manifest["recordingId"] != recording or manifest.get("sessionId") != session
@@ -105,7 +106,7 @@ def verify_execution_bundle(bundle, *, recording, session, profile, protocol, st
             or manifest["source"].get("profile") != profile):
         raise RuntimeError("Recording identity, complete coverage or worker profile did not match this session.")
     context = manifest["context"]
-    if context.get("taskId") != "libero_spatial:0" or context.get("seed") != 7 or context.get("protocol") != protocol:
+    if context.get("taskId") != task or context.get("seed") != seed or context.get("protocol") != protocol:
         raise RuntimeError("Recording task, seed or protocol did not match this probe.")
     events = manifest["events"]
     by_id = {event["id"]: event for event in events}

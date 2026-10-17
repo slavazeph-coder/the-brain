@@ -668,14 +668,20 @@ class RecordingArchive:
         except (OSError, RecordingError, KeyError, TypeError):
             return False
 
-    def manifest(self, recording_id):
-        directory = self._directory(recording_id)
+    def _final_manifest(self, directory):
         if (directory / "finalized.json").is_file():
             marker = _parse_json(self._read(directory / "finalized.json", 1024))
             text = self._read(directory / "manifest.json")
             if hashlib.sha256(text).hexdigest() != marker.get("manifestSha256"):
                 raise RecordingError("manifest_integrity_failed", "The stored manifest changed.", 409)
             return validate_manifest(_parse_json(text))
+        return None
+
+    def manifest(self, recording_id):
+        directory = self._directory(recording_id)
+        finalized = self._final_manifest(directory)
+        if finalized is not None:
+            return finalized
         manifest = _parse_json(self._read(directory / "header.json"))
         progress = _parse_json(self._read(directory / "progress.json", 1024))
         committed = progress.get("committedSequence", 0)
@@ -694,8 +700,16 @@ class RecordingArchive:
         last = events[-1]["seq"] if events else 0
         if last != committed:
             raise RecordingError("recording_integrity_failed", "Committed journal records are missing.", 409)
+        active = self._active(directory)
+        # The writer publishes its durable final marker before removing active.
+        # It may have finished after our first marker read; do not downgrade that
+        # completed archive to a crash-recovered partial recording.
+        if not active:
+            finalized = self._final_manifest(directory)
+            if finalized is not None:
+                return finalized
         manifest.update({"events": events, "artifacts": artifacts,
-                         "completion": {"status": "recording" if self._active(directory) else "partial",
+                         "completion": {"status": "recording" if active else "partial",
                                         "committedSequence": last, "lastObservedSequence": last,
                                         "gapCount": progress.get("gapCount", 0), "unknownTail": True,
                                         "reason": "No durable final marker; uncommitted tail is unknown."},

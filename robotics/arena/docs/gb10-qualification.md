@@ -1,6 +1,6 @@
 # GB10 qualification: a separate target for the same Arena contract
 
-Research checked 17 October 2026. **No GB10 model run, image build or EGL validation has been performed for this kit.** This is a qualification plan, not an installation recipe. The specific RTX 4090 procedure remains in `docs/rtx4090-handoff.md`. Do not change an existing text service, its environment, the host driver or the known 4090 dependency pins to try this plan.
+Research checked 17 October 2026. **No GB10 robot-policy run, image build or EGL validation has been performed for this kit.** This is a qualification plan, not an installation recipe. The specific RTX 4090 procedure remains in `docs/rtx4090-handoff.md`. Do not change an existing text service, its environment, the host driver or the known 4090 dependency pins to try this plan.
 
 ## What is known
 
@@ -22,6 +22,12 @@ CUDA 12.9 added `sm_121` support. It would be inaccurate to reject the current r
 Use the native inspector, integrity validator, local imports, recorded fixtures and API lifecycle tests. The existing test suites exercise camera/event relationships, missing evidence, archive retention, read-only credentials and browser behavior using worker doubles. Optional real Parquet/video/MCAP fixtures validate interchange. None of those tests qualifies GPU policy execution.
 
 Keep portable recording schemas, evidence rules and API behavior common across both machines. Keep policy, physics and optional importer dependencies isolated. The optional importer uses Python >=3.12; its NumPy/PyAV versions must not leak into the OpenPI or Python 3.10 physics environment. There is no need to train a new video model or migrate the website while hardware is unavailable.
+
+## Current host observation
+
+On 17 October 2026 a read-only preflight confirmed an ARM64 GB10 host with driver 580.159.03, a resident text service listening only on loopback 11434, approximately 101 GiB available system memory, and only 11 GiB free on the 50 GiB container overlay. GPU activity was present. The default Python environment did not contain Torch, JAX, MuJoCo or LIBERO. These are dated observations, not reserved capacity or a complete filesystem inventory.
+
+Qualify durable storage and available disk space before installing a separate robotics stack and checkpoint. Keep the existing Hermes/Ollama model, service and driver intact. Text-model GPU execution has been validated in its separate deployment; it does not qualify this policy, renderer or environment. No packages or files were changed by this preflight.
 
 ## Qualification when the machine is available
 
