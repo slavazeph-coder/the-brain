@@ -1,24 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-test('clip request produces a reviewable mail draft instead of a false receipt', async ({ page }) => {
+test('video research retains the real fixture without a paid offer or capture form', async ({ page }) => {
   await page.goto('/coherence');
-  await expect(page.getByRole('listitem').filter({ hasText: 'Scope:' })).toHaveText('Scope: up to 15s; brightness or color correction, eligibility checked first');
-  await page.getByRole('textbox', { name: 'Email', exact: true }).fill('creator@example.com');
-  await page.getByRole('textbox', { name: /Clip link/ }).fill('https://example.com/clip?part=1&quality=1080');
-  await page.getByRole('textbox', { name: /Notes/ }).fill('Color jumps at 00:12; keep camera movement.');
-  await page.getByRole('button', { name: 'Prepare clip request' }).click();
-  await expect(page.getByText('Your email draft is ready. Nothing has been sent from this page.')).toBeVisible();
-  await expect(page.getByText(/Received\. We will reply/)).toHaveCount(0);
-  const draft = page.getByRole('link', { name: 'Open email draft' });
-  await expect(draft).toBeVisible();
-  const url = new URL((await draft.getAttribute('href'))!);
-  expect(url.protocol).toBe('mailto:');
-  expect(url.pathname).toBe('slavazeph@gmail.com');
-  expect(url.searchParams.get('body')).toContain('https://example.com/clip?part=1&quality=1080');
-  expect(url.searchParams.get('body')).toContain('Color jumps at 00:12; keep camera movement.');
-  expect(url.searchParams.get('body')).toContain('only if the result is useful and I accept it');
-  expect(url.searchParams.get('body')).toContain('one clip up to 15 seconds');
-  // Deliberately do not click mailto: browser QA must not open/send external mail.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Inspect the correction pass.');
+  await expect(page.locator('video')).toBeVisible();
+  await expect(page.locator('video source').first()).toHaveAttribute('src', '/videos/coherence-demo-scrub.mp4');
+  await expect(page.locator('input, form')).toHaveCount(0);
+  await expect(page.locator('main')).not.toContainText('US$99');
 });
 
 test('evidence link serves methods and the failed native gate instead of the SPA fallback', async ({ page, request }) => {

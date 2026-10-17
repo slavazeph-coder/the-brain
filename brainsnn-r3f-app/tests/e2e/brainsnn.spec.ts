@@ -141,14 +141,9 @@ async function mockBackend(page) {
 }
 
 async function runScan(page) {
-  await page.getByRole('button', { name: 'Paid ad' }).click();
-  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
-  await expect(page.getByRole('status').getByText('Ingesting creative').first()).toBeVisible();
-  await expect(page.getByTestId('results-workspace')).toBeVisible();
-  // "Demo model result", asserted here until both branches fixed it, is a
-  // Tooltip *label* attribute and never rendered text. The visible marker for a
-  // fallback result is the badge in the inspector rail.
-  await expect(page.getByText('Deterministic local result').first()).toBeVisible();
+  await page.getByLabel('Passage to review').fill('Last chance to book a demo today. Act now before prices double. We measured a 42% drop in onboarding cost across 18 pilot customers.');
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -164,7 +159,7 @@ test('content reaction lab runs a fully local simulation in the Arcade', async (
   });
 
   await page.goto('/arcade?lab=content#playground');
-  await expect(page.getByRole('heading', { name: /Do not just explain the idea/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Arcade', exact: true })).toBeVisible();
   await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
 
   await page.getByLabel('Content to simulate').fill('Only forty were ever made. Private viewings close this week, and the small circle of people who understand why that matters is almost full.');
@@ -183,8 +178,8 @@ test('content reaction lab runs a fully local simulation in the Arcade', async (
 
   // The escape hatch into the full analyst app carries the content along.
   await page.getByRole('button', { name: /Open full analysis/ }).click();
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.locator('#brain-scan-input')).not.toHaveValue('');
+  await expect(page).toHaveURL(/\/office\?tab=passage$/);
+  await expect(page.getByLabel('Passage to review')).not.toHaveValue('');
 });
 
 test('spiking network lab runs in a worker and shows the regimes', async ({ page }) => {
@@ -253,27 +248,20 @@ test('arcade selector opens the content lab from the featured row', async ({ pag
   await expect(page).toHaveURL(/lab=content/);
 });
 
-test('reconstruct page renders from a direct route and links into the scanner', async ({ page }) => {
+test('reconstruct redirects to source-anchored Claim split', async ({ page }) => {
   await page.goto('/reconstruct');
-  await expect(page.getByTestId('reconstruct-page')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Grab the site. Ship the proof.' })).toBeVisible();
-  await expect(page.getByText('npm run reconstruct -- grab https://example.com')).toBeVisible();
-  await expect(page.getByRole('link', { name: /Open GitHub/ })).toHaveAttribute('href', /github\.com\/XioAISolutions\/Reconstruct/);
-
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
-
-  await page.getByRole('button', { name: /Scan this pitch/ }).click();
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page).toHaveTitle('BrainSNN | Creative Decision Intelligence');
-  await expect(page.locator('#brain-scan-input')).toHaveValue(/Reconstruct is the proof-first/);
+  await expect(page).toHaveURL(/office\?tab=claims/);
+  await page.getByLabel('Claim passage').fill('Our product will save time. We tested it on three tasks.');
+  await page.getByRole('button', { name: 'Split claim cues' }).click();
+  await expect(page.getByRole('region', { name: 'Claim split results' })).toContainText('Claim support remains unverified.');
+  await page.getByRole('region', { name: 'Claim split results' }).locator('.review-findings a').first().click();
+  await expect(page.locator('#review-source-claims mark')).not.toBeEmpty();
 });
 
-test('Arcade deeper-tools card opens the Reconstruct page without a reload', async ({ page }) => {
+test('Arcade opens the shared Review workbench', async ({ page }) => {
   await page.goto('/arcade');
-  await page.getByRole('button', { name: /Build a defensible claim/ }).click();
-  await expect(page).toHaveURL(/\/reconstruct$/);
-  await expect(page.getByTestId('reconstruct-page')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('link', { name: 'Review', exact: true }).click();
+  await expect(page.getByTestId('review-workbench')).toBeVisible();
 });
 
 test('3D brain mounts or falls back cleanly without console errors', async ({ page }) => {
@@ -296,78 +284,47 @@ test('3D brain mounts or falls back cleanly without console errors', async ({ pa
   expect(fatal).toEqual([]);
 });
 
-test('core analyze to export workflow works with deterministic fallback data', async ({ page }) => {
-  await page.goto('/app');
-  await expect(page.getByRole('heading', { name: 'Paste what you’re about to publish — or show BrainSNN what happened.' })).toBeVisible();
-
-  await runScan(page);
-  await page.getByRole('tab', { name: /Advanced/ }).click();
-  await expect(page.getByRole('heading', { name: 'Layers used in this scan' })).toBeVisible();
-
-  // The primary action counts the fixes when the scan found any, and falls
-  // back to "Improve this draft" for a draft with nothing mechanical to fix.
-  await page.getByRole('button', { name: /Fix this draft|Improve this draft/ }).click();
+test('review edits, saves versions, queues and exports without leaving the workbench', async ({ page }) => {
+  await page.goto('/app'); await runScan(page);
+  await page.getByRole('button', { name: 'Save on this device' }).click();
+  await page.getByRole('button', { name: 'Edit this draft' }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
-  await page.getByRole('button', { name: /Score both versions/ }).click();
-  await expect(page.getByText('Version 1 vs Version 2')).toBeVisible();
-
-  // Review actions moved into a disclosure so they stop competing with "Copy
-  // final draft", which is what this screen is actually for. Still reachable.
-  await page.getByText('Send this through review').click();
-  await page.getByRole('button', { name: /Save as version/ }).click();
-  await page.getByRole('button', { name: /Mark for approval/ }).click();
-  await expect(page.getByTestId('queue-workspace')).toBeVisible();
-  await page.getByRole('button', { name: /^Export$/ }).first().click();
-  await expect(page.getByTestId('export-dialog')).toBeVisible();
-  await expect(page.getByText('Share your score')).toBeVisible();
-  await expect(page.getByText('Copy public result link')).toBeVisible();
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+  await page.getByText('Send this through review', { exact: true }).click();
+  await page.getByRole('button', { name: 'Save as version' }).click();
+  await page.getByRole('button', { name: 'Mark for approval' }).click();
+  await page.getByText('Saved reviews on this device', { exact: false }).click();
+  await expect(page.getByRole('button', { name: 'Open queued draft' })).toBeVisible();
+  await page.getByRole('button', { name: 'Approve this draft' }).click();
+  await expect(page.locator('.review-saved')).toContainText('Approved');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download queued record' }).click();
+  expect((await download).suggestedFilename()).toBe('brainsnn-review.json');
+  await page.reload();
+  await page.getByText('Saved reviews on this device', { exact: false }).click();
+  await expect(page.locator('.review-saved')).toContainText('Approved');
+  await expect(page.locator('.review-saved')).toContainText('Versions (2)');
 });
 
-test('memory, autopsy, pricing and accessibility surfaces render', async ({ page }) => {
-  test.skip(test.info().project.name === 'mobile', 'Desktop nav owns direct History/Pricing access; mobile shell is covered separately.');
-  // Scan + history + compare + pricing + a full axe pass in one test lands at
-  // ~30s alone, which is exactly the default timeout, so it tipped over
-  // whenever a second worker competed for CPU. Its heavy neighbours all set
-  // this explicitly; this one had been relying on the margin.
-  test.setTimeout(90_000);
-  await page.goto('/app');
-  await runScan(page);
-  await page.getByRole('button', { name: /Save to History/ }).click();
-  await page.getByRole('button', { name: 'History', exact: true }).click();
-  await expect(page.getByTestId('memory-workspace')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Compare', exact: true }).click();
-  await expect(page.getByTestId('autopsy-workspace')).toBeVisible();
-  await page.getByRole('button', { name: /Compare variants/ }).click();
-  await expect(page.getByText(/Variant [AB] wins|Tie/)).toBeVisible();
-
-  await page.getByRole('button', { name: 'Pricing' }).click();
-  await expect(page.getByTestId('pricing-workspace')).toBeVisible();
-  // Was "$9/mo" — a tier whose per-month limits no code enforced. The page now
-  // states what is true: free during beta, pilots are the paid thing.
-  await expect(page.getByText('$0')).toBeVisible();
-  await expect(page.getByTestId('pricing-workspace')).toContainText(/not open yet/i);
-
-  const accessibilityScanResults = await new AxeBuilder({ page })
-    .disableRules(['color-contrast'])
-    .analyze();
-  const serious = accessibilityScanResults.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact || ''));
-  expect(serious).toEqual([]);
+test('saved reviews reopen within the four accessible Review tabs', async ({ page }) => {
+  await page.goto('/app'); await runScan(page);
+  await page.getByRole('button', { name: 'Save on this device' }).click();
+  await page.reload();
+  await page.getByText('Saved reviews on this device', { exact: false }).click();
+  await page.getByRole('button', { name: 'Open source', exact: true }).first().click();
+  await expect(page.getByLabel('Passage to review')).toHaveValue(/Last chance/);
+  await expect(page.locator('#review-tabs a')).toHaveCount(4);
+  const scan = await new AxeBuilder({ page }).include('#review-main').withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(scan.violations.filter(v => ['serious', 'critical'].includes(v.impact || ''))).toEqual([]);
 });
 
-test('mobile navigation has no horizontal overflow at 390px', async ({ page }) => {
-  test.skip(test.info().project.name !== 'mobile', 'Mobile navigation is hidden in the desktop shell.');
+test('shared navigation fits on a phone and Lab opens from overflow', async ({ page }) => {
   await page.goto('/app');
-  const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
-  await expect(mobileNav).toBeVisible();
-  await mobileNav.getByRole('button', { name: 'Compare', exact: true }).click();
-  await expect(page.getByTestId('autopsy-workspace')).toBeVisible();
-  await mobileNav.getByRole('button', { name: 'More' }).click();
-  await expect(page.getByRole('dialog', { name: 'More navigation' })).toBeVisible();
-  await page.getByRole('dialog', { name: 'More navigation' }).getByRole('button', { name: 'Pricing' }).click();
-  await expect(page.getByTestId('pricing-workspace')).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+  const nav = page.getByRole('navigation', { name: 'Main navigation', exact: true });
+  await expect(nav).toBeVisible(); await nav.getByLabel('More navigation').click();
+  await nav.getByRole('link', { name: 'Lab', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Lab', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
 test('defend the brain renders a real 3D board driven by detected techniques', async ({ page }) => {
@@ -461,7 +418,7 @@ test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => 
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-lab')).toBeVisible();
   await expect(page.getByTestId('powder-canvas')).toBeVisible();
 
@@ -490,7 +447,7 @@ test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => 
 
 test('the powder lab lede does not overclaim the model it loads with', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-lab')).toBeVisible();
 
   const lede = page.locator('.powder-lede');
@@ -505,28 +462,24 @@ test('the powder lab lede does not overclaim the model it loads with', async ({ 
   await expect(page.locator('.powder-model-note')).toContainText(/[Aa]rbitrary constants/);
 });
 
-test('the powder lab is reachable from the homepage, not just by typing the URL', async ({ page }) => {
-  test.setTimeout(60_000);
+test('the powder lab is reachable through Lab from the homepage', async ({ page }) => {
   await page.goto('/');
-
-  // Research remains reachable from the simplified homepage footer.
-  await page.getByRole('link', { name: 'Neuro Powder Lab', exact: true }).click();
+  await page.locator('.bh-footer').getByRole('link', { name: 'Lab', exact: true }).click();
+  await page.getByRole('link', { name: /Neuro Powder Lab/ }).click();
   await expect(page.getByTestId('powder-lab')).toBeVisible();
-  await expect(page).toHaveURL(/\/lab$/);
+  await expect(page).toHaveURL(/\/lab\/powder$/);
 });
 
-test('the powder lab retains its Arcade desktop navigation link', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === 'mobile', '.gg-nav-links is display:none below 900px');
-  test.setTimeout(60_000);
+test('Arcade links back to the Lab index and powder experiment', async ({ page }) => {
   await page.goto('/arcade');
-  await page.getByTestId('nav-powder-lab').click();
+  await page.locator('.bh-footer').getByRole('link', { name: 'Lab', exact: true }).click();
+  await page.getByRole('link', { name: /Neuro Powder Lab/ }).click();
   await expect(page.getByTestId('powder-lab')).toBeVisible();
-  await expect(page).toHaveURL(/\/lab$/);
 });
 
 test('powder lab objectives are earned by building, not handed out', async ({ page }) => {
   test.setTimeout(90_000);
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-canvas')).toBeVisible();
 
   const panel = page.getByTestId('powder-missions');
@@ -553,7 +506,7 @@ test('powder lab objectives are earned by building, not handed out', async ({ pa
   // Progress is progress, not a drawing: it survives Clear and a reload.
   await page.getByTestId('powder-clear').click();
   await expect(spark).toHaveAttribute('data-complete', 'true');
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(
     page.getByTestId('powder-missions').locator('[data-mission="first-spark"]'),
   ).toHaveAttribute('data-complete', 'true');
@@ -562,7 +515,7 @@ test('powder lab objectives are earned by building, not handed out', async ({ pa
 test('the powder lab measures its own firing regime, and says when it will not', async ({ page }) => {
   test.setTimeout(90_000);
 
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-canvas')).toBeVisible();
   const readout = page.getByTestId('powder-regime-label');
 
@@ -586,7 +539,7 @@ test('the powder lab measures its own firing regime, and says when it will not',
 
 test('drawing in the powder lab puts material on the grid', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-canvas')).toBeVisible();
 
   // Clear first so the count reflects only what this test drew.
@@ -610,7 +563,7 @@ test('drawing in the powder lab puts material on the grid', async ({ page }) => 
 
 test('a powder lab link carries the whole grid, with no server involved', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-canvas')).toBeVisible();
 
   await page.getByTestId('powder-clear').click();
@@ -652,7 +605,7 @@ test('a powder lab link carries the whole grid, with no server involved', async 
 
 test('a powder lab drawing survives a reload through the local save slot', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await expect(page.getByTestId('powder-canvas')).toBeVisible();
 
   await page.getByTestId('powder-clear').click();
@@ -668,7 +621,7 @@ test('a powder lab drawing survives a reload through the local save slot', async
   await page.getByTestId('powder-save').click();
   await expect(page.getByTestId('powder-lab')).toContainText('Saved to this browser.');
 
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   await page.getByTestId('powder-load').click();
   await expect(page.getByTestId('powder-lab')).toContainText('Restored your saved grid.');
   await expect(async () => {
@@ -677,132 +630,42 @@ test('a powder lab drawing survives a reload through the local save slot', async
   }).toPass({ timeout: 15_000 });
 });
 
-test('existing analyzer pricing remains reachable from the Arcade', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
-
-  // This test used to skip on mobile, on the grounds that .gg-nav-links is
-  // display:none below 1120px. That was the bug, not a reason to skip: nothing
-  // revealed those links, so on a phone the header offered the logo and "Start
-  // here" and the only route to pricing was a footer link 22 screens down an
-  // 18,900px page. The test now runs everywhere and takes whichever nav the
-  // breakpoint actually offers.
-  await page.goto('/arcade');
-
-  const toggle = page.getByTestId('nav-menu-toggle');
-  if (await toggle.isVisible()) {
-    await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await page.getByTestId('nav-pricing-mobile').click();
-  } else {
-    await page.getByTestId('nav-pricing').click();
-  }
-
-  await expect(page.getByTestId('pricing-workspace')).toBeVisible();
-  await expect(page).toHaveURL(/\/app/);
-});
-
-test('every Arcade destination remains reachable at every breakpoint', async ({ page }) => {
-  test.setTimeout(60_000);
-  await page.goto('/arcade');
-
-  // The guarantee that matters is narrow and absolute: whatever the viewport,
-  // at least one navigation is on screen. Both being hidden is the state that
-  // shipped, and it is invisible to anyone testing at their own screen size.
-  const bar = page.locator('.gg-nav-links');
-  const toggle = page.getByTestId('nav-menu-toggle');
-  const barVisible = await bar.isVisible();
-  const toggleVisible = await toggle.isVisible();
-  expect(barVisible || toggleVisible).toBe(true);
-  // And never both, which would be two navs competing for the same taps.
-  expect(barVisible && toggleVisible).toBe(false);
-
-  const nav = barVisible ? bar : (await toggle.click(), page.getByTestId('nav-mobile-menu'));
-  for (const label of ['Arcade', 'Fractal Lab', 'For organizations', 'Research', 'Powder Lab', 'Pricing']) {
-    await expect(nav.getByText(label, { exact: true })).toBeVisible();
+test('public navigation contains no paid action before the model gate', async ({ page }) => {
+  for (const path of ['/', '/office', '/arcade', '/lab']) {
+    await page.goto(path); await expect(page.locator('.public-nav')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Pricing/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Pricing|Upgrade|Pro \/ Pilot/ })).toHaveCount(0);
   }
 });
 
-test('the mobile menu can be dismissed without hitting the button again', async ({ page }) => {
-  test.setTimeout(60_000);
+test('Arcade exposes the same primary destinations at every breakpoint', async ({ page }) => {
   await page.goto('/arcade');
-  const toggle = page.getByTestId('nav-menu-toggle');
-  test.skip(!(await toggle.isVisible()), 'Desktop shows the full bar and has no toggle.');
-
-  // A menu that only closes via the control that opened it is a trap on a phone,
-  // where that control is easy to miss with a thumb.
-  await toggle.click();
-  await expect(page.getByTestId('nav-mobile-menu')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('nav-mobile-menu')).toHaveCount(0);
-
-  await toggle.click();
-  await expect(page.getByTestId('nav-mobile-menu')).toBeVisible();
-  await page.locator('.gg-hero-copy h1').click({ position: { x: 5, y: 5 } });
-  await expect(page.getByTestId('nav-mobile-menu')).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('> a')).toHaveText(['Arena', 'Review', 'Evidence']);
 });
 
-test('the pricing page does not promise limits the code does not enforce', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
-  await page.goto('/app');
-  // Desktop keeps Pricing in the sidebar; mobile puts it behind "More".
-  if (testInfo.project.name === 'mobile') {
-    const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
-    await mobileNav.getByRole('button', { name: 'More' }).click();
-    await page.getByRole('dialog', { name: 'More navigation' }).getByRole('button', { name: 'Pricing' }).click();
-  } else {
-    await page.getByRole('button', { name: 'Pricing' }).first().click();
-  }
-  const pricing = page.getByTestId('pricing-workspace');
-  await expect(pricing).toBeVisible();
-
-  const copy = (await pricing.textContent()) || '';
-  // Each of these described a capability that does not exist in src/.
-  expect(copy).not.toMatch(/analyses\s*\/\s*month/i);
-  expect(copy).not.toMatch(/watermark/i);
-  expect(copy).not.toMatch(/synced history/i);
-  expect(copy).not.toMatch(/waitlist/i);
-  // And it says so rather than leaving a greyed-out tier to imply it.
-  expect(copy).toMatch(/not open yet/i);
+test('Lab overflow closes on Escape and outside click', async ({ page }) => {
+  await page.goto('/arcade');
+  const overflow = page.locator('.public-overflow');
+  await overflow.locator('summary').click(); await expect(overflow).toHaveAttribute('open', '');
+  await page.keyboard.press('Escape'); await expect(overflow).not.toHaveAttribute('open', '');
+  await overflow.locator('summary').click(); await page.getByRole('heading', { name: 'Arcade', exact: true }).click();
+  await expect(overflow).not.toHaveAttribute('open', '');
 });
 
-test('the lead form never confirms a lead the server did not take', async ({ page }) => {
-  test.setTimeout(90_000);
-
-  // Unconfigured is the default: LEADS_WEBHOOK_URL is unset, so /api/leads
-  // returns 501. The UI must show the mailto fallback, never a success state.
-  await page.route('**/api/leads', (route) => route.fulfill({
-    status: 501,
-    contentType: 'application/json',
-    body: JSON.stringify({ error: 'Lead capture is not configured.', status: 'not_configured', fallbackEmail: 'hello@brainsnn.com' }),
-  }));
-
-  await page.goto('/arcade');
-  const form = page.getByTestId('lead-form');
-  await form.scrollIntoViewIfNeeded();
-  await page.getByTestId('lead-email').fill('buyer@example.com');
-  await form.getByRole('button', { name: /Send the brief/ }).click();
-
-  await expect(page.getByTestId('lead-form-failure')).toBeVisible();
-  await expect(page.getByTestId('lead-form-failure')).toContainText(/Nothing was saved/i);
-  await expect(page.getByTestId('lead-form-sent')).toHaveCount(0);
+test('old app links arrive at Review without pricing tiers', async ({ page }) => {
+  await page.goto('/app'); await expect(page.getByTestId('review-workbench')).toBeVisible();
+  await expect(page.getByTestId('pricing-workspace')).toHaveCount(0);
 });
 
-test('the lead form confirms only when the server accepts the lead', async ({ page }) => {
-  test.setTimeout(90_000);
-  await page.route('**/api/leads', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ ok: true, status: 'received' }),
-  }));
+test('Arcade has no email capture or invented customer proof', async ({ page }) => {
+  await page.goto('/arcade'); await expect(page.getByRole('heading', { name: 'Arcade', exact: true })).toBeVisible();
+  await expect(page.getByTestId('lead-form')).toHaveCount(0);
+  await expect(page.locator('input[type="email"]')).toHaveCount(0);
+});
 
-  await page.goto('/arcade');
-  const form = page.getByTestId('lead-form');
-  await form.scrollIntoViewIfNeeded();
-  await page.getByTestId('lead-email').fill('buyer@example.com');
-  await form.getByRole('button', { name: /Send the brief/ }).click();
-
-  await expect(page.getByTestId('lead-form-sent')).toBeVisible();
-  await expect(page.getByTestId('lead-form-sent')).toContainText('buyer@example.com');
+test('Review offers local work without a signup capture', async ({ page }) => {
+  await page.goto('/office'); await expect(page.getByTestId('review-workbench')).toBeVisible();
+  await expect(page.locator('input[type="email"]')).toHaveCount(0);
 });
 
 test('real interaction reaches the analytics sink, and carries no pasted text', async ({ page }) => {
@@ -828,10 +691,10 @@ test('real interaction reaches the analytics sink, and carries no pasted text', 
 
   // A lab click is one of the sixteen names the allowlist used to drop on the
   // floor, so this is the specific regression under test.
-  const labButton = page.locator('.gg-lab-card button').first();
+  const labButton = page.getByRole('tab', { name: /Mind-Hack Autopsy/ });
   await labButton.scrollIntoViewIfNeeded();
   await labButton.click();
-  await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_lab_clicked');
+  await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_lab_selected');
 
   // Every event carries a path and a timestamp, and none of them carries the
   // content fields the product exists to analyse.
@@ -916,7 +779,7 @@ test('the sitemap lists every route the app serves', async ({ request }) => {
   expect(response.headers()['content-type']).toContain('xml');
 
   const xml = await response.text();
-  for (const path of ['/', '/lab', '/app', '/evidence', '/reconstruct']) {
+  for (const path of ['/', '/lab', '/office', '/evidence', '/lab/powder']) {
     expect(xml).toContain(`<loc>https://www.brainsnn.com${path}</loc>`);
   }
 });
@@ -934,10 +797,10 @@ test('robots.txt points crawlers at the sitemap and keeps them out of the API', 
 test('every route serves content a crawler can read without running JavaScript', async ({ request }) => {
   const headings = new Set<string>();
 
-  for (const path of ['/', '/lab', '/app', '/evidence', '/reconstruct']) {
+  for (const path of ['/', '/lab', '/office', '/evidence', '/lab/powder']) {
     const html = await (await request.get(path)).text();
     const heading = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1] || '';
-    expect(heading.length).toBeGreaterThan(10);
+    expect(heading.length).toBeGreaterThan(2);
     headings.add(heading);
 
     // Inside #root, so React replaces it on mount rather than leaving it under
@@ -953,7 +816,7 @@ test('every route serves content a crawler can read without running JavaScript',
 test('a shared circuit previews as itself rather than as the site card', async ({ page, request }) => {
   test.setTimeout(90_000);
 
-  await page.goto('/lab');
+  await page.goto('/lab/powder');
   const canvas = page.getByTestId('powder-canvas');
   await expect(canvas).toBeVisible();
   await page.getByTestId('powder-clear').click();
@@ -1049,16 +912,15 @@ test('one-click fixes edit the draft and the copied result contains no coaching 
   const draft = 'Last chance to book a demo today. Act now before prices double. We measured a 42% drop in onboarding cost across 18 pilot customers.';
 
   await page.goto('/app');
-  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill(draft);
-  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
-  await expect(page.getByTestId('results-workspace')).toBeVisible();
+  await page.getByLabel('Passage to review').fill(draft);
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
 
   // The results rail leads with the count rather than a vague next step.
-  await expect(page.getByText(/can be applied to this draft/i).first()).toBeVisible();
-  await page.getByRole('button', { name: /Fix this draft/ }).click();
+  await page.getByRole('button', { name: 'Edit this draft', exact: true }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
 
-  const editor = page.getByRole('textbox').nth(1);
+  const editor = page.getByTestId('synapse-workspace').getByRole('textbox').nth(1);
   await expect(editor).toHaveValue(draft);
 
   // Default goal is "Build trust", which owns the structural fix only — the
@@ -1100,12 +962,12 @@ test('the diff shows a sentence move, which a word-set diff cannot', async ({ pa
   const draft = 'Book a call with our team today. We measured a 42% drop in onboarding cost across 18 pilot customers.';
 
   await page.goto('/app');
-  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill(draft);
-  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
-  await expect(page.getByTestId('results-workspace')).toBeVisible();
+  await page.getByLabel('Passage to review').fill(draft);
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
 
   // The next step leads the rail rather than sitting under four scorecards.
-  await page.getByRole('button', { name: /Fix this draft/ }).click();
+  await page.getByRole('button', { name: 'Edit this draft', exact: true }).click();
   await expect(page.getByTestId('synapse-workspace')).toBeVisible();
 
   await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
@@ -1119,10 +981,10 @@ test('the diff shows a sentence move, which a word-set diff cannot', async ({ pa
 test('the improve screen leads with one action, not six', async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto('/app');
-  await page.getByRole('textbox', { name: /content|paste|message/i }).first().fill('Last chance to book a demo today. Act now before prices double.');
-  await page.getByRole('button', { name: /Run Brain Scan/ }).click();
-  await expect(page.getByTestId('results-workspace')).toBeVisible();
-  await page.getByRole('button', { name: /Fix this draft|Improve this draft/ }).click();
+  await page.getByLabel('Passage to review').fill('Last chance to book a demo today. Act now before prices double.');
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit this draft', exact: true }).click();
 
   await expect(page.getByRole('button', { name: /Copy final draft/ })).toBeVisible();
   // The review workflow is folded away, not deleted — still reachable.

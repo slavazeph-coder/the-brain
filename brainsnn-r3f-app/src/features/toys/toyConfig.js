@@ -23,7 +23,7 @@ export const TOYS = Object.freeze([
     title: 'Poke the Brain',
     hook: 'poke the brain and watch the signal travel',
     blurb: 'A jelly brain wrapped around a seven-region spiking model. Poke it, drag it, shake it.',
-    path: '/',
+    path: '/play',
     shareSource: 'toy1-share',
     cta: 'Poke it',
   },

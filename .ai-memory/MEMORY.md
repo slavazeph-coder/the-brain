@@ -24,6 +24,9 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Arena-led lobby and unified Review](brainsnn-reposition-2026-10.md). Owner-approved October direction supersedes the older toy-homepage and engine-product positioning below; implementation follows PR #186.
+
+
 → [Engine-first repositioning and comparison contract](brainsnn-engine-2026-09.md). Owner correction: new clients only; BrainSNN itself is the objective. Sept9: restore original cyan/violet Sapient Playground identity; keep the homepage simple.
 
 → [GPU host recovery](brainsnn-gpu-host-recovery-2026-09.md). PR143 now includes a supervised outbound HTTPS GPU worker; private real RTX4090 tests verify inference, fallback and recovery. Single-replica website activation and durable container restart remain operational work.

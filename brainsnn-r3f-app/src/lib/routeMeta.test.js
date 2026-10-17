@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from '../test/tinyVitest.js';
 import { applyRouteMeta, renderContentBlock, resolveRouteMeta } from './routeMeta.js';
-import { LAB_TITLE } from '../features/agent-lab/agentLabModel.js';
+import { buildHoldoutReport } from './holdoutReport.js';
 
 const HTML = `<!doctype html>
 <html lang="en">
@@ -44,7 +44,7 @@ describe('per-route social previews', () => {
     expect(play.title).toBe('BrainSNN | Sapient Playground');
     expect(play.heading).toBe('Poke the brain and watch the signal travel.');
     expect(play.image).toBe('/og/toy-poke.png');
-    expect(play.body.join(' ')).toContain('build a mind, give it a world, give it a mission');
+    expect(play.body.join(' ')).toContain('Explore more toys in Lab');
     expect(play.body.join(' ')).toContain('not a recording of anyone’s brain');
   });
 
@@ -61,60 +61,67 @@ describe('per-route social previews', () => {
     expect(defend.image).toBe('/og/toy-defend.png');
     // A shared toy link carries ?src=; the preview must not care.
     expect(resolveRouteMeta('/toys/draft-duel', '?src=toy3-share').title).toBe(duel.title);
-    expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/toys/fool-the-detector"');
+    expect(renderContentBlock(resolveRouteMeta('/lab'), '/lab')).toContain('href="/toys/fool-the-detector"');
   });
 
-  it('keeps the office roadmap and operational evidence on their own route', () => {
+  it('makes office the single Review workbench with visible limitations', () => {
     const office = resolveRouteMeta('/office');
-    expect(office.title).toBe('Agent office | BrainSNN');
-    expect(office.title).toBe(LAB_TITLE);
+    expect(office.title).toBe('Review | BrainSNN');
     expect(office.title).not.toBe(resolveRouteMeta('/').title);
-    expect(office.body.join(' ')).toContain('planned integration');
-    expect(office.body.join(' ')).toContain('not BrainSNN-wide engine metrics');
+    expect(office.body.join(' ')).toContain('Passage, Two drafts, Claim split and Video cues');
+    expect(office.body.join(' ')).toContain('Known misses and false alarms');
+    expect(office.body.join(' ')).toContain('do not recognize objects');
     expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/office"');
   });
 
-  it('keeps the analyzer distinct from the playground homepage', () => {
-    expect(resolveRouteMeta('/app').title).not.toBe(resolveRouteMeta('/').title);
-    expect(resolveRouteMeta('/app').title).toContain('decision intelligence');
-    expect(resolveRouteMeta('/app').description).toContain('workflow steps');
+  it('resolves the former workbenches to the matching Review tabs', () => {
+    for (const [path, tab] of [['/app', 'passage'], ['/engine', 'drafts'], ['/reconstruct', 'claims']]) {
+      const legacy = resolveRouteMeta(path);
+      expect(legacy).toEqual(resolveRouteMeta('/office', `?tab=${tab}`));
+      const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
+      expect(tagContent(html, 'rel="canonical" href="([^"]*)"')).toBe('https://www.brainsnn.com/office');
+    }
   });
 
-  it('gives the comparison workbench a discoverable route with explicit review limits', () => {
-    const engine = resolveRouteMeta('/engine');
-    expect(engine.title).toBe('Compare two drafts | BrainSNN Engine');
-    expect(engine.body.join(' ')).toContain('REVIEW_REQUIRED');
-    expect(engine.body.join(' ')).toContain('does not verify facts');
-    expect(engine.body.join(' ')).toContain('POST /api/engine/compare');
-    expect(renderContentBlock(resolveRouteMeta('/'), '/')).toContain('href="/engine"');
+  it('gives each Review tab a title without exposing arbitrary query text', () => {
+    for (const [tab, label] of [['passage', 'Passage'], ['drafts', 'Two drafts'], ['claims', 'Claim split'], ['video', 'Video cues']]) {
+      expect(resolveRouteMeta('/office', `?tab=${tab}`).title).toBe(`Review: ${label} | BrainSNN`);
+    }
+    expect(resolveRouteMeta('/office', '?tab=<script>')).toEqual(resolveRouteMeta('/office'));
+    expect(resolveRouteMeta('/office', '?tab=constructor')).toEqual(resolveRouteMeta('/office'));
   });
 
   it('gives the Arcade a dedicated preview instead of making it the homepage', () => {
-    expect(resolveRouteMeta('/arcade').title).toContain('GaugeGap Arcade');
+    expect(resolveRouteMeta('/arcade').title).toBe('Arcade | BrainSNN');
     expect(resolveRouteMeta('/').title).not.toContain('GaugeGap Foundry');
   });
 
-  it('keeps proof mission routes discoverable with their own evidence boundary', () => {
-    expect(resolveRouteMeta('/missions').title).toContain('Proof Missions');
-    expect(resolveRouteMeta('/missions/build').title).toContain('Proof Missions');
-    expect(resolveRouteMeta('/missions').body.join(' ')).toContain('not a verified payment');
+  it('positions missions as Arena tasks with an explicit practice boundary', () => {
+    expect(resolveRouteMeta('/missions')).toEqual(resolveRouteMeta('/arena/'));
+    expect(resolveRouteMeta('/missions/build')).toEqual(resolveRouteMeta('/arena/tasks/build'));
+    expect(resolveRouteMeta('/arena/').body.join(' ')).toContain('Local practice — not a model score');
+    expect(resolveRouteMeta('/arena/tasks/build').title).toBe('Arena tasks | BrainSNN');
+    expect(resolveRouteMeta('/arena/tasks/build').body.join(' ')).toContain('Tasks without an implementation remain unavailable');
   });
 
-  it('matches the longest prefix, so /lab is not the homepage', () => {
-    expect(resolveRouteMeta('/lab').title).toContain('Powder Lab');
-    expect(resolveRouteMeta('/lab/anything').title).toContain('Powder Lab');
+  it('distinguishes the Lab index from the powder experiment', () => {
+    expect(resolveRouteMeta('/lab').title).toBe('Lab | BrainSNN');
+    expect(resolveRouteMeta('/lab/powder').title).toContain('Powder Lab');
+    expect(resolveRouteMeta('/lab/powder/anything').title).toContain('Powder Lab');
     expect(resolveRouteMeta('/').title).toContain('BrainSNN');
   });
 
   it('falls back to the homepage card for an unknown path', () => {
     expect(resolveRouteMeta('/nope').title).toBe(resolveRouteMeta('/').title);
+    expect(resolveRouteMeta('/laboratory').title).toBe(resolveRouteMeta('/').title);
   });
 
   it('describes a shared grid differently from the lab itself', () => {
-    const shared = resolveRouteMeta('/lab', '?grid=p1:240x160:1eB');
-    const plain = resolveRouteMeta('/lab');
+    const shared = resolveRouteMeta('/lab/powder', '?grid=p1:240x160:1eB');
+    const plain = resolveRouteMeta('/lab/powder');
     expect(shared.title).not.toBe(plain.title);
     expect(shared.title.toLowerCase()).toContain('built this');
+    expect(resolveRouteMeta('/lab', '?grid=p1:240x160:1eB')).toEqual(shared);
   });
 
   it('ignores a query string that merely mentions grid', () => {
@@ -134,6 +141,8 @@ describe('per-route social previews', () => {
     const html = applyRouteMeta(HTML, '/arcade', '', 'https://www.brainsnn.com');
     expect(tagContent(html, 'property="og:url" content="([^"]*)"')).toBe('https://www.brainsnn.com/arcade');
     expect(tagContent(html, 'rel="canonical" href="([^"]*)"')).toBe('https://www.brainsnn.com/arcade');
+    const taskHtml = applyRouteMeta(HTML, '/arena/tasks/refund-authority', '', 'https://www.brainsnn.com');
+    expect(tagContent(taskHtml, 'rel="canonical" href="([^"]*)"')).toBe('https://www.brainsnn.com/arena/tasks/refund-authority');
   });
 
   it('keeps the site card for a route that declares no image of its own', () => {
@@ -190,13 +199,23 @@ describe('content a crawler can read without running JavaScript', () => {
   it('quotes the live holdout numbers on the evidence page', () => {
     const html = applyRouteMeta(HTML, '/evidence', '', 'https://x.test');
     expect(html).toMatch(/Rank agreement[^<]*0\.\d+/);
+    const report = buildHoldoutReport();
+    const home = resolveRouteMeta('/');
+    expect(home.description).toContain(`${report.corpusSize} unseen passages is ${report.outOfSample.rho}`);
+    expect(home.description).toContain(`${report.falseAlarmCount} false alarms`);
   });
 
-  it('links the Arcade and analyzer so crawler routes are not islands', () => {
+  it('puts experiments under Lab and limits lobby navigation to the public destinations', () => {
     const html = applyRouteMeta(HTML, '/lab', '', 'https://x.test');
     expect(html).toContain('href="/arcade"');
-    expect(html).toContain('href="/app"');
+    expect(html).toContain('href="/office"');
+    expect(html).toContain('href="/lab/powder"');
+    expect(html).toContain('href="/play"');
     expect(html).not.toContain('href="/lab"');
+    const home = applyRouteMeta(HTML, '/', '', 'https://x.test');
+    for (const path of ['/arena/', '/office', '/evidence', '/lab']) expect(home).toContain(`href="${path}"`);
+    for (const path of ['/play', '/arcade', '/app', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
+    expect(home).toContain('<details><summary>More</summary>');
   });
 
   it('escapes prose rather than trusting it to be tag-free', () => {
@@ -212,6 +231,20 @@ describe('content a crawler can read without running JavaScript', () => {
   it('renders nothing for a route with no content of its own', () => {
     expect(renderContentBlock({ title: 'x' })).toBe('');
     expect(renderContentBlock(null)).toBe('');
+  });
+});
+
+describe('static application metadata', () => {
+  it('brands the initial document as BrainSNN and gives structured data the served route description', () => {
+    const template = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
+    expect(template).not.toContain('Sapient Playground');
+    expect(template).toContain('<title>BrainSNN | See the moment it breaks</title>');
+    const html = applyRouteMeta(template, '/office', '?tab=video', 'https://www.brainsnn.com');
+    const structured = JSON.parse(html.match(/<script id="site-schema" type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+    expect(structured.name).toBe('BrainSNN');
+    expect(structured.description).toBe(resolveRouteMeta('/office', '?tab=video').description);
+    expect(structured.url).toBe('https://www.brainsnn.com/office');
+    expect(html).not.toContain('decision intelligence');
   });
 });
 

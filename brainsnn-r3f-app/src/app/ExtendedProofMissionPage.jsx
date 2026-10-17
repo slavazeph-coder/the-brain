@@ -101,7 +101,7 @@ export function ExtendedProofMissionPage({ missionId }) {
     setResult(null);
     setBaseline(null);
     setHasFork(false);
-    document.title = `Proof Mission ${mission.id} · ${mission.title} | BrainSNN`;
+    document.title = `Arena Task ${mission.id} · ${mission.title} | BrainSNN`;
     trackMissionViewed(mission.id);
   }, [definition, mission.id, mission.title]);
 
@@ -144,15 +144,15 @@ export function ExtendedProofMissionPage({ missionId }) {
 
   return <div className="bh-site">
     <header className="bh-nav">
-      <a className="bh-brand" href="/missions"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Proof Mission {mission.id}</small></span></a>
-      <nav><a href="/missions">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
-      <a className="bh-nav-cta" href="/missions"><ArrowLeft size={15}/> Mission registry</a>
+      <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Arena Task {mission.id}</small></span></a>
+      <nav><a href="/arena/tasks">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
+      <a className="bh-nav-cta" href="/arena/tasks"><ArrowLeft size={15}/> Mission registry</a>
     </header>
     <main>
       <section className="bh-hero">
         <div className="bh-hero-copy">
           <p className="bh-kicker"><ShieldCheck size={15}/> LIVE · BOUNDED SYNTHETIC MISSION</p>
-          <h1>{mission.title}<br/><span>Proof Mission {mission.id}</span></h1>
+          <h1>{mission.title}<br/><span>Arena Task {mission.id}</span></h1>
           <p className="bh-lead">{definition.lead}</p>
           <p className="bh-boundary">{mission.claimBoundary}</p>
         </div>
@@ -200,6 +200,6 @@ export function ExtendedProofMissionPage({ missionId }) {
         </div>
       </section>}
     </main>
-    <footer className="bh-footer"><span>BrainSNN Proof Mission {mission.id}</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+    <footer className="bh-footer"><span>BrainSNN Arena Task {mission.id}</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
   </div>;
 }

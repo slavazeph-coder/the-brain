@@ -16,7 +16,6 @@ function showPage(id){
  if(id==='campaigns')window.BrainSNNCampaign?.refreshSelection?.();
 }
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{showPage(b.dataset.page);if(b.dataset.page==='playground')window.BrainSNNExperiment?.restoreFromURL?.();if(b.dataset.catalogTab){window.BrainSNNCatalog?.showTab(b.dataset.catalogTab);document.getElementById('catalog-tab-'+b.dataset.catalogTab)?.focus();}});
-document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();showPage('playground');window.BrainSNNExperiment?.restoreFromURL?.();});
 window.BrainSNNWorkspace=Object.freeze({showPage});
 window.addEventListener('hashchange',()=>showPage(location.hash.slice(1)));
 window.addEventListener('DOMContentLoaded',()=>showPage(location.hash.slice(1)||'playground'));

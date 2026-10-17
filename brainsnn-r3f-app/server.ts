@@ -36,6 +36,7 @@ import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
 import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
 import { createGpuBridge } from "./src/server/gpuBridge.js";
+import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 
 
@@ -46,9 +47,21 @@ const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridg
 export const app = express();
 // The arena is a standalone application with relative assets. Keep both its
 // documents and its missing-file responses ahead of Vite/the SPA catch-all.
-app.use('/arena', createArenaRouter({
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD'].includes(req.method)) return next();
+  const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+  const redirect = legacyRedirect(req.path, query);
+  if (redirect) return res.redirect(308, redirect);
+  next();
+});
+const arenaRouter = createArenaRouter({
   directory: path.join(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/arena' : 'public/arena'),
-}));
+});
+app.use('/arena', (req, res, next) => {
+  // Curated synthetic tasks use the shared React shell; the robot arena stays standalone.
+  if (req.path === '/tasks' || req.path.startsWith('/tasks/')) return next();
+  return arenaRouter(req, res, next);
+});
 // Authenticate and bound worker bodies before the general JSON parser/limiter.
 app.use('/api/gpu-worker', gpuBridge.handle);
 const readAgentLabFeed = createAgentLabFeed();
