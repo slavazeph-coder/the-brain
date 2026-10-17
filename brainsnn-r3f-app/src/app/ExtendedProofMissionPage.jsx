@@ -88,7 +88,7 @@ const DEFINITIONS = {
   },
 };
 
-export function ExtendedProofMissionPage({ missionId }) {
+export function ExtendedProofMissionPage({ missionId, embedded = false }) {
   const definition = DEFINITIONS[missionId] || DEFINITIONS['003'];
   const [config, setConfig] = useState(definition.initial);
   const [result, setResult] = useState(null);
@@ -142,12 +142,12 @@ export function ExtendedProofMissionPage({ missionId }) {
 
   const exceptions = result ? definition.exceptions(result) : [];
 
-  return <div className="bh-site">
-    <header className="bh-nav">
+  return <div className={embedded ? 'arena-task-content' : 'bh-site'}>
+    {!embedded && <header className="bh-nav">
       <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Arena Task {mission.id}</small></span></a>
       <nav><a href="/arena/tasks">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
       <a className="bh-nav-cta" href="/arena/tasks"><ArrowLeft size={15}/> Mission registry</a>
-    </header>
+    </header>}
     <main>
       <section className="bh-hero">
         <div className="bh-hero-copy">
@@ -200,6 +200,6 @@ export function ExtendedProofMissionPage({ missionId }) {
         </div>
       </section>}
     </main>
-    <footer className="bh-footer"><span>BrainSNN Arena Task {mission.id}</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+    {!embedded && <footer className="bh-footer"><span>BrainSNN Arena Task {mission.id}</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>}
   </div>;
 }

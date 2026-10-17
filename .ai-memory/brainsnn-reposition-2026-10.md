@@ -8,7 +8,12 @@ description: Arena-led lobby and unified Review implementation following PR 186;
 Owner approved an Arena-led lobby rather than making the simulator the homepage.
 Implementation was developed on `codex/arena-review-consolidation` atop PR #186
 (`lobby-home`). PR #187 was merged into `lobby-home` as `6f62616c` on October17 UTC.
-Check #186 for the final main merge and the deployment workflow for rollout status.
+PR #186 merged into main as `8240173c` on October17 UTC after all CI checks passed.
+Its GitHub deployment was cancelled during build when late review findings
+identified duplicate task chrome and the hidden practice action for restored
+named robot selections. A follow-up fixes those before rollout; check the
+deployment workflow for live status. The final Arena marker is
+`2026-10-16-arena-review-2`.
 
 - Public navigation: Arena, Review, Evidence; Lab in overflow. Near-black/cyan/violet identity retained.
 - `/office?tab=passage|drafts|claims|video` is the Review workbench. `/app`, `/engine`, `/reconstruct` redirect there. The previous Reconstruct route was a separate project landing page; Claim split now identifies source-anchored wording cues, not factual verification.
@@ -46,3 +51,11 @@ Check #186 for the final main merge and the deployment workflow for rollout stat
   two regression cases fail on the old compiled build and all four desktop/
   mobile cases pass on the corrected production build, including task-index
   and unavailable-task fallback titles.
+- Final navigation follow-up: restored URL/storage robot selections expose an
+  explicit local-practice choice before connecting a worker. Switching modes
+  preserves the selected robot/model/task/seed and cannot manufacture a policy
+  score. New visitors still see one paused mission and one Run button.
+- Arena task children accept an embedded mode that omits legacy navigation,
+  footers and nested site wrappers. Curated tasks, builder and published task
+  loading/ready/error states now share one public shell. The previous CSS-only
+  hiding rule was removed; DOM-count regressions prevent duplicates returning.

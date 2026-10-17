@@ -11,11 +11,11 @@ function env(selection={robotId:'g1',modelId:'sonic',task:'Track a reference mot
  e.ctx.BrainSNNArena.mount(root,selection);
  return {...e,root,intervals,tick(){for(const fn of [...intervals.values()])fn()},state:()=>e.ctx.BrainSNNArena.getState(),evidence:()=>e.ctx.BrainSNNArena.exportEvidence(),action(name){const b=root.querySelector(`[data-arena-action="${name}"]`);assert(b,'Missing action '+name);b.click();return b}};
 }
-function experimentEnv(selection){
- const e=makeEnv();const intervals=new Map();let intervalId=0;e.ctx.setInterval=fn=>{const id=++intervalId;intervals.set(id,fn);return id};e.ctx.clearInterval=id=>intervals.delete(id);
+function experimentEnv(selection, {hash='#catalog',saved}={}){
+ const e=makeEnv('{}',false,hash);if(saved)e.storageRecords.set('brainsnn.experiment.v1',JSON.stringify(saved));const intervals=new Map();let intervalId=0;e.ctx.setInterval=fn=>{const id=++intervalId;intervals.set(id,fn);return id};e.ctx.clearInterval=id=>intervals.delete(id);
  const page=e.document.createElement('section');page.setAttribute('id','playground');page.innerHTML='<div id="experiment-root"></div><div id="demo-workspace"></div>';e.document.body.appendChild(page);
  for(const f of ['arena-3d.js','arena-profiles.js','arena-workspace.js','experiment.js'])vm.runInContext(fs.readFileSync(path.join(dist,f),'utf8'),e.ctx,{filename:f});
- e.ctx.BrainSNNExperiment.open(selection);
+ if(selection!==undefined)e.ctx.BrainSNNExperiment.open(selection);
  return {...e,tick(){for(const fn of [...intervals.values()])fn()},state:()=>e.ctx.BrainSNNArena.getState(),evidence:()=>e.ctx.BrainSNNArena.exportEvidence(),action(name){const b=e.q(`[data-arena-action="${name}"]`);assert(b,'Missing action '+name);b.click();return b},edit(id,value){const input=e.$(id);input.value=value;input.dispatch('input')}};
 }
 function test(name,fn){try{fn();console.log('PASS',name)}catch(e){console.error('FAIL',name,e.stack);process.exitCode=1}}
@@ -28,6 +28,21 @@ test('first mission is paused with one Run button and no setup or replay control
  assert(visible(e.$('arena-runtime-badge')));assert(e.$('arena-runtime-badge').textContent.includes('LOCAL PRACTICE · NOT A MODEL SCORE'));
  assert(!root.textContent.includes('Benchmark'));assert(!root.textContent.includes('benchmark score'));
  e.action('run');e.tick();e.action('run');assert.equal(e.state().completedRun,false);assert(!visible(e.$('experiment-robot')));assert(!visible(e.$('arena-scrubber')));
+});
+for(const source of ['URL','saved storage'])test(source+' restored named selection offers explicit local practice before connecting or completing a run',()=>{
+ const selected={robotId:'g1',modelId:'sonic',task:'Track a reference motion',seed:'73'};
+ const options=source==='URL'?{hash:'#playground?robot=g1&model=sonic&task=Track+a+reference+motion&seed=73'}:{hash:'#playground',saved:selected};
+ const e=experimentEnv(undefined,options);const practice=e.q('[data-arena-action="practice"]');
+ assert.equal(e.state().mode,'named');assert.equal(e.state().completedRun,false);assert.equal(e.state().policyExecuted,false);
+ assert(visible(practice),'Local practice must be reachable without opening the worker form');assert(e.$('arena-connect-panel').hidden);
+ assert(!visible(e.$('experiment-robot')));assert(!visible(e.$('experiment-model')));assert(!visible(e.$('arena-scrubber')));
+ assert.equal(e.evidence().local,null);assert.equal(e.evidence().execution.kind,'worker');
+ practice.click();assert.equal(e.state().mode,'practice');assert.equal(e.state().running,false);assert.equal(e.state().currentSnapshot.state.steps,0);
+ assert.equal(e.evidence().selected.robotId,selected.robotId);assert.equal(e.evidence().selected.modelId,selected.modelId);assert.equal(e.evidence().selected.task,selected.task);assert.equal(String(e.evidence().selected.seed),selected.seed);
+ assert.equal(e.evidence().execution.robot,'generic-demo-arm');assert.equal(e.evidence().execution.policyExecuted,false);assert.equal(e.evidence().execution.benchmarkResult,null);
+ assert(e.$('arena-runtime-badge').textContent.includes('NOT A MODEL SCORE'));
+ const named=e.q('[data-arena-action="named"]');assert(visible(named),'The preserved named selection must remain reachable');named.click();
+ assert.equal(e.state().mode,'named');assert.equal(e.state().selection.robotId,'g1');assert.equal(e.state().selection.modelId,'sonic');assert.equal(e.state().policyExecuted,false);
 });
 test('a completed bounded practice run reveals setup and replay without inventing policy results',()=>{
  const e=experimentEnv({});e.action('run');for(let i=0;i<500&&!e.state().currentSnapshot.state.done;i++)e.tick();
@@ -63,7 +78,7 @@ async function asyncTest(name,fn){try{await fn();console.log('PASS',name)}catch(
  await asyncTest('worker errors stay named and never unlock controls or substitute a local score',async()=>{
   const e=env({robotId:'panda',modelId:'pi05',seed:'42'}),r=mockRuntime(e);await connect(e);e.action('create-session');await flush();
   r.records[0].frame('error',false);assert.equal(e.state().mode,'named');assert.equal(e.state().completedRun,false);assert.equal(e.state().policyExecuted,false);
-  assert.equal(e.evidence().execution.kind,'worker');assert.equal(e.evidence().execution.benchmarkResult,null);assert.equal(e.evidence().local,null);assert(!visible(e.$('arena-scrubber')));
+  assert.equal(e.evidence().execution.kind,'worker');assert.equal(e.evidence().execution.benchmarkResult,null);assert.equal(e.evidence().local,null);assert(!visible(e.$('arena-scrubber')));assert(visible(e.q('[data-arena-action="practice"]')));assert.equal(e.state().selection.modelId,'pi05');
   r.records[0].frame('succeeded',false);assert.equal(e.state().completedRun,false);
   r.records[0].frame('failed',true);assert.equal(e.state().completedRun,true);assert(visible(e.$('arena-scrubber')));assert.equal(e.state().mode,'named');
  });

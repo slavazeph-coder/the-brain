@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { buildMissionContract, DEFAULT_MISSION_DRAFT } from '../../src/features/missions/missionBuilder.js';
 
 test('lobby has three primary routes, Lab overflow and an honest paused preview', async ({ page }) => {
   let feedRequests = 0;
@@ -149,4 +150,50 @@ test('an existing deterministic task still runs inside Arena', async ({ page }) 
   await page.getByRole('button', { name: 'Fork permission + rerun', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'BOUNDARY FAILURE', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Export ProofPack', exact: true })).toBeVisible();
+});
+
+async function expectSingleTaskShell(page) {
+  // Count DOM nodes as well as accessible landmarks: hiding legacy chrome with
+  // CSS is not sufficient, and can bring duplicate navigation back on a refactor.
+  await expect(page.locator('.bh-site')).toHaveCount(1);
+  await expect(page.locator('header.bh-nav')).toHaveCount(1);
+  await expect(page.locator('.public-nav')).toHaveCount(1);
+  await expect(page.getByRole('navigation')).toHaveCount(1);
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.getByRole('main')).toBeVisible();
+  await expect(page.locator('footer')).toHaveCount(1);
+  await expect(page.locator('footer.bh-footer')).toHaveCount(1);
+  await expect(page.locator('.public-nav nav > a')).toHaveText(['Arena', 'Review', 'Evidence']);
+  await expect(page.locator('.task-context a[href="/arena/tasks"]')).toBeVisible();
+}
+
+test('curated Arena tasks and the builder render one shared navigation shell', async ({ page }) => {
+  for (const slug of ['refund-authority', 'workflow-efficiency', 'authorized-bug-hunt', 'reproduce-result', 'navigation-baseline', 'build']) {
+    await page.goto(`/arena/tasks/${slug}`);
+    await expect(page.locator('main h1')).toBeVisible();
+    await expectSingleTaskShell(page);
+  }
+});
+
+test('published Arena tasks retain one shell while loading, ready, and unavailable', async ({ page }) => {
+  for (const outcome of ['ready', 'unavailable']) {
+    let release = () => {};
+    const waiting = new Promise<void>(resolve => { release = resolve; });
+    const id = `navigation-${outcome}`;
+    await page.route(`**/api/v1/missions/${id}/leaderboard`, route => route.fulfill({ json: { ok: true, entries: [] } }));
+    await page.route(`**/api/v1/missions/${id}`, async route => {
+      await waiting;
+      await route.fulfill(outcome === 'ready' ? { json: {
+        ok: true, mission: { id, configuration: DEFAULT_MISSION_DRAFT, contract: buildMissionContract(DEFAULT_MISSION_DRAFT) },
+      } } : { status: 404, json: { ok: false, error: 'Fixture task unavailable.' } });
+    });
+    try {
+      await page.goto(`/arena/tasks/published/${id}`);
+      await expect(page.getByRole('heading', { name: 'Loading mission…', exact: true })).toBeVisible();
+      await expectSingleTaskShell(page);
+    } finally { release(); }
+    if (outcome === 'ready') await expect(page.getByRole('button', { name: 'Run locally', exact: true })).toBeVisible();
+    else await expect(page.getByRole('heading', { name: 'Mission unavailable', exact: true })).toBeVisible();
+    await expectSingleTaskShell(page);
+  }
 });

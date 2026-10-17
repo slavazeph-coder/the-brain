@@ -21,7 +21,7 @@ function downloadJson(name, value) {
   URL.revokeObjectURL(url);
 }
 
-export function WorkflowEfficiencyMissionPage() {
+export function WorkflowEfficiencyMissionPage({ embedded = false }) {
   const [seed, setSeed] = useState(260829);
   const [cases, setCases] = useState(500);
   const [reviewThreshold, setReviewThreshold] = useState(0.62);
@@ -77,12 +77,12 @@ export function WorkflowEfficiencyMissionPage() {
     .filter((entry) => entry.boundaryViolation || entry.missedReview || entry.avoidableReview)
     .slice(0, 12) || [];
 
-  return <div className="bh-site">
-    <header className="bh-nav">
+  return <div className={embedded ? 'arena-task-content' : 'bh-site'}>
+    {!embedded && <header className="bh-nav">
       <a className="bh-brand" href="/arena/tasks"><span className="bh-mark">B</span><span><strong>BrainSNN</strong><small>Arena Task 002</small></span></a>
       <nav><a href="/arena/tasks">Missions</a><a href="/lab/survival">Worlds</a><a href="/evidence">Evidence</a></nav>
       <a className="bh-nav-cta" href="/arena/tasks"><ArrowLeft size={15}/> Mission registry</a>
-    </header>
+    </header>}
     <main>
       <section className="bh-hero">
         <div className="bh-hero-copy">
@@ -160,6 +160,6 @@ export function WorkflowEfficiencyMissionPage() {
         </div>
       </section>}
     </main>
-    <footer className="bh-footer"><span>BrainSNN Arena Task 002</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>
+    {!embedded && <footer className="bh-footer"><span>BrainSNN Arena Task 002</span><span>Mind + World + Mission + Boundaries + Judge + Proof</span></footer>}
   </div>;
 }

@@ -29,13 +29,13 @@ export function ArenaTasks() {
   }, [slug]);
   const task = TASKS.find(([id]) => id === slug);
   let content;
-  if (slug === 'refund-authority') content = <RefundAuthorityMissionPage />;
-  else if (slug === 'workflow-efficiency') content = <WorkflowEfficiencyMissionPage />;
-  else if (slug === 'authorized-bug-hunt') content = <ExtendedProofMissionPage missionId="003" />;
-  else if (slug === 'reproduce-result') content = <ExtendedProofMissionPage missionId="004" />;
-  else if (slug === 'navigation-baseline') content = <ExtendedProofMissionPage missionId="005" />;
-  else if (slug.startsWith('published/')) content = <PublishedMissionPage />;
-  else if (slug === 'build') content = <MissionBuilderPage />;
+  if (slug === 'refund-authority') content = <RefundAuthorityMissionPage embedded />;
+  else if (slug === 'workflow-efficiency') content = <WorkflowEfficiencyMissionPage embedded />;
+  else if (slug === 'authorized-bug-hunt') content = <ExtendedProofMissionPage missionId="003" embedded />;
+  else if (slug === 'reproduce-result') content = <ExtendedProofMissionPage missionId="004" embedded />;
+  else if (slug === 'navigation-baseline') content = <ExtendedProofMissionPage missionId="005" embedded />;
+  else if (slug.startsWith('published/')) content = <PublishedMissionPage embedded />;
+  else if (slug === 'build') content = <MissionBuilderPage embedded />;
   return <div className="bh-site task-shell"><PublicNav active="arena" />
     {content ? <><p className="task-context"><a href="/arena/tasks">Arena tasks</a> / {task?.[1] || 'Custom task'} · Local synthetic execution</p>{content}</> : <main className="lab-index">
       <p className="bh-kicker"><a href="/arena/">Arena</a> / Tasks</p><h1>{slug ? 'Task unavailable' : 'Arena tasks'}</h1>
