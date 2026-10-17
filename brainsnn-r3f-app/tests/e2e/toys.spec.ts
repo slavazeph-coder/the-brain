@@ -5,12 +5,11 @@ import AxeBuilder from '@axe-core/playwright';
 // WebGL may not exist in CI, so these assert on what every tier shares — the
 // counter, the controls, the share sheet — rather than on the 3D canvas.
 
-test('the lobby offers a mission and a draft before the toys', async ({ page }) => {
+test('robotics leads and the toys remain under More', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('See the moment');
-  await expect(page.getByRole('link', { name: 'Enter Arena', exact: true })).toHaveAttribute('href', '/arena/');
-  await expect(page.getByRole('link', { name: 'Open Review', exact: true })).toHaveAttribute('href', '/office');
-  await expect(page.getByRole('link', { name: 'Inspect evidence', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Test your robot.');
+  await expect(page.getByRole('link', { name: 'Try the robot arcade', exact: true })).toHaveAttribute('href', '/arena/');
+  await expect(page.getByRole('link', { name: 'See test packs', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
   await page.getByLabel('More navigation').click();
   await page.getByRole('link', { name: 'Lab', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'Lab', exact: true })).toBeVisible();
@@ -162,7 +161,7 @@ test('defend the brain has its own route with the game and its disclaimers verba
 test('each toy unfurls as its own rendered screenshot', async ({ request }) => {
   for (const [path, image] of [
     ['/play', '/og/toy-poke.png'],
-    ['/', '/og-image.png'],
+    ['/', '/og/robot-testing.png'],
     ['/toys/fool-the-detector', '/og/toy-fool.png'],
     ['/toys/draft-duel', '/og/toy-duel.png'],
     ['/toys/defend-the-brain', '/og/toy-defend.png'],

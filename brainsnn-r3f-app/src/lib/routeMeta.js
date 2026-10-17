@@ -84,7 +84,8 @@ const ROUTES = [
   },
   {
     path: '/arena/',
-    title: 'Arena | BrainSNN',
+    image: '/og/robot-testing.png',
+    title: 'Robot arcade | BrainSNN',
     description: 'Pick a robot and a model, choose a challenge and play with the world. Try local practice or connect a matched model worker, then replay your run.',
     heading: 'Pick a robot. Choose its brain.',
     body: [
@@ -168,24 +169,21 @@ const ROUTES = [
   },
   {
     path: '/',
-    title: 'BrainSNN | See the moment it breaks',
-    description:
-      'Change one thing in a robot mission or a draft. Both runs stay. '
-      + `Rank agreement on ${EVIDENCE.corpusSize} unseen passages is ${EVIDENCE.outOfSample.rho}. `
-      + `${EVIDENCE.falseAlarmCount} false alarms are listed.`,
-    heading: 'See the moment it breaks.',
+    image: '/og/robot-testing.png',
+    title: 'BrainSNN | Robot policy testing',
+    description: 'Pick a robot and model, try a challenge and replay the result. Explore the first 10-episode robot-policy test pack. Local practice is open; hosted policy tests are not yet available.',
+    heading: 'Test your robot. See where it fails.',
     body: [
-      'Change one thing in a robot mission or a draft. Both runs stay: the original, and the one after the change.',
-      'Enter the robot arena to run a practice mission, disturb it, and replay the break. Open Review to put a passage through the detector and keep the comparison.',
-      `Rank agreement on ${EVIDENCE.corpusSize} passages the detector had never seen is ${EVIDENCE.outOfSample.rho}. ${EVIDENCE.falseAlarmCount} false alarms are listed. Local arena practice is scripted and does not score a named policy. Model scores describe their tested conditions; they do not establish universal capability.`,
+      'Choose a robot and model in the arcade, try a challenge and replay what happened. Local practice uses a scripted arm and does not score a named policy.',
+      'The first planned test pack is one policy and ten episodes: Panda + π₀.₅ on ten LIBERO Spatial tasks in simulation. Each episode is one task attempt, with outcomes and retained camera, action and state evidence.',
+      'Hosted policy tests are not yet available. The first real-policy GPU run still needs verification. Larger packs follow measured runtime and cost.',
     ],
   },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/arena/', label: 'Arena' },
-  { path: '/office', label: 'Review' },
-  { path: '/evidence', label: 'Evidence' },
+  { path: '/arena/', label: 'Robot arcade' },
+  { path: '/arena/#campaigns', label: 'Test packs' },
 ]);
 
 const SHARED_GRID = {
@@ -262,8 +260,11 @@ export function renderContentBlock(meta, currentPath = '/') {
   const experiments = meta.links
     ? `<section aria-label="Lab experiments"><ul>${renderLinks(meta.links)}</ul></section>`
     : '';
-  const overflow = currentPath === '/lab' ? ''
-    : '<details><summary>More</summary><a href="/lab" style="color:#7dd3fc">Lab</a></details>';
+  const overflow = '<details><summary>More</summary><ul>' + renderLinks([
+    { path: '/office', label: 'Review' },
+    { path: '/evidence', label: 'Evidence' },
+    { path: '/lab', label: 'Lab' },
+  ]) + '</ul></details>';
 
   return '<main data-prerendered="1" style="max-width:44rem;margin:0 auto;padding:3rem 1.5rem;'
     + 'font-family:Inter,system-ui,sans-serif;color:#e2e8f0;background:#030308;line-height:1.6">'

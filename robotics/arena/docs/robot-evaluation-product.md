@@ -8,6 +8,14 @@ Build for a robotics engineer choosing whether to promote a policy checkpoint. T
 
 Current bundled execution is Panda / π₀.₅ LIBERO behind the pinned OpenPI interface. The catalogue does not supply generic hosted inference for every listed robot or customer checkpoint. Supporting a buyer's compatible private checkpoint requires preflight of its identity, preprocessing, observations, actions and controller; compatibility must not be inferred from a model name.
 
+## Simple customer offer
+
+The public site has two primary choices: **Robot arcade** and **Test packs**. Keep robot/model selection and practice challenges visible. Review, text-detector Evidence, Lab, the catalogue and extra space tools remain secondary destinations.
+
+Lead with one planned product: **one policy, ten episodes, an outcome report and retained evidence**. One episode is one task attempt; task successes, completed task misses and execution errors stay separate. The initial recipe is Panda + π₀.₅ on the ten LIBERO Spatial tasks. Public hosted testing remains unavailable until the real GPU pilot is verified. There is no public price or purchase action yet.
+
+Customers should not need to choose providers, calculate worker-hours, enter a spending model, upload operator JSON or run a CLI to understand this offer. Those existing tools stay under a closed **Operator tools** disclosure. Larger packs are a short future-capacity note, not competing products to buy today. Do not attach the text detector’s holdout statistics to robotics claims.
+
 ## Pack ladder
 
 | Pack | Useful customer question | Delivery gate |

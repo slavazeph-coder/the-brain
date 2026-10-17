@@ -1,12 +1,16 @@
 {
   "name": "BrainSNN",
   "short_name": "BrainSNN",
-  "description": "See the moment it breaks. Run an Arena mission, review a passage or draft, and inspect the evidence and known misses.",
+  "description": "Pick a robot and model, try a challenge and replay the result. Explore the first 10-episode robot-policy test pack. Local practice is open; hosted policy tests are not yet available.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#030308",
   "theme_color": "#030308",
   "icons": [
-    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" }
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
   ]
 }

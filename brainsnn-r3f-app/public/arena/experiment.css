@@ -96,7 +96,9 @@
 .app-nav a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 .arena-overflow{position:relative;font-size:13px}
 .arena-overflow summary{padding:10px;cursor:pointer;color:#99a6b7}
-.arena-overflow>a{position:absolute;right:0;top:100%;z-index:20;padding:14px 24px;border:1px solid #283447;border-radius:10px;background:#101620;color:#68eaff}
+.arena-overflow-links{position:absolute;right:0;top:100%;z-index:30;display:flex;flex-direction:column;min-width:155px;padding:7px;border:1px solid #283447;border-radius:10px;background:#101620;box-shadow:0 12px 28px #0005}
+.arena-overflow-links a,.arena-overflow-links button{display:block;padding:12px 16px;color:#68eaff;text-decoration:none;border-radius:6px;text-align:left;font-size:12px;min-height:44px}
+.arena-overflow-links a:hover,.arena-overflow-links button:hover{background:#68eaff0b}
 .arena-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding-top:18px}
 .arena-tools a{text-decoration:none}
 .arena-tools .nav-tab{font-size:12px;min-height:40px}
@@ -109,3 +111,19 @@
 @media(min-width:1280px){#experiment-root.experiment-playground{display:grid;grid-template-columns:240px minmax(0,1fr);grid-template-rows:auto auto auto auto auto 1fr;column-gap:20px;align-items:start}.experiment-playground>.experiment-heading{grid-column:1/-1}.experiment-playground>.experiment-selection{grid-column:1;grid-row:2;grid-template-columns:1fr;padding:18px;gap:18px}.experiment-playground>.experiment-selection .experiment-seed-label{max-width:none}.experiment-playground>.experiment-selection-status{grid-column:1;grid-row:3;flex-direction:column;align-items:flex-start;gap:8px;padding:14px 6px}.experiment-playground>.experiment-error{grid-column:1;grid-row:4}.experiment-playground>.experiment-selection-note{grid-column:1;grid-row:5}.experiment-playground>.experiment-layout{grid-column:2;grid-row:2/7}.experiment-playground .arena-main{grid-template-columns:minmax(0,1fr) 250px}.experiment-playground .arena-panel-section{padding:18px 14px}.experiment-playground .arena-pair>strong{font-size:12px}.experiment-playground .arena-session-bar{padding:14px;gap:12px;flex-wrap:wrap}.experiment-playground .arena-profile-bar{padding:8px 10px 16px}.experiment-playground .arena-profile-bar>span{font-size:11px}.experiment-playground .arena-mission-picks button{grid-template-columns:18px 1fr;align-items:center;padding:10px}.experiment-playground .arena-mission-picks small{display:none}.experiment-playground .arena-mission-picks button>span{grid-row:auto}.experiment-playground .arena-transport-note,.experiment-playground .arena-camera-controls>span{display:none}}
 
 @media(max-width:760px){.arena-tools,.experiment-tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}.arena-tools .nav-tab,.experiment-tabs button{flex-shrink:0;white-space:nowrap}.arena-tools{padding-bottom:5px}.experiment-tabs{padding:8px}.experiment-heading>button{margin-top:5px;min-height:28px}.experiment-heading p{margin-top:6px}.experiment-heading{margin-bottom:14px!important}}
+
+/* Customer entry stays on the arcade and packs; setup utilities remain available. */
+.experiment-more-tools>summary{display:flex;align-items:center;min-height:44px;padding:10px 14px;color:var(--bh-muted,#99a6b7);font-size:12px;cursor:pointer;list-style:none;border-radius:10px}
+.experiment-more-tools>summary::-webkit-details-marker{display:none}
+.experiment-more-tools>summary::after{content:'+';margin-left:12px;color:var(--bh-cyan,#68eaff)}
+.experiment-more-tools[open]>summary::after{content:'−'}
+.experiment-tabs{align-items:flex-start;flex-wrap:wrap;overflow:visible}
+.experiment-more-tools{flex:1;min-width:0}
+.experiment-more-tools>summary{width:max-content;max-width:100%}
+.experiment-tool-options{display:flex;flex-wrap:wrap;gap:5px;padding:6px 0 8px}
+.experiment-tool-options .experiment-text-button{padding:9px 16px;color:var(--bh-muted)}
+.experiment-tool-options p{flex-basis:100%;padding:5px 16px;color:var(--bh-muted);font-size:11px;line-height:1.6;max-width:650px}
+.experiment-more-tools>summary:focus-visible{outline:2px solid var(--bh-cyan,#68eaff);outline-offset:3px}
+@media(max-width:760px){.arena-tools{flex-wrap:wrap;overflow:visible}.experiment-tool-options{margin-left:-4px}.experiment-tool-options button{font-size:11px;padding:9px 10px}.experiment-tool-options p{padding:5px 10px}}
+/* Hash links open a workspace with its single navigation still in view. */
+.workspace-page{scroll-margin-top:160px}

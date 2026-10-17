@@ -640,7 +640,7 @@ test('public navigation contains no paid action before the model gate', async ({
 
 test('Arcade exposes the same primary destinations at every breakpoint', async ({ page }) => {
   await page.goto('/arcade');
-  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('> a')).toHaveText(['Arena', 'Review', 'Evidence']);
+  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('> a')).toHaveText(['Robot arcade', 'Test packs']);
 });
 
 test('Lab overflow closes on Escape and outside click', async ({ page }) => {

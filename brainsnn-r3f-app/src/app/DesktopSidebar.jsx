@@ -22,7 +22,7 @@ export function DesktopSidebar({ active, onNavigate, collapsed, onToggle }) {
         {!collapsed ? (
           <span>
             <strong>BrainSNN</strong>
-            <small>See the moment it breaks</small>
+            <small>Robot policy testing</small>
           </span>
         ) : null}
       </div>
