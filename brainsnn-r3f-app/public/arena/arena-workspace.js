@@ -10,6 +10,7 @@
   const number = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
   const safeURL = value => { try { const u = new URL(value); return u.protocol === 'https:' ? u.href : ''; } catch { return ''; } };
   let completedRun = false;
+  let inspectedLegacy = null;
   let host = null, selection = {}, mode = 'named', protocol = 'practice', client = null;
   let connection = { status: 'disconnected', profile: null }, liveFrame = null, running = false;
   let remoteFrames = [], remoteCursor = -1, droppedFrames = 0, remoteBytes = 0;
@@ -44,12 +45,12 @@
   const text = (id, value) => { if ($(id)) $(id).textContent = value; };
   const attr = (id, key, value) => { const el = $(id); if (!el) return; value ? el.setAttribute(key, '') : el.removeAttribute(key); };
   const event = (kind, data = {}) => events.push(freeze({ id: ++counter, at: stamp(), branch: branchId, simTime: world?.time ?? liveFrame?.simTime ?? null, kind, ...clone(data) }));
-  function snapshot(kind) {
+  function snapshot(kind, controllerInput = null) {
     const state = clone(world);
     // Only the last 90 positions are used by the renderer. The independent
     // immutable timeline retains every state, avoiding a quadratic trace.
     state.trace = state.trace.slice(-90);
-    snapshots.push(freeze({ id: ++counter, branch: branchId, kind, state }));
+    snapshots.push(freeze({ id: ++counter, branch: branchId, kind, state, ...(controllerInput ? { controllerInput: clone(controllerInput) } : {}) }));
     cursor = snapshots.length - 1;
   }
   function makeWorld(seed = selection.seed ?? '42') {
@@ -72,6 +73,12 @@
         seed: connection.sessionId ? connection.selection?.seed ?? null : null
       },
       local: mode === 'practice' ? { branchId, cursor, branches, events, snapshots, sensorCamera,
+        recordingContext: { taskId: 'scripted-sort:' + (world?.opts?.challenge || challenge), taskRevision: 'scripted-sort.v1', judgeRevision: 'scripted-delivery-or-step-limit.v1',
+          environment: { name: 'BrainArena3D', version: 'scripted-kinematic.v1', dynamics: false },
+          actionSemantics: { version: 'scripted-skills.v1', skills: ['move_to', 'pick', 'place', 'wait'], position: 'Cartesian target in local workspace; no measured motor output' },
+          stateSemantics: { version: 'scripted-world.v1', position: 'Kinematic Cartesian workspace state', trace: 'Last 90 renderer positions; independent snapshots retained' },
+          units: { position: 'local workspace units', simTime: 'seconds', stepDuration: 0.1 }, preprocessingRevision: 'native-scripted-state.v1',
+          initialState: snapshots[0]?.state || null },
         limitation: 'Kinematic scripted demonstration. These are demo outcomes, not named robot/model, dynamics or model scores.' } : null,
       worker: mode === 'named' && liveFrame ? { ...frameMetadata(liveFrame), frames: remoteFrames.map(frameMetadata), droppedFrames,
         retention: 'Latest 180 observed frames, bounded to 24 MB of image URLs in browser memory. Export includes frame metadata, not image URLs or physics state.',
@@ -118,9 +125,9 @@
       '<div id="arena-profile-summary"' + (mode === 'practice' ? ' hidden' : '') + '><span class="arena-micro">EXECUTION PROFILE</span><strong id="arena-profile-name">' + esc(p?.name || p?.title || (p ? p.id : 'Custom robot + model')) + '</strong><p class="arena-muted">' + esc(selection.error || (p ? 'Connect a worker advertising this exact body, checkpoint and controller contract.' : 'This pair needs a matching execution profile. Your robot and model selection stays intact.')) + '</p><button class="arena-text-button" data-arena-action="connect">Connect your worker ↗</button></div></div>' +
       '<div class="arena-panel-section"><div class="arena-panel-label"><h3>Change the world</h3><span class="arena-small-glyph" aria-hidden="true">✧</span></div><p id="arena-disturbance-note" class="arena-muted"></p><div class="arena-disturbances"><button id="arena-add-obstacle" data-arena-action="add-obstacle"><span aria-hidden="true">▧</span>Add obstacle</button><button id="arena-move-obstacle" data-arena-action="move-obstacle"><span aria-hidden="true">↔</span>Move obstacle</button><button id="arena-lighting" data-arena-action="lighting"><span aria-hidden="true">◐</span>Change light</button><button id="arena-target" data-arena-action="target"><span aria-hidden="true">⌖</span>Move target</button><button id="arena-occlusion" data-arena-action="camera-occlusion"><span aria-hidden="true">◒</span>Obscure camera</button><button id="arena-clear-camera" data-arena-action="clear-camera"><span aria-hidden="true">◉</span>Clear camera</button></div></div>' +
       '<div class="arena-panel-section arena-evidence-panel"><div class="arena-panel-label"><h3>Run evidence</h3><span class="arena-badge" id="arena-evidence-badge">NO RUN</span></div><dl class="arena-metrics"><div><dt id="arena-outcome-label">Outcome</dt><dd id="arena-outcome">—</dd></div><div><dt>Steps</dt><dd id="arena-steps">—</dd></div><div><dt>Contacts</dt><dd id="arena-contacts">—</dd></div><div><dt>Interventions</dt><dd id="arena-interventions">—</dd></div><div><dt>Policy latency</dt><dd id="arena-latency">—</dd></div></dl><button class="arena-button arena-export" data-arena-action="export">Export evidence <span aria-hidden="true">↓</span></button></div></aside></div>' +
-      '<section class="arena-timeline" data-arena-after-run hidden><div class="arena-timeline-title"><div><span class="arena-micro">TIME MACHINE</span><strong id="arena-timeline-label">Make a run. Keep the evidence.</strong></div><div class="arena-timeline-actions"><button class="arena-button" id="arena-return-live" data-arena-action="return-live" hidden>Return to live</button><button class="arena-button" id="arena-branch" data-arena-action="branch">Branch here ↗</button></div></div><input id="arena-scrubber" type="range" min="0" max="0" value="0" aria-label="Replay recorded arena state"><div class="arena-timeline-footer"><span id="arena-timeline-start">00:00</span><span id="arena-branch-note">Replay and branch are available in local practice or a capable worker.</span><span id="arena-timeline-end">00:00</span></div><div id="arena-events" class="arena-event-list" aria-label="Run events"></div></section>' +
+      '<section class="arena-timeline" data-arena-after-run hidden><div class="arena-timeline-title"><div><span class="arena-micro">TIME MACHINE</span><strong id="arena-timeline-label">Make a run. Keep the evidence.</strong></div><div class="arena-timeline-actions"><button class="arena-button arena-primary" id="arena-inspect" data-arena-action="inspect">Inspect run</button><button class="arena-button" id="arena-return-live" data-arena-action="return-live" hidden>Return to live</button><button class="arena-button" id="arena-branch" data-arena-action="branch">Branch here ↗</button></div></div><input id="arena-scrubber" type="range" min="0" max="0" value="0" aria-label="Replay recorded arena state"><div class="arena-timeline-footer"><span id="arena-timeline-start">00:00</span><span id="arena-branch-note">Replay and branch are available in local practice or a capable worker.</span><span id="arena-timeline-end">00:00</span></div><div id="arena-events" class="arena-event-list" aria-label="Run events"></div></section>' +
       '<div class="arena-status-message" id="arena-status-message" role="status" aria-live="polite"></div></div>' +
-      '<p class="arena-integrity" id="arena-integrity"></p>' +
+      '<p class="arena-integrity" id="arena-integrity"></p><details class="arena-recording-tools"><summary>Recording tools</summary><a href="#inspect" data-arena-action="open-recording">Open a recording</a><p>Inspect a local file without connecting to a worker.</p></details>' +
       '<section id="arena-connect-panel" class="arena-connect-panel" hidden aria-labelledby="arena-connect-title"><div class="arena-connect-header"><div><span class="arena-eyebrow">BRING YOUR COMPUTE</span><h3 id="arena-connect-title">Connect a simulation worker.</h3></div><button class="arena-icon-button" data-arena-action="close-connect" aria-label="Close worker connection panel">×</button></div><p>Use an already running worker with a matching physics and policy profile. The worker must accept this site’s origin. Connecting does not rent a GPU.</p><form id="arena-connect-form"><label class="arena-field">Worker URL<input id="arena-worker-url" type="url" placeholder="https://your-worker.example" required autocomplete="off" spellcheck="false"></label><label class="arena-field">Session token<input id="arena-worker-token" type="password" placeholder="Optional worker token" autocomplete="off"></label><div class="arena-connect-actions"><button class="arena-button arena-primary" type="submit" id="arena-connect-submit">Connect & check profile</button><button class="arena-button" type="button" data-arena-action="disconnect">Disconnect</button></div></form><div id="arena-worker-task-panel" hidden><label class="arena-field">Available worker mission<select id="arena-worker-task"></select></label><button class="arena-button arena-primary" data-arena-action="create-session" id="arena-create-session">Create session</button></div><p class="arena-worker-links"><a href="worker-setup.html" target="_blank" rel="noopener noreferrer">Set up a physics worker ↗</a><a href="downloads/brainsnn-arena-worker.zip" download>Download worker kit ↓</a></p><p class="arena-muted">Credentials stay in memory and are excluded from exports. A successful connection checks the exact robot, checkpoint and control contract.</p><p id="arena-connect-message" role="status"></p><button class="arena-text-button" data-arena-action="practice">Switch to local practice · not a model score</button></section>';
     if ($('arena-world')) $('arena-world').value = challenge;
     if (mode === 'practice' && world && $('arena-seed')) $('arena-seed').value = String(world.seed);
@@ -223,9 +230,10 @@
     if (cursor < snapshots.length - 1) branch();
     if (world.done) return;
     const before = world.event;
-    window.BrainArena3D.step(world, window.BrainArena3D.demoAction(world));
+    const controllerInput = window.BrainArena3D.demoAction(world);
+    window.BrainArena3D.step(world, controllerInput);
     if (world.event !== before && !['move', 'wait', 'arrive', 'move-command'].includes(world.event)) event(world.event);
-    snapshot('step');
+    snapshot('step', controllerInput);
     if (world.done) { pause(); message = world.success ? 'Scripted demo complete. Rewind and change a condition to explore another path.' : 'The demo reached its step limit. Rewind to inspect what happened.'; }
     refresh(); draw();
   }
@@ -323,6 +331,27 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     message = 'Evidence exported. ' + (mode === 'practice' ? 'The file marks every outcome as a scripted demo.' : 'Credentials and camera URLs are excluded.'); refresh();
   }
+  function inspectRun() {
+    if (!window.BrainSNNArenaInspector) { message = 'The recording inspector did not load. Reload this page.'; return refresh(); }
+    const savedEvidence = evidence(), activeClient = client, recordingId = liveFrame?.recording?.recordingId;
+    const durable = mode === 'named' && connection.capabilities?.recordings && activeClient;
+    // Export time and the replay cursor do not change the underlying run.
+    // Reuse the first checked adaptation until recorded evidence changes, so a
+    // local review survives closing and reopening an unchanged practice run.
+    const identity = clone(savedEvidence); delete identity.createdAt;
+    if (identity.local) delete identity.local.cursor;
+    const legacyKey = durable ? null : JSON.stringify(identity);
+    return window.BrainSNNArenaInspector.open({ trigger: $('arena-inspect'), load: async () => {
+      if (durable) {
+        return activeClient.getRecording(recordingId);
+      }
+      // Old exports are incomplete by construction. The adapter keeps that gap
+      // visible and never substitutes a selected model for execution evidence.
+      if (inspectedLegacy?.key === legacyKey) return inspectedLegacy.bundle;
+      const bundle = await window.BrainSNNArenaRecording.adaptLegacy(savedEvidence);
+      inspectedLegacy = { key: legacyKey, bundle }; return bundle;
+    } });
+  }
   function switchMode(next) {
     if (mode === next) return;
     pause(); generation++; client?.disconnect(); client = null; connection = { status: 'disconnected' }; clearRemoteHistory();
@@ -344,6 +373,8 @@
     if (action === 'close-connect') { $('arena-connect-panel').hidden = true; return; }
     if (action === 'disconnect') { generation++; client?.disconnect(); client = null; connection = { status: 'disconnected' }; clearRemoteHistory(); message = 'Worker disconnected. No model is running in this page.'; render(); return; }
     if (action === 'export') return download();
+    if (action === 'inspect') return inspectRun();
+    if (action === 'open-recording') return window.BrainSNNArenaInspector?.open({ trigger: host?.querySelector('[data-arena-action="open-recording"]') });
     if (action === 'new-world') { const seed = $('arena-seed')?.value || '42'; challenge = $('arena-world')?.value || 'starter'; makeWorld(seed); message = 'Seeded practice world ready.'; refresh(); draw(); return; }
     if (mode !== 'practice') return;
     if (action === 'orbit') camera.yaw += Math.PI / 4;
@@ -354,7 +385,7 @@
   function wire() {
     on(host, 'click', ev => {
       const action = ev.target.closest?.('[data-arena-action]');
-      if (action && !action.disabled && !action.hasAttribute('disabled')) return handleAction(action.dataset.arenaAction);
+      if (action && !action.disabled && !action.hasAttribute('disabled')) { if (action.tagName === 'A') ev.preventDefault(); return handleAction(action.dataset.arenaAction); }
       const quick = ev.target.closest?.('[data-arena-profile]');
       if (quick) { const [robotId, modelId] = quick.dataset.arenaProfile.split(':'); window.BrainSNNExperiment?.open?.({ robotId, modelId, seed: selection.seed ?? 42 }); return; }
       const toggle = ev.target.closest?.('[data-arena-protocol]');
@@ -382,6 +413,8 @@
     on(document, 'visibilitychange', () => { if (!document.hidden) return; if (mode === 'practice') pause('page-hidden'); else if (connection.status === 'running' && supports('pause')) remote('pause'); });
   }
   function suspend() {
+    window.BrainSNNArenaInspector?.close();
+    inspectedLegacy = null;
     running = false; clearInterval(timer); timer = null; generation++;
     cleanup.forEach(fn => fn()); cleanup = [];
     client?.disconnect(); client = null; connection = { status: 'disconnected' }; clearRemoteHistory();
