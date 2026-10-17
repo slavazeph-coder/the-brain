@@ -51,6 +51,7 @@ try {
   });
   await test('worker setup and downloadable kit are reachable', async () => {
     const docs = await get('/arena/worker-setup.html'); assert.equal(docs.status, 200); assert.match(docs.headers.get('content-type'), /text\/html/);
+    const evaluation = await get('/arena/evaluation-setup.html'); assert.equal(evaluation.status, 200); assert.match(evaluation.headers.get('content-type'), /text\/html/); assert.match(await evaluation.text(), /run-campaign\.py/);
     const kit = await get('/arena/downloads/brainsnn-arena-worker.zip', { method: 'HEAD' }); assert.equal(kit.status, 200); assert.match(kit.headers.get('content-type'), /(?:zip|octet-stream)/);
   });
   await test('site testing viewer and private-worker setup are published as isolated assets', async () => {
