@@ -46,3 +46,8 @@ merged lobby/Review/nav work (#186–188, main `329602b2`).
 
 - Optional PyAV 19 tools need Python >=3.12. CI retains worker API tests on3.11
   and switches interpreters for isolated import/export dependencies.
+
+- Later owner clarification supersedes treating SSH as the only blocker: the
+  RTX 4090 is currently occupied and unavailable; GB10 access is expected but
+  not available. See `brainsnn-local-first-2026-10-17.md`. Do not retry hardware
+  access or claim either machine is ready for Arena.
