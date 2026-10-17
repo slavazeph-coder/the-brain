@@ -38,6 +38,7 @@ import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gp
 import { createGpuBridge } from "./src/server/gpuBridge.js";
 import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
+import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 
 
 dotenv.config();
@@ -78,6 +79,8 @@ app.get('/api/agent-lab/summary', async (_req, res) => {
 // exactly one hop takes the address Railway itself appended, which a client
 // cannot forge by sending its own X-Forwarded-For.
 app.set("trust proxy", 1);
+
+app.use('/api/arena/analysis', createPaidAnalysisRouter());
 
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
 
