@@ -65,7 +65,9 @@ if not source.is_file():
     raise SystemExit('Worker documentation must be complete before packaging.')
 files = sorted(p for p in (ROOT / 'workers/arena').rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
 files += [source, ROOT / 'docs/arena-runtime-protocol.md', ROOT / 'docs/rtx4090-handoff.md', ROOT / 'scripts/probe-worker.py']
-files += sorted((ROOT / 'tests').glob('test_arena_worker*.py'))
+files += sorted((ROOT / 'tests').glob('test_arena*.py'))
+files += [ROOT / 'docs/arena-inspection.md', ROOT / 'tests/test_inspection_interop.py']
+files += sorted(p for directory in ('schemas', 'inspection') for p in (ROOT / directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
 zip_path = ROOT / 'dist/downloads/brainsnn-arena-worker.zip'
 zip_path.parent.mkdir(exist_ok=True, parents=True)
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
