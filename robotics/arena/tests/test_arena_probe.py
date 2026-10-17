@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 from workers.arena.app import create_app
 from workers.arena.core import ArenaError, MAX_STEPS, SETTLE_STEPS
-from workers.arena.recording import MAX_BUNDLE_BYTES, SCHEMA, verify_bundle
+from workers.arena.recording import MAX_BUNDLE_BYTES, SCHEMA, RecordingWriter, verify_bundle
 from test_arena_worker import episode, settings
 
 spec = importlib.util.spec_from_file_location('arena_probe', Path(__file__).resolve().parents[1] / 'scripts/probe-worker.py')
@@ -21,9 +21,26 @@ spec.loader.exec_module(probe)
 
 class ProbeSession:
     def __init__(self, item): self.episode = item
+    def await_recording(self):
+        # This fixture runs physics without inference/rendering time. Wait for
+        # its real writer's durable work rather than making storage throughput
+        # an accidental prerequisite of the outcome/acceptance test. Overflow
+        # and nonblocking production behavior have separate recorder tests.
+        writer = self.episode.recorder
+        target, deadline = writer.observed, time.monotonic() + 5
+        with writer.queue.all_tasks_done:
+            while writer.queue.unfinished_tasks:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise AssertionError('Fixture recorder did not drain within five seconds.')
+                writer.queue.all_tasks_done.wait(remaining)
+        if writer.loss or writer.committed < target:
+            raise AssertionError('Fixture recorder did not commit the expected durable sequence.')
     def call(self, operation, data=None):
         if operation == 'frame':
-            if self.episode.status == 'running': self.episode.advance()
+            if self.episode.status == 'running':
+                self.episode.advance()
+                self.await_recording()
             return self.episode.frame()
         if operation == 'command': return self.episode.command(data)
         if operation == 'evidence': return self.episode.evidence()
@@ -99,7 +116,14 @@ class ProbeTests(unittest.TestCase):
         self.assertNotIn(self.config.token, ''.join(p.read_text() for p in self.output.glob('*.json')))
     def test_full_horizon_miss_passes_execution_but_remains_failed_task(self):
         self.manager.fail_horizon = True
-        result = self.run_probe()
+        write_item = RecordingWriter._write_item
+        def slow_write(writer, *args):
+            # Deliberately slower than the fixture's 2ms poll cadence. The
+            # previous unpaced fixture overflows its real 64-entry queue here.
+            time.sleep(0.01)
+            return write_item(writer, *args)
+        with patch.object(RecordingWriter, '_write_item', slow_write):
+            result = self.run_probe()
         self.assertTrue(result['transportAndExecutionPassed']); self.assertFalse(result['taskSuccess'])
         self.assertEqual(result['episodeOutcome'], 'failed'); self.assertEqual(result['metrics']['steps'], MAX_STEPS)
     def test_partial_recording_cannot_pass(self):
