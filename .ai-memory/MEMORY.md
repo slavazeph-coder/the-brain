@@ -41,6 +41,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [Native Arena inspection implementation](brainsnn-arena-inspection-2026-10-17.md). Owner-approved recorder, native viewer, portable evidence, comparison/reviews and bounded local LeRobot/MCAP tools; live GPU rollout requires verified host access.
 
+→ [Local-first delivery and hardware availability](brainsnn-local-first-2026-10-17.md). Owner confirms 4090 unavailable and GB10 future only; durable pilot acceptance corrections and a separate GB10 qualification plan. Commercial direction is a recommendation, not validated demand.
+
 → [TViz and Arena inspection research](brainsnn-inspection-layer-2026-10.md). October16 source audit and historical proposal; native implementation now tracked above, ROS/SSH viewer remains optional.
 
 ## Active Work
