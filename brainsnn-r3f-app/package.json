@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-deformable.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node mission-market-schema-bootstrap.cjs && node --require ./sponsorship/gt3/server.cjs --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@mujoco/mujoco": "3.16.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@tailwindcss/vite": "^4.1.14",

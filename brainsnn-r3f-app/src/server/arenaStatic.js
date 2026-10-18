@@ -16,6 +16,9 @@ export function createArenaRouter({ directory }) {
     if (req.path === '/' && !pathname.endsWith('/')) {
       return res.redirect(308, `${pathname}/${queryParts.length ? `?${queryParts.join('?')}` : ''}`);
     }
+    if (req.path === '/deformable' && !pathname.endsWith('/')) {
+      return res.redirect(308, `${pathname}/${queryParts.length ? `?${queryParts.join('?')}` : ''}`);
+    }
     next();
   });
   router.use(express.static(path.resolve(directory), {

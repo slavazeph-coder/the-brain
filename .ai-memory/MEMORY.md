@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Native deformable physics](brainsnn-deformable-physics-2026-10-17.md). Owner requests DeformX-like tasks; native MuJoCo rope strike, bounded motion search and recorded local instance packs. Distinguish browser physics from learned-policy/GPU qualification.
+
 → [Transparent robotics pricing](brainsnn-transparent-pricing-2026-10-17.md). Owner restores visible scale and the historical US$171.43 / 100,000-episode runtime-price illustration; keep assumptions explicit and separate from measured execution.
 
 → [Simple robotics testing offer](brainsnn-simple-robot-testing-2026-10-17.md). Owner requests a simpler robotics front door: Arcade + Test packs, one planned10-episode offer, secondary operator tools; keep interactive selection.
