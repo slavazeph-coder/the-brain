@@ -20,4 +20,4 @@ Original prompt: Need to build this level of simulation on brainsnn.com and test
 - Numerical physics qualification passed 32 selected material/damping corner cases, native MuJoCo bending reference and timestep refinement; physics source frozen.
 - Actual Chrome UI flows passed: new simulation versus replay, 13-recording search, unchanged target, full archive export, repeat cancellation, reset, invalid input and 320/390px layouts. Desktop/mobile and bent-rod screenshots inspected.
 - App tests, paid-analysis contracts, typecheck, production build, old Arena logic/selection and source/dist HTTP/WASM routes passed. Three renderer remains isolated from the homepage bundle.
-- New actual-worker fault-injection checks are completing; then PR/CI/deployment/live validation remain.
+- New actual-worker fault-injection checks passed, including a zero-episode cancellation that truthfully retains `physicsExecuted:false`. Missing-recording UI export preserves a clearly incomplete summary. PR197/CI/deployment/live validation remain.

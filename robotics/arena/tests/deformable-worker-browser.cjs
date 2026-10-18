@@ -198,6 +198,21 @@ function verifyEpisode(episode) {
     assert.equal(searchArchive.episodes.length, 13, 'all search attempts and fresh verification retain full recordings');
     searchArchive.episodes.forEach(verifyEpisode);
 
+    await spawn('cancelBeforeExecution');
+    const zeroStart = await mark('cancelBeforeExecution');
+    await page.evaluate(() => {
+      const worker = window.contractWorkers.cancelBeforeExecution.worker;
+      worker.postMessage({ type: 'batch', count: 10, seed: 70 });
+      worker.postMessage({ type: 'cancel' });
+    });
+    const zero = (await wait('cancelBeforeExecution', 'batchComplete', zeroStart)).report;
+    assert.equal(zero.status, 'cancelled');
+    assert.equal(zero.completed, 0);
+    assert.equal(zero.cases.length, 0);
+    assert.equal(zero.unattempted, 10);
+    assert.equal(zero.provenance.physicsExecuted, false, 'a prepared/cancelled pack must not claim executed physics');
+    assert.equal(zero.provenance.policyExecuted, false);
+
     await spawn('cancel', false, 1);
     const cancelled = (await operation('cancel', { type: 'batch', count: 100, seed: 100 }, 'batchComplete')).report;
     assert.equal(cancelled.status, 'cancelled');

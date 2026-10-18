@@ -96,7 +96,7 @@ async function batch(physics, request) {
     baseConfig: config,
     cases: [],
     runtime: runtimeManifest,
-    provenance: { physicsExecuted: true, policyExecuted: false, source: 'browser-mujoco-elastic-rod', controller: 'prescribed attachment trajectory', pricing: 'local execution; no hosted compute charge' },
+    provenance: { physicsExecuted: false, policyExecuted: false, source: 'browser-mujoco-elastic-rod', controller: 'prescribed attachment trajectory', pricing: 'local execution; no hosted compute charge' },
     coverage: 'Seeded target, Young\'s modulus and density perturbations, with exact per-case configurations retained. These are not independent real robots or a learned-policy benchmark.',
     physicsSeconds: 0,
     computeSeconds: 0,
@@ -117,6 +117,7 @@ async function batch(physics, request) {
       const row = { index: i, seed: seed + i, outcome, config: episode.config, summary: episode.summary, evidenceId: episode.evidenceId, manifest: episode.manifest, computeSeconds: episode.computeSeconds, storageAvailable: episode.storageAvailable };
       report.cases.push(row);
       report.completed++;
+      report.provenance.physicsExecuted = true;
       report[outcome === 'task_success' ? 'successes' : 'misses']++;
       report.physicsSeconds += episode.frames.at(-1)?.time || condition.duration || 0;
       report.computeSeconds += episode.computeSeconds;
@@ -158,7 +159,7 @@ async function search(physics, request) {
     requested: 13, candidateBudget: 12, verificationBudget: 1, completed: 0,
     successes: 0, misses: 0, errors: 0, cases: [], baseConfig: config,
     selection: 'Lowest measured rope-tip distance; earliest candidate wins ties. Target, material and judge remain fixed.',
-    provenance: { physicsExecuted: true, policyExecuted: false, controller: 'bounded parameter search over prescribed trajectories', source: 'browser-mujoco-elastic-rod' },
+    provenance: { physicsExecuted: false, policyExecuted: false, controller: 'bounded parameter search over prescribed trajectories', source: 'browser-mujoco-elastic-rod' },
     runtime: runtimeManifest,
   };
   await putRecord('campaigns', report);
@@ -169,6 +170,7 @@ async function search(physics, request) {
       const outcome = caseOutcome(episode);
       report.cases.push({ index: report.cases.length, role, config: episode.config, outcome, summary: episode.summary, evidenceId: episode.evidenceId, manifest: episode.manifest, storageAvailable: episode.storageAvailable });
       report.completed++;
+      report.provenance.physicsExecuted = true;
       report[outcome === 'task_success' ? 'successes' : 'misses']++;
       if (!episode.storageAvailable) { report.status = 'storage_error'; report.storageError = episode.storageError; }
       return episode;

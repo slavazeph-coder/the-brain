@@ -50,7 +50,7 @@ The build copies the official MuJoCo 3.16.0 loader/WASM and Apache license from 
 
 The meaningful numerical checks include finite supported cases, gravity response, reproducible reset, material sensitivity, a reachable target and an unreachable miss, independence of the target judge from physical motion, and timestep refinement. A controlled planar case compares custom elastic torques with native MuJoCo joint stiffness. These checks do not establish sim-to-real accuracy.
 
-The requested timestep is capped deterministically at 0.00025 s, or 0.000125 s when material damping is below 0.0003 N·m·s/rad. The actual model timestep, requested timestep, executed steps and elapsed simulation time are retained. This changes integration resolution rather than adding hidden material damping. Validation covers 32 endpoint combinations of elastic modulus, radius, length, density and supported low/default damping. It does not establish stability for every possible parameter tuple.
+The requested timestep is capped deterministically at 0.00025 s, or 0.000125 s when material damping is below 0.0003 N·m·s/rad. The actual model timestep, requested timestep, executed steps and elapsed simulation time are retained. This changes integration resolution rather than adding hidden material damping. Validation covers 32 endpoint combinations of elastic modulus, radius, length, density and supported damping boundaries. It does not establish stability for every possible parameter tuple.
 
 ## Research provenance and next fidelity gate
 
