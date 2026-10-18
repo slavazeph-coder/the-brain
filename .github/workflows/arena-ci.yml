@@ -7,6 +7,9 @@ on:
       - "brainsnn-r3f-app/arena-analysis/**"
       - "brainsnn-r3f-app/src/arena/**"
       - "brainsnn-r3f-app/scripts/build-site-renderer.mjs"
+      - "brainsnn-r3f-app/scripts/build-deformable.mjs"
+      - "brainsnn-r3f-app/package*.json"
+      - "brainsnn-r3f-app/vendor-licenses/**"
       - "robotics/arena/**"
       - ".github/workflows/arena-ci.yml"
   push:
@@ -16,6 +19,9 @@ on:
       - "brainsnn-r3f-app/arena-analysis/**"
       - "brainsnn-r3f-app/src/arena/**"
       - "brainsnn-r3f-app/scripts/build-site-renderer.mjs"
+      - "brainsnn-r3f-app/scripts/build-deformable.mjs"
+      - "brainsnn-r3f-app/package*.json"
+      - "brainsnn-r3f-app/vendor-licenses/**"
       - "robotics/arena/**"
       - ".github/workflows/arena-ci.yml"
   workflow_dispatch:
@@ -67,6 +73,22 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Native inspector desktop and mobile browser flows
         run: node tests/arena-inspector-browser.cjs
+      - name: Build isolated deformable physics assets
+        working-directory: brainsnn-r3f-app
+        run: node scripts/build-deformable.mjs
+      - name: Deformable dynamics, reproducibility and real worker recordings
+        run: |
+          node --test tests/deformable-physics.mjs
+          node tests/deformable-worker-browser.cjs
+          node tests/deformable-ui-browser.cjs
+      - name: Retain deformable desktop and mobile browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deformable-physics-browser
+          path: output/playwright/deformable-*.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Retain native inspector browser diagnostics
         if: always()
         uses: actions/upload-artifact@v4

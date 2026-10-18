@@ -31,6 +31,8 @@ const THREE_IMPORTERS = new Set([
   'src/features/toys/poke/PokeBrainScene.jsx',
   // Bundled separately for /arena/ and loaded only when Test your space opens.
   'src/arena/site-renderer.js',
+  // Separate page bundle; the homepage/Arcade only links to this task.
+  'src/arena/deformable-renderer.js',
 ]);
 
 const THREE_IMPORT = /from\s+['"](three|@react-three\/[a-z-]+)['"]|import\s*\(\s*['"](three|@react-three\/[a-z-]+)['"]/;

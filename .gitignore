@@ -19,3 +19,8 @@ brainsnn-r3f-app/playwright-report/
 # Local browser inspection artifacts
 .playwright-cli/
 output/playwright/
+
+# Pinned runtime assets are assembled from the lockfile by build-deformable.mjs.
+brainsnn-r3f-app/public/arena/deformable/vendor/
+brainsnn-r3f-app/public/arena/deformable/renderer.js
+brainsnn-r3f-app/public/arena/deformable/runtime-manifest.json

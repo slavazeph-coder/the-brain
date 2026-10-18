@@ -49,6 +49,29 @@ try {
     const full = await get('/arena/assets/robots/panda.png', { method: 'HEAD' }); assert.equal(full.status, 200); assert.match(full.headers.get('content-type'), /image\/png/); assert.equal(await full.text(), '');
     const r = await get('/arena/assets/robots/panda.png', { headers: { Range: 'bytes=0-15' } }); assert.equal(r.status, 206); assert.equal((await r.arrayBuffer()).byteLength, 16);
   });
+  await test('deformable task serves real WASM and versioned local modules', async () => {
+    const bare = await get('/arena/deformable?source=arcade');
+    assert.equal(bare.status, 308);
+    assert.equal(bare.headers.get('location'), '/arena/deformable/?source=arcade');
+    const document = await get('/arena/deformable/');
+    assert.equal(document.status, 200);
+    assert.match(document.headers.get('content-type'), /text\/html/);
+    assert.match(await document.text(), /deformable-physics-2026-10-17-v1/);
+    for (const name of ['app.js', 'simulation-worker.js', 'rope-physics.js', 'journal.js', 'renderer.js', 'vendor/mujoco.js']) {
+      const response = await get('/arena/deformable/' + name);
+      assert.equal(response.status, 200, name);
+      assert.match(response.headers.get('content-type'), /javascript/, name);
+      assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    }
+    const wasm = await get('/arena/deformable/vendor/mujoco.wasm', { headers: { Range: 'bytes=0-7' } });
+    assert.equal(wasm.status, 206);
+    assert.match(wasm.headers.get('content-type'), /application\/wasm/);
+    assert.deepEqual(Array.from(new Uint8Array(await wasm.arrayBuffer())), [0, 97, 115, 109, 1, 0, 0, 0]);
+    const manifest = await (await get('/arena/deformable/runtime-manifest.json')).json();
+    assert.equal(manifest.engine.version, '3.16.0');
+    assert(manifest.assets.some(asset => asset.path === 'vendor/mujoco.wasm' && /^[a-f0-9]{64}$/.test(asset.sha256)));
+    assert.equal((await get('/arena/deformable/', { method: 'POST' })).status, 405);
+  });
   await test('worker setup and downloadable kit are reachable', async () => {
     const docs = await get('/arena/worker-setup.html'); assert.equal(docs.status, 200); assert.match(docs.headers.get('content-type'), /text\/html/);
     const evaluation = await get('/arena/evaluation-setup.html'); assert.equal(evaluation.status, 200); assert.match(evaluation.headers.get('content-type'), /text\/html/); assert.match(await evaluation.text(), /run-campaign\.py/);
