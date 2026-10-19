@@ -1,0 +1,12 @@
+[
+  {
+    "id": "depth-small",
+    "label": "Relative-depth photo preview",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": ["image"],
+    "max_inputs": 1,
+    "timeout_seconds": 600,
+    "command": ["/absolute/path/to/venv/bin/python", "/absolute/path/to/the-brain/robotics/world_worker/depth_small.py", "--input-manifest", "{input_manifest}"]
+  }
+]
