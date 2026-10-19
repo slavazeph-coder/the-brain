@@ -352,8 +352,12 @@ Hermes/vLLM/Ollama processes were left running unchanged. That initial busy
 observation did not establish a safe reconstruction slot; the later idle-window
 qualification is documented separately above.
 
-[Lyra 2's tested installation](https://github.com/nv-tlabs/lyra/blob/main/Lyra-2/INSTALL.md)
-uses H100, CUDA 12.8 and Torch 2.7.1 with x86-specific build examples; a GB10 ARM64
-port and its service coexistence remain untested. Do not convert the available
-system memory observation into a claim that Lyra fits or runs here. An idle,
-bounded GPU qualification must precede any engine activation or flagship release.
+Lyra remains unqualified. Its Apache-2.0 source license is separate from model
+rights: Lyra 1's core checkpoints permit commercial use under NVIDIA Open Model
+terms, while Lyra 2's published checkpoint license restricts use to internal,
+non-production R&D. Lyra 1's documented approximately 43 GB offloaded peak is an
+H100/A100 observation, not a GB10 measurement or minimum; it exceeds the existing
+20 GiB allocation guard. The guardrail rights chain, source/card mismatch,
+isolated ARM64 port and service coexistence remain open gates. See the
+[pinned generative qualification review and acceptance plan](world-generative-qualification.md).
+Available host memory does not establish that either model fits or runs here.

@@ -128,6 +128,93 @@ def check_routes(browser, base):
     assert errors==[],errors
     ctx.close()
 
+def check_measurements(browser):
+    """Authored input fixture exercises self-reported evidence; no physical measurement is claimed."""
+    ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
+    view=ctx.new_page();errors=[];view.on('pageerror',lambda e:errors.append(str(e)))
+    view.goto(URL,wait_until='networkidle')
+    page=view.frame(url=re.compile(r'/world/index\.html$')) or view
+    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    authored={'schema':'brainsnn.world.v1','name':'Measurement contract fixture','width':8,'depth':8,'provenance':'observed','scaleReviewed':True,'mapReviewed':True,'start':{'x':1,'z':1},'objects':[{'id':'unknown-corner','name':'Unobserved corner','kind':'unknown','x':4,'z':4,'w':1,'d':1,'h':1}]}
+    def import_map(value):
+        page.locator('#files').set_input_files({'name':'measurement-fixture.json','mimeType':'application/json','buffer':json.dumps(value).encode()})
+        page.wait_for_function("document.querySelector('#world-title').textContent==='Measurement contract fixture'")
+    def proof(tag):
+        with view.expect_download() as event:page.locator('#export').click()
+        path=OUTPUT/(browser.browser_type.name+'-measurement-'+tag+'.json');event.value.save_as(path)
+        return json.loads(path.read_text())
+    def replace_worksheet():
+        view.once('dialog',lambda dialog:dialog.accept())
+        page.locator('#measurement-start').click()
+        page.wait_for_function("document.querySelector('#measurement-state').textContent.startsWith('Current map')")
+    import_map(authored)
+    page.locator('#scale-reviewed').check()
+    original=proof('before')['world']
+    assert original['scaleReviewed'] is True and original['mapReviewed'] is False
+    page.locator('#measurement-worksheet summary').click();page.locator('#measurement-start').click()
+    page.wait_for_function("document.querySelector('#measurement-state').textContent.startsWith('Current map')")
+    literal='<img src=x onerror="window.measurementInjected=true">'
+    page.locator('#measure-label').fill(literal)
+    page.locator('#measure-reviewNote').fill('Fixture floor needs independent site review')
+    page.locator('#measure-decision').select_option('needs-work');page.locator('#measurement-review').click()
+    assert page.locator('#measure-label').input_value()==literal
+    page.locator('[data-tab=understand]').click();page.locator('[data-tab=world]').click()
+    assert page.locator('#measure-label').input_value()==literal
+    pending=proof('draft')
+    assert pending['world']==original and pending['geometryEvidence']['measurements']==[]
+    assert literal not in json.dumps(pending['geometryEvidence'])
+    for key,value in {'fromX':'0','fromZ':'0','toX':'3','toZ':'0','distance':'3.02','uncertainty':'0.02','instrument':'Authored browser fixture, not a real meter','measuredOn':'2026-10-19','note':'Explicit test evidence'}.items():
+        page.locator('#measure-'+key).fill(value)
+    page.locator('#measurement-save').click()
+    assert page.locator('#measurement-records img').count()==0
+    assert literal in page.locator('#measurement-records').inner_text()
+    assert page.evaluate('window.measurementInjected') is None
+    for target in ['start','object:unknown-corner']:
+        page.locator('#measure-target').select_option(target);page.locator('#measure-decision').select_option('checked')
+        page.locator('#measure-reviewNote').fill('Test reviewer decision only');page.locator('#measurement-review').click()
+    current=proof('current');evidence=current['geometryEvidence']
+    assert current['world']==original and evidence['binding']['status']=='current'
+    assert evidence['authority']=='self-reported-unverified' and evidence['metricVerified'] is False and evidence['certified'] is False
+    assert len(evidence['measurements'])==1 and len(evidence['reviews'])==3
+    assert evidence['measurements'][0]['from']==[0,0] and evidence['measurements'][0]['to']==[3,0]
+    assert evidence['measurements'][0]['distanceMeters']==3.02 and evidence['measurements'][0]['uncertaintyMeters']==0.02
+    assert evidence['geometry']['sha256']==evidence['binding']['currentGeometrySha256']
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
+    page.evaluate("document.documentElement.style.scrollBehavior='auto'")
+    page.locator('#measurement-worksheet summary').focus()
+    page.evaluate("document.querySelector('#measurement-worksheet').scrollIntoView({block:'start',behavior:'instant'})")
+    page.locator('#measurement-worksheet').screenshot(path=str(OUTPUT/(browser.browser_type.name+'-measurement-worksheet.png')))
+    # An imported receipt cannot keep local review authority, even with identical geometry.
+    with view.expect_download() as event:page.locator('#measurement-export').click()
+    receipt=OUTPUT/(browser.browser_type.name+'-measurement-worksheet.json');event.value.save_as(receipt)
+    view.once('dialog',lambda dialog:dialog.accept());page.locator('#measurement-import').set_input_files(receipt)
+    page.wait_for_function("document.querySelector('#measurement-state').textContent.startsWith('Imported reference')")
+    assert page.locator('#measurement-save').is_disabled()
+    imported=proof('imported');assert imported['world']==original
+    assert imported['geometryEvidence']['binding']['status']=='imported'
+    assert imported['geometryEvidence']['measurements']==evidence['measurements']
+    # An actual geometry edit retains the worksheet as stale and preserves unsaved form text.
+    replace_worksheet();page.locator('#measure-label').fill('Unsubmitted draft survives map edit')
+    page.locator('#objects').select_option('unknown-corner')
+    page.locator('#object-x').fill('5');page.locator('#object-x').press('Tab')
+    assert 'Stale worksheet' in page.locator('#measurement-state').inner_text()
+    assert page.locator('#measure-label').input_value()=='Unsubmitted draft survives map edit'
+    assert page.locator('#measurement-save').is_disabled()
+    stale=proof('stale')['geometryEvidence'];assert stale['binding']['status']=='stale'
+    assert stale['geometry']['sha256']!=stale['binding']['currentGeometrySha256']
+    # Importing the same map invalidates local authority too; hashes alone cannot carry approval.
+    replace_worksheet();same=proof('same-map')['world'];import_map(same)
+    assert 'Stale worksheet' in page.locator('#measurement-state').inner_text()
+    replaced=proof('map-reimport')['geometryEvidence']
+    assert replaced['binding']['status']=='stale' and replaced['binding']['reason']=='map-replaced'
+    assert replaced['geometry']['sha256']==replaced['binding']['currentGeometrySha256']
+    assert not page.locator('#scale-reviewed').is_checked() and not page.locator('#map-reviewed').is_checked()
+    page.locator('[data-tab=evidence]').click();view.once('dialog',lambda dialog:dialog.accept());page.locator('[data-action=clear]').click()
+    assert 'geometryEvidence' not in proof('cleared')
+    assert errors==[],errors
+    ctx.close()
+    print(browser.browser_type.name+': measured-evidence drafts, inert labels, proof, edit/import invalidation and clearing verified',flush=True)
+
 def check_inference(browser, photo):
     """Opt-in real model download and inference; no substituted model responses."""
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
@@ -175,7 +262,7 @@ if __name__=='__main__':
         for name in os.environ.get('WORLD_BROWSERS','chromium').split(','):
             executable=os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
             browser=getattr(p,name).launch(headless=True, **({'executable_path':executable} if name=='chromium' and executable else {}))
-            check(browser,False);check(browser,True)
+            check(browser,False);check(browser,True);check_measurements(browser)
             if os.environ.get('WORLD_SITE_URL'):check_routes(browser,os.environ['WORLD_SITE_URL'].rstrip('/'))
             if os.environ.get('WORLD_PHOTO'):check_inference(browser,os.environ['WORLD_PHOTO'])
             browser.close()

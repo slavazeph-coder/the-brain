@@ -1,4 +1,4 @@
-"""HTTP browser -> private worker -> real observation CLI -> fixture VLM regression.
+"""HTTP browser -> scoped private worker -> real observation CLI -> fixture VLM.
 
 The loopback VLM response is an explicit transport fixture. No learned model
 executes and this test makes no claim about recognition quality. Photo decode,
@@ -420,13 +420,21 @@ def main():
         while frontend == backend:
             backend = port()
         origin, worker_url = f'http://127.0.0.1:{frontend}', f'http://127.0.0.1:{backend}'
-        token = secrets.token_urlsafe(48)
+        operator_token = secrets.token_urlsafe(48)
+        browser_tokens = {name: secrets.token_urlsafe(48) for name in ['chromium', 'webkit']}
+        tenants = tmp / 'tenants.json'
+        tenants.write_text(json.dumps({'schema':'brainsnn.world.tenants.v1','tenants':[
+            {'id':'browser-'+name, 'token_sha256':hashlib.sha256(value.encode()).hexdigest(),
+             'engines':['world-observations']} for name,value in browser_tokens.items()
+        ]}))
+        tenants.chmod(0o600)
         config = tmp / 'adapters.json'
         config.write_text(json.dumps([{'id': 'world-observations', 'label': 'Observation transport fixture (no model)',
             'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'], 'max_inputs': 1,
             'timeout_seconds': 90, 'command': [observations_python, str(ROOT / 'robotics/world_worker/observations.py'),
                                              '--input-manifest', '{input_manifest}']}]))
-        environment = {**os.environ, 'WORLD_WORKER_TOKEN': token, 'WORLD_WORKER_DIR': str(tmp / 'data'),
+        environment = {**os.environ, 'WORLD_WORKER_TOKEN': operator_token, 'WORLD_WORKER_DIR': str(tmp / 'data'),
+                       'WORLD_TENANTS_FILE':str(tenants),
                        'WORLD_ADAPTERS_FILE': str(config), 'WORLD_ALLOWED_ORIGINS': origin,
                        'WORLD_VLM_ENABLED': '1', 'WORLD_VLM_MODEL': FIXTURE_MODEL,
                        'WORLD_VLM_BASE_URL': fixture['base'], 'WORLD_VLM_API_KEY': fixture['key']}
@@ -443,7 +451,17 @@ def main():
             ready(origin + '/world/index.html', processes[0]); ready(worker_url + '/healthz', processes[1])
             with sync_playwright() as pw:
                 for name in os.environ.get('WORLD_BROWSERS', 'chromium,webkit').split(','):
-                    check_browser(pw, name.strip(), origin, worker_url, token, photo, fixture)
+                    name=name.strip()
+                    token=browser_tokens[name]
+                    request=urllib.request.Request(worker_url+'/v1/capabilities',headers={'Authorization':'Bearer '+token})
+                    with urllib.request.urlopen(request,timeout=5) as response:
+                        capabilities=json.load(response)
+                    assert capabilities['access_mode']=='tenant' and capabilities['owner_id']=='browser-'+name
+                    assert [engine['id'] for engine in capabilities['engines']]==['world-observations']
+                    check_browser(pw, name, origin, worker_url, token, photo, fixture)
+            request=urllib.request.Request(worker_url+'/v1/jobs',headers={'Authorization':'Bearer '+operator_token})
+            with urllib.request.urlopen(request,timeout=5) as response:
+                assert json.load(response)['jobs']==[],'Operator HTTP access must not inherit tenant jobs'
             assert not fixture['errors'], fixture['errors']
         except Exception:
             for path in [tmp / 'worker.log', *sorted((tmp / 'data/jobs').glob('*/operator.log'))]:

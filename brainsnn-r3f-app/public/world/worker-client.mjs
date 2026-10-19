@@ -1,7 +1,7 @@
 import {workerURL} from './core.mjs';
-/** Authenticated operator connection. Credentials never enter URLs or persistent storage. */
+/** Private worker connection. Credentials never enter URLs or persistent storage. */
 export class WorkerClient {
-  constructor(url, token) { this.base=workerURL(url); if(typeof token!=='string'||token.length<32)throw new Error('Use an operator token with at least 32 characters.'); this.token=token;this.uploads=new WeakMap(); }
+  constructor(url, token) { this.base=workerURL(url); if(typeof token!=='string'||token.length<32)throw new Error('Use a worker access token with at least 32 characters.'); this.token=token;this.uploads=new WeakMap(); }
   async request(path, {method='GET',body,signal,raw=false}={}) {
     if(!/^\/v1\/[a-zA-Z0-9/_?=&.-]+$/.test(path))throw new Error('Invalid worker path.');
     const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),60000);

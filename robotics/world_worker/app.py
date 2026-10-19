@@ -1,4 +1,4 @@
-"""Single-operator World Studio worker. Run behind TLS, with one Uvicorn process.
+"""Private World Studio worker. Run behind TLS, with one Uvicorn process.
 
 No user-supplied commands or remote input URLs are accepted. GPU adapters are
 operator-installed, license-reviewed executables and remain disabled by default.
@@ -27,6 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from .geometry import MAX_PREVIEW_COORDINATE
+from .auth import Identities, OPERATOR_OWNER
 
 MIB = 1024 ** 2
 ID = re.compile(r"^[a-f0-9]{32}$")
@@ -61,21 +62,29 @@ class Store:
         CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, name TEXT, kind TEXT, size INTEGER, offset INTEGER, created REAL);
         CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, engine TEXT, status TEXT, uploads TEXT, created REAL, error TEXT, artifacts TEXT);
         ''')
+        # Existing private data belongs only to the reserved operator identity.
+        # Never infer its owner from whichever tenant happens to connect first.
+        for table in ['uploads', 'jobs']:
+            if 'owner_id' not in {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{OPERATOR_OWNER}'")
+            self.db.execute(f'CREATE INDEX IF NOT EXISTS {table}_owner ON {table}(owner_id, created)')
         self.db.execute("UPDATE jobs SET status='failed', error='Worker restarted; execution was interrupted.' WHERE status IN ('queued','running')")
         self.db.commit()
 
-    def upload(self, uid):
+    def upload(self, uid, owner_id=None):
         if not ID.fullmatch(uid):
             raise HTTPException(404, 'Upload not found.')
-        row = self.db.execute('SELECT * FROM uploads WHERE id=?', (uid,)).fetchone()
+        row = self.db.execute('SELECT * FROM uploads WHERE id=?' + (' AND owner_id=?' if owner_id is not None else ''),
+                              (uid, owner_id) if owner_id is not None else (uid,)).fetchone()
         if not row:
             raise HTTPException(404, 'Upload not found.')
         return dict(row)
 
-    def job(self, jid):
+    def job(self, jid, owner_id=None):
         if not ID.fullmatch(jid):
             raise HTTPException(404, 'Job not found.')
-        row = self.db.execute('SELECT * FROM jobs WHERE id=?', (jid,)).fetchone()
+        row = self.db.execute('SELECT * FROM jobs WHERE id=?' + (' AND owner_id=?' if owner_id is not None else ''),
+                              (jid, owner_id) if owner_id is not None else (jid,)).fetchone()
         if not row:
             raise HTTPException(404, 'Job not found.')
         value = dict(row)
@@ -88,8 +97,8 @@ class Store:
                         (state, error, json.dumps(artifacts or []), jid))
         self.db.commit()
 
-    def upload_path(self, uid):
-        self.upload(uid)
+    def upload_path(self, uid, owner_id=None):
+        self.upload(uid, owner_id)
         return self.root / 'uploads' / uid
 
     def in_use(self, uid, running_ids=()):
@@ -108,15 +117,23 @@ class Store:
                 self.db.execute('DELETE FROM uploads WHERE id=?', (row['id'],))
         self.db.commit()
 
-    def storage_commitment(self, job_limit, running_ids=()):
+    def storage_commitment(self, job_limit, running_ids=(), owner_id=None):
         """Charge existing bytes plus unwritten upload/job reservations once.
 
         Database state persists reservations across HTTP requests and restarts.
         A cancelled adapter keeps its reservation until its process has stopped.
         Caller serializes admission and upload mutations with the worker IO lock.
         """
+        condition, arguments = (' WHERE owner_id=?', (owner_id,)) if owner_id is not None else ('', ())
+        uploads = list(self.db.execute('SELECT id,size FROM uploads' + condition, arguments))
+        jobs = list(self.db.execute('SELECT id,status FROM jobs' + condition, arguments))
+        upload_ids, job_ids = {row['id'] for row in uploads}, {row['id'] for row in jobs}
         used, upload_bytes, job_bytes = 0, {}, {}
         for path in self.root.rglob('*'):
+            parts = path.relative_to(self.root).parts
+            if owner_id is not None and not (len(parts) >= 2 and (
+                    (parts[0] == 'uploads' and parts[1] in upload_ids) or (parts[0] == 'jobs' and parts[1] in job_ids))):
+                continue
             try:
                 if path.is_symlink() or not path.is_file():
                     continue
@@ -124,15 +141,14 @@ class Store:
             except FileNotFoundError:
                 continue  # Adapter may rename a temporary file while monitored.
             used += size
-            parts = path.relative_to(self.root).parts
             if len(parts) == 2 and parts[0] == 'uploads':
                 upload_bytes[parts[1]] = size
             elif len(parts) >= 3 and parts[0] == 'jobs':
                 job_bytes[parts[1]] = job_bytes.get(parts[1], 0) + size
         upload_remaining = sum(max(0, row['size'] - upload_bytes.get(row['id'], 0))
-                               for row in self.db.execute('SELECT id,size FROM uploads'))
-        active_ids = {row['id'] for row in self.db.execute("SELECT id FROM jobs WHERE status IN ('prepared','queued','running')")}
-        active_ids.update(running_ids)
+                               for row in uploads)
+        active_ids = {row['id'] for row in jobs if row['status'] in ACTIVE}
+        active_ids.update(set(running_ids) & job_ids)
         job_remaining = sum(max(0, job_limit - job_bytes.get(jid, 0)) for jid in active_ids)
         # Leave room for bounded SQLite metadata/WAL updates after admission.
         return used + upload_remaining + job_remaining + MIB
@@ -210,23 +226,39 @@ def visual_metadata(entry):
     return result
 
 
-def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, ttl: int = 86400,
+def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, ttl: int = 86400,
                storage_limit: int = 20 * 1024 ** 3, job_limit: int = 4 * 1024 ** 3):
     token = token or os.environ.get('WORLD_WORKER_TOKEN', '')
     if len(token) < 32:
         raise RuntimeError('Set WORLD_WORKER_TOKEN to a random secret of at least 32 characters.')
     if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:
         raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
-    store = Store(root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data')))
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))
+    identities = Identities(token, tenants or os.environ.get('WORLD_TENANTS_FILE'), engines, storage_limit)
+    # Never sign capabilities with a credential handed to any browser, including
+    # the legacy operator credential. Restart intentionally expires old tickets.
+    ticket_key = secrets.token_bytes(32)
+    store = Store(root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data')))
     queue: asyncio.Queue = asyncio.Queue(maxsize=8)
     processes = {}
     running = set()
     io_lock = asyncio.Lock()
 
-    def check_storage(extra=0):
+    def check_storage(extra=0, principal=None):
         if store.storage_commitment(job_limit, running) + extra > storage_limit:
             raise HTTPException(429, 'Worker disk budget is reserved or full. Delete finished jobs or cancel pending work.')
+        if principal and store.storage_commitment(job_limit, running, principal.owner_id) + extra > principal.limits['storage_bytes']:
+            raise HTTPException(429, 'Owner disk budget is reserved or full. Delete finished jobs or cancel pending work.')
+
+    def require_engine(principal, engine):
+        if engine not in principal.engines:
+            raise HTTPException(403, 'This credential is not authorized for that engine.')
+
+    def check_owner_jobs(principal, *, adding=False):
+        owned = list(store.db.execute('SELECT id,status FROM jobs WHERE owner_id=?', (principal.owner_id,)))
+        active = sum(row['status'] in ACTIVE or row['id'] in running for row in owned)
+        if len(owned) + int(adding) > principal.limits['job_count'] or active + int(adding) > principal.limits['active_jobs']:
+            raise HTTPException(429,'Owner job quota reached. Finish or cancel active work and delete old jobs.')
 
     def check_execution_storage(directory):
         total = sum(path.stat().st_size for path in directory.rglob('*') if path.is_file() and not path.is_symlink())
@@ -285,18 +317,23 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                     raise
                 if job['status'] != 'queued': return
                 try:
-                    check_storage()
+                    principal = identities.owner(job['owner_id'])
+                    if principal is None or job['engine'] not in principal.engines:
+                        store.state(jid, 'failed', 'Owner access or engine authorization was revoked before execution.')
+                        return
+                    check_owner_jobs(principal)
+                    check_storage(principal=principal)
                 except HTTPException:
-                    store.state(jid, 'failed', 'Reserved disk capacity is no longer available; execution did not start.')
+                    store.state(jid, 'failed', 'Reserved capacity or owner quota is no longer available; execution did not start.')
                     return
                 store.state(jid, 'running')
                 running.add(jid)
             directory.mkdir(exist_ok=True)
             out.mkdir(exist_ok=True)
-            items = [store.upload(i) for i in job['upload_ids']]
+            items = [store.upload(i, job['owner_id']) for i in job['upload_ids']]
             inputs = []
             for item in items:
-                path = store.upload_path(item['id'])
+                path = store.upload_path(item['id'], job['owner_id'])
                 validate_media(path, item['kind'])
                 inputs.append({'path': str(path), 'name': item['name'], 'kind': item['kind'], 'size': item['size']})
             request_file = directory / 'input.json'
@@ -371,9 +408,18 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.middleware('http')
     async def security(request: Request, call_next):
         is_download = request.url.path.startswith('/v1/download/') and request.method in ['GET','HEAD']
-        if request.method != 'OPTIONS' and request.url.path != '/healthz' and not is_download:
-            auth = request.headers.get('authorization','')
-            if not hmac.compare_digest(auth.encode(), ('Bearer '+token).encode()): return JSONResponse({'detail':'Unauthorized.'},401)
+        needs_auth = request.method != 'OPTIONS' and request.url.path != '/healthz' and not is_download
+        def authorize():
+            try:
+                principal = identities.authenticate(request.headers.get('authorization', '')) if len(request.headers.getlist('authorization')) == 1 else None
+            except (OSError, ValueError):
+                return JSONResponse({'detail':'Tenant access configuration is unavailable.'},503)
+            if principal is None: return JSONResponse({'detail':'Unauthorized.'},401)
+            request.state.principal = principal
+            return None
+        if needs_auth:
+            failure = authorize()
+            if failure is not None: return failure
         limit = 4*MIB if request.method == 'PUT' and request.url.path.startswith('/v1/uploads/') else 16384
         if request.method in ['POST','PUT','PATCH']:
             length = request.headers.get('content-length')
@@ -385,6 +431,11 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 data.extend(chunk)
                 if len(data)>limit:return JSONResponse({'detail':'Request exceeds the body limit.'},413)
             request._body=bytes(data)
+            # A caller can stall its request body across a registry edit. Refresh
+            # identity, engine grants and budgets after the await, at admission.
+            if needs_auth:
+                failure = authorize()
+                if failure is not None: return failure
         response = await call_next(request)
         response.headers['Cache-Control']='no-store'
         response.headers['X-Content-Type-Options']='nosniff'
@@ -399,107 +450,130 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def health(): return {'status':'ok','public_processing':False}
 
     @app.get('/v1/capabilities')
-    async def capabilities():
-        return {'api_version':'brainsnn.worker.v1','operator_only':True,'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values()], 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
+    async def capabilities(request:Request):
+        principal = request.state.principal
+        return {'api_version':'brainsnn.worker.v1','operator_only':True,
+                'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
+                'owner_id':principal.owner_id, 'owner_limits':principal.limits,
+                'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values() if e['id'] in principal.engines],
+                'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
     @app.post('/v1/uploads',status_code=201)
-    async def create_upload(body: UploadBody):
+    async def create_upload(body: UploadBody, request:Request):
+        principal = request.state.principal
         suffix=Path(body.name).suffix.lower()
         if suffix not in (['.jpg','.jpeg','.png','.webp'] if body.kind=='image' else ['.mp4','.mov','.webm']): raise HTTPException(422,'Unsupported file type.')
         async with io_lock:
             store.prune(ttl, running)
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads').fetchone()
             if count>=50 or reserved+body.size>2*1024**3:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
-            check_storage(body.size)
+            count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads WHERE owner_id=?',(principal.owner_id,)).fetchone()
+            if count >= principal.limits['upload_count'] or reserved + body.size > principal.limits['upload_bytes']:
+                raise HTTPException(429,'Owner upload quota reached. Delete old sources or wait for expiry.')
+            check_storage(body.size, principal)
             uid=secrets.token_hex(16)
             (store.root/'uploads'/uid).touch(mode=0o600)
-            store.db.execute('INSERT INTO uploads VALUES (?,?,?,?,?,?)',(uid,body.name,body.kind,body.size,0,time.time()));store.db.commit()
-            return store.upload(uid)
+            store.db.execute('INSERT INTO uploads (id,name,kind,size,offset,created,owner_id) VALUES (?,?,?,?,?,?,?)',(uid,body.name,body.kind,body.size,0,time.time(),principal.owner_id));store.db.commit()
+            return store.upload(uid, principal.owner_id)
 
     @app.get('/v1/uploads/{uid}')
-    async def upload_status(uid:str):return store.upload(uid)
+    async def upload_status(uid:str,request:Request):return store.upload(uid, request.state.principal.owner_id)
 
     @app.put('/v1/uploads/{uid}')
     async def put_upload(uid:str,offset:int,request:Request):
+        principal = request.state.principal
         data=await request.body()
         if not data:raise HTTPException(422,'Empty upload chunk.')
         async with io_lock:
-            item=store.upload(uid)
+            item=store.upload(uid, principal.owner_id)
             if store.in_use(uid, running):raise HTTPException(409,'This upload belongs to an active or stopping job.')
             if offset!=item['offset']:raise HTTPException(409,'Upload offset mismatch. Read upload status to resume.')
             if offset+len(data)>item['size']:raise HTTPException(413,'Chunk exceeds the declared file size.')
-            check_storage()  # Full declared size was reserved at upload admission.
-            path=store.upload_path(uid)
+            check_storage(principal=principal)  # Full declared size was reserved at upload admission.
+            path=store.upload_path(uid, principal.owner_id)
             with path.open('r+b') as f:
                 f.truncate(offset);f.seek(offset);f.write(data);f.flush();os.fsync(f.fileno())
-            store.db.execute('UPDATE uploads SET offset=? WHERE id=?',(offset+len(data),uid));store.db.commit()
-            return store.upload(uid)
+            store.db.execute('UPDATE uploads SET offset=? WHERE id=? AND owner_id=?',(offset+len(data),uid,principal.owner_id));store.db.commit()
+            return store.upload(uid, principal.owner_id)
 
     @app.delete('/v1/uploads/{uid}')
-    async def delete_upload(uid:str):
+    async def delete_upload(uid:str,request:Request):
+        owner = request.state.principal.owner_id
         async with io_lock:
+            store.upload(uid, owner)  # Authorize before revealing active-job state.
             if store.in_use(uid, running):raise HTTPException(409,'Cancel the job and wait for execution to stop before deleting its sources.')
-            store.upload_path(uid).unlink(missing_ok=True);store.db.execute('DELETE FROM uploads WHERE id=?',(uid,));store.db.commit()
+            store.upload_path(uid,owner).unlink(missing_ok=True);store.db.execute('DELETE FROM uploads WHERE id=? AND owner_id=?',(uid,owner));store.db.commit()
         return {'deleted':True}
 
     @app.post('/v1/jobs',status_code=201)
-    async def create_job(body:JobBody):
+    async def create_job(body:JobBody,request:Request):
+        principal = request.state.principal
         if body.consent is not True:raise HTTPException(422,'Explicit processing consent is required.')
         engine=engines.get(body.engine)
         if not engine or not engine['available']:raise HTTPException(409,'This engine is not configured and license-approved.')
+        require_engine(principal, body.engine)
         if len(set(body.upload_ids))!=len(body.upload_ids) or len(body.upload_ids)>engine['max_inputs']:raise HTTPException(422,'Invalid number of inputs.')
         async with io_lock:
             if store.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0]>=50:raise HTTPException(429,'Job quota reached. Delete finished jobs or wait for expiry.')
+            check_owner_jobs(principal, adding=True)
             for uid in body.upload_ids:
-                item=store.upload(uid)
+                item=store.upload(uid, principal.owner_id)
                 if item['offset']!=item['size'] or item['kind'] not in engine['input_kinds']:raise HTTPException(422,'Incomplete or unsupported source.')
-                validate_media(store.upload_path(uid),item['kind'])
-            check_storage(job_limit)
+                validate_media(store.upload_path(uid, principal.owner_id),item['kind'])
+            check_storage(job_limit, principal)
             jid=secrets.token_hex(16)
-            store.db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]'));store.db.commit()
-            return store.job(jid)
+            store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id) VALUES (?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id));store.db.commit()
+            return store.job(jid, principal.owner_id)
 
     @app.post('/v1/jobs/{jid}/start')
-    async def start_job(jid:str):
+    async def start_job(jid:str,request:Request):
+        principal = request.state.principal
         async with io_lock:
-            job=store.job(jid)
+            job=store.job(jid, principal.owner_id)
+            require_engine(principal, job['engine'])
             if job['status']!='prepared':raise HTTPException(409,'Only a prepared job can start; cancelled jobs never restart.')
             if queue.full():raise HTTPException(429,'Processing queue is full.')
-            check_storage()
+            check_owner_jobs(principal)
+            check_storage(principal=principal)
             store.state(jid,'queued');queue.put_nowait(jid)
-            return store.job(jid)
+            return store.job(jid, principal.owner_id)
 
     @app.get('/v1/jobs/{jid}')
-    async def job_status(jid:str):return store.job(jid)
+    async def job_status(jid:str,request:Request):return store.job(jid, request.state.principal.owner_id)
 
     @app.get('/v1/jobs')
-    async def list_jobs():return {'jobs':[store.job(r[0]) for r in store.db.execute('SELECT id FROM jobs ORDER BY created DESC LIMIT 50')]}
+    async def list_jobs(request:Request):
+        owner = request.state.principal.owner_id
+        return {'jobs':[store.job(r[0], owner) for r in store.db.execute('SELECT id FROM jobs WHERE owner_id=? ORDER BY created DESC LIMIT 50',(owner,))]}
 
     @app.delete('/v1/jobs/{jid}')
-    async def cancel_job(jid:str):
+    async def cancel_job(jid:str,request:Request):
+        owner = request.state.principal.owner_id
         async with io_lock:
-            job=store.job(jid)
+            job=store.job(jid, owner)
             active=job['status'] in ACTIVE
             if active:store.state(jid,'cancelled')
         if active:await stop_process(jid)
-        return store.job(jid)
+        return store.job(jid, owner)
 
     @app.delete('/v1/jobs/{jid}/artifacts')
-    async def delete_artifacts(jid:str):
+    async def delete_artifacts(jid:str,request:Request):
+        owner = request.state.principal.owner_id
         async with io_lock:
-            job=store.job(jid)
+            job=store.job(jid, owner)
             if job['status'] in ACTIVE or jid in running:raise HTTPException(409,'Cancel the job and wait for execution to stop first.')
             shutil.rmtree(store.root/'jobs'/jid,ignore_errors=True)
-            store.db.execute('DELETE FROM jobs WHERE id=?',(jid,));store.db.commit()
+            store.db.execute('DELETE FROM jobs WHERE id=? AND owner_id=?',(jid,owner));store.db.commit()
         return {'deleted':True}
 
     @app.post('/v1/jobs/{jid}/ticket')
-    async def ticket(jid:str,body:TicketBody):
-        job=store.job(jid)
+    async def ticket(jid:str,body:TicketBody,request:Request):
+        principal = request.state.principal
+        job=store.job(jid, principal.owner_id)
         if job['status']!='complete' or body.artifact>=len(job['artifacts']):raise HTTPException(404,'Artifact not found.')
-        raw=json.dumps({'job':jid,'artifact':body.artifact,'expires':int(time.time())+60},separators=(',',':')).encode()
+        raw=json.dumps({'owner':principal.owner_id,'credential':principal.credential_hash,'job':jid,'artifact':body.artifact,'expires':int(time.time())+60},separators=(',',':')).encode()
         payload=base64.urlsafe_b64encode(raw).decode().rstrip('=')
-        sig=hmac.new(token.encode(),payload.encode(),hashlib.sha256).hexdigest()
+        sig=hmac.new(ticket_key,payload.encode(),hashlib.sha256).hexdigest()
         return {'url':f'/v1/download/{payload}.{sig}','expires_in':60}
 
     @app.api_route('/v1/download/{ticket}',methods=['GET','HEAD'])
@@ -507,14 +581,16 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         try:
             if len(ticket)>1024:raise ValueError()
             payload,sig=ticket.rsplit('.',1)
-            if not hmac.compare_digest(sig,hmac.new(token.encode(),payload.encode(),hashlib.sha256).hexdigest()):raise ValueError()
+            if not hmac.compare_digest(sig,hmac.new(ticket_key,payload.encode(),hashlib.sha256).hexdigest()):raise ValueError()
             body=json.loads(base64.urlsafe_b64decode(payload+'='*(-len(payload)%4)))
-            if not time.time()<body['expires']<=time.time()+65:raise ValueError()
-            job=store.job(body['job']);index=body['artifact']
-            if job['status']!='complete' or not isinstance(index,int) or not 0<=index<len(job['artifacts']):raise ValueError()
+            if not isinstance(body,dict) or set(body) != {'owner','credential','job','artifact','expires'}:raise ValueError()
+            if type(body['expires']) is not int or not time.time()<body['expires']<=time.time()+65:raise ValueError()
+            if not isinstance(body['owner'],str) or not identities.ticket_principal(body['owner'],body['credential']):raise ValueError()
+            job=store.job(body['job'],body['owner']);index=body['artifact']
+            if job['status']!='complete' or type(index) is not int or not 0<=index<len(job['artifacts']):raise ValueError()
             entry=job['artifacts'][index];path=store.root/'jobs'/job['id']/'output'/entry['name']
             if path.is_symlink() or not path.is_file():raise ValueError()
-        except (ValueError,KeyError,TypeError,IndexError,HTTPException):raise HTTPException(403,'Invalid or expired download ticket.') from None
+        except (OSError,ValueError,KeyError,TypeError,IndexError,HTTPException):raise HTTPException(403,'Invalid or expired download ticket.') from None
         return FileResponse(path,media_type='application/octet-stream',filename=entry['name'],headers={'Content-Security-Policy':'sandbox','Cache-Control':'private, no-store'})
 
     return app
