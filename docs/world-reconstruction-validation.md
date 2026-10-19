@@ -1,7 +1,8 @@
 # World reconstruction validation — 19 October 2026
 
 CPU sparse reconstruction and dense MapAnything GPU reconstruction have executed
-on real photographs. GPU qualification covers one and three views on an idle GB10.
+on real photographs. GPU qualification covers one, three and eleven photographs,
+plus a photograph-sequence MP4, on an idle GB10.
 Neither result qualifies a metric collision map, robot policy, or public GPU service.
 
 ## Executed CPU reconstruction
@@ -96,8 +97,8 @@ not applied twice. A model's predicted metric scale remains `metric_verified:fal
 Output is a dense point-cloud preview, not Gaussian splats or a collision mesh.
 The bounded execution below validates model loading, output generation, peak GPU
 memory and latency for its specific inputs. General numerical quality, twelve-view
-or video operation, and production concurrency remain release gates. The example
-engine remains disabled.
+operation, physical walkthrough video and production concurrency remain release
+gates. The example engine remains disabled.
 
 ## Isolated GPU staging, without inference
 
@@ -134,6 +135,8 @@ for three views. No synthetic depth or replacement output was used.
 |---|---:|---:|---:|---:|
 | One photograph | 72,125 | 1 | 15.556 s | 5.03 / 5.28 GiB |
 | Three photographs | 86,593 | 3 | 16.800 s | 5.17 / 5.51 GiB |
+| Eleven photographs | 98,735 | 11 | 18.379 s | 5.72 / 6.08 GiB |
+| Photograph-sequence MP4 | 98,345 | 11 | 17.273 s | 5.84 / 6.24 GiB |
 
 Adapter elapsed includes checkpoint/source validation, preprocessing, model load,
 inference and export; the model's evidence file separately times loading through
@@ -163,6 +166,10 @@ production traffic.
 | One-view `reconstruction.json` | `7cd5e8be5b52fcc5cd0fdaf64001a785c25e382339abda790e2a2b49823e1928` |
 | Three-view `dense-preview.ply` | `71e88803e5fae6176b25c5b55edbdc3750c2f601f3d3343431823d5c51494df4` |
 | Three-view `reconstruction.json` | `494ae3c65df7158e66e766c06c2430d3f65686d0fe01d2b78395da54cbb6253d` |
+| Eleven-view `dense-preview.ply` | `d066c601e0c8ba4b336c85399b614a45867d94d434213468fcc21974b7236a74` |
+| Eleven-view `reconstruction.json` | `f78499be88c3226fe152119e56a38c1c63fa3783638c305ac63013de2a888262` |
+| Video `dense-preview.ply` | `117be0d5809fec08ceda1ef00a78c49639c0a698809508d071ba56d714ce7e20` |
+| Video `reconstruction.json` | `980ceb835d12b0225032c6bd99b55bf80c4137e1c998d27c50993320f659c9e9` |
 
 Remote receipts are under `/workspace/brainsnn-world-builder/qualification/`,
 in `1-view-20261019T142658Z` and `3-view-20261019T142807Z`: `watchdog.json`,
@@ -181,10 +188,41 @@ The UI retained point-cloud and unverified-scale labels. Screenshots and browser
 receipts are local ignored files under `output/playwright/world/`; this verifies
 rendering, not real-device Safari or geometric accuracy.
 
+The larger trials used the same pinned adapter, model, allocation cap and watchdog.
+The eleven-photo run was **15:05:11.606–15:05:31.773 UTC**; the video run was
+**15:05:54.848–15:06:14.010 UTC**. Their 22 and 21 watchdog samples all reported
+healthy idle vLLM and unchanged OOM counters. Minimum host headroom was 60.30 and
+59.15 GiB respectively. The 5.5-second MP4 was decoded at 2.182 sample frames per
+second with a twelve-frame cap; one near-duplicate was removed, leaving eleven
+views. This validates the actual video decode-to-GPU path for this fixture, not
+physical camera motion or a longer walkthrough.
+
+The larger receipts are `11-view-20261019T150511Z` and
+`video-20261019T150554Z` in the same remote/local qualification directories.
+`input-sha256.json` binds the exact eleven original photographs and MP4 by byte
+count and SHA256; its hash is
+`b2e22e75f0fdffe5510ff6f759eb4ff34ff62cb2c5cb6432529b8d0b5ce9feaa`.
+Every copied PLY, reconstruction JSON and manifest matched its GPU receipt.
+At **15:07:41 UTC**, post-run health was 200, active/waiting requests were zero,
+GPU utilization was 0%, temperature 40°C, all OOM counters were zero, and the
+only GPU process remained the original vLLM engine. No reconstruction process
+or public listener was left running.
+
+Independent browser checks found all 98,735 photo and 98,345 video points finite,
+matched every source hash, and validated finite intrinsics and rotations for all
+eleven camera poses in each output. The actual video PLY loaded over local HTTP
+in Chromium and a phone-sized WebKit viewport, with working navigation, no WebGL
+or page errors and no uploads. The default screenshots show fragmented surfaces,
+gaps and outliers: this is evidence for artifact loading and navigation, not
+geometric quality. Ignored receipts and screenshots are under
+`output/playwright/world/video-20261019T150554Z-*`; both run IDs also have
+`-geometry-receipt.json` and `-source-camera-receipt.json` records.
+
 Predicted metric scale remains unverified, and point clouds are not watertight
 meshes or reviewed collision geometry. This qualification does not cover longer
-videos, twelve views, low-texture interiors, geometric accuracy, semantic labels,
-robot execution or a public worker endpoint.
+videos, twelve views, low-texture interiors, geometric accuracy,
+robot execution or a public worker endpoint. Separate frame-bound semantic
+observations are qualified below; they do not validate 3D semantic geometry.
 
 ## Executed local visual observations
 
