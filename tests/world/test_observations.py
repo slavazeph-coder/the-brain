@@ -260,13 +260,18 @@ def test_photo_pixel_limit_and_animated_image_refused(photo, monkeypatch, tmp_pa
         obs.png_derivative(animated)
 
 
-def test_video_real_pts_derivatives_with_explicit_fake_vlm(tmp_path):
+@pytest.mark.parametrize('codec', ['libx264', 'libx265'])
+def test_video_real_pts_derivatives_with_explicit_fake_vlm(tmp_path, codec):
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         pytest.skip('FFmpeg required for actual frame decoding contract')
     pytest.importorskip('av')
     source = tmp_path / 'offset.mp4'
+    codec_options = (['-tag:v', 'hvc1', '-x265-params', 'pools=none:frame-threads=1:log-level=error']
+                     if codec == 'libx265' else [])
     subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=5:duration=1',
-                    '-vf', 'setpts=PTS+2/TB', '-c:v', 'libx264', '-threads', '1', str(source)], check=True)
+                    '-vf', 'setpts=PTS+2/TB', '-c:v', codec, '-threads', '1', '-pix_fmt', 'yuv420p',
+                    '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
+                    *codec_options, str(source)], check=True)
     result = obs.run(request(source, tmp_path, 'video'), environ=ENV, transport=lambda *_: completion())
     decoded = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
         'frame=pts:stream=time_base', '-of', 'json', str(source)], check=True, capture_output=True).stdout)

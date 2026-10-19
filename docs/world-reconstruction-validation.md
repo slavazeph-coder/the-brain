@@ -302,6 +302,40 @@ the exact sidecar, model/prompt/source/frame bindings, pending decisions and nul
 human reviews. The existing authored map and review flags stayed unchanged.
 Ignored screenshots and receipts are under `output/playwright/world/actual-v3-*`.
 
+## Bounded HEVC decoder qualification
+
+The observation decoder now allows software HEVC in MP4/MOV, preserving the
+existing pixel/thread limits, closed decoder configuration and denied secondary
+I/O. This is codec support, not physical iPhone or HDR qualification.
+
+At **15:18:37 UTC**, the GB10 CPU passed six actual decoder tests: three new
+HEVC cases and the existing H.264 probe/resolution-change and AV1 resolution-change
+checks. Synthetic 8-bit BT.709 HEVC preserved exact decoded PTS/time bases,
+accepted `max_pixels` and `threads` before opening, and rejected oversized probe
+and midstream frames in native FFmpeg before returning them for RGB/PNG conversion.
+The fixtures use tiny 64/128-pixel frames with deliberately smaller limits;
+no oversized real allocation was attempted.
+
+The tested decoder SHA256 is
+`d01eb9ca30b23693c8f652ab0c3fe078ec7949e2e2c9f88aeefab75ebd8ef5b5`;
+the test-module SHA256 is
+`8c13abb95c27a852c1a5454f868671320008159e893d8c29b25c9336ffd6a990`.
+Runtime: Python 3.12.3, PyAV 19.0.1 with embedded libavcodec/libavformat 63.1.102,
+NumPy 2.3.5 and Pillow 13.0.0. System FFmpeg was 6.1.1-3ubuntu5; the decoder tests
+used PyAV's embedded libraries. Receipts are in the isolated
+`/workspace/brainsnn-world-builder/hevc-qualification/` directory, with local
+copies under the ignored `output/playwright/world/hevc-qualification/` directory. Earlier GPU
+and VLM snapshots remain unchanged. No model inference or service change occurred.
+
+The local World observation suite also passed a generated `hvc1` SDR MP4 through
+the real adapter, decoded source timestamps, bounded PNG frames and SHA-256 checks
+with an explicitly fake VLM transport. All 54 observation tests and the full
+24-test Arena interop suite passed locally. The latter used its existing pinned
+Python 3.12.12/PyAV 19.0.1/PyArrow 26.0.0/mcap 1.5.0/NumPy 2.4.3/Pillow 12.2.0
+environment. These
+checks do not validate HDR/color transfer, display rotation, physical capture,
+model accuracy or robot geometry. WebM remains outside this decoder's scope.
+
 ## Read-only GPU hardware observation
 
 At **2026-10-19 13:59 UTC**, the authenticated GB10 host reported ARM64,

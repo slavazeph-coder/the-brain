@@ -64,20 +64,23 @@ def changing_resolution_video(path, codec='h264'):
             'AAAAIGZ0eXBpc29tAAACAGlzb21hdjAxaXNvMm1wNDEAAAAIZnJlZQAAAEZtZGF0CgsCAAAFFX/8SvkAQDIPEACmggQQIIEAAAMlAJSACgsCAAAFGb//Er5AEDIREACJoIEECCBAAAADJQCVDq8AAAMBbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAABJPgAAB1MAAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAix0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAB1MAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAABAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAdTAAAAAAAABAAAAAAGkbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAABJPgAAB1MBVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABT21pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAQ9zdGJsAAAAo3N0c2QAAAAAAAAAAQAAAJNhdjAxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAQABIAAAASAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAGWF2MUOBAAwACgsCAAAFFX/8SvkAQAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABNgAAATYAAAABhzdHRzAAAAAAAAAAEAAAACAADqYAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAAB4AAAAgAAAAFHN0Y28AAAAAAAAAAQAAADAAAABhdWR0YQAAAFltZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAACxpbHN0AAAAJKl0b28AAAAcZGF0YQAAAAEAAAAATGF2ZjYzLjEuMTAy'))
         return
     bitstream = bytearray()
-    for size in (16, 64):
-        encoder = av.CodecContext.create('libx264', 'w')
+    for size in ((64, 128) if codec == 'hevc' else (16, 64)):
+        encoder = av.CodecContext.create('libx265' if codec == 'hevc' else 'libx264', 'w')
         encoder.width = encoder.height = size
         encoder.pix_fmt = 'yuv420p'
         encoder.time_base = Fraction(1, 2)
         encoder.framerate = Fraction(2, 1)
         encoder.thread_count = 1
-        encoder.options = {'preset': 'ultrafast', 'tune': 'zerolatency', 'x264-params': 'keyint=1:repeat-headers=1'}
+        encoder.options = ({'preset': 'ultrafast', 'tune': 'zerolatency',
+                            'x265-params': 'keyint=1:repeat-headers=1:bframes=0:pools=none:frame-threads=1:log-level=error:colorprim=bt709:transfer=bt709:colormatrix=bt709'}
+                           if codec == 'hevc' else
+                           {'preset': 'ultrafast', 'tune': 'zerolatency', 'x264-params': 'keyint=1:repeat-headers=1'})
         for index in range(2):
             frame = av.VideoFrame.from_ndarray(np.full((size, size, 3), 100, dtype=np.uint8), format='rgb24')
             frame.pts = index
             for packet in encoder.encode(frame): bitstream.extend(bytes(packet))
         for packet in encoder.encode(): bitstream.extend(bytes(packet))
-    with av.open(io.BytesIO(bitstream), format='h264') as source, av.open(str(path), 'w') as output:
+    with av.open(io.BytesIO(bitstream), format='hevc' if codec == 'hevc' else 'h264') as source, av.open(str(path), 'w') as output:
         stream = output.add_stream_from_template(source.streams.video[0])
         stream.time_base = Fraction(1, 2)
         for index, packet in enumerate(source.demux(video=0)):
@@ -339,6 +342,60 @@ if(r.manifest.source.kind!=='imported')throw Error('wrong source'); console.log(
             with self.assertRaisesRegex(ImportError, 'decoder rejected') as raised:
                 next(frames)
         self.assertIsInstance(raised.exception.__cause__, av.FFmpegError)
+
+    def test_software_hevc_preserves_exact_pts_and_accepts_preopen_allocation_limits(self):
+        import av
+        path = self.root / 'sdr-hevc.mp4'
+        changing_resolution_video(path, codec='hevc')
+        # Real generated 8-bit SDR fixture, not a physical iPhone/HDR capture.
+        with av.open(str(path), format='mov') as source:
+            decoder = source.streams.video[0].codec_context
+            self.assertEqual(decoder.name, 'hevc')
+            self.assertFalse(decoder.is_open)
+            decoder.options = {'max_pixels': '16384', 'threads': '1'}
+            decoder.thread_count = 1
+            decoder.open()
+            self.assertEqual(decoder.thread_count, 1)
+            self.assertNotIn('max_pixels', decoder.options)
+            self.assertNotIn('threads', decoder.options)
+            originals = [(str(frame.pts), [frame.time_base.numerator, frame.time_base.denominator],
+                          [frame.height, frame.width, 3]) for frame in source.decode(video=0)]
+        with patch('inspection.interop.MAX_VIDEO_PIXELS', 16384):
+            selected = list(video_frames(path, [0, 0.5, 1, 1.5], 0, 2, 2))
+        self.assertEqual([(frame['pts'], frame['timeBase'], frame['shape']) for frame in selected], originals)
+        self.assertEqual([frame['sourceTime'] for frame in selected], [0, 0.5, 1, 1.5])
+        self.assertEqual([frame['errorSeconds'] for frame in selected], [0, 0, 0, 0])
+
+    def test_hevc_native_limit_rejects_midstream_resolution_before_large_frame_return(self):
+        import av
+        path = self.root / 'changing-hevc.mp4'
+        changing_resolution_video(path, codec='hevc')
+        with av.open(str(path), format='mov') as source:
+            self.assertEqual([(frame.width, frame.height) for frame in source.decode(video=0)],
+                             [(64, 64), (64, 64), (128, 128), (128, 128)])
+        with patch('inspection.interop.MAX_VIDEO_PIXELS', 4096):
+            frames = video_frames(path, [0, 0.5, 1, 1.5], 0, 2, 2)
+            self.assertEqual(next(frames)['shape'], [64, 64, 3])
+            self.assertEqual(next(frames)['shape'], [64, 64, 3])
+            with self.assertRaisesRegex(ImportError, 'decoder rejected') as raised:
+                next(frames)
+        # Failure is raised by FFmpeg's native decoder, before Python receives
+        # an oversized VideoFrame or attempts RGB/PNG conversion.
+        self.assertIsInstance(raised.exception.__cause__, av.FFmpegError)
+
+    def test_hevc_probe_has_native_pixel_limit_before_metadata_check(self):
+        import av
+        path = self.root / 'oversized-hevc.mp4'
+        changing_resolution_video(path, codec='hevc')
+        previous_level = av.logging.get_level()
+        av.logging.set_level(av.logging.ERROR)
+        try:
+            with av.logging.Capture() as logs, patch('inspection.interop.MAX_VIDEO_PIXELS', 2048):
+                with self.assertRaisesRegex(ImportError, 'time base or dimensions'):
+                    list(video_frames(path, [0], 0, 1, 2))
+        finally:
+            av.logging.set_level(previous_level)
+        self.assertTrue(any('max pixel count 2048' in message for _, _, message in logs), logs)
 
     def test_unsupported_video_decoder_is_refused_cleanly_by_cli(self):
         import av
