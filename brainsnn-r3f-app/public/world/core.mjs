@@ -1,4 +1,6 @@
 /** Deterministic, bounded geometry planning. This module never executes a learned policy. */
+import '../arena/site-core.js';
+const siteCore=globalThis.BrainSNNSiteCore;
 export const SCHEMA = 'brainsnn.world.v1';
 export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
 export const ROBOTS = Object.freeze({
@@ -22,11 +24,15 @@ export function normalizeWorld(input) {
     const id = label(o.id, `object-${i}`);
     if (!id || ids.has(id)) throw new Error('Object identifiers must be unique.');
     ids.add(id);
-    const w = numeric(o.w, 0.05, width, 'Object width'), d = numeric(o.d, 0.05, depth, 'Object depth');
-    return { id, name: label(o.name, 'Obstacle'), x: numeric(o.x, 0, width - w + 1e-8, 'Object X'), z: numeric(o.z, 0, depth - d + 1e-8, 'Object Z'), w, d, h: numeric(o.h ?? 1, 0, 10, 'Object height'), kind: ['obstacle', 'unknown', 'no-go'].includes(o.kind) ? o.kind : 'obstacle', note: label(o.note) };
+    const w = numeric(o.w, 0.02, width, 'Object width'), d = numeric(o.d, 0.02, depth, 'Object depth');
+    return { id, name: label(o.name, 'Obstacle'), x: numeric(o.x, 0, width - w + 1e-8, 'Object X'), z: numeric(o.z, 0, depth - d + 1e-8, 'Object Z'), w, d, h: numeric(o.h ?? 1, 0, 20, 'Object height'), kind: ['obstacle', 'unknown', 'no-go'].includes(o.kind) ? o.kind : 'obstacle', note: label(o.note) };
   });
   const provenance = ['authored', 'observed', 'generated'].includes(input.provenance) ? input.provenance : 'observed';
+  const floor=input.floor===undefined?undefined:siteCore.normalizeScene({width,depth,floor:input.floor,obstacles:[]}).floor;
+  const source=input.geometrySource;
   return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance,
+    ...(floor?{floor}:{}),
+    ...(source&&typeof source==='object'?{geometrySource:{kind:label(source.kind),name:label(source.name),warnings:Array.isArray(source.warnings)?source.warnings.slice(0,16).map(v=>label(v)):[]}}:{}),
     scaleReviewed: input.scaleReviewed === true && provenance !== 'generated', mapReviewed: input.mapReviewed === true && provenance !== 'generated',
     start: { x: numeric(input.start?.x ?? Math.min(1, width / 2), 0, width, 'Start X'), z: numeric(input.start?.z ?? Math.min(1, depth / 2), 0, depth, 'Start Z') } };
 }
@@ -58,7 +64,8 @@ export function planWorld(input, robotInput) {
   const radius = Math.hypot(robot.width, robot.depth) / 2 + robot.margin;
   // Inflate by half a cell diagonal so every adjacent route segment is conservative.
   const padding = radius + cell * Math.SQRT2 / 2;
-  const blocked = (p, r) => p.x < r || p.z < r || p.x > world.width - r || p.z > world.depth - r || world.objects.some(o => p.x >= o.x - r && p.x <= o.x + o.w + r && p.z >= o.z - r && p.z <= o.z + o.d + r);
+  const floorScene=world.floor?{floor:world.floor,obstacles:[]}:null;
+  const blocked = (p, r) => p.x < r || p.z < r || p.x > world.width - r || p.z > world.depth - r || (floorScene&&!siteCore.pointClear([p.x,p.z],floorScene,r)) || world.objects.some(o => p.x >= o.x - r && p.x <= o.x + o.w + r && p.z >= o.z - r && p.z <= o.z + o.d + r);
   const point = index => ({ x: (index % nx + 0.5) * cell, z: (Math.floor(index / nx) + 0.5) * cell });
   const free = new Uint8Array(n); let freeCount = 0;
   for (let i = 0; i < n; i++) if (!blocked(point(i), padding)) { free[i] = 1; freeCount++; }
@@ -107,17 +114,21 @@ export function workerURL(value) {
 export function arenaMap(input) {
   const w = normalizeWorld(input), gate = planningGate(w); if (gate) throw new Error(gate);
   return { schemaVersion: 'brainsnn.site.v1', name: w.name, width: w.width, depth: w.depth, units: 'm', scaleConfirmed: w.scaleReviewed && w.mapReviewed,
-    floor: [[0, 0], [w.width, 0], [w.width, w.depth], [0, w.depth]], start: [w.start.x, w.start.z], goal: [w.start.x, w.start.z],
+    floor: w.floor || [[0, 0], [w.width, 0], [w.width, w.depth], [0, w.depth]], start: [w.start.x, w.start.z], goal: [w.start.x, w.start.z],
     obstacles: w.objects.map(o => ({ id: o.id, label: `${o.name} [${o.kind}]`, x: o.x + o.w / 2, z: o.z + o.d / 2, width: o.w, depth: o.d, height: Math.max(0.02, o.h) })),
-    source: { kind: w.provenance === 'authored' ? 'sample' : 'manual', name: w.name, warnings: ['World Studio reviewed-map export. All unknown regions remain obstacles.', 'This export does not transfer learned policies or prove robot safety.'] } };
+    source: { kind: w.provenance === 'authored' ? 'sample' : w.geometrySource?.kind||'manual', name: w.geometrySource?.name||w.name, warnings: ['World Builder reviewed-map export. All unknown regions remain obstacles.', 'This export does not transfer learned policies or prove robot safety.',...(w.geometrySource?.warnings||[])] } };
 }
 export function usdScene(input) {
   const w = normalizeWorld(input), gate = planningGate(w); if (gate) throw new Error(gate);
+  if(w.floor){
+    const corners=new Set(w.floor.map(p=>p.join(',')));
+    if(w.floor.length!==4||![[0,0],[w.width,0],[w.width,w.depth],[0,w.depth]].every(p=>corners.has(p.join(','))))throw new Error('OpenUSD export currently supports rectangular floors only. Export the polygon-preserving Arena map or World JSON for this scan.');
+  }
   const cube = (id, x, y, z, sx, sy, sz) => `    def Cube "${id}" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {\n        double size = 1\n        double3 xformOp:translate = (${x}, ${y}, ${z})\n        double3 xformOp:scale = (${sx}, ${sy}, ${sz})\n        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]\n    }`;
   return `#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n# Reviewed static proxy geometry, not a qualified robotics simulation.\ndef Xform "World" {\n${cube('Floor', w.width / 2, -0.05, w.depth / 2, w.width, 0.1, w.depth)}\n${w.objects.map((o, i) => cube(`Obstacle_${i}`, o.x + o.w / 2, Math.max(.02, o.h) / 2, o.z + o.d / 2, o.w, Math.max(.02, o.h), o.d)).join('\n')}\n}\n`;
 }
 export async function proofPack(world, result, assumptions, sources = [], events = []) {
-  const body = { schema: 'brainsnn.proof.v1', createdAt: new Date().toISOString(), world: world ? normalizeWorld(world) : null, result, estimate: result ? estimate(result, assumptions) : null, sources: sources.map(s => ({ name: label(s.name), size: s.size, kind: s.kind })), events: events.slice(-200), claim: 'Planning preview; no real robot or learned policy executed.', signature: null };
+  const body = { schema: 'brainsnn.proof.v1', createdAt: new Date().toISOString(), world: world ? normalizeWorld(world) : null, result, estimate: result ? estimate(result, assumptions) : null, sources: sources.map(s => ({ name: label(s.name), size: s.size, kind: s.kind, ...(s.derivation ? {derivation: clone(s.derivation)} : {}) })), events: events.slice(-200), claim: 'Planning preview; no real robot or learned policy executed.', signature: null };
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
   return { ...body, integrity: { algorithm: 'SHA-256', scope: 'JSON.stringify(body) before integrity property', value: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), authenticatesAuthor: false } };
 }

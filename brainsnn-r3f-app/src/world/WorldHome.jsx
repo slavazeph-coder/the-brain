@@ -3,8 +3,8 @@ import React, { useEffect } from 'react';
 export function WorldHome() {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'BrainSNN | World Studio';
+    document.title = 'BrainSNN | World Builder';
     return () => { document.title = previous; };
   }, []);
-  return <iframe title="BrainSNN World Studio: capture, review, plan and keep the evidence" src="/world/index.html" allow="camera" style={{ display: 'block', width: '100%', height: '100dvh', minHeight: 640, border: 0, background: '#06060a' }} />;
+  return <iframe title="BrainSNN World Builder: capture, review, plan and keep the evidence" src="/world/index.html" allow="camera" style={{ display: 'block', width: '100%', height: '100dvh', border: 0, background: '#06060a' }} />;
 }

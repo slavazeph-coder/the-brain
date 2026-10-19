@@ -1,0 +1,4 @@
+# Optional CPU reconstruction environment; no learned model weights.
+pycolmap==4.2.1
+numpy==2.5.4
+Pillow==12.1.0

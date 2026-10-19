@@ -10,6 +10,8 @@ from contextlib import asynccontextmanager
 import hashlib
 import hmac
 import json
+import logging
+import math
 import os
 from pathlib import Path
 import re
@@ -24,6 +26,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from .geometry import MAX_PREVIEW_COORDINATE
 
 MIB = 1024 ** 2
 ID = re.compile(r"^[a-f0-9]{32}$")
@@ -89,19 +92,50 @@ class Store:
         self.upload(uid)
         return self.root / 'uploads' / uid
 
-    def in_use(self, uid):
-        return any(uid in json.loads(r['uploads']) for r in self.db.execute("SELECT uploads FROM jobs WHERE status IN ('prepared','queued','running')"))
+    def in_use(self, uid, running_ids=()):
+        return any(uid in json.loads(row['uploads']) for row in self.db.execute('SELECT id,status,uploads FROM jobs')
+                   if row['status'] in ACTIVE or row['id'] in running_ids)
 
-    def prune(self, ttl):
+    def prune(self, ttl, running_ids=()):
         cutoff = time.time() - ttl
         for row in list(self.db.execute("SELECT id FROM jobs WHERE created<? AND status NOT IN ('queued','running')", (cutoff,))):
+            if row['id'] in running_ids: continue
             shutil.rmtree(self.root / 'jobs' / row['id'], ignore_errors=True)
             self.db.execute('DELETE FROM jobs WHERE id=?', (row['id'],))
         for row in list(self.db.execute('SELECT id FROM uploads WHERE created<?', (cutoff,))):
-            if not self.in_use(row['id']):
+            if not self.in_use(row['id'], running_ids):
                 (self.root / 'uploads' / row['id']).unlink(missing_ok=True)
                 self.db.execute('DELETE FROM uploads WHERE id=?', (row['id'],))
         self.db.commit()
+
+    def storage_commitment(self, job_limit, running_ids=()):
+        """Charge existing bytes plus unwritten upload/job reservations once.
+
+        Database state persists reservations across HTTP requests and restarts.
+        A cancelled adapter keeps its reservation until its process has stopped.
+        Caller serializes admission and upload mutations with the worker IO lock.
+        """
+        used, upload_bytes, job_bytes = 0, {}, {}
+        for path in self.root.rglob('*'):
+            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                size = path.stat().st_size
+            except FileNotFoundError:
+                continue  # Adapter may rename a temporary file while monitored.
+            used += size
+            parts = path.relative_to(self.root).parts
+            if len(parts) == 2 and parts[0] == 'uploads':
+                upload_bytes[parts[1]] = size
+            elif len(parts) >= 3 and parts[0] == 'jobs':
+                job_bytes[parts[1]] = job_bytes.get(parts[1], 0) + size
+        upload_remaining = sum(max(0, row['size'] - upload_bytes.get(row['id'], 0))
+                               for row in self.db.execute('SELECT id,size FROM uploads'))
+        active_ids = {row['id'] for row in self.db.execute("SELECT id FROM jobs WHERE status IN ('prepared','queued','running')")}
+        active_ids.update(running_ids)
+        job_remaining = sum(max(0, job_limit - job_bytes.get(jid, 0)) for jid in active_ids)
+        # Leave room for bounded SQLite metadata/WAL updates after admission.
+        return used + upload_remaining + job_remaining + MIB
 
 
 def sha256_file(path: Path) -> str:
@@ -146,17 +180,60 @@ def configured_engines(config):
     return engines
 
 
-def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, ttl: int = 86400):
+def visual_metadata(entry):
+    """Keep adapter display hints bounded; they never certify geometry or scale."""
+    if 'representation' not in entry:
+        return {}
+    if entry['representation'] not in ['point-cloud', 'gaussian-splat', 'triangle-mesh']:
+        raise ValueError('Unknown visual representation.')
+    result = {'representation': entry['representation'], 'units': 'arbitrary'}
+    if 'coordinate_frame' in entry:
+        if entry['coordinate_frame'] not in ['right-handed-y-up', 'colmap', 'unknown']:
+            raise ValueError('Unknown visual coordinate frame.')
+        result['coordinate_frame'] = entry['coordinate_frame']
+    if 'point_count' in entry:
+        if type(entry['point_count']) is not int or not 1 <= entry['point_count'] <= 20_000_000:
+            raise ValueError('Invalid visual point count.')
+        result['point_count'] = entry['point_count']
+    if 'bounds' in entry:
+        bounds = entry['bounds']
+        if not isinstance(bounds, dict) or set(bounds) != {'min', 'max'}:
+            raise ValueError('Invalid visual bounds.')
+        for axis in ['min', 'max']:
+            values = bounds[axis]
+            if (not isinstance(values, list) or len(values) != 3
+                    or any(type(value) not in [float, int] or not math.isfinite(value) or abs(value) > MAX_PREVIEW_COORDINATE for value in values)):
+                raise ValueError('Invalid visual bounds.')
+        if any(low > high for low, high in zip(bounds['min'], bounds['max'])):
+            raise ValueError('Invalid visual bounds.')
+        result['bounds'] = bounds
+    return result
+
+
+def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, ttl: int = 86400,
+               storage_limit: int = 20 * 1024 ** 3, job_limit: int = 4 * 1024 ** 3):
     token = token or os.environ.get('WORLD_WORKER_TOKEN', '')
     if len(token) < 32:
         raise RuntimeError('Set WORLD_WORKER_TOKEN to a random secret of at least 32 characters.')
+    if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:
+        raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
     store = Store(root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data')))
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))
     queue: asyncio.Queue = asyncio.Queue(maxsize=8)
     processes = {}
     running = set()
     io_lock = asyncio.Lock()
-    storage_limit = 20 * 1024 ** 3
+
+    def check_storage(extra=0):
+        if store.storage_commitment(job_limit, running) + extra > storage_limit:
+            raise HTTPException(429, 'Worker disk budget is reserved or full. Delete finished jobs or cancel pending work.')
+
+    def check_execution_storage(directory):
+        total = sum(path.stat().st_size for path in directory.rglob('*') if path.is_file() and not path.is_symlink())
+        if total > job_limit:
+            raise ValueError('Adapter exceeded its disk budget.')
+        if store.storage_commitment(job_limit, running) > storage_limit:
+            raise ValueError('Worker global disk budget was exceeded during execution.')
 
     async def stop_process(jid):
         proc = processes.get(jid)
@@ -176,32 +253,46 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         if not manifest.is_file() or manifest.is_symlink() or manifest.stat().st_size > MIB:
             raise ValueError('Adapter did not write a bounded manifest.json.')
         value = json.loads(manifest.read_text())
-        entries = value.get('artifacts')
+        entries = value.get('artifacts') if isinstance(value, dict) else None
         if not isinstance(entries, list) or not 1 <= len(entries) <= 32:
             raise ValueError('Adapter manifest requires 1 to 32 artifacts.')
         result = []
+        seen = set()
         for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not SAFE_NAME.fullmatch(name) or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.png','.jpg','.mp4','.csv']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.png','.jpg','.mp4','.csv']:
                 raise ValueError('Unsafe artifact name or type.')
+            seen.add(name)
             path = out / name
             if path.is_symlink() or not path.is_file() or path.resolve().parent != out.resolve() or not 0 < path.stat().st_size <= 3 * 1024 ** 3:
                 raise ValueError('Missing, oversized or unsafe artifact.')
             result.append({'name': name, 'size': path.stat().st_size, 'sha256': sha256_file(path),
                            'kind': str(entry.get('kind', 'visual'))[:40],
-                           'provenance': 'unverified-output', 'metric_verified': False})
+                           **visual_metadata(entry), 'provenance': 'unverified-output', 'metric_verified': False})
         return result
 
     async def execute(jid):
-        job = store.job(jid)
-        if job['status'] != 'queued': return
-        store.state(jid, 'running')
-        running.add(jid)
         directory = store.root / 'jobs' / jid
-        directory.mkdir(exist_ok=True)
         out = directory / 'output'
-        out.mkdir(exist_ok=True)
         try:
+            async with io_lock:
+                try:
+                    job = store.job(jid)
+                except HTTPException as error:
+                    if error.status_code == 404: return  # Cancelled/deleted queued job.
+                    raise
+                if job['status'] != 'queued': return
+                try:
+                    check_storage()
+                except HTTPException:
+                    store.state(jid, 'failed', 'Reserved disk capacity is no longer available; execution did not start.')
+                    return
+                store.state(jid, 'running')
+                running.add(jid)
+            directory.mkdir(exist_ok=True)
+            out.mkdir(exist_ok=True)
             items = [store.upload(i) for i in job['upload_ids']]
             inputs = []
             for item in items:
@@ -220,7 +311,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 entry = engines[job['engine']]
                 command = [arg.replace('{input_manifest}', str(request_file)).replace('{output_dir}', str(out)) for arg in entry['command']]
                 # The worker secret is deliberately excluded from adapter environments.
-                env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR']}
+                env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR']}
                 env.update({'PYTHONUNBUFFERED':'1','HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'})
                 with (directory / 'operator.log').open('wb') as log:
                     proc = await asyncio.create_subprocess_exec(*command, cwd=str(directory), env=env, stdout=log, stderr=log, start_new_session=os.name=='posix')
@@ -230,10 +321,12 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                         await asyncio.sleep(.2)
                         if store.job(jid)['status'] == 'cancelled': await stop_process(jid); return
                         if time.monotonic()-start > entry['timeout_seconds']: raise TimeoutError('Adapter exceeded its time budget.')
-                        total = sum(p.stat().st_size for p in directory.rglob('*') if p.is_file() and not p.is_symlink())
-                        if total > 4*1024**3: raise ValueError('Adapter exceeded its disk budget.')
+                        async with io_lock:
+                            check_execution_storage(directory)
                     if proc.returncode: raise ValueError('Adapter failed. Check operator logs; no successful output was claimed.')
             if store.job(jid)['status'] == 'cancelled': return
+            async with io_lock:
+                check_execution_storage(directory)
             artifacts = await asyncio.to_thread(artifact_manifest, out)
             if store.job(jid)['status'] != 'cancelled': store.state(jid, 'complete', artifacts=artifacts)
         except asyncio.CancelledError:
@@ -250,13 +343,18 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def runner():
         while True:
             jid = await queue.get()
-            try: await execute(jid)
+            try:
+                await execute(jid)
+            except Exception:
+                # A stale queue item or per-job IO failure must not stop all work.
+                # execute owns child cleanup; this is the final queue-service guard.
+                logging.getLogger(__name__).exception('Unexpected worker job failure: %s', jid)
             finally: queue.task_done()
 
     async def maintenance():
         while True:
             await asyncio.sleep(60)
-            async with io_lock: store.prune(ttl)
+            async with io_lock: store.prune(ttl, running)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -302,16 +400,17 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
 
     @app.get('/v1/capabilities')
     async def capabilities():
-        return {'api_version':'brainsnn.worker.v1','operator_only':True,'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values()], 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
+        return {'api_version':'brainsnn.worker.v1','operator_only':True,'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values()], 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
     @app.post('/v1/uploads',status_code=201)
     async def create_upload(body: UploadBody):
         suffix=Path(body.name).suffix.lower()
         if suffix not in (['.jpg','.jpeg','.png','.webp'] if body.kind=='image' else ['.mp4','.mov','.webm']): raise HTTPException(422,'Unsupported file type.')
         async with io_lock:
-            store.prune(ttl)
+            store.prune(ttl, running)
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads').fetchone()
             if count>=50 or reserved+body.size>2*1024**3:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
+            check_storage(body.size)
             uid=secrets.token_hex(16)
             (store.root/'uploads'/uid).touch(mode=0o600)
             store.db.execute('INSERT INTO uploads VALUES (?,?,?,?,?,?)',(uid,body.name,body.kind,body.size,0,time.time()));store.db.commit()
@@ -326,9 +425,10 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         if not data:raise HTTPException(422,'Empty upload chunk.')
         async with io_lock:
             item=store.upload(uid)
-            if store.in_use(uid):raise HTTPException(409,'This upload belongs to an active job.')
+            if store.in_use(uid, running):raise HTTPException(409,'This upload belongs to an active or stopping job.')
             if offset!=item['offset']:raise HTTPException(409,'Upload offset mismatch. Read upload status to resume.')
             if offset+len(data)>item['size']:raise HTTPException(413,'Chunk exceeds the declared file size.')
+            check_storage()  # Full declared size was reserved at upload admission.
             path=store.upload_path(uid)
             with path.open('r+b') as f:
                 f.truncate(offset);f.seek(offset);f.write(data);f.flush();os.fsync(f.fileno())
@@ -338,7 +438,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.delete('/v1/uploads/{uid}')
     async def delete_upload(uid:str):
         async with io_lock:
-            if store.in_use(uid):raise HTTPException(409,'Cancel the active job before deleting its sources.')
+            if store.in_use(uid, running):raise HTTPException(409,'Cancel the job and wait for execution to stop before deleting its sources.')
             store.upload_path(uid).unlink(missing_ok=True);store.db.execute('DELETE FROM uploads WHERE id=?',(uid,));store.db.commit()
         return {'deleted':True}
 
@@ -354,8 +454,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 item=store.upload(uid)
                 if item['offset']!=item['size'] or item['kind'] not in engine['input_kinds']:raise HTTPException(422,'Incomplete or unsupported source.')
                 validate_media(store.upload_path(uid),item['kind'])
-            used=sum(p.stat().st_size for p in store.root.rglob('*') if p.is_file() and not p.is_symlink())
-            if used>storage_limit-4*1024**3:raise HTTPException(429,'Worker disk budget reached.')
+            check_storage(job_limit)
             jid=secrets.token_hex(16)
             store.db.execute('INSERT INTO jobs VALUES (?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]'));store.db.commit()
             return store.job(jid)
@@ -366,6 +465,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             job=store.job(jid)
             if job['status']!='prepared':raise HTTPException(409,'Only a prepared job can start; cancelled jobs never restart.')
             if queue.full():raise HTTPException(429,'Processing queue is full.')
+            check_storage()
             store.state(jid,'queued');queue.put_nowait(jid)
             return store.job(jid)
 
@@ -377,16 +477,20 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
 
     @app.delete('/v1/jobs/{jid}')
     async def cancel_job(jid:str):
-        job=store.job(jid)
-        if job['status'] in ACTIVE:store.state(jid,'cancelled');await stop_process(jid)
+        async with io_lock:
+            job=store.job(jid)
+            active=job['status'] in ACTIVE
+            if active:store.state(jid,'cancelled')
+        if active:await stop_process(jid)
         return store.job(jid)
 
     @app.delete('/v1/jobs/{jid}/artifacts')
     async def delete_artifacts(jid:str):
-        job=store.job(jid)
-        if job['status'] in ACTIVE or jid in running:raise HTTPException(409,'Cancel the job and wait for execution to stop first.')
-        shutil.rmtree(store.root/'jobs'/jid,ignore_errors=True)
-        store.db.execute('DELETE FROM jobs WHERE id=?',(jid,));store.db.commit()
+        async with io_lock:
+            job=store.job(jid)
+            if job['status'] in ACTIVE or jid in running:raise HTTPException(409,'Cancel the job and wait for execution to stop first.')
+            shutil.rmtree(store.root/'jobs'/jid,ignore_errors=True)
+            store.db.execute('DELETE FROM jobs WHERE id=?',(jid,));store.db.commit()
         return {'deleted':True}
 
     @app.post('/v1/jobs/{jid}/ticket')

@@ -22,7 +22,10 @@ export class WorkerClient {
     if(item){try{item=await this.request(`/v1/uploads/${item.id}`,{signal});}catch(e){if(signal?.aborted)throw e;item=null;}}
     if(!item)item=await this.request('/v1/uploads',{method:'POST',body:{name:file.name,size:file.size,kind},signal});
     if(!/^[a-f0-9]{32}$/.test(item.id))throw new Error('Invalid upload identifier.');this.uploads.set(file,item);
-    let offset=item.offset;const step=Math.min(this.caps?.limits?.chunk_bytes||4*1024**2,4*1024**2);
+    let offset=item.offset;const advertised=this.caps?.limits?.chunk_bytes??4*1024**2;
+    if(!Number.isSafeInteger(offset)||offset<0||offset>file.size||item.size!==file.size)throw new Error('Invalid upload offset or size.');
+    if(!Number.isSafeInteger(advertised)||advertised<1)throw new Error('Invalid worker chunk limit.');
+    const step=Math.min(advertised,4*1024**2);
     while(offset<file.size){if(!Number.isSafeInteger(offset)||offset<0)throw new Error('Invalid upload offset.');
       const end=Math.min(file.size,offset+step);const part=await this.request(`/v1/uploads/${item.id}?offset=${offset}`,{method:'PUT',body:file.slice(offset,end),raw:true,signal});
       if(part.offset!==end)throw new Error('Worker upload offset mismatch.');offset=part.offset;progress(offset/file.size);
@@ -30,4 +33,20 @@ export class WorkerClient {
     return item.id;
   }
   async download(job,id,signal){if(!/^[a-f0-9]{32}$/.test(job)||!Number.isInteger(id)||id<0||id>31)throw new Error('Invalid artifact identifier.');const r=await this.request(`/v1/jobs/${job}/ticket`,{method:'POST',body:{artifact:id},signal});const url=new URL(r.url,this.base+'/');if(url.origin!==new URL(this.base).origin||!url.pathname.startsWith(new URL(this.base+'/v1/download/').pathname))throw new Error('Worker returned an untrusted download URL.');return url.href;}
+  async previewArtifact(job,index,signal){
+    const item=job.artifacts?.[index],limit=64*1024**2;
+    if(!item||!Number.isSafeInteger(item.size)||item.size<1||item.size>limit)throw new Error('In-browser previews are limited to 64 MiB. Download larger artifacts for a desktop viewer.');
+    if(!/^[a-f0-9]{64}$/.test(item.sha256))throw new Error('Artifact is missing a valid integrity hash.');
+    const url=await this.download(job.id,index,signal);
+    const response=await fetch(url,{signal,credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer'});
+    if(!response.ok||!response.body)throw new Error('Artifact preview download failed.');
+    const reader=response.body.getReader(),chunks=[];let size=0;
+    try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>item.size||size>limit)throw new Error('Artifact exceeded its declared size.');chunks.push(value);}}
+    finally{await reader.cancel();}
+    if(size!==item.size)throw new Error('Artifact download is incomplete.');
+    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+    const digest=await crypto.subtle.digest('SHA-256',bytes),hash=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+    if(hash!==item.sha256)throw new Error('Artifact integrity check failed.');
+    return bytes.buffer;
+  }
 }

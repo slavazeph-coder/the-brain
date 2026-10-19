@@ -1,6 +1,6 @@
 # BrainSNN World Builder — Flagship Product Specification
 
-Status: design/implementation blueprint; experimental features must not be advertised as live.
+Status: implementation in progress on the development branch; see [current implementation and validation](world-studio-implementation.md). Experimental features must not be advertised as live.
 Branch: feature/world-builder-flagship
 Goal: turn a photo or iPhone walkthrough into an explorable world, then a reviewed robot planning scenario.
 

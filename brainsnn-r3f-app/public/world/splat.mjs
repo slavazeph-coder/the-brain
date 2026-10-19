@@ -1,12 +1,52 @@
-const $=id=>document.getElementById(id);let api=null,scene=null,camera=null,renderer=null,controls=null,mesh=null,pending=null,loading=false,resize=null;
-const status=s=>$('viewer-status').textContent=s;
-function dispose(){if(!mesh)return;scene.remove(mesh);if(mesh.dispose)mesh.dispose();else mesh.traverse(o=>{o.geometry?.dispose();for(const m of Array.isArray(o.material)?o.material:[o.material])if(m){for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}});mesh=null;}
-function frame(){if(!mesh||!api)return;const b=mesh.getBoundingBox?mesh.getBoundingBox().applyMatrix4(mesh.matrixWorld):new api.THREE.Box3().setFromObject(mesh);const center=b.getCenter(new api.THREE.Vector3()),size=b.getSize(new api.THREE.Vector3());if(![...center.toArray(),...size.toArray()].every(Number.isFinite))throw new Error('The asset has invalid bounds.');const d=Math.max(.1,size.length());camera.position.copy(center).add(new api.THREE.Vector3(d*.35,d*.22,d*.8));controls.target.copy(center);camera.near=Math.max(.001,d/10000);camera.far=Math.max(100,d*20);camera.updateProjectionMatrix();controls.update();}
-async function load(file){if(!api||!file||loading)return;const ext=file.name.toLowerCase().split('.').pop();if(!['ply','spz','splat','ksplat','glb'].includes(ext)||!file.size||file.size>64*1024**2){status('Use a supported non-empty asset up to 64 MiB. Downsample large reconstructions first.');return;}loading=true;$('asset').disabled=true;status('Parsing the visual asset locally…');dispose();try{const bytes=await file.arrayBuffer();if(ext==='ply'){const head=new TextDecoder().decode(bytes.slice(0,16384));const n=Number(/element vertex\s+(\d+)/.exec(head)?.[1]);if(!Number.isFinite(n)||n>1500000)throw new Error('Use a PLY preview with at most 1.5 million points.');}
-  if(ext==='glb'){const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');const manager=new api.THREE.LoadingManager();manager.setURLModifier(url=>{if(!url.startsWith('blob:')&&!url.startsWith('data:'))throw new Error('External resources inside GLB files are disabled.');return url;});const gltf=await new GLTFLoader(manager).parseAsync(bytes,'');mesh=gltf.scene;}else{mesh=new api.SplatMesh({fileBytes:bytes,fileName:file.name,raycastable:false});await mesh.initialized;if(mesh.numSplats>1500000)throw new Error('Use a smaller preview with at most 1.5 million splats.');}
-  scene.add(mesh);mesh.updateMatrixWorld(true);frame();$('frame').disabled=false;$('flip').disabled=false;status(`${file.name} · VISUAL ONLY · No physical simulation or scale verification.`);
-}catch(e){dispose();status('Asset could not be opened: '+e.message);}finally{loading=false;$('asset').disabled=false;}}
-$('asset').onchange=()=>{pending=$('asset').files[0];if(api)void load(pending);else status('Asset selected locally. Approve the external renderer to view it.');};
-$('load-renderer').onclick=async()=>{if(api)return;const b=$('load-renderer');b.disabled=true;status('Loading the pinned external renderer…');try{const [THREE,spark,{OrbitControls}]=await Promise.all([import('three'),import('@sparkjsdev/spark'),import('three/addons/controls/OrbitControls.js')]);api={THREE,...spark};scene=new THREE.Scene();scene.background=new THREE.Color('#06060a');camera=new THREE.PerspectiveCamera(55,1,.01,1000);renderer=new THREE.WebGLRenderer({antialias:false});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));$('viewer').append(renderer.domElement);scene.add(new spark.SparkRenderer({renderer}));scene.add(new THREE.HemisphereLight(0xffffff,0x333344,2));controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;camera.position.set(0,1,4);resize=new ResizeObserver(()=>{const r=$('viewer').getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();});resize.observe($('viewer'));renderer.setAnimationLoop(()=>{if(!document.hidden){controls.update();renderer.render(scene,camera);}});renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();status('WebGL context lost. Reload and use a smaller asset.');});b.textContent='Renderer loaded';status('Renderer ready. Choose a local asset.');if(pending)await load(pending);}catch(e){api=null;b.disabled=false;status('External renderer unavailable. Check network or browser support. No substitute scene was generated.');}};
-$('frame').onclick=()=>{try{frame();}catch(e){status(e.message);}};$('flip').onclick=()=>{if(mesh){mesh.rotation.x+=Math.PI;mesh.updateMatrixWorld(true);frame();}};$('remove').onclick=()=>{if(loading){status('Wait for parsing to finish, then clear the asset.');return;}dispose();pending=null;$('asset').value='';$('frame').disabled=true;$('flip').disabled=true;status('Asset cleared.');};
-window.addEventListener('pagehide',()=>{dispose();resize?.disconnect();controls?.dispose();renderer?.setAnimationLoop(null);renderer?.dispose();});
+import { MAX_FILE_BYTES, STRIDE, parseVisualAsset } from './visual-geometry.mjs';
+import { createVisualViewer } from './visual-viewer.mjs';
+import { createMeshViewer } from './mesh-viewer.mjs';
+
+const $ = id => document.getElementById(id);
+const status = message => { $('viewer-status').textContent = message; };
+let viewer = null, meshViewer = null, meshPromise = null, epoch = 0, currentKind = 'points', disposed = false;
+try { viewer = createVisualViewer($('asset-canvas'), status); }
+catch (error) { status(error.message); $('asset').disabled = true; }
+
+function loaded(value) { for (const id of ['frame', 'flip']) $(id).disabled = !value; $('point-size').disabled = !value || currentKind === 'mesh'; }
+function show(kind) { currentKind = kind; $('asset-canvas').parentElement.hidden = kind === 'mesh'; $('mesh-stage').hidden = kind !== 'mesh'; }
+$('asset').onchange = async () => {
+  const file = $('asset').files[0], token = ++epoch;
+  loaded(false); viewer?.clear(); meshViewer?.clear();
+  if (!file) { status('Choose a local visual asset.'); return; }
+  const ext = file.name.toLowerCase().split('.').pop();
+  if (!file.size || file.size > (ext === 'glb' ? 50 * 1024**2 : MAX_FILE_BYTES)) { status('Use a non-empty .ply / .splat up to 64 MiB, or .glb up to 50 MiB.'); return; }
+  status('Opening the visual asset locally…');
+  try {
+    if (ext === 'glb') {
+      show('mesh');
+      if (!meshViewer) {
+        meshPromise ||= createMeshViewer($('mesh-stage'), status).catch(error => { meshPromise = null; throw error; });
+        meshViewer = await meshPromise;
+      }
+      if (disposed) { meshViewer.destroy(); return; }
+      if (token !== epoch) return;
+      const parsed = await meshViewer.setFile(file);
+      if (token !== epoch) return;
+      loaded(true);
+      $('viewer-help').textContent = 'Drag to orbit · pinch or scroll to zoom · two-finger drag or right-drag to pan · Reset view or 0 to frame the asset.';
+      status(`${file.name} · GLB visual mesh · ${parsed.vertices.toLocaleString()} vertices. Scale unverified; no collision geometry.`);
+      return;
+    }
+    show('points');
+    const buffer = await file.arrayBuffer();
+    if (token !== epoch) return;
+    const parsed = parseVisualAsset(buffer, file.name);
+    viewer.setPoints(parsed.points, { kind: parsed.kind });
+    loaded(true);
+    $('viewer-help').textContent = 'Drag to orbit · pinch or scroll to zoom · two-finger drag or Shift-drag to pan · WASD / arrow keys to move, + / − to zoom, 0 to reset.';
+    const representation = parsed.kind === 'point-cloud' ? 'Point cloud · not a trained Gaussian splat' : 'Gaussian parameters · DC colour preview';
+    status(`${file.name} · ${representation} · ${Math.round(parsed.points.length / STRIDE).toLocaleString()} visible points${parsed.sampled ? ` sampled from ${parsed.total.toLocaleString()}` : ''}${parsed.skipped ? ` · ${parsed.skipped} invalid samples omitted` : ''}. Scale unverified; no collision geometry.`);
+  } catch (error) { if (token === epoch) status(`Asset could not be opened: ${error.message}`); }
+};
+$('frame').onclick = () => (currentKind === 'mesh' ? meshViewer : viewer)?.reset();
+$('flip').onclick = () => (currentKind === 'mesh' ? meshViewer : viewer)?.flip();
+$('point-size').oninput = () => viewer?.setSize(Number($('point-size').value));
+$('remove').onclick = () => { epoch++; viewer?.clear(); meshViewer?.clear(); $('asset').value = ''; loaded(false); status('Asset cleared from this viewer.'); };
+window.addEventListener('pagehide', () => { disposed = true; epoch++; viewer?.destroy(); meshViewer?.destroy(); });
+window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });

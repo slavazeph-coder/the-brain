@@ -8,11 +8,17 @@ import argparse
 import json
 import os
 from pathlib import Path
+try:
+    from .geometry import write_point_cloud
+except ImportError:
+    from geometry import write_point_cloud
 
 
 def lift_depth(rgb, predicted_depth):
     import numpy as np
-    if predicted_depth.shape != rgb.shape[:2] or not np.isfinite(predicted_depth).all():
+    if (rgb.ndim != 3 or rgb.shape[2] != 3 or not 1 <= rgb.shape[0] * rgb.shape[1] <= 200_000
+            or predicted_depth.shape != rgb.shape[:2] or not np.isfinite(predicted_depth).all()
+            or not np.isfinite(rgb).all() or np.any(rgb < 0) or np.any(rgb > 255)):
         raise ValueError('Invalid predicted depth shape or values.')
     lo, hi = np.percentile(predicted_depth, [2, 98])
     norm = np.clip((predicted_depth-lo)/max(float(hi-lo),1e-6),0,1)
@@ -47,10 +53,8 @@ def main():
         prediction=torch.nn.functional.interpolate(outputs.predicted_depth.unsqueeze(1),size=(image.height,image.width),mode='bicubic',align_corners=False)[0,0].float().cpu().numpy()
     points,colours=lift_depth(np.array(image),prediction)
     out=Path(request['output_dir']);out.mkdir(parents=True,exist_ok=True)
-    with (out/'relative-depth.ply').open('w') as f:
-        f.write(f'ply\nformat ascii 1.0\ncomment BrainSNN unscaled relative-depth visual; assumed 60 degree horizontal FOV\nelement vertex {len(points)}\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n')
-        for p,c in zip(points,colours):f.write(f'{p[0]:.6f} {p[1]:.6f} {p[2]:.6f} {int(c[0])} {int(c[1])} {int(c[2])}\n')
+    visual=write_point_cloud(out/'relative-depth.ply',points,colours,coordinate_frame='right-handed-y-up')
     (out/'depth-evidence.json').write_text(json.dumps({'model':'depth-anything/Depth-Anything-V2-Small-hf','local_snapshot':model_dir.name,'device':device,'metric_verified':False,'representation':'relative-depth point cloud; not a trained splat','assumed_horizontal_fov_degrees':60,'unobserved_regions':'not reconstructed','source_dimensions':[image.width,image.height]},indent=2))
-    (out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':'relative-depth.ply','kind':'visual'},{'name':'depth-evidence.json','kind':'evidence'}]}))
+    (out/'manifest.json').write_text(json.dumps({'artifacts':[visual,{'name':'depth-evidence.json','kind':'evidence'}]}))
 
 if __name__=='__main__':main()

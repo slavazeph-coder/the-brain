@@ -25,9 +25,13 @@ export function createRenderer(canvas) {
     cancelAnimationFrame(raf); ctx.clearRect(0, 0, width, height);
     if (!world) return;
     const W = world.width, D = world.depth;
-    polygon([[0,0,0],[W,0,0],[W,0,D],[0,0,D]], '#0d1821', '#00f5ff66');
+    const floor=(world.floor||[[0,0],[W,0],[W,D],[0,D]]).map(([x,z])=>[x,0,z]);
+    polygon(floor, '#0d1821', '#00f5ff66');
+    // Clip the grid to the observed polygon so missing floor never looks traversable.
+    ctx.save();polygon(floor,null);ctx.clip();
     for(let x = 0; x <= W; x += Math.max(1, Math.ceil(W / 40))) line([x,0,0],[x,0,D], '#00f5ff16');
     for(let z = 0; z <= D; z += Math.max(1, Math.ceil(D / 40))) line([0,0,z],[W,0,z], '#00f5ff16');
+    ctx.restore();
     if (result?.route.length) {
       ctx.beginPath(); result.route.forEach((p,i) => { const v = project(p.x,.025,p.z); i ? ctx.lineTo(...v.slice(0,2)) : ctx.moveTo(...v.slice(0,2)); }); ctx.lineWidth=.65; ctx.strokeStyle='#00f5ff2b'; ctx.stroke();
       const end = Math.min(result.route.length, Math.max(1, Math.floor(cursor * (result.route.length - 1)) + 1));

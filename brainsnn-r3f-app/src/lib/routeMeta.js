@@ -33,6 +33,33 @@ const LEGACY_ROUTES = {
   '/missions': { path: '/arena/' },
 };
 
+const CLASSIC_HOME = {
+  path: '/',
+  positioning: 'robot-pricing-transparent-v1',
+  image: '/og/robot-testing.png',
+  title: 'BrainSNN | Robot policy testing',
+  description: `Explore robot-policy test packs from 10 to 100,000 episodes. The illustrative runtime price for 100,000 episodes is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)}. Assumptions shown; hosted policy testing is pending qualification.`,
+  heading: 'Test your robot. See where it fails.',
+  body: [
+    'Choose a robot and model in the arcade, try a challenge and replay what happened. Local practice uses a scripted arm and does not score a named policy.',
+    `Plan 10 to 100,000 total task attempts, with visible runtime pricing. The default illustration is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)} for 100,000 episodes, based on 500 episodes per worker-hour, US$0.60 per worker-hour and a 30% gross margin. These are assumed inputs, not measured policy throughput or a quote.`,
+    'The first execution kit covers ten Panda + π₀.₅ / LIBERO Spatial episodes. Larger counts are budget forecasts. Startup, storage, transfers, retries, external inference, operator support and taxes are excluded from the runtime price example.',
+    'Hosted policy tests are not yet available. The first real-policy GPU run still needs verification. Larger packs follow measured runtime and cost.',
+  ],
+};
+
+const WORLD = {
+  positioning: 'world-builder-v1',
+  title: 'BrainSNN | World Builder',
+  description: 'Start with a photo or phone walkthrough. Explore a visual 3D preview, review measured geometry and test a robot route with BrainSNN World Builder.',
+  heading: 'Turn any photo into a world. Turn any world into a robot simulation.',
+  body: [
+    'Upload a photo or capture a space. Explore a visual preview, inspect source evidence, and prepare a reviewed map for robot planning.',
+    'Single-photo depth and generative previews do not establish metric scale or hidden geometry. Review independent measurements, obstacles and unknown areas before planning.',
+    'Robot routes and operating-cost estimates use the reviewed map and your assumptions. They are planning previews, not physical robot execution or safety certification.',
+  ],
+};
+
 /** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
 const ROUTES = [
   { path: '/coherence', title: 'Video research preview | BrainSNN', heading: 'Inspect the correction pass.', description: 'Inspect a synthetic video correction fixture, published baselines and failed native-resolution quality gates.', body: ['Fixed post-process engine v0.4, with no trained weights. The low-resolution synthetic example does not establish HD or general video quality.', 'Native motion gates failed. Multi-minute coherence remains unestablished.'] },
@@ -168,19 +195,8 @@ const ROUTES = [
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
     ],
   },
-  {
-    path: '/',
-    image: '/og/robot-testing.png',
-    title: 'BrainSNN | Robot policy testing',
-    description: `Explore robot-policy test packs from 10 to 100,000 episodes. The illustrative runtime price for 100,000 episodes is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)}. Assumptions shown; hosted policy testing is pending qualification.`,
-    heading: 'Test your robot. See where it fails.',
-    body: [
-      'Choose a robot and model in the arcade, try a challenge and replay what happened. Local practice uses a scripted arm and does not score a named policy.',
-      `Plan 10 to 100,000 total task attempts, with visible runtime pricing. The default illustration is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)} for 100,000 episodes, based on 500 episodes per worker-hour, US$0.60 per worker-hour and a 30% gross margin. These are assumed inputs, not measured policy throughput or a quote.`,
-      'The first execution kit covers ten Panda + π₀.₅ / LIBERO Spatial episodes. Larger counts are budget forecasts. Startup, storage, transfers, retries, external inference, operator support and taxes are excluded from the runtime price example.',
-      'Hosted policy tests are not yet available. The first real-policy GPU run still needs verification. Larger packs follow measured runtime and cost.',
-    ],
-  },
+  { path: '/world', ...WORLD },
+  { path: '/', ...WORLD },
 ];
 
 const CRAWL_LINKS = Object.freeze([
@@ -204,6 +220,9 @@ export function resolveRouteMeta(pathname = '/', search = '') {
   const legacy = LEGACY_ROUTES[pathname.replace(/\/$/, '')];
   const targetPath = pathname.startsWith('/missions/') ? pathname.replace('/missions/', '/arena/tasks/') : legacy?.path || pathname;
   const normalizedPath = targetPath.replace(/\/$/, '') || '/';
+  if (normalizedPath === '/' && params.get('classic') === '1') {
+    return { ...CLASSIC_HOME, canonicalPath: '/?classic=1' };
+  }
   const route = ROUTES.find((entry) => (
     entry.path === '/' ? normalizedPath === '/' : (
       normalizedPath === entry.path.replace(/\/$/, '')
@@ -234,7 +253,7 @@ export function resolveRouteMeta(pathname = '/', search = '') {
   // original card, and shared circuit links keep the dynamic preview above.
   return {
     ...route,
-    canonicalPath: targetPath === '/arena' ? '/arena/' : targetPath,
+    canonicalPath: route.path === '/world' ? '/world' : targetPath === '/arena' ? '/arena/' : targetPath,
     image: route.image || '/og-image.png',
   };
 }
@@ -290,6 +309,10 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
     .replace(/(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`)
     .replace(/(<meta\s+name="twitter:title"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${title}${close}`)
     .replace(/(<meta\s+name="twitter:description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`);
+
+  if (meta.positioning) {
+    out = out.replace(/(<meta\s+name="brainsnn-positioning"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${escapeAttribute(meta.positioning)}${close}`);
+  }
 
   if (url) {
     out = out

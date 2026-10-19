@@ -9,6 +9,7 @@ const HTML = `<!doctype html>
   <head>
     <title>BrainSNN</title>
     <meta name="description" content="Original description." />
+    <meta name="brainsnn-positioning" content="world-builder-v1" />
     <link rel="canonical" href="https://www.brainsnn.com/" />
     <meta property="og:title" content="Original og title" />
     <meta property="og:description" content="Original og description" />
@@ -26,8 +27,8 @@ function tagContent(html, pattern) {
 }
 
 describe('per-route social previews', () => {
-  it('leads with robot testing and keeps the poke toy on /play', () => {
-    const home = resolveRouteMeta('/');
+  it('preserves robot testing in the classic view and the poke toy on /play', () => {
+    const home = resolveRouteMeta('/', '?classic=1');
     expect(home.title).toBe('BrainSNN | Robot policy testing');
     expect(home.heading).toBe('Test your robot. See where it fails.');
     expect(home.description).toContain('100,000 episodes');
@@ -47,6 +48,23 @@ describe('per-route social previews', () => {
     expect(play.image).toBe('/og/toy-poke.png');
     expect(play.body.join(' ')).toContain('Explore more toys in Lab');
     expect(play.body.join(' ')).toContain('not a recording of anyone’s brain');
+  });
+
+  it('publishes World Builder for the root and world routes with source limitations', () => {
+    for (const path of ['/', '/world', '/world/']) {
+      const world = resolveRouteMeta(path);
+      expect(world.title).toBe('BrainSNN | World Builder');
+      expect(world.heading).toBe('Turn any photo into a world. Turn any world into a robot simulation.');
+      expect(world.description).toContain('phone walkthrough');
+      expect(world.body.join(' ')).toContain('do not establish metric scale');
+      expect(world.body.join(' ')).toContain('not physical robot execution');
+      expect(world.image).toBe('/og-image.png');
+    }
+    expect(resolveRouteMeta('/world/').canonicalPath).toBe('/world');
+    expect(resolveRouteMeta('/', '?classic=1').canonicalPath).toBe('/?classic=1');
+    expect(resolveRouteMeta('/world', '?classic=1').title).toBe('BrainSNN | World Builder');
+    expect(applyRouteMeta(HTML, '/')).toContain('name="brainsnn-positioning" content="world-builder-v1"');
+    expect(applyRouteMeta(HTML, '/', '?classic=1')).toContain('name="brainsnn-positioning" content="robot-pricing-transparent-v1"');
   });
 
   it('gives every toy its own preview, hook and honest boundary', () => {
@@ -137,7 +155,7 @@ describe('per-route social previews', () => {
     for (const attribute of ['name="description"', 'property="og:description"', 'name="twitter:description"']) {
       expect(tagContent(html, `${attribute} content="([^"]*)"`)).toBe(description);
     }
-    expect(description).toContain('US$171.43');
+    expect(description).toContain('World Builder');
     expect(tagContent(html, 'property="og:title" content="([^"]*)"')).toBe(title);
     expect(tagContent(html, 'name="twitter:title" content="([^"]*)"')).toBe(title);
   });
@@ -155,13 +173,14 @@ describe('per-route social previews', () => {
     expect(html).toContain('og-image.png');
   });
 
-  it('uses the rendered toy screenshot for /play and the site card for the lobby', () => {
+  it('uses the rendered toy screenshot for /play and the site card for World Builder', () => {
     const playHtml = applyRouteMeta(HTML, '/play', '', 'https://www.brainsnn.com');
     expect(tagContent(playHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/toy-poke.png');
     expect(resolveRouteMeta('/play').image).toBe('/og/toy-poke.png');
     const homeHtml = applyRouteMeta(HTML, '/', '', 'https://www.brainsnn.com');
-    expect(tagContent(homeHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og/robot-testing.png');
-    expect(resolveRouteMeta('/').image).toBe('/og/robot-testing.png');
+    expect(tagContent(homeHtml, 'property="og:image" content="([^"]*)"')).toBe('https://www.brainsnn.com/og-image.png');
+    expect(resolveRouteMeta('/').image).toBe('/og-image.png');
+    expect(resolveRouteMeta('/', '?classic=1').image).toBe('/og/robot-testing.png');
     expect(resolveRouteMeta('/arcade').image).toBe('/og-image.png');
   });
 
@@ -193,7 +212,7 @@ describe('content a crawler can read without running JavaScript', () => {
   });
 
   it('gives every major route a heading and real prose', () => {
-    for (const path of ['/', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
+    for (const path of ['/', '/world', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
       const heading = tagContent(html, '<h1[^>]*>([^<]*)</h1>');
       expect(heading.length).toBeGreaterThan(10);
@@ -244,7 +263,7 @@ describe('static application metadata', () => {
   it('brands the initial document as BrainSNN and gives structured data the served route description', () => {
     const template = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
     expect(template).not.toContain('Sapient Playground');
-    expect(template).toContain('<title>BrainSNN | Robot policy testing</title>');
+    expect(template).toContain('<title>BrainSNN | World Builder</title>');
     const html = applyRouteMeta(template, '/office', '?tab=video', 'https://www.brainsnn.com');
     const structured = JSON.parse(html.match(/<script id="site-schema" type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
     expect(structured.name).toBe('BrainSNN');

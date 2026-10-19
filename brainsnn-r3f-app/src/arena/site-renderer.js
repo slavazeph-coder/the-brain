@@ -258,17 +258,17 @@ export function create(container, options = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.35;
-  renderer.domElement.setAttribute('aria-label', 'Interactive site preview. Drag to orbit, scroll to zoom, or select a point on the floor.');
+  renderer.domElement.setAttribute('aria-label', options.visualOnly ? 'Interactive 3D mesh asset. Drag to orbit, pinch or scroll to zoom.' : 'Interactive site preview. Drag to orbit, scroll to zoom, or select a point on the floor.');
   renderer.domElement.setAttribute('role', 'img');
   renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;outline:none';
   container.appendChild(renderer.domElement);
 
   const world = new THREE.Scene();
-  world.fog = new THREE.FogExp2(0x080d16, 0.015);
+  world.fog = options.visualOnly ? null : new THREE.FogExp2(0x080d16, 0.015);
   const camera = new THREE.PerspectiveCamera(42, 1, 0.03, 1500);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.12;
-  controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 0.7; controls.maxDistance = 180;
+  controls.maxPolarAngle = options.visualOnly ? Math.PI : Math.PI * 0.49; controls.minDistance = options.visualOnly ? 0.01 : 0.7; controls.maxDistance = 180;
   controls.enablePan = true;
   const groups = { geometry: new THREE.Group(), reference: new THREE.Group(), route: new THREE.Group(), coverage: new THREE.Group(), robot: new THREE.Group() };
   Object.values(groups).forEach(group => world.add(group));
@@ -347,7 +347,8 @@ export function create(container, options = {}) {
         child.material.depthWrite = !groups.reference.visible;
       }
     });
-    groups.robot.visible = cameraMode !== 'robot';
+    groups.geometry.visible = !options.visualOnly;
+    groups.robot.visible = !options.visualOnly && cameraMode !== 'robot';
     requestDraw();
   }
   function setMode(mode) { viewMode = ['geometry', 'reality', 'robot'].includes(mode) ? mode : 'geometry'; if (mode === 'robot') setCamera('robot'); else if (cameraMode === 'robot') setCamera('orbit'); applyMode(); }
@@ -568,7 +569,8 @@ export function create(container, options = {}) {
     const span = Math.max(size.x, size.y, size.z, 0.1);
     cameraMode = 'orbit'; controls.enabled = true; controls.target.copy(center);
     camera.far = Math.max(1500, span * 10); camera.updateProjectionMatrix(); controls.maxDistance = Math.max(180, span * 10);
-    camera.position.copy(center).add(new THREE.Vector3(span * 0.8, span * 0.65, span * 1.05));
+    const aspectFit = options.visualOnly ? Math.max(1, 1 / camera.aspect) : 1;
+    camera.position.copy(center).add(new THREE.Vector3(span * 0.8, span * 0.65, span * 1.05).multiplyScalar(aspectFit));
     camera.lookAt(center); controls.update(); applyMode(); requestDraw();
   }
   function pointerDown(event) { pickStart = { x: event.clientX, y: event.clientY, time: performance.now() }; }

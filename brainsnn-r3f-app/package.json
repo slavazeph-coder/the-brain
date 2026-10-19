@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "og:toys": "node scripts/render-toy-og.mjs",
     "test:analysis": "node --test arena-analysis/tests/*.test.cjs",
-    "analysis:admin": "node arena-analysis/admin.cjs"
+    "analysis:admin": "node arena-analysis/admin.cjs",
+    "test:world": "node --test ../tests/world/*.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

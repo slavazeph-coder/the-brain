@@ -8,5 +8,25 @@
     "max_inputs": 1,
     "timeout_seconds": 600,
     "command": ["/absolute/path/to/venv/bin/python", "/absolute/path/to/the-brain/robotics/world_worker/depth_small.py", "--input-manifest", "{input_manifest}"]
+  },
+  {
+    "id": "colmap-sparse",
+    "label": "Multi-view spatial reconstruction (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": ["image", "video"],
+    "max_inputs": 12,
+    "timeout_seconds": 1800,
+    "command": ["/absolute/path/to/colmap-venv/bin/python", "/absolute/path/to/the-brain/robotics/world_worker/sparse_colmap.py", "--input-manifest", "{input_manifest}"]
+  },
+  {
+    "id": "mapanything-apache",
+    "label": "Dense image/video reconstruction (GPU qualification required)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": ["image", "video"],
+    "max_inputs": 12,
+    "timeout_seconds": 900,
+    "command": ["/absolute/path/to/mapanything-venv/bin/python", "/absolute/path/to/the-brain/robotics/world_worker/mapanything_apache.py", "--input-manifest", "{input_manifest}"]
   }
 ]
