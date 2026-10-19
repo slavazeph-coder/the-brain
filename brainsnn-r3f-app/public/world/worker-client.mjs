@@ -37,16 +37,24 @@ export class WorkerClient {
     const item=job.artifacts?.[index],limit=64*1024**2;
     if(!item||!Number.isSafeInteger(item.size)||item.size<1||item.size>limit)throw new Error('In-browser previews are limited to 64 MiB. Download larger artifacts for a desktop viewer.');
     if(!/^[a-f0-9]{64}$/.test(item.sha256))throw new Error('Artifact is missing a valid integrity hash.');
-    const url=await this.download(job.id,index,signal);
-    const response=await fetch(url,{signal,credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer'});
-    if(!response.ok||!response.body)throw new Error('Artifact preview download failed.');
-    const reader=response.body.getReader(),chunks=[];let size=0;
-    try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>item.size||size>limit)throw new Error('Artifact exceeded its declared size.');chunks.push(value);}}
-    finally{await reader.cancel();}
-    if(size!==item.size)throw new Error('Artifact download is incomplete.');
-    const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
-    const digest=await crypto.subtle.digest('SHA-256',bytes),hash=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
-    if(hash!==item.sha256)throw new Error('Artifact integrity check failed.');
-    return bytes.buffer;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(new DOMException('Artifact preview exceeded its 60 second deadline.','TimeoutError')),60000);
+    const relay=()=>controller.abort(signal.reason);signal?.addEventListener('abort',relay,{once:true});if(signal?.aborted)relay();
+    try{
+      controller.signal.throwIfAborted();
+      const url=await this.download(job.id,index,controller.signal);
+      controller.signal.throwIfAborted();
+      const response=await fetch(url,{signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer'});
+      if(!response.ok||!response.body)throw new Error('Artifact preview download failed.');
+      const reader=response.body.getReader(),chunks=[];let size=0;
+      try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>item.size||size>limit)throw new Error('Artifact exceeded its declared size.');chunks.push(value);}}
+      finally{await reader.cancel().catch(()=>{});}
+      controller.signal.throwIfAborted();
+      if(size!==item.size)throw new Error('Artifact download is incomplete.');
+      const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+      const digest=await crypto.subtle.digest('SHA-256',bytes),hash=Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('');
+      controller.signal.throwIfAborted();
+      if(hash!==item.sha256)throw new Error('Artifact integrity check failed.');
+      return bytes.buffer;
+    }finally{clearTimeout(timer);signal?.removeEventListener('abort',relay);controller.abort();}
   }
 }

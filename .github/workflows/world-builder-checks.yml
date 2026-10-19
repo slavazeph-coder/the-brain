@@ -14,6 +14,7 @@ on:
       - "brainsnn-r3f-app/server.ts"
       - "brainsnn-r3f-app/package*.json"
       - "robotics/world_worker/**"
+      - "robotics/arena/inspection/interop.py"
       - "tests/world/**"
       - ".github/workflows/world-builder-checks.yml"
       - ".github/workflows/brainsnn-app-deploy.yml"
@@ -45,6 +46,7 @@ jobs:
             tests/world/requirements-ci.txt
             robotics/world_worker/requirements.txt
             robotics/world_worker/requirements-colmap.txt
+            robotics/world_worker/requirements-observations.txt
       - name: Install app dependencies
         working-directory: brainsnn-r3f-app
         run: npm ci --no-audit --no-fund
@@ -58,8 +60,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg
           # Use the Python SDK's binaries; npm Playwright has a separate version.
           python -m playwright install --with-deps chromium webkit
-      - name: Worker upload, cancellation, retention and reconstruction contracts
-        run: python -m pytest tests/world/test_worker.py -q
+      - name: Worker reconstruction and observations contracts with explicit fake VLM transport
+        run: python -m pytest tests/world/test_worker.py tests/world/test_observations.py -q
       - name: Build production app
         working-directory: brainsnn-r3f-app
         run: npm run build
@@ -91,6 +93,10 @@ jobs:
                          PLAYWRIGHT_WEBKIT_PATH=playwright.webkit.executable_path)
               subprocess.run(['node', 'tests/world/visual-browser-smoke.mjs'], env=env, check=True)
           PY
+      - name: Observations HTTP worker and review flows with explicit fixture VLM
+        env:
+          WORLD_BROWSERS: chromium,webkit
+        run: python tests/world/observations_browser_smoke.py
       - name: Retain World Builder browser diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

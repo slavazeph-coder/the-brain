@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {createServer} from 'node:http';
 import {WorkerClient} from '../../brainsnn-r3f-app/public/world/worker-client.mjs';
 
 const id='a'.repeat(32);
@@ -77,4 +78,71 @@ test('artifact previews fail closed for changed, truncated and oversized bytes',
     [{...artifact,sha256:'0'.repeat(64)},/integrity check/],
   ])await assert.rejects(client.previewArtifact({id,artifacts:[entry]},0),pattern);
   assert.equal(mock.mock.callCount(),3,'invalid manifests are rejected before an artifact fetch');
+});
+
+test('preview deadline cancels a real stalled HTTP body and cleans up ticket/preview timers',async(t)=>{
+  const timers=new Map(),realSetTimeout=globalThis.setTimeout,realClearTimeout=globalThis.clearTimeout;
+  t.mock.method(globalThis,'setTimeout',(callback,delay,...args)=>{
+    const timer=realSetTimeout(callback,delay,...args);
+    if(delay===60000)timers.set(timer,{callback,cleared:false});
+    return timer;
+  });
+  t.mock.method(globalThis,'clearTimeout',timer=>{if(timers.has(timer))timers.get(timer).cleared=true;return realClearTimeout(timer);});
+  let beginStream;const started=new Promise(resolve=>{beginStream=resolve;});
+  const server=createServer((request,response)=>{
+    if(request.url.endsWith('/ticket')){
+      response.writeHead(200,{'Content-Type':'application/json'});
+      response.end(JSON.stringify({url:'/v1/download/stalled'}));
+    }else{
+      response.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':String(bytes.length)});
+      response.write(bytes.slice(0,1));beginStream(); // Deliberately never completes.
+    }
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const client=new WorkerClient(`http://127.0.0.1:${server.address().port}`,'s'.repeat(40));
+    const pending=client.previewArtifact({id,artifacts:[artifact]},0);
+    const rejected=assert.rejects(pending,error=>error.name==='AbortError'||error.name==='TimeoutError');
+    await started;
+    const active=[...timers.values()].filter(timer=>!timer.cleared);
+    assert.equal(active.length,1,'ticket timer is cleaned before the artifact body begins');
+    active[0].callback(); // Fire the actual 60-second deadline without waiting a minute.
+    await rejected;
+    assert.equal(timers.size,2,'the ticket request and whole preview each have a deadline');
+    assert.ok([...timers.values()].every(timer=>timer.cleared));
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
+test('caller cancellation stops an in-flight artifact fetch and removes its relay',async(t)=>{
+  const client=makeClient(),caller=new AbortController();
+  client.download=async()=> 'https://worker.example/prefix/v1/download/ticket';
+  const removed=t.mock.method(caller.signal,'removeEventListener');
+  let beginFetch;const started=new Promise(resolve=>{beginFetch=resolve;});
+  t.mock.method(globalThis,'fetch',async(_url,{signal})=>new Promise((_,reject)=>{
+    signal.addEventListener('abort',()=>reject(signal.reason),{once:true});beginFetch();
+  }));
+  const pending=client.previewArtifact({id,artifacts:[artifact]},0,caller.signal);
+  const rejected=assert.rejects(pending,error=>error.name==='AbortError');
+  await started;caller.abort();await rejected;
+  assert.equal(removed.mock.callCount(),1);
+  assert.equal(removed.mock.calls[0].arguments[0],'abort');
+  await assert.rejects(client.previewArtifact({id,artifacts:[artifact]},0,caller.signal),error=>error.name==='AbortError');
+});
+
+test('rejected HTTP status cancels an unread artifact stream', {timeout:3000}, async()=>{
+  let closed;const bodyClosed=new Promise(resolve=>{closed=resolve;});
+  const server=createServer((_request,response)=>{
+    response.on('close',closed);
+    response.writeHead(503,{'Content-Type':'application/octet-stream'});
+    response.write('unavailable'); // A broken worker never closes this error body.
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const client=makeClient();
+    client.download=async()=>`http://127.0.0.1:${server.address().port}/v1/download/error`;
+    await assert.rejects(client.previewArtifact({id,artifacts:[artifact]},0),/download failed/);
+    let deadline;
+    try{await Promise.race([bodyClosed,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('Unread error body was not cancelled.')),1000);})]);}
+    finally{clearTimeout(deadline);}
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

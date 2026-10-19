@@ -311,7 +311,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 entry = engines[job['engine']]
                 command = [arg.replace('{input_manifest}', str(request_file)).replace('{output_dir}', str(out)) for arg in entry['command']]
                 # The worker secret is deliberately excluded from adapter environments.
-                env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR']}
+                env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR','WORLD_VLM_ENABLED','WORLD_VLM_BASE_URL','WORLD_VLM_MODEL','WORLD_VLM_REVISION','WORLD_VLM_API_KEY']}
                 env.update({'PYTHONUNBUFFERED':'1','HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'})
                 with (directory / 'operator.log').open('wb') as log:
                     proc = await asyncio.create_subprocess_exec(*command, cwd=str(directory), env=env, stdout=log, stderr=log, start_new_session=os.name=='posix')

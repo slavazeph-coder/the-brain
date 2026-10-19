@@ -186,6 +186,84 @@ meshes or reviewed collision geometry. This qualification does not cover longer
 videos, twelve views, low-texture interiors, geometric accuracy, semantic labels,
 robot execution or a public worker endpoint.
 
+## Executed local visual observations
+
+The observation adapter called the existing local vLLM service; it did not start
+another model process or use a cloud fallback. The served alias `qwen3.8:27b`
+corresponds to
+[`nvidia/Qwen3.8-27B-NVFP4`, revision `482ca0f3832238542f8f5295dde86b5f22711d80`](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4/tree/482ca0f3832238542f8f5295dde86b5f22711d80).
+Its pinned [checkpoint license](https://huggingface.co/nvidia/Qwen3.8-27B-NVFP4/blob/482ca0f3832238542f8f5295dde86b5f22711d80/LICENSE)
+declares Apache-2.0; that file's SHA256 is
+`bbedc3fda3305820b977265f01b8619d87570a6739de3a5582c3464840f1e57a`.
+The installed model configuration matched the pinned upstream configuration
+SHA256 `71fa01bb64de20971045cd82a82c0ebb25a54e1b0a3f09ef23cf5479e9c54df8`.
+The adapter verifies the response's served alias; the weight revision is
+operator-configured provenance, not a per-response weight attestation.
+
+Frozen adapter SHA256:
+`6cb6601d9cf18c571b9351b60082746217fef42c20ee1eb17439ed292a729237`.
+Prompt `world-visible-observations-v3` SHA256:
+`facafd757f471ef9ce459a9641c587b056551af2e412e71256d638fa22bfcfc1`.
+Generation and independent validation require at most six selected observations,
+80-character labels and 180-character uncertainty explanations. The response
+budget is 1,024 tokens, with a 60-second HTTP deadline and a separate 90-second
+qualification watchdog. Generated boxes are rejected: these are frame-bound
+labels, not qualified object localization. Empty or partial selections are not
+evidence that other objects are absent.
+
+| Final v3 run | UTC interval, 19 October 2026 | Frames / selected observations | Total elapsed |
+|---|---|---:|---:|
+| Fountain photograph `0000.png` | 14:55:42.551–14:55:50.653 | 1 / 1 | 8.097 s |
+| Fountain photograph-sequence MP4 | 14:54:12.194–14:54:38.451 | 4 / 4 | 26.255 s |
+
+The video remains a 5.5-second photograph sequence, not a physical phone
+walkthrough. Its source SHA256 is
+`7ecfa2755fc69f4a52668cfe457f00af0053bb512596dc7a8929660766cb7f5e`.
+The four decoded 512×384 frames retain actual PTS `8192`, `32768`, `57344`,
+`81920`, each with time base `1/16384`: 0.5, 2, 3.5 and 5 seconds. PyAV 19.0.1
+was installed only in the isolated environment; the run reused Pillow 13.0.0.
+Frame PNG hashes bind the exact remote decoder/resizer outputs; independent
+re-encoding with different builds need not produce identical PNG bytes.
+
+| Final artifact | SHA256 |
+|---|---|
+| Photo `observations.json` | `02506a6799d6895275f6b6b4692b334f6a62db3c4ed71893dd37af707e9bfcd2` |
+| Photo `observation-frames.json` | `00ed96ed19aa9ce0d62b046f27f7c11bc291bc5a6388d2ef9903a2ca2f31ab1c` |
+| Video `observations.json` | `d17cd0a3a4552f854a4974e22e6160c8cd7f9f79c2df877a0024ee06cb872d69` |
+| Video `observation-frames.json` | `0d41bfe2bc94bc4399c78d051e9d586efe3a5e37598e40c23d6c3c11039e53e5` |
+
+Receipts and actual PNG/JSON artifacts are under the private remote
+`vlm-qualification/image-20261019T145542Z` and
+`vlm-qualification/video-20261019T145412Z` directories beneath the staging root.
+Local copies under `/tmp/brainsnn-world-validation/vlm-qualification/` passed
+byte-count and SHA256 checks. The watchdog admitted only an idle, healthy service,
+then allowed one total active/waiting request for its own call. All 10 photo and
+28 video samples retained health 200, unchanged OOM counters and at least
+69.55 GiB host headroom. At 14:57:15 UTC the original vLLM engine was idle and
+healthy, GPU utilization was 0%, and no OOM events had occurred.
+
+Earlier attempts are preserved as failures: unconstrained JSON had unsupported
+fields, a longer video response reached the 60-second deadline, and a shorter
+response contained invalid boxes. None published a successful manifest. A
+qualification-harness attempt also stopped when it mistook its own waiting
+request for additional traffic; its guard was corrected to count total requests.
+The final design reduces output and excludes generated boxes; it does not relax
+validation, silently discard invalid fields, retry requests or increase deadlines.
+
+Manual comparison found recognizable fountain and building descriptions, but
+material and ornament labels such as sandstone, brick and snake remain uncertain.
+These observations are unreviewed suggestions, not an accuracy benchmark,
+exhaustive inventory, verified identity, physical measurement or collision map.
+
+The final recorded photo and video outputs also passed the main review UI in
+Chrome desktop and an iPhone 15-sized WebKit viewport. A temporary private worker
+verified the uploaded original's SHA256 and replayed the actual artifacts without
+another model call. Displayed PNG hashes matched the recorded remote frames;
+video captions showed 0.500, 2.000, 3.500 and 5.000 seconds. Exported proof retained
+the exact sidecar, model/prompt/source/frame bindings, pending decisions and null
+human reviews. The existing authored map and review flags stayed unchanged.
+Ignored screenshots and receipts are under `output/playwright/world/actual-v3-*`.
+
 ## Read-only GPU hardware observation
 
 At **2026-10-19 13:59 UTC**, the authenticated GB10 host reported ARM64,
