@@ -24,6 +24,16 @@ Both journeys: real local uvicorn worker signed an Ed25519 receipt over the exac
 
 No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
 
+## Re-verification 2026-10-21 (after HTTP UI commit) — checkpoint
+Mac worktree fast-forwarded `8bc5d77` → `3cc2068` (no force; local `.ai-memory/` dirty files untouched and not committed). Re-ran at `3cc2068`:
+- Node baseline: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (71.4 ms).
+- Python baseline: `pytest tests/world/test_report_receipts.py -q` → 18 passed in 2.89s.
+- Mac Chromium UI smoke: PASS. Receipt identical to run above: `{realPrivateWorker, realEd25519, consentGate, separateKeyTrustRequired, hashesOnlyRequest, exactScenarioBytes, offlineNetworkRequests:0, tamperRejected, mapReviewFlagsUnchanged, pageErrors:[]}`.
+- Mac WebKit UI smoke: PASS, identical receipt shape.
+- 4090 re-probe (short SSH, no tunnel): hostname `d130b6c7f3f4`, GPU UUID `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, branch `hermes/world-builder-4090` clean in sync with origin; `build-runtime/` already has node v22.23.3 + `worker-tests` runtime — pinned reconstruction runtime is the next item, GPU untouched this run (GB10/Mac slot).
+
+No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
+
 ## Blocker
 None. `docs/world-builder-remote-progress-gb10.md` created and committed this run.
 
