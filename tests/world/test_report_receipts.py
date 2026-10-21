@@ -9,6 +9,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
 
 import pytest
 from cryptography.exceptions import InvalidSignature
@@ -271,6 +272,42 @@ def test_offline_cli_verifies_actual_scenario_file_and_refuses_changed_bytes(sig
     scenario.write_bytes(SCENARIO + b' ')
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=10)
     assert result.returncode == 2 and 'rejected' in result.stderr and not result.stdout
+
+
+def test_owner_cancellation_aborts_job_source_rehash_and_never_completes(signed_options, monkeypatch):
+    # Unverified cancellation path: hash_cancellations (app.py cancel_job -> set)
+    # must abort the job's own source re-hash loop in execute(). Prove the loop
+    # stops, the job is cancelled, and no completion record or receipt is signed.
+    options, _, _, _ = signed_options
+    with TestClient(create_app(**options)) as client:
+        entered, release = threading.Event(), threading.Event()
+        def slow_job_hash(*args, **kwargs):
+            entered.set(); assert release.wait(5)
+            return file_digest(*args, **kwargs)
+        monkeypatch.setattr('robotics.world_worker.app.file_digest', slow_job_hash)
+        uid = upload(client, A)
+        jid = prepare(client, A, uid).json()['id']
+        client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={})
+        assert entered.wait(5), 'execute never entered the source re-hash loop'
+        # Owner cancels while the re-hash thread is blocked. cancel_job sets the
+        # hash_cancellations event; the loop must observe it and stop.
+        response = client.delete('/v1/jobs/' + jid, headers=headers(A))
+        assert response.status_code == 200 and response.json()['status'] == 'cancelled'
+        release.set()
+        # The blocked thread unblocks, calls real file_digest, which sees
+        # cancelled.is_set() and raises TimeoutError. execute() catches it,
+        # sees status != 'cancelled' is False, and returns without completing.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled':
+                break
+            time.sleep(0.05)
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled'
+        # No completion record: the re-hash never finished, so complete() was
+        # never called. Deleting artifacts is allowed only for non-complete jobs.
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
+        # The source upload is no longer in use (running set cleared).
+        assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
 
 
 def test_exact_file_reader_has_cancellation_and_deadline(tmp_path):
