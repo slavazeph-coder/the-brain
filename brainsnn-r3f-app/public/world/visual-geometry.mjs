@@ -162,6 +162,22 @@ export function fromDepth(rgba, width, height, depth, dw, dh, fov = 60) {
   if (!out.length) throw Error('No visible pixels with usable depth were found.');
   return new Float32Array(out);
 }
+/** Arena sim reference layer: the exact format `BrainSNNSiteRenderer.setPointCloud` accepts (≤50k rows of [x,y,z,r,g,b]).
+ * Arena places and frames a cloud by its full bounding box, so far-triangulated outliers would float the subject off the
+ * floor; the hand-off keeps the 2nd–98th percentile core and records exactly what was dropped. COLMAP (x right, y down,
+ * z forward) is turned Y-up. Visual only, never collision geometry; the World viewer and PLY export keep every point. */
+export const ARENA_MAX_POINTS = 50_000;
+export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', source = 'World Builder reconstruction' } = {}, budget = ARENA_MAX_POINTS) {
+  const { min, max, trimmed } = frameBounds(points), flip = coordinateFrame === 'colmap' ? -1 : 1, count = points.length / STRIDE, core = [];
+  for (let i = 0; i < count; i++) {
+    const at = i * STRIDE;
+    if ([0, 1, 2].every(j => points[at + j] >= min[j] && points[at + j] <= max[j]))
+      core.push([points[at], flip * points[at + 1], flip * points[at + 2], ...[6, 7, 8].map(j => Math.round(points[at + j] * 255))]);
+  }
+  const step = Math.max(1, Math.ceil(core.length / budget)), rows = core.filter((_, i) => i % step === 0);
+  return { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
+    source, points: rows, provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1, metricVerified: false } };
+}
 /** Exports a plain colored cloud, never adds trained Gaussian or metric provenance. */
 export function toPLY(points) {
   bounds(points);

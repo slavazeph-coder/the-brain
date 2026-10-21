@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
 
@@ -22,6 +22,21 @@ test('framing bounds ignore far reconstruction outliers without removing them', 
   assert.deepEqual(frameBounds(clean.points).max, bounds(clean.points).max);
   // Tiny clouds never trim.
   assert.deepEqual(frameBounds(parsePLY(ascii()).points), bounds(parsePLY(ascii()).points));
+});
+
+test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every dropped point', () => {
+  const rows = [];
+  for (let i = 0; i < 1000; i++) rows.push(`${(i % 10) / 10} ${(Math.floor(i / 10) % 10) / 10} ${(Math.floor(i / 100) % 10) / 10} 200 100 50`);
+  for (let i = 0; i < 10; i++) rows.push(`${500 + i} ${-300 - i} ${900 + i} 10 10 10`);
+  const p = parsePLY(ascii(rows)).points;
+  const cloud = toArenaCloud(p, { coordinateFrame: 'colmap', source: 'clip.mp4' });
+  assert.equal(cloud.kind, 'colmap-sparse-point-cloud'); assert.equal(cloud.coordinateFrame, 'right-handed-y-up'); assert.equal(cloud.sourceFrame, 'colmap');
+  assert.deepEqual(cloud.provenance, { totalPoints: 1010, keptPoints: 1000, outliersDropped: 10, thinned: false, metricVerified: false });
+  assert.ok(cloud.points.every(r => r.length === 6 && r[0] >= 0 && r[1] <= 0 && r[2] <= 0 && r[3] === 200), 'colmap y/z are negated; colours are 0-255');
+  // A Y-up source is passed through unchanged, and a large cloud is thinned under the Arena budget.
+  const same = toArenaCloud(p.subarray(0, 2 * STRIDE)); assert.deepEqual(same.points[1].slice(0, 3), [...p.subarray(STRIDE, STRIDE + 3)]); assert.equal(same.provenance.outliersDropped, 0);
+  const big = parsePLY(ascii(Array.from({ length: 2500 }, (_, i) => `${i % 50} ${Math.floor(i / 50)} 0 1 2 3`))).points;
+  const thin = toArenaCloud(big, {}, 1000); assert.ok(thin.points.length <= 1000 && thin.provenance.thinned);
 });
 
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {

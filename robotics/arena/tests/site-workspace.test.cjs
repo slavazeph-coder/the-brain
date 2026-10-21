@@ -35,7 +35,7 @@ function setup(selection = g1) {
   e.ctx.fetch = async (url, options) => { requests.push({ url, options }); throw new Error('Unexpected network request: ' + url); };
   const renderer = {};
   for (const name of ['setScene', 'setRobot', 'setMode', 'setCamera', 'setTrace', 'setAssetTransform', 'clearAsset', 'dispose']) renderer[name] = (...args) => renderCalls.push({ name, args: clone(args) });
-  renderer.setPointCloud = cloud => { renderCalls.push({ name: 'setPointCloud', args: [clone(cloud)] }); return { pointCount: cloud.positions.length / 3, visualOnly: true }; };
+  renderer.setPointCloud = cloud => { renderCalls.push({ name: 'setPointCloud', args: [clone(cloud)] }); return { pointCount: (cloud.points || cloud.positions || []).length, visualOnly: true }; };
   renderer.importAsset = async file => ({ name: file.name, visualOnly: true });
   e.ctx.BrainSNNSiteRenderer = { create(_host, options) { rendererOptions = options; return renderer; } };
   for (const name of ['site-core.js', 'site-operations.js', 'site-workspace.js']) vm.runInContext(fs.readFileSync(path.join(base, name), 'utf8'), e.ctx, { filename: name });
@@ -528,4 +528,19 @@ test('an invalid imported operations scenario cannot partially replace the curre
   assert.deepEqual(after.result, before.result); assert.deepEqual(after.operations, before.operations);
   assert.equal(after.proxy, before.proxy); assert.equal(after.mode, before.mode);
   assert.match(e.el('site-status').textContent, /Map import:/);
+});
+
+test('a World Builder point-cloud JSON loads through Add 3D visual as a visual-only reference and never touches the map', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const before = e.state(), cloud = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'fountain-clip.mp4', points: [[0, 0, 0, 200, 100, 50], [1, 2, 3, 10, 20, 30]] };
+  e.renderCalls.length = 0;
+  e.file('site-asset-input', e.jsonFile(cloud, 'brainsnn-point-cloud.json')); await flush();
+  const call = e.renderCalls.find(c => c.name === 'setPointCloud'); assert(call, 'renderer.setPointCloud receives the parsed cloud');
+  assert.deepEqual(call.args[0], cloud); assert(!e.renderCalls.some(c => c.name === 'importAsset'));
+  const after = e.state(); assert.deepEqual(after.scene, before.scene); assert.equal(after.view, 'reality'); assert.equal(after.result, null);
+  assert.match(e.root.textContent, /Visual only/); assert.match(e.el('site-status').textContent, /visual reference/);
+  // Malformed JSON and oversized files fail closed without clearing the previous appearance state.
+  e.file('site-asset-input', new e.ctx.File(['{nope'], 'bad.json')); await flush(); assert.match(e.el('site-status').textContent, /3D import:/);
+  e.file('site-asset-input', { name: 'huge.json', size: 16 * 1024 * 1024 + 1, text() { throw Error('Oversize cloud must not be read'); } }); await flush();
+  assert.match(e.el('site-status').textContent, /under 16 MB/); assert.deepEqual(e.state().scene, before.scene);
 });
