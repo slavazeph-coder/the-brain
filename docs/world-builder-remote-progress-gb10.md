@@ -1,35 +1,40 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-21T19:40Z
+Last updated: 2026-10-21T21:52Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
 - Worker: `/workspace/hermes-gb10/repos/the-brain/robotics/world_worker/`
-- Test baselines re-verified at `a0e8ae0` (clean tree):
-  - Node: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (66.0 ms)
-  - Python: `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → 19 passed in 6.03s
-- **Run 13 (this run): signed-receipt API documentation — COMPLETE**
-  - The worker API guide `brainsnn-r3f-app/public/world/api.html` documented no report-receipt endpoints at all.
-  - Added to the endpoint table: `POST /v1/jobs/{id}/report-receipt` (Ed25519-signed verification receipt; signed-key-provisioned only).
-  - Added full "Optional: sign completed-job receipts" section covering:
-    - Key provisioning: `python -m robotics.world_worker.report_receipts init-key --private-key /operator/report-signing.key --public-key /operator/report-signing.pub` (32-byte private key, mode 0600, absolute path, must live outside `WORLD_WORKER_DIR` tree; deps in `requirements-report-receipts.txt`).
-    - `WORLD_REPORT_SIGNING_KEY` requirement; public key served at `GET /v1/report-key` (schema `brainsnn.world.report-key.v1`: algorithm, keyId = SHA-256 of raw key, publicKey in canonical base64url) and advertised in `/v1/capabilities` under `reportSigning`.
-    - Receipt request shape: `scenarioSha256`/`geometrySha256` (owner-declared linkage; `null` allowed) + `artifactRefs: [{name, sha256}]`; receipt never asserts measurements, safety, policy execution or independent host attestation (all such flags fixed to false).
-    - Verification semantics: worker re-reads artifact bytes and verifies each against recorded SHA-256 before signing; refuses links and observed mutation; verification thread holds the single hash slot until it stops (no early free on disconnect). One verification at a time → concurrent request `429`; re-hash exceeding the time budget → `504` (slot released when the thread finishes). Signed envelope cap 64 KiB; selected artifact bytes capped at 256 MiB per receipt (`413` above). Request carries only digests/names, never source or artifact bytes; after IO the worker re-authenticates and re-checks job evidence → `401`/`409` with no new signature.
-    - Offline verification: `python -m robotics.world_worker.report_receipts verify --receipt receipt.json --trusted-public-key /operator/report-signing.pub --scenario scenario.json`; verifier re-checks signature, exact schema, and exact local scenario file bytes against the signed owner declaration. Embedded public keys never establish trust.
-  - HTML structure validated (tag balance check: no unclosed tags, no mismatches).
-  - Baselines re-run after the edit: Node 8 pass / 0 fail; Python 19 passed in 6.03s.
+- Test baselines re-verified at `d505bd1` (clean tree):
+  - Node: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (105.7 ms)
+  - Python: `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → 19 passed in 6.45s
+- **Run 17 (this run): loopback HTTP end-to-end signed-receipt driver — COMPLETE, GREEN**
+  - Driver: `/workspace/hermes-gb10/home/cache/scratch/wb_loopback_driver.py` (throwaway; not committed)
+  - Fixes applied this run:
+    1. `uvicorn 0.54` stores bound sockets on `Server.servers`, not `config.servers` → changed port line from `SERVER.config.servers[0].sockets[0]` to `SERVER.servers[0].sockets[0]`.
+    2. Receipt envelope uses `payloadText`/`payloadSha256`, not `payload` → assertion corrected to check `payloadText` and `payloadSha256` (envelope is `['schema','algorithm','keyId','payloadText','payloadSha256','signature']`).
+  - Full HTTP sequence verified:
+    - `GET /healthz` → 200
+    - `GET /v1/capabilities` → `reportSigning.available=True`, algorithm `Ed25519`, real keyId printed
+    - `GET /v1/report-key` → keyId matches capabilities; publicKey served
+    - `POST /v1/uploads` → 201; `PUT /v1/uploads/{id}?offset=0` → 200, 70 bytes
+    - `POST /v1/jobs` (inspect engine, `consent=true`) → 201; `POST start` → 200
+    - `GET /v1/jobs/{id}` polled → `complete`; artifact `capture-integrity.json` sha256 recorded
+    - `POST /v1/jobs/{id}/report-receipt` → 200, Ed25519 signature issued
+    - Tampered `artifactRefs` (wrong sha256) → HTTP 409 `"Artifact references do not match the completed job."`
+    - Offline verify (`receipt verify --receipt … --trusted-public-key … --scenario …`) → exit 0, claim: "Worker receipt and exact scenario hash verified. Measurements, model truth and host independence remain unverified."
+    - Tampered scenario bytes → rejected exit 2
+  - Worker dir cleaned up after test; no residual state.
 
 ## Blockers
 
-- None. Next gate: actual HTTP report UI validation (out of scope for this run — needs live worker + signed key provisioning; remains pending).
+- None. All signed-receipt API gates pass on loopback. HTTP report UI validation (browser-level, real app) remains the only remaining gate before release work can be considered complete.
 
 ## Next bounded action
 
-- Commit + push this documentation commit (in progress this run).
-- Follow-up runs: HTTP end-to-end report-receipt validation against a live worker instance; then continue the remaining implementation gates from `WORLD_BUILDER_CURRENT.md`.
+- Run 18: 4090 GPU task (alternation per task prompt) — short authenticated SSH, confirm hostname + GPU, then a bounded experiment or config check on `hermes/world-builder-4090` branch. Preserve existing 4090 experiments and GPU budgets. No permanent tunnel.
 
 ## Guardrails
 
