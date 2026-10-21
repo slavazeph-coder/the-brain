@@ -7,7 +7,7 @@ The bundled path is **FFmpeg + COLMAP sparse reconstruction**. It extracts camer
 ## What is available
 
 - Input: MP4/MOV video, 2–180 seconds, or a ZIP of 8–120 JPEG/PNG photos. Maximum upload is 256 MiB. HEIC photos need conversion to JPEG first.
-- Output: private `scan.json`, `point-cloud.json` and `sparse.ply` downloads. Optional `visual.ply` and `visual.usdz` are visual exports for external tools.
+- Output: private `scan.json`, `point-cloud.json`, `cameras.json` (camera centres and viewing axes in frame order) and `sparse.ply` downloads. Optional `visual.ply` and `visual.usdz` are visual exports for external tools.
 - Preview: at most 50,000 colored points for the browser. COLMAP coordinates have arbitrary scale and orientation. The preview is visual context; drawing a reviewed map is a separate step.
 - Required review: confirm metric scale using a known distance, align the ground plane, inspect missing areas and author the navigable floor and obstacles.
 - Capacity: one upload or reconstruction at a time; three retained jobs, 3 GiB per job, 5 GiB total monitored storage, a 30-minute reconstruction budget and 24-hour retention. Delete a scan to release its files earlier.
@@ -20,6 +20,34 @@ These limits are conservative defaults, not a benchmark. Filesystem quotas or a 
 Walk slowly around one well-lit space, keeping adjacent views overlapping. Include walls, floor boundaries, doorways and stationary details. Avoid fast pans, reflective surfaces and moving crowds. Record a real distance, such as the width of a doorway, for later scale confirmation. Do not assume a scan of glass or a plain white wall is complete.
 
 The worker rejects unreadable, blank and very dark frames. Reconstruction can still fail if images lack overlap or texture. A completed reconstruction means cameras and points were calculated, not that the floor or robot behavior has been validated. The manifest flags low camera registration.
+
+## Install without building COLMAP (pycolmap, CPU)
+
+`BRAIN_SITE_COLMAP=pycolmap` runs the CPU build of COLMAP bundled in the pycolmap wheel through `workers/site_scan/colmap_cli.py`, which accepts exactly the commands and flags this worker uses. No source build or `BRAIN_SITE_COLMAP_REVISION` is needed; `scan.json` records the pycolmap version, COLMAP build string and the SHA-256 of its native module instead.
+
+```bash
+.venv-site-scan/bin/pip install -r workers/site_scan/requirements.txt -r workers/site_scan/requirements-pycolmap.txt
+```
+
+Measured 21 October 2026 on a 4-vCPU cloud container, pycolmap 4.2.1 (COLMAP commit bd1fcf6, no GPU), using a 62-second 779×519 walkthrough (the Mip-NeRF 360 *room* photographs encoded as video), uploaded from brainsnn.com/scan in a real browser through a visitor ticket:
+
+| Run | Frames aligned | Points | Time |
+|---|---|---|---|
+| Sequential matching only (first version, frames upscaled to 1600 px) | 61 / 120 (walk split into 61 + 47) | 10,427 | 3 min 13 s |
+| Same, matching all pairs (offline benchmark) | 120 / 120 | 28,356 | 12 min 25 s |
+| Current: sequential, then all pairs because under 80% aligned; no upscaling | 120 / 120 | 15,020 | 4 min 17 s |
+
+Video frames are never upscaled, videos are solved with one shared camera, and a video walk that aligns under 80% of its frames is re-matched across all pairs (already matched pairs are skipped) and mapped again, which joins a walk that loops back on itself. A 45-photo ZIP built in the browser reconstructed in 29 s. A GPU COLMAP build is much faster for feature extraction and matching; this has not been measured yet.
+
+## Visitor uploads from brainsnn.com/scan
+
+With `BRAIN_SITE_TICKET_SECRET` set (and the same value as `WORLD_TICKET_SECRET` on the website, plus `WORLD_WORKER_URL` pointing at this worker's public HTTPS URL), the capture page can send a visitor's video or photo set straight to this worker:
+
+1. The website signs a single-use ticket: `v1.<expires>.<nonce>.<hex HMAC-SHA256>`, at most one hour ahead (ten minutes by default).
+2. The browser posts the capture with `Authorization: Ticket <ticket>`. The worker verifies the signature, expiry and that the nonce is unused, then returns the job with a one-time `accessKey`. Only its SHA-256 is stored.
+3. The browser opens `/world/<id>#k=<accessKey>`. The key stays in the URL fragment, so it never reaches brainsnn.com. `Authorization: Scan <accessKey>` reads, downloads and deletes that one scan and nothing else; capabilities and other scans still need the operator token.
+
+The website never receives the capture. Visitor scans keep the same limits: one reconstruction at a time (others get a clear "busy" error), 24-hour retention, and when the retained-job limit is reached the oldest finished visitor scan is deleted first. Rotate the ticket secret on both sides together.
 
 ## RTX 4090 setup
 
@@ -75,6 +103,7 @@ Every endpoint requires `Authorization: Bearer <worker token>`. Requests carryin
 - `GET /v1/site-scans/capabilities`: `{version:1, available, missing, acceptedTypes, maxUploadBytes, maxImages, maxVideoSeconds, retentionSeconds, requiresReview:true}`.
 - `POST /v1/site-scans`: raw file bytes, an accepted Content-Type and optional URL-encoded X-Filename. The service streams to private storage with a byte limit even when Content-Length is absent. Returns HTTP 202 and the job state.
 - `GET /v1/site-scans/{id}`: `{version:1, id, status, stage, progress, error, artifacts, requiresReview:true}`. Progress is 0–1. Status is uploading, queued, running, complete, failed or cancelled. A finished scan still requires geometry review.
+- Visitor variants: `POST /v1/site-scans` also accepts `Authorization: Ticket <ticket>` (response adds `accessKey` once); the three per-scan routes also accept `Authorization: Scan <accessKey>` for that scan only.
 - `GET /v1/site-scans/{id}/artifacts/{name}`: authorized file download. Only artifacts listed on a completed job can be fetched. Original capture, command logs and COLMAP working files are never exposed by this route.
 - `DELETE /v1/site-scans/{id}`: cancels work and deletes the job. Child processes are killed as a group. The old job ID stops resolving immediately; processing files are removed when its worker exits.
 

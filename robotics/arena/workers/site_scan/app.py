@@ -41,19 +41,46 @@ def create_app(settings=None, manager=None):
     async def scan_error(request, error):
         return JSONResponse(status_code=error.status, content={"version": 1, "error": error.as_dict()})
 
-    async def authorize(request: Request):
+    def check_origin(request):
         origin = request.headers.get("origin")
         if origin and origin not in settings.origins:
             raise ScanError("origin_rejected", "This browser origin is not allowed by the worker.", 403)
-        if not secrets.compare_digest(request.headers.get("authorization", "").encode("utf-8"), ("Bearer " + settings.token).encode("ascii")):
+
+    def is_operator(request):
+        return secrets.compare_digest(request.headers.get("authorization", "").encode("utf-8"), ("Bearer " + settings.token).encode("ascii"))
+
+    async def authorize(request: Request):
+        check_origin(request)
+        if not is_operator(request):
             raise ScanError("authentication_required", "Connect using this private worker's access token.", 401)
+
+    async def authorize_scan(request: Request, job_id: str):
+        """The operator token, or the access key issued for this one scan."""
+        check_origin(request)
+        if is_operator(request):
+            return
+        scheme, _, key = request.headers.get("authorization", "").partition(" ")
+        if scheme != "Scan" or not key:
+            raise ScanError("authentication_required", "Connect using this private worker's access token.", 401)
+        manager.authorize_job(job_id, key)
+
+    async def authorize_upload(request: Request):
+        """The operator token, or a single-use upload ticket signed by the website. Returns True for a visitor."""
+        check_origin(request)
+        if is_operator(request):
+            return False
+        scheme, _, ticket = request.headers.get("authorization", "").partition(" ")
+        if scheme != "Ticket" or not ticket:
+            raise ScanError("authentication_required", "Connect using this private worker's access token.", 401)
+        manager.redeem_ticket(ticket)
+        return True
 
     @app.get("/v1/site-scans/capabilities", dependencies=[Depends(authorize)])
     def capabilities():
         return manager.capabilities()
 
-    @app.post("/v1/site-scans", status_code=202, dependencies=[Depends(authorize)])
-    async def create_scan(request: Request):
+    @app.post("/v1/site-scans", status_code=202)
+    async def create_scan(request: Request, visitor: bool = Depends(authorize_upload)):
         media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
         length = request.headers.get("content-length")
         if length is not None:
@@ -62,7 +89,7 @@ def create_app(settings=None, manager=None):
                     raise ValueError()
             except ValueError:
                 raise ScanError("upload_limit", "The capture is empty or larger than the worker's upload limit.", 413)
-        job = manager.reserve(media_type, unquote(request.headers.get("x-filename", "capture" + ALLOWED_TYPES.get(media_type, ""))))
+        job = manager.reserve(media_type, unquote(request.headers.get("x-filename", "capture" + ALLOWED_TYPES.get(media_type, ""))), visitor=visitor)
         path = job.path / ("capture" + ALLOWED_TYPES[media_type])
         try:
             descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -77,7 +104,12 @@ def create_app(settings=None, manager=None):
                         target.write(chunk)
             if not job.uploaded_bytes:
                 raise ScanError("empty_capture", "Upload a non-empty capture file.")
-            return manager.submit(job)
+            view = manager.submit(job)
+            if job.access_key:
+                # Shown once: the visitor's browser keeps it; the worker stores only its hash.
+                view = {**view, "accessKey": job.access_key}
+                job.access_key = ""
+            return view
         except TimeoutError:
             manager.delete(job.id)
             raise ScanError("upload_timeout", "Upload took too long. Try a smaller capture.", 408)
@@ -88,16 +120,16 @@ def create_app(settings=None, manager=None):
             manager.delete(job.id)
             raise
 
-    @app.get("/v1/site-scans/{job_id}", dependencies=[Depends(authorize)])
+    @app.get("/v1/site-scans/{job_id}", dependencies=[Depends(authorize_scan)])
     def get_scan(job_id: str):
         return manager.view(manager.get(job_id))
 
-    @app.get("/v1/site-scans/{job_id}/artifacts/{name}", dependencies=[Depends(authorize)])
+    @app.get("/v1/site-scans/{job_id}/artifacts/{name}", dependencies=[Depends(authorize_scan)])
     def artifact(job_id: str, name: str):
         path, media_type = manager.artifact(job_id, name)
         return FileResponse(path, media_type=media_type, filename=name)
 
-    @app.delete("/v1/site-scans/{job_id}", dependencies=[Depends(authorize)])
+    @app.delete("/v1/site-scans/{job_id}", dependencies=[Depends(authorize_scan)])
     def delete_scan(job_id: str):
         manager.delete(job_id)
         return {"version": 1, "deleted": True}

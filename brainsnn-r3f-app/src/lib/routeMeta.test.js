@@ -41,8 +41,9 @@ describe('per-route social previews', () => {
 
     const scan = resolveRouteMeta('/scan');
     expect(scan.title).toBe('Capture a space | BrainSNN World Engine');
-    expect(scan.body.join(' ')).toContain('not uploaded automatically');
-    expect(scan.body.join(' ')).toContain('connect a compatible reconstruction worker');
+    expect(scan.body.join(' ')).toContain('Nothing is uploaded until you choose to build a world');
+    expect(scan.body.join(' ')).toContain('directly to BrainSNN\'s reconstruction worker, not the website');
+    expect(scan.body.join(' ')).toContain('kept for 24 hours');
     expect(resolveRouteMeta('/scan/').title).toBe(scan.title);
 
     const play = resolveRouteMeta('/play');

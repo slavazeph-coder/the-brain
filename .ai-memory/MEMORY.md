@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [World Engine: real video → 3D world](world-engine-reconstruction-2026-10-21.md). Owner: "Turn your videos into 3D worlds" is the product; robot motion is a parked side experiment. /scan uploads to the worker with tickets, /world/<id> viewer; real CPU run 120/120 frames in 4 min. Production not yet connected; photoreal splats need a GPU.
+
 → [Native deformable physics](brainsnn-deformable-physics-2026-10-17.md). Owner requests DeformX-like tasks; native MuJoCo rope strike, bounded motion search and recorded local instance packs. Distinguish browser physics from learned-policy/GPU qualification.
 
 → [Transparent robotics pricing](brainsnn-transparent-pricing-2026-10-17.md). Owner restores visible scale and the historical US$171.43 / 100,000-episode runtime-price illustration; keep assumptions explicit and separate from measured execution.

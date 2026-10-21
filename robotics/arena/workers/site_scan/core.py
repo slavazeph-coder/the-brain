@@ -3,7 +3,9 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import hmac
 import fcntl
+import importlib.util
 import json
 import math
 import os
@@ -13,6 +15,7 @@ import shutil
 import signal
 import stat
 import subprocess
+import sys
 import threading
 import time
 import warnings
@@ -24,7 +27,7 @@ Image.MAX_IMAGE_PIXELS = 40_000_000
 ALLOWED_TYPES = {"video/mp4": ".mp4", "video/quicktime": ".mov", "application/zip": ".zip"}
 TERMINAL = {"complete", "failed", "cancelled"}
 JOB_ID = re.compile(r"^[a-f0-9]{32}$")
-ARTIFACT_TYPES = {"scan.json": "application/json", "point-cloud.json": "application/json",
+ARTIFACT_TYPES = {"scan.json": "application/json", "point-cloud.json": "application/json", "cameras.json": "application/json",
                   "sparse.ply": "application/octet-stream", "visual.ply": "application/octet-stream",
                   "visual.usdz": "model/vnd.usdz+zip"}
 
@@ -50,6 +53,8 @@ class Settings:
     colmap_revision: str = ""
     visual_adapter: str = ""
     visual_adapter_sha256: str = ""
+    # Shared with the website, which signs single-use upload tickets for visitors. Unset: operator token only.
+    ticket_secret: str = ""
     max_upload_bytes: int = 256 * 1024 * 1024
     max_job_bytes: int = 3 * 1024 * 1024 * 1024
     max_total_bytes: int = 5 * 1024 * 1024 * 1024
@@ -73,17 +78,48 @@ class Settings:
                    ffprobe=os.environ.get("BRAIN_SITE_FFPROBE", "ffprobe"),
                    colmap_revision=os.environ.get("BRAIN_SITE_COLMAP_REVISION", ""),
                    visual_adapter=os.environ.get("BRAIN_SITE_VISUAL_ADAPTER", ""),
-                   visual_adapter_sha256=os.environ.get("BRAIN_SITE_VISUAL_ADAPTER_SHA256", ""))
+                   visual_adapter_sha256=os.environ.get("BRAIN_SITE_VISUAL_ADAPTER_SHA256", ""),
+                   ticket_secret=os.environ.get("BRAIN_SITE_TICKET_SECRET", ""))
 
     def validate(self):
         if len(self.token) < 32 or len(self.token) > 512 or any(ord(c) < 33 or ord(c) > 126 for c in self.token):
             raise ValueError("BRAIN_SITE_TOKEN must contain 32–512 printable, non-space characters.")
+        if self.ticket_secret and (len(self.ticket_secret) < 32 or len(self.ticket_secret) > 512
+                                   or any(ord(c) < 33 or ord(c) > 126 for c in self.ticket_secret) or self.ticket_secret == self.token):
+            raise ValueError("BRAIN_SITE_TICKET_SECRET must be 32–512 printable characters and differ from the access token.")
         if not self.origins or any(not re.fullmatch(r"https://(?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+(?::[0-9]{1,5})?|http://(?:localhost|127\.0\.0\.1)(?::[0-9]{1,5})?", x) for x in self.origins):
             raise ValueError("Configure exact HTTPS browser origins; wildcards are forbidden.")
         if self.data_dir.is_symlink():
             raise ValueError("Private data directory must not be a symlink.")
         if not (0 < self.max_upload_bytes <= self.max_job_bytes <= self.max_total_bytes):
             raise ValueError("Invalid storage limits.")
+
+
+def registered_images(model):
+    """COLMAP's images.bin starts with its registered-image count (uint64, little-endian)."""
+    with (model / "images.bin").open("rb") as source:
+        header = source.read(8)
+    return int.from_bytes(header, "little") if len(header) == 8 else 0
+
+
+def camera_path(lines):
+    """COLMAP images.txt pose lines -> camera centres and viewing axes in frame order (same frame as the points)."""
+    cameras = []
+    for line in lines[::2]:
+        columns = line.split()
+        if len(columns) < 10:
+            continue
+        qw, qx, qy, qz, tx, ty, tz = (float(v) for v in columns[1:8])
+        # Rows of the world-to-camera rotation; the centre is -R^T t, the camera looks along +Z and its image down is +Y.
+        r = [[1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy - qz * qw), 2 * (qx * qz + qy * qw)],
+             [2 * (qx * qy + qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz - qx * qw)],
+             [2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx * qx + qy * qy)]]
+        centre = [-(r[0][i] * tx + r[1][i] * ty + r[2][i] * tz) for i in range(3)]
+        values = centre + r[2] + r[1]
+        if all(math.isfinite(v) for v in values):
+            cameras.append({"frame": " ".join(columns[9:]), "centre": centre, "forward": r[2], "down": r[1]})
+    cameras.sort(key=lambda camera: camera["frame"])
+    return {"version": 1, "kind": "colmap-camera-path", "units": "arbitrary", "coordinateFrame": "colmap", "cameras": cameras}
 
 
 def file_hash(path):
@@ -123,6 +159,9 @@ class Job:
     uploaded_bytes: int = 0
     source_sha256: str = ""
     future: object = None
+    # Set for visitor uploads: SHA-256 of the scan's own access key, which unlocks this job only.
+    access_hash: str = ""
+    access_key: str = ""  # Returned once in the upload response, then cleared.
 
 
 class ScanManager:
@@ -152,6 +191,7 @@ class ScanManager:
             if JOB_ID.fullmatch(old.name) and old.is_dir() and not old.is_symlink():
                 shutil.rmtree(old)
         self.jobs = {}
+        self.used_tickets = {}
         self.active_future = None
         self.lock = threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="site-scan")
@@ -172,7 +212,34 @@ class ScanManager:
                 "geometry": "Unscaled visual points; no automatic floor, collision mesh or robot policy.",
                 "privacy": "Private worker storage; deleted on request, expiry or worker restart."}
 
-    def reserve(self, media_type, filename):
+    def redeem_ticket(self, ticket):
+        """Verify a website-signed, single-use upload ticket: v1.<expires>.<nonce>.<hex HMAC-SHA256>."""
+        if not self.settings.ticket_secret:
+            raise ScanError("authentication_required", "Connect using this private worker's access token.", 401)
+        parts = ticket.split(".")
+        if len(parts) != 4 or parts[0] != "v1" or not parts[1].isdigit() or not re.fullmatch(r"[a-f0-9]{32}", parts[2]):
+            raise ScanError("invalid_ticket", "This upload link is invalid. Start again from the capture page.", 401)
+        expected = hmac.new(self.settings.ticket_secret.encode("ascii"), ".".join(parts[:3]).encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, parts[3]):
+            raise ScanError("invalid_ticket", "This upload link is invalid. Start again from the capture page.", 401)
+        expires, now = int(parts[1]), time.time()
+        if expires < now or expires > now + 3600:
+            raise ScanError("ticket_expired", "This upload link expired. Start again from the capture page.", 401)
+        with self.lock:
+            self.used_tickets = {n: e for n, e in self.used_tickets.items() if e >= now}
+            if parts[2] in self.used_tickets:
+                raise ScanError("ticket_used", "This upload link was already used. Start again from the capture page.", 401)
+            self.used_tickets[parts[2]] = expires
+
+    def authorize_job(self, job_id, key):
+        """A visitor's access key opens its own scan and nothing else."""
+        with self.lock:
+            job = self.jobs.get(job_id) if JOB_ID.fullmatch(job_id or "") else None
+            digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+            if not job or not job.access_hash or not hmac.compare_digest(job.access_hash, digest):
+                raise ScanError("authentication_required", "This scan link is not valid on this worker.", 401)
+
+    def reserve(self, media_type, filename, visitor=False):
         with self.lock:
             self.sweep()
             if self.closed.is_set():
@@ -186,6 +253,11 @@ class ScanManager:
                 raise ScanError("invalid_filename", "Use a short filename without directories.")
             if (self.active_future and not self.active_future.done()) or any(j.status not in TERMINAL for j in self.jobs.values()):
                 raise ScanError("worker_busy", "A capture is already uploading or reconstructing. Wait for it or delete it first.", 409)
+            if visitor and len(self.jobs) >= self.settings.max_jobs:
+                # Visitor uploads recycle the oldest finished visitor scan instead of locking everyone out.
+                finished = sorted((j for j in self.jobs.values() if j.access_hash and j.status in TERMINAL), key=lambda j: j.created)
+                if finished:
+                    self.delete(finished[0].id)
             if len(self.jobs) >= self.settings.max_jobs:
                 raise ScanError("job_limit", "Delete an older scan before uploading another.", 429)
             if disk_size(self.settings.data_dir) + self.settings.max_upload_bytes > self.settings.max_total_bytes:
@@ -194,6 +266,9 @@ class ScanManager:
             path = self.settings.data_dir / job_id
             path.mkdir(mode=0o700)
             job = Job(job_id, path, media_type, filename)
+            if visitor:
+                job.access_key = secrets.token_urlsafe(32)
+                job.access_hash = hashlib.sha256(job.access_key.encode("utf-8")).hexdigest()
             self.jobs[job.id] = job
             return job
 
@@ -317,20 +392,54 @@ class ReconstructionPipeline:
     def __init__(self, settings):
         self.settings = settings
 
+    @property
+    def pycolmap(self):
+        """BRAIN_SITE_COLMAP=pycolmap runs the bundled CPU COLMAP from the pycolmap wheel; no source build needed."""
+        return self.settings.colmap == "pycolmap"
+
+    def colmap(self, *args):
+        prefix = [sys.executable, str(Path(__file__).with_name("colmap_cli.py"))] if self.pycolmap else [self.settings.colmap]
+        return prefix + list(args)
+
     def missing(self):
         missing = []
         if not self.settings.enabled:
             missing.append("Set BRAIN_SITE_ENABLED=1 after validating the reconstruction tools")
-        for label, executable in (("COLMAP", self.settings.colmap), ("FFmpeg", self.settings.ffmpeg), ("FFprobe", self.settings.ffprobe)):
+        tools = (("FFmpeg", self.settings.ffmpeg), ("FFprobe", self.settings.ffprobe))
+        if self.pycolmap:
+            if importlib.util.find_spec("pycolmap") is None:
+                missing.append("Install pycolmap in the worker environment")
+        else:
+            tools = (("COLMAP", self.settings.colmap),) + tools
+            if not re.fullmatch(r"[a-f0-9]{40}", self.settings.colmap_revision):
+                missing.append("Set BRAIN_SITE_COLMAP_REVISION to the installed source commit")
+        for label, executable in tools:
             if not shutil.which(executable):
                 missing.append("Install " + label)
-        if not re.fullmatch(r"[a-f0-9]{40}", self.settings.colmap_revision):
-            missing.append("Set BRAIN_SITE_COLMAP_REVISION to the installed source commit")
         adapter = self.settings.visual_adapter
         if adapter and (not Path(adapter).is_absolute() or not Path(adapter).is_file() or
                         not re.fullmatch(r"[a-f0-9]{64}", self.settings.visual_adapter_sha256) or file_hash(adapter) != self.settings.visual_adapter_sha256):
             missing.append("Verify the optional visual adapter path and SHA-256")
         return missing
+
+    def map(self, job, database, image_dir, sparse):
+        """Run the mapper; return the model with the most aligned frames and that count."""
+        self.command(job, self.colmap("mapper", "--database_path", database, "--image_path", image_dir, "--output_path", sparse))
+        models = [p for p in sparse.iterdir() if p.is_dir() and (p / "images.bin").is_file()]
+        if not models:
+            raise ScanError("no_reconstruction", "The views could not be aligned. Recapture with more overlap and visible stationary detail.", 422)
+        counted = [(registered_images(p), p) for p in models]
+        aligned, model = max(counted, key=lambda item: item[0])
+        return model, aligned
+
+    def colmap_provenance(self):
+        if not self.pycolmap:
+            return {"colmapBackend": "cli", "colmapRevisionOperatorAttested": self.settings.colmap_revision,
+                    "colmapBinarySha256": file_hash(shutil.which(self.settings.colmap))}
+        import pycolmap
+        core = next(Path(pycolmap.__file__).parent.glob("_core*"), None)
+        return {"colmapBackend": "pycolmap", "pycolmapVersion": pycolmap.__version__, "colmapBuild": pycolmap.COLMAP_build,
+                "pycolmapCoreSha256": file_hash(core) if core else None}
 
     def command(self, job, args, timeout=600, cwd=None, stdout_path=None):
         """Only server-authored argv. No shell; process group killed on timeout/cancel."""
@@ -437,7 +546,7 @@ class ReconstructionPipeline:
         raw.mkdir(mode=0o700)
         fps = min(2, self.settings.max_images / duration)
         self.command(job, [self.settings.ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-protocol_whitelist", "file,pipe", "-f", "mov", "-enable_drefs", "0", "-use_absolute_path", "0", "-i", capture,
-                           "-map", "0:v:0", "-an", "-sn", "-vf", f"fps={fps:.6f},scale=1600:1600:force_original_aspect_ratio=decrease", "-frames:v", str(self.settings.max_images), "-q:v", "3", raw / "frame_%04d.jpg"], timeout=90)
+                           "-map", "0:v:0", "-an", "-sn", "-vf", f"fps={fps:.6f},scale='min(1600,iw)':'min(1600,ih)':force_original_aspect_ratio=decrease", "-frames:v", str(self.settings.max_images), "-q:v", "3", raw / "frame_%04d.jpg"], timeout=90)
         count = 0
         for path in sorted(raw.glob("*.jpg")):
             try:
@@ -465,26 +574,35 @@ class ReconstructionPipeline:
         database, sparse = dataset / "database.db", dataset / "sparse"
         sparse.mkdir()
         update(job, "Finding image features", .3)
-        self.command(job, [settings.colmap, "feature_extractor", "--database_path", database, "--image_path", image_dir, "--ImageReader.camera_model", "SIMPLE_RADIAL"])
+        # Every frame of one video shares the same lens, so solve for a single camera there.
+        single = "1" if job.media_type.startswith("video/") else "0"
+        self.command(job, self.colmap("feature_extractor", "--database_path", database, "--image_path", image_dir,
+                                      "--ImageReader.camera_model", "SIMPLE_RADIAL", "--ImageReader.single_camera", single))
         update(job, "Matching overlapping views", .45)
-        matcher = "sequential_matcher" if job.media_type.startswith("video/") else "exhaustive_matcher"
-        self.command(job, [settings.colmap, matcher, "--database_path", database])
+        video = job.media_type.startswith("video/")
+        self.command(job, self.colmap("sequential_matcher" if video else "exhaustive_matcher", "--database_path", database))
         update(job, "Reconstructing camera positions and geometry", .6)
-        self.command(job, [settings.colmap, "mapper", "--database_path", database, "--image_path", image_dir, "--output_path", sparse])
-        models = [p for p in sparse.iterdir() if p.is_dir() and (p / "images.bin").is_file()]
-        if not models:
-            raise ScanError("no_reconstruction", "The views could not be aligned. Recapture with more overlap and visible stationary detail.", 422)
-        model = max(models, key=lambda p: (p / "images.bin").stat().st_size)
+        model, aligned = self.map(job, database, image_dir, sparse)
+        frames = len(list(image_dir.glob("*.jpg")))
+        if video and aligned < 0.8 * frames:
+            # Neighbouring frames alone can split a walk that loops back on itself into separate pieces.
+            # Matching every pair finds where it revisits a place; pairs already matched are skipped.
+            update(job, "Connecting the rest of the walk", .7)
+            self.command(job, self.colmap("exhaustive_matcher", "--database_path", database))
+            update(job, "Rebuilding the whole space", .75)
+            shutil.rmtree(sparse)
+            sparse.mkdir()
+            model, aligned = self.map(job, database, image_dir, sparse)
         text_dir = job.path / "colmap-text"
         text_dir.mkdir()
-        self.command(job, [settings.colmap, "model_converter", "--input_path", model, "--output_path", text_dir, "--output_type", "TXT"], timeout=60)
+        self.command(job, self.colmap("model_converter", "--input_path", model, "--output_path", text_dir, "--output_type", "TXT"), timeout=60)
         cameras_file, points_file = text_dir / "images.txt", text_dir / "points3D.txt"
         camera_lines = [line for line in cameras_file.read_text().splitlines() if not line.startswith("#")]
         registered = len(camera_lines) // 2
         if registered < 3:
             raise ScanError("too_few_cameras", "Fewer than 3 camera positions aligned. A more complete capture is needed.", 422)
         update(job, "Preparing visual geometry for review", .8)
-        self.command(job, [settings.colmap, "model_converter", "--input_path", model, "--output_path", artifacts / "sparse.ply", "--output_type", "PLY"], timeout=60)
+        self.command(job, self.colmap("model_converter", "--input_path", model, "--output_path", artifacts / "sparse.ply", "--output_type", "PLY"), timeout=60)
         points, total = [], 0
         # Two passes keep deterministic, evenly sampled points without loading a huge model.
         with points_file.open() as source:
@@ -505,12 +623,12 @@ class ReconstructionPipeline:
         if not points:
             raise ScanError("no_points", "No usable 3D points were reconstructed.", 422)
         (artifacts / "point-cloud.json").write_text(json.dumps({"version": 1, "kind": "colmap-sparse-point-cloud", "units": "arbitrary", "coordinateFrame": "colmap", "points": points}, separators=(",", ":")))
-        names = ["point-cloud.json", "sparse.ply"]
+        (artifacts / "cameras.json").write_text(json.dumps(camera_path(camera_lines), separators=(",", ":")))
+        names = ["point-cloud.json", "cameras.json", "sparse.ply"]
         if settings.visual_adapter:
             update(job, "Training the configured visual reconstruction", .85)
             if file_hash(settings.visual_adapter) != settings.visual_adapter_sha256:
                 raise ScanError("adapter_changed", "The configured visual adapter changed. The operator must verify its checksum.", 503)
-            import sys
             self.command(job, [sys.executable, settings.visual_adapter, str(dataset), str(artifacts)], timeout=settings.job_timeout)
             for name in ("visual.ply", "visual.usdz"):
                 candidate = artifacts / name
@@ -518,9 +636,7 @@ class ReconstructionPipeline:
                     names.append(name)
         manifest = {"version": 1, "schema": "brainsnn.site-scan.v1", "id": job.id,
                     "pipeline": "colmap-sparse", "source": {"filename": job.filename, "sha256": job.source_sha256, "mediaType": job.media_type},
-                    "provenance": {"colmapRevisionOperatorAttested": settings.colmap_revision,
-                                   "colmapBinarySha256": file_hash(shutil.which(settings.colmap)),
-                                   "visualAdapterSha256": settings.visual_adapter_sha256 or None},
+                    "provenance": {**self.colmap_provenance(), "visualAdapterSha256": settings.visual_adapter_sha256 or None},
                     "capture": {"images": len(list(image_dir.glob("*.jpg"))), "registeredCameras": registered, "reconstructedPoints": total, "previewPoints": len(points),
                                 "registrationFraction": registered / max(1, len(list(image_dir.glob("*.jpg"))))},
                     "units": "arbitrary", "coordinateFrame": "colmap", "requiresReview": True,

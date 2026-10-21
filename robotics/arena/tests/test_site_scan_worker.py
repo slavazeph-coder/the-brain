@@ -272,7 +272,9 @@ class PipelineTests(unittest.TestCase):
             elif operation == "model_converter":
                 output = Path(args[args.index("--output_path") + 1])
                 if args[-1] == "TXT":
-                    (output / "images.txt").write_text("# cameras\n1 pose\npoints\n2 pose\npoints\n3 pose\npoints\n")
+                    # Identity orientation at t=(1,2,3); a 180° turn about Y at t=(0,0,4); and an unparsable line.
+                    (output / "images.txt").write_text("# cameras\n1 1 0 0 0 1 2 3 1 image_0001.jpg\npoints\n"
+                                                       "2 0 0 1 0 0 0 4 1 image_0000.jpg\npoints\n3 pose\npoints\n")
                     (output / "points3D.txt").write_text("# points\n1 1.5 2 3 4 5 6 0 1 1\n2 3 4 5 6 7 8 0 2 2\n")
                 else:
                     output.write_text("ply\nformat ascii 1.0\nend_header\n")
@@ -285,7 +287,47 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(manifest["capture"]["registeredCameras"], 3)
         self.assertEqual(cloud["units"], "arbitrary")
         self.assertEqual(cloud["points"][0], [1.5, 2, 3, 4, 5, 6])
-        self.assertEqual({a["name"] for a in artifacts}, {"scan.json", "point-cloud.json", "sparse.ply"})
+        self.assertEqual({a["name"] for a in artifacts}, {"scan.json", "point-cloud.json", "cameras.json", "sparse.ply"})
+        path = json.loads((self.root / "artifacts/cameras.json").read_text())
+        self.assertEqual(path["units"], "arbitrary")
+        self.assertEqual([c["frame"] for c in path["cameras"]], ["image_0000.jpg", "image_0001.jpg"])
+        turned, identity = path["cameras"]
+        self.assertEqual(identity["centre"], [-1, -2, -3])
+        self.assertEqual(identity["forward"], [0, 0, 1])
+        self.assertEqual(identity["down"], [0, 1, 0])
+        for actual, expected in zip(turned["centre"] + turned["forward"], [0, 0, 4, 0, 0, -1]):
+            self.assertAlmostEqual(actual, expected)
+
+    def test_split_video_walk_is_rejoined_with_exhaustive_matching(self):
+        self.job.media_type = "video/mp4"
+        image_dir = self.root / "dataset/images"
+        self.pipeline.video_frames = lambda job, capture, target: [
+            (target / f"image_{i:04d}.jpg").write_bytes(self.photo()) for i in range(10)]
+        self.settings.colmap = sys.executable
+        self.settings.colmap_revision = "b" * 40
+        calls, maps = [], iter([(4, 3), (10,)])
+        def command(job, args, timeout=600, cwd=None):
+            calls.append(args[1:3] if args[1] == "feature_extractor" else args[1])
+            if args[1] == "mapper":
+                for index, count in enumerate(next(maps)):
+                    model = Path(args[args.index("--output_path") + 1]) / str(index)
+                    model.mkdir()
+                    (model / "images.bin").write_bytes(count.to_bytes(8, "little") + b"rest")
+            elif args[1] == "model_converter" and args[-1] == "TXT":
+                output = Path(args[args.index("--output_path") + 1])
+                self.assertEqual(int.from_bytes((Path(args[args.index("--input_path") + 1]) / "images.bin").read_bytes()[:8], "little"), 10)
+                (output / "images.txt").write_text("".join(f"{i} 1 0 0 0 0 0 {i} 1 image_{i:04d}.jpg\npoints\n" for i in range(10)))
+                (output / "points3D.txt").write_text("1 1 2 3 4 5 6 0 1 1\n")
+            elif args[1] == "model_converter":
+                Path(args[args.index("--output_path") + 1]).write_text("ply\n")
+        stages = []
+        self.pipeline.command = command
+        self.pipeline.run(self.job, lambda job, stage, progress: stages.append(stage))
+        self.assertEqual(calls[:6], [["feature_extractor", "--database_path"], "sequential_matcher", "mapper", "exhaustive_matcher", "mapper", "model_converter"])
+        self.assertIn("Connecting the rest of the walk", stages)
+        manifest = json.loads((self.root / "artifacts/scan.json").read_text())
+        self.assertEqual(manifest["capture"]["registeredCameras"], 10)
+        self.assertTrue(image_dir.is_dir())
 
 
 if __name__ == "__main__":

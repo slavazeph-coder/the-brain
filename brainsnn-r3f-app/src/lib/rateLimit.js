@@ -145,6 +145,9 @@ export const LIMITS = Object.freeze({
   // separate tier means enabling a GPU cannot silently inherit the generous
   // local-only floor.
   neural: { limit: 20, windowMs: 60_000 },
+  // Each ticket lets a browser start one reconstruction on the World Engine
+  // worker, minutes of GPU or CPU time. Six an hour is a person retrying.
+  world: { limit: 6, windowMs: 60 * 60_000 },
   // Sends mail to an address the caller chooses.
   magicLink: { limit: 3, windowMs: 60 * 60_000 },
   // Everything else: local computation only, but still worth bounding.
@@ -173,6 +176,7 @@ export const DEDICATED_ROUTES = Object.freeze({
   '/api/v1/multimodal/ingest': 'neural',
   '/api/v1/neural/predict': 'neural',
   '/api/neural/decode': 'neural',
+  '/api/world/ticket': 'world',
   '/api/auth/magic-link': 'magicLink',
   '/api/events': 'events',
 });

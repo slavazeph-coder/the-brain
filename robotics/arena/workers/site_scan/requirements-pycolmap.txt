@@ -1,0 +1,2 @@
+# CPU COLMAP for BRAIN_SITE_COLMAP=pycolmap (verified 2026-10-21: COLMAP 4.2.1, commit bd1fcf6, no GPU).
+pycolmap==4.2.1

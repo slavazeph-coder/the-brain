@@ -29,6 +29,8 @@ const THREE_IMPORTERS = new Set([
   'src/features/brain3d/BrainScene.jsx',
   'src/features/brain3d/GameScene.jsx',
   'src/features/toys/poke/PokeBrainScene.jsx',
+  // Imported with import() by WorldView only once a reconstruction is ready.
+  'src/app/worldScene3d.js',
   // Bundled separately for /arena/ and loaded only when Test your space opens.
   'src/arena/site-renderer.js',
   // Separate page bundle; the homepage/Arcade only links to this task.

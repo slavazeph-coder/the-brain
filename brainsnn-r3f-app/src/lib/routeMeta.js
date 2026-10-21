@@ -153,11 +153,11 @@ const ROUTES = [
   {
     path: '/scan',
     title: 'Capture a space | BrainSNN World Engine',
-    description: 'Prepare a phone video or overlapping photos for a 3D reconstruction. Local-only media preview is available. GPU reconstruction needs a connected worker and is in early access.',
+    description: 'Turn a phone video or overlapping photos into an explorable 3D reconstruction. Preview locally first; reconstruction runs on BrainSNN\'s worker when it is connected and is in early access.',
     heading: 'Capture a space. Make it a world.',
     body: [
       'Use a conventional camera to record a space with overlapping views, steady motion and clear lighting. Preview video or photos locally before processing.',
-      'Your files are not uploaded automatically. The existing Robot Arena site workspace can accept a supported capture when you connect a compatible reconstruction worker and select the media again.',
+      'Nothing is uploaded until you choose to build a world. The capture then goes directly to BrainSNN\'s reconstruction worker, not the website, is kept for 24 hours and opens with a private link: coloured 3D points, the camera path and PLY/JSON downloads.',
       'Dense 3D outputs, object-level intelligence and precision measurements are not yet available as a public self-serve service. Metric accuracy requires reference measurements and validation.',
     ],
     links: [{ path: '/', label: 'World Engine' }, { path: '/arena/', label: 'Robot Arena' }],

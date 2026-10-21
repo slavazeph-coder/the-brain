@@ -36,6 +36,7 @@ import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
 import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
 import { createGpuBridge } from "./src/server/gpuBridge.js";
+import { createWorldTickets } from "./src/server/worldTickets.js";
 import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
@@ -44,6 +45,7 @@ import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 dotenv.config();
 const gpuBridge = createGpuBridge(process.env);
 const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
+const worldTickets = createWorldTickets(process.env);
 
 export const app = express();
 // The arena is a standalone application with relative assets. Keep both its
@@ -257,6 +259,7 @@ const limiters = {
   magicLink: new RateLimiter(LIMITS.magicLink),
   general: new RateLimiter(LIMITS.general),
   events: new RateLimiter(LIMITS.events),
+  world: new RateLimiter(LIMITS.world),
 };
 
 /** Bounds what the process can spend on Gemini however many callers ask.
@@ -616,6 +619,20 @@ app.post("/api/neural/decode", limit("neural"), async (req, res) => {
     console.error("Error calling neural decoder:", error?.message || error);
     return res.status(502).json({ error: error?.message || "Neural decoder request failed." });
   }
+});
+
+// World Engine: the browser uploads its capture straight to the reconstruction
+// worker with a single-use ticket signed here. This server never sees the video.
+app.get("/api/world/status", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(worldTickets.snapshot());
+});
+
+app.post("/api/world/ticket", limit("world"), (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const ticket = worldTickets.mint();
+  if (!ticket) return res.status(503).json({ error: "not_configured" });
+  res.json(ticket);
 });
 
 // Named soliton presets and their fields — lets agents/UI preview archetypes

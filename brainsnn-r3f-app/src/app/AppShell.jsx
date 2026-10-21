@@ -10,6 +10,7 @@ import { getNavItem } from './navigation.js';
 import { legacyRedirect } from './legacyRoutes.js';
 import { resolveRouteMeta } from '../lib/routeMeta.js';
 
+const WorldView = React.lazy(() => import('./WorldView.jsx').then(m => ({ default: m.WorldView })));
 const CoherenceLanding = React.lazy(() => import('./CoherenceLanding.jsx').then(m => ({ default: m.CoherenceLanding })));
 const ReviewWorkbench = React.lazy(() => import('./ReviewWorkbench.jsx').then(m => ({ default: m.ReviewWorkbench })));
 const ArenaTasks = React.lazy(() => import('./ArenaTasks.jsx').then(m => ({ default: m.ArenaTasks })));
@@ -36,6 +37,7 @@ export function resolveRoute(pathname) {
   if (path === '/play') return 'play';
   if (path === '/coherence') return 'coherence';
   if (path === '/scan') return 'scan';
+  if (/^\/world\/[a-f0-9]{32}$/.test(path)) return 'world';
   if (path === '/') return 'home';
   return 'missing';
 }
@@ -82,6 +84,7 @@ export function AppShell() {
   let content;
   if (route === 'home') content = <WorldHome />;
   else if (route === 'scan') content = <WorldScan />;
+  else if (route === 'world') content = <WorldView />;
   else if (route === 'coherence') content = <CoherenceLanding onNavigate={navigate} onStart={openReview} />;
   else if (route === 'review') content = <div className="bh-site"><a className="bh-skip" href="#review-main">Skip to content</a><PublicNav active="review" /><ReviewWorkbench initialInput={initialInput} /><PublicFooter /></div>;
   else if (route === 'tasks') content = <ArenaTasks />;
