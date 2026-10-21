@@ -1,8 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
+
+test('framing bounds ignore far reconstruction outliers without removing them', () => {
+  // 1,000 points in a unit cube plus 10 triangulated far outliers: full extent is dominated by outliers.
+  const rows = [];
+  for (let i = 0; i < 1000; i++) rows.push(`${(i % 10) / 10} ${(Math.floor(i / 10) % 10) / 10} ${(Math.floor(i / 100) % 10) / 10} 200 100 50`);
+  for (let i = 0; i < 10; i++) rows.push(`${500 + i} ${-300 - i} ${900 + i} 10 10 10`);
+  const p = parsePLY(ascii(rows));
+  assert.equal(p.points.length / STRIDE, 1010, 'outliers remain in the point buffer');
+  const full = bounds(p.points), frame = frameBounds(p.points);
+  assert.ok(full.radius > 500, 'full extent is dominated by outliers');
+  assert.ok(frame.trimmed === true && frame.radius < 1.5, `framing radius ${frame.radius} should cover the dense core only`);
+  assert.ok(frame.center.every(v => Math.abs(v - .45) < .1), 'framing centre sits in the core');
+  assert.ok(p.points[3] < .1, `display footprint ${p.points[3]} derives from the core, not the outlier extent`);
+  // Without outliers the exact extent is kept and nothing is marked trimmed.
+  const clean = parsePLY(ascii(rows.slice(0, 1000)));
+  assert.equal(frameBounds(clean.points).trimmed, undefined);
+  assert.deepEqual(frameBounds(clean.points).max, bounds(clean.points).max);
+  // Tiny clouds never trim.
+  assert.deepEqual(frameBounds(parsePLY(ascii()).points), bounds(parsePLY(ascii()).points));
+});
 
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {
   const p = parsePLY(ascii());
