@@ -25,3 +25,21 @@
 
 .public-overflow > div { display: grid; gap: 6px; min-width: 150px; }
 .public-overflow > div a { display: block; padding: 9px 4px; }
+
+
+/* World Engine launch navigation: stay readable on phones and keep research
+   destinations available from the overflow menu. */
+.bh-nav.public-nav .world-nav-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;min-height:42px;padding:10px 15px;border-radius:11px;background:linear-gradient(110deg,#c8faff,#68eaff);color:#071319;font-weight:800;font-size:.72rem;text-decoration:none;border:1px solid rgba(104,234,255,.4);flex-shrink:0}
+.bh-nav.public-nav .world-nav-cta:hover{background:#effdff}
+.bh-nav.public-nav .world-nav-cta[aria-current="page"]{box-shadow:0 0 0 2px rgba(104,234,255,.2)}
+.bh-nav.public-nav nav a{white-space:nowrap}
+.world-footer{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap}
+.world-footer>div{display:flex;flex-direction:column;gap:8px}
+.world-footer-brand{font-size:.96rem;color:#e4f5ff!important;font-weight:780}
+.world-footer>div span{font-size:.67rem;color:#8ba0b4}
+.world-footer nav{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+.world-footer nav a{font-size:.72rem;color:#9eafc0!important}
+.world-footer nav a:hover{color:#e5fdff!important}
+@media(max-width:1010px){.bh-nav.public-nav{gap:13px}.bh-nav.public-nav nav{gap:12px}.bh-nav.public-nav nav a{font-size:.68rem}.bh-nav.public-nav .world-nav-cta{gap:6px;padding:10px 11px}}
+@media(max-width:720px){.bh-nav.public-nav{flex-wrap:wrap}.bh-nav.public-nav nav{order:2;flex:1 1 100%;justify-content:space-between;gap:12px;border-top:1px solid rgba(255,255,255,.06);padding-top:10px}.bh-nav.public-nav .world-nav-cta{margin-left:auto}.bh-nav.public-nav nav a:nth-of-type(2),.bh-nav.public-nav nav a:nth-of-type(4){display:none}.bh-nav.public-nav nav a{font-size:.74rem}.world-footer{align-items:flex-start}}
+@media(max-width:430px){.bh-nav.public-nav .world-nav-cta{font-size:.66rem;padding:10px 9px}.bh-nav.public-nav .world-nav-cta svg:last-child{display:none}.world-footer nav{gap:12px 18px}}

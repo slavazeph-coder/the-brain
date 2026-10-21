@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { ArrowUpRight, ScanLine } from 'lucide-react';
 import { NAV_ITEMS, OVERFLOW_ITEMS } from './navigation.js';
 import '../styles/behaviour-home.css';
 import '../styles/public-navigation.css';
@@ -17,8 +18,9 @@ export function PublicNav({ active }) {
       {NAV_ITEMS.map((item) => <a key={item.id} href={item.href} aria-current={active === item.id ? 'page' : undefined}>{item.label}</a>)}
       <details className="public-overflow" ref={overflow}><summary aria-label="More navigation">More</summary><div>{OVERFLOW_ITEMS.map((item) => <a key={item.id} href={item.href} aria-current={active === item.id ? 'page' : undefined}>{item.label}</a>)}</div></details>
     </nav>
+    <a className="world-nav-cta" href="/scan" aria-current={active === 'scan' ? 'page' : undefined}><ScanLine size={16} aria-hidden="true" />Start scanning <ArrowUpRight size={15} aria-hidden="true" /></a>
   </header>;
 }
 export function PublicFooter() {
-  return <footer className="bh-footer"><a href="/">BrainSNN</a><a href="/lab">Lab</a></footer>;
+  return <footer className="bh-footer world-footer"><div><a href="/" className="world-footer-brand">BrainSNN</a><span>Make the real world digital.</span></div><nav aria-label="Footer navigation"><a href="/world/index.html#workspace">Create a world</a><a href="/scan">Capture studio</a><a href="/world/api.html">Developers</a><a href="/arena/">Robot Arena</a><a href="/lab">Lab</a></nav></footer>;
 }

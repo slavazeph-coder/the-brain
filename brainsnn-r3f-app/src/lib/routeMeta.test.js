@@ -42,6 +42,11 @@ describe('per-route social previews', () => {
     expect(body).not.toContain('US$1,500');
     expect(body).not.toContain('70%');
 
+    const scan = resolveRouteMeta('/scan');
+    expect(scan.title).toBe('Capture a space | BrainSNN World Engine');
+    expect(scan.body.join(' ')).toContain('not uploaded automatically');
+    expect(resolveRouteMeta('/scan/').title).toBe(scan.title);
+
     const play = resolveRouteMeta('/play');
     expect(play.title).toBe('BrainSNN | Sapient Playground');
     expect(play.heading).toBe('Poke the brain and watch the signal travel.');
@@ -212,7 +217,7 @@ describe('content a crawler can read without running JavaScript', () => {
   });
 
   it('gives every major route a heading and real prose', () => {
-    for (const path of ['/', '/world', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
+    for (const path of ['/', '/world', '/scan', '/office', '/arcade', '/lab', '/app', '/engine', '/evidence', '/reconstruct']) {
       const html = applyRouteMeta(HTML, path, '', 'https://www.brainsnn.com');
       const heading = tagContent(html, '<h1[^>]*>([^<]*)</h1>');
       expect(heading.length).toBeGreaterThan(10);

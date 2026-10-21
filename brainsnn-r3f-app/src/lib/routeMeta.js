@@ -179,6 +179,18 @@ const ROUTES = [
     ],
   },
   {
+    path: '/scan',
+    title: 'Capture a space | BrainSNN World Engine',
+    description: 'Prepare a phone video or overlapping photos for a 3D reconstruction. Local-only media preview is available; reconstruction and robot planning continue in World Builder with a connected worker.',
+    heading: 'Capture a space. Make it a world.',
+    body: [
+      'Use a conventional camera to record a space with overlapping views, steady motion and clear lighting. Preview video or photos locally before processing.',
+      'Your files are not uploaded automatically. World Builder can send a capture to a connected reconstruction worker once you choose it there, then propose a robot planning map for review.',
+      'Dense 3D outputs, object-level intelligence and precision measurements are not yet available as a public self-serve service. Metric accuracy requires reference measurements and validation.',
+    ],
+    links: [{ path: '/', label: 'World Builder' }, { path: '/arena/', label: 'Robot Arena' }],
+  },
+  {
     path: '/office',
     ...REVIEW,
   },

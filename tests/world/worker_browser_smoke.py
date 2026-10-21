@@ -107,8 +107,28 @@ def main():
                 derived = proof['sources'][-1]['derivation']
                 assert derived['engine'] == 'colmap-sparse' and derived['metricVerified'] is False
                 assert len(derived['sha256']) == 64
+                # Real -> sim: the worker's own camera poses turn the reconstruction into a proposed, unreviewed map.
+                page.locator('[data-tab=capture]').click()
+                page.locator('[data-action=propose-map]').click()
+                page.wait_for_function("/Map proposed from \\d+ camera poses/.test(document.querySelector('#status').textContent)")
+                proposal_status = page.locator('#status').inner_text()
+                assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+                page.locator('#run').click()
+                page.wait_for_timeout(200)
+                assert 'Confirm independently measured scale' in page.locator('#status').inner_text()
+                page.locator('[data-tab=evidence]').click()
+                with page.expect_download() as event:
+                    page.locator('[data-action=proof]').click()
+                event.value.save_as(output / 'browser-api-proposal-proof.json')
+                proposal = json.loads((output / 'browser-api-proposal-proof.json').read_text())
+                assert proposal['world']['geometrySource']['kind'] == 'reconstruction-proposal'
+                assert proposal['world']['scaleReviewed'] is False and proposal['world']['mapReviewed'] is False
+                proposed = [e['detail'] for e in proposal['events'] if e['type'] == 'map_proposed'][-1]
+                assert proposed['job'] == derived['job'] and len(proposed['evidenceSha256']) == 64 and proposed['scaleVerified'] is False
+                page.locator('#viewport').screenshot(path=str(output / 'browser-api-proposed-map.png'))
                 assert not errors, errors
                 print(json.dumps({'browser': 'chromium', 'captures': len(photos), 'job': derived['job'],
+                                  'proposal': {'cameras': proposed['cameras'], 'points': proposed['points'], 'area': proposed['area'], 'status': proposal_status},
                                   'artifactSHA256': derived['sha256'], 'binaryExportSHA256': hashlib.sha256((output / 'browser-api-points.ply').read_bytes()).hexdigest(),
                                   'metricVerified': False, 'claim': 'Real browser upload, CPU sparse reconstruction and visual artifact loading passed.'}))
                 browser.close()

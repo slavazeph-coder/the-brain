@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { track } from '../lib/analytics.js';
 import { LobbyHome } from './LobbyHome.jsx';
+import { WorldScan } from './WorldScan.jsx';
 import { BehaviourHome } from './BehaviourHome.jsx';
 import { LabIndex } from './LabIndex.jsx';
 import { PublicNav, PublicFooter } from './PublicNav.jsx';
@@ -34,6 +35,7 @@ export function resolveRoute(pathname) {
   if (path === '/evidence') return 'evidence';
   if (path === '/play') return 'play';
   if (path === '/coherence') return 'coherence';
+  if (path === '/scan') return 'scan';
   if (path === '/') return 'home';
   return 'missing';
 }
@@ -78,7 +80,9 @@ export function AppShell() {
   }
   function navigate(id) { window.location.assign(getNavItem(id).href); }
   let content;
+  // App.tsx serves World Builder at `/`; the shell's home is the classic robot-testing lobby (`/?classic=1`).
   if (route === 'home') content = <LobbyHome />;
+  else if (route === 'scan') content = <WorldScan />;
   else if (route === 'coherence') content = <CoherenceLanding onNavigate={navigate} onStart={openReview} />;
   else if (route === 'review') content = <div className="bh-site"><a className="bh-skip" href="#review-main">Skip to content</a><PublicNav active="review" /><ReviewWorkbench initialInput={initialInput} /><PublicFooter /></div>;
   else if (route === 'tasks') content = <ArenaTasks />;
