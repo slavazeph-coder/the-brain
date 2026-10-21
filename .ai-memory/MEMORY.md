@@ -57,7 +57,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
-→ [World Builder flagship](world-builder-2026-10.md) — real local photo previews, CPU and bounded photo/video GPU reconstruction, source-bound local VLM reviews, private tenant boundaries, measured-evidence worksheets and bounded HEVC/capture tests; full public real-to-sim qualification remains open.
+→ [World Builder flagship](world-builder-2026-10.md) — real local photo previews, CPU and bounded photo/video GPU reconstruction, source-bound local VLM reviews, private tenant boundaries, measured-evidence worksheets and bounded HEVC/capture tests; reconstruction → proposed planning map handoff (Oct 21); full public real-to-sim qualification remains open.
 
 <!-- Both AIs append notes here as they work -->
 
