@@ -145,6 +145,10 @@ export const LIMITS = Object.freeze({
   // separate tier means enabling a GPU cannot silently inherit the generous
   // local-only floor.
   neural: { limit: 20, windowMs: 60_000 },
+  // Every allowed request occupies the robot-motion GPU (or a slow CPU worker)
+  // for one planner + generator pass. Ten per minute is several deliberate
+  // experiments, not a script.
+  motion: { limit: 10, windowMs: 60_000 },
   // Sends mail to an address the caller chooses.
   magicLink: { limit: 3, windowMs: 60 * 60_000 },
   // Everything else: local computation only, but still worth bounding.
@@ -173,6 +177,7 @@ export const DEDICATED_ROUTES = Object.freeze({
   '/api/v1/multimodal/ingest': 'neural',
   '/api/v1/neural/predict': 'neural',
   '/api/neural/decode': 'neural',
+  '/api/motion/generate': 'motion',
   '/api/auth/magic-link': 'magicLink',
   '/api/events': 'events',
 });

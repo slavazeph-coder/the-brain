@@ -1,0 +1,29 @@
+/* Builds on the shared playground styles in ../deformable/deformable.css. */
+.controls-panel textarea,.controls-panel select{display:block;margin-top:6px;width:100%;min-width:0;border:1px solid #c1d9ff20;border-radius:9px;background:#111d2b;color:#eaf1fb;padding:9px 10px;font:inherit;font-size:12px}
+.controls-panel textarea{resize:vertical;min-height:92px;line-height:1.55}.controls-panel select{min-height:41px}
+.controls-panel textarea:focus-visible,.controls-panel select:focus-visible,.playback select:focus-visible{outline:2px solid #68eaff;outline-offset:2px}
+.controls-panel textarea[aria-invalid=true]{border-color:#efb78a}
+.field-caption em{font-style:normal;color:#a7f5ff}
+.generate-button{width:100%;margin-top:4px}.field-row.motion-options{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.worker-note{font-size:9px;line-height:1.8;color:#7488a1;margin:10px 0 0}.worker-note.offline{color:#c5b8ff}.worker-note.error{color:#efb78a}
+.example-list{display:flex;flex-wrap:wrap;gap:6px}
+.example-list button{border:1px solid #b3d3ff20;border-radius:8px;background:#ffffff03;color:#91a4bb;padding:7px 9px;font-size:10px;min-height:34px;text-align:left}
+.example-list button[aria-pressed=true]{background:#68eaff0b;border-color:#68eaff45;color:#a7f5ff}.example-list button:hover{color:#cfe9ff}
+.variant-tabs{display:flex;gap:4px;padding:4px;background:#0a111cbb;border:1px solid #b3d3ff18;border-radius:9px}
+.variant-tabs button{border:0;border-radius:6px;background:transparent;color:#8298b1;min-height:30px;min-width:34px;padding:5px 9px;font-size:10px}
+.variant-tabs button[aria-pressed=true]{background:#68eaff12;color:#a7f5ff}
+.playback select{border:1px solid #b3d3ff20;border-radius:8px;background:#111d2b;color:#aabbd0;min-height:35px;padding:4px 6px;font:inherit;font-size:10px}
+.loop-toggle{display:flex;align-items:center;gap:6px;font-size:10px;color:#8ba6c1;white-space:nowrap}.loop-toggle input{accent-color:#68eaff}
+.channel-chart{padding:12px 19px 4px;border-bottom:1px solid #b3d3ff12}.channel-chart canvas{display:block;width:100%;height:120px}
+.channel-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:9px;color:#7d94ae;margin-top:6px}.channel-legend span::before{content:"";display:inline-block;width:10px;height:2px;margin-right:5px;vertical-align:middle;background:currentColor}
+.c-pitch{color:#68eaff}.c-roll{color:#947cff}.c-yaw{color:#8ce0c8}.c-ant{color:#ff9fd0}.c-body{color:#efb78a}
+.recipe-panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:18px;padding:4px 23px 10px}
+.recipe-panel span{display:block;font-size:9px;color:#8198b1;line-height:1.7}.recipe-panel p{margin:4px 0 0;font-size:11px;color:#c8d8ea}
+.recipe-panel code{display:block;margin-top:4px;font:10px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;color:#a7f5ff;white-space:pre-wrap;overflow-wrap:anywhere}
+.export-row{display:flex;gap:20px;align-items:center;padding:0 23px}
+.file-button{position:relative;cursor:pointer;display:inline-flex;align-items:center}.file-button input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.file-button:focus-within{outline:2px solid #68eaff;outline-offset:4px}
+.metrics strong.small{font-size:15px}
+@media(max-width:760px){.metrics strong.small{font-size:13px}}
+@media(max-width:760px){.recipe-panel{grid-template-columns:1fr;padding:4px 17px 10px}.export-row{padding:0 17px}.controls-panel textarea,.controls-panel select{font-size:16px}.example-list button{font-size:11px;min-height:38px}.channel-chart{padding:10px 13px 4px}}
+@media(max-width:420px){.playback select{font-size:9px}.loop-toggle{font-size:9px}.recipe-panel{padding:4px 13px 8px}.export-row{padding:0 13px;gap:14px}}

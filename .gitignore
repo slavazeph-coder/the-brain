@@ -24,3 +24,7 @@ output/playwright/
 brainsnn-r3f-app/public/arena/deformable/vendor/
 brainsnn-r3f-app/public/arena/deformable/renderer.js
 brainsnn-r3f-app/public/arena/deformable/runtime-manifest.json
+# Assembled from the lockfile by build-motion.mjs.
+brainsnn-r3f-app/public/arena/motion/renderer.js
+brainsnn-r3f-app/public/arena/motion/runtime-manifest.json
+brainsnn-r3f-app/public/arena/motion/robot/draco/

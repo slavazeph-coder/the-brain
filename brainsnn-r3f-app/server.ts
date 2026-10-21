@@ -36,6 +36,7 @@ import { agentLabCacheMaxAge, createAgentLabFeed } from "./src/lib/agentLabFeed.
 import { compareEngineInputs } from "./src/lib/engineComparison.js";
 import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gpuInference.js";
 import { createGpuBridge } from "./src/server/gpuBridge.js";
+import { MotionFailure, createMotionWorkerClient, motionFailureStatus } from "./src/server/motionWorker.js";
 import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
@@ -44,6 +45,7 @@ import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 dotenv.config();
 const gpuBridge = createGpuBridge(process.env);
 const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
+const motionWorker = createMotionWorkerClient(process.env);
 
 export const app = express();
 // The arena is a standalone application with relative assets. Keep both its
@@ -257,6 +259,7 @@ const limiters = {
   magicLink: new RateLimiter(LIMITS.magicLink),
   general: new RateLimiter(LIMITS.general),
   events: new RateLimiter(LIMITS.events),
+  motion: new RateLimiter(LIMITS.motion),
 };
 
 /** Bounds what the process can spend on Gemini however many callers ask.
@@ -615,6 +618,23 @@ app.post("/api/neural/decode", limit("neural"), async (req, res) => {
   } catch (error: any) {
     console.error("Error calling neural decoder:", error?.message || error);
     return res.status(502).json({ error: error?.message || "Neural decoder request failed." });
+  }
+});
+
+// Reachy Mini text-to-motion through a separately operated worker. The browser
+// never learns the worker address; prompts and motions are not stored.
+app.get("/api/motion/status", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(motionWorker.snapshot());
+});
+
+app.post("/api/motion/generate", limit("motion"), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    res.json({ ...(await motionWorker.generate(req.body)), source: "live_worker" });
+  } catch (error) {
+    const reason = error instanceof MotionFailure ? error.reason : "upstream_error";
+    res.status(motionFailureStatus(reason)).json({ error: reason });
   }
 });
 

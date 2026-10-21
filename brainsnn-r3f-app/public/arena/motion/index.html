@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#070b11"><meta name="brainsnn-motion-experience" content="reachy-motion-2026-10-21-v1"><meta name="description" content="Type an instruction and watch a simulated Reachy Mini perform it. Open-source text-to-motion: a language model plans the movement and a small motion model turns it into a smooth 25 Hz trajectory."><title>Expressive motion · BrainSNN</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="../deformable/deformable.css"><link rel="stylesheet" href="./motion.css"></head>
+<body>
+<a class="skip" href="#motion-heading">Skip to expressive motion</a>
+<header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">B</span><strong>BrainSNN</strong></a><nav aria-label="Main navigation"><a href="../#playground">Arcade</a><a href="../deformable/">Rope strike</a><span aria-current="page">Expressive motion</span></nav></header>
+<main>
+  <div class="page-heading"><div><p class="eyebrow">ROBOT BEHAVIOUR ENGINE · EARLY</p><h1 id="motion-heading">Tell the robot how to feel.</h1><p>Type an instruction. A planner writes the movement. A motion model makes it move.</p></div><span class="physics-label"><i aria-hidden="true"></i>Simulated Reachy Mini · kinematic playback</span></div>
+  <div class="workspace">
+    <aside class="controls-panel" aria-label="Motion instruction">
+      <div class="section-heading"><span>01</span><h2>Describe the behaviour</h2></div>
+      <form id="motion-form" novalidate>
+        <label for="prompt">Instruction<textarea id="prompt" name="prompt" rows="4" maxlength="300" required placeholder="excited. Greet a visitor who just walked in." spellcheck="true"></textarea></label>
+        <p class="field-caption" id="prompt-hint">Best as <em>feeling. one sentence of context.</em></p>
+        <div class="field-row motion-options"><label for="effort">Planner<select id="effort" name="effort" disabled><option>Not connected</option></select></label><label for="variants">Variations<select id="variants" name="variants"><option value="1">1</option><option value="2">2</option><option value="4">4</option></select></label></div>
+        <button class="button primary generate-button" id="generate" type="submit" disabled>Generate motion <span aria-hidden="true">↗</span></button>
+        <p class="worker-note" id="worker-note" role="status" aria-live="polite">Checking the motion worker…</p>
+      </form>
+      <div class="section-heading compact"><span>02</span><h2>Or try a recorded example</h2></div>
+      <p class="field-caption">Real outputs of the open-source 27B planner, pre-generated.</p>
+      <div class="example-list" id="examples" role="group" aria-label="Pre-generated examples"><p class="field-caption">Loading examples…</p></div>
+    </aside>
+    <section class="stage-panel" aria-label="Simulated robot">
+      <div class="stage-heading"><div><span class="eyebrow" id="source-label">REACHY MINI · NINE MOTION CHANNELS</span><h2 id="motion-title">Preparing the robot</h2></div><div class="variant-tabs" id="variant-tabs" role="group" aria-label="Variations" hidden></div></div>
+      <div class="viewport" id="viewport"><div class="scene-badge"><span class="status-dot"></span><span id="scene-mode">Loading the 3D model</span></div><div class="camera-controls" role="group" aria-label="Camera views"><button data-camera="orbit" aria-pressed="true">Orbit</button><button data-camera="front" aria-pressed="false">Front</button><button data-camera="side" aria-pressed="false">Side</button></div><p class="viewport-hint">Drag to orbit · scroll to zoom</p><div id="scene-loading" role="status">Loading Reachy Mini…</div></div>
+      <div class="playback"><button class="button subtle" id="play" disabled aria-label="Pause">Pause</button><button class="button subtle" id="restart" disabled>Restart</button><label class="timeline-label" for="timeline">Replay</label><input id="timeline" type="range" min="0" max="1000" step="1" value="0" disabled aria-label="Motion timeline"><output id="time-label">0.0 s</output><select id="speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><label class="loop-toggle"><input id="loop" type="checkbox" checked> Loop</label></div>
+      <div class="channel-chart"><canvas id="channels" height="120" role="img" aria-label="Head pitch, roll and yaw, antenna and body angles over time"></canvas><div class="channel-legend" aria-hidden="true"><span class="c-pitch">pitch</span><span class="c-roll">roll</span><span class="c-yaw">yaw</span><span class="c-ant">antennas</span><span class="c-body">body</span></div></div>
+      <div class="metrics" aria-label="Motion details"><div><span>Duration</span><strong id="duration">—</strong></div><div><span>Planner</span><strong id="planner">—</strong></div><div><span id="latency-label">Generation time</span><strong id="latency">—</strong></div></div>
+      <div class="recipe-panel"><div><span>Planner idea</span><p id="idea">—</p></div><div><span>Motion recipe</span><code id="recipe">—</code></div></div>
+      <div class="export-row"><button class="text-button" id="download" disabled>Download move JSON ↓</button><label class="text-button file-button">Open move JSON<input id="file" type="file" accept=".json,application/json"></label></div>
+      <p class="run-message" id="run-message" role="status" aria-live="polite">Pick an example or describe a behaviour.</p>
+    </section>
+  </div>
+  <details class="source-details"><summary>How this works and what it does not do</summary><div>
+    <p>A fine-tuned Qwen language model (the planner) reads the instruction and writes a short motion recipe: poses, holds, oscillations and timing for the head, antennas and body. A 21.8M-parameter flow-matching model turns the recipe into a 25 Hz trajectory, and every frame is pulled back into the Stewart platform's reachable set with the SDK's inverse kinematics.</p>
+    <p>This page plays the result on the open-source Reachy Mini 3D model. It is kinematic playback, not a physics simulation, and no robot is connected. A downloaded move uses the Reachy Mini SDK's recorded-move format; review it before playing it on hardware.</p>
+    <p>The released models control Reachy Mini's nine motion channels only. They do not drive humanoid arms, legs, locomotion or grasping; other robot bodies need retargeting, safety limits and likely additional training data. Generation needs a separately connected motion worker. Published speeds (about 0.17 s, 0.29 s and 0.8 s for the 0.8B, 4B and 27B planners) were measured by the author on an RTX PRO 6000 and have not been verified on BrainSNN hardware.</p>
+    <p>Open source: <a href="https://github.com/pham-tuan-binh/reachy-motion-generator" target="_blank" rel="noopener noreferrer">reachy-motion-generator ↗</a> by Binh Pham (Apache-2.0, <a href="./LICENSE-reachy-motion-generator.txt">licence</a>) · 3D model and passive-joint kinematics from <a href="https://huggingface.co/spaces/8bitkick/reachy_mini_3d_web_viz" target="_blank" rel="noopener noreferrer">reachy_mini_3d_web_viz ↗</a> (Apache-2.0, <a href="./robot/ATTRIBUTIONS.md">attributions</a>) · Reachy Mini by Pollen Robotics.</p>
+  </div></details>
+</main><footer>BrainSNN <span>·</span> Plan the behaviour. Watch it move.</footer>
+<script src="./renderer.js"></script><script type="module" src="./app.js"></script>
+</body></html>

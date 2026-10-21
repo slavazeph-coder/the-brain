@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Robot Behavior Engine: Reachy Mini text-to-motion](brainsnn-robot-motion-2026-10-21.md). Owner: adopt the open-source planner + motion-generator architecture for robot intelligence/animation as a separate experiment, not the World Engine flagship. `/arena/motion/` + motion worker kit; real 0.8B run on CPU only, no GPU run yet.
+
 → [Native deformable physics](brainsnn-deformable-physics-2026-10-17.md). Owner requests DeformX-like tasks; native MuJoCo rope strike, bounded motion search and recorded local instance packs. Distinguish browser physics from learned-policy/GPU qualification.
 
 → [Transparent robotics pricing](brainsnn-transparent-pricing-2026-10-17.md). Owner restores visible scale and the historical US$171.43 / 100,000-episode runtime-price illustration; keep assumptions explicit and separate from measured execution.

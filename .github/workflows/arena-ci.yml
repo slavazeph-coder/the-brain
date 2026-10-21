@@ -8,6 +8,7 @@ on:
       - "brainsnn-r3f-app/src/arena/**"
       - "brainsnn-r3f-app/scripts/build-site-renderer.mjs"
       - "brainsnn-r3f-app/scripts/build-deformable.mjs"
+      - "brainsnn-r3f-app/scripts/build-motion.mjs"
       - "brainsnn-r3f-app/package*.json"
       - "brainsnn-r3f-app/vendor-licenses/**"
       - "robotics/arena/**"
@@ -20,6 +21,7 @@ on:
       - "brainsnn-r3f-app/src/arena/**"
       - "brainsnn-r3f-app/scripts/build-site-renderer.mjs"
       - "brainsnn-r3f-app/scripts/build-deformable.mjs"
+      - "brainsnn-r3f-app/scripts/build-motion.mjs"
       - "brainsnn-r3f-app/package*.json"
       - "brainsnn-r3f-app/vendor-licenses/**"
       - "robotics/arena/**"
@@ -81,6 +83,21 @@ jobs:
           node --test tests/deformable-physics.mjs
           node tests/deformable-worker-browser.cjs
           node tests/deformable-ui-browser.cjs
+      - name: Motion worker entry point (authentication, body cap, bundle pins; no model loaded)
+        run: python -m unittest tests/test_motion_worker.py -v
+      - name: Build isolated expressive motion viewer assets
+        working-directory: brainsnn-r3f-app
+        run: node scripts/build-motion.mjs
+      - name: Expressive motion page, 3D viewer and motion API contract on desktop and mobile
+        run: node tests/motion-ui-browser.cjs
+      - name: Retain expressive motion browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expressive-motion-browser
+          path: output/playwright/motion-*.png
+          retention-days: 7
+          if-no-files-found: warn
       - name: Retain deformable desktop and mobile browser diagnostics
         if: always()
         uses: actions/upload-artifact@v4

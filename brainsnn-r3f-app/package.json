@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-deformable.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-deformable.mjs && node scripts/build-motion.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node mission-market-schema-bootstrap.cjs && node --require ./sponsorship/gt3/server.cjs --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -37,6 +37,7 @@
     "react-dom": "^19.0.1",
     "stripe": "22.6.0",
     "three": "^0.182.0",
+    "urdf-loader": "0.12.3",
     "vite": "^6.2.3"
   },
   "devDependencies": {

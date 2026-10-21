@@ -16,7 +16,7 @@ export function createArenaRouter({ directory }) {
     if (req.path === '/' && !pathname.endsWith('/')) {
       return res.redirect(308, `${pathname}/${queryParts.length ? `?${queryParts.join('?')}` : ''}`);
     }
-    if (req.path === '/deformable' && !pathname.endsWith('/')) {
+    if (['/deformable', '/motion'].includes(req.path) && !pathname.endsWith('/')) {
       return res.redirect(308, `${pathname}/${queryParts.length ? `?${queryParts.join('?')}` : ''}`);
     }
     next();

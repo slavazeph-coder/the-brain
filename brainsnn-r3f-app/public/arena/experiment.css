@@ -130,4 +130,6 @@
 /* A real-physics challenge inside the existing arcade, without another nav. */
 .deformable-entry{display:flex;justify-content:space-between;align-items:center;gap:18px;border:1px solid #47d9e84a;background:linear-gradient(110deg,#0b202a,#121428);border-radius:18px;padding:16px 20px;margin:0 0 22px;text-decoration:none;color:#dffbff}
 .deformable-entry strong{display:block;font-size:16px}.deformable-entry small{display:block;margin-top:5px;line-height:1.5;color:#a8b9cd}.deformable-entry>span:last-child{font-weight:700;white-space:nowrap;color:#63e9f5}.deformable-entry:hover{border-color:#62e2f5}.deformable-entry:focus-visible{outline:3px solid #ad95ff;outline-offset:4px}
+.playground-entries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:0 0 22px}.playground-entries .deformable-entry{margin:0}
+@media(max-width:760px){.playground-entries{grid-template-columns:1fr;gap:10px;margin-bottom:16px}}
 @media(max-width:600px){.deformable-entry{padding:14px;gap:12px;margin-bottom:16px}.deformable-entry small{font-size:12px}.deformable-entry>span:last-child{font-size:13px}}

@@ -33,6 +33,8 @@ const THREE_IMPORTERS = new Set([
   'src/arena/site-renderer.js',
   // Separate page bundle; the homepage/Arcade only links to this task.
   'src/arena/deformable-renderer.js',
+  // Separate page bundle for /arena/motion/; the Arcade only links to it.
+  'src/arena/motion-renderer.js',
 ]);
 
 const THREE_IMPORT = /from\s+['"](three|@react-three\/[a-z-]+)['"]|import\s*\(\s*['"](three|@react-three\/[a-z-]+)['"]/;

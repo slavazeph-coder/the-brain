@@ -72,6 +72,36 @@ try {
     assert(manifest.assets.some(asset => asset.path === 'vendor/mujoco.wasm' && /^[a-f0-9]{64}$/.test(asset.sha256)));
     assert.equal((await get('/arena/deformable/', { method: 'POST' })).status, 405);
   });
+  await test('expressive motion page serves its viewer, robot model and Draco decoder locally', async () => {
+    const bare = await get('/arena/motion?source=arcade');
+    assert.equal(bare.status, 308);
+    assert.equal(bare.headers.get('location'), '/arena/motion/?source=arcade');
+    const document = await get('/arena/motion/');
+    assert.equal(document.status, 200);
+    assert.match(await document.text(), /reachy-motion-2026-10-21-v1/);
+    for (const name of ['app.js', 'renderer.js', 'robot/draco/draco_wasm_wrapper.js']) {
+      const response = await get('/arena/motion/' + name);
+      assert.equal(response.status, 200, name);
+      assert.match(response.headers.get('content-type'), /javascript/, name);
+    }
+    const urdf = await get('/arena/motion/robot/reachy-mini.urdf');
+    assert.equal(urdf.status, 200);
+    const meshes = [...(await urdf.text()).matchAll(/filename="meshes_optimized\/([^"]+\.glb)"/g)].map(match => match[1]);
+    assert(meshes.length > 30);
+    for (const mesh of new Set(meshes)) assert.equal((await get('/arena/motion/robot/meshes_optimized/' + mesh, { method: 'HEAD' })).status, 200, mesh);
+    const wasm = await get('/arena/motion/robot/draco/draco_decoder.wasm', { headers: { Range: 'bytes=0-3' } });
+    assert.equal(wasm.status, 206);
+    assert.deepEqual(Array.from(new Uint8Array(await wasm.arrayBuffer())), [0, 97, 115, 109]);
+    const examples = await (await get('/arena/motion/examples.json')).json();
+    assert(examples.length >= 20 && examples.every(example => example.moves.length && example.recipe));
+    const manifest = await (await get('/arena/motion/runtime-manifest.json')).json();
+    assert.equal(manifest.upstream.commit, '96497d69a31cc89da209f224bd9c1fee1834b864');
+    assert(manifest.assets.some(asset => asset.path === 'robot/reachy-mini.urdf' && /^[a-f0-9]{64}$/.test(asset.sha256)));
+    for (const licence of ['LICENSE-reachy-motion-generator.txt', 'robot/LICENSE-reachy_mini_3d_web_viz.txt', 'robot/ATTRIBUTIONS.md']) {
+      assert.equal((await get('/arena/motion/' + licence, { method: 'HEAD' })).status, 200, licence);
+    }
+    assert.equal((await get('/arena/motion/', { method: 'POST' })).status, 405);
+  });
   await test('worker setup and downloadable kit are reachable', async () => {
     const docs = await get('/arena/worker-setup.html'); assert.equal(docs.status, 200); assert.match(docs.headers.get('content-type'), /text\/html/);
     const evaluation = await get('/arena/evaluation-setup.html'); assert.equal(evaluation.status, 200); assert.match(evaluation.headers.get('content-type'), /text\/html/); assert.match(await evaluation.text(), /run-campaign\.py/);

@@ -8,6 +8,7 @@ The deployable browser app is `brainsnn-r3f-app/public/arena/`. Vite copies it i
 - Worker installation: [docs/arena-worker.md](docs/arena-worker.md).
 - Browser/worker contract: [docs/arena-runtime-protocol.md](docs/arena-runtime-protocol.md).
 - Implemented features and limits: [docs/arena-release.md](docs/arena-release.md).
+- Reachy Mini text-to-motion worker for `/arena/motion/`: [docs/motion-worker.md](docs/motion-worker.md).
 
 From this directory, run `node scripts/check-arena.cjs` for browser logic checks. Install `workers/arena/requirements-api.txt` and `httpx==0.28.1`, then run `python -m unittest discover -s tests -p 'test_arena_worker*.py'` and `node tests/arena-integration-worker-contract.cjs` for worker contract tests. These checks use test doubles, not downloaded policies or a GPU renderer.
 

@@ -1,0 +1,11 @@
+# CPU motion worker (local development and qualification; versions verified 2026-10-21).
+# Install torch first from the CPU index:  pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+numpy==2.5.4
+scipy==1.18.1
+transformers==5.20.2
+accelerate==1.15.0
+huggingface_hub==2.2.0
+reachy-mini-rust-kinematics==1.0.3
+fastapi==0.157.0
+uvicorn==0.54.0
+reachy-motion-generator @ git+https://github.com/pham-tuan-binh/reachy-motion-generator@96497d69a31cc89da209f224bd9c1fee1834b864
