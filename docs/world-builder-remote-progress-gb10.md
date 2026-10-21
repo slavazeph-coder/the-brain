@@ -24,6 +24,20 @@ Both journeys: real local uvicorn worker signed an Ed25519 receipt over the exac
 
 No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
 
+## Run 2026-10-21 (9th) — report-receipt cancellation/deadline test
+Baseline re-run at `d026274` (clean tree):
+- Node: `PATH=/workspace/hermes-gb10/build-runtime/node/bin:$PATH node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (84.4 ms).
+- Python (before new test): `pytest tests/world/test_report_receipts.py -q` → **18 passed in 2.91s** (previously verified at d026274).
+
+New test added: `test_report_receipt_exceeding_wait_budget_returns_504_and_releases_slot`
+- Monkeypatches `REPORT_HASH_SECONDS=1`, `REPORT_WAIT_SECONDS=3` so the hash thread overruns its deadline.
+- Proves: first request → 504 (overrun); concurrent request while thread still holds slot → 429; after release → 200 (slot released, signing works).
+- Full suite after: **19 passed in 6.09s**.
+
+4090 re-probe (short SSH, no tunnel): hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, branch `hermes/world-builder-4090` clean at `e109088` — no GPU work this run (GB10 test slot).
+
+No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
+
 ## Re-verification 2026-10-21 (after HTTP UI commit) — checkpoint
 Mac worktree fast-forwarded `8bc5d77` → `3cc2068` (no force; local `.ai-memory/` dirty files untouched and not committed). Re-ran at `3cc2068`:
 - Node baseline: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (71.4 ms).
@@ -35,7 +49,7 @@ Mac worktree fast-forwarded `8bc5d77` → `3cc2068` (no force; local `.ai-memory
 No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
 
 ## Blocker
-None. `docs/world-builder-remote-progress-gb10.md` created and committed this run.
+None. 4090 reconstruction runtime build is next; the pinned MapAnything environment does not yet exist under `/workspace/slava/build-runtime/recon-venv` on the 4090 host.
 
 ## Next bounded action
-Alternate to a 4090 slot: build the separately pinned reconstruction runtime under `/workspace/slava` (never replacing base conda) and run the first bounded GPU qualification on the pinned MapAnything weights, with 20 GiB experiment cap and hostname/GPU re-check before running.
+4090 slot: build the separately pinned reconstruction runtime under `/workspace/slava` (never replacing base conda), confirm hostname `d130b6c7f3f4` + GPU UUID before running, then run the first bounded GPU qualification on the pinned MapAnything weights with 20 GiB experiment cap.

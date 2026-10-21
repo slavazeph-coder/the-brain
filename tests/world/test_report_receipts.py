@@ -310,6 +310,35 @@ def test_owner_cancellation_aborts_job_source_rehash_and_never_completes(signed_
         assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
 
 
+def test_report_receipt_exceeding_wait_budget_returns_504_and_releases_slot(signed_options, monkeypatch):
+    # REPORT_HASH_SECONDS (15) < REPORT_WAIT_SECONDS (20): a hash thread that
+    # overruns its deadline still holds the slot until it returns, so callers
+    # get 504, and a later request only succeeds after the thread actually
+    # finishes and the task is done.
+    options, _, _, _ = signed_options
+    monkeypatch.setattr('robotics.world_worker.app.REPORT_HASH_SECONDS', 1)
+    monkeypatch.setattr('robotics.world_worker.app.REPORT_WAIT_SECONDS', 3)
+    with TestClient(create_app(**options)) as client:
+        jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+        entered, release = threading.Event(), threading.Event()
+        def slow(*args, **kwargs):
+            entered.set(); assert release.wait(15)
+            return file_digest(*args, **kwargs)
+        monkeypatch.setattr('robotics.world_worker.app.file_digest', slow)
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            if client.post(f'/v1/jobs/{jid}/report-receipt', headers=headers(A), json=body).status_code == 504:
+                break
+            time.sleep(0.1)
+        assert entered.wait(5), 'hash thread never entered; first request did not overrun'
+        # While the overrun thread still runs, the slot stays held: 429.
+        assert receipt(client, jid, A, body).status_code == 429
+        release.set()
+        # Thread finishes; the task completes; a fresh request signs normally.
+        assert receipt(client, jid, A, body).status_code == 200, client.get('/v1/jobs/' + jid, headers=headers(A)).json()
+
+
 def test_exact_file_reader_has_cancellation_and_deadline(tmp_path):
     path = tmp_path / 'file'; path.write_bytes(b'test')
     cancelled = threading.Event(); cancelled.set()
