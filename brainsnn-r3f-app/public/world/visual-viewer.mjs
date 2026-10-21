@@ -1,4 +1,4 @@
-import { STRIDE, bounds } from './visual-geometry.mjs';
+import { STRIDE, bounds, frameBounds } from './visual-geometry.mjs';
 // First-party appearance viewer. Gaussian files use DC colour only (no higher-order SH).
 // Plain point clouds retain their identity: display footprints are not trained Gaussians.
 const VERT = `#version 300 es
@@ -89,7 +89,7 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   listen(document,'visibilitychange',()=>{if(!document.hidden)schedule();});
   const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas);
   const observer=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting??true;if(visible)schedule();});observer.observe(canvas);resize();
-  function fit(photo=false){if(!points.length)return;const b=bounds(points);radius=b.radius;target=b.center;const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*1.15;yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
+  function fit(photo=false){if(!points.length)return;const b=frameBounds(points);radius=b.radius;target=b.center;const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*(b.trimmed?.9:1.15);yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
   return {
     setPoints(p,{photo=false,kind='point-cloud'}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;auto=false;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);markers=[];updateMarkers();fit(photo);},
     clear(){points=new Float32Array();sorted=new Float32Array();order=[];markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},

@@ -32,6 +32,23 @@ export function bounds(points) {
   }
   return { min, max, center: min.map((v, i) => (v + max[i]) / 2), radius: Math.max(.001, Math.hypot(...max.map((v, i) => v - min[i])) / 2) };
 }
+/** Framing bounds for the camera and display footprint only: per-axis 2nd–98th percentile core.
+ * Sparse multi-view reconstructions carry far outliers (points triangulated at near-infinite depth);
+ * framing the full extent shrinks the subject to a speck. No point is removed or modified. */
+export function frameBounds(points) {
+  const full = bounds(points), count = points.length / STRIDE;
+  if (count < 50) return full;
+  const lo = [0, 0, 0], hi = [0, 0, 0];
+  for (let j = 0; j < 3; j++) {
+    const axis = new Float32Array(count);
+    for (let i = 0; i < count; i++) axis[i] = points[i * STRIDE + j];
+    axis.sort();
+    lo[j] = axis[Math.floor(count * .02)]; hi[j] = axis[Math.min(count - 1, Math.ceil(count * .98))];
+  }
+  const center = lo.map((v, i) => (v + hi[i]) / 2), radius = Math.max(.001, Math.hypot(...hi.map((v, i) => v - lo[i])) / 2);
+  // A core that is barely smaller than the full extent means no outliers: keep the exact extent.
+  return radius < full.radius * .9 ? { min: lo, max: hi, center, radius, trimmed: true } : full;
+}
 export function parsePLY(buffer) {
   const bytes = bytesOf(buffer);
   // PLY headers are ASCII: byte offsets must not depend on UTF-8 decoding/re-encoding.
@@ -100,7 +117,9 @@ export function parsePLY(buffer) {
   const parsed = result(points, total, step, isGaussian ? 'gaussian-splat' : 'point-cloud', skipped);
   if (!isGaussian) {
     // This is a display footprint, never a Gaussian fitted to source imagery.
-    const size = clamp(bounds(parsed.points).radius / Math.sqrt(parsed.points.length / STRIDE) * .8, .00001, 1e4);
+    // Sparse reconstructions (trimmed framing) get a smaller footprint so gaps read as gaps, not bubbles.
+    const frame = frameBounds(parsed.points);
+    const size = clamp(frame.radius / Math.sqrt(parsed.points.length / STRIDE) * (frame.trimmed ? .55 : .8), .00001, 1e4);
     for (let i = 0; i < parsed.points.length; i += STRIDE) parsed.points.fill(size, i + 3, i + 6);
   }
   return parsed;
