@@ -48,8 +48,35 @@ Mac worktree fast-forwarded `8bc5d77` → `3cc2068` (no force; local `.ai-memory
 
 No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
 
+## Run 2026-10-21 (11th) — 4090 recon-venv dependency gap closure
+
+GB10 baseline re-run (repo clean at `54b1bcc`):
+- `PATH=/workspace/hermes-gb10/build-runtime/node/bin:$PATH node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (66.3 ms).
+- `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **19 passed in 6.17s**.
+
+4090 re-probe (short SSH, no tunnel): hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, branch `hermes/world-builder-4090` clean at `e109088`.
+
+recon-venv dependency audit (before):
+- OK: einops 0.8.2, sklearn 1.7.2, hydra 1.3.7, uniception, torch 2.5.1+cu121, cv2 4.10.0
+- MISSING: easydict, ftfy, regex, transformers, kornia, scenedetect, moviepy, imageio, pycocotools, ninja, pycolmap
+
+Installed (pip, no base-conda replacement):
+`easydict ftfy regex einops kornia scenedetect moviepy imageio scikit-learn pycocotools ninja hydra-core pycolmap==4.2.1`
+
+recon-venv dependency audit (after):
+- ALL OK: easydict, ftfy 6.3.1, regex 2026.9.29, einops 0.8.2, kornia 0.8.2, scenedetect 0.7.2, moviepy 2.1.2, imageio 2.38.0, sklearn 1.7.2, pycocotools, ninja 1.13.2, hydra 1.3.7, uniception, torch 2.5.1+cu121, cv2 5.0.0, pycolmap 4.2.1, PIL 11.3.0
+- Note: transformers NOT required by worker (only depth_small.py uses it); not installed.
+
+Worker module import verification:
+- `from robotics.world_worker import sparse_colmap, geometry, mapanything_apache` → **OK**
+- `mapanything_apache.py` only requires: torch, uniception 0.1.7, mapanything (from uniception), numpy, PIL
+- `sparse_colmap.py` requires: pycolmap 4.2.1, PIL, numpy
+- All now present in recon-venv.
+
+No GPU work this run (env closure is the bounded step). No force-push, no merge/deploy. GB10 serving Qwen/backup and guardrail gates untouched.
+
 ## Blocker
-None. 4090 reconstruction runtime build is next; the pinned MapAnything environment does not yet exist under `/workspace/slava/build-runtime/recon-venv` on the 4090 host.
+None. recon-venv now has all worker dependencies. Worker modules import successfully.
 
 ## Next bounded action
-4090 slot: build the separately pinned reconstruction runtime under `/workspace/slava` (never replacing base conda), confirm hostname `d130b6c7f3f4` + GPU UUID before running, then run the first bounded GPU qualification on the pinned MapAnything weights with 20 GiB experiment cap.
+4090 slot: run first bounded GPU qualification via `qualify_child.py` (or equivalent) on the pinned MapAnything Apache-2.0 weights with 20 GiB experiment cap. Confirm hostname/GPU before running.
