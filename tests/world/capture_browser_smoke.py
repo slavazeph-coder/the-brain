@@ -57,6 +57,22 @@ def check(browser, url):
         assert errors == [], errors
         context.close()
 
+    # Exercise the actual upload fallback without opening any physical camera.
+    context=browser.new_context()
+    context.add_init_script(FIXTURE.replace("return type.startsWith('video/mp4');", 'return false;'))
+    page=context.new_page()
+    page.goto(url,wait_until='networkidle')
+    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.locator('#hero-capture').click()
+    with page.expect_file_chooser() as chooser:
+        page.locator('[data-action=record]').click()
+    assert chooser.value.element.get_attribute('id')=='phone-camera'
+    chooser.value.set_files([])
+    assert page.evaluate('captureFixture.requests.length')==0
+    assert page.evaluate('captureFixture.recorders')==0
+    assert 'cannot record a supported MP4' in page.locator('#status').inner_text()
+    context.close()
+
     context=browser.new_context()
     page=context.new_page()
     page.goto(url,wait_until='networkidle')
@@ -85,6 +101,7 @@ def check(browser, url):
         assert receipt['mime'].startswith('video/mp4') and receipt['trackState']=='ended'
         (OUTPUT/f'{browser.browser_type.name}-canvas.mp4').write_bytes(data)
     receipt['permission_fixture_cases']=['cancel','clear','pagehide','hidden']
+    receipt['unsupported_mp4_upload_fallback']=True
     receipt['physical_camera_used']=False
     (OUTPUT/f'{browser.browser_type.name}-receipt.json').write_text(json.dumps(receipt,indent=2))
     context.close()

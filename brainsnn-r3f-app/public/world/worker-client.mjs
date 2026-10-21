@@ -17,6 +17,14 @@ export class WorkerClient {
     }finally{clearTimeout(timer);signal?.removeEventListener('abort',relay);}
   }
   async capabilities(signal){const c=await this.request('/v1/capabilities',{signal});if(c.api_version!=='brainsnn.worker.v1'||!Array.isArray(c.engines)||c.engines.length>32)throw new Error('Incompatible worker capabilities.');this.caps=c;return c;}
+  async reportKey(signal){return this.request('/v1/report-key',{signal});}
+  async reportReceipt(job,scenarioText,signal){
+    if(this.caps?.reportSigning?.available!==true)throw new Error('This worker has not enabled report signing.');
+    const snapshot=structuredClone(job),{prepareReportRequest}=await import('./report-receipts.mjs');
+    const body=await prepareReportRequest(scenarioText,snapshot);
+    if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
+    return this.request(`/v1/jobs/${snapshot.id}/report-receipt`,{method:'POST',body,signal});
+  }
   async upload(file, kind, signal, progress=()=>{}){
     let item=this.uploads.get(file);
     if(item){try{item=await this.request(`/v1/uploads/${item.id}`,{signal});}catch(e){if(signal?.aborted)throw e;item=null;}}

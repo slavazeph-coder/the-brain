@@ -1,0 +1,2 @@
+# Optional private worker signatures; qualified locally and on GB10 CPU.
+cryptography==50.0.2

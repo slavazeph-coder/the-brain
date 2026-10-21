@@ -20,6 +20,7 @@ import shutil
 import signal
 import sqlite3
 import time
+import threading
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
@@ -28,11 +29,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from .geometry import MAX_PREVIEW_COORDINATE
 from .auth import Identities, OPERATOR_OWNER
+from .report_receipts import ReportSigner, file_digest, make_payload, validate_evidence, MAX_ARTIFACT_BYTES
 
 MIB = 1024 ** 2
 ID = re.compile(r"^[a-f0-9]{32}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$")
 ACTIVE = ('prepared', 'queued', 'running')
+REPORT_HASH_SECONDS = 15
+REPORT_WAIT_SECONDS = 20
 
 class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -49,6 +53,17 @@ class JobBody(BaseModel):
 class TicketBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     artifact: int = Field(ge=0, le=31, strict=True)
+
+class ReportArtifact(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    name: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$', strict=True)
+    sha256: str = Field(pattern=r'^[a-f0-9]{64}$', strict=True)
+
+class ReportBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    scenarioSha256: str = Field(pattern=r'^[a-f0-9]{64}$', strict=True)
+    geometrySha256: str | None = Field(pattern=r'^[a-f0-9]{64}$', strict=True)
+    artifactRefs: list[ReportArtifact] = Field(min_length=1, max_length=32)
 
 class Store:
     def __init__(self, root: Path):
@@ -68,6 +83,14 @@ class Store:
             if 'owner_id' not in {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{OPERATOR_OWNER}'")
             self.db.execute(f'CREATE INDEX IF NOT EXISTS {table}_owner ON {table}(owner_id, created)')
+        columns = {row['name'] for row in self.db.execute('PRAGMA table_info(jobs)')}
+        for column in ['source_hashes', 'completed_evidence']:
+            if column not in columns:
+                self.db.execute(f'ALTER TABLE jobs ADD COLUMN {column} TEXT')
+            self.db.execute(f'''CREATE TRIGGER IF NOT EXISTS {column}_immutable
+                BEFORE UPDATE OF {column} ON jobs
+                WHEN OLD.{column} IS NOT NULL AND NEW.{column} IS NOT OLD.{column}
+                BEGIN SELECT RAISE(ABORT, 'Completed/source evidence is immutable'); END''')
         self.db.execute("UPDATE jobs SET status='failed', error='Worker restarted; execution was interrupted.' WHERE status IN ('queued','running')")
         self.db.commit()
 
@@ -90,7 +113,30 @@ class Store:
         value = dict(row)
         value['upload_ids'] = json.loads(value.pop('uploads'))
         value['artifacts'] = json.loads(value['artifacts'] or '[]')
+        value.pop('source_hashes', None)
+        value.pop('completed_evidence', None)
         return value
+
+    def record_sources(self, jid, sources):
+        changed = self.db.execute("UPDATE jobs SET source_hashes=? WHERE id=? AND status='running' AND source_hashes IS NULL",
+                                  (json.dumps(sources, sort_keys=True, separators=(',', ':')), jid)).rowcount
+        self.db.commit()
+        return changed == 1
+
+    def complete(self, jid, sources, artifacts):
+        evidence = validate_evidence({'authority': 'worker-verified-bytes', 'sources': sources,
+            'artifacts': [{key: item[key] for key in ['name', 'kind', 'size', 'sha256']} for item in artifacts]})
+        original = json.dumps(sources, sort_keys=True, separators=(',', ':'))
+        self.db.execute("UPDATE jobs SET status='complete',error=NULL,artifacts=?,completed_evidence=? WHERE id=? AND status='running' AND source_hashes=? AND completed_evidence IS NULL",
+                        (json.dumps(artifacts), json.dumps(evidence, sort_keys=True, separators=(',', ':')), jid, original))
+        self.db.commit()
+
+    def evidence(self, jid, owner_id):
+        job = self.job(jid, owner_id)
+        row = self.db.execute('SELECT completed_evidence FROM jobs WHERE id=? AND owner_id=?', (jid, owner_id)).fetchone()
+        if job['status'] != 'complete' or not row['completed_evidence']:
+            raise HTTPException(409, 'This job has no immutable completed source evidence. Run a new job before requesting a receipt.')
+        return validate_evidence(json.loads(row['completed_evidence']))
 
     def state(self, jid, state, error=None, artifacts=None):
         self.db.execute('UPDATE jobs SET status=?, error=?, artifacts=? WHERE id=?',
@@ -226,7 +272,7 @@ def visual_metadata(entry):
     return result
 
 
-def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, ttl: int = 86400,
+def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, report_key: str | None = None, ttl: int = 86400,
                storage_limit: int = 20 * 1024 ** 3, job_limit: int = 4 * 1024 ** 3):
     token = token or os.environ.get('WORLD_WORKER_TOKEN', '')
     if len(token) < 32:
@@ -235,14 +281,28 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))
     identities = Identities(token, tenants or os.environ.get('WORLD_TENANTS_FILE'), engines, storage_limit)
+    directory = (root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data'))).resolve()
+    key_path = report_key or os.environ.get('WORLD_REPORT_SIGNING_KEY')
+    signer = None
+    if key_path:
+        if Path(key_path).resolve().is_relative_to(directory):
+            raise RuntimeError('Keep the report signing key outside worker source/artifact storage.')
+        try:
+            signer = ReportSigner(key_path)
+        except ImportError as error:
+            raise RuntimeError('Configured report signing requires requirements-report-receipts.txt.') from error
+        except (OSError, ValueError) as error:
+            raise RuntimeError('Configured report signing key is unavailable or invalid.') from error
     # Never sign capabilities with a credential handed to any browser, including
     # the legacy operator credential. Restart intentionally expires old tickets.
     ticket_key = secrets.token_bytes(32)
-    store = Store(root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data')))
+    store = Store(directory)
     queue: asyncio.Queue = asyncio.Queue(maxsize=8)
     processes = {}
+    hash_cancellations = {}
     running = set()
     io_lock = asyncio.Lock()
+    report_task = None
 
     def check_storage(extra=0, principal=None):
         if store.storage_commitment(job_limit, running) + extra > storage_limit:
@@ -308,6 +368,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def execute(jid):
         directory = store.root / 'jobs' / jid
         out = directory / 'output'
+        hash_cancelled = threading.Event()
         try:
             async with io_lock:
                 try:
@@ -328,20 +389,32 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                     return
                 store.state(jid, 'running')
                 running.add(jid)
+                hash_cancellations[jid] = hash_cancelled
             directory.mkdir(exist_ok=True)
             out.mkdir(exist_ok=True)
             items = [store.upload(i, job['owner_id']) for i in job['upload_ids']]
             inputs = []
+            source_hashes = []
             for item in items:
                 path = store.upload_path(item['id'], job['owner_id'])
                 validate_media(path, item['kind'])
                 inputs.append({'path': str(path), 'name': item['name'], 'kind': item['kind'], 'size': item['size']})
+                source_hashes.append({'id': item['id'], 'kind': item['kind'], 'size': item['size'],
+                                      'sha256': await asyncio.to_thread(file_digest, path, item['size'], cancelled=hash_cancelled)})
+            async with io_lock:
+                principal = identities.owner(job['owner_id'])
+                if principal is None or job['engine'] not in principal.engines:
+                    store.state(jid, 'failed', 'Owner access or engine authorization was revoked before execution.')
+                    return
+                check_owner_jobs(principal)
+                check_storage(principal=principal)
+                if not store.record_sources(jid, source_hashes): return
             request_file = directory / 'input.json'
             request_file.write_text(json.dumps({'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(out)}))
             if job['engine'] == 'inspect':
                 rows = []
-                for item in inputs:
-                    rows.append({k: v for k, v in item.items() if k != 'path'} | {'sha256': await asyncio.to_thread(sha256_file, Path(item['path']))})
+                for item, original in zip(inputs, source_hashes):
+                    rows.append({k: v for k, v in item.items() if k != 'path'} | {'sha256': original['sha256']})
                 (out / 'capture-integrity.json').write_text(json.dumps({'schema': 'brainsnn.capture.v1', 'sources': rows, 'model_executed': False, 'claim': 'File integrity only; no geometry or semantic inference.'}, indent=2))
                 (out / 'manifest.json').write_text(json.dumps({'artifacts': [{'name': 'capture-integrity.json', 'kind': 'integrity'}]}))
             else:
@@ -365,7 +438,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             async with io_lock:
                 check_execution_storage(directory)
             artifacts = await asyncio.to_thread(artifact_manifest, out)
-            if store.job(jid)['status'] != 'cancelled': store.state(jid, 'complete', artifacts=artifacts)
+            for item in source_hashes:
+                await asyncio.to_thread(file_digest, store.upload_path(item['id'], job['owner_id']), item['size'], expected_sha256=item['sha256'], cancelled=hash_cancelled)
+            if store.job(jid)['status'] != 'cancelled': store.complete(jid, source_hashes, artifacts)
         except asyncio.CancelledError:
             await stop_process(jid)
             if store.job(jid)['status'] != 'cancelled': store.state(jid,'failed','Worker stopped during execution.')
@@ -374,6 +449,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             await stop_process(jid)
             if store.job(jid)['status'] != 'cancelled': store.state(jid, 'failed', str(error)[:300])
         finally:
+            hash_cancelled.set()
+            hash_cancellations.pop(jid, None)
             processes.pop(jid, None)
             running.discard(jid)
 
@@ -408,7 +485,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.middleware('http')
     async def security(request: Request, call_next):
         is_download = request.url.path.startswith('/v1/download/') and request.method in ['GET','HEAD']
-        needs_auth = request.method != 'OPTIONS' and request.url.path != '/healthz' and not is_download
+        public_key_read = request.url.path == '/v1/report-key' and request.method in ['GET', 'HEAD']
+        needs_auth = request.method != 'OPTIONS' and request.url.path != '/healthz' and not is_download and not public_key_read
         def authorize():
             try:
                 principal = identities.authenticate(request.headers.get('authorization', '')) if len(request.headers.getlist('authorization')) == 1 else None
@@ -449,12 +527,18 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.get('/healthz')
     async def health(): return {'status':'ok','public_processing':False}
 
+    @app.api_route('/v1/report-key', methods=['GET', 'HEAD'])
+    async def report_public_key():
+        if signer is None: raise HTTPException(503, 'Report signing is not configured.')
+        return signer.public_key()
+
     @app.get('/v1/capabilities')
     async def capabilities(request:Request):
         principal = request.state.principal
         return {'api_version':'brainsnn.worker.v1','operator_only':True,
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
+                'reportSigning':{'available':signer is not None,'algorithm':'Ed25519','keyId':signer.public_key()['keyId'] if signer else None},
                 'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values() if e['id'] in principal.engines],
                 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
@@ -552,7 +636,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         async with io_lock:
             job=store.job(jid, owner)
             active=job['status'] in ACTIVE
-            if active:store.state(jid,'cancelled')
+            if active:
+                store.state(jid,'cancelled')
+                if jid in hash_cancellations: hash_cancellations[jid].set()
         if active:await stop_process(jid)
         return store.job(jid, owner)
 
@@ -575,6 +661,61 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         payload=base64.urlsafe_b64encode(raw).decode().rstrip('=')
         sig=hmac.new(ticket_key,payload.encode(),hashlib.sha256).hexdigest()
         return {'url':f'/v1/download/{payload}.{sig}','expires_in':60}
+
+    @app.post('/v1/jobs/{jid}/report-receipt')
+    async def report_receipt(jid:str, body:ReportBody, request:Request):
+        nonlocal report_task
+        principal = request.state.principal
+        async with io_lock:
+            job = store.job(jid, principal.owner_id)
+            if signer is None: raise HTTPException(503, 'Report signing is not configured.')
+            evidence = store.evidence(jid, principal.owner_id)
+            available = {item['name']: item for item in evidence['artifacts']}
+            if len({item.name for item in body.artifactRefs}) != len(body.artifactRefs):
+                raise HTTPException(422, 'Artifact references must be unique.')
+            selected = []
+            for ref in body.artifactRefs:
+                entry = available.get(ref.name)
+                if entry is None or ref.sha256 != entry['sha256']:
+                    raise HTTPException(409, 'Artifact references do not match the completed job.')
+                selected.append(entry)
+            if sum(item['size'] for item in selected) > MAX_ARTIFACT_BYTES:
+                raise HTTPException(413, 'Signed receipt verification is limited to 256 MiB of selected artifacts.')
+            if report_task is not None and not report_task.done():
+                raise HTTPException(429, 'Another report verification is running. Try again after it finishes.')
+            cancelled = threading.Event()
+            def check_artifacts():
+                deadline = time.monotonic() + REPORT_HASH_SECONDS
+                for item in selected:
+                    path = store.root / 'jobs' / jid / 'output' / item['name']
+                    file_digest(path, item['size'], expected_sha256=item['sha256'], deadline=deadline, cancelled=cancelled)
+            task = report_task = asyncio.create_task(asyncio.to_thread(check_artifacts))
+            # A disconnected request must not release the slot while its thread
+            # is still doing IO. This task stays busy until the thread returns.
+            task.add_done_callback(lambda done: done.exception() if not done.cancelled() else None)
+        try:
+            await asyncio.wait_for(asyncio.shield(task), REPORT_WAIT_SECONDS)
+        except (TimeoutError, asyncio.TimeoutError):
+            raise HTTPException(504, 'Report evidence verification exceeded its time budget.') from None
+        except (OSError, ValueError):
+            raise HTTPException(409, 'A selected artifact is missing or changed. No receipt was signed.') from None
+        finally:
+            cancelled.set()
+        # Verification awaited IO: a revoked identity or deleted job must not
+        # receive a fresh signature based on the earlier authorization snapshot.
+        async with io_lock:
+            try:
+                current = identities.authenticate(request.headers.get('authorization', ''))
+            except (OSError, ValueError):
+                raise HTTPException(503, 'Tenant access configuration is unavailable.') from None
+            if current is None or current.owner_id != principal.owner_id or current.credential_hash != principal.credential_hash:
+                raise HTTPException(401, 'Unauthorized.')
+            if store.evidence(jid, principal.owner_id) != evidence:
+                raise HTTPException(409, 'Job evidence changed during verification.')
+            payload = make_payload(signer.public_key()['keyId'], principal.owner_id, job,
+                {'authority':'worker-verified-bytes','sources':evidence['sources'],'artifacts':selected},
+                body.scenarioSha256, body.geometrySha256)
+            return signer.sign(payload)
 
     @app.api_route('/v1/download/{ticket}',methods=['GET','HEAD'])
     async def download(ticket:str):

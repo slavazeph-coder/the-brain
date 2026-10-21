@@ -39,7 +39,7 @@ export function createMeasurementReview({getWorld,status,event,download}){
     host=container;const world=getWorld();container.replaceChildren();if(!world)return;
     const state=session?evidenceBinding(session,world):'empty',editable=state==='current'&&!busy;
     const details=document.createElement('details');details.id='measurement-worksheet';details.className='processing-options';details.style.overflowWrap='anywhere';details.open=open;
-    details.innerHTML=`<summary>Measurements and geometry review evidence</summary><p>Record independent readings and decisions for this map. Self-reported evidence is not certification and never verifies a reconstruction or changes planning approval.</p>
+    details.innerHTML=`<summary>Measurements and geometry review evidence</summary><p>Kept in this tab; export to save. Record independent readings and decisions for this map. Self-reported evidence is not certification and never verifies a reconstruction or changes planning approval.</p>
       <p id="measurement-state" role="status">${state==='empty'?'No worksheet yet.':state==='current'?'Current map · self-reported, unverified evidence':state==='imported'?'Imported reference only · review authority reset':'Stale worksheet · map changed; prior decisions no longer apply'}</p>
       <button type="button" id="measurement-start" ${busy?'disabled':''}>${session?'Start replacement worksheet':'Start worksheet for this map'}</button>
       <label>Import worksheet as a reference<input id="measurement-import" type="file" accept=".json,application/json" ${busy?'disabled':''}></label>
