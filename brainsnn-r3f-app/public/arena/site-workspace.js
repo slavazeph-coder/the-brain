@@ -89,7 +89,7 @@
       '<div class="site-gym-guide"><b>Scan → reviewed map → route → time & cost</b><p>A supported floor-map JSON goes straight to review. A phone video or 3D visual still needs a measured floor map.</p><button class="site-link" data-site-action="gym-estimate">Estimate gym cleaning →</button></div>' +
       '<label class="site-dropzone"><span class="site-upload-icon">↑</span><strong>Add a capture reference</strong><small>Phone video or photos · local preview</small><input id="site-reference-input" type="file" accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp" multiple></label>' +
       '<p class="site-note">References help you draw the map. They do not automatically generate geometry.</p>' + media +
-      '<div class="site-import-grid"><label class="site-button">Import floor map<input id="site-map-input" type="file" accept=".json,application/json"></label><label class="site-button">Add 3D visual<input id="site-asset-input" type="file" accept=".glb,.usdz"></label></div><p class="site-note">Floor map: BrainSNN or RoomPlan JSON. Visual: GLB or ASCII USDZ. Binary RoomPlan USDZ needs GLB conversion.</p>' +
+      '<div class="site-import-grid"><label class="site-button">Import floor map<input id="site-map-input" type="file" accept=".json,application/json"></label><label class="site-button">Add 3D visual<input id="site-asset-input" type="file" accept=".glb,.usdz,.json"></label></div><p class="site-note">Floor map: BrainSNN or RoomPlan JSON. Visual: GLB, ASCII USDZ or a World Builder point-cloud JSON. Binary RoomPlan USDZ needs GLB conversion.</p>' +
       (hasAppearance() ? '<div class="site-asset-row"><span><b>Visual only</b>' + esc(appearanceName()) + '</span><button class="site-link" data-site-action="remove-asset">Remove</button></div>' : '') +
       '<button class="site-button site-wide" data-site-action="new-map">Draw my floor map →</button><button class="site-link" data-site-action="sample">Explore the sample space</button>' +
       '<details class="site-help"><summary>How to capture a useful gym</summary><ol><li>Capture one floor, walking slowly along usable aisles and through doorways.</li><li>Measure floor dimensions and narrow passages. Mark equipment, mats, stairs, drains and areas the robot must avoid.</li><li>Mirrors, glass and repetitive equipment can confuse reconstruction. Check the map against the actual gym.</li><li>Confirm one real measurement and the robot dimensions before estimating. Keep people out of the capture where possible.</li></ol><p>Supported RoomPlan JSON can provide a starting floor map. A raw video requires your connected reconstruction worker and manual floor review. Reconstruction produces an unscaled visual reference, not a ready collision map.</p><a href="gym-pilot.html" target="_blank" rel="noopener noreferrer">One-gym pilot checklist ↗</a></details>' + workerPanel();
@@ -287,10 +287,13 @@
     if (!file || !renderer) return; const version = generation, operation = ++assetEpoch;
     const current = () => version === generation && operation === assetEpoch && Boolean(host);
     try {
-      const metadata = await renderer.importAsset(file); if (!current()) return;
+      const isCloud = /\.json$/i.test(file.name);
+      if (isCloud && (file.size > 16 * 1024 * 1024 || !renderer.setPointCloud)) throw new Error('Point-cloud JSON must be under 16 MB.');
+      const cloud = isCloud ? JSON.parse(await file.text()) : null; if (!current()) return;
+      const metadata = isCloud ? renderer.setPointCloud(cloud) : await renderer.importAsset(file); if (!current()) return;
       if (isNew) assetTransform = { scale: 1, x: 0, y: 0, z: 0, rotation: 0, rotationX: 0, rotationZ: 0 };
-      asset = file; pointCloud = null; assetMeta = metadata; renderer.setAssetTransform(assetTransform); if (isNew) view = 'reality'; renderer.setMode(view); renderInspector(); update();
-      if (isNew) tell('3D appearance loaded. Align it in Review; only the reviewed floor map affects the route.');
+      asset = isCloud ? null : file; pointCloud = cloud; assetMeta = metadata; renderer.setAssetTransform(assetTransform); if (isNew) view = 'reality'; renderer.setMode(view); renderInspector(); update();
+      if (isNew) tell(isCloud ? 'Reconstructed point cloud loaded as a visual reference. Units are arbitrary; measure and draw the floor map before planning.' : '3D appearance loaded. Align it in Review; only the reviewed floor map affects the route.');
     } catch (error) { if (current()) tell('3D import: ' + error.message, true); }
   }
   function addReferences(files) {

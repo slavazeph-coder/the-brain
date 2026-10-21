@@ -13,9 +13,10 @@ by design and the viewer says so.
 | Multi-view reconstruction (PyCOLMAP 4.2.1, CPU) | real | 6,225 points, 11/11 images registered, mean reprojection 0.43 px, 9.1 s |
 | Worker API (upload → job → artifact ticket) | real | `tests/world/worker_video_browser_smoke.py` passed, Chromium |
 | Viewer (WebGL2 point viewer, PLY export, proof pack) | real | screenshot + `browser-video-points.ply` (93.6 KB) + proof JSON |
+| Hand-off to Arena sim (point cloud → robot workspace) | real | "Open in Arena sim" → `brainsnn-point-cloud.json` (5,669 core pts, 556 outliers recorded) → Arena site workspace renders it upright on the floor grid behind the G1 proxy; `browser-video-arena-sim.png` |
 | Upload → viewer wall time | 11.0 s | `output/playwright/world/browser-video-timings.json` |
 | Dense GPU reconstruction (MapAnything / VGGT) | not in this path | needs GB10/4090 gate; not fired |
-| Scene/sim export (planner, USDA, Arena) | existing, untested here | separate measured-map path, not video-derived |
+| Floor map / collision geometry from the video | not yet | Arena shows the cloud as a visual reference; the floor map is still drawn and measured by hand |
 
 Input: `fountain-clip.mp4` (1,456,188 bytes, SHA256 `7ecfa275…b7f5e`), 11 Strecha
 Fountain photographs rendered as a 5.5 s 1280×960 H.264 sequence. It is a test
@@ -55,7 +56,10 @@ Live demo in a real browser:
 In the page: drop the MP4 → Processing options → Connection → URL
 `http://127.0.0.1:8765`, paste token, Connect → engine "Video reconstruction
 (CPU)" → tick consent → Process. ~11 s later the point cloud loads; drag to
-orbit, scroll to zoom, Export PLY, Evidence tab → Proof.
+orbit, scroll to zoom, Export PLY, Evidence tab → Proof. Then **Open in Arena sim**:
+it saves `brainsnn-point-cloud.json`, opens the Arena site workspace in a new tab;
+there click Capture → Add 3D visual → pick that JSON. The cloud stands on the
+floor grid next to the robot as a visual-only reference.
 
 ## What the viewer sees
 
@@ -71,7 +75,8 @@ a smaller footprint for sparse clouds. Screenshots:
 ## Known limitations (say these out loud in the demo)
 
 - Sparse SfM only on this path. Dense GPU reconstruction (MapAnything on GB10, VGGT on 4090) exists but is gated and was not fired.
-- No metric scale, no collision geometry, no sim export from the video output yet. The planner/USDA path consumes measured maps, not this cloud.
+- No metric scale, no collision geometry. The Arena cloud is a visual reference; the planner still consumes the hand-drawn, measured floor map.
+- The Arena hand-off drops the far 2% per axis (recorded in `provenance.outliersDropped`) so the subject sits on the floor; the World viewer and PLY keep every point.
 - Fixture is a photo sequence, not a phone walkthrough. A real handheld clip with motion blur and rolling shutter will register fewer frames.
 - Splat radius is uniform; the viewer's size control helps but there is no depth attenuation yet.
 
@@ -79,6 +84,7 @@ a smaller footprint for sparse clouds. Screenshots:
 
 1. Record one real 10–20 s handheld phone walkthrough and run this exact journey on it; that is the honest demo input. (owner, 10 min)
 2. Depth-attenuated splat size in `visual-viewer.mjs` VERT (small shader change). (1–2 h)
-3. Auto-orbit on load for demos (viewer already has `orbit()`; one flag). (30 min)
-4. Wire the video-derived cloud into the Arena/planner import as a visual-only layer so "sim" is literally on screen. (half day)
-5. GB10 MapAnything on the same clip through this UI for the dense before/after. (needs idle-GPU gate)
+3. Floor estimate from the cloud (dominant horizontal plane → suggested floor polygon, still reviewed by hand) so the sim gets a starting map from the video. (half day)
+4. GB10 MapAnything on the same clip through this UI for the dense before/after. (needs idle-GPU gate)
+
+Done in this pass: auto-orbit on load for worker reconstructions; Arena hand-off.
