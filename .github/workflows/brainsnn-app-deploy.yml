@@ -72,8 +72,8 @@ jobs:
             sleep 1
           done
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
-          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Robot policy testing"
-          curl -sf http://127.0.0.1:8080/ | grep -Fq "robot-pricing-transparent-v1"
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Turn video into a 3D world"
+          curl -sf http://127.0.0.1:8080/ | grep -Fq "world-engine-home-v1"
           curl -sf http://127.0.0.1:8080/api/arena/analysis/capabilities | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const c=JSON.parse(s);if(c.build!=="paid-analysis-2026-10-17-v1"||c.analysisEnabled!==false||c.purchaseEnabled!==false)process.exit(1);})'
           kill $SRV 2>/dev/null || true
 
@@ -117,7 +117,7 @@ jobs:
         env:
           HEALTH_URL: ${{ vars.BRAINSNN_HEALTH_URL || 'https://www.brainsnn.com/healthz' }}
           # The SPA shell carries the current BrainSNN product title. Checking it
-          # proves the robot-testing homepage build rolled out, not merely that an
+          # proves the World Engine homepage build rolled out, not merely that an
           # older container is still answering health checks.
           HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
           ARENA_URL: https://www.brainsnn.com/arena/
@@ -130,7 +130,7 @@ jobs:
             arena="$(curl -L -s -o /tmp/brainsnn-arena.html -w '%{http_code}' "$ARENA_URL" || true)"
             analysis="$(curl -L -s -o /tmp/brainsnn-analysis.json -w '%{http_code}' "$ANALYSIS_CAPABILITIES_URL" || true)"
             analysis_asset="$(curl -L -s -o /tmp/brainsnn-analysis.js -w '%{http_code}' "$ANALYSIS_ASSET_URL" || true)"
-            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Robot policy testing" /tmp/brainsnn-home.html && grep -Fq "robot-pricing-transparent-v1" /tmp/brainsnn-home.html; then
+            if [ "$home" = "200" ] && grep -Fq "BrainSNN | Turn video into a 3D world" /tmp/brainsnn-home.html && grep -Fq "world-engine-home-v1" /tmp/brainsnn-home.html; then
               home_marker="ok"
             else
               home_marker="missing"
