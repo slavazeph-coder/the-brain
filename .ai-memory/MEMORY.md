@@ -57,6 +57,9 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Replacement King GPU worker](world-builder-king-56987795.md) — verified Mac/GB10 access, 955 source files restored, 47 Python + 8 Node checks and CUDA smoke passed; Hermes continuation updated.
+
+
 → [Remote World Builder continuation](world-builder-remote-2026-10-20.md) — owner moves ongoing builds to local Hermes on GB10/4090; repository access, separate branches and recurring native scheduler, with the unfinished report slice preserved separately.
 
 → [World Builder flagship](world-builder-2026-10.md) — real local photo previews, CPU and bounded photo/video GPU reconstruction, source-bound local VLM reviews, private tenant boundaries, measured-evidence worksheets and bounded HEVC/capture tests; full public real-to-sim qualification remains open.
