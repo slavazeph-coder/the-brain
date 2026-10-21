@@ -42,7 +42,7 @@ describe('per-route social previews', () => {
     const scan = resolveRouteMeta('/scan');
     expect(scan.title).toBe('Capture a space | BrainSNN World Engine');
     expect(scan.body.join(' ')).toContain('not uploaded automatically');
-    expect(scan.body.join(' ')).toContain('connected');
+    expect(scan.body.join(' ')).toContain('connect a compatible reconstruction worker');
     expect(resolveRouteMeta('/scan/').title).toBe(scan.title);
 
     const play = resolveRouteMeta('/play');
