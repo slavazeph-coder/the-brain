@@ -192,7 +192,8 @@ const ROUTES = [
       'Automatic dense reconstruction, editable object segmentation, professional exports and public developer APIs remain early-access development goals, not generally available self-serve products.',
     ],
     links: [{ path: '/scan', label: 'Capture studio' }, { path: '/#industries', label: 'Industry uses' }, { path: '/arena/', label: 'Robot Arena' }],
-  }];
+  },
+];
 
 const CRAWL_LINKS = Object.freeze([
   { path: '/scan', label: 'Start scanning' },
