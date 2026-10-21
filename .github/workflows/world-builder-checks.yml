@@ -86,6 +86,8 @@ jobs:
           # Permission fixtures test cancellation; native canvas MP4 is separate
           # from physical phone/camera qualification.
           python tests/world/capture_browser_smoke.py
+          # Reconstruction -> proposed map -> review gate -> plan, on a synthetic room in an arbitrary frame.
+          python tests/world/realtosim_browser_smoke.py
           # Reuse the Python SDK's installed binaries with the npm test driver.
           python - <<'PY'
           import os, subprocess
