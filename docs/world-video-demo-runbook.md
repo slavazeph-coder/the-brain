@@ -16,7 +16,7 @@ by design and the viewer says so.
 | Hand-off to Arena sim (point cloud → robot workspace) | real | "Open in Arena sim" → `brainsnn-point-cloud.json` (5,669 core pts, 556 outliers recorded) → Arena site workspace renders it upright on the floor grid behind the G1 proxy; `browser-video-arena-sim.png` |
 | Upload → viewer wall time | 11.0 s | `output/playwright/world/browser-video-timings.json` |
 | Dense GPU reconstruction (MapAnything / VGGT) | not in this path | needs GB10/4090 gate; not fired |
-| Floor map / collision geometry from the video | not yet | Arena shows the cloud as a visual reference; the floor map is still drawn and measured by hand |
+| Floor map from the video | suggestion only | hand-off carries `floorEstimate` (densest low band); Arena offers "Start unscaled floor map from this cloud" when support ≥ 5%. Synthetic room: grid coincides with floor points, walls on the edges. Fountain fixture: 11% support, 5.7 × 1.9 — weak, it is a facade |
 
 Input: `fountain-clip.mp4` (1,456,188 bytes, SHA256 `7ecfa275…b7f5e`), 11 Strecha
 Fountain photographs rendered as a 5.5 s 1280×960 H.264 sequence. It is a test
@@ -84,7 +84,6 @@ a smaller footprint for sparse clouds. Screenshots:
 
 1. Record one real 10–20 s handheld phone walkthrough and run this exact journey on it; that is the honest demo input. (owner, 10 min)
 2. Depth-attenuated splat size in `visual-viewer.mjs` VERT (small shader change). (1–2 h)
-3. Floor estimate from the cloud (dominant horizontal plane → suggested floor polygon, still reviewed by hand) so the sim gets a starting map from the video. (half day)
-4. GB10 MapAnything on the same clip through this UI for the dense before/after. (needs idle-GPU gate)
+3. GB10 MapAnything on the same clip through this UI for the dense before/after. (needs idle-GPU gate)
 
-Done in this pass: auto-orbit on load for worker reconstructions; Arena hand-off.
+Done in this pass: auto-orbit on load; Arena hand-off; floor estimate → unscaled starting map (still needs one real measurement to scale).

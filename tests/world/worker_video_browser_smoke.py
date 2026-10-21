@@ -129,6 +129,14 @@ def main():
                 arena.wait_for_function("document.querySelector('#site-status')?.textContent.includes('visual reference')", timeout=30000)
                 site = arena.locator('#site-workspace-root').inner_text()
                 assert 'visual only' in site.lower(), arena.locator('#site-status').inner_text()
+                floor = cloud.get('floorEstimate'); timings['floor_estimate'] = floor
+                if floor and floor['support'] >= 0.05:
+                    arena.locator('[data-site-action=floor-from-cloud]').click()
+                    arena.wait_for_function("document.querySelector('#site-status')?.textContent.includes('Unscaled floor map started')", timeout=30000)
+                    timings['floor_map_started'] = True
+                else:
+                    assert arena.locator('[data-site-action=floor-from-cloud]').count() == 0, 'weak floor support must not offer a map'
+                    timings['floor_map_started'] = False
                 arena.locator('#site-workspace-root canvas').first.screenshot(path=str(output / 'browser-video-arena-sim.png'))
                 assert not errors, errors
                 timings['proof_sources'] = len(proof['sources'])

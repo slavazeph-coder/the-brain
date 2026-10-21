@@ -544,3 +544,26 @@ test('a World Builder point-cloud JSON loads through Add 3D visual as a visual-o
   e.file('site-asset-input', { name: 'huge.json', size: 16 * 1024 * 1024 + 1, text() { throw Error('Oversize cloud must not be read'); } }); await flush();
   assert.match(e.el('site-status').textContent, /under 16 MB/); assert.deepEqual(e.state().scene, before.scene);
 });
+
+test('a cloud floor estimate can start an unscaled reviewed map, and a facade-only estimate offers nothing', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const base = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4', points: [[0, 0, 0, 1, 2, 3], [6, 0, 4, 1, 2, 3]] };
+  e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], width: 6.2, depth: 4.1, support: 0.03, units: 'arbitrary' } }, 'facade.json')); await flush();
+  assert.equal(e.root.querySelector('[data-site-action="floor-from-cloud"]'), null, 'weak support offers no floor');
+  e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], width: 6.2, depth: 4.1, support: 0.7, units: 'arbitrary' } }, 'room.json')); await flush();
+  assert.match(e.root.textContent, /6\.2 × 4\.1 cloud units, 70% of points/);
+  e.action('floor-from-cloud'); await flush();
+  const s = e.state();
+  assert.equal(s.step, 'review'); assert.equal(s.scene.width, 6.2); assert.equal(s.scene.depth, 4.1); assert.equal(s.scene.scaleConfirmed, false);
+  assert.equal(s.scene.source.kind, 'reconstruction-reference'); assert.equal(s.scene.source.name, 'gym.mp4'); assert.equal(s.scene.obstacles.length, 0);
+  assert.equal(s.result, null); assert.equal(e.el('site-run').disabled, true); assert.match(e.el('site-status').textContent, /Unscaled floor map started/);
+});
+
+test('starting a map from the cloud shifts the visual so the floor band sits at the map origin', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const cloud = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4',
+    points: [[-4, -1, -6, 1, 2, 3], [2, 2, -2, 1, 2, 3]], floorEstimate: { y: -0.5, origin: [-3, -5], width: 5, depth: 3, support: 0.5, units: 'arbitrary' } };
+  e.file('site-asset-input', e.jsonFile(cloud, 'room.json')); await flush(); e.action('floor-from-cloud'); await flush();
+  const transform = e.renderCalls.filter(c => c.name === 'setAssetTransform').pop().args[0];
+  assert.deepEqual([transform.x, transform.y, transform.z], [-1, -0.5, -1], 'bbox min minus floor origin / floor height');
+});

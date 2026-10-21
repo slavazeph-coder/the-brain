@@ -176,7 +176,20 @@ export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', so
   }
   const step = Math.max(1, Math.ceil(core.length / budget)), rows = core.filter((_, i) => i % step === 0);
   return { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
-    source, points: rows, provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1, metricVerified: false } };
+    source, points: rows, floorEstimate: estimateFloor(core), provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1, metricVerified: false } };
+}
+/** Dominant low horizontal band of a Y-up cloud: a floor suggestion in cloud units, never a measurement.
+ * `support` is the fraction of points in the band; below ~5% there is no usable floor (e.g. a facade-only scan). */
+export function estimateFloor(rows, bins = 40) {
+  if (rows.length < 50) return null;
+  const ys = rows.map(r => r[1]).sort((a, b) => a - b), lo = ys[0], hi = ys[ys.length - 1], span = (hi - lo) || 1, counts = new Array(bins).fill(0);
+  for (const y of ys) counts[Math.min(bins - 1, Math.floor((y - lo) / span * bins))]++;
+  // Floor = densest bin in the lower third, generous by one neighbour on each side.
+  const limit = Math.ceil(bins / 3), bin = counts.slice(0, limit).reduce((best, c, i) => c > counts[best] ? i : best, 0);
+  const y0 = lo + (bin - 1) * span / bins, y1 = lo + (bin + 2) * span / bins, band = rows.filter(r => r[1] >= y0 && r[1] <= y1);
+  const xs = band.map(r => r[0]).sort((a, b) => a - b), zs = band.map(r => r[2]).sort((a, b) => a - b), q = (v, f) => v[Math.min(v.length - 1, Math.floor(v.length * f))];
+  return { y: lo + (bin + .5) * span / bins, origin: [q(xs, .02), q(zs, .02)], width: q(xs, .98) - q(xs, .02), depth: q(zs, .98) - q(zs, .02),
+    support: band.length / rows.length, units: 'arbitrary' };
 }
 /** Exports a plain colored cloud, never adds trained Gaussian or metric provenance. */
 export function toPLY(points) {

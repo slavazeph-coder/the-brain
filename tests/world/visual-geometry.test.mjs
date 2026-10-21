@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
 
@@ -37,6 +37,25 @@ test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every droppe
   const same = toArenaCloud(p.subarray(0, 2 * STRIDE)); assert.deepEqual(same.points[1].slice(0, 3), [...p.subarray(STRIDE, STRIDE + 3)]); assert.equal(same.provenance.outliersDropped, 0);
   const big = parsePLY(ascii(Array.from({ length: 2500 }, (_, i) => `${i % 50} ${Math.floor(i / 50)} 0 1 2 3`))).points;
   const thin = toArenaCloud(big, {}, 1000); assert.ok(thin.points.length <= 1000 && thin.provenance.thinned);
+});
+
+test('floor estimate finds the dense low band of a room and declines a facade-only scan', () => {
+  // Room: 400 floor points on y=0 over a 6 x 4 footprint, 200 wall points up to y=3 along x=0, a few ceiling points.
+  const room = [];
+  for (let i = 0; i < 400; i++) room.push([(i % 20) / 19 * 6, 0.02 * Math.random(), Math.floor(i / 20) / 19 * 4, 1, 2, 3]);
+  for (let i = 0; i < 200; i++) room.push([0, 0.2 + (i / 200) * 2.8, (i % 20) / 19 * 4, 1, 2, 3]);
+  for (let i = 0; i < 20; i++) room.push([i / 19 * 6, 3, 2, 1, 2, 3]);
+  const floor = estimateFloor(room);
+  assert.ok(Math.abs(floor.y) < 0.15, `floor y ${floor.y} should sit near 0`);
+  assert.ok(Math.abs(floor.width - 6) < 0.4 && Math.abs(floor.depth - 4) < 0.3, `footprint ${floor.width} x ${floor.depth}`);
+  assert.ok(floor.support > 0.6 && floor.units === 'arbitrary' && floor.origin.every(v => Math.abs(v) < 0.4));
+  // Facade only: points spread evenly over a vertical wall have no dominant low band worth more than a few percent.
+  const facade = Array.from({ length: 600 }, (_, i) => [(i % 30) / 29 * 5, Math.floor(i / 30) / 19 * 3, 0, 1, 2, 3]);
+  assert.ok(estimateFloor(facade).support < 0.2, 'no floor band on a facade');
+  assert.equal(estimateFloor(room.slice(0, 10)), null);
+  // The Arena hand-off carries the estimate.
+  const p = parsePLY(ascii(room.map(r => r.join(' ')))).points;
+  assert.ok(toArenaCloud(p).floorEstimate.support > 0.6);
 });
 
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {
