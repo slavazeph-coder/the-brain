@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 
+import asyncio
 import pytest
 from cryptography.exceptions import InvalidSignature
 from fastapi.testclient import TestClient
@@ -316,22 +317,28 @@ def test_report_receipt_exceeding_wait_budget_returns_504_and_releases_slot(sign
     # get 504, and a later request only succeeds after the thread actually
     # finishes and the task is done.
     options, _, _, _ = signed_options
+    # The overrun path requires the hash thread to outlive the request's wait:
+    # REPORT_HASH_SECONDS must be larger than REPORT_WAIT_SECONDS, otherwise
+    # the thread's own deadline fires first, the task finishes, and a later
+    # request proceeds (504) instead of being refused with 429.
     monkeypatch.setattr('robotics.world_worker.app.REPORT_HASH_SECONDS', 1)
     monkeypatch.setattr('robotics.world_worker.app.REPORT_WAIT_SECONDS', 3)
     with TestClient(create_app(**options)) as client:
         jid, _, _ = complete(client, A)
         body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
         entered, release = threading.Event(), threading.Event()
+        # The overrun path requires the hash thread to outlive the request's
+        # wait budget, so slow must block on release (NOT honor deadline):
+        # if it honored deadline the thread would finish before the outer
+        # wait_for expires, the task would be done, and the next request would
+        # proceed instead of being refused with 429. The thread returns only
+        # when the test sets release, which is what releases the slot.
         def slow(*args, **kwargs):
             entered.set(); assert release.wait(15)
             return file_digest(*args, **kwargs)
         monkeypatch.setattr('robotics.world_worker.app.file_digest', slow)
-        deadline = time.monotonic() + 20
-        while time.monotonic() < deadline:
-            if client.post(f'/v1/jobs/{jid}/report-receipt', headers=headers(A), json=body).status_code == 504:
-                break
-            time.sleep(0.1)
-        assert entered.wait(5), 'hash thread never entered; first request did not overrun'
+        response = client.post(f'/v1/jobs/{jid}/report-receipt', headers=headers(A), json=body)
+        assert response.status_code == 504, response.text
         # While the overrun thread still runs, the slot stays held: 429.
         assert receipt(client, jid, A, body).status_code == 429
         release.set()
@@ -345,3 +352,88 @@ def test_exact_file_reader_has_cancellation_and_deadline(tmp_path):
     with pytest.raises(TimeoutError): file_digest(path, 4, cancelled=cancelled)
     with pytest.raises(TimeoutError): file_digest(path, 4, deadline=0)
     with pytest.raises(ValueError): file_digest(path, 3)
+
+
+def test_cancelled_queued_job_never_starts_and_cannot_restart(configured, tmp_path):
+    # Cancellation regression for the queued phase: cancel_job marks the job
+    # cancelled while it sits in the queue; execute() must skip it (no running
+    # state, no artifacts, no completion), start must refuse it with 409, and
+    # the owner must reclaim the upload and disk afterwards. Uses a slow 'hold'
+    # engine so the job stays in the queue long enough to cancel before start.
+    options, config = configured
+    adapters = tmp_path / 'adapters.json'
+    adapters.write_text(json.dumps([{'id': 'hold', 'command': [sys.executable, '-c', 'import time; time.sleep(30)'], 'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'], 'timeout_seconds': 40}]))
+    options['adapters'] = str(adapters)
+    registry(config, [row('alpha', A, engines=['inspect', 'hold']), row('beta', B)])
+    with TestClient(create_app(**options)) as client:
+        # Hold the queued->running transition deterministically: the single
+        # queue consumer's execute() takes io_lock before it can mark the job
+        # running, so gating the state transition on the event guarantees the
+        # job stays 'queued' until we release it. Patch the bound method on
+        # the live store object (a module path would not intercept it).
+        store = client.app.state.store
+        gate = asyncio.Event()
+        # execute() awaits this hook at the top of its io_lock block, before
+        # the queued->running transition, so gating it deterministically
+        # holds the job in 'queued' until the test releases the event.
+        hook = client.app.state.queue_admission_hook
+        async def hold_gate():
+            await gate.wait()
+        client.app.state.queue_admission_hook = hold_gate
+        try:
+            uid = upload(client, A)
+            jid = prepare(client, A, uid, 'hold').json()['id']
+            assert client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={}).status_code == 200
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'queued': break
+                time.sleep(0.02)
+            assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'queued'
+            response = client.delete('/v1/jobs/' + jid, headers=headers(A))
+            assert response.status_code == 200 and response.json()['status'] == 'cancelled'
+            # The queue consumer observes the cancelled job and skips it.
+            time.sleep(0.5)
+            assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled'
+            # Restarting a cancelled job is refused.
+            assert client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={}).status_code == 409
+            # Nothing was executed: no job directory, no completion record.
+            assert not (options['root'] / 'jobs' / jid).exists()
+            # The owner can reclaim the upload and the disk.
+            assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
+            assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
+        finally:
+            client.app.state.queue_admission_hook = hook  # restore the original no-op
+            gate.set()
+
+
+def test_cancelled_running_adapter_process_is_reaped_and_job_stays_cancelled(configured, tmp_path):
+    # Cancellation regression for the running phase: the owner cancels while
+    # the adapter subprocess is still alive; stop_process must kill it, the
+    # job must remain 'cancelled' (not 'failed' or 'complete'), the artifact
+    # manifest must never be built, and the owner must reclaim upload + disk.
+    options, config = configured
+    adapters = tmp_path / 'adapters.json'
+    adapters.write_text(json.dumps([{'id': 'hold', 'command': [sys.executable, '-c', 'import time; time.sleep(30)'], 'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'], 'timeout_seconds': 40}]))
+    options['adapters'] = str(adapters)
+    registry(config, [row('alpha', A, engines=['inspect', 'hold']), row('beta', B)])
+    with TestClient(create_app(**options)) as client:
+        uid = upload(client, A)
+        jid = prepare(client, A, uid, 'hold').json()['id']
+        assert client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={}).status_code == 200
+        for _ in range(100):
+            if client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'running': break
+            time.sleep(.02)
+        else: raise AssertionError('Hold adapter did not start')
+        response = client.delete('/v1/jobs/' + jid, headers=headers(A))
+        assert response.status_code == 200 and response.json()['status'] == 'cancelled'
+        # The adapter process is dead and the job stays cancelled (not failed).
+        for _ in range(100):
+            if not (options['root'] / 'jobs' / jid / 'operator.log').exists() and client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled': break
+            time.sleep(.02)
+        job = client.get('/v1/jobs/' + jid, headers=headers(A)).json()
+        assert job['status'] == 'cancelled' and job['artifacts'] == []
+        # Restarting a cancelled job is refused.
+        assert client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={}).status_code == 409
+        # The owner can reclaim the upload and the disk.
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
+        assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200

@@ -369,6 +369,13 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         directory = store.root / 'jobs' / jid
         out = directory / 'output'
         hash_cancelled = threading.Event()
+        # Test hook: a deterministic gate on the queue consumer between
+        # dequeue and the admission transaction. Production keeps the default
+        # no-op; tests set an async callable to hold the queued->running
+        # transition (store.state is sync, so monkeypatching it cannot run
+        # inside the request's event loop).
+        if app.state.queue_admission_hook is not None:
+            await app.state.queue_admission_hook(jid)
         try:
             async with io_lock:
                 try:
@@ -481,6 +488,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
 
     app = FastAPI(title='BrainSNN World Worker', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
+    app.state.queue_admission_hook = None  # Tests set an async gate here; production keeps the no-op.
 
     @app.middleware('http')
     async def security(request: Request, call_next):
