@@ -53,13 +53,30 @@ jobs:
       - name: World geometry, import, viewer parsing and worker client contracts
         working-directory: brainsnn-r3f-app
         run: npm run test:world
+      # Azure's Ubuntu mirror has served the FFmpeg and WebKit .debs at ~50 KB/s, running
+      # this job past its timeout. Restore the previous run's downloads so apt only fetches
+      # what changed; each successful run saves a fresh copy under a new key.
+      - name: Restore downloaded Ubuntu packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/apt-archives
+          key: world-apt-ubuntu-24.04-${{ hashFiles('tests/world/requirements-ci.txt') }}-${{ github.run_id }}
+          restore-keys: |
+            world-apt-ubuntu-24.04-${{ hashFiles('tests/world/requirements-ci.txt') }}-
+            world-apt-ubuntu-24.04-
       - name: Install CPU worker and browser test dependencies
         run: |
           python -m pip install -r tests/world/requirements-ci.txt
+          # FFmpeg and Playwright's --with-deps both install through apt-get, so both use this cache.
+          mkdir -p "$HOME/apt-archives/partial"
+          printf 'Dir::Cache::Archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$HOME/apt-archives" | sudo tee /etc/apt/apt.conf.d/90world-archives
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
           # Use the Python SDK's binaries; npm Playwright has a separate version.
           python -m playwright install --with-deps chromium webkit
+          # Drop superseded .debs, then hand the folder back to the runner user for the cache save.
+          sudo apt-get autoclean -y
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/apt-archives"
       - name: Worker tenant isolation, reconstruction and observations with explicit fake VLM transport
         run: python -m pytest tests/world/test_worker.py tests/world/test_tenant_isolation.py tests/world/test_observations.py -q
       - name: Build production app
