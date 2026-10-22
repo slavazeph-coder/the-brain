@@ -530,3 +530,49 @@ def test_cancelled_running_adapter_process_is_reaped_and_job_stays_cancelled(con
         # The owner can reclaim the upload and the disk.
         assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
         assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
+
+
+def test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature(signed_options, monkeypatch):
+    # Regression pin for the cancel-while-final-source-hashes gap: the receipt
+    # path creates a LOCAL threading.Event (report_receipt line 694) that only
+    # the request's own finally-block sets (line 711). cancel_job (line 649)
+    # sets hash_cancellations[jid] — a DIFFERENT event — which the receipt
+    # path never consults. So a concurrent cancel cannot interrupt in-flight
+    # receipt hashing by design: the thread keeps hashing, signs 200, and the
+    # job (already 'complete', not ACTIVE) is unaffected by the cancel.
+    # This test locks that behavior so a future refactor that wires
+    # hash_cancellations into the receipt loop must update it deliberately.
+    import robotics.world_worker.app as app_mod
+    options, _, key, _ = signed_options
+    with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
+        jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+        entered, release = threading.Event(), threading.Event()
+        original = app_mod.file_digest
+
+        def slow_digest(*args, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(app_mod, 'file_digest', slow_digest)
+        future = executor.submit(receipt, client, jid, A, body)
+        try:
+            assert entered.wait(5)
+            # Cancel fires while the hash thread is parked inside file_digest.
+            cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
+            assert cancel.status_code == 200
+            # Job is already complete → cancel is a no-op for active work;
+            # status stays 'complete'. The receipt's LOCAL cancelled event
+            # is a different object from hash_cancellations, so the in-flight
+            # hash is NOT interrupted by this cancel.
+            assert cancel.json()['status'] == 'complete'
+        finally:
+            release.set()
+        response = future.result(5)
+        # The receipt thread finished normally and signed — the concurrent
+        # cancel did not interrupt the in-flight hash.
+        assert response.status_code == 200, response.text
+        verify_receipt(response.json(), key, SCENARIO)
+        # Job is still complete after the cancel attempt.
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
