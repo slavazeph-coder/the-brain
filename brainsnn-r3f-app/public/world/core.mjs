@@ -54,6 +54,25 @@ export function planningGate(world) {
   if (!world.mapReviewed) return 'Review obstacles, unknown areas and the start position.';
   return null;
 }
+// A blocked start is a dead end unless the reviewer learns what fits: the nearest spot for this robot or, when
+// none exists, the widest square robot any spot fits at this margin. Both use the planner's own inflation.
+function startBlocked(world, robot, { cell, n, point, blocked, free }) {
+  const pad = cell * Math.SQRT2 / 2, away = p => Math.hypot(p.x - world.start.x, p.z - world.start.z), at = p => `X ${p.x.toFixed(2)} m, Z ${p.z.toFixed(2)} m`;
+  let spot = null;
+  for (let i = 0; i < n; i++) if (free[i] && (!spot || away(point(i)) < away(spot))) spot = point(i);
+  if (spot) return Object.assign(new Error(`The start is blocked at this robot size and margin. The nearest spot where it fits is ${at(spot)}: move the start there or review the geometry.`), { advice: { start: spot } });
+  // The largest clearance any cell centre has, bisected on the same blocked() test the planner uses.
+  let best = null, clear = 0;
+  for (let i = 0; i < n; i++) {
+    const p = point(i); if (blocked(p, clear)) continue;
+    let lo = clear, hi = Math.max(world.width, world.depth);
+    for (let k = 0; k < 24; k++) { const mid = (lo + hi) / 2; if (blocked(p, mid)) hi = mid; else lo = mid; }
+    if (!best || lo > clear) { best = p; clear = lo; }
+  }
+  const size = best ? Math.floor(Math.SQRT2 * (clear - pad - robot.margin) * 20) / 20 : 0, envelope = `${robot.width} × ${robot.depth} m robot with a ${robot.margin} m margin`;
+  if (size < 0.1) return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}, or any robot at that margin. Review unknown areas and obstacles, check the scale, or capture more open floor.`), { advice: null });
+  return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}. The most open spot, ${at(best)}, fits a square robot up to about ${size.toFixed(2)} m at that margin. Use a smaller envelope or margin, check the scale with a measured distance, or capture more open floor.`), { advice: { start: best, size } });
+}
 export function planWorld(input, robotInput) {
   const world = normalizeWorld(input), error = planningGate(world);
   if (error) throw new Error(error);
@@ -70,7 +89,7 @@ export function planWorld(input, robotInput) {
   const free = new Uint8Array(n); let freeCount = 0;
   for (let i = 0; i < n; i++) if (!blocked(point(i), padding)) { free[i] = 1; freeCount++; }
   const sx = Math.floor(world.start.x / cell), sz = Math.floor(world.start.z / cell), start = sz * nx + sx;
-  if (sx >= nx || sz >= nz || !free[start] || blocked(world.start, radius)) throw new Error('The start is blocked at this robot size and margin. Move the start or review the geometry.');
+  if (sx >= nx || sz >= nz || !free[start] || blocked(world.start, radius)) throw startBlocked(world, robot, { cell, n, point, blocked, free });
   const visited = new Uint8Array(n), stack = [start], order = [start]; visited[start] = 1;
   let reached = 1;
   while (stack.length) {
