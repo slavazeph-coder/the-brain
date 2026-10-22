@@ -27,7 +27,8 @@ permissions:
 jobs:
   world-contracts:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # The install step has its own 11-minute cap; this leaves room after it for the cache save and the tests.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
