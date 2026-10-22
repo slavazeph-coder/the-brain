@@ -72,6 +72,12 @@ a smaller footprint for sparse clouds. Screenshots:
 `output/playwright/world/browser-video-reconstruction-BEFORE.png` vs
 `browser-video-reconstruction.png`.
 
+## Phone / installable app (universal, no native build)
+
+- `/world/` is an installable PWA: `manifest.webmanifest`, icons (maskable + apple-touch), `sw.js` shell cache (network first; offline opens the shell; never caches `/v1/` or cross-origin). iOS: Share → Add to Home Screen (the Capture panel shows the hint); Chromium: install prompt.
+- Exports on phones go to the native share sheet (Files, AirDrop, Mail) with all files of an export in one share; desktop and any share failure fall back to downloads. Contract: `tests/world/browser_smoke.py::check_app_shell` (Chromium + WebKit).
+- Physical-iPhone session: `demo-20261021/phone_session.sh` serves World + Arena + the real COLMAP worker on one local origin and exposes it for 60 min over HTTPS (basic auth). Open `$URL/world/`, connect worker with `$URL` + token from `session.env`, record a walkthrough, process, Open in Arena sim. Record what breaks (HEVC/HDR, orientation, size).
+
 ## Known limitations (say these out loud in the demo)
 
 - Single photo (Depth Anything on-device, ~6 s): relative depth, no multi-view; the floor is a wedge, so the footprint box is coarse and the heading can be ~20° off. Good for "photo → explorable 3D → robot on the floor"; not a map.

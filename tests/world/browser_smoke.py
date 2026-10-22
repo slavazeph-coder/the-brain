@@ -257,12 +257,48 @@ def check_inference(browser, photo):
     print(browser.browser_type.name+': real photo depth, cancellation, source comparison, unverified geometry and download-only network verified',flush=True)
     ctx.close()
 
+def check_app_shell(browser):
+    """Installable shell + share-sheet export: manifest and icons resolve, SW only on https, touch exports go to
+    navigator.share with every file in one call and fall back to downloads when sharing is unavailable."""
+    base=URL.rsplit('/',1)[0]
+    ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True,user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.add_init_script("Object.defineProperty(navigator,'maxTouchPoints',{get:()=>5})")
+    page.goto(URL,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    manifest=page.request.get(base+'/manifest.webmanifest');assert manifest.ok;data=manifest.json()
+    assert data['scope']=='/world/' and data['display']=='standalone' and any(i.get('purpose')=='maskable' for i in data['icons'])
+    for icon in data['icons']:assert page.request.get(icon['src'] if icon['src'].startswith('http') else URL.split('/world/')[0]+icon['src']).ok,icon
+    assert page.request.get(base+'/icons/apple-touch-icon.png').ok and page.request.get(base+'/sw.js').ok
+    assert page.locator('link[rel=manifest]').count()==1 and page.locator('meta[name=apple-mobile-web-app-capable]').count()==1
+    # Shell worker: installs on this secure origin, precaches the shell, serves it offline, never caches API or cross-origin.
+    sw=page.evaluate("""async()=>{const reg=await navigator.serviceWorker.ready;const sw=reg.active;const t0=Date.now();while(sw.state!=='activated'&&Date.now()-t0<15000)await new Promise(r=>setTimeout(r,100));
+      const keys=(await caches.open('world-shell-v1').then(c=>c.keys())).map(r=>new URL(r.url).pathname);return {state:sw.state,keys}}""")
+    assert sw['state']=='activated' and '/world/app.mjs' in sw['keys'] and '/world/index.html' in sw['keys'],sw
+    page.reload(wait_until='networkidle');assert page.evaluate('navigator.serviceWorker.controller!==null')
+    ctx.set_offline(True);page.reload(wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000);ctx.set_offline(False)
+    page.evaluate("Promise.allSettled([fetch('/v1/site-scans/capabilities'),fetch('https://example.invalid/x')])")
+    assert not any('/v1/' in k for k in page.evaluate("caches.open('world-shell-v1').then(c=>c.keys()).then(ks=>ks.map(r=>r.url))"))
+    page.locator('[data-tab=capture]').click()
+    assert page.locator('[data-action=install]').count()==1,'iOS Safari gets the Add to Home Screen button'
+    page.locator('[data-action=install]').click();assert 'Add to Home Screen' in page.locator('#status').inner_text()
+    # Share path: a fake share sheet records the call; both proof files must arrive in one share.
+    page.evaluate("""()=>{window.__shared=[];navigator.canShare=d=>Boolean(d?.files?.length);navigator.share=async d=>{window.__shared.push(d.files.map(f=>[f.name,f.type,f.size]));};}""")
+    page.locator('[data-tab=evidence]').click();page.locator('[data-action=proof]').click();page.wait_for_function('window.__shared.length===1')
+    shared=page.evaluate('window.__shared');assert shared[0][0][0]=='brainsnn-proof.json' and shared[0][0][2]>0,shared
+    # Fallback: sharing rejects (no sheet) -> classic downloads, one per file.
+    page.evaluate("()=>{navigator.share=async()=>{throw new TypeError('no share sheet');};}")
+    with page.expect_download() as event:page.locator('[data-action=proof]').click()
+    assert event.value.suggested_filename=='brainsnn-proof.json'
+    # Dismissal is not an error and does not download.
+    page.evaluate("()=>{window.__dl=0;document.addEventListener('click',e=>{if(e.target.download)window.__dl++;},true);navigator.share=async()=>{const e=new Error('cancel');e.name='AbortError';throw e;};}")
+    page.locator('[data-action=proof]').click();page.wait_for_timeout(300);assert page.evaluate('window.__dl')==0
+    assert not errors,errors;ctx.close()
+
 if __name__=='__main__':
     with sync_playwright() as p:
         for name in os.environ.get('WORLD_BROWSERS','chromium').split(','):
             executable=os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
             browser=getattr(p,name).launch(headless=True, **({'executable_path':executable} if name=='chromium' and executable else {}))
-            check(browser,False);check(browser,True);check_measurements(browser)
+            check(browser,False);check(browser,True);check_measurements(browser);check_app_shell(browser)
             if os.environ.get('WORLD_SITE_URL'):check_routes(browser,os.environ['WORLD_SITE_URL'].rstrip('/'))
             if os.environ.get('WORLD_PHOTO'):check_inference(browser,os.environ['WORLD_PHOTO'])
             browser.close()
