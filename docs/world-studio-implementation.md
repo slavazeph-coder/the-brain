@@ -124,6 +124,31 @@ export WORLD_VLM_REVISION=482ca0f3832238542f8f5295dde86b5f22711d80
 
 Adapters receive bounded local files and write a validated manifest. They cannot accept browser-supplied executable commands or arbitrary output paths. API outputs keep `metric_verified:false`. The process boundary is not a complete host sandbox: run reviewed executables under a non-root service account with an external disk quota and resource limits. Never log short-lived download ticket URLs. Authentication supports legacy operator access and optional provisioned tenant credentials; it does not provide public account registration or qualified process isolation.
 
+### Report receipts (signed verification)
+
+Report signing is optional and disabled unless `WORLD_REPORT_SIGNING_KEY` names an existing absolute path outside `WORLD_WORKER_DIR` to a 32-byte Ed25519 private key in a mode-0600 regular file. Creating the key pair requires `robotics/world_worker/requirements-report-receipts.txt` (pinned `cryptography`); a configured worker fails startup when the dependency, key bytes, permissions, or location are invalid. Never reuse an authentication or ticket credential as the signing key.
+
+Generate the pair once with the module CLI:
+
+```sh
+python -m robotics.world_worker.report_receipts init-key \
+  --private-key /operator-secrets/world-report-key \
+  --public-key /operator-secrets/world-report-key.pub
+```
+
+`init-key` refuses existing paths and never prints private bytes; it prints the public key document (`brainsnn.world.report-key.v1`: `algorithm`, `keyId`, base64url `publicKey`). The only unauthenticated worker endpoint, `GET /v1/report-key`, returns that same public key document; it discloses no private material and is 503 while signing is disabled.
+
+A completed job's authenticated principal can request `POST /v1/jobs/{id}/report-receipt` with the job's exact artifact names and SHA-256 digests plus an owner-declared scenario hash. The worker re-hashes only the selected artifacts (256 MiB total cap, one-hash-task slot, 429 while another verification runs, 409 for missing or changed evidence, 504 past its time budget), re-authenticates and re-checks job evidence after the IO, then signs a canonical-JSON `brainsnn.world.report-receipt.v1` payload as a `brainsnn.world.signed-report-receipt.v1` envelope (Ed25519 over schema domain + payload bytes). Signed receipts are limited to 64 KiB and always keep `metricVerified`, `policyExecuted`, `safetyCertified` and `independentHostAttestation` false; they authenticate worker-verified bytes and the exact scenario hash only, not measurements, model truth, or host independence.
+
+Verification uses an independently trusted public key and the exact local scenario file:
+
+```sh
+python -m robotics.world_worker.report_receipts verify \
+  --receipt receipt.json --trusted-public-key key.json --scenario scenario.json
+```
+
+Exit 0 prints `verified:true`; exit 2 means the key fingerprint, signature, schema, byte limits, or scenario bytes were rejected. `GET /v1/capabilities` exposes `reportSigning.available/algorithm/keyId` so clients can discover support without the unauthenticated endpoint.
+
 ## Browser recording qualification
 
 The capture controller owns each permission request and stream independently. Cancelling a pending request, clearing the session, leaving the page or hiding it prevents a late permission result from restarting capture. Recorder errors, empty output and the byte limit discard partial files. Normal stop, the 90-second limit and track interruption release the camera and retain a completed recording. The recorder selects MP4; browsers without native MP4 recording use the native-camera upload fallback instead of producing a worker-incompatible WebM recording.
