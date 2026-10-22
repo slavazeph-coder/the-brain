@@ -268,6 +268,8 @@ def check_app_shell(browser):
     page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
     manifest=page.request.get(base+'/manifest.webmanifest');assert manifest.ok;data=manifest.json()
     assert data['scope']=='/world/' and data['display']=='standalone' and any(i.get('purpose')=='maskable' for i in data['icons'])
+    # In production /world/ is the outer site shell; the installed app must start on the World document itself.
+    assert data['start_url'].startswith('/world/index.html'),data['start_url']
     for icon in data['icons']:assert page.request.get(icon['src'] if icon['src'].startswith('http') else url.split('/world/')[0]+icon['src']).ok,icon
     assert page.request.get(base+'/icons/apple-touch-icon.png').ok and page.request.get(base+'/sw.js').ok
     assert page.locator('link[rel=manifest]').count()==1 and page.locator('meta[name=apple-mobile-web-app-capable]').count()==1
@@ -276,7 +278,10 @@ def check_app_shell(browser):
       const keys=(await caches.open('world-shell-v1').then(c=>c.keys())).map(r=>new URL(r.url).pathname);return {state:sw.state,keys}}""")
     assert sw['state']=='activated' and '/world/app.mjs' in sw['keys'] and '/world/index.html' in sw['keys'],sw
     page.reload(wait_until='networkidle');assert page.evaluate('navigator.serviceWorker.controller!==null')
-    ctx.set_offline(True);page.reload(wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000);ctx.set_offline(False)
+    ctx.set_offline(True);page.reload(wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000)
+    # Launching the installed app offline opens its start URL from the cache.
+    page.goto(url.split('/world/')[0]+data['start_url'],wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000)
+    ctx.set_offline(False)
     page.evaluate("Promise.allSettled([fetch('/v1/site-scans/capabilities'),fetch('https://example.invalid/x')])")
     assert not any('/v1/' in k for k in page.evaluate("caches.open('world-shell-v1').then(c=>c.keys()).then(ks=>ks.map(r=>r.url))"))
     page.locator('[data-tab=capture]').click()

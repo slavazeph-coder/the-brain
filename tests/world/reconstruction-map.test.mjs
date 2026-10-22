@@ -98,3 +98,15 @@ test('implausible measurements are refused with the reason',()=>{
   // The assumed height is not used, so an out-of-range value does not block a measured proposal.
   assert.doesNotThrow(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,cameraHeight:NaN,measurement:{a,b,distance:.9}}));
 });
+
+test('MapAnything camera-to-world poses propose the same map as the equivalent COLMAP poses',()=>{
+  // Same cameras rewritten as MapAnything stores them: 4x4 camera-to-world with OpenGL axes (right, up, backward) as columns.
+  const r=room(),mapanything={schema:'brainsnn.reconstruction.v1',pipeline:'mapanything-apache',cameras:r.reconstruction.cameras.map((c,view)=>{
+    const [right,down,forward]=c.world_to_camera.map(row=>row.slice(0,3)),t=c.camera_center;
+    return{view,camera_to_world_y_up:[0,1,2].map(i=>[right[i],-down[i],-forward[i],t[i]]).concat([[0,0,0,1]]),intrinsics_opencv:[[1,0,0],[0,1,0],[0,0,1]]};})};
+  const a=proposeWorld({points:r.points,reconstruction:r.reconstruction}),b=proposeWorld({points:r.points,reconstruction:mapanything});
+  assert.equal(b.report.cameras,a.report.cameras);
+  assert.ok(Math.abs(b.report.metresPerUnit-a.report.metresPerUnit)<1e-9);
+  assert.deepEqual(b.world.objects,a.world.objects);assert.deepEqual(b.world.start,a.world.start);
+  assert.deepEqual(readCameras(mapanything).map(c=>c.name).slice(0,2),['view_0000','view_0001']);
+});

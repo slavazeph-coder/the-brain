@@ -3,7 +3,7 @@
   "short_name": "World Builder",
   "description": "Capture a space, explore its geometry, review the evidence and test a robot plan.",
   "id": "/world/",
-  "start_url": "/world/?source=pwa",
+  "start_url": "/world/index.html?source=pwa",
   "scope": "/world/",
   "display": "standalone",
   "orientation": "any",

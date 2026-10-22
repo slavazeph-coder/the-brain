@@ -10,11 +10,16 @@ const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]
 const finite=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
 function quantile(sorted,q){if(!sorted.length)return NaN;const i=Math.min(sorted.length-1,Math.max(0,Math.floor(q*(sorted.length-1))));return sorted[i];}
 
-/** COLMAP-style evidence: camera_center and a 3x4 or 4x4 world_to_camera matrix per registered image. */
+/** Camera poses from either worker: COLMAP's camera_center + 3x4/4x4 world_to_camera, or MapAnything's 4x4
+ * camera_to_world_y_up (same Y-up frame as its points, OpenGL camera axes: columns right, up, backward). */
 export function readCameras(reconstruction){
   if(!reconstruction||reconstruction.schema!=='brainsnn.reconstruction.v1'||!Array.isArray(reconstruction.cameras))throw new Error('Load the reconstruction.json evidence that came with these points.');
   const cameras=[];
   for(const c of reconstruction.cameras.slice(0,2000)){
+    const p=c?.camera_to_world_y_up;
+    if(Array.isArray(p)&&p.length>=3&&p.slice(0,3).every(r=>Array.isArray(r)&&r.length>=4&&r.slice(0,4).every(Number.isFinite))){
+      const column=j=>[p[0][j],p[1][j],p[2][j]];
+      cameras.push({name:String(c.image||`view_${String(c.view??cameras.length).padStart(4,'0')}`),centre:column(3),down:column(1).map(v=>-v),forward:column(2).map(v=>-v)});continue;}
     const m=c?.world_to_camera;
     if(!finite(c?.camera_center)||!Array.isArray(m)||m.length<3||m.slice(0,3).some(r=>!Array.isArray(r)||r.length<3||!r.slice(0,3).every(Number.isFinite)))continue;
     // Rows of the rotation are the camera axes in world coordinates: image right, image down, viewing direction.
