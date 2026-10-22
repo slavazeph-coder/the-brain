@@ -43,7 +43,7 @@ brainsnn.com is published by Railway's GitHub deploy for `main` (GitHub environm
 The pipeline runs in two stages:
 - **Before the deploy: "BrainSNN app release checks"** (`.github/workflows/brainsnn-app-deploy.yml`). It runs the World checks, lint, the analysis tests, the build, the engine smoke and the server boot checks. It never deploys and needs no Railway secret.
 - **After the deploy: "Verify BrainSNN live deploy"** (`.github/workflows/brainsnn-live-verify.yml`). It runs when Railway posts a successful `deployment_status`, and can also be started by hand. It checks that the live World Builder and Arena files are byte-identical to the deployed commit. It also checks the healthz endpoint and the Home/World, Classic, Arena and analysis release markers.
-- Sponsor and GT3 live acceptance (`sponsor-live.yml`, `gt3-live.yml`) now follow the verify workflow, so they test the site only after the new build is actually live.
+- Sponsor and GT3 live acceptance (`sponsor-live.yml`, the `verify-live` job in `sponsor-launch.yml`, and `gt3-live.yml`) now follow the verify workflow, so they test the site only after the new build is actually live.
 
 History before this split:
 - The workflow used to run `railway up` itself, and Railway rejected its `RAILWAY_TOKEN` as Unauthorized.
