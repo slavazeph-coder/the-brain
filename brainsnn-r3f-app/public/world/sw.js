@@ -5,6 +5,7 @@ const CACHE = 'world-shell-v1';
 const SHELL = ['./index.html', './world.css', './app.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './visual-viewer.mjs',
   './visual-geometry.mjs', './worker-client.mjs', './depth-client.mjs', './depth-worker.mjs', './import-world.mjs', './observation-ui.mjs', './observations.mjs',
   './measurement-ui.mjs', './measurement-evidence.mjs', './planner-worker.mjs', './capture-client.mjs', './reconstruction-map.mjs',
+  './detections.mjs', './detect-client.mjs', './detect-worker.mjs',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', '../arena/site-core.js'];
 // The module graph imports one file outside /world/ (RoomPlan/Arena import); without it the shell cannot start offline.
 const SHARED = ['/arena/site-core.js'];

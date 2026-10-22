@@ -36,6 +36,18 @@ Free and obstacle cells merge into at most 128 axis-aligned boxes on whole-centi
 
 Pipelines that call the worker API directly can run the same proposal without a browser: `npm run world:propose -- --points sparse-preview.ply --evidence reconstruction.json --out world.json --report proposal.json [--measure "ax,ay,az;bx,by,bz;metres" | --camera-height m]` ([`scripts/world-propose-map.mjs`](../brainsnn-r3f-app/scripts/world-propose-map.mjs), documented in the [API guide](../brainsnn-r3f-app/public/world/api.html)). The report adds each input's SHA-256. The output map is unreviewed: World Builder imports it with its gate closed, and Arena/OpenUSD exports stay blocked until a person reviews it. A single-photo depth preview has no camera poses and never proposes a map.
 
+### On-device object identification
+
+A photo can also get object labels without a worker: "Identify objects on this device" downloads a pinned detector after consent and runs it in the browser. The photo is never uploaded. The detector is `Xenova/detr-resnet-50` at revision `8be7ab59`, q8 WASM, the ONNX conversion of `facebook/detr-resnet-50` (Apache-2.0). It suggests up to 20 objects scoring at least 0.7 from the 80 COCO categories, which exclude doors, stairs, boxes and cables.
+
+Detections go through the same frame-bound observation sidecar and review as worker VLM output ([`detections.mjs`](../brainsnn-r3f-app/public/world/detections.mjs)):
+- The reviewed frame is the exact lossless PNG of the pixels the detector saw.
+- The provenance records the model, its revision and a hash of the detection settings.
+- Each suggestion states that its score is not a calibrated probability and that a missed object is not evidence of free space.
+- Accept, edit or reject is recorded in the proof pack. Labels never change scale or collision geometry.
+
+Real run (`detect_browser_smoke.py`, opt-in, Chromium): one Mip-NeRF 360 *room* photograph produced 12 suggestions in about 10 s on CPU WASM, including chair, couch, TV and dining table. The chair box landed on the armchair. The only outbound requests were GETs to Hugging Face and jsDelivr for the pinned model and runtime. CI does not download models; run it with `WORLD_DETECT_PHOTO=/absolute/path/to/photo.jpg python tests/world/detect_browser_smoke.py`.
+
 ## Verified on October 22, 2026 (measured-scale calibration)
 
 - Proposal contracts: 8 Node tests. Two picked points 0.9 m apart in the synthetic room's arbitrary frame give metres per unit equal to the truth within 1e-9. The picked pair maps back to exactly 0.9 m, and the implied phone height comes out at the true 1.35 m whatever height was assumed. A 9 m entry for the same doorway (phone about 13 m up), identical points, NaN, sub-5 cm distances and malformed points are refused. All World Node contracts: 83 passed.
