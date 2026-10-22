@@ -134,22 +134,26 @@ def calibrate(page, mobile, label):
     assert page.locator('[data-action=pick-scale]').get_attribute('aria-pressed') == 'true'
     canvas = page.locator('#visual-canvas')
     canvas.scroll_into_view_if_needed()
-    box = canvas.bounding_box()
-    picks = 0
-    # Taps far apart across the fitted cloud; a miss (no point within reach) is reported and retried.
-    for dx, dy in [(-.3, 0), (-.3, .1), (-.25, -.1), (.3, 0), (.3, .1), (.25, -.1), (0, .2)]:
+    picks, trail = 0, []
+    # Taps alternate between the two sides of the fitted cloud, like the two ends of a measured span, and are
+    # spaced beyond the double-tap window so WebKit cannot treat a pair as a zoom gesture. A miss is reported and retried.
+    for dx, dy in [(-.3, 0), (.3, 0), (-.3, .1), (.3, .1), (-.25, -.1), (.25, -.1), (0, .2)]:
+        box = canvas.bounding_box()
         x, y = box['x'] + box['width'] * (.5 + dx), box['y'] + box['height'] * (.5 + dy)
         if mobile:
             page.touchscreen.tap(x, y)
         else:
             page.mouse.click(x, y)
-        page.wait_for_timeout(100)
-        if picks == 0 and 'other end' in page.locator('#status').inner_text():
+        page.wait_for_timeout(600 if mobile else 150)
+        trail.append(page.locator('#status').inner_text())
+        if picks == 0 and 'other end' in trail[-1]:
             picks = 1
         if page.locator('#picked-span').count():
             picks = 2
             break
-    assert picks == 2, page.locator('#status').inner_text()
+    if picks != 2:
+        page.screenshot(path=str(OUTPUT / f'{label}-calibration-failed.png'), full_page=True)
+    assert picks == 2, {'statuses': trail, 'zoom': page.evaluate('visualViewport.scale'), 'scrollY': page.evaluate('scrollY')}
     assert 'Enter the distance you measured' in page.locator('#status').inner_text()
     page.screenshot(path=str(OUTPUT / f'{label}-calibration.png'))
     span = float(page.locator('#picked-span').inner_text().split(':')[1].split()[0])
