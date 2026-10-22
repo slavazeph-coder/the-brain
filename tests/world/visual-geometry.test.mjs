@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, fitFloorPlane, alignToFloor, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
 
@@ -31,8 +31,8 @@ test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every droppe
   const p = parsePLY(ascii(rows)).points;
   const cloud = toArenaCloud(p, { coordinateFrame: 'colmap', source: 'clip.mp4' });
   assert.equal(cloud.kind, 'colmap-sparse-point-cloud'); assert.equal(cloud.coordinateFrame, 'right-handed-y-up'); assert.equal(cloud.sourceFrame, 'colmap');
-  assert.deepEqual(cloud.provenance, { totalPoints: 1010, keptPoints: 1000, outliersDropped: 10, thinned: false, metricVerified: false });
-  assert.ok(cloud.points.every(r => r.length === 6 && r[0] >= 0 && r[1] <= 0 && r[2] <= 0 && r[3] === 200), 'colmap y/z are negated; colours are 0-255');
+  assert.deepEqual(cloud.provenance, { totalPoints: 1010, keptPoints: 1000, outliersDropped: 10, thinned: false, floorAligned: true, floorTiltDegrees: 0, floorYawDegrees: cloud.provenance.floorYawDegrees, floorInlierFraction: 0.1, metricVerified: false });
+  assert.ok(cloud.points.every(r => r.length === 6 && r[1] >= -1e-6 && r[3] === 200), 'the floor layer sits at y=0 with the bulk above; colours are 0-255');
   // A Y-up source is passed through unchanged, and a large cloud is thinned under the Arena budget.
   const same = toArenaCloud(p.subarray(0, 2 * STRIDE)); assert.deepEqual(same.points[1].slice(0, 3), [...p.subarray(STRIDE, STRIDE + 3)]); assert.equal(same.provenance.outliersDropped, 0);
   const big = parsePLY(ascii(Array.from({ length: 2500 }, (_, i) => `${i % 50} ${Math.floor(i / 50)} 0 1 2 3`))).points;
@@ -56,6 +56,35 @@ test('floor estimate finds the dense low band of a room and declines a facade-on
   // The Arena hand-off carries the estimate.
   const p = parsePLY(ascii(room.map(r => r.join(' ')))).points;
   assert.ok(toArenaCloud(p).floorEstimate.support > 0.6);
+});
+
+test('a tilted room is gravity-aligned on its fitted floor plane before the estimate and the hand-off', () => {
+  const room = [];
+  for (let i = 0; i < 1500; i++) room.push([(i % 50) / 49 * 6, 0.02 * Math.random(), Math.floor(i / 50) / 29 * 4, 1, 2, 3]);
+  for (let i = 0; i < 600; i++) room.push([i % 2 ? 0 : 6, 0.1 + (i / 600) * 2.6, (i % 30) / 29 * 4, 1, 2, 3]);
+  // Roll the whole room 25° about X (a phone pointing down) and lift it: Y is no longer up.
+  const a = 25 * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const tilted = room.map(r => [r[0], r[1] * c - r[2] * s + 3, r[1] * s + r[2] * c + 1, r[3], r[4], r[5]]);
+  const plane = fitFloorPlane(tilted);
+  assert.ok(plane.inlierFraction > 0.5, `floor inliers ${plane.inlierFraction}`);
+  assert.ok(Math.abs(Math.acos(Math.abs(plane.normal[1])) * 180 / Math.PI - 25) < 2, `tilt ${Math.acos(Math.abs(plane.normal[1])) * 180 / Math.PI}`);
+  const upright = alignToFloor(tilted, plane), floor = estimateFloor(upright);
+  assert.ok(Math.abs(floor.y) < 0.1 && floor.support > 0.6, `floor y ${floor.y} support ${floor.support}`);
+  assert.ok(Math.abs(floor.width - 6) < 0.3 && Math.abs(floor.depth - 4) < 0.3, `footprint ${floor.width} x ${floor.depth}`);
+  assert.ok(upright.filter(r => r[1] > 0.1).length > 500, 'walls stand above the floor, not below it');
+  const cloud = toArenaCloud(parsePLY(ascii(tilted.map(r => r.join(' ')))).points);
+  assert.ok(cloud.provenance.floorAligned && Math.abs(cloud.provenance.floorTiltDegrees - 25) < 2 && Math.abs(cloud.floorEstimate.y) < 0.1);
+  // Heading: the same room yawed 40° comes back squared, long side along Z, so the footprint box is the room again.
+  const y = 40 * Math.PI / 180, cy = Math.cos(y), sy = Math.sin(y);
+  const yawed = room.map(r => [r[0] * cy + r[2] * sy, r[1], -r[0] * sy + r[2] * cy, r[3], r[4], r[5]]);
+  const squared = toArenaCloud(parsePLY(ascii(yawed.map(r => r.join(' ')))).points), f = squared.floorEstimate;
+  assert.ok(Math.abs(Math.abs(squared.provenance.floorYawDegrees) - 40) < 3 || Math.abs(Math.abs(squared.provenance.floorYawDegrees) - 50) < 3, `yaw ${squared.provenance.floorYawDegrees}`);
+  const sides = [f.width, f.depth].sort((a, b) => a - b);
+  assert.ok(Math.abs(sides[0] - 4) < 0.3 && Math.abs(sides[1] - 6) < 0.3, `squared footprint ${f.width} x ${f.depth}`);
+  // A wall scan gets no alignment: no horizontal slice of it carries floor-like support.
+  const facade = Array.from({ length: 600 }, () => [Math.random() * 5, Math.random() * 3, 0.01 * Math.random(), 1, 2, 3]);
+  const wall = toArenaCloud(parsePLY(ascii(facade.map(r => r.join(' ')))).points);
+  assert.equal(wall.provenance.floorAligned, false); assert.ok((wall.provenance.floorInlierFraction ?? 0) < 0.1);
 });
 
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {

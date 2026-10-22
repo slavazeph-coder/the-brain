@@ -174,9 +174,63 @@ export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', so
     if ([0, 1, 2].every(j => points[at + j] >= min[j] && points[at + j] <= max[j]))
       core.push([points[at], flip * points[at + 1], flip * points[at + 2], ...[6, 7, 8].map(j => Math.round(points[at + j] * 255))]);
   }
-  const step = Math.max(1, Math.ceil(core.length / budget)), rows = core.filter((_, i) => i % step === 0);
+  const step = Math.max(1, Math.ceil(core.length / budget));
+  // Gravity-align only on a confident floor (>=10% inliers); weaker planes are walls or noise and must not rotate the cloud.
+  const plane = fitFloorPlane(core), upright = plane && plane.inlierFraction >= .1 ? alignToFloor(core, plane) : null;
+  // Then square the heading: rotate about Y so the floor band's long axis runs along Z, so the footprint box fits the walkable strip.
+  const yaw = upright ? floorYaw(upright, plane.tolerance) : 0, aligned = upright ? rotateY(upright, -yaw) : core;
+  const rows = aligned.filter((_, i) => i % step === 0);
   return { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
-    source, points: rows, floorEstimate: estimateFloor(core), provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1, metricVerified: false } };
+    source, points: rows, floorEstimate: estimateFloor(aligned), provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1,
+      floorAligned: aligned !== core, floorTiltDegrees: plane ? +(Math.acos(Math.min(1, Math.abs(plane.normal[1]))) * 180 / Math.PI).toFixed(1) : null, floorYawDegrees: +(yaw * 180 / Math.PI).toFixed(1), floorInlierFraction: plane ? +plane.inlierFraction.toFixed(3) : null, metricVerified: false } };
+}
+/** Heading of the floor band's principal axis (PCA on x,z of points within `tol` of y=0), in radians from +Z. */
+export function floorYaw(rows, tol) {
+  const band = rows.filter(r => Math.abs(r[1]) <= tol); if (band.length < 20) return 0;
+  const mx = band.reduce((s, r) => s + r[0], 0) / band.length, mz = band.reduce((s, r) => s + r[2], 0) / band.length;
+  let sxx = 0, sxz = 0, szz = 0; for (const r of band) { const x = r[0] - mx, z = r[2] - mz; sxx += x * x; sxz += x * z; szz += z * z; }
+  return Math.atan2(2 * sxz, szz - sxx) / 2; // angle of the major axis measured from +Z toward +X
+}
+/** Rotates rows about +Y by `angle` radians (x,z only). */
+export const rotateY = (rows, angle) => { const c = Math.cos(angle), s = Math.sin(angle); return rows.map(r => [r[0] * c + r[2] * s, r[1], -r[0] * s + r[2] * c, r[3], r[4], r[5]]); };
+/** RANSAC plane through the floor-like points of a roughly Y-up cloud. Candidate normals must be within 45° of ±Y so
+ * walls never win; the plane with most inliers (1.5% of frame radius) is returned with its normal pointing toward the
+ * cloud's bulk. Deterministic (LCG seed) so the same cloud always aligns the same way. */
+export function fitFloorPlane(rows, iterations = 300) {
+  if (rows.length < 50) return null;
+  const radius = Math.hypot(...[0, 1, 2].map(j => rows.reduce((m, r) => Math.max(m, r[j]), -Infinity) - rows.reduce((m, r) => Math.min(m, r[j]), Infinity))) / 2;
+  const tol = Math.max(1e-6, radius * .015), ys = rows.map(r => r[1]).sort((a, b) => a - b), lowY = ys[Math.floor(ys.length * .5)];
+  const low = rows.filter(r => r[1] <= lowY); let seed = 7, best = null;
+  const rand = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  for (let k = 0; k < iterations; k++) {
+    const [a, b, c] = [0, 0, 0].map(() => low[Math.floor(rand() * low.length)]);
+    let n = cross(sub(b, a), sub(c, a)); const len = Math.hypot(...n); if (len < 1e-9) continue;
+    n = n.map(v => v / len); if (Math.abs(n[1]) < Math.SQRT1_2) continue;
+    const d = -(n[0] * a[0] + n[1] * a[1] + n[2] * a[2]);
+    let inliers = 0, above = 0;
+    for (const r of rows) { const s = n[0] * r[0] + n[1] * r[1] + n[2] * r[2] + d; if (Math.abs(s) <= tol) inliers++; else if (s > 0) above++; }
+    const up = Math.max(above, rows.length - inliers - above); // bulk on the normal's side once it is flipped toward the room
+    if (!best || inliers > best.inliers || (inliers === best.inliers && up > best.up)) best = { normal: n, inliers, above, up };
+  }
+  if (!best) return null;
+  // The floor's normal points toward the room, i.e. toward the majority of off-plane points.
+  const flip = best.above < (rows.length - best.inliers) / 2 ? -1 : 1, n = best.normal.map(v => v * flip);
+  // Refine: along the up-vector the floor is the lowest dense layer, not merely the densest (tables and beds carry points too).
+  const heights = rows.map(r => n[0] * r[0] + n[1] * r[1] + n[2] * r[2]), lo = Math.min(...heights), width = 2 * tol;
+  const counts = []; for (const h of heights) { const b = Math.floor((h - lo) / width); counts[b] = (counts[b] || 0) + 1; }
+  const peak = Math.max(...counts.map(c => c || 0)), bin = counts.findIndex(c => c >= peak * .8);
+  const d = -(lo + (bin + .5) * width), inliers = heights.filter(h => Math.abs(h + d) <= tol).length;
+  return { normal: n, d, inlierFraction: inliers / rows.length, tolerance: tol };
+}
+/** Rotates rows so `plane.normal` becomes +Y and the plane passes through y=0. Returns new rows (colours untouched). */
+export function alignToFloor(rows, plane) {
+  const n = plane.normal, c = n[1], s = Math.hypot(n[0], n[2]);
+  if (s < 1e-9) return rows.map(r => [r[0], r[1] + plane.d * Math.sign(c), r[2], r[3], r[4], r[5]]);
+  const [ax, , az] = [-n[2] / s, 0, n[0] / s], t = 1 - c; // axis = n × Y, angle = acos(n·Y)
+  const R = [[c + ax * ax * t, -az * s, ax * az * t], [az * s, c, -ax * s], [ax * az * t, ax * s, c + az * az * t]];
+  return rows.map(r => { const y = R[1][0] * r[0] + R[1][1] * r[1] + R[1][2] * r[2];
+    return [R[0][0] * r[0] + R[0][1] * r[1] + R[0][2] * r[2], y + plane.d, R[2][0] * r[0] + R[2][1] * r[1] + R[2][2] * r[2], r[3], r[4], r[5]]; });
 }
 /** Dominant low horizontal band of a Y-up cloud: a floor suggestion in cloud units, never a measurement.
  * `support` is the fraction of points in the band; below ~5% there is no usable floor (e.g. a facade-only scan). */
