@@ -543,6 +543,53 @@ def test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature(signed
     # This test locks that behavior so a future refactor that wires
     # hash_cancellations into the receipt loop must update it deliberately.
     import robotics.world_worker.app as app_mod
+    options, config, key, _ = signed_options
+    with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
+        jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+        entered, release = threading.Event(), threading.Event()
+        original = app_mod.file_digest
+
+        def slow_digest(*args, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            # Remove the tenant from the registry on disk while the hash
+            # thread is parked, so the endpoint's post-IO re-auth (which
+            # re-reads the registry) no longer recognises the credential.
+            registry(config, [row('beta', B)])
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(app_mod, 'file_digest', slow_digest)
+        future = executor.submit(receipt, client, jid, A, body)
+        try:
+            assert entered.wait(5)
+            # The job itself is untouched; only the tenant credential is
+            # revoked. The owner's receipt request was already authenticated
+            # and the hash is in flight.
+            assert client.get('/v1/jobs/' + jid, headers=headers(A)).status_code == 200
+        finally:
+            release.set()
+        # The post-IO re-auth re-reads the registry, finds the tenant gone,
+        # and returns 401, not 200. No signature is issued for a
+        # revoked identity.
+        response = future.result(5)
+        assert response.status_code == 401, response.text
+
+
+def test_artifact_delete_during_inflight_receipt_hash_blocks_signature(signed_options, monkeypatch):
+    # The hash thread reads the artifact bytes via file_digest. If the owner
+    # deletes the job's artifacts while the hash is in flight, file_digest
+    # raises ValueError('Evidence file is missing or changed.') inside the
+    # thread, the endpoint's except (OSError, ValueError) branch returns 409
+    # "A selected artifact is missing or changed. No receipt was signed.",
+    # and no signature is issued. This is the real path: the post-IO evidence
+    # re-check (which would 409 on changed evidence) is unreachable because
+    # the hash itself fails first. Distinct from cancel_job (run 44): cancel
+    # is a no-op for a completed job and the receipt signs 200; delete removes
+    # the bytes and the receipt must refuse to sign. Pinning this prevents a
+    # future refactor that skips the in-thread digest failure from silently
+    # signing a receipt for deleted artifacts.
+    import robotics.world_worker.app as app_mod
     options, _, key, _ = signed_options
     with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
         jid, _, _ = complete(client, A)
@@ -559,20 +606,20 @@ def test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature(signed
         future = executor.submit(receipt, client, jid, A, body)
         try:
             assert entered.wait(5)
-            # Cancel fires while the hash thread is parked inside file_digest.
-            cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
-            assert cancel.status_code == 200
-            # Job is already complete → cancel is a no-op for active work;
-            # status stays 'complete'. The receipt's LOCAL cancelled event
-            # is a different object from hash_cancellations, so the in-flight
-            # hash is NOT interrupted by this cancel.
-            assert cancel.json()['status'] == 'complete'
+            # Owner deletes the job's artifacts while the hash thread is parked.
+            # delete_artifacts takes io_lock; the receipt thread is in the
+            # hash phase (not holding io_lock), so the delete proceeds.
+            deleted = client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A))
+            assert deleted.status_code == 200 and deleted.json()['deleted'] is True
         finally:
             release.set()
+        # The hash thread's file_digest raised ValueError (file gone); the
+        # endpoint maps it to 409. No signature is issued for deleted bytes.
         response = future.result(5)
-        # The receipt thread finished normally and signed — the concurrent
-        # cancel did not interrupt the in-flight hash.
-        assert response.status_code == 200, response.text
-        verify_receipt(response.json(), key, SCENARIO)
-        # Job is still complete after the cancel attempt.
-        assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
+        assert response.status_code == 409, response.text
+        assert 'missing or changed' in response.json()['detail']
+        # Job row and directory are gone.
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).status_code == 404
+        assert not (options['root'] / 'jobs' / jid).exists()
+        assert client.app.state.store.db.execute(
+            'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0] == 0
