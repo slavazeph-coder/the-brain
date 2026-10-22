@@ -1,0 +1,16 @@
+{
+  "browser": "chromium",
+  "realPrivateWorker": true,
+  "realEd25519": true,
+  "engine": "inspect",
+  "modelExecuted": false,
+  "physicalCapture": false,
+  "consentGate": true,
+  "separateKeyTrustRequired": true,
+  "hashesOnlyRequest": true,
+  "exactScenarioBytes": true,
+  "offlineNetworkRequests": 0,
+  "tamperRejected": true,
+  "mapReviewFlagsUnchanged": true,
+  "pageErrors": []
+}
