@@ -35,8 +35,8 @@ def check(browser, mobile=False):
     assert 'Review' in page.locator('#status').inner_text()
     page.locator('#map-reviewed').check();page.locator('#run').click();page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')",timeout=5000)
     assert 'Baseline saved' in page.locator('#panel').inner_text()
-    page.locator('#replay').click();page.wait_for_timeout(180)
-    assert int(page.locator('#scrub').input_value())>0
+    # Replay must advance; WebKit's software-rendered first frame can take longer than a fixed sleep.
+    page.locator('#replay').click();page.wait_for_function("Number(document.querySelector('#scrub').value)>0",timeout=5000)
     page.locator('#replay').click()
     page.locator('[data-tab=evidence]').click()
     with view.expect_download() as event:page.locator('[data-action=proof]').click()
