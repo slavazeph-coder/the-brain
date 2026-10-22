@@ -567,3 +567,16 @@ test('starting a map from the cloud shifts the visual so the floor band sits at 
   const transform = e.renderCalls.filter(c => c.name === 'setAssetTransform').pop().args[0];
   assert.deepEqual([transform.x, transform.y, transform.z], [-1, -0.5, -1], 'bbox min minus floor origin / floor height');
 });
+
+test('a measured-scale cloud starts the floor map in metres and says the scale is self-reported', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const cloud = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'm', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4',
+    scale: { source: 'user-measured', metresPerUnit: 2.5, distance: 3, spanUnits: 1.2, selfReported: true, verified: false },
+    points: [[0, 0, 0, 1, 2, 3], [8, 0, 5, 1, 2, 3]], floorEstimate: { y: 0, origin: [0, 0], width: 8.2, depth: 5.1, support: 0.6, units: 'm' } };
+  e.file('site-asset-input', e.jsonFile(cloud, 'room.json')); await flush();
+  assert.match(e.root.textContent, /8\.2 × 5\.1 m \(your measured scale, unverified\)/); assert.match(e.root.textContent, /Start measured-scale floor map/);
+  e.action('floor-from-cloud'); await flush(); const s = e.state();
+  assert.equal(s.scene.width, 8.2); assert.equal(s.scene.depth, 5.1); assert.equal(s.scene.scaleConfirmed, false);
+  assert.match(s.scene.source.warnings[0], /measured scale \(3 m between two picked points\)\. Self-reported/);
+  assert.match(e.el('site-status').textContent, /at your measured scale \(8\.2 × 5\.1 m\)/); assert.equal(e.el('site-run').disabled, true);
+});

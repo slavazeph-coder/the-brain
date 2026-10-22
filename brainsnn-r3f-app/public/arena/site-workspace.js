@@ -21,6 +21,7 @@
   const appearanceName = () => asset?.name || (pointCloud ? 'Reconstructed point cloud' : '');
   // A usable floor suggestion needs a real low band; facade-only scans return almost nothing there.
   const floorEstimate = () => { const f = pointCloud?.floorEstimate; return f && f.support >= 0.05 && f.width >= 0.01 && f.depth >= 0.01 ? f : null; };
+  const metricCloud = () => pointCloud?.units === 'm' && pointCloud?.scale?.source === 'user-measured';
   const terminalJob = status => ['complete', 'completed', 'succeeded', 'failed', 'cancelled'].includes(status);
   const jobError = value => typeof value === 'string' ? value : value?.message || '';
   const robotName = () => selection.robot?.name || (window.BrainSNNRobots || []).find(r => r.id === selection.robotId)?.name || selection.robotId || 'Robot';
@@ -93,7 +94,7 @@
       '<p class="site-note">References help you draw the map. They do not automatically generate geometry.</p>' + media +
       '<div class="site-import-grid"><label class="site-button">Import floor map<input id="site-map-input" type="file" accept=".json,application/json"></label><label class="site-button">Add 3D visual<input id="site-asset-input" type="file" accept=".glb,.usdz,.json"></label></div><p class="site-note">Floor map: BrainSNN or RoomPlan JSON. Visual: GLB, ASCII USDZ or a World Builder point-cloud JSON. Binary RoomPlan USDZ needs GLB conversion.</p>' +
       (hasAppearance() ? '<div class="site-asset-row"><span><b>Visual only</b>' + esc(appearanceName()) + '</span><button class="site-link" data-site-action="remove-asset">Remove</button></div>' +
-        (floorEstimate() ? '<p class="site-note">Estimated floor band: ' + floorEstimate().width.toFixed(1) + ' × ' + floorEstimate().depth.toFixed(1) + ' cloud units, ' + Math.round(floorEstimate().support * 100) + '% of points. Not a measurement.</p><button class="site-button site-wide" data-site-action="floor-from-cloud">Start unscaled floor map from this cloud →</button>' : '') : '') +
+        (floorEstimate() ? '<p class="site-note">Estimated floor band: ' + floorEstimate().width.toFixed(1) + ' × ' + floorEstimate().depth.toFixed(1) + (metricCloud() ? ' m (your measured scale, unverified)' : ' cloud units') + ', ' + Math.round(floorEstimate().support * 100) + '% of points. Not a measurement.</p><button class="site-button site-wide" data-site-action="floor-from-cloud">Start ' + (metricCloud() ? 'measured-scale' : 'unscaled') + ' floor map from this cloud →</button>' : '') : '') +
       '<button class="site-button site-wide" data-site-action="new-map">Draw my floor map →</button><button class="site-link" data-site-action="sample">Explore the sample space</button>' +
       '<details class="site-help"><summary>How to capture a useful gym</summary><ol><li>Capture one floor, walking slowly along usable aisles and through doorways.</li><li>Measure floor dimensions and narrow passages. Mark equipment, mats, stairs, drains and areas the robot must avoid.</li><li>Mirrors, glass and repetitive equipment can confuse reconstruction. Check the map against the actual gym.</li><li>Confirm one real measurement and the robot dimensions before estimating. Keep people out of the capture where possible.</li></ol><p>Supported RoomPlan JSON can provide a starting floor map. A raw video requires your connected reconstruction worker and manual floor review. Reconstruction produces an unscaled visual reference, not a ready collision map.</p><a href="gym-pilot.html" target="_blank" rel="noopener noreferrer">One-gym pilot checklist ↗</a></details>' + workerPanel();
   }
@@ -348,18 +349,20 @@
   }
   function clearAppearance() { assetEpoch++; asset = null; pointCloud = null; assetMeta = null; renderer?.clearAsset(); }
   function floorFromCloud() {
-    const floor = floorEstimate(); if (!floor) return;
-    // Cloud units are read as metres only as a starting guess; the map stays unscaled until the owner confirms a real measurement.
+    const floor = floorEstimate(); if (!floor) return; const metric = metricCloud();
+    // Metric clouds carry the owner's measured distance (self-reported); arbitrary units are read as metres only as a starting guess.
     const width = Math.min(100, Math.max(1, floor.width)), depth = Math.min(100, Math.max(1, floor.depth));
     selectedObstacle = ''; applyScene({ ...core().sampleScene(), name: 'Reconstructed space', width, depth, floor: [[0, 0], [width, 0], [width, depth], [0, depth]],
       start: [Math.min(1, width / 2), Math.min(1, depth / 2)], goal: [width - Math.min(1, width / 2), depth - Math.min(1, depth / 2)], obstacles: [], scaleConfirmed: false,
-      source: { kind: 'reconstruction-reference', name: pointCloud.source || 'World Builder point cloud', warnings: ['Floor size comes from the densest low band of an unscaled point cloud, read as metres. Confirm one real measurement and rescale.', 'Obstacles and unknown areas must be marked by hand. Nothing here is collision geometry.'] } });
+      source: { kind: 'reconstruction-reference', name: pointCloud.source || 'World Builder point cloud', warnings: [metric
+        ? 'Floor size comes from the densest low band of the point cloud at your measured scale (' + pointCloud.scale.distance + ' m between two picked points). Self-reported: confirm it against a second measurement.'
+        : 'Floor size comes from the densest low band of an unscaled point cloud, read as metres. Confirm one real measurement and rescale.', 'Obstacles and unknown areas must be marked by hand. Nothing here is collision geometry.'] } });
     view = 'reality'; renderer?.setMode(view);
     // Arena parks the cloud by its bounding-box corner; shift it so the estimated floor band lies on y=0 at the map origin.
     const min = pointCloud.points.reduce((m, p) => [Math.min(m[0], p[0]), Math.min(m[1], p[1]), Math.min(m[2], p[2])], [Infinity, Infinity, Infinity]);
     assetTransform = { scale: 1, x: min[0] - floor.origin[0], y: min[1] - floor.y, z: min[2] - floor.origin[1], rotation: 0, rotationX: 0, rotationZ: 0 };
     renderer?.setAssetTransform(assetTransform); renderer?.frameAsset?.(); setStep('review');
-    tell('Unscaled floor map started from the cloud (' + width.toFixed(1) + ' × ' + depth.toFixed(1) + '). Confirm scale, then mark obstacles before testing.');
+    tell((metric ? 'Floor map started at your measured scale (' : 'Unscaled floor map started from the cloud (') + width.toFixed(1) + ' × ' + depth.toFixed(1) + (metric ? ' m). Confirm the scale, then mark obstacles before testing.' : '). Confirm scale, then mark obstacles before testing.'));
   }
   function handleChange(event) {
     const el = event.target, id = el.id;

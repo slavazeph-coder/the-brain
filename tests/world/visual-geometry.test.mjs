@@ -87,6 +87,22 @@ test('a tilted room is gravity-aligned on its fitted floor plane before the esti
   assert.equal(wall.provenance.floorAligned, false); assert.ok((wall.provenance.floorInlierFraction ?? 0) < 0.1);
 });
 
+test('a user-measured distance turns the Arena hand-off into metres, scaling points and floor alike', () => {
+  const room = [];
+  for (let i = 0; i < 1000; i++) room.push([(i % 40) / 39 * 3, 0.01 * Math.random(), Math.floor(i / 40) / 24 * 2, 1, 2, 3]);
+  for (let i = 0; i < 400; i++) room.push([i % 2 ? 0 : 3, 0.05 + (i / 400) * 1.3, (i % 20) / 19 * 2, 1, 2, 3]);
+  const p = parsePLY(ascii(room.map(r => r.join(' ')))).points;
+  const raw = toArenaCloud(p), metric = toArenaCloud(p, { metresPerUnit: 2, measurement: { distance: 4, span: 2 } });
+  assert.equal(raw.units, 'arbitrary'); assert.equal(raw.scale, null); assert.equal(raw.floorEstimate.units, 'arbitrary');
+  assert.equal(metric.units, 'm'); assert.deepEqual(metric.scale, { source: 'user-measured', metresPerUnit: 2, distance: 4, spanUnits: 2, selfReported: true, verified: false });
+  assert.ok(Math.abs(metric.floorEstimate.width - 2 * raw.floorEstimate.width) < 1e-6 && Math.abs(metric.floorEstimate.depth - 2 * raw.floorEstimate.depth) < 1e-6);
+  assert.equal(metric.floorEstimate.units, 'm'); assert.equal(metric.points.length, raw.points.length);
+  const span = rows => Math.max(...rows.map(r => r[0])) - Math.min(...rows.map(r => r[0]));
+  assert.ok(Math.abs(span(metric.points) - 2 * span(raw.points)) < 1e-6, 'coordinates scale by metresPerUnit');
+  // Nonsense scales are ignored rather than applied.
+  for (const bad of [0, -1, NaN, Infinity]) assert.equal(toArenaCloud(p, { metresPerUnit: bad }).units, 'arbitrary');
+});
+
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {
   const p = parsePLY(ascii());
   assert.equal(p.kind, 'point-cloud'); assert.equal(p.total, 2); assert.equal(p.metricVerified, false); assert.equal(p.collisionGeometry, null);

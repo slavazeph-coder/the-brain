@@ -167,21 +167,25 @@ export function fromDepth(rgba, width, height, depth, dw, dh, fov = 60) {
  * floor; the hand-off keeps the 2nd–98th percentile core and records exactly what was dropped. COLMAP (x right, y down,
  * z forward) is turned Y-up. Visual only, never collision geometry; the World viewer and PLY export keep every point. */
 export const ARENA_MAX_POINTS = 50_000;
-export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', source = 'World Builder reconstruction' } = {}, budget = ARENA_MAX_POINTS) {
+export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', source = 'World Builder reconstruction', metresPerUnit = null, measurement = null } = {}, budget = ARENA_MAX_POINTS) {
   const { min, max, trimmed } = frameBounds(points), flip = coordinateFrame === 'colmap' ? -1 : 1, count = points.length / STRIDE, core = [];
+  // A user-measured distance (two picked points + real metres) turns arbitrary units into metres; still self-reported, never verified.
+  const k = Number.isFinite(metresPerUnit) && metresPerUnit > 0 ? metresPerUnit : 1, metric = k !== 1;
   for (let i = 0; i < count; i++) {
     const at = i * STRIDE;
     if ([0, 1, 2].every(j => points[at + j] >= min[j] && points[at + j] <= max[j]))
-      core.push([points[at], flip * points[at + 1], flip * points[at + 2], ...[6, 7, 8].map(j => Math.round(points[at + j] * 255))]);
+      core.push([k * points[at], k * flip * points[at + 1], k * flip * points[at + 2], ...[6, 7, 8].map(j => Math.round(points[at + j] * 255))]);
   }
   const step = Math.max(1, Math.ceil(core.length / budget));
   // Gravity-align only on a confident floor (>=10% inliers); weaker planes are walls or noise and must not rotate the cloud.
   const plane = fitFloorPlane(core), upright = plane && plane.inlierFraction >= .1 ? alignToFloor(core, plane) : null;
   // Then square the heading: rotate about Y so the floor band's long axis runs along Z, so the footprint box fits the walkable strip.
   const yaw = upright ? floorYaw(upright, plane.tolerance) : 0, aligned = upright ? rotateY(upright, -yaw) : core;
-  const rows = aligned.filter((_, i) => i % step === 0);
-  return { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
-    source, points: rows, floorEstimate: estimateFloor(aligned), provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1,
+  const rows = aligned.filter((_, i) => i % step === 0), units = metric ? 'm' : 'arbitrary', floor = estimateFloor(aligned);
+  return { version: 1, kind: 'colmap-sparse-point-cloud', units, coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
+    source, points: rows, floorEstimate: floor && { ...floor, units },
+    scale: metric ? { source: 'user-measured', metresPerUnit: k, distance: measurement?.distance ?? null, spanUnits: measurement?.span ?? null, selfReported: true, verified: false } : null,
+    provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1,
       floorAligned: aligned !== core, floorTiltDegrees: plane ? +(Math.acos(Math.min(1, Math.abs(plane.normal[1]))) * 180 / Math.PI).toFixed(1) : null, floorYawDegrees: +(yaw * 180 / Math.PI).toFixed(1), floorInlierFraction: plane ? +plane.inlierFraction.toFixed(3) : null, metricVerified: false } };
 }
 /** Heading of the floor band's principal axis (PCA on x,z of points within `tol` of y=0), in radians from +Z. */

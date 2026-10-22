@@ -76,6 +76,7 @@ a smaller footprint for sparse clouds. Screenshots:
 
 - `/world/` is an installable PWA: `manifest.webmanifest`, icons (maskable + apple-touch), `sw.js` shell cache (network first; offline opens the shell; never caches `/v1/` or cross-origin). iOS: Share → Add to Home Screen (the Capture panel shows the hint); Chromium: install prompt.
 - Exports on phones go to the native share sheet (Files, AirDrop, Mail) with all files of an export in one share; desktop and any share failure fall back to downloads. Contract: `tests/world/browser_smoke.py::check_app_shell` (Chromium + WebKit).
+- Measured scale is universal: the calibration card (tap two points, type the distance) now shows for every cloud. With camera poses it proposes the map (flagship path); without poses (single photo, imported PLY) the scale rides the Arena hand-off: cloud JSON in metres, `scale:{source:'user-measured', …, selfReported:true, verified:false}`, Arena starts the floor map in metres and says so. Owner's photo: pick + 3 m → `units:'m'`, map started at measured scale (the number is only as good as the two taps).
 - Physical-iPhone session: `demo-20261021/phone_session.sh` serves World + Arena + the real COLMAP worker on one local origin and exposes it for 60 min over HTTPS (basic auth). Open `$URL/world/`, connect worker with `$URL` + token from `session.env`, record a walkthrough, process, Open in Arena sim. Record what breaks (HEVC/HDR, orientation, size).
 
 ## Known limitations (say these out loud in the demo)
