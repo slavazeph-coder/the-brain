@@ -11,9 +11,12 @@ on:
       - main
     paths:
       - "brainsnn-r3f-app/**"
+      - "robotics/world_worker/**"
+      - "tests/world/**"
       - "Dockerfile"
       - "railway.toml"
       - ".github/workflows/brainsnn-app-deploy.yml"
+      - ".github/workflows/world-builder-checks.yml"
   workflow_dispatch:
 
 permissions:
@@ -24,6 +27,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  world-checks:
+    uses: ./.github/workflows/world-builder-checks.yml
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -74,12 +80,17 @@ jobs:
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
           curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Turn video into a 3D world"
           curl -sf http://127.0.0.1:8080/ | grep -Fq "world-engine-home-v1"
+          curl -fsS http://127.0.0.1:8080/world/index.html -o /tmp/brainsnn-world.html
+          grep -Fq "BrainSNN | World Builder" /tmp/brainsnn-world.html
+          grep -Fq "world-builder-v1" /tmp/brainsnn-world.html
+          grep -Fq 'rel="manifest"' /tmp/brainsnn-world.html
+          curl -fsS http://127.0.0.1:8080/world/sw.js -o /dev/null
           curl -sf http://127.0.0.1:8080/api/arena/analysis/capabilities | node -e 'let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const c=JSON.parse(s);if(c.build!=="paid-analysis-2026-10-17-v1"||c.analysisEnabled!==false||c.purchaseEnabled!==false)process.exit(1);})'
           kill $SRV 2>/dev/null || true
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build, world-checks]
     timeout-minutes: 15
     environment:
       name: production
