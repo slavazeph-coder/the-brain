@@ -260,13 +260,15 @@ def check_inference(browser, photo):
 def check_app_shell(browser):
     """Installable shell + share-sheet export: manifest and icons resolve, SW only on https, touch exports go to
     navigator.share with every file in one call and fall back to downloads when sharing is unavailable."""
-    base=URL.rsplit('/',1)[0]
+    # The installed app starts at /world/; the production root embeds that same document in an iframe, so test it directly.
+    url=URL if URL.endswith('/world/index.html') else URL.rstrip('/')+'/world/index.html'
+    base=url.rsplit('/',1)[0]
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True,user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.add_init_script("Object.defineProperty(navigator,'maxTouchPoints',{get:()=>5})")
-    page.goto(URL,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
     manifest=page.request.get(base+'/manifest.webmanifest');assert manifest.ok;data=manifest.json()
     assert data['scope']=='/world/' and data['display']=='standalone' and any(i.get('purpose')=='maskable' for i in data['icons'])
-    for icon in data['icons']:assert page.request.get(icon['src'] if icon['src'].startswith('http') else URL.split('/world/')[0]+icon['src']).ok,icon
+    for icon in data['icons']:assert page.request.get(icon['src'] if icon['src'].startswith('http') else url.split('/world/')[0]+icon['src']).ok,icon
     assert page.request.get(base+'/icons/apple-touch-icon.png').ok and page.request.get(base+'/sw.js').ok
     assert page.locator('link[rel=manifest]').count()==1 and page.locator('meta[name=apple-mobile-web-app-capable]').count()==1
     # Shell worker: installs on this secure origin, precaches the shell, serves it offline, never caches API or cross-origin.

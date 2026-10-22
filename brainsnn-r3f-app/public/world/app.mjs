@@ -235,7 +235,7 @@ async function action(name){try{
   if(name==='map-export'&&world)download('brainsnn-world.json',world);
   if(name==='pick-scale'&&activeSource?.visual){const c=calibrationFor(activeSource.visual);
     if(c.picking){c.picking=false;c.picks=[];visualViewer?.setMarkers([]);status('Point picking cancelled.');}
-    else{c.picking=true;c.picks=[];display='visual';renderMedia();visualViewer?.setMarkers([]);status('Tap the first end of the distance you measured.');}
+    else{c.picking=true;c.picks=[];display='visual';renderMedia();visualViewer?.orbit(false);visualViewer?.setMarkers([]);status('Tap the first end of the distance you measured.');}
     renderPanel();return;}
   if((name==='propose-map'||name==='propose-measured')&&activeSource?.visual&&activeSource.reconstruction){
     const visual=activeSource.visual,c=calibrationFor(visual);let measurement=null;

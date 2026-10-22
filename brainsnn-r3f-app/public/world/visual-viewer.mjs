@@ -97,7 +97,7 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     setSize(n){if(Number.isFinite(n))pointSize=Math.max(.25,Math.min(3,n));schedule();},
     reset(){fit(sourcePhoto);},photoCamera(){fit(true);},
     flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
-    orbit(){auto=!auto;schedule();return auto;},
+    orbit(on=!auto){auto=!!on;schedule();return auto;},
     walk(){walking=!walking;if(walking){pitch=0;distance=Math.min(distance,radius*.5);sortDirty=true;schedule();}else fit();return walking;},
     snapshot(){return canvas.toDataURL('image/png');},
     /** Index (in setPoints order) of the point under a client position, or -1 if none is within `tolerance` CSS pixels.

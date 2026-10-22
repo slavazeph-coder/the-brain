@@ -170,7 +170,7 @@ export const ARENA_MAX_POINTS = 50_000;
 export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', source = 'World Builder reconstruction', metresPerUnit = null, measurement = null } = {}, budget = ARENA_MAX_POINTS) {
   const { min, max, trimmed } = frameBounds(points), flip = coordinateFrame === 'colmap' ? -1 : 1, count = points.length / STRIDE, core = [];
   // A user-measured distance (two picked points + real metres) turns arbitrary units into metres; still self-reported, never verified.
-  const k = Number.isFinite(metresPerUnit) && metresPerUnit > 0 ? metresPerUnit : 1, metric = k !== 1;
+  const metric = Number.isFinite(metresPerUnit) && metresPerUnit > 0, k = metric ? metresPerUnit : 1;
   for (let i = 0; i < count; i++) {
     const at = i * STRIDE;
     if ([0, 1, 2].every(j => points[at + j] >= min[j] && points[at + j] <= max[j]))

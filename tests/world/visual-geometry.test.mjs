@@ -101,6 +101,8 @@ test('a user-measured distance turns the Arena hand-off into metres, scaling poi
   assert.ok(Math.abs(span(metric.points) - 2 * span(raw.points)) < 1e-6, 'coordinates scale by metresPerUnit');
   // Nonsense scales are ignored rather than applied.
   for (const bad of [0, -1, NaN, Infinity]) assert.equal(toArenaCloud(p, { metresPerUnit: bad }).units, 'arbitrary');
+  // A measured scale of exactly one metre per unit is still a measurement, not arbitrary units.
+  assert.equal(toArenaCloud(p, { metresPerUnit: 1 }).units, 'm');
 });
 
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {
