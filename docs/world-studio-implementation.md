@@ -36,6 +36,18 @@ Free and obstacle cells merge into at most 128 axis-aligned boxes on whole-centi
 
 Pipelines that call the worker API directly can run the same proposal without a browser: `npm run world:propose -- --points sparse-preview.ply --evidence reconstruction.json --out world.json --report proposal.json [--measure "ax,ay,az;bx,by,bz;metres" | --camera-height m]` ([`scripts/world-propose-map.mjs`](../brainsnn-r3f-app/scripts/world-propose-map.mjs), documented in the [API guide](../brainsnn-r3f-app/public/world/api.html)). The report adds each input's SHA-256. The output map is unreviewed: World Builder imports it with its gate closed, and Arena/OpenUSD exports stay blocked until a person reviews it. A single-photo depth preview has no camera poses and never proposes a map.
 
+### Deploy path (October 22, 2026)
+
+brainsnn.com is published by Railway's GitHub deploy for `main`, and Railway waits for the GitHub checks on that commit:
+- When the "Deploy BrainSNN app to Railway" workflow runs on a commit and fails or is cancelled, Railway marks its deployment inactive and nothing ships.
+- That workflow runs on pushes touching `brainsnn-r3f-app/**`, `robotics/world_worker/**`, `tests/world/**` and similar paths. Its own Railway CLI step was rejecting `RAILWAY_TOKEN` as Unauthorized.
+
+Two releases show the pattern:
+- **463eca2:** no Railway deployment was created.
+- **2207c87 (on-device detection):** went inactive after the workflow's `world-contracts` job hung installing dependencies and was cancelled.
+
+Commits outside those paths, such as this note or the 43d8f8e retrigger, deploy normally. Until the token is replaced or the workflow no longer gates Railway, check that each release actually rolled out.
+
 ### On-device object identification
 
 A photo can also get object labels without a worker: "Identify objects on this device" downloads a pinned detector after consent and runs it in the browser. The photo is never uploaded. The detector is `Xenova/detr-resnet-50` at revision `8be7ab59`, q8 WASM, the ONNX conversion of `facebook/detr-resnet-50` (Apache-2.0). It suggests up to 20 objects scoring at least 0.7 from the 80 COCO categories, which exclude doors, stairs, boxes and cables.
