@@ -26,7 +26,7 @@ MAX_ROWS = 512
 MAX_MESSAGES = 4000
 MAX_MCAP_BYTES = 48 * 1024 * 1024
 MAX_VIDEO_PIXELS = 4096 * 2160
-VIDEO_DECODERS = ("h264", "mpeg4", "libdav1d")
+VIDEO_DECODERS = ("h264", "hevc", "mpeg4", "libdav1d")
 BUNDLE_SCHEMA = "brainsnn.arena.bundle.v1"
 MANIFEST_SCHEMA = "brainsnn.arena.recording.v1"
 NATIVE_ATTACHMENT = "brainsnn/manifest.json"
@@ -205,7 +205,7 @@ def _decode_video_frames(path, targets, start, end, fps):
             raise ImportError("Unsupported video time base or dimensions")
         decoder = stream.codec_context
         if decoder is None or decoder.name not in VIDEO_DECODERS:
-            raise ImportError("Only software H.264, MPEG-4 and libdav1d AV1 video decoders are supported")
+            raise ImportError("Only software H.264, HEVC, MPEG-4 and libdav1d AV1 video decoders are supported")
         # PyAV passes av.open options to stream-info probing, then creates a
         # fresh codec context. Set the same limits before that context opens:
         # a later resolution change must fail in FFmpeg before frame buffers

@@ -69,7 +69,7 @@ export function WorldScan() {
   const video = files.some(isVideo);
   const needMorePhotos = files.length > 0 && !video && files.length < 6;
   const pilotSubject = encodeURIComponent('BrainSNN World Engine pilot - ' + USE_CASES.find(item => item.id === useCase)?.label);
-  const workerUrl = '/arena/#playground?view=site&robot=g1&model=groot&task=Supported+reach&seed=42';
+  const workerUrl = '/world/index.html#workspace';
   return <div className="bh-site world-site world-capture-page" data-build-marker="world-engine-capture-v1">
     <a className="bh-skip" href="#capture-main">Skip to capture</a>
     <PublicNav active="scan" />
@@ -78,7 +78,7 @@ export function WorldScan() {
       <header className="world-capture-header">
         <p className="world-section-kicker">BRAINSNN CAPTURE STUDIO / EARLY ACCESS</p>
         <h1>Capture a space.<br/><span>Make it a world.</span></h1>
-        <p>Start with an ordinary video or photo set. Preview it privately in your browser, follow the capture checklist, and continue to the existing reconstruction workspace when you have a compatible GPU worker.</p>
+        <p>Start with an ordinary video or photo set. Preview it privately in your browser, follow the capture checklist, and continue in World Builder to create a 3D preview, reconstruct a walkthrough with a connected worker and plan a robot route.</p>
       </header>
       <div className="world-capture-layout">
         <section className="world-drop-card" aria-labelledby="world-upload-title">
@@ -113,9 +113,9 @@ export function WorldScan() {
           <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files and space name stay on this page. No media is sent to BrainSNN or any worker automatically.</p>
           {files.length > 0 && <div className="world-scan-ready">
             <h3>Capture prepared</h3>
-            <p>{video ? 'Your video can be previewed here. A compatible reconstruction worker can accept a supported video after you select it again in the Arena.' : 'Your photos are ready for review. Multi-photo reconstruction will require a supported frame archive and connected worker; this page does not yet convert individual photos into a scene.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
+            <p>{video ? 'Your video can be previewed here. In World Builder, a connected reconstruction worker can turn it into points and camera poses, then a proposed robot planning map. Select the file again there.' : 'Your photos are ready for review. Multi-photo reconstruction will require a supported frame archive and connected worker; this page does not yet convert individual photos into a scene.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
             <div className="world-scan-actions">
-              <a href={workerUrl} className="world-button world-button-primary" onClick={() => track('world_capture_worker_handoff', { use_case: useCase })}>Open reconstruction workspace <ArrowRight size={15} aria-hidden="true" /></a>
+              <a href={workerUrl} className="world-button world-button-primary" onClick={() => track('world_capture_worker_handoff', { use_case: useCase })}>Open World Builder <ArrowRight size={15} aria-hidden="true" /></a>
               <a href={'mailto:info@xioai.ca?subject=' + pilotSubject} className="world-button world-button-outline">Request pilot access <ArrowRight size={15} aria-hidden="true" /></a>
             </div>
           </div>}
@@ -127,8 +127,8 @@ export function WorldScan() {
             <div className="world-guide-step"><span>02</span><div><strong>Overlap your views</strong><p>Film the same surfaces from several angles. Move around furniture and reveal corners where possible.</p></div></div>
             <div className="world-guide-step"><span>03</span><div><strong>Include a measurement</strong><p>Record a known dimension or reference marker if you intend to use the reconstruction for measurements.</p></div></div>
             <div className="world-guide-cta">
-              <a className="world-button world-button-outline" href={workerUrl}><Bot size={16} aria-hidden="true" /> Existing Arena site tools <ArrowRight size={16} aria-hidden="true" /></a>
-              <small>The Arena can process captures through a separately connected, compatible worker. You will need to select your file again there.</small>
+              <a className="world-button world-button-outline" href={workerUrl}><Bot size={16} aria-hidden="true" /> Continue in World Builder <ArrowRight size={16} aria-hidden="true" /></a>
+              <small>World Builder processes captures through a separately connected, compatible worker. You will need to select your file again there.</small>
             </div>
           </section>
           <div className="world-privacy-card"><CircleHelp size={20} aria-hidden="true"/><div><strong>What's available now?</strong><p>This page is a private capture preview and guide, not a live consumer reconstruction service. Dense reconstruction, automatic object segmentation and calibrated professional exports are planned capabilities.</p></div></div>

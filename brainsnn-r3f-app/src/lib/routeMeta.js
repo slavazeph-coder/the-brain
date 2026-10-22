@@ -3,6 +3,7 @@
 // do not execute JavaScript.
 
 import { buildHoldoutReport } from './holdoutReport.js';
+import { DEFAULT_RUNTIME_ESTIMATE, formatUSD } from './arenaPricing.js';
 
 const SITE_NAME = 'BrainSNN';
 const EVIDENCE = buildHoldoutReport();
@@ -30,6 +31,33 @@ const LEGACY_ROUTES = {
   '/engine': { path: '/office', tab: 'drafts' },
   '/reconstruct': { path: '/office', tab: 'claims' },
   '/missions': { path: '/arena/' },
+};
+
+const CLASSIC_HOME = {
+  path: '/',
+  positioning: 'robot-pricing-transparent-v1',
+  image: '/og/robot-testing.png',
+  title: 'BrainSNN | Robot policy testing',
+  description: `Explore robot-policy test packs from 10 to 100,000 episodes. The illustrative runtime price for 100,000 episodes is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)}. Assumptions shown; hosted policy testing is pending qualification.`,
+  heading: 'Test your robot. See where it fails.',
+  body: [
+    'Choose a robot and model in the arcade, try a challenge and replay what happened. Local practice uses a scripted arm and does not score a named policy.',
+    `Plan 10 to 100,000 total task attempts, with visible runtime pricing. The default illustration is ${formatUSD(DEFAULT_RUNTIME_ESTIMATE.runtimePriceUSD)} for 100,000 episodes, based on 500 episodes per worker-hour, US$0.60 per worker-hour and a 30% gross margin. These are assumed inputs, not measured policy throughput or a quote.`,
+    'The first execution kit covers ten Panda + π₀.₅ / LIBERO Spatial episodes. Larger counts are budget forecasts. Startup, storage, transfers, retries, external inference, operator support and taxes are excluded from the runtime price example.',
+    'Hosted policy tests are not yet available. The first real-policy GPU run still needs verification. Larger packs follow measured runtime and cost.',
+  ],
+};
+
+const WORLD = {
+  positioning: 'world-builder-v1',
+  title: 'BrainSNN | World Builder',
+  description: 'Start with a photo or phone walkthrough. Explore a visual 3D preview, review measured geometry and test a robot route with BrainSNN World Builder.',
+  heading: 'Turn any photo into a world. Turn any world into a robot simulation.',
+  body: [
+    'Upload a photo or capture a space. Explore a visual preview, inspect source evidence, and prepare a reviewed map for robot planning.',
+    'Single-photo depth and generative previews do not establish metric scale or hidden geometry. Review independent measurements, obstacles and unknown areas before planning.',
+    'Robot routes and operating-cost estimates use the reviewed map and your assumptions. They are planning previews, not physical robot execution or safety certification.',
+  ],
 };
 
 /** Longest matching prefix wins, so dedicated routes stay distinct from `/`. */
@@ -153,14 +181,14 @@ const ROUTES = [
   {
     path: '/scan',
     title: 'Capture a space | BrainSNN World Engine',
-    description: 'Prepare a phone video or overlapping photos for a 3D reconstruction. Local-only media preview is available. GPU reconstruction needs a connected worker and is in early access.',
+    description: 'Prepare a phone video or overlapping photos for a 3D reconstruction. Local-only media preview is available; reconstruction and robot planning continue in World Builder with a connected worker.',
     heading: 'Capture a space. Make it a world.',
     body: [
       'Use a conventional camera to record a space with overlapping views, steady motion and clear lighting. Preview video or photos locally before processing.',
-      'Your files are not uploaded automatically. The existing Robot Arena site workspace can accept a supported capture when you connect a compatible reconstruction worker and select the media again.',
+      'Your files are not uploaded automatically. World Builder can send a capture to a connected reconstruction worker once you choose it there, then propose a robot planning map for review.',
       'Dense 3D outputs, object-level intelligence and precision measurements are not yet available as a public self-serve service. Metric accuracy requires reference measurements and validation.',
     ],
-    links: [{ path: '/', label: 'World Engine' }, { path: '/arena/', label: 'Robot Arena' }],
+    links: [{ path: '/', label: 'World Builder' }, { path: '/arena/', label: 'Robot Arena' }],
   },
   {
     path: '/office',
@@ -179,28 +207,13 @@ const ROUTES = [
       'Inspect the detector’s published evaluation, including missed cues and false alarms. Model scores and simulation results describe their tested conditions; they do not establish universal capability.',
     ],
   },
-  {
-    path: '/',
-    image: '/og-image.png',
-    title: 'BrainSNN | Turn video into a 3D world',
-    description: 'BrainSNN World Engine is building camera-first 3D capture for real estate, architecture, construction, facilities and robotics. Preview phone footage locally; GPU reconstruction is in early access.',
-    heading: 'Turn your videos into 3D worlds.',
-    body: [
-      'Capture a real space with an ordinary phone video or overlapping photographs. BrainSNN is developing a reusable spatial workflow: camera tracking, depth estimation, geometry, point clouds, visualization and semantic objects.',
-      'A single spatial dataset can support property walkthroughs, contractor site references, conceptual design and robot planning. Professional measurements require a known scale, confidence checks and independent validation.',
-      'The capture studio lets you preview media locally, with no automatic upload. The existing Robot Arena provides site mapping and route previews; its reconstruction worker must be connected separately.',
-      'Automatic dense reconstruction, editable object segmentation, professional exports and public developer APIs remain early-access development goals, not generally available self-serve products.',
-    ],
-    links: [{ path: '/scan', label: 'Capture studio' }, { path: '/#industries', label: 'Industry uses' }, { path: '/arena/', label: 'Robot Arena' }],
-  },
+  { path: '/world', ...WORLD },
+  { path: '/', ...WORLD },
 ];
 
 const CRAWL_LINKS = Object.freeze([
-  { path: '/scan', label: 'Start scanning' },
-  { path: '/#industries', label: 'Industry use cases' },
-  { path: '/#developers', label: 'World Engine API' },
-  { path: '/arena/', label: 'Robot Arena' },
-  { path: '/arena/#campaigns', label: 'Robot test pricing' },
+  { path: '/arena/', label: 'Robot arcade' },
+  { path: '/arena/#campaigns', label: 'Pricing' },
 ]);
 
 const SHARED_GRID = {
@@ -219,6 +232,9 @@ export function resolveRouteMeta(pathname = '/', search = '') {
   const legacy = LEGACY_ROUTES[pathname.replace(/\/$/, '')];
   const targetPath = pathname.startsWith('/missions/') ? pathname.replace('/missions/', '/arena/tasks/') : legacy?.path || pathname;
   const normalizedPath = targetPath.replace(/\/$/, '') || '/';
+  if (normalizedPath === '/' && params.get('classic') === '1') {
+    return { ...CLASSIC_HOME, canonicalPath: '/?classic=1' };
+  }
   const route = ROUTES.find((entry) => (
     entry.path === '/' ? normalizedPath === '/' : (
       normalizedPath === entry.path.replace(/\/$/, '')
@@ -249,7 +265,7 @@ export function resolveRouteMeta(pathname = '/', search = '') {
   // original card, and shared circuit links keep the dynamic preview above.
   return {
     ...route,
-    canonicalPath: targetPath === '/arena' ? '/arena/' : targetPath,
+    canonicalPath: route.path === '/world' ? '/world' : targetPath === '/arena' ? '/arena/' : targetPath,
     image: route.image || '/og-image.png',
   };
 }
@@ -305,6 +321,10 @@ export function applyRouteMeta(html, pathname, search = '', origin = '') {
     .replace(/(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`)
     .replace(/(<meta\s+name="twitter:title"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${title}${close}`)
     .replace(/(<meta\s+name="twitter:description"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${description}${close}`);
+
+  if (meta.positioning) {
+    out = out.replace(/(<meta\s+name="brainsnn-positioning"\s+content=")[\s\S]*?(")/, (_match, open, close) => `${open}${escapeAttribute(meta.positioning)}${close}`);
+  }
 
   if (url) {
     out = out

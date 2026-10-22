@@ -22,5 +22,5 @@ export function PublicNav({ active }) {
   </header>;
 }
 export function PublicFooter() {
-  return <footer className="bh-footer world-footer"><div><a href="/" className="world-footer-brand">BrainSNN</a><span>Make the real world digital.</span></div><nav aria-label="Footer navigation"><a href="/scan">Scan a space</a><a href="/#industries">Use cases</a><a href="/#developers">Developers</a><a href="/arena/">Robot Arena</a><a href="/lab">Lab</a></nav></footer>;
+  return <footer className="bh-footer world-footer"><div><a href="/" className="world-footer-brand">BrainSNN</a><span>Make the real world digital.</span></div><nav aria-label="Footer navigation"><a href="/world/index.html#workspace">Create a world</a><a href="/scan">Capture studio</a><a href="/world/api.html">Developers</a><a href="/arena/">Robot Arena</a><a href="/lab">Lab</a></nav></footer>;
 }

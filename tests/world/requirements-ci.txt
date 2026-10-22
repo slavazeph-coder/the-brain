@@ -1,0 +1,7 @@
+# CPU contracts and real HTTP browsers. No learned model weights are downloaded.
+-r ../../robotics/world_worker/requirements.txt
+-r ../../robotics/world_worker/requirements-colmap.txt
+-r ../../robotics/world_worker/requirements-observations.txt
+pytest==9.1.1
+httpx==0.28.1
+playwright==1.64.0

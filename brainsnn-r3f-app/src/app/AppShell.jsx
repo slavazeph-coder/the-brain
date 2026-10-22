@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { track } from '../lib/analytics.js';
-import { WorldHome } from './WorldHome.jsx';
+import { LobbyHome } from './LobbyHome.jsx';
 import { WorldScan } from './WorldScan.jsx';
 import { BehaviourHome } from './BehaviourHome.jsx';
 import { LabIndex } from './LabIndex.jsx';
@@ -80,7 +80,8 @@ export function AppShell() {
   }
   function navigate(id) { window.location.assign(getNavItem(id).href); }
   let content;
-  if (route === 'home') content = <WorldHome />;
+  // App.tsx serves World Builder at `/`; the shell's home is the classic robot-testing lobby (`/?classic=1`).
+  if (route === 'home') content = <LobbyHome />;
   else if (route === 'scan') content = <WorldScan />;
   else if (route === 'coherence') content = <CoherenceLanding onNavigate={navigate} onStart={openReview} />;
   else if (route === 'review') content = <div className="bh-site"><a className="bh-skip" href="#review-main">Skip to content</a><PublicNav active="review" /><ReviewWorkbench initialInput={initialInput} /><PublicFooter /></div>;
