@@ -1,11 +1,29 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-22T13:10Z
+Last updated: 2026-10-22T14:40Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
+- **Run 40 (this run): 4090 probe receipt commit + local regression re-verified**
+  - Run 39's 4090 GPU verification (probe + model integrity) committed to the
+    progress file; no new local code changed this run.
+  - 4090 receipt (Run 39, via `root@ssh2.vast.ai:23990`, key
+    `/root/.ssh/gb10-rebuild`): host `d130b6c7f3f4`, RTX 4090 confirmed, branch
+    `hermes/world-builder-4090` @ `ace31dc`, torch 2.1.2+cu121, CUDA available.
+    GPU matmul probe: 4096²×50 + 8192²×20 → ~35,000 GFLOPs peak, `matmul_ok`.
+    Model integrity: `map-anything-apache` safetensors — 736 tensors,
+    payload bytes = header-computed bytes exactly (`match True`), ~1,228M params,
+    no corruption.
+  - Local regression re-run this run before committing (clean tree @ `368dfed`):
+    - `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (102 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **22 passed** (9.20 s)
+  - Commit: `docs(world): run 39 — 4090 GPU verification receipt (probe + model integrity)`
+    (1 file changed). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+  - Next: 4090 MapAnything inference smoke test on a held-out frame
+    (separate pinned reconstruction runtime under `/workspace/slava` on King;
+    never replace base conda; reuse verified pinned weights from GB10 via SSH).
 - Worker: `/workspace/hermes-gb10/repos/the-brain/robotics/world_worker/`
 - **Run 38 (this run): completed-job cancellation regression — COMMITTED, GREEN**
   - Added `test_cancelled_completed_job_cannot_interrupt_receipt_verification`
