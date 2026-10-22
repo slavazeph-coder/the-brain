@@ -45,7 +45,11 @@ function iOS(){return /iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.p
 function installable(){return !standalone()&&(installPrompt||iOS());}
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;renderPanel();});
 window.addEventListener('appinstalled',()=>{installPrompt=null;event('app_installed','home screen');renderPanel();});
-async function installApp(){if(installPrompt){installPrompt.prompt();const {outcome}=await installPrompt.userChoice;if(outcome==='accepted')installPrompt=null;renderPanel();return;}
+// Home-screen installs act on the top-level page. Inside the homepage iframe that is the site shell, so open this app's
+// own document at the top level first, where its manifest and offline shell apply.
+function framed(){try{return window.top!==window.self;}catch{return true;}}
+async function installApp(){if(framed()){window.top.location.href=new URL('./index.html?install=1',location.href).href;return;}
+  if(installPrompt){installPrompt.prompt();const {outcome}=await installPrompt.userChoice;if(outcome==='accepted')installPrompt=null;renderPanel();return;}
   status(iOS()?'In Safari: tap Share, then "Add to Home Screen". The app opens full screen with the camera, worker and exports.':'Use your browser menu to install this page as an app.');}
 if('serviceWorker' in navigator&&isSecureContext&&!new URLSearchParams(location.search).has('nosw'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
 // The bundled sample exactly as loaded; any edit or an imported authored map is the user's work and is kept.
@@ -227,7 +231,7 @@ async function action(name){try{
   if(name==='depth'&&activeSource?.kind==='image')$('depth-consent').showModal();
   if(name==='cancel-depth')depthAbort?.abort();
   if(name==='visual-export'&&activeSource?.visual)deliver(['brainsnn-visible-points.ply',toPLY(activeSource.visual.points),'application/octet-stream'],['brainsnn-preview-provenance.json',{schema:'brainsnn.visual-provenance.v1',source:activeSource.name,...activeSource.derivation,metricVerified:false,collisionGeometry:null}]);
-  if(name==='arena-cloud'&&activeSource?.visual){const scale=measuredScale(activeSource.visual);download('brainsnn-point-cloud.json',toArenaCloud(activeSource.visual.points,{source:activeSource.name,coordinateFrame:activeSource.derivation?.engine==='colmap-sparse'?'colmap':'right-handed-y-up',metresPerUnit:scale?.metresPerUnit,measurement:scale}));if(!matchMedia('(pointer: coarse)').matches)window.open('../arena/#playground?robot=g1&view=site','_blank','noopener');status(`Point cloud saved${scale?` at your measured scale (${scale.metresPerUnit.toPrecision(4)} m per unit)`:' in arbitrary units'}. In Robot Arena: Capture → Add 3D visual → choose brainsnn-point-cloud.json. It is a visual reference only; ${scale?'confirm the scale and ':'measure and '}mark obstacles before planning.`);}
+  if(name==='arena-cloud'&&activeSource?.visual){const scale=measuredScale(activeSource.visual);download('brainsnn-point-cloud.json',toArenaCloud(activeSource.visual.points,{source:activeSource.name,coordinateFrame:activeSource.derivation?.engine==='colmap-sparse'||activeSource.reconstruction?.coordinate_frame==='colmap'?'colmap':'right-handed-y-up',metresPerUnit:scale?.metresPerUnit,measurement:scale}));if(!matchMedia('(pointer: coarse)').matches)window.open('../arena/#playground?robot=g1&view=site','_blank','noopener');status(`Point cloud saved${scale?` at your measured scale (${scale.metresPerUnit.toPrecision(4)} m per unit)`:' in arbitrary units'}. In Robot Arena: Capture → Add 3D visual → choose brainsnn-point-cloud.json. It is a visual reference only; ${scale?'confirm the scale and ':'measure and '}mark obstacles before planning.`);}
   if(name==='install')await installApp();
   if(name==='phone')$('phone-camera').click();
   if(name==='record')await record();
@@ -304,3 +308,5 @@ window.addEventListener('pagehide',e=>{cancelConnection();depthAbort?.abort();ar
 window.addEventListener('pageshow',e=>{if(!e.persisted)return;renderPanel();renderMedia();update();if(job&&client&&!['complete','failed','cancelled'].includes(job.status)){remoteAbort=new AbortController();void checkJob(remoteAbort.signal).catch(error=>{remoteAbort=null;status('Could not resume job status: '+error.message,true);});}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopReplay();capture.stop();}});
 renderer?.setWorld(world);renderInspector();setTab('world');renderSystems();update();
+// Arriving from the homepage's install button: show the iOS steps on the page they apply to.
+if(new URLSearchParams(location.search).has('install')&&!standalone())void installApp();

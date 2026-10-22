@@ -298,6 +298,12 @@ def check_app_shell(browser):
     # Dismissal is not an error and does not download.
     page.evaluate("()=>{window.__dl=0;document.addEventListener('click',e=>{if(e.target.download)window.__dl++;},true);navigator.share=async()=>{const e=new Error('cancel');e.name='AbortError';throw e;};}")
     page.locator('[data-action=proof]').click();page.wait_for_timeout(300);assert page.evaluate('window.__dl')==0
+    # On the homepage the app is framed: Install opens the standalone World document at the top level, where it applies.
+    page.goto(url.split('/world/')[0]+'/',wait_until='networkidle')
+    if page.locator('iframe[src="/world/index.html"]').count():
+        frame=page.frame(url=re.compile(r'/world/index\.html$'));frame.wait_for_function("document.querySelectorAll('.system-card').length===22")
+        frame.locator('[data-tab=capture]').click();frame.locator('[data-action=install]').click()
+        page.wait_for_url(re.compile(r'/world/index\.html\?install=1$'));page.wait_for_function("/Add to Home Screen/.test(document.querySelector('#status').textContent)")
     assert not errors,errors;ctx.close()
 
 def check_capture_keeps_user_map(browser):

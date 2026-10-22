@@ -120,6 +120,14 @@ def check(browser, url, ply, evidence, mobile=False):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
     page.locator('#viewport').scroll_into_view_if_needed()
     page.screenshot(path=str(OUTPUT / f'{label}.png'), full_page=mobile)
+    # Imported COLMAP artifacts keep their frame on the Arena hand-off (Y/Z flipped to Y-up), from the attached evidence.
+    page.locator('[data-tab=capture]').click()
+    with page.expect_download() as cloud_download:
+        page.locator('[data-action=arena-cloud]').click()
+    cloud = json.loads(Path(cloud_download.value.path()).read_text())
+    assert cloud['sourceFrame'] == 'colmap' and cloud['coordinateFrame'] == 'right-handed-y-up', cloud['sourceFrame']
+    for extra in page.context.pages[1:]:
+        extra.close()
     measured = calibrate(page, mobile, label)
     assert not errors, errors
     context.close()
