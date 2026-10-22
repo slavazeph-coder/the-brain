@@ -550,6 +550,12 @@ test('a cloud floor estimate can start an unscaled reviewed map, and a facade-on
   const base = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4', points: [[0, 0, 0, 1, 2, 3], [6, 0, 4, 1, 2, 3]] };
   e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], width: 6.2, depth: 4.1, support: 0.03, units: 'arbitrary' } }, 'facade.json')); await flush();
   assert.equal(e.root.querySelector('[data-site-action="floor-from-cloud"]'), null, 'weak support offers no floor');
+  // Malformed estimates (strings, non-finite) are ignored instead of breaking every later render.
+  for (const bad of [{ width: '6', depth: 4.1, support: 0.7 }, { width: 6.2, depth: 4.1, support: '0.7' }, { width: Infinity, depth: 4.1, support: 0.7 }]) {
+    e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], units: 'arbitrary', ...bad } }, 'odd.json')); await flush();
+    assert.equal(e.root.querySelector('[data-site-action="floor-from-cloud"]'), null, JSON.stringify(bad));
+    e.step('capture'); await flush();
+  }
   e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], width: 6.2, depth: 4.1, support: 0.7, units: 'arbitrary' } }, 'room.json')); await flush();
   assert.match(e.root.textContent, /6\.2 × 4\.1 cloud units, 70% of points/);
   e.action('floor-from-cloud'); await flush();

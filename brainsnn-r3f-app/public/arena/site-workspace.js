@@ -20,7 +20,8 @@
   const hasAppearance = () => Boolean(asset || pointCloud);
   const appearanceName = () => asset?.name || (pointCloud ? 'Reconstructed point cloud' : '');
   // A usable floor suggestion needs a real low band; facade-only scans return almost nothing there.
-  const floorEstimate = () => { const f = pointCloud?.floorEstimate; return f && f.support >= 0.05 && f.width >= 0.01 && f.depth >= 0.01 ? f : null; };
+  // Imported JSON is untrusted: only real finite numbers count (no coercion of "6"), so rendering never throws.
+  const floorEstimate = () => { const f = pointCloud?.floorEstimate, n = v => typeof v === 'number' && Number.isFinite(v); return f && n(f.support) && n(f.width) && n(f.depth) && f.support >= 0.05 && f.support <= 1 && f.width >= 0.01 && f.depth >= 0.01 ? f : null; };
   const metricCloud = () => pointCloud?.units === 'm' && pointCloud?.scale?.source === 'user-measured';
   const terminalJob = status => ['complete', 'completed', 'succeeded', 'failed', 'cancelled'].includes(status);
   const jobError = value => typeof value === 'string' ? value : value?.message || '';
