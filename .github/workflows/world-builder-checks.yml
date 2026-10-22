@@ -67,7 +67,7 @@ jobs:
         run: npm run build
       - name: Real HTTP desktop and phone-sized Chromium and WebKit flows
         env:
-          WORLD_URL: http://127.0.0.1:4180/
+          WORLD_URL: http://127.0.0.1:4180/world/index.html
           WORLD_SITE_URL: http://127.0.0.1:4180
           WORLD_BROWSERS: chromium,webkit
           # Model inference is an opt-in qualification, not a mocked CI output.

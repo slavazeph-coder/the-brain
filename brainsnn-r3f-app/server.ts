@@ -1166,6 +1166,10 @@ export async function startServer() {
     // per route, including the content a crawler reads, was silently skipped
     // there. Letting "/" fall through to the catch-all fixes that.
     app.use(express.static(distPath, { index: false }));
+    // World Builder is a static app of its own under /world/. With `index: false`
+    // above, its directory URL would fall through to the React catch-all and the
+    // most-shared World Builder link would quietly open the homepage instead.
+    app.get("/world/", (_req, res) => res.sendFile(path.join(distPath, "world", "index.html")));
 
     // Every route used to be served the identical index.html, so a shared
     // /lab?grid=... link, a challenge link and the homepage all previewed as

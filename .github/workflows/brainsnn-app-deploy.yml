@@ -80,7 +80,7 @@ jobs:
           curl -sf http://127.0.0.1:8080/healthz | grep -q '"status":"ok"'
           curl -sf http://127.0.0.1:8080/ | grep -Fq "BrainSNN | Turn video into a 3D world"
           curl -sf http://127.0.0.1:8080/ | grep -Fq "world-engine-home-v1"
-          curl -fsS http://127.0.0.1:8080/world/index.html -o /tmp/brainsnn-world.html
+          curl -fsS http://127.0.0.1:8080/world/ -o /tmp/brainsnn-world.html
           grep -Fq "BrainSNN | World Builder" /tmp/brainsnn-world.html
           grep -Fq "world-builder-v1" /tmp/brainsnn-world.html
           grep -Fq 'rel="manifest"' /tmp/brainsnn-world.html
@@ -131,6 +131,7 @@ jobs:
           # proves the World Engine homepage build rolled out, not merely that an
           # older container is still answering health checks.
           HOME_URL: ${{ vars.BRAINSNN_SITE_HOME_URL || 'https://www.brainsnn.com/' }}
+          WORLD_URL: https://www.brainsnn.com/world/
           ARENA_URL: https://www.brainsnn.com/arena/
           ANALYSIS_CAPABILITIES_URL: https://www.brainsnn.com/api/arena/analysis/capabilities
           ANALYSIS_ASSET_URL: https://www.brainsnn.com/arena/arena-analysis.js
@@ -138,6 +139,7 @@ jobs:
           for i in $(seq 1 30); do
             health="$(curl -L -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             home="$(curl -L -s -o /tmp/brainsnn-home.html -w '%{http_code}' "$HOME_URL" || true)"
+            world="$(curl -L -s -o /tmp/brainsnn-world.html -w '%{http_code}' "$WORLD_URL" || true)"
             arena="$(curl -L -s -o /tmp/brainsnn-arena.html -w '%{http_code}' "$ARENA_URL" || true)"
             analysis="$(curl -L -s -o /tmp/brainsnn-analysis.json -w '%{http_code}' "$ANALYSIS_CAPABILITIES_URL" || true)"
             analysis_asset="$(curl -L -s -o /tmp/brainsnn-analysis.js -w '%{http_code}' "$ANALYSIS_ASSET_URL" || true)"
@@ -145,6 +147,11 @@ jobs:
               home_marker="ok"
             else
               home_marker="missing"
+            fi
+            if [ "$world" = "200" ] && grep -Fq "BrainSNN | World Builder" /tmp/brainsnn-world.html && grep -Fq "world-builder-v1" /tmp/brainsnn-world.html; then
+              world_marker="ok"
+            else
+              world_marker="missing"
             fi
             if [ "$arena" = "200" ] && grep -Fq '2026-10-17-arena-inspection-1' /tmp/brainsnn-arena.html && grep -Fq 'arena-arcade-selection-2026-10-17-v1' /tmp/brainsnn-arena.html && grep -Fq 'robot-pricing-transparent-v1' /tmp/brainsnn-arena.html; then
               arena_marker="ok"
@@ -156,8 +163,8 @@ jobs:
             else
               analysis_marker="missing"
             fi
-            echo "attempt $i → healthz $health, home $home/$home_marker, arena $arena/$arena_marker, analysis $analysis/$analysis_marker"
-            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ] && [ "$arena_marker" = "ok" ] && [ "$analysis_marker" = "ok" ]; then
+            echo "attempt $i → healthz $health, home $home/$home_marker, world $world/$world_marker, arena $arena/$arena_marker, analysis $analysis/$analysis_marker"
+            if [ "$health" = "200" ] && [ "$home_marker" = "ok" ] && [ "$world_marker" = "ok" ] && [ "$arena_marker" = "ok" ] && [ "$analysis_marker" = "ok" ]; then
               echo "Live service is healthy and serving the current BrainSNN build."
               exit 0
             fi

@@ -93,38 +93,21 @@ def check(browser, mobile=False):
     ctx.close()
 
 def check_routes(browser, base):
-    """Exercise actual built-site route boundaries and links out of the frame."""
+    """Exercise actual built-site route boundaries: World Builder is served at /world/ as a top-level document
+    (the site root keeps its own homepage) and its nav links leave for the rest of the site without nesting."""
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    for route in ['/', '/world', '/world/']:
-        response=page.goto(base+route,wait_until='networkidle')
-        assert response.status==200
-        frame=page.frame(url=re.compile(r'/world/index\.html$'))
-        assert frame is not None
-        frame.locator('#hero-capture').click()
-        assert frame.locator('[data-action=files]').is_visible()
-        assert frame.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
+    def world():
+        page.goto(base+'/world/',wait_until='networkidle');assert page.locator('iframe').count()==0,'World Builder must be the top-level document at /world/'
+    world();assert page.title()=='BrainSNN | World Builder';assert page.locator('link[rel=manifest]').count()==1
+    page.locator('#hero-capture').click();assert page.locator('[data-action=files]').is_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     page.set_viewport_size({'width':844,'height':390})
-    assert page.evaluate('document.documentElement.scrollHeight <= innerHeight+1'),'Landscape must not add a second outer scrollbar'
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1'),'Landscape must not overflow sideways'
     page.set_viewport_size({'width':390,'height':844})
-    # target=_top is essential: otherwise old pages appear nested in World Builder.
-    frame.locator('a[href="/?classic=1"]').last.click()
-    page.wait_for_url(base+'/?classic=1')
-    page.locator('#lobby-title').wait_for()
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
-    page.set_viewport_size({'width':1440,'height':1000})
-    page.goto(base+'/',wait_until='networkidle')
-    frame=page.frame(url=re.compile(r'/world/index\.html$'))
-    frame.locator('a[href="/lab"]').last.click()
-    page.wait_for_url(base+'/lab')
-    page.get_by_role('heading',name='Lab',exact=True).wait_for()
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
-    page.goto(base+'/',wait_until='networkidle')
-    frame=page.frame(url=re.compile(r'/world/index\.html$'))
-    frame.locator('a[href="/arena/"]').last.click()
-    page.wait_for_url(base+'/arena/')
-    page.locator('#page-title').wait_for(state='attached')
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
+    response=page.goto(base+'/',wait_until='networkidle');assert response.status==200 and page.title()!='BrainSNN | World Builder','site root keeps its own homepage'
+    for href,ready in [('/',lambda:page.locator('h1').first.wait_for()),('/lab',lambda:page.get_by_role('heading',name='Lab',exact=True).wait_for()),('/arena/',lambda:page.locator('#page-title').wait_for(state='attached'))]:
+        world();page.set_viewport_size({'width':1440,'height':1000});page.locator(f'a[href="{href}"][target=_top]').last.click();page.wait_for_url(base+href);ready();assert page.title()!='BrainSNN | World Builder' and page.locator('iframe[src="/world/index.html"]').count()==0
     assert errors==[],errors
     ctx.close()
 
