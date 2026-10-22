@@ -1,4 +1,5 @@
 import {importObservations,reviewObservation,exportObservationProof,frameTimeSeconds} from './observations.mjs';
+import {detectionSidecar,DETECTION_CONFIG} from './detections.mjs';
 
 const MAX_JSON=256*1024,MAX_PNG=1024*1024;
 const node=(tag,text,attrs={})=>{const element=document.createElement(tag);if(text!==null)element.textContent=text;Object.assign(element,attrs);return element;};
@@ -60,6 +61,21 @@ export function createObservationReview({getSources,status,event}){
       event('model_observations_loaded',{job:job.id,sourceSHA256:binding.sha256,count:session.observations.length,model:session.model});
     }catch(error){for(const frame of previews)URL.revokeObjectURL(frame.url);throw error;}
   }
+  /** On-device detections for a photo: the same validation, source binding and review as worker observations. */
+  async function loadDetections(source,{png,width,height,detections}){
+    if(!getSources().includes(source)||source.kind!=='image')throw new Error('Keep the photo in this session to review its detections.');
+    const sourceSha=await sourceHash(source),frameSha=await digest(png),configSha=await digest(new TextEncoder().encode(DETECTION_CONFIG));
+    const frame={id:'photo',sha256:frameSha,width,height,timestamp:null},binding={sha256:sourceSha,kind:'photo',frames:[frame]};
+    const session=importObservations(JSON.stringify(detectionSidecar({sourceSha256:sourceSha,frame,detections,configSha256:configSha})),[binding]);
+    const url=await checkedImage(png,frame);
+    if(!getSources().includes(source)){URL.revokeObjectURL(url);throw new DOMException('Source removed','AbortError');}
+    // A fresh run on the same photo replaces its earlier on-device proposals.
+    rows=rows.filter(row=>{if(row.job!=='on-device'||row.source!==source)return true;dispose(row);return false;});
+    if(rows.length>=4){URL.revokeObjectURL(url);throw new Error('Remove an earlier source before reviewing another set of observations.');}
+    rows.push({job:'on-device',sha256:frameSha,source,binding,session,previews:[{...frame,url}],drafts:new Map()});
+    event('model_observations_loaded',{job:'on-device',sourceSHA256:sourceSha,count:session.observations.length,model:session.model});
+    return session.observations.length;
+  }
   function render(container){
     container.replaceChildren();
     if(!rows.length){container.append(node('p','A configured observation worker can propose labels from a photo or selected video frames. Review its suggestions here.'));return;}
@@ -106,7 +122,7 @@ export function createObservationReview({getSources,status,event}){
       container.append(group);
     }
   }
-  return {load,render,proofs:()=>rows.filter(row=>getSources().includes(row.source)).map(row=>exportObservationProof(row.session,bindings(row))),
+  return {load,loadDetections,render,proofs:()=>rows.filter(row=>getSources().includes(row.source)).map(row=>exportObservationProof(row.session,bindings(row))),
     removeSource(source){rows=rows.filter(row=>{if(row.source!==source)return true;dispose(row);return false;});},
     clear(){rows.forEach(dispose);rows=[];}};
 }
