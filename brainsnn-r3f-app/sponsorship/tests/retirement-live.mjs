@@ -30,11 +30,18 @@ try{
   const context=await browser.newContext({viewport:{width:1440,height:1000}});const page=await context.newPage();
   await page.route('**/api/**',route=>['GET','HEAD','OPTIONS'].includes(route.request().method())?route.continue():route.abort());
   for(const width of [1440,390]){
-    await page.setViewportSize({width,height:1000});await page.goto(base+'/',{waitUntil:'domcontentloaded',timeout:90000});await page.locator('.bh-nav').waitFor();
+    // `/` is the World Builder flagship, which frames /world/index.html; neither document may link to the retired page.
+    await page.setViewportSize({width,height:1000});await page.goto(base+'/',{waitUntil:'domcontentloaded',timeout:90000});
+    const world=page.frameLocator('iframe[src="/world/index.html"]');await world.getByRole('heading',{level:1,name:/Turn any photo into a world/}).waitFor();await page.waitForTimeout(1000);
+    assert.equal(await page.locator('a[href*="/sponsor"]').count()+await world.locator('a[href*="/sponsor"]').count(),0);
+    assert.equal(await world.getByRole('link',{name:'Sponsor Robot 001',exact:true}).count(),0);
+    const worldName='brainsnn-world-home-'+width+'.png';await page.screenshot({path:path.join(out,worldName),timeout:90000});evidence.screenshots.push(worldName);
+    // The classic robot-testing lobby keeps the shared navigation and footer.
+    await page.goto(base+'/?classic=1',{waitUntil:'domcontentloaded',timeout:90000});await page.locator('.bh-nav').waitFor();
     assert.equal(await page.locator('.bh-nav a[href^="/sponsor"],.bh-footer a[href^="/sponsor"]').count(),0);
     assert.equal(await page.getByRole('link',{name:'Sponsor Robot 001',exact:true}).count(),0);
     assert.deepEqual(await page.locator('.public-nav nav > a').evaluateAll(links=>links.map(link=>({label:link.textContent.trim(),href:link.getAttribute('href')}))),[
-      {label:'Arena',href:'/arena/'},{label:'Review',href:'/office'},{label:'Evidence',href:'/evidence'},
+      {label:'World Builder',href:'/'},{label:'Create a world',href:'/world/index.html#workspace'},{label:'Robot Arena',href:'/arena/'},{label:'Developers',href:'/world/api.html'},
     ]);
     assert.equal(await page.locator('.public-nav .public-overflow a[href="/lab"]').count(),1);
     assert.equal(await page.locator('.bh-footer a[href="/lab"]').count(),1);
