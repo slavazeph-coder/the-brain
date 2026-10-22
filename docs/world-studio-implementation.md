@@ -38,15 +38,18 @@ Pipelines that call the worker API directly can run the same proposal without a 
 
 ### Deploy path (October 22, 2026)
 
-brainsnn.com is published by Railway's GitHub deploy for `main`, and Railway waits for the GitHub checks on that commit:
-- When the "Deploy BrainSNN app to Railway" workflow runs on a commit and fails or is cancelled, Railway marks its deployment inactive and nothing ships.
-- That workflow runs on pushes touching `brainsnn-r3f-app/**`, `robotics/world_worker/**`, `tests/world/**` and similar paths. Its own Railway CLI step was rejecting `RAILWAY_TOKEN` as Unauthorized.
+brainsnn.com is published by Railway's GitHub deploy for `main` (GitHub environment `wonderful-charisma / production`). Railway waits for the GitHub checks on that commit, so a failed or cancelled check means nothing ships.
 
-Two releases show the pattern:
+The pipeline runs in two stages:
+- **Before the deploy: "BrainSNN app release checks"** (`.github/workflows/brainsnn-app-deploy.yml`). It runs the World checks, lint, the analysis tests, the build, the engine smoke and the server boot checks. It never deploys and needs no Railway secret.
+- **After the deploy: "Verify BrainSNN live deploy"** (`.github/workflows/brainsnn-live-verify.yml`). It runs when Railway posts a successful `deployment_status`, and can also be started by hand. It checks that the live World Builder and Arena files are byte-identical to the deployed commit. It also checks the healthz endpoint and the Home/World, Classic, Arena and analysis release markers.
+- Sponsor and GT3 live acceptance (`sponsor-live.yml`, the `verify-live` job in `sponsor-launch.yml`, and `gt3-live.yml`) now follow the verify workflow, so they test the site only after the new build is actually live.
+
+History before this split:
+- The workflow used to run `railway up` itself, and Railway rejected its `RAILWAY_TOKEN` as Unauthorized.
 - **463eca2:** no Railway deployment was created.
 - **2207c87 (on-device detection):** went inactive after the workflow's `world-contracts` job hung installing dependencies and was cancelled.
-
-Commits outside those paths, such as this note or the 43d8f8e retrigger, deploy normally. Until the token is replaced or the workflow no longer gates Railway, check that each release actually rolled out.
+- Only commits outside the workflow's paths, such as the 43d8f8e retrigger, deployed.
 
 ### On-device object identification
 

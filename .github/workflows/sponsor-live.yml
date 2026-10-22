@@ -1,9 +1,8 @@
 name: Sponsor live verification
 on:
   workflow_run:
-    workflows: ['Deploy BrainSNN app to Railway']
+    workflows: ['Verify BrainSNN live deploy']
     types: [completed]
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +11,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify-public-site:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Runs after a verified Railway deploy of main (its ref is a SHA, so there is no head branch to filter on).
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'deployment_status' || github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

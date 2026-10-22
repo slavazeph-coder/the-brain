@@ -1,7 +1,7 @@
 name: GT3 live acceptance
 on:
   workflow_run:
-    workflows: ['Deploy BrainSNN app to Railway']
+    workflows: ['Verify BrainSNN live deploy']
     types: [completed]
   workflow_dispatch:
 permissions:
@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   live:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'deployment_status' || github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
