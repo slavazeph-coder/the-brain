@@ -1,8 +1,107 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, fitFloorPlane, alignToFloor, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
+
+test('framing bounds ignore far reconstruction outliers without removing them', () => {
+  // 1,000 points in a unit cube plus 10 triangulated far outliers: full extent is dominated by outliers.
+  const rows = [];
+  for (let i = 0; i < 1000; i++) rows.push(`${(i % 10) / 10} ${(Math.floor(i / 10) % 10) / 10} ${(Math.floor(i / 100) % 10) / 10} 200 100 50`);
+  for (let i = 0; i < 10; i++) rows.push(`${500 + i} ${-300 - i} ${900 + i} 10 10 10`);
+  const p = parsePLY(ascii(rows));
+  assert.equal(p.points.length / STRIDE, 1010, 'outliers remain in the point buffer');
+  const full = bounds(p.points), frame = frameBounds(p.points);
+  assert.ok(full.radius > 500, 'full extent is dominated by outliers');
+  assert.ok(frame.trimmed === true && frame.radius < 1.5, `framing radius ${frame.radius} should cover the dense core only`);
+  assert.ok(frame.center.every(v => Math.abs(v - .45) < .1), 'framing centre sits in the core');
+  assert.ok(p.points[3] < .1, `display footprint ${p.points[3]} derives from the core, not the outlier extent`);
+  // Without outliers the exact extent is kept and nothing is marked trimmed.
+  const clean = parsePLY(ascii(rows.slice(0, 1000)));
+  assert.equal(frameBounds(clean.points).trimmed, undefined);
+  assert.deepEqual(frameBounds(clean.points).max, bounds(clean.points).max);
+  // Tiny clouds never trim.
+  assert.deepEqual(frameBounds(parsePLY(ascii()).points), bounds(parsePLY(ascii()).points));
+});
+
+test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every dropped point', () => {
+  const rows = [];
+  for (let i = 0; i < 1000; i++) rows.push(`${(i % 10) / 10} ${(Math.floor(i / 10) % 10) / 10} ${(Math.floor(i / 100) % 10) / 10} 200 100 50`);
+  for (let i = 0; i < 10; i++) rows.push(`${500 + i} ${-300 - i} ${900 + i} 10 10 10`);
+  const p = parsePLY(ascii(rows)).points;
+  const cloud = toArenaCloud(p, { coordinateFrame: 'colmap', source: 'clip.mp4' });
+  assert.equal(cloud.kind, 'colmap-sparse-point-cloud'); assert.equal(cloud.coordinateFrame, 'right-handed-y-up'); assert.equal(cloud.sourceFrame, 'colmap');
+  assert.deepEqual(cloud.provenance, { totalPoints: 1010, keptPoints: 1000, outliersDropped: 10, thinned: false, floorAligned: true, floorTiltDegrees: 0, floorYawDegrees: cloud.provenance.floorYawDegrees, floorInlierFraction: 0.1, metricVerified: false });
+  assert.ok(cloud.points.every(r => r.length === 6 && r[1] >= -1e-6 && r[3] === 200), 'the floor layer sits at y=0 with the bulk above; colours are 0-255');
+  // A Y-up source is passed through unchanged, and a large cloud is thinned under the Arena budget.
+  const same = toArenaCloud(p.subarray(0, 2 * STRIDE)); assert.deepEqual(same.points[1].slice(0, 3), [...p.subarray(STRIDE, STRIDE + 3)]); assert.equal(same.provenance.outliersDropped, 0);
+  const big = parsePLY(ascii(Array.from({ length: 2500 }, (_, i) => `${i % 50} ${Math.floor(i / 50)} 0 1 2 3`))).points;
+  const thin = toArenaCloud(big, {}, 1000); assert.ok(thin.points.length <= 1000 && thin.provenance.thinned);
+});
+
+test('floor estimate finds the dense low band of a room and declines a facade-only scan', () => {
+  // Room: 400 floor points on y=0 over a 6 x 4 footprint, 200 wall points up to y=3 along x=0, a few ceiling points.
+  const room = [];
+  for (let i = 0; i < 400; i++) room.push([(i % 20) / 19 * 6, 0.02 * Math.random(), Math.floor(i / 20) / 19 * 4, 1, 2, 3]);
+  for (let i = 0; i < 200; i++) room.push([0, 0.2 + (i / 200) * 2.8, (i % 20) / 19 * 4, 1, 2, 3]);
+  for (let i = 0; i < 20; i++) room.push([i / 19 * 6, 3, 2, 1, 2, 3]);
+  const floor = estimateFloor(room);
+  assert.ok(Math.abs(floor.y) < 0.15, `floor y ${floor.y} should sit near 0`);
+  assert.ok(Math.abs(floor.width - 6) < 0.4 && Math.abs(floor.depth - 4) < 0.3, `footprint ${floor.width} x ${floor.depth}`);
+  assert.ok(floor.support > 0.6 && floor.units === 'arbitrary' && floor.origin.every(v => Math.abs(v) < 0.4));
+  // Facade only: points spread evenly over a vertical wall have no dominant low band worth more than a few percent.
+  const facade = Array.from({ length: 600 }, (_, i) => [(i % 30) / 29 * 5, Math.floor(i / 30) / 19 * 3, 0, 1, 2, 3]);
+  assert.ok(estimateFloor(facade).support < 0.2, 'no floor band on a facade');
+  assert.equal(estimateFloor(room.slice(0, 10)), null);
+  // The Arena hand-off carries the estimate.
+  const p = parsePLY(ascii(room.map(r => r.join(' ')))).points;
+  assert.ok(toArenaCloud(p).floorEstimate.support > 0.6);
+});
+
+test('a tilted room is gravity-aligned on its fitted floor plane before the estimate and the hand-off', () => {
+  const room = [];
+  for (let i = 0; i < 1500; i++) room.push([(i % 50) / 49 * 6, 0.02 * Math.random(), Math.floor(i / 50) / 29 * 4, 1, 2, 3]);
+  for (let i = 0; i < 600; i++) room.push([i % 2 ? 0 : 6, 0.1 + (i / 600) * 2.6, (i % 30) / 29 * 4, 1, 2, 3]);
+  // Roll the whole room 25° about X (a phone pointing down) and lift it: Y is no longer up.
+  const a = 25 * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const tilted = room.map(r => [r[0], r[1] * c - r[2] * s + 3, r[1] * s + r[2] * c + 1, r[3], r[4], r[5]]);
+  const plane = fitFloorPlane(tilted);
+  assert.ok(plane.inlierFraction > 0.5, `floor inliers ${plane.inlierFraction}`);
+  assert.ok(Math.abs(Math.acos(Math.abs(plane.normal[1])) * 180 / Math.PI - 25) < 2, `tilt ${Math.acos(Math.abs(plane.normal[1])) * 180 / Math.PI}`);
+  const upright = alignToFloor(tilted, plane), floor = estimateFloor(upright);
+  assert.ok(Math.abs(floor.y) < 0.1 && floor.support > 0.6, `floor y ${floor.y} support ${floor.support}`);
+  assert.ok(Math.abs(floor.width - 6) < 0.3 && Math.abs(floor.depth - 4) < 0.3, `footprint ${floor.width} x ${floor.depth}`);
+  assert.ok(upright.filter(r => r[1] > 0.1).length > 500, 'walls stand above the floor, not below it');
+  const cloud = toArenaCloud(parsePLY(ascii(tilted.map(r => r.join(' ')))).points);
+  assert.ok(cloud.provenance.floorAligned && Math.abs(cloud.provenance.floorTiltDegrees - 25) < 2 && Math.abs(cloud.floorEstimate.y) < 0.1);
+  // Heading: the same room yawed 40° comes back squared, long side along Z, so the footprint box is the room again.
+  const y = 40 * Math.PI / 180, cy = Math.cos(y), sy = Math.sin(y);
+  const yawed = room.map(r => [r[0] * cy + r[2] * sy, r[1], -r[0] * sy + r[2] * cy, r[3], r[4], r[5]]);
+  const squared = toArenaCloud(parsePLY(ascii(yawed.map(r => r.join(' ')))).points), f = squared.floorEstimate;
+  assert.ok(Math.abs(Math.abs(squared.provenance.floorYawDegrees) - 40) < 3 || Math.abs(Math.abs(squared.provenance.floorYawDegrees) - 50) < 3, `yaw ${squared.provenance.floorYawDegrees}`);
+  const sides = [f.width, f.depth].sort((a, b) => a - b);
+  assert.ok(Math.abs(sides[0] - 4) < 0.3 && Math.abs(sides[1] - 6) < 0.3, `squared footprint ${f.width} x ${f.depth}`);
+  // A wall scan gets no alignment: no horizontal slice of it carries floor-like support.
+  const facade = Array.from({ length: 600 }, () => [Math.random() * 5, Math.random() * 3, 0.01 * Math.random(), 1, 2, 3]);
+  const wall = toArenaCloud(parsePLY(ascii(facade.map(r => r.join(' ')))).points);
+  assert.equal(wall.provenance.floorAligned, false); assert.ok((wall.provenance.floorInlierFraction ?? 0) < 0.1);
+});
+
+test('a user-measured distance turns the Arena hand-off into metres, scaling points and floor alike', () => {
+  const room = [];
+  for (let i = 0; i < 1000; i++) room.push([(i % 40) / 39 * 3, 0.01 * Math.random(), Math.floor(i / 40) / 24 * 2, 1, 2, 3]);
+  for (let i = 0; i < 400; i++) room.push([i % 2 ? 0 : 3, 0.05 + (i / 400) * 1.3, (i % 20) / 19 * 2, 1, 2, 3]);
+  const p = parsePLY(ascii(room.map(r => r.join(' ')))).points;
+  const raw = toArenaCloud(p), metric = toArenaCloud(p, { metresPerUnit: 2, measurement: { distance: 4, span: 2 } });
+  assert.equal(raw.units, 'arbitrary'); assert.equal(raw.scale, null); assert.equal(raw.floorEstimate.units, 'arbitrary');
+  assert.equal(metric.units, 'm'); assert.deepEqual(metric.scale, { source: 'user-measured', metresPerUnit: 2, distance: 4, spanUnits: 2, selfReported: true, verified: false });
+  assert.ok(Math.abs(metric.floorEstimate.width - 2 * raw.floorEstimate.width) < 1e-6 && Math.abs(metric.floorEstimate.depth - 2 * raw.floorEstimate.depth) < 1e-6);
+  assert.equal(metric.floorEstimate.units, 'm'); assert.equal(metric.points.length, raw.points.length);
+  const span = rows => Math.max(...rows.map(r => r[0])) - Math.min(...rows.map(r => r[0]));
+  assert.ok(Math.abs(span(metric.points) - 2 * span(raw.points)) < 1e-6, 'coordinates scale by metresPerUnit');
+  // Nonsense scales are ignored rather than applied.
+  for (const bad of [0, -1, NaN, Infinity]) assert.equal(toArenaCloud(p, { metresPerUnit: bad }).units, 'arbitrary');
+});
 
 test('plain xyz/rgb stays an unverified point cloud and preserves source colour', () => {
   const p = parsePLY(ascii());

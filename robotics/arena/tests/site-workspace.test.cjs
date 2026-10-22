@@ -35,7 +35,7 @@ function setup(selection = g1) {
   e.ctx.fetch = async (url, options) => { requests.push({ url, options }); throw new Error('Unexpected network request: ' + url); };
   const renderer = {};
   for (const name of ['setScene', 'setRobot', 'setMode', 'setCamera', 'setTrace', 'setAssetTransform', 'clearAsset', 'dispose']) renderer[name] = (...args) => renderCalls.push({ name, args: clone(args) });
-  renderer.setPointCloud = cloud => { renderCalls.push({ name: 'setPointCloud', args: [clone(cloud)] }); return { pointCount: cloud.positions.length / 3, visualOnly: true }; };
+  renderer.setPointCloud = cloud => { renderCalls.push({ name: 'setPointCloud', args: [clone(cloud)] }); return { pointCount: (cloud.points || cloud.positions || []).length, visualOnly: true }; };
   renderer.importAsset = async file => ({ name: file.name, visualOnly: true });
   e.ctx.BrainSNNSiteRenderer = { create(_host, options) { rendererOptions = options; return renderer; } };
   for (const name of ['site-core.js', 'site-operations.js', 'site-workspace.js']) vm.runInContext(fs.readFileSync(path.join(base, name), 'utf8'), e.ctx, { filename: name });
@@ -528,4 +528,55 @@ test('an invalid imported operations scenario cannot partially replace the curre
   assert.deepEqual(after.result, before.result); assert.deepEqual(after.operations, before.operations);
   assert.equal(after.proxy, before.proxy); assert.equal(after.mode, before.mode);
   assert.match(e.el('site-status').textContent, /Map import:/);
+});
+
+test('a World Builder point-cloud JSON loads through Add 3D visual as a visual-only reference and never touches the map', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const before = e.state(), cloud = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'fountain-clip.mp4', points: [[0, 0, 0, 200, 100, 50], [1, 2, 3, 10, 20, 30]] };
+  e.renderCalls.length = 0;
+  e.file('site-asset-input', e.jsonFile(cloud, 'brainsnn-point-cloud.json')); await flush();
+  const call = e.renderCalls.find(c => c.name === 'setPointCloud'); assert(call, 'renderer.setPointCloud receives the parsed cloud');
+  assert.deepEqual(call.args[0], cloud); assert(!e.renderCalls.some(c => c.name === 'importAsset'));
+  const after = e.state(); assert.deepEqual(after.scene, before.scene); assert.equal(after.view, 'reality'); assert.equal(after.result, null);
+  assert.match(e.root.textContent, /Visual only/); assert.match(e.el('site-status').textContent, /visual reference/);
+  // Malformed JSON and oversized files fail closed without clearing the previous appearance state.
+  e.file('site-asset-input', new e.ctx.File(['{nope'], 'bad.json')); await flush(); assert.match(e.el('site-status').textContent, /3D import:/);
+  e.file('site-asset-input', { name: 'huge.json', size: 16 * 1024 * 1024 + 1, text() { throw Error('Oversize cloud must not be read'); } }); await flush();
+  assert.match(e.el('site-status').textContent, /under 16 MB/); assert.deepEqual(e.state().scene, before.scene);
+});
+
+test('a cloud floor estimate can start an unscaled reviewed map, and a facade-only estimate offers nothing', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const base = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4', points: [[0, 0, 0, 1, 2, 3], [6, 0, 4, 1, 2, 3]] };
+  e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], width: 6.2, depth: 4.1, support: 0.03, units: 'arbitrary' } }, 'facade.json')); await flush();
+  assert.equal(e.root.querySelector('[data-site-action="floor-from-cloud"]'), null, 'weak support offers no floor');
+  e.file('site-asset-input', e.jsonFile({ ...base, floorEstimate: { y: 0, origin: [0, 0], width: 6.2, depth: 4.1, support: 0.7, units: 'arbitrary' } }, 'room.json')); await flush();
+  assert.match(e.root.textContent, /6\.2 × 4\.1 cloud units, 70% of points/);
+  e.action('floor-from-cloud'); await flush();
+  const s = e.state();
+  assert.equal(s.step, 'review'); assert.equal(s.scene.width, 6.2); assert.equal(s.scene.depth, 4.1); assert.equal(s.scene.scaleConfirmed, false);
+  assert.equal(s.scene.source.kind, 'reconstruction-reference'); assert.equal(s.scene.source.name, 'gym.mp4'); assert.equal(s.scene.obstacles.length, 0);
+  assert.equal(s.result, null); assert.equal(e.el('site-run').disabled, true); assert.match(e.el('site-status').textContent, /Unscaled floor map started/);
+});
+
+test('starting a map from the cloud shifts the visual so the floor band sits at the map origin', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const cloud = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'arbitrary', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4',
+    points: [[-4, -1, -6, 1, 2, 3], [2, 2, -2, 1, 2, 3]], floorEstimate: { y: -0.5, origin: [-3, -5], width: 5, depth: 3, support: 0.5, units: 'arbitrary' } };
+  e.file('site-asset-input', e.jsonFile(cloud, 'room.json')); await flush(); e.action('floor-from-cloud'); await flush();
+  const transform = e.renderCalls.filter(c => c.name === 'setAssetTransform').pop().args[0];
+  assert.deepEqual([transform.x, transform.y, transform.z], [-1, -0.5, -1], 'bbox min minus floor origin / floor height');
+});
+
+test('a measured-scale cloud starts the floor map in metres and says the scale is self-reported', async () => {
+  const e = setup(); await flush(); e.step('capture');
+  const cloud = { version: 1, kind: 'colmap-sparse-point-cloud', units: 'm', coordinateFrame: 'right-handed-y-up', source: 'gym.mp4',
+    scale: { source: 'user-measured', metresPerUnit: 2.5, distance: 3, spanUnits: 1.2, selfReported: true, verified: false },
+    points: [[0, 0, 0, 1, 2, 3], [8, 0, 5, 1, 2, 3]], floorEstimate: { y: 0, origin: [0, 0], width: 8.2, depth: 5.1, support: 0.6, units: 'm' } };
+  e.file('site-asset-input', e.jsonFile(cloud, 'room.json')); await flush();
+  assert.match(e.root.textContent, /8\.2 × 5\.1 m \(your measured scale, unverified\)/); assert.match(e.root.textContent, /Start measured-scale floor map/);
+  e.action('floor-from-cloud'); await flush(); const s = e.state();
+  assert.equal(s.scene.width, 8.2); assert.equal(s.scene.depth, 5.1); assert.equal(s.scene.scaleConfirmed, false);
+  assert.match(s.scene.source.warnings[0], /measured scale \(3 m between two picked points\)\. Self-reported/);
+  assert.match(e.el('site-status').textContent, /at your measured scale \(8\.2 × 5\.1 m\)/); assert.equal(e.el('site-run').disabled, true);
 });
