@@ -5,6 +5,7 @@ export const SCHEMA = 'brainsnn.world.v1';
 export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
 export const ROBOTS = Object.freeze({
   cleaner: { name: 'Cleaning robot', width: 0.58, depth: 0.68, speed: 0.3 },
+  vacuum: { name: 'Robot vacuum', width: 0.35, depth: 0.35, speed: 0.3 },
   amr: { name: 'Mobile robot', width: 0.85, depth: 1.0, speed: 0.5 },
   humanoid: { name: 'Humanoid envelope', width: 0.7, depth: 0.6, speed: 0.4 },
 });
@@ -71,13 +72,15 @@ function startBlocked(world, robot, { cell, n, point, blocked, free }) {
   }
   const size = best ? Math.floor(Math.SQRT2 * (clear - pad - robot.margin) * 20) / 20 : 0, envelope = `${robot.width} × ${robot.depth} m robot with a ${robot.margin} m margin`;
   if (size < 0.1) return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}, or any robot at that margin. Review unknown areas and obstacles, check the scale, or capture more open floor.`), { advice: null });
-  return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}. The most open spot, ${at(best)}, fits a square robot up to about ${size.toFixed(2)} m at that margin. Use a smaller envelope or margin, check the scale with a measured distance, or capture more open floor.`), { advice: { start: best, size } });
+  return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}. The most open spot, ${at(best)}, fits a robot up to about ${size.toFixed(2)} × ${size.toFixed(2)} m at that margin. Use a smaller envelope or margin, check the scale with a measured distance, or capture more open floor.`), { advice: { start: best, size } });
 }
 export function planWorld(input, robotInput) {
   const world = normalizeWorld(input), error = planningGate(world);
   if (error) throw new Error(error);
   const robot = { width: numeric(robotInput.width, 0.1, 5, 'Robot width'), depth: numeric(robotInput.depth, 0.1, 5, 'Robot depth'), speed: numeric(robotInput.speed, 0.01, 3, 'Robot speed'), margin: numeric(robotInput.margin ?? 0.1, 0, 2, 'Clearance margin') };
-  let cell = Math.max(0.25, Math.sqrt(world.width * world.depth / LIMITS.cells));
+  // A finer grid inflates less (half a cell diagonal), so room-sized maps keep their real corridors; large maps
+  // still coarsen to stay within LIMITS.cells.
+  let cell = Math.max(0.1, Math.sqrt(world.width * world.depth / LIMITS.cells));
   while (Math.ceil(world.width / cell) * Math.ceil(world.depth / cell) > LIMITS.cells) cell *= 1.01;
   const nx = Math.ceil(world.width / cell), nz = Math.ceil(world.depth / cell), n = nx * nz;
   const radius = Math.hypot(robot.width, robot.depth) / 2 + robot.margin;
