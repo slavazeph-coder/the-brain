@@ -90,3 +90,34 @@ test('missing or contradictory evidence is refused instead of guessed',()=>{
   assert.throws(()=>proposeWorld({points:r.points,reconstruction:scrambled}),/which way is up/);
   assert.throws(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,cameraHeight:2.5,robotHeight:9}),/Robot height/);
 });
+
+test('a measured distance between two picked points sets the scale exactly',()=>{
+  // Both edges of a 0.9 m doorway in the far wall, as the user would pick them in the 3D view.
+  const r=room(),a=toColmap([2,1,6]),b=toColmap([2.9,1,6]);
+  const {world,report}=proposeWorld({points:r.points,reconstruction:r.reconstruction,cameraHeight:2,measurement:{a,b,distance:.9}});
+  assert.equal(report.scaleSource,'measured-pair');assert.equal(report.assumedCameraHeight,null);
+  assert.ok(Math.abs(report.metresPerUnit-1/K)<1e-9,`scale ${report.metresPerUnit}`);
+  assert.ok(Math.abs(report.measurement.span-.9*K)<1e-12);
+  // The measurement recovers how high the phone really was, regardless of the assumed height.
+  assert.ok(Math.abs(report.impliedCameraHeight-1.35)<.08,`implied ${report.impliedCameraHeight}`);
+  const p=toMap(report.transform,a),q=toMap(report.transform,b);
+  assert.ok(Math.abs(Math.hypot(p.x-q.x,p.y-q.y,p.z-q.z)-.9)<1e-9);
+  assert.equal(world.scaleReviewed,false);assert.equal(report.scaleVerified,false);
+  assert.match(world.geometrySource.warnings[0],/self-reported 0\.9 m measurement/);
+  // The same pair reported a third longer grows the map by a third.
+  const longer=proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a,b,distance:1.2}});
+  assert.ok(Math.abs(longer.report.metresPerUnit/report.metresPerUnit-4/3)<1e-9);
+  assert.ok(Math.abs(longer.world.width/world.width-4/3)<.1);
+});
+
+test('implausible measurements are refused with the reason',()=>{
+  const r=room(),a=toColmap([2,1,6]),b=toColmap([2.9,1,6]);
+  // 9 m for a doorway would put the phone ~13 m above the floor.
+  assert.throws(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a,b,distance:9}}),/phone 1[0-9]\.\d\d m above the floor/);
+  assert.throws(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a,b:a,distance:1}}),/two different points/);
+  assert.throws(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a,b,distance:NaN}}),/Measured distance/);
+  assert.throws(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a,b,distance:.01}}),/Measured distance/);
+  assert.throws(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a:[1,2],b,distance:1}}),/Pick two/);
+  // The assumed height is not used, so an out-of-range value does not block a measured proposal.
+  assert.doesNotThrow(()=>proposeWorld({points:r.points,reconstruction:r.reconstruction,cameraHeight:NaN,measurement:{a,b,distance:.9}}));
+});

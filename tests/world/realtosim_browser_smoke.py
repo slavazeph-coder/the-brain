@@ -120,9 +120,56 @@ def check(browser, url, ply, evidence, mobile=False):
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
     page.locator('#viewport').scroll_into_view_if_needed()
     page.screenshot(path=str(OUTPUT / f'{label}.png'), full_page=mobile)
+    measured = calibrate(page, mobile, label)
     assert not errors, errors
     context.close()
-    print(f'{label}: proposed, gated, reviewed and planned {distance} m', flush=True)
+    print(f'{label}: proposed, gated, reviewed and planned {distance} m; measured scale {measured:.4f} m/unit', flush=True)
+
+
+def calibrate(page, mobile, label):
+    """Tap two reconstruction points, enter their true distance and re-propose at that exact scale."""
+    page.on('dialog', lambda dialog: dialog.accept())
+    page.locator('[data-tab=capture]').click()
+    page.locator('[data-action=pick-scale]').click()
+    assert page.locator('[data-action=pick-scale]').get_attribute('aria-pressed') == 'true'
+    canvas = page.locator('#visual-canvas')
+    canvas.scroll_into_view_if_needed()
+    box = canvas.bounding_box()
+    picks = 0
+    # Taps far apart across the fitted cloud; a miss (no point within reach) is reported and retried.
+    for dx, dy in [(-.3, 0), (-.3, .1), (-.25, -.1), (.3, 0), (.3, .1), (.25, -.1), (0, .2)]:
+        x, y = box['x'] + box['width'] * (.5 + dx), box['y'] + box['height'] * (.5 + dy)
+        if mobile:
+            page.touchscreen.tap(x, y)
+        else:
+            page.mouse.click(x, y)
+        page.wait_for_timeout(100)
+        if picks == 0 and 'other end' in page.locator('#status').inner_text():
+            picks = 1
+        if page.locator('#picked-span').count():
+            picks = 2
+            break
+    assert picks == 2, page.locator('#status').inner_text()
+    assert 'Enter the distance you measured' in page.locator('#status').inner_text()
+    page.screenshot(path=str(OUTPUT / f'{label}-calibration.png'))
+    span = float(page.locator('#picked-span').inner_text().split(':')[1].split()[0])
+    # The fixture's true metric distance between any two of its points is the COLMAP span divided by K.
+    page.locator('#measured-distance').fill(f'{span / K:.4f}')
+    page.locator('[data-action=propose-measured]').click()
+    page.wait_for_function("/at your measured .* m scale/.test(document.querySelector('#status').textContent)")
+    assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+    assert 'self-reported' in page.locator('#panel').inner_text()
+    assert not page.locator('#scale-reviewed').is_checked()
+    page.locator('[data-tab=evidence]').click()
+    with page.expect_download() as download:
+        page.locator('[data-action=proof]').click()
+    proof = json.loads(Path(download.value.path()).read_text())
+    event = [e for e in proof['events'] if e['type'] == 'map_proposed'][-1]['detail']
+    assert event['scaleSource'] == 'measured-pair' and event['assumedCameraHeight'] is None and event['scaleVerified'] is False
+    assert event['measurement']['selfReported'] is True and len(event['measurement']['a']) == 3
+    assert abs(event['metresPerUnit'] * K - 1) < 2e-3, event['metresPerUnit']
+    assert abs(event['impliedCameraHeight'] - 1.35) < .1, event['impliedCameraHeight']
+    return event['metresPerUnit']
 
 
 if __name__ == '__main__':

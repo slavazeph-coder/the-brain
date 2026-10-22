@@ -51,7 +51,15 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
   const uniforms=Object.fromEntries(['view','projection','viewport','focal','size','mode','cloud'].map(n=>[n,gl.getUniformLocation(program,n)]));
   let points=new Float32Array(), sorted=new Float32Array(), order=[], yaw=.65, pitch=.5, distance=13, target=[0,1,0], mode=0, pointSize=1, disposed=false, frame=0, auto=false, last=0;
-  let walking=false, sortDirty=true, visible=true, gesture=null, cloud=true, radius=1, sourcePhoto=false, lost=false;
+  let walking=false, sortDirty=true, visible=true, gesture=null, cloud=true, radius=1, sourcePhoto=false, lost=false, markers=[], markerCount=0;
+  // Picked reference points for scale calibration: drawn larger, in cyan, after the scene.
+  const markerBuffer=gl.createBuffer(), markerVao=gl.createVertexArray();gl.bindVertexArray(markerVao);gl.bindBuffer(gl.ARRAY_BUFFER,markerBuffer);
+  [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
+  function updateMarkers(){const data=new Float32Array(markers.length*STRIDE);markerCount=0;
+    for(const index of markers){const at=index*STRIDE;if(!Number.isInteger(index)||at<0||at+STRIDE>points.length)continue;data.set(points.subarray(at,at+STRIDE),markerCount*STRIDE);data.set([.408,.918,1,1],markerCount*STRIDE+6);markerCount++;}
+    gl.bindBuffer(gl.ARRAY_BUFFER,markerBuffer);gl.bufferData(gl.ARRAY_BUFFER,data.subarray(0,markerCount*STRIDE),gl.DYNAMIC_DRAW);schedule();}
+  const camera=()=>{const eye=[target[0]+distance*Math.sin(yaw)*Math.cos(pitch),target[1]+distance*Math.sin(pitch),target[2]+distance*Math.cos(yaw)*Math.cos(pitch)];
+    return {view:lookAt(eye,target),projection:perspective(canvas.width/canvas.height,Math.max(.00001,radius/10000),Math.max(10,radius*100,distance*10))};};
   const originalTouchAction=canvas.style.touchAction;
   canvas.style.touchAction='none';
   const listeners=[], pointers=new Map();
@@ -60,10 +68,11 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   function resize(){const r=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.5);const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;sortDirty=true;}schedule();}
   function render(now){frame=0;if(disposed||lost||!visible||document.hidden)return;
     if(auto&&!matchMedia('(prefers-reduced-motion: reduce)').matches){yaw+=Math.min(40,now-(last||now))*.00008;sortDirty=true;}last=now;
-    const eye=[target[0]+distance*Math.sin(yaw)*Math.cos(pitch),target[1]+distance*Math.sin(pitch),target[2]+distance*Math.cos(yaw)*Math.cos(pitch)],view=lookAt(eye,target);
+    const {view,projection}=camera();
     if(sortDirty&&points.length){order.sort((a,b)=>{const ai=a*STRIDE,bi=b*STRIDE;return (points[ai]-points[bi])*view[2]+(points[ai+1]-points[bi+1])*view[6]+(points[ai+2]-points[bi+2])*view[10];});for(let i=0;i<order.length;i++)sorted.set(points.subarray(order[i]*STRIDE,order[i]*STRIDE+STRIDE),i*STRIDE);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,sorted,gl.DYNAMIC_DRAW);sortDirty=false;}
     gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.02,.029,.047,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(program);gl.bindVertexArray(vao);
-    gl.uniformMatrix4fv(uniforms.view,false,view);gl.uniformMatrix4fv(uniforms.projection,false,perspective(canvas.width/canvas.height,Math.max(.00001,radius/10000),Math.max(10,radius*100,distance*10)));gl.uniform2f(uniforms.viewport,canvas.width,canvas.height);gl.uniform1f(uniforms.focal,canvas.height/(2*Math.tan(Math.PI/6)));gl.uniform1f(uniforms.size,mode===2?pointSize*.5:pointSize);gl.uniform1i(uniforms.mode,mode);gl.uniform1i(uniforms.cloud,cloud?1:0);gl.drawArraysInstanced(gl.TRIANGLES,0,6,points.length/STRIDE);
+    gl.uniformMatrix4fv(uniforms.view,false,view);gl.uniformMatrix4fv(uniforms.projection,false,projection);gl.uniform2f(uniforms.viewport,canvas.width,canvas.height);gl.uniform1f(uniforms.focal,canvas.height/(2*Math.tan(Math.PI/6)));gl.uniform1f(uniforms.size,mode===2?pointSize*.5:pointSize);gl.uniform1i(uniforms.mode,mode);gl.uniform1i(uniforms.cloud,cloud?1:0);gl.drawArraysInstanced(gl.TRIANGLES,0,6,points.length/STRIDE);
+    if(markerCount){gl.bindVertexArray(markerVao);gl.uniform1f(uniforms.size,pointSize*3);gl.uniform1i(uniforms.mode,0);gl.uniform1i(uniforms.cloud,1);gl.drawArraysInstanced(gl.TRIANGLES,0,6,markerCount);}
     if(auto)schedule();
   }
   function zoom(value){distance=Math.max(radius*.01,Math.min(radius*50,value));}
@@ -82,15 +91,27 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   const observer=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting??true;if(visible)schedule();});observer.observe(canvas);resize();
   function fit(photo=false){if(!points.length)return;const b=bounds(points);radius=b.radius;target=b.center;const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*1.15;yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
   return {
-    setPoints(p,{photo=false,kind='point-cloud'}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;auto=false;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);fit(photo);},
-    clear(){points=new Float32Array();sorted=new Float32Array();order=[];auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
+    setPoints(p,{photo=false,kind='point-cloud'}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;auto=false;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);markers=[];updateMarkers();fit(photo);},
+    clear(){points=new Float32Array();sorted=new Float32Array();order=[];markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
     setMode(m){mode=Number.isInteger(m)?Math.max(0,Math.min(2,m)):0;schedule();},
     setSize(n){if(Number.isFinite(n))pointSize=Math.max(.25,Math.min(3,n));schedule();},
     reset(){fit(sourcePhoto);},photoCamera(){fit(true);},
-    flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;fit();},
+    flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
     orbit(){auto=!auto;schedule();return auto;},
     walk(){walking=!walking;if(walking){pitch=0;distance=Math.min(distance,radius*.5);sortDirty=true;schedule();}else fit();return walking;},
     snapshot(){return canvas.toDataURL('image/png');},
-    destroy(){disposed=true;cancelAnimationFrame(frame);listeners.forEach(fn=>fn());resizeObserver.disconnect();observer.disconnect();canvas.style.touchAction=originalTouchAction;gl.deleteBuffer(buffer);gl.deleteVertexArray(vao);gl.deleteProgram(program);}
+    /** Index (in setPoints order) of the point under a client position, or -1 if none is within `tolerance` CSS pixels.
+     * Of the points within 4 px of the nearest one, the closest to the camera wins: the surface you see, not one behind it. */
+    pick(clientX,clientY,tolerance=14){if(!points.length)return -1;const r=canvas.getBoundingClientRect(),{view,projection}=camera(),m=new Float32Array(16),hits=[];
+      for(let i=0;i<4;i++)for(let j=0;j<4;j++){let v=0;for(let k=0;k<4;k++)v+=projection[k*4+i]*view[j*4+k];m[j*4+i]=v;}
+      let nearest=tolerance;
+      for(let i=0,n=0;i<points.length;i+=STRIDE,n++){const x=points[i],y=points[i+1],z=points[i+2],w=m[3]*x+m[7]*y+m[11]*z+m[15];if(w<=0)continue;
+        const d=Math.hypot(r.left+((m[0]*x+m[4]*y+m[8]*z+m[12])/w+1)/2*r.width-clientX,r.top+(1-(m[1]*x+m[5]*y+m[9]*z+m[13])/w)/2*r.height-clientY);
+        if(d<=tolerance){hits.push([n,d,w]);nearest=Math.min(nearest,d);}}
+      let best=-1,depth=Infinity;for(const [n,d,w] of hits)if(d<=nearest+4&&w<depth){depth=w;best=n;}
+      return best;},
+    /** Highlight points by index (e.g. picked scale references); they follow flips and clear with new points. */
+    setMarkers(indices=[]){markers=indices.slice(0,16);updateMarkers();},
+    destroy(){disposed=true;cancelAnimationFrame(frame);listeners.forEach(fn=>fn());resizeObserver.disconnect();observer.disconnect();canvas.style.touchAction=originalTouchAction;gl.deleteBuffer(buffer);gl.deleteBuffer(markerBuffer);gl.deleteVertexArray(vao);gl.deleteVertexArray(markerVao);gl.deleteProgram(program);}
   };
 }
