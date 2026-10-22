@@ -88,6 +88,18 @@ def test_prepared_job_never_spends_compute_without_start(client):
     assert client.post(f'/v1/jobs/{jid}/start',json={},headers=HEADERS).status_code==409
     assert client.delete('/v1/uploads/'+uid,headers=HEADERS).json()['deleted'] is True
 
+def test_tickets_keep_a_reverse_proxy_prefix(tmp_path):
+    # Behind a proxy that strips /prefix (uvicorn --root-path /prefix), clients only trust URLs under that prefix.
+    with TestClient(create_app(root=tmp_path,token=TOKEN),root_path='/prefix') as c:
+        jid,_=make_job(c)
+        assert c.post(f'/v1/jobs/{jid}/start',json={},headers=HEADERS).status_code==200
+        assert wait(c,jid)['status']=='complete'
+        url=c.post(f'/v1/jobs/{jid}/ticket',json={'artifact':0},headers=HEADERS).json()['url']
+        assert url.startswith('/prefix/v1/download/'),url
+    with TestClient(create_app(root=tmp_path,token=TOKEN)) as c:
+        jid,_=make_job(c);c.post(f'/v1/jobs/{jid}/start',json={},headers=HEADERS);wait(c,jid)
+        assert c.post(f'/v1/jobs/{jid}/ticket',json={'artifact':0},headers=HEADERS).json()['url'].startswith('/v1/download/')
+
 def test_integrity_job_and_ticketed_streaming(client):
     jid,uid=make_job(client)
     assert client.post(f'/v1/jobs/{jid}/start',json={},headers=HEADERS).status_code==200

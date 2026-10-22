@@ -300,12 +300,29 @@ def check_app_shell(browser):
     page.locator('[data-action=proof]').click();page.wait_for_timeout(300);assert page.evaluate('window.__dl')==0
     assert not errors,errors;ctx.close()
 
+def check_capture_keeps_user_map(browser):
+    """Adding a capture replaces only the untouched sample; an edited or imported authored map is the user's work."""
+    from PIL import Image
+    import io
+    url=URL if URL.endswith('/world/index.html') else URL.rstrip('/')+'/world/index.html'
+    ctx=browser.new_context();page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.locator('[data-tab=world]').click();page.locator('#map-name').fill('My measured gym');page.locator('#map-name').press('Enter')
+    b=io.BytesIO();Image.new('RGB',(20,20)).save(b,format='PNG')
+    page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
+    page.locator('[data-tab=world]').click()
+    assert page.locator('#map-name').input_value()=='My measured gym','edited authored map was discarded'
+    page.locator('#hero-sample').click()
+    page.locator('#files').set_input_files({'name':'camera-2.png','mimeType':'image/png','buffer':b.getvalue()})
+    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
+    assert not errors,errors;ctx.close()
+
 if __name__=='__main__':
     with sync_playwright() as p:
         for name in os.environ.get('WORLD_BROWSERS','chromium').split(','):
             executable=os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
             browser=getattr(p,name).launch(headless=True, **({'executable_path':executable} if name=='chromium' and executable else {}))
-            check(browser,False);check(browser,True);check_measurements(browser);check_app_shell(browser)
+            check(browser,False);check(browser,True);check_measurements(browser);check_app_shell(browser);check_capture_keeps_user_map(browser)
             if os.environ.get('WORLD_SITE_URL'):check_routes(browser,os.environ['WORLD_SITE_URL'].rstrip('/'))
             if os.environ.get('WORLD_PHOTO'):check_inference(browser,os.environ['WORLD_PHOTO'])
             browser.close()

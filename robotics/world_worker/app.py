@@ -574,7 +574,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         raw=json.dumps({'owner':principal.owner_id,'credential':principal.credential_hash,'job':jid,'artifact':body.artifact,'expires':int(time.time())+60},separators=(',',':')).encode()
         payload=base64.urlsafe_b64encode(raw).decode().rstrip('=')
         sig=hmac.new(ticket_key,payload.encode(),hashlib.sha256).hexdigest()
-        return {'url':f'/v1/download/{payload}.{sig}','expires_in':60}
+        # Behind a reverse-proxy prefix (ASGI root_path) the ticket must stay under that prefix, as clients check.
+        prefix=str(request.scope.get('root_path') or '').rstrip('/')
+        return {'url':f'{prefix}/v1/download/{payload}.{sig}','expires_in':60}
 
     @app.api_route('/v1/download/{ticket}',methods=['GET','HEAD'])
     async def download(ticket:str):
