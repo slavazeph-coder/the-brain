@@ -16,7 +16,7 @@ by design and the viewer says so.
 | Hand-off to Arena sim (point cloud → robot workspace) | real | "Open in Arena sim" → `brainsnn-point-cloud.json` (5,669 core pts, 556 outliers recorded) → Arena site workspace renders it upright on the floor grid behind the G1 proxy; `browser-video-arena-sim.png` |
 | Upload → viewer wall time | 11.0 s | `output/playwright/world/browser-video-timings.json` |
 | Dense GPU reconstruction (MapAnything / VGGT) | not in this path | needs GB10/4090 gate; not fired |
-| Floor map from the video | suggestion only | hand-off carries `floorEstimate` (densest low band); Arena offers "Start unscaled floor map from this cloud" when support ≥ 5%. Synthetic room: grid coincides with floor points, walls on the edges. Fountain fixture: 11% support, 5.7 × 1.9 — weak, it is a facade |
+| Floor map from the video/photo | suggestion only | hand-off fits a floor plane (RANSAC, lowest dense layer), gravity-aligns the cloud when ≥10% of points sit on it, squares the heading on the floor band's principal axis, then estimates the footprint. Arena offers "Start unscaled floor map from this cloud" when band support ≥ 5% and places the cloud so the floor is on the grid. Synthetic room: grid on floor points, walls on edges. Fountain: 6.8% plane inliers → not rotated (facade). Owner's mezzanine photo: 25° pitch recovered, 55% of points on the floor, floor flat to ±0.02 across the depth; ~20° yaw residual because a single photo's floor is a perspective wedge |
 
 Input: `fountain-clip.mp4` (1,456,188 bytes, SHA256 `7ecfa275…b7f5e`), 11 Strecha
 Fountain photographs rendered as a 5.5 s 1280×960 H.264 sequence. It is a test
@@ -73,6 +73,8 @@ a smaller footprint for sparse clouds. Screenshots:
 `browser-video-reconstruction.png`.
 
 ## Known limitations (say these out loud in the demo)
+
+- Single photo (Depth Anything on-device, ~6 s): relative depth, no multi-view; the floor is a wedge, so the footprint box is coarse and the heading can be ~20° off. Good for "photo → explorable 3D → robot on the floor"; not a map.
 
 - Sparse SfM only on this path. Dense GPU reconstruction (MapAnything on GB10, VGGT on 4090) exists but is gated and was not fired.
 - No metric scale, no collision geometry. The Arena cloud is a visual reference; the planner still consumes the hand-drawn, measured floor map.
