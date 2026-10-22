@@ -413,6 +413,40 @@ def test_cancelled_queued_job_never_starts_and_cannot_restart(configured, tmp_pa
             gate.set()
 
 
+def test_cancelled_completed_job_cannot_interrupt_receipt_verification(signed_options, monkeypatch):
+    # Cancellation coverage for the completed phase: cancel_job returns
+    # status 'complete' for jobs that are no longer ACTIVE, so it must NOT
+    # set hash_cancellations[jid]. The receipt verification thread uses a
+    # local cancelled event, not hash_cancellations, so a concurrent cancel
+    # request must not interrupt the in-flight verification — it signs 200.
+    options, _, key, _ = signed_options
+    with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
+        jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+        entered, release = threading.Event(), threading.Event()
+        def slow(*args, **kwargs):
+            entered.set(); assert release.wait(5)
+            return file_digest(*args, **kwargs)
+        monkeypatch.setattr('robotics.world_worker.app.file_digest', slow)
+        future = executor.submit(receipt, client, jid, A, body)
+        try:
+            assert entered.wait(5)
+            # The job is already complete, so cancel_job is not an active
+            # cancellation: it returns 'complete' and does not set the
+            # receipt thread's cancellation event.
+            cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
+            assert cancel.status_code == 200 and cancel.json()['status'] == 'complete'
+            # The receipt verification thread is unaffected by the cancel:
+            # it finishes normally and signs.
+        finally:
+            release.set()
+        response = future.result(5)
+        assert response.status_code == 200, response.text
+        verify_receipt(response.json(), key, SCENARIO)
+        # The job is still complete after the cancel attempt.
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
+
+
 def test_cancelled_running_adapter_process_is_reaped_and_job_stays_cancelled(configured, tmp_path):
     # Cancellation regression for the running phase: the owner cancels while
     # the adapter subprocess is still alive; stop_process must kill it, the
