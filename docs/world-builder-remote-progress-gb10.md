@@ -1,12 +1,30 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-22T14:40Z
+Last updated: 2026-10-22T14:55Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
-- **Run 40 (this run): 4090 probe receipt commit + local regression re-verified**
+- **Run 42 (this run): DELETE-semantics tests — COMMITTED, GREEN**
+  - Probe (TestClient) confirmed existing behavior: cross-owner DELETE → 404;
+    owner DELETE → 200, job dir removed, DB row removed (COUNT=0), GET → 404,
+    upload survives. No app.py patch needed.
+  - Added 2 tests to `tests/world/test_report_receipts.py`:
+    - `test_delete_completed_job_artifacts_frees_artifacts_and_row_without_reversing_status`
+      — pins 404-vs-409 distinction (row-absent vs evidence-gone), upload retention,
+      offline verify_receipt of captured signed receipt post-deletion.
+    - `test_delete_completed_job_artifacts_by_wrong_owner_is_noop`
+      — cross-tenant + OPERATOR delete no-op: row stays 1, dir intact,
+      owner receipt re-issue still signs 200.
+  - Full suite:
+    - `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail
+    - `pytest tests/world/test_report_receipts.py -q` → **24 passed** (9.35 s, up from 22)
+  - Commit: `24950b4 test(world): DELETE artifacts on completed job frees row + dir; cross-owner no-op`
+    (1 file changed, 52 insertions). Pushed to `hermes/world-builder-gb10`.
+    No force-push/merge/deploy. No 4090 GPU budget consumed.
+  - Next: 4090 MapAnything held-out-frame inference smoke test (SSH, separate branch).
+- **Run 40 (prev): 4090 probe receipt commit + local regression re-verified**
   - Run 39's 4090 GPU verification (probe + model integrity) committed to the
     progress file; no new local code changed this run.
   - 4090 receipt (Run 39, via `root@ssh2.vast.ai:23990`, key
@@ -93,11 +111,10 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Next bounded action
 
-- Run 39: alternate to a 4090 GPU task — short authenticated SSH to
-  `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`), confirm
-  hostname + GPU, run one bounded experiment/config check on
-  `hermes/world-builder-4090`. Preserve existing 4090 experiments and
-  GPU budgets. No permanent tunnel.
+- Run 43: 4090 MapAnything held-out-frame inference smoke test — short
+  authenticated SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
+  confirm hostname + GPU before running. Reuse verified pinned weights from
+  GB10; do not replace base conda env. No permanent tunnel.
 - Later: webkit UI smoke; 4090 parity check.
 
 ## Guardrails
