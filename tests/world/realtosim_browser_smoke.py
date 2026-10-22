@@ -126,34 +126,57 @@ def check(browser, url, ply, evidence, mobile=False):
     print(f'{label}: proposed, gated, reviewed and planned {distance} m; measured scale {measured:.4f} m/unit', flush=True)
 
 
+SCROLL_SETTLED = """() => new Promise(resolve => {
+  let last = -1, still = 0;
+  const tick = () => { still = scrollY === last ? still + 1 : 0; last = scrollY; if (still >= 6) resolve(); else requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+})"""
+
+# Client coordinates of lit (drawn) pixels on the 3D view, inside the visible viewport: candidates from the left and right.
+VISIBLE_POINT_TARGETS = """() => {
+  const canvas = document.querySelector('#visual-canvas'), rect = canvas.getBoundingClientRect(), w = canvas.width, h = canvas.height;
+  const copy = document.createElement('canvas'); copy.width = w; copy.height = h;
+  const context = copy.getContext('2d'); context.drawImage(canvas, 0, 0);
+  const data = context.getImageData(0, 0, w, h).data, lit = [];
+  for (let y = 0; y < h; y += 3) for (let x = 0; x < w; x += 3) {
+    const i = (y * w + x) * 4, cx = rect.left + (x + .5) / w * rect.width, cy = rect.top + (y + .5) / h * rect.height;
+    if (data[i] + data[i + 1] + data[i + 2] > 300 && cx > 4 && cy > 4 && cx < innerWidth - 4 && cy < innerHeight - 4) lit.push([cx, cy]);
+  }
+  lit.sort((a, b) => a[0] - b[0]);
+  const at = q => lit[Math.min(lit.length - 1, Math.floor(q * lit.length))];
+  return {lit: lit.length, canvas: [w, h], rect: [rect.left, rect.top, rect.width, rect.height],
+    left: lit.length ? [.1, .15, .2, .25].map(at) : [], right: lit.length ? [.9, .85, .8, .75].map(at) : []};
+}"""
+
+
 def calibrate(page, mobile, label):
     """Tap two reconstruction points, enter their true distance and re-propose at that exact scale."""
     page.on('dialog', lambda dialog: dialog.accept())
     page.locator('[data-tab=capture]').click()
     page.locator('[data-action=pick-scale]').click()
     assert page.locator('[data-action=pick-scale]').get_attribute('aria-pressed') == 'true'
-    canvas = page.locator('#visual-canvas')
-    canvas.scroll_into_view_if_needed()
-    picks, trail = 0, []
-    # Taps alternate between the two sides of the fitted cloud, like the two ends of a measured span, and are
-    # spaced beyond the double-tap window so WebKit cannot treat a pair as a zoom gesture. A miss is reported and retried.
-    for dx, dy in [(-.3, 0), (.3, 0), (-.3, .1), (.3, .1), (-.25, -.1), (.25, -.1), (0, .2)]:
-        box = canvas.bounding_box()
-        x, y = box['x'] + box['width'] * (.5 + dx), box['y'] + box['height'] * (.5 + dy)
-        if mobile:
-            page.touchscreen.tap(x, y)
-        else:
-            page.mouse.click(x, y)
-        page.wait_for_timeout(600 if mobile else 150)
-        trail.append(page.locator('#status').inner_text())
-        if picks == 0 and 'other end' in trail[-1]:
-            picks = 1
-        if page.locator('#picked-span').count():
-            picks = 2
-            break
-    if picks != 2:
-        page.screenshot(path=str(OUTPUT / f'{label}-calibration-failed.png'), full_page=True)
-    assert picks == 2, {'statuses': trail, 'zoom': page.evaluate('visualViewport.scale'), 'scrollY': page.evaluate('scrollY')}
+    # The page scrolls smoothly; an animating scroll would move the canvas under the taps. Jump, then wait until still.
+    page.locator('#visual-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+    page.evaluate(SCROLL_SETTLED)
+    trail = []
+    # Tap where points are actually drawn, as a person would: lit pixels of the rendered cloud (the WebGL canvas
+    # preserves its drawing buffer). One end on the left of the cloud, then the other on the right.
+    for side, done in (('left', "/other end/.test(document.querySelector('#status').textContent)"),
+                       ('right', "!!document.querySelector('#picked-span')")):
+        targets = page.evaluate(VISIBLE_POINT_TARGETS)
+        assert targets[side], targets
+        for x, y in targets[side]:
+            if mobile:
+                page.touchscreen.tap(x, y)
+            else:
+                page.mouse.click(x, y)
+            page.wait_for_timeout(250)
+            trail.append(page.locator('#status').inner_text())
+            if page.evaluate(done):
+                break
+        if not page.evaluate(done):
+            page.screenshot(path=str(OUTPUT / f'{label}-calibration-failed.png'), full_page=True)
+        assert page.evaluate(done), {'side': side, 'statuses': trail, 'targets': targets, 'zoom': page.evaluate('visualViewport.scale')}
     assert 'Enter the distance you measured' in page.locator('#status').inner_text()
     page.screenshot(path=str(OUTPUT / f'{label}-calibration.png'))
     span = float(page.locator('#picked-span').inner_text().split(':')[1].split()[0])
