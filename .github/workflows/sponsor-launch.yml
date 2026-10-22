@@ -18,7 +18,7 @@ on:
       - 'brainsnn-r3f-app/src/app/navigation.js'
       - '.github/workflows/sponsor-launch.yml'
   workflow_run:
-    workflows: ['Deploy BrainSNN app to Railway']
+    workflows: ['Verify BrainSNN live deploy']
     types: [completed]
     branches: [main]
   workflow_dispatch:
