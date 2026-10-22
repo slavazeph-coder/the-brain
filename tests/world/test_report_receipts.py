@@ -447,6 +447,58 @@ def test_cancelled_completed_job_cannot_interrupt_receipt_verification(signed_op
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
 
 
+def test_delete_completed_job_artifacts_frees_artifacts_and_row_without_reversing_status(signed_options, tmp_path):
+    # DELETE /v1/jobs/{jid}/artifacts on a completed job: the owner's delete
+    # must remove the job directory AND the DB row (receipt re-issue -> 404,
+    # not 409 'no evidence' — the row is gone, not merely un-evidenced); the
+    # upload survives (separate lifecycle); and a foreign tenant's delete must
+    # 404 without touching the owner's row or directory.
+    options, _, key, _ = signed_options
+    with TestClient(create_app(**options)) as client:
+        jid, uid, _ = complete(client, A)
+        # Capture a receipt before deletion so we can verify offline
+        # verification still works after the job row and files are gone.
+        signed = receipt(client, jid).json()
+        verify_receipt(signed, key, SCENARIO)
+        # Cross-owner delete: no row, no directory removed.
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(B)).status_code == 404
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).status_code == 200
+        # Owner delete: directory and row both gone.
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
+        assert not (options['root'] / 'jobs' / jid).exists()
+        assert client.app.state.store.db.execute(
+            'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0] == 0
+        # Re-issue: 404 (row absent) — NOT 409 (evidence gone). Distinguishes
+        # deletion from the 'no evidence' path on a still-existing row.
+        assert receipt(client, jid, body=request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+                       if client.get('/v1/jobs/' + jid, headers=headers(A)).status_code == 200
+                       else {'scenarioSha256': hashlib.sha256(SCENARIO).hexdigest(),
+                             'geometrySha256': None, 'artifactRefs': [{'name': 'capture-integrity.json', 'sha256': '0' * 64}]}
+                       ).status_code == 404
+        # Upload survives job deletion (separate retention lifecycle).
+        assert client.get('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
+        # Offline historical verification is independent of retention.
+        verify_receipt(signed, key, SCENARIO)
+
+
+def test_delete_completed_job_artifacts_by_wrong_owner_is_noop(signed_options):
+    # A different tenant attempting to delete a completed job's artifacts
+    # gets 404 and the owner's job row + directory are untouched; a subsequent
+    # receipt re-issue by the owner still succeeds (200), proving the delete
+    # was a no-op, not a partial or cross-tenant mutation.
+    options, _, key, _ = signed_options
+    with TestClient(create_app(**options)) as client:
+        jid, uid, _ = complete(client, A)
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(B)).status_code == 404
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(OPERATOR)).status_code == 404
+        # Owner's job is intact: row present, directory present, receipt signs.
+        assert client.app.state.store.db.execute(
+            'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0] == 1
+        assert (options['root'] / 'jobs' / jid).exists()
+        signed = receipt(client, jid).json()
+        assert signed['payloadText'] and verify_receipt(signed, key, SCENARIO)
+
+
 def test_cancelled_running_adapter_process_is_reaped_and_job_stays_cancelled(configured, tmp_path):
     # Cancellation regression for the running phase: the owner cancels while
     # the adapter subprocess is still alive; stop_process must kill it, the
