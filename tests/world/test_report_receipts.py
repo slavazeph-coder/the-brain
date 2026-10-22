@@ -342,7 +342,14 @@ def test_report_receipt_exceeding_wait_budget_returns_504_and_releases_slot(sign
         # While the overrun thread still runs, the slot stays held: 429.
         assert receipt(client, jid, A, body).status_code == 429
         release.set()
-        # Thread finishes; the task completes; a fresh request signs normally.
+        # Wait for the overrun thread to actually return and release the slot
+        # before asserting success: the 429/200 boundary is timing-dependent
+        # until the task is done, so poll until a fresh request signs normally.
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if receipt(client, jid, A, body).status_code == 200:
+                break
+            time.sleep(0.05)
         assert receipt(client, jid, A, body).status_code == 200, client.get('/v1/jobs/' + jid, headers=headers(A)).json()
 
 
