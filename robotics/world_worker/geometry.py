@@ -32,6 +32,7 @@ def write_point_cloud(path: Path, points, colours, *, coordinate_frame: str):
 
 ARENA_CLOUD_MAX_POINTS = 50_000  # The browser's ARENA_MAX_POINTS hand-off budget.
 ARENA_CLOUD_MAX_BYTES = 16 * 1024 ** 2
+ARENA_CLOUD_MAX_GRID_CELLS = 250_000  # scene_compiler.MAX_GRID_CELLS
 
 
 def _finite(value):
@@ -62,6 +63,17 @@ def load_arena_cloud(path: Path):
         if not (isinstance(row, list) and len(row) == 6 and all(_finite(v) for v in row)
                 and all(abs(v) <= MAX_PREVIEW_COORDINATE for v in row[:3]) and all(0 <= v <= 255 for v in row[3:])):
             raise ValueError('Every point must be finite x, y, z within bounds plus red, green, blue from 0 to 255.')
+    # Same bound as the scene compiler's unknown-space grid (scene_compiler.MAX_GRID_CELLS over the 2–98% footprint), so a
+    # cloud with a few far-apart points is refused at upload instead of occupying the worker for its whole time budget.
+    def core(axis):
+        values = sorted(row[axis] for row in points)
+        def at(q):
+            i = (len(values) - 1) * q; lo = math.floor(i)
+            return values[lo] + (values[min(lo + 1, len(values) - 1)] - values[lo]) * (i - lo)
+        return at(.02), at(.98)
+    (x0, x1), (z0, z1) = core(0), core(2)
+    if (math.ceil(x1 / .5) - math.floor(x0 / .5)) * (math.ceil(z1 / .5) - math.floor(z0 / .5)) > ARENA_CLOUD_MAX_GRID_CELLS:
+        raise ValueError('The cloud spans an area larger than 250 × 250 m at 0.5 m cells. Check the scale or remove stray points.')
     scale, units = value.get('scale'), value['units']
     if units == 'm':
         if not (isinstance(scale, dict) and scale.get('source') == 'user-measured' and _finite(scale.get('metresPerUnit'))

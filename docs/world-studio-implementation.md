@@ -56,7 +56,7 @@ Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `m
 3. After an explicit consent tick, the browser uploads the same Arena point-cloud JSON it exports as a `cloud` upload: `.json`, up to 16 MiB and 50,000 points.
 4. `scene-usd` skips COLMAP and compiles that cloud.
 
-The worker parses the hand-off strictly: no NaN, bounded coordinates and colours, and the known fields only. A metric cloud must carry its scale as user-measured, self-reported and unverified, and a single-photo preview is refused. The scene opens in the dialog, which says the metres are self-reported. The request is recorded in the proof pack with the metres per unit.
+The worker parses the hand-off strictly: no NaN, bounded coordinates and colours, a footprint the compiler's unknown-space grid can cover (at most 250 × 250 m at 0.5 m cells, also enforced in the compiler), and the known fields only. A metric cloud must carry its scale as user-measured, self-reported and unverified, and a single-photo preview is refused. The scene opens in the dialog, which says the metres are self-reported. The request is recorded in the proof pack with the metres per unit.
 
 Real run on the Mip-NeRF 360 room reconstruction. Two tapped points with an illustrative 0.66 m per unit (not a measurement of that room) gave a 3.97 × 7.95 m floor and 5 walls 1.5–2.2 m tall. `scene.usda` declared `metersPerUnit = 1`, the compile took 1.5 s, and the round trip from the click took about 6 s in Chromium at desktop and phone sizes.
 

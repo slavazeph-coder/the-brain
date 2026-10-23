@@ -611,6 +611,9 @@ def test_measured_cloud_handoff_reaches_a_cloud_engine(tmp_path):
     json.dumps(arena_cloud(points=[[0,0,0,1,2,300]])).encode(),
     json.dumps(arena_cloud(points=[[1e9,0,0,1,2,3]])).encode(),
     json.dumps(arena_cloud(points=[[0,0,0,1,2,True]])).encode(),
+    # A few points at opposite corners of the coordinate limit: valid numbers, but a footprint of ~10^15 grid cells.
+    json.dumps(arena_cloud(points=[[x,0,z,1,2,3] for x in (-9e6,9e6) for z in (-9e6,9e6) for _ in range(50)])).encode(),
+    json.dumps(arena_cloud(points=[[x*2,0,z*2,1,2,3] for x in range(160) for z in range(160)])).encode(),
     json.dumps(arena_cloud(scale=None)).encode(),
     json.dumps(arena_cloud(scale={'source':'user-measured','metresPerUnit':.42,'selfReported':True,'verified':True})).encode(),
     json.dumps(arena_cloud(units='arbitrary')).encode(),

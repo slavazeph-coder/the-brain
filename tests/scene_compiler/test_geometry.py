@@ -111,3 +111,12 @@ class Usd(unittest.TestCase):
             record = sc.emit_usd(tmp, scene("arbitrary"), [[0, 0, 0, 1, 2, 3]])
             self.assertFalse(record["written"]); self.assertIn("arbitrary units", record["reason"])
             self.assertFalse((Path(tmp) / "scene.usda").exists())
+
+
+class GridBound(unittest.TestCase):
+    def test_footprint_cells_match_the_unknown_pass_and_are_capped(self):
+        self.assertEqual(sc.grid_cells([0, 4], [0, 3]), 8 * 6)
+        self.assertEqual(sc.grid_cells([-0.25, 0.25], [0, 0.5]), 2 * 1)
+        self.assertLessEqual(sc.grid_cells([0, 249.5], [0, 249.5]), sc.MAX_GRID_CELLS)
+        self.assertGreater(sc.grid_cells([-9e6, 9e6], [-9e6, 9e6]), sc.MAX_GRID_CELLS)
+

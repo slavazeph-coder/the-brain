@@ -33,6 +33,17 @@ def args():
 
 
 # ---------- geometry helpers (pure python; clouds are ≤50k points) ----------
+UNKNOWN_CELL = 0.5
+# The unknown-space pass visits every cell of the 2–98% footprint. 250,000 cells is 250 × 250 m at 0.5 m: anything larger
+# is a wrong scale or stray points, not a room, and would only tie up the worker. The worker checks the same bound at upload.
+MAX_GRID_CELLS = 250_000
+
+
+def grid_cells(ex, ez, cell=UNKNOWN_CELL):
+    """Unknown-space cells spanned by the footprint [x0, x1] × [z0, z1]."""
+    return (math.ceil(ex[1] / cell) - math.floor(ex[0] / cell)) * (math.ceil(ez[1] / cell) - math.floor(ez[0] / cell))
+
+
 def percentile(v, q):
     s = sorted(v); i = (len(s) - 1) * q; lo = math.floor(i); return s[lo] + (s[min(lo + 1, len(s) - 1)] - s[lo]) * (i - lo)
 
@@ -250,6 +261,8 @@ def main():
     xs, zs = [p[0] for p in pts], [p[2] for p in pts]
     ex = [percentile(xs, 0.02), percentile(xs, 0.98)]; ez = [percentile(zs, 0.02), percentile(zs, 0.98)]
     ceiling = percentile([p[1] for p in pts], 0.98)
+    if grid_cells(ex, ez) > MAX_GRID_CELLS:
+        sys.exit("REFUSED: the footprint spans %d grid cells (limit %d). Check the scale or remove stray points." % (grid_cells(ex, ez), MAX_GRID_CELLS))
 
     reset(); scene = {"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud.get("scale"),
                       "source": cloud.get("source"), "floor_y": floor_y, "objects": [], "walls": [], "unknown": []}
@@ -268,7 +281,7 @@ def main():
             rec["support_points"] = det["support_points"]; rec["detector"] = det["detector"]; scene["objects"].append(rec)
         scene["objects"].extend(unplaced)
     # Unknown: everything inside the room box that no observed point touches, as a tagged volume (coarse grid).
-    cell = 0.5; occupied = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] > floor_y + 0.05}
+    cell = UNKNOWN_CELL; occupied = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] > floor_y + 0.05}
     seen_floor = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] <= floor_y + 0.05}
     for i in range(math.floor(ex[0] / cell), math.ceil(ex[1] / cell)):
         for j in range(math.floor(ez[0] / cell), math.ceil(ez[1] / cell)):
