@@ -264,7 +264,8 @@ async function openSceneArtifact(index){
     const sceneIndex=sourceJob.artifacts.findIndex(a=>a.name==='scene.json'&&a.kind==='evidence');let scene=null;
     if(sceneIndex>=0){try{scene=JSON.parse(new TextDecoder().decode(await sourceClient.previewArtifact(sourceJob,sceneIndex,controller.signal)));}catch(e){if(controller.signal.aborted)return;}}
     if(controller.signal.aborted)return;
-    if(!sceneViewer){scenePromise||=import('./mesh-viewer.mjs').then(m=>m.createMeshViewer($('scene-stage'),message=>sceneStatus(message,true))).catch(e=>{scenePromise=null;throw e;});sceneViewer=await scenePromise;}
+    // A clear or page hide while the viewer is being created replaces scenePromise; that late viewer is disposed, not kept.
+    if(!sceneViewer){const pending=scenePromise||=import('./mesh-viewer.mjs').then(m=>m.createMeshViewer($('scene-stage'),message=>sceneStatus(message,true))).catch(e=>{scenePromise=null;throw e;});const viewer=await pending;if(pending!==scenePromise){viewer.destroy();return;}sceneViewer=viewer;}
     if(controller.signal.aborted)return;
     const parsed=await sceneViewer.setFile(new File([buffer],item.name,{type:'model/gltf-binary'}));
     if(controller.signal.aborted)return;

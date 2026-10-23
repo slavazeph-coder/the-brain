@@ -15,7 +15,7 @@ export function sceneFacts(scene) {
   facts.push(points === null || walls === null ? 'Observed: counts not recorded.'
     : `Observed: ${plural(points, 'reconstructed point')}, the floor and ${plural(walls, 'wall')}.`);
   if (objects === null) facts.push('Detected: not recorded.');
-  else facts.push(`Detected: ${objects ? plural(objects, 'object') + ' placed from reviewed detections' : 'no objects placed'}${unplaced ? `, ${unplaced.toLocaleString('en')} left unplaced` : ''}.`);
+  else facts.push(`Detected: ${objects ? plural(objects, 'object') + ' placed from 2D detections' : 'no objects placed'}${unplaced ? `, ${unplaced.toLocaleString('en')} left unplaced` : ''}.`);
   facts.push(unknown === null ? 'Unknown space: not recorded.' : `Unknown: ${plural(unknown, 'floor cell')} no point reached, kept as a tagged volume, never free space.`);
   facts.push(scene.units === 'm' ? 'Units: metres, from a measured scale.' : 'Units: arbitrary reconstruction units. No measured scale, so sizes are relative.');
   const usd = scene.usd && typeof scene.usd === 'object' ? scene.usd : null;
