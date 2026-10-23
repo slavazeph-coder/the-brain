@@ -8,6 +8,8 @@ Turns a World Builder hand-off into a simulation-ready scene, headless, with Ble
 Outputs: `scene.glb` (browser Arena), `scene.usda` (Isaac Sim / Omniverse; written directly because Ubuntu's Blender lacks the
 USD exporter), `scene.blend`, `scene.json` (every object with label, size, centre, provenance and support-point count).
 
+`scene.ifc` (IFC4, metres, written by `ifc_export.py` without IfcOpenShell) follows the same rule for BIM tools: walls as `IfcWall`,
+the floor as `IfcSlab`, placed detections as `IfcFurniture`, unknown space as `IfcBuildingElementProxy`, provenance in `Pset_BrainSNN`.
 `scene.usda` is written only for metric clouds (a measured scale from World Builder), because USD's `metersPerUnit = 1`
 would otherwise turn every arbitrary reconstruction unit into a metre in Isaac Sim; `scene.json` records why it was skipped.
 Detections are lifted only when their frame carries `cameraFromCloud` (rigid 4x4, row-major, camera looking down -z, in the

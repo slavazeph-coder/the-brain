@@ -28,5 +28,7 @@ export function sceneFacts(scene) {
     : usd?.written === false && scene.units === 'arbitrary' ? 'No scene.usda: Isaac Sim reads USD in metres and this scene has no measured scale. Measure a known distance on the reconstruction, then build a metric simulation scene there, or review the map and use Export static OpenUSD.'
     : usd?.written === false ? `No scene.usda. ${typeof usd.reason === 'string' ? usd.reason.slice(0, 300) : ''}`.trim()
     : 'USD status was not recorded.');
+  if (scene.ifc && typeof scene.ifc === 'object' && scene.ifc.written === true)
+    facts.push('scene.ifc was written for BIM tools (IFC4, metres), with each element\'s provenance in Pset_BrainSNN.');
   return facts;
 }

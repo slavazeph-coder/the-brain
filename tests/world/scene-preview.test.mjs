@@ -21,4 +21,7 @@ test('missing or malformed scene.json never produces invented counts or scale',(
 test('a scene scaled by a distance the user measured says it is self-reported',()=>{
   const f=sceneFacts(scene({units:'m',scale:{source:'user-measured',metresPerUnit:.66,distance:3.581,selfReported:true,verified:false},usd:{written:true,metersPerUnit:1}}));
   assert.equal(f[3],'Units: metres, from a distance you measured (3.581 m). Self-reported, not verified.');
+  assert.equal(f.length,5,'no IFC line unless scene.json says it was written');
+  assert.match(sceneFacts(scene({units:'m',usd:{written:true},ifc:{written:true,schema:'IFC4'}}))[5],/^scene\.ifc was written for BIM tools \(IFC4, metres\)/);
+  assert.equal(sceneFacts(scene({ifc:{written:false,reason:'x'}})).length,5);
   assert.equal(sceneFacts(scene({units:'m',scale:{selfReported:true,distance:'3 m'}}))[3],'Units: metres, from a distance you measured. Self-reported, not verified.');});

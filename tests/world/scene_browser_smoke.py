@@ -132,11 +132,12 @@ def check_metric(pw, name, origin, worker_url, token):
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[3].startswith('Units: metres, from a distance you measured (') and facts[3].endswith('m). Self-reported, not verified.'), facts
         assert facts[4] == 'scene.usda was written for Isaac Sim (metersPerUnit = 1).', facts
+        assert facts[5].startswith('scene.ifc was written for BIM tools (IFC4, metres)'), facts
         page.screenshot(path=str(OUTPUT / f'scene-metric-{name}.png'))
         page.keyboard.press('Escape')
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
         page.locator('[data-tab=evidence]').click()
-        assert 'Download scene.usda' in page.locator('#panel').inner_text()
+        assert 'Download scene.usda' in page.locator('#panel').inner_text() and 'Download scene.ifc' in page.locator('#panel').inner_text()
         with page.expect_download() as download:
             page.locator('[data-action=proof]').click()
         proof = json.loads(Path(download.value.path()).read_text())

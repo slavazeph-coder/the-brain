@@ -41,7 +41,8 @@ Pipelines that call the worker API directly can run the same proposal without a 
 The worker engine `scene-usd` ([`scene_usd.py`](../robotics/world_worker/scene_usd.py)) turns one walkthrough video into a simulation scene. It runs COLMAP, then the same Arena hand-off as the browser's point-cloud export, then the [scene compiler](../robotics/scene_compiler/README.md) in headless Blender. It writes:
 - `scene.glb` for the browser;
 - `scene.json`, which records each object's label and provenance. Placed boxes also carry a size and centre, walls and placed detections carry their supporting point count, and unplaced detections carry the reason instead. Unknown cells are listed separately, with totals in `counts`;
-- `scene.usda` for Isaac Sim and Omniverse, only for a metric scene (see below).
+- `scene.usda` for Isaac Sim and Omniverse, only for a metric scene (see below);
+- `scene.ifc` for BIM tools (IFC4, metres), also only for a metric scene. Walls are `IfcWall` with their measured orientation, the floor is an `IfcSlab`, placed detections are `IfcFurniture`, and unknown space is an `IfcBuildingElementProxy` named "Unknown space (not free)". Each element carries its provenance and support count in `Pset_BrainSNN`, and the project records the scale source, the measured distance, `SelfReported` true and `MetricVerified` false. On the metric ETH3D office scene, IfcOpenShell's validation, including the IFC4 EXPRESS rules, reported 0 issues, and the IFC wall and floor geometry matched the GLB to the millimetre.
 
 Provenance follows the same rules as the planning map:
 - **observed:** the floor and PCA-oriented walls.
@@ -52,7 +53,7 @@ Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `m
 
 **Metric scenes (October 23, 2026).** The scale is measured after reconstruction, on the reconstruction itself, so the metric path takes the measured cloud back to the worker:
 1. Pick two points on a multi-view reconstruction and enter the distance you measured between them. Multi-view means camera poses from at least two views, from COLMAP or dense MapAnything; the hand-off then says `multiView: true`. A single-photo preview never qualifies.
-2. The calibration card then offers **Build metric simulation scene (GLB + USD)**. It needs a connected worker whose engine lists the `cloud` input kind.
+2. The calibration card then offers **Build metric simulation scene (GLB, USD, IFC)**. It needs a connected worker whose engine lists the `cloud` input kind.
 3. After an explicit consent tick, the browser uploads the same Arena point-cloud JSON it exports as a `cloud` upload: `.json`, up to 16 MiB and 50,000 points.
 4. `scene-usd` skips COLMAP and compiles that cloud.
 

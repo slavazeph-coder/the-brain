@@ -17,6 +17,9 @@ from __future__ import annotations
 import argparse, json, math, sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ifc_export import emit_ifc  # noqa: E402  (pure Python; runs inside Blender too)
+
 try:
     import bpy
 except ImportError:  # pure-geometry functions stay importable for tests outside Blender
@@ -305,6 +308,7 @@ def main():
 
     bpy.ops.export_scene.gltf(filepath=str(out / "scene.glb"), export_format="GLB", export_extras=True, export_apply=True)
     emit_usd(out, scene, pts)
+    emit_ifc(out, scene)
     bpy.ops.wm.save_as_mainfile(filepath=str(out / "scene.blend"))
     scene["counts"] = {"points": len(pts), "walls": len(scene["walls"]), "objects": sum(1 for o in scene["objects"] if o["provenance"] == "detected"),
                        "unplaced": sum(1 for o in scene["objects"] if o["provenance"] == "detected-unplaced"), "unknown_cells": len(scene["unknown"])}
