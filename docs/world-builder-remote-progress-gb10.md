@@ -120,19 +120,46 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - Commit: `docs(world): document signed report receipts API and env` (hash in
     `git log` after push; two docs files, no code changes).
 
+- **Run 50 (this run): webkit UI smoke gate — PASSED**
+  - Base re-verified before editing:
+    - `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (134 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → 26 passed in 10.32 s
+  - WebKit binary was the pending blocker since run 49. This run:
+    1. `playwright install webkit` — 97.1 MiB download succeeded (97.1 MiB,
+       playwright webkit v2370, WebKit 27.2). The prior security-scanner
+       blocker on nested `python -c` is gone; direct `python -m playwright
+       install webkit` passed cleanly.
+    2. `playwright install-deps webkit` — 143 packages via apt (libgtk-4,
+       libgraphene, libxslt, libevent, full GStreamer stack, libwebp,
+       libavif, libharfbuzz-icu, libepoxy, libmanette, libenchant-2,
+       libsecret-1, libhyphen, libGLESv2). EXIT 0.
+    3. `WORLD_BROWSERS=webkit python tests/world/report_receipt_ui_smoke.py`
+       → exit 0, all flags green:
+       `{"browser":"webkit","realPrivateWorker":true,"realEd25519":true,
+       "engine":"inspect","modelExecuted":false,"physicalCapture":false,
+       "consentGate":true,"separateKeyTrustRequired":true,
+       "hashesOnlyRequest":true,"exactScenarioBytes":true,
+       "offlineNetworkRequests":0,"tamperRejected":true,
+       "mapReviewFlagsUnchanged":true,"pageErrors":[]}`
+  - Artifacts committed in `output/playwright/world/report-receipt/`:
+    webkit-ui-before.json, webkit-ui-exact-proof.json, webkit-ui-receipt.json,
+    webkit-ui-signed-report.json, webkit-ui-signed-receipt.png
+  - Both browser legs (chromium run 36 + webkit run 50) now pass.
+  - No force-push/merge/deploy; no paid fallback; no 4090 GPU budget consumed.
+
 ## Blockers
 
-- None. Real HTTP UI smoke gate PASSED (chromium, run 36). Cancellation
-  coverage now complete (queued, running, source re-hash, 504 slot,
-  post-IO re-auth, completed-job non-interruption).
+- None. Real HTTP UI smoke gate PASSED on both chromium (run 36) and webkit
+  (run 50). Cancellation coverage complete (queued, running, source re-hash,
+  504 slot, post-IO re-auth, completed-job non-interruption). Signed-receipt
+  API/env docs complete.
 
 ## Next bounded action
 
-- Run 43: 4090 MapAnything held-out-frame inference smoke test — short
+- Run 51: 4090 MapAnything held-out-frame inference smoke test — short
   authenticated SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
   confirm hostname + GPU before running. Reuse verified pinned weights from
   GB10; do not replace base conda env. No permanent tunnel.
-- Later: webkit UI smoke; 4090 parity check.
 
 ## Guardrails
 
