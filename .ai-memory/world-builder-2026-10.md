@@ -39,3 +39,9 @@ description: World Builder flagship development, real browser inference and reco
   - Hosted test `tests/world/scene_browser_smoke.py` uses fixture adapter `tests/world/scene_fixture_adapter.py`, which writes an authored GLB with no Blender.
   - Running the real chain on an x86 container without Blender: `pip install bpy==4.2.23` in a Python 3.11 venv, plus a `blender` shim that runs the `--python` script through runpy and calls `os._exit`. The bpy module segfaults in interpreter teardown after `read_factory_settings`, even though all files are written.
   - Rendered scene colours in the Arena viewer: floor about #e5e2d9, walls about #abbbc6, unknown pink.
+  - Ground-truth check of the metric path, Oct 23. ETH3D `office` (`office_dslr_jpg.7z` and `office_scan_clean.7z` from eth3d.net; CC BY-NC-SA, test only, never commit).
+    - Setup: 12 photos downscaled to 3024 × 2016 (the worker's limit is 24 MP and the DSLR images are 24.4 MP), run through the site and worker with `colmap-sparse`.
+    - Scale: an Umeyama similarity from the reconstructed camera centres to the ground-truth centres in `dslr_calibration_jpg/images.txt` gives metres per unit. Enter `s × picked span` as the measured distance.
+    - Laser-scan check: map the scans with the matrices in `scan_alignment.mlp`. In ETH3D's office frame, z is vertical.
+    - Result: 0.1361 m per unit; camera RMS 1.5 cm; points a median 1.1 cm from the scan (88% within 5 cm). Sparse coverage gave only one wall.
+    - The scripts lived in the session scratchpad (`eth3d/scripts/flow_eth3d.py`, `validate_scan.py`) and are not in the repo.
