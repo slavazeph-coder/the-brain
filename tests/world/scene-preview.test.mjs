@@ -14,5 +14,7 @@ test('a metric scene with a written USD says so',()=>{const f=sceneFacts(scene({
 test('missing or malformed scene.json never produces invented counts or scale',()=>{
   for(const bad of [null,undefined,'x',{},{schema:'other'}])assert.deepEqual(sceneFacts(bad),['No valid scene.json came with this scene, so its provenance and scale are unknown. Treat it as a picture only.']);
   const f=sceneFacts(scene({counts:{points:-1,walls:1.5,objects:'3',unknown_cells:NaN},usd:undefined,units:'ft'}));
-  assert.deepEqual(f,['Observed: counts not recorded.','Detected: not recorded.','Unknown space: not recorded.','Units: arbitrary reconstruction units. No measured scale, so sizes are relative.','USD status was not recorded.']);
+  assert.deepEqual(f,['Observed: counts not recorded.','Detected: not recorded.','Unknown space: not recorded.','Units: not recorded.','USD status was not recorded.']);
+  // An unsupported unit is unknown, so neither the units nor the missing USD are explained as an unmeasured scene.
+  assert.deepEqual(sceneFacts(scene({units:'ft',usd:{written:false,reason:'Fixture reason.'}})).slice(3),['Units: not recorded.','No scene.usda. Fixture reason.']);
   assert.ok(sceneFacts(scene({units:'m',usd:{written:false,reason:'r'.repeat(5000)}}))[4].length<='No scene.usda. '.length+300);});

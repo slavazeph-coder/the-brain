@@ -254,14 +254,16 @@ function sceneStatus(message,error=false){$('scene-status').textContent=message;
 async function openSceneArtifact(index){
   if(!job||!client)return;sceneAbort?.abort();const controller=new AbortController();sceneAbort=controller;
   const sourceJob=job,sourceClient=client,item=sourceJob.artifacts[index],dialog=$('scene-dialog');
+  // Open at once and drop the previous scene's status and facts, so nothing stale shows while modules and bytes load.
+  $('scene-facts').replaceChildren();sceneStatus(`Downloading and checking ${item?.name??'the scene'}…`);sceneViewer?.clear();
+  if(!dialog.open)dialog.showModal();
   try{
     const {SCENE_PREVIEW_BYTES,sceneFacts}=await import('./scene-preview.mjs');
-    $('scene-facts').replaceChildren();sceneViewer?.clear();
-    if(!dialog.open)dialog.showModal();
+    if(controller.signal.aborted)return;
     if(!(item?.size<=SCENE_PREVIEW_BYTES))throw new Error('In-browser scene previews are limited to 50 MiB. Download the GLB for a desktop viewer.');
-    sceneStatus(`Downloading and checking ${item.name}…`);
     const buffer=await sourceClient.previewArtifact(sourceJob,index,controller.signal);
-    const sceneIndex=sourceJob.artifacts.findIndex(a=>a.name==='scene.json'&&a.kind==='evidence');let scene=null;
+    // scene.json describes the compiler's scene.glb only; any other GLB is shown without borrowed facts.
+    const sceneIndex=item.name==='scene.glb'?sourceJob.artifacts.findIndex(a=>a.name==='scene.json'&&a.kind==='evidence'):-1;let scene=null;
     if(sceneIndex>=0){try{scene=JSON.parse(new TextDecoder().decode(await sourceClient.previewArtifact(sourceJob,sceneIndex,controller.signal)));}catch(e){if(controller.signal.aborted)return;}}
     if(controller.signal.aborted)return;
     // A clear or page hide while the viewer is being created replaces scenePromise; that late viewer is disposed, not kept.

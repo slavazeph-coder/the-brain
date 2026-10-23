@@ -70,6 +70,8 @@ def check_browser(pw, name, origin, worker_url, token, photo):
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
         # Reopening reuses the viewer, and clearing the session removes it with the job.
         page.locator('[data-scene-artifact]').click()
+        # The click opens the dialog at once with a fresh status, so this waits for the reloaded scene, not the old one.
+        assert page.evaluate("document.querySelector('#scene-dialog').open && !/SHA-256 checked/.test(document.querySelector('#scene-status').textContent)")
         page.wait_for_function("/SHA-256 checked/.test(document.querySelector('#scene-status').textContent)", timeout=60000)
         assert page.locator('#scene-stage canvas').count() == 1
         page.keyboard.press('Escape')
