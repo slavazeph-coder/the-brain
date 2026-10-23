@@ -209,7 +209,9 @@ def visual_metadata(entry):
         return {}
     if entry['representation'] not in ['point-cloud', 'gaussian-splat', 'triangle-mesh']:
         raise ValueError('Unknown visual representation.')
-    result = {'representation': entry['representation'], 'units': 'arbitrary'}
+    # An adapter may say its output is in metres (a scene compiled from a user-measured cloud); that stays a hint, and
+    # metric_verified is always false. Anything else reads as arbitrary.
+    result = {'representation': entry['representation'], 'units': 'm' if entry.get('units') == 'm' else 'arbitrary'}
     if 'coordinate_frame' in entry:
         if entry['coordinate_frame'] not in ['right-handed-y-up', 'colmap', 'unknown']:
             raise ValueError('Unknown visual coordinate frame.')

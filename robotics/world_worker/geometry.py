@@ -87,6 +87,11 @@ def load_arena_cloud(path: Path):
     if floor is not None:
         if not isinstance(floor, dict) or not _finite(floor.get('y')):
             raise ValueError('Invalid floor estimate.')
+        # The compiler builds the floor at this height, so it must lie within the points it was estimated from (with a small
+        # margin: the browser's histogram estimate of a perfectly flat cloud sits half a bin of a 1-unit span above it).
+        ys = [row[1] for row in points]; margin = .05 * (max(ys) - min(ys)) + .05
+        if not min(ys) - margin <= floor['y'] <= max(ys) + margin:
+            raise ValueError('The floor estimate lies outside the points.')
         origin = floor.get('origin')
         floor = {**{k: floor[k] for k in ['y', 'width', 'depth', 'support'] if _finite(floor.get(k))}, 'units': units,
                  **({'origin': origin} if isinstance(origin, list) and len(origin) == 2 and all(_finite(v) for v in origin) else {})}

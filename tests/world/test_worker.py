@@ -614,6 +614,8 @@ def test_measured_cloud_handoff_reaches_a_cloud_engine(tmp_path):
     # A few points at opposite corners of the coordinate limit: valid numbers, but a footprint of ~10^15 grid cells.
     json.dumps(arena_cloud(points=[[x,0,z,1,2,3] for x in (-9e6,9e6) for z in (-9e6,9e6) for _ in range(50)])).encode(),
     json.dumps(arena_cloud(points=[[x*2,0,z*2,1,2,3] for x in range(160) for z in range(160)])).encode(),
+    json.dumps(arena_cloud(floorEstimate={'y':1e308,'units':'m'})).encode(),
+    json.dumps(arena_cloud(floorEstimate={'y':.5,'units':'m'})).encode(),  # all points at y=0: beyond the 0.05 margin
     json.dumps(arena_cloud(scale=None)).encode(),
     json.dumps(arena_cloud(scale={'source':'user-measured','metresPerUnit':.42,'selfReported':True,'verified':True})).encode(),
     json.dumps(arena_cloud(units='arbitrary')).encode(),
@@ -628,3 +630,10 @@ def test_cloud_uploads_are_json_only_and_bounded(client):
     assert upload_cloud(client,b'{}',name='cloud.png').status_code==422
     assert client.post('/v1/uploads',json={'name':'cloud.json','kind':'cloud','size':16*1024**2+1},headers=HEADERS).status_code==422
     assert client.post('/v1/uploads',json={'name':'room.json','kind':'image','size':20},headers=HEADERS).status_code==422
+
+
+def test_metric_artifact_units_are_kept_as_a_hint_never_verified():
+    assert visual_metadata({'representation':'triangle-mesh','units':'m'})['units']=='m'
+    for units in ['metres','M','ft',None]:
+        assert visual_metadata({'representation':'triangle-mesh','units':units})['units']=='arbitrary'
+
