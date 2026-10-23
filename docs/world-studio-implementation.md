@@ -40,15 +40,15 @@ Pipelines that call the worker API directly can run the same proposal without a 
 
 The worker engine `scene-usd` ([`scene_usd.py`](../robotics/world_worker/scene_usd.py)) turns one walkthrough video into a simulation scene. It runs COLMAP, then the same Arena hand-off as the browser's point-cloud export, then the [scene compiler](../robotics/scene_compiler/README.md) in headless Blender. It writes:
 - `scene.glb` for the browser;
-- `scene.usda` for Isaac Sim and Omniverse;
-- `scene.json`, which lists every object with its size, centre, support points and provenance.
+- `scene.json`, which lists every object with its size, centre, support points and provenance;
+- `scene.usda` for Isaac Sim and Omniverse, only for a metric scene (see below).
 
 Provenance follows the same rules as the planning map:
 - **observed:** the floor and PCA-oriented walls.
-- **detected:** reviewed 2D detections lifted into 3D boxes. A detection is lifted only through its frame's camera pose. Without that pose, or without a box, it stays unplaced and the reason is recorded.
 - **unknown:** floor no point reached. It is exported as a tagged volume, never as free space.
+- **detected:** reviewed 2D detections lifted into 3D boxes. Only the compiler run directly with `--detections` does this: the worker engine never passes detections, so worker scenes contain no detected objects. A detection is lifted only through its frame's camera pose. Without that pose, or without a box, it stays unplaced and the reason is recorded.
 
-Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only when the job carries a measured scale; otherwise `scene.json` records why it was skipped.
+Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only for a cloud with a measured scale; otherwise `scene.json` records why it was skipped. A job submitted through the worker API or the website cannot carry a measured scale (the job body has only the engine, uploads and consent), so worker scenes are in arbitrary units and never include `scene.usda`. Only a hand-built adapter manifest with a `scale` reaches the metric path. On the website, the metric OpenUSD route is the reviewed map: measure a known distance on the reconstruction, review it, then use Export static OpenUSD.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a `scene-usd` job finishes, the website offers its files as downloads, but it does not yet open `scene.glb` in 3D. World checks run the compiler and adapter contracts without Blender or COLMAP.
 
