@@ -88,6 +88,55 @@ def unproject_box(box, w, h, fov, depth_samples):
     return [[x0, y0, -z1], [x1, y1, -z0]]
 
 
+def valid_pose(m):
+    """A rigid 4x4 (row-major) mapping cloud coordinates to camera coordinates: finite, orthonormal, det +1."""
+    if not (isinstance(m, list) and len(m) == 4 and all(isinstance(r, list) and len(r) == 4 for r in m)): return False
+    if not all(isinstance(v, (int, float)) and math.isfinite(v) for r in m for v in r): return False
+    if any(abs(a - b) > 1e-6 for a, b in zip(m[3], (0, 0, 0, 1))): return False
+    R = [r[:3] for r in m[:3]]
+    for i in range(3):
+        for j in range(3):
+            if abs(sum(R[i][k] * R[j][k] for k in range(3)) - (i == j)) > 1e-3: return False
+    det = (R[0][0] * (R[1][1] * R[2][2] - R[1][2] * R[2][1]) - R[0][1] * (R[1][0] * R[2][2] - R[1][2] * R[2][0])
+           + R[0][2] * (R[1][0] * R[2][1] - R[1][1] * R[2][0]))
+    return abs(det - 1) < 1e-3
+
+
+def lift_detections(pts, side, fov, min_cluster):
+    """Lift 2D detections into 3D boxes in the cloud's frame. The points behind a box are only meaningful in the camera
+    that saw it, so each frame must carry `cameraFromCloud` (rigid 4x4, row-major, camera looking down -z with y up)
+    in the cloud's own frame. Without that pose, or without a box, a detection stays `detected-unplaced` with the
+    reason: nothing is guessed. Returns (placed, unplaced); placed boxes are axis-aligned in the cloud's frame."""
+    frames = {f.get("id"): f for f in side.get("frames", []) if isinstance(f, dict)}
+    only = next(iter(frames.values())) if len(frames) == 1 else None
+    placed, unplaced = [], []
+    for ob in side.get("observations", []):
+        name, label = str(ob.get("id", "detection")), str(ob.get("label", "object"))
+        box, frame = ob.get("box"), frames.get(ob.get("frameId")) or only
+        reason = None
+        if not (isinstance(box, list) and len(box) == 4 and all(isinstance(v, (int, float)) for v in box)): reason = "no bounding box"
+        elif not frame or not valid_pose(frame.get("cameraFromCloud")): reason = "no camera pose for this frame in the cloud's frame"
+        if reason:
+            unplaced.append({"name": name, "label": label, "provenance": "detected-unplaced", "reason": reason}); continue
+        M, w, h = frame["cameraFromCloud"], frame["width"], frame["height"]
+        focal = w / (2 * math.tan(math.radians(fov) / 2))
+        cam = lambda p: [sum(M[i][k] * p[k] for k in range(3)) + M[i][3] for i in range(3)]
+        inside = []
+        for p in pts:
+            pr = project(cam(p), w, h, focal)
+            if pr and box[0] <= pr[0] <= box[2] and box[1] <= pr[1] <= box[3]: inside.append(pr[2])
+        if len(inside) < min_cluster:
+            unplaced.append({"name": name, "label": label, "provenance": "detected-unplaced", "reason": f"{len(inside)} supporting points"}); continue
+        lo, hi = unproject_box(box, w, h, fov, inside)
+        # Camera-frame corners back to the cloud's frame (inverse of a rigid transform: R^T (c - t)).
+        R, t = [r[:3] for r in M[:3]], [M[i][3] for i in range(3)]
+        corners = [[sum(R[k][i] * (c[k] - t[k]) for k in range(3)) for i in range(3)]
+                   for c in ([x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2]))]
+        placed.append({"name": f"{label}_{name}".replace(" ", "_"), "label": label, "support_points": len(inside), "detector": side.get("model", {}).get("id"),
+                       "min": [min(c[i] for c in corners) for i in range(3)], "max": [max(c[i] for c in corners) for i in range(3)]})
+    return placed, unplaced
+
+
 def project(p, w, h, focal):
     x, y, z = p[0], p[1], p[2]
     if z >= -1e-6: return None
@@ -120,9 +169,15 @@ def add_points(pts, name="observed_points"):
     return ob
 
 
+USD_NEEDS_METRES = ("Isaac Sim reads USD in metres (metersPerUnit), and this cloud is in arbitrary units, so no scene.usda was "
+                    "written. Set a measured scale in World Builder and export again.")
+
+
 def write_usda(path, scene, pts):
-    """Flat USD (text) for Isaac Sim / Omniverse: Y-up, metres when metric. Boxes as Cube prims, points as a Points prim,
-    provenance as custom attributes. Ubuntu's Blender 4.0 ships without the USD exporter, so this is written directly."""
+    """Flat USD (text) for Isaac Sim / Omniverse: Y-up, metres. Boxes as Cube prims, points as a Points prim,
+    provenance as custom attributes. Ubuntu's Blender 4.0 ships without the USD exporter, so this is written directly.
+    Only metric scenes: metersPerUnit = 1 on arbitrary units would make every reconstruction unit a metre."""
+    if scene.get("units") != "m": raise ValueError(USD_NEEDS_METRES)
     CUBE = ('    def Cube "%(name)s"\n    {\n        double size = 1\n        double3 xformOp:translate = (%(cx)s, %(cy)s, %(cz)s)\n'
             '        float3 xformOp:rotateXYZ = (0, %(yaw)s, 0)\n'
             '        float3 xformOp:scale = (%(sx)s, %(sy)s, %(sz)s)\n        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]\n'
@@ -179,7 +234,7 @@ def main():
                  "geometry; single-photo depth is a visual preview only. Record a walkthrough, or pass --allow-unverified for experiments."
                  % cloud.get("sourceFrame"))
     if not metric:  # arbitrary units: keep them but say so loudly; the site's scale card is the way to fix it
-        print("WARNING: cloud is in arbitrary units; exporting unscaled (scale.source = none)")
+        print("WARNING: cloud is in arbitrary units; exporting unscaled (scale.source = none), and no USD")
     floor_y = floor_plane(pts, cloud.get("floorEstimate"))
     xs, zs = [p[0] for p in pts], [p[2] for p in pts]
     ex = [percentile(xs, 0.02), percentile(xs, 0.98)]; ez = [percentile(zs, 0.02), percentile(zs, 0.98)]
@@ -196,17 +251,11 @@ def main():
         _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1)); scene["walls"].append(rec)
     # Objects from detections: lift each 2D box with the cloud points that project inside it.
     if a.detections:
-        side = json.loads(Path(a.detections).read_text()); frame = side["frames"][0]; w, h = frame["width"], frame["height"]
-        focal = w / (2 * math.tan(math.radians(a.fov) / 2))
-        proj = [(project(p, w, h, focal), p) for p in pts]
-        for ob in side.get("observations", []):
-            b = ob["box"]; inside = [pr[2] for pr, p in proj if pr and b[0] <= pr[0] <= b[2] and b[1] <= pr[1] <= b[3]]
-            if len(inside) < a.min_cluster:
-                scene["objects"].append({"name": ob["id"], "label": ob["label"], "provenance": "detected-unplaced", "reason": f"{len(inside)} supporting points"}); continue
-            aabb = unproject_box(b, w, h, a.fov, inside)
-            if not aabb: continue
-            _, rec = add_box(f"{ob['label']}_{ob['id']}".replace(" ", "_"), aabb[0], aabb[1], "detected", ob["label"], (0.20, 0.55, 0.85, 1))
-            rec["support_points"] = len(inside); rec["detector"] = side.get("model", {}).get("id"); scene["objects"].append(rec)
+        placed, unplaced = lift_detections(pts, json.loads(Path(a.detections).read_text()), a.fov, a.min_cluster)
+        for det in placed:
+            _, rec = add_box(det["name"], det["min"], det["max"], "detected", det["label"], (0.20, 0.55, 0.85, 1))
+            rec["support_points"] = det["support_points"]; rec["detector"] = det["detector"]; scene["objects"].append(rec)
+        scene["objects"].extend(unplaced)
     # Unknown: everything inside the room box that no observed point touches, as a tagged volume (coarse grid).
     cell = 0.5; occupied = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] > floor_y + 0.05}
     seen_floor = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] <= floor_y + 0.05}
@@ -225,7 +274,10 @@ def main():
         mat = bpy.data.materials.new("unknown_mat"); mat.diffuse_color = (0.9, 0.3, 0.3, 0.35); ob.data.materials.append(mat); ob["provenance"] = "unknown"
 
     bpy.ops.export_scene.gltf(filepath=str(out / "scene.glb"), export_format="GLB", export_extras=True, export_apply=True)
-    write_usda(out / "scene.usda", scene, pts)
+    if metric:
+        write_usda(out / "scene.usda", scene, pts); scene["usd"] = {"written": True, "metersPerUnit": 1}
+    else:
+        scene["usd"] = {"written": False, "reason": USD_NEEDS_METRES}; print("NOTE:", USD_NEEDS_METRES)
     bpy.ops.wm.save_as_mainfile(filepath=str(out / "scene.blend"))
     scene["counts"] = {"points": len(pts), "walls": len(scene["walls"]), "objects": sum(1 for o in scene["objects"] if o["provenance"] == "detected"),
                        "unplaced": sum(1 for o in scene["objects"] if o["provenance"] == "detected-unplaced"), "unknown_cells": len(scene["unknown"])}

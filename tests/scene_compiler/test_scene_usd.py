@@ -65,3 +65,25 @@ class ArenaHandoff(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompileScene(unittest.TestCase):
+    """The adapter accepts scene.usda only when the compiler says it wrote one (metric clouds only)."""
+    def fake_blender(self, written, write_file):
+        def run(command, **kwargs):
+            out = Path(command[command.index('--out') + 1]); out.mkdir(parents=True, exist_ok=True)
+            (out / 'scene.glb').write_bytes(b'glTF')
+            (out / 'scene.json').write_text(json.dumps({'schema': 'brainsnn.scene.v1', 'usd': {'written': written}}))
+            if write_file: (out / 'scene.usda').write_text('#usda 1.0\n')
+        return run
+
+    def test_usd_must_match_the_compilers_record(self):
+        original = su.subprocess.run
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                for written, write_file, ok in [(False, False, True), (True, True, True), (True, False, False), (False, True, False)]:
+                    su.subprocess.run = self.fake_blender(written, write_file); out = Path(tmp) / f'{written}-{write_file}'
+                    if ok: self.assertEqual(su.compile_scene(Path(tmp) / 'cloud.json', out, blender='/usr/bin/blender')['usd'], {'written': written})
+                    else: self.assertRaises(RuntimeError, su.compile_scene, Path(tmp) / 'cloud.json', out, blender='/usr/bin/blender')
+        finally:
+            su.subprocess.run = original

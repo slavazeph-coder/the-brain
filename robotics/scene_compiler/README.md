@@ -8,6 +8,11 @@ Turns a World Builder hand-off into a simulation-ready scene, headless, with Ble
 Outputs: `scene.glb` (browser Arena), `scene.usda` (Isaac Sim / Omniverse; written directly because Ubuntu's Blender lacks the
 USD exporter), `scene.blend`, `scene.json` (every object with label, size, centre, provenance and support-point count).
 
+`scene.usda` is written only for metric clouds (a measured scale from World Builder), because USD's `metersPerUnit = 1`
+would otherwise turn every arbitrary reconstruction unit into a metre in Isaac Sim; `scene.json` records why it was skipped.
+Detections are lifted only when their frame carries `cameraFromCloud` (rigid 4x4, row-major, camera looking down -z, in the
+cloud's frame); otherwise, or without a box, they stay `detected-unplaced` with the reason.
+
 Provenance is the contract: `observed` (floor footprint, PCA-oriented walls from the points), `detected` (on-device 2D detections
 lifted to 3D boxes with the points behind them), `unknown` (floor cells no point touched — exported as a tagged volume, never as
 free space). Nothing is inferred in stage 1. Only multi-view clouds (`sourceFrame: colmap`) are accepted; single-photo depth
