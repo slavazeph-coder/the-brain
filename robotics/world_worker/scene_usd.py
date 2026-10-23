@@ -1,5 +1,8 @@
 """Simulation scene (GLB/USD) from a walkthrough: sparse COLMAP -> Arena hand-off -> Blender scene compiler.
 
+It also accepts the browser's Arena point-cloud hand-off (input kind "cloud") instead of a video: COLMAP is skipped, and
+a cloud the user scaled with a measured distance compiles to a metric scene with scene.usda.
+
 Reuses sparse_colmap.run() for the reconstruction, mirrors the browser's toArenaCloud()
 (brainsnn-r3f-app/public/world/visual-geometry.mjs) in Python so the worker hands the scene
 compiler exactly what a user export would, then runs robotics/scene_compiler/scene_compiler.py
@@ -8,6 +11,7 @@ nothing here verifies metric scale or authors collision geometry.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -17,8 +21,10 @@ import time
 
 try:
     from . import sparse_colmap
+    from .geometry import load_arena_cloud
 except ImportError:
     import sparse_colmap
+    from geometry import load_arena_cloud
 
 SCENE_COMPILER = Path(__file__).resolve().parents[1] / 'scene_compiler' / 'scene_compiler.py'
 ARENA_MAX_POINTS = 50_000
@@ -224,6 +230,24 @@ def blender_version(blender: str):
     return probe.stdout.strip().splitlines()[0] if probe.stdout.strip() else None
 
 
+def handoff_input(request: dict):
+    """The one validated browser hand-off of a cloud request, or None for a walkthrough request."""
+    inputs = request.get('inputs', [])
+    if not any(item.get('kind') == 'cloud' for item in inputs):
+        return None
+    if request.get('schema') != 'brainsnn.adapter.v1' or len(inputs) != 1:
+        raise ValueError('Send one point-cloud hand-off on its own.')
+    path = Path(inputs[0]['path'])
+    if not path.is_absolute() or path.is_symlink() or not path.is_file():
+        raise ValueError('Adapter inputs must be regular local files.')
+    cloud = load_arena_cloud(path)
+    # COLMAP clouds are multi-view by construction; any other frame must say so (World Builder sets it from camera poses).
+    if cloud['sourceFrame'] != 'colmap' and cloud.get('multiView') is not True:
+        raise ValueError('The scene compiler needs a multi-view reconstruction; this hand-off does not come from one.')
+    return cloud, {'kind': 'browser-handoff', 'name': str(inputs[0].get('name', ''))[:160],
+                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
 def run(request: dict, *, blender: str):
     if not SCENE_COMPILER.is_file():
         raise RuntimeError(f'Scene compiler not found at {SCENE_COMPILER}.')
@@ -231,11 +255,19 @@ def run(request: dict, *, blender: str):
         raise RuntimeError('Blender must be an existing absolute path.')
     started = time.monotonic()
     out = Path(request['output_dir']).resolve()
-    reconstruction = sparse_colmap.run(request)  # writes sparse-preview.ply, reconstruction.json, manifest.json
-    scale = request['scale'] if isinstance(request.get('scale'), dict) else {}
-    cloud = to_arena_cloud(read_ply(out / 'sparse-preview.ply'), coordinate_frame=reconstruction['coordinate_frame'],
-                           source='sparse-preview.ply', metres_per_unit=scale.get('metres_per_unit'),
-                           measurement=scale.get('measurement'))
+    handoff = handoff_input(request)
+    if handoff:
+        cloud, source = handoff
+        out.mkdir(parents=True, exist_ok=True)
+        reconstruction, previous = None, []
+    else:
+        reconstruction = sparse_colmap.run(request)  # writes sparse-preview.ply, reconstruction.json, manifest.json
+        scale = request['scale'] if isinstance(request.get('scale'), dict) else {}
+        cloud = to_arena_cloud(read_ply(out / 'sparse-preview.ply'), coordinate_frame=reconstruction['coordinate_frame'],
+                               source='sparse-preview.ply', metres_per_unit=scale.get('metres_per_unit'),
+                               measurement=scale.get('measurement'))
+        source = {'kind': 'walkthrough'}
+        previous = json.loads((out / 'manifest.json').read_text())['artifacts']
     (out / 'arena-cloud.json').write_text(json.dumps(cloud, allow_nan=False))
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
@@ -243,20 +275,23 @@ def run(request: dict, *, blender: str):
     usd = bool((scene.get('usd') or {}).get('written'))
     for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []):
         shutil.copyfile(work / name, out / name)
-    evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'units': cloud['units'],
+    measured = ['The scale comes from a distance the user measured and entered: self-reported, not verified.'] if cloud['units'] == 'm' else []
+    evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'),
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
-                                                                      'preview_points', 'mean_reprojection_error_pixels']},
-                'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance']},
+                                                                      'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
+                'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
+                            'sourceFrame': cloud['sourceFrame'], 'points': len(cloud['points'])},
                 'compiler': {'script': SCENE_COMPILER.name, 'blender': blender_version(blender), 'schema': scene.get('schema'),
                              'counts': scene.get('counts'), 'floor_y': scene.get('floor_y'),
                              'walls': [{key: wall[key] for key in ['name', 'size', 'yaw_degrees', 'support_points']} for wall in scene.get('walls', [])]},
                 'elapsed_seconds': round(time.monotonic() - started, 3),
-                'review_required': reconstruction['review_required'] + ['Confirm walls and floor against the walkthrough before simulation'],
-                'warnings': reconstruction['warnings'] + ['Unseen floor cells are exported as a tagged unknown volume, not free space.']}
+                'review_required': (reconstruction['review_required'] if reconstruction else [])
+                + ['Confirm walls and floor against the walkthrough before simulation'] + (['Check the measured distance before using metres'] if measured else []),
+                'warnings': (reconstruction['warnings'] if reconstruction else [])
+                + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured}
     (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
-    previous = json.loads((out / 'manifest.json').read_text())['artifacts']
     artifacts = [{'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': cloud['units']},
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
@@ -274,10 +309,11 @@ def main():
     if request.stat().st_size > 65536:
         raise ValueError('Input manifest is too large.')
     evidence = run(json.loads(request.read_text()), blender=args.blender)
-    print('SCENE_USD_OK', json.dumps({'points': evidence['reconstruction']['reconstructed_points'],
-                                      'registered': evidence['reconstruction']['capture']['registered_images'],
-                                      'reprojection_px': round(evidence['reconstruction']['mean_reprojection_error_pixels'], 3),
-                                      'counts': evidence['compiler']['counts'], 'units': evidence['units'],
+    reconstruction = evidence['reconstruction'] or {}
+    print('SCENE_USD_OK', json.dumps({'input': evidence['input']['kind'], 'points': reconstruction.get('reconstructed_points', evidence['handoff']['points']),
+                                      'registered': (reconstruction.get('capture') or {}).get('registered_images'),
+                                      'reprojection_px': round(reconstruction['mean_reprojection_error_pixels'], 3) if reconstruction else None,
+                                      'counts': evidence['compiler']['counts'], 'units': evidence['units'], 'usd': evidence['usd'],
                                       'elapsed_seconds': evidence['elapsed_seconds']}), flush=True)
 
 

@@ -48,7 +48,27 @@ Provenance follows the same rules as the planning map:
 - **unknown:** floor no point reached. It is exported as a tagged volume, never as free space.
 - **detected:** 2D detections from an observation sidecar lifted into 3D boxes. Only the compiler run directly with `--detections` does this: the worker engine never passes detections, so worker scenes contain no detected objects. The compiler lifts every detection in the sidecar and does not read review decisions, so pass only detections you have reviewed. A detection is lifted only through its frame's camera pose. Without that pose, or without a box, it stays unplaced and the reason is recorded.
 
-Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only for a cloud with a measured scale; otherwise `scene.json` records why it was skipped. A job submitted through the worker API or the website cannot carry a measured scale (the job body has only the engine, uploads and consent), so worker scenes are in arbitrary units and never include `scene.usda`. Only a hand-built adapter manifest with a `scale` reaches the metric path. On the website, the metric OpenUSD route is the reviewed map: measure a known distance on the reconstruction, review it, then use Export static OpenUSD.
+Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only for a cloud with a measured scale; otherwise `scene.json` records why it was skipped. A walkthrough video job has no measured scale yet, so its scene is in arbitrary units without `scene.usda`.
+
+**Metric scenes (October 23, 2026).** The scale is measured after reconstruction, on the reconstruction itself, so the metric path takes the measured cloud back to the worker:
+1. Pick two points on a multi-view reconstruction and enter the distance you measured between them. Multi-view means camera poses from at least two views, from COLMAP or dense MapAnything; the hand-off then says `multiView: true`. A single-photo preview never qualifies.
+2. The calibration card then offers **Build metric simulation scene (GLB + USD)**. It needs a connected worker whose engine lists the `cloud` input kind.
+3. After an explicit consent tick, the browser uploads the same Arena point-cloud JSON it exports as a `cloud` upload: `.json`, up to 16 MiB and 50,000 points.
+4. `scene-usd` skips COLMAP and compiles that cloud.
+
+The worker parses the hand-off strictly: no NaN, bounded coordinates and colours, a footprint the compiler's unknown-space grid can cover (at most 250 × 250 m at 0.5 m cells, also enforced in the compiler), and the known fields only. A metric cloud must carry its scale as user-measured, self-reported and unverified, and a single-photo preview is refused. The scene opens in the dialog, which says the metres are self-reported. The request is recorded in the proof pack with the metres per unit.
+
+Real run on the Mip-NeRF 360 room reconstruction. Two tapped points with an illustrative 0.66 m per unit (not a measurement of that room) gave a 3.97 × 7.95 m floor and 5 walls 1.5–2.2 m tall. `scene.usda` declared `metersPerUnit = 1`, the compile took 1.5 s, and the round trip from the click took about 6 s in Chromium at desktop and phone sizes.
+
+**Checked against ground truth (ETH3D office, October 23, 2026).** ETH3D's *office* scene has real DSLR photos, ground-truth camera poses in metres and a laser scan (CC BY-NC-SA, used for testing and not committed). The test ran through the built site and the real worker (`colmap-sparse`, then `scene-usd` with Blender 4.2 via `bpy`), in Chromium:
+- **Input:** twelve photos, downscaled to 3024 × 2016 to stay within the 24 MP limit.
+- **Reconstruction:** all 12 registered, with 695 sparse points.
+- **Ground-truth scale:** aligning the reconstructed cameras to the ground-truth cameras gave 0.1361 m per unit, with camera centres agreeing to 1.5 cm RMS.
+- **Measurement:** two points tapped in the 3D view are truly 2.976 m apart by that ground truth. That value was entered as the measured distance, the role a tape measure plays.
+- **Metric scene:** `scene.usda` was written in metres, with a 2.89 × 2.38 m observed floor, one wall and 7 unknown cells.
+- **Independent check:** placed in the scan's frame, the metric points sit a median 1.1 cm from the laser scan, with 88% within 5 cm and 94% within 10 cm.
+
+So the scale and geometry are right where points exist, but a 12-photo sparse CPU reconstruction covers little of the room. Its points stop about 1.8 m above the floor (the scanned room is 4.1 m tall), and only one wall had enough support. A full simulation scene needs dense geometry, which is the planned GPU MapAnything path.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a job returns a `.glb`, Evidence offers **Explore scene.glb in 3D** next to the downloads ([`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)). The workspace downloads the file with a short-lived ticket, checks its SHA-256, and opens it in a dialog with the Arena's mesh viewer, which loads only on first use. Beside the scene it lists only what `scene.json` records: observed points and walls, placed and unplaced detections, unknown floor cells, units and whether USD was written. A missing or malformed `scene.json` is shown as unknown, never guessed.
 

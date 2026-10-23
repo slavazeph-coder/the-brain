@@ -26,7 +26,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from .geometry import MAX_PREVIEW_COORDINATE
+from .geometry import ARENA_CLOUD_MAX_BYTES, MAX_PREVIEW_COORDINATE, load_arena_cloud
 from .auth import Identities, OPERATOR_OWNER
 
 MIB = 1024 ** 2
@@ -37,7 +37,7 @@ ACTIVE = ('prepared', 'queued', 'running')
 class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=160)
-    kind: Literal['image', 'video']
+    kind: Literal['image', 'video', 'cloud']
     size: int = Field(gt=0, le=200 * MIB, strict=True)
 
 class JobBody(BaseModel):
@@ -163,6 +163,13 @@ def sha256_file(path: Path) -> str:
 
 
 def validate_media(path: Path, kind: str):
+    if kind == 'cloud':
+        # A browser point-cloud hand-off is data, not media: parse it strictly and refuse anything outside the schema.
+        try:
+            load_arena_cloud(path)
+        except (OSError, ValueError) as error:
+            raise HTTPException(422, str(error)[:300])
+        return
     with path.open('rb') as stream:
         header = stream.read(32)
     if kind == 'image':
@@ -188,7 +195,7 @@ def configured_engines(config):
         if not Path(command[0]).is_absolute() or not Path(command[0]).is_file():
             raise ValueError('Adapter executable must be an existing absolute path.')
         kinds = entry.get('input_kinds', [])
-        if not kinds or any(k not in ['image', 'video'] for k in kinds):
+        if not kinds or any(k not in ['image', 'video', 'cloud'] for k in kinds):
             raise ValueError('Invalid adapter input kinds.')
         engines[eid] = {**entry, 'available': entry.get('enabled') is True and entry.get('license_reviewed') is True,
                         'max_inputs': min(12, max(1, int(entry.get('max_inputs', 1)))),
@@ -202,7 +209,9 @@ def visual_metadata(entry):
         return {}
     if entry['representation'] not in ['point-cloud', 'gaussian-splat', 'triangle-mesh']:
         raise ValueError('Unknown visual representation.')
-    result = {'representation': entry['representation'], 'units': 'arbitrary'}
+    # An adapter may say its output is in metres (a scene compiled from a user-measured cloud); that stays a hint, and
+    # metric_verified is always false. Anything else reads as arbitrary.
+    result = {'representation': entry['representation'], 'units': 'm' if entry.get('units') == 'm' else 'arbitrary'}
     if 'coordinate_frame' in entry:
         if entry['coordinate_frame'] not in ['right-handed-y-up', 'colmap', 'unknown']:
             raise ValueError('Unknown visual coordinate frame.')
@@ -462,7 +471,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def create_upload(body: UploadBody, request:Request):
         principal = request.state.principal
         suffix=Path(body.name).suffix.lower()
-        if suffix not in (['.jpg','.jpeg','.png','.webp'] if body.kind=='image' else ['.mp4','.mov','.webm']): raise HTTPException(422,'Unsupported file type.')
+        if suffix not in {'image':['.jpg','.jpeg','.png','.webp'],'video':['.mp4','.mov','.webm'],'cloud':['.json']}[body.kind]: raise HTTPException(422,'Unsupported file type.')
+        if body.kind=='cloud' and body.size>ARENA_CLOUD_MAX_BYTES: raise HTTPException(422,'Point-cloud hand-offs are limited to 16 MiB.')
         async with io_lock:
             store.prune(ttl, running)
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads').fetchone()

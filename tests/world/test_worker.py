@@ -556,3 +556,92 @@ def test_cancelled_stopping_job_keeps_disk_and_source_reservations(tmp_path):
         assert store.upload_path(uid).exists()
         store.prune(1)
         assert c.get('/v1/jobs/'+jid,headers=HEADERS).status_code==404
+
+
+def arena_cloud(**over):
+    """A browser Arena hand-off (toArenaCloud shape) with a user-measured scale."""
+    value={'version':1,'kind':'colmap-sparse-point-cloud','units':'m','coordinateFrame':'right-handed-y-up','sourceFrame':'colmap',
+           'source':'sparse-preview.ply','points':[[x*.1,0,z*.1,90,80,70] for x in range(20) for z in range(20)],
+           'floorEstimate':{'y':0,'origin':[0,0],'width':1.9,'depth':1.9,'support':1,'units':'m'},
+           'scale':{'source':'user-measured','metresPerUnit':.42,'distance':.84,'spanUnits':2,'selfReported':True,'verified':False},
+           'provenance':{'totalPoints':400,'keptPoints':400,'metricVerified':False}}
+    return value|over
+
+
+def upload_cloud(c,data,name='brainsnn-point-cloud.json'):
+    r=c.post('/v1/uploads',json={'name':name,'kind':'cloud','size':len(data)},headers=HEADERS)
+    if r.status_code!=201:return r
+    uid=r.json()['id'];assert c.put(f'/v1/uploads/{uid}?offset=0',content=data,headers=HEADERS).status_code==200
+    return uid
+
+
+def cloud_adapter(tmp_path):
+    script=tmp_path/'adapter.py';script.write_text(
+        "import json,sys\nfrom pathlib import Path\n"
+        "request=json.loads(Path(sys.argv[1]).read_text());out=Path(request['output_dir'])\n"
+        "assert [i['kind'] for i in request['inputs']]==['cloud']\n"
+        "cloud=json.loads(Path(request['inputs'][0]['path']).read_text())\n"
+        "(out/'echo.json').write_text(json.dumps({'units':cloud['units'],'points':len(cloud['points'])}))\n"
+        "(out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':'echo.json','kind':'evidence'}]}))\n")
+    config=tmp_path/'adapters.json'
+    config.write_text(json.dumps([{'id':'scene-test','label':'TEST FIXTURE','enabled':True,'license_reviewed':True,
+        'input_kinds':['video','cloud'],'max_inputs':1,'timeout_seconds':5,'command':[sys.executable,str(script),'{input_manifest}']}]))
+    return config
+
+
+def test_measured_cloud_handoff_reaches_a_cloud_engine(tmp_path):
+    with TestClient(create_app(root=tmp_path/'data',token=TOKEN,adapters=str(cloud_adapter(tmp_path)))) as c:
+        caps=c.get('/v1/capabilities',headers=HEADERS).json()
+        assert next(e for e in caps['engines'] if e['id']=='scene-test')['input_kinds']==['video','cloud']
+        uid=upload_cloud(c,json.dumps(arena_cloud()).encode())
+        # The integrity engine never takes a cloud; the cloud engine does.
+        assert c.post('/v1/jobs',json={'engine':'inspect','upload_ids':[uid],'consent':True},headers=HEADERS).status_code==422
+        r=c.post('/v1/jobs',json={'engine':'scene-test','upload_ids':[uid],'consent':True},headers=HEADERS);assert r.status_code==201,r.text
+        jid=r.json()['id'];c.post(f'/v1/jobs/{jid}/start',json={},headers=HEADERS)
+        job=wait(c,jid);assert job['status']=='complete',job
+        url=c.post(f'/v1/jobs/{jid}/ticket',json={'artifact':0},headers=HEADERS).json()['url']
+        assert json.loads(c.get(url).content)=={'units':'m','points':400}
+
+
+@pytest.mark.parametrize('bad',[
+    b'not json', b'{"version":1,"points":[[0,0,0,1,2,NaN]]}', b'['*100_000+b']'*100_000,
+    json.dumps(arena_cloud(kind='gaussian')).encode(),
+    json.dumps(arena_cloud(points=[])).encode(),
+    json.dumps(arena_cloud(points=[[0,0,0,1,2,3]]*50_001)).encode(),
+    json.dumps(arena_cloud(points=[[0,0,0,1,2,300]])).encode(),
+    json.dumps(arena_cloud(points=[[1e9,0,0,1,2,3]])).encode(),
+    json.dumps(arena_cloud(points=[[0,0,0,1,2,True]])).encode(),
+    # A few points at opposite corners of the coordinate limit: valid numbers, but a footprint of ~10^15 grid cells.
+    json.dumps(arena_cloud(points=[[x,0,z,1,2,3] for x in (-9e6,9e6) for z in (-9e6,9e6) for _ in range(50)])).encode(),
+    json.dumps(arena_cloud(points=[[x*2,0,z*2,1,2,3] for x in range(160) for z in range(160)])).encode(),
+    json.dumps(arena_cloud(floorEstimate={'y':1e308,'units':'m'})).encode(),
+    # A flat z exactly on a cell boundary must not zero out a huge x span.
+    json.dumps(arena_cloud(points=[[x,0,0,1,2,3] for x in (-9e6,9e6) for _ in range(50)])).encode(),
+    json.dumps(arena_cloud(floorEstimate={'y':.5,'units':'m'})).encode(),  # all points at y=0: beyond the 0.05 margin
+    json.dumps(arena_cloud(scale=None)).encode(),
+    json.dumps(arena_cloud(scale={'source':'user-measured','metresPerUnit':.42,'selfReported':True,'verified':True})).encode(),
+    json.dumps(arena_cloud(units='arbitrary')).encode(),
+])
+def test_malformed_or_overclaiming_cloud_handoffs_are_refused(tmp_path,bad):
+    with TestClient(create_app(root=tmp_path/'data',token=TOKEN,adapters=str(cloud_adapter(tmp_path)))) as c:
+        uid=upload_cloud(c,bad)
+        assert c.post('/v1/jobs',json={'engine':'scene-test','upload_ids':[uid],'consent':True},headers=HEADERS).status_code==422
+
+
+def test_cloud_uploads_are_json_only_and_bounded(client):
+    assert upload_cloud(client,b'{}',name='cloud.png').status_code==422
+    assert client.post('/v1/uploads',json={'name':'cloud.json','kind':'cloud','size':16*1024**2+1},headers=HEADERS).status_code==422
+    assert client.post('/v1/uploads',json={'name':'room.json','kind':'image','size':20},headers=HEADERS).status_code==422
+
+
+def test_metric_artifact_units_are_kept_as_a_hint_never_verified():
+    assert visual_metadata({'representation':'triangle-mesh','units':'m'})['units']=='m'
+    for units in ['metres','M','ft',None]:
+        assert visual_metadata({'representation':'triangle-mesh','units':units})['units']=='arbitrary'
+
+
+def test_dense_multi_view_cloud_in_a_y_up_frame_is_admitted(tmp_path):
+    with TestClient(create_app(root=tmp_path/'data',token=TOKEN,adapters=str(cloud_adapter(tmp_path)))) as c:
+        uid=upload_cloud(c,json.dumps(arena_cloud(sourceFrame='right-handed-y-up',multiView=True)).encode())
+        assert c.post('/v1/jobs',json={'engine':'scene-test','upload_ids':[uid],'consent':True},headers=HEADERS).status_code==201
+

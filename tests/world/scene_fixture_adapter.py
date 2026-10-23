@@ -64,10 +64,22 @@ def main():
     request = json.loads(Path(parser.parse_args().input_manifest).read_text())
     out = Path(request['output_dir'])
     out.mkdir(parents=True, exist_ok=True)
+    scene = dict(SCENE)
+    # A browser point-cloud hand-off (already validated by the worker) keeps its units and scale, as the compiler does.
+    cloud = next((json.loads(Path(i['path']).read_text()) for i in request['inputs'] if i['kind'] == 'cloud'), None)
+    if cloud:
+        metric = cloud['units'] == 'm'
+        scene.update(units=cloud['units'], scale=cloud['scale'], source='browser hand-off (authored fixture scene)',
+                     usd={'written': True, 'metersPerUnit': 1} if metric else {'written': False, 'reason': 'Fixture: arbitrary units.'},
+                     counts={**SCENE['counts'], 'points': len(cloud['points'])})
+        if metric:
+            (out / 'scene.usda').write_text('#usda 1.0\n(\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n')
     (out / 'scene.glb').write_bytes(glb())
-    (out / 'scene.json').write_text(json.dumps(SCENE))
+    (out / 'scene.json').write_text(json.dumps(scene))
+    usd = scene['usd']['written']
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [
-        {'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'arbitrary'},
+        {'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': scene['units']},
+        *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
         {'name': 'scene.json', 'kind': 'evidence'}]}))
 
 

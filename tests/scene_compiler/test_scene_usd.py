@@ -87,3 +87,63 @@ class CompileScene(unittest.TestCase):
                     else: self.assertRaises(RuntimeError, su.compile_scene, Path(tmp) / 'cloud.json', out, blender='/usr/bin/blender')
         finally:
             su.subprocess.run = original
+
+
+FAKE_BLENDER = '''#!/usr/bin/env python3
+"""Stand-in for the blender binary: writes the compiler's output contract (metric clouds get scene.usda). No Blender runs."""
+import json, sys
+from pathlib import Path
+if sys.argv[1:] == ["--version"]:
+    print("Blender test stand-in"); sys.exit(0)
+args = sys.argv[sys.argv.index("--") + 1:]
+cloud, out = json.loads(Path(args[args.index("--cloud") + 1]).read_text()), Path(args[args.index("--out") + 1])
+out.mkdir(parents=True, exist_ok=True); metric = cloud["units"] == "m"
+(out / "scene.glb").write_bytes(b"glTF-stand-in")
+if metric: (out / "scene.usda").write_text("#usda 1.0\\n")
+(out / "scene.json").write_text(json.dumps({"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud["scale"],
+    "usd": {"written": metric}, "counts": {"points": len(cloud["points"]), "walls": 0, "objects": 0, "unplaced": 0, "unknown_cells": 0}, "walls": []}))
+'''
+
+
+def handoff(units="m", source_frame="colmap"):
+    rows = [[x * .1, 0, z * .1, 90, 80, 70] for x in range(10) for z in range(10)]
+    scale = {"source": "user-measured", "metresPerUnit": .5, "distance": 1.0, "spanUnits": 2.0, "selfReported": True, "verified": False}
+    return {"version": 1, "kind": "colmap-sparse-point-cloud", "units": units, "coordinateFrame": "right-handed-y-up", "sourceFrame": source_frame,
+            "source": "sparse-preview.ply", "points": rows, "floorEstimate": {"y": 0, "units": units}, "scale": scale if units == "m" else None,
+            "provenance": {"metricVerified": False}}
+
+
+class CloudHandoff(unittest.TestCase):
+    def run_handoff(self, cloud, extra_inputs=()):
+        d = Path(tempfile.mkdtemp()); blender = d / "blender"; blender.write_text(FAKE_BLENDER); blender.chmod(0o755)
+        path = d / "brainsnn-point-cloud.json"; path.write_text(json.dumps(cloud))
+        out = d / "job" / "output"
+        request = {"schema": "brainsnn.adapter.v1", "output_dir": str(out),
+                   "inputs": [{"kind": "cloud", "path": str(path), "name": path.name}, *extra_inputs]}
+        return su.run(request, blender=str(blender)), out
+
+    def test_measured_cloud_compiles_to_a_metric_scene_without_colmap(self):
+        evidence, out = self.run_handoff(handoff("m"))
+        self.assertEqual((evidence["units"], evidence["input"]["kind"], evidence["reconstruction"]), ("m", "browser-handoff", None))
+        self.assertEqual(len(evidence["input"]["sha256"]), 64); self.assertFalse(evidence["metric_verified"])
+        self.assertEqual(evidence["handoff"]["scale"]["selfReported"], True)
+        self.assertTrue(any("self-reported" in w for w in evidence["warnings"]))
+        names = [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]]
+        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.json", "scene-usd.json", "arena-cloud.json"])
+        self.assertFalse((out / "sparse-preview.ply").exists())
+
+    def test_unscaled_cloud_writes_no_usd(self):
+        evidence, out = self.run_handoff(handoff("arbitrary"))
+        self.assertEqual(evidence["units"], "arbitrary"); self.assertFalse((out / "scene.usda").exists())
+        self.assertNotIn("scene.usda", [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]])
+
+    def test_single_photo_previews_and_mixed_inputs_are_refused(self):
+        with self.assertRaisesRegex(ValueError, "multi-view"):
+            self.run_handoff(handoff("m", source_frame="right-handed-y-up"))
+        with self.assertRaisesRegex(ValueError, "on its own"):
+            self.run_handoff(handoff("m"), extra_inputs=[{"kind": "video", "path": "/dev/null", "name": "walk.mp4"}])
+
+    def test_dense_y_up_cloud_compiles_when_it_declares_multiple_views(self):
+        evidence, out = self.run_handoff({**handoff("m", source_frame="right-handed-y-up"), "multiView": True})
+        self.assertEqual(evidence["handoff"]["sourceFrame"], "right-handed-y-up"); self.assertTrue((out / "scene.usda").exists())
+

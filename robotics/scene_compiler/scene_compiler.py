@@ -33,6 +33,23 @@ def args():
 
 
 # ---------- geometry helpers (pure python; clouds are ≤50k points) ----------
+UNKNOWN_CELL = 0.5
+# The unknown-space pass visits every cell of the 2–98% footprint. 250,000 cells is 250 × 250 m at 0.5 m: anything larger
+# is a wrong scale or stray points, not a room, and would only tie up the worker. The worker checks the same bound at upload.
+MAX_GRID_CELLS = 250_000
+
+
+def grid_cells(ex, ez, cell=UNKNOWN_CELL):
+    """Unknown-space cells spanned by the footprint [x0, x1] × [z0, z1]."""
+    # At least one cell per axis: the pass loops over every x cell even when the z range is empty.
+    return max(1, math.ceil(ex[1] / cell) - math.floor(ex[0] / cell)) * max(1, math.ceil(ez[1] / cell) - math.floor(ez[0] / cell))
+
+
+def multi_view(cloud):
+    """COLMAP clouds are multi-view by construction; other frames (dense MapAnything) must declare it."""
+    return cloud.get("sourceFrame") == "colmap" or cloud.get("multiView") is True
+
+
 def percentile(v, q):
     s = sorted(v); i = (len(s) - 1) * q; lo = math.floor(i); return s[lo] + (s[min(lo + 1, len(s) - 1)] - s[lo]) * (i - lo)
 
@@ -240,16 +257,18 @@ def main():
     # Hard gate: a single-photo relative-depth cloud has no consistent geometry (every object is a perspective wedge),
     # so compiling it produces confident nonsense (a 22 m "refrigerator" in the mezzanine test). The hand-off JSON
     # only names its frame today: 'colmap' means multi-view SfM; anything else is treated as unverified geometry.
-    if cloud.get("sourceFrame") != "colmap" and not a.allow_unverified:
-        sys.exit("REFUSED: sourceFrame=%r is not a multi-view reconstruction. The scene compiler needs COLMAP/MapAnything/VIPE "
-                 "geometry; single-photo depth is a visual preview only. Record a walkthrough, or pass --allow-unverified for experiments."
-                 % cloud.get("sourceFrame"))
+    if not multi_view(cloud) and not a.allow_unverified:
+        sys.exit("REFUSED: this cloud is not a multi-view reconstruction (sourceFrame=%r, multiView not set). The scene compiler needs "
+                 "COLMAP/MapAnything/VIPE geometry from at least two views; single-photo depth is a visual preview only. Record a "
+                 "walkthrough, or pass --allow-unverified for experiments." % cloud.get("sourceFrame"))
     if not metric:  # arbitrary units: keep them but say so loudly; the site's scale card is the way to fix it
         print("WARNING: cloud is in arbitrary units; exporting unscaled (scale.source = none), and no USD")
     floor_y = floor_plane(pts, cloud.get("floorEstimate"))
     xs, zs = [p[0] for p in pts], [p[2] for p in pts]
     ex = [percentile(xs, 0.02), percentile(xs, 0.98)]; ez = [percentile(zs, 0.02), percentile(zs, 0.98)]
     ceiling = percentile([p[1] for p in pts], 0.98)
+    if grid_cells(ex, ez) > MAX_GRID_CELLS:
+        sys.exit("REFUSED: the footprint spans %d grid cells (limit %d). Check the scale or remove stray points." % (grid_cells(ex, ez), MAX_GRID_CELLS))
 
     reset(); scene = {"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud.get("scale"),
                       "source": cloud.get("source"), "floor_y": floor_y, "objects": [], "walls": [], "unknown": []}
@@ -268,7 +287,7 @@ def main():
             rec["support_points"] = det["support_points"]; rec["detector"] = det["detector"]; scene["objects"].append(rec)
         scene["objects"].extend(unplaced)
     # Unknown: everything inside the room box that no observed point touches, as a tagged volume (coarse grid).
-    cell = 0.5; occupied = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] > floor_y + 0.05}
+    cell = UNKNOWN_CELL; occupied = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] > floor_y + 0.05}
     seen_floor = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] <= floor_y + 0.05}
     for i in range(math.floor(ex[0] / cell), math.ceil(ex[1] / cell)):
         for j in range(math.floor(ez[0] / cell), math.ceil(ez[1] / cell)):

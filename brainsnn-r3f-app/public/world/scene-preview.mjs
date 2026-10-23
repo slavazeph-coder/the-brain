@@ -17,12 +17,15 @@ export function sceneFacts(scene) {
   if (objects === null) facts.push('Detected: not recorded.');
   else facts.push(`Detected: ${objects ? plural(objects, 'object') + ' placed from 2D detections' : 'no objects placed'}${unplaced ? `, ${unplaced.toLocaleString('en')} left unplaced` : ''}.`);
   facts.push(unknown === null ? 'Unknown space: not recorded.' : `Unknown: ${plural(unknown, 'floor cell')} no point reached, kept as a tagged volume, never free space.`);
-  facts.push(scene.units === 'm' ? 'Units: metres, from a measured scale.'
+  const scale = scene.scale && typeof scene.scale === 'object' ? scene.scale : null;
+  facts.push(scene.units === 'm' ? (scale?.selfReported === true
+      ? `Units: metres, from a distance you measured${Number.isFinite(scale.distance) ? ` (${scale.distance} m)` : ''}. Self-reported, not verified.`
+      : 'Units: metres, from a measured scale.')
     : scene.units === 'arbitrary' ? 'Units: arbitrary reconstruction units. No measured scale, so sizes are relative.' : 'Units: not recorded.');
   const usd = scene.usd && typeof scene.usd === 'object' ? scene.usd : null;
-  // Worker jobs cannot carry a measured scale yet, so point to the metric export the site already has instead of the compiler's advice.
+  // A video job has no measured scale, so point to the site's metric routes instead of the compiler's advice.
   facts.push(usd?.written === true ? 'scene.usda was written for Isaac Sim (metersPerUnit = 1).'
-    : usd?.written === false && scene.units === 'arbitrary' ? 'No scene.usda: Isaac Sim reads USD in metres and this scene has no measured scale. For a metric OpenUSD file, measure a known distance on the reconstruction, review the map, then use Export static OpenUSD.'
+    : usd?.written === false && scene.units === 'arbitrary' ? 'No scene.usda: Isaac Sim reads USD in metres and this scene has no measured scale. Measure a known distance on the reconstruction, then build a metric simulation scene there, or review the map and use Export static OpenUSD.'
     : usd?.written === false ? `No scene.usda. ${typeof usd.reason === 'string' ? usd.reason.slice(0, 300) : ''}`.trim()
     : 'USD status was not recorded.');
   return facts;
