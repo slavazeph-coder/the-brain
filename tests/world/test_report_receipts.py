@@ -682,3 +682,64 @@ def test_artifact_delete_during_inflight_receipt_hash_blocks_signature(signed_op
         assert not (options['root'] / 'jobs' / jid).exists()
         assert client.app.state.store.db.execute(
             'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0] == 0
+
+
+def test_report_signing_key_environment_variable_wiring(configured, tmp_path, monkeypatch):
+    # create_app line: key_path = report_key or os.environ.get('WORLD_REPORT_SIGNING_KEY')
+    # No existing test exercises the env-var path — every other test passes
+    # report_key= directly. Pin the wiring: when report_key is NOT given,
+    # the environment variable must be picked up and used to initialise
+    # the signer; when it is unset, the worker must start with signing
+    # disabled (503 on /v1/report-key, available=False on capabilities).
+    options, config = configured
+    options = dict(options)
+    options.pop('report_key', None)  # must be absent so env var is the only source
+
+    private = tmp_path / 'env-signing.key'
+    public = tmp_path / 'env-public.json'
+    key = init_key(private, public)
+
+    # --- env var set → signer active, key matches the env-var key file ---
+    # The signer is a closure variable in create_app, not on app.state, so
+    # the only observable proof of env-var wiring is the live HTTP surface:
+    # /v1/report-key must serve exactly this key, and a signed receipt must
+    # verify against it.
+    monkeypatch.setenv('WORLD_REPORT_SIGNING_KEY', str(private))
+    try:
+        with TestClient(create_app(**options)) as client:
+            assert client.get('/v1/report-key').json() == key
+            cap = client.get('/v1/capabilities', headers=headers(A)).json()['reportSigning']
+            assert cap == {'available': True, 'algorithm': 'Ed25519', 'keyId': key['keyId']}
+            jid, _, _ = complete(client, A)
+            response = receipt(client, jid)
+            assert response.status_code == 200, response.text
+            payload = verify_receipt(response.json(), key, SCENARIO)
+            assert payload['ownerId'] == 'alpha'
+    finally:
+        monkeypatch.delenv('WORLD_REPORT_SIGNING_KEY', raising=False)
+
+    # --- env var unset, report_key absent → signing disabled, 503 ---
+    with TestClient(create_app(**options)) as client:
+        assert client.get('/v1/report-key').status_code == 503
+        cap = client.get('/v1/capabilities', headers=headers(A)).json()['reportSigning']
+        assert cap['available'] is False and cap['keyId'] is None
+
+
+def test_report_signing_key_inside_worker_storage_is_rejected(configured, tmp_path, monkeypatch):
+    # Guard at app.py:287-289: if the key file path resolves inside the
+    # worker data directory, create_app must raise before the app is usable.
+    options, config = configured
+    options = dict(options)
+    options.pop('report_key', None)
+
+    data_dir = options['root']
+    key_inside = data_dir / 'signing-inside.key'
+    data_dir.mkdir(exist_ok=True)  # configured root is created by Store; init_key uses O_EXCL and requires the parent to exist
+    init_key(key_inside, data_dir / 'public-inside.json')
+
+    monkeypatch.setenv('WORLD_REPORT_SIGNING_KEY', str(key_inside))
+    try:
+        with pytest.raises(RuntimeError, match='outside worker'):
+            create_app(**options)
+    finally:
+        monkeypatch.delenv('WORLD_REPORT_SIGNING_KEY', raising=False)

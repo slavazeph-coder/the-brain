@@ -1,12 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-23T04:15Z
+Last updated: 2026-10-23T05:20Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
-- **Run 57 (this run): cancellation regression committed — 27 pytest pass**
+- **Run 64 (this run): two broken env-var tests fixed — BOTH SUITES GREEN (29 + 8)**
+  - Baseline: clean tree at `6a8e1c6` (run-57). `node --test tests/world/report-receipts.test.mjs` → 8 pass; `pytest tests/world/test_report_receipts.py -q` → 27 passed, 2 failed.
+  - Failure 1 — `test_report_signing_key_environment_variable_wiring`: asserted `app.state.signer`, but the signer is a **closure variable** in `create_app` (app.py:286), not on `app.state`. Fix: dropped the state assertion; the env-var wiring is now proven through the live HTTP surface — `/v1/report-key` returns exactly the env-var key, `capabilities.reportSigning.available` is true, and a signed receipt verifies against that key.
+  - Failure 2 — `test_report_signing_key_inside_worker_storage_is_rejected`: `init_key` uses `os.open(O_CREAT|O_EXCL)` and does **not** create parent dirs; the `configured` fixture's root (`tmp_path/data`) doesn't exist until `Store()` runs. Fix: one line — `data_dir.mkdir(exist_ok=True)` before `init_key`.
+  - Exact results (executed this run):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (113 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 10.18 s** (was 27 pass / 2 fail)
+  - Commit: `test(world): fix env-var wiring test — signer is a closure var; init_key needs parent dir`. Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- **Run 57 (prev): cancellation regression committed — 27 pytest pass**
   - Baseline verified: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (111 ms); `pytest tests/world/test_report_receipts.py -q` → 26 passed in 9.55 s. Clean tree at `558a3a8`, branch `hermes/world-builder-gb10`.
   - New test: `test_cancel_job_on_complete_job_does_not_enter_hash_cancellations` — pins the app-level invariant that cancel_job on a non-ACTIVE (complete) job returns status='complete' and must NOT insert an entry into hash_cancellations. The receipt path's local threading.Event (app.py:694) is only set by the request's finally-block (app.py:711); the receipt thread is never consulted against hash_cancellations. A concurrent cancel while the hash thread is in-flight must not interrupt signing — the receipt signs 200, verifies against the key, and the job stays 'complete'.
   - Full suite (executed this run):
@@ -186,10 +194,15 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Next bounded action
 
-- Run 55: 4090 MapAnything held-out-frame inference smoke test — short
+- Run 65: 4090 MapAnything held-out-frame inference smoke test — short
   authenticated SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
   confirm hostname + GPU before running. Reuse verified pinned weights from
   GB10; do not replace base conda env. No permanent tunnel.
+- Both suites now fully green (29 pytest + 8 node). Signed-receipt
+  env-var wiring is now covered by `test_report_signing_key_environment_variable_wiring`
+  (closure-var signer proven via `/v1/report-key` + capabilities + receipt verify)
+  and `test_report_signing_key_inside_worker_storage_is_rejected`
+  (fail-closed guard at create_app line 288-289).
 - Handoff task 1 (actual HTTP signing/UI journey) is now CLOSED: both
   chromium (run 36) and webkit (run 50) passed, fresh receipts committed
   run 54. Remaining handoff tasks: 3 (Node/browser regression re-run after
