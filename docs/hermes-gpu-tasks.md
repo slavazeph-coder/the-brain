@@ -1,0 +1,52 @@
+# Hermes: GPU tasks for World Builder (October 23, 2026)
+
+What the site needs from the GB10 and the 4090. Each item lists what "done" means. Keep tokens, worker URLs and SSH
+details out of the repository; send them to the owner directly.
+
+## 1. 4090: dense reconstruction, scored (highest value)
+
+The metric scene path is on brainsnn.com (#217). On real photos the CPU reconstruction is accurate where it has
+points (1.5 cm median against the ETH3D laser scan) but covers almost nothing: 2.1% of the room within 5 cm. Dense
+MapAnything should change that.
+
+- Run the `mapanything-apache` smoke on the 4090 (CUDA, offline weights pinned in `mapanything_apache.py`).
+- Run it on the 12 ETH3D office photos named in `docs/world-studio-implementation.md`, uploaded with their original
+  names (downscale to 3024 × 2016; the worker caps photos at 24 MP).
+- Score it: `python -m robotics.world_worker.benchmark_eth3d --reconstruction JOB/output --eth3d office --out report.json`
+  (needs scipy).
+
+Done when the report is posted. Beat the CPU baseline on completeness, and record metres per unit: about 1.0 means
+MapAnything's predicted scale is right without a tape measure. Also record peak GPU memory and time.
+
+## 2. GB10: the always-on production worker
+
+- Update to `main` (#213, #216, #217) and run the worker with `adapters.gb10.json`. `scene-usd` now takes `video` and
+  `cloud`.
+- Add `mapanything-apache` (GB10 or 4090) to the same worker, so the site gets dense clouds and metric scenes from one
+  connection.
+- Put it behind TLS, with a stable hostname rather than a quick tunnel, and give the owner the URL and an operator token.
+
+Done when brainsnn.com connects to it and builds a metric scene from a walkthrough: measure a distance, then use
+"Build metric simulation scene (GLB + USD)".
+
+## 3. Detections into the simulation scene
+
+`scene-usd` never passes `--detections`, so worker scenes have walls and floor but no furniture. The compiler already
+lifts 2D boxes with camera poses, but it does not read review decisions.
+
+- Pass only reviewed detections (accepted or edited in the Understand panel, or from the GB10 vision model after
+  review), with each frame's `cameraFromCloud` pose.
+- Keep unplaced detections in `scene.json` with their reason.
+
+Done when a walkthrough scene shows detected boxes and the dialog's "Detected" line counts them.
+
+## 4. Housekeeping
+
+- Remove the SSH host and key path from the progress log on `hermes/world-builder-gb10`; the repository is public.
+- Port the receipts work from `hermes/world-builder-gb10` onto `main` as one focused PR.
+- #212 and #215 are superseded by #213 and #216; the owner decides whether to close them.
+
+## 5. Lyra 1 on the 4090, only after the owner's licence and guardrail decision
+
+Stage Lyra 1 with its safeguards enabled (the upstream entry point disables them; do not copy that setting). Measure
+it, then label every output as a generative preview that planning never uses. See `docs/world-generative-qualification.md`.
