@@ -1,11 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-23T03:30Z
+Last updated: 2026-10-23T04:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
+- **Run 57 (this run): cancellation regression committed — 27 pytest pass**
+  - Baseline verified: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (111 ms); `pytest tests/world/test_report_receipts.py -q` → 26 passed in 9.55 s. Clean tree at `558a3a8`, branch `hermes/world-builder-gb10`.
+  - New test: `test_cancel_job_on_complete_job_does_not_enter_hash_cancellations` — pins the app-level invariant that cancel_job on a non-ACTIVE (complete) job returns status='complete' and must NOT insert an entry into hash_cancellations. The receipt path's local threading.Event (app.py:694) is only set by the request's finally-block (app.py:711); the receipt thread is never consulted against hash_cancellations. A concurrent cancel while the hash thread is in-flight must not interrupt signing — the receipt signs 200, verifies against the key, and the job stays 'complete'.
+  - Full suite (executed this run):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (111 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **27 passed in 9.74 s** (up from 26)
+  - Commit: `cd57b87 test(world): pin cancel-vs-hash-thread invariant at app level` (1 file, 59 insertions). Pushed to `hermes/world-builder-gb10`.
+  - No force-push/merge/deploy. No paid fallback. Serving Qwen/backup untouched.
+  - Next: signed-receipt API/env documentation (docs/world-builder-remote-handoff.md) or 4090 GPU task via short SSH (verify `d130b6c7f3f4` + GPU UUID first per `world-builder-4090.json`).
 - **Run 54 (this run): actual HTTP report UI smoke — PASSES on both engines**
   - Baseline verified: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (127 ms); `pytest tests/world/test_report_receipts.py -q` → 26 passed in 10.55 s. Clean tree at `3d15f91`, branch `hermes/world-builder-gb10`.
   - Ran the pending real HTTP journey: `report_receipt_ui_smoke.py` with local uvicorn worker + real Ed25519 signing, `WORLD_SERVER_PYTHON` = world-builder venv. First attempt failed — Playwright looked in `/root/.cache/ms-playwright` (empty); browsers actually live at `/workspace/hermes-gb10/build-runtime/playwright-browsers`. Re-ran with `PLAYWRIGHT_BROWSERS_PATH` set: **chromium and webkit both passed**, zero page errors.
