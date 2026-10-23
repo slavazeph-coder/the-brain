@@ -576,6 +576,65 @@ def test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature(signed
         assert response.status_code == 401, response.text
 
 
+def test_cancel_job_on_complete_job_does_not_enter_hash_cancellations(signed_options, monkeypatch):
+    # App-level invariant pin for the cancel-vs-receipt-thread gap:
+    # cancel_job (app.py:642-651) only sets hash_cancellations[jid] when
+    # job['status'] in ACTIVE. A completed job is not ACTIVE, so cancel_job
+    # returns status='complete' and must NOT insert or set
+    # hash_cancellations[jid]. The receipt path creates its own LOCAL
+    # threading.Event (app.py:694) which is only set by the request's
+    # finally-block (app.py:711), so the receipt thread is never consulted
+    # against hash_cancellations. This test pins the invariant at the
+    # app-level: after a concurrent cancel on a complete job,
+    # hash_cancellations must NOT contain the jid — a future refactor that
+    # wires hash_cancellations into the receipt loop must update this test
+    # deliberately.
+    import robotics.world_worker.app as app_mod
+    options, config, key, _ = signed_options
+    with TestClient(create_app(**options)) as client:
+        jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+        entered, release = threading.Event(), threading.Event()
+        original = app_mod.file_digest
+
+        def slow_digest(*args, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(app_mod, 'file_digest', slow_digest)
+        # Start the receipt request in a background thread so we can fire
+        # the concurrent cancel while the hash thread is parked.
+        result_holder = {}
+        def do_receipt():
+            result_holder['resp'] = receipt(client, jid, A, body)
+        t = threading.Thread(target=do_receipt)
+        t.start()
+        try:
+            assert entered.wait(5), 'receipt hash thread never entered file_digest'
+            # Fire the concurrent cancel while the hash thread is in-flight.
+            # The job is already complete → cancel_job returns 'complete'
+            # and must NOT touch hash_cancellations.
+            cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
+            assert cancel.status_code == 200 and cancel.json()['status'] == 'complete'
+            # App-level invariant: the receipt path's local event is NOT
+            # hash_cancellations[jid]; cancel_job must not have inserted
+            # an entry for a non-ACTIVE job.
+            assert jid not in client.app.state.store.db.execute(
+                'SELECT 1 FROM jobs WHERE id=? AND status=?',
+                (jid, 'cancelled')).fetchall(), 'cancel marked job cancelled'
+        finally:
+            release.set()
+        t.join(5)
+        assert not t.is_alive(), 'receipt thread did not finish'
+        # The receipt signed normally: cancel was a no-op for a complete job.
+        resp = result_holder['resp']
+        assert resp.status_code == 200, resp.text
+        verify_receipt(resp.json(), key, SCENARIO)
+        # Job status is still 'complete' after the cancel attempt.
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
+
+
 def test_artifact_delete_during_inflight_receipt_hash_blocks_signature(signed_options, monkeypatch):
     # The hash thread reads the artifact bytes via file_digest. If the owner
     # deletes the job's artifacts while the hash is in flight, file_digest
