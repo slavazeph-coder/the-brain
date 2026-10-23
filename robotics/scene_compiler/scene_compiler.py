@@ -200,6 +200,17 @@ def write_usda(path, scene, pts):
     body.append('}\n'); Path(path).write_text("".join(body))
 
 
+def emit_usd(out, scene, pts):
+    """Write scene.usda for a metric scene, or record why not. A reused output folder must not keep an older USD that
+    scene.json no longer describes, so a skipped USD also removes any stale file."""
+    path = Path(out) / "scene.usda"
+    if scene.get("units") == "m":
+        write_usda(path, scene, pts); scene["usd"] = {"written": True, "metersPerUnit": 1}
+    else:
+        path.unlink(missing_ok=True); scene["usd"] = {"written": False, "reason": USD_NEEDS_METRES}; print("NOTE:", USD_NEEDS_METRES)
+    return scene["usd"]
+
+
 def add_oriented_box(name, w, provenance, label, color):
     """Wall box rotated about the vertical axis (Y-up yaw -> Blender Z rotation)."""
     cx, cz, y0, y1 = w["centre"][0], w["centre"][1], w["y0"], w["y1"]
@@ -274,10 +285,7 @@ def main():
         mat = bpy.data.materials.new("unknown_mat"); mat.diffuse_color = (0.9, 0.3, 0.3, 0.35); ob.data.materials.append(mat); ob["provenance"] = "unknown"
 
     bpy.ops.export_scene.gltf(filepath=str(out / "scene.glb"), export_format="GLB", export_extras=True, export_apply=True)
-    if metric:
-        write_usda(out / "scene.usda", scene, pts); scene["usd"] = {"written": True, "metersPerUnit": 1}
-    else:
-        scene["usd"] = {"written": False, "reason": USD_NEEDS_METRES}; print("NOTE:", USD_NEEDS_METRES)
+    emit_usd(out, scene, pts)
     bpy.ops.wm.save_as_mainfile(filepath=str(out / "scene.blend"))
     scene["counts"] = {"points": len(pts), "walls": len(scene["walls"]), "objects": sum(1 for o in scene["objects"] if o["provenance"] == "detected"),
                        "unplaced": sum(1 for o in scene["objects"] if o["provenance"] == "detected-unplaced"), "unknown_cells": len(scene["unknown"])}

@@ -101,3 +101,13 @@ class Usd(unittest.TestCase):
             self.assertFalse(path.exists())
             sc.write_usda(path, {**scene, "units": "m"}, [[0, 0, 0, 1, 2, 3]])
             self.assertIn("metersPerUnit = 1", path.read_text())
+
+    def test_a_skipped_usd_removes_one_left_from_an_earlier_metric_run(self):
+        import tempfile
+        scene = lambda units: {"schema": "brainsnn.scene.v1", "units": units, "floor_y": 0, "objects": [], "walls": [], "unknown": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(sc.emit_usd(tmp, scene("m"), [[0, 0, 0, 1, 2, 3]]), {"written": True, "metersPerUnit": 1})
+            self.assertTrue((Path(tmp) / "scene.usda").is_file())
+            record = sc.emit_usd(tmp, scene("arbitrary"), [[0, 0, 0, 1, 2, 3]])
+            self.assertFalse(record["written"]); self.assertIn("arbitrary units", record["reason"])
+            self.assertFalse((Path(tmp) / "scene.usda").exists())
