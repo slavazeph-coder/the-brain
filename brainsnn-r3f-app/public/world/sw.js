@@ -2,7 +2,7 @@
 // Models, worker-API calls, uploads and cross-origin requests are never cached: fresh code and
 // fresh evidence always win; the cache only lets an installed app open without a connection.
 const CACHE = 'world-shell-v1';
-const SHELL = ['./index.html', './world.css', './app.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './visual-viewer.mjs',
+const SHELL = ['./index.html', './world.css', './app.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './visual-viewer.mjs', './mesh-viewer.mjs',
   './visual-geometry.mjs', './worker-client.mjs', './depth-client.mjs', './depth-worker.mjs', './import-world.mjs', './observation-ui.mjs', './observations.mjs',
   './measurement-ui.mjs', './measurement-evidence.mjs', './planner-worker.mjs', './capture-client.mjs', './reconstruction-map.mjs',
   './detections.mjs', './detect-client.mjs', './detect-worker.mjs',
