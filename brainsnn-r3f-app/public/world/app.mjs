@@ -64,7 +64,8 @@ function pickedSpan(visual,picks){const [a,b]=picks.map(i=>pickedPoint(visual,i)
 function measuredScale(visual){const c=calibrationFor(visual),d=Number(c.distance);if(c.picks.length!==2||c.picking||!(d>=PROPOSAL.minMeasuredDistance&&d<=PROPOSAL.maxMeasuredDistance))return null;const span=pickedSpan(visual,c.picks);return span>1e-6?{metresPerUnit:d/span,distance:d,span}:null;}
 // COLMAP-frame points (multi-view reconstructions) are flipped to Y-up on hand-off; anything else is already Y-up.
 function arenaFrame(source){return source?.derivation?.engine==='colmap-sparse'||source?.derivation?.coordinateFrame==='colmap'||source?.reconstruction?.coordinate_frame==='colmap'?'colmap':'right-handed-y-up';}
-const sceneEngine=()=>caps?.engines?.find(e=>e.available&&e.input_kinds?.includes('cloud'));
+// Only the scene compiler's engine promises a GLB/USD scene; accepting clouds alone does not.
+const SCENE_ENGINES=['scene-usd'],sceneEngine=()=>caps?.engines?.find(e=>e.available&&SCENE_ENGINES.includes(e.id)&&e.input_kinds?.includes('cloud'));
 function metricSceneCard(source){if(arenaFrame(source)!=='colmap')return '';const entry=sceneEngine();
   return entry?`<label class="check"><input id="scene-consent" type="checkbox">Upload this measured point cloud to your worker to compile a simulation scene.</label><button class="wide" data-action="metric-scene" ${isRemoteActive()?'disabled':''}>Build metric simulation scene (GLB + USD) →</button><p class="micro">${esc(entry.label)}. The scene uses your measured distance, so it is in metres but self-reported, not verified.</p>`
     :`<p class="micro">Connect a worker with a simulation scene engine to compile this measured cloud into a metric scene (GLB + USD).</p>`;}

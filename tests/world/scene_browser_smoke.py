@@ -50,14 +50,14 @@ def check_browser(pw, name, origin, worker_url, token, photo):
         page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')")
         page.locator('#connection [aria-label=Close]').click()
         processing_options(page)
-        page.locator('#engine').select_option('scene-fixture')
+        page.locator('#engine').select_option('scene-usd')
         page.locator('#consent').check()
         page.locator('[data-action=process]').click()
         # A job whose only visual output is a scene opens it directly, over Evidence where its artifacts are listed.
-        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status').textContent) || /scene-fixture: (failed|cancelled)/.test(document.querySelector('#status').textContent)", timeout=60000)
+        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status').textContent) || /scene-usd: (failed|cancelled)/.test(document.querySelector('#status').textContent)", timeout=60000)
         assert page.locator('[data-tab=evidence]').get_attribute('aria-selected') == 'true', page.locator('#status').inner_text()
         assert page.locator('[data-scene-artifact]').all_inner_texts() == ['Explore scene.glb in 3D']
-        assert page.locator('#scene-status').inner_text() == 'scene.glb from scene-fixture · 3 meshes · 72 vertices · SHA-256 checked', page.locator('#scene-status').inner_text()
+        assert page.locator('#scene-status').inner_text() == 'scene.glb from scene-usd · 3 meshes · 72 vertices · SHA-256 checked', page.locator('#scene-status').inner_text()
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[:4] == FACTS and 'Export static OpenUSD' in facts[4], facts
         geometry = page.evaluate("""() => { const d = document.querySelector('#scene-dialog').getBoundingClientRect(),
@@ -105,7 +105,9 @@ def check_metric(pw, name, origin, worker_url, token):
     page = context.new_page()
     errors, uploads = [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    jobs = []
     page.on('request', lambda request: uploads.append(request.post_data_json) if request.method == 'POST' and request.url.endswith('/v1/uploads') else None)
+    page.on('request', lambda request: jobs.append(request.post_data_json['engine']) if request.method == 'POST' and request.url.endswith('/v1/jobs') else None)
     try:
         ply, evidence = fixture()
         page.goto(origin + '/world/index.html', wait_until='networkidle')
@@ -124,8 +126,9 @@ def check_metric(pw, name, origin, worker_url, token):
         assert not uploads, uploads
         page.locator('#scene-consent').check()
         build.click()
-        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status')?.textContent || '') || /scene-fixture: failed/.test(document.querySelector('#status').textContent)", timeout=60000)
+        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status')?.textContent || '') || /scene-usd: failed/.test(document.querySelector('#status').textContent)", timeout=60000)
         assert [u['kind'] for u in uploads] == ['cloud'] and uploads[0]['name'] == 'brainsnn-point-cloud.json', uploads
+        assert jobs == ['scene-usd'], jobs
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[3].startswith('Units: metres, from a distance you measured (') and facts[3].endswith('m). Self-reported, not verified.'), facts
         assert facts[4] == 'scene.usda was written for Isaac Sim (metersPerUnit = 1).', facts
@@ -158,7 +161,11 @@ def main():
             backend = port()
         origin, worker_url, token = f'http://127.0.0.1:{frontend}', f'http://127.0.0.1:{backend}', secrets.token_urlsafe(48)
         config = tmp / 'adapters.json'
-        config.write_text(json.dumps([{'id': 'scene-fixture', 'label': 'Scene transport fixture (no reconstruction)',
+        # A decoy that also takes clouds is listed first: the site must still pick the scene compiler by id.
+        config.write_text(json.dumps([{'id': 'cloud-echo', 'label': 'Cloud transport fixture (not a scene compiler)',
+            'enabled': True, 'license_reviewed': True, 'input_kinds': ['cloud'], 'max_inputs': 1, 'timeout_seconds': 60,
+            'command': [sys.executable, str(ROOT / 'tests/world/scene_fixture_adapter.py'), '--input-manifest', '{input_manifest}']},
+            {'id': 'scene-usd', 'label': 'Scene transport fixture (no reconstruction)',
             'enabled': True, 'license_reviewed': True, 'input_kinds': ['image', 'cloud'], 'max_inputs': 1, 'timeout_seconds': 60,
             'command': [sys.executable, str(ROOT / 'tests/world/scene_fixture_adapter.py'), '--input-manifest', '{input_manifest}']}]))
         environment = {**os.environ, 'WORLD_WORKER_TOKEN': token, 'WORLD_WORKER_DIR': str(tmp / 'data'),
