@@ -99,9 +99,9 @@ args = sys.argv[sys.argv.index("--") + 1:]
 cloud, out = json.loads(Path(args[args.index("--cloud") + 1]).read_text()), Path(args[args.index("--out") + 1])
 out.mkdir(parents=True, exist_ok=True); metric = cloud["units"] == "m"
 (out / "scene.glb").write_bytes(b"glTF-stand-in")
-if metric: (out / "scene.usda").write_text("#usda 1.0\\n")
+if metric: (out / "scene.usda").write_text("#usda 1.0\\n"); (out / "scene.ifc").write_text("ISO-10303-21;\\n")
 (out / "scene.json").write_text(json.dumps({"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud["scale"],
-    "usd": {"written": metric}, "counts": {"points": len(cloud["points"]), "walls": 0, "objects": 0, "unplaced": 0, "unknown_cells": 0}, "walls": []}))
+    "usd": {"written": metric}, "ifc": {"written": metric}, "counts": {"points": len(cloud["points"]), "walls": 0, "objects": 0, "unplaced": 0, "unknown_cells": 0}, "walls": []}))
 '''
 
 
@@ -129,12 +129,13 @@ class CloudHandoff(unittest.TestCase):
         self.assertEqual(evidence["handoff"]["scale"]["selfReported"], True)
         self.assertTrue(any("self-reported" in w for w in evidence["warnings"]))
         names = [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]]
-        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.json", "scene-usd.json", "arena-cloud.json"])
+        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.ifc", "scene.json", "scene-usd.json", "arena-cloud.json"])
+        self.assertEqual(evidence["ifc"], {"written": True})
         self.assertFalse((out / "sparse-preview.ply").exists())
 
     def test_unscaled_cloud_writes_no_usd(self):
         evidence, out = self.run_handoff(handoff("arbitrary"))
-        self.assertEqual(evidence["units"], "arbitrary"); self.assertFalse((out / "scene.usda").exists())
+        self.assertEqual(evidence["units"], "arbitrary"); self.assertFalse((out / "scene.usda").exists()); self.assertFalse((out / "scene.ifc").exists())
         self.assertNotIn("scene.usda", [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]])
 
     def test_single_photo_previews_and_mixed_inputs_are_refused(self):

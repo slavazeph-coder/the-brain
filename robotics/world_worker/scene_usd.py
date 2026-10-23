@@ -219,9 +219,10 @@ def compile_scene(cloud: Path, out: Path, *, blender: str):
         if not (out / name).is_file() or (out / name).stat().st_size == 0:
             raise RuntimeError(f'Scene compiler did not write {name}.')
     scene = json.loads((out / 'scene.json').read_text())
-    # USD is metric-only: present exactly when the compiler says it wrote it.
-    if bool((scene.get('usd') or {}).get('written')) != ((out / 'scene.usda').is_file() and (out / 'scene.usda').stat().st_size > 0):
-        raise RuntimeError('Scene compiler USD output does not match scene.json.')
+    # USD and IFC are metric-only: each is present exactly when the compiler says it wrote it.
+    for key, name in [('usd', 'scene.usda'), ('ifc', 'scene.ifc')]:
+        if bool((scene.get(key) or {}).get('written')) != ((out / name).is_file() and (out / name).stat().st_size > 0):
+            raise RuntimeError(f'Scene compiler {key.upper()} output does not match scene.json.')
     return scene
 
 
@@ -272,13 +273,13 @@ def run(request: dict, *, blender: str):
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
     scene = compile_scene(out / 'arena-cloud.json', work, blender=blender)
-    usd = bool((scene.get('usd') or {}).get('written'))
-    for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []):
+    usd, ifc = (bool((scene.get(key) or {}).get('written')) for key in ['usd', 'ifc'])
+    for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
         shutil.copyfile(work / name, out / name)
     measured = ['The scale comes from a distance the user measured and entered: self-reported, not verified.'] if cloud['units'] == 'm' else []
     evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
-                'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'),
+                'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'),
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
                 'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
@@ -294,6 +295,7 @@ def run(request: dict, *, blender: str):
     (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     artifacts = [{'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': cloud['units']},
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
+                 *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))

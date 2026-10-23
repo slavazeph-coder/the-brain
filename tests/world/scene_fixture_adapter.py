@@ -6,7 +6,11 @@ never a claim about any capture.
 import argparse
 import json
 import struct
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'robotics' / 'scene_compiler'))
+from ifc_export import emit_ifc  # noqa: E402  the real IFC writer, run on the authored scene
 
 # (name, min corner, max corner, linear RGBA, glTF extras), Y-up metres-like units as the compiler writes them.
 BOXES = [
@@ -51,9 +55,10 @@ def glb(boxes=BOXES):
 
 
 SCENE = {'schema': 'brainsnn.scene.v1', 'units': 'arbitrary', 'scale': None, 'source': 'authored transport fixture', 'floor_y': 0,
-         'objects': [{'name': 'floor_observed', 'label': 'floor', 'provenance': 'observed'},
+         'objects': [{'name': 'floor_observed', 'label': 'floor', 'provenance': 'observed', 'centre': [2, -.01, 1.5], 'size': [4, .02, 3]},
                      {'name': 'chair', 'label': 'chair', 'provenance': 'detected-unplaced', 'reason': 'no camera pose for this frame in the cloud\'s frame'}],
-         'walls': [{'name': 'wall_1', 'label': 'wall', 'provenance': 'observed'}], 'unknown': [[3, 2, 1]],
+         'walls': [{'name': 'wall_1', 'label': 'wall', 'provenance': 'observed', 'centre': [2, 1.2, .05], 'size': [4, 2.4, .1], 'yaw_degrees': 0, 'support_points': 40}],
+         'unknown': [[3, 2, 1]],
          'usd': {'written': False, 'reason': 'Fixture: arbitrary units.'},
          'counts': {'points': 0, 'walls': 1, 'objects': 0, 'unplaced': 1, 'unknown_cells': 1}}
 
@@ -74,12 +79,14 @@ def main():
                      counts={**SCENE['counts'], 'points': len(cloud['points'])})
         if metric:
             (out / 'scene.usda').write_text('#usda 1.0\n(\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n')
+        emit_ifc(out, scene)
     (out / 'scene.glb').write_bytes(glb())
     (out / 'scene.json').write_text(json.dumps(scene))
-    usd = scene['usd']['written']
+    usd, ifc = scene['usd']['written'], (scene.get('ifc') or {}).get('written', False)
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [
         {'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': scene['units']},
         *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
+        *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
         {'name': 'scene.json', 'kind': 'evidence'}]}))
 
 
