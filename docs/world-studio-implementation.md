@@ -1,6 +1,6 @@
 # BrainSNN World Builder: implementation and validation
 
-Development branch: `feature/world-builder-flagship`. This is a working development build, not a deployed or fully qualified real-to-sim product. The full objective remains in [the flagship specification](world-builder-flagship.md).
+World Builder is live on brainsnn.com as a labelled preview, deployed from `main` (see Deploy path). It is not yet a fully qualified real-to-sim product. The full objective remains in [the flagship specification](world-builder-flagship.md).
 
 ## What works now
 
@@ -35,6 +35,22 @@ A reconstruction that comes with camera poses (the worker's `reconstruction.json
 Free and obstacle cells merge into at most 128 axis-aligned boxes on whole-centimetre cells. The robot start is the most open free cell within 1.5 m of where the walk began. The result is `provenance: observed`, `geometrySource.kind: reconstruction-proposal` with its assumptions as warnings, and `scaleReviewed`/`mapReviewed` false, so the existing review gate still decides when planning may run. The proposal event enters the proof pack. It records the job, the evidence SHA-256, the scale source and the implied phone height. For a measured scale it also records both picked points in reconstruction coordinates, their span and the entered distance, flagged `selfReported`. Picking needs a pointer or touch; keyboard users can still use the assumed height.
 
 Pipelines that call the worker API directly can run the same proposal without a browser: `npm run world:propose -- --points sparse-preview.ply --evidence reconstruction.json --out world.json --report proposal.json [--measure "ax,ay,az;bx,by,bz;metres" | --camera-height m]` ([`scripts/world-propose-map.mjs`](../brainsnn-r3f-app/scripts/world-propose-map.mjs), documented in the [API guide](../brainsnn-r3f-app/public/world/api.html)). The report adds each input's SHA-256. The output map is unreviewed: World Builder imports it with its gate closed, and Arena/OpenUSD exports stay blocked until a person reviews it. A single-photo depth preview has no camera poses and never proposes a map.
+
+### Simulation scene: walkthrough → Blender GLB/USD (October 23, 2026)
+
+The worker engine `scene-usd` ([`scene_usd.py`](../robotics/world_worker/scene_usd.py)) turns one walkthrough video into a simulation scene. It runs COLMAP, then the same Arena hand-off as the browser's point-cloud export, then the [scene compiler](../robotics/scene_compiler/README.md) in headless Blender. It writes:
+- `scene.glb` for the browser;
+- `scene.usda` for Isaac Sim and Omniverse;
+- `scene.json`, which lists every object with its size, centre, support points and provenance.
+
+Provenance follows the same rules as the planning map:
+- **observed:** the floor and PCA-oriented walls.
+- **detected:** reviewed 2D detections lifted into 3D boxes. A detection is lifted only through its frame's camera pose. Without that pose, or without a box, it stays unplaced and the reason is recorded.
+- **unknown:** floor no point reached. It is exported as a tagged volume, never as free space.
+
+Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only when the job carries a measured scale; otherwise `scene.json` records why it was skipped.
+
+The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a `scene-usd` job finishes, the website offers its files as downloads, but it does not yet open `scene.glb` in 3D. World checks run the compiler and adapter contracts without Blender or COLMAP.
 
 ### Deploy path (October 22, 2026)
 
@@ -208,6 +224,6 @@ These are release requirements, not optional polish:
 5. Benchmark the connected video-language observation adapter on target captures, including omissions and incorrect labels. Frame/time provenance and human review are implemented; uncertainty text is not a calibrated confidence score. Qualify localization before enabling model-generated boxes. Extend supported phone codecs with preserved source timing before claiming broad capture compatibility.
 6. Validate one measured gym with one cleaner, compare predicted clearances/routes/time against a supervised physical run, and calibrate editable operating assumptions. Current planning is conservative planar traversal, not robot dynamics, optimized cleaning or a learned policy.
 7. Add authenticated report signatures and scenario evidence linkage. Current SHA-256 export detects byte changes and explicitly does not authenticate authorship.
-8. Finish production privacy/retention/access checks, then release and verify the real public domain, app/API journeys and rollback. This branch has not been merged or deployed.
+8. Finish production privacy/retention/access checks, then verify the public app/API journeys and rollback. The preview is deployed from `main` and checked against the live site after each deploy, but public hosted processing is still disabled.
 
 The original app remains at `/?classic=1`. Reverting the WorldHome selection in `src/App.tsx` restores the earlier homepage. Existing Arena and production credentials are preserved.
