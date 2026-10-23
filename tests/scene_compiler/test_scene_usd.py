@@ -138,7 +138,12 @@ class CloudHandoff(unittest.TestCase):
         self.assertNotIn("scene.usda", [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]])
 
     def test_single_photo_previews_and_mixed_inputs_are_refused(self):
-        with self.assertRaisesRegex(ValueError, "single-photo"):
+        with self.assertRaisesRegex(ValueError, "multi-view"):
             self.run_handoff(handoff("m", source_frame="right-handed-y-up"))
         with self.assertRaisesRegex(ValueError, "on its own"):
             self.run_handoff(handoff("m"), extra_inputs=[{"kind": "video", "path": "/dev/null", "name": "walk.mp4"}])
+
+    def test_dense_y_up_cloud_compiles_when_it_declares_multiple_views(self):
+        evidence, out = self.run_handoff({**handoff("m", source_frame="right-handed-y-up"), "multiView": True})
+        self.assertEqual(evidence["handoff"]["sourceFrame"], "right-handed-y-up"); self.assertTrue((out / "scene.usda").exists())
+

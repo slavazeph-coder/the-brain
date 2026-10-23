@@ -66,7 +66,10 @@ function measuredScale(visual){const c=calibrationFor(visual),d=Number(c.distanc
 function arenaFrame(source){return source?.derivation?.engine==='colmap-sparse'||source?.derivation?.coordinateFrame==='colmap'||source?.reconstruction?.coordinate_frame==='colmap'?'colmap':'right-handed-y-up';}
 // Only the scene compiler's engine promises a GLB/USD scene; accepting clouds alone does not.
 const SCENE_ENGINES=['scene-usd'],sceneEngine=()=>caps?.engines?.find(e=>e.available&&SCENE_ENGINES.includes(e.id)&&e.input_kinds?.includes('cloud'));
-function metricSceneCard(source){if(arenaFrame(source)!=='colmap')return '';const entry=sceneEngine();
+// Multi-view comes from provenance, not axis names: camera poses from at least two views (COLMAP or dense MapAnything).
+// A single-photo depth preview never qualifies.
+const multiView=source=>source?.visual?.origin!=='depth'&&(source?.reconstruction?.cameras?.length??0)>=2;
+function metricSceneCard(source){if(!multiView(source))return '';const entry=sceneEngine();
   return entry?`<label class="check"><input id="scene-consent" type="checkbox">Upload this measured point cloud to your worker to compile a simulation scene.</label><button class="wide" data-action="metric-scene" ${isRemoteActive()?'disabled':''}>Build metric simulation scene (GLB + USD) →</button><p class="micro">${esc(entry.label)}. The scene uses your measured distance, so it is in metres but self-reported, not verified.</p>`
     :`<p class="micro">Connect a worker with a simulation scene engine to compile this measured cloud into a metric scene (GLB + USD).</p>`;}
 function calibrationCard(visual){const c=calibrationFor(visual),done=c.picks.length===2&&!c.picking;
@@ -318,10 +321,10 @@ async function action(name){try{
     const scale=measuredScale(source.visual);
     if(!client||!entry)throw new Error('Connect a worker with a simulation scene engine first.');
     if(isRemoteActive())throw new Error('Wait for the current worker job to finish or cancel it.');
-    if(arenaFrame(source)!=='colmap')throw new Error('A simulation scene needs a multi-view reconstruction, not a single-photo preview.');
+    if(!multiView(source))throw new Error('A simulation scene needs a multi-view reconstruction with camera poses, not a single-photo preview.');
     if(!scale)throw new Error(`Enter the distance you measured between the two points (${PROPOSAL.minMeasuredDistance}–${PROPOSAL.maxMeasuredDistance} m).`);
     if(!$('scene-consent')?.checked)throw new Error('Approve uploading the measured point cloud to your worker first.');
-    const cloud=toArenaCloud(source.visual.points,{source:source.name,coordinateFrame:'colmap',metresPerUnit:scale.metresPerUnit,measurement:scale});
+    const cloud={...toArenaCloud(source.visual.points,{source:source.name,coordinateFrame:arenaFrame(source),metresPerUnit:scale.metresPerUnit,measurement:scale}),multiView:true};
     const file=new File([JSON.stringify(cloud)],'brainsnn-point-cloud.json',{type:'application/json'});
     event('metric_scene_requested',{source:source.name,...(source.derivation||{}),points:cloud.points.length,metresPerUnit:scale.metresPerUnit,distance:scale.distance,selfReported:true});
     await runJob(entry.id,[{file,kind:'cloud',name:file.name}]);return;}

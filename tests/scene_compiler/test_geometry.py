@@ -119,4 +119,12 @@ class GridBound(unittest.TestCase):
         self.assertEqual(sc.grid_cells([-0.25, 0.25], [0, 0.5]), 2 * 1)
         self.assertLessEqual(sc.grid_cells([0, 249.5], [0, 249.5]), sc.MAX_GRID_CELLS)
         self.assertGreater(sc.grid_cells([-9e6, 9e6], [-9e6, 9e6]), sc.MAX_GRID_CELLS)
+        # A flat axis on a cell boundary still counts one cell, so the other axis alone is bounded.
+        self.assertEqual(sc.grid_cells([-9e6, 9e6], [0, 0]), 36_000_000)
+
+    def test_multi_view_comes_from_colmap_or_an_explicit_flag(self):
+        self.assertTrue(sc.multi_view({"sourceFrame": "colmap"}))
+        self.assertTrue(sc.multi_view({"sourceFrame": "right-handed-y-up", "multiView": True}))
+        for cloud in [{"sourceFrame": "right-handed-y-up"}, {"sourceFrame": "right-handed-y-up", "multiView": "yes"}, {}]:
+            self.assertFalse(sc.multi_view(cloud))
 

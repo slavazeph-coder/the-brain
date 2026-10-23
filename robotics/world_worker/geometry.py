@@ -72,7 +72,8 @@ def load_arena_cloud(path: Path):
             return values[lo] + (values[min(lo + 1, len(values) - 1)] - values[lo]) * (i - lo)
         return at(.02), at(.98)
     (x0, x1), (z0, z1) = core(0), core(2)
-    if (math.ceil(x1 / .5) - math.floor(x0 / .5)) * (math.ceil(z1 / .5) - math.floor(z0 / .5)) > ARENA_CLOUD_MAX_GRID_CELLS:
+    # Each axis counts at least one cell: a flat axis on a cell boundary must not zero out a huge span on the other.
+    if max(1, math.ceil(x1 / .5) - math.floor(x0 / .5)) * max(1, math.ceil(z1 / .5) - math.floor(z0 / .5)) > ARENA_CLOUD_MAX_GRID_CELLS:
         raise ValueError('The cloud spans an area larger than 250 × 250 m at 0.5 m cells. Check the scale or remove stray points.')
     scale, units = value.get('scale'), value['units']
     if units == 'm':
@@ -101,4 +102,5 @@ def load_arena_cloud(path: Path):
     source = value.get('source')
     return {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
             'sourceFrame': value['sourceFrame'], 'source': source[:200] if isinstance(source, str) else 'browser hand-off',
-            'points': points, 'floorEstimate': floor, 'scale': scale, 'provenance': {**provenance, 'metricVerified': False}}
+            'points': points, 'floorEstimate': floor, 'scale': scale, 'provenance': {**provenance, 'metricVerified': False},
+            **({'multiView': True} if value.get('multiView') is True else {})}

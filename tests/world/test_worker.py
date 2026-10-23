@@ -615,6 +615,8 @@ def test_measured_cloud_handoff_reaches_a_cloud_engine(tmp_path):
     json.dumps(arena_cloud(points=[[x,0,z,1,2,3] for x in (-9e6,9e6) for z in (-9e6,9e6) for _ in range(50)])).encode(),
     json.dumps(arena_cloud(points=[[x*2,0,z*2,1,2,3] for x in range(160) for z in range(160)])).encode(),
     json.dumps(arena_cloud(floorEstimate={'y':1e308,'units':'m'})).encode(),
+    # A flat z exactly on a cell boundary must not zero out a huge x span.
+    json.dumps(arena_cloud(points=[[x,0,0,1,2,3] for x in (-9e6,9e6) for _ in range(50)])).encode(),
     json.dumps(arena_cloud(floorEstimate={'y':.5,'units':'m'})).encode(),  # all points at y=0: beyond the 0.05 margin
     json.dumps(arena_cloud(scale=None)).encode(),
     json.dumps(arena_cloud(scale={'source':'user-measured','metresPerUnit':.42,'selfReported':True,'verified':True})).encode(),
@@ -636,4 +638,10 @@ def test_metric_artifact_units_are_kept_as_a_hint_never_verified():
     assert visual_metadata({'representation':'triangle-mesh','units':'m'})['units']=='m'
     for units in ['metres','M','ft',None]:
         assert visual_metadata({'representation':'triangle-mesh','units':units})['units']=='arbitrary'
+
+
+def test_dense_multi_view_cloud_in_a_y_up_frame_is_admitted(tmp_path):
+    with TestClient(create_app(root=tmp_path/'data',token=TOKEN,adapters=str(cloud_adapter(tmp_path)))) as c:
+        uid=upload_cloud(c,json.dumps(arena_cloud(sourceFrame='right-handed-y-up',multiView=True)).encode())
+        assert c.post('/v1/jobs',json={'engine':'scene-test','upload_ids':[uid],'consent':True},headers=HEADERS).status_code==201
 

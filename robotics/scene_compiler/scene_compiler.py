@@ -41,7 +41,13 @@ MAX_GRID_CELLS = 250_000
 
 def grid_cells(ex, ez, cell=UNKNOWN_CELL):
     """Unknown-space cells spanned by the footprint [x0, x1] × [z0, z1]."""
-    return (math.ceil(ex[1] / cell) - math.floor(ex[0] / cell)) * (math.ceil(ez[1] / cell) - math.floor(ez[0] / cell))
+    # At least one cell per axis: the pass loops over every x cell even when the z range is empty.
+    return max(1, math.ceil(ex[1] / cell) - math.floor(ex[0] / cell)) * max(1, math.ceil(ez[1] / cell) - math.floor(ez[0] / cell))
+
+
+def multi_view(cloud):
+    """COLMAP clouds are multi-view by construction; other frames (dense MapAnything) must declare it."""
+    return cloud.get("sourceFrame") == "colmap" or cloud.get("multiView") is True
 
 
 def percentile(v, q):
@@ -251,10 +257,10 @@ def main():
     # Hard gate: a single-photo relative-depth cloud has no consistent geometry (every object is a perspective wedge),
     # so compiling it produces confident nonsense (a 22 m "refrigerator" in the mezzanine test). The hand-off JSON
     # only names its frame today: 'colmap' means multi-view SfM; anything else is treated as unverified geometry.
-    if cloud.get("sourceFrame") != "colmap" and not a.allow_unverified:
-        sys.exit("REFUSED: sourceFrame=%r is not a multi-view reconstruction. The scene compiler needs COLMAP/MapAnything/VIPE "
-                 "geometry; single-photo depth is a visual preview only. Record a walkthrough, or pass --allow-unverified for experiments."
-                 % cloud.get("sourceFrame"))
+    if not multi_view(cloud) and not a.allow_unverified:
+        sys.exit("REFUSED: this cloud is not a multi-view reconstruction (sourceFrame=%r, multiView not set). The scene compiler needs "
+                 "COLMAP/MapAnything/VIPE geometry from at least two views; single-photo depth is a visual preview only. Record a "
+                 "walkthrough, or pass --allow-unverified for experiments." % cloud.get("sourceFrame"))
     if not metric:  # arbitrary units: keep them but say so loudly; the site's scale card is the way to fix it
         print("WARNING: cloud is in arbitrary units; exporting unscaled (scale.source = none), and no USD")
     floor_y = floor_plane(pts, cloud.get("floorEstimate"))
