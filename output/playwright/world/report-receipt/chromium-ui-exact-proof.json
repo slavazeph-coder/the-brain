@@ -1,6 +1,6 @@
 {
   "schema": "brainsnn.proof.v1",
-  "createdAt": "2026-10-23T02:42:51.339Z",
+  "createdAt": "2026-10-23T11:14:00.844Z",
   "world": {
     "schema": "brainsnn.world.v1",
     "name": "Explicit report test map",
@@ -26,17 +26,17 @@
   ],
   "events": [
     {
-      "time": "2026-10-23T02:42:48.879Z",
+      "time": "2026-10-23T11:13:58.437Z",
       "type": "source_added",
       "detail": "explicit-authored-fixture.png (image), local only"
     },
     {
-      "time": "2026-10-23T02:42:49.102Z",
+      "time": "2026-10-23T11:13:58.611Z",
       "type": "worker_connected",
-      "detail": "http://127.0.0.1:36143"
+      "detail": "http://127.0.0.1:33955"
     },
     {
-      "time": "2026-10-23T02:42:49.327Z",
+      "time": "2026-10-23T11:13:58.867Z",
       "type": "job_submitted",
       "detail": {
         "engine": "inspect",
@@ -46,20 +46,20 @@
       }
     },
     {
-      "time": "2026-10-23T02:42:50.849Z",
+      "time": "2026-10-23T11:14:00.389Z",
       "type": "worker_complete",
       "detail": {
         "engine": "inspect",
-        "job": "a820e1629fa9dadcf2a363b8ff3199ef"
+        "job": "6bb8660d8b58669fa47c9d154a9bb2ce"
       }
     },
     {
-      "time": "2026-10-23T02:42:50.886Z",
+      "time": "2026-10-23T11:14:00.403Z",
       "type": "map_import",
       "detail": "authored-test-map.json"
     },
     {
-      "time": "2026-10-23T02:42:50.932Z",
+      "time": "2026-10-23T11:14:00.453Z",
       "type": "human_review",
       "detail": "scale-reviewed: true"
     }
@@ -69,7 +69,7 @@
   "integrity": {
     "algorithm": "SHA-256",
     "scope": "JSON.stringify(body) before integrity property",
-    "value": "f9774c048df83f682bd629081f80f6b5a720c242ca32d1f745617c1ea80cf65f",
+    "value": "6fd2d96c15111db0ec48cd037d71b87786e2c790878d15416ffa732907b63e77",
     "authenticatesAuthor": false
   }
 }
