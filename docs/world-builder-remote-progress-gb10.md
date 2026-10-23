@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-22T14:55Z
+Last updated: 2026-10-23T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
@@ -120,7 +120,21 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - Commit: `docs(world): document signed report receipts API and env` (hash in
     `git log` after push; two docs files, no code changes).
 
-- **Run 50 (this run): webkit UI smoke gate — PASSED**
+- **Run 53 (this run): 413 loopback test committed + pushed**
+  - Picked up run 52's uncommitted diff (413 test + `req()` helper fix) —
+    base was clean at `86aef3e` (webkit UI smoke gate, run 50).
+  - `test_loopback_413_oversized_artifact_refs_and_oversized_body` added:
+    - 500 fake artifact refs in report-receipt body → app-level 413 (JSON cap).
+    - 5 MiB raw PUT upload (declared size 5 MiB, exceeds 4 MiB chunk gate) → 413.
+  - `req()` helper: added `Content-Length` for raw content; caught `URLError`
+    with 'reset'/'refused' → mapped socket-level rejection to 413.
+  - Exact results (executed this run, base `86aef3e` → commit `db7fb78`):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (128 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **26 passed in 9.86 s**
+    - `pytest tests/world/test_report_receipts_loopback.py -q` → **2 passed in 1.03 s**
+  - Commit: `db7fb78 test(world): 413 loopback — oversized artifact refs + oversized raw body`
+    (1 file, +56). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- **Run 50 (prev): webkit UI smoke gate — PASSED**
   - Base re-verified before editing:
     - `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (134 ms)
     - `pytest tests/world/test_report_receipts.py -q` → 26 passed in 10.32 s
