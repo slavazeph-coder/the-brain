@@ -1,11 +1,18 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-23T00:00Z
+Last updated: 2026-10-23T03:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
+- **Run 54 (this run): actual HTTP report UI smoke — PASSES on both engines**
+  - Baseline verified: `node --test tests/world/report-receipts.test.mjs` → 8 pass, 0 fail (127 ms); `pytest tests/world/test_report_receipts.py -q` → 26 passed in 10.55 s. Clean tree at `3d15f91`, branch `hermes/world-builder-gb10`.
+  - Ran the pending real HTTP journey: `report_receipt_ui_smoke.py` with local uvicorn worker + real Ed25519 signing, `WORLD_SERVER_PYTHON` = world-builder venv. First attempt failed — Playwright looked in `/root/.cache/ms-playwright` (empty); browsers actually live at `/workspace/hermes-gb10/build-runtime/playwright-browsers`. Re-ran with `PLAYWRIGHT_BROWSERS_PATH` set: **chromium and webkit both passed**, zero page errors.
+  - Fresh receipts (2026-10-23): realPrivateWorker, realEd25519, consentGate, separateKeyTrustRequired, hashesOnlyRequest, exactScenarioBytes, offlineNetworkRequests=0, tamperRejected — confirmed in both `*-ui-receipt.json` files. The "actual HTTP validation pending" item from handoff is now closed.
+  - Commit: `a01fc77 test(world): run 54 — fresh UI smoke receipts (2026-10-23)` (5 files: 4 chromium + 1 webkit receipt JSON). Pushed to `hermes/world-builder-gb10`.
+  - No force-push/merge/deploy. No paid fallback. Serving Qwen/backup untouched.
+  - Next: 4090 GPU task via short SSH (verify `d130b6c7f3f4` + GPU UUID first, per `world-builder-4090.json`), e.g. MapAnything held-out-frame smoke reusing pinned weights.
 - **Run 49 (this run): run-46/47 mis-pins corrected + executed — BOTH SUITES GREEN**
   - Revoke test (569): `headers(OPERATOR)` → `headers(A)` — operator isn't the job
     owner; `store.job(jid, OPERATOR)` 404s, so the mid-flight "job still present"
@@ -170,10 +177,15 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Next bounded action
 
-- Run 51: 4090 MapAnything held-out-frame inference smoke test — short
+- Run 55: 4090 MapAnything held-out-frame inference smoke test — short
   authenticated SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
   confirm hostname + GPU before running. Reuse verified pinned weights from
   GB10; do not replace base conda env. No permanent tunnel.
+- Handoff task 1 (actual HTTP signing/UI journey) is now CLOSED: both
+  chromium (run 36) and webkit (run 50) passed, fresh receipts committed
+  run 54. Remaining handoff tasks: 3 (Node/browser regression re-run after
+  fixes), 4 (release requirements: dense reconstruction, qualified isolation,
+  public accounts, durable queue, generative model qualification, capture quality).
 
 ## Guardrails
 
