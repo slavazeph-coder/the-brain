@@ -6,7 +6,24 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
-- **Run 42 (this run): DELETE-semantics tests — COMMITTED, GREEN**
+- **Run 49 (this run): run-46/47 mis-pins corrected + executed — BOTH SUITES GREEN**
+  - Revoke test (569): `headers(OPERATOR)` → `headers(A)` — operator isn't the job
+    owner; `store.job(jid, OPERATOR)` 404s, so the mid-flight "job still present"
+    assertion must use owner A.
+  - Delete test: expectation 404 → **409**. Deleting the dir mid-hash makes
+    `file_digest` raise `ValueError` inside the hash thread, hit by the endpoint's
+    `except (OSError, ValueError)` → 409 "A selected artifact is missing or
+    changed. No receipt was signed." Post-IO re-check (line 721) unreachable.
+  - Exact results (executed this run):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (120 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **26 passed in 10.23 s**
+  - Commit: `98f2664 test(world): fix revoke/delete mis-pins — owner-A revoke,
+    409 on mid-hash delete`. Pushed to `hermes/world-builder-gb10`.
+    No force-push/merge/deploy. No paid fallback. No 4090 GPU budget consumed.
+  - Next: complete missing signed-receipt API/env documentation
+    (docs/world-builder-remote-handoff.md) or one cancellation regression.
+    Actual HTTP report UI validation remains pending.
+- **Run 42 (prev): DELETE-semantics tests — COMMITTED, GREEN**
   - Probe (TestClient) confirmed existing behavior: cross-owner DELETE → 404;
     owner DELETE → 200, job dir removed, DB row removed (COUNT=0), GET → 404,
     upload survives. No app.py patch needed.
