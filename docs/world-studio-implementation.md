@@ -53,7 +53,7 @@ Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `m
 
 **Metric scenes (October 23, 2026).** The scale is measured after reconstruction, on the reconstruction itself, so the metric path takes the measured cloud back to the worker:
 1. Pick two points on a multi-view reconstruction and enter the distance you measured between them. Multi-view means camera poses from at least two views, from COLMAP or dense MapAnything; the hand-off then says `multiView: true`. A single-photo preview never qualifies.
-2. The calibration card then offers **Build metric simulation scene (GLB + USD)**. It needs a connected worker whose engine lists the `cloud` input kind.
+2. The calibration card then offers **Build metric simulation scene (GLB, USD, IFC)**. It needs a connected worker whose engine lists the `cloud` input kind.
 3. After an explicit consent tick, the browser uploads the same Arena point-cloud JSON it exports as a `cloud` upload: `.json`, up to 16 MiB and 50,000 points.
 4. `scene-usd` skips COLMAP and compiles that cloud.
 
