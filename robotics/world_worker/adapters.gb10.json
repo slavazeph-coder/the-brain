@@ -4,7 +4,7 @@
     "label": "Simulation scene (GLB/USD) from walkthrough",
     "enabled": true,
     "license_reviewed": true,
-    "input_kinds": ["video"],
+    "input_kinds": ["video", "cloud"],
     "max_inputs": 1,
     "timeout_seconds": 1800,
     "command": [

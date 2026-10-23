@@ -26,6 +26,8 @@ Tests (no Blender): `python3 -m unittest tests.scene_compiler.test_geometry test
 `sparse_colmap.run()` → Python port of the browser's `toArenaCloud()` (`arena-cloud.json`, identical output to a browser export
 of the same PLY) → this compiler in headless Blender → `scene.glb`, `scene.usda`, `scene.json` (kind `visual`/`evidence`) plus the
 reconstruction artifacts. Units stay `arbitrary` unless the request carries `{"scale": {"metres_per_unit": k, "measurement": {...}}}`.
+It also takes one `cloud` input instead of a video: the browser's Arena point-cloud JSON after the user measured a distance on the
+reconstruction. COLMAP is skipped, the hand-off is validated strictly (`geometry.load_arena_cloud`), and a metric cloud gives `scene.usda`.
 `adapters.gb10.json` registers it on GB10 (pycolmap 4.2.1 from conda-forge in a micromamba env, since PyPI ships no linux-aarch64 wheel;
 Blender 4.0.2 at `/usr/bin/blender`):
 

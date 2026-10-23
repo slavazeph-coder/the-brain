@@ -48,7 +48,17 @@ Provenance follows the same rules as the planning map:
 - **unknown:** floor no point reached. It is exported as a tagged volume, never as free space.
 - **detected:** 2D detections from an observation sidecar lifted into 3D boxes. Only the compiler run directly with `--detections` does this: the worker engine never passes detections, so worker scenes contain no detected objects. The compiler lifts every detection in the sidecar and does not read review decisions, so pass only detections you have reviewed. A detection is lifted only through its frame's camera pose. Without that pose, or without a box, it stays unplaced and the reason is recorded.
 
-Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only for a cloud with a measured scale; otherwise `scene.json` records why it was skipped. A job submitted through the worker API or the website cannot carry a measured scale (the job body has only the engine, uploads and consent), so worker scenes are in arbitrary units and never include `scene.usda`. Only a hand-built adapter manifest with a `scale` reaches the metric path. On the website, the metric OpenUSD route is the reviewed map: measure a known distance on the reconstruction, review it, then use Export static OpenUSD.
+Nothing is inferred, and single-photo depth is refused. `scene.usda` declares `metersPerUnit = 1`, so it is written only for a cloud with a measured scale; otherwise `scene.json` records why it was skipped. A walkthrough video job has no measured scale yet, so its scene is in arbitrary units without `scene.usda`.
+
+**Metric scenes (October 23, 2026).** The scale is measured after reconstruction, on the reconstruction itself, so the metric path takes the measured cloud back to the worker:
+1. Pick two points on a multi-view reconstruction (one with camera poses) and enter the distance you measured between them.
+2. The calibration card then offers **Build metric simulation scene (GLB + USD)**. It needs a connected worker whose engine lists the `cloud` input kind.
+3. After an explicit consent tick, the browser uploads the same Arena point-cloud JSON it exports as a `cloud` upload: `.json`, up to 16 MiB and 50,000 points.
+4. `scene-usd` skips COLMAP and compiles that cloud.
+
+The worker parses the hand-off strictly: no NaN, bounded coordinates and colours, and the known fields only. A metric cloud must carry its scale as user-measured, self-reported and unverified, and a single-photo preview is refused. The scene opens in the dialog, which says the metres are self-reported. The request is recorded in the proof pack with the metres per unit.
+
+Real run on the Mip-NeRF 360 room reconstruction. Two tapped points with an illustrative 0.66 m per unit (not a measurement of that room) gave a 3.97 × 7.95 m floor and 5 walls 1.5–2.2 m tall. `scene.usda` declared `metersPerUnit = 1`, the compile took 1.5 s, and the round trip from the click took about 6 s in Chromium at desktop and phone sizes.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a job returns a `.glb`, Evidence offers **Explore scene.glb in 3D** next to the downloads ([`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)). The workspace downloads the file with a short-lived ticket, checks its SHA-256, and opens it in a dialog with the Arena's mesh viewer, which loads only on first use. Beside the scene it lists only what `scene.json` records: observed points and walls, placed and unplaced detections, unknown floor cells, units and whether USD was written. A missing or malformed `scene.json` is shown as unknown, never guessed.
 

@@ -18,3 +18,7 @@ test('missing or malformed scene.json never produces invented counts or scale',(
   // An unsupported unit is unknown, so neither the units nor the missing USD are explained as an unmeasured scene.
   assert.deepEqual(sceneFacts(scene({units:'ft',usd:{written:false,reason:'Fixture reason.'}})).slice(3),['Units: not recorded.','No scene.usda. Fixture reason.']);
   assert.ok(sceneFacts(scene({units:'m',usd:{written:false,reason:'r'.repeat(5000)}}))[4].length<='No scene.usda. '.length+300);});
+test('a scene scaled by a distance the user measured says it is self-reported',()=>{
+  const f=sceneFacts(scene({units:'m',scale:{source:'user-measured',metresPerUnit:.66,distance:3.581,selfReported:true,verified:false},usd:{written:true,metersPerUnit:1}}));
+  assert.equal(f[3],'Units: metres, from a distance you measured (3.581 m). Self-reported, not verified.');
+  assert.equal(sceneFacts(scene({units:'m',scale:{selfReported:true,distance:'3 m'}}))[3],'Units: metres, from a distance you measured. Self-reported, not verified.');});

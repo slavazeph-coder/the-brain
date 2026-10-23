@@ -1,4 +1,5 @@
-"""HTTP browser -> private worker -> scene transport fixture -> Explore scene.glb in 3D.
+"""HTTP browser -> private worker -> scene transport fixture -> Explore scene.glb in 3D, and the metric path:
+synthetic reconstruction -> two tapped points + measured distance -> measured point-cloud upload -> metric scene.
 
 The adapter writes an authored GLB and scene.json (tests/world/scene_fixture_adapter.py); no reconstruction or Blender
 runs, and this test makes no claim about scene quality. Upload, job, short-lived tickets, SHA-256 checks, the mesh viewer
@@ -18,6 +19,7 @@ from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from observations_browser_smoke import port, processing_options, ready
+from realtosim_browser_smoke import K, calibrate, fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'output/playwright/world'
@@ -51,12 +53,10 @@ def check_browser(pw, name, origin, worker_url, token, photo):
         page.locator('#engine').select_option('scene-fixture')
         page.locator('#consent').check()
         page.locator('[data-action=process]').click()
-        # A completed job opens Evidence, where its worker artifacts are listed.
-        page.wait_for_function("document.querySelector('[data-scene-artifact]') || /scene-fixture: (failed|cancelled)/.test(document.querySelector('#status').textContent)", timeout=60000)
+        # A job whose only visual output is a scene opens it directly, over Evidence where its artifacts are listed.
+        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status').textContent) || /scene-fixture: (failed|cancelled)/.test(document.querySelector('#status').textContent)", timeout=60000)
         assert page.locator('[data-tab=evidence]').get_attribute('aria-selected') == 'true', page.locator('#status').inner_text()
         assert page.locator('[data-scene-artifact]').all_inner_texts() == ['Explore scene.glb in 3D']
-        page.locator('[data-scene-artifact]').click()
-        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status').textContent)", timeout=60000)
         assert page.locator('#scene-status').inner_text() == 'scene.glb from scene-fixture · 3 meshes · 72 vertices · SHA-256 checked', page.locator('#scene-status').inner_text()
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[:4] == FACTS and 'Export static OpenUSD' in facts[4], facts
@@ -84,6 +84,67 @@ def check_browser(pw, name, origin, worker_url, token, photo):
         browser.close()
 
 
+def connect(page, worker_url, token):
+    page.locator('[data-tab=capture]').click()
+    processing_options(page)
+    page.locator('[data-action=connection]').click()
+    page.locator('#worker-url').fill(worker_url)
+    page.locator('#worker-token').fill(token)
+    page.locator('#connect').click()
+    page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')")
+    page.locator('#connection [aria-label=Close]').click()
+
+
+def check_metric(pw, name, origin, worker_url, token):
+    """A measured multi-view reconstruction uploads as a point-cloud hand-off and comes back as a metric scene with USD."""
+    executable = os.environ.get('PLAYWRIGHT_' + name.upper() + '_PATH')
+    browser = getattr(pw, name).launch(headless=True, **({'executable_path': executable} if executable else {}))
+    # Same contexts as the real-to-sim smoke, whose tapping calibration is proven in both engines.
+    mobile = name == 'webkit'
+    context = browser.new_context(viewport={'width': 390, 'height': 844} if mobile else {'width': 1440, 'height': 1000}, has_touch=mobile)
+    page = context.new_page()
+    errors, uploads = [], []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('request', lambda request: uploads.append(request.post_data_json) if request.method == 'POST' and request.url.endswith('/v1/uploads') else None)
+    try:
+        ply, evidence = fixture()
+        page.goto(origin + '/world/index.html', wait_until='networkidle')
+        page.locator('#files').set_input_files({'name': 'room.ply', 'mimeType': 'application/octet-stream', 'buffer': ply})
+        page.wait_for_function("/Visual asset loaded/.test(document.querySelector('#status').textContent)")
+        page.locator('#files').set_input_files({'name': 'reconstruction.json', 'mimeType': 'application/json', 'buffer': evidence})
+        page.locator('[data-action=propose-map]').wait_for()
+        connect(page, worker_url, token)
+        metres_per_unit = calibrate(page, mobile, f'scene-metric-{name}')
+        page.locator('[data-tab=capture]').click()
+        build = page.locator('[data-action=metric-scene]')
+        build.wait_for()
+        # Nothing uploads until the person approves this specific upload.
+        build.click()
+        assert 'Approve uploading the measured point cloud' in page.locator('#status').inner_text()
+        assert not uploads, uploads
+        page.locator('#scene-consent').check()
+        build.click()
+        page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status')?.textContent || '') || /scene-fixture: failed/.test(document.querySelector('#status').textContent)", timeout=60000)
+        assert [u['kind'] for u in uploads] == ['cloud'] and uploads[0]['name'] == 'brainsnn-point-cloud.json', uploads
+        facts = page.locator('#scene-facts li').all_inner_texts()
+        assert facts[3].startswith('Units: metres, from a distance you measured (') and facts[3].endswith('m). Self-reported, not verified.'), facts
+        assert facts[4] == 'scene.usda was written for Isaac Sim (metersPerUnit = 1).', facts
+        page.screenshot(path=str(OUTPUT / f'scene-metric-{name}.png'))
+        page.keyboard.press('Escape')
+        page.wait_for_function("!document.querySelector('#scene-dialog').open")
+        page.locator('[data-tab=evidence]').click()
+        assert 'Download scene.usda' in page.locator('#panel').inner_text()
+        with page.expect_download() as download:
+            page.locator('[data-action=proof]').click()
+        proof = json.loads(Path(download.value.path()).read_text())
+        requested = [e['detail'] for e in proof['events'] if e['type'] == 'metric_scene_requested'][-1]
+        assert requested['selfReported'] is True and abs(requested['metresPerUnit'] - metres_per_unit) < 1e-9 and abs(requested['metresPerUnit'] * K - 1) < 2e-3, requested
+        assert any(e['type'] == 'scene_opened' for e in proof['events'])
+        assert not errors, errors
+    finally:
+        browser.close()
+
+
 def main():
     server_python = os.environ.get('WORLD_SERVER_PYTHON', sys.executable)
     OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -98,7 +159,7 @@ def main():
         origin, worker_url, token = f'http://127.0.0.1:{frontend}', f'http://127.0.0.1:{backend}', secrets.token_urlsafe(48)
         config = tmp / 'adapters.json'
         config.write_text(json.dumps([{'id': 'scene-fixture', 'label': 'Scene transport fixture (no reconstruction)',
-            'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'], 'max_inputs': 1, 'timeout_seconds': 60,
+            'enabled': True, 'license_reviewed': True, 'input_kinds': ['image', 'cloud'], 'max_inputs': 1, 'timeout_seconds': 60,
             'command': [sys.executable, str(ROOT / 'tests/world/scene_fixture_adapter.py'), '--input-manifest', '{input_manifest}']}]))
         environment = {**os.environ, 'WORLD_WORKER_TOKEN': token, 'WORLD_WORKER_DIR': str(tmp / 'data'),
                        'WORLD_ADAPTERS_FILE': str(config), 'WORLD_ALLOWED_ORIGINS': origin}
@@ -116,6 +177,8 @@ def main():
                 for name in os.environ.get('WORLD_BROWSERS', 'chromium,webkit').split(','):
                     check_browser(pw, name.strip(), origin, worker_url, token, photo)
                     print('scene preview passed in', name.strip(), flush=True)
+                    check_metric(pw, name.strip(), origin, worker_url, token)
+                    print('metric scene from a measured cloud passed in', name.strip(), flush=True)
         except Exception:
             for path in [tmp / 'worker.log', *sorted((tmp / 'data/jobs').glob('*/operator.log'))]:
                 if path.exists():
