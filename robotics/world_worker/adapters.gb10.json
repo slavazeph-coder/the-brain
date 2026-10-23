@@ -1,0 +1,17 @@
+[
+  {
+    "id": "scene-usd",
+    "label": "Simulation scene (GLB/USD) from walkthrough",
+    "enabled": true,
+    "license_reviewed": true,
+    "input_kinds": ["video"],
+    "max_inputs": 1,
+    "timeout_seconds": 1800,
+    "command": [
+      "/workspace/brainsnn-workspace/scene-compiler/micromamba/envs/colmap/bin/python",
+      "/workspace/brainsnn-workspace/scene-compiler/the-brain-scene-usd/robotics/world_worker/scene_usd.py",
+      "--input-manifest", "{input_manifest}",
+      "--blender", "/usr/bin/blender"
+    ]
+  }
+]
