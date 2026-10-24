@@ -7,7 +7,8 @@ the same X and Y. Every file says where its scale came from, and none claims a v
   length dimensioned and the observed floor extent as a rectangle (an extent, not the room's outline).
 - scene.3dm (rhino3dm): one layer each for floor, walls, objects and unknown space, every element a named box with
   its measurements, IFC class and provenance as user text, and the scale in the document's user text.
-- quantities.csv: one row per element (length, width, height, plan or face area) under a summary of totals.
+- quantities.csv: one row per element (length, width, height, plan or face area) under a summary of totals, led by
+  the floor the capture saw (the extent less unknown cells), not the extent's bounding rectangle.
 Both libraries are optional (requirements-cad.txt); without one, that file is skipped and the evidence says why.
 """
 from __future__ import annotations
@@ -71,15 +72,26 @@ def quantities(scene, items):
     floor = next((i for i in items if i['kind'] == 'floor'), None)
     walls = [i for i in items if i['kind'] == 'wall']; objects = [i for i in items if i['kind'] == 'object']
     unknown = [i for i in items if i['kind'] == 'unknown']
+    # The floor the capture saw: the extent less the unknown cells inside it. The extent alone is a bounding rectangle,
+    # which for a room turned against the axes takes in empty corners.
+    def inside(u):
+        (ux0, uy0), (ux1, uy1) = u['corners'][0], u['corners'][2]
+        (fx0, fy0), (fx1, fy1) = floor['corners'][0], floor['corners'][2]
+        w = min(max(ux0, ux1), max(fx0, fx1)) - max(min(ux0, ux1), min(fx0, fx1))
+        h = min(max(uy0, uy1), max(fy0, fy1)) - max(min(uy0, uy1), min(fy0, fy1))
+        return max(0.0, w) * max(0.0, h)
+    observed = floor['length'] * floor['width'] - sum(inside(u) for u in unknown) if floor else None
     totals = {'floor_extent_m': [round(floor['length'], 3), round(floor['width'], 3)] if floor else None,
               'floor_extent_area_m2': round(floor['length'] * floor['width'], 2) if floor else None,
+              'observed_floor_area_m2': round(observed, 2) if floor else None,
               'walls': len(walls), 'wall_length_m': round(sum(w['length'] for w in walls), 2),
               'wall_face_area_m2': round(sum(w['length'] * w['height'] for w in walls), 2),
               'objects': len(objects), 'named_objects': sum(1 for o in objects if o['label']),
               'unknown_area_m2': round(sum(u['length'] * u['width'] for u in unknown), 2)}
     head = ['section', 'element', 'ifc_class', 'name', 'length_m', 'width_m', 'height_m', 'area_m2', 'notes']
     rows = [head,
-            ['summary', 'floor_observed', 'IfcSlab', 'floor', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['floor_extent_area_m2'], 'observed floor extent (bounding rectangle), not the room outline'],
+            ['summary', 'floor_observed', 'IfcSlab', 'floor', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['observed_floor_area_m2'], 'floor the capture saw: the extent less unknown cells'],
+            ['summary', 'floor_extent', 'IfcSlab', 'floor extent', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['floor_extent_area_m2'], 'bounding rectangle of the observed floor, not the room outline'],
             ['summary', 'walls', 'IfcWall', f"{totals['walls']} walls", f"{totals['wall_length_m']:.2f}", '', '', totals['wall_face_area_m2'], 'total length; area is one face'],
             ['summary', 'objects', '', f"{totals['objects']} objects", '', '', '', '', f"{totals['named_objects']} named, unreviewed"],
             ['summary', 'unknown_space', 'IfcBuildingElementProxy', 'unknown space', '', '', '', totals['unknown_area_m2'], 'floor no point reached: not free space'],

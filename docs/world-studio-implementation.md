@@ -125,8 +125,8 @@ Crops leave the worker only after a second, separate approval in the site ("Also
   - `scene.3dm` ([rhino3dm](https://github.com/mcneel/rhino3dm), MIT): one named solid per element on four layers, with its measurements, IFC class and provenance as user text, and the scale in the document's user text;
   - `quantities.csv`: a summary (floor extent and area, wall length and face area, objects, unknown area, scale source) above one row per wall and object.
 - **Frame.** Plans use the IFC export's frame: plan X is the scene's x and plan Y is minus its z. On the room run, every Rhino box matched the compiled GLB to the centimetre.
-- **What the numbers are.** The floor is the observed extent (a bounding rectangle, not the room's outline), and the scale stays self-reported in all three files.
-- **Real run through the worker API.** Floor extent 5.11 × 7.06 m (36.08 m²), 6 walls totalling 15.27 m (38.17 m² of face), 14 objects (3 named), 11.5 m² unknown.
+- **What the numbers are.** The sheet leads with the floor the capture saw: the extent less the unknown cells inside it. The extent itself is a bounding rectangle, which for a room turned against the axes takes in empty corners: on the room run, 29.62 m² observed against a 36.08 m² extent. The scale stays self-reported in all three files.
+- **Real run through the worker API.** Observed floor 29.62 m² (extent 5.11 × 7.06 m), 6 walls totalling 15.27 m (38.17 m² of face), 14 objects (3 named), 11.5 m² unknown. IfcOpenShell 0.9 validated that run's `scene.ifc`, including the EXPRESS rules, with 0 issues.
 - **Without the libraries** (`requirements-cad.txt`), the DXF or 3DM is skipped and `scene-usd.json` says why; a CAD problem never fails the scene.
 - **Not an integration.** These are open files. Estimating platforms with closed formats (for example ESX) need a vendor partnership, which this is not.
 

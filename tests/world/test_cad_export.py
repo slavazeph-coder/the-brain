@@ -28,7 +28,7 @@ def scene(units='m'):
                          'size': [.4, .4, .3], 'yaw_degrees': 0}],
             'walls': [{'name': 'wall_1', 'label': 'wall', 'provenance': 'observed', 'centre': [2, FLOOR_Y + 1.25, 0], 'size': [4, 2.5, .1], 'yaw_degrees': 0},
                       {'name': 'wall_2', 'label': 'wall', 'provenance': 'observed', 'centre': [4, FLOOR_Y + 1.2, 1.5], 'size': [3, 2.4, .1], 'yaw_degrees': 90}],
-            'unknown': [[3.0, 2.5, .5], [3.5, 2.5, .5]]}
+            'unknown': [[3.0, 2.5, .5], [3.75, 2.5, .5]]}  # the second cell is half outside the floor
 
 
 def test_footprints_follow_the_compilers_yaw_and_the_ifc_plan_frame():
@@ -44,6 +44,7 @@ def test_the_quantities_sheet_totals_every_element(tmp_path):
     q = evidence['quantities']
     assert q['floor_extent_area_m2'] == 12 and q['walls'] == 2 and q['wall_length_m'] == 7 and q['wall_face_area_m2'] == pytest.approx(17.2)
     assert q['objects'] == 2 and q['named_objects'] == 1 and q['unknown_area_m2'] == .5
+    assert q['observed_floor_area_m2'] == pytest.approx(11.625, abs=.01), 'the extent less the unknown inside it'
     rows = list(csv.reader((tmp_path / 'quantities.csv').open()))
     assert rows[0][:4] == ['section', 'element', 'ifc_class', 'name'] and q['rows'] == len(rows) - 1
     sofa = next(r for r in rows if r[1] == 'object_1')
