@@ -78,8 +78,11 @@ def run_checks(base, token, origin=SITE_ORIGINS[0], requirements=None, upload_pr
 
     status, _, _ = call(base + '/v1/capabilities')
     check('refuses requests without the token', status == 401, http_detail(status))
-    status, _, caps = call(base + '/v1/capabilities', token=token)
+    # Sent with the site's Origin: the browser can only read the answer if the response itself allows that origin.
+    status, headers, caps = call(base + '/v1/capabilities', token=token, headers={'Origin': origin})
     if not check('accepts the operator token', status == 200 and isinstance(caps, dict), http_detail(status)): return results
+    allowed = headers.get('Access-Control-Allow-Origin') if headers else None
+    check(f'lets {origin} read the response', allowed == origin, f'allow-origin {allowed!r}')
     engines = {e.get('id'): set(e.get('input_kinds') or []) for e in caps.get('engines', []) if e.get('available')}
     check('advertises engines', bool(engines), ', '.join(f"{k} ({'/'.join(sorted(v))})" for k, v in sorted(engines.items())))
     for engine, kinds in (requirements or {}).items():

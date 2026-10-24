@@ -53,9 +53,10 @@ def test_open_cors_and_an_unprotected_worker_fail():
     def permissive(url, method='GET', token=None, headers=None, body=None, timeout=20):
         if url.endswith('/healthz'): return 200, {}, {'status': 'ok'}
         if method == 'OPTIONS': return 200, {'Access-Control-Allow-Origin': '*'}, None
-        return 200, {}, {'engines': [{'id': 'inspect', 'available': True, 'input_kinds': ['image']}]}
+        return 200, {'Access-Control-Allow-Origin': '*'}, {'engines': [{'id': 'inspect', 'available': True, 'input_kinds': ['image']}]}
     failed = [r['check'] for r in cw.run_checks(BASE, TOKEN, call=permissive) if not r['ok']]
-    assert failed == ['refuses requests without the token', 'allows browser calls from https://www.brainsnn.com', 'does not allow other origins']
+    assert failed == ['refuses requests without the token', 'lets https://www.brainsnn.com read the response',
+                      'allows browser calls from https://www.brainsnn.com', 'does not allow other origins']
 
 
 def test_requirements_parse_and_the_probe_image_is_a_valid_png():
@@ -74,7 +75,7 @@ def test_a_preflight_without_put_or_authorization_fails():
             return 200, {'Access-Control-Allow-Origin': headers['Origin'], 'Access-Control-Allow-Methods': 'GET, POST',
                          'Access-Control-Allow-Headers': '*'}, None
         if not token: return 401, {}, None
-        return 200, {}, {'engines': [{'id': 'inspect', 'available': True, 'input_kinds': ['image']}]}
+        return 200, {'Access-Control-Allow-Origin': headers['Origin']}, {'engines': [{'id': 'inspect', 'available': True, 'input_kinds': ['image']}]}
     failed = {r['check']: r['detail'] for r in cw.run_checks(BASE, TOKEN, call=partial) if not r['ok']}
     assert failed == {'allows browser calls from https://www.brainsnn.com': "HTTP 200, allow-origin 'https://www.brainsnn.com', not allowed: PUT, Authorization"}
 
@@ -99,3 +100,12 @@ def test_redirects_are_reported_not_followed():
         assert results[2] == {'check': '/healthz answers', 'ok': False, 'detail': 'HTTP 302 (a redirect: the site does not follow redirects)'}
     finally:
         proxy.shutdown(); target.shutdown()
+
+
+def test_a_proxy_that_drops_cors_on_real_responses_fails(call):
+    """The preflight passes, but the authenticated answer carries no allow-origin, so a browser could not read it."""
+    def stripped(url, method='GET', token=None, headers=None, body=None, timeout=20):
+        status, got, data = call(url, method, token, headers, body, timeout)
+        return (status, got, data) if method == 'OPTIONS' else (status, {}, data)
+    failed = {r['check']: r['detail'] for r in cw.run_checks(BASE, TOKEN, call=stripped) if not r['ok']}
+    assert failed == {'lets https://www.brainsnn.com read the response': 'allow-origin None'}
