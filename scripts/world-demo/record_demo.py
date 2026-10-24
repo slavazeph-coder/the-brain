@@ -6,7 +6,8 @@ import base64, os, shutil, subprocess, sys, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-URL, PHOTO, OUT = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+# Absolute, so the ffmpeg concat manifest (resolved against its own folder) finds the frames for any output path.
+URL, PHOTO, OUT = sys.argv[1], sys.argv[2], Path(sys.argv[3]).resolve()
 WARMUP = '--no-warmup' not in sys.argv
 PROFILE = Path(OUT.parent / 'chromium-profile')
 SIZE = {'width': 1280, 'height': 720}

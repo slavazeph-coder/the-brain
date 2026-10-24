@@ -11,7 +11,8 @@ from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tests' / 'world'))
 from realtosim_browser_smoke import SCROLL_SETTLED, VISIBLE_POINT_TARGETS
 
-URL, VIDEO, VIEWER, OUT = sys.argv[1], sys.argv[2], sys.argv[3], Path(sys.argv[4])
+# Absolute, so the ffmpeg concat manifest (resolved against its own folder) finds the frames for any output path.
+URL, VIDEO, VIEWER, OUT = sys.argv[1], sys.argv[2], sys.argv[3], Path(sys.argv[4]).resolve()
 RECORD = '--dry-run' not in sys.argv
 LIVE = 'brainsnn.com' in URL
 ROBOT = os.environ.get('ROBOT', 'vacuum')
