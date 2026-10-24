@@ -1,11 +1,18 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-24T15:30Z
+Last updated: 2026-10-24T16:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
+- **Run 81 (this run): cancellation regression verified green + handoff item 2 closed — COMMITTED `c29ce4d`**
+  - Run 80's "blocker" (test not yet written) was a false start: `test_cancel_job_on_complete_job_does_not_enter_hash_cancellations` (test_report_receipts.py:579) is already committed in HEAD and passes.
+  - Re-ran both receipt suites on clean tree at `c29ce4d`:
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (82 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 10.05 s**
+  - No code changes; handoff item 2 (cancellation edge-case coverage during receipt hashing) is closed.
+  - Next: 4090 MapAnything held-out-frame inference smoke via short SSH (verify `d130b6c7f3f4` + GPU UUID per `world-builder-4090.json` first), OR actual HTTP report UI validation (pending per job contract).
 - **Run 78 (prev): double-restart test fixed + all suites green — COMMITTED `7be5b54`**
   - Run 77's uncommitted `app.state.queue` line was verified, and the double-restart test bug fixed:
     - `lifespan` already calls `store.requeue_pending(queue)`, so the test's manual call was double-driving recovery (runner consumed both jobs before the assertion ran).
