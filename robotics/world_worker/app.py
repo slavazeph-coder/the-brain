@@ -19,6 +19,7 @@ import secrets
 import shutil
 import signal
 import sqlite3
+import stat
 import time
 from typing import Literal
 
@@ -203,6 +204,21 @@ def configured_engines(config):
     return engines
 
 
+def directory_bytes(directory):
+    """Bytes in regular files under directory. The adapter keeps writing and deleting while this runs, so a file or
+    folder that vanishes between listing and stat simply no longer counts."""
+    total = 0
+    for root, _, files in os.walk(directory):  # os.walk skips folders that disappear mid-walk
+        for name in files:
+            try:
+                info = os.lstat(os.path.join(root, name))
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(info.st_mode):
+                total += info.st_size
+    return total
+
+
 def visual_metadata(entry):
     """Keep adapter display hints bounded; they never certify geometry or scale."""
     if 'representation' not in entry:
@@ -270,7 +286,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             raise HTTPException(429,'Owner job quota reached. Finish or cancel active work and delete old jobs.')
 
     def check_execution_storage(directory):
-        total = sum(path.stat().st_size for path in directory.rglob('*') if path.is_file() and not path.is_symlink())
+        total = directory_bytes(directory)
         if total > job_limit:
             raise ValueError('Adapter exceeded its disk budget.')
         if store.storage_commitment(job_limit, running) > storage_limit:

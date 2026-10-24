@@ -15,7 +15,7 @@ from PIL import Image
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
-from robotics.world_worker.app import create_app, visual_metadata
+from robotics.world_worker.app import create_app, directory_bytes, visual_metadata
 from robotics.world_worker.depth_small import lift_depth
 from robotics.world_worker.geometry import write_point_cloud
 from robotics.world_worker.sparse_colmap import prepare_photo, extract_video, run as reconstruct
@@ -645,3 +645,16 @@ def test_dense_multi_view_cloud_in_a_y_up_frame_is_admitted(tmp_path):
         uid=upload_cloud(c,json.dumps(arena_cloud(sourceFrame='right-handed-y-up',multiView=True)).encode())
         assert c.post('/v1/jobs',json={'engine':'scene-test','upload_ids':[uid],'consent':True},headers=HEADERS).status_code==201
 
+
+
+def test_disk_check_tolerates_files_the_adapter_deletes_mid_walk(tmp_path, monkeypatch):
+    """An adapter deletes its extracted video frames while the worker measures the job folder; that must not fail the job."""
+    (tmp_path / 'frames').mkdir(); (tmp_path / 'frames' / 'a.jpg').write_bytes(b'x' * 10); (tmp_path / 'b.ply').write_bytes(b'y' * 5)
+    os.symlink(tmp_path / 'b.ply', tmp_path / 'link.ply')
+    assert directory_bytes(tmp_path) == 15  # symlinks are not counted twice
+    real = os.lstat
+    def vanishing(path, *args, **kwargs):
+        if str(path).endswith('a.jpg'): raise FileNotFoundError(path)
+        return real(path, *args, **kwargs)
+    monkeypatch.setattr(os, 'lstat', vanishing)
+    assert directory_bytes(tmp_path) == 5
