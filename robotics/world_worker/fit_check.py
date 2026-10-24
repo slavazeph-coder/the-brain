@@ -42,13 +42,14 @@ def distances(points, elements):
     P = np.asarray([p[:3] for p in points], float).reshape(-1, 3)
     if not elements or not len(P):
         return np.full(len(P), np.inf), np.full(len(P), -1)
-    D = np.empty((len(P), len(elements)))
+    best, near = np.full(len(P), np.inf), np.full(len(P), -1)  # a running minimum: 50,000 points x 200 objects stays small
     for k, (_, _, _, centre, size, yaw) in enumerate(elements):
         t = math.radians(yaw); ex, ez = np.array([math.cos(t), 0, math.sin(t)]), np.array([-math.sin(t), 0, math.cos(t)])
         d = P - np.asarray(centre, float)
         q = np.abs(np.stack([d @ ex, d[:, 1], d @ ez], 1)) - np.asarray(size, float) / 2
-        D[:, k] = np.abs(np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0))
-    return D.min(1), D.argmin(1)
+        dist = np.abs(np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0))
+        closer = dist < best; best[closer], near[closer] = dist[closer], k
+    return best, near
 
 
 def check(scene, points):
