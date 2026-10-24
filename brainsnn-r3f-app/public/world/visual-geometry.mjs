@@ -238,9 +238,10 @@ export function fitFloorPlane(rows, iterations = 300) {
   // The floor's normal points toward the room, i.e. toward the majority of off-plane points.
   const flip = best.above < (rows.length - best.inliers) / 2 ? -1 : 1, n = best.normal.map(v => v * flip);
   // Refine: along the up-vector the floor is the lowest dense layer, not merely the densest (tables and beds carry points too).
-  const heights = rows.map(r => n[0] * r[0] + n[1] * r[1] + n[2] * r[2]), lo = Math.min(...heights), width = 2 * tol;
+  const heights = rows.map(r => n[0] * r[0] + n[1] * r[1] + n[2] * r[2]), lo = heights.reduce((m, h) => Math.min(m, h), Infinity), width = 2 * tol;
   const counts = []; for (const h of heights) { const b = Math.floor((h - lo) / width); counts[b] = (counts[b] || 0) + 1; }
-  const peak = Math.max(...counts.map(c => c || 0)), bin = counts.findIndex(c => c >= peak * .8);
+  // counts has holes wherever a height bin is empty; reduce skips them (a spread would read undefined and give NaN).
+  const peak = counts.reduce((m, c) => Math.max(m, c), 0), bin = counts.findIndex(c => c >= peak * .8);
   const d = -(lo + (bin + .5) * width), inliers = heights.filter(h => Math.abs(h + d) <= tol).length;
   return { normal: n, d, inlierFraction: inliers / rows.length, tolerance: tol };
 }
