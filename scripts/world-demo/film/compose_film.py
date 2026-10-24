@@ -2,11 +2,13 @@
 Rhino and a quantity takeoff -> a robot route in the same model.
 
 usage: python compose_film.py <film_dir> <photos_dir> <scene_job_output> <route.json> <out.mp4> [--cut master|commercial]
-                              [--still SECONDS ...]
+                              [--reconstruction reconstruction.json] [--still SECONDS ...]
 film_dir holds the Blender shots from bl_shots.py (shot_points, shot_scene, shot_route, shot_bim); route.json comes from
 plan_route.mjs on the same scene.json. The plan is drawn from cad_export.elements() of the job's scene.json (the
 geometry of scene-plan.dxf); every number and hash on screen is read from the job's files. --cut commercial leaves the
-robot route out. Fonts: Inter (/usr/share/fonts/opentype/inter) and DejaVu Sans Mono.
+robot route out. --reconstruction (the source job's reconstruction.json) adds its camera poses, time and video length;
+without it those are left out rather than guessed. The IFC card claims validation only when IfcOpenShell is installed
+and validates the job's scene.ifc here. Fonts: Inter (/usr/share/fonts/opentype/inter) and DejaVu Sans Mono.
 """
 import hashlib, json, math, subprocess, sys
 from pathlib import Path
@@ -14,8 +16,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ARGS = sys.argv[1:sys.argv.index('--still')] if '--still' in sys.argv else sys.argv[1:]
-CUT = ARGS[ARGS.index('--cut') + 1] if '--cut' in ARGS else 'master'
-POSITIONAL = [x for k, x in enumerate(ARGS) if x != '--cut' and (k == 0 or ARGS[k - 1] != '--cut')]
+OPTIONS = {ARGS[k]: ARGS[k + 1] for k in range(len(ARGS) - 1) if ARGS[k] in ('--cut', '--reconstruction')}
+POSITIONAL = [x for k, x in enumerate(ARGS) if x not in OPTIONS and (k == 0 or ARGS[k - 1] not in OPTIONS)]
+CUT = OPTIONS.get('--cut', 'master')
 FILM, PHOTOS, JOB, ROUTE = (Path(x) for x in POSITIONAL[:4]); OUT = POSITIONAL[4]
 STILLS = [float(x) for x in sys.argv[sys.argv.index('--still') + 1:]] if '--still' in sys.argv else None
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'robotics' / 'world_worker'))
@@ -30,7 +33,23 @@ AMBER, CYAN, WHITE, GREY, DIM, STEEL, MAGENTA = (255, 176, 32), (0, 229, 240), (
 # ---------- the run ----------
 scene = json.load(open(JOB / 'scene.json'))
 items = cad_export.elements(scene)
-cad = json.load(open(JOB / 'scene-usd.json'))['cad']; Q = cad['quantities']
+evidence = json.load(open(JOB / 'scene-usd.json')); cad = evidence['cad']; Q = cad['quantities']
+POINTS = (evidence.get('handoff') or {}).get('points') or (evidence.get('reconstruction') or {}).get('reconstructed_points')
+REC = json.load(open(OPTIONS['--reconstruction'])) if '--reconstruction' in OPTIONS else evidence.get('reconstruction')
+CAPTURE = (REC or {}).get('capture') or {}
+NAMING = scene.get('naming') if isinstance(scene.get('naming'), dict) else None
+IFC_COUNTS = {'IfcWall': len(scene.get('walls', [])), 'IfcSlab': sum(o.get('name') == 'floor_observed' for o in scene['objects']),
+              'IfcFurniture': sum(o.get('ifcClass') == 'IfcFurniture' for o in scene['objects'])}
+def ifc_issues():
+    """IfcOpenShell's validation of this job's scene.ifc, EXPRESS rules included, or None when it is not installed here."""
+    try:
+        import io, logging, ifcopenshell, ifcopenshell.validate
+    except ImportError:
+        return None
+    log = io.StringIO(); logger = logging.getLogger('film-ifc'); logger.addHandler(logging.StreamHandler(log)); logger.setLevel(logging.INFO)
+    ifcopenshell.validate.validate(ifcopenshell.open(str(JOB / 'scene.ifc')), logger, express_rules=True)
+    return len([line for line in log.getvalue().splitlines() if line.strip()])
+IFC_ISSUES = ifc_issues()
 SHA = {n: hashlib.sha256((JOB / n).read_bytes()).hexdigest() for n in ('scene.ifc', 'scene.3dm', 'scene-plan.dxf', 'quantities.csv')}
 scale = scene['scale']
 
@@ -228,12 +247,15 @@ def draw(i):
             d.rectangle([40, 290, 1040, 957], outline=AMBER + (int(200 * fade),), width=2)
             for cx, cy in ((40, 290), (1040, 290), (40, 957), (1040, 957)):
                 d.line([(cx - 14, cy), (cx + 14, cy)], fill=AMBER + (int(255 * fade),), width=3); d.line([(cx, cy - 14), (cx, cy + 14)], fill=AMBER + (int(255 * fade),), width=3)
-            header(d, STEP['walk'], 'Walk the space with a phone', '62 s video · no scanner · sent to your own worker', lt, rem)
+            seconds = CAPTURE.get('duration_seconds')
+            header(d, STEP['walk'], 'Walk the space with a phone', (f'{seconds:.0f} s video · ' if seconds else '') + 'no scanner · sent to your own worker', lt, rem)
             chip(d, (W / 2, 1010), 'test capture: Mip-NeRF 360 “room” (Barron et al.)', font('Inter-Medium.otf', 21), GREY, (14, 20, 32), fade)
         elif name == 'points':
             place(canvas, shot('points', 1 + int(lt * FPS)), fade)
-            header(d, STEP['points'], 'Reconstructed in 3D', f"{int(10925 * ease_out((lt - .2) / 1.2)):,} points · 57 of 60 camera poses · CPU", lt, rem)
-            footnote(d, 'COLMAP on CPU in 135 s · 3D shots rendered in Blender from the run’s exported files', ta(lt, rem))
+            poses = f" · {CAPTURE['registered_images']} of {CAPTURE['images']} camera poses" if CAPTURE.get('registered_images') else ''
+            header(d, STEP['points'], 'Reconstructed in 3D', f"{int(POINTS * ease_out((lt - .2) / 1.2)):,} points{poses}", lt, rem)
+            took = f"{REC['pipeline'].split('-')[0].upper()} on {REC.get('device', 'cpu').upper()} in {REC['elapsed_seconds']:.0f} s · " if REC and REC.get('elapsed_seconds') else ''
+            footnote(d, took + '3D shots rendered in Blender from the run’s exported files', ta(lt, rem))
         elif name == 'model':
             fi = 1 + int(lt * FPS); place(canvas, shot('scene', fi), fade)
             header(d, STEP['model'], 'Every wall and object, measured', f"{Q['walls']} walls · {Q['objects']} objects · metres", lt, rem)
@@ -244,7 +266,7 @@ def draw(i):
                 d.line([x, y, x, y - L], fill=AMBER + (int(230 * la),), width=2); d.rectangle([x - 5, y - 5, x + 5, y + 5], fill=AMBER + (int(255 * la),))
                 dims = f"  {PLAN_SIZE[obj['label']][0]:.2f} × {PLAN_SIZE[obj['label']][1]:.2f} m" if obj['label'] == 'sofa' else ''
                 chip(d, (x, y - L - 18), obj['label'] + dims, mono(20, True), (12, 16, 24), AMBER, la, pad=(12, 7))
-            footnote(d, 'Names: object detector on the worker, unreviewed · touching objects stay one', ta(lt, rem))
+            footnote(d, (f"Names: {NAMING['model']}, unreviewed" if NAMING else 'Objects are unnamed in this run') + ' · touching objects stay one', ta(lt, rem))
         elif name == 'plan':
             layer.alpha_composite(plan_layer(lt, fade))
             header(d, STEP['plan'], 'A dimensioned plan for CAD', 'scene-plan.dxf · layers · walls dimensioned in metres', lt, rem)
@@ -252,7 +274,9 @@ def draw(i):
         elif name == 'files':
             place(canvas, shot('bim', 1 + int(lt * FPS * .9)), fade, dim=.38)
             header(d, STEP['files'], 'Open files for BIM, Rhino and CAD', 'downloaded from the worker · SHA-256 checked', lt, rem)
-            cards = [('IFC', 'scene.ifc', ['IFC4 · 0 IfcOpenShell validation issues', 'IfcWall ×6 · IfcFurniture ×2 · IfcSlab'], SHA['scene.ifc']),
+            checked = 'IFC4 · open BIM standard' if IFC_ISSUES is None else f"IFC4 · {IFC_ISSUES} IfcOpenShell validation issue{'s' if IFC_ISSUES != 1 else ''}"
+            classes = f"IfcWall ×{IFC_COUNTS['IfcWall']} · IfcFurniture ×{IFC_COUNTS['IfcFurniture']}" + (' · IfcSlab' if IFC_COUNTS['IfcSlab'] else '')
+            cards = [('IFC', 'scene.ifc', [checked, classes], SHA['scene.ifc']),
                      ('3DM', 'scene.3dm', ['Rhino model · metres', f"{cad['3dm']['objects']} named solids · 4 layers"], SHA['scene.3dm']),
                      ('DXF', 'scene-plan.dxf', ['2D plan · metres', f"{len(cad['dxf']['layers'])} layers · dimensioned"], SHA['scene-plan.dxf']),
                      ('CSV', 'quantities.csv', ['quantity takeoff', f"{Q['rows']} rows · areas and lengths"], SHA['quantities.csv'])]

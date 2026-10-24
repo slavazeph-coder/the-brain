@@ -64,7 +64,8 @@ node scripts/world-demo/film/plan_route.mjs $J/scene.json route.json brainsnn-r3
 for s in points scene route bim; do                  # the bpy module (Python 3.11) or Blender's own Python
   python scripts/world-demo/film/bl_shots.py -- $J/scene.glb $J/arena-cloud.json $J/scene.json route.json $s film/shot_$s
 done
-python scripts/world-demo/film/compose_film.py film <walkthrough photos> $J route.json film.mp4
+python scripts/world-demo/film/compose_film.py film <walkthrough photos> $J route.json film.mp4 \
+  --reconstruction worker-data/jobs/<reconstruction job>/output/reconstruction.json   # adds poses, time and video length
 ```
 
 The film's end card names the test capture, the typed distance and that the measurements are not a survey. Change

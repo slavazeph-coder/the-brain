@@ -57,8 +57,9 @@ def to_bottom_origin(o):
     return c, max(zs) - min(zs)
 walls = sorted([o for o in sc.objects if o.name.startswith('wall_')], key=lambda o: o.name)
 objects = sorted([o for o in sc.objects if o.name.startswith('object_')], key=lambda o: int(o.name.split('_')[1]))
-floor = sc.objects['floor_observed']; unknown = sc.objects['unknown_space']
-for o in walls + objects + [floor, unknown]: to_bottom_origin(o)
+floor = sc.objects['floor_observed']; unknown = sc.objects.get('unknown_space')  # only when some floor went unseen
+extras = [unknown] if unknown else []
+for o in walls + objects + [floor] + extras: to_bottom_origin(o)
 named = [o for o in objects if labels.get(o.name) not in (None, 'object')]
 
 BIM = SHOT == 'bim'
@@ -70,7 +71,7 @@ m_unknown = material('unknown', '#5b3a6e', rough=.9, emit='#ff4f9a', strength=.0
 floor.data.materials.clear(); floor.data.materials.append(m_floor)
 for o in walls: o.data.materials.clear(); o.data.materials.append(m_wall)
 for o in objects: o.data.materials.clear(); o.data.materials.append(m_named if o in named else m_obj)
-unknown.data.materials.clear(); unknown.data.materials.append(m_unknown)
+for o in extras: o.data.materials.clear(); o.data.materials.append(m_unknown)
 for o in walls + objects: bevel = o.modifiers.new('bevel', 'BEVEL'); bevel.width = .015; bevel.segments = 2
 
 # ---------- the run's points (hand-off frame, y up -> Blender z up) ----------
@@ -161,7 +162,7 @@ for f in range(1, FRAMES + 1, 2):  # smooth camera: a key every other frame
 
 pts_mat = m_pts
 if SHOT == 'points':
-    for o in walls + objects + [floor, unknown, route_ob, puck]: o.hide_render = True
+    for o in walls + objects + [floor, route_ob, puck] + extras: o.hide_render = True
     for b, ob in enumerate(pts_objs):
         start = 1 + b * 4
         hide(ob, 1, True); hide(ob, start, True); hide(ob, start + 1, False)
@@ -183,7 +184,7 @@ elif SHOT == 'route':
         puck.location = along(u); puck.keyframe_insert('location', frame=f)
     puck.location = along(0); puck.keyframe_insert('location', frame=1)
 else:
-    for o in pts_objs + [route_ob, puck, unknown]: o.hide_render = True
+    for o in pts_objs + [route_ob, puck] + extras: o.hide_render = True
 for fc_ in [a for o in bpy.data.objects if o.animation_data and o.animation_data.action for a in o.animation_data.action.fcurves]:
     for k in fc_.keyframe_points:
         if fc_.data_path == 'hide_render': k.interpolation = 'CONSTANT'
