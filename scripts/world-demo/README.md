@@ -41,6 +41,36 @@ only for a recording made on the live site.
 The worker URL and token are typed under a title card, and an init script blurs the worker host wherever the page
 shows it, so neither appears in the video. Never commit a recording's proof JSON: it contains the worker URL.
 
+## The feed film (`film/`)
+
+A designed 4:5 film (1080 × 1350, about 33 s) built from one finished run, not a screen recording. It shows:
+- the walkthrough;
+- the points;
+- the measured model with names;
+- a dimensioned plan;
+- the IFC, 3DM, DXF and CSV files with their SHA-256 hashes;
+- the quantity takeoff;
+- the robot route in the same model.
+
+| Script | What it does |
+|---|---|
+| `film/plan_route.mjs` | Runs the site's own `worldFromScene` and `planWorld` (robot vacuum) on a `scene.json`, so the route and its numbers match the browser |
+| `film/bl_shots.py` | Renders the 3D shots in Blender (Cycles, CPU) from the run's `scene.glb`, `arena-cloud.json`, `scene.json` and route. The shots are `points`, `scene`, `route` and `bim`, at about 9 s a frame on 4 cores. Styling, light and camera are the only additions |
+| `film/compose_film.py` | Draws the titles, the plan (from `cad_export.elements`, the geometry of `scene-plan.dxf`), the file cards and the takeoff over the renders, then encodes H.264. Pass `--cut commercial` to leave out the robot route; `--still SECONDS ...` renders stills |
+
+```sh
+J=worker-data/jobs/<scene job>/output             # a metric scene-usd job with the CAD exports
+node scripts/world-demo/film/plan_route.mjs $J/scene.json route.json brainsnn-r3f-app/public/world
+for s in points scene route bim; do                  # the bpy module (Python 3.11) or Blender's own Python
+  python scripts/world-demo/film/bl_shots.py -- $J/scene.glb $J/arena-cloud.json $J/scene.json route.json $s film/shot_$s
+done
+python scripts/world-demo/film/compose_film.py film <walkthrough photos> $J route.json film.mp4 \
+  --reconstruction worker-data/jobs/<reconstruction job>/output/reconstruction.json   # adds poses, time and video length
+```
+
+The film's end card names the test capture, the typed distance and that the measurements are not a survey. Change
+those lines when the capture changes. The 3D shots are renders of exported files, and the film says so.
+
 ## Honesty rules the recordings follow
 
 - **Only real numbers.** Every number on screen comes from the run itself.

@@ -119,6 +119,30 @@ engine also suggests a name for each separated object ([`object_names.py`](../ro
 
 Crops leave the worker only after a second, separate approval in the site ("Also send crops of each separated object … to Anthropic"). That box appears only when the engine advertises `object_naming` and the reconstruction came from this worker. The worker passes `ANTHROPIC_API_KEY` to that one adapter (`"secrets"` in `adapters.json`), never to the others. Without the key, naming is not offered. The model call is mocked in CI (`tests/world/test_object_names.py`).
 
+**CAD and estimating files (metric scenes).**
+- [`cad_export.py`](../robotics/world_worker/cad_export.py) writes three more files from the same `scene.json` as the GLB, USD and IFC, so their numbers agree:
+  - `scene-plan.dxf` ([ezdxf](https://ezdxf.mozman.at/), MIT): layers FLOOR, WALLS, OBJECTS, UNKNOWN (hatched), DIMENSIONS and LABELS, in metres, with every wall's length dimensioned;
+  - `scene.3dm` ([rhino3dm](https://github.com/mcneel/rhino3dm), MIT): one named solid per element on four layers, with its measurements, IFC class and provenance as user text, and the scale in the document's user text;
+  - `quantities.csv`: a summary (floor extent and area, wall length and face area, objects, unknown area, scale source) above one row per wall and object.
+- **Frame.** Plans use the IFC export's frame: plan X is the scene's x and plan Y is minus its z. On the room run, every Rhino box matched the compiled GLB to the centimetre.
+- **What the numbers are.** The sheet leads with the floor the capture saw: the extent less the unknown cells inside it. The extent itself is a bounding rectangle, which for a room turned against the axes takes in empty corners: on the room run, 29.62 m² observed against a 36.08 m² extent. The scale stays self-reported in all three files.
+- **Real run through the worker API.** Observed floor 29.62 m² (extent 5.11 × 7.06 m), 6 walls totalling 15.27 m (38.17 m² of face), 14 objects (3 named), 11.5 m² unknown. IfcOpenShell 0.9 validated that run's `scene.ifc`, including the EXPRESS rules, with 0 issues.
+- **Without the libraries** (`requirements-cad.txt`), the DXF or 3DM is skipped and `scene-usd.json` says why; a CAD problem never fails the scene.
+- **Not an integration.** These are open files. Estimating platforms with closed formats (for example ESX) need a vendor partnership, which this is not.
+
+**Names from a detector on the worker (no key, nothing sent).**
+- [`detector_names.py`](../robotics/world_worker/detector_names.py) runs MediaPipe's EfficientDet-Lite2 (COCO's 80 categories) on the same views `choose_views` picks. It runs when the engine is started with `--detector-model` and the vision model did not name the objects: naming was not approved, there is no key, or the call failed.
+- **Matching.** A detection names an object when the two boxes overlap (IoU at least 0.3). It also names one when at least 70% of the object's box lies inside a detection no more than 8 times its size, because sparse points often cover only part of an object.
+- **Confidence.**
+  - Medium needs either one clear match (IoU at least 0.5 and a score of at least 0.6) or agreement in two views.
+  - High needs both.
+  - Low names are not applied.
+  - A second category with half the votes names a pair ("table and sofa").
+- **Labels.** Only room categories become labels (sofa, chair, table, bed, television, potted plant, appliances…); people, animals and vehicles never do.
+- **Data and approval.** No crop is made and no frame leaves the worker, so the site asks for no second approval. Because the scene step needs that job's frames, the site sends the reconstruction job whenever the engine advertises `object_detection`.
+- **Measured run.** Real room walkthrough, 10 separated objects, 2.3 s on CPU: sofa (high), chair (medium) and potted plant (medium). The other 7 stayed "Object N", because COCO has no piano bench, door or computer tower. Claude named 7 of 10 on a dense run of the same room (#224).
+- **Licence.** The model file carries no licence notice, so the operator reviews its terms before enabling it. On Linux, MediaPipe needs `libegl1` and `libgles2` even on CPU (`requirements-detector.txt`).
+
 Objects that touch, such as a sofa with a table against it, stay one object, because geometry alone cannot split them. On the dense room walkthrough this gave 8 objects, including an armchair-sized 1.01 × 0.97 m, 1.06 m high, and 6 wall planes.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a job returns a `.glb`, Evidence offers **Explore scene.glb in 3D** next to the downloads ([`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)). The workspace downloads the file with a short-lived ticket, checks its SHA-256, and opens it in a dialog with the Arena's mesh viewer, which loads only on first use. Beside the scene it lists only what `scene.json` records: observed points and walls, placed and unplaced detections, unknown floor cells, units and whether USD was written. A missing or malformed `scene.json` is shown as unknown, never guessed.

@@ -330,10 +330,11 @@ async function action(name){try{
     if(!$('scene-consent')?.checked)throw new Error('Approve uploading the measured point cloud to your worker first.');
     // Naming is a second, separate approval: crops of the person's frames go to a third-party model.
     const naming=!!(entry.object_naming&&source.derivation?.job&&$('scene-naming')?.checked);
+    // A detector on the worker names objects from the same job's frames without sending them anywhere, so it needs no second approval.
     const cloud={...toArenaCloud(source.visual.points,{source:source.name,coordinateFrame:arenaFrame(source),metresPerUnit:scale.metresPerUnit,measurement:scale}),multiView:true,...(naming?{nameObjects:true}:{})};
     const file=new File([JSON.stringify(cloud)],'brainsnn-point-cloud.json',{type:'application/json'});
     event('metric_scene_requested',{source:source.name,...(source.derivation||{}),points:cloud.points.length,metresPerUnit:scale.metresPerUnit,distance:scale.distance,selfReported:true,nameObjects:naming,...(naming?{namingModel:entry.object_naming.model}:{})});
-    await runJob(entry.id,[{file,kind:'cloud',name:file.name}],naming?{source_job:source.derivation.job}:{});return;}
+    await runJob(entry.id,[{file,kind:'cloud',name:file.name}],naming||(entry.object_detection&&source.derivation?.job)?{source_job:source.derivation.job}:{});return;}
   if((name==='propose-map'||name==='propose-measured')&&activeSource?.visual&&activeSource.reconstruction){
     const visual=activeSource.visual,c=calibrationFor(visual);let measurement=null;
     if(name==='propose-measured'){c.distance=$('measured-distance')?.value??'';if(c.picks.length!==2)throw new Error('Pick two points first.');
