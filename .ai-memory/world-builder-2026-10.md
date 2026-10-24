@@ -63,8 +63,16 @@ description: World Builder flagship development, real browser inference and reco
     - Scene compiler separates every object (oriented box, metres) and finds walls by RANSAC above furniture; IFC writes unnamed objects as IfcBuildingElementProxy "Object N" with dimensions.
     - Robot route: the scene dialog's "Plan a robot route in this scene" (`worldFromScene`) makes an unreviewed World map from scene.json. Use it rather than the point-based proposal for dense clouds: dense floor scatter reads as obstacles there (vacuum 0.2 m² vs 3.4 m² and a 67.8 m route on the room walkthrough). Tried and rejected: an obstacle-share rule in the planner (could erase thin legs), depth-edge masks and wide-baseline agreement (little gain).
     - Demo scale: 0.66 m/unit for the Mip-NeRF room. At 0.41 the walls fall below the 1.3 m wall band.
+  - #224 (4ec8c95): Claude names separated objects.
+    - The scene engine crops each object from the reconstruction's frames. `fromSource` in the hand-off maps it back, `source_job` lets the scene job read the reconstruction job, and the exported COLMAP model is recorded in `sparse/selected.txt`.
+    - It asks `claude-opus-5-5` once, with a JSON schema. A second consent box gates sending crops to Anthropic.
+    - Names apply at medium or high confidence and are marked unreviewed.
+    - The worker passes `ANTHROPIC_API_KEY` only to adapters that list it under `secrets`.
+    - Real run: 10 objects in 11 s, about $0.03.
+  - Session handoff: `docs/world-builder-handoff.md` (state, how to run, blockers, next steps). The demo recorders moved into `scripts/world-demo/`.
   - Still open:
     - a physical iPhone Safari test (owner);
-    - the GPU worker on a stable hostname (Hermes; the GB10 is rented out for now);
+    - the GPU worker on a stable hostname, on the 4090 while the GB10 is rented (Hermes or the owner; cloud sessions can't reach the 4090);
+    - rotating the Anthropic key shared in chat (owner);
     - a dense GPU benchmark on the 4090 (Hermes);
     - Lyra 1 trial receipts.
