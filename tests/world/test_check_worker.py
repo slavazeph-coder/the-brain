@@ -64,3 +64,38 @@ def test_requirements_parse_and_the_probe_image_is_a_valid_png():
     import io
     image = Image.open(io.BytesIO(cw.tiny_png())); image.verify()
     assert image.size == (8, 8)
+
+
+def test_a_preflight_without_put_or_authorization_fails():
+    def partial(url, method='GET', token=None, headers=None, body=None, timeout=20):
+        if url.endswith('/healthz'): return 200, {}, {'status': 'ok'}
+        if method == 'OPTIONS':  # the origin is allowed, but '*' never covers Authorization
+            if headers['Origin'] != cw.SITE_ORIGINS[0]: return 400, {}, None
+            return 200, {'Access-Control-Allow-Origin': headers['Origin'], 'Access-Control-Allow-Methods': 'GET, POST',
+                         'Access-Control-Allow-Headers': '*'}, None
+        if not token: return 401, {}, None
+        return 200, {}, {'engines': [{'id': 'inspect', 'available': True, 'input_kinds': ['image']}]}
+    failed = {r['check']: r['detail'] for r in cw.run_checks(BASE, TOKEN, call=partial) if not r['ok']}
+    assert failed == {'allows browser calls from https://www.brainsnn.com': "HTTP 200, allow-origin 'https://www.brainsnn.com', not allowed: PUT, Authorization"}
+
+
+def test_redirects_are_reported_not_followed():
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    hits = []
+    class Target(BaseHTTPRequestHandler):
+        def do_GET(self): hits.append(self.headers.get('Authorization')); self.send_response(200); self.end_headers(); self.wfile.write(b'{"status":"ok"}')
+        def log_message(self, *a): pass
+    target = ThreadingHTTPServer(('127.0.0.1', 0), Target)
+    class Redirect(BaseHTTPRequestHandler):
+        def do_GET(self): self.send_response(302); self.send_header('Location', f'http://127.0.0.1:{target.server_port}/healthz'); self.end_headers()
+        def log_message(self, *a): pass
+    proxy = ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+    for server in (target, proxy): threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        status, _, _ = cw.request(f'http://127.0.0.1:{proxy.server_port}/v1/capabilities', token=TOKEN)
+        assert status == 302 and hits == []  # not followed, so the token never reached the other server
+        results = cw.run_checks(f'http://127.0.0.1:{proxy.server_port}', TOKEN, allow_http=True)
+        assert results[2] == {'check': '/healthz answers', 'ok': False, 'detail': 'HTTP 302 (a redirect: the site does not follow redirects)'}
+    finally:
+        proxy.shutdown(); target.shutdown()

@@ -11,14 +11,24 @@ SITE_ORIGINS = ('https://www.brainsnn.com', 'https://brainsnn.com')
 FOREIGN_ORIGIN = 'https://not-brainsnn.example'
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """The site's client refuses redirects (fetch redirect:'error'), so the check does too. Following one would also
+    resend the Authorization header to wherever it points."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl): return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+
+
 def request(url, method='GET', token=None, headers=None, body=None, timeout=20):
-    """Returns (status, headers, parsed JSON or None). Network and TLS errors propagate."""
+    """Returns (status, headers, parsed JSON or None); a redirect comes back as its 3xx status. Network and TLS errors
+    propagate."""
     headers = dict(headers or {})
     if token: headers['Authorization'] = 'Bearer ' + token
     if isinstance(body, (dict, list)): body = json.dumps(body).encode(); headers['Content-Type'] = 'application/json'
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as res:
+        with OPENER.open(req, timeout=timeout) as res:
             raw, status, got = res.read(), res.status, res.headers
     except urllib.error.HTTPError as err:
         raw, status, got = err.read(), err.code, err.headers
@@ -31,6 +41,14 @@ def tiny_png():
     def chunk(kind, data): return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
     rows = b''.join(b'\x00' + b'\x46\x78\xa0' * 8 for _ in range(8))
     return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 8, 8, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
+
+
+def http_detail(status):
+    return f'HTTP {status}' + (' (a redirect: the site does not follow redirects)' if 300 <= status < 400 else '')
+
+
+def listed(header):
+    return {v.strip().lower() for v in (header or '').split(',') if v.strip()}
 
 
 def parse_requirements(values):
@@ -56,12 +74,12 @@ def run_checks(base, token, origin=SITE_ORIGINS[0], requirements=None, upload_pr
     except (urllib.error.URLError, OSError) as err:  # TLS, DNS and connection failures land here.
         check('reachable with a valid certificate', False, str(getattr(err, 'reason', err))[:200]); return results
     check('reachable with a valid certificate', True)
-    check('/healthz answers', status == 200 and isinstance(data, dict) and data.get('status') == 'ok', f'HTTP {status}')
+    check('/healthz answers', status == 200 and isinstance(data, dict) and data.get('status') == 'ok', http_detail(status))
 
     status, _, _ = call(base + '/v1/capabilities')
-    check('refuses requests without the token', status == 401, f'HTTP {status}')
+    check('refuses requests without the token', status == 401, http_detail(status))
     status, _, caps = call(base + '/v1/capabilities', token=token)
-    if not check('accepts the operator token', status == 200 and isinstance(caps, dict), f'HTTP {status}'): return results
+    if not check('accepts the operator token', status == 200 and isinstance(caps, dict), http_detail(status)): return results
     engines = {e.get('id'): set(e.get('input_kinds') or []) for e in caps.get('engines', []) if e.get('available')}
     check('advertises engines', bool(engines), ', '.join(f"{k} ({'/'.join(sorted(v))})" for k, v in sorted(engines.items())))
     for engine, kinds in (requirements or {}).items():
@@ -72,7 +90,13 @@ def run_checks(base, token, origin=SITE_ORIGINS[0], requirements=None, upload_pr
     preflight = {'Origin': origin, 'Access-Control-Request-Method': 'PUT', 'Access-Control-Request-Headers': 'authorization,content-type'}
     status, headers, _ = call(base + '/v1/capabilities', method='OPTIONS', headers=preflight)
     allowed = headers.get('Access-Control-Allow-Origin') if headers else None
-    check(f'allows browser calls from {origin}', status in (200, 204) and allowed == origin, f'HTTP {status}, allow-origin {allowed!r}')
+    methods = listed(headers.get('Access-Control-Allow-Methods') if headers else None)
+    allowed_headers = listed(headers.get('Access-Control-Allow-Headers') if headers else None)
+    # The site sends PUT chunks with Authorization and Content-Type. A '*' wildcard never covers Authorization.
+    gaps = ([] if methods & {'put', '*'} else ['PUT']) + ([] if 'authorization' in allowed_headers else ['Authorization']) + \
+           ([] if allowed_headers & {'content-type', '*'} else ['Content-Type'])
+    check(f'allows browser calls from {origin}', status in (200, 204) and allowed == origin and not gaps,
+          f'{http_detail(status)}, allow-origin {allowed!r}' + (f", not allowed: {', '.join(gaps)}" if gaps else ''))
     status, headers, _ = call(base + '/v1/capabilities', method='OPTIONS', headers={**preflight, 'Origin': FOREIGN_ORIGIN})
     foreign = headers.get('Access-Control-Allow-Origin') if headers else None
     check('does not allow other origins', foreign not in (FOREIGN_ORIGIN, '*'), f'allow-origin {foreign!r}')
@@ -80,12 +104,12 @@ def run_checks(base, token, origin=SITE_ORIGINS[0], requirements=None, upload_pr
     if upload_probe:
         png = tiny_png()
         status, _, item = call(base + '/v1/uploads', method='POST', token=token, body={'name': 'check-worker.png', 'size': len(png), 'kind': 'image'})
-        if check('creates an upload', status == 201 and isinstance(item, dict) and 'id' in item, f'HTTP {status}'):
+        if check('creates an upload', status == 201 and isinstance(item, dict) and 'id' in item, http_detail(status)):
             status, _, part = call(f"{base}/v1/uploads/{item['id']}?offset=0", method='PUT', token=token, body=png,
                                    headers={'Content-Type': 'application/octet-stream'})
-            check('accepts an upload chunk through the proxy', status == 200 and isinstance(part, dict) and part.get('offset') == len(png), f'HTTP {status}')
+            check('accepts an upload chunk through the proxy', status == 200 and isinstance(part, dict) and part.get('offset') == len(png), http_detail(status))
             status, _, _ = call(f"{base}/v1/uploads/{item['id']}", method='DELETE', token=token)
-            check('deletes the probe upload', status in (200, 204), f'HTTP {status}')
+            check('deletes the probe upload', status in (200, 204), http_detail(status))
     return results
 
 
