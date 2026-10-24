@@ -21,12 +21,13 @@ import subprocess
 import time
 
 try:
-    from . import cad_export, detector_names, fit_check, object_names, sparse_colmap
+    from . import cad_export, detector_names, fit_check, measurement_check, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import cad_export
     import detector_names
     import fit_check
+    import measurement_check
     import object_names
     import sparse_colmap
     from geometry import load_arena_cloud
@@ -365,12 +366,22 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     if names:
         shutil.copyfile(names, out / 'object-names.json')
         naming['applied'] = (scene.get('naming') or {}).get('named', 0)
-    measured = ['The scale comes from a distance the user measured and entered: self-reported, not verified.'] if cloud['units'] == 'm' else []
+    # A dimensional audit is separate from model-to-points fit. Invalid supplied references fail the job instead
+    # of silently becoming an unchecked success. Even matching held-out lengths never certify the whole scene.
+    measurement_files = []
+    if cloud['units'] == 'm':
+        report = measurement_check.build_report(scene, cloud)
+        (out / 'scene-measurements.json').write_text(json.dumps(report, indent=2, allow_nan=False))
+        measurement_files = ['scene-measurements.json']
+        measurements = {'written': True, 'status': report['status'], 'metric_verified': False}
+    else:
+        measurements = {'skipped': 'Dimensional checks require a metric scene.'}
+    measured = ['The scale follows an entered distance: whether it was independently measured is self-reported, not verified.'] if cloud['units'] == 'm' else []
     named = ['Object names are suggestions from a vision model looking at the walkthrough frames; nobody has reviewed them.'] if names else []
     evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'), 'cad': cad, 'fit': fit,
-                'naming': naming,
+                'naming': naming, 'measurements': measurements,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
                 'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
@@ -381,6 +392,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'elapsed_seconds': round(time.monotonic() - started, 3),
                 'review_required': (reconstruction['review_required'] if reconstruction else [])
                 + ['Confirm walls and floor against the walkthrough before simulation'] + (['Check the measured distance before using metres'] if measured else [])
+                + (['Check held-out tape or laser distances; model-to-points fit is not independent dimensional validation'] if measured else [])
                 + (['Review the suggested object names before relying on them'] if names else []),
                 'warnings': (reconstruction['warnings'] if reconstruction else [])
                 + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured + named}
@@ -391,6 +403,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
+                 *({'name': name, 'kind': 'evidence'} for name in measurement_files),
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
     return evidence

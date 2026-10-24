@@ -59,6 +59,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [World Builder dimensional evidence](world-builder-dimensions-2026-10-24.md) — source-bound backend physical-reference checks, semantic sizing boundaries and the next BIM qualification slice.
+
 → [World Builder flagship](world-builder-2026-10.md) — real local photo previews, CPU and bounded photo/video GPU reconstruction, source-bound local VLM reviews, private tenant boundaries, measured-evidence worksheets and bounded HEVC/capture tests; reconstruction → proposed planning map handoff (Oct 21) with exact rescaling from a user-measured distance (Oct 22); metric scenes with GLB, USD and IFC (Oct 23); Lyra 1 GB10 trial approved (Oct 24); full public real-to-sim qualification remains open.
 
 <!-- Both AIs append notes here as they work -->
