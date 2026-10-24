@@ -32,7 +32,11 @@ test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every droppe
   const cloud = toArenaCloud(p, { coordinateFrame: 'colmap', source: 'clip.mp4' });
   assert.equal(cloud.kind, 'colmap-sparse-point-cloud'); assert.equal(cloud.coordinateFrame, 'right-handed-y-up'); assert.equal(cloud.sourceFrame, 'colmap');
   assert.deepEqual(cloud.provenance, { totalPoints: 1010, keptPoints: 1000, outliersDropped: 10, thinned: false, floorAligned: true, floorTiltDegrees: 0, floorYawDegrees: cloud.provenance.floorYawDegrees, floorInlierFraction: 0.1, metricVerified: false });
-  assert.ok(cloud.points.every(r => r.length === 6 && r[1] >= -1e-6 && r[3] === 200), 'the floor layer sits at y=0 with the bulk above; colours are 0-255');
+  // The plane passes through the centre of the floor's height bin, so the floor layer sits within the fit tolerance
+  // (1.5% of the frame radius) of y=0.
+  const tol = 0.015 * Math.hypot(.9, .9, .9) / 2;
+  assert.ok(cloud.points.every(r => r.length === 6 && r[1] >= -tol - 1e-9 && r[3] === 200), 'the floor layer sits at y=0 with the bulk above; colours are 0-255');
+  assert.ok(cloud.points.filter(r => r[1] > tol).length === 900, 'every layer above the floor stays above it');
   // A Y-up source is passed through unchanged, and a large cloud is thinned under the Arena budget.
   const same = toArenaCloud(p.subarray(0, 2 * STRIDE)); assert.deepEqual(same.points[1].slice(0, 3), [...p.subarray(STRIDE, STRIDE + 3)]); assert.equal(same.provenance.outliersDropped, 0);
   const big = parsePLY(ascii(Array.from({ length: 2500 }, (_, i) => `${i % 50} ${Math.floor(i / 50)} 0 1 2 3`))).points;
@@ -91,6 +95,10 @@ test('a tilted room is gravity-aligned on its fitted floor plane before the esti
   assert.ok(upright.filter(r => r[1] > 0.1).length > 500, 'walls stand above the floor, not below it');
   const cloud = toArenaCloud(parsePLY(ascii(tilted.map(r => r.join(' ')))).points);
   assert.ok(cloud.provenance.floorAligned && Math.abs(cloud.provenance.floorTiltDegrees - 25) < 2 && Math.abs(cloud.floorEstimate.y) < 0.1);
+  // One stray point under the floor leaves empty height bins between it and the floor; the floor must still be found.
+  const stray = [...tilted, [3, 3 - 0.6 * c, 1 - 0.6 * s, 1, 2, 3]], gapped = fitFloorPlane(stray);
+  assert.ok(gapped.inlierFraction > 0.5, `floor inliers with a stray point ${gapped.inlierFraction}`);
+  assert.ok(toArenaCloud(parsePLY(ascii(stray.map(r => r.join(' ')))).points).provenance.floorAligned, 'a stray point does not stop the alignment');
   // Heading: the same room yawed 40° comes back squared, long side along Z, so the footprint box is the room again.
   const y = 40 * Math.PI / 180, cy = Math.cos(y), sy = Math.sin(y);
   const yawed = room.map(r => [r[0] * cy + r[2] * sy, r[1], -r[0] * sy + r[2] * cy, r[3], r[4], r[5]]);
