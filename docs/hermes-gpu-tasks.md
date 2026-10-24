@@ -25,9 +25,11 @@ MapAnything's predicted scale is right without a tape measure. Also record peak 
 - Add `mapanything-apache` (GB10 or 4090) to the same worker, so the site gets dense clouds and metric scenes from one
   connection.
 - Put it behind TLS, with a stable hostname rather than a quick tunnel, and give the owner the URL and an operator token.
+  `robotics/world_worker/deploy/` has a systemd unit, an environment template and a Cloudflare named-tunnel template.
 
-Done when brainsnn.com connects to it and builds a metric scene from a walkthrough: measure a distance, then use
-"Build metric simulation scene (GLB, USD, IFC)".
+Done when `python -m robotics.world_worker.check_worker --url https://... --require scene-usd:video,cloud --upload-probe`
+passes from outside the host, and brainsnn.com connects to it and builds a metric scene from a walkthrough: measure a
+distance, then use "Build metric simulation scene (GLB, USD, IFC)".
 
 ## 3. Detections into the simulation scene
 

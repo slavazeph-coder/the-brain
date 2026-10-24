@@ -219,6 +219,8 @@ python -m uvicorn robotics.world_worker.app:create_app --factory \
   --host 127.0.0.1 --port 8010 --workers 1 --no-access-log
 ```
 
+For a long-running host, `robotics/world_worker/deploy/` has a systemd unit, an environment template and a Cloudflare named-tunnel template. Check a deployed worker from outside with `python -m robotics.world_worker.check_worker --url https://... --upload-probe`. It verifies TLS, the token, the engines, brainsnn.com's CORS access and a chunked upload, without printing the token.
+
 Connect with Capture → Process a walkthrough / use an API worker. Explicitly approve uploads to the displayed destination. `/v1/capabilities` advertises only available configured engines. Start with `inspect` for an integrity-only receipt. Enable an AI or reconstruction adapter only after its installation, licensing and hardware checks. Example engines are disabled by default.
 
 The observation adapter additionally needs `requirements-observations.txt` (Pillow and PyAV), FFmpeg/FFprobe, and an already running local image-capable model server. Enable the example engine only after qualification. Supply these through the private worker service environment:

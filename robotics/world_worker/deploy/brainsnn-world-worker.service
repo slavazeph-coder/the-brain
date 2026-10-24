@@ -1,0 +1,31 @@
+# systemd unit for the World Builder worker. Copy to /etc/systemd/system/, adjust the paths, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now brainsnn-world-worker
+[Unit]
+Description=BrainSNN World Builder worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=brainsnn-worker
+Group=brainsnn-worker
+# A checkout of the repository at the commit you have qualified.
+WorkingDirectory=/opt/brainsnn/the-brain
+# Holds WORLD_WORKER_TOKEN and the rest; see world-worker.env.example. Keep it mode 600, owned by root.
+EnvironmentFile=/etc/brainsnn/world-worker.env
+# Loopback only: the tunnel or reverse proxy provides TLS and the public hostname.
+ExecStart=/opt/brainsnn/venv/bin/python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.1 --port 8010 --workers 1 --no-access-log
+Restart=on-failure
+RestartSec=5
+# Hardening. Adapters run as child processes with the same limits; open only the paths they need.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/brainsnn-world-worker
+# Optional caps, sized to the host (GPU memory is limited by the adapters' own guards, not by systemd):
+# MemoryMax=48G
+# CPUQuota=800%
+
+[Install]
+WantedBy=multi-user.target
