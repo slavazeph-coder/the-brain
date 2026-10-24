@@ -376,6 +376,30 @@ def test_mapanything_missing_installation_fails_before_inference(monkeypatch):
     with pytest.raises(RuntimeError,match='Install pinned'):local_installation()
 
 
+def test_mapanything_model_dir_symlink_rejected_before_hash(monkeypatch, tmp_path):
+    # A symlinked checkpoint would hash whatever it points at, not the file the
+    # worker serves. Fail closed before the digest is ever computed. The source
+    # revision gate is isolated out (monkeypatched) so this test targets the
+    # model-dir symlink guard in particular.
+    from robotics.world_worker import mapanything_apache as worker_module
+    monkeypatch.setattr(worker_module, 'verify_source', lambda *a, **k: None)
+    real = tmp_path / 'real'; real.mkdir()
+    link = tmp_path / 'linked'; link.mkdir()
+    (link / 'model.safetensors').symlink_to(real / 'model.safetensors')
+    (link / 'config.json').write_text('config-fixture')
+    monkeypatch.setenv('WORLD_MAPANYTHING_SOURCE_DIR', str(real))
+    monkeypatch.setenv('WORLD_DINOV2_SOURCE_DIR', str(real))
+    monkeypatch.setenv('WORLD_MAPANYTHING_MODEL_DIR', str(link))
+    with pytest.raises(RuntimeError, match='model.safetensors'):
+        local_installation()
+    # A regular (non-symlink) checkpoint with the wrong size must also fail,
+    # and only after the symlink guard has been cleared.
+    (link / 'model.safetensors').unlink()
+    (link / 'model.safetensors').write_bytes(b'wrong')
+    with pytest.raises(RuntimeError, match='model.safetensors'):
+        local_installation()
+
+
 def test_mapanything_source_pin_rejects_different_revision(tmp_path):
     subprocess.run(['git','init','-q',str(tmp_path)],check=True)
     (tmp_path/'source.py').write_text('pinned = True\n')
