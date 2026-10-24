@@ -1,7 +1,7 @@
 # The Brain — AI Memory
 
 > Shared by Claude Code and Codex. Keep under 200 lines.
-> Last updated: 2026-04-12
+> Last updated: 2026-10-24
 
 ## Purpose
 
@@ -23,6 +23,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 - Cron jobs: workspace-git-sync (3h), memory-cleanup-weekly, daily-self-review
 
 ## Current BrainSNN direction
+
+→ [World Builder handoff, October 24](../docs/world-builder-handoff.md). **Start here for World Builder:** what is live, how to run it, what is blocked (4090 access, rotating the Anthropic key, physical iPhone test), and the next steps in order. Demo recorders: `scripts/world-demo/`.
 
 → [Native deformable physics](brainsnn-deformable-physics-2026-10-17.md). Owner requests DeformX-like tasks; native MuJoCo rope strike, bounded motion search and recorded local instance packs. Distinguish browser physics from learned-policy/GPU qualification.
 

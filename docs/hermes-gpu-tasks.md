@@ -20,6 +20,17 @@ MapAnything's predicted scale is right without a tape measure. Also record peak 
 
 ## 2. GB10: the always-on production worker
 
+**October 24: the GB10 is rented out, so run this worker on the 4090 until it returns.** Use the same kit and the
+same done check. A Claude cloud session cannot reach the 4090 over SSH (its network allows HTTPS only), so this is
+yours or the owner's to deploy. Status and next steps: `docs/world-builder-handoff.md`.
+
+- **Object names (#224).** Install `robotics/world_worker/requirements-naming.txt` in the scene engine's environment.
+  Put a **newly rotated** `ANTHROPIC_API_KEY` in `/etc/brainsnn/world-worker.env`; the key shared in chat on
+  October 24 must not be used. `adapters.gb10.json` already gives `scene-usd` that secret, `source_job` and
+  `object_naming`.
+- **Done for names when:** after a walkthrough, a measured distance and both approvals in the calibration card, the
+  scene dialog shows "Named: N objects by claude-opus-5-5".
+
 - Update to `main` (#213, #216, #217) and run the worker with `adapters.gb10.json`. `scene-usd` now takes `video` and
   `cloud`.
 - Add `mapanything-apache` (GB10 or 4090) to the same worker, so the site gets dense clouds and metric scenes from one
@@ -32,6 +43,9 @@ passes from outside the host, and brainsnn.com connects to it and builds a metri
 distance, then use "Build metric simulation scene (GLB, USD, IFC)".
 
 ## 3. Detections into the simulation scene
+
+Since #224, separated objects can be named by Claude from the frames. Reviewed detections still matter: they win over
+model names, and they can name things separation does not find.
 
 `scene-usd` never passes `--detections`, so worker scenes have walls and floor but no furniture. The compiler already
 lifts 2D boxes with camera poses, but it does not read review decisions.
