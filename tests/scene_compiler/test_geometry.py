@@ -217,3 +217,30 @@ class GridBound(unittest.TestCase):
         for cloud in [{"sourceFrame": "right-handed-y-up"}, {"sourceFrame": "right-handed-y-up", "multiView": "yes"}, {}]:
             self.assertFalse(sc.multi_view(cloud))
 
+
+
+class Names(unittest.TestCase):
+    def objects(self):
+        return [{"centre": [0.8, -0.5], "y0": 0.0, "y1": 0.75}, {"centre": [-1.0, 0.6], "y0": 0.0, "y1": 0.9},
+                {"centre": [2.0, 2.0], "y0": 0.0, "y1": 1.8, "label": "bookshelf", "detector": "detr"}]
+
+    def test_names_land_on_the_object_they_were_made_for(self):
+        objects = self.objects()
+        names = {"model": "claude-opus-5-5", "objects": [
+            {"label": "dining table", "category": "furniture", "confidence": "high", "centre": [0.82, -0.48], "height": 0.75},
+            {"label": "floor lamp", "category": "lighting", "confidence": "medium", "centre": [-1.0, 0.6], "height": 0.9}]}
+        self.assertEqual(sc.apply_names(objects, names), 2)
+        self.assertEqual((objects[0]["label"], objects[0]["ifcClass"], objects[0]["labelReviewed"]), ("dining table", "IfcFurniture", False))
+        self.assertEqual((objects[1]["label"], objects[1]["ifcClass"], objects[1]["detector"]), ("floor lamp", "IfcBuildingElementProxy", "claude-opus-5-5"))
+
+    def test_low_confidence_far_wrong_height_and_already_named_objects_keep_their_names(self):
+        objects = self.objects()
+        names = {"model": "m", "objects": [
+            {"label": "table", "category": "furniture", "confidence": "low", "centre": [0.8, -0.5]},
+            {"label": "unknown", "category": "unknown", "confidence": "high", "centre": [0.8, -0.5]},
+            {"label": "lamp", "category": "lighting", "confidence": "high", "centre": [-1.3, 0.6]},
+            {"label": "chair", "category": "furniture", "confidence": "high", "centre": [-1.0, 0.6], "height": 0.45},
+            {"label": "cabinet", "category": "furniture", "confidence": "high", "centre": [2.0, 2.0], "height": 1.8}]}
+        self.assertEqual(sc.apply_names(objects, names), 0)
+        self.assertEqual([o.get("label") for o in objects], [None, None, "bookshelf"])
+        self.assertEqual(sc.apply_names(objects, None), 0)

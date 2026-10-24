@@ -31,6 +31,7 @@ def args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     p = argparse.ArgumentParser()
     p.add_argument("--cloud", required=True); p.add_argument("--detections"); p.add_argument("--fov", type=float, default=60.0)
+    p.add_argument("--names", help="object-names JSON from the worker's naming step: model suggestions for separated objects")
     p.add_argument("--out", required=True); p.add_argument("--min-cluster", type=int, default=12)
     p.add_argument("--allow-unverified", action="store_true", help="compile non-multi-view clouds anyway (experiments only)")
     return p.parse_args(argv)
@@ -211,6 +212,35 @@ def label_objects(objects, pts, placed):
         else:
             left.append(det)
     return left
+
+
+NAME_MATCH = 0.15  # metres between a named object's centre and the compiled one: farther, and the name is not applied
+
+
+def analyse(pts, floor_y, metric):
+    """Walls and separated objects of a cloud, exactly as main() compiles them; the naming step runs this outside Blender."""
+    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin)
+    return margin, walls, rest, (separate_objects(pts, floor_y, rest) if metric else [])
+
+
+def apply_names(objects, names):
+    """Model-suggested names for separated objects that nothing else has named. Each suggestion is matched by the centre
+    and height it was made for, so a name never lands on a different object; low-confidence and unknown names are skipped.
+    Returns how many objects were named."""
+    named = 0
+    for entry in (names or {}).get("objects", []):
+        if not isinstance(entry, dict) or entry.get("confidence") not in ("medium", "high"): continue
+        label, centre, height = entry.get("label"), entry.get("centre"), entry.get("height")
+        if not (isinstance(label, str) and 0 < len(label) <= 60 and label.lower() not in ("unknown", "object")): continue
+        if not (isinstance(centre, list) and len(centre) == 2 and all(isinstance(v, (int, float)) for v in centre)): continue
+        free = [o for o in objects if "label" not in o]
+        best = min(free, key=lambda o: math.dist(o["centre"], centre), default=None)
+        if best is None or math.dist(best["centre"], centre) > NAME_MATCH: continue
+        if isinstance(height, (int, float)) and abs((best["y1"] - best["y0"]) - height) > 0.2: continue
+        best.update(label=label, detector=str(names.get("model", "model"))[:80], labelConfidence=entry["confidence"],
+                    labelReviewed=False, ifcClass="IfcFurniture" if entry.get("category") == "furniture" else "IfcBuildingElementProxy")
+        named += 1
+    return named
 
 
 def unproject_box(box, w, h, fov, depth_samples):
@@ -401,23 +431,28 @@ def main():
     _, rec = add_box("floor_observed", [ex[0], floor_y - 0.02, ez[0]], [ex[1], floor_y, ez[1]], "observed", "floor", (0.55, 0.45, 0.30, 1))
     scene["objects"].append(rec)
     # Walls: vertical planes found above furniture height. Whatever stands against them is left for object separation.
-    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin)
+    # Objects: in metres, every other cluster above the floor is separated and measured. Sizes need a measured scale.
+    margin, walls, rest, separated = analyse(pts, floor_y, metric)
     for i, w in enumerate(walls):
         _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1)); scene["walls"].append(rec)
-    # Objects: in metres, every other cluster above the floor is separated and measured. Sizes need a measured scale.
-    separated = separate_objects(pts, floor_y, rest) if metric else []
     scene["separation"] = ({"done": True, "cell_m": OBJECT_CELL, "floor_margin_m": round(margin, 3), "max_height_m": OBJECT_MAX_HEIGHT} if metric
                            else {"done": False, "reason": "Object sizes need a measured scale."})
     # Detections: lift each 2D box with the cloud points that project inside it, and name the object it overlaps.
     placed, unplaced = (lift_detections(pts, json.loads(Path(a.detections).read_text()), a.fov, a.min_cluster)
                         if a.detections else ([], []))
-    for det in label_objects(separated, pts, placed):
+    left = label_objects(separated, pts, placed)
+    # Then model-suggested names, from the frames that saw each object, for the objects no detection named.
+    names = json.loads(Path(a.names).read_text()) if a.names else None
+    scene["naming"] = ({"model": names.get("model"), "named": apply_names(separated, names), "reviewed": False} if names else None)
+    for det in left:
         _, rec = add_box(det["name"], det["min"], det["max"], "detected", det["label"], (0.20, 0.55, 0.85, 1))
         rec["support_points"] = det["support_points"]; rec["detector"] = det["detector"]; scene["objects"].append(rec)
     for i, ob in enumerate(separated):
         _, rec = add_oriented_box(f"object_{i+1}", ob, "observed", ob.get("label", "object"), OBJECT_COLOURS[i % len(OBJECT_COLOURS)])
         rec["kind"] = "separated"
         if "detector" in ob: rec["labelSource"] = ob["detector"]
+        for key in ("labelConfidence", "labelReviewed", "ifcClass"):
+            if key in ob: rec[key] = ob[key]
         scene["objects"].append(rec)
     scene["objects"].extend(unplaced)
     # Unknown: everything inside the room box that no observed point touches, as a tagged volume (coarse grid).

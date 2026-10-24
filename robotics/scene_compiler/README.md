@@ -14,6 +14,8 @@ In metric scenes every cluster of points above the floor that is not a wall is s
 RANSAC above furniture height (split at doorways, so an opening stays an opening), objects are face-connected 10 cm cells fitted with the
 smallest oriented box. An unnamed object is an
 `IfcBuildingElementProxy` "Object N" with its length, width and height; one a detection overlaps takes its label as `IfcFurniture`.
+`--names` applies model-suggested names from the worker's naming step (`robotics/world_worker/object_names.py`), matched by centre and
+height and marked unreviewed.
 `scene.usda` is written only for metric clouds (a measured scale from World Builder), because USD's `metersPerUnit = 1`
 would otherwise turn every arbitrary reconstruction unit into a metre in Isaac Sim; `scene.json` records why it was skipped.
 Detections are lifted only when their frame carries `cameraFromCloud` (rigid 4x4, row-major, camera looking down -z, in the

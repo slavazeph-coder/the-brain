@@ -14,15 +14,17 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import time
 
 try:
-    from . import sparse_colmap
+    from . import object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
+    import object_names
     import sparse_colmap
     from geometry import load_arena_cloud
 
@@ -149,6 +151,26 @@ def rotate_y(rows, angle):
     return [[r[0] * c + r[2] * s, r[1], -r[0] * s + r[2] * c, r[3], r[4], r[5]] for r in rows]
 
 
+def arena_transform(k: float, flip: int, plane, aligned: bool, yaw: float):
+    """to_arena_cloud's mapping from source coordinates to hand-off coordinates as a 3 x 4 matrix [A | t]: scale and
+    flip, then the floor alignment (align_to_floor), then the heading turn (rotate_y by -yaw)."""
+    S = [[k, 0, 0], [0, k * flip, 0], [0, 0, k * flip]]
+    A, t = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], [0.0, 0.0, 0.0]
+    if aligned:
+        n, d = plane['normal'], plane['d']
+        c, s = n[1], math.hypot(n[0], n[2])
+        if s < 1e-9:
+            t = [0.0, d * ((c > 0) - (c < 0)), 0.0]
+        else:
+            ax, az, v = -n[2] / s, n[0] / s, 1 - c
+            A, t = [[c + ax * ax * v, -az * s, ax * az * v], [az * s, c, -ax * s], [ax * az * v, ax * s, c + az * az * v]], [0.0, d, 0.0]
+    a = -yaw
+    Ry = [[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]]
+    mul = lambda X, Y: [[sum(X[i][m] * Y[m][j] for m in range(3)) for j in range(3)] for i in range(3)]
+    M = mul(Ry, mul(A, S)); u = [sum(Ry[i][m] * t[m] for m in range(3)) for i in range(3)]
+    return [[*M[i], u[i]] for i in range(3)]
+
+
 def estimate_floor(rows, bins: int = 40):
     """Dominant low horizontal band of a Y-up cloud: a floor suggestion in cloud units, never a measurement."""
     if len(rows) < 50:
@@ -196,6 +218,7 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
     measurement = measurement or {}
     return {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
             'sourceFrame': coordinate_frame, 'source': source, 'points': kept,
+            'fromSource': arena_transform(k, flip, plane, upright is not None, yaw),
             'floorEstimate': floor and {**floor, 'units': units},
             'scale': {'source': 'user-measured', 'metresPerUnit': k, 'distance': measurement.get('distance'),
                       'spanUnits': measurement.get('span'), 'selfReported': True, 'verified': False} if metric else None,
@@ -209,11 +232,36 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
 
 
 # ---------- Blender ----------
-def compile_scene(cloud: Path, out: Path, *, blender: str):
+def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None):
+    """Model-suggested names for the separated objects, when the person asked for them with this hand-off. Returns the
+    names file for the compiler (or None) and what happened; a problem here never fails the scene."""
+    source = request.get('source') if isinstance(request.get('source'), dict) else {}
+    try:
+        if cloud['units'] != 'm':
+            raise object_names.NamingSkipped('Naming needs a metric scene.')
+        if not source or source.get('missing'):
+            raise object_names.NamingSkipped('The reconstruction job is no longer on the worker, so there are no frames to crop.'
+                                             if source.get('missing') else 'No reconstruction job came with this request, so there are no frames to crop.')
+        if 'fromSource' not in cloud:
+            raise object_names.NamingSkipped('The hand-off does not record its transform from the reconstruction.')
+        if client is None and not os.environ.get('ANTHROPIC_API_KEY'):
+            raise object_names.NamingSkipped('This worker has no Anthropic API key configured.')
+        names, evidence = object_names.name_objects(cloud, Path(source['path']), client=client, views=views)
+        work.mkdir(parents=True, exist_ok=True)
+        path = work / 'object-names.json'
+        path.write_text(json.dumps(names, indent=2, allow_nan=False))
+        return path, {'status': 'named', **evidence}
+    except object_names.NamingSkipped as reason:
+        return None, {'status': 'skipped', 'reason': str(reason)}
+    except Exception as error:  # an API or network error: the scene still compiles, unnamed
+        return None, {'status': 'failed', 'reason': f'{type(error).__name__}: {str(error)[:200]}'}
+
+
+def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = None):
     """Headless scene compiler; Blender only exits non-zero for Python errors when asked to."""
     out.mkdir(parents=True, exist_ok=True)
     command = [blender, '-b', '--python-exit-code', '1', '--python', str(SCENE_COMPILER), '--',
-               '--cloud', str(cloud), '--out', str(out)]
+               '--cloud', str(cloud), '--out', str(out), *(['--names', str(names)] if names else [])]
     subprocess.run(command, check=True, stdin=subprocess.DEVNULL, timeout=BLENDER_TIMEOUT)
     for name in ['scene.glb', 'scene.json']:
         if not (out / name).is_file() or (out / name).stat().st_size == 0:
@@ -249,7 +297,7 @@ def handoff_input(request: dict):
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def run(request: dict, *, blender: str):
+def run(request: dict, *, blender: str, naming_client=None, naming_views=None):
     if not SCENE_COMPILER.is_file():
         raise RuntimeError(f'Scene compiler not found at {SCENE_COMPILER}.')
     if not Path(blender).is_absolute() or not Path(blender).is_file():
@@ -272,14 +320,20 @@ def run(request: dict, *, blender: str):
     (out / 'arena-cloud.json').write_text(json.dumps(cloud, allow_nan=False))
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
-    scene = compile_scene(out / 'arena-cloud.json', work, blender=blender)
+    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views) if cloud.get('nameObjects') else (None, None)
+    scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names)
     usd, ifc = (bool((scene.get(key) or {}).get('written')) for key in ['usd', 'ifc'])
     for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
         shutil.copyfile(work / name, out / name)
+    if names:
+        shutil.copyfile(names, out / 'object-names.json')
+        naming['applied'] = (scene.get('naming') or {}).get('named', 0)
     measured = ['The scale comes from a distance the user measured and entered: self-reported, not verified.'] if cloud['units'] == 'm' else []
+    named = ['Object names are suggestions from a vision model looking at the walkthrough frames; nobody has reviewed them.'] if names else []
     evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'),
+                'naming': naming,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
                 'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
@@ -289,15 +343,16 @@ def run(request: dict, *, blender: str):
                              'walls': [{key: wall[key] for key in ['name', 'size', 'yaw_degrees', 'support_points']} for wall in scene.get('walls', [])]},
                 'elapsed_seconds': round(time.monotonic() - started, 3),
                 'review_required': (reconstruction['review_required'] if reconstruction else [])
-                + ['Confirm walls and floor against the walkthrough before simulation'] + (['Check the measured distance before using metres'] if measured else []),
+                + ['Confirm walls and floor against the walkthrough before simulation'] + (['Check the measured distance before using metres'] if measured else [])
+                + (['Review the suggested object names before relying on them'] if names else []),
                 'warnings': (reconstruction['warnings'] if reconstruction else [])
-                + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured}
+                + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured + named}
     (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     artifacts = [{'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': cloud['units']},
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
-                 {'name': 'arena-cloud.json', 'kind': 'evidence'}, *previous]
+                 {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
     return evidence
 

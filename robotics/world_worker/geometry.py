@@ -100,7 +100,15 @@ def load_arena_cloud(path: Path):
     provenance = {k: v for k, v in list(provenance.items())[:20] if isinstance(k, str) and len(k) <= 40
                   and (v is None or isinstance(v, bool) or _finite(v))}
     source = value.get('source')
+    # The mapping from the reconstruction's coordinates to these points (3 x 4), which lets the worker find the frames that
+    # saw each object; and whether the person approved sending crops of those frames out for naming.
+    transform = value.get('fromSource')
+    if transform is not None and not (isinstance(transform, list) and len(transform) == 3 and all(
+            isinstance(row, list) and len(row) == 4 and all(_finite(v) and abs(v) <= MAX_PREVIEW_COORDINATE for v in row) for row in transform)):
+        raise ValueError('The hand-off transform must be a 3 x 4 matrix of finite numbers.')
     return {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
             'sourceFrame': value['sourceFrame'], 'source': source[:200] if isinstance(source, str) else 'browser hand-off',
             'points': points, 'floorEstimate': floor, 'scale': scale, 'provenance': {**provenance, 'metricVerified': False},
-            **({'multiView': True} if value.get('multiView') is True else {})}
+            **({'multiView': True} if value.get('multiView') is True else {}),
+            **({'fromSource': transform} if transform is not None else {}),
+            **({'nameObjects': True} if value.get('nameObjects') is True else {})}
