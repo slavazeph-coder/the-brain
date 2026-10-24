@@ -49,6 +49,13 @@ class ArenaHandoff(unittest.TestCase):
         worst = max(abs(sum(M[i][j] * src[j] for j in range(3)) + M[i][3] - out[i]) for src, out in zip(kept, cloud["points"]) for i in range(3))
         self.assertLess(worst, 1e-9)
 
+    def test_a_denser_raised_surface_never_takes_the_floors_place(self):
+        rng = random.Random(1)
+        rows = [[rng.uniform(0, 10), 0.0, rng.uniform(0, 10), 1, 2, 3] for _ in range(1000)]
+        rows += [[rng.uniform(0, 10), 0.3, rng.uniform(0, 10), 1, 2, 3] for _ in range(1100)]  # in the next height bin
+        rows += [[rng.uniform(0, 10), rng.uniform(0.5, 3), rng.uniform(0, 10), 1, 2, 3] for _ in range(1200)]
+        self.assertAlmostEqual(su.fit_floor_plane(rows)["d"], 0.0, places=9)
+
     def test_frame_flip_only_for_colmap(self):
         # A floorless blob (<10% plane inliers) is never rotated, so the frame handling shows through directly.
         rng = random.Random(5); rows = [[rng.uniform(-3, 3), rng.uniform(-3, 3), rng.uniform(-3, 3), 1, 2, 3] for _ in range(2000)]
