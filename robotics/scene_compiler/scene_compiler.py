@@ -78,6 +78,8 @@ def floor_margin(pts, floor_y):
 # that wall again, seen through noisy depth, not another wall.
 WALL_HIGH, WALL_TOP, WALL_TOLERANCE, WALL_MIN_LENGTH, WALL_MIN_HEIGHT, WALL_LIMIT = 1.3, 2.3, 0.06, 1.0, 1.2, 8
 WALL_MIN_SPAN = 0.8  # metres of height the wall's own points must cover (furniture may hide its lower part)
+# A doorway: at least WALL_GAP along a wall with none of its points below WALL_DOOR_TOP (a lintel may sit above it).
+WALL_GAP, WALL_DOOR_TOP = 0.5, 1.9
 
 
 def along_wall(w, XZ):
@@ -87,15 +89,26 @@ def along_wall(w, XZ):
     return float(((np.abs(rel @ n) < w["band"] + 0.05) & (np.abs(rel @ d) < w["length"] / 2 + 0.2)).mean())
 
 
+def wall_spans(t, a0, a1):
+    """[a0, a1] along a wall, split into the stretches its low points t support: an inner gap of at least WALL_GAP
+    is an opening. The ends stay at a0 and a1 (a wall's lower part may be hidden there); without low points it is one."""
+    import numpy as np
+    t = np.sort(np.asarray(t, float)); t = t[(t > a0) & (t < a1)]
+    if len(t) == 0: return [(float(a0), float(a1))]
+    gaps = np.flatnonzero(np.diff(t) >= WALL_GAP)
+    return [(float(s0), float(s1)) for s0, s1 in zip([a0, *t[gaps + 1]], [*t[gaps], a1])]
+
+
 def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
     """Walls by RANSAC on vertical planes. Returns (walls, rest): walls with centre (x, z), yaw, length, thickness, y0, y1,
-    support and member indices; rest, the indices of points above the floor margin that belong to no wall."""
+    support and member indices; rest, the indices of points above the floor margin that belong to no wall. A plane with a
+    doorway in it gives one wall per stretch either side; the points above the opening stay with the wall."""
     import numpy as np
     P = np.asarray([p[:3] for p in pts], float); rng = np.random.default_rng(seed)
     above = np.flatnonzero(P[:, 1] > floor_y + margin)
     high = above[(P[above, 1] > floor_y + WALL_HIGH) & (P[above, 1] < floor_y + WALL_TOP)]
-    taken = np.zeros(len(P), bool); tried = np.zeros(len(P), bool); walls, attempts = [], 0
-    while len(walls) < WALL_LIMIT and attempts < 2 * WALL_LIMIT:
+    taken = np.zeros(len(P), bool); tried = np.zeros(len(P), bool); walls, attempts, planes = [], 0, 0
+    while planes < WALL_LIMIT and attempts < 2 * WALL_LIMIT:
         pool = high[~taken[high] & ~tried[high]]
         if len(pool) < 20: break
         attempts += 1; XZ = P[pool][:, [0, 2]]; best, best_count = None, 0
@@ -113,18 +126,21 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
         rel = P[above][:, [0, 2]] - centre; t, n = rel @ direction, rel @ normal
         members = above[(np.abs(n) < band) & (t > a0 - 0.1) & (t < a1 + 0.1) & ~taken[above]]
         tried[pool[inl]] = True  # a rejected line is not sampled again, but its points stay free for objects
-        if any(along_wall(w, Q) > 0.5 for w in walls):
-            taken[pool[inl]] = True; continue  # the scatter of a wall already found
+        if sum(along_wall(w, Q) for w in walls) > 0.5:
+            taken[pool[inl]] = True; continue  # the scatter of a wall already found (its stretches together)
         if a1 - a0 < WALL_MIN_LENGTH or len(members) < 20: continue
         # A wall is seen over a real height; a long horizontal surface in the band (a shelf top) is not one.
         if np.percentile(P[members, 1], 95) - np.percentile(P[members, 1], 5) < WALL_MIN_SPAN: continue
         y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
         if y1 - y0 < WALL_MIN_HEIGHT: continue
-        taken[members] = True; spread = n[np.isin(above, members)]
-        mid = centre + direction * (a0 + a1) / 2
-        walls.append({"centre": [float(mid[0]), float(mid[1])], "yaw": math.atan2(direction[1], direction[0]), "length": float(a1 - a0),
-                      "thickness": max(0.1, float(np.percentile(spread, 90) - np.percentile(spread, 10))), "y0": y0, "y1": y1,
-                      "support": int(len(members)), "band": band, "members": members.tolist()})
+        taken[members] = True; planes += 1; on = np.isin(above, members); spread = n[on]
+        thickness = max(0.1, float(np.percentile(spread, 90) - np.percentile(spread, 10)))
+        low = t[(np.abs(n) < band) & (P[above, 1] < floor_y + WALL_DOOR_TOP)]
+        for s0, s1 in wall_spans(low, a0, a1):
+            s0, s1 = min(s0, (s0 + s1) / 2 - 0.05), max(s1, (s0 + s1) / 2 + 0.05)  # a stub between two openings stays a wall
+            mine = members[(t[on] >= s0 - 0.1) & (t[on] <= s1 + 0.1)]; mid = centre + direction * (s0 + s1) / 2
+            walls.append({"centre": [float(mid[0]), float(mid[1])], "yaw": math.atan2(direction[1], direction[0]), "length": float(s1 - s0),
+                          "thickness": thickness, "y0": y0, "y1": y1, "support": int(len(mine)), "band": band, "members": mine.tolist()})
     return walls, [int(i) for i in above if not taken[i]]
 
 

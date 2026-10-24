@@ -27,6 +27,26 @@ class Walls(unittest.TestCase):
                 self.assertAlmostEqual(w["length"], 6.0, delta=0.4); self.assertAlmostEqual(w["y1"] - w["y0"], 3.0, delta=0.3)
                 self.assertGreater(w["support"], 3500); self.assertLess(w["thickness"], 0.3); self.assertLess(len(rest), 300)
 
+    def test_a_doorway_splits_a_wall_and_a_short_hidden_stretch_does_not(self):
+        def with_openings(openings, length=6.0, n=6000, seed=3):
+            # A wall along x at z = -2, with no points below 2.0 m inside each opening (a lintel above it).
+            rng = random.Random(seed); pts = []
+            while len(pts) < n:
+                t, y = rng.uniform(-length / 2, length / 2), rng.uniform(0.05, 2.6)
+                if y < 2.0 and any(a < t < b for a, b in openings): continue
+                pts.append([t, y, -2.0 + rng.gauss(0, 0.02), 120, 120, 120])
+            return pts
+        for openings, want in (([(-0.5, 0.5)], [(-3.0, -0.5), (0.5, 3.0)]), ([(-0.15, 0.15)], [(-3.0, 3.0)]),
+                               ([(-1.2, -0.2), (0.2, 1.2)], [(-3.0, -1.2), (-0.2, 0.2), (1.2, 3.0)])):
+            with self.subTest(openings=openings):
+                walls, rest = sc.find_walls(with_openings(openings), 0.0)
+                got = sorted((w["centre"][0] - w["length"] / 2, w["centre"][0] + w["length"] / 2) for w in walls)
+                self.assertEqual(len(got), len(want), got)
+                for (g0, g1), (w0, w1) in zip(got, want):
+                    self.assertAlmostEqual(g0, w0, delta=0.15); self.assertAlmostEqual(g1, w1, delta=0.15)
+                self.assertTrue(all(abs(w["centre"][1] + 2.0) < 0.05 for w in walls))
+                self.assertLess(len(rest), 60, "the lintel above an opening stays with the wall, not an object")
+
     def test_floor_only_has_no_walls(self):
         pts = [p for p in wall_cloud(0) if p[1] < 0.04]
         self.assertEqual(sc.find_walls(pts, floor_y=0.0), ([], []))
