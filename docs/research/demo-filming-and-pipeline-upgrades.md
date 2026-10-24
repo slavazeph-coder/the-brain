@@ -102,6 +102,33 @@ compiler, not in the product.
 - **Rule.** Splats stay visual only and never become collision geometry, as the flagship spec already says.
 - **The demo shot.** The photoreal room fades into the compiled boxes and the robot route.
 
+## Measured here: the same video does not always give the same reconstruction
+
+Three runs of `colmap-sparse` on the same 62 s room walkthrough, with the same settings, in one container:
+
+| Run | Frames registered | Reconstructed points | Scene | Robot route |
+|---|---|---|---|---|
+| 1 | 57 / 60 | 12,005 | 7 walls, 8 separated objects, 44 unknown cells | planned (23.0 m) |
+| 2 | 57 / 60 | 11,975 | 4 walls, 9 separated objects, 38 unknown cells | planned (20.8 m) |
+| 3 | 33 / 60 | 6,915 | 33 walls, 1 separated object, 309 unknown cells | **failed**: "This scene has 169 walls, objects and unobserved areas; a planning map holds at most 128." |
+
+What happens:
+- `sparse_colmap.py` passes `random_seed: 0` to the mapper.
+- It still runs extraction and matching on two threads, and it never calls `pycolmap.set_random_seed`.
+- In run 3, the mapper split the walkthrough, and the largest model held only about half the frames.
+
+A visitor whose capture lands on the bad run sees a scene they cannot plan in, with nothing telling them why. Proposed
+fixes, smallest first:
+1. **Seed everything.** Call `pycolmap.set_random_seed(0)`, then check whether one-thread matching makes runs
+   reproducible.
+2. **Treat a low share of joined frames as a capture problem.** When the selected model registers under about 80% of
+   frames, retry mapping once. If it is still low, report "only 33 of 60 frames joined" and ask for a recapture,
+   instead of compiling a fragmented scene.
+3. **Merge unknown cells before the 128-element cap.** `worldFromScene` could merge adjacent unknown cells into larger
+   rectangles, which would get it under the limit.
+4. **Use feed-forward reconstruction on the GPU.** DA3 and MapAnything give every frame a pose by construction, which
+   removes this failure mode.
+
 ## Build order
 
 1. **A real capture on a GPU worker** (owner and Hermes).

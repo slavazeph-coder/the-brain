@@ -142,7 +142,9 @@ def run(page):
     say('<b>6</b> · The compiled scene becomes the robot map: walls and objects are obstacles')
     plan = page.locator('#scene-plan'); glide(plan, click=False); hold(.8)
     page.evaluate("() => document.body.append(document.getElementById('demo-caption'), document.getElementById('demo-cursor'))")
-    plan.click(); page.wait_for_function("/Map built from the simulation scene/.test(document.querySelector('#status').textContent)", timeout=60_000)
+    # A scene the planner cannot take (for example over its element limit) reports in the dialog's own status line.
+    plan.click(); page.wait_for_function("/Map built from the simulation scene/.test(document.querySelector('#status').textContent) || /could not be built/.test(document.querySelector('#scene-status')?.textContent || '')", timeout=60_000)
+    if 'Map built from the simulation scene' not in page.locator('#status').inner_text(): raise SystemExit('scene map: ' + page.locator('#scene-status').inner_text())
     mapped = page.locator('#status').inner_text()
     page.locator('#world-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})"); settle(); hold(1.2)
     orbit('#world-canvas', 3); hold(1.0)
