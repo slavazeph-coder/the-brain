@@ -1,7 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-24T20:28Z
+Last updated: 2026-10-24T21:10Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
+
+## Run log (newest first)
+
+### Run 87 — two-browser UI proof complete (Chromium + WebKit); commit + push this run
+
+- WebKit unblocked: `playwright install webkit` (v2370, the exact rev the venv expects) into
+  `/root/.cache/ms-playwright/webkit-2370` — run 86's "webkit blocked" was a browsers-path
+  mismatch, not a product failure.
+- Re-ran `report_receipt_ui_smoke.py` (EXIT=0):
+  - **Chromium:** all green — realPrivateWorker, realEd25519, consentGate,
+    hashesOnlyRequest, exactScenarioBytes, offlineNetworkRequests=0, tamperRejected,
+    mapReviewFlagsUnchanged, pageErrors=[].
+  - **WebKit:** same all-green result — the two-browser proof is now satisfied (handoff item resolved).
+- This run committed the run-87 chromium artifacts (`git add output/playwright/world/report-receipt/chromium-ui-*`)
+  and pushed on `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- Serving Qwen/backup, licensed gates, no paid fallback untouched.
 
 ## Current status
 
@@ -247,7 +263,7 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Next bounded action
 
-- Run 65: 4090 MapAnything held-out-frame inference smoke test — short
+- Run 88: 4090 MapAnything held-out-frame inference smoke test — short
   authenticated SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
   confirm hostname + GPU before running. Reuse verified pinned weights from
   GB10; do not replace base conda env. No permanent tunnel.
