@@ -77,15 +77,33 @@ def source_points(points, from_source):
     return (np.asarray(points, float)[:, :3] - t) @ np.linalg.inv(A).T, abs(det) ** (1 / 3)
 
 
+def selected_model(sparse: Path):
+    """The folder of the COLMAP model a reconstruction job exported. COLMAP can find several disconnected models, and
+    the exported points come from the largest, which need not be model 0: the job records its index next to them.
+    An older job without that record is usable only when it has a single model."""
+    marker = sparse / 'selected.txt'
+    if marker.is_file():
+        index = marker.read_text().strip()
+        if not index.isdigit() or not (sparse / index).is_dir():
+            raise NamingSkipped('The reconstruction records a model that is not there.')
+        return sparse / index
+    models = [d for d in sparse.iterdir() if d.is_dir() and d.name.isdigit()] if sparse.is_dir() else []
+    if len(models) != 1:
+        raise NamingSkipped('The reconstruction has several models and does not record which one its points came from.'
+                            if models else 'The reconstruction job no longer holds its camera poses.')
+    return models[0]
+
+
 def colmap_views(source_dir: Path):
     """Registered frames of a reconstruction job: name, image path, size, cam_from_world (3 x 4) and the camera's own
     projection (COLMAP's model, so its fitted lens distortion is respected)."""
     import numpy as np
     import pycolmap
     source_dir = Path(source_dir).resolve()
-    sparse, images = source_dir / 'colmap-work' / 'sparse' / '0', source_dir / 'colmap-work' / 'images'
-    if not sparse.is_dir() or not images.is_dir():
-        raise NamingSkipped('The reconstruction job no longer holds its frames and camera poses.')
+    images = source_dir / 'colmap-work' / 'images'
+    if not images.is_dir():
+        raise NamingSkipped('The reconstruction job no longer holds its frames.')
+    sparse = selected_model(source_dir / 'colmap-work' / 'sparse')
     model, views = pycolmap.Reconstruction(str(sparse)), []
     for image_id in sorted(model.reg_image_ids()):
         image = model.image(image_id); camera = model.camera(image.camera_id)

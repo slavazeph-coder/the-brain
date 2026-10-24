@@ -145,3 +145,20 @@ def test_the_scene_step_says_why_it_did_not_name(views, tmp_path, monkeypatch):
     assert su.name_step(cloud(), request, tmp_path, client=failing, views=views)[1] == {'status': 'failed', 'reason': 'ConnectionError: network down'}
     path, evidence = su.name_step(cloud(), request, tmp_path, client=FakeClient(by_size), views=views)
     assert evidence['status'] == 'named' and json.loads(path.read_text())['schema'] == 'brainsnn.object-names.v1'
+
+
+def test_frames_come_from_the_model_the_points_were_exported_from(tmp_path):
+    sparse = tmp_path / 'sparse'
+    with pytest.raises(on.NamingSkipped, match='no longer holds'):
+        on.selected_model(sparse)
+    (sparse / '0').mkdir(parents=True)
+    assert on.selected_model(sparse) == sparse / '0', 'an older job with one model'
+    (sparse / '1').mkdir()
+    with pytest.raises(on.NamingSkipped, match='several models'):
+        on.selected_model(sparse)
+    (sparse / 'selected.txt').write_text('1')
+    assert on.selected_model(sparse) == sparse / '1', 'the recorded model, not model 0'
+    for bad in ('7', '../0', ''):
+        (sparse / 'selected.txt').write_text(bad)
+        with pytest.raises(on.NamingSkipped, match='not there'):
+            on.selected_model(sparse)

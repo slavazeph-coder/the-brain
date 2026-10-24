@@ -32,6 +32,7 @@ MAX_IMAGES = 60
 MAX_PIXELS = 24_000_000
 MAX_IMAGE_EDGE = 1280
 MAX_POINTS = 50_000
+SELECTED_MODEL = 'selected.txt'  # in the sparse folder: which of COLMAP's models the outputs come from
 
 
 def prepare_photo(source: Path, target: Path):
@@ -164,7 +165,9 @@ def run(request: dict, densify_model: Path | None = None):
     models = pycolmap.incremental_mapping(database, images, sparse, options=mapping)
     if not models:
         raise ValueError('Views could not be aligned. Recapture with sideways motion, overlap and stationary detail.')
-    model = max(models.values(), key=lambda value: (value.num_reg_images(), value.num_points3D()))
+    index, model = max(models.items(), key=lambda item: (item[1].num_reg_images(), item[1].num_points3D()))
+    # The models are written to sparse/<index>; record which one the outputs come from, for anything that reads the frames later.
+    (sparse / SELECTED_MODEL).write_text(str(index))
     registered = model.num_reg_images()
     if registered < 3 or model.num_points3D() < 30:
         raise ValueError('Insufficient reconstructed geometry: at least 3 camera positions and 30 points are required.')
@@ -201,7 +204,7 @@ def run(request: dict, densify_model: Path | None = None):
     evidence = {'schema': 'brainsnn.reconstruction.v1', 'pipeline': 'colmap-sparse',
                 'pycolmap_version': pycolmap.__version__, 'device': 'cpu', 'sources': sources,
                 'capture': {**capture, 'images': count, 'registered_images': registered,
-                            'registration_fraction': registered / count, 'models_found': len(models)},
+                            'registration_fraction': registered / count, 'models_found': len(models), 'model_index': index},
                 'reconstructed_points': model.num_points3D(), 'preview_points': len(sample),
                 'mean_reprojection_error_pixels': model.compute_mean_reprojection_error(),
                 'elapsed_seconds': round(time.monotonic() - started, 3),
