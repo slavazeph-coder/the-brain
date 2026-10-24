@@ -69,11 +69,17 @@ for s in points scene route bim check; do            # the bpy module (Python 3.
   python scripts/world-demo/film/bl_shots.py -- $J/scene.glb $J/arena-cloud.json $J/scene.json route.json $s film/shot_$s
 done
 python scripts/world-demo/film/compose_film.py film <walkthrough photos> $J route.json film.mp4 \
-  --reconstruction worker-data/jobs/<reconstruction job>/output/reconstruction.json   # adds poses, time and video length
+  --reconstruction worker-data/jobs/<reconstruction job>/output/reconstruction.json \
+  --capture-kind photo-sequence-fixture \
+  --capture-credit 'Mip-NeRF 360 room photographs, Barron et al.; photograph-sequence test video'
 ```
 
-The film's end card names the test capture, the typed distance and that the measurements are not a survey. Change
-those lines when the capture changes. The 3D shots are renders of exported files, and the film says so.
+Pass the actual source kind and credit for every run. The renderer shows that credit and the entered scale caveat in
+every cut. A bound `scene-measurements.json` adds held-out results, including failures, separately from internal fit.
+Phone-labelled jobs require that report. It is recomputed and checked against the exact scene/cloud hashes and worker
+summary before rendering. Capture descriptions and physical readings remain self-reported; matching spans do not
+certify the BIM model. The 3D shots are renders of exported files, and the film says so. See [the saved phone-job
+workflow](REGENERATE.md#render-a-new-phone-run-from-its-preserved-worker-artifacts) for measured capture and rendering.
 
 ## Honesty rules the recordings follow
 

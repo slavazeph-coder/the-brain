@@ -30,6 +30,9 @@ The demonstrated path is capture/upload → actual reconstruction → entered me
 - Verify artifact downloads by the worker-provided size and SHA-256. Load measurement evidence only from its own job/cloud/scene and discard late or mismatched responses.
 - Parse and validate the IFC, including all references, metre units, host/void/filling relationships and a geometry check that the opening actually cuts its intended wall. An EXPRESS pass alone is not the native BIM editing test.
 - Keep fixture tests explicitly labelled. Do not record fixture screenshots as proof of real reconstruction or physical accuracy.
+- For saved-job films, pass the actual capture kind and credit explicitly. Recompute and verify the exact scene/cloud
+  dimensional report before rendering. Keep held-out failures visible in every cut and retain the full report. The
+  source description remains operator-declared; counts and internal fit never upgrade it to verified physical accuracy.
 
 `tests/world/scene_browser_smoke.py` exercises the actual local HTTP worker with an authored scene fixture. Set `WORLD_BROWSERS=chromium WORLD_PHONE_VIEWPORT=1` for both desktop and a 390 × 844 touch viewport. This includes a deliberately failing withheld reading, explicit opening review and upload consent, a fresh IFC download, changed-scale invalidation and rejection of a stale review. This remains software validation. A phone-sized Chromium run does not establish Safari or physical-phone compatibility.
 

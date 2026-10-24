@@ -60,11 +60,14 @@ OUT=output/playwright/world/demo-replacement-20261024
 # Verifies required evidence and source hash before creating output; archives without rendering.
 python3 scripts/world-demo/regenerate_reference.py \
   --capture "$CAPTURE" --capture-sha256 "$CAPTURE_SHA256" \
+  --capture-kind photo-sequence-fixture \
+  --capture-credit 'Mip-NeRF 360 room photographs, Barron et al.; photograph-sequence test video' \
   --reconstruction "$RECON" --source-ply "$SOURCE_PLY" --photos "$PHOTOS" --job "$JOB" \
   --expected-points 10925 --entered-distance 5.79 --out "$OUT"
 ```
 
-The wrapper archives all original reconstruction, source photos, capture and job files; runs the existing
+The wrapper archives all original reconstruction, source photos, capture and job files; retains the capture's original
+filename under `capture/` with its size and SHA-256 in the manifest; runs the existing
 `film/plan_route.mjs` on that scene; and records file hashes, names, inferred bases, scale, floor provenance and fit
 evidence in `regeneration.json`. It verifies every retained PLY point and colour through the saved `fromSource`
 transform and the site's own framing/thinning rules (1e-5 m numerical comparison tolerance, not physical accuracy),
@@ -90,7 +93,9 @@ for shot in points scene route bim check; do
 done
 for cut in master commercial check; do
   python3 scripts/world-demo/film/compose_film.py NEW_EMPTY_DIR "$PHOTOS" "$JOB" route.json "world-builder-$cut.mp4" \
-    --cut "$cut" --reconstruction "$RECON/reconstruction.json"
+    --cut "$cut" --reconstruction "$RECON/reconstruction.json" \
+    --capture-kind photo-sequence-fixture \
+    --capture-credit 'Mip-NeRF 360 room photographs, Barron et al.; photograph-sequence test video'
 done
 ```
 
@@ -161,3 +166,43 @@ sh scripts/world-demo/short_cut.sh output/playwright/world/new-run/scan-to-model
 Keep the source credit and typed-scale caveat readable in every short derivative. The two `ACTUAL_…` values and the
 original capture/hash/job paths are intentionally unresolved until real receipts are recovered. If any is unavailable,
 stop that dependent step and report the exact missing input instead of producing a corrected-looking substitute.
+
+## Render a new phone run from its preserved worker artifacts
+
+Collect the real run in World Builder manually: retain the original video, set scale using its measured landmarks,
+add at least three withheld readings, compile, review openings if needed, and keep the final job's exact exports.
+Record calibration endpoints and the instrument, date, uncertainty and physical landmark descriptions before using
+the held-out checks. Preserve the original and revised jobs separately. The scripted screen recorder above still
+chooses illustrative endpoints and distance; it must not substitute for that measured workflow.
+
+Once the original capture, reconstruction frames and final scene job are available, run the same archiver with their
+actual paths, point count, entered length and credit:
+
+```sh
+python3 scripts/world-demo/regenerate_reference.py \
+  --capture "$CAPTURE" --capture-sha256 "$CAPTURE_SHA256" \
+  --reconstruction "$RECON" --source-ply "$SOURCE_PLY" --photos "$PHOTOS" --job "$JOB" \
+  --capture-kind phone-video --capture-credit "$ACTUAL_CAPTURE_CREDIT" \
+  --expected-points "$ACTUAL_RETAINED_POINTS" --entered-distance "$ACTUAL_ENTERED_METRES" \
+  --minimum-held-out 3 --out "$NEW_PRIVATE_OUTPUT"
+```
+
+The command requires `scene-measurements.json` for a phone-labelled run. It recomputes every measurement field from
+the archived cloud and scene, verifies their exact file hashes, and compares the worker's measurement summary.
+Missing, stale or altered reports stop before output is created. The minimum counts supplied held-out pairs, including
+failures. It never certifies a run or turns failures into passes. Capture kind and credit are operator descriptions,
+not proof of a physical phone input.
+
+Legacy jobs without a report are admitted only for `photo-sequence-fixture` or `unknown` when neither cloud nor worker
+claims dimensional evidence. They remain explicitly unchecked. A present report always needs exact bindings and a
+matching worker summary; a standalone offline report is not silently described as a worker result.
+
+For rendering, repeat into another fresh output directory with `--render`. The existing master, commercial and check
+cuts all show capture credit, entered unverified scale and independent-check scope. A dimensional chapter shows the
+held-out count, failures, requested tolerance and representative differences; calibration stays separate. The full
+report is archived, including checks that did not pass. Internal model-to-points fit stays a separate chapter in the
+check cut. Direct `compose_film.py` calls use the same report validator.
+
+Review every cut, especially its source credit, failing checks, inferred geometry and route status, before release.
+These are renders of genuine saved outputs. They do not demonstrate a new live upload, native BIM editing or physical
+robot execution. The original phone capture and measured readings are still required; this command does not create them.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Archive and optionally film an existing corrected Mip-NeRF 360 room job.
+"""Archive and optionally film an existing corrected reconstruction and scene job.
 
 This does not reconstruct, compile, rename objects, or repair an old scene. Missing
 original inputs or mismatched evidence stop before any output is created. See
@@ -13,6 +13,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from demo_evidence import CAPTURE_KINDS, capture_metadata, measurement_evidence
 
 ROOT = Path(__file__).resolve().parents[2]
 FILM = ROOT / 'scripts/world-demo/film'
@@ -42,6 +45,8 @@ def read(path):
 
 
 def validate(args):
+    capture = capture_metadata(args.capture_kind, args.capture_credit)
+    minimum = getattr(args, 'minimum_held_out', 0)
     require(not args.out.exists(), 'Output already exists; choose a fresh directory to avoid stale frames.')
     if getattr(args, 'original_route', None):
         regular(args.original_route)
@@ -61,6 +66,8 @@ def validate(args):
         regular(args.job / name)
     cloud, scene, evidence, fit = (read(args.job / n) for n in
                                  ('arena-cloud.json', 'scene.json', 'scene-usd.json', 'fit-check.json'))
+    measurements = measurement_evidence(args.job, require_report=capture['kind'] == 'phone-video',
+                                        minimum_held_out=minimum)
     scale = cloud.get('scale') or {}
     require(cloud.get('units') == scene.get('units') == evidence.get('units') == fit.get('units') == 'm',
             'Centimetre captions require a metric scene and fit receipt.')
@@ -108,7 +115,8 @@ def validate(args):
                     else 'Sparse COLMAP points' if source_ply.name == 'sparse-preview.ply'
                     else 'Selected reconstruction points; density method not established by filename',
                     'dense_evidence': rec.get('dense') if source_ply.name == 'dense-preview.ply' else None}
-    return {'points': len(cloud['points']), 'scale': scale, 'floor': cloud['provenance'], 'source_binding': binding, 'point_source': point_source,
+    return {'capture': capture, 'measurements': measurements,
+            'points': len(cloud['points']), 'scale': scale, 'floor': cloud['provenance'], 'source_binding': binding, 'point_source': point_source,
             'fit': fit, 'names': scene.get('naming'),
             'objects': [{k: o[k] for k in ('name', 'label', 'labelConfidence', 'base') if k in o}
                         for o in scene.get('objects', [])]}
@@ -122,8 +130,13 @@ def main():
     parser.add_argument('--photos', type=Path, required=True, help='original COLMAP images directory')
     parser.add_argument('--capture', type=Path, required=True)
     parser.add_argument('--capture-sha256', required=True, help='hash from original capture receipt')
-    parser.add_argument('--expected-points', type=int, default=10925)
-    parser.add_argument('--entered-distance', type=float, default=5.79)
+    parser.add_argument('--capture-kind', choices=CAPTURE_KINDS, required=True,
+                        help='operator description; not independent proof of capture type')
+    parser.add_argument('--capture-credit', required=True, help='actual source credit, 1 to 240 plain characters')
+    parser.add_argument('--expected-points', type=int, required=True)
+    parser.add_argument('--entered-distance', type=float, required=True)
+    parser.add_argument('--minimum-held-out', type=int, default=0,
+                        help='require this many supplied held-out pairs, including failures; never certification')
     parser.add_argument('--out', type=Path, required=True, help='fresh private output directory')
     parser.add_argument('--render', action='store_true', help='render every shot and all three cuts with existing scripts')
     parser.add_argument('--original-route', type=Path, help='preserve an original route receipt alongside the recomputed route')
@@ -137,8 +150,11 @@ def main():
         parser.exit(2, f'BLOCKED: {error}\nNo replacement media was generated.\n')
     args.out.mkdir(parents=True, mode=0o700)
     manifest = {'schema': 'brainsnn.demo-regeneration.v1', 'status': 'archived-not-rendered',
-                'capture_credit': 'Mip-NeRF 360 room photographs, Barron et al.; video fixture, not a physical phone capture',
-                'entered_distance_caveat': 'Typed for demonstration, not independently measured; not survey accuracy.',
+                'capture': summary['capture'], 'capture_credit': summary['capture']['credit'],
+                'capture_file': {'original_name': args.capture.name,
+                                 'archive_path': 'capture/' + args.capture.name,
+                                 'sha256': args.capture_sha256.lower(), 'bytes': args.capture.stat().st_size},
+                'entered_distance_caveat': 'Entered scale is self-reported and unverified. Held-out point-pair checks do not certify the BIM model.',
                 'route_caveat': 'Scripted planar planning preview; review flags set by the existing demo script, not human acceptance or physical robot evidence.',
                 'validation_scope': 'Local consistency checks and hashes; not independent attestation that a worker executed this job.',
                 'run': summary}
@@ -148,7 +164,11 @@ def main():
         shutil.copytree(args.job, args.out / 'job')
         shutil.copytree(args.reconstruction, args.out / 'reconstruction')
         shutil.copytree(args.photos, args.out / 'photos')
-        shutil.copy2(args.capture, args.out / 'capture.mp4')
+        (args.out / 'capture').mkdir(mode=0o700)
+        archived_capture = args.out / 'capture' / args.capture.name
+        shutil.copy2(args.capture, archived_capture)
+        require(digest(archived_capture) == args.capture_sha256.lower(),
+                'Capture changed while archiving; no replacement is publishable.')
         shutil.copy2(args.source_ply, args.out / 'source-points.ply')
         if args.original_route:
             shutil.copy2(regular(args.original_route), args.out / 'original-route.json')
@@ -157,7 +177,7 @@ def main():
                         str(route), str(ROOT / 'brainsnn-r3f-app/public/world')], check=True)
         manifest['code_commit'] = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
         manifest['script_sha256'] = {str(p.relative_to(ROOT)): digest(p) for p in
-                                    [Path(__file__), ROOT / 'scripts/world-demo/verify_reference.mjs',
+                                    [Path(__file__), ROOT / 'scripts/world-demo/demo_evidence.py', ROOT / 'scripts/world-demo/verify_reference.mjs',
                                      *FILM.glob('*.py'), FILM / 'plan_route.mjs']}
         if args.render:
             shots = args.out / 'renders'
@@ -168,7 +188,9 @@ def main():
             for cut in ('master', 'commercial', 'check'):
                 subprocess.run([sys.executable, str(FILM / 'compose_film.py'), str(shots), str(args.out / 'photos'),
                                 str(args.out / 'job'), str(route), str(args.out / f'world-builder-{cut}.mp4'),
-                                '--cut', cut, '--reconstruction', str(args.out / 'reconstruction/reconstruction.json')], check=True)
+                                '--cut', cut, '--reconstruction', str(args.out / 'reconstruction/reconstruction.json'),
+                                '--capture-kind', summary['capture']['kind'],
+                                '--capture-credit', summary['capture']['credit']], check=True)
                 regular(args.out / f'world-builder-{cut}.mp4')
             manifest['status'] = 'rendered-awaiting-visual-review'
     except Exception as error:
