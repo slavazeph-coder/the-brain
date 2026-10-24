@@ -1,12 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-24T16:30Z
+Last updated: 2026-10-24T20:28Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
-- **Run 81 (this run): cancellation regression verified green + handoff item 2 closed — COMMITTED `c29ce4d`**
+- **Run 85 (this run): test_worker.py symlink-guard test fixed + committed — COMMITTED `332d314`**
+  - Baseline: clean tree at `d80f63c` (run 81). `git status --short` confirmed only `M tests/world/test_worker.py` (run 84's uncommitted test addition, never committed).
+  - Run 84 identified the bug: `test_mapanything_model_dir_symlink_rejected_before_hash` did `import worker as worker_module` — no top-level `worker` module exists in `robotics/world_worker/`, so the test errored at import before the model-dir symlink guard was ever exercised.
+  - Fix (one line, tests/world/test_worker.py:384): `from robotics.world_worker import mapanything_apache as worker_module` — points at the real module where `verify_source` (line 46) and `local_installation` (line 57) live; the symlink guard at mapanything_apache.py:66 raises the matching `RuntimeError('Local model.safetensors does not match...')`.
+  - The test itself (added in run 84) was also uncommitted and is now included in the same commit: 24 insertions total (new test function + import fix).
+  - Exact results (executed this run):
+    - `pytest tests/world/test_worker.py -q` → **46 passed, 3 skipped in 6.40 s** (was 45 passed, 3 skipped before — the new symlink-guard test adds one more pass)
+    - Full test count up from 45 → 46. All green.
+  - Commit: `332d314 fix(tests/world): point symlink-guard test at real mapanything_apache module` (1 file, +24). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+  - No paid fallback. Serving Qwen/backup untouched.
+  - Next: 4090 MapAnything held-out-frame inference smoke via short SSH (verify `d130b6c7f3f4` + GPU UUID per `world-builder-4090.json` first), OR actual HTTP report UI validation (pending per job contract), OR one more GB10 verification task.
+- **Run 81 (prev): cancellation regression verified green + handoff item 2 closed — COMMITTED `c29ce4d`**
   - Run 80's "blocker" (test not yet written) was a false start: `test_cancel_job_on_complete_job_does_not_enter_hash_cancellations` (test_report_receipts.py:579) is already committed in HEAD and passes.
   - Re-ran both receipt suites on clean tree at `c29ce4d`:
     - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (82 ms)
