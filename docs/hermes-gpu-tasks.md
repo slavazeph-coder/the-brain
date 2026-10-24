@@ -27,7 +27,7 @@ MapAnything's predicted scale is right without a tape measure. Also record peak 
 - Put it behind TLS, with a stable hostname rather than a quick tunnel, and give the owner the URL and an operator token.
 
 Done when brainsnn.com connects to it and builds a metric scene from a walkthrough: measure a distance, then use
-"Build metric simulation scene (GLB + USD)".
+"Build metric simulation scene (GLB, USD, IFC)".
 
 ## 3. Detections into the simulation scene
 
@@ -46,7 +46,22 @@ Done when a walkthrough scene shows detected boxes and the dialog's "Detected" l
 - Port the receipts work from `hermes/world-builder-gb10` onto `main` as one focused PR.
 - #212 and #215 are superseded by #213 and #216; the owner decides whether to close them.
 
-## 5. Lyra 1 on the 4090, only after the owner's licence and guardrail decision
+## 5. Lyra 1 on the GB10: approved for a measured trial (October 24, 2026)
 
-Stage Lyra 1 with its safeguards enabled (the upstream entry point disables them; do not copy that setting). Measure
-it, then label every output as a generative preview that planning never uses. See `docs/world-generative-qualification.md`.
+The owner approved staging Lyra 1 on the GB10 under the NVIDIA Open Model License. Lyra 2 stays excluded: its checkpoint
+licence is research-only. The 4090's 24 GB is too small for Lyra 1's documented peak of about 43 GB with full offloading.
+
+The approval's conditions:
+- **Safeguards stay on.** Run Cosmos-Guardrail1 and Llama-Guard-3-8B as the upstream downloader provisions them. The
+  single-image entry point sets `disable_guardrail = True`; never copy that. Record the Llama 3.1 terms that come with
+  Llama Guard.
+- **Batch job in an isolated environment.** Do not change the shared production environment. Use the free headroom next
+  to the two LLMs. If it does not fit, run in a slot where the 35B is paused; never stop the 27B. A run that does not
+  fit is a failed admission, not a reason to drop checks.
+- **Measure before anything is wired in.** Follow the staged plan in `docs/world-generative-qualification.md`: a
+  decoder-only sample, then fresh-image generation with guardrails on. Record peak memory, time, input and weight
+  hashes, the PLY hash, and that the PLY loads in Chromium and WebKit.
+- **Labels when it ships.** Every output is a generative preview that planning never uses, and `metric_verified` stays
+  false. The site credits NVIDIA Cosmos.
+
+Done when the receipts are posted for review. Nothing goes on brainsnn.com until the owner has seen them.
