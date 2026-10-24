@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import * as W from './vendor/web-ifc-api.js';
 
 const CLASSES = [[W.IFCWALL, 'IfcWall', '#abbbc6', 1], [W.IFCSLAB, 'IfcSlab', '#e5e2d9', 1],
+  [W.IFCDOOR, 'IfcDoor', '#b58c4e', 1],
   [W.IFCFURNITURE, 'IfcFurniture', '#a855f7', 1], [W.IFCBUILDINGELEMENTPROXY, 'IfcBuildingElementProxy', '#f2b8c2', .55]];
 const $ = id => document.getElementById(id), esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
 const stage = $('stage'), renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

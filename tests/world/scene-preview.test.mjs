@@ -11,7 +11,7 @@ test('scene facts come only from scene.json and say what was observed, detected 
   assert.match(f[3],/arbitrary reconstruction units/);
   assert.match(f[4],/^No scene\.usda: .*no measured scale\. .*Export static OpenUSD\.$/);});
 test('a metric scene with a written USD says so',()=>{const f=sceneFacts(scene({units:'m',counts:{points:10,walls:3,objects:1,unplaced:0,unknown_cells:0},usd:{written:true,metersPerUnit:1}}));
-  assert.equal(f[1],'Detected: 1 object placed from 2D detections.');assert.equal(f[3],'Units: metres, from a measured scale.');assert.match(f[4],/^scene\.usda was written/);});
+  assert.equal(f[1],'Detected: 1 object placed from 2D detections.');assert.equal(f[3],'Units: metres, from the scale recorded in this scene.');assert.match(f[4],/^scene\.usda was written/);});
 test('missing or malformed scene.json never produces invented counts or scale',()=>{
   for(const bad of [null,undefined,'x',{},{schema:'other'}])assert.deepEqual(sceneFacts(bad),['No valid scene.json came with this scene, so its provenance and scale are unknown. Treat it as a picture only.']);
   const f=sceneFacts(scene({counts:{points:-1,walls:1.5,objects:'3',unknown_cells:NaN},usd:undefined,units:'ft'}));
@@ -21,11 +21,11 @@ test('missing or malformed scene.json never produces invented counts or scale',(
   assert.ok(sceneFacts(scene({units:'m',usd:{written:false,reason:'r'.repeat(5000)}}))[4].length<='No scene.usda. '.length+300);});
 test('a scene scaled by a distance the user measured says it is self-reported',()=>{
   const f=sceneFacts(scene({units:'m',scale:{source:'user-measured',metresPerUnit:.66,distance:3.581,selfReported:true,verified:false},usd:{written:true,metersPerUnit:1}}));
-  assert.equal(f[3],'Units: metres, from a distance you measured (3.581 m). Self-reported, not verified.');
+  assert.equal(f[3],'Units: metres, from an entered distance (3.581 m). Self-reported, not verified.');
   assert.equal(f.length,5,'no IFC line unless scene.json says it was written');
   assert.match(sceneFacts(scene({units:'m',usd:{written:true},ifc:{written:true,schema:'IFC4'}}))[5],/^scene\.ifc was written for BIM tools \(IFC4, metres\)/);
   assert.equal(sceneFacts(scene({ifc:{written:false,reason:'x'}})).length,5);
-  assert.equal(sceneFacts(scene({units:'m',scale:{selfReported:true,distance:'3 m'}}))[3],'Units: metres, from a distance you measured. Self-reported, not verified.');});
+  assert.equal(sceneFacts(scene({units:'m',scale:{selfReported:true,distance:'3 m'}}))[3],'Units: metres, from an entered distance. Self-reported, not verified.');});
 test('separated objects are counted and the largest are measured, only from scene.json',()=>{
   const objects=[{name:'object_1',label:'object',kind:'separated',size:[3.412,0.731,1.26]},{name:'object_2',label:'chair',kind:'separated',size:[0.5,0.9,0.48]},
     {name:'floor_observed',label:'floor',size:[4,0.02,8]},{name:'object_3',kind:'separated',size:[1,NaN,1]}];
@@ -65,7 +65,7 @@ test('a metric scene becomes an unreviewed planning map whose boxes contain ever
   assert.equal(summary,'Map built from the simulation scene: 2 walls and 2 objects as obstacles, 1 unobserved area, 4 × 6 m of observed floor. Review scale and obstacles, then plan.');
   assert.equal(world.provenance,'observed');assert.equal(world.scaleReviewed,false);assert.equal(world.mapReviewed,false);
   assert.match(planningGate(world),/scale/);assert.equal(world.geometrySource.kind,'compiled-scene');
-  assert.ok(world.geometrySource.warnings.some(w=>/distance you measured, not verified/.test(w)));
+  assert.ok(world.geometrySource.warnings.some(w=>/entered distance, not verified/.test(w)));
   assert.equal(world.width,4);assert.equal(world.depth,6);
   // Every point of the diagonal object's footprint lies in one of its strips, and the strips block far less than one box would.
   const parts=world.objects.filter(o=>o.id.startsWith('object-1-'));assert.ok(parts.length>1&&parts.every(o=>/^Object 1 \(part \d of \d\)$/.test(o.name)));
@@ -106,3 +106,39 @@ test('diagonal objects share the object budget as strips, and a scene beyond it 
   const {world}=worldFromScene(metric({objects:[floor,...many(40)],walls:[],unknown:[]}));
   assert.ok(world.objects.length<=LIMITS.objects);assert.ok(world.objects.every(o=>/\(part \d of 3\)$/.test(o.name)),'40 diagonal objects get 3 strips each');
   assert.throws(()=>worldFromScene(metric({objects:[floor,...many(130)],walls:[],unknown:[]})),/at most 128/);});
+
+function withOpening(over={},wallOver={}) {
+  const s=metric({objects:[metric().objects[0]],walls:[{...metric().walls[0],...wallOver}],unknown:[]}),w=s.walls[0];
+  s.openings=[{id:'entry',hostWall:w.name,offsetMeters:1.5,widthMeters:1,heightMeters:2.1,sillMeters:0,kind:'opening',reviewed:true,
+    host:{centre:[...w.centre],size:[...w.size],yaw_degrees:w.yaw_degrees},...over}];
+  return s;
+}
+test('reviewed floor voids produce a real planning gap with rotated jambs preserved',()=>{
+  for(const yaw of [0,30,90]) {
+    const s=withOpening({}, {centre:[0,1.18,0],yaw_degrees:yaw}),{world,counts}=worldFromScene(s),a=yaw*Math.PI/180;
+    const walls=world.objects.filter(o=>o.id.startsWith('wall-'));
+    assert.equal(counts.walls,1);assert.ok(walls.length>=2);
+    assert.ok(!walls.some(o=>inBox(o,2,3)),`yaw ${yaw}: void midpoint must be clear`);
+    for(const along of [-1.9,-1.3,.8,1.8]) {
+      const x=2+along*Math.cos(a),z=3+along*Math.sin(a);
+      assert.ok(walls.some(o=>inBox(o,x,z,1e-8)),`yaw ${yaw}: jamb ${along} must stay blocked`);
+    }
+    assert.ok(world.geometrySource.warnings.some(w=>/2 m headroom/.test(w)));
+  }
+});
+test('raised windows, low voids, closed reference doors and unknown floor remain blocked',()=>{
+  for(const o of [{kind:'door'},{sillMeters:.9,heightMeters:1.1},{heightMeters:1.5}]) {
+    const {world}=worldFromScene(withOpening(o,{centre:[0,1.18,0]}));
+    assert.ok(world.objects.some(o=>inBox(o,2,3)),JSON.stringify(o));
+  }
+  const s=withOpening({}, {centre:[0,1.18,0]});s.unknown=[[-.25,-.25,.5]];
+  assert.ok(worldFromScene(s).world.objects.some(o=>o.kind==='unknown'&&inBox(o,2,3)),'a void does not erase unknown floor');
+});
+test('malformed, stale or overlapping reviewed voids are refused before a planning map is made',()=>{
+  for(const over of [{reviewed:false},{offsetMeters:-1},{widthMeters:5},{heightMeters:3},{kind:'window'},
+    {host:{centre:[1,1.18,-2.9],size:[4,2.4,.2],yaw_degrees:0}}]) {
+    assert.throws(()=>worldFromScene(withOpening(over)),/review|host/i);
+  }
+  const s=withOpening();s.openings.push({...s.openings[0],id:'overlap',offsetMeters:1.6});
+  assert.throws(()=>worldFromScene(s),/overlap/);
+});

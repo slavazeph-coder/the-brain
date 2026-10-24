@@ -219,6 +219,9 @@ def configured_engines(config):
             raise ValueError('object_detection must name a provider and a model.')
         if entry.get('source_job') not in (None, True, False):
             raise ValueError('source_job must be true or false.')
+        for feature in ('dimension_checks', 'bim_review'):
+            if feature in entry and type(entry[feature]) is not bool:
+                raise ValueError(f'{feature} must be true or false.')
         engines[eid] = {**entry, 'available': entry.get('enabled') is True and entry.get('license_reviewed') is True,
                         'max_inputs': min(12, max(1, int(entry.get('max_inputs', 1)))),
                         'timeout_seconds': min(3600, max(1, int(entry.get('timeout_seconds', 1800))))}
@@ -516,6 +519,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                             **({'object_naming':e['object_naming']} if e.get('object_naming') and all(os.environ.get(x) for x in e.get('secrets', [])) else {}),
                             # A detector on the worker needs no secret, and no frame leaves the worker.
                             **({'object_detection':e['object_detection']} if e.get('object_detection') else {})}
+                            | {feature: True for feature in ('dimension_checks', 'bim_review') if e.get(feature) is True}
                            for e in engines.values() if e['id'] in principal.engines],
                 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 

@@ -21,12 +21,13 @@ import subprocess
 import time
 
 try:
-    from . import cad_export, detector_names, fit_check, object_names, sparse_colmap
+    from . import cad_export, detector_names, fit_check, measurement_check, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import cad_export
     import detector_names
     import fit_check
+    import measurement_check
     import object_names
     import sparse_colmap
     from geometry import load_arena_cloud
@@ -242,8 +243,30 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
 def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None, detector_model: Path | None = None, detect=None):
     """Suggested names for the separated objects. The vision model names them when the person asked for it with this
     hand-off; an on-worker detector (detector_model, or detect for tests) names them when it is configured and the model
-    did not. Returns the names file for the compiler (or None) and what happened; a problem here never fails the scene."""
+    did not. Returns the names file for the compiler (or None) and what happened. Provider failures keep an unnamed
+    scene possible; invalid source-bound reuse is rejected rather than attaching stale names."""
     source = request.get('source') if isinstance(request.get('source'), dict) else {}
+    # A same-owner scene job can carry forward names on the identical cloud. The API resolves source_job and
+    # enforces ownership; no browser-supplied filesystem path is read here. This avoids another model call when
+    # the operator only adds an opening. Suggestions retain their original model/prompt and unreviewed state.
+    if source.get('engine') == 'scene-usd' and not source.get('missing'):
+        previous = Path(source['path']) / 'output'
+        old_cloud, old_names = previous / 'arena-cloud.json', previous / 'object-names.json'
+        if old_names.exists():
+            if old_cloud.is_symlink() or old_names.is_symlink() or not old_names.is_file() or old_names.stat().st_size > 1024 * 1024:
+                raise ValueError('Prior scene naming evidence is invalid.')
+            prior = load_arena_cloud(old_cloud)
+            if measurement_check.points_sha256(prior) != measurement_check.points_sha256(cloud) or prior['scale'] != cloud['scale']:
+                raise ValueError('Prior scene names belong to different geometry or scale; reconstruct or name this scene again.')
+            payload = json.loads(old_names.read_text())
+            if not isinstance(payload, dict) or payload.get('schema') != 'brainsnn.object-names.v1':
+                raise ValueError('Prior object naming evidence has an unknown schema.')
+            work.mkdir(parents=True, exist_ok=True)
+            path = work / 'object-names.json'
+            shutil.copyfile(old_names, path)
+            return path, {'status': 'reused', 'source_job': source.get('job'), 'model_executed': False,
+                          'model': payload.get('model'), 'prompt_version': payload.get('prompt_version'),
+                          'source_sha256': hashlib.sha256(old_names.read_bytes()).hexdigest()}
     providers = (['model'] if cloud.get('nameObjects') else []) + (['detector'] if detector_model or detect else [])
     attempts = []
     for provider in providers:
@@ -339,6 +362,8 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     work = out.parent / 'scene-work'
     names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect)
     scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names)
+    if cloud.get('bimReview') and not scene.get('bimReview'):
+        raise RuntimeError('The scene compiler did not apply the supplied BIM review. Update the complete worker checkout.')
     usd, ifc = (bool((scene.get(key) or {}).get('written')) for key in ['usd', 'ifc'])
     for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
         shutil.copyfile(work / name, out / name)
@@ -365,12 +390,25 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     if names:
         shutil.copyfile(names, out / 'object-names.json')
         naming['applied'] = (scene.get('naming') or {}).get('named', 0)
-    measured = ['The scale comes from a distance the user measured and entered: self-reported, not verified.'] if cloud['units'] == 'm' else []
+    # A dimensional audit is separate from model-to-points fit. Invalid supplied references fail the job instead
+    # of silently becoming an unchecked success. Even matching held-out lengths never certify the whole scene.
+    measurement_files = []
+    if cloud['units'] == 'm':
+        report = measurement_check.build_report(scene, cloud)
+        report['sourceFiles'] = {
+            'scene': {'sha256': hashlib.sha256((out / 'scene.json').read_bytes()).hexdigest()},
+            'cloud': {'sha256': hashlib.sha256((out / 'arena-cloud.json').read_bytes()).hexdigest()}}
+        (out / 'scene-measurements.json').write_text(json.dumps(report, indent=2, allow_nan=False))
+        measurement_files = ['scene-measurements.json']
+        measurements = {'written': True, 'status': report['status'], 'metric_verified': False}
+    else:
+        measurements = {'skipped': 'Dimensional checks require a metric scene.'}
+    measured = ['The scale follows an entered distance: whether it was independently measured is self-reported, not verified.'] if cloud['units'] == 'm' else []
     named = ['Object names are suggestions from a vision model looking at the walkthrough frames; nobody has reviewed them.'] if names else []
     evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'), 'cad': cad, 'fit': fit,
-                'naming': naming,
+                'naming': naming, 'measurements': measurements, 'bim_review': scene.get('bimReview'),
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
                 'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
@@ -381,6 +419,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'elapsed_seconds': round(time.monotonic() - started, 3),
                 'review_required': (reconstruction['review_required'] if reconstruction else [])
                 + ['Confirm walls and floor against the walkthrough before simulation'] + (['Check the measured distance before using metres'] if measured else [])
+                + (['Check held-out tape or laser distances; model-to-points fit is not independent dimensional validation'] if measured else [])
                 + (['Review the suggested object names before relying on them'] if names else []),
                 'warnings': (reconstruction['warnings'] if reconstruction else [])
                 + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured + named}
@@ -391,6 +430,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
+                 *({'name': name, 'kind': 'evidence'} for name in measurement_files),
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
     return evidence

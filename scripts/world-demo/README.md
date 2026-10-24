@@ -3,9 +3,13 @@
 These scripts record the product demos on the real site against a real worker: nothing on screen is mocked.
 They are reference tools, not part of CI.
 
+**Replacing the affected tilted demos:** use [REGENERATE.md](REGENERATE.md) for the asset inventory, original-capture
+requirements, corrected-job archive and fresh rendering commands. `regenerate_reference.py` fails closed when source
+hashes, scale or corrected floor evidence are missing. Existing film filenames in this README are examples.
+
 | Script | What it records |
 |---|---|
-| `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: phone walkthrough → dense CPU reconstruction → measured distance → scene compile with separated (and, if offered, Claude-named) objects → robot route in the compiled scene → `scene.ifc` opened in a web-ifc viewer |
+| `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: test walkthrough → CPU reconstruction → illustrative entered distance → observed clusters as scaled boxes (with suggested names, if offered) → planar robot route → `scene.ifc` opened in a web-ifc viewer. Touching objects can remain grouped; the fixture has no independent physical readings. |
 | `record_demo.py` | The earlier photo → depth → map demo. It also holds the caption, cursor and title-card overlay (`OVERLAY`) that `record_scan2model.py` reuses |
 | `feed_cut.sh` | A 4:5 feed version (1080 × 1350) of a 16:9 recording, with a title band and footer |
 | `short_cut.sh` | A short 4:5 feed clip from chosen moments of a recording (hard cuts), with your own subtitle and footer |
@@ -13,7 +17,7 @@ They are reference tools, not part of CI.
 
 ## Running the scan-to-model recording
 
-1. **A worker.** Start a worker with `colmap-dense-cpu` and `scene-usd` (see `robotics/world_worker/README.md` and
+1. **A worker.** Start a worker with `colmap-dense-cpu` and `scene-usd` (see `robotics/world_worker/deploy/README.md` and
    `adapters.example.json`). For object names, set `ANTHROPIC_API_KEY` in the worker's environment and install
    `requirements-naming.txt`. The live site only talks to an HTTPS worker; a worker on `127.0.0.1` works from a local
    headless browser.

@@ -6,3 +6,4 @@
 pytest==9.1.1
 httpx==0.28.1
 playwright==1.64.0
+ifcopenshell==0.9.0

@@ -69,3 +69,18 @@ def test_nothing_is_written_without_metres_points_or_surfaces(tmp_path):
     assert fc.export({**scene(), 'units': 'arbitrary'}, points(), tmp_path) == {'skipped': 'The fit check needs a metric scene.'}
     assert 'skipped' in fc.export(scene(), [], tmp_path) and 'skipped' in fc.export({'units': 'm', 'objects': [], 'walls': []}, points(), tmp_path)
     assert not list(tmp_path.iterdir())
+
+
+def test_cut_wall_fit_uses_exposed_jambs_and_lintel_not_the_removed_face_or_internal_seams():
+    s = scene(); s['objects'] = []; s['walls'][0]['yaw_degrees'] = 30
+    s['openings'] = [{'id': 'entry', 'hostWall': 'wall_1', 'offsetMeters': 1.5, 'widthMeters': 1,
+                      'heightMeters': 2.1, 'sillMeters': 0, 'kind': 'opening'}]
+    angle = math.radians(30)
+    def p(x, y, z): return [2 + x * math.cos(angle) - z * math.sin(angle), y, x * math.sin(angle) + z * math.cos(angle)]
+    pts = [p(0, 1, .05), p(-.5, 1, 0), p(0, 2.1, 0), p(-.5, 2.3, 0)]
+    dist, _ = fc.distances(pts, fc.surfaces(s))
+    assert dist.tolist() == pytest.approx([.5, 0, 0, .05]), 'hole face is absent; jamb/lintel exposed; internal decomposition seam is absent'
+    assert [e[0] for e in fc.surfaces(s)] == ['wall_1'], 'per-element metrics retain the semantic host name'
+    s['openings'][0]['kind'] = 'door'
+    dist, near = fc.distances([p(0, 1, .025)], fc.surfaces(s))
+    assert dist[0] == pytest.approx(0, abs=1e-8) and fc.surfaces(s)[near[0]][2] == 'door'

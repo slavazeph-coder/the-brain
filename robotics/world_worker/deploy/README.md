@@ -33,3 +33,20 @@ restart. This folder holds a setup for a long-running worker on a GPU host such 
 
 Adapters run as child processes of this service. Systemd does not isolate them from each other, so keep the
 per-adapter guards (memory, time, output size) in place.
+
+## Enable dimensional checks and reviewed BIM openings
+
+Deploy the browser, worker and scene compiler from the same qualified revision. The `scene-usd` entry in the supplied
+adapter examples declares `dimension_checks: true` and `bim_review: true`; copy those boolean fields only after the
+matching code and dependencies are installed. Older workers omit the capabilities and the browser requests an
+upgrade. A capability declaration is not evidence of successful execution.
+
+Use an actual Blender executable with the scene compiler's dependencies, including IfcOpenShell for IFC and
+`requirements-cad.txt` for CAD. Run the tests in [the demo acceptance checklist](../../../docs/world-demo-release-checklist.md),
+then perform an authenticated cloud job and inspect the resulting `scene-measurements.json`, IFC and matching visual
+exports. Reviewed openings must cut the same host wall across formats. Retain the input/output hashes and failures.
+
+The browser recompiles a reviewed opening using the previous same-owner scene job as `source_job`. Unchanged cloud
+points and scale allow the adapter to reuse that job's exact `object-names.json`, with a reuse receipt and no new model
+call. It never upgrades unreviewed name suggestions into approvals. A different source, point order, scale or host
+snapshot requires a new review. Contract and placement details are in [BIM review](../../../docs/world-bim-review.md).
