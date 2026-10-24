@@ -102,6 +102,13 @@ Dense CPU covers 3.6 times as much of the room, at lower point accuracy. The agr
 - **Measurements:** each object gets the smallest oriented box around its 3–97% extents, in metres, standing on the floor when its lowest points are within 30 cm of it.
 - **Exports:** objects are written to `scene.json` with `kind: separated` and to the GLB and USD with their orientation. In IFC, an object nothing has named is an `IfcBuildingElementProxy` called "Object N", with its length, width and height in `Pset_BrainSNN`. An object a lifted detection overlaps (at least 30% of its points inside the detection's box) takes that label and becomes `IfcFurniture`.
 - **Dialog:** it lists the count and the largest objects' measurements.
+- **Robot route in the scene:** for a metric scene, the dialog offers **Plan a robot route in this scene**. It turns `scene.json` into an unreviewed World v1 map in the scene's own frame (`worldFromScene` in [`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)):
+  - The observed floor sets the map's size.
+  - Walls and objects become obstacles: axis-aligned boxes that contain them. A diagonal one is cut into up to 4 strips along its length, so it blocks little more than itself and the map stays within 128 boxes. A scene with more elements than that is refused.
+  - Floor cells no point reached stay unknown, and the rest of the observed floor is proposed as free.
+  - The robot starts at the most open point and plans only after both reviews.
+
+  On the dense room walkthrough at the same measured scale, the map proposed from the points left a robot vacuum 0.2 m² (a 3.4 m route from the nearest start that fits), because the dense floor's scatter reads as obstacles. The scene map gave it 3.4 m² and a 67.8 m coverage route around 8 walls and 14 separated objects. Two more objects lay outside the observed floor.
 
 Objects that touch, such as a sofa with a table against it, stay one object, because geometry alone cannot split them. On the dense room walkthrough this gave 8 objects, including an armchair-sized 1.01 × 0.97 m, 1.06 m high, and 6 wall planes.
 
