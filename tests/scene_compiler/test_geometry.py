@@ -72,6 +72,15 @@ class Objects(unittest.TestCase):
         self.assertGreater(len(shelf), 600, "the bookshelf's points are left for object separation")
         self.assertEqual(sc.find_walls([p for p in pts if abs(p[2] + 3.0) > 0.1], 0.0)[0], [], "a lone bookshelf is not a wall")
 
+    def test_a_long_shelf_top_in_the_wall_band_is_not_a_wall(self):
+        rng = random.Random(5)
+        floor = [[rng.uniform(-3, 3), rng.gauss(0, 0.005), rng.uniform(-3, 3), 90, 80, 70] for _ in range(1500)]
+        shelf = [[rng.uniform(-0.8, 0.8), rng.uniform(1.45, 1.6), rng.uniform(-0.15, 0.15), 200, 200, 200] for _ in range(800)]  # 15 cm deep
+        walls, rest = sc.find_walls(floor + shelf, 0.0)
+        self.assertEqual(walls, []); self.assertEqual(len(rest), 800, "its points stay free for object separation")
+        objects = sc.separate_objects(floor + shelf, 0.0, rest)
+        self.assertEqual(len(objects), 1); self.assertAlmostEqual(objects[0]["length"], 1.6, delta=0.1)
+
     def test_every_object_is_separated_and_measured(self):
         pts = room_cloud(); _, rest = sc.find_walls(pts, 0.0)
         objects = sc.separate_objects(pts, 0.0, rest)

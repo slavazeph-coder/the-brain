@@ -81,3 +81,37 @@ def test_model_input_matches_the_processor_and_a_wrong_file_is_refused(tmp_path)
     pytest.importorskip('onnxruntime')
     with pytest.raises(RuntimeError, match='is not the pinned'):
         dn.load_session(fake)
+
+
+class Radial:
+    """A SIMPLE_RADIAL-like lens (pycolmap's cam_from_img / img_from_cam) at map resolution: strong k so a pinhole is wrong."""
+    def __init__(self, k=0.15): self.k = k
+    def img_from_cam(self, cam):
+        x, y = cam[:, 0] / cam[:, 2], cam[:, 1] / cam[:, 2]; d = 1 + self.k * (x * x + y * y)
+        return np.stack([F * x * d + W / 2, F * y * d + H / 2], 1)
+    def cam_from_img(self, uv):
+        xd, yd = (uv[:, 0] - W / 2) / F, (uv[:, 1] - H / 2) / F; x, y = xd.copy(), yd.copy()
+        for _ in range(20): d = 1 + self.k * (x * x + y * y); x, y = xd / d, yd / d
+        return np.stack([x, y], 1)
+
+
+def test_lens_distortion_is_carried_through_lifting_and_reprojection():
+    lens = Radial(); rows, cols = np.mgrid[0:H, 0:W]
+    rays = lens.cam_from_img(np.stack([cols.ravel() + .5, rows.ravel() + .5], 1)).reshape(H, W, 2)
+    def distorted(centre, yaw, s, t):
+        M = look(centre, yaw); R, tvec = M[:, :3], M[:, 3]; origin = -R.T @ tvec
+        dirs = np.concatenate([rays, np.ones((H, W, 1))], -1) @ R  # the true ray through each (distorted) pixel
+        hits = []
+        for normal, offset in (((0, 0, 1), 6.0), ((0, 1, 0), 1.5)):
+            n = np.array(normal, float); denom = dirs @ n
+            lam = np.where(np.abs(denom) > 1e-9, (offset - origin @ n) / np.where(np.abs(denom) > 1e-9, denom, 1), np.inf)
+            hits.append(np.where(lam > 0, lam, np.inf))
+        z = np.minimum(*hits); frame = aligned(M, z, (1 / z - t) / s)
+        frame.update(rays=rays, project=lambda cam: lens.img_from_cam(cam)); return frame
+    frames = [distorted(c, y, s, t) for c, y, s, t in [((0, 0, 0), 0.0, .5, .01), ((.4, 0, .1), -.05, .8, .03), ((-.4, 0, .1), .05, .3, 0.), ((0, -.2, -.3), 0., 1.2, .02)]]
+    off_room = lambda P: np.minimum(np.abs(P[:, 2] - 6.0), np.abs(P[:, 1] - 1.5))  # distance to the nearer true surface
+    points, _, stats = dn.fuse(frames, stride=2, neighbours=3, min_agree=2, tolerance=0.02)
+    assert stats['confirmed'] > 2000 and np.percentile(off_room(points), 95) < 0.005
+    pinhole = [{k: v for k, v in f.items() if k not in ('rays', 'project')} for f in frames]
+    p2, _, _ = dn.fuse(pinhole, stride=2, neighbours=3, min_agree=2, tolerance=0.02)
+    assert np.percentile(off_room(p2), 95) > 0.03, 'ignoring the lens bends the room'

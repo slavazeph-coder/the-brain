@@ -77,6 +77,7 @@ def floor_margin(pts, floor_y):
 # metre long and 1.2 m tall. A line whose points mostly lie along a wall already found (within its band plus 5 cm) is
 # that wall again, seen through noisy depth, not another wall.
 WALL_HIGH, WALL_TOP, WALL_TOLERANCE, WALL_MIN_LENGTH, WALL_MIN_HEIGHT, WALL_LIMIT = 1.3, 2.3, 0.06, 1.0, 1.2, 8
+WALL_MIN_SPAN = 0.8  # metres of height the wall's own points must cover (furniture may hide its lower part)
 
 
 def along_wall(w, XZ):
@@ -115,6 +116,8 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
         if any(along_wall(w, Q) > 0.5 for w in walls):
             taken[pool[inl]] = True; continue  # the scatter of a wall already found
         if a1 - a0 < WALL_MIN_LENGTH or len(members) < 20: continue
+        # A wall is seen over a real height; a long horizontal surface in the band (a shelf top) is not one.
+        if np.percentile(P[members, 1], 95) - np.percentile(P[members, 1], 5) < WALL_MIN_SPAN: continue
         y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
         if y1 - y0 < WALL_MIN_HEIGHT: continue
         taken[members] = True; spread = n[np.isin(above, members)]

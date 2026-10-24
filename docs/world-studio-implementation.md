@@ -82,7 +82,7 @@ CPU baseline, the 12 office photos above through `colmap-sparse`: camera RMS 1.5
 
 **Dense points without a GPU.** The `colmap-dense-cpu` engine is the same COLMAP adapter run with `--densify-model` ([`densify.py`](../robotics/world_worker/densify.py)). After the sparse reconstruction, it:
 1. Predicts depth for every registered frame with Depth Anything V2 Small, the Apache-2.0 checkpoint the site already runs on the device. It is pinned as ONNX by revision and SHA-256, and any other file is refused.
-2. Fits each frame's depth to that frame's own triangulated points (`1/z = s·d + t`), which puts it in the reconstruction's units.
+2. Fits each frame's depth to that frame's own triangulated points (`1/z = s·d + t`), which puts it in the reconstruction's units. Lifting and reprojection go through COLMAP's own camera model, so the fitted radial distortion is respected.
 3. Keeps a lifted point only where at least 2 of the 4 nearest frames predict the same depth within 2%.
 4. Writes `dense-preview.ply` (at most 50,000 points) before `sparse-preview.ply`, so the site opens the dense cloud. Camera poses and measured scale work unchanged, and `reconstruction.json` records the model, the alignment error and the counts under `dense`.
 
@@ -91,19 +91,19 @@ Scored with the ETH3D benchmark on the same 12 office photos:
 | Points | Median error | Within 5 cm of the scan | Scan covered within 5 / 10 cm |
 |---|---|---|---|
 | Sparse (`colmap-sparse`) | 1.5 cm | 87% | 2.1% / 5.3% |
-| Dense CPU (2%, 2 of 4 neighbours) | 3.4 cm | 58% | 7.2% / 11.1% |
+| Dense CPU (2%, 2 of 4 neighbours) | 3.1 cm | 59% | 7.6% / 11.4% |
 
-Dense CPU covers 3.4 times as much of the room, at lower point accuracy. The agreement tolerance sets the trade-off: at 5%, coverage is 13.5% / 17.9% with a 6.8 cm median error; requiring 3 of 6 neighbours at 2% gives 2.4 cm and 5.1%. These ETH3D figures come from 12 widely spaced photos; a walkthrough gives each frame closer neighbours. On the 62 s room walkthrough, all 57 frames aligned to their SfM points with a median relative error of 1.3%. The depth pass took about 80 s on 4 CPU threads, fusion took 7 s, and about 39,000 points were kept. Dense GPU reconstruction (MapAnything on the 4090) remains the path to survey-grade coverage.
+Dense CPU covers 3.6 times as much of the room, at lower point accuracy. The agreement tolerance sets the trade-off: at 5%, coverage is 13.8% / 18.0% with a 6.8 cm median error; requiring 3 of 6 neighbours at 2% gives 2.1 cm and 5.0%. The ETH3D photos carry a radial distortion of −0.04, and handling it improved the default from 3.4 cm and 7.2%. These ETH3D figures come from 12 widely spaced photos; a walkthrough gives each frame closer neighbours. On the 62 s room walkthrough, all 57 frames aligned to their SfM points with a median relative error of 1.3%. The depth pass took about 80 s on 4 CPU threads, fusion took 7 s, and about 39,000 points were kept. Dense GPU reconstruction (MapAnything on the 4090) remains the path to survey-grade coverage.
 
 **Every object separated and measured.** In a metric scene the compiler now finds:
-- **Walls:** vertical planes, found by RANSAC on points 1.3–2.3 m above the floor, above most furniture. A wall is at least 1 m long and 1.2 m tall, and takes the points within 2.5 times its own scatter (6–15 cm). Furniture standing against it stays furniture.
+- **Walls:** vertical planes, found by RANSAC on points 1.3–2.3 m above the floor, above most furniture. A wall is at least 1 m long and 1.2 m tall, its own points cover at least 0.8 m of height (so a shelf top is not a wall), and it takes the points within 2.5 times its own scatter (6–15 cm). Furniture standing against it stays furniture.
 - **Floor:** points within twice the floor layer's scatter of the floor plane (5–15 cm) count as floor.
 - **Objects:** every other cluster up to 2.4 m above the floor is its own object. Clusters are 10 cm cells joined through their faces, at least 0.3% of the cloud.
 - **Measurements:** each object gets the smallest oriented box around its 3–97% extents, in metres, standing on the floor when its lowest points are within 30 cm of it.
 - **Exports:** objects are written to `scene.json` with `kind: separated` and to the GLB and USD with their orientation. In IFC, an object nothing has named is an `IfcBuildingElementProxy` called "Object N", with its length, width and height in `Pset_BrainSNN`. An object a lifted detection overlaps (at least 30% of its points inside the detection's box) takes that label and becomes `IfcFurniture`.
 - **Dialog:** it lists the count and the largest objects' measurements.
 
-Objects that touch, such as a sofa with a table against it, stay one object, because geometry alone cannot split them. On the dense room walkthrough this gave 8 objects, including an armchair-sized 1.01 × 0.97 m, 1.06 m high, and 8 wall planes.
+Objects that touch, such as a sofa with a table against it, stay one object, because geometry alone cannot split them. On the dense room walkthrough this gave 8 objects, including an armchair-sized 1.01 × 0.97 m, 1.06 m high, and 6 wall planes.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a job returns a `.glb`, Evidence offers **Explore scene.glb in 3D** next to the downloads ([`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)). The workspace downloads the file with a short-lived ticket, checks its SHA-256, and opens it in a dialog with the Arena's mesh viewer, which loads only on first use. Beside the scene it lists only what `scene.json` records: observed points and walls, placed and unplaced detections, unknown floor cells, units and whether USD was written. A missing or malformed `scene.json` is shown as unknown, never guessed.
 

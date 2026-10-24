@@ -78,25 +78,32 @@ def depth_map(disparity, s, t, z_range):
     return np.where((z >= z_range[0]) & (z <= z_range[1]), z, np.nan)
 
 
-def backproject(z, K, cam_from_world, stride):
+def backproject(z, K, cam_from_world, stride, rays=None):
     """World points (N, 3) and their (row, col) pixels for every `stride`-th pixel with a depth. K is 3×3 for this map's
-    resolution; cam_from_world is 3×4 (COLMAP convention: x right, y down, z forward)."""
+    resolution; cam_from_world is 3×4 (COLMAP convention: x right, y down, z forward). `rays` (H×W×2, normalised x/z
+    and y/z per pixel) carries the camera's lens distortion; without it the camera is a pinhole."""
     import numpy as np
     rows, cols = np.mgrid[stride // 2:z.shape[0]:stride, stride // 2:z.shape[1]:stride]
     depth = z[rows, cols]; ok = np.isfinite(depth); rows, cols, depth = rows[ok], cols[ok], depth[ok]
-    cam = np.stack([(cols + 0.5 - K[0, 2]) / K[0, 0] * depth, (rows + 0.5 - K[1, 2]) / K[1, 1] * depth, depth], 1)
+    if rays is not None: xn, yn = rays[rows, cols, 0], rays[rows, cols, 1]
+    else: xn, yn = (cols + 0.5 - K[0, 2]) / K[0, 0], (rows + 0.5 - K[1, 2]) / K[1, 1]
+    cam = np.stack([xn * depth, yn * depth, depth], 1)
     R, tvec = cam_from_world[:, :3], cam_from_world[:, 3]
     return (cam - tvec) @ R, np.stack([rows, cols], 1)
 
 
-def agreement(points, z, K, cam_from_world, tolerance):
-    """Which points another frame sees (inside its image, in front of it) and, of those, which match its depth."""
+def agreement(points, z, K, cam_from_world, tolerance, project=None):
+    """Which points another frame sees (inside its image, in front of it) and, of those, which match its depth.
+    `project` maps camera points (N × 3) to this map's pixel coordinates with the lens distortion; else a pinhole."""
     import numpy as np
     cam = points @ cam_from_world[:, :3].T + cam_from_world[:, 3]
     front = cam[:, 2] > 1e-9
     u = np.full(len(points), -1); v = np.full(len(points), -1)
-    u[front] = np.floor(cam[front, 0] / cam[front, 2] * K[0, 0] + K[0, 2]).astype(int)
-    v[front] = np.floor(cam[front, 1] / cam[front, 2] * K[1, 1] + K[1, 2]).astype(int)
+    if project is not None and front.any():
+        uv = np.floor(project(cam[front])).astype(int); u[front], v[front] = uv[:, 0], uv[:, 1]
+    else:
+        u[front] = np.floor(cam[front, 0] / cam[front, 2] * K[0, 0] + K[0, 2]).astype(int)
+        v[front] = np.floor(cam[front, 1] / cam[front, 2] * K[1, 1] + K[1, 2]).astype(int)
     inside = front & (u >= 0) & (v >= 0) & (u < z.shape[1]) & (v < z.shape[0])
     seen = np.zeros(len(points), bool); agree = np.zeros(len(points), bool)
     there = z[v[inside], u[inside]]; known = np.isfinite(there)
@@ -118,17 +125,17 @@ def voxel_mean(points, colours, size):
 
 def fuse(frames, stride=4, neighbours=4, min_agree=2, tolerance=0.02, max_points=50_000):
     """Frames: dicts with z (aligned depth map), K, cam_from_world (3×4), rgb (H×W×3 at the map's resolution) and
-    centre. Lifts each frame, keeps points that at least `min_agree` of its nearest `neighbours` frames confirm, and
+    centre, and optionally rays and project for a camera with lens distortion (see frames_from_model). Lifts each frame, keeps points that at least `min_agree` of its nearest `neighbours` frames confirm, and
     voxel-thins the union to at most `max_points`. Returns (points, colours, stats)."""
     import numpy as np
     centres = np.array([f['centre'] for f in frames])
     kept_p, kept_c, lifted = [], [], 0
     for i, f in enumerate(frames):
-        pts, px = backproject(f['z'], f['K'], f['cam_from_world'], stride); lifted += len(pts)
+        pts, px = backproject(f['z'], f['K'], f['cam_from_world'], stride, f.get('rays')); lifted += len(pts)
         order = np.argsort(np.linalg.norm(centres - centres[i], axis=1))
         votes = np.zeros(len(pts), int)
         for j in [j for j in order if j != i][:neighbours]:
-            _, agree = agreement(pts, frames[j]['z'], frames[j]['K'], frames[j]['cam_from_world'], tolerance)
+            _, agree = agreement(pts, frames[j]['z'], frames[j]['K'], frames[j]['cam_from_world'], tolerance, frames[j].get('project'))
             votes += agree
         ok = votes >= min_agree
         kept_p.append(pts[ok]); kept_c.append(f['rgb'][px[ok, 0], px[ok, 1]].astype(float))
@@ -169,8 +176,14 @@ def frames_from_model(model, images_dir, session, log=print):
             skipped += 1; continue
         s, t, error, n = fit; errors.append(error)
         lo, hi = np.percentile(z[front], [2, 98])
+        # The camera's own model (COLMAP fits radial distortion) maps between map pixels and rays, both ways.
+        rows_c, cols_c = np.mgrid[0:h, 0:w]
+        grid = np.stack([(cols_c.ravel() + 0.5) / sx, (rows_c.ravel() + 0.5) / sy], 1)
+        rays = np.asarray(camera.cam_from_img(grid), float).reshape(h, w, 2)
+        project = lambda cam, camera=camera, sx=sx, sy=sy: np.asarray(camera.img_from_cam(cam), float) * (sx, sy)
         frames.append({'name': image.name, 'z': depth_map(disparity, s, t, (0.5 * lo, 2.0 * hi)), 'K': K, 'cam_from_world': M,
-                       'rgb': np.asarray(rgb_full.resize((w, h))), 'centre': np.asarray(image.projection_center()), 'fit_points': n})
+                       'rays': rays, 'project': project, 'rgb': np.asarray(rgb_full.resize((w, h))),
+                       'centre': np.asarray(image.projection_center()), 'fit_points': n})
     stats = {'frames': len(frames), 'skipped_frames': skipped,
              'median_alignment_error': float(np.median(errors)) if errors else None}
     log(f'aligned depth for {len(frames)} frames ({skipped} skipped), median relative error {stats["median_alignment_error"]}')
