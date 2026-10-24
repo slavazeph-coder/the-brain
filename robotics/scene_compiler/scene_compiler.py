@@ -7,6 +7,7 @@ Turns what the World Builder already exports into a simulation-ready scene:
        camera model for the sidecar frame (fov degrees; the site's depth path uses 60)
   out: scene.glb  (browser Arena / three.js)       scene.usda  (Isaac Sim / Omniverse, written directly)
        scene.json (every object: label, box, centre, size, provenance: observed | detected | unknown)
+       In metres, every cluster of points above the floor that is not a wall becomes its own measured object.
 
 Everything here is derived from observed geometry. Nothing is invented: unseen space is exported as an
 explicit "unknown" volume, never as free floor. Inferred fill (stage 2) will be a separate, tagged layer.
@@ -63,38 +64,153 @@ def floor_plane(pts, floor):
     return percentile([p[1] for p in pts], 0.05)
 
 
-def wall_segments(pts, floor_y, cell=0.25, min_height=0.8, min_cells=4):
-    """Vertical structure: XZ cells whose points span >= min_height above the floor, grouped into 8-connected
-    components, each fitted with a PCA-oriented box (so a wall seen diagonally is one wall, not a staircase).
-    Returns per wall: centre (x,z), yaw (radians about Y), length, thickness, height, support (point count)."""
-    span, members = {}, {}
-    for i, (x, y, z, *_) in enumerate(pts):
-        if y < floor_y + 0.05: continue
-        k = (math.floor(x / cell), math.floor(z / cell)); lo, hi = span.get(k, (y, y)); span[k] = (min(lo, y), max(hi, y))
-        members.setdefault(k, []).append(i)
-    tall = {k for k, (lo, hi) in span.items() if hi - lo >= min_height}
-    walls, seen = [], set()
-    for k in sorted(tall):
-        if k in seen: continue
-        comp, stack = [], [k]; seen.add(k)
-        while stack:
-            c = stack.pop(); comp.append(c)
-            for dx in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    n = (c[0] + dx, c[1] + dz)
-                    if n in tall and n not in seen: seen.add(n); stack.append(n)
-        if len(comp) < min_cells: continue
-        idx = [i for c in comp for i in members[c]]; P = [(pts[i][0], pts[i][2]) for i in idx]
-        mx, mz = sum(x for x, _ in P) / len(P), sum(z for _, z in P) / len(P)
-        sxx = sum((x - mx) ** 2 for x, _ in P); szz = sum((z - mz) ** 2 for _, z in P); sxz = sum((x - mx) * (z - mz) for x, z in P)
-        yaw = 0.5 * math.atan2(2 * sxz, sxx - szz)  # principal axis in XZ
+def floor_margin(pts, floor_y):
+    """How far above the floor plane points still belong to the floor: twice the floor layer's own scatter, between 5
+    and 15 cm. Sparse points sit on the floor to a centimetre; dense model-depth points scatter several centimetres."""
+    near = sorted(p[1] - floor_y for p in pts if abs(p[1] - floor_y) < 0.3)
+    if len(near) < 20: return 0.05
+    return min(0.15, max(0.05, percentile(near, 0.84) - percentile(near, 0.16)))
+
+
+# Walls are found from points above most furniture (1.3–2.3 m over the floor) as vertical planes, then given every point
+# along that stretch within 2.5 times the wall's own scatter (WALL_TOLERANCE to 15 cm) of the plane. A wall is at least a
+# metre long and 1.2 m tall. A line whose points mostly lie along a wall already found (within its band plus 5 cm) is
+# that wall again, seen through noisy depth, not another wall.
+WALL_HIGH, WALL_TOP, WALL_TOLERANCE, WALL_MIN_LENGTH, WALL_MIN_HEIGHT, WALL_LIMIT = 1.3, 2.3, 0.06, 1.0, 1.2, 8
+WALL_MIN_SPAN = 0.8  # metres of height the wall's own points must cover (furniture may hide its lower part)
+# A doorway: at least WALL_GAP along a wall with none of its points below WALL_DOOR_TOP (a lintel may sit above it).
+WALL_GAP, WALL_DOOR_TOP = 0.5, 1.9
+
+
+def along_wall(w, XZ):
+    """The share of plan points XZ (N × 2) lying on wall w: within its band (plus 5 cm) of its line and its length."""
+    import numpy as np
+    d = np.array([math.cos(w["yaw"]), math.sin(w["yaw"])]); n = np.array([-d[1], d[0]]); rel = XZ - np.array(w["centre"])
+    return float(((np.abs(rel @ n) < w["band"] + 0.05) & (np.abs(rel @ d) < w["length"] / 2 + 0.2)).mean())
+
+
+def wall_spans(t, a0, a1):
+    """[a0, a1] along a wall, split into the stretches its low points t support: an inner gap of at least WALL_GAP
+    is an opening. The ends stay at a0 and a1 (a wall's lower part may be hidden there); without low points it is one."""
+    import numpy as np
+    t = np.sort(np.asarray(t, float)); t = t[(t > a0) & (t < a1)]
+    if len(t) == 0: return [(float(a0), float(a1))]
+    gaps = np.flatnonzero(np.diff(t) >= WALL_GAP)
+    return [(float(s0), float(s1)) for s0, s1 in zip([a0, *t[gaps + 1]], [*t[gaps], a1])]
+
+
+def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
+    """Walls by RANSAC on vertical planes. Returns (walls, rest): walls with centre (x, z), yaw, length, thickness, y0, y1,
+    support and member indices; rest, the indices of points above the floor margin that belong to no wall. A plane with a
+    doorway in it gives one wall per stretch either side; the points above the opening stay with the wall."""
+    import numpy as np
+    P = np.asarray([p[:3] for p in pts], float); rng = np.random.default_rng(seed)
+    above = np.flatnonzero(P[:, 1] > floor_y + margin)
+    high = above[(P[above, 1] > floor_y + WALL_HIGH) & (P[above, 1] < floor_y + WALL_TOP)]
+    taken = np.zeros(len(P), bool); tried = np.zeros(len(P), bool); walls, attempts, planes = [], 0, 0
+    while planes < WALL_LIMIT and attempts < 2 * WALL_LIMIT:
+        pool = high[~taken[high] & ~tried[high]]
+        if len(pool) < 20: break
+        attempts += 1; XZ = P[pool][:, [0, 2]]; best, best_count = None, 0
+        for _ in range(iterations):
+            i, j = rng.choice(len(pool), 2, replace=False); d = XZ[j] - XZ[i]; length = math.hypot(*d)
+            if length < 0.3: continue
+            normal = np.array([-d[1], d[0]]) / length; count = int((np.abs((XZ - XZ[i]) @ normal) < WALL_TOLERANCE).sum())
+            if count > best_count: best, best_count = (XZ[i], normal), count
+        if best is None or best_count < max(20, 0.02 * len(high)): break
+        inl = np.abs((XZ - best[0]) @ best[1]) < WALL_TOLERANCE
+        Q = XZ[inl]; centre = Q.mean(0); _, _, vt = np.linalg.svd(Q - centre, full_matrices=False)  # refit the line
+        direction, normal = vt[0], np.array([-vt[0][1], vt[0][0]])
+        along = (Q - centre) @ direction; a0, a1 = np.percentile(along, [2, 98])
+        near = np.abs((XZ - centre) @ normal); band = min(0.15, max(WALL_TOLERANCE, 2.5 * float(np.median(near[near < 0.15])) * 1.4826))
+        rel = P[above][:, [0, 2]] - centre; t, n = rel @ direction, rel @ normal
+        members = above[(np.abs(n) < band) & (t > a0 - 0.1) & (t < a1 + 0.1) & ~taken[above]]
+        tried[pool[inl]] = True  # a rejected line is not sampled again, but its points stay free for objects
+        if sum(along_wall(w, Q) for w in walls) > 0.5:
+            taken[pool[inl]] = True; continue  # the scatter of a wall already found (its stretches together)
+        if a1 - a0 < WALL_MIN_LENGTH or len(members) < 20: continue
+        # A wall is seen over a real height; a long horizontal surface in the band (a shelf top) is not one.
+        if np.percentile(P[members, 1], 95) - np.percentile(P[members, 1], 5) < WALL_MIN_SPAN: continue
+        y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
+        if y1 - y0 < WALL_MIN_HEIGHT: continue
+        taken[members] = True; planes += 1; on = np.isin(above, members); spread = n[on]
+        thickness = max(0.1, float(np.percentile(spread, 90) - np.percentile(spread, 10)))
+        low = t[(np.abs(n) < band) & (P[above, 1] < floor_y + WALL_DOOR_TOP)]
+        for s0, s1 in wall_spans(low, a0, a1):
+            s0, s1 = min(s0, (s0 + s1) / 2 - 0.05), max(s1, (s0 + s1) / 2 + 0.05)  # a stub between two openings stays a wall
+            mine = members[(t[on] >= s0 - 0.1) & (t[on] <= s1 + 0.1)]; mid = centre + direction * (s0 + s1) / 2
+            walls.append({"centre": [float(mid[0]), float(mid[1])], "yaw": math.atan2(direction[1], direction[0]), "length": float(s1 - s0),
+                          "thickness": thickness, "y0": y0, "y1": y1, "support": int(len(mine)), "band": band, "members": mine.tolist()})
+    return walls, [int(i) for i in above if not taken[i]]
+
+
+# Object separation works in metres: 10 cm cells, up to 2.4 m above the floor (higher is ceiling and wall tops).
+OBJECT_CELL, OBJECT_MAX_HEIGHT, OBJECT_LIMIT = 0.1, 2.4, 200
+
+
+def object_box(P, floor_y):
+    """A box oriented by PCA in plan around points P (rows x, y, z, ...), trimmed to the 3–97% extents so a few stray
+    points do not inflate it. Its long side is `length`. An object whose lowest points are within 0.3 m of the floor
+    stands on it, so its box starts at the floor."""
+    mx, mz = sum(p[0] for p in P) / len(P), sum(p[2] for p in P) / len(P)
+    def extents(yaw):
         ca, sa = math.cos(yaw), math.sin(yaw)
-        along = [ (x - mx) * ca + (z - mz) * sa for x, z in P]; across = [-(x - mx) * sa + (z - mz) * ca for x, z in P]
-        ys = [pts[i][1] for i in idx]
-        walls.append({"centre": [mx, mz], "yaw": yaw, "length": percentile(along, 0.98) - percentile(along, 0.02),
-                      "thickness": max(0.1, percentile(across, 0.9) - percentile(across, 0.1)),
-                      "y0": max(floor_y, percentile(ys, 0.02)), "y1": percentile(ys, 0.98), "support": len(idx), "cells": len(comp)})
-    return walls
+        along = [(p[0] - mx) * ca + (p[2] - mz) * sa for p in P]; across = [-(p[0] - mx) * sa + (p[2] - mz) * ca for p in P]
+        return percentile(along, 0.03), percentile(along, 0.97), percentile(across, 0.03), percentile(across, 0.97)
+    # The smallest trimmed rectangle over 5-degree steps: PCA alone picks an arbitrary axis for a square footprint.
+    yaw = min((math.radians(d) for d in range(0, 90, 5)), key=lambda t: (lambda e: (e[1] - e[0]) * (e[3] - e[2]))(extents(t)))
+    a0, a1, b0, b1 = extents(yaw)
+    if b1 - b0 > a1 - a0: yaw += math.pi / 2; a0, a1, b0, b1 = extents(yaw)  # length is the long side
+    ca, sa = math.cos(yaw), math.sin(yaw)
+    ys = [p[1] for p in P]; y0, y1 = percentile(ys, 0.03), percentile(ys, 0.97)
+    ac, bc = (a0 + a1) / 2, (b0 + b1) / 2
+    return {"centre": [mx + ac * ca - bc * sa, mz + ac * sa + bc * ca], "yaw": yaw, "length": max(a1 - a0, 0.02),
+            "thickness": max(b1 - b0, 0.02), "y0": floor_y if y0 - floor_y < 0.3 else y0, "y1": y1, "support": len(P)}
+
+
+def separate_objects(pts, floor_y, candidates, cell=OBJECT_CELL, min_points=None, limit=OBJECT_LIMIT):
+    """Every cluster of the candidate points (above the floor, in no wall) below OBJECT_MAX_HEIGHT, as its own measured
+    object: occupied cells joined through their faces (a diagonal touch does not join two objects), each cluster fitted
+    with object_box. Clusters smaller than min_points (0.3% of the cloud, at least 30), under 15 cm long or 5 cm thick
+    stay points. Largest first, with member indices."""
+    top = floor_y + OBJECT_MAX_HEIGHT
+    min_points = min_points or max(30, round(0.003 * len(pts)))
+    cells = {}
+    for i in candidates:
+        p = pts[i]
+        if p[1] < top:
+            cells.setdefault((math.floor(p[0] / cell), math.floor(p[1] / cell), math.floor(p[2] / cell)), []).append(i)
+    seen, objects = set(), []
+    for k in cells:
+        if k in seen: continue
+        members, stack = [], [k]; seen.add(k)
+        while stack:
+            c = stack.pop(); members += cells[c]
+            for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+                n = (c[0] + dx, c[1] + dy, c[2] + dz)
+                if n in cells and n not in seen: seen.add(n); stack.append(n)
+        if len(members) < min_points: continue
+        box = object_box([pts[i] for i in members], floor_y)
+        if box["length"] < 0.15 or box["thickness"] < 0.05 or box["y1"] - box["y0"] < 0.1: continue  # slivers stay points
+        box["members"] = members; objects.append(box)
+    objects.sort(key=lambda o: -o["support"])
+    return objects[:limit]
+
+
+def label_objects(objects, pts, placed):
+    """Name separated objects from lifted detections: a detection labels the object with the most of its points inside
+    the detection's box, if that is at least 30% of the object. Returns the detections that labelled nothing."""
+    left = []
+    for det in placed:
+        lo, hi = det["min"], det["max"]
+        inside = lambda p: all(lo[i] <= p[i] <= hi[i] for i in range(3))
+        scores = [(sum(1 for i in o["members"] if inside(pts[i])) / len(o["members"]), n) for n, o in enumerate(objects) if "label" not in o]
+        best = max(scores, default=(0, None))
+        if best[0] >= 0.3:
+            objects[best[1]].update(label=det["label"], detector=det["detector"])
+        else:
+            left.append(det)
+    return left
 
 
 def unproject_box(box, w, h, fov, depth_samples):
@@ -232,7 +348,7 @@ def emit_usd(out, scene, pts):
 
 
 def add_oriented_box(name, w, provenance, label, color):
-    """Wall box rotated about the vertical axis (Y-up yaw -> Blender Z rotation)."""
+    """A box rotated about the vertical axis (Y-up yaw -> Blender Z rotation): walls and separated objects."""
     cx, cz, y0, y1 = w["centre"][0], w["centre"][1], w["y0"], w["y1"]
     bpy.ops.mesh.primitive_cube_add(size=1, location=(cx, -cz, (y0 + y1) / 2)); ob = bpy.context.active_object
     ob.scale = (w["length"], w["thickness"], y1 - y0); ob.rotation_euler = (0, 0, -w["yaw"]); ob.name = name
@@ -240,6 +356,11 @@ def add_oriented_box(name, w, provenance, label, color):
     ob["provenance"] = provenance; ob["label"] = label; ob["support_points"] = w["support"]
     return ob, {"name": name, "label": label, "provenance": provenance, "centre": [cx, (y0 + y1) / 2, cz], "size": [w["length"], y1 - y0, w["thickness"]],
                 "yaw_degrees": math.degrees(w["yaw"]), "support_points": w["support"]}
+
+
+# Distinct colours for separated objects (BrainSNN purple first), so neighbouring objects read as separate in the viewer.
+OBJECT_COLOURS = [(0.66, 0.33, 0.97, 1), (0.0, 0.80, 0.85, 1), (0.98, 0.70, 0.25, 1), (0.45, 0.85, 0.45, 1),
+                  (0.95, 0.45, 0.60, 1), (0.40, 0.60, 1.0, 1), (0.95, 0.90, 0.40, 1), (0.80, 0.55, 1.0, 1)]
 
 
 def add_box(name, lo, hi, provenance, label, color):
@@ -279,16 +400,26 @@ def main():
     # Floor: the observed footprint (2–98% core), a thin slab at floor_y.
     _, rec = add_box("floor_observed", [ex[0], floor_y - 0.02, ez[0]], [ex[1], floor_y, ez[1]], "observed", "floor", (0.55, 0.45, 0.30, 1))
     scene["objects"].append(rec)
-    # Walls: vertical runs of tall cells.
-    for i, w in enumerate(wall_segments(pts, floor_y)):
+    # Walls: vertical planes found above furniture height. Whatever stands against them is left for object separation.
+    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin)
+    for i, w in enumerate(walls):
         _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1)); scene["walls"].append(rec)
-    # Objects from detections: lift each 2D box with the cloud points that project inside it.
-    if a.detections:
-        placed, unplaced = lift_detections(pts, json.loads(Path(a.detections).read_text()), a.fov, a.min_cluster)
-        for det in placed:
-            _, rec = add_box(det["name"], det["min"], det["max"], "detected", det["label"], (0.20, 0.55, 0.85, 1))
-            rec["support_points"] = det["support_points"]; rec["detector"] = det["detector"]; scene["objects"].append(rec)
-        scene["objects"].extend(unplaced)
+    # Objects: in metres, every other cluster above the floor is separated and measured. Sizes need a measured scale.
+    separated = separate_objects(pts, floor_y, rest) if metric else []
+    scene["separation"] = ({"done": True, "cell_m": OBJECT_CELL, "floor_margin_m": round(margin, 3), "max_height_m": OBJECT_MAX_HEIGHT} if metric
+                           else {"done": False, "reason": "Object sizes need a measured scale."})
+    # Detections: lift each 2D box with the cloud points that project inside it, and name the object it overlaps.
+    placed, unplaced = (lift_detections(pts, json.loads(Path(a.detections).read_text()), a.fov, a.min_cluster)
+                        if a.detections else ([], []))
+    for det in label_objects(separated, pts, placed):
+        _, rec = add_box(det["name"], det["min"], det["max"], "detected", det["label"], (0.20, 0.55, 0.85, 1))
+        rec["support_points"] = det["support_points"]; rec["detector"] = det["detector"]; scene["objects"].append(rec)
+    for i, ob in enumerate(separated):
+        _, rec = add_oriented_box(f"object_{i+1}", ob, "observed", ob.get("label", "object"), OBJECT_COLOURS[i % len(OBJECT_COLOURS)])
+        rec["kind"] = "separated"
+        if "detector" in ob: rec["labelSource"] = ob["detector"]
+        scene["objects"].append(rec)
+    scene["objects"].extend(unplaced)
     # Unknown: everything inside the room box that no observed point touches, as a tagged volume (coarse grid).
     cell = UNKNOWN_CELL; occupied = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] > floor_y + 0.05}
     seen_floor = {(math.floor(p[0] / cell), math.floor(p[2] / cell)) for p in pts if p[1] <= floor_y + 0.05}
@@ -311,6 +442,7 @@ def main():
     emit_ifc(out, scene)
     bpy.ops.wm.save_as_mainfile(filepath=str(out / "scene.blend"))
     scene["counts"] = {"points": len(pts), "walls": len(scene["walls"]), "objects": sum(1 for o in scene["objects"] if o["provenance"] == "detected"),
+                       "separated": len(separated),
                        "unplaced": sum(1 for o in scene["objects"] if o["provenance"] == "detected-unplaced"), "unknown_cells": len(scene["unknown"])}
     (out / "scene.json").write_text(json.dumps(scene, indent=1))
     print("SCENE_OK", json.dumps(scene["counts"]), "floor_y=%.3f extent=%.2fx%.2f ceiling=%.2f" % (floor_y, ex[1] - ex[0], ez[1] - ez[0], ceiling - floor_y))

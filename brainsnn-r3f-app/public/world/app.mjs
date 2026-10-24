@@ -262,13 +262,14 @@ async function openObservationArtifact(index){
   finally{if(artifactAbort===controller)artifactAbort=null;}
 }
 // A worker's simulation scene opens in a dialog with the Arena's mesh viewer, loaded only when first needed.
-let sceneAbort=null,sceneViewer=null,scenePromise=null;
+// sceneMap holds the open scene's metric scene.json, the only input to a planning map built from a scene.
+let sceneAbort=null,sceneViewer=null,scenePromise=null,sceneMap=null;
 function sceneStatus(message,error=false){$('scene-status').textContent=message;$('scene-status').classList.toggle('error',error);}
 async function openSceneArtifact(index){
   if(!job||!client)return;sceneAbort?.abort();const controller=new AbortController();sceneAbort=controller;
   const sourceJob=job,sourceClient=client,item=sourceJob.artifacts[index],dialog=$('scene-dialog');
   // Open at once and drop the previous scene's status and facts, so nothing stale shows while modules and bytes load.
-  $('scene-facts').replaceChildren();sceneStatus(`Downloading and checking ${item?.name??'the scene'}…`);sceneViewer?.clear();
+  $('scene-facts').replaceChildren();sceneMap=null;$('scene-plan').hidden=true;sceneStatus(`Downloading and checking ${item?.name??'the scene'}…`);sceneViewer?.clear();
   if(!dialog.open)dialog.showModal();
   try{
     const {SCENE_PREVIEW_BYTES,sceneFacts}=await import('./scene-preview.mjs');
@@ -287,7 +288,8 @@ async function openSceneArtifact(index){
     $('scene-facts').replaceChildren(...sceneFacts(scene).map(text=>Object.assign(document.createElement('li'),{textContent:text})));
     sceneStatus(`${item.name} from ${sourceJob.engine} · ${parsed.meshes.toLocaleString('en')} meshes · ${parsed.vertices.toLocaleString('en')} vertices · SHA-256 checked`);
     event('scene_opened',{job:sourceJob.id,engine:sourceJob.engine,sha256:item.sha256,sceneJsonSha256:sceneIndex>=0?sourceJob.artifacts[sceneIndex].sha256:null});
-    status('Simulation scene opened. It is a visual scene; planning still uses the reviewed map.');
+    if(scene?.schema==='brainsnn.scene.v1'&&scene.units==='m'){sceneMap={scene,job:sourceJob.id,engine:sourceJob.engine,source:typeof scene.source==='string'?scene.source.slice(0,80):item.name};$('scene-plan').hidden=false;}
+    status('Simulation scene opened. It is a visual scene; a robot plans in it only through a map you review.');
   }catch(e){if(!controller.signal.aborted){sceneStatus('Scene preview failed: '+e.message,true);status('Scene preview failed: '+e.message,true);}}
   finally{if(sceneAbort===controller)sceneAbort=null;}
 }
@@ -386,6 +388,14 @@ document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft',
 $('workspace').addEventListener('dragover',e=>{e.preventDefault();});$('workspace').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files.length)void addFiles(e.dataTransfer.files);});
 $('connection').addEventListener('close',cancelConnection);
 $('scene-dialog').addEventListener('close',()=>sceneAbort?.abort());$('scene-reset').onclick=()=>sceneViewer?.reset();
+// A metric scene's walls, separated objects and unobserved floor become an unreviewed planning map; the robot waits for review.
+$('scene-plan').onclick=async()=>{try{if(!sceneMap)return;const {worldFromScene}=await import('./scene-preview.mjs');
+  const {world:proposed,counts,summary}=worldFromScene(sceneMap.scene,`Scene map / ${sceneMap.source}`);
+  if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with a map built from this simulation scene?'))return;
+  $('scene-dialog').close();
+  apply(proposed,summary);
+  event('scene_map_proposed',{job:sceneMap.job,engine:sceneMap.engine,...counts,boxes:proposed.objects.length,scaleVerified:false});setTab('world');
+}catch(e){sceneStatus('A planning map could not be built from this scene: '+e.message,true);}};
 window.addEventListener('pagehide',e=>{cancelConnection();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();capture.stop({discard:true});stopReplay();planner?.terminate();planner=null;planning=false;remoteAbort?.abort();remoteAbort=null;clearTimeout(poll);if(e.persisted)return;observations.clear();visualViewer?.destroy();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;sources.forEach(s=>URL.revokeObjectURL(s.url));renderer?.destroy();});
 window.addEventListener('pageshow',e=>{if(!e.persisted)return;renderPanel();renderMedia();update();if(job&&client&&!['complete','failed','cancelled'].includes(job.status)){remoteAbort=new AbortController();void checkJob(remoteAbort.signal).catch(error=>{remoteAbort=null;status('Could not resume job status: '+error.message,true);});}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopReplay();capture.stop();}});

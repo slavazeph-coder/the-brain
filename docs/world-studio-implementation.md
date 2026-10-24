@@ -45,7 +45,7 @@ The worker engine `scene-usd` ([`scene_usd.py`](../robotics/world_worker/scene_u
 - `scene.ifc` for BIM tools (IFC4, metres), also only for a metric scene. Walls are `IfcWall` with their measured orientation, the floor is an `IfcSlab`, placed detections are `IfcFurniture`, and unknown space is an `IfcBuildingElementProxy` named "Unknown space (not free)". Each element carries its provenance and support count in `Pset_BrainSNN`, and the project records the scale source, the measured distance, `SelfReported` true and `MetricVerified` false. On the metric ETH3D office scene, IfcOpenShell's validation, including the IFC4 EXPRESS rules, reported 0 issues, and the IFC wall and floor geometry matched the GLB to the millimetre.
 
 Provenance follows the same rules as the planning map:
-- **observed:** the floor and PCA-oriented walls.
+- **observed:** the floor, walls (vertical planes) and, in metric scenes, separated objects measured from their points.
 - **unknown:** floor no point reached. It is exported as a tagged volume, never as free space.
 - **detected:** 2D detections from an observation sidecar lifted into 3D boxes. Only the compiler run directly with `--detections` does this: the worker engine never passes detections, so worker scenes contain no detected objects. The compiler lifts every detection in the sidecar and does not read review decisions, so pass only detections you have reviewed. A detection is lifted only through its frame's camera pose. Without that pose, or without a box, it stays unplaced and the reason is recorded.
 
@@ -77,6 +77,40 @@ So the scale and geometry are right where points exist, but a 12-photo sparse CP
 - completeness: how much of the 2 cm voxelised scan has a reconstructed point within 5 / 10 cm.
 
 CPU baseline, the 12 office photos above through `colmap-sparse`: camera RMS 1.5 cm, accuracy median 1.5 cm (87% within 5 cm), completeness 2.1% within 5 cm and 5.3% within 10 cm. Completeness is the number dense GPU reconstruction has to raise.
+
+### Dense CPU points and separated objects (October 24, 2026)
+
+**Dense points without a GPU.** The `colmap-dense-cpu` engine is the same COLMAP adapter run with `--densify-model` ([`densify.py`](../robotics/world_worker/densify.py)). After the sparse reconstruction, it:
+1. Predicts depth for every registered frame with Depth Anything V2 Small, the Apache-2.0 checkpoint the site already runs on the device. It is pinned as ONNX by revision and SHA-256, and any other file is refused.
+2. Fits each frame's depth to that frame's own triangulated points (`1/z = s·d + t`), which puts it in the reconstruction's units. Lifting and reprojection go through COLMAP's own camera model, so the fitted radial distortion is respected.
+3. Keeps a lifted point only where at least 2 of the 4 nearest frames predict the same depth within 2%.
+4. Writes `dense-preview.ply` (at most 50,000 points) before `sparse-preview.ply`, so the site opens the dense cloud. Camera poses and measured scale work unchanged, and `reconstruction.json` records the model, the alignment error and the counts under `dense`.
+
+Scored with the ETH3D benchmark on the same 12 office photos:
+
+| Points | Median error | Within 5 cm of the scan | Scan covered within 5 / 10 cm |
+|---|---|---|---|
+| Sparse (`colmap-sparse`) | 1.5 cm | 87% | 2.1% / 5.3% |
+| Dense CPU (2%, 2 of 4 neighbours) | 3.1 cm | 59% | 7.6% / 11.4% |
+
+Dense CPU covers 3.6 times as much of the room, at lower point accuracy. The agreement tolerance sets the trade-off: at 5%, coverage is 13.8% / 18.0% with a 6.8 cm median error; requiring 3 of 6 neighbours at 2% gives 2.1 cm and 5.0%. The ETH3D photos carry a radial distortion of −0.04, and handling it improved the default from 3.4 cm and 7.2%. These ETH3D figures come from 12 widely spaced photos; a walkthrough gives each frame closer neighbours. On the 62 s room walkthrough, all 57 frames aligned to their SfM points with a median relative error of 1.3%. The depth pass took about 80 s on 4 CPU threads, fusion took 7 s, and about 39,000 points were kept. Dense GPU reconstruction (MapAnything on the 4090) remains the path to survey-grade coverage.
+
+**Every object separated and measured.** In a metric scene the compiler now finds:
+- **Walls:** vertical planes, found by RANSAC on points 1.3–2.3 m above the floor, above most furniture. A wall is at least 1 m long and 1.2 m tall, its own points cover at least 0.8 m of height (so a shelf top is not a wall), and it takes the points within 2.5 times its own scatter (6–15 cm). Furniture standing against it stays furniture. A doorway (at least 50 cm along the wall with none of its points below 1.9 m) splits it into one wall per stretch, and the points above the opening stay with the wall, so the opening stays passable.
+- **Floor:** points within twice the floor layer's scatter of the floor plane (5–15 cm) count as floor.
+- **Objects:** every other cluster up to 2.4 m above the floor is its own object. Clusters are 10 cm cells joined through their faces, at least 0.3% of the cloud.
+- **Measurements:** each object gets the smallest oriented box around its 3–97% extents, in metres, standing on the floor when its lowest points are within 30 cm of it.
+- **Exports:** objects are written to `scene.json` with `kind: separated` and to the GLB and USD with their orientation. In IFC, an object nothing has named is an `IfcBuildingElementProxy` called "Object N", with its length, width and height in `Pset_BrainSNN`. An object a lifted detection overlaps (at least 30% of its points inside the detection's box) takes that label and becomes `IfcFurniture`.
+- **Dialog:** it lists the count and the largest objects' measurements.
+- **Robot route in the scene:** for a metric scene, the dialog offers **Plan a robot route in this scene**. It turns `scene.json` into an unreviewed World v1 map in the scene's own frame (`worldFromScene` in [`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)):
+  - The observed floor sets the map's size.
+  - Walls and objects become obstacles: axis-aligned boxes that contain them. A diagonal one is cut into up to 4 strips along its length, so it blocks little more than itself and the map stays within 128 boxes. A scene with more elements than that is refused.
+  - Floor cells no point reached stay unknown, and the rest of the observed floor is proposed as free.
+  - The robot starts at the most open point and plans only after both reviews.
+
+  On the dense room walkthrough at the same measured scale, the map proposed from the points left a robot vacuum 0.2 m² (a 3.4 m route from the nearest start that fits), because the dense floor's scatter reads as obstacles. The scene map gave it 3.4 m² and a 67.8 m coverage route around 8 walls and 14 separated objects. Two more objects lay outside the observed floor.
+
+Objects that touch, such as a sofa with a table against it, stay one object, because geometry alone cannot split them. On the dense room walkthrough this gave 8 objects, including an armchair-sized 1.01 × 0.97 m, 1.06 m high, and 6 wall planes.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a job returns a `.glb`, Evidence offers **Explore scene.glb in 3D** next to the downloads ([`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)). The workspace downloads the file with a short-lived ticket, checks its SHA-256, and opens it in a dialog with the Arena's mesh viewer, which loads only on first use. Beside the scene it lists only what `scene.json` records: observed points and walls, placed and unplaced detections, unknown floor cells, units and whether USD was written. A missing or malformed `scene.json` is shown as unknown, never guessed.
 

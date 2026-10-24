@@ -10,12 +10,16 @@ USD exporter), `scene.blend`, `scene.json` (every object with label, size, centr
 
 `scene.ifc` (IFC4, metres, written by `ifc_export.py` without IfcOpenShell) follows the same rule for BIM tools: walls as `IfcWall`,
 the floor as `IfcSlab`, placed detections as `IfcFurniture`, unknown space as `IfcBuildingElementProxy`, provenance in `Pset_BrainSNN`.
+In metric scenes every cluster of points above the floor that is not a wall is separated and measured: walls are vertical planes found by
+RANSAC above furniture height (split at doorways, so an opening stays an opening), objects are face-connected 10 cm cells fitted with the
+smallest oriented box. An unnamed object is an
+`IfcBuildingElementProxy` "Object N" with its length, width and height; one a detection overlaps takes its label as `IfcFurniture`.
 `scene.usda` is written only for metric clouds (a measured scale from World Builder), because USD's `metersPerUnit = 1`
 would otherwise turn every arbitrary reconstruction unit into a metre in Isaac Sim; `scene.json` records why it was skipped.
 Detections are lifted only when their frame carries `cameraFromCloud` (rigid 4x4, row-major, camera looking down -z, in the
 cloud's frame); otherwise, or without a box, they stay `detected-unplaced` with the reason.
 
-Provenance is the contract: `observed` (floor footprint, PCA-oriented walls from the points), `detected` (on-device 2D detections
+Provenance is the contract: `observed` (floor footprint, wall planes and separated objects from the points), `detected` (on-device 2D detections
 lifted to 3D boxes with the points behind them), `unknown` (floor cells no point touched — exported as a tagged volume, never as
 free space). Nothing is inferred in stage 1. Only multi-view clouds (`sourceFrame: colmap`) are accepted; single-photo depth
 is refused because it is a perspective wedge, not geometry (`--allow-unverified` for experiments).

@@ -1,9 +1,17 @@
 /** Simulation scene preview: a worker's scene.glb in the same-site mesh viewer, described only by its own scene.json. */
+import { SCHEMA as WORLD_SCHEMA, LIMITS, normalizeWorld } from './core.mjs';
+
 export const SCENE_PREVIEW_BYTES = 50 * 1024 ** 2;
 export const SCENE_SCHEMA = 'brainsnn.scene.v1';
 
 const count = v => Number.isSafeInteger(v) && v >= 0 ? v : null;
 const plural = (n, word) => `${n.toLocaleString('en')} ${word}${n === 1 ? '' : 's'}`;
+const metres = v => Number.isFinite(v) && v > 0 && v < 1000;
+/** "Object 1: 3.41 × 1.26 m, 0.73 m high" from a separated object's size [length, height, width]. */
+function measured(o) {
+  const name = o.label && o.label !== 'object' ? o.label : String(o.name || 'object').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+  return `${name.slice(0, 40)}: ${o.size[0].toFixed(2)} × ${o.size[2].toFixed(2)} m, ${o.size[1].toFixed(2)} m high`;
+}
 
 /** Facts from scene.json, one per line. Missing or malformed fields are reported as unknown, never guessed. */
 export function sceneFacts(scene) {
@@ -30,5 +38,108 @@ export function sceneFacts(scene) {
     : 'USD status was not recorded.');
   if (scene.ifc && typeof scene.ifc === 'object' && scene.ifc.written === true)
     facts.push('scene.ifc was written for BIM tools (IFC4, metres), with each element\'s provenance in Pset_BrainSNN.');
+  const separation = scene.separation && typeof scene.separation === 'object' ? scene.separation : null, separated = count(c.separated);
+  if (separation?.done === true && separated !== null) {
+    const largest = (Array.isArray(scene.objects) ? scene.objects : [])
+      .filter(o => o && o.kind === 'separated' && Array.isArray(o.size) && o.size.length === 3 && o.size.every(metres)).slice(0, 3);
+    facts.push(separated ? `Separated: ${plural(separated, 'object')} from the points, each measured as an oriented box in metres${largest.length ? `. Largest: ${largest.map(measured).join('; ')}` : ''}.`
+      : 'Separated: no clusters of points stand above the floor apart from walls.');
+  } else if (separation?.done === false) facts.push('Separated: none, because object sizes need a measured scale.');
   return facts;
+}
+
+const triple = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
+const title = name => String(name || 'object').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()).slice(0, 60);
+// A box with a centre and size is oriented by its yaw (none: axis-aligned); one with only min/max is axis-aligned.
+const oriented = o => triple(o.centre) && triple(o.size) && (Number.isFinite(o.yaw_degrees) || !(triple(o.min) && triple(o.max)));
+const turned = o => oriented(o) && Number.isFinite(o.yaw_degrees) && Math.abs(Math.sin(2 * o.yaw_degrees * Math.PI / 180)) > .05;
+/** Floor-plan boxes that together contain a scene element, never smaller than it. An oriented box (centre, size
+ * [length, height, width], yaw about the vertical) is cut into `strips` pieces along its length and each piece's
+ * axis-aligned box is kept, so a diagonal object blocks little more than itself; a detected object keeps its min/max. */
+function footprints(o, strips = 1) {
+  if (oriented(o)) {
+    const a = (Number.isFinite(o.yaw_degrees) ? o.yaw_degrees : 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a), [length, , width] = o.size, top = o.centre[1] + o.size[1] / 2;
+    const hx = Math.abs(width * s) / 2, hz = Math.abs(width * c) / 2;
+    return Array.from({ length: strips }, (_, i) => {
+      const t0 = length * (i / strips - .5), t1 = length * ((i + 1) / strips - .5);
+      const xs = [t0 * c, t1 * c].map(v => o.centre[0] + v), zs = [t0 * s, t1 * s].map(v => o.centre[2] + v);
+      return { x0: Math.min(...xs) - hx, x1: Math.max(...xs) + hx, z0: Math.min(...zs) - hz, z1: Math.max(...zs) + hz, top };
+    });
+  }
+  return triple(o.min) && triple(o.max) ? [{ x0: o.min[0], x1: o.max[0], z0: o.min[2], z1: o.max[2], top: o.max[1] }] : [];
+}
+/** Unknown floor cells [x, z, size] merged into runs along x, row by row. */
+function unknownRuns(cells) {
+  const valid = (Array.isArray(cells) ? cells : []).filter(u => Array.isArray(u) && u.length === 3 && u.every(Number.isFinite) && u[2] > 0)
+    .sort((a, b) => a[1] - b[1] || a[0] - b[0]), runs = [];
+  for (const [x, z, c] of valid) {
+    const last = runs.at(-1);
+    if (last && last.z0 === z && last.c === c && Math.abs(last.x1 - x) < 1e-6) last.x1 = x + c;
+    else runs.push({ x0: x, x1: x + c, z0: z, z1: z + c, c });
+  }
+  return runs;
+}
+/** The free point farthest from every box and the floor's edge, on a grid of at most about 20,000 points. */
+function openest(objects, width, depth) {
+  const step = Math.max(.1, Math.sqrt(width * depth / 20000));
+  let best = { x: width / 2, z: depth / 2 }, clearance = -Infinity;
+  for (let z = step / 2; z < depth; z += step) for (let x = step / 2; x < width; x += step) {
+    let c = Math.min(x, z, width - x, depth - z);
+    for (const o of objects) {
+      c = Math.min(c, Math.hypot(Math.max(o.x - x, 0, x - o.x - o.w), Math.max(o.z - z, 0, z - o.z - o.d)));
+      if (c <= clearance) break;
+    }
+    if (c > clearance) { clearance = c; best = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 }; }
+  }
+  return best;
+}
+
+/** A metric scene.json -> an unreviewed World v1 planning map in the scene's own frame, shifted so the observed floor
+ * starts at 0, 0. Walls and separated or detected objects are obstacles (the boxes around them); floor cells no point
+ * reached are unknown; the rest of the observed floor is proposed as free and still needs review. */
+export function worldFromScene(scene, name = 'Scene map') {
+  if (!scene || typeof scene !== 'object' || scene.schema !== SCENE_SCHEMA) throw new Error('No valid scene.json came with this scene, so it cannot become a planning map.');
+  if (scene.units !== 'm') throw new Error('A planning map needs a metric scene. Measure a known distance on the reconstruction, then build the scene again.');
+  const objects = Array.isArray(scene.objects) ? scene.objects : [], walls = Array.isArray(scene.walls) ? scene.walls : [];
+  const floor = objects.find(o => o?.name === 'floor_observed'), extent = floor && footprints(floor)[0];
+  if (!extent || !Number.isFinite(scene.floor_y)) throw new Error('This scene has no observed floor, so free space cannot be proposed.');
+  const cm = v => Math.round(v * 100) / 100, width = cm(extent.x1 - extent.x0), depth = cm(extent.z1 - extent.z0);
+  // Round outwards to whole centimetres and clip to the floor, so a box never shrinks below the element it stands for.
+  const down = v => Math.floor(v * 100 + 1e-6) / 100, up = v => Math.ceil(v * 100 - 1e-6) / 100;  // tolerant of float noise
+  const place = (b, extra) => {
+    const x0 = Math.max(0, down(b.x0 - extent.x0)), x1 = Math.min(width, up(b.x1 - extent.x0));
+    const z0 = Math.max(0, down(b.z0 - extent.z0)), z1 = Math.min(depth, up(b.z1 - extent.z0));
+    return x1 - x0 >= .02 && z1 - z0 >= .02 ? { ...extra, x: x0, z: z0, w: cm(x1 - x0), d: cm(z1 - z0) } : null;
+  };
+  const height = b => Math.min(20, Math.max(.02, cm(b.top - scene.floor_y)));
+  const elements = [...walls.map((o, i) => o && { o, id: `wall-${i + 1}`, name: title(o.name || `wall_${i + 1}`), count: 'walls', note: 'Observed wall: boxes around its measured oriented box.' }),
+    ...objects.map((o, i) => o && o !== floor && o.provenance !== 'detected-unplaced' && { o, id: `object-${i}`,
+      name: o.label && o.label !== 'object' ? String(o.label).slice(0, 60) : title(o.name), count: o.kind === 'separated' ? 'separated' : 'detected',
+      note: o.kind === 'separated' ? 'Separated from the points: boxes around its measured oriented box. Objects that touch stay one.' : 'Placed from a 2D detection and its supporting points.' })]
+    .filter(e => e && footprints(e.o).length);
+  const runs = unknownRuns(scene.unknown);
+  // Diagonal elements share what is left of the object budget as strips, at most four each.
+  const diagonal = elements.filter(e => turned(e.o)).length, spare = LIMITS.objects - elements.length - runs.length;
+  const strips = diagonal && spare > 0 ? Math.min(4, 1 + Math.floor(spare / diagonal)) : 1;
+  const counts = { walls: 0, separated: 0, detected: 0, unknown: 0, outside: 0 }, placed = [];
+  for (const e of elements) {
+    const parts = footprints(e.o, turned(e.o) ? strips : 1).map((b, k, all) => place(b, { id: all.length > 1 ? `${e.id}-${k + 1}` : e.id,
+      name: all.length > 1 ? `${e.name} (part ${k + 1} of ${all.length})` : e.name, kind: 'obstacle', h: height(b), note: e.note })).filter(Boolean);
+    if (parts.length) { placed.push(...parts); counts[e.count]++; } else counts.outside++;
+  }
+  runs.forEach((u, i) => { const r = place(u, { id: `unknown-${i + 1}`, name: `Unobserved area ${i + 1}`, kind: 'unknown', h: .05,
+    note: 'No reconstructed point reached this floor area. Blocked until observed or reviewed.' }); if (r) { placed.push(r); counts.unknown++; } });
+  if (placed.length > LIMITS.objects) throw new Error(`This scene has ${placed.length} walls, objects and unobserved areas; a planning map holds at most ${LIMITS.objects}.`);
+  const self = scene.scale?.selfReported === true;
+  const world = normalizeWorld({ schema: WORLD_SCHEMA, name: String(name).slice(0, 120), width, depth, provenance: 'observed', scaleReviewed: false, mapReviewed: false,
+    geometrySource: { kind: 'compiled-scene', name: String(scene.source || 'scene.json'), warnings: [
+      self ? 'Scale is the distance you measured, not verified.' : 'Scale comes from the scene and is not verified.',
+      'Obstacles are axis-aligned boxes around walls and separated objects (diagonal ones in strips), so they are a little larger than the objects.',
+      'Clusters too small or too low to separate are not obstacles: check for low clutter before a robot runs.',
+      'Floor no point reached is unknown; the rest of the observed floor is proposed as free.'] },
+    start: openest(placed, width, depth), objects: placed });
+  const objectCount = counts.separated + counts.detected;
+  const summary = `Map built from the simulation scene: ${plural(counts.walls, 'wall')} and ${plural(objectCount, 'object')} as obstacles, `
+    + `${plural(counts.unknown, 'unobserved area')}, ${width} × ${depth} m of observed floor${counts.outside ? ` (${counts.outside} beyond it left out)` : ''}. Review scale and obstacles, then plan.`;
+  return { world, counts, summary };
 }

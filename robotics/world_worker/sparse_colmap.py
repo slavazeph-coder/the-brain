@@ -3,6 +3,11 @@
 No downloaded models, network inputs, invented depth, or metric-scale claims.
 Accepts 3–12 overlapping photos or one 2–120 second local video. Run via the
 World Worker's adapter protocol so timeout, cancellation and disk limits apply.
+
+With --densify-model (the pinned local Depth Anything V2 Small ONNX file), it also
+writes dense-preview.ply: per-frame model depth aligned to the frame's own SfM
+points and kept only where neighbouring frames agree (see densify.py). The dense
+cloud is listed first, so the site opens it; the sparse cloud stays alongside it.
 """
 from __future__ import annotations
 import argparse
@@ -17,8 +22,10 @@ import warnings
 
 try:
     from .geometry import write_point_cloud
+    from . import densify
 except ImportError:
     from geometry import write_point_cloud
+    import densify
 
 PYCOLMAP_VERSION = '4.2.1'
 MAX_IMAGES = 60
@@ -109,7 +116,7 @@ def extract_video(source: Path, images: Path, *, max_images: int = MAX_IMAGES):
             'near_duplicate_frames': duplicates}
 
 
-def run(request: dict):
+def run(request: dict, densify_model: Path | None = None):
     import numpy as np
     import pycolmap
     if pycolmap.__version__ != PYCOLMAP_VERSION:
@@ -167,6 +174,21 @@ def run(request: dict):
     sample = [point for _, point in points[::stride]]
     visual = write_point_cloud(out / 'sparse-preview.ply', np.array([point.xyz for point in sample]),
                                np.array([point.color for point in sample]), coordinate_frame='colmap')
+    artifacts, dense = [visual], None
+    if densify_model:
+        dense_started = time.monotonic()
+        frames, frame_stats = densify.frames_from_model(model, images, densify.load_session(densify_model), log=lambda message: None)
+        if not frames:
+            raise ValueError('No frame could be aligned for dense points; the sparse reconstruction alone is reliable here.')
+        dense_points, dense_colours, fuse_stats = densify.fuse(frames)
+        if fuse_stats['points'] < 30:
+            raise ValueError('Neighbouring frames confirmed too few dense points; recapture with more overlap.')
+        artifacts = [write_point_cloud(out / 'dense-preview.ply', dense_points, np.clip(dense_colours, 0, 255).astype(np.uint8),
+                                       coordinate_frame='colmap'), visual]
+        dense = {'method': 'monocular depth per frame, aligned to its SfM points, kept where neighbouring frames agree',
+                 'model': {k: densify.MODEL[k] for k in ('repo', 'revision', 'file', 'sha256', 'license')},
+                 **frame_stats, **fuse_stats, 'tolerance': 0.02, 'min_agree': 2, 'neighbours': 4,
+                 'elapsed_seconds': round(time.monotonic() - dense_started, 3)}
     cameras = []
     for image_id in sorted(model.reg_image_ids()):
         image = model.image(image_id)
@@ -184,27 +206,31 @@ def run(request: dict):
                 'mean_reprojection_error_pixels': model.compute_mean_reprojection_error(),
                 'elapsed_seconds': round(time.monotonic() - started, 3),
                 'coordinate_frame': 'colmap', 'units': 'arbitrary', 'metric_verified': False,
-                'physics_ready': False, 'policy_executed': False, 'model_weights_used': False,
+                'physics_ready': False, 'policy_executed': False, 'model_weights_used': dense is not None,
                 'camera_intrinsics': 'estimated from resized images; not measured calibration',
                 'review_required': ['Verify scale against a measured distance', 'Align floor and up axis',
                                     'Inspect missing surfaces and author collision geometry'],
                 'warnings': ['Sparse points do not define a solid surface or free space.',
                              'Glass, blank walls, reflections and moving objects may be missing.'] +
-                            (['Some submitted views did not align; reconstruction is incomplete.'] if registered < count else []),
+                            (['Some submitted views did not align; reconstruction is incomplete.'] if registered < count else []) +
+                            (['Dense points come from a depth model checked across frames; they are less accurate than the sparse points.']
+                             if dense else []),
                 'cameras': cameras}
+    if dense: evidence['dense'] = dense
     (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
-    (out / 'manifest.json').write_text(json.dumps({'artifacts': [visual, {'name': 'reconstruction.json', 'kind': 'evidence'}]}, allow_nan=False))
+    (out / 'manifest.json').write_text(json.dumps({'artifacts': [*artifacts, {'name': 'reconstruction.json', 'kind': 'evidence'}]}, allow_nan=False))
     return evidence
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-manifest', required=True)
+    parser.add_argument('--densify-model', type=Path, help='pinned Depth Anything V2 Small ONNX file; adds dense-preview.ply')
     args = parser.parse_args()
     request = Path(args.input_manifest)
     if request.stat().st_size > 65536:
         raise ValueError('Input manifest is too large.')
-    run(json.loads(request.read_text()))
+    run(json.loads(request.read_text()), densify_model=args.densify_model)
 
 
 if __name__ == '__main__':

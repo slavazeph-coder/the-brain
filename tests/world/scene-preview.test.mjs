@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {sceneFacts,SCENE_SCHEMA} from '../../brainsnn-r3f-app/public/world/scene-preview.mjs';
+import {sceneFacts,worldFromScene,SCENE_SCHEMA} from '../../brainsnn-r3f-app/public/world/scene-preview.mjs';
+import {planWorld,planningGate,ROBOTS,LIMITS} from '../../brainsnn-r3f-app/public/world/core.mjs';
 const scene=(over={})=>({schema:SCENE_SCHEMA,units:'arbitrary',counts:{points:6195,walls:1,objects:0,unplaced:2,unknown_cells:14},usd:{written:false,reason:'Isaac Sim reads USD in metres.'},...over});
 test('scene facts come only from scene.json and say what was observed, detected and unknown',()=>{
   const f=sceneFacts(scene());
@@ -25,3 +26,69 @@ test('a scene scaled by a distance the user measured says it is self-reported',(
   assert.match(sceneFacts(scene({units:'m',usd:{written:true},ifc:{written:true,schema:'IFC4'}}))[5],/^scene\.ifc was written for BIM tools \(IFC4, metres\)/);
   assert.equal(sceneFacts(scene({ifc:{written:false,reason:'x'}})).length,5);
   assert.equal(sceneFacts(scene({units:'m',scale:{selfReported:true,distance:'3 m'}}))[3],'Units: metres, from a distance you measured. Self-reported, not verified.');});
+test('separated objects are counted and the largest are measured, only from scene.json',()=>{
+  const objects=[{name:'object_1',label:'object',kind:'separated',size:[3.412,0.731,1.26]},{name:'object_2',label:'chair',kind:'separated',size:[0.5,0.9,0.48]},
+    {name:'floor_observed',label:'floor',size:[4,0.02,8]},{name:'object_3',kind:'separated',size:[1,NaN,1]}];
+  const f=sceneFacts(scene({units:'m',usd:{written:true},ifc:{written:true},separation:{done:true},counts:{points:10,walls:2,objects:0,unplaced:0,unknown_cells:0,separated:3},objects}));
+  assert.equal(f[6],'Separated: 3 objects from the points, each measured as an oriented box in metres. Largest: Object 1: 3.41 × 1.26 m, 0.73 m high; chair: 0.50 × 0.48 m, 0.90 m high.');
+  assert.equal(sceneFacts(scene({separation:{done:false,reason:'x'}}))[5],'Separated: none, because object sizes need a measured scale.');
+  assert.equal(sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:0}}))[5],'Separated: no clusters of points stand above the floor apart from walls.');
+  assert.equal(sceneFacts(scene()).length,5,'older scenes without separation add no line');});
+
+// A measured 4 x 6 m room in the compiler's frame (floor at y = -0.02, x from -2, z from -3): two walls, a diagonal
+// separated object, a detected box, a detection that could not be placed, and three unobserved cells in a row.
+const metric=(over={})=>({schema:SCENE_SCHEMA,units:'m',scale:{source:'user-measured',selfReported:true,distance:2},source:'dense-preview.ply',floor_y:-.02,
+  objects:[{name:'floor_observed',label:'floor',min:[-2,-.04,-3],max:[2,-.02,3]},
+    {name:'object_1',label:'object',kind:'separated',centre:[.5,.38,0],size:[1.6,.8,.6],yaw_degrees:45},
+    {name:'chair',label:'chair',provenance:'detected',min:[-1.2,-.02,1.8],max:[-.7,.88,2.3]},
+    {name:'lamp',label:'lamp',provenance:'detected-unplaced',reason:'no pose'}],
+  walls:[{name:'wall_1',label:'wall',centre:[0,1.18,-2.9],size:[4,2.4,.2],yaw_degrees:0},{name:'wall_2',label:'wall',centre:[1.9,1.18,0],size:[6,2.4,.2],yaw_degrees:90}],
+  unknown:[[-2,-1,.5],[-1.5,-1,.5],[-1,-1,.5]],...over});
+const inBox=(o,x,z,r=0)=>x>=o.x-r&&x<=o.x+o.w+r&&z>=o.z-r&&z<=o.z+o.d+r;
+test('a metric scene becomes an unreviewed planning map whose boxes contain every wall and object',()=>{
+  const {world,counts,summary}=worldFromScene(metric(),'Scene map / test');
+  assert.deepEqual(counts,{walls:2,separated:1,detected:1,unknown:1,outside:0});
+  assert.equal(summary,'Map built from the simulation scene: 2 walls and 2 objects as obstacles, 1 unobserved area, 4 × 6 m of observed floor. Review scale and obstacles, then plan.');
+  assert.equal(world.provenance,'observed');assert.equal(world.scaleReviewed,false);assert.equal(world.mapReviewed,false);
+  assert.match(planningGate(world),/scale/);assert.equal(world.geometrySource.kind,'compiled-scene');
+  assert.ok(world.geometrySource.warnings.some(w=>/distance you measured, not verified/.test(w)));
+  assert.equal(world.width,4);assert.equal(world.depth,6);
+  // Every point of the diagonal object's footprint lies in one of its strips, and the strips block far less than one box would.
+  const parts=world.objects.filter(o=>o.id.startsWith('object-1-'));assert.ok(parts.length>1&&parts.every(o=>/^Object 1 \(part \d of \d\)$/.test(o.name)));
+  const a=Math.PI/4;
+  for(let u=-.8;u<=.8;u+=.05)for(let v=-.3;v<=.3;v+=.05){const x=.5+u*Math.cos(a)-v*Math.sin(a)+2,z=u*Math.sin(a)+v*Math.cos(a)+3;
+    assert.ok(parts.some(o=>inBox(o,x,z,1e-9)),`object point ${x.toFixed(2)}, ${z.toFixed(2)}`);}
+  let covered=0;for(let x=.005;x<4;x+=.01)for(let z=.005;z<6;z+=.01)if(parts.some(o=>inBox(o,x,z)))covered+=1e-4;
+  const aabb=((1.6+.6)*Math.SQRT1_2)**2;assert.ok(covered<.7*aabb,`strips block ${covered.toFixed(2)} m² vs ${aabb.toFixed(2)} m² for one box`);
+  assert.ok(parts.every(o=>Math.abs(o.h-.8)<.011),'height above the floor');
+  const wall=world.objects.find(o=>o.id==='wall-1');assert.deepEqual([wall.x,wall.z,wall.w,wall.d,wall.h],[0,0,4,.2,2.4]);
+  const chair=world.objects.find(o=>o.name==='chair');assert.deepEqual([chair.x,chair.z,chair.w,chair.d,chair.h],[.8,4.8,.5,.5,.9]);
+  assert.ok(!world.objects.some(o=>o.name==='lamp'),'an unplaced detection has no geometry to block with');
+  const unknown=world.objects.filter(o=>o.kind==='unknown');assert.deepEqual(unknown.map(o=>[o.x,o.z,o.w,o.d]),[[0,2,1.5,.5]]);
+  assert.ok(!world.objects.some(o=>inBox(o,world.start.x,world.start.z,.3)),'the start is clear of every box');
+  // An element entirely beyond the observed floor is left out and said so; one partly on it is clipped to the floor.
+  const beyond=worldFromScene(metric({walls:[...metric().walls,{name:'wall_3',centre:[9,1.18,0],size:[2,2.4,.2],yaw_degrees:0},{name:'wall_4',centre:[2,1.18,0],size:[1,2.4,.2],yaw_degrees:0}]}));
+  assert.equal(beyond.counts.outside,1);assert.match(beyond.summary,/4 × 6 m of observed floor \(1 beyond it left out\)\./);
+  const clipped=beyond.world.objects.find(o=>o.id==='wall-4');assert.deepEqual([clipped.x,clipped.w],[3.5,.5]);});
+test('a reviewed scene map plans a route that never enters a wall, object or unobserved area',()=>{
+  const {world}=worldFromScene(metric()),robot=ROBOTS.vacuum,plan=planWorld({...world,scaleReviewed:true,mapReviewed:true},robot);
+  assert.ok(plan.distance>5&&plan.reachableArea>2,`route ${plan.distance} m over ${plan.reachableArea} m²`);
+  const radius=Math.hypot(robot.width,robot.depth)/2;
+  for(const p of plan.route)assert.ok(!world.objects.some(o=>inBox(o,p.x,p.z,radius-1e-6)),`route point ${p.x}, ${p.z}`);});
+test('scenes without metres, a floor or valid json are refused, never guessed',()=>{
+  assert.throws(()=>worldFromScene(null),/No valid scene\.json/);
+  assert.throws(()=>worldFromScene(metric({units:'arbitrary'})),/metric scene/);
+  assert.throws(()=>worldFromScene(metric({objects:[]})),/no observed floor/);
+  assert.throws(()=>worldFromScene(metric({floor_y:NaN})),/no observed floor/);
+  // Malformed elements and cells are skipped rather than placed somewhere.
+  const {counts}=worldFromScene(metric({walls:[null,{name:'wall_x',centre:[0,1],size:[1,1,1],yaw_degrees:0}],unknown:[[0,0],[0,0,-1],'x']}));
+  assert.deepEqual(counts,{walls:0,separated:1,detected:1,unknown:0,outside:0});
+  // A box with a centre and size but no yaw is axis-aligned.
+  const plain=worldFromScene(metric({objects:[{name:'floor_observed',label:'floor',centre:[0,-.03,0],size:[4,.02,6]}],walls:[],unknown:[]})).world;
+  assert.deepEqual([plain.width,plain.depth,plain.objects.length],[4,6,0]);});
+test('diagonal objects share the object budget as strips, and a scene beyond it is refused',()=>{
+  const many=n=>Array.from({length:n},(_,i)=>({name:`object_${i+1}`,label:'object',kind:'separated',centre:[-1.8+(i%13)*.3,.2,-2.5+Math.floor(i/13)*.5],size:[.3,.4,.1],yaw_degrees:30}));
+  const floor=metric().objects[0];
+  const {world}=worldFromScene(metric({objects:[floor,...many(40)],walls:[],unknown:[]}));
+  assert.ok(world.objects.length<=LIMITS.objects);assert.ok(world.objects.every(o=>/\(part \d of 3\)$/.test(o.name)),'40 diagonal objects get 3 strips each');
+  assert.throws(()=>worldFromScene(metric({objects:[floor,...many(130)],walls:[],unknown:[]})),/at most 128/);});

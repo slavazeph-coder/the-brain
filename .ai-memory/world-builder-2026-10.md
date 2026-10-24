@@ -58,8 +58,13 @@ description: World Builder flagship development, real browser inference and reco
     - Under full CPU load from a co-located COLMAP worker, CDP screencast frames show stale tiles of whatever was on screen before the panel grew. Wait with the view on the workspace and cut the frames around the layout jump.
     - Captions need `pointer-events:none`.
   - Oct 24 owner decision: Lyra 1 is approved for a measured GB10 trial (safeguards on, isolated batch job, never stopping the 27B; Lyra 2 excluded). Conditions are in `docs/hermes-gpu-tasks.md` task 5.
+  - Oct 24 scan to model (#223, branch `claude/scan-to-objects`), after the owner asked for Moving Atoms-style "every object separated and measured":
+    - `colmap-dense-cpu`: Depth Anything V2 Small (pinned ONNX) per frame, fitted to each frame's SfM points, kept where 2 of 4 neighbouring frames agree within 2%. ETH3D office: 3.1 cm median, 7.6% / 11.4% coverage (sparse 1.5 cm, 2.1% / 5.3%).
+    - Scene compiler separates every object (oriented box, metres) and finds walls by RANSAC above furniture; IFC writes unnamed objects as IfcBuildingElementProxy "Object N" with dimensions.
+    - Robot route: the scene dialog's "Plan a robot route in this scene" (`worldFromScene`) makes an unreviewed World map from scene.json. Use it rather than the point-based proposal for dense clouds: dense floor scatter reads as obstacles there (vacuum 0.2 m² vs 3.4 m² and a 67.8 m route on the room walkthrough). Tried and rejected: an obstacle-share rule in the planner (could erase thin legs), depth-edge masks and wide-baseline agreement (little gain).
+    - Demo scale: 0.66 m/unit for the Mip-NeRF room. At 0.41 the walls fall below the 1.3 m wall band.
   - Still open:
     - a physical iPhone Safari test (owner);
-    - the GPU worker on a stable hostname (Hermes);
-    - dense reconstruction scored with the ETH3D benchmark (Hermes);
+    - the GPU worker on a stable hostname (Hermes; the GB10 is rented out for now);
+    - a dense GPU benchmark on the 4090 (Hermes);
     - Lyra 1 trial receipts.

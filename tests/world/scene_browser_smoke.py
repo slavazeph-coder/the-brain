@@ -60,6 +60,7 @@ def check_browser(pw, name, origin, worker_url, token, photo):
         assert page.locator('#scene-status').inner_text() == 'scene.glb from scene-usd · 3 meshes · 72 vertices · SHA-256 checked', page.locator('#scene-status').inner_text()
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[:4] == FACTS and 'Export static OpenUSD' in facts[4], facts
+        assert page.locator('#scene-plan').is_hidden(), 'a scene without metres offers no planning map'
         geometry = page.evaluate("""() => { const d = document.querySelector('#scene-dialog').getBoundingClientRect(),
             c = document.querySelector('#scene-stage canvas'), r = c?.getBoundingClientRect();
             return {open: document.querySelector('#scene-dialog').open, canvas: r ? [r.width, r.height] : null,
@@ -134,8 +135,20 @@ def check_metric(pw, name, origin, worker_url, token):
         assert facts[4] == 'scene.usda was written for Isaac Sim (metersPerUnit = 1).', facts
         assert facts[5].startswith('scene.ifc was written for BIM tools (IFC4, metres)'), facts
         page.screenshot(path=str(OUTPUT / f'scene-metric-{name}.png'))
-        page.keyboard.press('Escape')
+        # The metric scene becomes an unreviewed planning map; the robot plans only after both reviews.
+        page.locator('#scene-plan').click()
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
+        assert page.locator('#status').inner_text() == ('Map built from the simulation scene: 1 wall and 0 objects as obstacles, 1 unobserved area, '
+                                                        '4 × 3 m of observed floor. Review scale and obstacles, then plan.'), page.locator('#status').inner_text()
+        assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+        page.locator('#run').click()
+        page.wait_for_timeout(200)
+        assert 'Confirm independently measured scale' in page.locator('#status').inner_text()
+        page.locator('#scale-reviewed').check()
+        page.locator('#map-reviewed').check()
+        page.locator('#run').click()
+        page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')", timeout=15000)
+        assert float(page.locator('#metric-distance').inner_text().split()[0]) > 3, page.locator('#metric-distance').inner_text()
         page.locator('[data-tab=evidence]').click()
         assert 'Download scene.usda' in page.locator('#panel').inner_text() and 'Download scene.ifc' in page.locator('#panel').inner_text()
         with page.expect_download() as download:
@@ -144,6 +157,9 @@ def check_metric(pw, name, origin, worker_url, token):
         requested = [e['detail'] for e in proof['events'] if e['type'] == 'metric_scene_requested'][-1]
         assert requested['selfReported'] is True and abs(requested['metresPerUnit'] - metres_per_unit) < 1e-9 and abs(requested['metresPerUnit'] * K - 1) < 2e-3, requested
         assert any(e['type'] == 'scene_opened' for e in proof['events'])
+        mapped = [e['detail'] for e in proof['events'] if e['type'] == 'scene_map_proposed'][-1]
+        assert {k: mapped[k] for k in ('walls', 'separated', 'detected', 'unknown', 'outside', 'scaleVerified')} == {
+            'walls': 1, 'separated': 0, 'detected': 0, 'unknown': 1, 'outside': 0, 'scaleVerified': False}, mapped
         assert not errors, errors
     finally:
         browser.close()
