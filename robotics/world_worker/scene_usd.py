@@ -120,7 +120,10 @@ def fit_floor_plane(rows, iterations: int = 300):
         counts[math.floor((h - lo) / width)] = counts.get(math.floor((h - lo) / width), 0) + 1
     peak = max(counts.values())
     bin_index = next(i for i in range(max(counts) + 1) if counts.get(i, 0) >= peak * .8)
-    d = -(lo + (bin_index + .5) * width)
+    # Through the layer itself, not its bin's centre (a layer can straddle a bin edge): as the browser does.
+    median = lambda v: sorted(v)[len(v) // 2]
+    around = median([h for h in heights if lo + (bin_index - 1) * width <= h < lo + (bin_index + 2) * width])
+    d = -median([h for h in heights if abs(h - around) <= tol])
     inliers = sum(abs(h + d) <= tol for h in heights)
     return {'normal': n, 'd': d, 'inlierFraction': inliers / len(rows), 'tolerance': tol}
 
