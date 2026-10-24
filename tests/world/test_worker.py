@@ -516,6 +516,47 @@ def test_prepared_disk_reservations_survive_worker_restart(tmp_path):
         assert c.post('/v1/jobs',json=body,headers=HEADERS).status_code==429
 
 
+def test_queued_jobs_survive_worker_restart(tmp_path):
+    """Durable queue: jobs in 'queued' state are re-enqueued after restart.
+
+    The in-memory asyncio queue loses its items on process exit, but the
+    'queued' status is persisted in SQLite.  On restart the worker must
+    recover those jobs from the database and resume execution, instead of
+    losing them or failing them.
+    """
+    config,release=blocking_adapter(tmp_path)
+    root=tmp_path/'data'
+    options={'root':root,'token':TOKEN,'adapters':str(config),'storage_limit':8*1024**2,'job_limit':2*1024**2}
+    jids=[]
+    with TestClient(create_app(**options)) as c:
+        for _ in range(3):
+            jid,_=make_job(c,'test-adapter')
+            assert c.post(f'/v1/jobs/{jid}/start',json={},headers=HEADERS).status_code==200
+            jids.append(jid)
+        # The first job is running (blocked by the release gate); the other two
+        # are queued.  Verify the queue state before the restart.
+        statuses={c.get('/v1/jobs/'+jid,headers=HEADERS).json()['status'] for jid in jids}
+        assert 'running' in statuses
+        assert 'queued' in statuses
+    # Simulate a worker restart: a new app instance opens the same SQLite store.
+    with TestClient(create_app(**options)) as c:
+        # The previously queued jobs must still exist and be 'queued' or
+        # 'complete' (if the runner already started them).  They must NOT be
+        # 'failed' with the restart-interrupted error.
+        for jid in jids[1:]:
+            job=c.get('/v1/jobs/'+jid,headers=HEADERS).json()
+            assert job['status']!='failed' or 'restarted' not in (job['error'] or ''), \
+                f'Job {jid} was lost to restart: {job}'
+        # Release the blocking adapter so the runner can finish everything.
+        release.touch()
+        # jid[0] was 'running' when the first TestClient shut down; its
+        # subprocess was killed and it is legitimately 'failed'.  Only the
+        # recovered jobs (jids[1:]) are expected to run to completion.
+        assert wait(c, jids[0])['status'] == 'failed'
+        for jid in jids[1:]:
+            assert wait(c, jid)['status'] == 'complete'
+
+
 def test_queued_job_rechecks_capacity_before_spawning_adapter(tmp_path):
     config,_=blocking_adapter(tmp_path)
     root=tmp_path/'data'

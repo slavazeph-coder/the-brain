@@ -1,11 +1,25 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-23T05:20Z
+Last updated: 2026-10-24T05:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
+- **Run 72 (this run): durable queue — requeue_pending + restart-scope test fix — COMMITTED, ALL SUITES GREEN**
+  - Baseline: clean tree at `60b279c` (run-66). `node --test` → 8 pass; `pytest test_worker.py` → 43 passed, 3 skipped; `pytest test_report_receipts.py` → 29 passed.
+  - Run 71's uncommitted diff (durable queue) was verified and the restart test's completion-scope bug fixed:
+    - `Store.__init__` now only marks `'running'` jobs failed on restart (was `'queued' OR 'running'`). Queued jobs are persisted in SQLite and are safe to re-queue.
+    - New `Store.requeue_pending(queue)` method: selects all `status='queued'` rows ordered by `created`, pushes them back onto the live asyncio queue.
+    - `lifespan` calls `store.requeue_pending(queue)` at startup so the runner picks up recovered jobs before it starts.
+    - Test fix: `test_queued_jobs_survive_worker_restart` now asserts `jids[0]` (the running job killed by subprocess shutdown) → `failed`, and `jids[1:]` (recovered queued jobs) → `complete`. Previously it asserted all 3 complete, which was wrong.
+  - Exact results (executed this run):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (66 ms)
+    - `pytest tests/world/test_worker.py -q` → **44 passed, 3 skipped in 5.54 s**
+    - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 9.93 s**
+  - Commit: `feat(world): durable queue — requeue pending jobs on restart` (2 files, +64/-1). Pushed to `hermes/world-builder-gb10`.
+  - No force-push/merge/deploy. No paid fallback. Serving Qwen/backup untouched.
+  - Next: 4090 MapAnything held-out-frame inference smoke test via short SSH, OR one more GB10 verification task.
 - **Run 64 (this run): two broken env-var tests fixed — BOTH SUITES GREEN (29 + 8)**
   - Baseline: clean tree at `6a8e1c6` (run-57). `node --test tests/world/report-receipts.test.mjs` → 8 pass; `pytest tests/world/test_report_receipts.py -q` → 27 passed, 2 failed.
   - Failure 1 — `test_report_signing_key_environment_variable_wiring`: asserted `app.state.signer`, but the signer is a **closure variable** in `create_app` (app.py:286), not on `app.state`. Fix: dropped the state assertion; the env-var wiring is now proven through the live HTTP surface — `/v1/report-key` returns exactly the env-var key, `capabilities.reportSigning.available` is true, and a signed receipt verifies against that key.

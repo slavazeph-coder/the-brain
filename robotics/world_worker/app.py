@@ -91,7 +91,9 @@ class Store:
                 BEFORE UPDATE OF {column} ON jobs
                 WHEN OLD.{column} IS NOT NULL AND NEW.{column} IS NOT OLD.{column}
                 BEGIN SELECT RAISE(ABORT, 'Completed/source evidence is immutable'); END''')
-        self.db.execute("UPDATE jobs SET status='failed', error='Worker restarted; execution was interrupted.' WHERE status IN ('queued','running')")
+        # Only 'running' jobs were in-flight and cannot be recovered; they are
+        # failed.  'queued' jobs are safe to re-queue on restart (durable queue).
+        self.db.execute("UPDATE jobs SET status='failed', error='Worker restarted; execution was interrupted.' WHERE status='running'")
         self.db.commit()
 
     def upload(self, uid, owner_id=None):
@@ -142,6 +144,23 @@ class Store:
         self.db.execute('UPDATE jobs SET status=?, error=?, artifacts=? WHERE id=?',
                         (state, error, json.dumps(artifacts or []), jid))
         self.db.commit()
+
+    def requeue_pending(self, queue):
+        """Re-enqueue jobs that were queued before a restart.
+
+        The asyncio queue is in-memory; a restart loses its items.  Jobs that
+        were 'queued' (but not yet 'running') are persisted in the database, so
+        we recover them here and push them back onto the live queue, preserving
+        their original enqueue order.  Jobs that were 'running' have already
+        been failed by the startup reconciliation (see Store.__init__).
+        """
+        pending = [row['id'] for row in self.db.execute(
+            "SELECT id FROM jobs WHERE status='queued' ORDER BY created")]
+        for jid in pending:
+            queue.put_nowait(jid)
+        if pending:
+            self.db.commit()
+        return pending
 
     def upload_path(self, uid, owner_id=None):
         self.upload(uid, owner_id)
@@ -480,6 +499,13 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @asynccontextmanager
     async def lifespan(app):
         store.prune(ttl)
+        # Durable queue: recover jobs that were queued before the previous
+        # process died.  'queued' rows survive in SQLite; the asyncio queue
+        # does not, so we re-push them in enqueue order before the runner
+        # starts.  'running' rows were already failed by Store.__init__.
+        requeued = store.requeue_pending(queue)
+        if requeued:
+            logging.getLogger(__name__).info('Recovered %d queued job(s) from persistent state', len(requeued))
         task = asyncio.create_task(runner()); cleanup = asyncio.create_task(maintenance())
         yield
         task.cancel(); cleanup.cancel()
