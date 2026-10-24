@@ -16,6 +16,8 @@ URL, VIDEO, VIEWER, OUT = sys.argv[1], sys.argv[2], sys.argv[3], Path(sys.argv[4
 RECORD = '--dry-run' not in sys.argv
 LIVE = 'brainsnn.com' in URL
 ROBOT = os.environ.get('ROBOT', 'vacuum')
+ENGINE = os.environ.get('ENGINE', 'colmap-sparse')
+DENSE = ENGINE == 'colmap-dense-cpu'  # the captions describe whichever engine actually ran
 METRES_PER_UNIT = .66  # illustrative: about a 4 x 8 m room for the Mip-NeRF 360 "room" walkthrough; not measured
 WORKER, TOKEN = os.environ['WORKER_URL'], os.environ['WORKER_TOKEN']
 HOST = WORKER.split('://', 1)[-1].split('/', 1)[0]
@@ -30,7 +32,7 @@ SEGMENTS, PHASES, START = [], [], []
 def run(page):
     started = time.time()
     def say(html):
-        PHASES.append((round(time.time() - started, 1), html))
+        PHASES.append((round(time.time() - started, 1), html, time.time()))
         if RECORD: page.evaluate('h => window.__caption(h)', html)
     def speed(factor, note=''):
         SEGMENTS.append((time.time(), factor))
@@ -85,22 +87,23 @@ def run(page):
     page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')", timeout=60_000)
     page.locator('#connection [aria-label=Close]').click(); page.evaluate("document.getElementById('connection').style.opacity = ''"); hold(2.2); card('')
 
-    say('<b>2</b> · Dense 3D reconstruction on a CPU worker, only after explicit consent')
+    say(('<b>2</b> · Dense 3D reconstruction' if DENSE else '<b>2</b> · 3D reconstruction') + ' on a CPU worker, only after explicit consent')
     panel_open(); page.locator('.processing-options').scroll_into_view_if_needed(); hold(.6)
-    page.locator('#engine').select_option(os.environ.get('ENGINE', 'colmap-sparse')); hold(.8)
+    page.locator('#engine').select_option(ENGINE); hold(.8)
     glide(page.locator('#consent')); hold(.5); onscreen_clean()
     glide(page.locator('[data-action=process]')); hold(.5)
     # Wait on the workspace itself: the panel grows ~1000 px when the reconstruction loads, and under full CPU load Chrome
     # keeps compositing stale tiles of whatever was on screen at those coordinates (otherwise the section below).
     speed(1000); page.locator('#workspace').evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})"); settle(); hold(2.0)
-    speed(60, 'upload + CPU reconstruction and depth · sped up 60×')
+    speed(60, 'upload + CPU reconstruction' + (' and depth' if DENSE else '') + ' · sped up 60×')
     page.wait_for_function("/Reconstruction loaded|failed/.test(document.querySelector('#status').textContent)", timeout=1_800_000)
     # Cut, not sped up: while the CPU reconstruction saturates the machine, Chrome composites stale tiles for a moment
     # as the panel re-renders, so the frames until the 3D view has settled are dropped.
     speed(1000)
     if 'Reconstruction loaded' not in page.locator('#status').inner_text(): raise SystemExit('reconstruction: ' + page.locator('#status').inner_text())
     page.locator('#visual-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})"); settle(); hold(2.5)
-    speed(1); say('<b>3</b> · Dense points: a depth model per frame, kept only where neighbouring frames agree'); hold(.8)
+    speed(1); say('<b>3</b> · Dense points: a depth model per frame, kept only where neighbouring frames agree' if DENSE else
+                  '<b>3</b> · 3D points and every camera pose, recovered from the walkthrough by COLMAP on CPU'); hold(.8)
     zoom('#visual-canvas', -360); orbit('#visual-canvas', 3); hold(1.4)
 
     say('<b>4</b> · Measure one real distance, then tap both ends in 3D')
@@ -120,7 +123,8 @@ def run(page):
 
     say('<b>5</b> · Compile the scene: walls, floor, and every object separated')
     glide(page.locator('#scene-consent')); hold(.4); onscreen_clean()
-    if page.locator('#scene-naming').count():
+    named = page.locator('#scene-naming').count() > 0  # offered only by a worker with a naming key
+    if named:
         say('<b>5</b> · And, with a second approval, Claude names each object from the walkthrough frames')
         glide(page.locator('#scene-naming')); hold(1.2)
     glide(page.locator('[data-action=metric-scene]'))
@@ -131,7 +135,7 @@ def run(page):
     page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status')?.textContent || '') || /scene-usd: failed/.test(document.querySelector('#status').textContent)", timeout=1_200_000)
     speed(1)
     if 'SHA-256 checked' not in page.locator('#scene-status').inner_text(): raise SystemExit('scene: ' + page.locator('#scene-status').inner_text() + ' / ' + page.locator('#status').inner_text())
-    say('<b>5</b> · Each object is its own element, measured in metres and named'); hold(1.2)
+    say('<b>5</b> · Each object is its own element, measured in metres' + (' and named' if named else '')); hold(1.2)
     zoom('#scene-stage', -420); orbit('#scene-stage', 2, sweep=260); hold(1.6)
     say(''); page.locator('#scene-facts').evaluate(f"el => el.scrollIntoView({{block: 'center', behavior: 'instant'}})"); hold(5.0)
     facts = page.locator('#scene-facts li').all_inner_texts()
@@ -191,7 +195,7 @@ def run(page):
     page.wait_for_function('window.__ifc', timeout=60_000)
     if 'error' in page.evaluate('window.__ifc'): raise SystemExit('viewer: ' + json.dumps(page.evaluate('window.__ifc')))
     hold(1.6); orbit('#stage', 2, sweep=200); hold(.8)
-    say('<b>9</b> · Every separated object is its own IFC element, with its name and dimensions')
+    say('<b>9</b> · Every separated object is its own IFC element, with its ' + ('name and dimensions' if named else 'dimensions'))
     els = page.locator('.el')
     for i in [i for i in range(els.count()) if not re.search(r'wall|slab|unknown|floor', els.nth(i).inner_text(), re.I)][:3]:
         glide(els.nth(i)); hold(2.0)
@@ -202,9 +206,11 @@ def run(page):
     say('')
     card('<p>BRAINSNN · WORLD BUILDER</p><h1>Scan it. Separate it.<br><em>Simulate it. Hand it to BIM.</em></h1><p>App and API · brainsnn.com</p>'); hold(3.6)
     card(f'<p>ABOUT THIS RUN</p><h1 style="font-size:30px;line-height:1.3">Test walkthrough: Mip-NeRF 360 “room” images <em>(Barron et al.)</em><br>'
-         f'The {distance} m distance was typed for the demo; this room was not measured.<br>Names are Claude suggestions from the frames, not reviewed; touching objects stay one.</h1>'
-         '<p>Dense points: a depth model on CPU, checked across frames (3.1 cm median error on ETH3D)<br>Scale self-reported, not verified · IFC viewer: web-ifc, not part of brainsnn.com</p>'); hold(6.0)
-    return {'distance_m': distance, 'span_units': span, 'facts': facts, 'mapped': mapped, 'artifacts': artifacts, 'viewer': viewer, 'route': metrics}
+         f'The {distance} m distance was typed for the demo; this room was not measured.<br>'
+         + ('Names are Claude suggestions from the frames, not reviewed; touching objects stay one.' if named else 'Objects were not named in this run; touching objects stay one.') + '</h1>'
+         + ('<p>Dense points: a depth model on CPU, checked across frames (3.1 cm median error on ETH3D)' if DENSE else '<p>Sparse points: COLMAP on CPU (1.5 cm median error on ETH3D)')
+         + '<br>Scale self-reported, not verified · IFC viewer: web-ifc, not part of brainsnn.com</p>'); hold(6.0)
+    return {'engine': ENGINE, 'named': named, 'distance_m': distance, 'span_units': span, 'facts': facts, 'mapped': mapped, 'artifacts': artifacts, 'viewer': viewer, 'route': metrics}
 
 
 if __name__ == '__main__':
@@ -238,7 +244,7 @@ if __name__ == '__main__':
         if RECORD: cdp.send('Page.stopScreencast')
         print(f'{"recorded" if RECORD else "dry run"} in {stopped - started:.0f}s, {len(frames)} frames; page errors: {errors}', flush=True)
         print(json.dumps(result, indent=1), flush=True)
-        for at, html in PHASES: print(f'  {at:6.1f}s  {html[:90]}', flush=True)
+        for at, html, _ in PHASES: print(f'  {at:6.1f}s  {html[:90]}', flush=True)
         browser.close()
     if not RECORD: sys.exit(0)
     frames = [f for f in frames if f[1] >= START[0]] or frames[-1:]
@@ -248,11 +254,16 @@ if __name__ == '__main__':
         for when, f in SEGMENTS:
             if when <= t: current = f
         return current
+    clock, timeline = 0.0, []  # where each wall-clock moment lands in the output, for cutting shorter versions
     with listing.open('w') as out:
         for (path, t), (_, t_next) in zip(frames, frames[1:] + [(None, max(stopped, frames[-1][1] + 1 / 30))]):
             if factor(t) >= 1000: continue  # a cut segment
-            out.write(f"file '{path}'\nduration {max((t_next - t) / factor(t), 1 / 120):.4f}\n")
+            duration = max((t_next - t) / factor(t), 1 / 120); timeline.append((t, clock)); clock += duration
+            out.write(f"file '{path}'\nduration {duration:.4f}\n")
         out.write(f"file '{frames[-1][0]}'\n")
+    print('captions in the output video:', flush=True)
+    for _, html, wall in PHASES:
+        print(f"  {next((c for t, c in reversed(timeline) if t <= wall), 0.0):6.1f}s  {re.sub('<[^>]+>', '', html)[:90]}", flush=True)
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing),
                     '-vf', f"scale={VIDEO_SIZE[0]}:{VIDEO_SIZE[1]}:force_original_aspect_ratio=decrease,pad={VIDEO_SIZE[0]}:{VIDEO_SIZE[1]}:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
                     '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-movflags', '+faststart', str(OUT)], check=True)
