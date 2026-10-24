@@ -557,6 +557,73 @@ def test_queued_jobs_survive_worker_restart(tmp_path):
             assert wait(c, jid)['status'] == 'complete'
 
 
+def test_durable_queue_double_restart_is_idempotent(tmp_path):
+    """Restart the worker twice; recovered jobs must be re-enqueued exactly
+    once (FIFO) and must not be re-run after completing.
+
+    Phase 1: 3 jobs, job[0] running (blocked), jobs[1..2] queued.
+    Restart 1: requeue_pending recovers the 2 queued jobs; they complete.
+    Restart 2: nothing is 'queued' in the DB, so requeue_pending returns
+    [].  The already-complete jobs are untouched — their immutable
+    completed_evidence (DB trigger) and 'complete' status are preserved.
+    """
+    config, release = blocking_adapter(tmp_path)
+    root = tmp_path / 'data'
+    options = {'root': root, 'token': TOKEN, 'adapters': str(config),
+               'storage_limit': 8 * 1024**2, 'job_limit': 2 * 1024**2}
+
+    # Phase 1: create 3 jobs; job[0] is running (blocked by release gate),
+    # jobs[1..2] are queued in FIFO order.
+    with TestClient(create_app(**options)) as c:
+        jids = []
+        for _ in range(3):
+            jid, _ = make_job(c, 'test-adapter')
+            assert c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS).status_code == 200
+            jids.append(jid)
+        # Stagger created timestamps so ORDER BY created is deterministic.
+        import time as _t
+        db = c.app.state.store.db
+        for i, jid in enumerate(jids):
+            db.execute('UPDATE jobs SET created=? WHERE id=?', (_t.time() + i, jid))
+        db.commit()
+        statuses = [c.get('/v1/jobs/' + jid, headers=HEADERS).json()['status'] for jid in jids]
+        assert statuses[0] == 'running'
+        assert statuses[1] == 'queued'
+        assert statuses[2] == 'queued'
+
+    # Restart 1: queued jobs are recovered and run to completion.
+    with TestClient(create_app(**options)) as c:
+        store1 = c.app.state.store
+        # Lifespan already called requeue_pending; read the recovered list
+        # out of the app state instead of re-driving the recovery.
+        recovered = c.app.state.requeue_pending_return
+        assert recovered == [jids[1], jids[2]], f'FIFO order broken: {recovered}'
+        release.touch()
+        assert wait(c, jids[0])['status'] == 'failed'
+        for jid in jids[1:]:
+            assert wait(c, jid)['status'] == 'complete'
+        # completed_evidence is set — the immutability trigger is live.
+        for jid in jids[1:]:
+            row = store1.db.execute(
+                'SELECT completed_evidence FROM jobs WHERE id=?', (jid,)).fetchone()
+            assert row['completed_evidence'] is not None
+
+    # Restart 2: no queued rows remain, so requeue_pending is a no-op.
+    with TestClient(create_app(**options)) as c:
+        store2 = c.app.state.store
+        recovered2 = c.app.state.requeue_pending_return
+        assert recovered2 == [], f'jobs re-enqueued a second time: {recovered2}'
+        # Completed jobs are still complete; their evidence is intact.
+        for jid in jids[1:]:
+            job = c.get('/v1/jobs/' + jid, headers=HEADERS).json()
+            assert job['status'] == 'complete', f'job {jid} regressed: {job}'
+            row = store2.db.execute(
+                'SELECT completed_evidence FROM jobs WHERE id=?', (jid,)).fetchone()
+            assert row['completed_evidence'] is not None
+        # The running job is still failed (not resurrected).
+        assert c.get('/v1/jobs/' + jids[0], headers=HEADERS).json()['status'] == 'failed'
+
+
 def test_queued_job_rechecks_capacity_before_spawning_adapter(tmp_path):
     config,_=blocking_adapter(tmp_path)
     root=tmp_path/'data'

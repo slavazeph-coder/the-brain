@@ -506,6 +506,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         requeued = store.requeue_pending(queue)
         if requeued:
             logging.getLogger(__name__).info('Recovered %d queued job(s) from persistent state', len(requeued))
+        app.state.requeue_pending_return = requeued
         task = asyncio.create_task(runner()); cleanup = asyncio.create_task(maintenance())
         yield
         task.cancel(); cleanup.cancel()
@@ -514,6 +515,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
 
     app = FastAPI(title='BrainSNN World Worker', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
+    app.state.queue = queue  # Exposed for test introspection (requeue_pending idempotency); production uses the closure variable.
     app.state.queue_admission_hook = None  # Tests set an async gate here; production keeps the no-op.
 
     @app.middleware('http')
