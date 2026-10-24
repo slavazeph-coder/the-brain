@@ -72,7 +72,8 @@ grid = np.zeros((H, W), np.float32)
 grid[::30, :] = .35; grid[:, ::30] = .35; grid[::150, :] = .8; grid[:, ::150] = .8
 BG += grid[..., None] * np.array([7, 12, 20], np.float32)
 feather = np.ones((1080, 1), np.float32); feather[:90, 0] = np.linspace(0, 1, 90) ** 1.5; feather[-110:, 0] = np.linspace(1, 0, 110) ** 1.5
-photos = sorted(PHOTOS.glob('*.JPG'))[::4]
+photos = sorted(p for p in PHOTOS.iterdir() if p.suffix.lower() in ('.jpg', '.jpeg', '.png'))[::4]  # the worker writes .jpg frames
+if not photos: sys.exit(f'No .jpg, .jpeg or .png walkthrough photos in {PHOTOS}')
 LABELS = json.load(open(FILM / 'shot_scene' / 'labels.json'))
 PLAN_SIZE = {o['label']: (o['size'][0], o['size'][2]) for o in scene['objects'] if o.get('label') not in (None, 'object', 'floor')}
 
