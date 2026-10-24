@@ -52,7 +52,7 @@ export function sceneFacts(scene) {
   if (inferred) facts.push(`Inferred: ${plural(inferred, 'object')} ${inferred === 1 ? 'stands' : 'stand'} on the floor, though the floor under ${inferred === 1 ? 'it' : 'them'} went unseen. Check against the walkthrough.`);
   // The worker's fit check: how closely the boxes follow the points (fit-check.json has every element).
   const fit = scene.fit && typeof scene.fit === 'object' ? scene.fit : null;
-  if (fit && Number.isFinite(fit.within_5cm) && fit.within_5cm >= 0 && fit.within_5cm <= 1) {
+  if (scene.units === 'm' && fit && Number.isFinite(fit.within_5cm) && fit.within_5cm >= 0 && fit.within_5cm <= 1) {  // centimetres need metres
     const kinds = [['floor', 'floor'], ['wall', 'walls'], ['object', 'objects']].filter(([k]) => Number.isFinite(fit.by_kind?.[k]?.median_cm))
       .map(([k, word]) => `${word} ${fit.by_kind[k].median_cm.toFixed(1)} cm`);
     const misfits = (Array.isArray(fit.misfits) ? fit.misfits : []).filter(n => typeof n === 'string').slice(0, 4)

@@ -109,7 +109,9 @@ def write_heatmap(points, dist, path):
 
 
 def export(scene, points, out):
-    """Writes fit-check.json and fit-heatmap.ply into out; returns the evidence the scene job records."""
+    """Writes fit-check.json and fit-heatmap.ply into out (metric scenes only); returns the evidence the scene job records."""
+    if scene.get('units') != 'm':  # centimetres need metres: an unscaled reconstruction gets no fit numbers, like USD, IFC and CAD
+        return {'skipped': 'The fit check needs a metric scene.'}
     if not points or not surfaces(scene):
         return {'skipped': 'No points or no model surfaces to check.'}
     summary = check(scene, points)

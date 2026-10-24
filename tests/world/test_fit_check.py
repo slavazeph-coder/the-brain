@@ -65,6 +65,7 @@ def test_the_heatmap_is_a_binary_ply_in_the_scene_frame_coloured_by_distance(tmp
     assert fc.colour(0) == (0, 200, 140) and fc.colour(fc.ON) == (240, 220, 60) and fc.colour(fc.MODELLED) == (240, 60, 60)
 
 
-def test_nothing_is_written_without_points_or_surfaces(tmp_path):
-    assert 'skipped' in fc.export(scene(), [], tmp_path) and 'skipped' in fc.export({'objects': [], 'walls': []}, points(), tmp_path)
+def test_nothing_is_written_without_metres_points_or_surfaces(tmp_path):
+    assert fc.export({**scene(), 'units': 'arbitrary'}, points(), tmp_path) == {'skipped': 'The fit check needs a metric scene.'}
+    assert 'skipped' in fc.export(scene(), [], tmp_path) and 'skipped' in fc.export({'units': 'm', 'objects': [], 'walls': []}, points(), tmp_path)
     assert not list(tmp_path.iterdir())
