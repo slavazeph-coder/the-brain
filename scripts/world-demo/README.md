@@ -8,6 +8,7 @@ They are reference tools, not part of CI.
 | `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: phone walkthrough → dense CPU reconstruction → measured distance → scene compile with separated (and, if offered, Claude-named) objects → robot route in the compiled scene → `scene.ifc` opened in a web-ifc viewer |
 | `record_demo.py` | The earlier photo → depth → map demo. It also holds the caption, cursor and title-card overlay (`OVERLAY`) that `record_scan2model.py` reuses |
 | `feed_cut.sh` | A 4:5 feed version (1080 × 1350) of a 16:9 recording, with a title band and footer |
+| `short_cut.sh` | A short 4:5 feed clip from chosen moments of a recording (hard cuts), with your own subtitle and footer |
 | `ifc-viewer/` | The small web-ifc page used for the BIM step. It is not part of brainsnn.com |
 
 ## Running the scan-to-model recording
@@ -26,6 +27,16 @@ They are reference tools, not part of CI.
      http://127.0.0.1:4190/ out/scan-to-model.mp4            # add --dry-run to check every step without recording
    sh scripts/world-demo/feed_cut.sh out/scan-to-model.mp4 out/scan-to-model-4x5.mp4
    ```
+4. **A short clip.** The recorder ends by printing where each caption lands in the output video. Pick the moments
+   from that list and pass them as `start+seconds`. Add `@W:H:X:Y` to crop a region of the 1920 × 1080 source so it fills
+   the frame: full-width UI is unreadable on a phone, and a 4:3 crop fills the 1080 × 810 window exactly.
+   ```sh
+   sh scripts/world-demo/short_cut.sh out/scan-to-model.mp4 out/short.mp4 'subtitle' 'footer' 4.2+2 30+3.5@1200:900:360:140 ...
+   ```
+
+`ENGINE` sets the captions as well as the engine: `colmap-sparse` and `colmap-dense-cpu` each describe their own points.
+Naming captions appear only when the worker offers naming. `feed_cut.sh` says "A real run on brainsnn.com", so use it
+only for a recording made on the live site.
 
 The worker URL and token are typed under a title card, and an init script blurs the worker host wherever the page
 shows it, so neither appears in the video. Never commit a recording's proof JSON: it contains the worker URL.
