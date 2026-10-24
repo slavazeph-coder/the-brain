@@ -28,9 +28,10 @@ They are reference tools, not part of CI.
    sh scripts/world-demo/feed_cut.sh out/scan-to-model.mp4 out/scan-to-model-4x5.mp4
    ```
 4. **A short clip.** The recorder ends by printing where each caption lands in the output video. Pick the moments
-   from that list and pass them as `start+seconds`:
+   from that list and pass them as `start+seconds`. Add `@W:H:X:Y` to crop a region of the 1920 × 1080 source so it fills
+   the frame: full-width UI is unreadable on a phone, and a 4:3 crop fills the 1080 × 810 window exactly.
    ```sh
-   sh scripts/world-demo/short_cut.sh out/scan-to-model.mp4 out/short.mp4 'subtitle' 'footer' 4.2+2 30+3.5 ...
+   sh scripts/world-demo/short_cut.sh out/scan-to-model.mp4 out/short.mp4 'subtitle' 'footer' 4.2+2 30+3.5@1200:900:360:140 ...
    ```
 
 `ENGINE` sets the captions as well as the engine: `colmap-sparse` and `colmap-dense-cpu` each describe their own points.

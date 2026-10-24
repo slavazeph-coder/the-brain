@@ -177,7 +177,10 @@ def run(page):
     else:
         page.locator('#replay').scroll_into_view_if_needed(); hold(.6)
         speed(4, 'route replay · sped up 4×')
-        glide(page.locator('#replay')); page.wait_for_function("document.querySelector('#replay').textContent.trim()!=='Pause'", timeout=180_000); speed(1)
+        glide(page.locator('#replay'))
+        # The replay button sits below the map, so bring the map back into view while the robot drives.
+        page.locator('#world-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})"); settle()
+        page.wait_for_function("document.querySelector('#replay').textContent.trim()!=='Pause'", timeout=180_000); speed(1)
         hold(1.4)
     metrics = {k: page.locator('#metric-' + k).inner_text() for k in ('area', 'distance', 'time')}
 
