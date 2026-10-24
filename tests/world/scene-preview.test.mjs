@@ -25,3 +25,11 @@ test('a scene scaled by a distance the user measured says it is self-reported',(
   assert.match(sceneFacts(scene({units:'m',usd:{written:true},ifc:{written:true,schema:'IFC4'}}))[5],/^scene\.ifc was written for BIM tools \(IFC4, metres\)/);
   assert.equal(sceneFacts(scene({ifc:{written:false,reason:'x'}})).length,5);
   assert.equal(sceneFacts(scene({units:'m',scale:{selfReported:true,distance:'3 m'}}))[3],'Units: metres, from a distance you measured. Self-reported, not verified.');});
+test('separated objects are counted and the largest are measured, only from scene.json',()=>{
+  const objects=[{name:'object_1',label:'object',kind:'separated',size:[3.412,0.731,1.26]},{name:'object_2',label:'chair',kind:'separated',size:[0.5,0.9,0.48]},
+    {name:'floor_observed',label:'floor',size:[4,0.02,8]},{name:'object_3',kind:'separated',size:[1,NaN,1]}];
+  const f=sceneFacts(scene({units:'m',usd:{written:true},ifc:{written:true},separation:{done:true},counts:{points:10,walls:2,objects:0,unplaced:0,unknown_cells:0,separated:3},objects}));
+  assert.equal(f[6],'Separated: 3 objects from the points, each measured as an oriented box in metres. Largest: Object 1: 3.41 × 1.26 m, 0.73 m high; chair: 0.50 × 0.48 m, 0.90 m high.');
+  assert.equal(sceneFacts(scene({separation:{done:false,reason:'x'}}))[5],'Separated: none, because object sizes need a measured scale.');
+  assert.equal(sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:0}}))[5],'Separated: no clusters of points stand above the floor apart from walls.');
+  assert.equal(sceneFacts(scene()).length,5,'older scenes without separation add no line');});

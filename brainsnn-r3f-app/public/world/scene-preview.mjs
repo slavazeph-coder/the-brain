@@ -4,6 +4,12 @@ export const SCENE_SCHEMA = 'brainsnn.scene.v1';
 
 const count = v => Number.isSafeInteger(v) && v >= 0 ? v : null;
 const plural = (n, word) => `${n.toLocaleString('en')} ${word}${n === 1 ? '' : 's'}`;
+const metres = v => Number.isFinite(v) && v > 0 && v < 1000;
+/** "Object 1: 3.41 × 1.26 m, 0.73 m high" from a separated object's size [length, height, width]. */
+function measured(o) {
+  const name = o.label && o.label !== 'object' ? o.label : String(o.name || 'object').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+  return `${name.slice(0, 40)}: ${o.size[0].toFixed(2)} × ${o.size[2].toFixed(2)} m, ${o.size[1].toFixed(2)} m high`;
+}
 
 /** Facts from scene.json, one per line. Missing or malformed fields are reported as unknown, never guessed. */
 export function sceneFacts(scene) {
@@ -30,5 +36,12 @@ export function sceneFacts(scene) {
     : 'USD status was not recorded.');
   if (scene.ifc && typeof scene.ifc === 'object' && scene.ifc.written === true)
     facts.push('scene.ifc was written for BIM tools (IFC4, metres), with each element\'s provenance in Pset_BrainSNN.');
+  const separation = scene.separation && typeof scene.separation === 'object' ? scene.separation : null, separated = count(c.separated);
+  if (separation?.done === true && separated !== null) {
+    const largest = (Array.isArray(scene.objects) ? scene.objects : [])
+      .filter(o => o && o.kind === 'separated' && Array.isArray(o.size) && o.size.length === 3 && o.size.every(metres)).slice(0, 3);
+    facts.push(separated ? `Separated: ${plural(separated, 'object')} from the points, each measured as an oriented box in metres${largest.length ? `. Largest: ${largest.map(measured).join('; ')}` : ''}.`
+      : 'Separated: no clusters of points stand above the floor apart from walls.');
+  } else if (separation?.done === false) facts.push('Separated: none, because object sizes need a measured scale.');
   return facts;
 }

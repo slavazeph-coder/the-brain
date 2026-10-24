@@ -27,7 +27,7 @@ class IfcExport(unittest.TestCase):
     def test_metric_scene_writes_a_self_consistent_ifc4_file(self):
         with tempfile.TemporaryDirectory() as d:
             scene = metric_scene(); record = ie.emit_ifc(d, scene)
-            self.assertEqual(record, {"written": True, "schema": "IFC4", "elements": {"walls": 1, "slabs": 1, "objects": 1, "unknownRuns": 3}})
+            self.assertEqual(record, {"written": True, "schema": "IFC4", "elements": {"walls": 1, "slabs": 1, "objects": 1, "separated": 0, "unknownRuns": 3}})
             text = (Path(d) / "scene.ifc").read_text(encoding="ascii")
         self.assertTrue(text.startswith("ISO-10303-21;") and "FILE_SCHEMA(('IFC4'));" in text and text.rstrip().endswith("END-ISO-10303-21;"))
         rows, refs = parse(text)
@@ -46,6 +46,23 @@ class IfcExport(unittest.TestCase):
         # A wall at 90° yaw (Y-up) runs along -Y in IFC's Z-up frame: Blender and IFC use the same (x, -z, y) mapping.
         self.assertIn("IFCDIRECTION((0.,-1.,0.))", text)
         self.assertIn("IFCCARTESIANPOINT((0.,-3.,-0.4))", text)  # wall base: centre y 0.5 minus half its 1.8 m height
+
+    def test_separated_objects_keep_their_orientation_and_measurements(self):
+        separated = [{"name": "object_1", "label": "object", "provenance": "observed", "kind": "separated", "centre": [1, 0.45, -2],
+                      "size": [1.6, 0.9, 0.8], "yaw_degrees": 90, "support_points": 300},
+                     {"name": "object_2", "label": "chair", "provenance": "observed", "kind": "separated", "centre": [0, 0.45, 0],
+                      "size": [0.5, 0.9, 0.5], "yaw_degrees": 0, "support_points": 120, "labelSource": "detr"}]
+        with tempfile.TemporaryDirectory() as d:
+            record = ie.emit_ifc(d, metric_scene(objects=separated, walls=[], unknown=[]))
+            text = (Path(d) / "scene.ifc").read_text(encoding="ascii")
+        self.assertEqual(record["elements"], {"walls": 0, "slabs": 0, "objects": 0, "separated": 2, "unknownRuns": 0})
+        rows, refs = parse(text); self.assertLessEqual(refs, set(rows))
+        # Unnamed: a proxy called "Object 1", not furniture. Named by a detector: furniture.
+        self.assertIn("IFCBUILDINGELEMENTPROXY(", text); self.assertIn("'Object 1'", text); self.assertIn("IFCFURNITURE(", text); self.assertIn("'chair'", text)
+        for key, value in (("LengthMetres", "1.6"), ("WidthMetres", "0.8"), ("HeightMetres", "0.9"), ("Detector", "'detr'")):
+            self.assertRegex(text, rf"IFCPROPERTYSINGLEVALUE\('{key}',\$,IFC(REAL|LABEL)\({value}")
+        self.assertIn("IFCDIRECTION((0.,-1.,0.))", text)  # 90 degrees of yaw (Y-up) runs along -Y in IFC, like walls
+        self.assertIn("IFCCARTESIANPOINT((1.,2.,0.))", text)  # the box stands on its base: centre y 0.45 minus half its height
 
     def test_arbitrary_units_write_no_ifc_and_remove_a_stale_one(self):
         with tempfile.TemporaryDirectory() as d:

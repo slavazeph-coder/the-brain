@@ -20,20 +20,80 @@ class Walls(unittest.TestCase):
     def test_diagonal_wall_is_one_oriented_box(self):
         for yaw in (0, 17, -40, 80):
             with self.subTest(yaw=yaw):
-                walls = sc.wall_segments(wall_cloud(yaw), floor_y=0.0)
+                walls, rest = sc.find_walls(wall_cloud(yaw), floor_y=0.0)
                 self.assertEqual(len(walls), 1, f"expected one wall, got {len(walls)}")
                 w = walls[0]; fitted = math.degrees(w["yaw"]) % 180; want = yaw % 180
                 self.assertLess(min(abs(fitted - want), 180 - abs(fitted - want)), 4)
                 self.assertAlmostEqual(w["length"], 6.0, delta=0.4); self.assertAlmostEqual(w["y1"] - w["y0"], 3.0, delta=0.3)
-                self.assertGreater(w["support"], 3500); self.assertLess(w["thickness"], 0.3)
+                self.assertGreater(w["support"], 3500); self.assertLess(w["thickness"], 0.3); self.assertLess(len(rest), 300)
 
     def test_floor_only_has_no_walls(self):
         pts = [p for p in wall_cloud(0) if p[1] < 0.04]
-        self.assertEqual(sc.wall_segments(pts, floor_y=0.0), [])
+        self.assertEqual(sc.find_walls(pts, floor_y=0.0), ([], []))
+
+    def test_the_floor_margin_follows_the_floors_scatter(self):
+        rng = random.Random(3)
+        tight = [[0, rng.gauss(0, 0.005), 0] for _ in range(500)]; loose = [[0, rng.gauss(0, 0.06), 0] for _ in range(500)]
+        self.assertEqual(sc.floor_margin(tight, 0.0), 0.05); self.assertAlmostEqual(sc.floor_margin(loose, 0.0), 0.12, delta=0.02)
 
     def test_floor_plane_prefers_handoff_estimate(self):
         self.assertEqual(sc.floor_plane([[0, 5, 0, 0, 0, 0]], {"y": -0.26}), -0.26)
         self.assertAlmostEqual(sc.floor_plane([[0, y / 100, 0, 0, 0, 0] for y in range(101)], None), 0.05, places=6)
+
+
+def room_cloud(seed=2):
+    """A 6 m wall, a bookshelf against it, a table turned 30 degrees and a chair, on a floor (metres, Y-up)."""
+    rng = random.Random(seed); pts = []
+    def box(cx, cz, length, width, height, yaw_deg=0.0, n=600, y0=0.0, rgb=(150, 120, 90)):
+        ca, sa = math.cos(math.radians(yaw_deg)), math.sin(math.radians(yaw_deg))
+        for _ in range(n):  # points on the box's surface, as a reconstruction sees it
+            u, v, y = rng.uniform(-length / 2, length / 2), rng.uniform(-width / 2, width / 2), rng.uniform(y0, y0 + height)
+            face = rng.randrange(3)
+            if face == 0: u = rng.choice((-length / 2, length / 2))
+            elif face == 1: v = rng.choice((-width / 2, width / 2))
+            else: y = y0 + height
+            pts.append([cx + u * ca - v * sa, y, cz + u * sa + v * ca, *rgb])
+    box(0.0, -3.0, 6.0, 0.08, 2.6, n=3000)                   # wall along x at z = -3
+    box(-1.5, -2.6, 0.9, 0.4, 1.8, n=900)                    # bookshelf, 14 cm in front of the wall
+    box(0.8, -0.5, 1.6, 0.8, 0.75, yaw_deg=30, n=900)        # table
+    box(-1.0, 0.6, 0.5, 0.5, 0.9, n=500)                     # chair
+    box(2.4, 1.8, 0.05, 0.05, 0.05, n=8)                     # a few stray points: not an object
+    for _ in range(1500): pts.append([rng.uniform(-3, 3), rng.gauss(0, 0.005), rng.uniform(-3, 2.5), 90, 80, 70])
+    return pts
+
+
+class Objects(unittest.TestCase):
+    def test_the_wall_is_a_plane_and_furniture_against_it_is_not(self):
+        pts = room_cloud(); walls, rest = sc.find_walls(pts, 0.0)
+        self.assertEqual(len(walls), 1); w = walls[0]
+        self.assertAlmostEqual(w["length"], 6.0, delta=0.3); self.assertAlmostEqual(w["centre"][1], -3.0, delta=0.08)
+        self.assertGreaterEqual(w["y1"] - w["y0"], 2.4)
+        shelf = [i for i in rest if abs(pts[i][0] + 1.5) < 0.5 and abs(pts[i][2] + 2.6) < 0.25]
+        self.assertGreater(len(shelf), 600, "the bookshelf's points are left for object separation")
+        self.assertEqual(sc.find_walls([p for p in pts if abs(p[2] + 3.0) > 0.1], 0.0)[0], [], "a lone bookshelf is not a wall")
+
+    def test_every_object_is_separated_and_measured(self):
+        pts = room_cloud(); _, rest = sc.find_walls(pts, 0.0)
+        objects = sc.separate_objects(pts, 0.0, rest)
+        self.assertEqual(len(objects), 3, [(round(o["length"], 2), round(o["thickness"], 2)) for o in objects])
+        by_height = sorted(objects, key=lambda o: o["y1"] - o["y0"])
+        for o, (length, width, height, cx, cz) in zip(by_height, [(1.6, 0.8, 0.75, 0.8, -0.5), (0.5, 0.5, 0.9, -1.0, 0.6), (0.9, 0.4, 1.8, -1.5, -2.6)]):
+            with self.subTest(height=height):
+                self.assertAlmostEqual(o["length"], length, delta=0.1); self.assertAlmostEqual(o["thickness"], width, delta=0.1)
+                self.assertAlmostEqual(o["y1"] - o["y0"], height, delta=0.08); self.assertEqual(o["y0"], 0.0)
+                self.assertAlmostEqual(o["centre"][0], cx, delta=0.08); self.assertAlmostEqual(o["centre"][1], cz, delta=0.08)
+        table = by_height[0]; yaw = math.degrees(table["yaw"]) % 180
+        self.assertLess(min(abs(yaw - 30), 180 - abs(yaw - 30)), 5)
+
+    def test_detections_name_the_object_they_overlap(self):
+        pts = room_cloud(); _, rest = sc.find_walls(pts, 0.0)
+        objects = sc.separate_objects(pts, 0.0, rest)
+        chair = {"label": "chair", "detector": "detr", "min": [-1.3, 0.0, 0.3], "max": [-0.7, 1.0, 0.9]}
+        nowhere = {"label": "tv", "detector": "detr", "min": [5, 0, 5], "max": [6, 1, 6]}
+        left = sc.label_objects(objects, pts, [chair, nowhere])
+        self.assertEqual(left, [nowhere])
+        named = [o for o in objects if o.get("label") == "chair"]
+        self.assertEqual(len(named), 1); self.assertAlmostEqual(named[0]["y1"] - named[0]["y0"], 0.9, delta=0.08)
 
 
 class Lift(unittest.TestCase):

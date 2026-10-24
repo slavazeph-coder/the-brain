@@ -123,19 +123,28 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
     properties(project, 'project', {'SceneSchema': scene.get('schema'), 'Units': 'm', 'ScaleSource': scale.get('source', 'unknown'),
                                     'MetresPerUnit': scale.get('metresPerUnit'), 'MeasuredDistanceMetres': scale.get('distance'),
                                     'SelfReported': scale.get('selfReported', True), 'MetricVerified': False})
-    elements, counts = [], {'walls': 0, 'slabs': 0, 'objects': 0, 'unknownRuns': 0}
+    elements, counts = [], {'walls': 0, 'slabs': 0, 'objects': 0, 'separated': 0, 'unknownRuns': 0}
     for obj in scene.get('objects', []):
         if 'centre' not in obj or 'size' not in obj:
             continue  # unplaced detections have no geometry; they stay in scene.json with their reason
         (cx, cy, cz), (sx, sy, sz) = obj['centre'], obj['size']
-        placement, solid = prism(cx, -cz, cy - sy / 2, sx, sz, sy)
+        placement, solid = prism(cx, -cz, cy - sy / 2, sx, sz, sy, yaw=-math.radians(obj.get('yaw_degrees', 0)))
         seed = 'object-' + str(obj.get('name'))
+        separated, named = obj.get('kind') == 'separated', obj.get('label') not in (None, 'object')
         if obj.get('label') == 'floor':
             element = w.add(f"IFCSLAB('{ifc_guid(seed)}',$,{label(obj.get('name', 'floor'))},$,$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
+        elif separated and not named:
+            # A measured cluster of points with no name: a proxy, not furniture, because nothing says what it is.
+            title = str(obj.get('name', 'object')).replace('_', ' ').capitalize()
+            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(title)},{label('Separated from the reconstructed points; not identified.')},"
+                            f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
         else:
-            element = w.add(f"IFCFURNITURE('{ifc_guid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['objects'] += 1
+            element = w.add(f"IFCFURNITURE('{ifc_guid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
+            counts['separated' if separated else 'objects'] += 1
         properties(element, seed, {'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
-                                   'Detector': obj.get('detector')})
+                                   'Detector': obj.get('detector') or obj.get('labelSource'), 'Separated': True if separated else None,
+                                   'LengthMetres': float(sx) if separated else None, 'WidthMetres': float(sz) if separated else None,
+                                   'HeightMetres': float(sy) if separated else None})
         elements.append(element)
     for wall in scene.get('walls', []):
         if 'centre' not in wall or 'size' not in wall:
