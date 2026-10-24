@@ -35,6 +35,26 @@
     ]
   },
   {
+    "id": "colmap-dense-cpu",
+    "label": "Multi-view reconstruction with dense points (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image",
+      "video"
+    ],
+    "max_inputs": 12,
+    "timeout_seconds": 1800,
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/sparse_colmap.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--densify-model",
+      "/absolute/path/to/depth-anything-v2-small/onnx/model.onnx"
+    ]
+  },
+  {
     "id": "mapanything-apache",
     "label": "Dense image/video reconstruction (GPU qualification required)",
     "enabled": false,
