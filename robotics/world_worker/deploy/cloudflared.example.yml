@@ -1,0 +1,12 @@
+# Cloudflare named tunnel: a stable hostname with TLS, and no inbound port on the host.
+#   cloudflared tunnel login
+#   cloudflared tunnel create brainsnn-world-worker
+#   cloudflared tunnel route dns brainsnn-world-worker world-worker.example.com
+# Then copy this file to /etc/cloudflared/config.yml and run: sudo cloudflared service install
+# The site uploads in chunks of at most 4 MiB, well under Cloudflare's request body limit.
+tunnel: <TUNNEL-UUID>
+credentials-file: /etc/cloudflared/<TUNNEL-UUID>.json
+ingress:
+  - hostname: world-worker.example.com
+    service: http://127.0.0.1:8010
+  - service: http_status:404
