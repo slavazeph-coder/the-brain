@@ -73,10 +73,10 @@ def run(page):
 
     page.goto(URL, wait_until='networkidle'); page.mouse.move(800, 450)
     START.append(time.time())  # frames before the title card (page load) are dropped
-    card('<p>BRAINSNN · WORLD BUILDER · SCAN TO MODEL</p><h1>One phone walkthrough.<br><em>Every object separated and measured.</em></h1><p>Robot simulation · GLB, OpenUSD and IFC</p>'); hold(3.8); card('')
+    card('<p>BRAINSNN · WORLD BUILDER · SCAN TO MODEL</p><h1>One test walkthrough.<br><em>Observed objects as scaled boxes.</em></h1><p>Robot simulation · GLB, OpenUSD and IFC</p>'); hold(3.8); card('')
     say(('Live on <b>brainsnn.com</b>' if LIVE else 'World Builder') + ' · real reconstruction, nothing faked'); hold(2.4)
 
-    say('<b>1</b> · Walk through the space with a phone, then upload the video')
+    say('<b>1</b> · Upload the test walkthrough video')
     glide(page.locator('#hero-capture')); hold(.8)
     page.locator('#files').set_input_files(VIDEO); hold(2.6)
 
@@ -106,7 +106,7 @@ def run(page):
                   '<b>3</b> · 3D points and every camera pose, recovered from the walkthrough by COLMAP on CPU'); hold(.8)
     zoom('#visual-canvas', -360); orbit('#visual-canvas', 3); hold(1.4)
 
-    say('<b>4</b> · Measure one real distance, then tap both ends in 3D')
+    say('<b>4</b> · Pick two points, then enter the illustrative test distance')
     if not page.locator('[data-action=pick-scale]').is_visible(): page.locator('[data-tab=capture]').click()
     glide(page.locator('[data-action=pick-scale]')); hold(.6)
     page.locator('#visual-canvas').evaluate(f"el => el.scrollIntoView({{block: 'center', behavior: 'instant'}})"); settle(); hold(.4)
@@ -150,10 +150,10 @@ def run(page):
     mapped = page.locator('#status').inner_text()
     page.locator('#world-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})"); settle(); hold(1.2)
     orbit('#world-canvas', 3); hold(1.0)
-    say('<b>6</b> · A person reviews scale and obstacles before anything is simulated')
+    say('<b>6</b> · Review gates are demonstrated here; this is not physical validation')
     glide(page.locator('#run')); hold(1.8)
     glide(page.locator('#scale-reviewed')); hold(.4); glide(page.locator('#map-reviewed')); hold(.8)
-    say('<b>7</b> · Drop a robot into the real room and simulate its route')
+    say('<b>7</b> · Preview a robot route in the reconstructed scene')
     glide(page.locator('[data-tab=test]')); hold(.6)
     page.locator('#robot').select_option(ROBOT); hold(.8)
     glide(page.locator('#run'))
@@ -162,7 +162,7 @@ def run(page):
     route = page.locator('#status').inner_text()
     advice = re.search(r'fits is X ([\d.]+) m, Z ([\d.]+) m', route)
     if 'Planning preview complete' not in route and advice:
-        # The planner names where this robot fits; a person moves the start there and reviews again.
+        # The demo follows the planner's suggested start and demonstrates the review gates.
         say('<b>7</b> · Blocked where the walk began, so the start moves to where the planner says it fits'); hold(2.4)
         if not page.locator('#start-x').is_visible(): page.locator('[data-tab=world]').click(); hold(.4)
         for field, value in (('#start-x', advice.group(1)), ('#start-z', advice.group(2))):
@@ -172,7 +172,7 @@ def run(page):
             box.press('Tab'); hold(.4)
         for tick in ('#scale-reviewed', '#map-reviewed'):
             if not page.locator(tick).is_checked(): glide(page.locator(tick)); hold(.3)
-        say('<b>7</b> · Drop a robot into the real room and simulate its route')
+        say('<b>7</b> · Preview a robot route in the reconstructed scene')
         glide(page.locator('[data-tab=test]')); hold(.4); glide(page.locator('#run'))
         page.wait_for_function("""() => { const s = document.querySelector('#status');
           return /Planning preview complete/.test(s.textContent) || s.classList.contains('error'); }""", timeout=60_000)

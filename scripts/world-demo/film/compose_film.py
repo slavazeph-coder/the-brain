@@ -242,12 +242,12 @@ def draw(i):
             a = min(1, rem / .2)
             master = CUT == 'master'
             if CUT == 'check':
-                text(d, (W / 2, 92), 'A phone video in.', font('InterDisplay-SemiBold.otf', 62), WHITE, a, 'mm')
+                text(d, (W / 2, 92), 'A test video in.', font('InterDisplay-SemiBold.otf', 62), WHITE, a, 'mm')
                 text(d, (W / 2, 162), 'A checked BIM model out.', font('InterDisplay-SemiBold.otf', 62), AMBER, a, 'mm')
                 chip(d, (W / 2, H - 150), 'no scanner' + (f' · {PROCESSING / 60:.1f} min on a CPU worker' if PROCESSING else '') + ' · every point checked',
                      mono(22), AMBER, (12, 18, 30), a, outline=AMBER)
             else:
-                text(d, (W / 2, 92), 'One site video in.' if master else 'Site video in.', font('InterDisplay-SemiBold.otf', 60 if master else 62), WHITE, a, 'mm')
+                text(d, (W / 2, 92), 'One test video in.' if master else 'Test video in.', font('InterDisplay-SemiBold.otf', 60 if master else 62), WHITE, a, 'mm')
                 text(d, (W / 2, 162), 'Plans, BIM, Rhino, robot routes out.' if master else 'Plans, BIM and Rhino out.', font('InterDisplay-SemiBold.otf', 52 if master else 62), AMBER, a, 'mm')
                 chip(d, (W / 2, H - 150), 'real estate · estimating · BIM · robotics' if master else 'for real estate · estimating · facilities', mono(22), AMBER, (12, 18, 30), a, outline=AMBER)
             text(d, (W / 2, H - 96), 'drawn from a real run — every dimension is from the model', font('Inter-Regular.otf', 21), GREY, a, 'mm')
@@ -262,7 +262,7 @@ def draw(i):
             for cx, cy in ((40, 290), (1040, 290), (40, 957), (1040, 957)):
                 d.line([(cx - 14, cy), (cx + 14, cy)], fill=AMBER + (int(255 * fade),), width=3); d.line([(cx, cy - 14), (cx, cy + 14)], fill=AMBER + (int(255 * fade),), width=3)
             seconds = CAPTURE.get('duration_seconds')
-            header(d, STEP['walk'], 'Walk the space with a phone', (f'{seconds:.0f} s video · ' if seconds else '') + 'no scanner · sent to your own worker', lt, rem)
+            header(d, STEP['walk'], 'Reconstruct the test walkthrough', (f'{seconds:.0f} s video · ' if seconds else '') + 'no scanner · sent to your own worker', lt, rem)
             chip(d, (W / 2, 1010), 'test capture: Mip-NeRF 360 “room” (Barron et al.)', font('Inter-Medium.otf', 21), GREY, (14, 20, 32), fade)
         elif name == 'points':
             place(canvas, shot('points', 1 + int(lt * FPS)), fade)
@@ -272,7 +272,7 @@ def draw(i):
             footnote(d, took + '3D shots rendered in Blender from the run’s exported files', ta(lt, rem))
         elif name == 'model':
             fi = 1 + int(lt * FPS); place(canvas, shot('scene', fi), fade)
-            header(d, STEP['model'], 'Every wall and object, measured', f"{Q['walls']} walls · {Q['objects']} objects · metres", lt, rem)
+            header(d, STEP['model'], 'Observed walls and object boxes', f"{Q['walls']} walls · {Q['objects']} objects · metres", lt, rem)
             for obj in LABELS.values():
                 x, y, depth = obj['screen'][min(fi, len(obj['screen'])) - 1]; la = ease_out((fi - 52) / 12) * fade * min(1, rem / .2)
                 if la <= 0 or depth <= 0: continue
@@ -313,7 +313,7 @@ def draw(i):
             title_block(d, ease_out((lt - 2.6) / .5) * min(1, rem / .2))
         elif name == 'files':
             place(canvas, shot('bim', 1 + int(lt * FPS * .9)), fade, dim=.38)
-            header(d, STEP['files'], 'Open files for BIM, Rhino and CAD', 'downloaded from the worker · SHA-256 checked', lt, rem)
+            header(d, STEP['files'], 'Open files for BIM, Rhino and CAD', 'worker exports · SHA-256 recorded', lt, rem)
             checked = 'IFC4 · open BIM standard' if IFC_ISSUES is None else f"IFC4 · {IFC_ISSUES} IfcOpenShell validation issue{'s' if IFC_ISSUES != 1 else ''}"
             classes = f"IfcWall ×{IFC_COUNTS['IfcWall']} · IfcFurniture ×{IFC_COUNTS['IfcFurniture']}" + (' · IfcSlab' if IFC_COUNTS['IfcSlab'] else '')
             cards = [('IFC', 'scene.ifc', [checked, classes], SHA['scene.ifc']),
@@ -332,7 +332,7 @@ def draw(i):
                     ('Walls', f"{Q['walls']} · {Q['wall_length_m']:.2f} m long", f"{Q['wall_face_area_m2']:.2f} m² face"),
                     ('Objects', f"{Q['objects']} separated · {Q['named_objects']} named", 'boxes in m'),
                     ('Unknown space', 'never counted as free', f"{Q['unknown_area_m2']:.2f} m²"),
-                    ('Scale', f"user-measured · {scale['distance']} m", 'not verified')]
+                    ('Scale', f"entered · {scale['distance']} m", 'not verified')]
             d.line([(70, 330), (1010, 330)], fill=AMBER + (int(255 * ta(lt, rem)),), width=3)
             for k, s in enumerate(('ITEM', 'MEASURE', 'QUANTITY')): text(d, ((90, 400, 990)[k], 305), s, mono(18, True), AMBER, ta(lt, rem), 'lm' if k < 2 else 'rm')
             for k, (a_, b_, c_) in enumerate(rows):
@@ -352,7 +352,7 @@ def draw(i):
                 cx = W / 2 + (k - 1) * 300
                 text(d, (cx, H - 150), v, font('InterDisplay-SemiBold.otf', 46), CYAN if k == 0 else WHITE, sa, 'mm')
                 text(d, (cx, H - 108), lab, mono(20), GREY, sa, 'mm')
-            footnote(d, 'Unknown space stays blocked · a person reviews scale and map before any route', ta(lt, rem))
+            footnote(d, 'Scripted planar preview · unknown space blocked · not a physical robot test', ta(lt, rem))
         elif name == 'uses':
             header(d, STEP['uses'], 'Where it fits', 'open files into the tools teams already use', lt, rem)
             uses = [('REAL ESTATE', 'Floor plans and areas', 'DXF plan · quantities'), ('ESTIMATING & RESTORATION', 'Room measurements', 'quantity takeoff · CSV'),
@@ -374,7 +374,8 @@ def draw(i):
             chip(d, (W / 2, 775), 'brainsnn.com · app and API', font('Inter-SemiBold.otf', 30), (12, 16, 24), AMBER, ease_out((lt - .5) / .5), pad=(28, 14))
             notes = [f'Test capture: Mip-NeRF 360 “room” (Barron et al.). The {scale["distance"]} m distance was typed for the demo.',
                      'Measurements are self-reported until checked against a tape or laser: not a survey.',
-                     'Every number is from one real run; 3D shots are Blender renders of its exported files.']
+                     'Every number is from one real run; 3D shots are Blender renders of its exported files.',
+                     'Names are unreviewed suggestions; inferred object bases are recorded in the exports.']
             for k, s in enumerate(notes): text(d, (W / 2, 1080 + 38 * k), s, font('Inter-Regular.otf', 21), DIM, ease_out((lt - .8) / .6), 'mm')
     out = Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8)).convert('RGBA'); out.alpha_composite(layer)
     return out.convert('RGB')
@@ -388,4 +389,7 @@ ff = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '
 for i in range(n):
     ff.stdin.write(draw(i).tobytes())
     if i % 90 == 0: print('frame', i, '/', n, flush=True)
-ff.stdin.close(); ff.wait(); print('wrote', OUT)
+ff.stdin.close()
+if ff.wait() != 0:
+    sys.exit(f'FFmpeg failed to encode {OUT}; this is not a completed film.')
+print('wrote', OUT)

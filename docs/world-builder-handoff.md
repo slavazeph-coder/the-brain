@@ -108,11 +108,21 @@ notes in `.ai-memory/world-builder-2026-10.md`.
 
 ## Measured facts worth keeping
 
-| Fact | Value |
+The earlier room geometry and its derived object/route counts were affected by the floor-alignment bug. Keep those
+historical receipts, but do not use them as current corrected evidence. PR #228 is merged; #229 adds stable floor-layer
+refinement and a newer compilation. Regeneration and asset inventory: [demo replacement runbook](../scripts/world-demo/REGENERATE.md).
+
+| Fact | Value and scope |
 |---|---|
 | ETH3D office (12 photos), median error / within 5 cm / coverage at 5 cm and 10 cm | Sparse: 1.5 cm / 87% / 2.1% and 5.3%. Dense CPU: 3.1 cm / 59% / 7.6% and 11.4% |
 | Dense room walkthrough (Mip-NeRF 360 "room", 57 frames), CPU time | About 3.5 minutes (depth pass 80 s on 4 threads) |
-| Same walkthrough, scene | 10–11 walls, 10–11 separated objects |
-| Robot vacuum route, point-based map vs scene map | 0.2 m² vs 3.6 m², 71 m |
-| Claude naming, same scene | 10 objects, 19 crops, 11 s, 4,029 input and 607 output tokens (about $0.03) |
-| Claude answers | sofa and side table, recliner armchair, computer tower, door ×2, piano bench ×2; a bare-floor cluster "unknown" (low, not applied) |
+| Corrected compilation reported in #229, 10,925 points | 6 walls, 7 objects (4 named), 28.64 m² observed floor, 4.5 m² unknown; entered scale remains unverified |
+| Same #229 compilation, model-to-points fit | 63% within 5 cm; median floor 0.7 cm, walls 2.7 cm, objects 5.6 cm; sofa flagged at 6.8 cm; chair base inferred |
+| Historical scene before correction | 10–11 walls and 10–11 objects; potentially tilted, not current corrected evidence |
+| Historical robot route, point map vs scene map | 0.2 m² vs 3.6 m², 71 m; potentially tilted, recompute from the corrected scene |
+| Historical Claude naming | 10 objects, 19 crops, 11 s, 4,029 input and 607 output tokens (about $0.03); retain as a distinct run, not corrected-run names |
+| Historical Claude suggestions | sofa and side table, recliner armchair, computer tower, door ×2, piano bench ×2; a bare-floor cluster "unknown" (low, not applied); unreviewed |
+
+These are reported test-dataset measurements, not a physical phone capture or independent proof of room accuracy.
+Model-to-points fit measures agreement with the reconstruction; typed scale, missing surfaces and inferred bases carry
+their own uncertainty. No corrected route length or replacement video is established by this table.

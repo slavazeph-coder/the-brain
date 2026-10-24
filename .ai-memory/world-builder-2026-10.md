@@ -76,3 +76,8 @@ description: World Builder flagship development, real browser inference and reco
     - rotating the Anthropic key shared in chat (owner);
     - a dense GPU benchmark on the 4090 (Hermes);
     - Lyra 1 trial receipts.
+## October 24: independent demo correction validation
+
+PR #228 and follow-up #229 are merged; use `2f1f38e` or a validated descendant for replacement footage. Both PR CI workflows succeeded, including production build and Chromium/WebKit. Independent local checks: 109 World contracts, lint/build, 125 worker tests (3 skips), and 37 compiler tests passed. A seeded synthetic stray-point regression reproduces the old sparse-histogram failure and passes on current code. This is not reproduction of the original 10,925-point room.
+
+Original room video, picked endpoints, corrected worker artifacts, original film filenames/hashes and private worker access were unavailable in this environment. No replacement footage was rendered. `scripts/world-demo/REGENERATE.md` inventories affected asset families and provides commands; `regenerate_reference.py` preserves and validates recovered evidence before rendering into a fresh directory. Captions distinguish the photograph-sequence test fixture, entered unverified scale, inferred bases, unreviewed names and scripted planar routes. Do not mix #228's six-object result with #229's seven-object/four-name receipt. Validation detail: `docs/world-demo-validation-2026-10-24.md`. Research and DeepMind integration direction: `docs/research/world-builder-2026-10-24.md`.
