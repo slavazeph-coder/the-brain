@@ -1,12 +1,33 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-24T05:15Z
+Last updated: 2026-10-24T15:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Current status
 
 - Repo: `/workspace/hermes-gb10/repos/the-brain` (branch `hermes/world-builder-gb10`)
-- **Run 72 (this run): durable queue — requeue_pending + restart-scope test fix — COMMITTED, ALL SUITES GREEN**
+- **Run 78 (prev): double-restart test fixed + all suites green — COMMITTED `7be5b54`**
+  - Run 77's uncommitted `app.state.queue` line was verified, and the double-restart test bug fixed:
+    - `lifespan` already calls `store.requeue_pending(queue)`, so the test's manual call was double-driving recovery (runner consumed both jobs before the assertion ran).
+    - Fix: added `app.state.requeue_pending_return = requeued` in `lifespan` (app.py, one line); test now reads that attribute instead of re-calling `requeue_pending`.
+  - Exact results (executed this run, base `028b82c` → commit `7be5b54`):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (63 ms)
+    - `pytest tests/world/test_worker.py -q` → **45 passed, 3 skipped in 6.21 s**
+    - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 10.70 s**
+  - Commit: `7be5b54 fix(world): double-restart test reads requeue from lifespan state, not re-driven` (2 files, +69). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+  - No paid fallback. Serving Qwen/backup untouched.
+  - Next: 4090 MapAnything held-out-frame inference smoke via short SSH, OR one more GB10 verification task.
+- **Run 79 (this run): tree-state re-verification + progress file corrected — COMMITTED**
+  - Context: a compression failure in the run-78 session left this progress file stale on disk (stale "this run" header) after run 78 was actually committed and pushed. No app/test code changed since `7be5b54`; run-78's `app.state.queue` + `requeue_pending_return` fixes are in the committed tree.
+  - Re-ran the two receipt suites on the clean tree at `7be5b54` (exact commands per job contract):
+    - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (46 ms)
+    - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 10.65 s**
+    - `pytest tests/world/test_worker.py -q` → **45 passed, 3 skipped in 6.25 s**
+  - Signed-receipt API/env documentation gap re-audited: already closed in run 31 (commit `docs(world): document signed report receipts API and env`) — "Report receipts (signed verification)" subsection in `docs/world-studio-implementation.md` covers env var, init-key CLI, report-key/receipt endpoints, verify CLI, capabilities discovery; handoff item 2 is marked done. No doc changes needed this run.
+  - Commit: `docs(world): run 79 — re-verified receipt suites green at 7be5b54; fixed stale progress header`. Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+  - No paid fallback. Serving Qwen/backup untouched.
+  - Next: 4090 MapAnything held-out-frame inference smoke via short SSH (verify `d130b6c7f3f4` + GPU UUID per `world-builder-4090.json` first), OR one more GB10 verification task (durable object storage/queueing gap from handoff item 2).
+- **Run 72 (prev): durable queue — requeue_pending + restart-scope test fix — COMMITTED, ALL SUITES GREEN**
   - Baseline: clean tree at `60b279c` (run-66). `node --test` → 8 pass; `pytest test_worker.py` → 43 passed, 3 skipped; `pytest test_report_receipts.py` → 29 passed.
   - Run 71's uncommitted diff (durable queue) was verified and the restart test's completion-scope bug fixed:
     - `Store.__init__` now only marks `'running'` jobs failed on restart (was `'queued' OR 'running'`). Queued jobs are persisted in SQLite and are safe to re-queue.
