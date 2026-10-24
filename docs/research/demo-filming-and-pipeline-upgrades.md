@@ -141,6 +141,63 @@ On run 3's database, it selected seed 1 with 57 frames in 37 s.
 3. **Use feed-forward reconstruction on the GPU.** DA3 and MapAnything give every frame a pose by construction, which
    removes this failure mode.
 
+## Assessment of the "Video → Sim → BIM" deep-research plan (same day)
+
+The owner shared a plan with this chain:
+1. phone video, IMU, Wi-Fi RTT and a NavVis e57 scan;
+2. dense points from CoTracker3, TAPIR and Depth Anything;
+3. alignment with Open3D, PDAL and g2o;
+4. gsplat, then NuRec USD and TRELLIS.2 PBR;
+5. physics with PhysGaussian MPM;
+6. simulation in Genesis and Newton;
+7. IFC ↔ USD via IfcOpenShell;
+8. a GR00T N1.7 fine-tune;
+9. Cosmos Transfer and DreamDojo.
+
+The plan assumes three things that are not true:
+- **It misreads today's product.** It treats today's product as "photo → depth → mesh → route", but the walkthrough
+  path already does all of these:
+  - reconstruction;
+  - walls and floor;
+  - separated, measured objects;
+  - GLB, OpenUSD and IFC4 from one `scene.json`, with provenance in `Pset_BrainSNN`, and IfcOpenShell validation
+    reporting 0 issues;
+  - a robot route.
+
+  The blocker is not missing stages. It is that no GPU worker is live and no real capture exists.
+- **It contradicts itself on scanners.** It pitches a phone instead of a $50k scanner, then adds a NavVis VLX e57
+  scan to the input.
+- **Many citations cannot be checked.**
+  - Some are press-release mirrors, a retail listing, or a patent page cited for an IfcOpenShell claim.
+  - The `【…】` markers point at nothing.
+
+| Piece | What was checked | Call |
+|---|---|---|
+| Wi-Fi RTT loop closure | No browser API exists, and as far as I know iOS gives apps no access to RTT. Android's own target is 2–8 m error at the 90th percentile, and both the phone and the access point must support 802.11mc. COLMAP poses are centimetre-level. | **Drop.** The ranging is far coarser than our poses, and visitors cannot reach it from a browser. |
+| NavVis e57 alignment | It is a professional scanner. | **Later**, as an optional import for customers who already own one. `geometry.load_arena_cloud` is the place for it. |
+| CoTracker3 | It gives 2D point tracks only, not depth. The majority of it is CC BY-NC. | **Drop.** |
+| TAPIR / BootsTAPIR / TAPNext | Apache-2.0 code and checkpoints, but 2D tracks too. | **Not needed.** DA3 or MapAnything give dense depth and poses directly. |
+| Video Depth Anything | Not re-checked here. | Use DA3 (Apache-2.0, multi-view) instead. |
+| Open3D ICP, PDAL, CloudCompare QA | Mature tools. | **Keep in mind** for the NavVis import and QA. They are not needed for phone captures. |
+| gsplat → NuRec `py3dgsPlyToUsd.py` | Fits the splat visual layer above. | **Keep.** Add a NuRec USD export next to `scene.usda` once splats exist. |
+| TRELLIS.2 (4B) | MIT. Single image to PBR mesh; about 24 GB VRAM (a mirror's figure); fastest timings are on an H100. | **Later**, as a generated stand-in model per separated object, labelled generated. It invents unseen geometry, so it never replaces measured boxes or collision. |
+| PhysGaussian / i-PhysGaussian MPM | Simulates deformable materials (elastic, plastic). | **Drop for now.** Rooms and furniture are rigid for a navigating robot, and the i-PhysGaussian repo was not verified. |
+| Genesis "43M FPS" | Its own benchmark: one Franka arm, one simple scene. | **Not the bottleneck.** The planner already runs in the browser. Pick Isaac Lab or MuJoCo when a customer needs dynamics. |
+| Newton / Warp / Isaac Lab | Real, but GPU-heavy. | **Later**, and `scene.usda` already targets Isaac Sim. |
+| IFC ↔ USD via IfcOpenShell | We already write both from one source. IfcOpenShell is LGPL-3.0. | **Keep** what exists. Next, add Revit import QA and `IfcDoor` and `IfcWindow` for doorway gaps, which the handoff already lists. |
+| GR00T N1.7 fine-tune on site videos | The official workflow needs robot demonstrations (video, state and action). The NVIDIA tutorial asks for at least 200 episodes per task, with a 40+ GB GPU (LoRA on 24 GB). | **Drop the 30-day plan.** Videos of human workers have no robot actions, and there is no robot. |
+| Cosmos Transfer / DreamDojo | Research-grade world models, heavy on GPU. | **Later.** At most, a marketing render after a real scene exists. |
+
+**Instead:** keep the ladder above:
+1. a real capture on the 4090 worker;
+2. DA3;
+3. SAM 2.1 objects;
+4. splats, plus a NuRec USD export;
+5. IFC doors and windows.
+
+Choose one paying use, then add the dynamics it needs. The construction twin, and robots learning from site
+footage, is a different product with a different buyer, and that is the owner's call.
+
 ## Build order
 
 1. **A real capture on a GPU worker** (owner and Hermes).
@@ -167,4 +224,7 @@ On run 3's database, it selected seed 1 with 57 frames in 37 s.
 - [Spark](https://github.com/sparkjsdev/spark), [Spark 2.0 notes](https://radiancefields.com/platforms/spark), [Brush](https://github.com/ArthurBrussee/brush)
 - [Remotion pricing](https://www.remotion.dev/docs/license/pricing)
 - [WebGL without a GPU](https://microlink.io/blog/webgl-without-a-gpu), [CCapture.js](https://sourceforge.net/mirror/ccapture-js/)
+- [Android Wi-Fi RTT](https://source.android.com/docs/core/connect/wifi-rtt), [Aruba on 802.11mc](https://blogs.arubanetworks.com/?p=28476)
+- [CoTracker](https://github.com/facebookresearch/co-tracker), [TAPNet (TAPIR)](https://github.com/google-deepmind/tapnet), [TRELLIS.2-4B card](https://huggingface.co/microsoft/TRELLIS.2-4B/blob/main/README.md), [TRELLIS.2 timings (ComfyUI Wiki)](https://comfyui-wiki.com/news/2025-12-18-microsoft-trellis2-3d-generation)
+- [Isaac-GR00T README](https://github.com/NVIDIA/Isaac-GR00T), [GR00T fine-tuning tutorial](https://docs.nvidia.com/learning/physical-ai/gr00t-e2e-workflow/latest/real-robot-workflow/real-fine-tuning-and-leapp.html), [IfcOpenShell](https://github.com/IfcOpenShell/IfcOpenShell), [Genesis announcement coverage](https://www.datacamp.com/blog/genesis-physics-engine)
 - [LinkedIn video guide (Kapwing)](https://www.kapwing.com/resources/linkedin-video-size-guide-aspect-ratios-resolution-length-and-best-practices-3/), [LinkedIn video posts 2026 (Ligo)](https://ligosocial.com/blog/linkedin-video-post-best-practices)
