@@ -48,7 +48,7 @@ def elements(scene):
             out.append({'kind': 'object', 'name': o['name'], 'label': label, 'ifc': o.get('ifcClass', 'IfcBuildingElementProxy'),
                         'corners': footprint(o['centre'][0], o['centre'][2], L, t, o.get('yaw_degrees', 0)), 'length': L, 'width': t, 'height': h,
                         'base': o['centre'][1] - h / 2, 'provenance': o.get('provenance', 'observed'), 'label_source': o.get('labelSource'),
-                        'label_reviewed': o.get('labelReviewed') if label else None})
+                        'label_reviewed': o.get('labelReviewed') if label else None, 'base_inferred': o.get('base') == 'inferred'})
     for w in scene.get('walls', []):
         L, h, t = w['size']
         out.append({'kind': 'wall', 'name': w['name'], 'label': 'wall', 'ifc': 'IfcWall', 'corners': footprint(w['centre'][0], w['centre'][2], L, t, w.get('yaw_degrees', 0)),
@@ -98,7 +98,8 @@ def quantities(scene, items):
             ['summary', 'scale', '', '', '', '', '', '', scale_note(scene)]]
     for i in walls + objects:
         area = i['length'] * i['height'] if i['kind'] == 'wall' else i['length'] * i['width']
-        note = 'area is one face' if i['kind'] == 'wall' else 'plan area' + (f"; name from {i['label_source']}, unreviewed" if i['label'] and i.get('label_source') else '')
+        note = 'area is one face' if i['kind'] == 'wall' else 'plan area' + (f"; name from {i['label_source']}, unreviewed" if i['label'] and i.get('label_source') else '') \
+            + ('; base inferred: the floor under it went unseen' if i.get('base_inferred') else '')
         rows.append([i['kind'], i['name'], i['ifc'], i['label'] or i['name'].replace('_', ' ').capitalize(), f"{i['length']:.3f}", f"{i['width']:.3f}",
                      f"{i['height']:.3f}", f'{area:.2f}', note])
     return rows, totals
@@ -171,7 +172,8 @@ def write_3dm(scene, items, path):
         attrs.Name = i['label'] if i['kind'] == 'object' and i['label'] else i['name']
         for key, value in (('element', i['name']), ('ifcClass', i['ifc']), ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
                            ('width_m', f"{i['width']:.3f}"), ('height_m', f"{i['height']:.3f}"), ('labelSource', i.get('label_source') or ''),
-                           ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower())):
+                           ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower()),
+                           ('base', 'inferred' if i.get('base_inferred') else '')):
             if value: attrs.SetUserString(key, value)
         model.Objects.AddBrep(brep, attrs)
     model.Write(str(path), 8)

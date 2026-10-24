@@ -147,12 +147,39 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
 
 # Object separation works in metres: 10 cm cells, up to 2.4 m above the floor (higher is ceiling and wall tops).
 OBJECT_CELL, OBJECT_MAX_HEIGHT, OBJECT_LIMIT = 0.1, 2.4, 200
+# An object whose lowest points are within GROUND_NEAR of the floor stands on it. Up to GROUND_REACH it stands on it too
+# when the floor under it went unseen (under GROUND_SEEN of the floor points expected there): sparse points often miss a
+# dark sofa front or a cupboard plinth, and furniture does not float over floor nobody saw. That base is inferred.
+GROUND_NEAR, GROUND_REACH, GROUND_SEEN = 0.3, 0.8, 0.1
 
 
-def object_box(P, floor_y):
+def floor_coverage(pts, floor_y, margin, cell=UNKNOWN_CELL):
+    """The floor's points in plan (x, z) and their density per square metre over the cells they reach."""
+    import numpy as np
+    xz = np.asarray([(p[0], p[2]) for p in pts if abs(p[1] - floor_y) <= margin], float).reshape(-1, 2)
+    seen = len({(math.floor(x / cell), math.floor(z / cell)) for x, z in xz})
+    return {"xz": xz, "density": len(xz) / (seen * cell * cell) if seen else 0.0}
+
+
+def floor_unseen(box, floor):
+    """Whether the floor under a box went unseen: its core (the footprint less 20% a side, at least 10 cm) holds under
+    GROUND_SEEN of the floor points the observed density puts there. The core, because a box fitted to sparse points
+    overhangs the floor seen in front of it. A core too small to judge (under 20 cm a side, or under 5 expected points) is
+    never called unseen, so a cup on a table does not become a column."""
+    import numpy as np
+    length, width = (side - 2 * max(0.1, 0.2 * side) for side in (box["length"], box["thickness"]))
+    expected = floor["density"] * length * width if length >= 0.2 and width >= 0.2 else 0.0
+    if expected < 5: return False
+    d = np.array([math.cos(box["yaw"]), math.sin(box["yaw"])]); rel = floor["xz"] - np.array(box["centre"])
+    inside = (np.abs(rel @ d) < length / 2) & (np.abs(rel @ np.array([-d[1], d[0]])) < width / 2)
+    return int(inside.sum()) < GROUND_SEEN * expected
+
+
+def object_box(P, floor_y, floor=None):
     """A box oriented by PCA in plan around points P (rows x, y, z, ...), trimmed to the 3–97% extents so a few stray
-    points do not inflate it. Its long side is `length`. An object whose lowest points are within 0.3 m of the floor
-    stands on it, so its box starts at the floor."""
+    points do not inflate it. Its long side is `length`. An object whose lowest points are within GROUND_NEAR of the floor
+    stands on it, so its box starts at the floor; with the floor's coverage (floor_coverage), so does one within
+    GROUND_REACH over unseen floor, marked base 'inferred'."""
     mx, mz = sum(p[0] for p in P) / len(P), sum(p[2] for p in P) / len(P)
     def extents(yaw):
         ca, sa = math.cos(yaw), math.sin(yaw)
@@ -165,15 +192,18 @@ def object_box(P, floor_y):
     ca, sa = math.cos(yaw), math.sin(yaw)
     ys = [p[1] for p in P]; y0, y1 = percentile(ys, 0.03), percentile(ys, 0.97)
     ac, bc = (a0 + a1) / 2, (b0 + b1) / 2
-    return {"centre": [mx + ac * ca - bc * sa, mz + ac * sa + bc * ca], "yaw": yaw, "length": max(a1 - a0, 0.02),
-            "thickness": max(b1 - b0, 0.02), "y0": floor_y if y0 - floor_y < 0.3 else y0, "y1": y1, "support": len(P)}
+    box = {"centre": [mx + ac * ca - bc * sa, mz + ac * sa + bc * ca], "yaw": yaw, "length": max(a1 - a0, 0.02),
+           "thickness": max(b1 - b0, 0.02), "y0": y0, "y1": y1, "support": len(P)}
+    if y0 - floor_y < GROUND_NEAR: box["y0"] = floor_y
+    elif floor is not None and y0 - floor_y < GROUND_REACH and floor_unseen(box, floor): box.update(y0=floor_y, base="inferred")
+    return box
 
 
-def separate_objects(pts, floor_y, candidates, cell=OBJECT_CELL, min_points=None, limit=OBJECT_LIMIT):
+def separate_objects(pts, floor_y, candidates, cell=OBJECT_CELL, min_points=None, limit=OBJECT_LIMIT, floor=None):
     """Every cluster of the candidate points (above the floor, in no wall) below OBJECT_MAX_HEIGHT, as its own measured
     object: occupied cells joined through their faces (a diagonal touch does not join two objects), each cluster fitted
-    with object_box. Clusters smaller than min_points (0.3% of the cloud, at least 30), under 15 cm long or 5 cm thick
-    stay points. Largest first, with member indices."""
+    with object_box (floor: floor_coverage, for bases over unseen floor). Clusters smaller than min_points (0.3% of the
+    cloud, at least 30), under 15 cm long or 5 cm thick stay points. Largest first, with member indices."""
     top = floor_y + OBJECT_MAX_HEIGHT
     min_points = min_points or max(30, round(0.003 * len(pts)))
     cells = {}
@@ -191,7 +221,7 @@ def separate_objects(pts, floor_y, candidates, cell=OBJECT_CELL, min_points=None
                 n = (c[0] + dx, c[1] + dy, c[2] + dz)
                 if n in cells and n not in seen: seen.add(n); stack.append(n)
         if len(members) < min_points: continue
-        box = object_box([pts[i] for i in members], floor_y)
+        box = object_box([pts[i] for i in members], floor_y, floor)
         if box["length"] < 0.15 or box["thickness"] < 0.05 or box["y1"] - box["y0"] < 0.1: continue  # slivers stay points
         box["members"] = members; objects.append(box)
     objects.sort(key=lambda o: -o["support"])
@@ -220,7 +250,7 @@ NAME_MATCH = 0.15  # metres between a named object's centre and the compiled one
 def analyse(pts, floor_y, metric):
     """Walls and separated objects of a cloud, exactly as main() compiles them; the naming step runs this outside Blender."""
     margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin)
-    return margin, walls, rest, (separate_objects(pts, floor_y, rest) if metric else [])
+    return margin, walls, rest, (separate_objects(pts, floor_y, rest, floor=floor_coverage(pts, floor_y, margin)) if metric else [])
 
 
 def apply_names(objects, names):
@@ -451,7 +481,7 @@ def main():
         _, rec = add_oriented_box(f"object_{i+1}", ob, "observed", ob.get("label", "object"), OBJECT_COLOURS[i % len(OBJECT_COLOURS)])
         rec["kind"] = "separated"
         if "detector" in ob: rec["labelSource"] = ob["detector"]
-        for key in ("labelConfidence", "labelReviewed", "ifcClass"):
+        for key in ("base", "labelConfidence", "labelReviewed", "ifcClass"):
             if key in ob: rec[key] = ob[key]
         scene["objects"].append(rec)
     scene["objects"].extend(unplaced)

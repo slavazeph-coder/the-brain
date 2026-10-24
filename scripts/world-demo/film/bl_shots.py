@@ -1,9 +1,11 @@
 """Render the LinkedIn demo's 3D shots in Blender (Cycles, CPU) from one real run's exported files.
 
 usage: python bl_shots.py -- <scene.glb> <arena-cloud.json> <scene.json> <route.json> <shot> <out_dir> [--test FRAME]
-shots: points (reconstruction appears), scene (walls rise, objects pop, names), route (robot drives), bim (IFC classes)
-Geometry comes only from the run: scene.glb (compiled walls, floor, objects, unknown space), the hand-off's points and
-the route the site's planner produced. Styling, lighting and camera are the only things added.
+shots: points (reconstruction appears), scene (walls rise, objects pop, names), route (robot drives), bim (IFC classes),
+       check (a sweep recolours every point by its distance to the model; misfits glow)
+Geometry comes only from the run: scene.glb (compiled walls, floor, objects, unknown space), the hand-off's points, the
+route the site's planner produced and, for check, the job's fit-heatmap.ply and fit-check.json beside scene.json.
+Styling, lighting and camera are the only things added. Only high-confidence names count as named.
 """
 import bpy, json, math, os, random, sys
 from mathutils import Matrix, Vector
@@ -13,7 +15,7 @@ args = sys.argv[sys.argv.index('--') + 1:]
 GLB, CLOUD, SCENE, ROUTE, SHOT, OUT = args[:6]
 TEST = int(args[args.index('--test') + 1]) if '--test' in args else None
 FPS, SIZE = 30, 1080
-FRAMES = {'points': 105, 'scene': 120, 'route': 120, 'bim': 90}[SHOT]
+FRAMES = {'points': 105, 'scene': 120, 'route': 120, 'bim': 90, 'check': 126}[SHOT]
 
 def hexcol(h, a=1.0):
     h = h.lstrip('#'); c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
@@ -45,7 +47,7 @@ def material(name, colour, rough=.55, emit=None, strength=0.0, alpha=1.0):
 # ---------- the run's compiled scene ----------
 bpy.ops.import_scene.gltf(filepath=GLB)
 scene_json = json.load(open(SCENE))
-labels = {o['name']: o.get('label') for o in scene_json['objects']}
+labels = {o['name']: o.get('label') if o.get('labelConfidence', 'high') == 'high' else None for o in scene_json['objects']}
 for o in list(sc.objects):
     if o.name == 'observed_points': bpy.data.objects.remove(o, do_unlink=True)
 def to_bottom_origin(o):
@@ -73,9 +75,21 @@ for o in walls: o.data.materials.clear(); o.data.materials.append(m_wall)
 for o in objects: o.data.materials.clear(); o.data.materials.append(m_named if o in named else m_obj)
 for o in extras: o.data.materials.clear(); o.data.materials.append(m_unknown)
 for o in walls + objects: bevel = o.modifiers.new('bevel', 'BEVEL'); bevel.width = .015; bevel.segments = 2
+CHECK = SHOT == 'check'
+misfits = set(json.load(open(os.path.join(os.path.dirname(SCENE), 'fit-check.json')))['misfits']) if CHECK else set()
+if CHECK:  # the model as a ghost the points are checked against; a misfit glows
+    m_ghost = material('ghost', '#cfd8e6', rough=.6, alpha=.07); m_misfit = material('misfit', '#ff4f9a', emit='#ff4f9a', strength=1.2, alpha=.3)
+    for o in walls + objects + [floor]: o.data.materials.clear(); o.data.materials.append(m_misfit if o.name in misfits else m_ghost)
 
 # ---------- the run's points (hand-off frame, y up -> Blender z up) ----------
 cloud = json.load(open(CLOUD))['points']
+def heatmap_colours(path):
+    """The fit check's colour for every point, in the hand-off's order (binary little-endian x y z float, r g b uchar)."""
+    import struct
+    raw = open(path, 'rb').read(); body = raw[raw.index(b'end_header\n') + len(b'end_header\n'):]
+    return [struct.unpack_from('<fffBBB', body, 15 * k)[3:] for k in range(len(body) // 15)]
+fit = heatmap_colours(os.path.join(os.path.dirname(SCENE), 'fit-heatmap.ply')) if CHECK else None
+if fit is not None and len(fit) != len(cloud): raise SystemExit('fit-heatmap.ply does not match the hand-off points')
 random.seed(7); order = list(range(len(cloud))); random.shuffle(order)
 batches = 8
 pts_objs = []
@@ -86,6 +100,9 @@ for b in range(batches):
     for k, i in enumerate(idx):
         r, g, bb = (min(1.0, (cloud[i][3 + j] / 255) * 1.35 + .04) for j in range(3))
         col.data[k].color = [x ** 2.2 for x in (r, g, bb)] + [1]
+    if fit is not None:
+        heat = me.attributes.new('Fit', 'FLOAT_COLOR', 'POINT')
+        for k, i in enumerate(idx): heat.data[k].color = [(c / 255) ** 2.2 for c in fit[i]] + [1]
     ob = bpy.data.objects.new(f'points{b}', me); sc.collection.objects.link(ob); pts_objs.append(ob)
 gn = bpy.data.node_groups.new('to_points', 'GeometryNodeTree')
 gn.interface.new_socket('Geometry', in_out='INPUT', socket_type='NodeSocketGeometry'); gn.interface.new_socket('Geometry', in_out='OUTPUT', socket_type='NodeSocketGeometry')
@@ -98,6 +115,15 @@ attr = nt.nodes.new('ShaderNodeAttribute'); attr.attribute_name = 'Col'
 em = nt.nodes.new('ShaderNodeEmission'); em.inputs['Strength'].default_value = 2.4
 outm = nt.nodes.new('ShaderNodeOutputMaterial')
 nt.links.new(attr.outputs['Color'], em.inputs['Color']); nt.links.new(em.outputs['Emission'], outm.inputs['Surface'])
+if CHECK:  # behind the sweep (lower Blender y), a point shows its fit colour; ahead of it, its photo colour
+    fitc = nt.nodes.new('ShaderNodeAttribute'); fitc.attribute_name = 'Fit'
+    pos = nt.nodes.new('ShaderNodeNewGeometry'); xyz = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(pos.outputs['Position'], xyz.inputs[0])
+    sweep = nt.nodes.new('ShaderNodeValue'); sweep.name = 'sweep'
+    behind = nt.nodes.new('ShaderNodeMath'); behind.operation = 'LESS_THAN'
+    nt.links.new(xyz.outputs['Y'], behind.inputs[0]); nt.links.new(sweep.outputs[0], behind.inputs[1])
+    mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'
+    nt.links.new(behind.outputs[0], mix.inputs['Factor']); nt.links.new(attr.outputs['Color'], mix.inputs['A']); nt.links.new(fitc.outputs['Color'], mix.inputs['B'])
+    nt.links.new(mix.outputs['Result'], em.inputs['Color'])
 setm.inputs['Material'].default_value = m_pts
 gn.links.new(gi.outputs[0], m2p.inputs['Mesh']); gn.links.new(m2p.outputs['Points'], setm.inputs['Geometry']); gn.links.new(setm.outputs['Geometry'], go.inputs[0])
 for ob in pts_objs: ob.modifiers.new('pts', 'NODES').node_group = gn
@@ -158,6 +184,7 @@ for f in range(1, FRAMES + 1, 2):  # smooth camera: a key every other frame
     if SHOT == 'points': orbit(f, 205 + 40 * t, 36, 8.0 - .6 * t)
     elif SHOT == 'scene': orbit(f, 245 + 45 * t, 40 + 4 * t, 9.4 - .5 * t)
     elif SHOT == 'route': u = ease(min(1, t * 2.2)); orbit(f, 290 + 40 * u, 44 + 18 * u, 9.6 + .2 * u)
+    elif SHOT == 'check': orbit(f, 215 + 50 * t, 46 - 6 * t, 7.4 - .5 * t)
     else: orbit(f, 330 + 18 * t, 48 - 4 * t, 9.8 - .7 * t)
 
 pts_mat = m_pts
@@ -183,6 +210,12 @@ elif SHOT == 'route':
         u = min(1, (f - 18) / (FRAMES - 26)); cd.bevel_factor_end = max(u, 1e-4); cd.keyframe_insert('bevel_factor_end', frame=f)
         puck.location = along(u); puck.keyframe_insert('location', frame=f)
     puck.location = along(0); puck.keyframe_insert('location', frame=1)
+elif CHECK:
+    for o in [route_ob, puck] + extras: o.hide_render = True
+    ys = [-p[2] for p in cloud]; y0, y1 = min(ys) - .2, max(ys) + .2
+    value = m_pts.node_tree.nodes['sweep'].outputs[0]
+    for f, v in ((1, y0), (12, y0), (78, y1)): value.default_value = v; value.keyframe_insert('default_value', frame=f)
+    m2p.inputs['Radius'].default_value = .024
 else:
     for o in pts_objs + [route_ob, puck] + extras: o.hide_render = True
 for fc_ in [a for o in bpy.data.objects if o.animation_data and o.animation_data.action for a in o.animation_data.action.fcurves]:
@@ -196,10 +229,10 @@ if bpy.data.curves['route'].animation_data:
 marks = {}
 for f in range(1, FRAMES + 1):
     sc.frame_set(f)
-    for o in named:
+    for o in named + [o for o in objects if o.name in misfits and o not in named]:
         top = o.matrix_world @ Vector((0, 0, max(v.co.z for v in o.data.vertices) * o.scale.z))
         p = world_to_camera_view(sc, cam, top)
-        marks.setdefault(o.name, {'label': labels[o.name], 'size': [round(o.dimensions.x, 2), round(o.dimensions.y, 2), round(o.dimensions.z, 2)], 'screen': []})
+        marks.setdefault(o.name, {'label': labels[o.name] or 'object', 'misfit': o.name in misfits, 'size': [round(o.dimensions.x, 2), round(o.dimensions.y, 2), round(o.dimensions.z, 2)], 'screen': []})
         marks[o.name]['screen'].append([round(p.x * SIZE, 1), round((1 - p.y) * SIZE, 1), round(p.z, 2)])
 os.makedirs(OUT, exist_ok=True)
 json.dump(marks, open(os.path.join(OUT, 'labels.json'), 'w'))

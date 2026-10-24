@@ -130,8 +130,8 @@ def handoff(units="m", source_frame="colmap"):
 
 
 class CloudHandoff(unittest.TestCase):
-    def run_handoff(self, cloud, extra_inputs=()):
-        d = Path(tempfile.mkdtemp()); blender = d / "blender"; blender.write_text(FAKE_BLENDER); blender.chmod(0o755)
+    def run_handoff(self, cloud, extra_inputs=(), fake=FAKE_BLENDER):
+        d = Path(tempfile.mkdtemp()); blender = d / "blender"; blender.write_text(fake); blender.chmod(0o755)
         path = d / "brainsnn-point-cloud.json"; path.write_text(json.dumps(cloud))
         out = d / "job" / "output"
         request = {"schema": "brainsnn.adapter.v1", "output_dir": str(out),
@@ -148,6 +148,17 @@ class CloudHandoff(unittest.TestCase):
         self.assertEqual(names, ["scene.glb", "scene.usda", "scene.ifc", "scene.json", "scene-usd.json", "arena-cloud.json"])
         self.assertEqual(evidence["ifc"], {"written": True})
         self.assertFalse((out / "sparse-preview.ply").exists())
+
+    def test_a_scene_with_surfaces_ships_its_fit_check_as_evidence(self):
+        # The stand-in compiler also writes the observed floor the hand-off's points lie on.
+        floor = ('"floor_y": 0, "objects": [{"name": "floor_observed", "label": "floor", "centre": [0.45, -0.01, 0.45], '
+                 '"size": [0.9, 0.02, 0.9], "min": [0, -0.02, 0], "max": [0.9, 0, 0.9]}], "walls": []}')
+        evidence, out = self.run_handoff(handoff("m"), fake=FAKE_BLENDER.replace('"walls": []}', floor))
+        artifacts = {a["name"]: a["kind"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]}
+        self.assertEqual((artifacts.get("fit-check.json"), artifacts.get("fit-heatmap.ply")), ("evidence", "evidence"))
+        self.assertEqual((evidence["fit"]["written"], evidence["fit"]["within_5cm"], evidence["fit"]["misfits"]), (True, 1.0, []))
+        self.assertEqual(json.loads((out / "fit-check.json").read_text())["points"], 100)
+        self.assertEqual(json.loads((out / "scene.json").read_text())["fit"]["within_5cm"], 1.0, "the summary travels with the scene")
 
     def test_unscaled_cloud_writes_no_usd(self):
         evidence, out = self.run_handoff(handoff("arbitrary"))
