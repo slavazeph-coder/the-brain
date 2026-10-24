@@ -242,7 +242,12 @@ export function fitFloorPlane(rows, iterations = 300) {
   const counts = []; for (const h of heights) { const b = Math.floor((h - lo) / width); counts[b] = (counts[b] || 0) + 1; }
   // counts has holes wherever a height bin is empty; reduce skips them (a spread would read undefined and give NaN).
   const peak = counts.reduce((m, c) => Math.max(m, c), 0), bin = counts.findIndex(c => c >= peak * .8);
-  const d = -(lo + (bin + .5) * width), inliers = heights.filter(h => Math.abs(h + d) <= tol).length;
+  // The plane goes through the layer itself, not the centre of its bin: a layer can straddle a bin edge, and a bin centre
+  // up to a tolerance away would leave part of the floor out. Median of the chosen bin's own points (so a denser surface
+  // in the next bin never wins), then of the points within the tolerance of it, which takes in the rest of that layer.
+  const median = v => { const s = [...v].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+  const around = median(heights.filter(h => Math.floor((h - lo) / width) === bin));
+  const d = -median(heights.filter(h => Math.abs(h - around) <= tol)), inliers = heights.filter(h => Math.abs(h + d) <= tol).length;
   return { normal: n, d, inlierFraction: inliers / rows.length, tolerance: tol };
 }
 /** Rotates rows so `plane.normal` becomes +Y and the plane passes through y=0. Returns new rows (colours untouched). */

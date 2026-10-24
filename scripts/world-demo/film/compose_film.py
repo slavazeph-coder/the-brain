@@ -1,12 +1,13 @@
 """The 4:5 feed film (1080 x 1350, 30 fps) of one real run: site video -> measured model -> dimensioned plan, BIM,
 Rhino and a quantity takeoff -> a robot route in the same model.
 
-usage: python compose_film.py <film_dir> <photos_dir> <scene_job_output> <route.json> <out.mp4> [--cut master|commercial]
+usage: python compose_film.py <film_dir> <photos_dir> <scene_job_output> <route.json> <out.mp4> [--cut master|commercial|check]
                               [--reconstruction reconstruction.json] [--still SECONDS ...]
 film_dir holds the Blender shots from bl_shots.py (shot_points, shot_scene, shot_route, shot_bim); route.json comes from
 plan_route.mjs on the same scene.json. The plan is drawn from cad_export.elements() of the job's scene.json (the
 geometry of scene-plan.dxf); every number and hash on screen is read from the job's files. --cut commercial leaves the
-robot route out. --reconstruction (the source job's reconstruction.json) adds its camera poses, time and video length;
+robot route out; --cut check leaves it out and adds the fit check (shot_check, the job's fit-check.json). Only
+high-confidence names are shown. --reconstruction (the source job's reconstruction.json) adds its camera poses, time and video length;
 without it those are left out rather than guessed. The IFC card claims validation only when IfcOpenShell is installed
 and validates the job's scene.ifc here. Fonts: Inter (/usr/share/fonts/opentype/inter) and DejaVu Sans Mono.
 """
@@ -36,8 +37,13 @@ items = cad_export.elements(scene)
 evidence = json.load(open(JOB / 'scene-usd.json')); cad = evidence['cad']; Q = cad['quantities']
 POINTS = (evidence.get('handoff') or {}).get('points') or (evidence.get('reconstruction') or {}).get('reconstructed_points')
 REC = json.load(open(OPTIONS['--reconstruction'])) if '--reconstruction' in OPTIONS else evidence.get('reconstruction')
+# Processing time on the worker: the reconstruction job and this scene job (not upload, not the person's review).
+PROCESSING = (REC['elapsed_seconds'] + evidence['elapsed_seconds']) if REC and REC.get('elapsed_seconds') and evidence.get('elapsed_seconds') else None
 CAPTURE = (REC or {}).get('capture') or {}
 NAMING = scene.get('naming') if isinstance(scene.get('naming'), dict) else None
+FIT = json.load(open(JOB / 'fit-check.json')) if (JOB / 'fit-check.json').exists() else None
+if CUT == 'check' and FIT is None: sys.exit('--cut check needs the job\'s fit-check.json (a scene job with the fit check)')
+SHOWN = {o['name'] for o in scene['objects'] if o.get('label') not in (None, 'object', 'floor') and o.get('labelConfidence', 'high') == 'high'}
 IFC_COUNTS = {'IfcWall': len(scene.get('walls', [])), 'IfcSlab': sum(o.get('name') == 'floor_observed' for o in scene['objects']),
               'IfcFurniture': sum(o.get('ifcClass') == 'IfcFurniture' for o in scene['objects'])}
 def ifc_issues():
@@ -54,8 +60,8 @@ SHA = {n: hashlib.sha256((JOB / n).read_bytes()).hexdigest() for n in ('scene.if
 scale = scene['scale']
 
 ROUTE_RUN = json.load(open(ROUTE))
-LENGTHS = {'hook': 3.0, 'walk': 2.4, 'points': 2.8, 'model': 3.6, 'plan': 4.4, 'files': 3.6, 'takeoff': 3.2, 'route': 3.8, 'uses': 3.0, 'end': 3.6}
-ORDER = ['hook', 'walk', 'points', 'model', 'plan', 'files', 'takeoff'] + (['route'] if CUT == 'master' else []) + ['uses', 'end']
+LENGTHS = {'hook': 3.0, 'walk': 2.4, 'points': 2.8, 'model': 3.6, 'check': 4.8, 'plan': 4.4, 'files': 3.6, 'takeoff': 3.2, 'route': 3.8, 'uses': 3.0, 'end': 3.6}
+ORDER = ['hook', 'walk', 'points', 'model'] + (['check'] if CUT == 'check' else []) + ['plan', 'files', 'takeoff'] + (['route'] if CUT == 'master' else []) + ['uses', 'end']
 SECTIONS, t0 = [], 0.0
 for name in ORDER: SECTIONS.append((name, round(t0, 2), round(t0 + LENGTHS[name], 2))); t0 += LENGTHS[name]
 STEP = {name: k for k, name in enumerate([n for n in ORDER if n not in ('hook', 'end')], 1)}
@@ -74,7 +80,8 @@ BG += grid[..., None] * np.array([7, 12, 20], np.float32)
 feather = np.ones((1080, 1), np.float32); feather[:90, 0] = np.linspace(0, 1, 90) ** 1.5; feather[-110:, 0] = np.linspace(1, 0, 110) ** 1.5
 photos = sorted(p for p in PHOTOS.iterdir() if p.suffix.lower() in ('.jpg', '.jpeg', '.png'))[::4]  # the worker writes .jpg frames
 if not photos: sys.exit(f'No .jpg, .jpeg or .png walkthrough photos in {PHOTOS}')
-LABELS = json.load(open(FILM / 'shot_scene' / 'labels.json'))
+LABELS = {k: v for k, v in json.load(open(FILM / 'shot_scene' / 'labels.json')).items() if k in SHOWN}
+CHECK_MARKS = json.load(open(FILM / 'shot_check' / 'labels.json')) if CUT == 'check' else {}
 PLAN_SIZE = {o['label']: (o['size'][0], o['size'][2]) for o in scene['objects'] if o.get('label') not in (None, 'object', 'floor')}
 
 def shot(name, i):
@@ -160,7 +167,7 @@ def plan_layer(lt, a):
         oa = al((lt - .8 - .04 * n) / .3)
         if oa <= 0: continue
         poly = [sp(p) for p in o['corners']]
-        colour = CYAN if o['label'] else (167, 139, 250)
+        colour = CYAN if o['name'] in SHOWN else (167, 139, 250)
         d.polygon(poly, fill=colour + (int(50 * oa),), outline=colour + (int(255 * oa),), width=2 * SS)
     out = big.resize((W, H), Image.LANCZOS)
     # dimensions (drawn at 1x on top, crisp enough with anti-aliased text)
@@ -195,7 +202,7 @@ def plan_layer(lt, a):
         dd.line([(fx1 + 46, fy0), (fx1 + 46, fy1)], fill=GREY + (int(200 * oa),), width=1)
         rotated_label(out, f"extent {EXT[1]:.2f} m", mono(20, True), GREY, (fx1 + 66, (fy0 + fy1) / 2), math.pi / 2, oa)
     # labels for named objects
-    for o in [i for i in items if i['kind'] == 'object' and i['label']]:
+    for o in [i for i in items if i['kind'] == 'object' and i['name'] in SHOWN]:
         la = al((lt - 2.0) / .4)
         if la <= 0: continue
         cx = sum(sp(p)[0] for p in o['corners']) / 4 / SS; cy = sum(sp(p)[1] for p in o['corners']) / 4 / SS
@@ -234,9 +241,15 @@ def draw(i):
             layer.alpha_composite(pl)
             a = min(1, rem / .2)
             master = CUT == 'master'
-            text(d, (W / 2, 92), 'One site video in.' if master else 'Site video in.', font('InterDisplay-SemiBold.otf', 60 if master else 62), WHITE, a, 'mm')
-            text(d, (W / 2, 162), 'Plans, BIM, Rhino, robot routes out.' if master else 'Plans, BIM and Rhino out.', font('InterDisplay-SemiBold.otf', 52 if master else 62), AMBER, a, 'mm')
-            chip(d, (W / 2, H - 150), 'real estate · estimating · BIM · robotics' if master else 'for real estate · estimating · facilities', mono(22), AMBER, (12, 18, 30), a, outline=AMBER)
+            if CUT == 'check':
+                text(d, (W / 2, 92), 'A phone video in.', font('InterDisplay-SemiBold.otf', 62), WHITE, a, 'mm')
+                text(d, (W / 2, 162), 'A checked BIM model out.', font('InterDisplay-SemiBold.otf', 62), AMBER, a, 'mm')
+                chip(d, (W / 2, H - 150), 'no scanner' + (f' · {PROCESSING / 60:.1f} min on a CPU worker' if PROCESSING else '') + ' · every point checked',
+                     mono(22), AMBER, (12, 18, 30), a, outline=AMBER)
+            else:
+                text(d, (W / 2, 92), 'One site video in.' if master else 'Site video in.', font('InterDisplay-SemiBold.otf', 60 if master else 62), WHITE, a, 'mm')
+                text(d, (W / 2, 162), 'Plans, BIM, Rhino, robot routes out.' if master else 'Plans, BIM and Rhino out.', font('InterDisplay-SemiBold.otf', 52 if master else 62), AMBER, a, 'mm')
+                chip(d, (W / 2, H - 150), 'real estate · estimating · BIM · robotics' if master else 'for real estate · estimating · facilities', mono(22), AMBER, (12, 18, 30), a, outline=AMBER)
             text(d, (W / 2, H - 96), 'drawn from a real run — every dimension is from the model', font('Inter-Regular.otf', 21), GREY, a, 'mm')
         elif name == 'walk':
             k = min(len(photos) - 1, int(lt * FPS)); ph = Image.open(photos[k]).convert('RGB'); z = 1 + .05 * lt / (s1 - s0)
@@ -267,7 +280,33 @@ def draw(i):
                 d.line([x, y, x, y - L], fill=AMBER + (int(230 * la),), width=2); d.rectangle([x - 5, y - 5, x + 5, y + 5], fill=AMBER + (int(255 * la),))
                 dims = f"  {PLAN_SIZE[obj['label']][0]:.2f} × {PLAN_SIZE[obj['label']][1]:.2f} m" if obj['label'] == 'sofa' else ''
                 chip(d, (x, y - L - 18), obj['label'] + dims, mono(20, True), (12, 16, 24), AMBER, la, pad=(12, 7))
-            footnote(d, (f"Names: {NAMING['model']}, unreviewed" if NAMING else 'Objects are unnamed in this run') + ' · touching objects stay one', ta(lt, rem))
+            footnote(d, (f"Names: {NAMING['model']}, unreviewed · high confidence shown" if NAMING else 'Objects are unnamed in this run') + ' · touching objects stay one', ta(lt, rem))
+        elif name == 'check':
+            fi = 1 + int(lt * FPS); place(canvas, shot('check', fi), fade)
+            header(d, STEP['check'], 'Every point checked against the model', 'fit-check.json · fit-heatmap.ply · model to points', lt, rem)
+            sa = ease_out((lt - 2.2) / .5) * min(1, rem / .2)
+            kinds = [(k, FIT['by_kind'][k]) for k in ('floor', 'wall', 'object') if k in FIT['by_kind']]
+            for k, (kind, v) in enumerate(kinds):
+                cx = W / 2 + (k - (len(kinds) - 1) / 2) * 310
+                text(d, (cx, H - 214), f"{v['median_cm']:.1f} cm", font('InterDisplay-SemiBold.otf', 46), (0, 220, 160) if v['median_cm'] <= 5 else AMBER, sa, 'mm')
+                text(d, (cx, H - 172), {'floor': 'floor', 'wall': 'walls', 'object': 'objects'}[kind] + ' · median', mono(20), GREY, sa, 'mm')
+            text(d, (W / 2, H - 120), f"{FIT['within']['5cm'] * 100:.0f}% of {FIT['points']:,} points within 5 cm of a surface", font('Inter-Medium.otf', 24), WHITE, sa, 'mm')
+            # the ramp, as the heatmap colours it: green on the surface, yellow at 5 cm, red at 15 cm, grey not modelled
+            ra = ease_out((lt - .4) / .5) * min(1, rem / .2); x0, x1, y = 300, 780, 1034
+            for x in range(x0, x1):
+                c = [(0, 200, 140), (240, 220, 60), (240, 60, 60)]; u = (x - x0) / (x1 - x0) * 2; j = min(1, int(u)); f = u - j
+                d.line([(x, y), (x, y + 12)], fill=tuple(round(c[j][q] + (c[j + 1][q] - c[j][q]) * f) for q in range(3)) + (int(255 * ra),))
+            d.rectangle([x1 + 26, y, x1 + 50, y + 12], fill=(110, 118, 135, int(255 * ra)))
+            for x, lab in ((x0, '0'), ((x0 + x1) / 2, '5 cm'), (x1, '15 cm')): text(d, (x, y + 32), lab, mono(17), GREY, ra, 'mm')
+            text(d, (x1 + 38, y + 32), 'not modelled', mono(17), GREY, ra, 'lm')
+            for oname, mark in CHECK_MARKS.items():
+                if not mark.get('misfit'): continue
+                x, yy, depth = mark['screen'][min(fi, len(mark['screen'])) - 1]; ma = ease_out((fi - 80) / 12) * fade * min(1, rem / .2)
+                if ma <= 0 or depth <= 0: continue
+                yy += MEDIA_Y; element = next(e for e in FIT['elements'] if e['name'] == oname)
+                d.line([x, yy, x, yy - 60], fill=MAGENTA + (int(230 * ma),), width=2)
+                chip(d, (x, yy - 80), f"flagged for review: {mark['label']} · {element['median_cm']:.1f} cm off", mono(19, True), (12, 16, 24), MAGENTA, ma, pad=(12, 7))
+            footnote(d, 'Model to points, not a survey: confirm against a tape or laser measurement before quoting', ta(lt, rem))
         elif name == 'plan':
             layer.alpha_composite(plan_layer(lt, fade))
             header(d, STEP['plan'], 'A dimensioned plan for CAD', 'scene-plan.dxf · layers · walls dimensioned in metres', lt, rem)
@@ -331,7 +370,7 @@ def draw(i):
             a = ease_out(lt / .5)
             text(d, (W / 2, 470), 'BRAINSNN · WORLD BUILDER', mono(24), AMBER, a, 'mm')
             text(d, (W / 2, 560), 'Walk it. Measure it.', font('InterDisplay-SemiBold.otf', 70), WHITE, a, 'mm')
-            text(d, (W / 2, 648), 'Plan it. Simulate it.' if CUT == 'master' else 'Hand it to BIM and CAD.', font('InterDisplay-SemiBold.otf', 70), AMBER, ease_out((lt - .25) / .5), 'mm')
+            text(d, (W / 2, 648), {'master': 'Plan it. Simulate it.', 'check': 'Check it. Hand it to BIM.'}.get(CUT, 'Hand it to BIM and CAD.'), font('InterDisplay-SemiBold.otf', 70), AMBER, ease_out((lt - .25) / .5), 'mm')
             chip(d, (W / 2, 775), 'brainsnn.com · app and API', font('Inter-SemiBold.otf', 30), (12, 16, 24), AMBER, ease_out((lt - .5) / .5), pad=(28, 14))
             notes = [f'Test capture: Mip-NeRF 360 “room” (Barron et al.). The {scale["distance"]} m distance was typed for the demo.',
                      'Measurements are self-reported until checked against a tape or laser: not a survey.',

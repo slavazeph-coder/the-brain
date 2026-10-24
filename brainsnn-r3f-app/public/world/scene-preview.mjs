@@ -47,6 +47,19 @@ export function sceneFacts(scene) {
   } else if (separation?.done === false) facts.push('Separated: none, because object sizes need a measured scale.');
   const naming = scene.naming && typeof scene.naming === 'object' ? scene.naming : null, named = count(naming?.named);
   if (naming && named !== null) facts.push(`Named: ${plural(named, 'object')} by ${typeof naming.model === 'string' ? naming.model.slice(0, 60) : 'a vision model'} from the walkthrough frames. Suggestions, not reviewed.`);
+  const elements = [...(Array.isArray(scene.objects) ? scene.objects : []), ...(Array.isArray(scene.walls) ? scene.walls : [])].filter(o => o && typeof o === 'object');
+  const inferred = elements.filter(o => o.kind === 'separated' && o.base === 'inferred').length;
+  if (inferred) facts.push(`Inferred: ${plural(inferred, 'object')} ${inferred === 1 ? 'stands' : 'stand'} on the floor, though the floor under ${inferred === 1 ? 'it' : 'them'} went unseen. Check against the walkthrough.`);
+  // The worker's fit check: how closely the boxes follow the points (fit-check.json has every element).
+  const fit = scene.fit && typeof scene.fit === 'object' ? scene.fit : null;
+  if (scene.units === 'm' && fit && Number.isFinite(fit.within_5cm) && fit.within_5cm >= 0 && fit.within_5cm <= 1) {  // centimetres need metres
+    const kinds = [['floor', 'floor'], ['wall', 'walls'], ['object', 'objects']].filter(([k]) => Number.isFinite(fit.by_kind?.[k]?.median_cm))
+      .map(([k, word]) => `${word} ${fit.by_kind[k].median_cm.toFixed(1)} cm`);
+    const misfits = (Array.isArray(fit.misfits) ? fit.misfits : []).filter(n => typeof n === 'string').slice(0, 4)
+      .map(n => { const o = elements.find(e => e.name === n); return o?.label && o.label !== 'object' ? String(o.label).slice(0, 40) : title(n); });
+    facts.push(`Fit: ${Math.round(fit.within_5cm * 100)}% of points within 5 cm of the model${kinds.length ? ` (median ${kinds.join(', ')})` : ''}`
+      + `${misfits.length ? `; flagged for review: ${misfits.join(', ')}` : ''}. Model to points, not a survey.`);
+  }
   return facts;
 }
 

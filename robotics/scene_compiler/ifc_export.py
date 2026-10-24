@@ -148,6 +148,7 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         properties(element, seed, {'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
                                    'Detector': obj.get('detector') or obj.get('labelSource'), 'Separated': True if separated else None,
                                    'LabelConfidence': obj.get('labelConfidence'), 'LabelReviewed': obj.get('labelReviewed'),
+                                   'Base': obj.get('base'),
                                    'LengthMetres': float(sx) if separated else None, 'WidthMetres': float(sz) if separated else None,
                                    'HeightMetres': float(sy) if separated else None})
         elements.append(element)

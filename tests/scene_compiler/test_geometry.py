@@ -114,6 +114,23 @@ class Objects(unittest.TestCase):
         table = by_height[0]; yaw = math.degrees(table["yaw"]) % 180
         self.assertLess(min(abs(yaw - 30), 180 - abs(yaw - 30)), 5)
 
+    def test_furniture_over_unseen_floor_stands_on_it_and_an_object_over_seen_floor_does_not(self):
+        rng = random.Random(9); floor = []
+        for _ in range(6000):  # 8 x 8 m of floor, with no points under the sofa (x 1..3, z 1..2)
+            x, z = rng.uniform(-4, 4), rng.uniform(-4, 4)
+            if not (1 <= x <= 3 and 1 <= z <= 2): floor.append([x, rng.gauss(0, 0.005), z, 90, 80, 70])
+        sofa = [[rng.uniform(1, 3), rng.uniform(0.5, 0.9), rng.uniform(1, 2), 60, 60, 60] for _ in range(600)]  # seat and back only
+        shelf = [[rng.uniform(-2, -1), rng.uniform(0.6, 0.8), rng.uniform(-2, -1.5), 200, 200, 200] for _ in range(300)]  # floor seen below
+        cup = [[rng.uniform(-3.1, -2.9), rng.uniform(0.55, 0.75), rng.uniform(2.9, 3.1), 250, 250, 250] for _ in range(60)]
+        pts = floor + sofa + shelf + cup; cover = sc.floor_coverage(pts, 0.0, 0.05)
+        rest = [i for i, p in enumerate(pts) if p[1] > 0.05]
+        found = {round(o["centre"][0]): o for o in sc.separate_objects(pts, 0.0, rest, min_points=30, floor=cover)}
+        self.assertEqual((found[2]["y0"], found[2].get("base")), (0.0, "inferred"), "the sofa stands on the floor nobody saw")
+        self.assertAlmostEqual(found[-2]["y0"], 0.6, delta=0.02); self.assertNotIn("base", found[-2])
+        self.assertAlmostEqual(found[-3]["y0"], 0.55, delta=0.02, msg="a footprint too small to judge is never grounded")
+        plain = {round(o["centre"][0]): o for o in sc.separate_objects(pts, 0.0, rest, min_points=30)}
+        self.assertAlmostEqual(plain[2]["y0"], 0.5, delta=0.02, msg="without the floor's coverage nothing is inferred")
+
     def test_detections_name_the_object_they_overlap(self):
         pts = room_cloud(); _, rest = sc.find_walls(pts, 0.0)
         objects = sc.separate_objects(pts, 0.0, rest)

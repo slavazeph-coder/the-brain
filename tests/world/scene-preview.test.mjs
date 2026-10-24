@@ -34,6 +34,15 @@ test('separated objects are counted and the largest are measured, only from scen
   assert.equal(sceneFacts(scene({separation:{done:false,reason:'x'}}))[5],'Separated: none, because object sizes need a measured scale.');
   assert.equal(sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:0}}))[5],'Separated: no clusters of points stand above the floor apart from walls.');
   assert.equal(sceneFacts(scene()).length,5,'older scenes without separation add no line');});
+test('an inferred base and the fit check are reported from scene.json, with misfits by name',()=>{
+  const objects=[{name:'object_1',label:'sofa',kind:'separated',size:[3,0.7,1.2]},{name:'object_2',label:'chair',kind:'separated',size:[1,1,0.8],base:'inferred'}];
+  const fit={within_5cm:0.623,by_kind:{floor:{median_cm:0.7},wall:{median_cm:2.7},object:{median_cm:5.6}},misfits:['object_1','wall_9']};
+  const f=sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:2},objects,fit}));
+  assert.ok(f.includes('Inferred: 1 object stands on the floor, though the floor under it went unseen. Check against the walkthrough.'));
+  assert.equal(f.at(-1),'Fit: 62% of points within 5 cm of the model (median floor 0.7 cm, walls 2.7 cm, objects 5.6 cm); flagged for review: sofa, Wall 9. Model to points, not a survey.');
+  for(const bad of [{within_5cm:2},{within_5cm:'62%'},null])assert.ok(!sceneFacts(scene({units:'m',fit:bad})).some(l=>l.startsWith('Fit')),'a malformed fit says nothing');
+  assert.ok(!sceneFacts(scene({fit})).some(l=>l.startsWith('Fit')),'an unscaled scene states no centimetres');
+  assert.ok(!sceneFacts(scene()).some(l=>l.startsWith('Inferred')||l.startsWith('Fit')));});
 test('model names are reported as unreviewed suggestions, with the model that made them',()=>{
   const f=sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:3},naming:{model:'claude-opus-5-5',named:2,reviewed:false}}));
   assert.equal(f.at(-1),'Named: 2 objects by claude-opus-5-5 from the walkthrough frames. Suggestions, not reviewed.');

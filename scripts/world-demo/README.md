@@ -55,13 +55,13 @@ A designed 4:5 film (1080 × 1350, about 33 s) built from one finished run, not 
 | Script | What it does |
 |---|---|
 | `film/plan_route.mjs` | Runs the site's own `worldFromScene` and `planWorld` (robot vacuum) on a `scene.json`, so the route and its numbers match the browser |
-| `film/bl_shots.py` | Renders the 3D shots in Blender (Cycles, CPU) from the run's `scene.glb`, `arena-cloud.json`, `scene.json` and route. The shots are `points`, `scene`, `route` and `bim`, at about 9 s a frame on 4 cores. Styling, light and camera are the only additions |
-| `film/compose_film.py` | Draws the titles, the plan (from `cad_export.elements`, the geometry of `scene-plan.dxf`), the file cards and the takeoff over the renders, then encodes H.264. Pass `--cut commercial` to leave out the robot route; `--still SECONDS ...` renders stills |
+| `film/bl_shots.py` | Renders the 3D shots in Blender (Cycles, CPU) from the run's `scene.glb`, `arena-cloud.json`, `scene.json` and route. The shots are `points`, `scene`, `route`, `bim` and `check` (a sweep recolours every point by the job's `fit-heatmap.ply`; misfits from `fit-check.json` glow), at about 9 s a frame on 4 cores. Only high-confidence names count as named. Styling, light and camera are the only additions |
+| `film/compose_film.py` | Draws the titles, the plan (from `cad_export.elements`, the geometry of `scene-plan.dxf`), the file cards and the takeoff over the renders, then encodes H.264. Pass `--cut commercial` to leave out the robot route, or `--cut check` to leave it out and add the fit check (per-kind medians, the share within 5 cm, the flagged misfits and the worker's processing time); `--still SECONDS ...` renders stills |
 
 ```sh
 J=worker-data/jobs/<scene job>/output             # a metric scene-usd job with the CAD exports
 node scripts/world-demo/film/plan_route.mjs $J/scene.json route.json brainsnn-r3f-app/public/world
-for s in points scene route bim; do                  # the bpy module (Python 3.11) or Blender's own Python
+for s in points scene route bim check; do            # the bpy module (Python 3.11) or Blender's own Python; check needs the fit check
   python scripts/world-demo/film/bl_shots.py -- $J/scene.glb $J/arena-cloud.json $J/scene.json route.json $s film/shot_$s
 done
 python scripts/world-demo/film/compose_film.py film <walkthrough photos> $J route.json film.mp4 \

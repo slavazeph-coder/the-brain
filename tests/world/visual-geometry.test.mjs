@@ -99,6 +99,12 @@ test('a tilted room is gravity-aligned on its fitted floor plane before the esti
   const stray = [...tilted, [3, 3 - 0.6 * c, 1 - 0.6 * s, 1, 2, 3]], gapped = fitFloorPlane(stray);
   assert.ok(gapped.inlierFraction > 0.5, `floor inliers with a stray point ${gapped.inlierFraction}`);
   assert.ok(toArenaCloud(parsePLY(ascii(stray.map(r => r.join(' ')))).points).provenance.floorAligned, 'a stray point does not stop the alignment');
+  // A denser raised surface 30 cm up, in the next height bin, never takes the floor's place.
+  let seed = 3; const u = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, layered = [];
+  for (let i = 0; i < 1000; i++) layered.push([u() * 10, 0, u() * 10, 1, 2, 3]);
+  for (let i = 0; i < 1100; i++) layered.push([u() * 10, 0.3, u() * 10, 1, 2, 3]);
+  for (let i = 0; i < 1200; i++) layered.push([u() * 10, 0.5 + u() * 2.5, u() * 10, 1, 2, 3]);
+  assert.ok(Math.abs(fitFloorPlane(layered).d) < 1e-9, `the floor stays at y=0, not the raised surface (d ${fitFloorPlane(layered).d})`);
   // Heading: the same room yawed 40° comes back squared, long side along Z, so the footprint box is the room again.
   const y = 40 * Math.PI / 180, cy = Math.cos(y), sy = Math.sin(y);
   const yawed = room.map(r => [r[0] * cy + r[2] * sy, r[1], -r[0] * sy + r[2] * cy, r[3], r[4], r[5]]);
