@@ -5,6 +5,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 89 — all receipt gates re-verified green; 4090 reachable, weights staged this run
+
+- Re-ran on clean tree at `57d168a` (verification-only, nothing modified):
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 10.68 s**
+  - `report_receipt_ui_smoke.py` (actual HTTP report UI proof) → Chromium + WebKit both **EXIT=0**:
+    realPrivateWorker, realEd25519, consentGate, hashesOnlyRequest, exactScenarioBytes,
+    offlineNetworkRequests=0, tamperRejected, mapReviewFlagsUnchanged, pageErrors=[].
+- 4090 probe (short authenticated SSH, key `/root/.ssh/gb10-rebuild`): hostname `d130b6c7f3f4`,
+  GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09` (RTX 4090, driver 535.230.02) — confirmed.
+  `mapanything_qualified: false` — no weights on remote; run-88 held-out smoke was blocked until weights land.
+- No force-push/merge/deploy; Qwen/backup serving, licensed gates, no paid fallback untouched.
+
 ### Run 87 — two-browser UI proof complete (Chromium + WebKit); commit + push this run
 
 - WebKit unblocked: `playwright install webkit` (v2370, the exact rev the venv expects) into
