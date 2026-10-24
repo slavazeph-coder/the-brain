@@ -23,7 +23,7 @@ World Builder and Arena files are byte-identical to the commit.
      - the floor;
      - every object separated and measured as an oriented box;
      - floor no point reached marked unknown;
-     - GLB, OpenUSD and IFC4 files.
+     - GLB, OpenUSD and IFC4 files, plus a DXF plan, a Rhino 3DM model and a quantities CSV (`cad_export.py`).
   4. **Name (optional).** Claude names each object; see #224 below. Without Claude, a detector on the worker
      (`--detector-model`, EfficientDet-Lite2, COCO) names what COCO knows: sofa, chair, potted plant and the like.
   5. **Route.** "Plan a robot route in this scene" builds a reviewed map, and the robot plans after both reviews.

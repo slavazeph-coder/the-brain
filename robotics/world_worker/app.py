@@ -340,7 +340,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if not isinstance(entry, dict):
                 raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.png','.jpg','.mp4','.csv']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv']:
                 raise ValueError('Unsafe artifact name or type.')
             seen.add(name)
             path = out / name

@@ -119,6 +119,17 @@ engine also suggests a name for each separated object ([`object_names.py`](../ro
 
 Crops leave the worker only after a second, separate approval in the site ("Also send crops of each separated object … to Anthropic"). That box appears only when the engine advertises `object_naming` and the reconstruction came from this worker. The worker passes `ANTHROPIC_API_KEY` to that one adapter (`"secrets"` in `adapters.json`), never to the others. Without the key, naming is not offered. The model call is mocked in CI (`tests/world/test_object_names.py`).
 
+**CAD and estimating files (metric scenes).**
+- [`cad_export.py`](../robotics/world_worker/cad_export.py) writes three more files from the same `scene.json` as the GLB, USD and IFC, so their numbers agree:
+  - `scene-plan.dxf` ([ezdxf](https://ezdxf.mozman.at/), MIT): layers FLOOR, WALLS, OBJECTS, UNKNOWN (hatched), DIMENSIONS and LABELS, in metres, with every wall's length dimensioned;
+  - `scene.3dm` ([rhino3dm](https://github.com/mcneel/rhino3dm), MIT): one named solid per element on four layers, with its measurements, IFC class and provenance as user text, and the scale in the document's user text;
+  - `quantities.csv`: a summary (floor extent and area, wall length and face area, objects, unknown area, scale source) above one row per wall and object.
+- **Frame.** Plans use the IFC export's frame: plan X is the scene's x and plan Y is minus its z. On the room run, every Rhino box matched the compiled GLB to the centimetre.
+- **What the numbers are.** The floor is the observed extent (a bounding rectangle, not the room's outline), and the scale stays self-reported in all three files.
+- **Real run through the worker API.** Floor extent 5.11 × 7.06 m (36.08 m²), 6 walls totalling 15.27 m (38.17 m² of face), 14 objects (3 named), 11.5 m² unknown.
+- **Without the libraries** (`requirements-cad.txt`), the DXF or 3DM is skipped and `scene-usd.json` says why; a CAD problem never fails the scene.
+- **Not an integration.** These are open files. Estimating platforms with closed formats (for example ESX) need a vendor partnership, which this is not.
+
 **Names from a detector on the worker (no key, nothing sent).**
 - [`detector_names.py`](../robotics/world_worker/detector_names.py) runs MediaPipe's EfficientDet-Lite2 (COCO's 80 categories) on the same views `choose_views` picks. It runs when the engine is started with `--detector-model` and the vision model did not name the objects: naming was not approved, there is no key, or the call failed.
 - **Matching.** A detection names an object when the two boxes overlap (IoU at least 0.3). It also names one when at least 70% of the object's box lies inside a detection no more than 8 times its size, because sparse points often cover only part of an object.

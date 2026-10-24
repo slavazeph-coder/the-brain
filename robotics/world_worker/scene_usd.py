@@ -21,9 +21,10 @@ import subprocess
 import time
 
 try:
-    from . import detector_names, object_names, sparse_colmap
+    from . import cad_export, detector_names, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
+    import cad_export
     import detector_names
     import object_names
     import sparse_colmap
@@ -336,6 +337,15 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     usd, ifc = (bool((scene.get(key) or {}).get('written')) for key in ['usd', 'ifc'])
     for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
         shutil.copyfile(work / name, out / name)
+    # CAD and estimating files from the same scene.json: a DXF plan, a Rhino model and a quantities sheet (metric only).
+    try:
+        cad = cad_export.export(scene, work)
+    except Exception as error:  # like naming, a CAD export problem never fails the scene; the evidence says what happened
+        cad = {'failed': f'{type(error).__name__}: {str(error)[:200]}'}
+    cad_files = [name for key, name in (('dxf', 'scene-plan.dxf'), ('3dm', 'scene.3dm'), ('quantities', 'quantities.csv'))
+                 if (cad.get(key) or {}).get('written')]
+    for name in cad_files:
+        shutil.copyfile(work / name, out / name)
     if names:
         shutil.copyfile(names, out / 'object-names.json')
         naming['applied'] = (scene.get('naming') or {}).get('named', 0)
@@ -343,7 +353,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     named = ['Object names are suggestions from a vision model looking at the walkthrough frames; nobody has reviewed them.'] if names else []
     evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
-                'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'),
+                'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'), 'cad': cad,
                 'naming': naming,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
@@ -362,6 +372,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     artifacts = [{'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': cloud['units']},
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
+                 *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
