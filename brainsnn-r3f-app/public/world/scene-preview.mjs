@@ -45,6 +45,8 @@ export function sceneFacts(scene) {
     facts.push(separated ? `Separated: ${plural(separated, 'object')} from the points, each measured as an oriented box in metres${largest.length ? `. Largest: ${largest.map(measured).join('; ')}` : ''}.`
       : 'Separated: no clusters of points stand above the floor apart from walls.');
   } else if (separation?.done === false) facts.push('Separated: none, because object sizes need a measured scale.');
+  const naming = scene.naming && typeof scene.naming === 'object' ? scene.naming : null, named = count(naming?.named);
+  if (naming && named !== null) facts.push(`Named: ${plural(named, 'object')} by ${typeof naming.model === 'string' ? naming.model.slice(0, 60) : 'a vision model'} from the walkthrough frames. Suggestions, not reviewed.`);
   return facts;
 }
 

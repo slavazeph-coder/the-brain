@@ -33,6 +33,22 @@ class ArenaHandoff(unittest.TestCase):
         self.assertTrue(cloud["provenance"]["floorAligned"]); self.assertGreater(cloud["floorEstimate"]["support"], .5)
         self.assertTrue(all(len(p) == 6 and all(isinstance(c, int) for c in p[3:]) for p in cloud["points"]))
 
+    def test_the_hand_off_records_its_exact_transform_from_the_source(self):
+        # A tilted, turned room: floor alignment and the heading turn both apply, plus the measured scale.
+        rng = random.Random(9); rows = []
+        for _ in range(3000):
+            x, y, z = rng.uniform(-2, 2), 0.0, rng.uniform(-3, 3)
+            if rng.random() < .3: x, y = 2.0, rng.uniform(0, 2.4)
+            c, s = math.cos(.5), math.sin(.5); x, z = c * x + s * z, -s * x + c * z
+            rows.append([x + 1, -(y * math.cos(.25) - z * math.sin(.25)) + 1.5, -(y * math.sin(.25) + z * math.cos(.25)) + 4, 1, 2, 3])
+        cloud = su.to_arena_cloud(rows, coordinate_frame="colmap", metres_per_unit=.4, measurement={"distance": 2.0, "span": 5.0})
+        self.assertTrue(cloud["provenance"]["floorAligned"]); self.assertNotEqual(cloud["provenance"]["floorYawDegrees"], 0)
+        lo, hi, _ = su.frame_bounds(rows); M = cloud["fromSource"]
+        kept = [r for r in rows if all(lo[j] <= r[j] <= hi[j] for j in range(3))]  # the percentile core, in order
+        self.assertEqual(len(cloud["points"]), len(kept))
+        worst = max(abs(sum(M[i][j] * src[j] for j in range(3)) + M[i][3] - out[i]) for src, out in zip(kept, cloud["points"]) for i in range(3))
+        self.assertLess(worst, 1e-9)
+
     def test_frame_flip_only_for_colmap(self):
         # A floorless blob (<10% plane inliers) is never rotated, so the frame handling shows through directly.
         rng = random.Random(5); rows = [[rng.uniform(-3, 3), rng.uniform(-3, 3), rng.uniform(-3, 3), 1, 2, 3] for _ in range(2000)]

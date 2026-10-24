@@ -39,6 +39,23 @@ test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every droppe
   const thin = toArenaCloud(big, {}, 1000); assert.ok(thin.points.length <= 1000 && thin.provenance.thinned);
 });
 
+test('the hand-off records the exact transform from the reconstruction, through tilt, heading and scale', () => {
+  // A COLMAP-frame room (y down), tilted and turned, so floor alignment and the heading turn both apply.
+  let seed = 11; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, rows = [];
+  for (let i = 0; i < 3000; i++) {
+    let x = r() * 4 - 2, y = 0, z = r() * 6 - 3; if (i % 3 === 0) { x = 2; y = r() * 2.4; }
+    [x, z] = [Math.cos(.5) * x + Math.sin(.5) * z, -Math.sin(.5) * x + Math.cos(.5) * z];
+    rows.push(`${x + 1} ${-(y * Math.cos(.25) - z * Math.sin(.25)) + 1.5} ${-(y * Math.sin(.25) + z * Math.cos(.25)) + 4} 90 80 70`);
+  }
+  const p = parsePLY(ascii(rows)).points, cloud = toArenaCloud(p, { coordinateFrame: 'colmap', metresPerUnit: .4, measurement: { distance: 2, span: 5 } });
+  assert.ok(cloud.provenance.floorAligned && cloud.provenance.floorYawDegrees !== 0);
+  const { min, max } = frameBounds(p), M = cloud.fromSource, kept = [];
+  for (let i = 0; i < p.length / STRIDE; i++) { const q = [0, 1, 2].map(j => p[i * STRIDE + j]); if (q.every((v, j) => v >= min[j] && v <= max[j])) kept.push(q); }
+  assert.equal(kept.length, cloud.points.length);
+  const worst = Math.max(...kept.flatMap((q, n) => M.map((row, i) => Math.abs(row[0] * q[0] + row[1] * q[1] + row[2] * q[2] + row[3] - cloud.points[n][i]))));
+  assert.ok(worst < 1e-5, `largest difference ${worst}`); // float32 source coordinates
+});
+
 test('floor estimate finds the dense low band of a room and declines a facade-only scan', () => {
   // Room: 400 floor points on y=0 over a 6 x 4 footprint, 200 wall points up to y=3 along x=0, a few ceiling points.
   const room = [];

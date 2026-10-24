@@ -121,6 +121,7 @@ def check_metric(pw, name, origin, worker_url, token):
         page.locator('[data-tab=capture]').click()
         build = page.locator('[data-action=metric-scene]')
         build.wait_for()
+        assert page.locator('#scene-naming').count() == 0, 'naming needs a reconstruction from this worker, not a local file'
         # Nothing uploads until the person approves this specific upload.
         build.click()
         assert 'Approve uploading the measured point cloud' in page.locator('#status').inner_text()
@@ -184,8 +185,10 @@ def main():
             'command': [sys.executable, str(ROOT / 'tests/world/scene_fixture_adapter.py'), '--input-manifest', '{input_manifest}']},
             {'id': 'scene-usd', 'label': 'Scene transport fixture (no reconstruction)',
             'enabled': True, 'license_reviewed': True, 'input_kinds': ['image', 'cloud'], 'max_inputs': 1, 'timeout_seconds': 60,
+            # Naming is advertised (its secret is set), but a cloud opened from a local file has no worker frames to crop.
+            'source_job': True, 'secrets': ['FIXTURE_NAMING_KEY'], 'object_naming': {'provider': 'Fixture', 'model': 'fixture-model'},
             'command': [sys.executable, str(ROOT / 'tests/world/scene_fixture_adapter.py'), '--input-manifest', '{input_manifest}']}]))
-        environment = {**os.environ, 'WORLD_WORKER_TOKEN': token, 'WORLD_WORKER_DIR': str(tmp / 'data'),
+        environment = {**os.environ, 'WORLD_WORKER_TOKEN': token, 'WORLD_WORKER_DIR': str(tmp / 'data'), 'FIXTURE_NAMING_KEY': 'fixture-only',
                        'WORLD_ADAPTERS_FILE': str(config), 'WORLD_ALLOWED_ORIGINS': origin}
         try:
             for label, command, env in [

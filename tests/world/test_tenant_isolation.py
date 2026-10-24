@@ -383,3 +383,20 @@ def test_engine_allowlist_and_revoked_queued_owner_checked_before_process(config
         next_job = prepare(client, A, ua, 'hold').json()['id']
         registry(config, [row('alpha', A)])
         assert client.post(f'/v1/jobs/{next_job}/start', headers=headers(A), json={}).status_code == 403
+
+
+def test_a_job_cannot_read_another_owners_job(tmp_path):
+    script = tmp_path / 'noop.py'
+    script.write_text("import json,sys\nfrom pathlib import Path\nr=json.loads(Path(sys.argv[1]).read_text())\n"
+                      "(Path(r['output_dir'])/'manifest.json').write_text(json.dumps({'artifacts':[]}))\n")
+    adapters = tmp_path / 'adapters.json'
+    adapters.write_text(json.dumps([{'id': 'test-source', 'label': 'TEST FIXTURE', 'enabled': True, 'license_reviewed': True,
+                                     'input_kinds': ['image'], 'max_inputs': 1, 'timeout_seconds': 5, 'source_job': True,
+                                     'command': [sys.executable, str(script), '{input_manifest}']}]))
+    config = tmp_path / 'tenants.json'
+    registry(config, [row('alpha', A, engines=['inspect', 'test-source']), row('beta', B, engines=['inspect', 'test-source'])])
+    with TestClient(create_app(root=tmp_path / 'data', token=OPERATOR, tenants=str(config), adapters=str(adapters))) as client:
+        alpha_job, _, _ = complete(client, A)
+        uid = upload(client, B)
+        response = client.post('/v1/jobs', headers=headers(B), json={'engine': 'test-source', 'upload_ids': [uid], 'consent': True, 'source_job': alpha_job})
+        assert response.status_code == 404, response.text

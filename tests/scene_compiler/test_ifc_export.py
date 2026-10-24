@@ -64,6 +64,20 @@ class IfcExport(unittest.TestCase):
         self.assertIn("IFCDIRECTION((0.,-1.,0.))", text)  # 90 degrees of yaw (Y-up) runs along -Y in IFC, like walls
         self.assertIn("IFCCARTESIANPOINT((1.,2.,0.))", text)  # the box stands on its base: centre y 0.45 minus half its height
 
+    def test_model_named_objects_say_they_are_unreviewed_and_only_furniture_is_furniture(self):
+        named = [{"name": "object_1", "label": "sofa", "provenance": "observed", "kind": "separated", "centre": [0, 0.45, 0], "size": [2, 0.9, 0.9],
+                  "yaw_degrees": 0, "labelSource": "claude-opus-5-5", "labelConfidence": "high", "labelReviewed": False, "ifcClass": "IfcFurniture"},
+                 {"name": "object_2", "label": "potted plant", "provenance": "observed", "kind": "separated", "centre": [2, 0.6, 0], "size": [0.4, 1.2, 0.4],
+                  "yaw_degrees": 0, "labelSource": "claude-opus-5-5", "labelConfidence": "medium", "labelReviewed": False, "ifcClass": "IfcBuildingElementProxy"}]
+        with tempfile.TemporaryDirectory() as d:
+            record = ie.emit_ifc(d, metric_scene(objects=named, walls=[], unknown=[]))
+            text = (Path(d) / "scene.ifc").read_text(encoding="ascii")
+        self.assertEqual(record["elements"]["separated"], 2)
+        self.assertRegex(text, r"IFCFURNITURE\('[^']+',\$,'sofa'"); self.assertRegex(text, r"IFCBUILDINGELEMENTPROXY\('[^']+',\$,'potted plant','[^']*not reviewed")
+        self.assertEqual(text.count("IFCPROPERTYSINGLEVALUE('LabelReviewed',$,IFCBOOLEAN(.F.),$)"), 2)
+        self.assertIn("IFCPROPERTYSINGLEVALUE('Detector',$,IFCLABEL('claude-opus-5-5'),$)", text)
+        self.assertIn("IFCPROPERTYSINGLEVALUE('LabelConfidence',$,IFCLABEL('medium'),$)", text)
+
     def test_arbitrary_units_write_no_ifc_and_remove_a_stale_one(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "scene.ifc").write_text("stale")

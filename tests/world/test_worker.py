@@ -658,3 +658,72 @@ def test_disk_check_tolerates_files_the_adapter_deletes_mid_walk(tmp_path, monke
         return real(path, *args, **kwargs)
     monkeypatch.setattr(os, 'lstat', vanishing)
     assert directory_bytes(tmp_path) == 5
+
+
+def source_config(tmp_path, *, secret=None):
+    """An adapter that may read an earlier job and receives one secret; it records what it was given."""
+    script = tmp_path / 'source_adapter.py'
+    script.write_text("import json,sys,os\nfrom pathlib import Path\n"
+                      "request=json.loads(Path(sys.argv[1]).read_text());out=Path(request['output_dir'])\n"
+                      "seen={'source':request.get('source'),'secret':os.environ.get('FIXTURE_NAMING_KEY'),'token':'WORLD_WORKER_TOKEN' in os.environ}\n"
+                      "(out/'seen.json').write_text(json.dumps(seen))\n"
+                      "(out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':'seen.json','kind':'evidence'}]}))\n")
+    config = tmp_path / 'adapters.json'
+    config.write_text(json.dumps([
+        {'id': 'test-source', 'label': 'TEST FIXTURE', 'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'],
+         'max_inputs': 1, 'timeout_seconds': 5, 'source_job': True, 'secrets': ['FIXTURE_NAMING_KEY'],
+         'object_naming': {'provider': 'Fixture', 'model': 'fixture-model'}, 'command': [sys.executable, str(script), '{input_manifest}']},
+        {'id': 'test-plain', 'label': 'TEST FIXTURE', 'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'],
+         'max_inputs': 1, 'timeout_seconds': 5, 'command': [sys.executable, str(script), '{input_manifest}']}]))
+    return config
+
+
+def test_a_job_reads_an_earlier_job_only_where_configured_and_receives_only_its_own_secret(tmp_path, monkeypatch):
+    monkeypatch.setenv('FIXTURE_NAMING_KEY', 'fixture-secret-value')
+    with TestClient(create_app(root=tmp_path / 'data', token=TOKEN, adapters=str(source_config(tmp_path)))) as c:
+        engines = {e['id']: e for e in c.get('/v1/capabilities', headers=HEADERS).json()['engines']}
+        assert engines['test-source']['object_naming'] == {'provider': 'Fixture', 'model': 'fixture-model'}
+        assert 'object_naming' not in engines['test-plain']
+        earlier, _ = make_job(c)
+        uid = upload(c)
+        body = {'engine': 'test-source', 'upload_ids': [uid], 'consent': True, 'source_job': earlier}
+        assert c.post('/v1/jobs', json=body, headers=HEADERS).status_code == 409, 'the earlier job has not run yet'
+        c.post(f'/v1/jobs/{earlier}/start', json={}, headers=HEADERS); assert wait(c, earlier)['status'] == 'complete'
+        assert c.post('/v1/jobs', json=body | {'engine': 'test-plain'}, headers=HEADERS).status_code == 422
+        assert c.post('/v1/jobs', json=body | {'source_job': 'f' * 32}, headers=HEADERS).status_code == 404
+        r = c.post('/v1/jobs', json=body, headers=HEADERS); assert r.status_code == 201, r.text
+        jid = r.json()['id']; c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS)
+        assert wait(c, jid)['status'] == 'complete'
+        seen = json.loads((tmp_path / 'data' / 'jobs' / jid / 'output' / 'seen.json').read_text())
+        assert seen['source'] == {'job': earlier, 'engine': 'inspect', 'path': str((tmp_path / 'data' / 'jobs' / earlier).resolve())}
+        assert seen['secret'] == 'fixture-secret-value' and seen['token'] is False
+        # The plain adapter gets no source and not the other adapter's secret.
+        plain, _ = make_job(c, 'test-plain'); c.post(f'/v1/jobs/{plain}/start', json={}, headers=HEADERS); wait(c, plain)
+        seen = json.loads((tmp_path / 'data' / 'jobs' / plain / 'output' / 'seen.json').read_text())
+        assert seen == {'source': None, 'secret': None, 'token': False}
+
+
+def test_naming_is_not_offered_without_its_secret_and_bad_secret_names_are_refused(tmp_path, monkeypatch):
+    monkeypatch.delenv('FIXTURE_NAMING_KEY', raising=False)
+    with TestClient(create_app(root=tmp_path / 'data', token=TOKEN, adapters=str(source_config(tmp_path)))) as c:
+        assert all('object_naming' not in e for e in c.get('/v1/capabilities', headers=HEADERS).json()['engines'])
+    config = source_config(tmp_path); entries = json.loads(config.read_text())
+    for bad in (['WORLD_WORKER_TOKEN'], ['lower_case'], 'ANTHROPIC_API_KEY', ['A', 'B', 'C', 'D', 'E']):
+        entries[0]['secrets'] = bad; config.write_text(json.dumps(entries))
+        with pytest.raises(ValueError, match='secrets'):
+            create_app(root=tmp_path / 'data2', token=TOKEN, adapters=str(config))
+
+
+def test_a_hand_off_keeps_its_source_transform_and_naming_approval_only_when_well_formed(tmp_path):
+    from robotics.world_worker.geometry import load_arena_cloud
+    path = tmp_path / 'cloud.json'
+    good = [[.4, 0, 0, 1.0], [0, .4, 0, -2.0], [0, 0, .4, 3.0]]
+    path.write_text(json.dumps(arena_cloud(fromSource=good, nameObjects=True)))
+    cloud = load_arena_cloud(path)
+    assert cloud['fromSource'] == good and cloud['nameObjects'] is True
+    path.write_text(json.dumps(arena_cloud(nameObjects='yes')))
+    assert 'nameObjects' not in load_arena_cloud(path) and 'fromSource' not in load_arena_cloud(path)
+    for bad in ([[1, 0, 0, 0], [0, 1, 0, 0]], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, '0']], [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1e9, 0]], 'identity'):
+        path.write_text(json.dumps(arena_cloud(fromSource=bad)))
+        with pytest.raises(ValueError, match='transform'):
+            load_arena_cloud(path)

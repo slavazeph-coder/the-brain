@@ -183,10 +183,27 @@ export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', so
   const yaw = upright ? floorYaw(upright, plane.tolerance) : 0, aligned = upright ? rotateY(upright, -yaw) : core;
   const rows = aligned.filter((_, i) => i % step === 0), units = metric ? 'm' : 'arbitrary', floor = estimateFloor(aligned);
   return { version: 1, kind: 'colmap-sparse-point-cloud', units, coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
-    source, points: rows, floorEstimate: floor && { ...floor, units },
+    source, points: rows, fromSource: arenaTransform(k, flip, plane, !!upright, yaw), floorEstimate: floor && { ...floor, units },
     scale: metric ? { source: 'user-measured', metresPerUnit: k, distance: measurement?.distance ?? null, spanUnits: measurement?.span ?? null, selfReported: true, verified: false } : null,
     provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1,
       floorAligned: aligned !== core, floorTiltDegrees: plane ? +(Math.acos(Math.min(1, Math.abs(plane.normal[1]))) * 180 / Math.PI).toFixed(1) : null, floorYawDegrees: +(yaw * 180 / Math.PI).toFixed(1), floorInlierFraction: plane ? +plane.inlierFraction.toFixed(3) : null, metricVerified: false } };
+}
+/** toArenaCloud's mapping from source coordinates to hand-off coordinates, as a 3 x 4 matrix [A | t]: scale and flip,
+ * then the floor alignment (alignToFloor), then the heading turn (rotateY by -yaw). The worker uses it to find the
+ * reconstruction's frames that saw each object. */
+export function arenaTransform(k, flip, plane, aligned, yaw) {
+  const S = [[k, 0, 0], [0, k * flip, 0], [0, 0, k * flip]];
+  let A = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], t = [0, 0, 0];
+  if (aligned) {
+    const n = plane.normal, c = n[1], s = Math.hypot(n[0], n[2]);
+    if (s < 1e-9) t = [0, plane.d * Math.sign(c), 0];
+    else { const ax = -n[2] / s, az = n[0] / s, v = 1 - c;
+      A = [[c + ax * ax * v, -az * s, ax * az * v], [az * s, c, -ax * s], [ax * az * v, ax * s, c + az * az * v]]; t = [0, plane.d, 0]; }
+  }
+  const a = -yaw, Ry = [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+  const mul = (X, Y) => X.map((_, i) => [0, 1, 2].map(j => X[i][0] * Y[0][j] + X[i][1] * Y[1][j] + X[i][2] * Y[2][j]));
+  const M = mul(Ry, mul(A, S));
+  return M.map((row, i) => [...row, Ry[i][0] * t[0] + Ry[i][1] * t[1] + Ry[i][2] * t[2]]);
 }
 /** Heading of the floor band's principal axis (PCA on x,z of points within `tol` of y=0), in radians from +Z. */
 export function floorYaw(rows, tol) {

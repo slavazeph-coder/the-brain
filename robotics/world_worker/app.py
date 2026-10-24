@@ -33,6 +33,8 @@ from .auth import Identities, OPERATOR_OWNER
 MIB = 1024 ** 2
 ID = re.compile(r"^[a-f0-9]{32}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$")
+# An adapter secret is an environment variable name; the worker's own token and tenants never pass to adapters.
+SECRET_NAME = re.compile(r"^(?!WORLD_WORKER_|WORLD_TENANTS)[A-Z][A-Z0-9_]{0,63}$")
 ACTIVE = ('prepared', 'queued', 'running')
 
 class UploadBody(BaseModel):
@@ -46,6 +48,9 @@ class JobBody(BaseModel):
     engine: str = Field(min_length=1, max_length=64)
     upload_ids: list[str] = Field(min_length=1, max_length=12)
     consent: bool = Field(strict=True)
+    # A finished job of the same owner whose files this one may read (the scene compiler's naming step reads the
+    # reconstruction's frames and camera poses). Only engines configured with "source_job": true accept one.
+    source_job: str | None = Field(default=None, min_length=32, max_length=32)
 
 class TicketBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -69,6 +74,8 @@ class Store:
             if 'owner_id' not in {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{OPERATOR_OWNER}'")
             self.db.execute(f'CREATE INDEX IF NOT EXISTS {table}_owner ON {table}(owner_id, created)')
+        if 'source_job' not in {row['name'] for row in self.db.execute('PRAGMA table_info(jobs)')}:
+            self.db.execute('ALTER TABLE jobs ADD COLUMN source_job TEXT')
         self.db.execute("UPDATE jobs SET status='failed', error='Worker restarted; execution was interrupted.' WHERE status IN ('queued','running')")
         self.db.commit()
 
@@ -198,6 +205,16 @@ def configured_engines(config):
         kinds = entry.get('input_kinds', [])
         if not kinds or any(k not in ['image', 'video', 'cloud'] for k in kinds):
             raise ValueError('Invalid adapter input kinds.')
+        # Secrets this adapter alone receives from the worker's environment, by name (for example ANTHROPIC_API_KEY).
+        secrets_ = entry.get('secrets', [])
+        if not isinstance(secrets_, list) or len(secrets_) > 4 or not all(isinstance(x, str) and SECRET_NAME.fullmatch(x) for x in secrets_):
+            raise ValueError('Adapter secrets must be up to four environment variable names.')
+        naming = entry.get('object_naming')
+        if naming is not None and not (isinstance(naming, dict) and set(naming) <= {'provider', 'model'}
+                                       and all(isinstance(v, str) and 0 < len(v) <= 80 for v in naming.values())):
+            raise ValueError('object_naming must name a provider and a model.')
+        if entry.get('source_job') not in (None, True, False):
+            raise ValueError('source_job must be true or false.')
         engines[eid] = {**entry, 'available': entry.get('enabled') is True and entry.get('license_reviewed') is True,
                         'max_inputs': min(12, max(1, int(entry.get('max_inputs', 1)))),
                         'timeout_seconds': min(3600, max(1, int(entry.get('timeout_seconds', 1800))))}
@@ -361,8 +378,17 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 path = store.upload_path(item['id'], job['owner_id'])
                 validate_media(path, item['kind'])
                 inputs.append({'path': str(path), 'name': item['name'], 'kind': item['kind'], 'size': item['size']})
+            request = {'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(out)}
+            if job.get('source_job'):
+                # Read-only access to the same owner's earlier job, checked again here: if it was deleted since, the
+                # adapter runs without it and says so.
+                try:
+                    source = store.job(job['source_job'], job['owner_id'])
+                    request['source'] = {'job': source['id'], 'engine': source['engine'], 'path': str(store.root / 'jobs' / source['id'])}
+                except HTTPException:
+                    request['source'] = {'job': job['source_job'], 'missing': True}
             request_file = directory / 'input.json'
-            request_file.write_text(json.dumps({'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(out)}))
+            request_file.write_text(json.dumps(request))
             if job['engine'] == 'inspect':
                 rows = []
                 for item in inputs:
@@ -375,6 +401,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 # The worker secret is deliberately excluded from adapter environments.
                 env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR','WORLD_VLM_ENABLED','WORLD_VLM_BASE_URL','WORLD_VLM_MODEL','WORLD_VLM_REVISION','WORLD_VLM_API_KEY']}
                 env.update({'PYTHONUNBUFFERED':'1','HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'})
+                env.update({k: os.environ[k] for k in entry.get('secrets', []) if os.environ.get(k)})
                 with (directory / 'operator.log').open('wb') as log:
                     proc = await asyncio.create_subprocess_exec(*command, cwd=str(directory), env=env, stdout=log, stderr=log, start_new_session=os.name=='posix')
                     processes[jid] = proc
@@ -480,7 +507,10 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         return {'api_version':'brainsnn.worker.v1','operator_only':True,
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
-                'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values() if e['id'] in principal.engines],
+                'engines':[{**{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']},
+                            # Naming is offered only when the adapter's secrets are actually set on this worker.
+                            **({'object_naming':e['object_naming']} if e.get('object_naming') and all(os.environ.get(x) for x in e.get('secrets', [])) else {})}
+                           for e in engines.values() if e['id'] in principal.engines],
                 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
     @app.post('/v1/uploads',status_code=201)
@@ -546,9 +576,12 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 item=store.upload(uid, principal.owner_id)
                 if item['offset']!=item['size'] or item['kind'] not in engine['input_kinds']:raise HTTPException(422,'Incomplete or unsupported source.')
                 validate_media(store.upload_path(uid, principal.owner_id),item['kind'])
+            if body.source_job is not None:
+                if engine.get('source_job') is not True:raise HTTPException(422,'This engine does not read an earlier job.')
+                if store.job(body.source_job, principal.owner_id)['status']!='complete':raise HTTPException(409,'The earlier job has not completed.')
             check_storage(job_limit, principal)
             jid=secrets.token_hex(16)
-            store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id) VALUES (?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id));store.db.commit()
+            store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id,source_job) VALUES (?,?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id,body.source_job));store.db.commit()
             return store.job(jid, principal.owner_id)
 
     @app.post('/v1/jobs/{jid}/start')

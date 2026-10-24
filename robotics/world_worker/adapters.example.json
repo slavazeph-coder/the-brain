@@ -89,5 +89,33 @@
       "--input-manifest",
       "{input_manifest}"
     ]
+  },
+  {
+    "id": "scene-usd",
+    "label": "Simulation scene (GLB/USD/IFC) from a walkthrough",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "video",
+      "cloud"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 1800,
+    "source_job": true,
+    "secrets": [
+      "ANTHROPIC_API_KEY"
+    ],
+    "object_naming": {
+      "provider": "Anthropic",
+      "model": "claude-opus-5-5"
+    },
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/scene_usd.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--blender",
+      "/usr/bin/blender"
+    ]
   }
 ]

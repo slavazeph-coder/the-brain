@@ -138,11 +138,16 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             title = str(obj.get('name', 'object')).replace('_', ' ').capitalize()
             element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(title)},{label('Separated from the reconstructed points; not identified.')},"
                             f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
+        elif separated and obj.get('ifcClass') == 'IfcBuildingElementProxy':
+            # Named by a model, but not furniture (a plant, a lamp, a radiator): a proxy that carries the suggested name.
+            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(obj['label'])},{label('Separated from the reconstructed points; name suggested by a model, not reviewed.')},"
+                            f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
         else:
             element = w.add(f"IFCFURNITURE('{ifc_guid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
             counts['separated' if separated else 'objects'] += 1
         properties(element, seed, {'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
                                    'Detector': obj.get('detector') or obj.get('labelSource'), 'Separated': True if separated else None,
+                                   'LabelConfidence': obj.get('labelConfidence'), 'LabelReviewed': obj.get('labelReviewed'),
                                    'LengthMetres': float(sx) if separated else None, 'WidthMetres': float(sz) if separated else None,
                                    'HeightMetres': float(sy) if separated else None})
         elements.append(element)

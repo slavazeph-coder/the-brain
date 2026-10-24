@@ -34,6 +34,11 @@ test('separated objects are counted and the largest are measured, only from scen
   assert.equal(sceneFacts(scene({separation:{done:false,reason:'x'}}))[5],'Separated: none, because object sizes need a measured scale.');
   assert.equal(sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:0}}))[5],'Separated: no clusters of points stand above the floor apart from walls.');
   assert.equal(sceneFacts(scene()).length,5,'older scenes without separation add no line');});
+test('model names are reported as unreviewed suggestions, with the model that made them',()=>{
+  const f=sceneFacts(scene({units:'m',usd:{written:true},separation:{done:true},counts:{points:1,walls:0,objects:0,unknown_cells:0,separated:3},naming:{model:'claude-opus-5-5',named:2,reviewed:false}}));
+  assert.equal(f.at(-1),'Named: 2 objects by claude-opus-5-5 from the walkthrough frames. Suggestions, not reviewed.');
+  assert.ok(!sceneFacts(scene({naming:null})).some(l=>l.startsWith('Named')));
+  assert.ok(!sceneFacts(scene({naming:{model:'m',named:-1}})).some(l=>l.startsWith('Named')),'a malformed count is not reported');});
 
 // A measured 4 x 6 m room in the compiler's frame (floor at y = -0.02, x from -2, z from -3): two walls, a diagonal
 // separated object, a detected box, a detection that could not be placed, and three unobserved cells in a row.
