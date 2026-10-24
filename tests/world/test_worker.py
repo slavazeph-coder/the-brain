@@ -754,6 +754,21 @@ def test_naming_is_not_offered_without_its_secret_and_bad_secret_names_are_refus
             create_app(root=tmp_path / 'data2', token=TOKEN, adapters=str(config))
 
 
+def test_on_worker_detection_is_offered_without_a_secret_and_must_be_well_formed(tmp_path, monkeypatch):
+    monkeypatch.delenv('FIXTURE_NAMING_KEY', raising=False)
+    config = source_config(tmp_path); entries = json.loads(config.read_text())
+    entries[0]['object_detection'] = {'provider': 'on-worker detector', 'model': 'EfficientDet-Lite2 (COCO)'}
+    config.write_text(json.dumps(entries))
+    with TestClient(create_app(root=tmp_path / 'data', token=TOKEN, adapters=str(config))) as c:
+        engines = c.get('/v1/capabilities', headers=HEADERS).json()['engines']
+        assert [e['object_detection'] for e in engines if 'object_detection' in e] == [entries[0]['object_detection']]
+        assert all('object_naming' not in e for e in engines)
+    for bad in ('EfficientDet', {'provider': 'x', 'weights': 'y'}, {'provider': ''}, {'model': 'x' * 81}):
+        entries[0]['object_detection'] = bad; config.write_text(json.dumps(entries))
+        with pytest.raises(ValueError, match='object_detection'):
+            create_app(root=tmp_path / 'data2', token=TOKEN, adapters=str(config))
+
+
 def test_a_hand_off_keeps_its_source_transform_and_naming_approval_only_when_well_formed(tmp_path):
     from robotics.world_worker.geometry import load_arena_cloud
     path = tmp_path / 'cloud.json'

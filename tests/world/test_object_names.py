@@ -162,3 +162,58 @@ def test_frames_come_from_the_model_the_points_were_exported_from(tmp_path):
         (sparse / 'selected.txt').write_text(bad)
         with pytest.raises(on.NamingSkipped, match='not there'):
             on.selected_model(sparse)
+
+
+def detections_on_the_objects(views, labels):
+    """A stand-in for detector_names.load: in every chosen view, each object is detected exactly on its projected box,
+    labelled by labels(index, height)."""
+    c, objects = separated()
+    P, mpu = on.source_points(c['points'], c['fromSource'])
+    seen = {}
+    for n, picks in enumerate(on.choose_views(objects, P, views, mpu)):
+        for p in picks:
+            seen.setdefault(str(p['view']['path']), []).append((labels(n, round(objects[n]['y1'] - objects[n]['y0'], 1)), 0.8, tuple(p['box'])))
+    return lambda path: seen.get(str(path), [])
+
+
+def test_an_on_worker_detector_names_objects_when_the_model_cannot_and_sends_nothing(views, tmp_path, monkeypatch):
+    monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+    detect = detections_on_the_objects(views, lambda n, height: 'refrigerator' if height == 0.9 else 'person')
+    request = {'source': {'job': 'a' * 32, 'path': str(tmp_path)}}
+    path, evidence = su.name_step(cloud(), request, tmp_path, views=views, detect=detect)
+    assert evidence['status'] == 'named' and evidence['provider'] == 'on-worker detector' and evidence['crops_sent'] == 0
+    assert evidence['model_attempt'] == {'status': 'skipped', 'reason': 'This worker has no Anthropic API key configured.'}
+    by_label = {o['label']: o for o in json.loads(path.read_text())['objects']}
+    assert by_label['refrigerator']['confidence'] == 'high' and by_label['refrigerator']['category'] == 'appliance'
+    assert by_label['unknown']['confidence'] == 'low', 'a person never names an object'
+    # Without the person's approval for the model, only the detector runs; with a model answer, the detector waits.
+    client = FakeClient(by_size)
+    assert su.name_step({**cloud(), 'nameObjects': False}, request, tmp_path, client=client, views=views, detect=detect)[1]['provider'] == 'on-worker detector'
+    assert not client.calls
+    assert su.name_step(cloud(), request, tmp_path, client=client, views=views, detect=detect)[1]['provider'] == 'Anthropic'
+    assert su.name_step({**cloud(), 'nameObjects': False}, request, tmp_path, client=client, views=views) == (None, None)
+
+
+def test_detector_rules_need_a_clear_overlap_agreement_or_a_box_inside_a_detection_of_similar_size():
+    import detector_names as dn
+    def item(box, *frames): return {'id': '1', 'picks': [{'view': {'name': f, 'path': f}, 'box': box} for f in frames]}
+    def name(frames, detections, box=(100, 100, 200, 200)):
+        return dn.answer([item(box, *frames)], lambda path: detections[path])[0]['1']
+    sofa = ('couch', .8, (95, 95, 205, 210))
+    assert name(['a', 'b'], {'a': [sofa], 'b': [sofa]})['confidence'] == 'high'
+    assert name(['a'], {'a': [sofa]}) | {'reason': ''} == {'label': 'sofa', 'category': 'furniture', 'confidence': 'medium', 'reason': ''}
+    weak = ('couch', .4, (120, 120, 230, 230))  # overlaps (IoU 0.41), but neither large nor clear
+    assert name(['a'], {'a': [weak]})['confidence'] == 'low' and name(['a', 'b'], {'a': [weak], 'b': [weak]})['confidence'] == 'medium'
+    assert name(['a'], {'a': [sofa, ('dining table', .8, (100, 100, 195, 200))]})['label'] == 'table and sofa', 'the closer fit first'
+    plant, small = ('potted plant', .7, (90, 80, 160, 170)), (100, 100, 120, 140)  # 7.9 times the object's box
+    assert name(['a', 'b'], {'a': [plant], 'b': [plant]}, small)['label'] == 'potted plant'
+    assert name(['a', 'b'], {'a': [('potted plant', .7, (0, 0, 300, 300))]} | {'b': []}, small)['label'] == 'unknown', 'a detection far larger than the object'
+    assert name(['a'], {'a': [('person', .9, (95, 95, 205, 210))]}) == {'label': 'unknown', 'category': 'unknown', 'confidence': 'low',
+                                                                      'reason': 'no room-object detection overlapped it in its views'}
+
+
+def test_the_detector_loads_only_the_pinned_model(tmp_path):
+    import detector_names as dn
+    other = tmp_path / 'other.tflite'; other.write_bytes(b'not the model')
+    with pytest.raises(ValueError, match='not the pinned'):
+        dn.load(other)

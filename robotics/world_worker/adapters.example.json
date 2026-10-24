@@ -115,7 +115,13 @@
       "--input-manifest",
       "{input_manifest}",
       "--blender",
-      "/usr/bin/blender"
-    ]
+      "/usr/bin/blender",
+      "--detector-model",
+      "/absolute/path/to/mediapipe-models/efficientdet_lite2.tflite"
+    ],
+    "object_detection": {
+      "provider": "on-worker detector",
+      "model": "EfficientDet-Lite2 (COCO)"
+    }
   }
 ]

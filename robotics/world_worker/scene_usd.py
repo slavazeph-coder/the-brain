@@ -21,9 +21,10 @@ import subprocess
 import time
 
 try:
-    from . import object_names, sparse_colmap
+    from . import detector_names, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
+    import detector_names
     import object_names
     import sparse_colmap
     from geometry import load_arena_cloud
@@ -232,29 +233,39 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
 
 
 # ---------- Blender ----------
-def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None):
-    """Model-suggested names for the separated objects, when the person asked for them with this hand-off. Returns the
-    names file for the compiler (or None) and what happened; a problem here never fails the scene."""
+def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None, detector_model: Path | None = None, detect=None):
+    """Suggested names for the separated objects. The vision model names them when the person asked for it with this
+    hand-off; an on-worker detector (detector_model, or detect for tests) names them when it is configured and the model
+    did not. Returns the names file for the compiler (or None) and what happened; a problem here never fails the scene."""
     source = request.get('source') if isinstance(request.get('source'), dict) else {}
-    try:
-        if cloud['units'] != 'm':
-            raise object_names.NamingSkipped('Naming needs a metric scene.')
-        if not source or source.get('missing'):
-            raise object_names.NamingSkipped('The reconstruction job is no longer on the worker, so there are no frames to crop.'
-                                             if source.get('missing') else 'No reconstruction job came with this request, so there are no frames to crop.')
-        if 'fromSource' not in cloud:
-            raise object_names.NamingSkipped('The hand-off does not record its transform from the reconstruction.')
-        if client is None and not os.environ.get('ANTHROPIC_API_KEY'):
-            raise object_names.NamingSkipped('This worker has no Anthropic API key configured.')
-        names, evidence = object_names.name_objects(cloud, Path(source['path']), client=client, views=views)
-        work.mkdir(parents=True, exist_ok=True)
-        path = work / 'object-names.json'
-        path.write_text(json.dumps(names, indent=2, allow_nan=False))
-        return path, {'status': 'named', **evidence}
-    except object_names.NamingSkipped as reason:
-        return None, {'status': 'skipped', 'reason': str(reason)}
-    except Exception as error:  # an API or network error: the scene still compiles, unnamed
-        return None, {'status': 'failed', 'reason': f'{type(error).__name__}: {str(error)[:200]}'}
+    providers = (['model'] if cloud.get('nameObjects') else []) + (['detector'] if detector_model or detect else [])
+    attempts = []
+    for provider in providers:
+        try:
+            if cloud['units'] != 'm':
+                raise object_names.NamingSkipped('Naming needs a metric scene.')
+            if not source or source.get('missing'):
+                raise object_names.NamingSkipped('The reconstruction job is no longer on the worker, so there are no frames to crop.'
+                                                 if source.get('missing') else 'No reconstruction job came with this request, so there are no frames to crop.')
+            if 'fromSource' not in cloud:
+                raise object_names.NamingSkipped('The hand-off does not record its transform from the reconstruction.')
+            if provider == 'model' and client is None and not os.environ.get('ANTHROPIC_API_KEY'):
+                raise object_names.NamingSkipped('This worker has no Anthropic API key configured.')
+            if provider == 'detector' and detect is None:
+                detect = detector_names.load(detector_model)
+            names, evidence = object_names.name_objects(cloud, Path(source['path']), client=client, views=views,
+                                                        detect=detect if provider == 'detector' else None)
+            work.mkdir(parents=True, exist_ok=True)
+            path = work / 'object-names.json'
+            path.write_text(json.dumps(names, indent=2, allow_nan=False))
+            return path, {'status': 'named', **evidence, **({'model_attempt': attempts[0]} if attempts else {})}
+        except object_names.NamingSkipped as reason:
+            attempts.append({'status': 'skipped', 'reason': str(reason)})
+        except Exception as error:  # an API, network or detector error: the scene still compiles, unnamed
+            attempts.append({'status': 'failed', 'reason': f'{type(error).__name__}: {str(error)[:200]}'})
+    if not attempts:
+        return None, None
+    return None, {**attempts[-1], **({'model_attempt': attempts[0]} if len(attempts) > 1 else {})}
 
 
 def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = None):
@@ -297,7 +308,7 @@ def handoff_input(request: dict):
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def run(request: dict, *, blender: str, naming_client=None, naming_views=None):
+def run(request: dict, *, blender: str, naming_client=None, naming_views=None, detector_model: Path | None = None, naming_detect=None):
     if not SCENE_COMPILER.is_file():
         raise RuntimeError(f'Scene compiler not found at {SCENE_COMPILER}.')
     if not Path(blender).is_absolute() or not Path(blender).is_file():
@@ -320,7 +331,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None):
     (out / 'arena-cloud.json').write_text(json.dumps(cloud, allow_nan=False))
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
-    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views) if cloud.get('nameObjects') else (None, None)
+    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect)
     scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names)
     usd, ifc = (bool((scene.get(key) or {}).get('written')) for key in ['usd', 'ifc'])
     for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
@@ -361,11 +372,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-manifest', required=True)
     parser.add_argument('--blender', default=shutil.which('blender') or '/usr/bin/blender')
+    parser.add_argument('--detector-model', type=Path, help='pinned EfficientDet-Lite2 .tflite; names objects on the worker when the vision model does not')
     args = parser.parse_args()
     request = Path(args.input_manifest)
     if request.stat().st_size > 65536:
         raise ValueError('Input manifest is too large.')
-    evidence = run(json.loads(request.read_text()), blender=args.blender)
+    evidence = run(json.loads(request.read_text()), blender=args.blender, detector_model=args.detector_model)
     reconstruction = evidence['reconstruction'] or {}
     print('SCENE_USD_OK', json.dumps({'input': evidence['input']['kind'], 'points': reconstruction.get('reconstructed_points', evidence['handoff']['points']),
                                       'registered': (reconstruction.get('capture') or {}).get('registered_images'),

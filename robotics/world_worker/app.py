@@ -213,6 +213,10 @@ def configured_engines(config):
         if naming is not None and not (isinstance(naming, dict) and set(naming) <= {'provider', 'model'}
                                        and all(isinstance(v, str) and 0 < len(v) <= 80 for v in naming.values())):
             raise ValueError('object_naming must name a provider and a model.')
+        detection = entry.get('object_detection')
+        if detection is not None and not (isinstance(detection, dict) and set(detection) <= {'provider', 'model'}
+                                          and all(isinstance(v, str) and 0 < len(v) <= 80 for v in detection.values())):
+            raise ValueError('object_detection must name a provider and a model.')
         if entry.get('source_job') not in (None, True, False):
             raise ValueError('source_job must be true or false.')
         engines[eid] = {**entry, 'available': entry.get('enabled') is True and entry.get('license_reviewed') is True,
@@ -509,7 +513,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
                 'engines':[{**{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']},
                             # Naming is offered only when the adapter's secrets are actually set on this worker.
-                            **({'object_naming':e['object_naming']} if e.get('object_naming') and all(os.environ.get(x) for x in e.get('secrets', [])) else {})}
+                            **({'object_naming':e['object_naming']} if e.get('object_naming') and all(os.environ.get(x) for x in e.get('secrets', [])) else {}),
+                            # A detector on the worker needs no secret, and no frame leaves the worker.
+                            **({'object_detection':e['object_detection']} if e.get('object_detection') else {})}
                            for e in engines.values() if e['id'] in principal.engines],
                 'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 

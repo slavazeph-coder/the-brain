@@ -123,8 +123,7 @@ def run(page):
 
     say('<b>5</b> · Compile the scene: walls, floor, and every object separated')
     glide(page.locator('#scene-consent')); hold(.4); onscreen_clean()
-    named = page.locator('#scene-naming').count() > 0  # offered only by a worker with a naming key
-    if named:
+    if page.locator('#scene-naming').count():  # offered only by a worker with a naming key
         say('<b>5</b> · And, with a second approval, Claude names each object from the walkthrough frames')
         glide(page.locator('#scene-naming')); hold(1.2)
     glide(page.locator('[data-action=metric-scene]'))
@@ -135,7 +134,10 @@ def run(page):
     page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status')?.textContent || '') || /scene-usd: failed/.test(document.querySelector('#status').textContent)", timeout=1_200_000)
     speed(1)
     if 'SHA-256 checked' not in page.locator('#scene-status').inner_text(): raise SystemExit('scene: ' + page.locator('#scene-status').inner_text() + ' / ' + page.locator('#status').inner_text())
-    say('<b>5</b> · Each object is its own element, measured in metres' + (' and named' if named else '')); hold(1.2)
+    # Who named the objects, if anyone: the vision model the person approved, or a detector on the worker.
+    named = next((m for m in (re.match(r'Named: (\d+) objects? by (.+?) from the walkthrough', f) for f in page.locator('#scene-facts li').all_inner_texts()) if m), None)
+    namer = None if not named else 'an object detector on the worker' if 'on the worker' in named.group(2) else 'Claude'
+    say('<b>5</b> · Each object is its own element, measured in metres' + (f' · {named.group(1)} named by {namer}' if named else '')); hold(1.2)
     zoom('#scene-stage', -420); orbit('#scene-stage', 2, sweep=260); hold(1.6)
     say(''); page.locator('#scene-facts').evaluate(f"el => el.scrollIntoView({{block: 'center', behavior: 'instant'}})"); hold(5.0)
     facts = page.locator('#scene-facts li').all_inner_texts()
@@ -200,7 +202,7 @@ def run(page):
     page.wait_for_function('window.__ifc', timeout=60_000)
     if 'error' in page.evaluate('window.__ifc'): raise SystemExit('viewer: ' + json.dumps(page.evaluate('window.__ifc')))
     hold(1.6); orbit('#stage', 2, sweep=200); hold(.8)
-    say('<b>9</b> · Every separated object is its own IFC element, with its ' + ('name and dimensions' if named else 'dimensions'))
+    say('<b>9</b> · Every separated object is its own IFC element with its dimensions' + (', and its name where one was suggested' if named else ''))
     els = page.locator('.el')
     for i in [i for i in range(els.count()) if not re.search(r'wall|slab|unknown|floor', els.nth(i).inner_text(), re.I)][:3]:
         glide(els.nth(i)); hold(2.0)
@@ -212,10 +214,10 @@ def run(page):
     card('<p>BRAINSNN · WORLD BUILDER</p><h1>Scan it. Separate it.<br><em>Simulate it. Hand it to BIM.</em></h1><p>App and API · brainsnn.com</p>'); hold(3.6)
     card(f'<p>ABOUT THIS RUN</p><h1 style="font-size:30px;line-height:1.3">Test walkthrough: Mip-NeRF 360 “room” images <em>(Barron et al.)</em><br>'
          f'The {distance} m distance was typed for the demo; this room was not measured.<br>'
-         + ('Names are Claude suggestions from the frames, not reviewed; touching objects stay one.' if named else 'Objects were not named in this run; touching objects stay one.') + '</h1>'
+         + (f'Names are suggestions from {namer}, not reviewed; touching objects stay one.' if named else 'Objects were not named in this run; touching objects stay one.') + '</h1>'
          + ('<p>Dense points: a depth model on CPU, checked across frames (3.1 cm median error on ETH3D)' if DENSE else '<p>Sparse points: COLMAP on CPU (1.5 cm median error on ETH3D)')
          + '<br>Scale self-reported, not verified · IFC viewer: web-ifc, not part of brainsnn.com</p>'); hold(6.0)
-    return {'engine': ENGINE, 'named': named, 'distance_m': distance, 'span_units': span, 'facts': facts, 'mapped': mapped, 'artifacts': artifacts, 'viewer': viewer, 'route': metrics}
+    return {'engine': ENGINE, 'named': named and named.group(0), 'distance_m': distance, 'span_units': span, 'facts': facts, 'mapped': mapped, 'artifacts': artifacts, 'viewer': viewer, 'route': metrics}
 
 
 if __name__ == '__main__':

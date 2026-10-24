@@ -119,6 +119,19 @@ engine also suggests a name for each separated object ([`object_names.py`](../ro
 
 Crops leave the worker only after a second, separate approval in the site ("Also send crops of each separated object … to Anthropic"). That box appears only when the engine advertises `object_naming` and the reconstruction came from this worker. The worker passes `ANTHROPIC_API_KEY` to that one adapter (`"secrets"` in `adapters.json`), never to the others. Without the key, naming is not offered. The model call is mocked in CI (`tests/world/test_object_names.py`).
 
+**Names from a detector on the worker (no key, nothing sent).**
+- [`detector_names.py`](../robotics/world_worker/detector_names.py) runs MediaPipe's EfficientDet-Lite2 (COCO's 80 categories) on the same views `choose_views` picks. It runs when the engine is started with `--detector-model` and the vision model did not name the objects: naming was not approved, there is no key, or the call failed.
+- **Matching.** A detection names an object when the two boxes overlap (IoU at least 0.3). It also names one when at least 70% of the object's box lies inside a detection no more than 8 times its size, because sparse points often cover only part of an object.
+- **Confidence.**
+  - Medium needs either one clear match (IoU at least 0.5 and a score of at least 0.6) or agreement in two views.
+  - High needs both.
+  - Low names are not applied.
+  - A second category with half the votes names a pair ("table and sofa").
+- **Labels.** Only room categories become labels (sofa, chair, table, bed, television, potted plant, appliances…); people, animals and vehicles never do.
+- **Data and approval.** No crop is made and no frame leaves the worker, so the site asks for no second approval. Because the scene step needs that job's frames, the site sends the reconstruction job whenever the engine advertises `object_detection`.
+- **Measured run.** Real room walkthrough, 10 separated objects, 2.3 s on CPU: sofa (high), chair (medium) and potted plant (medium). The other 7 stayed "Object N", because COCO has no piano bench, door or computer tower. Claude named 7 of 10 on a dense run of the same room (#224).
+- **Licence.** The model file carries no licence notice, so the operator reviews its terms before enabling it. On Linux, MediaPipe needs `libegl1` and `libgles2` even on CPU (`requirements-detector.txt`).
+
 Objects that touch, such as a sofa with a table against it, stay one object, because geometry alone cannot split them. On the dense room walkthrough this gave 8 objects, including an armchair-sized 1.01 × 0.97 m, 1.06 m high, and 6 wall planes.
 
 The engine is registered for GB10 in `adapters.gb10.json`. An 11-frame clip there ran end to end in about 20 s. When a job returns a `.glb`, Evidence offers **Explore scene.glb in 3D** next to the downloads ([`scene-preview.mjs`](../brainsnn-r3f-app/public/world/scene-preview.mjs)). The workspace downloads the file with a short-lived ticket, checks its SHA-256, and opens it in a dialog with the Arena's mesh viewer, which loads only on first use. Beside the scene it lists only what `scene.json` records: observed points and walls, placed and unplaced detections, unknown floor cells, units and whether USD was written. A missing or malformed `scene.json` is shown as unknown, never guessed.

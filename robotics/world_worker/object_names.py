@@ -233,8 +233,10 @@ def ask(client, items):
         'input_tokens': getattr(usage, 'input_tokens', None), 'output_tokens': getattr(usage, 'output_tokens', None)}
 
 
-def name_objects(cloud, source_dir, *, client=None, views=None, log=print):
-    """names (for scene_compiler --names) and evidence for a metric hand-off whose reconstruction is in source_dir."""
+def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detect=None):
+    """names (for scene_compiler --names) and evidence for a metric hand-off whose reconstruction is in source_dir.
+    With detect (detector_names.load), an object detector on the worker answers instead of the API: no crop is made
+    and no frame leaves the worker."""
     import scene_compiler as sc
     started = time.monotonic()
     if cloud.get('units') != 'm':
@@ -255,20 +257,32 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print):
         if not picks:
             skipped.append({'id': f'object_{i + 1}', 'reason': 'not seen whole and unoccluded in any frame'}); continue
         items.append({'id': str(i + 1), 'object': obj, 'size': [obj['length'], obj['thickness'], obj['y1'] - obj['y0']],
-                      'views': [p['view']['name'] for p in picks], 'crops': [crop(p['view'], p['box']) for p in picks]})
+                      'views': [p['view']['name'] for p in picks], 'picks': picks,
+                      'crops': [] if detect else [crop(p['view'], p['box']) for p in picks]})
     if not items:
         raise NamingSkipped('No separated object was seen whole and unoccluded in any frame.')
-    if client is None:
-        import anthropic
-        client = anthropic.Anthropic()
-    log(f'naming {len(items)} objects with {sum(len(i["crops"]) for i in items)} crops')
-    answers, served, usage = ask(client, items)
-    names = {'schema': 'brainsnn.object-names.v1', 'model': served, 'prompt_version': PROMPT_VERSION, 'objects': [
+    if detect:
+        try:
+            from . import detector_names
+        except ImportError:
+            import detector_names
+        log(f'naming {len(items)} objects with the on-worker detector')
+        answers, served, usage = detector_names.answer(items, detect)
+        provider, requested, version = 'on-worker detector', detector_names.MODEL['sha256'], detector_names.RULES_VERSION
+    else:
+        if client is None:
+            import anthropic
+            client = anthropic.Anthropic()
+        log(f'naming {len(items)} objects with {sum(len(i["crops"]) for i in items)} crops')
+        answers, served, usage = ask(client, items)
+        provider, requested, version = 'Anthropic', MODEL, PROMPT_VERSION
+    names = {'schema': 'brainsnn.object-names.v1', 'model': served, 'prompt_version': version, 'objects': [
         {'id': f"object_{item['id']}", 'centre': [float(v) for v in item['object']['centre']],
          'height': float(item['object']['y1'] - item['object']['y0']), 'views': item['views'], **answers[item['id']]}
         for item in items if item['id'] in answers]}
-    evidence = {'provider': 'Anthropic', 'requested_model': MODEL, 'model': served, 'prompt_version': PROMPT_VERSION,
-                'objects_separated': len(separated), 'objects_sent': len(items), 'crops_sent': sum(len(i['crops']) for i in items),
+    evidence = {'provider': provider, 'requested_model': requested, 'model': served, 'prompt_version': version,
+                'objects_separated': len(separated), ('objects_checked' if detect else 'objects_sent'): len(items),
+                'crops_sent': sum(len(i['crops']) for i in items),
                 'answered': len(answers), 'skipped': skipped + [{'id': f"object_{i['id']}", 'reason': 'no answer'} for i in items if i['id'] not in answers],
                 'usage': usage, 'elapsed_seconds': round(time.monotonic() - started, 3), 'reviewed': False}
     return names, evidence
