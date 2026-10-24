@@ -45,3 +45,21 @@ description: World Builder flagship development, real browser inference and reco
     - Laser-scan check: map the scans with the matrices in `scan_alignment.mlp`. In ETH3D's office frame, z is vertical.
     - Result: 0.1361 m per unit; camera RMS 1.5 cm; points a median 1.1 cm from the scan (88% within 5 cm). Sparse coverage gave only one wall.
     - The scripts lived in the session scratchpad (`eth3d/scripts/flow_eth3d.py`, `validate_scan.py`) and are not in the repo.
+\n- October 23–24 (Claude cloud session):
+  - #219 (265fffa) adds `python -m robotics.world_worker.benchmark_eth3d`, which scores any worker output against ETH3D ground truth. CPU `colmap-sparse` baseline: camera RMS 1.5 cm; completeness 2.1% within 5 cm and 5.3% within 10 cm. `docs/hermes-gpu-tasks.md` lists the GPU work for Hermes.
+  - #220 (2d1e16a) makes metric scenes also write `scene.ifc`. The IFC4 file is written directly by `robotics/scene_compiler/ifc_export.py`, with no IfcOpenShell needed.
+    - Element mapping: walls → IfcWall; observed floor → IfcSlab `.FLOOR.`; placed detections → IfcFurniture; unknown space → one IfcBuildingElementProxy.
+    - Provenance: each element carries `Pset_BrainSNN`. The project's set has `SelfReported` true and `MetricVerified` false.
+    - Validation: IfcOpenShell's full validation reports 0 issues on the real ETH3D scene, and web-ifc 0.0.77 opens it.
+    - The deploy chain was green, including the live verify.
+  - Demo video "phone walkthrough → simulation → BIM" (90 s, 1080p, recorded on live brainsnn.com). The recorder and the web-ifc demo viewer are in the session scratchpad, not the repo.
+  - Recording lessons:
+    - The scene `<dialog>` is in the top layer, so captions must move inside it.
+    - Under full CPU load from a co-located COLMAP worker, CDP screencast frames show stale tiles of whatever was on screen before the panel grew. Wait with the view on the workspace and cut the frames around the layout jump.
+    - Captions need `pointer-events:none`.
+  - Oct 24 owner decision: Lyra 1 is approved for a measured GB10 trial (safeguards on, isolated batch job, never stopping the 27B; Lyra 2 excluded). Conditions are in `docs/hermes-gpu-tasks.md` task 5.
+  - Still open:
+    - a physical iPhone Safari test (owner);
+    - the GPU worker on a stable hostname (Hermes);
+    - dense reconstruction scored with the ETH3D benchmark (Hermes);
+    - Lyra 1 trial receipts.

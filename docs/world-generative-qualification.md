@@ -1,5 +1,9 @@
 # Generative world qualification — 19 October 2026
 
+**Owner decision, 24 October 2026:** Lyra 1 is approved for a measured trial on the GB10, with safeguards on, as a
+batch job in an isolated environment. Lyra 2 stays excluded. The trial's conditions are in
+[`hermes-gpu-tasks.md`](hermes-gpu-tasks.md), task 5. The status below is unchanged until the trial's receipts exist.
+
 **Status: unqualified.** Neither Lyra version has generated a scene in this
 environment. Lyra 1 is the candidate for a separate commercial-use qualification;
 Lyra 2's published checkpoint terms exclude production use. Existing MapAnything
