@@ -147,7 +147,7 @@ def check_metric(pw, name, origin, worker_url, token, phone=False):
         assert [u['kind'] for u in uploads] == ['cloud'] and uploads[0]['name'] == 'brainsnn-point-cloud.json', uploads
         assert jobs == ['scene-usd'], jobs
         facts = page.locator('#scene-facts li').all_inner_texts()
-        assert facts[3].startswith('Units: metres, from a distance you measured (') and facts[3].endswith('m). Self-reported, not verified.'), facts
+        assert facts[3].startswith('Units: metres, from an entered distance (') and facts[3].endswith('m). Self-reported, not verified.'), facts
         assert facts[4] == 'scene.usda was written for Isaac Sim (metersPerUnit = 1).', facts
         assert facts[5].startswith('scene.ifc was written for BIM tools (IFC4, metres)'), facts
         page.screenshot(path=str(OUTPUT / f'scene-metric-{view_name}.png'))
