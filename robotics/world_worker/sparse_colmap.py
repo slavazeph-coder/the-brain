@@ -33,6 +33,43 @@ MAX_PIXELS = 24_000_000
 MAX_IMAGE_EDGE = 1280
 MAX_POINTS = 50_000
 SELECTED_MODEL = 'selected.txt'  # in the sparse folder: which of COLMAP's models the outputs come from
+# Mapping can split one walkthrough into several models depending on its seed. From the same matches, a 62 s room video
+# joined 33 of 60 frames with seed 0 and 57 with seeds 1, 2 and 3, about 20 s each. Another seed is tried only while
+# fewer than JOINED_FRACTION of the frames are in one model, within the same total mapping time as before.
+MAPPING_SEEDS = (0, 1, 2)
+JOINED_FRACTION = 0.9
+MAPPING_SECONDS = 900
+
+
+def map_frames(database: Path, images: Path, workspace: Path, count: int):
+    """Incremental mapping into workspace/sparse, retrying other seeds while too few frames joined one model."""
+    import pycolmap
+    best, attempts, deadline = None, [], time.monotonic() + MAPPING_SECONDS
+    for seed in MAPPING_SEEDS:
+        remaining = deadline - time.monotonic()
+        if best and remaining < 60: break
+        target = workspace / f'sparse-seed-{seed}'
+        target.mkdir()
+        pycolmap.set_random_seed(seed)
+        mapping = pycolmap.IncrementalPipelineOptions({'num_threads': 2, 'random_seed': seed,
+                                                      'min_model_size': 3, 'max_num_models': 3,
+                                                      'max_runtime_seconds': max(60, int(remaining))})
+        models = pycolmap.incremental_mapping(database, images, target, options=mapping)
+        if not models:
+            attempts.append({'seed': seed, 'registered_images': 0, 'models_found': 0}); continue
+        index, model = max(models.items(), key=lambda item: (item[1].num_reg_images(), item[1].num_points3D()))
+        attempts.append({'seed': seed, 'registered_images': model.num_reg_images(), 'models_found': len(models)})
+        if not best or (model.num_reg_images(), model.num_points3D()) > (best[3].num_reg_images(), best[3].num_points3D()):
+            best = (target, models, index, model)
+        if best[3].num_reg_images() >= JOINED_FRACTION * count: break
+    if not best:
+        raise ValueError('Views could not be aligned. Recapture with sideways motion, overlap and stationary detail.')
+    target, models, index, model = best
+    # The models are written to sparse/<index>; record which one the outputs come from, for anything that reads the frames later.
+    target.rename(workspace / 'sparse')
+    (workspace / 'sparse' / SELECTED_MODEL).write_text(str(index))
+    for attempt in workspace.glob('sparse-seed-*'): shutil.rmtree(attempt)
+    return models, index, model, attempts
 
 
 def prepare_photo(source: Path, target: Path):
@@ -149,8 +186,7 @@ def run(request: dict, densify_model: Path | None = None):
         for index, item in enumerate(inputs):
             prepare_photo(Path(item['path']), images / f'image_{index:04d}.jpg')
     count = len(list(images.glob('*.jpg')))
-    database, sparse = workspace / 'database.db', workspace / 'sparse'
-    sparse.mkdir()
+    database = workspace / 'database.db'
     extraction = pycolmap.FeatureExtractionOptions({'num_threads': 2, 'max_image_size': MAX_IMAGE_EDGE,
                                                     'sift': {'max_num_features': 4096}})
     pycolmap.extract_features(database, images, camera_mode=pycolmap.CameraMode.AUTO,
@@ -159,15 +195,7 @@ def run(request: dict, densify_model: Path | None = None):
     matching = pycolmap.FeatureMatchingOptions({'num_threads': 2})
     # Exhaustive matching stays bounded at 60 frames and can close walkthrough loops.
     pycolmap.match_exhaustive(database, matching_options=matching, device=pycolmap.Device.cpu)
-    mapping = pycolmap.IncrementalPipelineOptions({'num_threads': 2, 'random_seed': 0,
-                                                  'min_model_size': 3, 'max_num_models': 3,
-                                                  'max_runtime_seconds': 900})
-    models = pycolmap.incremental_mapping(database, images, sparse, options=mapping)
-    if not models:
-        raise ValueError('Views could not be aligned. Recapture with sideways motion, overlap and stationary detail.')
-    index, model = max(models.items(), key=lambda item: (item[1].num_reg_images(), item[1].num_points3D()))
-    # The models are written to sparse/<index>; record which one the outputs come from, for anything that reads the frames later.
-    (sparse / SELECTED_MODEL).write_text(str(index))
+    models, index, model, attempts = map_frames(database, images, workspace, count)
     registered = model.num_reg_images()
     if registered < 3 or model.num_points3D() < 30:
         raise ValueError('Insufficient reconstructed geometry: at least 3 camera positions and 30 points are required.')
@@ -204,7 +232,8 @@ def run(request: dict, densify_model: Path | None = None):
     evidence = {'schema': 'brainsnn.reconstruction.v1', 'pipeline': 'colmap-sparse',
                 'pycolmap_version': pycolmap.__version__, 'device': 'cpu', 'sources': sources,
                 'capture': {**capture, 'images': count, 'registered_images': registered,
-                            'registration_fraction': registered / count, 'models_found': len(models), 'model_index': index},
+                            'registration_fraction': registered / count, 'models_found': len(models), 'model_index': index,
+                            'mapping_attempts': attempts},
                 'reconstructed_points': model.num_points3D(), 'preview_points': len(sample),
                 'mean_reprojection_error_pixels': model.compute_mean_reprojection_error(),
                 'elapsed_seconds': round(time.monotonic() - started, 3),

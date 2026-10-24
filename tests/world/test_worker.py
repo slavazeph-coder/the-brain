@@ -281,6 +281,46 @@ def test_colmap_no_overlap_never_returns_a_success_manifest(tmp_path):
     assert not (tmp_path/'output'/'manifest.json').exists()
 
 
+def fake_mapper(monkeypatch,joined_by_seed):
+    """A stand-in pycolmap whose mapping joins joined_by_seed[seed] frames per model (an empty list finds none)."""
+    import types
+    class Model:
+        def __init__(self,frames):self.frames=frames
+        def num_reg_images(self):return self.frames
+        def num_points3D(self):return self.frames*100
+    seeds=[]
+    def incremental_mapping(database,images,target,options):
+        assert options['random_seed']==seeds[-1]
+        for index,_ in enumerate(joined_by_seed[seeds[-1]]):(target/str(index)).mkdir()
+        return {index:Model(frames) for index,frames in enumerate(joined_by_seed[seeds[-1]])}
+    monkeypatch.setitem(sys.modules,'pycolmap',types.SimpleNamespace(set_random_seed=seeds.append,
+        IncrementalPipelineOptions=dict,incremental_mapping=incremental_mapping))
+    return seeds
+
+def test_colmap_mapping_retries_another_seed_when_a_walkthrough_splits(tmp_path,monkeypatch):
+    from robotics.world_worker.sparse_colmap import map_frames
+    # Measured on a 62 s room video: seed 0 split it into 33 + 26 frames, seed 1 joined 57 of 60.
+    seeds=fake_mapper(monkeypatch,{0:[33,26],1:[57],2:[57]})
+    models,index,model,attempts=map_frames(tmp_path/'database.db',tmp_path/'images',tmp_path,60)
+    assert seeds==[0,1] and model.num_reg_images()==57 and index==0
+    assert attempts==[{'seed':0,'registered_images':33,'models_found':2},{'seed':1,'registered_images':57,'models_found':1}]
+    assert (tmp_path/'sparse'/'selected.txt').read_text()=='0' and (tmp_path/'sparse'/'0').is_dir()
+    assert not list(tmp_path.glob('sparse-seed-*'))
+
+def test_colmap_mapping_keeps_the_best_attempt_and_stops_once_joined(tmp_path,monkeypatch):
+    from robotics.world_worker.sparse_colmap import map_frames
+    seeds=fake_mapper(monkeypatch,{0:[58]})
+    assert map_frames(tmp_path/'database.db',tmp_path/'images',tmp_path,60)[2].num_reg_images()==58 and seeds==[0]
+    other=tmp_path/'other';other.mkdir()
+    seeds=fake_mapper(monkeypatch,{0:[20,10],1:[40,15],2:[]})
+    models,index,model,attempts=map_frames(other/'database.db',other/'images',other,60)
+    assert seeds==[0,1,2] and model.num_reg_images()==40 and [a['registered_images'] for a in attempts]==[20,40,0]
+    empty=tmp_path/'empty';empty.mkdir()
+    fake_mapper(monkeypatch,{0:[],1:[],2:[]})
+    with pytest.raises(ValueError,match='Views could not be aligned'):map_frames(empty/'database.db',empty/'images',empty,60)
+    assert not (empty/'sparse').exists()
+
+
 @pytest.mark.parametrize('capture_kind',['photos','video'])
 def test_real_colmap_upload_job_if_dataset_provided(tmp_path,capture_kind):
     """Optional full HTTP/CPU proof using separately downloaded real photographs.

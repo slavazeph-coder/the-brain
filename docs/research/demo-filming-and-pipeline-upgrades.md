@@ -117,16 +117,28 @@ What happens:
 - It still runs extraction and matching on two threads, and it never calls `pycolmap.set_random_seed`.
 - In run 3, the mapper split the walkthrough, and the largest model held only about half the frames.
 
-A visitor whose capture lands on the bad run sees a scene they cannot plan in, with nothing telling them why. Proposed
-fixes, smallest first:
-1. **Seed everything.** Call `pycolmap.set_random_seed(0)`, then check whether one-thread matching makes runs
-   reproducible.
-2. **Treat a low share of joined frames as a capture problem.** When the selected model registers under about 80% of
-   frames, retry mapping once. If it is still low, report "only 33 of 60 frames joined" and ask for a recapture,
-   instead of compiling a fragmented scene.
-3. **Merge unknown cells before the 128-element cap.** `worldFromScene` could merge adjacent unknown cells into larger
+A visitor whose capture lands on the bad run sees a scene they cannot plan in, with nothing telling them why.
+
+**The cause is the mapping seed, and a retry fixes it.**
+- I copied run 3's database and re-ran only the mapper with four seeds:
+  - seed 0 split it again (33 + 26 frames);
+  - seeds 1, 2 and 3 each joined 57 frames in one model, in 20–36 s.
+- **Extraction and matching vary too.** Image IDs follow thread completion order, and RANSAC kept 633–638
+  verified pairs. That moves which seed fails, not whether one can.
+
+**Built in this PR.** `sparse_colmap.map_frames` tries seeds 0, 1 and 2:
+- it stops as soon as one model holds at least 90% of the frames;
+- it keeps the best model otherwise, within the same 900 s mapping budget as before;
+- it records each attempt in `reconstruction.json` under `capture.mapping_attempts`.
+
+On run 3's database, it selected seed 1 with 57 frames in 37 s.
+
+**Still open:**
+1. **Treat a low joined share as a capture problem.** If all three seeds still join under about 80% of the frames,
+   say "only 33 of 60 frames joined" and ask for a recapture, instead of compiling a fragmented scene.
+2. **Merge unknown cells before the 128-element cap.** `worldFromScene` could merge adjacent unknown cells into larger
    rectangles, which would get it under the limit.
-4. **Use feed-forward reconstruction on the GPU.** DA3 and MapAnything give every frame a pose by construction, which
+3. **Use feed-forward reconstruction on the GPU.** DA3 and MapAnything give every frame a pose by construction, which
    removes this failure mode.
 
 ## Build order
