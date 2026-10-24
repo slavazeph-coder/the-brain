@@ -258,12 +258,14 @@ if __name__ == '__main__':
     with listing.open('w') as out:
         for (path, t), (_, t_next) in zip(frames, frames[1:] + [(None, max(stopped, frames[-1][1] + 1 / 30))]):
             if factor(t) >= 1000: continue  # a cut segment
-            duration = max((t_next - t) / factor(t), 1 / 120); timeline.append((t, clock)); clock += duration
+            duration = max((t_next - t) / factor(t), 1 / 120); timeline.append((t, clock, duration, factor(t))); clock += duration
             out.write(f"file '{path}'\nduration {duration:.4f}\n")
         out.write(f"file '{frames[-1][0]}'\n")
     print('captions in the output video:', flush=True)
     for _, html, wall in PHASES:
-        print(f"  {next((c for t, c in reversed(timeline) if t <= wall), 0.0):6.1f}s  {re.sub('<[^>]+>', '', html)[:90]}", flush=True)
+        # Within the frame on screen at that moment: a static frame (a title card) can last seconds.
+        at = next((c + min((wall - t) / f, d) for t, c, d, f in reversed(timeline) if t <= wall), 0.0)
+        print(f"  {at:6.1f}s  {re.sub('<[^>]+>', '', html)[:90]}", flush=True)
     subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing),
                     '-vf', f"scale={VIDEO_SIZE[0]}:{VIDEO_SIZE[1]}:force_original_aspect_ratio=decrease,pad={VIDEO_SIZE[0]}:{VIDEO_SIZE[1]}:(ow-iw)/2:(oh-ih)/2,fps=30,format=yuv420p",
                     '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-movflags', '+faststart', str(OUT)], check=True)
