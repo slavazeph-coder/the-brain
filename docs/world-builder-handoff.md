@@ -23,8 +23,9 @@ World Builder and Arena files are byte-identical to the commit.
      - the floor;
      - every object separated and measured as an oriented box;
      - floor no point reached marked unknown;
-     - GLB, OpenUSD and IFC4 files.
-  4. **Name (optional).** Claude names each object; see #224 below.
+     - GLB, OpenUSD and IFC4 files, plus a DXF plan, a Rhino 3DM model and a quantities CSV (`cad_export.py`).
+  4. **Name (optional).** Claude names each object; see #224 below. Without Claude, a detector on the worker
+     (`--detector-model`, EfficientDet-Lite2, COCO) names what COCO knows: sofa, chair, potted plant and the like.
   5. **Route.** "Plan a robot route in this scene" builds a reviewed map, and the robot plans after both reviews.
 - **PRs merged in this session:**
   - #219: ETH3D benchmark;
@@ -50,6 +51,7 @@ World Builder and Arena files are byte-identical to the commit.
 ```sh
 # Worker (Python 3.11+ for bpy 4.2; see robotics/world_worker/README.md). adapters.json lists the engines;
 # copy entries from adapters.example.json. For names: pip install -r robotics/world_worker/requirements-naming.txt
+# (Claude) and/or requirements-detector.txt (on-worker detector; model file and sha256 in that file)
 WORLD_WORKER_TOKEN=... WORLD_WORKER_DIR=./worker-data WORLD_ADAPTERS_FILE=./adapters.json \
 WORLD_ALLOWED_ORIGINS=http://127.0.0.1:4181 ANTHROPIC_API_KEY=... \
 python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.1 --port 8040
