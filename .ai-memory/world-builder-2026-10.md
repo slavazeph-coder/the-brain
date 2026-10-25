@@ -93,6 +93,12 @@ description: World Builder flagship development, real browser inference and reco
     - After the fixes, merged with #232: level 0.3 degrees, floor +4.0 cm, walls 4 of 4 within 1.7 cm, faces 0.7 cm, furniture 5 of 10 (sizes rough on sparse points), withheld 7 of 7 (worst 1.9 cm). The LinkedIn film is this run, labelled synthetic.
     - Open: wall boxes centred on the seen face read the room 9-11 cm short between boxes (owner's call); the dense engine's depth model can't be fetched from cloud sessions (Hugging Face blocked).
     - Oct 25 reference scale (#233, `reference_scale.py`): Claude marks standard-size references (A4/A3/Letter, 595 mm ceiling tile, EUR pallet; no pillows or mugs), corners refined from the image, faces measured on the cloud's plane, proportions checked; cross-checked when 2+ agree within 2%, never "verified". Oracle stand-in on the rendered room: -0.45% at 0-5 px corner error, nothing at 15 px; sheets are 40-70 px across a room, so film references from about 1 m. Claude run pending a real key: the owner's `apikey_01...` value is a key ID (401), not the `sk-ant-` secret.
+    - Oct 25 iPhone upload: #236 added `video/*` to the upload input; iOS Photo Library had offered photos only, because extensions alone did not register as video.
+    - Oct 25 five-minute videos (owner's ask):
+      - Limits: 2 s to 5 min; 2 GiB per video (photos stay 200 MiB); worker operator quota 4 GiB, all uploads 6 GiB; site session 4 GiB. The site reads duration from metadata and refuses over 5 min before uploading.
+      - Frames: 60 up to a minute, then one a second (300 at 5 min). Past 60 frames, matching is each frame with its next 15 plus all pairs of 60 spread keyframes (5,988 pairs at 300, not 44,850).
+      - Timeouts: extraction max(90, 3 x duration) (5 min 1080p30 HEVC decodes in 34 s on 2 threads); video engines 3600 s. `WORLD_CPU_THREADS` (default 2; the local worker uses every core).
+      - The observations engine still takes 120 s at most.
 
 ## October 24: independent demo correction validation
 

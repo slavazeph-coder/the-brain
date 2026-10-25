@@ -179,7 +179,12 @@ The status is `cross-checked` when two or more references agree within 2%, `sing
 
 ### 1. Film it (about 10 minutes on site)
 
-- **What to film:** one room or zone per video, 60–90 s, lights on, a modern phone at 1080p or 4K, 30 fps.
+- **What to film:** one room or zone per video, lights on, a modern phone at 1080p or 4K, 30 fps.
+  - **Length:** 60–90 s for one room. Up to 5 minutes for a suite of rooms or a long space, walked in one go.
+  - **File size:** at most 2 GiB. Five minutes is about 0.3 GB at 1080p and about 1 GB in 4K30 (HEVC).
+  - **Past a minute,** the worker takes one frame a second, so a five-minute walk gives 300 frames. Each frame is
+    matched with its next 15 and with up to 60 keyframes spread over the walk, which reconnects a wall seen again later.
+    The vision-model observations engine (`world-observations`) still takes 120 s at most.
 - **How to walk:**
   - Walk **along the walls first**: about 1 m from each wall, camera level, so every wall is seen floor to ceiling.
   - Then cross the middle once.
