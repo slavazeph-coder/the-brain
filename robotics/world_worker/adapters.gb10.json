@@ -9,7 +9,7 @@
       "cloud"
     ],
     "max_inputs": 1,
-    "timeout_seconds": 1800,
+    "timeout_seconds": 3600,
     "source_job": true,
     "secrets": [
       "ANTHROPIC_API_KEY"

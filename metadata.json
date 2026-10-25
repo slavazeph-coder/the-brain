@@ -1,8 +1,0 @@
-{
-  "name": "BrainSNN | World Builder",
-  "description": "Start with a photo or phone walkthrough. Explore a visual 3D preview, review measured geometry and test a robot route with BrainSNN World Builder.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}

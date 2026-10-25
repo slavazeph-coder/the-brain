@@ -1,0 +1,4 @@
+# Optional local observations adapter; Python >=3.12, no model download.
+# PyAV matches the existing Arena exact-PTS video importer.
+av==19.0.1
+Pillow==12.1.0

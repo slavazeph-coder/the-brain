@@ -1,0 +1,127 @@
+.gg-passport {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) minmax(220px, 1fr) auto auto;
+  gap: 12px;
+  align-items: stretch;
+  margin: 0 0 24px;
+  padding: 14px;
+  border: 1px solid rgba(125, 249, 255, 0.14);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(125,249,255,0.055), rgba(139,92,246,0.035)), rgba(7,8,16,0.88);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.gg-passport-main,
+.gg-daily-card,
+.gg-passport-stat {
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 15px;
+  background: rgba(255,255,255,0.025);
+}
+
+.gg-passport-level,
+.gg-daily-card,
+.gg-passport-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gg-passport-level { color: #dffcff; }
+.gg-passport-level span { font-family: var(--bsn-font-mono); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.gg-passport-level strong { margin-left: auto; color: var(--bsn-cyan); font-family: var(--bsn-font-mono); }
+.gg-passport-progress { height: 6px; margin: 12px 0 8px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,0.07); }
+.gg-passport-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7df9ff, #a78bfa, #ff5edb); box-shadow: 0 0 16px rgba(125,249,255,0.35); }
+.gg-passport-main > small { color: var(--bsn-text-muted); }
+
+.gg-daily-card {
+  color: var(--bsn-text);
+  text-align: left;
+  cursor: pointer;
+}
+.gg-daily-card:hover { border-color: rgba(217,255,101,0.4); background: rgba(217,255,101,0.055); }
+.gg-daily-card.complete { border-color: rgba(110,255,120,0.24); }
+.gg-daily-card span { display: grid; min-width: 0; }
+.gg-daily-card small { color: var(--bsn-text-muted); font-family: var(--bsn-font-mono); font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.gg-daily-card strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gg-daily-card em { margin-left: auto; padding: 5px 8px; border-radius: 999px; color: #071008; background: #d9ff65; font-family: var(--bsn-font-mono); font-size: 0.64rem; font-style: normal; font-weight: 900; }
+.gg-daily-card.complete em { background: #6eff78; }
+
+.gg-passport-stat { min-width: 108px; color: var(--bsn-cyan); }
+.gg-passport-stat span { display: grid; }
+.gg-passport-stat strong { color: #f4ffff; font-family: var(--bsn-font-mono); font-size: 1.15rem; }
+.gg-passport-stat small { color: var(--bsn-text-muted); font-size: 0.66rem; }
+.gg-achievements { grid-column: 1 / -1; padding: 2px 5px 0; }
+.gg-achievements summary { width: fit-content; display: flex; align-items: center; gap: 7px; color: var(--bsn-text-muted); cursor: pointer; font-size: 0.74rem; }
+.gg-achievements > div { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 10px; }
+.gg-achievements span { padding: 6px 9px; border: 1px solid rgba(255,255,255,0.07); border-radius: 999px; color: rgba(255,255,255,0.32); font-size: 0.68rem; }
+.gg-achievements span.unlocked { border-color: rgba(217,255,101,0.25); color: #edffb3; background: rgba(217,255,101,0.05); }
+
+.gg-arcade-card-mint { --arcade-accent: #70ffd0; }
+.gg-arcade-card-yellow { --arcade-accent: #ffe66d; }
+.gg-arcade-card-teal { --arcade-accent: #43e7d5; }
+.gg-arcade-card-green { --arcade-accent: #6eff78; }
+.gg-arcade-card.visited::before {
+  content: "✓";
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #041008;
+  background: var(--arcade-accent);
+  font-size: 0.68rem;
+  font-weight: 1000;
+}
+.gg-arcade-card.visited .gg-arcade-card-icon { margin-left: 18px; }
+
+.gg-ant-canvas,
+.gg-life-canvas,
+.gg-ecosystem-canvas { cursor: crosshair; touch-action: none; }
+.gg-life-canvas { image-rendering: pixelated; }
+.gg-traffic-canvas { cursor: pointer; }
+
+.gg-species-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.gg-species-picker button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  color: var(--bsn-text-secondary);
+  background: rgba(255,255,255,0.025);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.gg-species-picker button.active { border-color: rgba(110,255,120,0.42); color: #d8ffdb; background: rgba(110,255,120,0.08); }
+
+.gg-arcade-stage[data-experiment="ants"] { background: radial-gradient(circle at 50% 0%, rgba(112,255,208,0.08), transparent 40%), rgba(2,3,9,0.9); }
+.gg-arcade-stage[data-experiment="traffic"] { background: radial-gradient(circle at 50% 0%, rgba(255,230,109,0.08), transparent 40%), rgba(2,3,9,0.9); }
+.gg-arcade-stage[data-experiment="life"] { background: radial-gradient(circle at 50% 0%, rgba(67,231,213,0.08), transparent 40%), rgba(2,3,9,0.9); }
+.gg-arcade-stage[data-experiment="ecosystem"] { background: radial-gradient(circle at 50% 0%, rgba(110,255,120,0.08), transparent 40%), rgba(2,3,9,0.9); }
+
+@media (max-width: 980px) {
+  .gg-passport { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gg-passport-main { grid-column: 1 / -1; }
+}
+
+@media (max-width: 620px) {
+  .gg-passport { grid-template-columns: 1fr 1fr; padding: 10px; }
+  .gg-daily-card { grid-column: 1 / -1; }
+  .gg-passport-stat { min-width: 0; }
+  .gg-species-picker { grid-template-columns: 1fr; }
+  .gg-arcade-card.visited .gg-arcade-card-icon { margin-left: 12px; }
+}

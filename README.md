@@ -47,11 +47,12 @@ variable. Leave them unset and the app runs fully offline on its deterministic l
 
 ## Run it
 
-Everything runs as a full-stack React SPA with Express on port 3000:
+Everything lives in `brainsnn-r3f-app/` (an Express server that also serves the React SPA):
 
 ```bash
+cd brainsnn-r3f-app
 npm install
-npm run dev          # Express + Vite middleware → http://0.0.0.0:3000
+npm run dev          # Express + Vite middleware → http://localhost:3000
 ```
 
 No keys required — the deterministic engine drives every panel out of the box.

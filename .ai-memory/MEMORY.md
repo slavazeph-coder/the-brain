@@ -824,15 +824,3 @@ canon: /HACKATHON.md.
   `https://github.com/XioAISolutions/Reconstruct`.
 - Verified locally with `npm run lint`, `npm test`, `npm run build`,
   `npm run test:e2e`, and Playwright screenshots on desktop/mobile.
-
----
-type: project
-description: Rewrote and consolidated AI Studio build layout to root React application on Vite/Express
----
-
-### AI Studio Build & React Application Layout — 2026-10-25
-
-- Standardized repository structure to the workspace root for AI Studio compatibility.
-- Full-stack React 19 SPA running on Vite 6 and Express 4, with `dev: "tsx server.ts"` binding to `0.0.0.0:3000`.
-- Verified compilation with `compile_applet` and type-checking with `lint_applet` (`tsc --noEmit`).
-- Preserved core features: World Builder, Robot Arena & Arcade (deformable rope strike MuJoCo physics, 3D sandbox), Cognitive Firewall, Soliton Field, and Sponsorship studios.

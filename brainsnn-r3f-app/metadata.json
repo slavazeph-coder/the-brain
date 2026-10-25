@@ -1,0 +1,8 @@
+{
+  "name": "BrainSNN",
+  "description": "Explore robot-policy test packs from 10 to 100,000 episodes, with transparent runtime-price estimates and visible assumptions. Try the arcade today; hosted testing is pending qualification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

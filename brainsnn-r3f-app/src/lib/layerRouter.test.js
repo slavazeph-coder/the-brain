@@ -1,0 +1,110 @@
+import { describe, expect, it } from '../test/tinyVitest.js';
+import { LAYER_CATALOG } from './layerCatalog.js';
+import { createAutopsyFromLayerStack, createRewriteFromLayerStack, getEngineStatusSnapshot, runLayerRouter } from './layerRouter.js';
+import { analyzeContentLocally } from './analysisEngine.js';
+
+describe('BrainSNN layer router', () => {
+  it('indexes the full 103-layer stack', () => {
+    expect(LAYER_CATALOG).toHaveLength(103);
+    expect(LAYER_CATALOG.find((layer) => layer.id === 3)?.name).toContain('TRIBE');
+    expect(LAYER_CATALOG.find((layer) => layer.id === 102)?.name).toContain('Lobster');
+    expect(LAYER_CATALOG.find((layer) => layer.id === 103)?.name).toContain('Soliton');
+  });
+
+  it('enriches an AnalysisResult without removing required backend fields', () => {
+    const baseResult = analyzeContentLocally({ content: 'Customer proof makes this calmer launch claim easier to trust today.' });
+    const enriched = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(enriched.id).toBe(baseResult.id);
+    expect(enriched.layersUsed.length).toBeGreaterThan(8);
+    expect(enriched.firewallSignals.manipulationPressure).toBeGreaterThanOrEqual(0);
+    expect(enriched.tribeProjection.regions.AMY).toBeGreaterThanOrEqual(0);
+    expect(enriched.receipt.id).toMatch(/^bsnn-/);
+    expect(enriched.evidenceGapAnalysis.schemaVersion).toBe('brainsnn.evidence-gaps.v1');
+  });
+
+  it('attaches a deterministic 39 Hz soliton field to every scan', () => {
+    const baseResult = analyzeContentLocally({ content: 'Customer proof makes this calmer launch claim easier to trust today.' });
+    const enriched = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(enriched.solitonField.layer).toBe(103);
+    expect(enriched.solitonField.baseFrequencyHz).toBe(39);
+    expect(enriched.solitonField.effectiveFrequencyHz).toBeGreaterThanOrEqual(30);
+    expect(enriched.solitonField.effectiveFrequencyHz).toBeLessThanOrEqual(100);
+    expect(enriched.solitonField.gammaCoherence).toBeGreaterThanOrEqual(0);
+    expect(enriched.solitonField.gammaCoherence).toBeLessThanOrEqual(1);
+    expect(enriched.solitonField.solitons.length).toBeGreaterThan(2);
+    expect(['bound', 'partial', 'desynchronized']).toContain(enriched.solitonField.synchrony);
+    expect(enriched.engineTrace.some((stage) => stage.stage.includes('Soliton'))).toBe(true);
+    // Deterministic: identical content yields an identical field.
+    const again = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(again.solitonField.gammaCoherence).toBe(enriched.solitonField.gammaCoherence);
+    expect(again.solitonField.leapfrogEvents).toBe(enriched.solitonField.leapfrogEvents);
+  });
+
+  it('folds a stable soliton hash into the firewall receipt', () => {
+    const baseResult = analyzeContentLocally({ content: 'Customer proof makes this calmer launch claim easier to trust today.' });
+    const enriched = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(typeof enriched.receipt.solitonHash).toBe('string');
+    expect(enriched.receipt.solitonHash.length).toBeGreaterThan(0);
+    const again = runLayerRouter({ content: baseResult.rawContent, baseResult });
+    expect(again.receipt.solitonHash).toBe(enriched.receipt.solitonHash);
+  });
+
+  it('reports engine readiness from env without leaking secrets', () => {
+    const status = getEngineStatusSnapshot({ STRIPE_SECRET_KEY: 'sk_test_secret', TRIBE_API_URL: 'https://example.com' });
+    expect(status.totalLayers).toBe(103);
+    expect(status.engines.stripe.configured).toBe(true);
+    expect(status.engines.tribe.configured).toBe(true);
+    expect(status.engines.tribe.enabled).toBe(false);
+    expect(status.engines.tribe.researchOnly).toBe(true);
+    expect(status.engines.tribe.commercialUse).toBe(false);
+    expect(status.engines.tribe.status).toBe('disabled');
+  });
+
+  it('requires an explicit research flag before reporting TRIBE research configured', () => {
+    const status = getEngineStatusSnapshot({
+      TRIBE_API_URL: 'https://example.com',
+      ENABLE_TRIBE_RESEARCH: 'true',
+    });
+    expect(status.engines.tribe.status).toBe('configured_research_only');
+  });
+
+  it('reports GPU configuration as unverified until the server checks it', () => {
+    const status = getEngineStatusSnapshot({
+      GPU_INFERENCE_URL: 'https://private.example/v1', GPU_INFERENCE_KEY: 'secret-token', GPU_INFERENCE_MODEL: 'model',
+    });
+    expect(status.engines.gpu).toEqual({ configured: true, status: 'unverified' });
+    expect(JSON.stringify(status)).not.toContain('private.example');
+    expect(JSON.stringify(status)).not.toContain('secret-token');
+    expect(getEngineStatusSnapshot({ GPU_INFERENCE_URL: 'https://private.example/v1' }).engines.gpu.status).toBe('invalid_configuration');
+  });
+
+  it('reports an explicitly configured single-replica outbound GPU without claiming reachability', () => {
+    const env = { GPU_INFERENCE_TRANSPORT: 'outbound', GPU_INFERENCE_MODEL: 'brainsnn-local',
+      GPU_BRIDGE_WORKER_KEY: 'private-worker-key'.padEnd(40, 'k'), GPU_BRIDGE_SINGLE_REPLICA: '1' };
+    const status = getEngineStatusSnapshot(env);
+    expect(status.engines.gpu).toEqual({ configured: true, status: 'unverified' });
+    expect(JSON.stringify(status)).not.toContain(env.GPU_BRIDGE_WORKER_KEY);
+    expect(getEngineStatusSnapshot({ ...env, GPU_BRIDGE_SINGLE_REPLICA: '' }).engines.gpu.status).toBe('invalid_configuration');
+    expect(getEngineStatusSnapshot({ ...env, GPU_BRIDGE_WORKER_KEY: 'short' }).engines.gpu.status).toBe('invalid_configuration');
+  });
+
+  it('runs an autopsy comparison with layer evidence', () => {
+    const autopsy = createAutopsyFromLayerStack(
+      'Last chance to unlock the secret growth system before competitors win.',
+      'See customer proof for the growth system, then decide whether it fits your campaign.'
+    );
+    expect(['left', 'right', 'tie']).toContain(autopsy.winner);
+    expect(autopsy.layersUsed.length).toBeGreaterThan(4);
+    expect(autopsy.left.layersUsed.length).toBeGreaterThan(8);
+  });
+
+  it('turns a price claim into context-specific proof guidance instead of a template sentence', () => {
+    const rewrite = createRewriteFromLayerStack(
+      'Security companies could pay $300+ for footage labeling.',
+      'trust',
+    );
+    expect(rewrite.content).not.toContain('Add one specific proof point before publishing.');
+    expect(rewrite.content).toContain('Minutes or hours of footage processed');
+    expect(rewrite.content).toContain('Labeling accuracy or quality-control acceptance rate');
+  });
+});
