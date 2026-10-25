@@ -29,6 +29,20 @@ What it is not:
 - It is not an Xactimate integration.
 - It does not write native Revit families.
 
+## Review, dimension and demo guides (from #232)
+
+Since #232, World Builder has:
+- guided capture, scale, review and export;
+- source-bound independent dimension checks;
+- reviewed hosted IFC openings, with matching visual and CAD geometry;
+- same-source reuse of object names.
+
+It is deployed with main, but not physically qualified. Use [BIM review](world-bim-review.md),
+[dimensional evidence](world-dimension-checks.md) and [demo acceptance](world-demo-release-checklist.md) for this flow.
+The local worker qualification records software execution separately from an actual phone-room demonstration.
+Original tilted footage and its derivatives still require recovery and replacement using the
+[regeneration runbook](../scripts/world-demo/REGENERATE.md).
+
 ## What is live on brainsnn.com
 
 Railway deploys main after "BrainSNN app release checks". "Verify BrainSNN live deploy" then checks that the World Builder
@@ -64,9 +78,9 @@ Before assuming any deploy, check that main is green.
 
 Earlier: #219 ETH3D benchmark, #220 IFC export, #221 Lyra decision record, #222 worker stable-host kit and `check_worker`.
 
-## PR #232 (Codex, draft): the next step, and what it needs
+## #232 (Codex, merged October 25): measured review, doors and strict film admission
 
-`codex/world-bim-demo` consolidates #230 and #231 on top of main. CI is green on head `4c2ceb9`: 265 worker tests,
+Merged as `1643653`. It consolidated #230 and #231 on top of main; CI was green on its head `4c2ceb9`: 265 worker tests,
 129 Node contracts, 45 compiler/IFC tests, and Chromium and WebKit review flows. It adds:
 - **A Capture → Scale → Review → Export flow.** It records reference picks in 3D, with instrument, date and uncertainty.
   A changed source, worker or scale invalidates a stale review.
@@ -348,10 +362,10 @@ scale step next. A hosted worker (this deploy kit on the 4090, or a service next
 work for visitors.
 
 ```sh
-# Worker: Python 3.11+ for bpy 4.2; see robotics/world_worker/README.md. adapters.json lists the engines (copy entries
-# from adapters.example.json). pip install -r robotics/world_worker/requirements-cad.txt for DXF and 3DM;
-# requirements-detector.txt for on-worker names (model file and sha256 in that file; Linux needs libegl1 libgles2);
-# requirements-naming.txt for Claude names.
+# Worker: Python 3.11+ for bpy 4.2; see robotics/world_worker/README.md and robotics/world_worker/deploy/README.md.
+# adapters.json lists the engines (copy entries from adapters.example.json). pip install -r
+# robotics/world_worker/requirements-cad.txt for DXF and 3DM; requirements-detector.txt for on-worker names (model file
+# and sha256 in that file; Linux needs libegl1 libgles2); requirements-naming.txt for Claude names.
 WORLD_WORKER_TOKEN=... WORLD_WORKER_DIR=./worker-data WORLD_ADAPTERS_FILE=./adapters.json \
 WORLD_ALLOWED_ORIGINS=http://127.0.0.1:4181 ANTHROPIC_API_KEY=... \
 python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.1 --port 8040
@@ -421,8 +435,8 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    - Run it through #232's flow: Scale, then Review with the withheld checks, then Export.
    - Render with `regenerate_reference.py --capture-kind phone-video --render`. The film then carries a reference-check
      chapter, with failures shown: the first error figure measured against reality rather than against points.
-2. **Review and merge #232** (owner). Doors, measurement review and strict film admission live there. Then merge #233.
-   Its conflicts with #232 are only the docs, the memory notes and the CI test list.
+2. **Check main after #232 and #233 merged** (both October 25). Confirm "BrainSNN app release checks" and "Verify
+   BrainSNN live deploy" passed before relying on the live site.
 3. **Centre wall boxes behind the surface they saw** (owner's call). Today a compiled wall is centred on the face the
    camera saw, so half its thickness stands in the room. On the benchmark, the room between the boxes reads 9 to 11 cm
    short. Moving each box outward by half its thickness changes every exported wall and the fit numbers.
@@ -469,7 +483,11 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 
 ## Measured facts worth keeping
 
-| Fact | Value |
+The earlier room geometry and its derived object/route counts were affected by the floor-alignment bug. Keep those
+historical receipts, but do not use them as current corrected evidence. PR #228 is merged; #229 adds stable floor-layer
+refinement and a newer compilation. Regeneration and asset inventory: [demo replacement runbook](../scripts/world-demo/REGENERATE.md).
+
+| Fact | Value and scope |
 |---|---|
 | Room walkthrough (Mip-NeRF 360 "room", 62.2 s, 60 frames), `colmap-sparse` on CPU | 135 s; 57 of 60 frames posed (seed 0 joined 33, seed 1 joined 57); 12,007 points; 0.53 px reprojection error |
 | Same capture, metric scene (scale typed: 5.79 m) | 5 s. 6 walls (10.50 m), 7 objects (4 named by the on-worker detector in 2.3 s), observed floor 28.64 m² of a 3.96 × 7.79 m extent, 4.5 m² unknown, 12 files. IFC: 0 IfcOpenShell issues |
@@ -481,3 +499,11 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 | Synthetic meeting room (60 frames, 960 × 540), `colmap-sparse` | 60 of 60 frames posed; 20,844 points; camera alignment 7.5 mm RMS; about 2.5 min |
 | Same room, after the fixes (scale from a 2.4 m span) | Level 0.3°, floor +4.0 cm; walls 4 of 4, width −1.7 cm, depth −1.5 cm, faces 0.7 cm median; furniture 5 of 10; withheld spans 7 of 7, worst 1.9 cm |
 | Same room, before the fixes | Level 9.4°, floor +58 cm; walls 2 of 4; furniture 2 of 10; withheld spans 5 of 7 usable, worst 4.1 cm |
+| Dense room walkthrough (Mip-NeRF 360 "room", 57 frames), CPU time | About 3.5 minutes (depth pass 80 s on 4 threads) |
+| Historical scene before correction | 10–11 walls and 10–11 objects; potentially tilted, not current corrected evidence |
+| Historical robot route, point map vs scene map | 0.2 m² vs 3.6 m², 71 m; potentially tilted, recompute from the corrected scene |
+| Historical Claude naming | 10 objects, 19 crops, 11 s, 4,029 input and 607 output tokens (about $0.03); retain as a distinct run, not corrected-run names |
+| Historical Claude suggestions | sofa and side table, recliner armchair, computer tower, door ×2, piano bench ×2; a bare-floor cluster "unknown" (low, not applied); unreviewed |
+These are reported test-dataset measurements, not a physical phone capture or independent proof of room accuracy.
+Model-to-points fit measures agreement with the reconstruction; typed scale, missing surfaces and inferred bases carry
+their own uncertainty. No corrected route length or replacement video is established by this table.

@@ -769,6 +769,24 @@ def test_on_worker_detection_is_offered_without_a_secret_and_must_be_well_formed
             create_app(root=tmp_path / 'data2', token=TOKEN, adapters=str(config))
 
 
+def test_dimensional_and_bim_review_capabilities_need_explicit_boolean_flags(tmp_path):
+    config = source_config(tmp_path); entries = json.loads(config.read_text())
+    entries[0].update(dimension_checks=True, bim_review=False)
+    entries[1].update(dimension_checks=False, bim_review=True)
+    config.write_text(json.dumps(entries))
+    with TestClient(create_app(root=tmp_path / 'data', token=TOKEN, adapters=str(config))) as c:
+        engines = {e['id']: e for e in c.get('/v1/capabilities', headers=HEADERS).json()['engines']}
+        assert engines['test-source']['dimension_checks'] is True and 'bim_review' not in engines['test-source']
+        assert engines['test-plain']['bim_review'] is True and 'dimension_checks' not in engines['test-plain']
+        assert 'dimension_checks' not in engines['inspect'] and 'bim_review' not in engines['inspect']
+    for feature in ('dimension_checks', 'bim_review'):
+        for bad in (1, 0, 'true', None, [], {}):
+            rows = json.loads(json.dumps(entries)); rows[0][feature] = bad
+            config.write_text(json.dumps(rows))
+            with pytest.raises(ValueError, match=feature):
+                create_app(root=tmp_path / 'bad-data', token=TOKEN, adapters=str(config))
+
+
 def test_a_hand_off_keeps_its_source_transform_and_naming_approval_only_when_well_formed(tmp_path):
     from robotics.world_worker.geometry import load_arena_cloud
     path = tmp_path / 'cloud.json'

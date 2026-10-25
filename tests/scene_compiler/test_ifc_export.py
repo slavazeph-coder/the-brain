@@ -1,6 +1,6 @@
 """IFC4 export contracts without Blender or IfcOpenShell: python3 -m unittest tests.scene_compiler.test_ifc_export
 (IfcOpenShell's full EXPRESS validation of real scenes is a local check; see docs/world-studio-implementation.md.)"""
-import re, sys, tempfile, unittest
+import copy, re, sys, tempfile, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "robotics" / "scene_compiler"))
 import ifc_export as ie
@@ -24,6 +24,74 @@ def parse(text):
 
 
 class IfcExport(unittest.TestCase):
+    def reviewed_scene(self, kind='opening'):
+        wall = {'name': 'wall_1', 'label': 'wall', 'provenance': 'observed', 'centre': [0, 1.5, 0],
+                'size': [4, 3, .2], 'yaw_degrees': 30, 'support_points': 120}
+        opening = {'id': 'entry', 'hostWall': 'wall_1', 'offsetMeters': 1, 'widthMeters': 1,
+                   'heightMeters': 2, 'sillMeters': 0, 'kind': kind, 'reviewed': True,
+                   'host': {key: copy.deepcopy(wall[key]) for key in ('centre', 'size', 'yaw_degrees')}}
+        return metric_scene(objects=[], walls=[wall], unknown=[], openings=[opening])
+
+    def test_reviewed_openings_are_hosted_voids_and_doors_are_explicit_fillings(self):
+        for kind in ('opening', 'door'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as d:
+                record = ie.emit_ifc(d, self.reviewed_scene(kind))
+                text = (Path(d) / 'scene.ifc').read_text()
+                self.assertEqual(record['elements']['openings'], 1)
+                self.assertEqual(record['elements']['doors'], int(kind == 'door'))
+                rows, refs = parse(text); self.assertLessEqual(refs, set(rows))
+                kinds = [body.split('(')[0] for body in rows.values()]
+                self.assertEqual(kinds.count('IFCOPENINGELEMENT'), 1)
+                self.assertEqual(kinds.count('IFCRELVOIDSELEMENT'), 1)
+                self.assertEqual(kinds.count('IFCRELFILLSELEMENT'), int(kind == 'door'))
+                self.assertEqual(kinds.count('IFCDOOR'), int(kind == 'door'))
+                self.assertIn("'ReviewSelfReported',$,IFCBOOLEAN(.T.)", text)
+                self.assertIn("'ClearanceVerified',$,IFCBOOLEAN(.F.)", text)
+
+    def test_stale_unreviewed_overlapping_or_out_of_bounds_openings_are_refused(self):
+        original = self.reviewed_scene()
+        variants = []
+        for key, value in [('reviewed', False), ('widthMeters', 5), ('hostWall', 'missing'), ('heightMeters', float('nan'))]:
+            scene = copy.deepcopy(original); scene['openings'][0][key] = value; variants.append(scene)
+        stale = copy.deepcopy(original); stale['walls'][0]['centre'][0] += .1; variants.append(stale)
+        overlap = copy.deepcopy(original); overlap['openings'].append({**copy.deepcopy(overlap['openings'][0]), 'id': 'other'}); variants.append(overlap)
+        with tempfile.TemporaryDirectory() as d:
+            for index, scene in enumerate(variants):
+                path = Path(d) / f'invalid-{index}.ifc'
+                with self.subTest(index=index), self.assertRaises(ValueError):
+                    ie.write_ifc(path, scene)
+                self.assertFalse(path.exists())
+
+    def test_ifcopenshell_validates_and_subtracts_the_rotated_host_void(self):
+        try:
+            import ifcopenshell
+            import ifcopenshell.geom
+            import ifcopenshell.util.shape
+            import ifcopenshell.validate
+        except ImportError:
+            self.skipTest('IfcOpenShell is needed for actual schema and solid validation.')
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'scene.ifc'; ie.emit_ifc(d, self.reviewed_scene('door'))
+            model = ifcopenshell.open(path)
+            log = ifcopenshell.validate.json_logger()
+            ifcopenshell.validate.validate(model, log, express_rules=True)
+            self.assertEqual(log.statements, [])
+            wall = model.by_type('IfcWall')[0]; opening = model.by_type('IfcOpeningElement')[0]; door = model.by_type('IfcDoor')[0]
+            self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement, wall)
+            self.assertEqual(door.FillsVoids[0].RelatingOpeningElement, opening)
+            self.assertEqual(opening.ObjectPlacement.PlacementRelTo, wall.ObjectPlacement)
+            self.assertEqual(door.ObjectPlacement.PlacementRelTo, opening.ObjectPlacement)
+            self.assertEqual(door.OverallWidth, 1); self.assertEqual(door.OverallHeight, 2)
+            settings = ifcopenshell.geom.settings()
+            actual = ifcopenshell.geom.create_shape(settings, wall)
+            # 4*3*.2 = 2.4 m3 wall; the actual IFC void removes 1*2*.2 = .4 m3, even at 30 degrees yaw.
+            self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(actual.geometry), 2.0, places=6)
+            leaf = ifcopenshell.geom.create_shape(settings, door)
+            self.assertAlmostEqual(ifcopenshell.util.shape.get_volume(leaf.geometry), .1, places=6)
+            saved = Path(d) / 'roundtrip.ifc'; model.write(saved); reopened = ifcopenshell.open(saved)
+            self.assertEqual(reopened.by_type('IfcOpeningElement')[0].GlobalId, opening.GlobalId)
+            self.assertEqual(reopened.by_type('IfcDoor')[0].FillsVoids[0].RelatingOpeningElement.GlobalId, opening.GlobalId)
+
     def test_metric_scene_writes_a_self_consistent_ifc4_file(self):
         with tempfile.TemporaryDirectory() as d:
             scene = metric_scene(); record = ie.emit_ifc(d, scene)

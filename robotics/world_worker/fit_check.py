@@ -13,7 +13,11 @@ from __future__ import annotations
 import json
 import math
 import struct
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scene_compiler'))
+from opening_geometry import wall_openings, wall_faces, door_parts
 
 ON, MODELLED, MISFIT_MEDIAN, MISFIT_POINTS = 0.05, 0.15, 0.05, 20
 CEILING = 2.4  # metres over the floor: points higher than the objects are separated up to (scene_compiler.OBJECT_MAX_HEIGHT)
@@ -23,7 +27,7 @@ UNMODELLED = (110, 118, 135)
 
 
 def surfaces(scene):
-    """(name, label, kind, centre, size, yaw_degrees) of every element with a box: the floor, walls and objects."""
+    """Semantic surfaces, with optional exposed local faces for reviewed cut walls."""
     out = []
     for o in scene.get('objects', []):
         if 'centre' in o and 'size' in o:
@@ -31,7 +35,10 @@ def surfaces(scene):
             out.append((o['name'], o.get('label'), kind, o['centre'], o['size'], o.get('yaw_degrees', 0)))
     for w in scene.get('walls', []):
         if 'centre' in w and 'size' in w:
-            out.append((w['name'], 'wall', 'wall', w['centre'], w['size'], w.get('yaw_degrees', 0)))
+            element = (w['name'], 'wall', 'wall', w['centre'], w['size'], w.get('yaw_degrees', 0))
+            out.append((*element, wall_faces(w, scene['openings'])) if wall_openings(w, scene.get('openings', [])) else element)
+    for leaf in door_parts(scene.get('walls', []), scene.get('openings', [])):
+        out.append((leaf['name'], 'closed reference door', 'door', leaf['centre'], leaf['size'], leaf.get('yaw_degrees', 0)))
     return out
 
 
@@ -43,11 +50,18 @@ def distances(points, elements):
     if not elements or not len(P):
         return np.full(len(P), np.inf), np.full(len(P), -1)
     best, near = np.full(len(P), np.inf), np.full(len(P), -1)  # a running minimum: 50,000 points x 200 objects stays small
-    for k, (_, _, _, centre, size, yaw) in enumerate(elements):
+    for k, (_, _, _, centre, size, yaw, *faces) in enumerate(elements):
         t = math.radians(yaw); ex, ez = np.array([math.cos(t), 0, math.sin(t)]), np.array([-math.sin(t), 0, math.cos(t)])
         d = P - np.asarray(centre, float)
-        q = np.abs(np.stack([d @ ex, d[:, 1], d @ ez], 1)) - np.asarray(size, float) / 2
-        dist = np.abs(np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0))
+        local = np.stack([d @ ex, d[:, 1], d @ ez], 1)
+        if faces:
+            dist = np.full(len(P), np.inf)
+            for face_centre, face_size in faces[0]:
+                q = np.abs(local - np.asarray(face_centre)) - np.asarray(face_size) / 2
+                dist = np.minimum(dist, np.linalg.norm(np.maximum(q, 0), axis=1))
+        else:
+            q = np.abs(local) - np.asarray(size, float) / 2
+            dist = np.abs(np.linalg.norm(np.maximum(q, 0), axis=1) + np.minimum(q.max(1), 0))
         closer = dist < best; best[closer], near[closer] = dist[closer], k
     return best, near
 
@@ -68,7 +82,7 @@ def check(scene, points):
                     'p90_cm': cm(np.percentile(own, 90)) if len(own) else None,
                     'misfit': bool(len(own) >= MISFIT_POINTS and median > MISFIT_MEDIAN)})
     kinds = {}
-    for kind in ('floor', 'wall', 'object'):
+    for kind in ('floor', 'wall', 'object', 'door'):
         own = dist[np.isin(near, [k for k, e in enumerate(elements) if e[2] == kind]) & modelled]
         if len(own): kinds[kind] = {'points': int(len(own)), 'median_cm': cm(np.median(own)), 'p90_cm': cm(np.percentile(own, 90))}
     n = len(dist); share = lambda m: round(float(m.sum()) / n, 3) if n else 0.0

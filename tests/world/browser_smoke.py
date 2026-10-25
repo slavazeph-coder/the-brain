@@ -275,15 +275,17 @@ def check_app_shell(browser):
     assert page.locator('link[rel=manifest]').count()==1 and page.locator('meta[name=apple-mobile-web-app-capable]').count()==1
     # Shell worker: installs on this secure origin, precaches the shell, serves it offline, never caches API or cross-origin.
     sw=page.evaluate("""async()=>{const reg=await navigator.serviceWorker.ready;const sw=reg.active;const t0=Date.now();while(sw.state!=='activated'&&Date.now()-t0<15000)await new Promise(r=>setTimeout(r,100));
-      const keys=(await caches.open('world-shell-v1').then(c=>c.keys())).map(r=>new URL(r.url).pathname);return {state:sw.state,keys}}""")
-    assert sw['state']=='activated' and '/world/app.mjs' in sw['keys'] and '/world/index.html' in sw['keys'],sw
+      const names=(await caches.keys()).filter(n=>n.startsWith('world-shell-'));
+      const keys=(await Promise.all(names.map(n=>caches.open(n).then(c=>c.keys())))).flat().map(r=>new URL(r.url).pathname);
+      return {state:sw.state,names,keys}}""")
+    assert sw['state']=='activated' and len(sw['names'])==1 and '/world/app.mjs' in sw['keys'] and '/world/index.html' in sw['keys'],sw
     page.reload(wait_until='networkidle');assert page.evaluate('navigator.serviceWorker.controller!==null')
     ctx.set_offline(True);page.reload(wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000)
     # Launching the installed app offline opens its start URL from the cache.
     page.goto(url.split('/world/')[0]+data['start_url'],wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000)
     ctx.set_offline(False)
     page.evaluate("Promise.allSettled([fetch('/v1/site-scans/capabilities'),fetch('https://example.invalid/x')])")
-    assert not any('/v1/' in k for k in page.evaluate("caches.open('world-shell-v1').then(c=>c.keys()).then(ks=>ks.map(r=>r.url))"))
+    assert not any('/v1/' in k for k in page.evaluate("async()=>{const names=(await caches.keys()).filter(n=>n.startsWith('world-shell-'));return (await Promise.all(names.map(n=>caches.open(n).then(c=>c.keys())))).flat().map(r=>r.url)}"))
     page.locator('[data-tab=capture]').click()
     assert page.locator('[data-action=install]').count()==1,'iOS Safari gets the Add to Home Screen button'
     page.locator('[data-action=install]').click();assert 'Add to Home Screen' in page.locator('#status').inner_text()

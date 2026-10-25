@@ -4,6 +4,7 @@ import json, math, random, sys, tempfile, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "robotics" / "world_worker"))
 import scene_usd as su
+import measurement_check as mc
 
 
 def room_cloud(n=3000, seed=3, colmap=True):
@@ -175,7 +176,10 @@ class CloudHandoff(unittest.TestCase):
         self.assertEqual(evidence["handoff"]["scale"]["selfReported"], True)
         self.assertTrue(any("self-reported" in w for w in evidence["warnings"]))
         names = [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]]
-        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.ifc", "scene.json", "scene-usd.json", "arena-cloud.json"])
+        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.ifc", "scene.json", "scene-usd.json", "scene-measurements.json", "arena-cloud.json"])
+        report = json.loads((out / "scene-measurements.json").read_text())
+        self.assertEqual(report["status"], "no-held-out")
+        self.assertFalse(report["metric_verified"])
         self.assertEqual(evidence["ifc"], {"written": True})
         self.assertFalse((out / "sparse-preview.ply").exists())
 
@@ -194,6 +198,34 @@ class CloudHandoff(unittest.TestCase):
         evidence, out = self.run_handoff(handoff("arbitrary"))
         self.assertEqual(evidence["units"], "arbitrary"); self.assertFalse((out / "scene.usda").exists()); self.assertFalse((out / "scene.ifc").exists())
         self.assertNotIn("scene.usda", [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]])
+        self.assertFalse((out / "scene-measurements.json").exists())
+
+    def test_independent_distance_failure_is_returned_without_recalibrating_the_scene(self):
+        cloud = handoff("m")
+        def check(identifier, role, ends, distance):
+            return {"id": identifier, "label": identifier, "role": role, "pointIndices": ends,
+                    "distanceMeters": distance, "uncertaintyMeters": .005, "method": "tape",
+                    "instrument": "test tape", "measuredOn": "2026-10-24", "note": "synthetic contract fixture"}
+        cloud["measurementChecks"] = {"schema": "brainsnn.dimension-checks.v1", "cloudPointsSha256": mc.points_sha256(cloud),
+                                      "coordinateFrame": "right-handed-y-up", "units": "m",
+                                      "tolerance": {"absoluteMeters": .05, "relative": .02},
+                                      "checks": [check("scale-anchor", "calibration", [0, 90], .9),
+                                                 check("withheld-width", "held-out", [0, 9], 1.2)]}
+        evidence, out = self.run_handoff(cloud)
+        self.assertEqual(evidence["measurements"]["status"], "outside-requested-tolerance")
+        self.assertFalse(evidence["metric_verified"])
+        archived = json.loads((out / "arena-cloud.json").read_text())
+        self.assertEqual(archived["points"], cloud["points"])
+        self.assertEqual(archived["scale"], cloud["scale"])
+        self.assertEqual(archived["measurementChecks"], cloud["measurementChecks"])
+
+    def test_stale_measurement_references_are_refused_before_compile(self):
+        cloud = handoff("m")
+        cloud["measurementChecks"] = {"schema": "brainsnn.dimension-checks.v1", "cloudPointsSha256": "0" * 64,
+                                      "coordinateFrame": "right-handed-y-up", "units": "m",
+                                      "tolerance": {"absoluteMeters": .05, "relative": .02}, "checks": []}
+        with self.assertRaises(ValueError):
+            self.run_handoff(cloud)
 
     def test_single_photo_previews_and_mixed_inputs_are_refused(self):
         with self.assertRaisesRegex(ValueError, "multi-view"):

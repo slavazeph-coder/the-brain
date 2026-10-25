@@ -16,6 +16,10 @@ from __future__ import annotations
 import csv
 import math
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scene_compiler'))
+from opening_geometry import wall_parts, door_parts, plan_wall_parts, wall_openings
 
 LAYERS = {'FLOOR': 8, 'WALLS': 7, 'OBJECTS': 4, 'UNKNOWN': 6, 'DIMENSIONS': 2, 'LABELS': 7}  # AutoCAD colour indices
 RHINO_LAYERS = {'Floor': (216, 205, 184), 'Walls': (154, 166, 184), 'Objects': (168, 85, 247), 'Unknown space (not free)': (255, 79, 154)}
@@ -51,8 +55,20 @@ def elements(scene):
                         'label_reviewed': o.get('labelReviewed') if label else None, 'base_inferred': o.get('base') == 'inferred'})
     for w in scene.get('walls', []):
         L, h, t = w['size']
+        def rect(part):
+            return {'corners': footprint(part['centre'][0], part['centre'][2], part['size'][0], part['size'][2], part.get('yaw_degrees', 0)),
+                    'base': part['centre'][1] - part['size'][1] / 2, 'height': part['size'][1]}
+        holes = wall_openings(w, scene.get('openings', []))
         out.append({'kind': 'wall', 'name': w['name'], 'label': 'wall', 'ifc': 'IfcWall', 'corners': footprint(w['centre'][0], w['centre'][2], L, t, w.get('yaw_degrees', 0)),
-                    'length': L, 'width': t, 'height': h, 'base': w['centre'][1] - h / 2, 'provenance': w.get('provenance', 'observed')})
+                    'length': L, 'width': t, 'height': h, 'base': w['centre'][1] - h / 2, 'provenance': w.get('provenance', 'observed'),
+                    'net_face_area': L * h - sum(o['widthMeters'] * o['heightMeters'] for o in holes),
+                    'solid_parts': [rect(part) for part in wall_parts(w, holes)],
+                    'plan_parts': [rect(part)['corners'] for part in plan_wall_parts(w, holes, closed_doors_block=False, floor_y=floor_y)]})
+    for leaf in door_parts(scene.get('walls', []), scene.get('openings', [])):
+        L, h, t = leaf['size']
+        out.append({'kind': 'door', 'name': leaf['name'], 'label': 'closed reference door', 'ifc': 'IfcDoor',
+                    'corners': footprint(leaf['centre'][0], leaf['centre'][2], L, t, leaf.get('yaw_degrees', 0)),
+                    'length': L, 'width': t, 'height': h, 'base': leaf['centre'][1] - h / 2, 'provenance': leaf['provenance']})
     for n, (x, z, c) in enumerate(scene.get('unknown', [])):
         out.append({'kind': 'unknown', 'name': f'unknown_{n + 1}', 'label': 'unknown space (not free)', 'ifc': 'IfcBuildingElementProxy',
                     'corners': [(x, -z), (x + c, -z), (x + c, -(z + c)), (x, -(z + c))], 'length': c, 'width': c, 'height': 0.3, 'base': floor_y,
@@ -71,6 +87,7 @@ def quantities(scene, items):
     """Rows for quantities.csv and the totals the evidence records."""
     floor = next((i for i in items if i['kind'] == 'floor'), None)
     walls = [i for i in items if i['kind'] == 'wall']; objects = [i for i in items if i['kind'] == 'object']
+    doors = [i for i in items if i['kind'] == 'door']
     unknown = [i for i in items if i['kind'] == 'unknown']
     # The floor the capture saw: the extent less the unknown cells inside it. The extent alone is a bounding rectangle,
     # which for a room turned against the axes takes in empty corners.
@@ -85,20 +102,21 @@ def quantities(scene, items):
               'floor_extent_area_m2': round(floor['length'] * floor['width'], 2) if floor else None,
               'observed_floor_area_m2': round(observed, 2) if floor else None,
               'walls': len(walls), 'wall_length_m': round(sum(w['length'] for w in walls), 2),
-              'wall_face_area_m2': round(sum(w['length'] * w['height'] for w in walls), 2),
+              'wall_face_area_m2': round(sum(w.get('net_face_area', w['length'] * w['height']) for w in walls), 2),
+              'openings': len(scene.get('openings', [])), 'doors': len(doors),
               'objects': len(objects), 'named_objects': sum(1 for o in objects if o['label']),
               'unknown_area_m2': round(sum(u['length'] * u['width'] for u in unknown), 2)}
     head = ['section', 'element', 'ifc_class', 'name', 'length_m', 'width_m', 'height_m', 'area_m2', 'notes']
     rows = [head,
             ['summary', 'floor_observed', 'IfcSlab', 'floor', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['observed_floor_area_m2'], 'floor the capture saw: the extent less unknown cells'],
             ['summary', 'floor_extent', 'IfcSlab', 'floor extent', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['floor_extent_area_m2'], 'bounding rectangle of the observed floor, not the room outline'],
-            ['summary', 'walls', 'IfcWall', f"{totals['walls']} walls", f"{totals['wall_length_m']:.2f}", '', '', totals['wall_face_area_m2'], 'total length; area is one face'],
+            ['summary', 'walls', 'IfcWall', f"{totals['walls']} walls", f"{totals['wall_length_m']:.2f}", '', '', totals['wall_face_area_m2'], 'total length; net one-face area after reviewed voids'],
             ['summary', 'objects', '', f"{totals['objects']} objects", '', '', '', '', f"{totals['named_objects']} named, unreviewed"],
             ['summary', 'unknown_space', 'IfcBuildingElementProxy', 'unknown space', '', '', '', totals['unknown_area_m2'], 'floor no point reached: not free space'],
             ['summary', 'scale', '', '', '', '', '', '', scale_note(scene)]]
-    for i in walls + objects:
-        area = i['length'] * i['height'] if i['kind'] == 'wall' else i['length'] * i['width']
-        note = 'area is one face' if i['kind'] == 'wall' else 'plan area' + (f"; name from {i['label_source']}, unreviewed" if i['label'] and i.get('label_source') else '') \
+    for i in walls + objects + doors:
+        area = i.get('net_face_area', i['length'] * i['height']) if i['kind'] == 'wall' else i['length'] * i['width']
+        note = 'net one-face area after reviewed voids' if i['kind'] == 'wall' else ('closed reference leaf; no clearance validation' if i['kind'] == 'door' else 'plan area') + (f"; name from {i['label_source']}, unreviewed" if i['label'] and i.get('label_source') else '') \
             + ('; base inferred: the floor under it went unseen' if i.get('base_inferred') else '')
         rows.append([i['kind'], i['name'], i['ifc'], i['label'] or i['name'].replace('_', ' ').capitalize(), f"{i['length']:.3f}", f"{i['width']:.3f}",
                      f"{i['height']:.3f}", f'{area:.2f}', note])
@@ -113,18 +131,21 @@ def write_dxf(scene, items, path):
         doc.layers.add(name, color=colour)
     msp = doc.modelspace()
     for i in items:
-        layer = {'floor': 'FLOOR', 'wall': 'WALLS', 'object': 'OBJECTS', 'unknown': 'UNKNOWN'}[i['kind']]
-        msp.add_lwpolyline(i['corners'], close=True, dxfattribs={'layer': layer})
+        layer = {'floor': 'FLOOR', 'wall': 'WALLS', 'object': 'OBJECTS', 'door': 'OBJECTS', 'unknown': 'UNKNOWN'}[i['kind']]
+        plans = i.get('plan_parts', [i['corners']])
+        for corners in plans:
+            msp.add_lwpolyline(corners, close=True, dxfattribs={'layer': layer})
         if i['kind'] in ('wall', 'unknown'):
-            hatch = msp.add_hatch(color=LAYERS[layer], dxfattribs={'layer': layer})
-            if i['kind'] == 'unknown': hatch.set_pattern_fill('ANSI31', scale=0.02)
-            hatch.paths.add_polyline_path(i['corners'], is_closed=True)
+            for corners in plans:
+                hatch = msp.add_hatch(color=LAYERS[layer], dxfattribs={'layer': layer})
+                if i['kind'] == 'unknown': hatch.set_pattern_fill('ANSI31', scale=0.02)
+                hatch.paths.add_polyline_path(corners, is_closed=True)
         if i['kind'] == 'wall':
             # The wall's length along its centre line, offset to the outside of the wall.
             c = i['corners']; a = ((c[0][0] + c[3][0]) / 2, (c[0][1] + c[3][1]) / 2); b = ((c[1][0] + c[2][0]) / 2, (c[1][1] + c[2][1]) / 2)
             msp.add_aligned_dim(p1=a, p2=b, distance=0.35, dxfattribs={'layer': 'DIMENSIONS'},
                                 override={'dimtxt': 0.12, 'dimasz': 0.08, 'dimdec': 2, 'dimexe': 0.05, 'dimexo': 0.05, 'dimgap': 0.03}).render()
-        if i['kind'] == 'object':
+        if i['kind'] in ('object', 'door'):
             cx, cy = sum(p[0] for p in i['corners']) / 4, sum(p[1] for p in i['corners']) / 4
             msp.add_text(i['label'] or i['name'].replace('_', ' '), height=0.1, dxfattribs={'layer': 'LABELS'}).set_placement((cx, cy), align=TextEntityAlignment.MIDDLE_CENTER)
             msp.add_text(f"{i['length']:.2f} x {i['width']:.2f} m", height=0.07, dxfattribs={'layer': 'LABELS'}).set_placement((cx, cy - 0.14), align=TextEntityAlignment.MIDDLE_CENTER)
@@ -166,16 +187,18 @@ def write_3dm(scene, items, path):
     model.Strings['BrainSNN.scale'] = scale_note(scene)
     model.Strings['BrainSNN.metricVerified'] = 'false'
     for i in items:
-        brep = box(r, i['corners'], i['base'], i['height'])
-        attrs = r.ObjectAttributes()
-        attrs.LayerIndex = index[{'floor': 'Floor', 'wall': 'Walls', 'object': 'Objects', 'unknown': 'Unknown space (not free)'}[i['kind']]]
-        attrs.Name = i['label'] if i['kind'] == 'object' and i['label'] else i['name']
-        for key, value in (('element', i['name']), ('ifcClass', i['ifc']), ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
-                           ('width_m', f"{i['width']:.3f}"), ('height_m', f"{i['height']:.3f}"), ('labelSource', i.get('label_source') or ''),
-                           ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower()),
-                           ('base', 'inferred' if i.get('base_inferred') else '')):
-            if value: attrs.SetUserString(key, value)
-        model.Objects.AddBrep(brep, attrs)
+        for part_no, part in enumerate(i.get('solid_parts', [i]), 1):
+            brep = box(r, part['corners'], part['base'], part['height'])
+            attrs = r.ObjectAttributes()
+            attrs.LayerIndex = index[{'floor': 'Floor', 'wall': 'Walls', 'object': 'Objects', 'door': 'Objects', 'unknown': 'Unknown space (not free)'}[i['kind']]]
+            attrs.Name = i['label'] if i['kind'] in ('object', 'door') and i['label'] else i['name']
+            if len(i.get('solid_parts', [])) > 1: attrs.Name += f' part {part_no}'
+            for key, value in (('element', i['name']), ('ifcClass', i['ifc']), ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
+                               ('width_m', f"{i['width']:.3f}"), ('height_m', f"{i['height']:.3f}"), ('labelSource', i.get('label_source') or ''),
+                               ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower()),
+                               ('base', 'inferred' if i.get('base_inferred') else '')):
+                if value: attrs.SetUserString(key, value)
+            model.Objects.AddBrep(brep, attrs)
     model.Write(str(path), 8)
     return {'written': True, 'layers': list(RHINO_LAYERS), 'objects': len(model.Objects), 'units': 'm'}
 

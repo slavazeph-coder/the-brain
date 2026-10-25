@@ -1,11 +1,11 @@
-"""Records the scan-to-model demo: phone walkthrough -> dense CPU reconstruction -> every object separated and measured ->
-robot route in the compiled scene -> IFC opened in a BIM parser.
+"""Records the test scan-to-model demo: walkthrough fixture -> CPU reconstruction -> scaled object boxes ->
+source-bound dimensional status -> checked IFC download -> optional planar route -> IFC opened in a BIM parser.
 
 usage: WORKER_URL=... WORKER_TOKEN=... ENGINE=colmap-dense-cpu record_scan2model.py <site-world-url> <walkthrough video> <ifc-viewer-url> <output.mp4> [--dry-run]
 The worker URL and token are typed under a title card, so they never appear in the recording. Every number shown comes
 from the real run; the distance typed in is illustrative and the closing card says so.
 """
-import base64, json, os, re, shutil, subprocess, sys, time
+import base64, hashlib, html, json, os, re, subprocess, sys, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tests' / 'world'))
@@ -19,6 +19,9 @@ ROBOT = os.environ.get('ROBOT', 'vacuum')
 ENGINE = os.environ.get('ENGINE', 'colmap-sparse')
 DENSE = ENGINE == 'colmap-dense-cpu'  # the captions describe whichever engine actually ran
 METRES_PER_UNIT = .66  # illustrative: about a 4 x 8 m room for the Mip-NeRF 360 "room" walkthrough; not measured
+CAPTURE_CREDIT = os.environ.get('CAPTURE_CREDIT', 'Mip-NeRF 360 “room” photographs (Barron et al.), encoded as a test video; not a physical phone capture').strip()
+if not CAPTURE_CREDIT or len(CAPTURE_CREDIT) > 600:
+    raise SystemExit('CAPTURE_CREDIT must identify the actual input in 1 to 600 characters.')
 WORKER, TOKEN = os.environ['WORKER_URL'], os.environ['WORKER_TOKEN']
 HOST = WORKER.split('://', 1)[-1].split('/', 1)[0]
 SIZE = {'width': 1600, 'height': 900}  # CSS pixels; at 1.2x this records 1920 x 1080
@@ -27,6 +30,11 @@ OVERLAY = (Path(__file__).parent / 'record_demo.py').read_text().split('OVERLAY 
 OVERLAY = OVERLAY.replace('#demo-card{position:fixed;', '#demo-card{pointer-events:none;position:fixed;').replace('#demo-caption{position:fixed;', '#demo-caption{pointer-events:none;user-select:none;position:fixed;')
 assert 'pointer-events:none;position:fixed;inset:0' in OVERLAY and '#demo-caption{pointer-events:none' in OVERLAY
 SEGMENTS, PHASES, START = [], [], []
+
+
+def file_sha256(path):
+    with Path(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def run(page):
@@ -73,10 +81,10 @@ def run(page):
 
     page.goto(URL, wait_until='networkidle'); page.mouse.move(800, 450)
     START.append(time.time())  # frames before the title card (page load) are dropped
-    card('<p>BRAINSNN · WORLD BUILDER · SCAN TO MODEL</p><h1>One phone walkthrough.<br><em>Every object separated and measured.</em></h1><p>Robot simulation · GLB, OpenUSD and IFC</p>'); hold(3.8); card('')
+    card('<p>BRAINSNN · WORLD BUILDER · SCAN TO MODEL</p><h1>One test walkthrough.<br><em>Observed objects as scaled boxes.</em></h1><p>Robot simulation · GLB, OpenUSD and IFC</p>'); hold(3.8); card('')
     say(('Live on <b>brainsnn.com</b>' if LIVE else 'World Builder') + ' · real reconstruction, nothing faked'); hold(2.4)
 
-    say('<b>1</b> · Walk through the space with a phone, then upload the video')
+    say('<b>1</b> · Upload the test walkthrough video')
     glide(page.locator('#hero-capture')); hold(.8)
     page.locator('#files').set_input_files(VIDEO); hold(2.6)
 
@@ -103,10 +111,10 @@ def run(page):
     if 'Reconstruction loaded' not in page.locator('#status').inner_text(): raise SystemExit('reconstruction: ' + page.locator('#status').inner_text())
     page.locator('#visual-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})"); settle(); hold(2.5)
     speed(1); say('<b>3</b> · Dense points: a depth model per frame, kept only where neighbouring frames agree' if DENSE else
-                  '<b>3</b> · 3D points and every camera pose, recovered from the walkthrough by COLMAP on CPU'); hold(.8)
+                  '<b>3</b> · 3D points and registered camera poses, recovered from the walkthrough by COLMAP on CPU'); hold(.8)
     zoom('#visual-canvas', -360); orbit('#visual-canvas', 3); hold(1.4)
 
-    say('<b>4</b> · Measure one real distance, then tap both ends in 3D')
+    say('<b>4</b> · Pick two points, then enter the illustrative test distance')
     if not page.locator('[data-action=pick-scale]').is_visible(): page.locator('[data-tab=capture]').click()
     glide(page.locator('[data-action=pick-scale]')); hold(.6)
     page.locator('#visual-canvas').evaluate(f"el => el.scrollIntoView({{block: 'center', behavior: 'instant'}})"); settle(); hold(.4)
@@ -121,10 +129,13 @@ def run(page):
     else: field.fill(distance)
     field.press('Tab'); hold(1.0)
 
-    say('<b>5</b> · Compile the scene: walls, floor, and every object separated')
+    if not page.locator('[data-action=metric-scene]').count():
+        raise SystemExit('The connected worker does not offer the complete metric scene workflow. '
+                         'Update its scene-usd checkout and advertise dimension_checks and bim_review, then reconnect.')
+    say('<b>5</b> · Compile the scene: observed floor, walls and separated clusters as scaled boxes')
     glide(page.locator('#scene-consent')); hold(.4); onscreen_clean()
     if page.locator('#scene-naming').count():  # offered only by a worker with a naming key
-        say('<b>5</b> · And, with a second approval, Claude names each object from the walkthrough frames')
+        say('<b>5</b> · With a second approval, Claude suggests names for observed clusters from the walkthrough frames')
         glide(page.locator('#scene-naming')); hold(1.2)
     glide(page.locator('[data-action=metric-scene]'))
     page.locator('#scene-dialog').wait_for(state='visible', timeout=60_000)
@@ -137,10 +148,22 @@ def run(page):
     # Who named the objects, if anyone: the vision model the person approved, or a detector on the worker.
     named = next((m for m in (re.match(r'Named: (\d+) objects? by (.+?) from the walkthrough', f) for f in page.locator('#scene-facts li').all_inner_texts()) if m), None)
     namer = None if not named else 'an object detector on the worker' if 'on the worker' in named.group(2) else 'Claude'
-    say('<b>5</b> · Each object is its own element, measured in metres' + (f' · {named.group(1)} named by {namer}' if named else '')); hold(1.2)
+    say('<b>5</b> · Each separated cluster is an element with geometry-derived dimensions' + (f' · {named.group(1)} named by {namer}' if named else '')); hold(1.2)
     zoom('#scene-stage', -420); orbit('#scene-stage', 2, sweep=260); hold(1.6)
     say(''); page.locator('#scene-facts').evaluate(f"el => el.scrollIntoView({{block: 'center', behavior: 'instant'}})"); hold(5.0)
     facts = page.locator('#scene-facts li').all_inner_texts()
+    # The updated review dialog exposes verified-byte downloads and the dimensional report from this exact job.
+    # This recorder supplies no physical references or opening approvals; show that limitation instead of inventing them.
+    ifc_button = page.locator('[data-scene-download]', has_text='scene.ifc')
+    ifc_button.wait_for(state='visible', timeout=60_000)
+    dimension_report = page.locator('#scene-measurement-report').inner_text()
+    say('<b>5</b> · Dimensional evidence stays explicit: this test fixture has no independent physical readings')
+    page.locator('#scene-measurement-report').evaluate("el => el.scrollIntoView({block:'center',behavior:'instant'})")
+    settle(); hold(3.0)
+    say('<b>5</b> · Download this job’s IFC after its bytes and SHA-256 are checked')
+    with page.expect_download() as download: glide(ifc_button)
+    ifc = OUT.with_suffix('.scene.ifc') if RECORD else OUT.with_name(OUT.stem + f'.dry-run-{time.time_ns()}.scene.ifc')
+    download.value.save_as(ifc); hold(1.2); onscreen_clean()
     say('<b>6</b> · The compiled scene becomes the robot map: walls and objects are obstacles')
     plan = page.locator('#scene-plan'); glide(plan, click=False); hold(.8)
     page.evaluate("() => document.body.append(document.getElementById('demo-caption'), document.getElementById('demo-cursor'))")
@@ -150,10 +173,10 @@ def run(page):
     mapped = page.locator('#status').inner_text()
     page.locator('#world-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})"); settle(); hold(1.2)
     orbit('#world-canvas', 3); hold(1.0)
-    say('<b>6</b> · A person reviews scale and obstacles before anything is simulated')
+    say('<b>6</b> · Review gates are demonstrated here; this is not physical validation')
     glide(page.locator('#run')); hold(1.8)
     glide(page.locator('#scale-reviewed')); hold(.4); glide(page.locator('#map-reviewed')); hold(.8)
-    say('<b>7</b> · Drop a robot into the real room and simulate its route')
+    say('<b>7</b> · Preview a robot route in the reconstructed scene')
     glide(page.locator('[data-tab=test]')); hold(.6)
     page.locator('#robot').select_option(ROBOT); hold(.8)
     glide(page.locator('#run'))
@@ -162,7 +185,7 @@ def run(page):
     route = page.locator('#status').inner_text()
     advice = re.search(r'fits is X ([\d.]+) m, Z ([\d.]+) m', route)
     if 'Planning preview complete' not in route and advice:
-        # The planner names where this robot fits; a person moves the start there and reviews again.
+        # The demo follows the planner's suggested start and demonstrates the review gates.
         say('<b>7</b> · Blocked where the walk began, so the start moves to where the planner says it fits'); hold(2.4)
         if not page.locator('#start-x').is_visible(): page.locator('[data-tab=world]').click(); hold(.4)
         for field, value in (('#start-x', advice.group(1)), ('#start-z', advice.group(2))):
@@ -172,7 +195,7 @@ def run(page):
             box.press('Tab'); hold(.4)
         for tick in ('#scale-reviewed', '#map-reviewed'):
             if not page.locator(tick).is_checked(): glide(page.locator(tick)); hold(.3)
-        say('<b>7</b> · Drop a robot into the real room and simulate its route')
+        say('<b>7</b> · Preview a robot route in the reconstructed scene')
         glide(page.locator('[data-tab=test]')); hold(.4); glide(page.locator('#run'))
         page.wait_for_function("""() => { const s = document.querySelector('#status');
           return /Planning preview complete/.test(s.textContent) || s.classList.contains('error'); }""", timeout=60_000)
@@ -188,12 +211,9 @@ def run(page):
         hold(1.4)
     metrics = {k: page.locator('#metric-' + k).inner_text() for k in ('area', 'distance', 'time')}
 
-    say('<b>8</b> · Every file is downloadable, with its SHA-256 checked')
+    say('<b>8</b> · Keep the model and evidence from the same worker job')
     glide(page.locator('[data-tab=evidence]')); hold(.8)
-    ifc_button = page.locator('[data-artifact]', has_text='scene.ifc')
     page.locator('[data-artifact]', has_text='scene.glb').evaluate(f"el => el.scrollIntoView({{block: 'center', behavior: 'instant'}})"); settle(); hold(1.4)
-    with page.expect_download() as download: glide(ifc_button)
-    ifc = OUT.parent / 'scene.ifc'; download.value.save_as(ifc); hold(1.2); onscreen_clean()
     artifacts = page.locator('[data-artifact]').all_inner_texts()
 
     page.goto(VIEWER, wait_until='networkidle'); page.mouse.move(800, 450)
@@ -202,7 +222,7 @@ def run(page):
     page.wait_for_function('window.__ifc', timeout=60_000)
     if 'error' in page.evaluate('window.__ifc'): raise SystemExit('viewer: ' + json.dumps(page.evaluate('window.__ifc')))
     hold(1.6); orbit('#stage', 2, sweep=200); hold(.8)
-    say('<b>9</b> · Every separated object is its own IFC element with its dimensions' + (', and its name where one was suggested' if named else ''))
+    say('<b>9</b> · Each separated observed cluster has its own IFC element and box dimensions' + (', with a name where suggested' if named else ''))
     els = page.locator('.el')
     for i in [i for i in range(els.count()) if not re.search(r'wall|slab|unknown|floor', els.nth(i).inner_text(), re.I)][:3]:
         glide(els.nth(i)); hold(2.0)
@@ -212,18 +232,31 @@ def run(page):
     viewer = page.evaluate('window.__ifc')
     say('')
     card('<p>BRAINSNN · WORLD BUILDER</p><h1>Scan it. Separate it.<br><em>Simulate it. Hand it to BIM.</em></h1><p>App and API · brainsnn.com</p>'); hold(3.6)
-    card(f'<p>ABOUT THIS RUN</p><h1 style="font-size:30px;line-height:1.3">Test walkthrough: Mip-NeRF 360 “room” images <em>(Barron et al.)</em><br>'
-         f'The {distance} m distance was typed for the demo; this room was not measured.<br>'
+    card(f'<p>ABOUT THIS RUN</p><h1 style="font-size:30px;line-height:1.3">{html.escape(CAPTURE_CREDIT)}<br>'
+         f'The {distance} m distance was typed for the demo; the capture was not independently measured.<br>'
          + (f'Names are suggestions from {namer}, not reviewed; touching objects stay one.' if named else 'Objects were not named in this run; touching objects stay one.') + '</h1>'
-         + ('<p>Dense points: a depth model on CPU, checked across frames (3.1 cm median error on ETH3D)' if DENSE else '<p>Sparse points: COLMAP on CPU (1.5 cm median error on ETH3D)')
+         + ('<p>Dense points: a depth model on CPU, checked across frames' if DENSE else '<p>Sparse points: COLMAP on CPU')
          + '<br>Scale self-reported, not verified · IFC viewer: web-ifc, not part of brainsnn.com</p>'); hold(6.0)
-    return {'engine': ENGINE, 'named': named and named.group(0), 'distance_m': distance, 'span_units': span, 'facts': facts, 'mapped': mapped, 'artifacts': artifacts, 'viewer': viewer, 'route': metrics}
+    return {'engine': ENGINE, 'capture_credit': CAPTURE_CREDIT,
+            'source_video': {'name': Path(VIDEO).name, 'size': Path(VIDEO).stat().st_size, 'sha256': file_sha256(VIDEO)},
+            'downloaded_ifc': {'name': ifc.name, 'size': ifc.stat().st_size, 'sha256': file_sha256(ifc)},
+            'named': named and named.group(0), 'distance_m': distance, 'span_units': span, 'facts': facts,
+            'dimension_report': dimension_report, 'physical_references_supplied': False, 'opening_reviews_supplied': False,
+            'mapped': mapped, 'artifacts': artifacts, 'viewer': viewer, 'route': metrics}
 
 
 if __name__ == '__main__':
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    raw = OUT.parent / (OUT.stem + '-frames')
+    if RECORD and (OUT.exists() or raw.exists() or OUT.with_suffix('.scene.ifc').exists()):
+        raise SystemExit('Choose a fresh recording output and frame directory; existing media will not be overwritten.')
     with sync_playwright() as p:
-        launch = dict(headless=True, executable_path='/opt/pw-browsers/chromium', args=['--enable-unsafe-swiftshader'])
+        launch = dict(headless=True, args=['--enable-unsafe-swiftshader'])
+        executable = os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
+        if executable:
+            launch['executable_path'] = executable
+        elif Path('/opt/pw-browsers/chromium').is_file():
+            launch['executable_path'] = '/opt/pw-browsers/chromium'
         if os.environ.get('HTTPS_PROXY'): launch['proxy'] = {'server': os.environ['HTTPS_PROXY'], 'bypass': '127.0.0.1,localhost'}
         browser = p.chromium.launch(**launch)
         ctx = browser.new_context(viewport=SIZE, device_scale_factor=SCALE, accept_downloads=True)
@@ -239,8 +272,9 @@ if __name__ == '__main__':
           const start = () => { blur(document.body); new MutationObserver(() => blur(document.body)).observe(document.body, {subtree: true, childList: true, characterData: true}); };
           if (document.readyState === 'loading') addEventListener('DOMContentLoaded', start); else start(); })(%s)""" % json.dumps(HOST))
         page = ctx.new_page(); errors = []; page.on('pageerror', lambda e: errors.append(str(e))); page.on('dialog', lambda d: d.accept())
-        raw = OUT.parent / 'frames'; shutil.rmtree(raw, ignore_errors=True); raw.mkdir(parents=True); frames = []
+        frames = []
         if RECORD:
+            raw.mkdir(parents=True)
             cdp = ctx.new_cdp_session(page)
             def on_frame(event):
                 path = raw / f'f{len(frames):06d}.jpg'; path.write_bytes(base64.b64decode(event['data']))

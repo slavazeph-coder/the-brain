@@ -70,11 +70,52 @@ def merge_unknown(cells):
     return runs
 
 
+def _reviewed_openings(scene):
+    """Defend the standalone exporter as well as the worker's validated review path."""
+    openings = scene.get('openings', [])
+    if not isinstance(openings, list) or len(openings) > 32:
+        raise ValueError('Use at most 32 reviewed BIM openings.')
+    walls = {wall.get('name'): wall for wall in scene.get('walls', [])}
+    ids = set()
+    for opening in openings:
+        if not isinstance(opening, dict) or opening.get('reviewed') is not True or opening.get('kind') not in ('opening', 'door'):
+            raise ValueError('IFC openings require an explicit operator review.')
+        identifier = opening.get('id')
+        if not isinstance(identifier, str) or not identifier or len(identifier) > 64 or identifier in ids:
+            raise ValueError('IFC opening IDs must be unique.')
+        ids.add(identifier)
+        host_name = opening.get('hostWall')
+        if not isinstance(host_name, str) or not 1 <= len(host_name) <= 160:
+            raise ValueError('IFC opening needs a bounded host wall name.')
+        wall = walls.get(host_name)
+        if wall is None or opening.get('host') != {key: wall.get(key, 0 if key == 'yaw_degrees' else None)
+                                                 for key in ('centre', 'size', 'yaw_degrees')}:
+            raise ValueError('IFC opening host geometry is missing or stale.')
+        for key in ('offsetMeters', 'widthMeters', 'heightMeters', 'sillMeters'):
+            value = opening.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise ValueError('IFC opening dimensions must be finite positive metres.')
+        if opening['widthMeters'] < .05 or opening['heightMeters'] < .05 \
+                or opening['offsetMeters'] + opening['widthMeters'] > wall['size'][0] + 1e-9 \
+                or opening['sillMeters'] + opening['heightMeters'] > wall['size'][1] + 1e-9:
+            raise ValueError('IFC opening does not fit inside its host wall.')
+        if opening['kind'] == 'door' and opening['sillMeters'] != 0:
+            raise ValueError('An IFC door must start at the host wall base.')
+    for index, first in enumerate(openings):
+        for second in openings[index + 1:]:
+            if first['hostWall'] == second['hostWall'] and \
+                    min(first['offsetMeters'] + first['widthMeters'], second['offsetMeters'] + second['widthMeters']) > max(first['offsetMeters'], second['offsetMeters']) + 1e-9 and \
+                    min(first['sillMeters'] + first['heightMeters'], second['sillMeters'] + second['heightMeters']) > max(first['sillMeters'], second['sillMeters']) + 1e-9:
+                raise ValueError('IFC opening rectangles must not overlap.')
+    return openings
+
+
 def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
     """Writes scene.ifc for a metric scene and returns element counts. Scene coordinates are Y-up; IFC is Z-up:
     (x, y, z) -> (x, -z, y), the same mapping the compiler uses for Blender."""
     if scene.get('units') != 'm':
         raise ValueError(IFC_NEEDS_METRES)
+    openings = _reviewed_openings(scene)
     w = _Writer()
     origin = w.add('IFCCARTESIANPOINT((0.,0.,0.))')
     z_axis, x_axis = w.add('IFCDIRECTION((0.,0.,1.))'), w.add('IFCDIRECTION((1.,0.,0.))')
@@ -152,6 +193,7 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
                                    'LengthMetres': float(sx) if separated else None, 'WidthMetres': float(sz) if separated else None,
                                    'HeightMetres': float(sy) if separated else None})
         elements.append(element)
+    wall_refs = {}
     for wall in scene.get('walls', []):
         if 'centre' not in wall or 'size' not in wall:
             continue
@@ -160,7 +202,40 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         seed = 'wall-' + str(wall.get('name'))
         element = w.add(f"IFCWALL('{ifc_guid(seed)}',$,{label(wall.get('name', 'wall'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
         properties(element, seed, {'Provenance': wall.get('provenance', 'observed'), 'Label': 'wall', 'SupportPoints': wall.get('support_points')})
+        wall_refs[wall['name']] = (element, placement)
         elements.append(element); counts['walls'] += 1
+    if openings:
+        counts.update(openings=0, doors=0)
+    for opening in openings:
+        host_element, host_place = wall_refs[opening['hostWall']]
+        length, _height, thickness = opening['host']['size']
+        # The host's local X is its length. Relative placement preserves rotated walls in IFC's Z-up frame.
+        ox = -length / 2 + opening['offsetMeters'] + opening['widthMeters'] / 2
+        placement, solid = prism(ox, 0, opening['sillMeters'], opening['widthMeters'], thickness + .02,
+                                 opening['heightMeters'], placement_parent=host_place)
+        seed = 'opening-' + opening['id']
+        element = w.add(f"IFCOPENINGELEMENT('{ifc_guid(seed)}',$,{label(opening['id'])},"
+                        f"{label('Operator-reviewed opening; dimensions and clearance not independently verified.')},"
+                        f"$,{placement},{shape([solid])},$,.OPENING.)")
+        w.add(f"IFCRELVOIDSELEMENT('{ifc_guid(seed + '-voids')}',$,$,$,{host_element},{element})")
+        properties(element, seed, {'Provenance': 'operator-reviewed', 'ReviewSelfReported': True, 'Reviewed': True,
+                                   'HostWall': opening['hostWall'], 'WidthMetres': float(opening['widthMeters']),
+                                   'HeightMetres': float(opening['heightMeters']), 'SillMetres': float(opening['sillMeters']),
+                                   'MetricVerified': False, 'ClearanceVerified': False})
+        counts['openings'] += 1
+        if opening['kind'] == 'door':
+            door_place, door_solid = prism(0, 0, 0, opening['widthMeters'], min(.05, thickness),
+                                           opening['heightMeters'], placement_parent=placement)
+            door_seed = 'door-' + opening['id']
+            door = w.add(f"IFCDOOR('{ifc_guid(door_seed)}',$,{label(opening['id'] + ' door')},"
+                         f"{label('Closed reference leaf; handing, swing and physical passage not verified.')},"
+                         f"$,{door_place},{shape([door_solid])},$,{real(opening['heightMeters'])},"
+                         f"{real(opening['widthMeters'])},.DOOR.,.NOTDEFINED.,$)")
+            w.add(f"IFCRELFILLSELEMENT('{ifc_guid(door_seed + '-fills')}',$,$,$,{element},{door})")
+            properties(door, door_seed, {'Provenance': 'operator-reviewed', 'ReviewSelfReported': True,
+                                         'Reviewed': True, 'LeafRepresentation': 'closed-reference',
+                                         'SwingVerified': False, 'MetricVerified': False, 'ClearanceVerified': False})
+            elements.append(door); counts['doors'] += 1
     runs = merge_unknown(scene.get('unknown', []))
     if runs:
         floor_y = float(scene.get('floor_y', 0))

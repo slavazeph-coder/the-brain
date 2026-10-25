@@ -1,6 +1,6 @@
 """BrainSNN scene compiler — stage 1 (Blender headless, GB10).
 
-Turns what the World Builder already exports into a simulation-ready scene:
+Turns what the World Builder already exports into a static simulation scene:
 
   in : Arena point-cloud JSON  (brainsnn-point-cloud.json: points [x,y,z,r,g,b], units, floorEstimate, scale)
        observation sidecar JSON (optional: on-device detections, 2D boxes per frame, COCO labels)
@@ -9,8 +9,8 @@ Turns what the World Builder already exports into a simulation-ready scene:
        scene.json (every object: label, box, centre, size, provenance: observed | detected | unknown)
        In metres, every cluster of points above the floor that is not a wall becomes its own measured object.
 
-Everything here is derived from observed geometry. Nothing is invented: unseen space is exported as an
-explicit "unknown" volume, never as free floor. Inferred fill (stage 2) will be a separate, tagged layer.
+Base geometry comes from the reconstructed points. Optional operator-reviewed openings are explicit, tagged edits,
+not detected ground truth. Unseen floor remains an explicit "unknown" volume, never free floor.
 
 Run:  blender -b --python scene_compiler.py -- --cloud X.json [--detections Y.json --fov 60] --out DIR
 """
@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ifc_export import emit_ifc  # noqa: E402  (pure Python; runs inside Blender too)
+from opening_geometry import wall_parts, door_parts  # noqa: E402
 
 try:
     import bpy
@@ -380,13 +381,16 @@ def write_usda(path, scene, pts):
     CUBE = ('    def Cube "%(name)s"\n    {\n        double size = 1\n        double3 xformOp:translate = (%(cx)s, %(cy)s, %(cz)s)\n'
             '        float3 xformOp:rotateXYZ = (0, %(yaw)s, 0)\n'
             '        float3 xformOp:scale = (%(sx)s, %(sy)s, %(sz)s)\n        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]\n'
-            '        custom string provenance = "%(prov)s"\n        custom string label = "%(label)s"\n    }\n')
+            '        custom string provenance = "%(prov)s"\n        custom string label = "%(label)s"\n        custom string sourceName = "%(source)s"\n    }\n')
     def cube(prim, name=None):
         c, s = prim["centre"], prim["size"]
-        return CUBE % dict(name=name or prim["name"], cx=c[0], cy=c[1], cz=c[2], sx=s[0], sy=s[1], sz=s[2], yaw=-prim.get("yaw_degrees", 0), prov=prim["provenance"], label=prim["label"])
+        return CUBE % dict(name=name or prim["name"], source=prim.get("name", name), cx=c[0], cy=c[1], cz=c[2], sx=s[0], sy=s[1], sz=s[2], yaw=-prim.get("yaw_degrees", 0), prov=prim["provenance"], label=prim["label"])
     head = ('#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n'
             '    customLayerData = { string schema = "%s", string units = "%s" }\n)\n\ndef Xform "World"\n{\n') % (scene["schema"], scene["units"])
-    body = [head] + [cube(o) for o in scene["objects"] if "centre" in o] + [cube(w) for w in scene["walls"]]
+    openings = scene.get('openings', [])
+    body = [head] + [cube(o) for o in scene["objects"] if "centre" in o] \
+        + [cube(part) for w in scene["walls"] for part in wall_parts(w, openings)] \
+        + [cube(door, name=f'door_reference_{index + 1}') for index, door in enumerate(door_parts(scene["walls"], openings))]
     xyz = ", ".join("(%g, %g, %g)" % (p[0], p[1], p[2]) for p in pts)
     rgb = ", ".join("(%.3f, %.3f, %.3f)" % (p[3] / 255, p[4] / 255, p[5] / 255) for p in pts)
     body.append('    def Points "observed_points"\n    {\n        point3f[] points = [%s]\n        color3f[] primvars:displayColor = [%s] (interpolation = "vertex")\n'
@@ -504,6 +508,32 @@ def main():
             faces += [[b, b+1, b+2, b+3], [b+4, b+5, b+6, b+7], [b, b+1, b+5, b+4], [b+1, b+2, b+6, b+5], [b+2, b+3, b+7, b+6], [b+3, b, b+4, b+7]]
         me.from_pydata(verts, [], faces); ob = bpy.data.objects.new("unknown_space", me); bpy.context.collection.objects.link(ob)
         mat = bpy.data.materials.new("unknown_mat"); mat.diffuse_color = (0.9, 0.3, 0.3, 0.35); ob.data.materials.append(mat); ob["provenance"] = "unknown"
+
+    if cloud.get('bimReview') is not None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world_worker'))
+        from bim_review import apply_review
+        scene = apply_review(scene, cloud)
+        # Replace host mesh boxes with exact remaining prisms. Semantic wall records remain intact for hosted IFC voids.
+        hosts = {o['hostWall'] for o in scene['openings']}
+        for wall in scene['walls']:
+            if wall['name'] not in hosts:
+                continue
+            old = bpy.data.objects.get(wall['name'])
+            if old is not None:
+                bpy.data.objects.remove(old, do_unlink=True)
+            for part in wall_parts(wall, scene['openings']):
+                L, H, T = part['size']; cx, cy, cz = part['centre']
+                ob, _ = add_oriented_box(part['name'], {'centre': [cx, cz], 'y0': cy - H / 2, 'y1': cy + H / 2,
+                    'length': L, 'thickness': T, 'yaw': math.radians(part.get('yaw_degrees', 0)), 'support': 0},
+                    'operator-reviewed-cut', 'wall', (0.75, 0.75, 0.78, 1))
+                ob['hostWall'] = wall['name']
+        for leaf in door_parts(scene['walls'], scene['openings']):
+            L, H, T = leaf['size']; cx, cy, cz = leaf['centre']
+            ob, _ = add_oriented_box(leaf['name'], {'centre': [cx, cz], 'y0': cy - H / 2, 'y1': cy + H / 2,
+                'length': L, 'thickness': T, 'yaw': math.radians(leaf.get('yaw_degrees', 0)), 'support': 0},
+                leaf['provenance'], 'door', (0.42, 0.30, 0.18, 1))
+            ob['hostWall'] = leaf['hostWall']; ob['clearanceVerified'] = False
+        scene['bimReview']['representationScope'] = 'Hosted IFC voids; matching GLB/USD wall cuts and closed reference door leaves; CAD and planar maps derive from these reviewed openings.'
 
     bpy.ops.export_scene.gltf(filepath=str(out / "scene.glb"), export_format="GLB", export_extras=True, export_apply=True)
     emit_usd(out, scene, pts)

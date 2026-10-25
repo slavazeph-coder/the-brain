@@ -3,6 +3,51 @@ import math, random, sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "robotics" / "scene_compiler"))
 import scene_compiler as sc
+from opening_geometry import wall_parts, door_parts, plan_wall_parts
+
+
+class ReviewedOpenings(unittest.TestCase):
+    def setUp(self):
+        self.wall = {'name': 'wall_1', 'label': 'wall', 'provenance': 'observed', 'centre': [3, 2, -4], 'size': [4, 3, .2], 'yaw_degrees': 30}
+        self.opening = {'id': 'entry', 'hostWall': 'wall_1', 'offsetMeters': 1, 'widthMeters': 1.2, 'heightMeters': 2.1, 'sillMeters': 0, 'kind': 'opening', 'reviewed': True}
+
+    def test_rotated_cut_preserves_net_volume_and_contains_no_void(self):
+        import copy
+        original = copy.deepcopy(self.wall); parts = wall_parts(self.wall, [self.opening])
+        self.assertEqual(self.wall, original)
+        self.assertAlmostEqual(sum(math.prod(p['size']) for p in parts), (4 * 3 - 1.2 * 2.1) * .2)
+        angle = math.radians(30)
+        for part in parts:
+            along = (part['centre'][0] - 3) * math.cos(angle) + (part['centre'][2] + 4) * math.sin(angle) + 2
+            x0, x1 = along - part['size'][0] / 2, along + part['size'][0] / 2
+            y0, y1 = part['centre'][1] - part['size'][1] / 2 - .5, part['centre'][1] + part['size'][1] / 2 - .5
+            self.assertTrue(x1 <= 1 + 1e-8 or x0 >= 2.2 - 1e-8 or y0 >= 2.1 - 1e-8 or y1 <= 0)
+            self.assertEqual(part['yaw_degrees'], 30)
+
+    def test_raised_void_has_a_sill_and_closed_door_remains_blocked_in_plan(self):
+        raised = {**self.opening, 'sillMeters': .9, 'heightMeters': 1.2}
+        parts = wall_parts(self.wall, [raised])
+        self.assertEqual(len(parts), 4)
+        self.assertEqual(plan_wall_parts(self.wall, [raised]), [self.wall])
+        door = {**self.opening, 'kind': 'door'}
+        self.assertEqual(plan_wall_parts(self.wall, [door]), [self.wall])
+        self.assertEqual(len(plan_wall_parts(self.wall, [door], closed_doors_block=False)), 2)
+        leaf = door_parts([self.wall], [door])[0]
+        for got, expected in zip(leaf['size'], [1.2, 2.1, .05]): self.assertAlmostEqual(got, expected)
+        self.assertEqual(leaf['yaw_degrees'], 30)
+        self.assertAlmostEqual(leaf['centre'][1], .5 + 2.1 / 2)
+
+    def test_usd_uses_cut_parts_and_closed_leaf_while_semantic_wall_stays_whole(self):
+        import tempfile
+        scene = {'schema': 'brainsnn.scene.v1', 'units': 'm', 'floor_y': .5, 'objects': [], 'walls': [self.wall], 'unknown': [], 'openings': [{**self.opening, 'id': 'front-entry', 'kind': 'door'}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'scene.usda'; sc.write_usda(path, scene, [])
+            text = path.read_text()
+        self.assertNotIn('def Cube "wall_1"', text)
+        self.assertIn('def Cube "wall_1_part_1"', text); self.assertIn('def Cube "door_reference_1"', text)
+        self.assertIn('sourceName = "door_front-entry"', text)
+        self.assertIn('xformOp:rotateXYZ = (0, -30, 0)', text)
+        self.assertEqual(scene['walls'][0]['size'], [4, 3, .2])
 
 
 def wall_cloud(yaw_deg, length=6.0, height=3.0, n=4000, seed=1):
