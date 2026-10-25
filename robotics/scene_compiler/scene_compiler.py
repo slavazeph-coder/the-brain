@@ -203,10 +203,13 @@ def object_box(P, floor_y, floor=None):
 def separate_objects(pts, floor_y, candidates, cell=OBJECT_CELL, min_points=None, limit=OBJECT_LIMIT, floor=None):
     """Every cluster of the candidate points (above the floor, in no wall) below OBJECT_MAX_HEIGHT, as its own measured
     object: occupied cells joined through their faces (a diagonal touch does not join two objects), each cluster fitted
-    with object_box (floor: floor_coverage, for bases over unseen floor). Clusters smaller than min_points (0.3% of the
-    cloud, at least 30), under 15 cm long or 5 cm thick stay points. Largest first, with member indices."""
+    with object_box (floor: floor_coverage, for bases over unseen floor). Clusters smaller than min_points, under 15 cm
+    long or 5 cm thick stay points. Largest first, with member indices.
+    min_points is 0.3% of the candidates, at least 30: of the points no wall took, not of the whole cloud. A sparse room's
+    cloud is mostly walls (94% in the rendered meeting room), and a share of the whole put each chair, 27 to 67 points,
+    under the minimum."""
     top = floor_y + OBJECT_MAX_HEIGHT
-    min_points = min_points or max(30, round(0.003 * len(pts)))
+    min_points = min_points or max(30, round(0.003 * len(candidates)))
     cells = {}
     for i in candidates:
         p = pts[i]

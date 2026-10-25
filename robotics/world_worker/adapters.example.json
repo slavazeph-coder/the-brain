@@ -125,5 +125,26 @@
     },
     "dimension_checks": true,
     "bim_review": true
+  },
+  {
+    "id": "reference-scale",
+    "label": "Scale from standard-size references (sends frames to Anthropic)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "cloud"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 600,
+    "source_job": true,
+    "secrets": [
+      "ANTHROPIC_API_KEY"
+    ],
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/reference_scale.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
   }
 ]

@@ -58,7 +58,9 @@ def read_ply(path: Path):
 
 # ---------- toArenaCloud() port; each helper keeps the name and semantics of its JS original ----------
 def frame_bounds(rows):
-    """Per-axis 2nd-98th percentile core when that trims real outliers, else the full extent."""
+    """The box of kept points: per-axis 2nd-98th percentile core widened by 15% of its size on every side, when that
+    trims real outliers, else the full extent. A room's walls are its own extremes, so the core alone cut them. As the
+    browser does."""
     axes = [[row[j] for row in rows] for j in range(3)]
     full_lo, full_hi = [min(axis) for axis in axes], [max(axis) for axis in axes]
     full_radius = max(.001, math.hypot(*[hi - lo for lo, hi in zip(full_lo, full_hi)]) / 2)
@@ -69,6 +71,8 @@ def frame_bounds(rows):
     lo = [axis[math.floor(count * .02)] for axis in ordered]
     hi = [axis[min(count - 1, math.ceil(count * .98))] for axis in ordered]
     radius = max(.001, math.hypot(*[h - l for l, h in zip(lo, hi)]) / 2)
+    pad = [(h - l) * .15 for l, h in zip(lo, hi)]
+    lo, hi = [max(f, l - p) for f, l, p in zip(full_lo, lo, pad)], [min(f, h + p) for f, h, p in zip(full_hi, hi, pad)]
     return (lo, hi, True) if radius < full_radius * .9 else (full_lo, full_hi, False)
 
 
@@ -112,8 +116,12 @@ def fit_floor_plane(rows, iterations: int = 300):
     if not best:
         return None
     flip = -1 if best['above'] < (len(rows) - best['inliers']) / 2 else 1
-    n = [value * flip for value in best['normal']]
-    # Refine: along the up-vector the floor is the lowest dense layer, not merely the densest.
+    return floor_along(rows, [value * flip for value in best['normal']], tol)
+
+
+def floor_along(rows, n, tol, lowest: bool = False):
+    """The floor plane with a given up-normal: the lowest dense layer along it (not merely the densest), or with
+    `lowest`, the room's lowest points (median of the lowest 0.5%) for a floor the cameras barely saw. As the browser."""
     heights = [n[0] * r[0] + n[1] * r[1] + n[2] * r[2] for r in rows]
     lo, width = min(heights), 2 * tol
     counts: dict[int, int] = {}
@@ -124,10 +132,107 @@ def fit_floor_plane(rows, iterations: int = 300):
     # Through the layer itself, not its bin's centre (a layer can straddle a bin edge): the median of the chosen bin's own
     # points, so a denser surface in the next bin never wins, then of the points within tolerance of it. As the browser does.
     median = lambda v: sorted(v)[len(v) // 2]
-    around = median([h for h in heights if math.floor((h - lo) / width) == bin_index])
+    around = (median(sorted(heights)[:max(5, math.floor(len(heights) * .005))]) if lowest
+              else median([h for h in heights if math.floor((h - lo) / width) == bin_index]))
     d = -median([h for h in heights if abs(h - around) <= tol])
     inliers = sum(abs(h + d) <= tol for h in heights)
     return {'normal': n, 'd': d, 'inlierFraction': inliers / len(rows), 'tolerance': tol}
+
+
+def room_axes(rows, planes: int = 6, iterations: int = 200):
+    """The room's own three axes from its largest planes: planes found one after another by RANSAC (LCG seed 13, the
+    browser's sampling) and refined through their inliers, then the orthogonal frame their normals agree on most."""
+    import numpy as np
+    if len(rows) < 200:
+        return None
+    step = max(1, len(rows) // 20000)
+    pts = np.asarray([r[:3] for i, r in enumerate(rows) if i % step == 0], float)
+    radius = float(np.linalg.norm(pts.max(0) - pts.min(0))) / 2
+    tol = max(1e-6, radius * .015)
+    seed = 13
+
+    def rand():
+        nonlocal seed
+        seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF
+        return seed / 4294967296
+
+    free, found = np.arange(len(pts)), []
+    for _ in range(planes):
+        if len(free) < 3:
+            break
+        best = None
+        for _ in range(iterations):
+            a, b, c = (pts[free[math.floor(rand() * len(free))]] for _ in range(3))
+            raw = np.cross(b - a, c - a)
+            if np.linalg.norm(raw) < 1e-12:
+                continue
+            n = raw / np.linalg.norm(raw); d = -float(n @ a)
+            count = int((np.abs(pts[free] @ n + d) <= tol).sum())
+            if best is None or count > best[2]:
+                best = (n, d, count)
+        if best is None or best[2] < .03 * len(pts):
+            break
+        ins = pts[free[np.abs(pts[free] @ best[0] + best[1]) <= tol]]
+        n = np.linalg.eigh(np.cov(ins.T, bias=True))[1][:, 0]  # the direction of least spread
+        if n @ best[0] < 0:
+            n = -n
+        on = np.abs(pts[free] @ n - float(n @ ins.mean(0))) <= tol
+        found.append((n, int(on.sum()))); free = free[~on]
+    cos10, sin10, frame = math.cos(math.pi / 18), math.sin(math.pi / 18), None
+    for i in range(len(found)):
+        for j in range(i + 1, len(found)):
+            a, nb = found[i][0], found[j][0]
+            if abs(a @ nb) > sin10:
+                continue
+            b = nb - (nb @ a) * a; b /= np.linalg.norm(b); axes = [a, b, np.cross(a, b)]
+            score = sum(f[1] for f in found if any(abs(x @ f[0]) >= cos10 for x in axes))
+            if frame is None or score > frame[1]:
+                frame = (axes, score)
+    return frame and {'axes': [list(map(float, x)) for x in frame[0]], 'support': frame[1] / len(pts), 'planes': len(found)}
+
+
+def square_to_room(rows, plane):
+    """A weakly supported floor (under a quarter of the points) squared to the nearest room axis within 20 degrees when
+    the room's planes carry 30% of the points; the floor is the room's lowest points when the dense layer has over 5% of
+    the room below it. None keeps the fitted plane. As the browser does."""
+    if not plane or plane['inlierFraction'] >= .25:
+        return None
+    room = room_axes(rows)
+    if not room or room['support'] < .3:
+        return None
+    n = plane['normal']; dot = lambda a: a[0] * n[0] + a[1] * n[1] + a[2] * n[2]
+    near = max(room['axes'], key=lambda a: abs(dot(a)))
+    angle = math.acos(min(1, abs(dot(near))))
+    if angle < math.pi / 360 or angle > math.pi / 9:
+        return None
+    up = [v * math.copysign(1, near[1]) for v in near]  # the +y side, where the floor search looks (as the browser)
+    layer = floor_along(rows, up, plane['tolerance'])
+    below = sum(up[0] * r[0] + up[1] * r[1] + up[2] * r[2] < -layer['d'] - plane['tolerance'] for r in rows) / len(rows)
+    return {**(floor_along(rows, up, plane['tolerance'], lowest=True) if below > .05 else layer), 'squaredToRoom': True,
+            'roomAxes': [a for a in room['axes'] if a is not near]}
+
+
+def room_yaw(plane, yaw):
+    """The heading that runs a squared room's walls along X and Z: of its horizontal axes turned upright, the one nearest
+    the floor band's own heading."""
+    angles = []
+    for a in plane['roomAxes']:
+        h = align_to_floor([[a[0], a[1], a[2], 0, 0, 0]], {**plane, 'd': 0})[0]
+        angles.append(math.atan2(h[0], h[2]))
+    gap = lambda t: abs(math.fmod(math.fmod(t - yaw, math.pi) + 1.5 * math.pi, math.pi) - math.pi / 2)
+    best = min(angles, key=gap)
+    return yaw + (math.fmod(math.fmod(best - yaw, math.pi) + 1.5 * math.pi, math.pi) - math.pi / 2)
+
+
+def floor_band(rows, y, half):
+    """The floor footprint at a known height: the points within `half` of it."""
+    band = [r for r in rows if abs(r[1] - y) <= half]
+    if len(band) < 5:
+        return None
+    xs, zs = sorted(r[0] for r in band), sorted(r[2] for r in band)
+    q = lambda v, f: v[min(len(v) - 1, math.floor(len(v) * f))]
+    return {'y': y, 'origin': [q(xs, .02), q(zs, .02)], 'width': q(xs, .98) - q(xs, .02), 'depth': q(zs, .98) - q(zs, .02),
+            'support': len(band) / len(rows), 'units': 'arbitrary'}
 
 
 def align_to_floor(rows, plane):
@@ -217,12 +322,15 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
     core = [[k * r[0], k * flip * r[1], k * flip * r[2], r[3], r[4], r[5]]
             for r in rows if all(lo[j] <= r[j] <= hi[j] for j in range(3))]
     step = max(1, math.ceil(len(core) / budget))
-    plane = fit_floor_plane(core)
-    upright = align_to_floor(core, plane) if plane and plane['inlierFraction'] >= .1 else None
+    fitted = fit_floor_plane(core)
+    plane = square_to_room(core, fitted) or fitted
+    squared = bool(plane and plane.get('squaredToRoom'))
+    upright = align_to_floor(core, plane) if plane and (plane['inlierFraction'] >= .1 or squared) else None
     yaw = floor_yaw(upright, plane['tolerance']) if upright and plane else 0
+    yaw = room_yaw(plane, yaw) if upright and squared else yaw
     aligned = rotate_y(upright, -yaw) if upright else core
     kept, units = aligned[::step], 'm' if metric else 'arbitrary'
-    floor = estimate_floor(aligned)
+    floor = (floor_band(aligned, 0, 2 * plane['tolerance']) or estimate_floor(aligned)) if upright and squared else estimate_floor(aligned)
     measurement = measurement or {}
     return {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
             'sourceFrame': coordinate_frame, 'source': source, 'points': kept,
@@ -236,7 +344,7 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
                            'floorTiltDegrees': round(math.degrees(math.acos(min(1, abs(plane['normal'][1])))), 1) if plane else None,
                            'floorYawDegrees': round(math.degrees(yaw), 1),
                            'floorInlierFraction': round(plane['inlierFraction'], 3) if plane else None,
-                           'metricVerified': False}}
+                           **({'floorSquaredToRoom': True} if squared else {}), 'metricVerified': False}}
 
 
 # ---------- Blender ----------
