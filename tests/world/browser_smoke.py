@@ -9,7 +9,7 @@ URL=os.environ.get('WORLD_URL','http://127.0.0.1:8765/world/index.html')
 OUTPUT=ROOT/'output/playwright/world'
 OUTPUT.mkdir(parents=True,exist_ok=True)
 
-def open_world(view, url):
+def open_world(view, url, *, require_response=False):
     """Wait for the actual World app, independently of unrelated network traffic.
 
     The built root mounts its iframe after React starts. Waiting for document
@@ -18,7 +18,13 @@ def open_world(view, url):
     Keep readiness tied to the same exact app-content assertion in both routes.
     """
     response=view.goto(url,wait_until='domcontentloaded')
-    assert response is not None and response.status==200
+    # A same-document or history-restored navigation can return no response.
+    # Route-boundary checks still require a real HTTP 200, while every issued
+    # document response is checked and every navigation must reach the app.
+    if require_response:
+        assert response is not None, 'The route check must issue a document request'
+    if response is not None:
+        assert response.status==200, f'World document returned HTTP {response.status}: {response.url}'
     selector='iframe[src="/world/index.html"]'
     view.wait_for_function("document.querySelector('iframe[src=\"/world/index.html\"]') !== null || document.querySelectorAll('.system-card').length===22")
     if view.locator(selector).count():
@@ -113,7 +119,7 @@ def check_routes(browser, base):
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     for route in ['/', '/world', '/world/']:
-        frame=open_world(page,base+route)
+        frame=open_world(page,base+route,require_response=True)
         assert frame is not page, 'Production World routes must retain the iframe shell'
         frame.locator('#hero-capture').click()
         assert frame.locator('[data-action=files]').is_visible()
