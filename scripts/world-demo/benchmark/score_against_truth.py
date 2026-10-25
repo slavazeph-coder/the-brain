@@ -7,7 +7,8 @@ camera positions, so a wrong scale shows up as error instead of being fitted awa
 - a compiled wall to the true wall whose inner face it runs along: within 20 degrees and 0.5 m;
 - a compiled object to the nearest true object of the same kind (table, chair, cabinet, plant): plan centres within
   0.6 m.
-Reported: room width and depth between matched opposite walls, each wall's offset from its true face, its tilt and
+Reported: how far the model's up is from true up and its floor from the true floor, room width and depth between
+matched opposite walls, each wall's offset from its true face, its tilt and
 covered length, stray wall pieces (a stretch matched to a wall but more than 15 cm off its main stretch), each object's size and centre error, missed and spurious objects, and floor area; and every compiled
 footprint and camera placed in the true plan, for truth_card.py.
 """
@@ -51,6 +52,11 @@ def score(truth, references, scene, cloud):
     place = lambda p: R @ np.asarray(p, float) + t
     turn = lambda d: R @ d
     cam_rms = float(np.sqrt(np.mean([np.sum((place(to_cloud(p['reconstruction'])) - p['truth']) ** 2) for p in pairs])))
+    # Level and floor: the rigid fit can turn a model over and still match its walls, so the model's own up and its
+    # floor plane (scene floor_y, under the cameras' centre) are checked against the true room's.
+    level = math.degrees(math.acos(max(-1.0, min(1.0, float(turn(np.array([0.0, 1.0, 0.0]))[1])))))
+    hub = np.mean([to_cloud(p['reconstruction']) for p in pairs], axis=0)
+    floor_height = float(place([hub[0], scene.get('floor_y', 0.0), hub[2]])[1])
     room = truth['room']
     # Walls: the true wall's inner face is its centre moved half a thickness toward the room.
     true_walls = []
@@ -132,7 +138,7 @@ def score(truth, references, scene, cloud):
         'unmatchedWallPieces': sum(1 for w in walls if not w['true']),
         'objectsMatched': f"{len(matched)} of {len(true_objects)}", 'spuriousObjects': sum(1 for o in objects if not o['true']),
         'objectSizeErrorMedianMeters': round(float(np.median([abs(v) for o in matched for v in o['sizeErrorMeters'].values()])), 4) if matched else None,
-        'cameraFitRmsMeters': round(cam_rms, 4)}
+        'cameraFitRmsMeters': round(cam_rms, 4), 'levelErrorDegrees': round(level, 2), 'floorHeightErrorMeters': round(floor_height, 4)}
     return {'schema': 'brainsnn.truth-score.v1', 'synthetic': True,
             'basis': 'model to truth: compiled elements against the exact scene definition, placed by a rigid camera fit',
             'summary': summary, 'room': dims, 'walls': per_wall, 'strayWallPieces': stray, 'compiledWalls': walls, 'objects': objects, 'missedObjects': missed,

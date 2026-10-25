@@ -76,6 +76,8 @@ class ArenaHandoff(unittest.TestCase):
         self.assertLess(math.degrees(math.acos(mapped[1] / math.hypot(*mapped))), 1)
         for corner in ([0, 0, 0], [6, 0, 4.8]):
             self.assertLess(abs(apply(place(corner))[1]), .03, "a floor corner sits on the hand-off's floor")
+        fitted = su.fit_floor_plane(rows); facing_down = {**fitted, "normal": [-v if fitted["normal"][1] > 0 else v for v in fitted["normal"]]}
+        self.assertGreater(su.square_to_room(rows, facing_down)["normal"][1], 0, "squared up is the +y side whichever way the fit faced")
 
     def test_frame_flip_only_for_colmap(self):
         # A floorless blob (<10% plane inliers) is never rotated, so the frame handling shows through directly.

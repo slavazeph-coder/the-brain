@@ -58,7 +58,7 @@ def layers(truth, score, measurements, size, references=None):
     d.text((m, 184), f"Rendered meeting room, {room['width']:.1f} × {room['depth']:.1f} m by construction · "
                      f"scale from one {cal['distanceMeters']:.1f} m span", font=font(22), fill=GREY)
     # The plan, north up: x to the right, z down the page.
-    box = (m, 240, W - m, int(H * .66)); T = room.get('wallThickness', .12)
+    box = (m, 240, W - m, int(H * .62)); T = room.get('wallThickness', .12)
     x0, x1, z0, z1 = -T - .3, room['width'] + T + .3, -T - .3, room['depth'] + T + .3
     s = min((box[2] - box[0]) / (x1 - x0), (box[3] - box[1]) / (z1 - z0))
     ox = box[0] + ((box[2] - box[0]) - s * (x1 - x0)) / 2 - s * x0; oz = box[1] + ((box[3] - box[1]) - s * (z1 - z0)) / 2 - s * z0
@@ -90,6 +90,7 @@ def layers(truth, score, measurements, size, references=None):
     sm = score['summary']; r = score['room']; rows = [
         ('Room width', f"{r['width']['measuredMeters']:.3f} m" if r['width'].get('measuredMeters') is not None else 'not compiled', cm(sm['roomWidthErrorMeters'])),
         ('Room depth', f"{r['depth']['measuredMeters']:.3f} m" if r['depth'].get('measuredMeters') is not None else 'not compiled', cm(sm['roomDepthErrorMeters'])),
+        ('Level', f"{sm['levelErrorDegrees']:.1f}° off true up", 'floor ' + cm(sm['floorHeightErrorMeters'])),
         # Stray: wall pieces off their wall's line, and pieces that match no wall at all (both are furniture taken for wall).
         ('Wall faces', f"{sm['wallsMatched']} found" + (lambda n: f" · {n} stray" if n else '')(sm.get('strayWallPieces', 0) + sm.get('unmatchedWallPieces', 0)),
          'median ' + cm(sm['wallFaceOffsetMedianMeters'], False)),
@@ -97,12 +98,12 @@ def layers(truth, score, measurements, size, references=None):
     if measurements and measurements.get('summary', {}).get('heldOutCount'):
         ms = measurements['summary']
         rows.append(('Withheld spans', f"{ms['heldOutWithinTolerance']} of {ms['heldOutCount']} within tolerance", 'worst ' + cm(ms['heldOutMaxAbsoluteErrorMeters'], False)))
-    y = y + 54; label_f, value_f = font(26), font(26, True); out = [base, model]
+    y = y + 50; label_f, value_f = font(26), font(26, True); out = [base, model]
     for label, value, error in rows:
         layer = blank(); dr = ImageDraw.Draw(layer, 'RGBA')
         dr.line([m, y - 12, W - m, y - 12], fill=STEEL, width=1)
         dr.text((m, y), label, font=label_f, fill=GREY); dr.text((m + 250, y), value, font=value_f, fill=WHITE)
-        dr.text((W - m - dr.textlength(error, font=value_f), y), error, font=value_f, fill=AMBER); y += 52
+        dr.text((W - m - dr.textlength(error, font=value_f), y), error, font=value_f, fill=AMBER); y += 48
         out.append(layer)
     return out
 

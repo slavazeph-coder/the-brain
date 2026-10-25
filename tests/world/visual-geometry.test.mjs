@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, fitFloorPlane, alignToFloor, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, fitFloorPlane, alignToFloor, squareToRoom, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
 
@@ -75,6 +75,11 @@ test('a room whose floor the cameras barely saw is squared to its walls and stan
   const up = place([0, 1, 0]), mapped = M.map(row => row[0] * up[0] + row[1] * up[1] + row[2] * up[2]);
   assert.ok(Math.acos(mapped[1] / Math.hypot(...mapped)) < Math.PI / 180, `true up is ${(Math.acos(mapped[1] / Math.hypot(...mapped)) * 180 / Math.PI).toFixed(2)} degrees off the hand-off's`);
   for (const corner of [[0, 0, 0], [6, 0, 4.8]]) assert.ok(Math.abs(apply(place(corner))[1]) < .03, `a floor corner sits ${apply(place(corner))[1].toFixed(3)} off the hand-off's floor`);
+  // A weak fitted plane whose normal faces down still squares to the +y side (the side the floor search samples).
+  const core = parsePLY(ascii(rows)).points, list = [];
+  for (let i = 0; i < core.length; i += STRIDE) list.push([core[i], core[i + 1], core[i + 2], 0, 0, 0]);
+  const fitted = fitFloorPlane(list), down = squareToRoom(list, { ...fitted, normal: fitted.normal.map(v => -v * Math.sign(fitted.normal[1])) });
+  assert.ok(down && down.normal[1] > 0, 'the squared floor faces up whichever way the fitted plane faced');
   // and its walls run along X and Z
   const along = M.map(row => row[0] * place([1, 0, 0])[0] + row[1] * place([1, 0, 0])[1] + row[2] * place([1, 0, 0])[2]);
   assert.ok(Math.min(Math.abs(along[0]), Math.abs(along[2])) / Math.hypot(...along) < Math.sin(Math.PI / 180), 'walls are square to the plan axes');

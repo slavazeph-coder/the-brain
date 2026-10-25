@@ -75,6 +75,11 @@ def test_the_truth_score_reports_exactly_the_planted_errors():
     assert table['sizeErrorMeters']['length'] == pytest.approx(.06) and table['planCentreErrorMeters'] == pytest.approx(.05)
     assert r['missedObjects'] == ['chair_0'] and r['summary']['spuriousObjects'] == 1 and r['summary']['wallsMatched'] == '4 of 4'
     assert r['summary']['strayWallPieces'] == 1 and r['strayWallPieces'][0]['name'] == 'wall_5', 'reported, not averaged into the width'
+    assert r['summary']['levelErrorDegrees'] == pytest.approx(0, abs=1e-6) and r['summary']['floorHeightErrorMeters'] == pytest.approx(0, abs=1e-9)
+    # A model standing on its head still matches its walls under a rigid fit; level and floor say so.
+    over = {'alignment': {'pairs': [{'reconstruction': c, 'truth': [c[0], 3 - c[1], -c[2]]} for c in cams]}}
+    flipped = st.score(t, over, scene, cloud)['summary']
+    assert flipped['levelErrorDegrees'] == pytest.approx(180, abs=1e-6) and flipped['floorHeightErrorMeters'] == pytest.approx(3)
     # Footprints come back in the true plan: the table 2.46 x 1.1 m round (3.05, 2.5), the west wall along z at x = 0.03.
     xs, zs = zip(*table['plan']); assert (min(xs), max(xs), min(zs), max(zs)) == pytest.approx((1.82, 4.28, 1.95, 3.05), abs=1e-3)
     xs, zs = zip(*r['compiledWalls'][0]['plan']); assert (min(xs), max(xs), min(zs), max(zs)) == pytest.approx((-.02, .08, .45, 4.35), abs=1e-3)

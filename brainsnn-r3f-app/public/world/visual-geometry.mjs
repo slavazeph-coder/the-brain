@@ -322,8 +322,10 @@ export function squareToRoom(rows, plane) {
   const n = plane.normal, near = room.axes.reduce((b, a) => Math.abs(a[0] * n[0] + a[1] * n[1] + a[2] * n[2]) > Math.abs(b[0] * n[0] + b[1] * n[1] + b[2] * n[2]) ? a : b);
   const c = near[0] * n[0] + near[1] * n[1] + near[2] * n[2], angle = Math.acos(Math.min(1, Math.abs(c)));
   if (angle < Math.PI / 360 || angle > Math.PI / 9) return null;
-  // Along the squared normal, a dense layer with more than 5% of the room below it is a table top or a sill, not the floor.
-  const up = near.map(v => v * Math.sign(c)), layer = floorAlong(rows, up, plane.tolerance);
+  // Up is the axis's +y side: the floor search already takes the floor from the cloud's lower half, and a weak fitted
+  // plane's own normal can face down (it did on a rendered meeting room, which then stood on its wall tops).
+  // Along it, a dense layer with more than 5% of the room below it is a table top or a sill, not the floor.
+  const up = near.map(v => v * Math.sign(near[1])), layer = floorAlong(rows, up, plane.tolerance);
   const below = rows.filter(r => up[0] * r[0] + up[1] * r[1] + up[2] * r[2] < -layer.d - plane.tolerance).length / rows.length;
   return { ...(below > .05 ? floorAlong(rows, up, plane.tolerance, true) : layer), squaredToRoom: true, roomAxes: room.axes.filter(a => a !== near) };
 }

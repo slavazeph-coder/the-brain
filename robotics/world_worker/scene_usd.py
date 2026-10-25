@@ -204,7 +204,7 @@ def square_to_room(rows, plane):
     angle = math.acos(min(1, abs(dot(near))))
     if angle < math.pi / 360 or angle > math.pi / 9:
         return None
-    up = [v * math.copysign(1, dot(near)) for v in near]
+    up = [v * math.copysign(1, near[1]) for v in near]  # the +y side, where the floor search looks (as the browser)
     layer = floor_along(rows, up, plane['tolerance'])
     below = sum(up[0] * r[0] + up[1] * r[1] + up[2] * r[2] < -layer['d'] - plane['tolerance'] for r in rows) / len(rows)
     return {**(floor_along(rows, up, plane['tolerance'], lowest=True) if below > .05 else layer), 'squaredToRoom': True,
