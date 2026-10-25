@@ -16,7 +16,7 @@ import tempfile
 
 from .component_graph import apply_edits, ensure_component_ids
 from . import nav2_export
-from ..world_worker import cad_export, fit_check, measurement_check
+from ..world_worker import cad_export, component_evidence, fit_check, measurement_check
 from ..world_worker.geometry import load_arena_cloud
 
 COMPILER = Path(__file__).with_name('scene_compiler.py')
@@ -38,7 +38,7 @@ def _file_hash(path):
     return digest.hexdigest()
 
 
-def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, allow_unverified=False):
+def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, allow_unverified=False, source_job=None):
     scene, scene_raw = _read(scene_path, 16 * 1024**2)
     cloud, cloud_raw = _read(cloud_path, 16 * 1024**2)
     edits, edits_raw = _read(edits_path, 64 * 1024)
@@ -92,6 +92,8 @@ def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, al
         graph = {'schema': 'brainsnn.component-graph-export.v1', 'graph': rebuilt['componentGraph'],
                  'sourceFiles': source_files, 'metric_verified': False, 'physics_ready': False}
         (result / 'component-graph.json').write_text(json.dumps(graph, indent=2, allow_nan=False))
+        support = component_evidence.write_component_evidence(result, rebuilt, cloud,
+            scene_path=result / 'scene.json', cloud_path=result / 'arena-cloud.json', source_dir=source_job)
         nav = nav2_export.export(rebuilt, work / 'nav2', cloud=cloud,
                                  scene_bytes=(result / 'scene.json').read_bytes(), cloud_bytes=cloud_raw)
         for name in nav['files']:
@@ -101,6 +103,8 @@ def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, al
                    'editFileSha256': hashlib.sha256(edits_raw).hexdigest(), 'sourceFiles': source_files,
                    'blenderProcessSucceeded': True, 'cad': cad, 'fit': fit, 'navigation': nav,
                    'unverifiedGeometryExperiment': allow_unverified,
+                   'componentEvidence': {'written': True, 'projection': support['projection'],
+                                         'scope': 'Edited geometry remains unsupported by original point memberships.'},
                    'metric_verified': False, 'physics_ready': False, 'physicalRobotValidated': False,
                    'scope': 'Operator-authored geometric edits. Point-pair checks compare unchanged source points, not edited BIM elements.',
                    'artifacts': {p.name: {'sha256': _file_hash(p), 'bytes': p.stat().st_size}
@@ -116,9 +120,10 @@ def main():
         parser.add_argument('--' + key, required=True, type=Path)
     parser.add_argument('--allow-unverified', action='store_true',
                         help='Explicit geometry experiment only; preserve default non-multiview refusal.')
+    parser.add_argument('--source-job', type=Path, help='Retained reconstruction job for bound private-frame projections.')
     args = parser.parse_args()
     result = rebuild(args.scene, args.cloud, args.edits, args.out, blender=args.blender,
-                     allow_unverified=args.allow_unverified)
+                     allow_unverified=args.allow_unverified, source_job=args.source_job)
     print(json.dumps({'written': True, 'revision': result['revision'], 'metric_verified': False}))
 
 

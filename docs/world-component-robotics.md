@@ -2,6 +2,9 @@
 
 Implementation and primary-source review: 25 October 2026.
 
+The next implemented layer is [shared camera and component evidence](world-camera-evidence.md):
+adapter-neutral rasters/poses, bound naming crops and component-to-frame projections.
+
 The next useful product layer is a saved architectural scene that teams can edit,
 re-export and inspect consistently. A photorealistic reconstruction alone does
 not supply building-component identity, wall construction thickness, robot

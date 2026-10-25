@@ -22,10 +22,11 @@ import sys
 import time
 
 try:
-    from . import cad_export, detector_names, fit_check, measurement_check, object_names, sparse_colmap
+    from . import cad_export, component_evidence, detector_names, fit_check, measurement_check, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import cad_export
+    import component_evidence
     import detector_names
     import fit_check
     import measurement_check
@@ -527,6 +528,23 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                                             'cloud': {'sha256': hashlib.sha256((out / 'arena-cloud.json').read_bytes()).hexdigest()}}}
         (out / 'component-graph.json').write_text(json.dumps(component_export, indent=2, allow_nan=False))
         component_files = ['component-graph.json']
+    source_support_files = []
+    support_source = request.get('source') if isinstance(request.get('source'), dict) else {}
+    support_root = (Path(support_source['path']) if support_source.get('path') and not support_source.get('missing')
+                    else out.parent if reconstruction is not None else None)
+    if graph and cloud['units'] == 'm':
+        try:
+            support = component_evidence.write_component_evidence(out, scene, cloud,
+                scene_path=out / 'scene.json', cloud_path=out / 'arena-cloud.json', source_dir=support_root)
+            source_support = {'written': True, 'components': support['componentCount'],
+                              'source_memberships': sum(row['status'] == 'source-membership' for row in support['components']),
+                              'projection': support['projection'], 'metric_verified': False,
+                              'source_job': support_source.get('job')}
+            source_support_files = ['component-evidence.json']
+        except Exception as error:
+            source_support = {'written': False, 'reason': f'Source component evidence failed ({type(error).__name__}).'}
+    else:
+        source_support = {'written': False, 'reason': 'Source component evidence requires a metric component graph.'}
     nav_files = []
     if cloud['units'] == 'm':
         try:
@@ -546,6 +564,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'), 'cad': cad, 'fit': fit,
                 'naming': naming, 'measurements': measurements, 'bim_review': scene.get('bimReview'),
                 'component_graph': {'written': bool(component_files), 'revision': graph.get('revision') if graph else None},
+                'component_evidence': source_support,
                 'navigation': navigation,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
@@ -570,6 +589,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
                  *({'name': name, 'kind': 'evidence'} for name in measurement_files),
                  *({'name': name, 'kind': 'evidence'} for name in component_files),
+                 *({'name': name, 'kind': 'evidence'} for name in source_support_files),
                  *({'name': name, 'kind': 'nav-map'} for name in nav_files),
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
