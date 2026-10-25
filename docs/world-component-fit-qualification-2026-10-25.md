@@ -80,6 +80,13 @@ executable could not create its process-singleton socket on this host. No
 local browser pass is claimed. The configured hosted Chromium and WebKit jobs
 provide the browser checks at the pull request's exact commit.
 
+The first hosted browser attempt passed Chromium and timed out in WebKit while
+waiting for global `networkidle` on the production root. The smoke now waits for
+HTTP 200 and the actual 22-card interface, including the asynchronously mounted
+World Builder iframe. This avoids tying readiness to background/external
+requests. It preserves the interaction, layout and error assertions and does
+not add retries or extend the timeout. PWA/offline reload checks are unchanged.
+
 ## Remaining qualification
 
 Real repeated phone-room captures with withheld tape/laser measurements remain
