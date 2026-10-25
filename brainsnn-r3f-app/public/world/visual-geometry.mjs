@@ -46,8 +46,15 @@ export function frameBounds(points) {
     lo[j] = axis[Math.floor(count * .02)]; hi[j] = axis[Math.min(count - 1, Math.ceil(count * .98))];
   }
   const center = lo.map((v, i) => (v + hi[i]) / 2), radius = Math.max(.001, Math.hypot(...hi.map((v, i) => v - lo[i])) / 2);
+  // Framing (centre, radius) stays on the 2-98% core. The box that decides which points are kept is that core widened
+  // by 15% of its size on every side: a room's walls, floor and ceiling are the cloud's own extremes, so the core alone
+  // cut them. On a rendered meeting room it dropped 2,306 points inside the room, 11% of the wall points, to remove 75
+  // outliers; widened, it drops 45 inside the room and keeps 20 more strays. Triangulation outliers many room-widths
+  // away still fall outside.
+  const pad = hi.map((v, j) => (v - lo[j]) * .15);
+  const min = lo.map((v, j) => Math.max(full.min[j], v - pad[j])), max = hi.map((v, j) => Math.min(full.max[j], v + pad[j]));
   // A core that is barely smaller than the full extent means no outliers: keep the exact extent.
-  return radius < full.radius * .9 ? { min: lo, max: hi, center, radius, trimmed: true } : full;
+  return radius < full.radius * .9 ? { min, max, center, radius, trimmed: true } : full;
 }
 export function parsePLY(buffer) {
   const bytes = bytesOf(buffer);
@@ -178,15 +185,21 @@ export function toArenaCloud(points, { coordinateFrame = 'right-handed-y-up', so
   }
   const step = Math.max(1, Math.ceil(core.length / budget));
   // Gravity-align only on a confident floor (>=10% inliers); weaker planes are walls or noise and must not rotate the cloud.
-  const plane = fitFloorPlane(core), upright = plane && plane.inlierFraction >= .1 ? alignToFloor(core, plane) : null;
-  // Then square the heading: rotate about Y so the floor band's long axis runs along Z, so the footprint box fits the walkable strip.
-  const yaw = upright ? floorYaw(upright, plane.tolerance) : 0, aligned = upright ? rotateY(upright, -yaw) : core;
-  const rows = aligned.filter((_, i) => i % step === 0), units = metric ? 'm' : 'arbitrary', floor = estimateFloor(aligned);
+  // A weak floor whose room shows its own axes is squared to them instead (squareToRoom), and that aligns too.
+  const fitted = fitFloorPlane(core), plane = squareToRoom(core, fitted) || fitted;
+  const upright = plane && (plane.inlierFraction >= .1 || plane.squaredToRoom) ? alignToFloor(core, plane) : null;
+  // Then square the heading: rotate about Y so the floor band's long axis runs along Z, so the footprint box fits the walkable
+  // strip; a room squared to its axes turns to its walls instead (the nearer of them to that heading).
+  const band = upright ? floorYaw(upright, plane.tolerance) : 0, yaw = upright && plane.squaredToRoom ? roomYaw(plane, band) : band;
+  const aligned = upright ? rotateY(upright, -yaw) : core;
+  // A floor squared to the room is y = 0 by construction; the densest low band would be table height there.
+  const rows = aligned.filter((_, i) => i % step === 0), units = metric ? 'm' : 'arbitrary';
+  const floor = upright && plane.squaredToRoom ? floorBand(aligned, 0, 2 * plane.tolerance) || estimateFloor(aligned) : estimateFloor(aligned);
   return { version: 1, kind: 'colmap-sparse-point-cloud', units, coordinateFrame: 'right-handed-y-up', sourceFrame: coordinateFrame,
     source, points: rows, fromSource: arenaTransform(k, flip, plane, !!upright, yaw), floorEstimate: floor && { ...floor, units },
     scale: metric ? { source: 'user-measured', metresPerUnit: k, distance: measurement?.distance ?? null, spanUnits: measurement?.span ?? null, selfReported: true, verified: false } : null,
     provenance: { totalPoints: count, keptPoints: rows.length, outliersDropped: trimmed ? count - core.length : 0, thinned: step > 1,
-      floorAligned: aligned !== core, floorTiltDegrees: plane ? +(Math.acos(Math.min(1, Math.abs(plane.normal[1]))) * 180 / Math.PI).toFixed(1) : null, floorYawDegrees: +(yaw * 180 / Math.PI).toFixed(1), floorInlierFraction: plane ? +plane.inlierFraction.toFixed(3) : null, metricVerified: false } };
+      floorAligned: aligned !== core, floorTiltDegrees: plane ? +(Math.acos(Math.min(1, Math.abs(plane.normal[1]))) * 180 / Math.PI).toFixed(1) : null, floorYawDegrees: +(yaw * 180 / Math.PI).toFixed(1), floorInlierFraction: plane ? +plane.inlierFraction.toFixed(3) : null, ...(plane?.squaredToRoom ? { floorSquaredToRoom: true } : {}), metricVerified: false } };
 }
 /** toArenaCloud's mapping from source coordinates to hand-off coordinates, as a 3 x 4 matrix [A | t]: scale and flip,
  * then the floor alignment (alignToFloor), then the heading turn (rotateY by -yaw). The worker uses it to find the
@@ -236,8 +249,12 @@ export function fitFloorPlane(rows, iterations = 300) {
   }
   if (!best) return null;
   // The floor's normal points toward the room, i.e. toward the majority of off-plane points.
-  const flip = best.above < (rows.length - best.inliers) / 2 ? -1 : 1, n = best.normal.map(v => v * flip);
-  // Refine: along the up-vector the floor is the lowest dense layer, not merely the densest (tables and beds carry points too).
+  const flip = best.above < (rows.length - best.inliers) / 2 ? -1 : 1;
+  return floorAlong(rows, best.normal.map(v => v * flip), tol);
+}
+/** The floor plane with a given up-normal: along it, the floor is the lowest dense layer, not merely the densest
+ * (tables and beds carry points too). */
+export function floorAlong(rows, n, tol, lowest = false) {
   const heights = rows.map(r => n[0] * r[0] + n[1] * r[1] + n[2] * r[2]), lo = heights.reduce((m, h) => Math.min(m, h), Infinity), width = 2 * tol;
   const counts = []; for (const h of heights) { const b = Math.floor((h - lo) / width); counts[b] = (counts[b] || 0) + 1; }
   // counts has holes wherever a height bin is empty; reduce skips them (a spread would read undefined and give NaN).
@@ -246,9 +263,83 @@ export function fitFloorPlane(rows, iterations = 300) {
   // up to a tolerance away would leave part of the floor out. Median of the chosen bin's own points (so a denser surface
   // in the next bin never wins), then of the points within the tolerance of it, which takes in the rest of that layer.
   const median = v => { const s = [...v].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
-  const around = median(heights.filter(h => Math.floor((h - lo) / width) === bin));
+  // `lowest`: a floor the cameras barely saw has no dense layer of its own, so it is where the room's lowest points are,
+  // the feet of its walls and furniture (the median of the lowest 0.5%, so a stray point below the floor does not set it).
+  const around = lowest ? median([...heights].sort((a, b) => a - b).slice(0, Math.max(5, Math.floor(heights.length * .005))))
+    : median(heights.filter(h => Math.floor((h - lo) / width) === bin));
   const d = -median(heights.filter(h => Math.abs(h - around) <= tol)), inliers = heights.filter(h => Math.abs(h + d) <= tol).length;
   return { normal: n, d, inlierFraction: inliers / rows.length, tolerance: tol };
+}
+/** The room's own three axes from its largest planes (walls, floor, ceiling, table tops): planes found one after
+ * another by RANSAC and refined through their inliers, then the orthogonal frame their normals agree on most.
+ * `support` is the share of points on planes along those axes. Null when fewer than two orthogonal planes are found. */
+export function roomAxes(rows, planes = 6, iterations = 200) {
+  if (rows.length < 200) return null;
+  const step = Math.max(1, Math.floor(rows.length / 20000)), pts = rows.filter((_, i) => i % step === 0), N = pts.length;
+  const radius = Math.hypot(...[0, 1, 2].map(j => pts.reduce((m, r) => Math.max(m, r[j]), -Infinity) - pts.reduce((m, r) => Math.min(m, r[j]), Infinity))) / 2;
+  const tol = Math.max(1e-6, radius * .015), unit = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  let seed = 13; const rand = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  let free = pts.map((_, i) => i); const found = [];
+  for (let p = 0; p < planes && free.length >= 3; p++) {
+    let best = null;
+    for (let k = 0; k < iterations; k++) {
+      const [a, b, c] = [0, 0, 0].map(() => pts[free[Math.floor(rand() * free.length)]]);
+      const raw = cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]); if (Math.hypot(...raw) < 1e-12) continue;
+      const n = unit(raw), d = -dot(n, a); let count = 0;
+      for (const i of free) if (Math.abs(dot(n, pts[i]) + d) <= tol) count++;
+      if (!best || count > best.count) best = { n, d, count };
+    }
+    if (!best || best.count < .03 * N) break;
+    // Refine the normal through the inliers: the direction of least spread (inverse power iteration on their covariance).
+    const ins = free.filter(i => Math.abs(dot(best.n, pts[i]) + best.d) <= tol), m = [0, 1, 2].map(j => ins.reduce((s, i) => s + pts[i][j], 0) / ins.length);
+    const C = [0, 1, 2].map(a => [0, 1, 2].map(b => ins.reduce((s, i) => s + (pts[i][a] - m[a]) * (pts[i][b] - m[b]), 0) / ins.length));
+    const e = (C[0][0] + C[1][1] + C[2][2]) * 1e-9 + 1e-15; [0, 1, 2].forEach(j => { C[j][j] += e; });
+    const det = C[0][0] * (C[1][1] * C[2][2] - C[1][2] * C[2][1]) - C[0][1] * (C[1][0] * C[2][2] - C[1][2] * C[2][0]) + C[0][2] * (C[1][0] * C[2][1] - C[1][1] * C[2][0]);
+    const inv = [0, 1, 2].map(i => [0, 1, 2].map(j => { const r = [0, 1, 2].filter(x => x !== j), c = [0, 1, 2].filter(x => x !== i);
+      return ((i + j) % 2 ? -1 : 1) * (C[r[0]][c[0]] * C[r[1]][c[1]] - C[r[0]][c[1]] * C[r[1]][c[0]]) / det; }));
+    let n = best.n; for (let k = 0; k < 20; k++) n = unit(inv.map(row => dot(row, n)));
+    const d = -dot(n, m), on = new Set(free.filter(i => Math.abs(dot(n, pts[i]) + d) <= tol));
+    found.push({ normal: n, support: on.size }); free = free.filter(i => !on.has(i));
+  }
+  // The frame from each orthogonal pair (within 10 degrees), scored by the support of every plane along one of its axes.
+  const cos10 = Math.cos(Math.PI / 18), sin10 = Math.sin(Math.PI / 18); let frame = null;
+  for (let i = 0; i < found.length; i++) for (let j = i + 1; j < found.length; j++) {
+    const a = found[i].normal, nb = found[j].normal; if (Math.abs(dot(a, nb)) > sin10) continue;
+    const b = unit(nb.map((v, k) => v - dot(nb, a) * a[k])), axes = [a, b, cross(a, b)];
+    const score = found.reduce((s, f) => s + (axes.some(x => Math.abs(dot(x, f.normal)) >= cos10) ? f.support : 0), 0);
+    if (!frame || score > frame.score) frame = { axes, score };
+  }
+  return frame && { axes: frame.axes, support: frame.score / N, planes: found.length };
+}
+/** A weakly supported floor (a low-texture floor gives structure from motion few points, so the floor fit can settle on a
+ * tilted plane through wall bottoms and table tops) is squared to the room: its normal is replaced by the nearest room
+ * axis, when that axis is within 20 degrees and the room's planes carry at least 30% of the points. A floor seen well
+ * (a quarter of the points or more) is kept as fitted. Returns the squared plane, or null to keep the fitted one. */
+export function squareToRoom(rows, plane) {
+  if (!plane || plane.inlierFraction >= .25) return null;
+  const room = roomAxes(rows); if (!room || room.support < .3) return null;
+  const n = plane.normal, near = room.axes.reduce((b, a) => Math.abs(a[0] * n[0] + a[1] * n[1] + a[2] * n[2]) > Math.abs(b[0] * n[0] + b[1] * n[1] + b[2] * n[2]) ? a : b);
+  const c = near[0] * n[0] + near[1] * n[1] + near[2] * n[2], angle = Math.acos(Math.min(1, Math.abs(c)));
+  if (angle < Math.PI / 360 || angle > Math.PI / 9) return null;
+  // Along the squared normal, a dense layer with more than 5% of the room below it is a table top or a sill, not the floor.
+  const up = near.map(v => v * Math.sign(c)), layer = floorAlong(rows, up, plane.tolerance);
+  const below = rows.filter(r => up[0] * r[0] + up[1] * r[1] + up[2] * r[2] < -layer.d - plane.tolerance).length / rows.length;
+  return { ...(below > .05 ? floorAlong(rows, up, plane.tolerance, true) : layer), squaredToRoom: true, roomAxes: room.axes.filter(a => a !== near) };
+}
+/** The heading that runs a squared room's walls along X and Z: of its two horizontal axes (turned upright with the floor),
+ * the one nearest the floor band's own heading `yaw`, as an angle from +Z toward +X. */
+export function roomYaw(plane, yaw) {
+  const angles = plane.roomAxes.map(a => { const [h] = alignToFloor([[a[0], a[1], a[2], 0, 0, 0]], { ...plane, d: 0 }); return Math.atan2(h[0], h[2]); });
+  const gap = t => Math.abs(((t - yaw) % Math.PI + 1.5 * Math.PI) % Math.PI - Math.PI / 2);  // distance mod 180 degrees
+  const best = angles.reduce((b, t) => gap(t) < gap(b) ? t : b);
+  return yaw + (((best - yaw) % Math.PI + 1.5 * Math.PI) % Math.PI - Math.PI / 2);
+}
+/** The floor footprint at a known height: the points within `half` of it. */
+export function floorBand(rows, y, half) {
+  const band = rows.filter(r => Math.abs(r[1] - y) <= half); if (band.length < 5) return null;
+  const xs = band.map(r => r[0]).sort((a, b) => a - b), zs = band.map(r => r[2]).sort((a, b) => a - b), q = (v, f) => v[Math.min(v.length - 1, Math.floor(v.length * f))];
+  return { y, origin: [q(xs, .02), q(zs, .02)], width: q(xs, .98) - q(xs, .02), depth: q(zs, .98) - q(zs, .02), support: band.length / rows.length, units: 'arbitrary' };
 }
 /** Rotates rows so `plane.normal` becomes +Y and the plane passes through y=0. Returns new rows (colours untouched). */
 export function alignToFloor(rows, plane) {

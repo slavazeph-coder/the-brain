@@ -17,7 +17,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-CHUNK = 8 * 1024 * 1024
+CHUNK = 4 * 1024 * 1024  # the worker's default; it advertises its own in /v1/capabilities limits.chunk_bytes
 KIND = {'.mp4': 'video', '.mov': 'video', '.webm': 'video', '.json': 'cloud', '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.webp': 'image'}
 
 
@@ -36,10 +36,11 @@ def call(method, path, body=None, *, raw=None):
 
 def upload(path, kind=None):
     path = Path(path); size = path.stat().st_size
+    chunk = int((call('GET', '/v1/capabilities').get('limits') or {}).get('chunk_bytes') or CHUNK)
     item = call('POST', '/v1/uploads', {'name': path.name, 'kind': kind or KIND[path.suffix.lower()], 'size': size})
     with path.open('rb') as f:
         while item['offset'] < size:
-            f.seek(item['offset']); item = call('PUT', f"/v1/uploads/{item['id']}?offset={item['offset']}", raw=f.read(CHUNK))
+            f.seek(item['offset']); item = call('PUT', f"/v1/uploads/{item['id']}?offset={item['offset']}", raw=f.read(chunk))
     return item['id']
 
 

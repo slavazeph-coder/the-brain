@@ -131,6 +131,17 @@ class Objects(unittest.TestCase):
         plain = {round(o["centre"][0]): o for o in sc.separate_objects(pts, 0.0, rest, min_points=30)}
         self.assertAlmostEqual(plain[2]["y0"], 0.5, delta=0.02, msg="without the floor's coverage nothing is inferred")
 
+    def test_a_sparse_rooms_chair_is_an_object_however_many_points_its_walls_carry(self):
+        # 30,000 wall points and a compact 45-point object: a minimum of 0.3% of the whole cloud (90) left it as points.
+        rng = random.Random(4); walls = []
+        for _ in range(30000):
+            side, u, y = rng.randrange(4), rng.uniform(0, 1), rng.uniform(0.2, 2.6)
+            walls.append([(6 * u, y, 0), (6 * u, y, 4.8), (0, y, 4.8 * u), (6, y, 4.8 * u)][side] + (0, 0, 0))
+        chair = [[rng.uniform(2.0, 2.3), rng.uniform(0.4, 0.6), rng.uniform(2.0, 2.3), 50, 50, 50] for _ in range(45)]
+        pts = [list(p) for p in walls] + chair; rest = list(range(len(walls), len(pts)))
+        objects = sc.separate_objects(pts, 0.0, rest)
+        self.assertEqual(len(objects), 1); self.assertAlmostEqual(objects[0]["length"], 0.3, delta=0.08)
+
     def test_detections_name_the_object_they_overlap(self):
         pts = room_cloud(); _, rest = sc.find_walls(pts, 0.0)
         objects = sc.separate_objects(pts, 0.0, rest)

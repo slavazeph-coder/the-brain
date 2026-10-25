@@ -219,15 +219,10 @@ bpy.ops.mesh.primitive_ico_sphere_add(radius=.38, subdivisions=3, location=B(.45
 leaves.data.materials.append(m_leaf); tex = bpy.data.textures.new('leafy', 'CLOUDS'); disp = leaves.modifiers.new('d', 'DISPLACE'); disp.texture = tex; disp.strength = .12
 truth['objects'].append({'name': 'plant', 'label': 'potted plant', 'centre': [.45, .565, .45], 'size': [.76, 1.13, .76], 'yaw_degrees': 0})
 
-# Reference spans: one calibration (what a person would tape and type), the rest withheld, in different directions.
-truth['spans'] = [
-    {'id': 'table-length', 'role': 'calibration', 'from': 'table_nw', 'to': 'table_ne', 'label': 'Table top, long edge'},
-    {'id': 'whiteboard-width', 'role': 'held-out', 'from': 'whiteboard_top_left', 'to': 'whiteboard_top_right', 'label': 'Whiteboard, top edge'},
-    {'id': 'window-height', 'role': 'held-out', 'from': 'window_top_left', 'to': 'window_sill_left', 'label': 'Window opening, height'},
-    {'id': 'credenza-length', 'role': 'held-out', 'from': 'credenza_top_north', 'to': 'credenza_top_south', 'label': 'Credenza top, length'},
-    {'id': 'table-to-whiteboard', 'role': 'held-out', 'from': 'table_se', 'to': 'whiteboard_bottom_left', 'label': 'Table corner to whiteboard corner'},
-    {'id': 'window-width', 'role': 'held-out', 'from': 'window_top_left', 'to': 'window_top_right', 'label': 'Window opening, width'},
-]
+# Reference spans: one calibration (what a person would tape and type), the rest withheld, in different directions and
+# across the room. They join corners a sparse reconstruction resolves (high-contrast corners on walls and furniture);
+# kept in office-spans.json so pick_references.py can apply them to an earlier render.
+truth['spans'] = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'office-spans.json')))
 for s in truth['spans']:
     a, b = truth['landmarks'][s['from']], truth['landmarks'][s['to']]; s['distanceMeters'] = round(math.dist(a, b), 6)
 

@@ -43,6 +43,21 @@ test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every droppe
   const thin = toArenaCloud(big, {}, 1000); assert.ok(thin.points.length <= 1000 && thin.provenance.thinned);
 });
 
+test('the hand-off keeps a room\'s walls, floor and ceiling, which are its own extremes, and drops far outliers', () => {
+  // Points scattered 1 cm about the six faces of a 6 x 2.7 x 4.8 room, plus 20 triangulated outliers 50 m out.
+  // A 2-98% core alone cut 2% off each end of each axis, which here is the walls themselves.
+  let seed = 5; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, rows = [], size = [6, 2.7, 4.8];
+  for (let i = 0; i < 6000; i++) {
+    const axis = i % 3, q = size.map(s => r() * s); q[axis] = (i % 6 < 3 ? 0 : size[axis]) + (r() - .5) * .02;
+    rows.push(`${q[0]} ${q[1]} ${q[2]} 120 120 120`);
+  }
+  for (let i = 0; i < 20; i++) rows.push(`${50 + i} ${-50 - i} ${50 + i} 10 10 10`);
+  const p = parsePLY(ascii(rows)).points, cloud = toArenaCloud(p);
+  assert.equal(frameBounds(p).trimmed, true, 'the outliers make this a trimmed cloud');
+  assert.equal(cloud.provenance.outliersDropped, 20, `dropped ${cloud.provenance.outliersDropped}: every outlier and no wall point`);
+  assert.equal(cloud.points.length, 6000);
+});
+
 test('the hand-off records the exact transform from the reconstruction, through tilt, heading and scale', () => {
   // A COLMAP-frame room (y down), tilted and turned, so floor alignment and the heading turn both apply.
   let seed = 11; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, rows = [];

@@ -2,7 +2,7 @@
 calibration span the way a person does in the site, and write the withheld spans as #232's dimension-checks.json.
 
 usage: python pick_references.py --truth truth.json --frames frames/ --reconstruction <reconstruction job dir> --out OUT
-                                 [--radius 0.05] [--world brainsnn-r3f-app/public/world]
+                                 [--radius 0.05] [--world brainsnn-r3f-app/public/world] [--spans office-spans.json]
 <reconstruction job dir> holds output/ (sparse-preview.ply, reconstruction.json) and colmap-work/images (the frames the
 worker sampled). Writes into OUT:
 - brainsnn-point-cloud.json: the site's hand-off (toArenaCloud), scaled by the calibration span alone;
@@ -81,8 +81,12 @@ def main():
     ap.add_argument('--reconstruction', type=Path, required=True); ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--radius', type=float, default=0.05, help='metres: a landmark with no point this close has no endpoint')
     ap.add_argument('--world', type=Path, default=ROOT / 'brainsnn-r3f-app/public/world')
+    ap.add_argument('--spans', type=Path, help="reference spans to use instead of truth.json's (lengths from its landmarks)")
     a = ap.parse_args(); a.out.mkdir(parents=True, exist_ok=False)
     truth = json.loads(a.truth.read_text()); rec = json.loads((a.reconstruction / 'output/reconstruction.json').read_text())
+    if a.spans:
+        truth['spans'] = [{**sp, 'distanceMeters': round(math.dist(truth['landmarks'][sp['from']], truth['landmarks'][sp['to']]), 6)}
+                          for sp in json.loads(a.spans.read_text())]
     # 1. Which rendered frame each sampled image is, then align camera centres to the true camera positions.
     matched = match_frames(a.reconstruction / 'colmap-work/images', a.frames)
     true_pos = {c['frame']: c['position'] for c in truth['cameras']}

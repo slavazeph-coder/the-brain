@@ -57,7 +57,9 @@ def read_ply(path: Path):
 
 # ---------- toArenaCloud() port; each helper keeps the name and semantics of its JS original ----------
 def frame_bounds(rows):
-    """Per-axis 2nd-98th percentile core when that trims real outliers, else the full extent."""
+    """The box of kept points: per-axis 2nd-98th percentile core widened by 15% of its size on every side, when that
+    trims real outliers, else the full extent. A room's walls are its own extremes, so the core alone cut them. As the
+    browser does."""
     axes = [[row[j] for row in rows] for j in range(3)]
     full_lo, full_hi = [min(axis) for axis in axes], [max(axis) for axis in axes]
     full_radius = max(.001, math.hypot(*[hi - lo for lo, hi in zip(full_lo, full_hi)]) / 2)
@@ -68,6 +70,8 @@ def frame_bounds(rows):
     lo = [axis[math.floor(count * .02)] for axis in ordered]
     hi = [axis[min(count - 1, math.ceil(count * .98))] for axis in ordered]
     radius = max(.001, math.hypot(*[h - l for l, h in zip(lo, hi)]) / 2)
+    pad = [(h - l) * .15 for l, h in zip(lo, hi)]
+    lo, hi = [max(f, l - p) for f, l, p in zip(full_lo, lo, pad)], [min(f, h + p) for f, h, p in zip(full_hi, hi, pad)]
     return (lo, hi, True) if radius < full_radius * .9 else (full_lo, full_hi, False)
 
 
