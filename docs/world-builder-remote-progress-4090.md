@@ -33,3 +33,11 @@ Mode: 4090 GPU (separate branch `hermes/world-builder-4090`); GB10 build/verific
 - No force-push, no merge, no deploy. 4090 GPU work on its separate branch/config.
 - Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
 - Preserve existing 4090 experiments and GPU budgets. No permanent tunnel.
+
+## Run 95 — libx264 fixed, test_worker green (2026-10-21)
+
+- Root cause: `/opt/conda/bin/ffmpeg` (4.3, no libx264) shadowed `/usr/bin/ffmpeg` (4.2.7, has libx264) via shell-profile `conda activate` PATH prefix.
+- Fix: `apt install ffmpeg` → `/usr/bin/ffmpeg` 4.2.7-0ubuntu0.1.
+- Test: `PATH=/usr/bin:$PATH pytest tests/world/test_worker.py -q` → **44 passed, 2 skipped in 4.53 s** (was 43/1/2).
+- Commit: `ace31dc` (pre-existing), progress file updated.
+- Next: provision `WORLD_MAPANYTHING_SOURCE_DIR` / `WORLD_DINOV2_SOURCE_DIR` / `WORLD_MAPANYTHING_MODEL_DIR` (4.9 GB checkpoint) for held-out GPU inference smoke.
