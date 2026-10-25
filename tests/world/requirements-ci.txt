@@ -1,6 +1,6 @@
 # CPU contracts and real HTTP browsers. No learned model weights are downloaded.
 -r ../../robotics/world_worker/requirements.txt
--r ../../robotics/world_worker/requirements-colmap.txt
+-r ../../robotics/world_worker/requirements-comparison.txt
 -r ../../robotics/world_worker/requirements-observations.txt
 -r ../../robotics/world_worker/requirements-cad.txt
 pytest==9.1.1

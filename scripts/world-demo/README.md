@@ -83,6 +83,10 @@ workflow](REGENERATE.md#render-a-new-phone-run-from-its-preserved-worker-artifac
 
 ## Honesty rules the recordings follow
 
+Before choosing a new reconstruction engine, use the [same-frame COLMAP/VGGT comparison](../../docs/world-reconstruction-comparison.md).
+It includes a local pixel annotation worksheet, a frozen calibration/withheld split, bounded engine runs and
+source-bound JSON/Markdown reports. Its camera-landmark comparisons do not validate the resulting BIM or robot routes.
+
 Component-authoring software qualification is separate from footage. `component_fixture.py` generates an explicitly
 authored room for native compiler/edit tests; `verify_component_bundle.py` checks a rebuilt bundle against its saved
 source using real IFC/Rhino parsers and exact hashes. See [the reproducible qualification](../../docs/world-component-qualification-2026-10-25.md)
