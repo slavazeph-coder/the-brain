@@ -223,3 +223,50 @@ def test_loopback_413_oversized_artifact_refs_and_oversized_body(worker):
     chunk = b'x' * (5 * 1024 * 1024)
     status, detail = req(base, 'PUT', '/v1/uploads/%s?offset=0' % uid3, token, content=chunk)
     assert status == 413, (status, detail)
+
+
+def test_loopback_413_is_real_http_status_not_helper_fallback(worker):
+    """Regression: the oversized-body 413 must be a true HTTP 413 from the
+    LIVE server's wire, not a status fabricated by req()'s URLError fallback
+    (which maps a connection reset/refused to 413).
+
+    Send the oversized body over a raw socket and read the status line
+    directly.  If the app ever failed to return a real 413 on the wire, this
+    test would fail -- proving the honest-outcome path is exercised, not
+    inferred from req().  The fallback mapping is then known to trigger only
+    on genuine connection failure, where 'not delivered' is the correct
+    receipt outcome.
+    """
+    import socket
+    base, token, keys, scenario_path = worker
+    host, port = base.split('//')[1].split(':')
+    port = int(port)
+
+    # Body > MAX_REPORT_JSON_BODY_BYTES (16 KiB).
+    body = b'x' * 32_000
+    payload = (
+        b'POST /v1/jobs/deadbeef/report-receipt HTTP/1.1\r\n'
+        b'Host: ' + host.encode() + b':%d\r\n' % port +
+        b'Content-Type: application/json\r\n'
+        b'Authorization: Bearer ' + token.encode() + b'\r\n'
+        b'Content-Length: %d\r\n' % len(body) +
+        b'Connection: close\r\n\r\n' + body
+    )
+    with socket.create_connection((host, port), timeout=10) as s:
+        s.sendall(payload)
+        raw = b''
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            raw += chunk
+            if b'\r\n\r\n' in raw and len(raw) > 200:
+                break
+
+    status_line = raw.split(b'\r\n', 1)[0].decode('latin-1')
+    # A real HTTP 413 on the wire: 'HTTP/1.1 413 ...'
+    assert status_line.startswith('HTTP/1.1 413'), status_line
+    # And the body is the app's honest detail, not a reset/refused marker.
+    assert b'Request exceeds the body limit' in raw
+    assert 'reset' not in status_line and 'refused' not in status_line
+
