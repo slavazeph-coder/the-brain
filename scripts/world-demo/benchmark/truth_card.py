@@ -2,7 +2,7 @@
 the errors beneath. Drawn from truth.json and truth-score.json alone, so every line on it is a number in those files.
 
 usage: python truth_card.py --truth truth.json --score truth-score.json [--measurements scene-measurements.json]
-                            --out card.png|chapter.mp4 [--size 1080x1350] [--seconds 6]
+                            [--references references.json] --out card.png|chapter.mp4 [--size 1080x1350] [--seconds 6]
 The card says it is a synthetic test room in its top line; keep it that way.
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ def dashed(draw, pts, colour, width=2, dash=10):
             draw.line([tuple(a + (b - a) * k / n), tuple(a + (b - a) * min(k + 1, n) / n)], fill=colour, width=width)
 
 
-def layers(truth, score, measurements, size):
+def layers(truth, score, measurements, size, references=None):
     """The card as transparent layers, in the order a viewer should see them: the heading and the true plan, the
     compiled model over it, then each row of numbers."""
     W, H = size; m = int(W * .083)
@@ -50,7 +50,11 @@ def layers(truth, score, measurements, size):
     d.rounded_rectangle([m, 54, m + 330, 96], 8, fill=MAGENTA + (40,), outline=MAGENTA, width=2)
     d.text((m + 16, 62), 'SYNTHETIC TEST ROOM', font=font(22, True), fill=MAGENTA)
     d.text((m, 116), 'Model against exact truth', font=font(52, True), fill=WHITE)
-    room = truth['room']; cal = next(s for s in truth['spans'] if s['role'] == 'calibration')
+    room = truth['room']
+    # The spans the run used (references.json), which may differ from the ones the render wrote.
+    spans = [{'role': r['role'], 'from': r['endpoints'][0], 'to': r['endpoints'][1], 'distanceMeters': r['trueMeters']}
+             for r in references['spans']] if references else truth['spans']
+    cal = next(s for s in spans if s['role'] == 'calibration')
     d.text((m, 184), f"Rendered meeting room, {room['width']:.1f} × {room['depth']:.1f} m by construction · "
                      f"scale from one {cal['distanceMeters']:.1f} m span", font=font(22), fill=GREY)
     # The plan, north up: x to the right, z down the page.
@@ -86,7 +90,9 @@ def layers(truth, score, measurements, size):
     sm = score['summary']; r = score['room']; rows = [
         ('Room width', f"{r['width']['measuredMeters']:.3f} m" if r['width'].get('measuredMeters') is not None else 'not compiled', cm(sm['roomWidthErrorMeters'])),
         ('Room depth', f"{r['depth']['measuredMeters']:.3f} m" if r['depth'].get('measuredMeters') is not None else 'not compiled', cm(sm['roomDepthErrorMeters'])),
-        ('Wall faces', f"{sm['wallsMatched']} found", 'median ' + cm(sm['wallFaceOffsetMedianMeters'], False)),
+        # Stray: wall pieces off their wall's line, and pieces that match no wall at all (both are furniture taken for wall).
+        ('Wall faces', f"{sm['wallsMatched']} found" + (lambda n: f" · {n} stray" if n else '')(sm.get('strayWallPieces', 0) + sm.get('unmatchedWallPieces', 0)),
+         'median ' + cm(sm['wallFaceOffsetMedianMeters'], False)),
         ('Objects', f"{sm['objectsMatched']} found · {sm['spuriousObjects']} extra", 'median size ' + cm(sm['objectSizeErrorMedianMeters'], False))]
     if measurements and measurements.get('summary', {}).get('heldOutCount'):
         ms = measurements['summary']
@@ -110,14 +116,14 @@ def compose(stack, alphas, size):
     return img.convert('RGB')
 
 
-def card(truth, score, measurements, size):
-    stack = layers(truth, score, measurements, size); return compose(stack, [1] * len(stack), size)
+def card(truth, score, measurements, size, references=None):
+    stack = layers(truth, score, measurements, size, references); return compose(stack, [1] * len(stack), size)
 
 
-def clip(truth, score, measurements, size, out, seconds=6.0, fps=30):
+def clip(truth, score, measurements, size, out, seconds=6.0, fps=30, references=None):
     """The card as a chapter: the true plan, then the compiled model over it, then the rows one by one, then a hold.
     Written as H.264 with a silent stereo track, so feeds that expect audio accept it."""
-    stack = layers(truth, score, measurements, size); n = int(round(seconds * fps))
+    stack = layers(truth, score, measurements, size, references); n = int(round(seconds * fps))
     ease = lambda u: 0 if u <= 0 else 1 if u >= 1 else 1 - (1 - u) ** 3
     proc = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}',
                              '-r', str(fps), '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
@@ -135,11 +141,13 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--truth', type=Path, required=True); ap.add_argument('--score', type=Path, required=True)
     ap.add_argument('--measurements', type=Path); ap.add_argument('--out', type=Path, required=True); ap.add_argument('--size', default='1080x1350')
     ap.add_argument('--seconds', type=float, help='write an animated chapter of this length (.mp4) instead of a still')
+    ap.add_argument('--references', type=Path, help="the run's references.json, for the spans it actually used")
     a = ap.parse_args(); size = tuple(int(v) for v in a.size.lower().split('x'))
     measurements = json.loads(a.measurements.read_text()) if a.measurements else None
     truth, score = json.loads(a.truth.read_text()), json.loads(a.score.read_text())
-    if a.seconds: clip(truth, score, measurements, size, a.out, a.seconds)
-    else: card(truth, score, measurements, size).save(a.out)
+    references = json.loads(a.references.read_text()) if a.references else None
+    if a.seconds: clip(truth, score, measurements, size, a.out, a.seconds, references=references)
+    else: card(truth, score, measurements, size, references).save(a.out)
     print(a.out)
 
 

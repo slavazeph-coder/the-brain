@@ -59,7 +59,8 @@ def test_the_truth_score_reports_exactly_the_planted_errors():
     def wall(name, centre, length, yaw):
         return {'name': name, 'centre': list(to_cloud(centre)), 'size': [length, 2.5, .1], 'yaw_degrees': yaw - 30}
     scene = {'walls': [wall('wall_1', [.03, 1.25, 2.4], 3.9, 90), wall('wall_2', [6.02, 1.25, 2.4], 4.1, 90),
-                       wall('wall_3', [3, 1.25, 0], 5.0, 0), wall('wall_4', [3, 1.25, 4.8], 2.2, 0)],
+                       wall('wall_3', [3, 1.25, 0], 5.0, 0), wall('wall_4', [3, 1.25, 4.8], 2.2, 0),
+                       wall('wall_5', [.45, 1.25, 2.4], 1.6, 90)],  # a credenza face 45 cm in from the west wall
              'objects': [{'name': 'object_1', 'label': 'table', 'kind': 'separated', 'centre': list(to_cloud([3.05, .37, 2.5])),
                           'size': [2.46, .74, 1.1], 'yaw_degrees': -30},
                          {'name': 'object_2', 'label': 'object', 'kind': 'separated', 'centre': list(to_cloud([5.5, .2, .5])),
@@ -73,6 +74,7 @@ def test_the_truth_score_reports_exactly_the_planted_errors():
     table = next(o for o in r['objects'] if o['true'] == 'table')
     assert table['sizeErrorMeters']['length'] == pytest.approx(.06) and table['planCentreErrorMeters'] == pytest.approx(.05)
     assert r['missedObjects'] == ['chair_0'] and r['summary']['spuriousObjects'] == 1 and r['summary']['wallsMatched'] == '4 of 4'
+    assert r['summary']['strayWallPieces'] == 1 and r['strayWallPieces'][0]['name'] == 'wall_5', 'reported, not averaged into the width'
     # Footprints come back in the true plan: the table 2.46 x 1.1 m round (3.05, 2.5), the west wall along z at x = 0.03.
     xs, zs = zip(*table['plan']); assert (min(xs), max(xs), min(zs), max(zs)) == pytest.approx((1.82, 4.28, 1.95, 3.05), abs=1e-3)
     xs, zs = zip(*r['compiledWalls'][0]['plan']); assert (min(xs), max(xs), min(zs), max(zs)) == pytest.approx((-.02, .08, .45, 4.35), abs=1e-3)

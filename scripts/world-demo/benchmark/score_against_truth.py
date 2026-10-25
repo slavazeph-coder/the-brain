@@ -8,7 +8,7 @@ camera positions, so a wrong scale shows up as error instead of being fitted awa
 - a compiled object to the nearest true object of the same kind (table, chair, cabinet, plant): plan centres within
   0.6 m.
 Reported: room width and depth between matched opposite walls, each wall's offset from its true face, its tilt and
-covered length, each object's size and centre error, missed and spurious objects, and floor area; and every compiled
+covered length, stray wall pieces (a stretch matched to a wall but more than 15 cm off its main stretch), each object's size and centre error, missed and spurious objects, and floor area; and every compiled
 footprint and camera placed in the true plan, for truth_card.py.
 """
 from __future__ import annotations
@@ -71,10 +71,16 @@ def score(truth, references, scene, cloud):
         walls.append({'name': w['name'], 'lengthMeters': round(w['size'][0], 3), 'heightMeters': round(w['size'][1], 3),
                       'thicknessMeters': round(w['size'][2], 3), **(best or {'true': None}),
                       'plan': footprint(c, d, w['size'][0], w['size'][2])})
-    per_wall = {}
+    per_wall, stray = {}, []
     for tw in true_walls:
         mine = [w for w in walls if w['true'] == tw['name']]
         if mine:
+            # The wall is its longest stretch and every stretch in line with it (within 15 cm); a stretch further in is a
+            # stray piece (a furniture face taken for wall), reported as such rather than averaged into the room's size.
+            main = max(mine, key=lambda w: w['lengthMeters'])
+            stray += [{'name': w['name'], 'nearWall': tw['name'], 'lengthMeters': w['lengthMeters'], 'offsetMeters': w['offsetMeters']}
+                      for w in mine if abs(w['offsetMeters'] - main['offsetMeters']) > .15]
+            mine = [w for w in mine if abs(w['offsetMeters'] - main['offsetMeters']) <= .15]
             weight = sum(w['lengthMeters'] for w in mine)
             per_wall[tw['name']] = {'compiled': [w['name'] for w in mine], 'coveredMeters': round(weight, 3), 'trueLengthMeters': tw['size'][0],
                                     'offsetMeters': round(sum(w['offsetMeters'] * w['lengthMeters'] for w in mine) / weight, 4),
@@ -122,13 +128,14 @@ def score(truth, references, scene, cloud):
     summary = {
         'roomWidthErrorMeters': dims['width'].get('errorMeters'), 'roomDepthErrorMeters': dims['depth'].get('errorMeters'),
         'wallFaceOffsetMedianMeters': round(float(np.median([abs(w['offsetMeters']) for w in per_wall.values()])), 4) if per_wall else None,
-        'wallsMatched': f"{len(per_wall)} of {len(true_walls)}",
+        'wallsMatched': f"{len(per_wall)} of {len(true_walls)}", 'strayWallPieces': len(stray),
+        'unmatchedWallPieces': sum(1 for w in walls if not w['true']),
         'objectsMatched': f"{len(matched)} of {len(true_objects)}", 'spuriousObjects': sum(1 for o in objects if not o['true']),
         'objectSizeErrorMedianMeters': round(float(np.median([abs(v) for o in matched for v in o['sizeErrorMeters'].values()])), 4) if matched else None,
         'cameraFitRmsMeters': round(cam_rms, 4)}
     return {'schema': 'brainsnn.truth-score.v1', 'synthetic': True,
             'basis': 'model to truth: compiled elements against the exact scene definition, placed by a rigid camera fit',
-            'summary': summary, 'room': dims, 'walls': per_wall, 'compiledWalls': walls, 'objects': objects, 'missedObjects': missed,
+            'summary': summary, 'room': dims, 'walls': per_wall, 'strayWallPieces': stray, 'compiledWalls': walls, 'objects': objects, 'missedObjects': missed,
             'floor': {'trueAreaM2': room['floorArea'], 'compiledExtent': floor and [round(floor['size'][0], 3), round(floor['size'][2], 3)]},
             'cameras': [[round(float(q[0]), 4), round(float(q[2]), 4)] for q in (place(to_cloud(p['reconstruction'])) for p in pairs)],
             'caveat': 'A rendered test room with exact dimensions: real captures add lens, motion and lighting error this does not.'}
