@@ -15,6 +15,9 @@ for executable commands, validation scope and remaining physics/robot gates. Vis
 
 `scene.ifc` (IFC4, metres, written by `ifc_export.py` without IfcOpenShell) follows the same rule for BIM tools: walls as `IfcWall`,
 the floor as `IfcSlab`, placed detections as `IfcFurniture`, unknown space as `IfcBuildingElementProxy`, provenance in `Pset_BrainSNN`.
+A wall seen from inside the room is its observed face, with an assumed 0.1 m behind it, so the box's inner face is the
+surface the camera saw (`faceCentre`, `thicknessBasis`). The faces of a partition seen from both sides stand toward each
+other, and a wall whose points span both faces keeps its measured thickness.
 In metric scenes every cluster of points above the floor that is not a wall is separated and measured: walls are vertical planes found by
 RANSAC above furniture height (split at doorways, so an opening stays an opening), objects are face-connected 10 cm cells fitted with the
 smallest oriented box. An unnamed object is an
