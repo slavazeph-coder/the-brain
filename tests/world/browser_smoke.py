@@ -19,12 +19,14 @@ def open_world(view, url, *, require_response=False):
     """
     response=view.goto(url,wait_until='domcontentloaded')
     # A same-document or history-restored navigation can return no response.
-    # Route-boundary checks still require a real HTTP 200, while every issued
-    # document response is checked and every navigation must reach the app.
+    # Fresh route-boundary checks still require HTTP 200. WebKit may expose a
+    # valid cache revalidation as 304 on subsequent returns to the same page.
+    # Every navigation must still reach the exact app-content readiness check.
     if require_response:
         assert response is not None, 'The route check must issue a document request'
     if response is not None:
-        assert response.status==200, f'World document returned HTTP {response.status}: {response.url}'
+        assert response.status==200 or (not require_response and response.status==304), \
+            f'World document returned HTTP {response.status}: {response.url}'
     selector='iframe[src="/world/index.html"]'
     view.wait_for_function("document.querySelector('iframe[src=\"/world/index.html\"]') !== null || document.querySelectorAll('.system-card').length===22")
     if view.locator(selector).count():

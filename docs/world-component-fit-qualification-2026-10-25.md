@@ -82,10 +82,11 @@ provide the browser checks at the pull request's exact commit.
 
 The first hosted browser attempt passed Chromium and timed out in WebKit while
 waiting for global `networkidle` on the production root. The smoke now waits for
-HTTP 200 when a document response is issued, and the actual 22-card interface,
-including the asynchronously mounted World Builder iframe. The original three
-route status checks still require a response; subsequent history returns may
-complete without one. This avoids tying readiness to background/external
+the actual 22-card interface, including the asynchronously mounted World Builder
+iframe. The original three route status checks still require HTTP 200;
+subsequent history returns may complete without a response or expose WebKit's
+valid HTTP 304 cache revalidation. HTTP errors remain failures. This avoids
+tying readiness to background/external
 requests. It preserves the interaction, layout and error assertions and does
 not add retries or extend the timeout. PWA/offline reload checks are unchanged.
 
