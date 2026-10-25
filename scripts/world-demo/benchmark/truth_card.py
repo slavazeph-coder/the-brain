@@ -2,13 +2,14 @@
 the errors beneath. Drawn from truth.json and truth-score.json alone, so every line on it is a number in those files.
 
 usage: python truth_card.py --truth truth.json --score truth-score.json [--measurements scene-measurements.json]
-                            --out card.png [--size 1080x1350]
+                            --out card.png|chapter.mp4 [--size 1080x1350] [--seconds 6]
 The card says it is a synthetic test room in its top line; keep it that way.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -39,8 +40,12 @@ def dashed(draw, pts, colour, width=2, dash=10):
             draw.line([tuple(a + (b - a) * k / n), tuple(a + (b - a) * min(k + 1, n) / n)], fill=colour, width=width)
 
 
-def card(truth, score, measurements, size):
-    W, H = size; img = Image.new('RGB', size, (10, 16, 27)); d = ImageDraw.Draw(img, 'RGBA'); m = int(W * .083)
+def layers(truth, score, measurements, size):
+    """The card as transparent layers, in the order a viewer should see them: the heading and the true plan, the
+    compiled model over it, then each row of numbers."""
+    W, H = size; m = int(W * .083)
+    blank = lambda: Image.new('RGBA', size, (0, 0, 0, 0))
+    base, model = blank(), blank(); d, dm = ImageDraw.Draw(base, 'RGBA'), ImageDraw.Draw(model, 'RGBA')
     # Heading: what this is, before anything else.
     d.rounded_rectangle([m, 54, m + 330, 96], 8, fill=MAGENTA + (40,), outline=MAGENTA, width=2)
     d.text((m + 16, 62), 'SYNTHETIC TEST ROOM', font=font(22, True), fill=MAGENTA)
@@ -59,13 +64,13 @@ def card(truth, score, measurements, size):
     for o in (o for o in truth['objects'] if o['label'] in KIND):  # the scored furniture, not the floor
         dashed(d, [px(q) for q in footprint(o['centre'], plan(o['yaw_degrees']), o['size'][0], o['size'][2])], GREY)
     for w in score['compiledWalls']:
-        d.polygon([px(q) for q in w['plan']], fill=AMBER + (150,), outline=AMBER)
+        dm.polygon([px(q) for q in w['plan']], fill=AMBER + (150,), outline=AMBER)
     for o in score['objects']:
-        d.polygon([px(q) for q in o['plan']], outline=CYAN if o['true'] else MAGENTA, width=3)
+        dm.polygon([px(q) for q in o['plan']], outline=CYAN if o['true'] else MAGENTA, width=3)
     for q in score.get('cameras', []):
-        u, v = px(q); d.ellipse([u - 3, v - 3, u + 3, v + 3], fill=GREY + (200,))
+        u, v = px(q); dm.ellipse([u - 3, v - 3, u + 3, v + 3], fill=GREY + (200,))
     a, b = truth['landmarks'][cal['from']], truth['landmarks'][cal['to']]
-    d.line([px((a[0], a[2])), px((b[0], b[2]))], fill=MAGENTA, width=4)
+    dm.line([px((a[0], a[2])), px((b[0], b[2]))], fill=MAGENTA, width=4)
     # Legend.
     y = box[3] + 18; f = font(20); x = m
     for colour, label, kind in ((WHITE, 'true walls and objects (exact)', 'line'), (AMBER, 'compiled walls', 'fill'),
@@ -76,6 +81,7 @@ def card(truth, score, measurements, size):
         else: d.line([x, y + 11, x + 22, y + 11], fill=colour, width=4)
         d.text((x + 30, y), label, font=f, fill=GREY); x += 30 + d.textlength(label, font=f) + 26
         if x > W - m - 220: x, y = m, y + 30
+    d.text((m, H - 64), 'A render, not a capture: real phones add lens, motion and lighting error this room does not.', font=font(19), fill=DIM)
     # The numbers.
     sm = score['summary']; r = score['room']; rows = [
         ('Room width', f"{r['width']['measuredMeters']:.3f} m" if r['width'].get('measuredMeters') is not None else 'not compiled', cm(sm['roomWidthErrorMeters'])),
@@ -85,21 +91,55 @@ def card(truth, score, measurements, size):
     if measurements and measurements.get('summary', {}).get('heldOutCount'):
         ms = measurements['summary']
         rows.append(('Withheld spans', f"{ms['heldOutWithinTolerance']} of {ms['heldOutCount']} within tolerance", 'worst ' + cm(ms['heldOutMaxAbsoluteErrorMeters'], False)))
-    y = y + 54; label_f, value_f = font(26), font(26, True)
+    y = y + 54; label_f, value_f = font(26), font(26, True); out = [base, model]
     for label, value, error in rows:
-        d.line([m, y - 12, W - m, y - 12], fill=STEEL, width=1)
-        d.text((m, y), label, font=label_f, fill=GREY); d.text((m + 250, y), value, font=value_f, fill=WHITE)
-        d.text((W - m - d.textlength(error, font=value_f), y), error, font=value_f, fill=AMBER); y += 52
-    d.text((m, H - 64), 'A render, not a capture: real phones add lens, motion and lighting error this room does not.', font=font(19), fill=DIM)
-    return img
+        layer = blank(); dr = ImageDraw.Draw(layer, 'RGBA')
+        dr.line([m, y - 12, W - m, y - 12], fill=STEEL, width=1)
+        dr.text((m, y), label, font=label_f, fill=GREY); dr.text((m + 250, y), value, font=value_f, fill=WHITE)
+        dr.text((W - m - dr.textlength(error, font=value_f), y), error, font=value_f, fill=AMBER); y += 52
+        out.append(layer)
+    return out
+
+
+def compose(stack, alphas, size):
+    img = Image.new('RGBA', size, (10, 16, 27, 255))
+    for layer, a in zip(stack, alphas):
+        if a >= 1: img.alpha_composite(layer)
+        elif a > 0:
+            faded = layer.copy(); faded.putalpha(layer.getchannel('A').point(lambda v: int(v * a))); img.alpha_composite(faded)
+    return img.convert('RGB')
+
+
+def card(truth, score, measurements, size):
+    stack = layers(truth, score, measurements, size); return compose(stack, [1] * len(stack), size)
+
+
+def clip(truth, score, measurements, size, out, seconds=6.0, fps=30):
+    """The card as a chapter: the true plan, then the compiled model over it, then the rows one by one, then a hold.
+    Written as H.264 with a silent stereo track, so feeds that expect audio accept it."""
+    stack = layers(truth, score, measurements, size); n = int(round(seconds * fps))
+    ease = lambda u: 0 if u <= 0 else 1 if u >= 1 else 1 - (1 - u) ** 3
+    proc = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}',
+                             '-r', str(fps), '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
+                             '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '16', '-c:a', 'aac', '-b:a', '128k', str(out)],
+                            stdin=subprocess.PIPE)
+    for f in range(n):
+        t = f / fps
+        alphas = [ease(t / .5), ease((t - .7) / .7)] + [ease((t - 1.9 - .45 * k) / .35) for k in range(len(stack) - 2)]
+        proc.stdin.write(compose(stack, alphas, size).tobytes())
+    proc.stdin.close()
+    if proc.wait(): raise RuntimeError('ffmpeg failed writing the clip')
 
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--truth', type=Path, required=True); ap.add_argument('--score', type=Path, required=True)
     ap.add_argument('--measurements', type=Path); ap.add_argument('--out', type=Path, required=True); ap.add_argument('--size', default='1080x1350')
+    ap.add_argument('--seconds', type=float, help='write an animated chapter of this length (.mp4) instead of a still')
     a = ap.parse_args(); size = tuple(int(v) for v in a.size.lower().split('x'))
     measurements = json.loads(a.measurements.read_text()) if a.measurements else None
-    card(json.loads(a.truth.read_text()), json.loads(a.score.read_text()), measurements, size).save(a.out)
+    truth, score = json.loads(a.truth.read_text()), json.loads(a.score.read_text())
+    if a.seconds: clip(truth, score, measurements, size, a.out, a.seconds)
+    else: card(truth, score, measurements, size).save(a.out)
     print(a.out)
 
 
