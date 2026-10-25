@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 
 try:
@@ -33,6 +34,8 @@ except ImportError:
     from geometry import load_arena_cloud
 
 SCENE_COMPILER = Path(__file__).resolve().parents[1] / 'scene_compiler' / 'scene_compiler.py'
+sys.path.insert(0, str(SCENE_COMPILER.parent))
+import nav2_export  # noqa: E402  pure Python, no ROS dependency
 ARENA_MAX_POINTS = 50_000
 BLENDER_TIMEOUT = 900
 
@@ -403,12 +406,39 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
         measurements = {'written': True, 'status': report['status'], 'metric_verified': False}
     else:
         measurements = {'skipped': 'Dimensional checks require a metric scene.'}
+    # Bind interchange sidecars to the final serialized scene, after internal fit has been attached.
+    # Neither a component ID nor a Nav2-readable raster certifies physical accuracy or robot readiness.
+    component_files = []
+    graph = scene.get('componentGraph')
+    if graph:
+        if graph.get('sourceSha256') != measurement_check.points_sha256(cloud):
+            raise RuntimeError('Component graph is not bound to this exact ordered source cloud.')
+        component_export = {'schema': 'brainsnn.component-graph-export.v1', 'graph': graph,
+                            'metric_verified': False, 'physics_ready': False,
+                            'sourceFiles': {'scene': {'sha256': hashlib.sha256((out / 'scene.json').read_bytes()).hexdigest()},
+                                            'cloud': {'sha256': hashlib.sha256((out / 'arena-cloud.json').read_bytes()).hexdigest()}}}
+        (out / 'component-graph.json').write_text(json.dumps(component_export, indent=2, allow_nan=False))
+        component_files = ['component-graph.json']
+    nav_files = []
+    if cloud['units'] == 'm':
+        try:
+            navigation = nav2_export.export(scene, work / 'nav2', cloud=cloud,
+                scene_bytes=(out / 'scene.json').read_bytes(), cloud_bytes=(out / 'arena-cloud.json').read_bytes())
+            nav_files = navigation['files']
+            for name in nav_files:
+                shutil.copyfile(work / 'nav2' / name, out / name)
+        except Exception as error:
+            navigation = {'written': False, 'reason': f'{type(error).__name__}: {str(error)[:200]}'}
+    else:
+        navigation = {'written': False, 'reason': 'Nav2 maps require a metric scene.'}
     measured = ['The scale follows an entered distance: whether it was independently measured is self-reported, not verified.'] if cloud['units'] == 'm' else []
     named = ['Object names are suggestions from a vision model looking at the walkthrough frames; nobody has reviewed them.'] if names else []
     evidence = {'schema': 'brainsnn.scene-usd.v1', 'pipeline': 'scene-usd', 'input': source, 'units': cloud['units'],
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'), 'cad': cad, 'fit': fit,
                 'naming': naming, 'measurements': measurements, 'bim_review': scene.get('bimReview'),
+                'component_graph': {'written': bool(component_files), 'revision': graph.get('revision') if graph else None},
+                'navigation': navigation,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
                 'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
@@ -431,6 +461,8 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
                  *({'name': name, 'kind': 'evidence'} for name in measurement_files),
+                 *({'name': name, 'kind': 'evidence'} for name in component_files),
+                 *({'name': name, 'kind': 'nav-map'} for name in nav_files),
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
     return evidence

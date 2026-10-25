@@ -83,6 +83,11 @@ workflow](REGENERATE.md#render-a-new-phone-run-from-its-preserved-worker-artifac
 
 ## Honesty rules the recordings follow
 
+Component-authoring software qualification is separate from footage. `component_fixture.py` generates an explicitly
+authored room for native compiler/edit tests; `verify_component_bundle.py` checks a rebuilt bundle against its saved
+source using real IFC/Rhino parsers and exact hashes. See [the reproducible qualification](../../docs/world-component-qualification-2026-10-25.md)
+and [component editing and Nav2 commands](../../docs/world-component-robotics.md). These fixtures are not phone footage.
+
 - **Only real numbers.** Every number on screen comes from the run itself.
 - **Typed distances are labelled.** A distance typed for the demo (the test captures were not measured) is said to be
   typed on the closing card.

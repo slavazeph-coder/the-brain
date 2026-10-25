@@ -214,6 +214,99 @@ def test_adapter_artifacts_deliver_viewer_hints_without_certifying_geometry(tmp_
         assert len(artifact['sha256'])==64
 
 
+def test_navigation_artifacts_use_signed_downloads_with_exact_bytes_and_hashes(tmp_path):
+    """A fake adapter tests transport only, never a navigation map or a physical robot result."""
+    payloads = {
+        'nav2-map.pgm': b'P5\n3 2\n255\n\x00\xcd\xfe\xff\x0a\x00',
+        'nav2-map.yaml': (b'image: nav2-map.pgm\nmode: trinary\nresolution: 0.05\n'
+                          b'origin: [-1.0, -2.0, 0.0]\nnegate: 0\n'
+                          b'occupied_thresh: 0.65\nfree_thresh: 0.196\n'),
+        'nav2-evidence.json': (b'{\n  "schema": "authored-transport-fixture",\n'
+                               b'  "physicalRobotValidated": false\n}\n')}
+    config = adapter_config(tmp_path,
+        "import json,sys\nfrom pathlib import Path\n"
+        "out=Path(json.loads(Path(sys.argv[1]).read_text())['output_dir'])\n"
+        f"payloads={payloads!r}\n"
+        "for name,data in payloads.items(): (out/name).write_bytes(data)\n"
+        "(out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':n,'kind':'evidence'} for n in payloads]}))\n")
+    with TestClient(create_app(root=tmp_path/'data', token=TOKEN, adapters=str(config))) as c:
+        jid, _ = make_job(c, 'test-adapter')
+        assert c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS).status_code == 200
+        job = wait(c, jid)
+        assert job['status'] == 'complete', job
+        assert [a['name'] for a in job['artifacts']] == list(payloads)
+        for index, artifact in enumerate(job['artifacts']):
+            expected = payloads[artifact['name']]
+            assert artifact['size'] == len(expected)
+            assert artifact['sha256'] == hashlib.sha256(expected).hexdigest()
+            assert artifact['metric_verified'] is False and artifact['provenance'] == 'unverified-output'
+            assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': index}).status_code == 401
+            ticket = c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': index}, headers=HEADERS)
+            assert ticket.status_code == 200
+            url = ticket.json()['url']
+            assert url.startswith('/v1/download/') and TOKEN not in url
+            downloaded = c.get(url)  # The short-lived signature grants this download, without the bearer token.
+            assert downloaded.status_code == 200
+            assert downloaded.content == expected
+            assert downloaded.headers['content-disposition'].startswith('attachment')
+            assert int(downloaded.headers['content-length']) == len(expected)
+            assert hashlib.sha256(downloaded.content).hexdigest() == artifact['sha256']
+            assert c.get(url + 'tampered').status_code == 403
+
+
+def test_navigation_output_extensions_do_not_expand_allowed_uploads(client):
+    for name in ('nav2-map.pgm', 'nav2-map.yaml', 'nav2-map.yml'):
+        for kind in ('image', 'video', 'cloud'):
+            response = client.post('/v1/uploads', json={'name': name, 'kind': kind, 'size': 10}, headers=HEADERS)
+            assert response.status_code == 422, (name, kind, response.text)
+    assert client.post('/v1/uploads', json={'name': 'nav2.json', 'kind': 'navigation', 'size': 10},
+                       headers=HEADERS).status_code == 422
+
+
+@pytest.mark.parametrize('count', [32, 33])
+def test_adapter_artifact_count_stays_bounded_at_32(tmp_path, count):
+    config = adapter_config(tmp_path,
+        "import json,sys\nfrom pathlib import Path\n"
+        "out=Path(json.loads(Path(sys.argv[1]).read_text())['output_dir'])\n"
+        f"names=[f'part-{{i}}.json' for i in range({count})]\n"
+        "for name in names: (out/name).write_bytes(b'{}\\n')\n"
+        "(out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':n,'kind':'evidence'} for n in names]}))\n")
+    with TestClient(create_app(root=tmp_path/'data', token=TOKEN, adapters=str(config))) as c:
+        jid, _ = make_job(c, 'test-adapter')
+        c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS)
+        job = wait(c, jid)
+        if count == 32:
+            assert job['status'] == 'complete' and len(job['artifacts']) == 32, job
+            url = c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 31}, headers=HEADERS).json()['url']
+            assert c.get(url).content == b'{}\n'
+        else:
+            assert job['status'] == 'failed' and job['artifacts'] == [], job
+            assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}, headers=HEADERS).status_code == 404
+        assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 32}, headers=HEADERS).status_code == 422
+
+
+@pytest.mark.parametrize('name,mode', [
+    ('../nav2-map.yaml', 'file'), ('nested/nav2-map.pgm', 'file'), ('nav2-map.yml', 'file'),
+    ('nav2-map.yaml', 'symlink'), ('nav2-map.pgm', 'symlink'), ('nav2-map.yaml', 'duplicate')])
+def test_unsafe_navigation_artifacts_fail_even_when_the_named_file_exists(tmp_path, name, mode):
+    config = adapter_config(tmp_path,
+        "import json,sys\nfrom pathlib import Path\n"
+        "out=Path(json.loads(Path(sys.argv[1]).read_text())['output_dir'])\n"
+        f"name,mode={name!r},{mode!r}\n"
+        "target=out/name;target.parent.mkdir(parents=True,exist_ok=True)\n"
+        "if mode=='symlink':\n"
+        " source=out.parent/'source-map';source.write_bytes(b'authored test output');target.symlink_to(source)\n"
+        "else: target.write_bytes(b'authored test output')\n"
+        "entries=[{'name':name,'kind':'evidence'}]*(2 if mode=='duplicate' else 1)\n"
+        "(out/'manifest.json').write_text(json.dumps({'artifacts':entries}))\n")
+    with TestClient(create_app(root=tmp_path/'data', token=TOKEN, adapters=str(config))) as c:
+        jid, _ = make_job(c, 'test-adapter')
+        c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS)
+        job = wait(c, jid)
+        assert job['status'] == 'failed' and job['artifacts'] == [], job
+        assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}, headers=HEADERS).status_code == 404
+
+
 @pytest.mark.parametrize('artifact',[
     {'name':'../outside.json'},
     {'name':'scene.html'},

@@ -146,6 +146,9 @@ def _inventory(scene):
             name = _text(element.get('name'), 160, 'scene element name')
             floor = element.get('label') == 'floor' or name == 'floor_observed'
             notes = ['Compiled geometry; independently unchecked element dimensions.']
+            edited = element.get('dimensionProvenance') == 'operator-authored-edit'
+            if edited:
+                notes.append('Geometry includes operator-authored edits. Original point support does not validate edited dimensions.')
             if kind == 'wall':
                 notes.append('Wall thickness is estimated from point spread with a 0.10 m compiler minimum; it is not measured construction thickness.')
             if floor:
@@ -154,7 +157,8 @@ def _inventory(scene):
                 notes.append('Object base is inferred; the resulting height is not wholly observed.')
             inventory.append({'name': name, 'label': element.get('label'), 'kind': 'floor' if floor else kind,
                               'dimensionsMeters': {'length': size[0], 'height': size[1], 'width': size[2]},
-                              'basis': 'compiled-geometry', 'independentlyChecked': False,
+                              'basis': 'operator-authored-edit' if edited else 'compiled-geometry', 'independentlyChecked': False,
+                              **({'parameterProvenance': element.get('parameterProvenance', {})} if edited else {}),
                               'provenance': element.get('provenance', 'unknown'), 'base': element.get('base', 'unknown'),
                               'notes': notes})
     return inventory

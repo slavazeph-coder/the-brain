@@ -15,12 +15,13 @@ not detected ground truth. Unseen floor remains an explicit "unknown" volume, ne
 Run:  blender -b --python scene_compiler.py -- --cloud X.json [--detections Y.json --fov 60] --out DIR
 """
 from __future__ import annotations
-import argparse, json, math, sys
+import argparse, json, math, re, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ifc_export import emit_ifc  # noqa: E402  (pure Python; runs inside Blender too)
 from opening_geometry import wall_parts, door_parts  # noqa: E402
+from component_graph import attach_component_ids, apply_edits  # noqa: E402
 
 try:
     import bpy
@@ -35,6 +36,8 @@ def args():
     p.add_argument("--names", help="object-names JSON from the worker's naming step: model suggestions for separated objects")
     p.add_argument("--out", required=True); p.add_argument("--min-cluster", type=int, default=12)
     p.add_argument("--allow-unverified", action="store_true", help="compile non-multi-view clouds anyway (experiments only)")
+    p.add_argument("--scene", help="Saved scene.json to edit; requires --edits and the exact original --cloud")
+    p.add_argument("--edits", help="Source/revision-bound component-edits JSON; requires --scene and a fresh --out")
     return p.parse_args(argv)
 
 
@@ -378,10 +381,22 @@ def write_usda(path, scene, pts):
     CUBE = ('    def Cube "%(name)s"\n    {\n        double size = 1\n        double3 xformOp:translate = (%(cx)s, %(cy)s, %(cz)s)\n'
             '        float3 xformOp:rotateXYZ = (0, %(yaw)s, 0)\n'
             '        float3 xformOp:scale = (%(sx)s, %(sy)s, %(sz)s)\n        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]\n'
-            '        custom string provenance = "%(prov)s"\n        custom string label = "%(label)s"\n        custom string sourceName = "%(source)s"\n    }\n')
+            '        custom string provenance = %(prov)s\n        custom string label = %(label)s\n        custom string sourceName = %(source)s\n'
+            '        custom string componentId = %(component)s\n        custom string sourceProvenance = %(original)s\n'
+            '        custom string dimensionProvenance = %(dimension)s\n    }\n')
     def cube(prim, name=None):
         c, s = prim["centre"], prim["size"]
-        return CUBE % dict(name=name or prim["name"], source=prim.get("name", name), cx=c[0], cy=c[1], cz=c[2], sx=s[0], sy=s[1], sz=s[2], yaw=-prim.get("yaw_degrees", 0), prov=prim["provenance"], label=prim["label"])
+        def quote(value):
+            return json.dumps(value, ensure_ascii=False)
+        identifier = re.sub(r'[^A-Za-z0-9_]', '_', name or prim["name"])
+        if not identifier or identifier[0].isdigit():
+            identifier = 'component_' + identifier
+        return CUBE % dict(name=identifier, source=quote(prim.get("name", name)), cx=c[0], cy=c[1], cz=c[2],
+                           sx=s[0], sy=s[1], sz=s[2], yaw=-prim.get("yaw_degrees", 0),
+                           prov=quote(prim["provenance"]), label=quote(prim["label"]),
+                           component=quote(prim.get('componentId', '')),
+                           original=quote(prim.get('sourceProvenance', prim['provenance'])),
+                           dimension=quote(prim.get('dimensionProvenance', 'compiled-geometry')))
     head = ('#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n'
             '    customLayerData = { string schema = "%s", string units = "%s" }\n)\n\ndef Xform "World"\n{\n') % (scene["schema"], scene["units"])
     openings = scene.get('openings', [])
@@ -438,9 +453,73 @@ def add_box(name, lo, hi, provenance, label, color):
     return ob, {"name": name, "label": label, "provenance": provenance, "centre": [cx, cz, -cy], "size": [sx, sz, sy], "min": lo, "max": hi}
 
 
+def add_unknown(scene):
+    """One batched mesh, including during saved-scene edits, rather than one object per cell."""
+    if not scene['unknown']:
+        return
+    me = bpy.data.meshes.new('unknown_space'); verts, faces = [], []
+    for x, z, c in scene['unknown']:
+        b = len(verts); y0, y1 = scene['floor_y'], scene['floor_y'] + .3
+        for vx, vy, vz in [(x, y0, z), (x+c, y0, z), (x+c, y0, z+c), (x, y0, z+c),
+                           (x, y1, z), (x+c, y1, z), (x+c, y1, z+c), (x, y1, z+c)]:
+            verts.append((vx, -vz, vy))
+        faces.extend([[b,b+1,b+2,b+3], [b+4,b+5,b+6,b+7], [b,b+1,b+5,b+4],
+                      [b+1,b+2,b+6,b+5], [b+2,b+3,b+7,b+6], [b+3,b,b+4,b+7]])
+    me.from_pydata(verts, [], faces)
+    ob = bpy.data.objects.new('unknown_space', me); bpy.context.collection.objects.link(ob)
+    mat = bpy.data.materials.new('unknown_mat'); mat.diffuse_color = (.9,.3,.3,.35)
+    ob.data.materials.append(mat); ob['provenance'] = 'unknown'
+
+
+def component_metadata(scene):
+    """Carry the same identity into GLB extras and Blender without using mutable labels as keys."""
+    records = {o['name']: o for o in scene['objects'] if 'name' in o}
+    for wall in scene['walls']:
+        for part in wall_parts(wall, scene.get('openings', [])):
+            records[part['name']] = part
+    for door in door_parts(scene['walls'], scene.get('openings', [])):
+        records[door['name']] = door
+    for name, record in records.items():
+        ob = bpy.data.objects.get(name)
+        if ob is not None:
+            for key in ('componentId', 'hostComponentId', 'provenance', 'sourceProvenance',
+                        'dimensionProvenance', 'supportPointsScope', 'label'):
+                if record.get(key) is not None:
+                    ob[key] = record[key]
+
+
+def render_components(scene, pts):
+    """Rebuild edited geometry from the canonical scene, keeping source points as evidence."""
+    reset(); add_points(pts)
+    records = [(o, OBJECT_COLOURS[i % len(OBJECT_COLOURS)]) for i, o in enumerate(scene['objects']) if 'centre' in o]
+    records += [(part, (.75,.75,.78,1)) for wall in scene['walls'] for part in wall_parts(wall, scene.get('openings', []))]
+    records += [(door, (.42,.30,.18,1)) for door in door_parts(scene['walls'], scene.get('openings', []))]
+    for record, color in records:
+        L,H,T = record['size']; cx,cy,cz = record['centre']
+        add_oriented_box(record['name'], {'centre':[cx,cz], 'y0':cy-H/2, 'y1':cy+H/2,
+                         'length':L, 'thickness':T, 'yaw':math.radians(record.get('yaw_degrees',0)),
+                         'support':record.get('support_points',0)}, record['provenance'], record['label'], color)
+    add_unknown(scene); component_metadata(scene)
+
+
+def write_scene(out, scene, pts):
+    component_metadata(scene)
+    bpy.ops.export_scene.gltf(filepath=str(out / 'scene.glb'), export_format='GLB', export_extras=True, export_apply=True)
+    emit_usd(out, scene, pts); emit_ifc(out, scene)
+    bpy.ops.wm.save_as_mainfile(filepath=str(out / 'scene.blend'))
+    (out / 'scene.json').write_text(json.dumps(scene, indent=1, allow_nan=False))
+
+
 def main():
-    a = args(); out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    a = args(); out = Path(a.out)
+    if bool(a.scene) != bool(a.edits):
+        sys.exit('REFUSED: --scene and --edits must be supplied together.')
+    if a.scene and out.exists():
+        sys.exit('REFUSED: saved-scene edits require a fresh --out directory.')
     cloud = json.loads(Path(a.cloud).read_text()); pts = cloud["points"]
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world_worker'))
+    from measurement_check import points_sha256
+    point_hash = points_sha256(cloud) if cloud.get('units') == 'm' else None
     metric = cloud.get("units") == "m"; k = 1.0
     # Hard gate: a single-photo relative-depth cloud has no consistent geometry (every object is a perspective wedge),
     # so compiling it produces confident nonsense (a 22 m "refrigerator" in the mezzanine test). The hand-off JSON
@@ -449,6 +528,22 @@ def main():
         sys.exit("REFUSED: this cloud is not a multi-view reconstruction (sourceFrame=%r, multiView not set). The scene compiler needs "
                  "COLMAP/MapAnything/VIPE geometry from at least two views; single-photo depth is a visual preview only. Record a "
                  "walkthrough, or pass --allow-unverified for experiments." % cloud.get("sourceFrame"))
+    if a.scene:
+        if not metric:
+            sys.exit('REFUSED: controlled BIM component edits require a metric source cloud.')
+        scene_path, edit_path = Path(a.scene), Path(a.edits)
+        if scene_path.stat().st_size > 32 * 1024**2 or edit_path.stat().st_size > 65536:
+            sys.exit('REFUSED: saved scene or edit contract is oversized.')
+        saved = json.loads(scene_path.read_text())
+        if saved.get('cloudPointsSha256') != point_hash or (saved.get('componentGraph') or {}).get('sourceSha256') != point_hash:
+            sys.exit('REFUSED: saved scene does not belong to this exact ordered cloud.')
+        if saved.get('scale') != cloud.get('scale') or saved.get('units') != cloud.get('units'):
+            sys.exit('REFUSED: saved scene scale does not match the source cloud.')
+        scene = apply_edits(saved, json.loads(edit_path.read_text()))
+        out.mkdir(parents=True); render_components(scene, pts); write_scene(out, scene, pts)
+        print('SCENE_EDIT_OK', scene['componentGraph']['revision'])
+        return
+    out.mkdir(parents=True, exist_ok=True)
     if not metric:  # arbitrary units: keep them but say so loudly; the site's scale card is the way to fix it
         print("WARNING: cloud is in arbitrary units; exporting unscaled (scale.source = none), and no USD")
     floor_y = floor_plane(pts, cloud.get("floorEstimate"))
@@ -496,15 +591,7 @@ def main():
         for j in range(math.floor(ez[0] / cell), math.ceil(ez[1] / cell)):
             if (i, j) not in occupied and (i, j) not in seen_floor:
                 scene["unknown"].append([i * cell, j * cell, cell])
-    if scene["unknown"]:
-        me = bpy.data.meshes.new("unknown_space"); verts, faces = [], []
-        for x, z, c in scene["unknown"]:
-            b = len(verts); y0, y1 = floor_y, floor_y + 0.3
-            for vx, vy, vz in [(x, y0, z), (x + c, y0, z), (x + c, y0, z + c), (x, y0, z + c), (x, y1, z), (x + c, y1, z), (x + c, y1, z + c), (x, y1, z + c)]:
-                verts.append((vx, -vz, vy))
-            faces += [[b, b+1, b+2, b+3], [b+4, b+5, b+6, b+7], [b, b+1, b+5, b+4], [b+1, b+2, b+6, b+5], [b+2, b+3, b+7, b+6], [b+3, b, b+4, b+7]]
-        me.from_pydata(verts, [], faces); ob = bpy.data.objects.new("unknown_space", me); bpy.context.collection.objects.link(ob)
-        mat = bpy.data.materials.new("unknown_mat"); mat.diffuse_color = (0.9, 0.3, 0.3, 0.35); ob.data.materials.append(mat); ob["provenance"] = "unknown"
+    add_unknown(scene)
 
     if cloud.get('bimReview') is not None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world_worker'))
@@ -532,14 +619,13 @@ def main():
             ob['hostWall'] = leaf['hostWall']; ob['clearanceVerified'] = False
         scene['bimReview']['representationScope'] = 'Hosted IFC voids; matching GLB/USD wall cuts and closed reference door leaves; CAD and planar maps derive from these reviewed openings.'
 
-    bpy.ops.export_scene.gltf(filepath=str(out / "scene.glb"), export_format="GLB", export_extras=True, export_apply=True)
-    emit_usd(out, scene, pts)
-    emit_ifc(out, scene)
-    bpy.ops.wm.save_as_mainfile(filepath=str(out / "scene.blend"))
+    if metric:
+        scene['cloudPointsSha256'] = point_hash
+        scene = attach_component_ids(scene, point_hash)
     scene["counts"] = {"points": len(pts), "walls": len(scene["walls"]), "objects": sum(1 for o in scene["objects"] if o["provenance"] == "detected"),
                        "separated": len(separated),
                        "unplaced": sum(1 for o in scene["objects"] if o["provenance"] == "detected-unplaced"), "unknown_cells": len(scene["unknown"])}
-    (out / "scene.json").write_text(json.dumps(scene, indent=1))
+    write_scene(out, scene, pts)
     print("SCENE_OK", json.dumps(scene["counts"]), "floor_y=%.3f extent=%.2fx%.2f ceiling=%.2f" % (floor_y, ex[1] - ex[0], ez[1] - ez[0], ceiling - floor_y))
 
 

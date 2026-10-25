@@ -133,6 +133,14 @@ def preview_from_predictions(predictions, *, max_points=MAX_POINTS):
 
 
 def camera_metadata(predictions):
+    """Record only rigid camera-to-world poses and valid pinhole calibration.
+
+    The reviewed MapAnything API documents OpenCV cam2world poses and pinhole
+    intrinsics (source README at SOURCE_REVISION). Finite matrices alone can
+    still contain scale, shear or a reflection, which would corrupt subsequent
+    frame-to-component projections. Allow small floating-point rotation error;
+    this validates the representation, not the predicted camera's accuracy.
+    """
     import numpy as np
     transform = np.diag([1., -1., -1., 1.])
     result = []
@@ -140,8 +148,15 @@ def camera_metadata(predictions):
         pose, intrinsics = (as_numpy(view[key]) for key in ['camera_poses', 'intrinsics'])
         if (pose.shape != (1, 4, 4) or intrinsics.shape != (1, 3, 3)
                 or not np.isfinite(pose).all() or not np.isfinite(intrinsics).all()
-                or not np.allclose(pose[0, 3], [0, 0, 0, 1], atol=1e-4)):
+                or not np.allclose(pose[0, 3], [0, 0, 0, 1], atol=1e-4, rtol=0)):
             raise ValueError('Invalid predicted camera geometry.')
+        rotation = pose[0, :3, :3]
+        if (not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-3, rtol=0)
+                or not np.isclose(np.linalg.det(rotation), 1, atol=1e-3, rtol=0)):
+            raise ValueError('Invalid predicted camera rotation: expected a right-handed rigid pose.')
+        if (intrinsics[0, 0, 0] <= 0 or intrinsics[0, 1, 1] <= 0
+                or not np.allclose(intrinsics[0, 2], [0, 0, 1], atol=1e-4, rtol=0)):
+            raise ValueError('Invalid predicted camera intrinsics: expected positive focal lengths and a canonical last row.')
         result.append({'view': index, 'camera_to_world_y_up': (transform @ pose[0] @ transform).tolist(),
                        'intrinsics_opencv': intrinsics[0].tolist()})
     return result
