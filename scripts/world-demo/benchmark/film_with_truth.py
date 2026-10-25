@@ -78,9 +78,11 @@ def main():
         rows, t = [], 0.0
         for c in chapters[:-1]: rows.append((c, t, t + LENGTHS[c])); t += LENGTHS[c]
         t -= XFADE; rows.append(('truth', t, t + chapter - XFADE)); t += chapter - XFADE; rows.append(('end', t, total))
+        rows = [(c, s, min(e, rows[k + 1][1]) if k + 1 < len(rows) else e) for k, (c, s, e) in enumerate(rows)]  # no two at once
         a.captions.write_text(''.join(f'{k}\n{stamp(s)} --> {stamp(e - .05)}\n{CAPTIONS[c]}\n\n' for k, (c, s, e) in enumerate(rows, 1)))
-    if a.thumbnail:  # the truth chapter's held frame: the plan, the model on it and every number
-        subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-sseof', '-0.5', '-i', str(a.chapter), '-frames:v', '1', str(a.thumbnail)], check=True)
+    if a.thumbnail:  # the truth chapter's held frame, in the film: the plan, the model on it, every number and the strip
+        subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-ss', f'{end - XFADE + chapter - .6:.2f}', '-i', str(a.out),
+                        '-frames:v', '1', str(a.thumbnail)], check=True)
     print(json.dumps({'out': str(a.out), 'seconds': round(total, 2), 'truthChapterStarts': round(end - XFADE, 2)}))
 
 
