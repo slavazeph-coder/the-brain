@@ -1,13 +1,14 @@
-# World Builder handoff (October 24, 2026, evening)
+# World Builder handoff (October 25, 2026)
 
-The state of BrainSNN World Builder after #226–#229, written so the owner, or the next agent (Claude, Codex or Hermes),
-can use it and carry on without the session.
+The state of BrainSNN World Builder after #226–#229 and the synthetic benchmark in #233, written so the owner, or the
+next agent (Claude, Codex or Hermes), can use it and carry on without the session.
 
 Deeper notes:
 - `docs/world-studio-implementation.md`: how each part works, with measured numbers;
 - `.ai-memory/world-builder-2026-10.md`: history and decisions;
 - `docs/hermes-gpu-tasks.md`: GPU work;
-- `scripts/world-demo/README.md`: demo recorders and the film.
+- `scripts/world-demo/README.md`: demo recorders and the film;
+- `scripts/world-demo/benchmark/README.md`: the synthetic meeting room, its results and how to rerun it.
 
 ## In one paragraph
 
@@ -91,11 +92,49 @@ This session still holds all of it, and it passed `regenerate_reference.py` on `
 - the 5.79 m scale;
 - the scene job compiled with main's final floor code.
 
-The three cuts (master, commercial, check) are being rendered from it with that wrapper. The raw archive is private: it
-goes to the owner, not into the repo.
+The three cuts (master 33.4 s, commercial 29.6 s, check 34.4 s) were rendered from it with that wrapper. The wrapper stopped
+at its IFC check until pytest was installed in the film environment (IfcOpenShell's rule checker imports it). The cuts
+were then composed from its rendered shots. They and the raw archive are private: they go to the owner, not into the repo.
+**Don't post them.** The Mip-NeRF 360 photographs state no licence for commercial reuse. The LinkedIn film is the
+synthetic one below.
 
 **What #232 still needs:** a real phone capture of one measured room, with one calibration span and at least three
 withheld readings in different directions. Run it three times. Until then, no film shows physical accuracy.
+
+## The synthetic meeting-room benchmark (#233)
+
+A real capture can't separate model error from tape error. So `scripts/world-demo/benchmark/` defines a 6.0 × 4.8 ×
+2.7 m meeting room in code, renders a 60-frame walkthrough, runs it through the real worker, and scores every compiled
+wall and object against the exact room. The scale still comes from one calibration span (the table's long edge), as a
+person types it. Seven withheld spans go in as #232 measurement checks, and a rigid camera fit places the model in the
+true room. Details and commands are in that folder's README.
+
+It found four defects in the shipped pipeline, all fixed on this branch with tests in both the browser and the worker:
+1. **The hand-off's outlier trim cut the walls.** The 2nd–98th percentile box dropped 11% of the wall points. It is now
+   widened by 15%.
+2. **A floor the cameras barely saw was fitted 9.4° off level, at table height.** A weak floor is now squared to the
+   room's own planes, and up is the cloud's +y side. The floor is then the room's lowest points, and the heading
+   turns to the walls.
+3. **Sparse furniture stayed points.** The object minimum is now 0.3% of the candidate points, not of the whole cloud.
+4. **The truth score could not see a model standing on its head.** A rigid fit matches the walls either way. The
+   score now checks level and floor height.
+
+| On the same rendered room | before | after (merged with #232) |
+|---|---|---|
+| Model's up against true up | 9.4° | 0.3° |
+| Model floor against true floor | +58 cm | +4.0 cm |
+| Walls matched | 2 of 4 | 4 of 4 |
+| Room width, depth error | not measurable | −1.7, −1.5 cm |
+| Wall faces, median offset | 6.7 cm | 0.7 cm |
+| Furniture matched | 2 of 10 | 5 of 10 (sizes off by 40 cm, median) |
+| Withheld spans within tolerance, worst error | 5 of 7 usable, 4.1 cm | 7 of 7, 1.9 cm (1.1%) |
+
+A local merge of #232 into this branch passes all of #232's tests, along with this branch's. Only the docs, the
+memory notes and the CI test list conflict. Keep both test lists when merging.
+
+**The LinkedIn film** is made from the "after" run through #232's `regenerate_reference.py`. The truth chapter
+(`truth_card.py --seconds 6`) is spliced in before the end card with `film_with_truth.py`, which also writes captions and a
+thumbnail. Every frame says "synthetic test room" or "Synthetic test room rendered in Blender".
 
 ## Use it: a commercial space, start to finish
 
@@ -241,7 +280,8 @@ python scripts/world-demo/film/compose_film.py film <walkthrough frames> $J rout
 - **The end card** names the test capture and the typed distance. Change those lines when the capture changes.
 - **Names:** films show only high-confidence names.
 
-**Post text for the room film** (edit the numbers when the capture changes; do not name competitors):
+**Post text for the room film.** It is private only: the Mip-NeRF 360 photographs state no licence for commercial
+reuse. Edit the numbers when the capture changes, and do not name competitors.
 
 > A 62-second phone video in. A checked BIM model out, 2.3 minutes later on a CPU.
 > World Builder reconstructs the room, separates and measures every wall and object, and writes IFC4, a Rhino model, a
@@ -261,6 +301,8 @@ python scripts/world-demo/film/compose_film.py film <walkthrough frames> $J rout
 | "Furniture is measured as boxes" | "As-built LOD 300", "every pipe and fitting" (no MEP, no meshes) |
 | "Navigation and coverage scenes for robots" | "Manipulation-ready" (boxes at 3–6 cm cannot support grasping) |
 | "Object names are suggestions" | Names as facts (all are unreviewed; the detector called a 6 cm-thick object "oven") |
+| "On a synthetic test room with exact dimensions: walls within 2 cm, withheld spans within 1.9 cm" | The same numbers without "synthetic", or as the accuracy on real rooms |
+| "5 of 10 pieces of furniture found on a sparse cloud" | "Every object" for sparse captures (that needs the dense engine) |
 
 **Against laser-scan-to-BIM services,** for internal use only:
 - They start from a laser scanner, take 48 h and claim about 2 mm.
@@ -292,7 +334,8 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
   ```sh
   python -m pytest tests/world/test_worker.py tests/world/test_tenant_isolation.py tests/world/test_observations.py \
     tests/world/test_benchmark_eth3d.py tests/world/test_check_worker.py tests/world/test_densify.py \
-    tests/world/test_object_names.py tests/world/test_cad_export.py tests/world/test_fit_check.py -q
+    tests/world/test_object_names.py tests/world/test_cad_export.py tests/world/test_fit_check.py \
+    tests/world/test_benchmark_tools.py -q
   python -m unittest tests.scene_compiler.test_geometry tests.scene_compiler.test_scene_usd tests.scene_compiler.test_ifc_export
   ```
 
@@ -322,8 +365,8 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    - **The GB10** is rented out.
 2. **The Anthropic key (owner).** A key was pasted into a session chat on October 24 and must be rotated. Set the new key
    only in the worker's environment file (`ANTHROPIC_API_KEY`), never in the repo, the site or chat.
-3. **A commercial capture (owner).** Film one space as in "Film it", with the tape measurements. Until then every film
-   shows the residential test room.
+3. **A commercial capture (owner).** Film one space as in "Film it", with the tape measurements. Until then the films
+   show either the residential test room (private) or the synthetic meeting room (public, labelled synthetic).
 4. **Licence reviews (owner), before enabling or using commercially:**
    - the detector's model file (no licence notice in the file; MediaPipe itself is Apache-2.0);
    - `facebook/VGGT-1B` (CC BY-NC 4.0; the gated `VGGT-1B-Commercial` has its own licence);
@@ -342,34 +385,41 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    - Run it through #232's flow: Scale, then Review with the withheld checks, then Export.
    - Render with `regenerate_reference.py --capture-kind phone-video --render`. The film then carries a reference-check
      chapter, with failures shown: the first error figure measured against reality rather than against points.
-2. **Review and merge #232** (owner). Doors, measurement review and strict film admission live there.
-3. **Metric LiDAR import.**
+2. **Review and merge #232** (owner). Doors, measurement review and strict film admission live there. Then merge #233.
+   Its conflicts with #232 are only the docs, the memory notes and the CI test list.
+3. **Centre wall boxes behind the surface they saw** (owner's call). Today a compiled wall is centred on the face the
+   camera saw, so half its thickness stands in the room. On the benchmark, the room between the boxes reads 9 to 11 cm
+   short. Moving each box outward by half its thickness changes every exported wall and the fit numbers.
+4. **Run the dense CPU engine on the benchmark.** Five of ten pieces of furniture are found on the sparse cloud. The
+   dense engine is the intended answer, but its pinned depth model (Hugging Face) can't be fetched from these
+   cloud sessions.
+5. **Metric LiDAR import.**
    - Accept an iPhone Pro LiDAR export (PLY from Polycam, Scaniverse or 3D Scanner App, or Splatcatcher's COLMAP export)
      as a source with scale "device LiDAR", so no distance is typed.
    - Today the metric scene needs a worker reconstruction (`multiView`, `app.mjs:71`) and a typed distance
      (`app.mjs:64`).
-4. **MuJoCo export (`scene.mjcf`).**
+6. **MuJoCo export (`scene.mjcf`).**
    - Floor, walls and objects as static boxes, keeping the fit numbers and inferred marks; tested by loading and stepping
      it with the `mujoco` package in CI.
    - It makes scanned spaces usable as evaluation scenes in DeepMind's simulator and in the Robot Arena, which already
      runs MuJoCo 3.2.3.
    - About a day, all on CPU.
-5. **Rooms in IFC.** Doors arrive with #232. Still missing:
+7. **Rooms in IFC.** Doors arrive with #232. Still missing:
    - the room as an `IfcSpace`, with its area in `quantities.csv`;
    - the site button rename: it still says "(GLB, USD, IFC)" though it also writes DXF, 3DM, CSV and the fit check.
-6. **Gemini Robotics-ER 2 as a naming option.**
+8. **Gemini Robotics-ER 2 as a naming option.**
    - Use `gemini-robotics-er-2-preview` through the Gemini API, alongside Claude and the detector.
    - It returns 2D points and boxes; the worker lifts them into 3D with the COLMAP poses.
    - It needs `GEMINI_API_KEY` on the worker, a consent box like Claude naming, and a check of preview pricing and data
      terms.
-7. **The GPU stack on the 4090:**
+9. **The GPU stack on the 4090:**
    - splats (splatfacto) and planar meshes (PGSR) for photoreal review;
    - OpenUSD's splat prim;
    - SAM 2 masks to split touching objects.
 
    Keep IFC as the source of truth.
-8. **A review UI for names** (accept, edit or reject per object), then map "door" to `IfcDoor`.
-9. **Objects from one photo for visitors**, through a spend-capped server route. It needs a key in Railway and the
+10. **A review UI for names** (accept, edit or reject per object), then map "door" to `IfcDoor`.
+11. **Objects from one photo for visitors**, through a spend-capped server route. It needs a key in Railway and the
    owner's approval for public spend.
 
 ## Known weaknesses (room run)
@@ -392,3 +442,6 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 | Robot vacuum route, scene map | 110.2 m, 5.52 m² reachable |
 | ETH3D office (12 photos), median error / within 5 cm | Sparse: 1.5 cm / 87%. Dense CPU: 3.1 cm / 59% |
 | Claude naming (earlier dense run) | 10 objects, 19 crops, 11 s, about $0.03 |
+| Synthetic meeting room (60 frames, 960 × 540), `colmap-sparse` | 60 of 60 frames posed; 20,844 points; camera alignment 7.5 mm RMS; about 2.5 min |
+| Same room, after the fixes (scale from a 2.4 m span) | Level 0.3°, floor +4.0 cm; walls 4 of 4, width −1.7 cm, depth −1.5 cm, faces 0.7 cm median; furniture 5 of 10; withheld spans 7 of 7, worst 1.9 cm |
+| Same room, before the fixes | Level 9.4°, floor +58 cm; walls 2 of 4; furniture 2 of 10; withheld spans 5 of 7 usable, worst 4.1 cm |

@@ -59,7 +59,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
-→ [World Builder flagship](world-builder-2026-10.md) — real local photo previews, CPU and bounded photo/video GPU reconstruction, source-bound local VLM reviews, private tenant boundaries, measured-evidence worksheets and bounded HEVC/capture tests; reconstruction → proposed planning map handoff (Oct 21) with exact rescaling from a user-measured distance (Oct 22); metric scenes with GLB, USD and IFC (Oct 23); Lyra 1 GB10 trial approved (Oct 24); DXF, Rhino 3DM, quantities and a fit check of every point, with the floor-leveling fix (Oct 24, #226–#229); full public real-to-sim qualification remains open.
+→ [World Builder flagship](world-builder-2026-10.md) — real local photo previews, CPU and bounded photo/video GPU reconstruction, source-bound local VLM reviews, private tenant boundaries, measured-evidence worksheets and bounded HEVC/capture tests; reconstruction → proposed planning map handoff (Oct 21) with exact rescaling from a user-measured distance (Oct 22); metric scenes with GLB, USD and IFC (Oct 23); Lyra 1 GB10 trial approved (Oct 24); DXF, Rhino 3DM, quantities and a fit check of every point, with the floor-leveling fix (Oct 24, #226–#229); a synthetic meeting-room benchmark scored against exact truth, which fixed the hand-off trim, weak-floor leveling and sparse furniture (Oct 25, #233); full public real-to-sim qualification remains open.
 
 <!-- Both AIs append notes here as they work -->
 
