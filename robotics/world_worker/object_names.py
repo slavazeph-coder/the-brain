@@ -12,7 +12,10 @@ worker only when the person approved it for this job (`nameObjects` in the hand-
 from __future__ import annotations
 
 import base64
+import bisect
+import hashlib
 import io
+import itertools
 import json
 import math
 from pathlib import Path
@@ -75,7 +78,140 @@ def source_points(points, from_source):
     det = float(np.linalg.det(A))
     if abs(det) < 1e-12:
         raise NamingSkipped('The hand-off transform is singular.')
-    return (np.asarray(points, float)[:, :3] - t) @ np.linalg.inv(A).T, abs(det) ** (1 / 3)
+    scale = abs(det) ** (1 / 3)
+    if det <= 0 or not np.allclose(A.T @ A, np.eye(3) * scale**2, rtol=1e-5, atol=scale**2 * 1e-6):
+        raise NamingSkipped('The hand-off transform must be a proper rotation and uniform positive scale.')
+    return (np.asarray(points, float)[:, :3] - t) @ np.linalg.inv(A).T, scale
+
+
+def _source_cloud_rows(root, entry):
+    """Read only the bounded ASCII preview written by our adapters, from admitted bytes."""
+    import numpy as np
+    path = root / entry['name']
+    raw = path.read_bytes()
+    if len(raw) != entry['bytes'] or hashlib.sha256(raw).hexdigest() != entry['sha256']:
+        raise NamingSkipped('Source point-cloud bytes changed after camera evidence validation.')
+    head, separator, body = raw.partition(b'end_header\n')
+    if not separator or len(head) > 8192:
+        raise NamingSkipped('Unsupported source preview PLY header.')
+    lines = head.decode('ascii').splitlines()
+    properties = [line for line in lines if line.startswith('property ')]
+    if lines[:2] != ['ply', 'format ascii 1.0'] or properties != [
+            'property float x', 'property float y', 'property float z', 'property uchar red',
+            'property uchar green', 'property uchar blue']:
+        raise NamingSkipped('Source camera binding requires the adapter ASCII XYZ/RGB preview.')
+    vertices = [line.split() for line in lines if line.startswith('element vertex ')]
+    if len(vertices) != 1 or not 1 <= int(vertices[0][2]) <= 200_000:
+        raise NamingSkipped('Source preview point count is invalid.')
+    rows = body.decode('ascii').splitlines()
+    if len(rows) != int(vertices[0][2]):
+        raise NamingSkipped('Source preview body differs from its declared point count.')
+    values = np.asarray([row.split() for row in rows], dtype=float)
+    if values.shape != (len(rows), 6) or not np.isfinite(values).all() \
+            or np.any(np.abs(values[:, :3]) > 10_000_000) \
+            or np.any(values[:, 3:] < 0) or np.any(values[:, 3:] > 255) \
+            or np.any(values[:, 3:] != np.rint(values[:, 3:])):
+        raise NamingSkipped('Source preview has invalid XYZ/RGB values.')
+    # Browser PLY parsing uses float32, even though the text can carry more digits.
+    values[:, :3] = values[:, :3].astype(np.float32)
+    return values
+
+
+def _ordered_source_subset(cloud, source, source_points_xyz):
+    """Confirm source membership, RGB and order with a bounded numeric-roundoff allowance.
+
+    This checks data lineage, not metric accuracy. Trimming and thinning preserve
+    source order. Arbitrary new coordinates cannot silently borrow another job's cameras.
+    """
+    import numpy as np
+    target = np.asarray(cloud.get('points'), dtype=float)
+    if target.ndim != 2 or target.shape[1] != 6 or not 1 <= len(target) <= 50_000 \
+            or not np.isfinite(target).all():
+        raise NamingSkipped('Camera evidence needs a bounded finite hand-off cloud.')
+    # The saved PLY and browser both use the same float32 coordinates. Only
+    # double-precision similarity inversion/serialization roundoff is allowed.
+    # A discarded far outlier must not turn a moved room point into a match.
+    matrix = np.asarray(cloud['fromSource'], dtype=float)
+    scale = abs(float(np.linalg.det(matrix[:, :3]))) ** (1 / 3)
+    offset_term = float(np.abs(matrix[:, 3]).max()) / scale
+    roundoff = 128 * np.finfo(float).eps
+    source_floor = 1e-6 / scale
+    epsilon = max(source_floor, roundoff * (2 * float(np.abs(source[:, :3]).max()) + 2 * offset_term + 1))
+    buckets = {}
+    for index, row in enumerate(source):
+        key = (*np.floor(row[:3] / epsilon).astype(np.int64).tolist(), *row[3:].tolist())
+        buckets.setdefault(key, []).append(index)
+    previous, checks = -1, 0
+    offsets = list(itertools.product((-1, 0, 1), repeat=3))
+    for position, target_point in zip(source_points_xyz, target):
+        colour = target_point[3:]
+        cell = np.floor(position / epsilon).astype(np.int64)
+        best = len(source)
+        for offset in offsets:
+            key = (*(cell + offset).tolist(), *colour.tolist())
+            indices = buckets.get(key, ())
+            at = bisect.bisect_right(indices, previous)
+            for offset_index in range(at, len(indices)):
+                index = indices[offset_index]
+                if index >= best:
+                    break
+                checks += 1
+                if checks > 2_000_000:
+                    raise NamingSkipped('Source-cloud association exceeded its comparison budget.')
+                local_tolerance = np.maximum(source_floor, roundoff * (np.abs(source[index, :3]) + np.abs(position) + 2 * offset_term + 1))
+                forward = matrix[:, :3] @ source[index, :3] + matrix[:, 3]
+                handoff_tolerance = 1e-6 + roundoff * (np.abs(matrix[:, :3]) @ np.abs(source[index, :3])
+                                                      + np.abs(matrix[:, 3]) + np.abs(target_point[:3]))
+                if np.all(np.abs(source[index, :3] - position) <= local_tolerance) \
+                        and np.all(np.abs(forward - target_point[:3]) <= handoff_tolerance):
+                    best = index
+                    break
+        if best == len(source):
+            raise NamingSkipped('Hand-off points, colours or ordering do not match the source camera cloud.')
+        previous = best
+    return epsilon
+
+
+def reconstruction_views(source_dir, cloud, *, ledger_path=None):
+    """Adapter-neutral, source-bound cameras; legacy COLMAP jobs remain explicitly unbound."""
+    try:
+        from . import camera_frames
+    except ImportError:
+        import camera_frames
+    root = Path(source_dir).absolute()
+    # CLI callers may pass the actual artifact directory; worker callers pass
+    # the authorized job root and use its canonical output directory.
+    if ledger_path is None and ((root / 'camera-frames.json').exists() or (root / 'camera-frames.json').is_symlink()):
+        ledger_path = root / 'camera-frames.json'
+        root = root.parent
+    ledger = Path(ledger_path) if ledger_path is not None else root / 'output' / 'camera-frames.json'
+    if not ledger.is_absolute():
+        ledger = root / ledger
+    if not ledger.exists() and not ledger.is_symlink():
+        if ledger_path is not None:
+            raise NamingSkipped('The supplied camera-frame ledger is missing.')
+        return [{**view, 'binding_status': 'legacy-colmap-unbound'} for view in colmap_views(root)]
+    record = camera_frames.load_record(root, ledger_path=ledger)  # Invalid evidence must never fall back.
+    P, _scale = source_points(cloud['points'], cloud.get('fromSource'))
+    candidates, failures = [], []
+    for entry in record['clouds']:
+        if entry['coordinate_frame'] != cloud.get('sourceFrame'):
+            continue
+        try:
+            epsilon = _ordered_source_subset(cloud, _source_cloud_rows(root, entry), P)
+            candidates.append((entry, epsilon))
+        except NamingSkipped as error:
+            failures.append(str(error))
+    if not candidates:
+        raise NamingSkipped(failures[0] if failures else 'The source camera coordinate frame does not match this hand-off.')
+    if len(candidates) > 1:
+        hinted = [row for row in candidates if Path(row[0]['name']).name == Path(str(cloud.get('source', ''))).name]
+        if len(hinted) != 1:
+            raise NamingSkipped('More than one source cloud matches; retain its actual preview artifact name.')
+        candidates = hinted
+    entry, epsilon = candidates[0]
+    return [{**view, 'binding_status': 'ordered-source-subset', 'binding_tolerance_source_units': epsilon}
+            for view in camera_frames.load_views(root, expected_cloud_sha256=entry['sha256'], ledger_path=ledger)]
 
 
 def selected_model(sparse: Path):
@@ -158,7 +294,7 @@ def choose_views(objects, P, views, metres_per_unit, cell=8):
                 continue
             size = min(1.0, (x1 - x0) * (y1 - y0) / (W * H) / 0.35)  # larger is better, up to about a third of the frame
             centre = -view['cam_from_world'][:, :3].T @ view['cam_from_world'][:, 3]
-            ranked[n].append({'score': (1 - hidden) * size * seen.mean(), 'hidden': hidden, 'view': view,
+            ranked[n].append({'score': (1 - hidden) * size * seen.mean(), 'hidden': hidden, 'visible': float(seen.mean()), 'view': view,
                               'box': [float(x0), float(y0), float(x1), float(y1)], 'camera': centre})
     chosen = []
     for options in ranked:
@@ -172,12 +308,26 @@ def choose_views(objects, P, views, metres_per_unit, cell=8):
     return chosen
 
 
-def crop(view, box):
+def view_image_bytes(view):
+    """Read the admitted raster bytes again before use; new evidence fails closed on replacement."""
+    path = Path(view['path'])
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 64 * 1024**2:
+        raise NamingSkipped('Source camera image is missing, oversized or unsafe.')
+    raw = path.read_bytes()
+    if 'image_sha256' in view and (hashlib.sha256(raw).hexdigest() != view['image_sha256']
+                                  or len(raw) != view['image_bytes_size']):
+        raise NamingSkipped('Source camera image changed after evidence validation.')
+    return raw
+
+
+def crop_with_evidence(view, box):
     """JPEG bytes of the frame around a pixel box (a quarter of its size added on each side), the box outlined."""
     from PIL import Image, ImageDraw
     x0, y0, x1, y1 = box
     pad_x, pad_y = max(48, (x1 - x0) * .25), max(48, (y1 - y0) * .25)
-    with Image.open(view['path']) as source:
+    with Image.open(io.BytesIO(view_image_bytes(view))) as source:
+        if source.size != (view['width'], view['height']):
+            raise NamingSkipped('Source camera image dimensions changed.')
         image = source.convert('RGB')
     left, top = max(0, int(x0 - pad_x)), max(0, int(y0 - pad_y))
     right, bottom = min(image.width, int(math.ceil(x1 + pad_x))), min(image.height, int(math.ceil(y1 + pad_y)))
@@ -185,7 +335,24 @@ def crop(view, box):
     ImageDraw.Draw(piece).rectangle([x0 - left, y0 - top, x1 - left, y1 - top], outline=OUTLINE, width=max(2, round(max(piece.size) / 170)))
     piece.thumbnail((CROP_EDGE, CROP_EDGE))
     out = io.BytesIO(); piece.save(out, format='JPEG', quality=85)
-    return out.getvalue()
+    raw = out.getvalue()
+    return raw, {'pixelBox': [float(v) for v in box], 'cropRectangle': [left, top, right, bottom],
+                 'cropWidth': piece.width, 'cropHeight': piece.height, 'cropSha256': hashlib.sha256(raw).hexdigest(),
+                 'cropBytes': len(raw), 'raster': 'Outlined JPEG derivative of the admitted camera raster.'}
+
+
+def crop(view, box):
+    return crop_with_evidence(view, box)[0]
+
+
+def frame_evidence(pick, crop_record=None):
+    view = pick['view']
+    return {'frameId': view.get('frame_id'), 'imageSha256': view.get('image_sha256'),
+            'cameraLedgerSha256': view.get('ledger_sha256'), 'sourceCloudSha256': view.get('source_cloud_sha256'),
+            'bindingStatus': view.get('binding_status', 'injected-view-unbound'),
+            'pixelConvention': view.get('pixel_convention', 'legacy-or-injected-unspecified'),
+            'pixelBox': [float(v) for v in pick['box']], 'visibleFraction': pick.get('visible'),
+            'occludedFraction': pick['hidden'], **({'crop': crop_record} if crop_record else {})}
 
 
 def request_content(items):
@@ -251,15 +418,17 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
     order = sorted(range(len(separated)), key=lambda i: -(separated[i]['length'] * separated[i]['thickness']
                                                           * (separated[i]['y1'] - separated[i]['y0'])))[:MAX_OBJECTS]
     objects = [separated[i] for i in order]
-    views = views if views is not None else colmap_views(source_dir)
+    views = views if views is not None else reconstruction_views(source_dir, cloud)
     chosen = choose_views(objects, P, views, metres_per_unit)
     items, skipped = [], []
     for i, obj, picks in zip(order, objects, chosen):
         if not picks:
             skipped.append({'id': f'object_{i + 1}', 'reason': 'not seen whole and unoccluded in any frame'}); continue
+        crops = [] if detect else [crop_with_evidence(p['view'], p['box']) for p in picks]
         items.append({'id': str(i + 1), 'object': obj, 'size': [obj['length'], obj['thickness'], obj['y1'] - obj['y0']],
                       'views': [p['view']['name'] for p in picks], 'picks': picks,
-                      'crops': [] if detect else [crop(p['view'], p['box']) for p in picks]})
+                      'crops': [row[0] for row in crops],
+                      'frameEvidence': [frame_evidence(pick, None if detect else crops[n][1]) for n, pick in enumerate(picks)]})
     if not items:
         raise NamingSkipped('No separated object was seen whole and unoccluded in any frame.')
     if detect:
@@ -281,9 +450,13 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
         {'id': f"object_{item['id']}", 'centre': [float(v) for v in item['object']['centre']],
          'height': float(item['object']['y1'] - item['object']['y0']), 'views': item['views'], **answers[item['id']]}
         for item in items if item['id'] in answers]}
+    for record, item in zip(names['objects'], [i for i in items if i['id'] in answers]):
+        record['frameEvidence'] = item['frameEvidence']
     evidence = {'provider': provider, 'requested_model': requested, 'model': served, 'prompt_version': version,
                 'objects_separated': len(separated), ('objects_checked' if detect else 'objects_sent'): len(items),
                 'crops_sent': sum(len(i['crops']) for i in items),
                 'answered': len(answers), 'skipped': skipped + [{'id': f"object_{i['id']}", 'reason': 'no answer'} for i in items if i['id'] not in answers],
-                'usage': usage, 'elapsed_seconds': round(time.monotonic() - started, 3), 'reviewed': False}
+                'usage': usage, 'elapsed_seconds': round(time.monotonic() - started, 3), 'reviewed': False,
+                'frame_evidence': {'bound': all(v.get('binding_status') == 'ordered-source-subset' for v in views),
+                                   'frames': len(views), 'scope': 'Raster/geometry association; naming remains an unreviewed suggestion.'}}
     return names, evidence

@@ -84,7 +84,42 @@ def map_frames(database: Path, images: Path, workspace: Path, count: int):
     return models, index, model, attempts
 
 
-def prepare_photo(source: Path, target: Path):
+def file_sha256(path: Path):
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for part in iter(lambda: stream.read(1024 ** 2), b''):
+            digest.update(part)
+    return digest.hexdigest()
+
+
+def photo_pixel_transform(width, height, orientation, prepared_width, prepared_height):
+    """Stored source pixel centres -> EXIF-upright, resized pixel centres.
+
+    Pixel (0,0) is the first pixel centre, not its outer corner. Pillow's resize
+    maps centres by (x+.5)*scale-.5, after the discrete EXIF transpose.
+    """
+    if any(type(value) is not int or value < 1 for value in (width, height, prepared_width, prepared_height)):
+        raise ValueError('Source and prepared raster dimensions must be positive integers.')
+    matrices = {
+        1: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        2: [[-1, 0, width - 1], [0, 1, 0], [0, 0, 1]],
+        3: [[-1, 0, width - 1], [0, -1, height - 1], [0, 0, 1]],
+        4: [[1, 0, 0], [0, -1, height - 1], [0, 0, 1]],
+        5: [[0, 1, 0], [1, 0, 0], [0, 0, 1]],
+        6: [[0, -1, height - 1], [1, 0, 0], [0, 0, 1]],
+        7: [[0, -1, height - 1], [-1, 0, width - 1], [0, 0, 1]],
+        8: [[0, 1, 0], [-1, 0, width - 1], [0, 0, 1]],
+    }
+    if type(orientation) is not int or orientation not in matrices:
+        raise ValueError('EXIF orientation must be an integer from 1 to 8.')
+    ow, oh = (height, width) if orientation >= 5 else (width, height)
+    sx, sy = prepared_width / ow, prepared_height / oh
+    exif = matrices[orientation]
+    return [[sx * exif[0][0], sx * exif[0][1], sx * exif[0][2] + (sx - 1) / 2],
+            [sy * exif[1][0], sy * exif[1][1], sy * exif[1][2] + (sy - 1) / 2], [0, 0, 1]]
+
+
+def prepare_photo(source: Path, target: Path, *, with_evidence=False):
     from PIL import Image, ImageOps, ImageStat
     with warnings.catch_warnings():
         warnings.simplefilter('error', Image.DecompressionBombWarning)
@@ -93,7 +128,12 @@ def prepare_photo(source: Path, target: Path):
                 raise ValueError('Photos must be JPEG, PNG or WebP up to 24 megapixels.')
             original.verify()
         with Image.open(source) as original:
+            original_width, original_height = original.size
+            orientation = original.getexif().get(274, 1)
+            if type(orientation) is not int or not 1 <= orientation <= 8:
+                raise ValueError('Unsupported EXIF orientation; use an orientation from 1 to 8.')
             image = ImageOps.exif_transpose(original).convert('RGB')
+            oriented_width, oriented_height = image.size
             if min(image.size) < 256:
                 raise ValueError('Use photographs at least 256 pixels on each side.')
             image.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE))
@@ -103,7 +143,14 @@ def prepare_photo(source: Path, target: Path):
             # Re-encoding removes location/EXIF metadata. COLMAP estimates intrinsics;
             # no lens, scale or camera calibration is claimed to be measured.
             image.save(target, 'JPEG', quality=92)
-            return {'width': image.width, 'height': image.height}
+            result = {'width': image.width, 'height': image.height}
+            if with_evidence:
+                result.update(sourceSha256=file_sha256(source), sourceWidth=original_width, sourceHeight=original_height,
+                              exifOrientation=orientation, orientedWidth=oriented_width, orientedHeight=oriented_height,
+                              preparedPath=target.name, preparedSha256=file_sha256(target),
+                              sourceToPreparedPixelCenter=photo_pixel_transform(original_width, original_height, orientation,
+                                                                               image.width, image.height))
+            return result
 
 
 def video_input_options(source: Path):
@@ -162,11 +209,13 @@ def extract_video(source: Path, images: Path, *, max_images: int | None = None):
                     '-frames:v', str(budget), '-q:v', '3', str(raw / 'frame_%04d.jpg')],
                    check=True, timeout=max(90, 3 * duration))
     accepted, discarded, duplicates = 0, 0, 0
+    associations = []
+    source_sha256 = file_sha256(source)
     previous = None
-    for frame in sorted(raw.glob('*.jpg')):
+    for sampled_index, frame in enumerate(sorted(raw.glob('*.jpg'))):
         try:
             target = images / f'image_{accepted:04d}.jpg'
-            prepare_photo(frame, target)
+            preparation = prepare_photo(frame, target, with_evidence=True)
             with Image.open(target) as photo:
                 fingerprint = photo.convert('L').resize((32, 32))
             if previous is not None and ImageStat.Stat(ImageChops.difference(previous, fingerprint)).mean[0] < 1:
@@ -174,6 +223,11 @@ def extract_video(source: Path, images: Path, *, max_images: int | None = None):
                 duplicates += 1
                 continue
             previous = fingerprint
+            associations.append({'image': target.name, 'sourceIndex': 0, 'sourceSha256': source_sha256,
+                                 'sourceWidth': streams[0]['width'], 'sourceHeight': streams[0]['height'],
+                                 'exifOrientation': None, 'sourceToFramePixelCenter': None, 'timestamp': None,
+                                 'resampledOutputIndex': sampled_index, 'extractedFrame': frame.name,
+                                 'preparation': preparation})
             accepted += 1
         except ValueError:
             discarded += 1
@@ -181,7 +235,53 @@ def extract_video(source: Path, images: Path, *, max_images: int | None = None):
     if accepted < 6:
         raise ValueError('Fewer than 6 useful frames. Walk slowly with overlapping views and visible detail.')
     return {'duration_seconds': duration, 'sample_fps': fps, 'frame_budget': budget, 'discarded_frames': discarded,
-            'near_duplicate_frames': duplicates}
+            'near_duplicate_frames': duplicates, 'frames': associations,
+            'timestamp_evidence': 'Original PTS/time base unavailable: FFmpeg fps resampling and duplicate filtering are not an original-frame timestamp ledger. resampledOutputIndex is not a source PTS.',
+            'pixel_geometry_evidence': 'Video source-to-prepared transform unavailable: FFmpeg autorotation and pre-extraction scaling were not recorded. The extracted-raster-to-prepared transform and prepared image hash are retained.'}
+
+
+def camera_frame_records(model, images, associations, sources, job_root):
+    """Actual selected-model cameras, bound to their precise prepared rasters.
+
+    Source-to-frame transforms describe preparation only, not calibration. The
+    full fitted lens model is retained; radial distortion is not discarded.
+    """
+    try:
+        from . import camera_frames
+    except ImportError:
+        import camera_frames
+    by_name = {entry['image']: entry for entry in associations}
+    if len(by_name) != len(associations):
+        raise ValueError('Prepared frame associations must have unique names.')
+    frames = []
+    for image_id in sorted(model.reg_image_ids()):
+        image = model.image(image_id); camera = model.camera(image.camera_id)
+        entry = by_name.get(image.name)
+        if entry is None or Path(image.name).name != image.name:
+            raise ValueError('A registered camera has no exact prepared-source frame association.')
+        preparation = entry['preparation']; path = Path(images) / image.name
+        if file_sha256(path) != preparation['preparedSha256']:
+            raise ValueError('Prepared camera raster changed after capture preparation.')
+        if (camera.width, camera.height) != (preparation['width'], preparation['height']):
+            raise ValueError('COLMAP camera dimensions do not match the actual prepared raster.')
+        source_index = entry['sourceIndex']
+        if type(source_index) is not int or not 0 <= source_index < len(sources) \
+                or entry['sourceSha256'] != sources[source_index]['sha256']:
+            raise ValueError('Prepared frame source hash does not match the accepted capture source.')
+        # COLMAP's top-left pixel centre is (.5,.5), unlike Pillow raster
+        # indices. Keep fitted parameters native and let the shared projector
+        # convert to integer-centre raster coordinates explicitly.
+        camera_model = {'model': camera.model_name, 'params': camera.params.tolist(), 'pixelConvention': 'colmap-half-pixel'}
+        if camera_model['model'] not in ('PINHOLE', 'SIMPLE_RADIAL'):
+            raise ValueError('This frame evidence version requires a supported actual COLMAP camera model.')
+        pose = image.cam_from_world().matrix().tolist()
+        image_record = camera_frames.file_record(job_root, path, width=camera.width, height=camera.height)
+        frame = {'frame_id': camera_frames.frame_id(sources[source_index]['sha256'], image_record['sha256'], camera_model, pose),
+                 'image': image_record,
+                 'origin': {key: entry[key] for key in ('sourceIndex', 'sourceWidth', 'sourceHeight', 'exifOrientation', 'sourceToFramePixelCenter')},
+                 'timestamp': entry['timestamp'], 'camera': camera_model, 'cam_from_world': pose}
+        frames.append(frame)
+    return frames
 
 
 def run(request: dict, densify_model: Path | None = None):
@@ -206,15 +306,18 @@ def run(request: dict, densify_model: Path | None = None):
         path = Path(item['path'])
         if not path.is_absolute() or path.is_symlink() or not path.is_file():
             raise ValueError('Adapter inputs must be regular local files.')
-        digest = hashlib.sha256()
-        with path.open('rb') as stream:
-            for part in iter(lambda: stream.read(1024 ** 2), b''):
-                digest.update(part)
-        sources.append({'name': item['name'], 'kind': item['kind'], 'sha256': digest.hexdigest()})
+        sources.append({'name': item['name'], 'kind': item['kind'], 'sha256': file_sha256(path)})
     capture = extract_video(Path(inputs[0]['path']), images) if video else {}
+    associations = list(capture.get('frames', []))
     if photo_set:
         for index, item in enumerate(inputs):
-            prepare_photo(Path(item['path']), images / f'image_{index:04d}.jpg')
+            target = images / f'image_{index:04d}.jpg'
+            preparation = prepare_photo(Path(item['path']), target, with_evidence=True)
+            associations.append({'image': target.name, 'sourceIndex': index, 'sourceSha256': preparation['sourceSha256'],
+                                 'sourceWidth': preparation['sourceWidth'], 'sourceHeight': preparation['sourceHeight'],
+                                 'exifOrientation': preparation['exifOrientation'],
+                                 'sourceToFramePixelCenter': preparation['sourceToPreparedPixelCenter'],
+                                 'timestamp': None, 'preparation': preparation})
     count = len(list(images.glob('*.jpg')))
     database = workspace / 'database.db'
     extraction = pycolmap.FeatureExtractionOptions({'num_threads': THREADS, 'max_image_size': MAX_IMAGE_EDGE,
@@ -258,11 +361,13 @@ def run(request: dict, densify_model: Path | None = None):
                  'model': {k: densify.MODEL[k] for k in ('repo', 'revision', 'file', 'sha256', 'license')},
                  **frame_stats, **fuse_stats, 'tolerance': 0.02, 'min_agree': 2, 'neighbours': 4,
                  'elapsed_seconds': round(time.monotonic() - dense_started, 3)}
+    frame_records = camera_frame_records(model, images, associations, sources, out.parent)
+    by_image = {Path(frame['image']['name']).name: frame for frame in frame_records}
     cameras = []
     for image_id in sorted(model.reg_image_ids()):
         image = model.image(image_id)
         camera = model.camera(image.camera_id)
-        cameras.append({'image': image.name, 'camera_id': image.camera_id,
+        cameras.append({'image': image.name, 'camera_id': image.camera_id, 'frame_id': by_image[image.name]['frame_id'],
                         'world_to_camera': image.cam_from_world().matrix().tolist(),
                         'camera_center': image.projection_center().tolist(),
                         'model': camera.model_name, 'width': camera.width, 'height': camera.height,
@@ -286,9 +391,26 @@ def run(request: dict, densify_model: Path | None = None):
                             (['Dense points come from a depth model checked across frames; they are less accurate than the sparse points.']
                              if dense else []),
                 'cameras': cameras}
+    try:
+        from . import camera_frames
+    except ImportError:
+        import camera_frames
+    clouds = [camera_frames.file_record(out.parent, out / artifact['name'], coordinate_frame='colmap') for artifact in artifacts]
+    evidence['point_clouds'] = clouds
+    evidence['camera_frame_evidence'] = {'schema': 'brainsnn.camera-frames.v1', 'artifact': 'camera-frames.json',
+                                         'registered_frames': len(frame_records),
+                                         'prepared_images': 'Private colmap-work/images files share worker job retention; source EXIF/location metadata is stripped from prepared JPEGs.',
+                                         'pixel_centres': 'Source integer pixel centres; EXIF transpose followed by (x+.5)*scale-.5 resize.',
+                                         'camera_pixels': 'Native COLMAP parameters use top-left centre (.5,.5); the shared raster projector subtracts .5. Calibration parameters are not silently shifted.',
+                                         'timestamps': 'Original video PTS unavailable for the FFmpeg resampled path; photos have no video timestamp.'}
     if dense: evidence['dense'] = dense
     (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
-    (out / 'manifest.json').write_text(json.dumps({'artifacts': [*artifacts, {'name': 'reconstruction.json', 'kind': 'evidence'}]}, allow_nan=False))
+    ledger = {'schema': 'brainsnn.camera-frames.v1', 'sources': sources,
+              'reconstruction': camera_frames.file_record(out.parent, out / 'reconstruction.json'),
+              'clouds': clouds, 'frames': frame_records, 'metric_verified': False}
+    camera_frames.write(out.parent, ledger, output_path=out / 'camera-frames.json')
+    (out / 'manifest.json').write_text(json.dumps({'artifacts': [*artifacts, {'name': 'reconstruction.json', 'kind': 'evidence'},
+                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}]}, allow_nan=False))
     return evidence
 
 
