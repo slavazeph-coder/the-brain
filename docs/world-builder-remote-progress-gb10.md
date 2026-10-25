@@ -5,6 +5,24 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 98 — loopback 413 wire test verified green; run log synced; 4090 idle confirmed
+- Previous run's `1ecfb3c` (loopback 413 wire test, `tests/world/test_report_receipts_loopback.py`)
+  verified **pushed** (HEAD == origin after `git fetch`). Re-ran both suites on this tree:
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (79.9 ms)
+  - `pytest tests/world/test_report_receipts.py tests/world/test_report_receipts_loopback.py -q`
+    → **32 passed in 10.89 s**
+- Real-HTTP loopback checks (uvicorn on real socket, 413 tamper path, offline verify) confirmed
+  passing on live code — the previous run's commit had never been recorded in this progress file.
+- 4090 probe (short SSH, key `/root/.ssh/gb10-rebuild`): hostname `d130b6c7f3f4`, GPU
+  `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09` **0% util, 28/24564 MiB, 30C** — idle.
+  4090 branch `hermes/world-builder-4090` at `24cf8fb` (run 95: libx264 fixed,
+  test_worker 44 passed 2 skipped); `robotics/experiments/` untracked, preserved.
+- No 4090 GPU work this run (alternation: GB10 verification closed). No force-push/merge/deploy.
+  No paid fallback. Serving Qwen/backup, licensed gates untouched.
+- Next bounded action: run the full signed-receipt UI smoke (`report_receipt_ui_smoke.mjs`)
+  against a live uvicorn instance to close the "actual HTTP report UI validation" gate —
+  or fold the 413 loopback result into the progress doc as a run-94+ record first.
+
 ### Run 93 — .env.example committed + pushed; suites re-verified green
 
 - Run 92's pending `.env.example` (2,978 B, documents WORLD_WORKER_TOKEN, WORLD_WORKER_DIR,
