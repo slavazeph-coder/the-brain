@@ -76,3 +76,13 @@ description: World Builder flagship development, real browser inference and reco
     - rotating the Anthropic key shared in chat (owner);
     - a dense GPU benchmark on the 4090 (Hermes);
     - Lyra 1 trial receipts.
+  - Oct 24 evening (#226–#229), after the owner asked for commercial BIM films "better than Moving Atoms":
+    - #226: COLMAP mapping retries seeds 0–2 until 90% of frames join one model (one walkthrough split 33 + 26 frames).
+    - #227: on-worker detector names (EfficientDet-Lite2, pinned sha256); `scene-plan.dxf`, `scene.3dm` and `quantities.csv` from scene.json; the feed-film scripts.
+    - #228: the site's `fitFloorPlane` read empty height bins as undefined (NaN peak), so a capture with one stray point under the floor stayed tilted. Every film before it was compiled 16.3° off level.
+    - #229: fit check (`fit-check.json`, `fit-heatmap.ply`; model to points, metric scenes only), furniture grounded over unseen floor (base "inferred"), the floor plane through the floor layer itself (not a bin centre), and the film's `--cut check`.
+    - Main's release checks failed on #228's merge because #228's own new test was flaky (17 of 40 runs). #229 fixed the cause; check that main is green before assuming a deploy.
+    - Decisions: don't compete with laser scan-to-BIM on millimetres; win on phone capture, minutes and an open fit check. No "Xactimate integration" claims (ESX needs Verisk's partner programme). VGGT-1B, Depth Anything V2 Base/Large and Depth Pro are not licensed for commercial use. Gemini Robotics-ER 2 (Gemini API) fits as a naming provider; next exports are a MuJoCo scene and doors/rooms in IFC.
+    - Handoff: `docs/world-builder-handoff.md` (Oct 24 evening), with capture guide, API steps, file table, claims sheet and next steps.
+    - Oct 25: Codex's draft #232 (`codex/world-bim-demo`) adds reviewed measurements (calibration plus withheld checks), hosted openings and strict film admission. The original room evidence #232 called unavailable was recovered from the Claude session (capture SHA-256 `083923ee…26ab`), and passed its `regenerate_reference.py`; the three cuts are rendered from it with that wrapper, and the raw archive goes to the owner, not the repo.
+
