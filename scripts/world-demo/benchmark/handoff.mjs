@@ -1,11 +1,12 @@
 // The site's own hand-off for a reconstruction PLY: toArenaCloud, as the browser exports it after a measured distance.
-// usage: node handoff.mjs <sparse-preview.ply> <out.json> <metresPerUnit> [<distance> <span>] [<world dir>]
+// usage: node handoff.mjs <sparse-preview.ply> <out.json> <metresPerUnit> <world dir> [<distance> <span>]
 // With metresPerUnit 1 and no distance, the hand-off stays in reconstruction units (the order and framing are the same).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [ply, out, k, distance, span, worldDir = 'brainsnn-r3f-app/public/world'] = process.argv.slice(2);
+const [ply, out, k, worldDir, distance, span] = process.argv.slice(2);
+if (!worldDir) throw Error('usage: node handoff.mjs <ply> <out.json> <metresPerUnit> <world dir> [<distance> <span>]');
 const { parsePLY, toArenaCloud } = await import(pathToFileURL(resolve(worldDir, 'visual-geometry.mjs')).href);
 const buf = readFileSync(ply), { points } = parsePLY(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 const metric = Number(k) !== 1 || distance !== undefined;

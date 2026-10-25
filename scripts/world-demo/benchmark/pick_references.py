@@ -66,9 +66,9 @@ def fingerprint(points):
 
 
 def handoff(ply, out, world, k=1.0, distance=None, span=None):
-    cmd = ['node', str(Path(__file__).with_name('handoff.mjs')), str(ply), str(out), repr(k)]
+    cmd = ['node', str(Path(__file__).with_name('handoff.mjs')), str(ply), str(out), repr(k), str(Path(world).resolve())]
     if distance is not None: cmd += [repr(distance), repr(span)]
-    subprocess.run(cmd + [str(world)], check=True, capture_output=True, cwd=ROOT)
+    subprocess.run(cmd, check=True, capture_output=True, cwd=ROOT)
     return json.loads(Path(out).read_text())
 
 
@@ -114,8 +114,11 @@ def main():
     k = cal['distanceMeters'] / span_units
     cloud = handoff(ply, a.out / 'brainsnn-point-cloud.json', a.world, k, cal['distanceMeters'], span_units)
     Pk = np.asarray([p[:3] for p in cloud['points']], float)
-    if len(Pk) != len(P1) or not np.allclose(Pk, P1 * k, atol=1e-6 * max(1, k)):
-        sys.exit('The metric hand-off does not keep the unit hand-off\'s point order; indices would not carry over.')
+    # The same source points in the same order: each hand-off's points taken back through its own transform. (Positions
+    # alone could differ: the floor fit at another scale may round to a slightly different plane.)
+    back = lambda c, P: np.linalg.solve(np.asarray(c['fromSource'])[:, :3], (P - np.asarray(c['fromSource'])[:, 3]).T).T
+    if len(Pk) != len(P1) or not np.allclose(back(cloud, Pk), back(unit, P1), atol=1e-4 * float(np.abs(back(unit, P1)).max())):
+        sys.exit('The metric hand-off does not hold the unit hand-off\'s points in its order; indices would not carry over.')
     (a.out / 'unit-cloud.json').unlink()
     # 4. #232's dimension checks, and our own record of every span.
     today = datetime.date.today().isoformat(); checks, spans = [], []
