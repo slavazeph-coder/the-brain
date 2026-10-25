@@ -4,9 +4,9 @@
    tile, a EUR pallet...). For each, it gives the frame and the face's four corners. A pillow, a mug or a chair has
    no standard size and is not on the list.
 2. Claude's corners only say where to look. Model pixel coordinates are good to a few percent of the image, and 1% of
-   a 1280-pixel frame is 13 pixels: 4 cm at 3 m. Each side of the face is found again in the image itself, from the
-   strongest edge across a band around it, fitted as a line through sub-pixel edge points. The corners are where the
-   lines meet.
+   a 1280-pixel frame is 13 pixels: 4 cm at 3 m. Each side of the face is found again in the image itself: the edge
+   that holds along the whole side (not wall texture or print), located to a fraction of a pixel at 40 places and
+   fitted as a line. The corners are where the lines meet.
 3. The face's plane comes from the reconstruction's own points that fall on it (or around it, for a sheet on a wall).
    Each corner is the ray from the camera through the refined pixel, cut by that plane.
 4. Each edge gives metres per unit: standard length / measured length. A face whose measured proportions do not match
@@ -184,49 +184,74 @@ def ask(client, frames):
 
 # ---------- refine corners from the image ----------
 
-def refine(gray, corners, band=None, samples=40):
-    """The quad's corners found again in the image (float H x W grey): each side becomes the line through the strongest
-    edge across a band about it, located to a fraction of a pixel; adjacent lines meet at the corners. Returns
-    (corners, per-side support) or (None, reason)."""
+def refine(gray, corners, band=None, samples=40, passes=3):
+    """The quad's corners found again in the image (float H x W grey). For each side, the directional derivative across
+    a band about it is averaged over the whole side: the consensus edge is the offset where that mean is strongest, so
+    one straight boundary wins over wall texture and print, which do not line up along the side. Each place along the
+    side then takes the derivative's peak of the same sign within 2.5 px of that offset, to a fraction of a pixel, and
+    a line is fitted through them. Adjacent lines meet at the corners; a second pass starts from those corners with a
+    narrow band. Returns (corners, per-side support) or (None, reason)."""
     import numpy as np
     Q = np.asarray(corners, float); H, W = gray.shape
     gy, gx = np.gradient(gray)
+    if min(np.linalg.norm(Q[(k + 1) % 4] - Q[k]) for k in range(4)) < MIN_EDGE_PIXELS / 2:
+        return None, f'the face given is under {MIN_EDGE_PIXELS // 2} px on a side'
     def sample(img, pts):  # bilinear
         x = np.clip(pts[:, 0], 0, W - 1.001); y = np.clip(pts[:, 1], 0, H - 1.001); x0, y0 = x.astype(int), y.astype(int); fx, fy = x - x0, y - y0
         return (img[y0, x0] * (1 - fx) * (1 - fy) + img[y0, x0 + 1] * fx * (1 - fy) + img[y0 + 1, x0] * (1 - fx) * fy + img[y0 + 1, x0 + 1] * fx * fy)
-    lines, support = [], []
-    for s in range(4):
-        a, b = Q[s], Q[(s + 1) % 4]; d = b - a; length = float(np.linalg.norm(d))
-        if length < MIN_EDGE_PIXELS:
-            return None, f'side {s + 1} is {length:.0f} px, under {MIN_EDGE_PIXELS}'
-        d /= length; n = np.array([-d[1], d[0]]); half = band or max(6.0, .06 * length)
-        offsets = np.linspace(-half, half, int(2 * half) * 4 + 1); pts = []
-        for t in np.linspace(.15, .85, samples):  # away from the corners, where the neighbouring side's edge is
-            line = a + t * length * d + offsets[:, None] * n
-            g = np.abs(sample(gx, line) * n[0] + sample(gy, line) * n[1])  # gradient across the side
-            k = int(g.argmax())
-            if g[k] < 4 * np.median(g) + 1e-3 or k in (0, len(g) - 1):
-                continue
-            y0, y1, y2 = g[k - 1], g[k], g[k + 1]; shift = .5 * (y0 - y2) / (y0 - 2 * y1 + y2) if y0 - 2 * y1 + y2 != 0 else 0
-            pts.append(a + t * length * d + (offsets[k] + shift * (offsets[1] - offsets[0])) * n)
-        if len(pts) < samples * .6:
-            return None, f'side {s + 1} has a clear edge at {len(pts)} of {samples} places'
-        P = np.asarray(pts); c = P.mean(0)
-        for _ in range(3):  # least squares, then drop points more than 1.5 px off, twice
-            u = np.linalg.svd(P - c)[2][0]; m = np.array([-u[1], u[0]]); r = np.abs((P - c) @ m)
-            keep = r < max(1.5, 2.5 * np.median(r)); P, c = P[keep], P[keep].mean(0)
-        u = np.linalg.svd(P - c)[2][0]; lines.append((c, u)); support.append(len(P))
-    out = []
-    for s in range(4):
-        (c1, u1), (c2, u2) = lines[(s - 1) % 4], lines[s]
-        A = np.array([u1, -u2]).T
-        if abs(np.linalg.det(A)) < 1e-6:
-            return None, 'two sides are parallel'
-        t = np.linalg.solve(A, c2 - c1); out.append(c1 + t[0] * u1)
-    out = np.asarray(out)
-    if np.linalg.norm(out - Q, axis=1).max() > max(12.0, .25 * min(np.linalg.norm(Q[1] - Q[0]), np.linalg.norm(Q[2] - Q[1]))):
-        return None, 'the edges found are far from the corners given'
-    return out, support
+    support = []
+    for p in range(passes):
+        lines, support = [], []
+        for s in range(4):
+            a, b = Q[s], Q[(s + 1) % 4]; d = b - a; length = float(np.linalg.norm(d))
+            d /= length; mid = (a + b) / 2
+            half = (band or max(8.0, .15 * length)) if p == 0 else 3.0
+            step = .25 if p else .5; offsets = np.arange(-half, half + step / 2, step); ts = np.linspace(.15, .85, samples) - .5  # off the corners
+            best = None  # the first pass also tries the side at other angles: given corners can tilt it by several degrees
+            for tilt in (np.radians(np.arange(-12, 12.5, 1.0)) if p == 0 else [0.0]):
+                dt = np.array([d[0] * np.cos(tilt) - d[1] * np.sin(tilt), d[0] * np.sin(tilt) + d[1] * np.cos(tilt)]); nt = np.array([-dt[1], dt[0]])
+                grid = mid + (ts[:, None, None] * length * dt) + offsets[None, :, None] * nt
+                flat = grid.reshape(-1, 2); prof = (sample(gx, flat) * nt[0] + sample(gy, flat) * nt[1]).reshape(len(ts), len(offsets))
+                mean = prof.mean(0); k = int(np.abs(mean).argmax())
+                if best is None or abs(mean[k]) > abs(best[3][best[4]]): best = (dt, nt, prof, mean, k)
+            d, n, prof, mean, k0 = best; a = mid - .5 * length * d; ts = ts + .5
+            # The face's own edge is the outermost strong one: printed paper has a second straight edge where the margin
+            # meets the print, inside the sheet.
+            out_sign = 1.0 if n @ (mid - Q.mean(0)) > 0 else -1.0
+            strong = [k for k in range(1, len(mean) - 1) if abs(mean[k]) >= .5 * abs(mean[k0]) and abs(mean[k]) >= abs(mean[k - 1]) and abs(mean[k]) >= abs(mean[k + 1])]
+            k0 = max(strong, key=lambda k: out_sign * offsets[k]) if strong else k0; sign = np.sign(mean[k0]) or 1.0
+            if p == 0 and abs(mean[k0]) < 2 * np.median(np.abs(mean)) + 1e-6:  # the narrow pass's band is all edge
+                return None, f'side {s + 1} has no edge that holds along it'
+            pts, window = [], int(round(2.5 / step))
+            for i, t in enumerate(ts):
+                lo, hi = max(1, k0 - window), min(len(offsets) - 2, k0 + window); g = sign * prof[i, lo:hi + 1]; k = lo + int(g.argmax())
+                if sign * prof[i, k] < .3 * abs(mean[k0]):
+                    continue
+                y0, y1, y2 = sign * prof[i, k - 1], sign * prof[i, k], sign * prof[i, k + 1]
+                shift = .5 * (y0 - y2) / (y0 - 2 * y1 + y2) if y0 - 2 * y1 + y2 != 0 else 0
+                pts.append(a + t * length * d + (offsets[k] + max(-1, min(1, shift)) * step) * n)
+            if len(pts) < samples * .5:
+                return None, f'side {s + 1} has a clear edge at {len(pts)} of {samples} places'
+            P = np.asarray(pts); c = P.mean(0)
+            for _ in range(3):  # least squares, then drop points more than 1.5 px off, twice
+                u = np.linalg.svd(P - c)[2][0]; m = np.array([-u[1], u[0]]); r = np.abs((P - c) @ m)
+                keep = r < max(1.5, 2.5 * np.median(r)); P, c = P[keep], P[keep].mean(0)
+            u = np.linalg.svd(P - c)[2][0]; lines.append((c, u)); support.append(len(P))
+        out = []
+        for s in range(4):
+            (c1, u1), (c2, u2) = lines[(s - 1) % 4], lines[s]
+            A = np.array([u1, -u2]).T
+            if abs(np.linalg.det(A)) < 1e-6:
+                return None, 'two sides are parallel'
+            t = np.linalg.solve(A, c2 - c1); out.append(c1 + t[0] * u1)
+        out = np.asarray(out)
+        if np.linalg.norm(out - np.asarray(corners, float), axis=1).max() > max(15.0, .3 * min(np.linalg.norm(Q[1] - Q[0]), np.linalg.norm(Q[2] - Q[1]))):
+            return None, 'the edges found are far from the corners given'
+        Q = out
+    short = min(np.linalg.norm(Q[(k + 1) % 4] - Q[k]) for k in range(4))
+    if short < MIN_EDGE_PIXELS:
+        return None, f'the face is {short:.0f} px on its shortest side, under {MIN_EDGE_PIXELS}'
+    return Q, support
 
 
 # ---------- measure in the reconstruction ----------

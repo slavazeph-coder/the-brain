@@ -79,6 +79,46 @@ Still open:
   wall stretches. The truth score reports such pieces as stray rather than averaging them into the room. The upright
   run has none.
 
+## Reference scale (October 25, 2026)
+
+`robotics/world_worker/reference_scale.py` sets the scale from objects whose size a standard fixes: ISO 216 A4 and A3
+and US Letter sheets, a 595 mm lay-in ceiling tile, and a EUR pallet. It works in three steps:
+
+1. Claude marks the objects with rough corners.
+2. The corners are found again in the image, and the face is measured on the plane of the reconstruction's own points.
+3. A face whose proportions are more than 3% off the standard's is rejected.
+
+Two or more references agreeing within 2% is `cross-checked`. The result is never called verified.
+
+The room above was rendered again with A4 sheets (on the cork board, the teal wall and the table), an A3 sheet and a
+can at their exact sizes. `run_reference_benchmark.py` reconstructed it (60 of 60 frames). Detection here is an
+**oracle stand-in**: the true corners projected into the frames, with pixel noise in place of a model's pointing error.
+Claude itself has not run on it yet: this environment had no working `ANTHROPIC_API_KEY`.
+
+| Corner noise | Status | Scale against the truth | Detections used |
+|---|---|---|---|
+| 0 px | cross-checked (two sheets) | −0.45% | 4 of 9 |
+| 5 px | cross-checked (two sheets) | −0.45% | 4 of 9 |
+| 10 px | single reference | +0.3% | 1 of 9 |
+| 15 px | none | — | 0 of 9 |
+| 20 px | single reference | −1.4% | 1 of 9 |
+
+What it shows:
+- **Paper is small at room distance.** From 2–5 m the sheets are 40–70 px across, and the cork-board sheet is never
+  large enough to use. Corner refinement recovers 20 px of pointing error to 0.05 px on a 300 px face, and 10 px to
+  0.25 px on an A4-sized face. Beyond that, the given corners miss a small sheet altogether.
+- **The capture rule that follows:** film each reference from about a metre for a second. Ceiling tiles and pallets
+  are large enough from where people stand.
+- **Rejections are explicit.** Grazing views of the table sheet failed the proportions check (13–15% off). Sides with
+  no edge along them, and faces under 40 px, are reported with the reason.
+- **The error budget at 0 px.** The wall sheet's corners land up to 1.75 px inside the paper, which costs −0.9%, and
+  the wall plane from the points costs −0.4%.
+
+```sh
+python scripts/world-demo/benchmark/run_reference_benchmark.py OUT            # oracle at 0/5/10/20 px
+python scripts/world-demo/benchmark/run_reference_benchmark.py OUT --claude   # with ANTHROPIC_API_KEY set
+```
+
 ## Run it
 
 ```sh

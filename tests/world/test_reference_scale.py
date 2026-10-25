@@ -39,7 +39,7 @@ def test_a_face_too_small_or_without_edges_is_refused():
     small = np.array([[100, 100], [130, 100], [130, 120], [100, 120]], float)
     assert rs.refine(rectangle_image(small), small)[0] is None
     flat = np.full((720, 1280), 120.0); quad = np.array([[400, 200], [700, 200], [700, 600], [400, 600]], float)
-    assert 'clear edge' in rs.refine(flat, quad)[1]
+    assert 'edge' in rs.refine(flat, quad)[1]
 
 
 def pinhole_view(R, C, f=900.0, cx=640.0, cy=360.0):

@@ -155,7 +155,7 @@ wall('wall_south', (0, D), (W, D), m_wall, openings=[(4.2, 5.1, 0, 2.1)])
 wall('wall_east', (W, D), (W, 0), m_feature)
 box('outside', (W / 2, 1.5, -1.5), [8, 4, .02], 0, m_glass_sky)  # bright sky beyond the window
 box('door_leaf', (5.1 + .02, 1.05, D + .45), [.9, 2.1, .04], 90, m_door)  # open door, swung outward
-for x in (1.8, 4.2):  # window frame mullions on the inner face
+for x in (2.4, 4.2):  # window frame jambs on the inner face, at the opening's two sides (u from x = 6)
     box(f'window_jamb_{x}', (W - x, 1.5, -.02), [.05, 1.2, .05], 0, m_frame)
 
 def lm(name, x, y, z): truth['landmarks'][name] = [round(x, 6), round(y, 6), round(z, 6)]
