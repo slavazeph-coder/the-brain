@@ -133,6 +133,14 @@ def preview_from_predictions(predictions, *, max_points=MAX_POINTS):
 
 
 def camera_metadata(predictions):
+    """Record only rigid camera-to-world poses and valid pinhole calibration.
+
+    The reviewed MapAnything API documents OpenCV cam2world poses and pinhole
+    intrinsics (source README at SOURCE_REVISION). Finite matrices alone can
+    still contain scale, shear or a reflection, which would corrupt subsequent
+    frame-to-component projections. Allow small floating-point rotation error;
+    this validates the representation, not the predicted camera's accuracy.
+    """
     import numpy as np
     transform = np.diag([1., -1., -1., 1.])
     result = []
@@ -140,11 +148,136 @@ def camera_metadata(predictions):
         pose, intrinsics = (as_numpy(view[key]) for key in ['camera_poses', 'intrinsics'])
         if (pose.shape != (1, 4, 4) or intrinsics.shape != (1, 3, 3)
                 or not np.isfinite(pose).all() or not np.isfinite(intrinsics).all()
-                or not np.allclose(pose[0, 3], [0, 0, 0, 1], atol=1e-4)):
+                or not np.allclose(pose[0, 3], [0, 0, 0, 1], atol=1e-4, rtol=0)):
             raise ValueError('Invalid predicted camera geometry.')
+        rotation = pose[0, :3, :3]
+        if (not np.allclose(rotation.T @ rotation, np.eye(3), atol=1e-3, rtol=0)
+                or not np.isclose(np.linalg.det(rotation), 1, atol=1e-3, rtol=0)):
+            raise ValueError('Invalid predicted camera rotation: expected a right-handed rigid pose.')
+        if (intrinsics[0, 0, 0] <= 0 or intrinsics[0, 1, 1] <= 0
+                or not np.allclose(intrinsics[0, 2], [0, 0, 1], atol=1e-4, rtol=0)):
+            raise ValueError('Invalid predicted camera intrinsics: expected positive focal lengths and a canonical last row.')
         result.append({'view': index, 'camera_to_world_y_up': (transform @ pose[0] @ transform).tolist(),
                        'intrinsics_opencv': intrinsics[0].tolist()})
     return result
+
+
+def model_frame_records(predictions, model_views, paths, preparations, sources, job_root, *, normalization):
+    """Persist private, camera-matched model rasters without inventing original-image coordinates.
+
+    At SOURCE_REVISION, utils/image.py:load_images preserves a supplied path-list's
+    order (but can skip unreadable files), assigns idx/instance in that order, and
+    records true_shape. utils/inference.py:postprocess_model_outputs_for_inference
+    zips outputs with inputs and derives img_no_norm from each input's normalized
+    image. Check all of those bindings before trusting the corresponding camera.
+    The loader crops/resizes; this adapter does not claim an original-to-model
+    pixel transform merely from the two raster dimensions.
+    """
+    import numpy as np
+    from PIL import Image
+    try:
+        from . import camera_frames
+    except ImportError:
+        import camera_frames
+
+    count = len(paths)
+    if not 1 <= count <= MAX_VIEWS or any(len(v) != count for v in (predictions, model_views, preparations)):
+        raise ValueError('Camera frame evidence requires every prepared view and prediction in source order.')
+    camera_metadata(predictions)  # same rigid-camera checks as the public reconstruction metadata
+    mean, std = (as_numpy(normalization[key]).reshape(-1) for key in ('mean', 'std'))
+    if (normalization.get('name') != 'dinov2' or mean.shape != (3,) or std.shape != (3,)
+            or not np.isfinite(mean).all() or not np.isfinite(std).all() or np.any(std <= 0)):
+        raise ValueError('Camera frame evidence requires the exact DINOv2 input normalization.')
+    root = Path(job_root).resolve()
+    transform = np.diag([1., -1., -1., 1.])
+    checked = []
+    seen_paths = set()
+    for index, (prediction, loaded, path, prep) in enumerate(zip(predictions, model_views, paths, preparations)):
+        path = Path(path)
+        if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root):
+            raise ValueError('Prepared camera frames must be regular files inside this job.')
+        if path.resolve() in seen_paths:
+            raise ValueError('Prepared camera frame paths must be unique.')
+        seen_paths.add(path.resolve())
+        source_index = prep.get('sourceIndex')
+        detail = prep.get('preparation', prep)
+        if (type(source_index) is not int or not 0 <= source_index < len(sources)
+                or prep.get('image') != path.name
+                or prep.get('sourceSha256') != sources[source_index].get('sha256')
+                or detail.get('preparedPath') != path.name
+                or detail.get('preparedSha256') != file_hash(path)):
+            raise ValueError('Prepared camera frame source/hash association does not match this view.')
+        with Image.open(path) as image:
+            prepared_width, prepared_height = image.size
+            if image.mode != 'RGB' or (detail.get('width'), detail.get('height')) != image.size:
+                raise ValueError('Prepared camera frame dimensions do not match its preparation record.')
+        rgb = as_numpy(prediction['img_no_norm'])
+        normalized = as_numpy(loaded.get('img'))
+        shape = as_numpy(loaded.get('true_shape'))
+        if (rgb.ndim != 4 or rgb.shape[0] != 1 or rgb.shape[-1] != 3
+                or not 1 <= rgb.shape[1] * rgb.shape[2] <= 1_000_000
+                or normalized.shape != (1, 3, rgb.shape[1], rgb.shape[2])
+                or not np.isfinite(rgb).all() or not np.isfinite(normalized).all()
+                or np.any(rgb < 0) or np.any(rgb > 1)
+                or type(loaded.get('idx')) is not int or loaded['idx'] != index
+                or loaded.get('instance') != str(index) or loaded.get('data_norm_type') != ['dinov2']
+                or shape.shape != (1, 2) or not np.array_equal(shape[0], rgb.shape[1:3])):
+            raise ValueError('Model camera frame order, shape or input normalization is invalid.')
+        expected = np.clip(normalized.transpose(0, 2, 3, 1) * std + mean, 0, 1)
+        if not np.allclose(rgb, expected, atol=1e-6, rtol=0):
+            raise ValueError('Predicted camera raster does not match its loaded input view order.')
+        K = as_numpy(prediction['intrinsics'])[0]
+        # The shared PINHOLE contract has no skew fields. Never silently discard one.
+        if not np.allclose([K[0, 1], K[1, 0]], [0, 0], atol=1e-6, rtol=0):
+            raise ValueError('Shared PINHOLE camera evidence cannot represent skewed intrinsics.')
+        # Pinned geometry.py uses torch.arange pixel centres and explicitly
+        # distinguishes PyTorch's (0,0) from COLMAP's (.5,.5) camera convention.
+        camera = {'model': 'PINHOLE', 'params': [float(K[0, 0]), float(K[1, 1]), float(K[0, 2]), float(K[1, 2])],
+                  'pixelConvention': 'integer-centres'}
+        # The points are already rotated into Y-up. Camera-local coordinates must
+        # remain OpenCV for these intrinsics: inv(cam2world_cv) @ world_yup_to_cv.
+        cam_from_world = (np.linalg.inv(as_numpy(prediction['camera_poses'])[0]) @ transform)[:3].tolist()
+        checked.append((np.rint(rgb[0] * 255).astype(np.uint8), camera, cam_from_world,
+                        path, prepared_width, prepared_height, prep, source_index))
+
+    private = root / 'mapanything-frames'
+    private.mkdir(exist_ok=False)
+    frames = []
+    for index, (pixels, camera, pose, path, pw, ph, prep, source_index) in enumerate(checked):
+        target = private / f'view_{index:04d}.png'
+        Image.fromarray(pixels).save(target, format='PNG')
+        image = camera_frames.file_record(root, target, width=pixels.shape[1], height=pixels.shape[0])
+        frames.append({
+            'frame_id': camera_frames.frame_id(sources[source_index]['sha256'], image['sha256'], camera, pose),
+            'image': image,
+            'preparedImage': camera_frames.file_record(root, path, width=pw, height=ph),
+            'origin': {'sourceIndex': source_index, 'sourceWidth': prep.get('sourceWidth'),
+                       'sourceHeight': prep.get('sourceHeight'), 'exifOrientation': prep.get('exifOrientation'),
+                       'sourceToFramePixelCenter': None},
+            'timestamp': prep.get('timestamp'),
+            'camera': camera, 'cam_from_world': pose,
+            'preprocessing': {'sourceToModelPixelCenter': None, 'preparedToModelPixelCenter': None,
+                              'reason': 'Pinned model loader resizes/crops; its pixel transform is not recorded.',
+                              'raster': 'Derived model-input RGB; img_no_norm rounded to uint8, not the original upload.'},
+        })
+    return frames
+
+
+def write_camera_frame_evidence(predictions, model_views, paths, preparations, sources, out, *, normalization):
+    """Bind the private camera rasters to the exact published reconstruction and cloud bytes."""
+    try:
+        from . import camera_frames
+    except ImportError:
+        import camera_frames
+    out = Path(out).resolve()
+    root = out.parent
+    frames = model_frame_records(predictions, model_views, paths, preparations, sources, root, normalization=normalization)
+    record = {'schema': 'brainsnn.camera-frames.v1', 'sources': sources,
+              'reconstruction': camera_frames.file_record(root, out / 'reconstruction.json'),
+              'clouds': [camera_frames.file_record(root, out / 'dense-preview.ply', coordinate_frame='right-handed-y-up')],
+              'frames': frames, 'metric_verified': False}
+    camera_frames.write(root, record, output_path=out / 'camera-frames.json')
+    return record
 
 
 def run(request):
@@ -162,6 +295,7 @@ def run(request):
     import torch
     from mapanything.models import MapAnything
     from mapanything.utils.image import load_images
+    from uniception.models.encoders.image_normalizations import IMAGE_NORMALIZATION_DICT
     if not torch.cuda.is_available():
         raise RuntimeError('This adapter requires a separately qualified CUDA worker. No CPU fallback is claimed.')
     out = Path(request['output_dir']).resolve();out.mkdir(parents=True, exist_ok=True)
@@ -173,9 +307,14 @@ def run(request):
             raise ValueError('Inputs must be regular local files.')
         sources.append({'name': item['name'], 'kind': item['kind'], 'sha256': file_hash(path)})
     capture = extract_video(Path(items[0]['path']), images, max_images=MAX_VIEWS) if video else {}
+    preparations = capture.get('frames', []) if video else []
     if photos:
         for index, item in enumerate(items):
-            prepare_photo(Path(item['path']), images / f'image_{index:04d}.jpg')
+            target = images / f'image_{index:04d}.jpg'
+            prep = prepare_photo(Path(item['path']), target, with_evidence=True)
+            preparations.append({'image': target.name, 'sourceIndex': index, 'sourceSha256': prep['sourceSha256'],
+                                 'sourceWidth': prep['sourceWidth'], 'sourceHeight': prep['sourceHeight'],
+                                 'exifOrientation': prep['exifOrientation'], 'timestamp': None, 'preparation': prep})
     paths = sorted(images.glob('*.jpg'))
     started = time.monotonic()
     torch.cuda.reset_peak_memory_stats()
@@ -210,7 +349,11 @@ def run(request):
                              'Dense points are not a watertight collision mesh or a proof of free space.',
                              'Review scale, floor alignment, missing surfaces and obstacles before planning.']}
     (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
-    (out / 'manifest.json').write_text(json.dumps({'artifacts': [visual, {'name': 'reconstruction.json', 'kind': 'evidence'}]}, allow_nan=False))
+    norm = IMAGE_NORMALIZATION_DICT['dinov2']
+    write_camera_frame_evidence(predictions, views, paths, preparations, sources, out,
+                                normalization={'name': 'dinov2', 'mean': as_numpy(norm.mean), 'std': as_numpy(norm.std)})
+    (out / 'manifest.json').write_text(json.dumps({'artifacts': [visual, {'name': 'reconstruction.json', 'kind': 'evidence'},
+                                                              {'name': 'camera-frames.json', 'kind': 'evidence'}]}, allow_nan=False))
     return evidence
 
 

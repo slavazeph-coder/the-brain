@@ -7,9 +7,15 @@ observed wall, a detected box and unseen space as the same kind of fact.
 """
 from __future__ import annotations
 import datetime
+import json
 import math
 import uuid
 from pathlib import Path
+
+try:
+    from .component_graph import ensure_component_ids, derive_id
+except ImportError:  # Blender/script entry points expose this directory directly.
+    from component_graph import ensure_component_ids, derive_id
 
 IFC_NEEDS_METRES = ("BIM tools read IFC in metres, and this cloud is in arbitrary units, so no scene.ifc was written. "
                     "Set a measured scale in World Builder and build a metric scene.")
@@ -115,6 +121,9 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
     (x, y, z) -> (x, -z, y), the same mapping the compiler uses for Blender."""
     if scene.get('units') != 'm':
         raise ValueError(IFC_NEEDS_METRES)
+    scene = ensure_component_ids(scene)
+    source_sha256 = scene['componentGraph']['sourceSha256']
+    hierarchy = {key: derive_id(source_sha256, 'hierarchy', key) for key in ('project', 'site', 'building', 'storey')}
     openings = _reviewed_openings(scene)
     w = _Writer()
     origin = w.add('IFCCARTESIANPOINT((0.,0.,0.))')
@@ -125,16 +134,16 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
     body = w.add(f"IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,{context},$,.MODEL_VIEW.,$)")
     units = [w.add(f'IFCSIUNIT(*,.{kind}.,$,.{unit}.)') for kind, unit in
              [('LENGTHUNIT', 'METRE'), ('AREAUNIT', 'SQUARE_METRE'), ('VOLUMEUNIT', 'CUBIC_METRE'), ('PLANEANGLEUNIT', 'RADIAN')]]
-    project = w.add(f"IFCPROJECT('{ifc_guid('project')}',$,{label(name)},{label('Compiled by BrainSNN World Builder from a reconstruction; not a surveyed model.')},"
+    project = w.add(f"IFCPROJECT('{ifc_guid(hierarchy['project'])}',$,{label(name)},{label('Compiled by BrainSNN World Builder from a reconstruction; not a surveyed model.')},"
                     f"$,$,$,({context}),{w.add('IFCUNITASSIGNMENT((' + ','.join(units) + '))')})")
     site_place = w.add(f'IFCLOCALPLACEMENT($,{world})')
-    site = w.add(f"IFCSITE('{ifc_guid('site')}',$,'Site',$,$,{site_place},$,$,.ELEMENT.,$,$,$,$,$)")
+    site = w.add(f"IFCSITE('{ifc_guid(hierarchy['site'])}',$,'Site',$,$,{site_place},$,$,.ELEMENT.,$,$,$,$,$)")
     building_place = w.add(f'IFCLOCALPLACEMENT({site_place},{world})')
-    building = w.add(f"IFCBUILDING('{ifc_guid('building')}',$,'Building',$,$,{building_place},$,$,.ELEMENT.,$,$,$)")
+    building = w.add(f"IFCBUILDING('{ifc_guid(hierarchy['building'])}',$,'Building',$,$,{building_place},$,$,.ELEMENT.,$,$,$)")
     storey_place = w.add(f'IFCLOCALPLACEMENT({building_place},{world})')
-    storey = w.add(f"IFCBUILDINGSTOREY('{ifc_guid('storey')}',$,'Scanned floor',$,$,{storey_place},$,$,.ELEMENT.,0.)")
+    storey = w.add(f"IFCBUILDINGSTOREY('{ifc_guid(hierarchy['storey'])}',$,'Scanned floor',$,$,{storey_place},$,$,.ELEMENT.,0.)")
     for i, (parent, child) in enumerate([(project, site), (site, building), (building, storey)]):
-        w.add(f"IFCRELAGGREGATES('{ifc_guid(f'aggregate-{i}')}',$,$,$,{parent},({child}))")
+        w.add(f"IFCRELAGGREGATES('{ifc_guid(derive_id(source_sha256, 'relation', f'aggregate-{i}'))}',$,$,$,{parent},({child}))")
 
     def prism(cx, cy, z0, length, width, height, yaw=0.0, placement_parent=storey_place):
         """A rectangular prism centred on (cx, cy), from z0 up, its length rotated by yaw about Z."""
@@ -160,19 +169,26 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         pset = w.add(f"IFCPROPERTYSET('{ifc_guid(seed + '-pset')}',$,'Pset_BrainSNN',$,({','.join(props)}))")
         w.add(f"IFCRELDEFINESBYPROPERTIES('{ifc_guid(seed + '-rel')}',$,$,$,({element}),{pset})")
 
+    def lineage(item):
+        return {'SourceProvenance': item.get('sourceProvenance'), 'SupportPoints': item.get('support_points'),
+                'SupportPointsScope': item.get('supportPointsScope'), 'DimensionProvenance': item.get('dimensionProvenance'),
+                'ParameterProvenance': json.dumps(item['parameterProvenance'], sort_keys=True, separators=(',', ':'))
+                    if item.get('parameterProvenance') else None}
+
     scale = scene.get('scale') if isinstance(scene.get('scale'), dict) else {}
-    properties(project, 'project', {'SceneSchema': scene.get('schema'), 'Units': 'm', 'ScaleSource': scale.get('source', 'unknown'),
+    properties(project, hierarchy['project'], {'SceneSchema': scene.get('schema'), 'Units': 'm', 'ScaleSource': scale.get('source', 'unknown'),
                                     'MetresPerUnit': scale.get('metresPerUnit'), 'MeasuredDistanceMetres': scale.get('distance'),
-                                    'SelfReported': scale.get('selfReported', True), 'MetricVerified': False})
+                                    'SelfReported': scale.get('selfReported', True), 'MetricVerified': False,
+                                    'ComponentId': hierarchy['project'], 'SourceSha256': source_sha256})
     elements, counts = [], {'walls': 0, 'slabs': 0, 'objects': 0, 'separated': 0, 'unknownRuns': 0}
     for obj in scene.get('objects', []):
         if 'centre' not in obj or 'size' not in obj:
             continue  # unplaced detections have no geometry; they stay in scene.json with their reason
         (cx, cy, cz), (sx, sy, sz) = obj['centre'], obj['size']
         placement, solid = prism(cx, -cz, cy - sy / 2, sx, sz, sy, yaw=-math.radians(obj.get('yaw_degrees', 0)))
-        seed = 'object-' + str(obj.get('name'))
+        seed = obj['componentId']
         separated, named = obj.get('kind') == 'separated', obj.get('label') not in (None, 'object')
-        if obj.get('label') == 'floor':
+        if obj.get('name') == 'floor_observed':  # the fixed name, as CAD and Nav2 use: a display label may be edited
             element = w.add(f"IFCSLAB('{ifc_guid(seed)}',$,{label(obj.get('name', 'floor'))},$,$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
         elif separated and not named:
             # A measured cluster of points with no name: a proxy, not furniture, because nothing says what it is.
@@ -186,9 +202,11 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         else:
             element = w.add(f"IFCFURNITURE('{ifc_guid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
             counts['separated' if separated else 'objects'] += 1
-        properties(element, seed, {'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
+        properties(element, seed, {**lineage(obj), 'ComponentId': seed, 'SourceSha256': source_sha256,
+                                   'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
                                    'Detector': obj.get('detector') or obj.get('labelSource'), 'Separated': True if separated else None,
                                    'LabelConfidence': obj.get('labelConfidence'), 'LabelReviewed': obj.get('labelReviewed'),
+                                   'LabelProvenance': obj.get('labelProvenance'),
                                    'Base': obj.get('base'),
                                    'LengthMetres': float(sx) if separated else None, 'WidthMetres': float(sz) if separated else None,
                                    'HeightMetres': float(sy) if separated else None})
@@ -199,45 +217,54 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             continue
         (cx, cy, cz), (length, height, thickness) = wall['centre'], wall['size']
         placement, solid = prism(cx, -cz, cy - height / 2, length, thickness, height, yaw=-math.radians(wall.get('yaw_degrees', 0)))
-        seed = 'wall-' + str(wall.get('name'))
-        element = w.add(f"IFCWALL('{ifc_guid(seed)}',$,{label(wall.get('name', 'wall'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
-        properties(element, seed, {'Provenance': wall.get('provenance', 'observed'), 'Label': 'wall', 'SupportPoints': wall.get('support_points')})
-        wall_refs[wall['name']] = (element, placement)
+        seed = wall['componentId']
+        wall_label = wall.get('label') if wall.get('label') not in (None, 'wall') else wall.get('name', 'wall')
+        element = w.add(f"IFCWALL('{ifc_guid(seed)}',$,{label(wall_label)},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
+        properties(element, seed, {**lineage(wall), 'ComponentId': seed, 'SourceSha256': source_sha256,
+                                   'ElementName': wall.get('name'), 'Provenance': wall.get('provenance', 'observed'),
+                                   'Label': wall.get('label', 'wall'), 'LabelProvenance': wall.get('labelProvenance'),
+                                   'SupportPoints': wall.get('support_points')})
+        wall_refs[wall['name']] = (element, placement, seed)
         elements.append(element); counts['walls'] += 1
     if openings:
         counts.update(openings=0, doors=0)
     for opening in openings:
-        host_element, host_place = wall_refs[opening['hostWall']]
+        host_element, host_place, host_component_id = wall_refs[opening['hostWall']]
         length, _height, thickness = opening['host']['size']
         # The host's local X is its length. Relative placement preserves rotated walls in IFC's Z-up frame.
         ox = -length / 2 + opening['offsetMeters'] + opening['widthMeters'] / 2
         placement, solid = prism(ox, 0, opening['sillMeters'], opening['widthMeters'], thickness + .02,
                                  opening['heightMeters'], placement_parent=host_place)
-        seed = 'opening-' + opening['id']
-        element = w.add(f"IFCOPENINGELEMENT('{ifc_guid(seed)}',$,{label(opening['id'])},"
+        seed = opening['componentId']
+        opening_label = opening.get('label') or opening['id']
+        element = w.add(f"IFCOPENINGELEMENT('{ifc_guid(seed)}',$,{label(opening_label)},"
                         f"{label('Operator-reviewed opening; dimensions and clearance not independently verified.')},"
                         f"$,{placement},{shape([solid])},$,.OPENING.)")
         w.add(f"IFCRELVOIDSELEMENT('{ifc_guid(seed + '-voids')}',$,$,$,{host_element},{element})")
-        properties(element, seed, {'Provenance': 'operator-reviewed', 'ReviewSelfReported': True, 'Reviewed': True,
-                                   'HostWall': opening['hostWall'], 'WidthMetres': float(opening['widthMeters']),
+        properties(element, seed, {**lineage(opening), 'ComponentId': seed, 'SourceSha256': source_sha256, 'HostComponentId': host_component_id,
+                                   'Provenance': opening.get('provenance', 'operator-reviewed'), 'ReviewSelfReported': True, 'Reviewed': True,
+                                   'OpeningKey': opening['id'], 'HostWall': opening['hostWall'], 'WidthMetres': float(opening['widthMeters']),
                                    'HeightMetres': float(opening['heightMeters']), 'SillMetres': float(opening['sillMeters']),
                                    'MetricVerified': False, 'ClearanceVerified': False})
         counts['openings'] += 1
         if opening['kind'] == 'door':
             door_place, door_solid = prism(0, 0, 0, opening['widthMeters'], min(.05, thickness),
                                            opening['heightMeters'], placement_parent=placement)
-            door_seed = 'door-' + opening['id']
-            door = w.add(f"IFCDOOR('{ifc_guid(door_seed)}',$,{label(opening['id'] + ' door')},"
+            door_seed = opening['doorComponentId']
+            door = w.add(f"IFCDOOR('{ifc_guid(door_seed)}',$,{label(opening_label + ' door')},"
                          f"{label('Closed reference leaf; handing, swing and physical passage not verified.')},"
                          f"$,{door_place},{shape([door_solid])},$,{real(opening['heightMeters'])},"
                          f"{real(opening['widthMeters'])},.DOOR.,.NOTDEFINED.,$)")
             w.add(f"IFCRELFILLSELEMENT('{ifc_guid(door_seed + '-fills')}',$,$,$,{element},{door})")
-            properties(door, door_seed, {'Provenance': 'operator-reviewed', 'ReviewSelfReported': True,
+            properties(door, door_seed, {**lineage(opening), 'ComponentId': door_seed, 'SourceSha256': source_sha256,
+                                         'HostComponentId': host_component_id, 'OpeningComponentId': seed,
+                                         'Provenance': opening.get('provenance', 'operator-reviewed'), 'ReviewSelfReported': True,
                                          'Reviewed': True, 'LeafRepresentation': 'closed-reference',
                                          'SwingVerified': False, 'MetricVerified': False, 'ClearanceVerified': False})
             elements.append(door); counts['doors'] += 1
     runs = merge_unknown(scene.get('unknown', []))
     if runs:
+        unknown_id = derive_id(source_sha256, 'unknown', 'space')
         floor_y = float(scene.get('floor_y', 0))
         solids = []
         for x0, x1, z, c in runs:
@@ -245,12 +272,13 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             position = w.add(f'IFCAXIS2PLACEMENT3D({point},{z_axis},{x_axis})')
             profile = w.add(f"IFCRECTANGLEPROFILEDEF(.AREA.,$,{origin2d},{real(x1 - x0)},{real(c)})")
             solids.append(w.add(f'IFCEXTRUDEDAREASOLID({profile},{position},{z_axis},{real(UNKNOWN_HEIGHT)})'))
-        element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid('unknown-space')}',$,'Unknown space (not free)',"
+        element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(unknown_id)}',$,'Unknown space (not free)',"
                         f"{label('Floor area no reconstructed point reached. Not evidence of free space.')},$,{storey_place},{shape(solids)},$,.NOTDEFINED.)")
-        properties(element, 'unknown-space', {'Provenance': 'unknown', 'Label': 'unknown', 'Cells': len(scene.get('unknown', []))})
+        properties(element, unknown_id, {'ComponentId': unknown_id, 'SourceSha256': source_sha256,
+                                        'Provenance': 'unknown', 'Label': 'unknown', 'Cells': len(scene.get('unknown', []))})
         elements.append(element); counts['unknownRuns'] = len(runs)
     if elements:
-        w.add(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('{ifc_guid('contained')}',$,$,$,({','.join(elements)}),{storey})")
+        w.add(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('{ifc_guid(derive_id(source_sha256, 'relation', 'contained'))}',$,$,$,({','.join(elements)}),{storey})")
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
     text = ['ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('ViewDefinition [ReferenceView_V1.2]'),'2;1');",
             f"FILE_NAME('scene.ifc','{stamp}',(''),('BrainSNN'),'BrainSNN scene compiler','BrainSNN World Builder','');",

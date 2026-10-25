@@ -4,6 +4,7 @@ import copy, re, sys, tempfile, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "robotics" / "scene_compiler"))
 import ifc_export as ie
+from component_graph import attach_component_ids, apply_edits, scene_sha256, EDIT_SCHEMA
 
 
 def metric_scene(**over):
@@ -24,6 +25,43 @@ def parse(text):
 
 
 class IfcExport(unittest.TestCase):
+    def test_source_scoped_ids_survive_label_edits_and_do_not_alias_other_captures(self):
+        first = attach_component_ids(metric_scene(), 'a' * 64)
+        renamed = apply_edits(first, {'schema': EDIT_SCHEMA, 'sourceSha256': 'a' * 64,
+            'sceneSha256': scene_sha256(first), 'revision': 0, 'edits': [
+                {'op': 'label', 'componentId': first['objects'][1]['componentId'], 'label': 'reviewed chair name'},
+                {'op': 'label', 'componentId': first['walls'][0]['componentId'], 'label': 'North partition'}]})
+        other = attach_component_ids(metric_scene(), 'b' * 64)
+        with tempfile.TemporaryDirectory() as d:
+            texts = []
+            for index, scene in enumerate((first, renamed, other)):
+                path = Path(d) / f'{index}.ifc'; ie.write_ifc(path, scene, name=f'Presentation title {index}')
+                texts.append(path.read_text())
+        def ids(text):
+            return set(re.findall(r"IFC[A-Z]+\('([0-3][0-9A-Za-z_$]{21})'", text))
+        self.assertEqual(ids(texts[0]), ids(texts[1]), 'presentation names do not replace component or hierarchy identity')
+        self.assertIn("'North partition'", texts[1])
+        self.assertTrue(ids(texts[0]).isdisjoint(ids(texts[2])), 'even identical geometry from another capture is a separate model')
+        for item in first['objects'][:2] + first['walls']:
+            self.assertIn(f"IFCLABEL('{item['componentId']}')", texts[0])
+            self.assertIn(f"'{ie.ifc_guid(item['componentId'])}'", texts[0])
+        self.assertIn(f"'SourceSha256',$,IFCLABEL('{'a' * 64}')", texts[0])
+
+    def test_legacy_export_namespace_is_geometry_derived_and_ignores_receipts_and_labels(self):
+        first = metric_scene(); renamed = copy.deepcopy(first)
+        renamed['objects'][1]['label'] = 'chair renamed'
+        renamed['ifc'] = {'written': True}; renamed['cad'] = {'written': True}
+        changed = metric_scene(); changed['walls'][0]['centre'][0] += 1
+        with tempfile.TemporaryDirectory() as d:
+            models = []
+            for index, scene in enumerate((first, renamed, changed)):
+                path = Path(d) / f'{index}.ifc'; ie.write_ifc(path, scene)
+                models.append(path.read_text())
+        project_id = lambda text: re.search(r"IFCPROJECT\('([^']+)'", text).group(1)
+        self.assertEqual(project_id(models[0]), project_id(models[1]))
+        self.assertNotEqual(project_id(models[0]), project_id(models[2]))
+        self.assertNotIn('componentGraph', first, 'standalone export does not mutate the source scene')
+
     def reviewed_scene(self, kind='opening'):
         wall = {'name': 'wall_1', 'label': 'wall', 'provenance': 'observed', 'centre': [0, 1.5, 0],
                 'size': [4, 3, .2], 'yaw_degrees': 30, 'support_points': 120}
@@ -92,6 +130,29 @@ class IfcExport(unittest.TestCase):
             self.assertEqual(reopened.by_type('IfcOpeningElement')[0].GlobalId, opening.GlobalId)
             self.assertEqual(reopened.by_type('IfcDoor')[0].FillsVoids[0].RelatingOpeningElement.GlobalId, opening.GlobalId)
 
+    def test_ifcopenshell_reopens_shared_component_and_host_identity(self):
+        try:
+            import ifcopenshell
+            import ifcopenshell.util.element
+        except ImportError:
+            self.skipTest('IfcOpenShell is needed for actual identity roundtrip validation.')
+        scene = attach_component_ids(self.reviewed_scene('door'), 'c' * 64)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'scene.ifc'; ie.write_ifc(path, scene)
+            model = ifcopenshell.open(path); saved = Path(d) / 'saved.ifc'; model.write(saved)
+            reopened = ifcopenshell.open(saved)
+            wall = reopened.by_type('IfcWall')[0]; opening = reopened.by_type('IfcOpeningElement')[0]; door = reopened.by_type('IfcDoor')[0]
+            props = lambda element: ifcopenshell.util.element.get_pset(element, 'Pset_BrainSNN')
+            reviewed = scene['openings'][0]
+            self.assertEqual(props(wall)['ComponentId'], scene['walls'][0]['componentId'])
+            self.assertEqual(props(opening)['ComponentId'], reviewed['componentId'])
+            self.assertEqual(props(opening)['HostComponentId'], props(wall)['ComponentId'])
+            self.assertEqual(props(door)['ComponentId'], reviewed['doorComponentId'])
+            self.assertEqual(props(door)['OpeningComponentId'], props(opening)['ComponentId'])
+            self.assertEqual(props(door)['HostComponentId'], props(wall)['ComponentId'])
+            self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement.GlobalId, wall.GlobalId)
+            self.assertEqual(door.FillsVoids[0].RelatingOpeningElement.GlobalId, opening.GlobalId)
+
     def test_metric_scene_writes_a_self_consistent_ifc4_file(self):
         with tempfile.TemporaryDirectory() as d:
             scene = metric_scene(); record = ie.emit_ifc(d, scene)
@@ -154,6 +215,16 @@ class IfcExport(unittest.TestCase):
             self.assertFalse((Path(d) / "scene.ifc").exists())
         with self.assertRaises(ValueError):
             ie.write_ifc("unused.ifc", metric_scene(units="arbitrary"))
+
+    def test_the_floor_is_a_slab_by_its_fixed_name_not_its_editable_label(self):
+        scene = metric_scene()
+        scene["objects"][0]["label"] = "Ground floor"  # an operator's display label for the observed floor
+        scene["objects"][1]["label"] = "floor"  # a detected chair someone called floor
+        with tempfile.TemporaryDirectory() as d:
+            ie.emit_ifc(d, scene); rows, _ = parse((Path(d) / "scene.ifc").read_text(encoding="ascii"))
+        slabs = [body for body in rows.values() if body.startswith("IFCSLAB(")]
+        self.assertEqual(len(slabs), 1); self.assertIn("'floor_observed'", slabs[0])
+        self.assertEqual(sum(body.startswith("IFCFURNITURE(") for body in rows.values()), 1, "the chair stays furniture")
 
     def test_unknown_cells_merge_into_runs_and_labels_are_escaped(self):
         self.assertEqual(ie.merge_unknown([[0, 0, .5], [.5, 0, .5], [1.5, 0, .5], [0, .5, .5]]), [(0, 1.0, 0, .5), (1.5, 2.0, 0, .5), (0, .5, .5, .5)])

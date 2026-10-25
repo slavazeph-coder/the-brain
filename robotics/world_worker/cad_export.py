@@ -5,8 +5,9 @@ the IFC export's frame: plan X is the scene's x and plan Y is minus its z (seen 
 the same X and Y. Every file says where its scale came from, and none claims a verified measurement:
 - scene-plan.dxf (ezdxf): layers FLOOR, WALLS, OBJECTS, UNKNOWN, DIMENSIONS and LABELS in metres, with each wall's
   length dimensioned and the observed floor extent as a rectangle (an extent, not the room's outline).
-- scene.3dm (rhino3dm): one layer each for floor, walls, objects and unknown space, every element a named box with
-  its measurements, IFC class and provenance as user text, and the scale in the document's user text.
+- scene.3dm (rhino3dm): named BREP solids on floor, wall, object and unknown-space layers; reviewed wall voids
+  leave separate solid parts. Shared component IDs and deterministic object UUIDs retain IFC correspondence,
+  with measurements, IFC class and provenance as user text and semantic voids in document metadata.
 - quantities.csv: one row per element (length, width, height, plan or face area) under a summary of totals, led by
   the floor the capture saw (the extent less unknown cells), not the extent's bounding rectangle.
 Both libraries are optional (requirements-cad.txt); without one, that file is skipped and the evidence says why.
@@ -14,12 +15,16 @@ Both libraries are optional (requirements-cad.txt); without one, that file is sk
 from __future__ import annotations
 
 import csv
+import json
 import math
 from pathlib import Path
 import sys
+import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scene_compiler'))
 from opening_geometry import wall_parts, door_parts, plan_wall_parts, wall_openings
+from ifc_export import ifc_guid
+from component_graph import ensure_component_ids, derive_id
 
 LAYERS = {'FLOOR': 8, 'WALLS': 7, 'OBJECTS': 4, 'UNKNOWN': 6, 'DIMENSIONS': 2, 'LABELS': 7}  # AutoCAD colour indices
 RHINO_LAYERS = {'Floor': (216, 205, 184), 'Walls': (154, 166, 184), 'Objects': (168, 85, 247), 'Unknown space (not free)': (255, 79, 154)}
@@ -39,40 +44,59 @@ def footprint(centre_x, centre_z, length, thickness, yaw_degrees):
 
 def elements(scene):
     """Floor, walls, objects and unknown cells as plan rectangles with their heights and metadata."""
+    scene = ensure_component_ids(scene)
+    source_sha256 = scene['componentGraph']['sourceSha256']
     floor_y = scene['floor_y']
+    def lineage(item):
+        return {key: item[key] for key in ('sourceProvenance', 'support_points', 'supportPointsScope',
+                                          'dimensionProvenance', 'parameterProvenance') if key in item}
     out = []
     for o in scene.get('objects', []):
+        if 'centre' not in o or 'size' not in o:
+            continue  # Unplaced detections remain in scene.json; they provide no CAD solid or quantity.
         if o.get('name') == 'floor_observed':
             (x0, _, z0), (x1, _, z1) = o['min'], o['max']
             out.append({'kind': 'floor', 'name': o['name'], 'label': 'floor', 'ifc': 'IfcSlab', 'corners': [(x0, -z0), (x1, -z0), (x1, -z1), (x0, -z1)],
-                        'length': x1 - x0, 'width': z1 - z0, 'height': o['size'][1], 'base': o['min'][1], 'provenance': o.get('provenance', 'observed')})
+                        'length': x1 - x0, 'width': z1 - z0, 'height': o['size'][1], 'base': o['min'][1], 'provenance': o.get('provenance', 'observed'),
+                        'componentId': o['componentId'], **lineage(o)})
         else:
             L, h, t = o['size']
             label = o.get('label') if o.get('label') not in (None, 'object') else None
             out.append({'kind': 'object', 'name': o['name'], 'label': label, 'ifc': o.get('ifcClass', 'IfcBuildingElementProxy'),
                         'corners': footprint(o['centre'][0], o['centre'][2], L, t, o.get('yaw_degrees', 0)), 'length': L, 'width': t, 'height': h,
                         'base': o['centre'][1] - h / 2, 'provenance': o.get('provenance', 'observed'), 'label_source': o.get('labelSource'),
-                        'label_reviewed': o.get('labelReviewed') if label else None, 'base_inferred': o.get('base') == 'inferred'})
+                        'label_provenance': o.get('labelProvenance'),
+                        'label_reviewed': o.get('labelReviewed') if label else None, 'base_inferred': o.get('base') == 'inferred',
+                        'componentId': o['componentId'], **lineage(o)})
     for w in scene.get('walls', []):
         L, h, t = w['size']
         def rect(part):
             return {'corners': footprint(part['centre'][0], part['centre'][2], part['size'][0], part['size'][2], part.get('yaw_degrees', 0)),
                     'base': part['centre'][1] - part['size'][1] / 2, 'height': part['size'][1]}
         holes = wall_openings(w, scene.get('openings', []))
-        out.append({'kind': 'wall', 'name': w['name'], 'label': 'wall', 'ifc': 'IfcWall', 'corners': footprint(w['centre'][0], w['centre'][2], L, t, w.get('yaw_degrees', 0)),
+        out.append({'kind': 'wall', 'name': w['name'], 'label': w.get('label', 'wall'), 'ifc': 'IfcWall', 'corners': footprint(w['centre'][0], w['centre'][2], L, t, w.get('yaw_degrees', 0)),
                     'length': L, 'width': t, 'height': h, 'base': w['centre'][1] - h / 2, 'provenance': w.get('provenance', 'observed'),
                     'net_face_area': L * h - sum(o['widthMeters'] * o['heightMeters'] for o in holes),
+                    'componentId': w['componentId'], 'openingComponentIds': [o['componentId'] for o in holes], **lineage(w),
                     'solid_parts': [rect(part) for part in wall_parts(w, holes)],
                     'plan_parts': [rect(part)['corners'] for part in plan_wall_parts(w, holes, closed_doors_block=False, floor_y=floor_y)]})
     for leaf in door_parts(scene.get('walls', []), scene.get('openings', [])):
+        opening = next(o for o in scene['openings'] if leaf['name'] == f"door_{o['id']}")
         L, h, t = leaf['size']
-        out.append({'kind': 'door', 'name': leaf['name'], 'label': 'closed reference door', 'ifc': 'IfcDoor',
+        out.append({'kind': 'door', 'name': leaf['name'], 'label': (opening['label'] + ' door') if opening.get('label') else 'closed reference door', 'ifc': 'IfcDoor',
                     'corners': footprint(leaf['centre'][0], leaf['centre'][2], L, t, leaf.get('yaw_degrees', 0)),
-                    'length': L, 'width': t, 'height': h, 'base': leaf['centre'][1] - h / 2, 'provenance': leaf['provenance']})
+                    'length': L, 'width': t, 'height': h, 'base': leaf['centre'][1] - h / 2,
+                    'provenance': opening.get('provenance', leaf['provenance']), **lineage(opening),
+                    'componentId': opening['doorComponentId'], 'hostComponentId': opening['hostComponentId'],
+                    'openingComponentId': opening['componentId']})
+    unknown_parts = {}
     for n, (x, z, c) in enumerate(scene.get('unknown', [])):
+        cell_key = json.dumps([float(x), float(z), float(c)], separators=(',', ':'))
+        duplicate = unknown_parts.get(cell_key, 0); unknown_parts[cell_key] = duplicate + 1
         out.append({'kind': 'unknown', 'name': f'unknown_{n + 1}', 'label': 'unknown space (not free)', 'ifc': 'IfcBuildingElementProxy',
                     'corners': [(x, -z), (x + c, -z), (x + c, -(z + c)), (x, -(z + c))], 'length': c, 'width': c, 'height': 0.3, 'base': floor_y,
-                    'provenance': 'unknown'})
+                    'provenance': 'unknown', 'componentId': derive_id(source_sha256, 'unknown', 'space'),
+                    'partKey': f'cell:{cell_key}:{duplicate}'})
     return out
 
 
@@ -179,6 +203,8 @@ def box(r, corners, base, height):
 
 def write_3dm(scene, items, path):
     import rhino3dm as r
+    scene = ensure_component_ids(scene)
+    source_sha256 = scene['componentGraph']['sourceSha256']
     model = r.File3dm(); model.Settings.ModelUnitSystem = r.UnitSystem.Meters
     index = {}
     for name, colour in RHINO_LAYERS.items():
@@ -186,20 +212,37 @@ def write_3dm(scene, items, path):
     model.Strings['BrainSNN.source'] = 'World Builder scene compiled from a walkthrough reconstruction'  # document user text
     model.Strings['BrainSNN.scale'] = scale_note(scene)
     model.Strings['BrainSNN.metricVerified'] = 'false'
+    model.Strings['BrainSNN.sourceSha256'] = source_sha256
+    model.Strings['BrainSNN.componentGraphSchema'] = scene['componentGraph']['schema']
+    # Voids have no positive Rhino solid: retain their semantic IDs/hosts in document metadata.
+    model.Strings['BrainSNN.openings'] = json.dumps(scene.get('openings', []), sort_keys=True)
     for i in items:
         for part_no, part in enumerate(i.get('solid_parts', [i]), 1):
             brep = box(r, part['corners'], part['base'], part['height'])
             attrs = r.ObjectAttributes()
+            component_id = i['componentId']
+            part_key = i.get('partKey', f'solid-part:{part_no}')
+            attrs.Id = uuid.uuid5(uuid.UUID(component_id), part_key)
             attrs.LayerIndex = index[{'floor': 'Floor', 'wall': 'Walls', 'object': 'Objects', 'door': 'Objects', 'unknown': 'Unknown space (not free)'}[i['kind']]]
-            attrs.Name = i['label'] if i['kind'] in ('object', 'door') and i['label'] else i['name']
+            attrs.Name = i['label'] if i['label'] and (i['kind'] in ('object', 'door') or i['kind'] == 'wall' and i['label'] != 'wall') else i['name']
             if len(i.get('solid_parts', [])) > 1: attrs.Name += f' part {part_no}'
-            for key, value in (('element', i['name']), ('ifcClass', i['ifc']), ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
+            for key, value in (('element', i['name']), ('componentId', component_id), ('ifcGlobalId', ifc_guid(component_id)),
+                               ('sourceSha256', source_sha256), ('partKey', part_key),
+                               ('sourceProvenance', i.get('sourceProvenance', '')), ('supportPointsScope', i.get('supportPointsScope', '')),
+                               ('supportPoints', str(i['support_points']) if i.get('support_points') is not None else ''),
+                               ('dimensionProvenance', i.get('dimensionProvenance', '')),
+                               ('parameterProvenance', json.dumps(i['parameterProvenance'], sort_keys=True, separators=(',', ':')) if i.get('parameterProvenance') else ''),
+                               ('hostComponentId', i.get('hostComponentId', '')), ('openingComponentId', i.get('openingComponentId', '')),
+                               ('openingComponentIds', json.dumps(i['openingComponentIds']) if i.get('openingComponentIds') else ''),
+                               ('ifcClass', i['ifc']), ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
                                ('width_m', f"{i['width']:.3f}"), ('height_m', f"{i['height']:.3f}"), ('labelSource', i.get('label_source') or ''),
+                               ('labelProvenance', i.get('label_provenance') or ''),
                                ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower()),
                                ('base', 'inferred' if i.get('base_inferred') else '')):
                 if value: attrs.SetUserString(key, value)
             model.Objects.AddBrep(brep, attrs)
-    model.Write(str(path), 8)
+    if not model.Write(str(path), 8):
+        raise OSError(f'Rhino could not write {path}.')
     return {'written': True, 'layers': list(RHINO_LAYERS), 'objects': len(model.Objects), 'units': 'm'}
 
 
@@ -208,6 +251,7 @@ def export(scene: dict, out: Path):
     out = Path(out)
     if scene.get('units') != 'm':
         return {'skipped': 'CAD exports need a metric scene.'}
+    scene = ensure_component_ids(scene)
     items = elements(scene)
     rows, totals = quantities(scene, items)
     with (out / 'quantities.csv').open('w', newline='') as f:

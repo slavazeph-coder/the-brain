@@ -81,10 +81,21 @@ def answer(items, detect):
         votes, views_seen, strong = {}, {}, set()
         for pick in item['picks']:
             view = pick['view']
-            if view['name'] not in cache:
-                cache[view['name']] = detect(view['path'])
+            key = (view.get('frame_id'), str(view['path']), view.get('image_sha256'))
+            # Basenames can repeat across private frame directories. Recheck on
+            # every use, including cached results, before attaching a detection.
+            if view.get('image_sha256'):
+                try:
+                    from .object_names import view_image_bytes
+                except ImportError:
+                    from object_names import view_image_bytes
+                view_image_bytes(view)
+            if key not in cache:
+                cache[key] = detect(view['path'])
+                if view.get('image_sha256'):
+                    view_image_bytes(view)
             best = {}
-            for category, score, box in cache[view['name']]:
+            for category, score, box in cache[key]:
                 if category not in LABELS or score < MIN_SCORE:
                     continue
                 overlap, (share, ratio) = iou(pick['box'], box), inside(pick['box'], box)

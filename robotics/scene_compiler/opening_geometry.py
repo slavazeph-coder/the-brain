@@ -55,8 +55,16 @@ def door_parts(walls, openings):
         o = _piece(wall, opening['offsetMeters'], opening['offsetMeters'] + opening['widthMeters'],
                    opening['sillMeters'], opening['sillMeters'] + opening['heightMeters'], f"door_{opening['id']}")
         o['size'][2] = min(.05, wall['size'][2])
-        o.update(label='door', provenance='operator-reviewed-reference', kind='door',
+        o.update(label='door', provenance=opening.get('provenance', 'operator-reviewed-reference'), kind='door',
                  note='Closed reference leaf; no swing, clearance or physical passability validation.')
+        o['support_points'] = opening.get('support_points', 0)
+        for key in ('sourceProvenance', 'dimensionProvenance', 'parameterProvenance', 'supportPointsScope'):
+            o.pop(key, None)  # A fill inherits the opening's authored intent, not the host wall's observations.
+            if key in opening:
+                o[key] = opening[key]
+        if opening.get('doorComponentId'):
+            o['componentId'] = opening['doorComponentId']
+            o['hostComponentId'] = wall.get('componentId')
         result.append(o)
     return result
 

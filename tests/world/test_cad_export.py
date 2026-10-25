@@ -3,7 +3,9 @@
 A small metric scene in scene.json's own form (y up): a 4 x 3 m observed floor, a wall along x, a wall along z, a sofa
 turned 30 degrees and two unknown cells. Files are read back with the libraries that wrote them."""
 from pathlib import Path
+import copy
 import csv
+import json
 import math
 import sys
 
@@ -12,6 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'robotics' / 'world_worker'))
 import cad_export as ce  # noqa: E402
+from component_graph import attach_component_ids, apply_edits, scene_sha256, EDIT_SCHEMA  # noqa: E402
 
 FLOOR_Y = -1.5
 
@@ -50,6 +53,15 @@ def test_the_quantities_sheet_totals_every_element(tmp_path):
     sofa = next(r for r in rows if r[1] == 'object_1')
     assert sofa[2:8] == ['IfcFurniture', 'sofa', '2.000', '0.900', '0.800', '1.80'] and 'unreviewed' in sofa[8]
     assert any('verified False' in r[8] for r in rows if r[1] == 'scale'), 'the sheet says the scale is not verified'
+
+
+def test_unplaced_detection_does_not_invent_cad_geometry_or_quantities(tmp_path):
+    data = scene()
+    data['objects'].append({'name': 'unplaced', 'label': 'chair', 'provenance': 'detected-unplaced', 'reason': 'no camera pose'})
+    assert not any(item['name'] == 'unplaced' for item in ce.elements(data))
+    assert ce.export(data, tmp_path)['quantities']['objects'] == 2
+    assert 'unplaced' not in (tmp_path / 'quantities.csv').read_text()
+    assert data['objects'][-1]['reason'] == 'no camera pose', 'source evidence remains intact'
 
 
 def test_the_dxf_plan_is_in_metres_with_layers_dimensions_and_the_scale_note(tmp_path):
@@ -125,3 +137,112 @@ def test_raised_window_plan_stays_blocked_and_closed_door_is_a_separate_referenc
     assert len(host['plan_parts']) == 2 and leaf['width'] == .05 and leaf['height'] == 2.1
     assert ce.export(s, tmp_path)['quantities']['doors'] == 1
     assert 'closed reference leaf; no clearance validation' in (tmp_path / 'quantities.csv').read_text()
+
+
+def test_rhino_component_ids_and_real_object_uuids_survive_rename_save_and_reopen(tmp_path):
+    r = pytest.importorskip('rhino3dm')
+    original = attach_component_ids(reviewed_scene(kind='door'), 'a' * 64)
+    renamed = apply_edits(original, {'schema': EDIT_SCHEMA, 'sourceSha256': 'a' * 64,
+        'sceneSha256': scene_sha256(original), 'revision': 0, 'edits': [
+            {'op': 'label', 'componentId': original['objects'][1]['componentId'], 'label': 'reviewed sofa name'},
+            {'op': 'label', 'componentId': original['walls'][0]['componentId'], 'label': 'North partition'},
+            {'op': 'label', 'componentId': original['openings'][0]['componentId'], 'label': 'Entry'}]})
+    other_capture = attach_component_ids(reviewed_scene(kind='door'), 'b' * 64)
+    models = []
+    for index, data in enumerate((original, renamed, other_capture)):
+        directory = tmp_path / str(index); directory.mkdir(); ce.export(data, directory)
+        models.append(r.File3dm.Read(str(directory / 'scene.3dm')))
+    def object_ids(model):
+        return {(o.Attributes.GetUserString('componentId'), o.Attributes.GetUserString('partKey')): str(o.Attributes.Id)
+                for o in model.Objects}
+    first, edited, other = map(object_ids, models)
+    assert first == edited
+    assert set(first.values()).isdisjoint(other.values()), 'identical geometry from another capture is a separate model'
+    assert len(first) == len(models[0].Objects) == len(set(first.values())), 'wall parts and unknown cells have separate stable UUIDs'
+    saved = tmp_path / 'saved.3dm'; models[1].Write(str(saved), 8)
+    reopened = r.File3dm.Read(str(saved))
+    assert object_ids(reopened) == edited
+    assert any(o.Attributes.Name == 'reviewed sofa name' for o in reopened.Objects)
+    assert next(o for o in reopened.Objects if o.Attributes.Name == 'reviewed sofa name').Attributes.GetUserString('labelProvenance') == 'operator-authored-edit'
+    assert any(o.Attributes.Name == 'North partition part 1' for o in reopened.Objects)
+    assert any(o.Attributes.Name == 'Entry door' for o in reopened.Objects)
+    assert reopened.Strings['BrainSNN.sourceSha256'] == 'a' * 64
+    opening = original['openings'][0]
+    assert json.loads(reopened.Strings['BrainSNN.openings'])[0]['componentId'] == opening['componentId']
+    leaf = next(o for o in reopened.Objects if o.Attributes.GetUserString('ifcClass') == 'IfcDoor')
+    assert leaf.Attributes.GetUserString('componentId') == opening['doorComponentId']
+    assert leaf.Attributes.GetUserString('hostComponentId') == opening['hostComponentId']
+    assert leaf.Attributes.GetUserString('openingComponentId') == opening['componentId']
+    parts = [o for o in reopened.Objects if o.Attributes.GetUserString('componentId') == original['walls'][0]['componentId']]
+    assert len(parts) == 3
+    assert all(json.loads(o.Attributes.GetUserString('openingComponentIds')) == [opening['componentId']] for o in parts)
+
+
+def test_ifc_and_rhino_reopen_with_the_same_component_host_and_filling_identity(tmp_path):
+    r = pytest.importorskip('rhino3dm'); ifcopenshell = pytest.importorskip('ifcopenshell')
+    import ifcopenshell.util.element
+    from ifc_export import write_ifc
+    source = reviewed_scene(kind='door')
+    source['walls'][0]['support_points'] = 120
+    source['openings'][0].update(provenance='operator-reviewed', support_points=20)
+    data = attach_component_ids(source, 'c' * 64)
+    original_ids = [entry['componentId'] for entry in data['componentGraph']['components']]
+    data = apply_edits(data, {'schema': EDIT_SCHEMA, 'sourceSha256': 'c' * 64,
+        'sceneSha256': scene_sha256(data), 'revision': 0, 'edits': [
+            {'op': 'wall', 'componentId': data['walls'][0]['componentId'], 'translationMeters': [.1, 0, 0]},
+            {'op': 'opening', 'componentId': data['openings'][0]['componentId'], 'widthMeters': 1.1}]})
+    assert [entry['componentId'] for entry in data['componentGraph']['components']] == original_ids
+    ce.export(data, tmp_path); write_ifc(tmp_path / 'scene.ifc', data)
+    model = r.File3dm.Read(str(tmp_path / 'scene.3dm')); ifc = ifcopenshell.open(tmp_path / 'scene.ifc')
+    props = lambda element: ifcopenshell.util.element.get_pset(element, 'Pset_BrainSNN')
+    by_id = {props(element)['ComponentId']: element for element in ifc.by_type('IfcElement') if props(element)}
+    for obj in model.Objects:
+        component_id = obj.Attributes.GetUserString('componentId')
+        element = by_id[component_id]
+        assert obj.Attributes.GetUserString('ifcGlobalId') == element.GlobalId
+        assert obj.Attributes.GetUserString('sourceSha256') == props(element)['SourceSha256'] == 'c' * 64
+    door = ifc.by_type('IfcDoor')[0]; opening = door.FillsVoids[0].RelatingOpeningElement
+    assert props(opening)['ComponentId'] == data['openings'][0]['componentId']
+    assert props(opening)['HostComponentId'] == props(opening.VoidsElements[0].RelatingBuildingElement)['ComponentId']
+    import ifcopenshell.geom
+    import ifcopenshell.util.shape
+    wall = opening.VoidsElements[0].RelatingBuildingElement
+    for element, original_provenance, support in ((wall, 'observed', 120), (opening, 'operator-reviewed', 20), (door, 'operator-reviewed', 20)):
+        pset = props(element)
+        assert pset['Provenance'] == pset['DimensionProvenance'] == 'operator-authored-edit'
+        assert pset['SourceProvenance'] == original_provenance
+        assert pset['SupportPoints'] == support
+        assert pset['SupportPointsScope'] == 'original-source-not-edited-geometry'
+    assert json.loads(props(opening)['ParameterProvenance'])['widthMeters'] == 'operator-authored-edit'
+    for obj in model.Objects:
+        component_id = obj.Attributes.GetUserString('componentId')
+        if component_id not in (props(wall)['ComponentId'], props(door)['ComponentId']):
+            continue
+        assert obj.Attributes.GetUserString('provenance') == obj.Attributes.GetUserString('dimensionProvenance') == 'operator-authored-edit'
+        assert obj.Attributes.GetUserString('sourceProvenance') == ('observed' if component_id == props(wall)['ComponentId'] else 'operator-reviewed')
+        assert obj.Attributes.GetUserString('supportPoints') == ('120' if component_id == props(wall)['ComponentId'] else '20')
+        assert obj.Attributes.GetUserString('supportPointsScope') == 'original-source-not-edited-geometry'
+    saved_void = json.loads(model.Strings['BrainSNN.openings'])[0]
+    assert saved_void['provenance'] == 'operator-authored-edit' and saved_void['sourceProvenance'] == 'operator-reviewed'
+    assert source['walls'][0]['provenance'] == 'observed' and source['walls'][0]['support_points'] == 120
+    actual = ifcopenshell.geom.create_shape(ifcopenshell.geom.settings(), wall)
+    expected_volume = (4 * 2.5 - 1.1 * 2.1) * .1
+    assert ifcopenshell.util.shape.get_volume(actual.geometry) == pytest.approx(expected_volume, abs=1e-6)
+    boxes = [o.Geometry.GetBoundingBox() for o in model.Objects if o.Attributes.GetUserString('componentId') == props(wall)['ComponentId']]
+    assert sum((b.Max.X - b.Min.X) * (b.Max.Y - b.Min.Y) * (b.Max.Z - b.Min.Z) for b in boxes) == pytest.approx(expected_volume, abs=1e-6)
+    assert min(b.Min.X for b in boxes) == pytest.approx(.1, abs=1e-6)
+    assert max(b.Max.X for b in boxes) == pytest.approx(4.1, abs=1e-6)
+
+
+def test_legacy_rhino_namespace_is_deterministic_and_label_independent(tmp_path):
+    r = pytest.importorskip('rhino3dm')
+    first = scene(); changed_label = copy.deepcopy(first); changed_label['objects'][1]['label'] = 'new sofa label'
+    changed_geometry = scene(); changed_geometry['walls'][0]['centre'][0] += 1
+    models = []
+    for index, data in enumerate((first, changed_label, changed_geometry)):
+        directory = tmp_path / str(index); directory.mkdir(); ce.export(data, directory)
+        models.append(r.File3dm.Read(str(directory / 'scene.3dm')))
+    assert models[0].Strings['BrainSNN.sourceSha256'] == models[1].Strings['BrainSNN.sourceSha256']
+    assert {str(o.Attributes.Id) for o in models[0].Objects} == {str(o.Attributes.Id) for o in models[1].Objects}
+    assert models[0].Strings['BrainSNN.sourceSha256'] != models[2].Strings['BrainSNN.sourceSha256']
+    assert 'componentGraph' not in first

@@ -194,6 +194,41 @@ class CloudHandoff(unittest.TestCase):
         self.assertEqual(json.loads((out / "fit-check.json").read_text())["points"], 100)
         self.assertEqual(json.loads((out / "scene.json").read_text())["fit"]["within_5cm"], 1.0, "the summary travels with the scene")
 
+    def test_graph_and_nav_bundle_bind_the_final_scene_without_changing_measurement_hashes(self):
+        import hashlib
+        root = Path(__file__).resolve().parents[2]
+        floor = ('"floor_y": 0, "unknown": [], "objects": [{"name": "floor_observed", "label": "floor", '
+                 '"provenance": "observed", "centre": [0.45, -0.01, 0.45], '
+                 '"size": [0.9, 0.02, 0.9], "min": [0, -0.02, 0], "max": [0.9, 0, 0.9]}], "walls": []}')
+        fake = FAKE_BLENDER.replace('"walls": []}', floor) + f'''
+sys.path.insert(0, {str(root)!r})
+from robotics.scene_compiler.component_graph import attach_component_ids
+from robotics.world_worker.measurement_check import points_sha256
+scene = json.loads((out / 'scene.json').read_text())
+scene['cloudPointsSha256'] = points_sha256(cloud)
+scene = attach_component_ids(scene, points_sha256(cloud))
+(out / 'scene.json').write_text(json.dumps(scene))
+'''
+        evidence, out = self.run_handoff(handoff('m'), fake=fake)
+        self.assertTrue(evidence['navigation']['written'])
+        self.assertTrue(evidence['component_graph']['written'])
+        scene_hash = hashlib.sha256((out / 'scene.json').read_bytes()).hexdigest()
+        cloud_hash = hashlib.sha256((out / 'arena-cloud.json').read_bytes()).hexdigest()
+        graph = json.loads((out / 'component-graph.json').read_text())
+        nav = json.loads((out / 'nav2-map.json').read_text())
+        report = json.loads((out / 'scene-measurements.json').read_text())
+        self.assertEqual(graph['sourceFiles']['scene']['sha256'], scene_hash)
+        self.assertEqual(report['sourceFiles']['scene']['sha256'], scene_hash)
+        self.assertEqual(nav['source']['sceneSha256'], scene_hash)
+        self.assertEqual(nav['source']['cloudSha256'], cloud_hash)
+        self.assertFalse(nav['validation']['physicalRobotValidated'])
+        self.assertFalse(nav['validation']['nav2RuntimeTested'])
+        self.assertEqual(nav['counts']['free'], 0, 'Sparse point spacing cannot manufacture observed free cells')
+        artifacts = json.loads((out / 'manifest.json').read_text())['artifacts']
+        self.assertLessEqual(len(artifacts), 32)
+        self.assertEqual({a['name'] for a in artifacts if a['kind'] == 'nav-map'},
+                         {'nav2-map.pgm', 'nav2-map.yaml', 'nav2-map.json'})
+
     def test_unscaled_cloud_writes_no_usd(self):
         evidence, out = self.run_handoff(handoff("arbitrary"))
         self.assertEqual(evidence["units"], "arbitrary"); self.assertFalse((out / "scene.usda").exists()); self.assertFalse((out / "scene.ifc").exists())
