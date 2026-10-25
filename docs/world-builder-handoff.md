@@ -136,6 +136,31 @@ memory notes and the CI test list conflict. Keep both test lists when merging.
 (`truth_card.py --seconds 6`) is spliced in before the end card with `film_with_truth.py`, which also writes captions and a
 thumbnail. Every frame says "synthetic test room" or "Synthetic test room rendered in Blender".
 
+## Scale from standard-size references (#233)
+
+`robotics/world_worker/reference_scale.py` sets or checks the scale without a tape. It works in four steps:
+1. Claude finds objects whose size a standard fixes, from a closed list: ISO 216 A4 and A3 and US Letter sheets, a
+   595 mm lay-in ceiling tile, and a EUR pallet. Pillows, mugs and posters have no standard size and are not on the
+   list. A 355 ml can is recognised but not measured.
+2. The corners Claude gives are found again in the image to a fraction of a pixel.
+3. Each face is measured on the plane of the reconstruction's own points.
+4. A face whose proportions are more than 3% off the standard's is rejected.
+
+The status is `cross-checked` when two or more references agree within 2%, `single-reference` for one, and
+`conflicting` otherwise. It is never "verified".
+
+- **Worker engine:** `reference-scale` (in `adapters.example.json`, disabled). Its input is the hand-off cloud, its
+  source job is the reconstruction, and it needs `ANTHROPIC_API_KEY` in the worker's environment. It also reports how
+  far a typed scale is from the references, so a typed span gets an automatic independent check.
+- **Measured on the rendered room** with an oracle stand-in for detection: cross-checked by two sheets, −0.45% from the
+  true scale at 0–5 px of corner error. One sheet survives at 10 px, none at 15 px. Sheets across a room are only
+  40–70 px. **Capture rule:** film each reference from about a metre for a second.
+- **Not run yet: Claude itself.** The key in this environment was a key ID (`apikey_…`, rejected with a 401), not the
+  secret (`sk-ant-…`). With a real key set as `ANTHROPIC_API_KEY`, a new session runs
+  `run_reference_benchmark.py OUT --claude`, which scores Claude's pointing in pixels.
+- **Site UI:** a "Find scale references" step with its own consent line (frames go to Anthropic). It belongs on top of
+  #232's Scale step after #232 merges; building it now would conflict with #232's `app.mjs`.
+
 ## Use it: a commercial space, start to finish
 
 ### 1. Film it (about 10 minutes on site)
