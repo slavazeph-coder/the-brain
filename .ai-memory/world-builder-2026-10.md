@@ -100,6 +100,12 @@ description: World Builder flagship development, real browser inference and reco
       - Walls: observed face/base/height, inferred thickness, centreline behind the face. Openings hosted by wall ID. Review state turns `needs-review` after a 2 cm move.
       - Matching is same-frame only; a recapture needs registration first.
       - Next: edits (move wall with its openings and joins, widen an opening, save/reopen), exporters from building.json, site review by host ID, then Nav2 with about 200 sim tasks (19/20 only bounds success at 75%).
+    - Oct 25 iPhone upload: #236 added `video/*` to the upload input; iOS Photo Library had offered photos only, because extensions alone did not register as video.
+    - Oct 25 five-minute videos (owner's ask):
+      - Limits: 2 s to 5 min; 2 GiB per video (photos stay 200 MiB); worker operator quota 4 GiB, all uploads 6 GiB; site session 4 GiB. The site reads duration from metadata and refuses over 5 min before uploading.
+      - Frames: 60 up to a minute, then one a second (300 at 5 min). Past 60 frames, matching is each frame with its next 15 plus all pairs of 60 spread keyframes (5,988 pairs at 300, not 44,850).
+      - Timeouts: extraction max(90, 3 x duration) (5 min 1080p30 HEVC decodes in 34 s on 2 threads); video engines 3600 s. `WORLD_CPU_THREADS` (default 2; the local worker uses every core).
+      - The observations engine still takes 120 s at most.
 
 ## October 24: independent demo correction validation
 

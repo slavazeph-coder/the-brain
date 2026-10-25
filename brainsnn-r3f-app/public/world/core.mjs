@@ -2,7 +2,9 @@
 import '../arena/site-core.js';
 const siteCore=globalThis.BrainSNNSiteCore;
 export const SCHEMA = 'brainsnn.world.v1';
-export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
+// A five-minute walkthrough is about 0.3 GB at 1080p and 1 GB in 4K, so videos get their own limit. Files stay on the
+// device until uploaded in chunks; none is read into memory whole.
+export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
 export const ROBOTS = Object.freeze({
   cleaner: { name: 'Cleaning robot', width: 0.58, depth: 0.68, speed: 0.3 },
   vacuum: { name: 'Robot vacuum', width: 0.35, depth: 0.35, speed: 0.3 },
@@ -120,11 +122,15 @@ export function estimate(result, values) {
   return { minutes, assistanceMinutes, cost: robotRate === null || labourRate === null ? null : minutes / 60 * robotRate + (setupMinutes + assistanceMinutes) / 60 * labourRate, currency: 'CAD', assumptions: { setupMinutes, turnSeconds, assistanceMinutes, robotRate, labourRate }, measured: false };
 }
 export function classifyFile(file) {
-  if (!file || !file.size || file.size > LIMITS.file) throw new Error('Choose a non-empty file up to 200 MiB.');
+  if (!file || !file.size) throw new Error('Choose a non-empty file.');
   const ext = file.name.toLowerCase().split('.').pop();
+  if (['mp4', 'mov', 'webm'].includes(ext)) {
+    if (file.size > LIMITS.video) throw new Error('Videos can be up to 2 GiB. Record at 1080p, or keep the walk under five minutes.');
+    return 'video';
+  }
+  if (file.size > LIMITS.file) throw new Error('Choose a file up to 200 MiB (videos up to 2 GiB).');
   if (ext === 'json') { if (file.size > LIMITS.json) throw new Error('Map JSON must be at most 2 MiB.'); return 'map'; }
   if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image';
-  if (['mp4', 'mov', 'webm'].includes(ext)) return 'video';
   if (['ply', 'splat', 'spz', 'ksplat', 'glb'].includes(ext)) return 'visual';
   throw new Error('Use JPG, PNG, WebP, MP4, MOV, WebM, GLB, PLY, SPLAT, SPZ or a World v1 map. Convert HEIC to JPEG first.');
 }

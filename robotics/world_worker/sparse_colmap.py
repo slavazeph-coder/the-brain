@@ -1,7 +1,7 @@
 """CPU multi-view reconstruction, using pinned PyCOLMAP and local FFmpeg.
 
 No downloaded models, network inputs, invented depth, or metric-scale claims.
-Accepts 3–12 overlapping photos or one 2–120 second local video. Run via the
+Accepts 3–12 overlapping photos or one local video of 2 seconds to 5 minutes. Run via the
 World Worker's adapter protocol so timeout, cancellation and disk limits apply.
 
 With --densify-model (the pinned local Depth Anything V2 Small ONNX file), it also
@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -29,6 +30,17 @@ except ImportError:
 
 PYCOLMAP_VERSION = '4.2.1'
 MAX_IMAGES = 60
+# A video gives 60 frames up to a minute long (at most 3 a second), then one a second up to five minutes: a person
+# walking films about half a metre between frames, so a longer walk needs more frames, not sparser ones.
+MAX_VIDEO_SECONDS = 300
+MAX_VIDEO_FRAMES = 300
+# Matching every pair is 1,770 pairs at 60 frames but 44,850 at 300. Past 60 frames, each frame is matched with its
+# NEIGHBOURS next frames, and up to 60 keyframes spread over the video with every other keyframe, which closes loops
+# where the walk comes back to a wall it already filmed.
+EXHAUSTIVE_FRAMES = 60
+NEIGHBOURS = 15
+THREADS = int(os.environ.get('WORLD_CPU_THREADS', '2')) if os.environ.get('WORLD_CPU_THREADS', '2').isdigit() else 2
+THREADS = max(1, min(64, THREADS))  # a shared worker keeps 2; a worker on its own machine can give it all its cores
 MAX_PIXELS = 24_000_000
 MAX_IMAGE_EDGE = 1280
 MAX_POINTS = 50_000
@@ -51,7 +63,7 @@ def map_frames(database: Path, images: Path, workspace: Path, count: int):
         target = workspace / f'sparse-seed-{seed}'
         target.mkdir()
         pycolmap.set_random_seed(seed)
-        mapping = pycolmap.IncrementalPipelineOptions({'num_threads': 2, 'random_seed': seed,
+        mapping = pycolmap.IncrementalPipelineOptions({'num_threads': THREADS, 'random_seed': seed,
                                                       'min_model_size': 3, 'max_num_models': 3,
                                                       'max_runtime_seconds': max(60, int(remaining))})
         models = pycolmap.incremental_mapping(database, images, target, options=mapping)
@@ -104,10 +116,26 @@ def video_input_options(source: Path):
     raise ValueError('Video signature is not MP4/MOV or WebM.')
 
 
-def extract_video(source: Path, images: Path, *, max_images: int = MAX_IMAGES):
+def frame_budget(duration: float) -> int:
+    """Frames to sample from a video: 60 up to a minute, then one a second."""
+    return max(MAX_IMAGES, min(MAX_VIDEO_FRAMES, round(duration)))
+
+
+def image_pairs(count: int):
+    """The pairs to match among `count` frames in filming order: all of them up to EXHAUSTIVE_FRAMES, else each frame
+    with its NEIGHBOURS next frames plus every pair of up to EXHAUSTIVE_FRAMES evenly spread keyframes."""
+    if count <= EXHAUSTIVE_FRAMES:
+        return [(i, j) for i in range(count) for j in range(i + 1, count)]
+    keys = sorted({round(k * (count - 1) / (EXHAUSTIVE_FRAMES - 1)) for k in range(EXHAUSTIVE_FRAMES)})
+    pairs = {(i, j) for i in range(count) for j in range(i + 1, min(count, i + NEIGHBOURS + 1))}
+    pairs |= {(a, b) for n, a in enumerate(keys) for b in keys[n + 1:]}
+    return sorted(pairs)
+
+
+def extract_video(source: Path, images: Path, *, max_images: int | None = None):
     from PIL import Image, ImageChops, ImageStat
-    if type(max_images) is not int or not 6 <= max_images <= MAX_IMAGES:
-        raise ValueError('Video frame budget must be between 6 and 60.')
+    if max_images is not None and (type(max_images) is not int or not 6 <= max_images <= MAX_VIDEO_FRAMES):
+        raise ValueError(f'Video frame budget must be between 6 and {MAX_VIDEO_FRAMES}.')
     ffmpeg, ffprobe = shutil.which('ffmpeg'), shutil.which('ffprobe')
     if not ffmpeg or not ffprobe:
         raise RuntimeError('Install FFmpeg and FFprobe before enabling video reconstruction.')
@@ -120,17 +148,19 @@ def extract_video(source: Path, images: Path, *, max_images: int = MAX_IMAGES):
     metadata = json.loads(probe.stdout)
     duration = float(metadata.get('format', {}).get('duration', 0))
     streams = [stream for stream in metadata.get('streams', []) if stream.get('codec_type') == 'video']
-    if (not math.isfinite(duration) or not 2 <= duration <= 120 or not streams
+    if (not math.isfinite(duration) or not 2 <= duration <= MAX_VIDEO_SECONDS or not streams
             or any(not 1 <= stream.get('width', 0) * stream.get('height', 0) <= MAX_PIXELS for stream in streams)):
-        raise ValueError('Use a 2–120 second video, at most 24 megapixels per frame.')
+        raise ValueError('Use a video of 2 seconds to 5 minutes, at most 24 megapixels per frame.')
     raw = images.parent / 'video-frames'
     raw.mkdir()
-    fps = min(3, max_images / duration)
-    subprocess.run([ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', '2',
+    budget = frame_budget(duration) if max_images is None else min(max_images, frame_budget(duration))
+    fps = min(3, budget / duration)
+    # Every frame is decoded to sample a few: about 3 s per minute of 1080p on 2 threads, 4 times that for 4K.
+    subprocess.run([ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', str(THREADS),
                     *options, '-i', str(source), '-map', '0:v:0', '-an', '-sn', '-dn',
                     '-vf', f'fps={fps:.8f},scale={MAX_IMAGE_EDGE}:{MAX_IMAGE_EDGE}:force_original_aspect_ratio=decrease',
-                    '-frames:v', str(max_images), '-q:v', '3', str(raw / 'frame_%04d.jpg')],
-                   check=True, timeout=90)
+                    '-frames:v', str(budget), '-q:v', '3', str(raw / 'frame_%04d.jpg')],
+                   check=True, timeout=max(90, 3 * duration))
     accepted, discarded, duplicates = 0, 0, 0
     previous = None
     for frame in sorted(raw.glob('*.jpg')):
@@ -150,7 +180,7 @@ def extract_video(source: Path, images: Path, *, max_images: int = MAX_IMAGES):
     shutil.rmtree(raw)
     if accepted < 6:
         raise ValueError('Fewer than 6 useful frames. Walk slowly with overlapping views and visible detail.')
-    return {'duration_seconds': duration, 'sample_fps': fps, 'discarded_frames': discarded,
+    return {'duration_seconds': duration, 'sample_fps': fps, 'frame_budget': budget, 'discarded_frames': discarded,
             'near_duplicate_frames': duplicates}
 
 
@@ -187,19 +217,27 @@ def run(request: dict, densify_model: Path | None = None):
             prepare_photo(Path(item['path']), images / f'image_{index:04d}.jpg')
     count = len(list(images.glob('*.jpg')))
     database = workspace / 'database.db'
-    extraction = pycolmap.FeatureExtractionOptions({'num_threads': 2, 'max_image_size': MAX_IMAGE_EDGE,
+    extraction = pycolmap.FeatureExtractionOptions({'num_threads': THREADS, 'max_image_size': MAX_IMAGE_EDGE,
                                                     'sift': {'max_num_features': 4096}})
     pycolmap.extract_features(database, images, camera_mode=pycolmap.CameraMode.AUTO,
                               reader_options={'camera_model': 'SIMPLE_RADIAL'},
                               extraction_options=extraction, device=pycolmap.Device.cpu)
-    matching = pycolmap.FeatureMatchingOptions({'num_threads': 2})
-    # Exhaustive matching stays bounded at 60 frames and can close walkthrough loops.
-    pycolmap.match_exhaustive(database, matching_options=matching, device=pycolmap.Device.cpu)
+    matching = pycolmap.FeatureMatchingOptions({'num_threads': THREADS})
+    names = sorted(path.name for path in images.glob('*.jpg'))  # filming order
+    pairs = image_pairs(count)
+    if count <= EXHAUSTIVE_FRAMES:
+        pycolmap.match_exhaustive(database, matching_options=matching, device=pycolmap.Device.cpu)
+    else:
+        listing = workspace / 'pairs.txt'
+        listing.write_text(''.join(f'{names[i]} {names[j]}\n' for i, j in pairs))
+        pycolmap.match_image_pairs(database, matching_options=matching, pairing_options=pycolmap.ImportedPairingOptions({'match_list_path': str(listing)}),
+                                   device=pycolmap.Device.cpu)
+    capture['matching'] = {'method': 'exhaustive' if count <= EXHAUSTIVE_FRAMES else f'{NEIGHBOURS} neighbours and keyframes', 'pairs': len(pairs)}
     models, index, model, attempts = map_frames(database, images, workspace, count)
     registered = model.num_reg_images()
     if registered < 3 or model.num_points3D() < 30:
         raise ValueError('Insufficient reconstructed geometry: at least 3 camera positions and 30 points are required.')
-    model.extract_colors_for_all_images(images, num_threads=2)
+    model.extract_colors_for_all_images(images, num_threads=THREADS)
     points = sorted(model.points3D.items())
     stride = max(1, math.ceil(len(points) / MAX_POINTS))
     sample = [point for _, point in points[::stride]]

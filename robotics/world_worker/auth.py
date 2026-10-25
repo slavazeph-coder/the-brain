@@ -45,7 +45,7 @@ class Identities:
         self.registry = Path(registry) if registry else None
         if self.registry and not self.registry.is_absolute():
             raise ValueError('WORLD_TENANTS_FILE must be an absolute private file path.')
-        self.maximum = {'upload_count': 50, 'upload_bytes': 2 * 1024 ** 3,
+        self.maximum = {'upload_count': 50, 'upload_bytes': 4 * 1024 ** 3,  # room for a 2 GiB video and its photos
                         'job_count': 50, 'active_jobs': 9, 'storage_bytes': storage_limit}
         self.defaults = {'upload_count': 12, 'upload_bytes': min(512 * MIB, storage_limit - MIB),
                          'job_count': 12, 'active_jobs': 1, 'storage_bytes': min(6 * 1024 ** 3, storage_limit)}
