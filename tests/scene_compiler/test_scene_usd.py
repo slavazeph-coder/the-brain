@@ -56,6 +56,27 @@ class ArenaHandoff(unittest.TestCase):
         rows += [[rng.uniform(0, 10), rng.uniform(0.5, 3), rng.uniform(0, 10), 1, 2, 3] for _ in range(1200)]
         self.assertAlmostEqual(su.fit_floor_plane(rows)["d"], 0.0, places=9)
 
+    def test_a_room_whose_floor_was_barely_seen_is_squared_to_its_walls(self):
+        # As the browser test: textured walls, a table top as the only dense low layer, 1% floor; tilted 8, turned 30 degrees.
+        rng = random.Random(21); room = []
+        for i in range(6000):
+            u, y = rng.random(), rng.random() * 2.7
+            room.append([[6 * u, y, 0], [6 * u, y, 4.8], [0, y, 4.8 * u], [6, y, 4.8 * u]][i % 4])
+        room += [[1.8 + 2.4 * rng.random(), .75, 1.95 + 1.1 * rng.random()] for _ in range(400)]
+        room += [[6 * rng.random(), 0, 4.8 * rng.random()] for _ in range(64)]
+        tilt, turn = math.radians(8), math.radians(30)
+        def place(q):
+            x, y, z = q; y1, z1 = y * math.cos(tilt) - z * math.sin(tilt), y * math.sin(tilt) + z * math.cos(tilt)
+            return [x * math.cos(turn) + z1 * math.sin(turn), y1, -x * math.sin(turn) + z1 * math.cos(turn)]
+        rows = [place([v + (rng.random() - .5) * .01 for v in q]) + [120, 120, 120] for q in room]
+        cloud = su.to_arena_cloud(rows); M = cloud["fromSource"]
+        apply = lambda q: [row[0] * q[0] + row[1] * q[1] + row[2] * q[2] + row[3] for row in M]
+        self.assertTrue(cloud["provenance"]["floorSquaredToRoom"])
+        up = place([0, 1, 0]); mapped = [row[0] * up[0] + row[1] * up[1] + row[2] * up[2] for row in M]
+        self.assertLess(math.degrees(math.acos(mapped[1] / math.hypot(*mapped))), 1)
+        for corner in ([0, 0, 0], [6, 0, 4.8]):
+            self.assertLess(abs(apply(place(corner))[1]), .03, "a floor corner sits on the hand-off's floor")
+
     def test_frame_flip_only_for_colmap(self):
         # A floorless blob (<10% plane inliers) is never rotated, so the frame handling shows through directly.
         rng = random.Random(5); rows = [[rng.uniform(-3, 3), rng.uniform(-3, 3), rng.uniform(-3, 3), 1, 2, 3] for _ in range(2000)]

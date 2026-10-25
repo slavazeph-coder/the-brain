@@ -58,6 +58,28 @@ test('the hand-off keeps a room\'s walls, floor and ceiling, which are its own e
   assert.equal(cloud.points.length, 6000);
 });
 
+test('a room whose floor the cameras barely saw is squared to its walls and stands on its lowest points', () => {
+  // 6 x 2.7 x 4.8 m: textured walls, a table top as the only dense low layer, 1% of the points on the floor; tilted
+  // 8 degrees and turned 30 degrees. The floor fit alone settles on a tilted plane or the table; squared, it is level.
+  let seed = 21; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, room = [];
+  for (let i = 0; i < 6000; i++) { const u = r(), y = r() * 2.7, side = i % 4;
+    room.push(side === 0 ? [6 * u, y, 0] : side === 1 ? [6 * u, y, 4.8] : side === 2 ? [0, y, 4.8 * u] : [6, y, 4.8 * u]); }
+  for (let i = 0; i < 400; i++) room.push([1.8 + 2.4 * r(), .75, 1.95 + 1.1 * r()]);
+  for (let i = 0; i < 64; i++) room.push([6 * r(), 0, 4.8 * r()]);
+  const tilt = 8 * Math.PI / 180, turn = Math.PI / 6;
+  const place = ([x, y, z]) => { const y1 = y * Math.cos(tilt) - z * Math.sin(tilt), z1 = y * Math.sin(tilt) + z * Math.cos(tilt);
+    return [x * Math.cos(turn) + z1 * Math.sin(turn), y1, -x * Math.sin(turn) + z1 * Math.cos(turn)]; };
+  const rows = room.map(q => place(q.map(v => v + (r() - .5) * .01)).map(v => v.toFixed(5)).join(' ') + ' 120 120 120');
+  const cloud = toArenaCloud(parsePLY(ascii(rows)).points), M = cloud.fromSource, apply = q => M.map(row => row[0] * q[0] + row[1] * q[1] + row[2] * q[2] + row[3]);
+  assert.equal(cloud.provenance.floorSquaredToRoom, true);
+  const up = place([0, 1, 0]), mapped = M.map(row => row[0] * up[0] + row[1] * up[1] + row[2] * up[2]);
+  assert.ok(Math.acos(mapped[1] / Math.hypot(...mapped)) < Math.PI / 180, `true up is ${(Math.acos(mapped[1] / Math.hypot(...mapped)) * 180 / Math.PI).toFixed(2)} degrees off the hand-off's`);
+  for (const corner of [[0, 0, 0], [6, 0, 4.8]]) assert.ok(Math.abs(apply(place(corner))[1]) < .03, `a floor corner sits ${apply(place(corner))[1].toFixed(3)} off the hand-off's floor`);
+  // and its walls run along X and Z
+  const along = M.map(row => row[0] * place([1, 0, 0])[0] + row[1] * place([1, 0, 0])[1] + row[2] * place([1, 0, 0])[2]);
+  assert.ok(Math.min(Math.abs(along[0]), Math.abs(along[2])) / Math.hypot(...along) < Math.sin(Math.PI / 180), 'walls are square to the plan axes');
+});
+
 test('the hand-off records the exact transform from the reconstruction, through tilt, heading and scale', () => {
   // A COLMAP-frame room (y down), tilted and turned, so floor alignment and the heading turn both apply.
   let seed = 11; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, rows = [];
