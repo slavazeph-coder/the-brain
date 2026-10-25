@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, fitFloorPlane, alignToFloor, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, frameBounds, toArenaCloud, estimateFloor, fitFloorPlane, alignToFloor, squareToRoom, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
 
@@ -41,6 +41,48 @@ test('Arena hand-off keeps the core, turns COLMAP Y-up, and records every droppe
   const same = toArenaCloud(p.subarray(0, 2 * STRIDE)); assert.deepEqual(same.points[1].slice(0, 3), [...p.subarray(STRIDE, STRIDE + 3)]); assert.equal(same.provenance.outliersDropped, 0);
   const big = parsePLY(ascii(Array.from({ length: 2500 }, (_, i) => `${i % 50} ${Math.floor(i / 50)} 0 1 2 3`))).points;
   const thin = toArenaCloud(big, {}, 1000); assert.ok(thin.points.length <= 1000 && thin.provenance.thinned);
+});
+
+test('the hand-off keeps a room\'s walls, floor and ceiling, which are its own extremes, and drops far outliers', () => {
+  // Points scattered 1 cm about the six faces of a 6 x 2.7 x 4.8 room, plus 20 triangulated outliers 50 m out.
+  // A 2-98% core alone cut 2% off each end of each axis, which here is the walls themselves.
+  let seed = 5; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, rows = [], size = [6, 2.7, 4.8];
+  for (let i = 0; i < 6000; i++) {
+    const axis = i % 3, q = size.map(s => r() * s); q[axis] = (i % 6 < 3 ? 0 : size[axis]) + (r() - .5) * .02;
+    rows.push(`${q[0]} ${q[1]} ${q[2]} 120 120 120`);
+  }
+  for (let i = 0; i < 20; i++) rows.push(`${50 + i} ${-50 - i} ${50 + i} 10 10 10`);
+  const p = parsePLY(ascii(rows)).points, cloud = toArenaCloud(p);
+  assert.equal(frameBounds(p).trimmed, true, 'the outliers make this a trimmed cloud');
+  assert.equal(cloud.provenance.outliersDropped, 20, `dropped ${cloud.provenance.outliersDropped}: every outlier and no wall point`);
+  assert.equal(cloud.points.length, 6000);
+});
+
+test('a room whose floor the cameras barely saw is squared to its walls and stands on its lowest points', () => {
+  // 6 x 2.7 x 4.8 m: textured walls, a table top as the only dense low layer, 1% of the points on the floor; tilted
+  // 8 degrees and turned 30 degrees. The floor fit alone settles on a tilted plane or the table; squared, it is level.
+  let seed = 21; const r = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296, room = [];
+  for (let i = 0; i < 6000; i++) { const u = r(), y = r() * 2.7, side = i % 4;
+    room.push(side === 0 ? [6 * u, y, 0] : side === 1 ? [6 * u, y, 4.8] : side === 2 ? [0, y, 4.8 * u] : [6, y, 4.8 * u]); }
+  for (let i = 0; i < 400; i++) room.push([1.8 + 2.4 * r(), .75, 1.95 + 1.1 * r()]);
+  for (let i = 0; i < 64; i++) room.push([6 * r(), 0, 4.8 * r()]);
+  const tilt = 8 * Math.PI / 180, turn = Math.PI / 6;
+  const place = ([x, y, z]) => { const y1 = y * Math.cos(tilt) - z * Math.sin(tilt), z1 = y * Math.sin(tilt) + z * Math.cos(tilt);
+    return [x * Math.cos(turn) + z1 * Math.sin(turn), y1, -x * Math.sin(turn) + z1 * Math.cos(turn)]; };
+  const rows = room.map(q => place(q.map(v => v + (r() - .5) * .01)).map(v => v.toFixed(5)).join(' ') + ' 120 120 120');
+  const cloud = toArenaCloud(parsePLY(ascii(rows)).points), M = cloud.fromSource, apply = q => M.map(row => row[0] * q[0] + row[1] * q[1] + row[2] * q[2] + row[3]);
+  assert.equal(cloud.provenance.floorSquaredToRoom, true);
+  const up = place([0, 1, 0]), mapped = M.map(row => row[0] * up[0] + row[1] * up[1] + row[2] * up[2]);
+  assert.ok(Math.acos(mapped[1] / Math.hypot(...mapped)) < Math.PI / 180, `true up is ${(Math.acos(mapped[1] / Math.hypot(...mapped)) * 180 / Math.PI).toFixed(2)} degrees off the hand-off's`);
+  for (const corner of [[0, 0, 0], [6, 0, 4.8]]) assert.ok(Math.abs(apply(place(corner))[1]) < .03, `a floor corner sits ${apply(place(corner))[1].toFixed(3)} off the hand-off's floor`);
+  // A weak fitted plane whose normal faces down still squares to the +y side (the side the floor search samples).
+  const core = parsePLY(ascii(rows)).points, list = [];
+  for (let i = 0; i < core.length; i += STRIDE) list.push([core[i], core[i + 1], core[i + 2], 0, 0, 0]);
+  const fitted = fitFloorPlane(list), down = squareToRoom(list, { ...fitted, normal: fitted.normal.map(v => -v * Math.sign(fitted.normal[1])) });
+  assert.ok(down && down.normal[1] > 0, 'the squared floor faces up whichever way the fitted plane faced');
+  // and its walls run along X and Z
+  const along = M.map(row => row[0] * place([1, 0, 0])[0] + row[1] * place([1, 0, 0])[1] + row[2] * place([1, 0, 0])[2]);
+  assert.ok(Math.min(Math.abs(along[0]), Math.abs(along[2])) / Math.hypot(...along) < Math.sin(Math.PI / 180), 'walls are square to the plan axes');
 });
 
 test('the hand-off records the exact transform from the reconstruction, through tilt, heading and scale', () => {

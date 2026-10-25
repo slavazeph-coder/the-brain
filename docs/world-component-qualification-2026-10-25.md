@@ -100,8 +100,8 @@ IDs, actual native IFC/Rhino files, map orientation, unknown-space policies,
 invalid inputs, stale evidence and failed-process publication. Blender is a
 separate opt-in execution check.
 
-Local combined validation after the final geometry/provenance changes:
-408 tests passed, 95 subtests passed, 7 prerequisite skips. Skips were one missing
-PyCOLMAP test, two absent real-capture opt-ins, three missing PyAV tests and one
-missing ONNX Runtime test. Hosted CI installs those CPU dependencies; real-capture
-opt-ins remain separate. CI results must be read at the exact proposed commit.
+Local combined validation after integrating main's PR #233 and installing the
+configured CPU prerequisites: 428 tests passed, 95 subtests passed, 2 real-capture
+opt-ins skipped. The 131 browser/Node contracts also passed. Earlier missing
+PyCOLMAP, PyAV and ONNX Runtime prerequisites were installed and their tests then
+passed. CI results must be read at the exact proposed commit.

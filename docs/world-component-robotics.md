@@ -31,6 +31,10 @@ fingerprint. IDs survive the supported edits and display-label changes within
 that saved scene. They are not cross-capture object recognition. Legacy standalone
 exporters derive a clearly labelled geometry-scoped namespace when no source
 fingerprint is available; callers must retain the identified scene for later edits.
+Fresh segmentation or compiler-version changes can alter component ordering even
+for the same points. Do not use index-derived IDs as proof of semantic matching
+between those fresh runs; continuity requires the retained scene graph and its
+exact edit lineage.
 
 Walls, source objects, openings and door fills have distinct identities. IFC
 GlobalIds and Rhino metadata use those component IDs; unrelated source namespaces

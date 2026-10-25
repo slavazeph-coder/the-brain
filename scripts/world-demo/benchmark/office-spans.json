@@ -1,0 +1,10 @@
+[
+ {"id": "table-length", "role": "calibration", "from": "table_sw", "to": "table_se", "label": "Table top, long edge"},
+ {"id": "window-width", "role": "held-out", "from": "window_sill_left", "to": "window_sill_right", "label": "Window opening, width at the sill"},
+ {"id": "window-height", "role": "held-out", "from": "window_top_right", "to": "window_sill_right", "label": "Window opening, height"},
+ {"id": "credenza-length", "role": "held-out", "from": "credenza_top_north", "to": "credenza_top_south", "label": "Credenza top, length"},
+ {"id": "door-width", "role": "held-out", "from": "door_top_left", "to": "door_top_right", "label": "Door opening, width at the head"},
+ {"id": "whiteboard-height", "role": "held-out", "from": "whiteboard_top_right", "to": "whiteboard_bottom_right", "label": "Whiteboard, right edge"},
+ {"id": "window-to-door", "role": "held-out", "from": "window_sill_right", "to": "door_top_left", "label": "Across the room: window sill to door head"},
+ {"id": "credenza-to-screen", "role": "held-out", "from": "credenza_top_north", "to": "screen_bottom_right", "label": "Across the room: credenza to screen"}
+]

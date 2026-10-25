@@ -76,6 +76,24 @@ description: World Builder flagship development, real browser inference and reco
     - rotating the Anthropic key shared in chat (owner);
     - a dense GPU benchmark on the 4090 (Hermes);
     - Lyra 1 trial receipts.
+  - Oct 24 evening (#226–#229), after the owner asked for commercial BIM films "better than Moving Atoms":
+    - #226: COLMAP mapping retries seeds 0–2 until 90% of frames join one model (one walkthrough split 33 + 26 frames).
+    - #227: on-worker detector names (EfficientDet-Lite2, pinned sha256); `scene-plan.dxf`, `scene.3dm` and `quantities.csv` from scene.json; the feed-film scripts.
+    - #228: the site's `fitFloorPlane` read empty height bins as undefined (NaN peak), so a capture with one stray point under the floor stayed tilted. Every film before it was compiled 16.3° off level.
+    - #229: fit check (`fit-check.json`, `fit-heatmap.ply`; model to points, metric scenes only), furniture grounded over unseen floor (base "inferred"), the floor plane through the floor layer itself (not a bin centre), and the film's `--cut check`.
+    - Main's release checks failed on #228's merge because #228's own new test was flaky (17 of 40 runs). #229 fixed the cause; check that main is green before assuming a deploy.
+    - Decisions: don't compete with laser scan-to-BIM on millimetres; win on phone capture, minutes and an open fit check. No "Xactimate integration" claims (ESX needs Verisk's partner programme). VGGT-1B, Depth Anything V2 Base/Large and Depth Pro are not licensed for commercial use. Gemini Robotics-ER 2 (Gemini API) fits as a naming provider; next exports are a MuJoCo scene and doors/rooms in IFC.
+    - Handoff: `docs/world-builder-handoff.md` (Oct 24 evening), with capture guide, API steps, file table, claims sheet and next steps.
+    - Oct 25: Codex's draft #232 (`codex/world-bim-demo`) adds reviewed measurements (calibration plus withheld checks), hosted openings and strict film admission. The original room evidence #232 called unavailable was recovered from the Claude session (capture SHA-256 `083923ee…26ab`), and passed its `regenerate_reference.py`; the three cuts were rendered from it with that wrapper (the film env needs pytest: IfcOpenShell's rule checker imports it). Private only: the Mip-NeRF 360 photos state no licence for commercial reuse.
+    - Oct 25 synthetic benchmark (#233, `scripts/world-demo/benchmark/`): a 6.0 x 4.8 x 2.7 m meeting room in Blender, 60 frames, scored model-to-truth (rigid camera fit, scale from one 2.4 m span, 7 withheld spans as #232 checks). It found and fixed four defects:
+      - the hand-off's 2-98% trim cut 11% of the wall points (now widened 15%);
+      - a barely-seen floor was fitted 9.4 degrees off level at table height (a weak floor is now squared to the room's planes, up is the +y side, the floor is the room's lowest points);
+      - the object minimum counted wall points, so sparse chairs stayed points (now 0.3% of the candidates);
+      - the score missed an upside-down model (now checks level and floor height).
+    - After the fixes, merged with #232: level 0.3 degrees, floor +4.0 cm, walls 4 of 4 within 1.7 cm, faces 0.7 cm, furniture 5 of 10 (sizes rough on sparse points), withheld 7 of 7 (worst 1.9 cm). The LinkedIn film is this run, labelled synthetic.
+    - Open: wall boxes centred on the seen face read the room 9-11 cm short between boxes (owner's call); the dense engine's depth model can't be fetched from cloud sessions (Hugging Face blocked).
+    - Oct 25 reference scale (#233, `reference_scale.py`): Claude marks standard-size references (A4/A3/Letter, 595 mm ceiling tile, EUR pallet; no pillows or mugs), corners refined from the image, faces measured on the cloud's plane, proportions checked; cross-checked when 2+ agree within 2%, never "verified". Oracle stand-in on the rendered room: -0.45% at 0-5 px corner error, nothing at 15 px; sheets are 40-70 px across a room, so film references from about 1 m. Claude run pending a real key: the owner's `apikey_01...` value is a key ID (401), not the `sk-ant-` secret.
+
 ## October 24: independent demo correction validation
 
 PR #228 and follow-up #229 are merged; use `2f1f38e` or a validated descendant for replacement footage. Both PR CI workflows succeeded, including production build and Chromium/WebKit. Independent local checks: 109 World contracts, lint/build, 125 worker tests (3 skips), and 37 compiler tests passed. A seeded synthetic stray-point regression reproduces the old sparse-histogram failure and passes on current code. This is not reproduction of the original 10,925-point room.
