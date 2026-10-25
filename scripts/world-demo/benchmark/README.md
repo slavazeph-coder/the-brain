@@ -31,23 +31,28 @@ inward. It is 26 mm on a 36 mm sensor, about a phone's main camera.
 ## Run it
 
 ```sh
-# 1. Render (Blender 4.2, CPU). 60 frames at 960 x 540 take about 20 minutes on 4 cores.
+# 1. Render (Blender 4.2, CPU). --test 10 renders only frame 10, to check the room before a full run.
 blender -b --python scripts/world-demo/benchmark/build_office.py -- OUT --frames 60 --width 960 --height 540
-#    --test 10 renders only frame 10, to check the room before a full run.
 
-# 2. Reconstruct: upload OUT/walkthrough.mp4 to a worker and run the colmap-sparse engine, as the site does.
+# 2. Run it through a worker whose job directory is on this machine. Keep the token in the environment only.
+export WORLD_WORKER_URL=http://127.0.0.1:8040 WORLD_WORKER_TOKEN=...
+python scripts/world-demo/benchmark/run_benchmark.py OUT --jobs <worker dir>/jobs
 
-# 3. Pick the reference points and set the scale from the calibration span alone.
-python scripts/world-demo/benchmark/pick_references.py --truth OUT/truth.json --frames OUT/frames \
-  --reconstruction <worker jobs dir>/<reconstruction job> --out OUT/refs
-
-# 4. Upload OUT/refs/brainsnn-point-cloud.json, with OUT/refs/dimension-checks.json embedded as measurementChecks,
-#    and run scene-usd on it. The scene's own measurement report then scores the withheld spans.
-
-# 5. Score every compiled wall and object against the true room.
-python scripts/world-demo/benchmark/score_against_truth.py --truth OUT/truth.json --references OUT/refs/references.json \
-  --job <worker jobs dir>/<scene job>/output --out OUT/truth-score.json
+# 3. The card: the true plan with the compiled walls, objects and cameras on it, and the errors beneath.
+python scripts/world-demo/benchmark/truth_card.py --truth OUT/truth.json --score OUT/truth-score.json \
+  --measurements <worker dir>/jobs/<scene job>/output/scene-measurements.json --out OUT/card.png
 ```
+
+`run_benchmark.py` runs each step the way a person does it in the site:
+
+1. It uploads `walkthrough.mp4` and runs `colmap-sparse` (`worker_client.py`).
+2. `pick_references.py` finds the reconstructed point at each landmark. It sets the scale from the calibration span
+   alone and writes the withheld spans as measurement checks.
+3. It uploads the metric hand-off with those checks embedded and runs `scene-usd` on it. That job reads the
+   reconstruction's frames, and its own `scene-measurements.json` scores the withheld spans.
+4. `score_against_truth.py` scores every compiled wall and object against the true room.
+
+The job ids go to `OUT/run.json`.
 
 ## What each step is allowed to know
 
@@ -73,6 +78,9 @@ error is picking.
   - Each wall face's offset and tilt, and how much of its length was covered.
   - Each object's size and centre error.
   - Missed and spurious objects.
+  - The clear distance between opposite compiled wall boxes. A compiled wall is a box centred on the surface the
+    camera saw, so half its thickness stands inside the room. A BIM user measuring between boxes reads that much
+    less than the faces' distance.
   - The camera fit's RMS.
 
-The geometry of the alignment fits, the fingerprint and the score is tested in `tests/world/test_benchmark_tools.py`.
+The alignment fits, the fingerprint, the score and the card are tested in `tests/world/test_benchmark_tools.py`.

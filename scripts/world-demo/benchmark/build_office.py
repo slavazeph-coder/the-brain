@@ -244,15 +244,19 @@ sc.render.image_settings.file_format = 'PNG'; sc.view_settings.view_transform = 
 
 def path(t):
     """A walk once round the room, 0.95 m inside the walls, at phone height, looking 50 degrees inward from the
-    direction of travel and a little down, with a slight sway. t in [0, 1)."""
+    direction of travel and a little down, with a slight sway. The heading turns over 1.4 m at each corner, as a
+    person's does, rather than jumping 90 degrees between two frames. t in [0, 1)."""
     m = .95; pts = [(m, m), (W - m, m), (W - m, D - m), (m, D - m)]
     per = [math.dist(pts[i], pts[(i + 1) % 4]) for i in range(4)]; total = sum(per); s = t * total
+    corners = [sum(per[:k]) for k in range(5)]  # arc length of each corner, the start counted at both ends
+    smooth = lambda u: 0 if u <= -1 else 1 if u >= 1 else .5 + .75 * u - .25 * u ** 3
+    travel = math.radians(90) * (sum(smooth((s - c) / .7) for c in corners) - 1)  # 0, 90, 180, 270 along the sides
     for i in range(4):
         if s <= per[i]:
             a, b = pts[i], pts[(i + 1) % 4]; f = s / per[i]; break
         s -= per[i]
     x, z = a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f
-    heading = math.atan2(b[1] - a[1], b[0] - a[0]) + math.radians(50) + .03 * math.sin(t * 37)  # inward is +90 here
+    heading = travel + math.radians(50) + .03 * math.sin(t * 37)  # inward is +90 here
     y = 1.5 + .02 * math.sin(t * 23)
     look = (math.cos(heading), -.16, math.sin(heading))
     return (x, y, z), look

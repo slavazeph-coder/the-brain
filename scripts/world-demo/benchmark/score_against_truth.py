@@ -8,7 +8,8 @@ camera positions, so a wrong scale shows up as error instead of being fitted awa
 - a compiled object to the nearest true object of the same kind (table, chair, cabinet, plant): plan centres within
   0.6 m.
 Reported: room width and depth between matched opposite walls, each wall's offset from its true face, its tilt and
-covered length, each object's size and centre error, missed and spurious objects, and floor area.
+covered length, each object's size and centre error, missed and spurious objects, and floor area; and every compiled
+footprint and camera placed in the true plan, for truth_card.py.
 """
 from __future__ import annotations
 
@@ -31,7 +32,15 @@ def rigid(src, dst):
 
 
 def plan(yaw_degrees):
+    """The length direction of a scene element: (cos yaw, sin yaw) in the x-z plane, as scene_compiler writes it."""
     t = math.radians(yaw_degrees); return np.array([math.cos(t), 0.0, math.sin(t)])
+
+
+def footprint(centre, d, length, thickness):
+    """An element's plan rectangle as four [x, z] corners: length along d, thickness across it."""
+    n = np.array([-d[2], 0, d[0]]); c = np.asarray(centre, float)
+    return [[round(float(q[0]), 4), round(float(q[2]), 4)] for q in
+            (c + a * d * length / 2 + b * n * thickness / 2 for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1)))]
 
 
 def score(truth, references, scene, cloud):
@@ -59,7 +68,9 @@ def score(truth, references, scene, cloud):
             along = float((c - tw['face']) @ tw['dir'])
             if angle <= 20 and abs(offset) <= .5 and abs(along) <= tw['size'][0] / 2 + .3 and (best is None or abs(offset) < abs(best['offsetMeters'])):
                 best = {'true': tw['name'], 'offsetMeters': round(offset, 4), 'angleDegrees': round(angle, 2)}
-        walls.append({'name': w['name'], 'lengthMeters': round(w['size'][0], 3), 'heightMeters': round(w['size'][1], 3), **(best or {'true': None})})
+        walls.append({'name': w['name'], 'lengthMeters': round(w['size'][0], 3), 'heightMeters': round(w['size'][1], 3),
+                      'thicknessMeters': round(w['size'][2], 3), **(best or {'true': None}),
+                      'plan': footprint(c, d, w['size'][0], w['size'][2])})
     per_wall = {}
     for tw in true_walls:
         mine = [w for w in walls if w['true'] == tw['name']]
@@ -67,31 +78,44 @@ def score(truth, references, scene, cloud):
             weight = sum(w['lengthMeters'] for w in mine)
             per_wall[tw['name']] = {'compiled': [w['name'] for w in mine], 'coveredMeters': round(weight, 3), 'trueLengthMeters': tw['size'][0],
                                     'offsetMeters': round(sum(w['offsetMeters'] * w['lengthMeters'] for w in mine) / weight, 4),
-                                    'heightMeters': round(max(w['heightMeters'] for w in mine), 3), 'trueHeightMeters': tw['size'][1]}
+                                    'heightMeters': round(max(w['heightMeters'] for w in mine), 3), 'trueHeightMeters': tw['size'][1],
+                                    'thicknessMeters': round(sum(w['thicknessMeters'] * w['lengthMeters'] for w in mine) / weight, 3)}
     dims = {}
     for name, (a, b), true in (('width', ('wall_west', 'wall_east'), room['width']), ('depth', ('wall_north', 'wall_south'), room['depth'])):
         if a in per_wall and b in per_wall:  # each face moved by its offset (positive is into the room)
             measured = true - per_wall[a]['offsetMeters'] - per_wall[b]['offsetMeters']
-            dims[name] = {'trueMeters': true, 'measuredMeters': round(measured, 4), 'errorMeters': round(measured - true, 4)}
+            # A compiled wall is a box centred on the surface it saw, so half its thickness stands in the room: the clear
+            # distance a BIM user reads between the two boxes is shorter than the faces' by that much.
+            clear = measured - (per_wall[a]['thicknessMeters'] + per_wall[b]['thicknessMeters']) / 2
+            dims[name] = {'trueMeters': true, 'measuredMeters': round(measured, 4), 'errorMeters': round(measured - true, 4),
+                          'betweenBoxesMeters': round(clear, 4), 'betweenBoxesErrorMeters': round(clear - true, 4)}
         else:
             dims[name] = {'trueMeters': true, 'measuredMeters': None, 'reason': 'an opposite wall was not compiled'}
     # Objects.
     true_objects = [o for o in truth['objects'] if KIND.get(o['label'])]
     compiled = [o for o in scene.get('objects', []) if o.get('kind') == 'separated']
-    used, objects = set(), []
+    placed = []
     for o in compiled:
-        c = place(o['centre']); kind = KIND.get(o.get('label'))
-        cand = [(math.dist((c[0], c[2]), (to['centre'][0], to['centre'][2])), k) for k, to in enumerate(true_objects)
-                if k not in used and (kind is None or KIND[to['label']] == kind)]
-        dist, k = min(cand, default=(None, None))
-        if dist is None or dist > .6:
-            objects.append({'name': o['name'], 'label': o.get('label'), 'true': None}); continue
-        used.add(k); to = true_objects[k]
+        c = place(o['centre']); d = turn(plan(o.get('yaw_degrees', 0))); d[1] = 0; d /= np.linalg.norm(d)
+        placed.append((c, footprint(c, d, o['size'][0], o['size'][2])))
+    # Closest pairs first, over the whole room, so the order objects were compiled in does not decide a match.
+    pairs_by_distance = sorted((math.dist((c[0], c[2]), (to['centre'][0], to['centre'][2])), i, k)
+                               for i, (o, (c, _)) in enumerate(zip(compiled, placed)) for k, to in enumerate(true_objects)
+                               if KIND.get(o.get('label')) in (None, KIND[to['label']]))
+    match, used = {}, set()
+    for dist, i, k in pairs_by_distance:
+        if dist <= .6 and i not in match and k not in used: match[i] = (dist, k); used.add(k)
+    objects = []
+    for i, o in enumerate(compiled):
+        shape = placed[i][1]
+        if i not in match:
+            objects.append({'name': o['name'], 'label': o.get('label'), 'true': None, 'plan': shape}); continue
+        dist, k = match[i]; to = true_objects[k]
         ms, ts = sorted(o['size'][::2], reverse=True), sorted(to['size'][::2], reverse=True)
         objects.append({'name': o['name'], 'label': o.get('label'), 'true': to['name'], 'trueLabel': to['label'],
                         'planCentreErrorMeters': round(dist, 4), 'base': o.get('base', 'observed'),
                         'sizeErrorMeters': {'length': round(ms[0] - ts[0], 4), 'width': round(ms[1] - ts[1], 4),
-                                            'height': round(o['size'][1] - to['size'][1], 4)}})
+                                            'height': round(o['size'][1] - to['size'][1], 4)}, 'plan': shape})
     missed = [to['name'] for k, to in enumerate(true_objects) if k not in used]
     floor = next((o for o in scene.get('objects', []) if o.get('name') == 'floor_observed'), None)
     matched = [o for o in objects if o['true']]
@@ -106,6 +130,7 @@ def score(truth, references, scene, cloud):
             'basis': 'model to truth: compiled elements against the exact scene definition, placed by a rigid camera fit',
             'summary': summary, 'room': dims, 'walls': per_wall, 'compiledWalls': walls, 'objects': objects, 'missedObjects': missed,
             'floor': {'trueAreaM2': room['floorArea'], 'compiledExtent': floor and [round(floor['size'][0], 3), round(floor['size'][2], 3)]},
+            'cameras': [[round(float(q[0]), 4), round(float(q[2]), 4)] for q in (place(to_cloud(p['reconstruction'])) for p in pairs)],
             'caveat': 'A rendered test room with exact dimensions: real captures add lens, motion and lighting error this does not.'}
 
 

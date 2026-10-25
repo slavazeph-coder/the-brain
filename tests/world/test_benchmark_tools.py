@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / 'scripts' / 'world-demo' / 'benchmark'))
 sys.path.insert(0, str(ROOT / 'robotics' / 'world_worker'))
 import pick_references as pr  # noqa: E402
 import score_against_truth as st  # noqa: E402
+import truth_card  # noqa: E402
 
 
 def turn(degrees):
@@ -72,3 +73,17 @@ def test_the_truth_score_reports_exactly_the_planted_errors():
     table = next(o for o in r['objects'] if o['true'] == 'table')
     assert table['sizeErrorMeters']['length'] == pytest.approx(.06) and table['planCentreErrorMeters'] == pytest.approx(.05)
     assert r['missedObjects'] == ['chair_0'] and r['summary']['spuriousObjects'] == 1 and r['summary']['wallsMatched'] == '4 of 4'
+    # Footprints come back in the true plan: the table 2.46 x 1.1 m round (3.05, 2.5), the west wall along z at x = 0.03.
+    xs, zs = zip(*table['plan']); assert (min(xs), max(xs), min(zs), max(zs)) == pytest.approx((1.82, 4.28, 1.95, 3.05), abs=1e-3)
+    xs, zs = zip(*r['compiledWalls'][0]['plan']); assert (min(xs), max(xs), min(zs), max(zs)) == pytest.approx((-.02, .08, .45, 4.35), abs=1e-3)
+    assert np.allclose(r['cameras'], [[c[0], c[2]] for c in cams], atol=1e-3)
+    # The compiled boxes are 0.1 m thick and centred on the faces, so a BIM user reads 0.1 m less between them.
+    assert r['room']['width']['betweenBoxesMeters'] == pytest.approx(5.99 - .1)
+    # Matching is by distance over the whole room, not by the order the objects were compiled in.
+    scene['objects'] = scene['objects'][::-1]
+    assert sorted((o['name'], o['true']) for o in st.score(t, references, scene, cloud)['objects']) == sorted((o['name'], o['true']) for o in r['objects'])
+    # The card draws from these numbers alone.
+    t.update(landmarks={'table_nw': [1.8, .74, 1.95], 'table_ne': [4.2, .74, 1.95]},
+             spans=[{'id': 'table-length', 'role': 'calibration', 'from': 'table_nw', 'to': 'table_ne', 'distanceMeters': 2.4}])
+    measurements = {'summary': {'heldOutCount': 3, 'heldOutWithinTolerance': 2, 'heldOutMaxAbsoluteErrorMeters': .07}}
+    assert truth_card.card(t, r, measurements, (540, 675)).size == (540, 675)
