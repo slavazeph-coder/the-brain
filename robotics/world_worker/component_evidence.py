@@ -236,7 +236,9 @@ source artifact/transform before loading the shared camera-frame ledger.
                 views = names.reconstruction_views(source_dir, cloud)
             if not isinstance(views, (list, tuple)) or not views:
                 raise _ViewEvidenceUnavailable('No registered camera views were supplied.')
-            metadata = [_view_metadata(view) for view in views[:MAX_VIEWS]]
+            # A long walk has up to 300 views; the 60 evaluated are spread over all of it, not its first minute.
+            considered = [views[round(k * (len(views) - 1) / (MAX_VIEWS - 1))] for k in range(MAX_VIEWS)] if len(views) > MAX_VIEWS else list(views)
+            metadata = [_view_metadata(view) for view in considered]
             if len({item['frameId'] for item in metadata}) != len(metadata):
                 raise _ViewEvidenceUnavailable('Camera frame IDs are duplicated.')
             if len({(item['ledgerSha256'], item['sourceArtifact']['sha256'], item['sourceArtifact']['name']) for item in metadata}) != 1:
@@ -250,7 +252,7 @@ source artifact/transform before loading the shared camera-frame ledger.
             if not np.allclose(linear.T @ linear, np.eye(3), atol=1e-6, rtol=1e-6):
                 raise _ViewEvidenceUnavailable('The hand-off transform must preserve distances with one uniform scale.')
             objects_for_projection = [{'members': members_by_id[entry['componentId']]} for entry in supported]
-            selected = names.choose_views(objects_for_projection, source_points, list(views[:MAX_VIEWS]), metres_per_unit)
+            selected = names.choose_views(objects_for_projection, source_points, considered, metres_per_unit)
             for entry, picks in zip(supported, selected):
                 for pick in picks[:2]:
                     view = pick['view']; record = _view_metadata(view)
@@ -268,6 +270,7 @@ source artifact/transform before loading the shared camera-frame ledger.
                 if not entry['frames']:
                     entry['frameReason'] = 'No ledger frame saw enough member points at sufficient size and estimated visibility.'
             projection = {'status': 'available', 'viewsConsidered': len(metadata), 'viewsTruncated': len(views) > MAX_VIEWS,
+                          'viewSelection': 'all views' if len(views) <= MAX_VIEWS else f'{MAX_VIEWS} evenly spread over {len(views)}',
                           'cameraViewSource': 'injected-local-metadata' if injected_views else 'validated-reconstruction-ledger',
                           'pixelBoxBasis': '2nd-to-98th percentile of projected full component membership',
                           'occlusionBasis': 'Other source points in an 8-pixel depth cell; heuristic, not image-ground-truth occlusion.'}

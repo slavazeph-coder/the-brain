@@ -137,6 +137,18 @@ def test_injected_ledger_views_return_only_ids_hashes_and_projected_boxes(captur
     assert result['imagesPublished'] is False
 
 
+def test_a_long_walk_considers_views_spread_over_all_of_it(capture, monkeypatch):
+    # 150 views, and only the last ten see the object: the first 60 alone would miss it.
+    cloud, scene = identified(capture)
+    monkeypatch.setattr(ce.names, 'crop', lambda *_: pytest.fail('No images may be cropped or read.'))
+    walk = [camera(f'away-{i}', [.5, 1.5, 4], [.5, 1.5, 10]) for i in range(140)] + \
+           [camera(f'late-{i}', [.5, 1.5, 4], [.5, .5, .5]) for i in range(10)]
+    result = report(scene, cloud, views=walk)
+    assert result['projection']['viewsConsidered'] == 60 and result['projection']['viewSelection'] == '60 evenly spread over 150'
+    obj = next(item for item in result['components'] if item['name'] == 'object_1')
+    assert obj['frames'] and all(frame['frameId'].startswith('late-') for frame in obj['frames'])
+
+
 def test_raw_hashes_parsed_source_and_exact_ordered_cloud_must_all_match(capture):
     cloud, scene = identified(capture)
     for key in ('scene_sha256', 'cloud_sha256'):
