@@ -135,6 +135,20 @@ class ComponentGraph(unittest.TestCase):
         self.assertEqual(hole['reviewed'], True)
         self.assertTrue(hole['physicalReviewRequired'])
 
+    def test_a_wall_edit_drops_the_compilers_face_placement(self):
+        # The compiled box stood behind the face the camera saw; once an operator moves it, that face no longer bounds it
+        # and a scorer reading faceCentre would measure the old position.
+        original = fixture()
+        original['walls'][0].update(faceCentre=[2, 1.5, .1], thicknessBasis='assumed 0.1 m: one face seen')
+        scene = attach_component_ids(original, 'a' * 64)
+        edited = apply_edits(scene, self.contract([{'op': 'wall', 'componentId': self.wall_id,
+                                                     'translationMeters': [0, 0, .3]}], scene))
+        wall = edited['walls'][0]
+        self.assertEqual(wall['centre'], [2, 1.5, .3])
+        self.assertNotIn('faceCentre', wall)
+        self.assertNotIn('thicknessBasis', wall)
+        self.assertIn('faceCentre', scene['walls'][0], 'the source scene keeps its record')
+
     def test_combined_wall_and_opening_resize_checks_final_geometry(self):
         edited = apply_edits(self.scene, self.contract([
             {'op': 'wall', 'componentId': self.wall_id, 'sizeMeters': [3, 2.5, .15]},
