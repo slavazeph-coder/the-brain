@@ -336,6 +336,17 @@ reuse. Edit the numbers when the capture changes, and do not name competitors.
 
 ## Running it locally
 
+**Test video on brainsnn.com today** with a worker on your own computer: `scripts/world-demo/local-worker/start.sh`.
+Run it on Linux or macOS, or in WSL on Windows. The script:
+- installs the worker and Blender's Python module into `~/.brainsnn-worker`;
+- starts the worker on `127.0.0.1:8040`, allowing browser calls from brainsnn.com;
+- prints the URL and token for the site's Worker connection dialog.
+
+With `--tunnel` it also opens a Cloudflare quick tunnel, which gives an `https://` address a phone can use. Tested
+here: the site connected, a 30 s video went up, `colmap-sparse` finished in 162 s, and the points loaded with the
+scale step next. A hosted worker (this deploy kit on the 4090, or a service next to the site) is still what makes video
+work for visitors.
+
 ```sh
 # Worker: Python 3.11+ for bpy 4.2; see robotics/world_worker/README.md. adapters.json lists the engines (copy entries
 # from adapters.example.json). pip install -r robotics/world_worker/requirements-cad.txt for DXF and 3DM;
