@@ -1,7 +1,0 @@
-# On-worker object detection for naming in the scene-usd engine: the CPU reconstruction environment plus MediaPipe
-# (Apache-2.0). The operator provisions the model: MediaPipe's EfficientDet-Lite2 float32 build (COCO, 80 categories),
-# object_detector/efficientdet_lite2/float32/1/efficientdet_lite2.tflite from storage.googleapis.com/mediapipe-models,
-# sha256 ad2abbf2...db91d; the adapter refuses any other file. The file carries no licence notice, so review its terms
-# before enabling. On Linux, MediaPipe needs libEGL and libGLESv2 even on CPU (Debian/Ubuntu: libegl1 libgles2).
--r requirements-colmap.txt
-mediapipe==1.1.1

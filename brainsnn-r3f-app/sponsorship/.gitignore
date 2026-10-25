@@ -1,9 +1,0 @@
-node_modules/
-.data/
-public/models/
-public/viewer.js
-public/catalog.json
-public/style.css
-reports/
-*.sqlite*
-.env

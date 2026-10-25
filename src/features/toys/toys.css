@@ -1,0 +1,82 @@
+.toy-page {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.toy-more {
+  max-width: 1140px;
+  margin: 2.5rem auto;
+  padding: 0 1.5rem;
+}
+
+.toy-more-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.toy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1.25rem;
+  border-radius: 0.85rem;
+  background: rgba(17, 21, 36, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+  text-decoration: none;
+}
+
+.toy-card-number {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #00f5ff;
+}
+
+.toy-card-cta {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #00f5ff;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.duel-row {
+  list-style: none;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.duel-track {
+  position: relative;
+  display: flex;
+  height: 1.6rem;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  margin-top: 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.duel-bar-a {
+  background: linear-gradient(90deg, #00f5ff, #06b6d4);
+  color: #06060a;
+  display: flex;
+  align-items: center;
+  padding-left: 0.5rem;
+}
+
+.duel-bar-b {
+  background: linear-gradient(90deg, #a855f7, #7e22ce);
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.5rem;
+}

@@ -83,14 +83,6 @@ workflow](REGENERATE.md#render-a-new-phone-run-from-its-preserved-worker-artifac
 
 ## Honesty rules the recordings follow
 
-Component-authoring software qualification is separate from footage. `component_fixture.py` generates an explicitly
-authored room for native compiler/edit tests; `verify_component_bundle.py` checks a rebuilt bundle against its saved
-source using real IFC/Rhino parsers and exact hashes. See [the reproducible qualification](../../docs/world-component-qualification-2026-10-25.md)
-and [component editing and Nav2 commands](../../docs/world-component-robotics.md). These fixtures are not phone footage.
-`verify_camera_frames.py` validates retained source rasters/clouds and, when present, compares the shared projector with
-the actual selected COLMAP model. [Camera/component evidence commands and limits](../../docs/world-camera-evidence.md)
-explain its source binding, private-frame retention and unavailable timestamps. Projection parity is not physical accuracy.
-
 - **Only real numbers.** Every number on screen comes from the run itself.
 - **Typed distances are labelled.** A distance typed for the demo (the test captures were not measured) is said to be
   typed on the closing card.

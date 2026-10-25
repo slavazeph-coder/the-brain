@@ -179,12 +179,7 @@ The status is `cross-checked` when two or more references agree within 2%, `sing
 
 ### 1. Film it (about 10 minutes on site)
 
-- **What to film:** one room or zone per video, lights on, a modern phone at 1080p or 4K, 30 fps.
-  - **Length:** 60–90 s for one room. Up to 5 minutes for a suite of rooms or a long space, walked in one go.
-  - **File size:** at most 2 GiB. Five minutes is about 0.3 GB at 1080p and about 1 GB in 4K30 (HEVC).
-  - **Past a minute,** the worker takes one frame a second, so a five-minute walk gives 300 frames. Each frame is
-    matched with its next 15 and with up to 60 keyframes spread over the walk, which reconnects a wall seen again later.
-    The vision-model observations engine (`world-observations`) still takes 120 s at most.
+- **What to film:** one room or zone per video, 60–90 s, lights on, a modern phone at 1080p or 4K, 30 fps.
 - **How to walk:**
   - Walk **along the walls first**: about 1 m from each wall, camera level, so every wall is seen floor to ceiling.
   - Then cross the middle once.
@@ -440,16 +435,11 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    - Run it through #232's flow: Scale, then Review with the withheld checks, then Export.
    - Render with `regenerate_reference.py --capture-kind phone-video --render`. The film then carries a reference-check
      chapter, with failures shown: the first error figure measured against reality rather than against points.
-2. **The component contract: Codex's #234 (edits, Nav2) and #237 (camera evidence).** The owner chose these as the base
-   on October 25, over a parallel building model (`cef5fff`, reverted from #235). After they merge, two pieces from that
-   building model go onto `componentId`:
-   - IDs carried across a fresh recompile by geometric matching (walls within 10°, 25 cm and half their length;
-     objects at 30% plan overlap). #234's IDs hold within one saved scene, not across a re-run;
-   - per-parameter provenance: observed face, base and height; inferred thickness; the centreline half a thickness
-     behind the face.
-3. **Centre wall boxes behind the surface they saw** (part of that port). Today a compiled wall is centred on the face
-   the camera saw, so half its thickness stands in the room. On the benchmark, the room between the boxes reads 9 to
-   11 cm short. Moving each box outward by half its thickness changes every exported wall and the fit numbers.
+2. **Check main after #232 and #233 merged** (both October 25). Confirm "BrainSNN app release checks" and "Verify
+   BrainSNN live deploy" passed before relying on the live site.
+3. **Centre wall boxes behind the surface they saw** (owner's call). Today a compiled wall is centred on the face the
+   camera saw, so half its thickness stands in the room. On the benchmark, the room between the boxes reads 9 to 11 cm
+   short. Moving each box outward by half its thickness changes every exported wall and the fit numbers.
 4. **Run the dense CPU engine on the benchmark.** Five of ten pieces of furniture are found on the sparse cloud. The
    dense engine is the intended answer, but its pinned depth model (Hugging Face) can't be fetched from these
    cloud sessions.
@@ -484,20 +474,6 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 
 ## Known weaknesses (room run)
 
-- **A forward walk close to the walls can reconstruct wrong while every frame registers** (found October 25, on
-  synthetic walks of the benchmark room).
-  - **What happens:** with the camera 0.75 m from the walls, looking 35° in from the direction of travel, 60 of 60
-    frames register at a low reprojection error, but the camera path is 20–80 cm off the true one. That holds at the
-    benchmark's own render quality and through the unchanged 60-frame, every-pair path. The benchmark's walk is 0.95 m
-    out, looking 50° in, and scores 1.1 cm on the same room.
-  - **Causes ruled out:** frame spacing (0.23 m and 0.5 m both fail), render quality, the long-video pairing (matching
-    every pair is no better), and the lens. One shared camera fits the true focal length exactly, and the path gets
-    worse.
-  - **Most likely:** opposite walls share a procedural texture and are matched to each other, folding the loop. A real
-    room has more distinct detail, but real phone walkthroughs are filmed forward too.
-  - **Until it is understood:** trust a video's dimensions only after the scale step and some withheld tape
-    measurements agree. Reconstructions from videos over a minute carry a warning saying so. The test renders are
-    reproducible with a lap-and-inset variant of `build_office.py`'s `path()`.
 - **Sofa:** flagged at 6.8 cm. Its 1.25 m-deep box takes in floor in front of it, and part of the capture saw floor under
   the cluster, so its base was not inferred.
 - **Walls:** two cross at the far end and one diagonal is false. The capture orbits a table and never walks the walls.

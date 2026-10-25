@@ -1,4 +1,0 @@
-# CPU worker dependencies, tested together. GPU adapters use a separate environment.
-fastapi==0.128.2
-pydantic==2.13.5
-uvicorn==0.48.0

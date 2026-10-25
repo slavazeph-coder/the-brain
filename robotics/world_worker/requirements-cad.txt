@@ -1,5 +1,0 @@
-# CAD and estimating exports in the scene-usd engine (cad_export.py): a DXF plan with ezdxf and a Rhino 3DM model with
-# rhino3dm, both MIT-licensed. quantities.csv needs neither. Without them the scene still compiles and says which file
-# was skipped.
-ezdxf==1.4.3
-rhino3dm==8.17.0
