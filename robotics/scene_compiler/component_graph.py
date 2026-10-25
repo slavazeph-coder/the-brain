@@ -377,6 +377,9 @@ def apply_edits(scene, contract):
                 item['yaw_degrees'] = _number(edit['yawDegrees'], -360, 360, 'Wall yaw')
             item.pop('min', None)
             item.pop('max', None)
+            # Where the compiler put the box against the face it saw; no longer true of the edited box.
+            item.pop('faceCentre', None)
+            item.pop('thicknessBasis', None)
             if item != before:
                 _authored_geometry(item, edit, 'observed')
         elif operation == 'opening':

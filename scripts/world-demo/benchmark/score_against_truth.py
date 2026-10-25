@@ -67,15 +67,18 @@ def score(truth, references, scene, cloud):
     walls = []
     for w in scene.get('walls', []):
         c = place(w['centre']); d = turn(plan(w['yaw_degrees'])); d[1] = 0; d /= np.linalg.norm(d)
+        # The face the camera saw: recorded when the compiler placed the box behind it, else the box's centre plane.
+        face = place(w['faceCentre']) if 'faceCentre' in w else c
         best = None
         for tw in true_walls:
             angle = math.degrees(math.acos(min(1, abs(float(d @ tw['dir'])))))
-            offset = float((c - tw['face']) @ tw['normal'])  # + into the room
-            along = float((c - tw['face']) @ tw['dir'])
+            offset = float((face - tw['face']) @ tw['normal'])  # + into the room
+            along = float((face - tw['face']) @ tw['dir'])
             if angle <= 20 and abs(offset) <= .5 and abs(along) <= tw['size'][0] / 2 + .3 and (best is None or abs(offset) < abs(best['offsetMeters'])):
                 best = {'true': tw['name'], 'offsetMeters': round(offset, 4), 'angleDegrees': round(angle, 2)}
         walls.append({'name': w['name'], 'lengthMeters': round(w['size'][0], 3), 'heightMeters': round(w['size'][1], 3),
-                      'thicknessMeters': round(w['size'][2], 3), **(best or {'true': None}),
+                      'thicknessMeters': round(w['size'][2], 3), 'standsInRoomMeters': 0.0 if 'faceCentre' in w else w['size'][2] / 2,
+                      **(best or {'true': None}),
                       'plan': footprint(c, d, w['size'][0], w['size'][2])})
     per_wall, stray = {}, []
     for tw in true_walls:
@@ -91,14 +94,16 @@ def score(truth, references, scene, cloud):
             per_wall[tw['name']] = {'compiled': [w['name'] for w in mine], 'coveredMeters': round(weight, 3), 'trueLengthMeters': tw['size'][0],
                                     'offsetMeters': round(sum(w['offsetMeters'] * w['lengthMeters'] for w in mine) / weight, 4),
                                     'heightMeters': round(max(w['heightMeters'] for w in mine), 3), 'trueHeightMeters': tw['size'][1],
-                                    'thicknessMeters': round(sum(w['thicknessMeters'] * w['lengthMeters'] for w in mine) / weight, 3)}
+                                    'thicknessMeters': round(sum(w['thicknessMeters'] * w['lengthMeters'] for w in mine) / weight, 3),
+                                    'standsInRoomMeters': round(sum(w['standsInRoomMeters'] * w['lengthMeters'] for w in mine) / weight, 4)}
     dims = {}
     for name, (a, b), true in (('width', ('wall_west', 'wall_east'), room['width']), ('depth', ('wall_north', 'wall_south'), room['depth'])):
         if a in per_wall and b in per_wall:  # each face moved by its offset (positive is into the room)
             measured = true - per_wall[a]['offsetMeters'] - per_wall[b]['offsetMeters']
-            # A compiled wall is a box centred on the surface it saw, so half its thickness stands in the room: the clear
-            # distance a BIM user reads between the two boxes is shorter than the faces' by that much.
-            clear = measured - (per_wall[a]['thicknessMeters'] + per_wall[b]['thicknessMeters']) / 2
+            # A box centred on the surface it saw (compilers before October 25) has half its thickness in the room, and
+            # the clear distance a BIM user reads between two boxes is shorter than the faces' by that much. A box placed
+            # behind its face has none in the room.
+            clear = measured - per_wall[a]['standsInRoomMeters'] - per_wall[b]['standsInRoomMeters']
             dims[name] = {'trueMeters': true, 'measuredMeters': round(measured, 4), 'errorMeters': round(measured - true, 4),
                           'betweenBoxesMeters': round(clear, 4), 'betweenBoxesErrorMeters': round(clear - true, 4)}
         else:

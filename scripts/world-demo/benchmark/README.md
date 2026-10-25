@@ -72,9 +72,10 @@ Still open:
   because each piece carries only tens of points. The table's 139 points break into pieces at 10 cm cells. The
   dense CPU engine (`colmap-dense-cpu`) is the intended answer. Its pinned depth model could not be fetched in this
   environment, so it was not run here.
-- **Compiled wall boxes are centred on the surface the camera saw**, so half of each wall's thickness stands inside
-  the room. Between the boxes, the room reads 9 to 11 cm short. Moving each box outward by half its thickness is the
-  fix. It changes every exported wall and the fit numbers, so it is left for review.
+- **Compiled wall boxes stood centred on the surface the camera saw**, so half of each wall's thickness stood in the
+  room, and between the boxes the room read 11.7 and 11.5 cm short. Fixed on October 25: each box now stands behind its
+  face. On the same hand-off it reads 1.7 and 1.5 cm short, the faces' own error, and the wall fit median is 0.8 cm
+  instead of 4.2 cm.
 - **Furniture faces can become wall pieces.** In the upside-down run the credenza's front and the plant became short
   wall stretches. The truth score reports such pieces as stray rather than averaging them into the room. The upright
   run has none.
@@ -175,9 +176,9 @@ error is picking.
   - Each wall face's offset and tilt, and how much of its length was covered.
   - Each object's size and centre error.
   - Missed and spurious objects.
-  - The clear distance between opposite compiled wall boxes. A compiled wall is a box centred on the surface the
-    camera saw, so half its thickness stands inside the room. A BIM user measuring between boxes reads that much
-    less than the faces' distance.
+  - The clear distance between opposite compiled wall boxes, which is what a BIM user measures. A wall placed behind
+    its face (`faceCentre` in `scene.json`) has nothing in the room. A box centred on its face, as compilers made them
+    before October 25, has half its thickness in the room, and the clear distance is that much shorter.
   - The camera fit's RMS.
 
 The alignment fits, the fingerprint, the score and the card are tested in `tests/world/test_benchmark_tools.py`.

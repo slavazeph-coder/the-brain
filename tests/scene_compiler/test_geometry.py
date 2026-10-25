@@ -127,6 +127,38 @@ def room_cloud(seed=2):
     return pts
 
 
+def faces_cloud(faces, seed=4):
+    """A 6 m wall along x whose points lie on the given z faces, and a floor in front of it (the room is +z)."""
+    rng = random.Random(seed); pts = []
+    for z in faces:
+        pts += [[rng.uniform(-3, 3), rng.uniform(0, 2.6), z + rng.gauss(0, .004), 150, 150, 150] for _ in range(2500)]
+    pts += [[rng.uniform(-3, 3), rng.gauss(0, .005), rng.uniform(-3, 2.5), 90, 80, 70] for _ in range(1500)]
+    return pts
+
+
+class WallPlacement(unittest.TestCase):
+    def test_a_wall_seen_from_the_room_stands_behind_the_face_the_camera_saw(self):
+        _, walls, _, _ = sc.analyse(faces_cloud([-3.0]), 0.0, True)
+        self.assertEqual(len(walls), 1); w = walls[0]
+        self.assertFalse(w["thicknessMeasured"]); self.assertEqual(w["thickness"], .1)
+        self.assertAlmostEqual(w["face"][1], -3.0, delta=.01)
+        self.assertAlmostEqual(w["centre"][1], -3.05, delta=.01, msg="half the assumed thickness away from the room, not into it")
+
+    def test_a_thin_wall_seen_from_both_sides_keeps_its_centre_between_the_faces(self):
+        _, walls, _, _ = sc.analyse(faces_cloud([-3.0, -2.92]), 0.0, True)
+        self.assertEqual(len(walls), 1); w = walls[0]
+        self.assertTrue(w["thicknessMeasured"]); self.assertIsNone(w["face"])
+        self.assertAlmostEqual(w["centre"][1], -2.96, delta=.02)
+
+    def test_the_two_faces_of_a_partition_each_stand_toward_the_other(self):
+        # Faces 20 cm apart are found as two walls; the far one was seen from the far side, not from this room.
+        _, walls, _, _ = sc.analyse(faces_cloud([-3.0, -2.8]), 0.0, True)
+        self.assertEqual(sorted(round(w["face"][1], 2) for w in walls), [-3.0, -2.8])
+        for w in walls:
+            self.assertAlmostEqual(w["centre"][1], w["face"][1] + (.05 if w["face"][1] < -2.9 else -.05), delta=.01)
+            self.assertTrue(-3.0 - 1e-3 <= w["centre"][1] - .05 and w["centre"][1] + .05 <= -2.8 + 1e-3, "both boxes inside the partition")
+
+
 class Objects(unittest.TestCase):
     def test_the_wall_is_a_plane_and_furniture_against_it_is_not(self):
         pts = room_cloud(); walls, rest = sc.find_walls(pts, 0.0)

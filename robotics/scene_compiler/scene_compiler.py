@@ -139,13 +139,14 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
         y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
         if y1 - y0 < WALL_MIN_HEIGHT: continue
         taken[members] = True; planes += 1; on = np.isin(above, members); spread = n[on]
-        thickness = max(0.1, float(np.percentile(spread, 90) - np.percentile(spread, 10)))
+        measured = float(np.percentile(spread, 90) - np.percentile(spread, 10)); thickness = max(0.1, measured)
         low = t[(np.abs(n) < band) & (P[above, 1] < floor_y + WALL_DOOR_TOP)]
         for s0, s1 in wall_spans(low, a0, a1):
             s0, s1 = min(s0, (s0 + s1) / 2 - 0.05), max(s1, (s0 + s1) / 2 + 0.05)  # a stub between two openings stays a wall
             mine = members[(t[on] >= s0 - 0.1) & (t[on] <= s1 + 0.1)]; mid = centre + direction * (s0 + s1) / 2
             walls.append({"centre": [float(mid[0]), float(mid[1])], "yaw": math.atan2(direction[1], direction[0]), "length": float(s1 - s0),
-                          "thickness": thickness, "y0": y0, "y1": y1, "support": int(len(mine)), "band": band, "members": mine.tolist()})
+                          "thickness": thickness, "thicknessMeasured": measured >= 0.1, "y0": y0, "y1": y1, "support": int(len(mine)),
+                          "band": band, "members": mine.tolist()})
     return walls, [int(i) for i in above if not taken[i]]
 
 
@@ -254,9 +255,51 @@ def label_objects(objects, pts, placed):
 NAME_MATCH = 0.15  # metres between a named object's centre and the compiled one: farther, and the name is not applied
 
 
+def place_behind_faces(walls, room):
+    """A wall seen from one side only is its observed face, with a thickness assumed behind it: the box moves half that
+    thickness behind the face, so its inner face is the surface the camera saw. Left centred on the face, half of every
+    wall stood in the room, and the room read 9 to 11 cm short between boxes on the benchmark.
+    Behind means away from the room, unless a parallel wall 5 to 35 cm away overlaps it: the two are the faces of one
+    partition seen from both sides, and each box goes toward the other. A wall whose points span both faces has a
+    measured thickness and its centre between them, and stays where it is."""
+    def partner(w):
+        (cx, cz), d = w["centre"], (math.cos(w["yaw"]), math.sin(w["yaw"]))
+        for o in walls:
+            if o is w or abs(d[0] * math.cos(o["yaw"]) + d[1] * math.sin(o["yaw"])) < math.cos(math.radians(5)):
+                continue
+            rx, rz = o["centre"][0] - cx, o["centre"][1] - cz
+            across, along = -d[1] * rx + d[0] * rz, d[0] * rx + d[1] * rz
+            if .05 <= abs(across) <= .35 and abs(along) < (w["length"] + o["length"]) / 2 - .25 * min(w["length"], o["length"]):
+                return across
+        return None
+    shifts = []
+    for w in walls:
+        (cx, cz), yaw = w["centre"], w["yaw"]
+        if w.get("thicknessMeasured"):
+            shifts.append(None); continue
+        nx, nz = -math.sin(yaw), math.cos(yaw)  # (nx, nz) will point to the side the camera saw
+        other = partner(w)
+        toward_room = nx * (room[0] - cx) + nz * (room[1] - cz) >= 0
+        if (other is not None and other > 0) or (other is None and not toward_room): nx, nz = -nx, -nz
+        shifts.append((nx, nz))
+    for w, shift in zip(walls, shifts):  # all partners are found before any wall moves
+        if shift is None:
+            w["face"] = None; continue
+        (cx, cz), (nx, nz) = w["centre"], shift
+        w["face"] = [cx, cz]; w["centre"] = [cx - nx * w["thickness"] / 2, cz - nz * w["thickness"] / 2]
+    return walls
+
+
+def room_centre(pts):
+    """The plan centre of the footprint the floor slab covers (2nd to 98th percentile of the points)."""
+    xs, zs = [p[0] for p in pts], [p[2] for p in pts]
+    return ((percentile(xs, 0.02) + percentile(xs, 0.98)) / 2, (percentile(zs, 0.02) + percentile(zs, 0.98)) / 2)
+
+
 def analyse(pts, floor_y, metric):
     """Walls and separated objects of a cloud, exactly as main() compiles them; the naming step runs this outside Blender."""
     margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin)
+    place_behind_faces(walls, room_centre(pts))
     return margin, walls, rest, (separate_objects(pts, floor_y, rest, floor=floor_coverage(pts, floor_y, margin)) if metric else [])
 
 
@@ -566,7 +609,11 @@ def main():
     # Objects: in metres, every other cluster above the floor is separated and measured. Sizes need a measured scale.
     margin, walls, rest, separated = analyse(pts, floor_y, metric)
     for i, w in enumerate(walls):
-        _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1)); scene["walls"].append(rec)
+        _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1))
+        if w.get("face"):  # the surface the camera saw, and the box behind it
+            rec["faceCentre"] = [w["face"][0], rec["centre"][1], w["face"][1]]
+        rec["thicknessBasis"] = "measured: both faces seen" if w.get("thicknessMeasured") else "assumed 0.1 m: one face seen"
+        scene["walls"].append(rec)
     scene["separation"] = ({"done": True, "cell_m": OBJECT_CELL, "floor_margin_m": round(margin, 3), "max_height_m": OBJECT_MAX_HEIGHT} if metric
                            else {"done": False, "reason": "Object sizes need a measured scale."})
     # Detections: lift each 2D box with the cloud points that project inside it, and name the object it overlaps.
