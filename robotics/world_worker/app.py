@@ -31,6 +31,9 @@ from .geometry import ARENA_CLOUD_MAX_BYTES, MAX_PREVIEW_COORDINATE, load_arena_
 from .auth import Identities, OPERATOR_OWNER
 
 MIB = 1024 ** 2
+FILE_BYTES = 200 * MIB  # a photo or a point-cloud hand-off
+VIDEO_BYTES = 2 * 1024 ** 3  # five minutes of 4K30 HEVC is about 1 GB; H.264 or 1080p60 can approach 2
+UPLOADS_BYTES = 6 * 1024 ** 3  # all owners' unfinished and kept uploads together
 ID = re.compile(r"^[a-f0-9]{32}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$")
 # An adapter secret is an environment variable name; the worker's own token and tenants never pass to adapters.
@@ -41,7 +44,7 @@ class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=160)
     kind: Literal['image', 'video', 'cloud']
-    size: int = Field(gt=0, le=200 * MIB, strict=True)
+    size: int = Field(gt=0, le=VIDEO_BYTES, strict=True)
 
 class JobBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -521,7 +524,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                             **({'object_detection':e['object_detection']} if e.get('object_detection') else {})}
                             | {feature: True for feature in ('dimension_checks', 'bim_review') if e.get(feature) is True}
                            for e in engines.values() if e['id'] in principal.engines],
-                'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
+                'limits':{'file_bytes':FILE_BYTES,'video_bytes':VIDEO_BYTES,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
     @app.post('/v1/uploads',status_code=201)
     async def create_upload(body: UploadBody, request:Request):
@@ -529,10 +532,11 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         suffix=Path(body.name).suffix.lower()
         if suffix not in {'image':['.jpg','.jpeg','.png','.webp'],'video':['.mp4','.mov','.webm'],'cloud':['.json']}[body.kind]: raise HTTPException(422,'Unsupported file type.')
         if body.kind=='cloud' and body.size>ARENA_CLOUD_MAX_BYTES: raise HTTPException(422,'Point-cloud hand-offs are limited to 16 MiB.')
+        if body.kind!='video' and body.size>FILE_BYTES: raise HTTPException(422,'Photos are limited to 200 MiB; videos to 2 GiB.')
         async with io_lock:
             store.prune(ttl, running)
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads').fetchone()
-            if count>=50 or reserved+body.size>2*1024**3:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
+            if count>=50 or reserved+body.size>UPLOADS_BYTES:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads WHERE owner_id=?',(principal.owner_id,)).fetchone()
             if count >= principal.limits['upload_count'] or reserved + body.size > principal.limits['upload_bytes']:
                 raise HTTPException(429,'Owner upload quota reached. Delete old sources or wait for expiry.')

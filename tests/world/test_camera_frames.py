@@ -221,8 +221,8 @@ def test_invalid_camera_origin_pose_or_claims_fail_closed(tmp_path, change):
 
 def test_ledger_byte_frame_bounds_and_duplicate_json_keys(tmp_path):
     record = make_job(tmp_path)
-    too_many = copy.deepcopy(record); too_many['frames'] *= 61
-    with pytest.raises(ValueError, match='60'): cf.validate(too_many)
+    too_many = copy.deepcopy(record); too_many['frames'] *= cf.MAX_FRAMES + 1
+    with pytest.raises(ValueError, match=str(cf.MAX_FRAMES)): cf.validate(too_many)
     too_large = copy.deepcopy(record); too_large['extra'] = 'x' * cf.MAX_BYTES
     with pytest.raises(ValueError, match='1 MiB'): cf.validate(too_large)
     (tmp_path / 'output/camera-frames.json').write_text('{"schema":"one","schema":"two"}')
@@ -240,3 +240,24 @@ def test_nonstandard_adapter_output_directory_is_explicit_and_contained(tmp_path
     assert len(cf.load_views(tmp_path, ledger_path='test-output/camera-frames.json')) == 1
     for path in ('../camera-frames.json', '/tmp/camera-frames.json', 'test-output/../camera-frames.json'):
         with pytest.raises(ValueError): cf.write(tmp_path, record, output_path=path)
+
+
+def test_a_five_minute_walk_of_300_frames_fits_one_ledger(tmp_path):
+    # Five minutes at one frame a second: 300 registered frames, with full-precision fitted lenses and poses.
+    record = make_job(tmp_path); template = record['frames'][0]; images = tmp_path / 'colmap-work/images'
+    rng = np.random.default_rng(7); frames = []
+    for index in range(300):
+        Image.new('RGB', (64, 48), (index % 256, 60, 90 + index // 256)).save(images / f'image_{index:04d}.png')
+        rotation = np.linalg.qr(rng.normal(size=(3, 3)))[0]; rotation *= np.sign(np.linalg.det(rotation))
+        frame = copy.deepcopy(template)
+        frame['image'] = cf.file_record(tmp_path, images / f'image_{index:04d}.png', width=64, height=48)
+        frame['camera'] = {'model': 'SIMPLE_RADIAL', 'params': [float(rng.uniform(90, 110)), 32.123456789, 24.987654321, float(rng.normal(0, .01))],
+                           'pixelConvention': 'colmap-half-pixel'}
+        frame['cam_from_world'] = np.hstack([rotation, rng.normal(size=(3, 1))]).tolist()
+        frames.append(frame)
+    record['frames'] = frames; rekey(record)
+    path = cf.write(tmp_path, record)
+    assert path.stat().st_size < cf.MAX_BYTES and len(cf.load_record(tmp_path)['frames']) == 300
+    record['frames'] = frames + [copy.deepcopy(frames[0])]
+    with pytest.raises(ValueError, match='1 to 300'):
+        cf.validate(record, tmp_path)

@@ -17,7 +17,7 @@ import unicodedata
 import warnings
 
 SCHEMA = 'brainsnn.camera-frames.v1'
-MAX_FRAMES = 60
+MAX_FRAMES = 300  # a five-minute video's frames (sparse_colmap.MAX_VIDEO_FRAMES)
 MAX_BYTES = 1024 * 1024
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_PIXELS = 24_000_000
@@ -244,7 +244,7 @@ def validate(record, job_root=None, expected_cloud_sha256=None):
     if expected_cloud_sha256 is not None and _sha(expected_cloud_sha256) not in cloud_hashes:
         _fail('This camera ledger is bound to another point-cloud artifact.')
     if not isinstance(frames, list) or not 1 <= len(frames) <= MAX_FRAMES:
-        _fail('Use 1 to 60 registered camera frames.')
+        _fail(f'Use 1 to {MAX_FRAMES} registered camera frames.')
     identifiers, names = set(), set()
     for frame in frames:
         _exact(frame, ('frame_id', 'image', 'origin', 'timestamp', 'camera', 'cam_from_world'), 'frame',

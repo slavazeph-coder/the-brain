@@ -18,7 +18,7 @@
 <tr><td><code>POST /v1/jobs/{id}/ticket</code></td><td>Request <code>{artifact:0}</code> for a 60-second signed download URL.</td></tr>
 <tr><td><code>DELETE /v1/jobs/{id}/artifacts</code></td><td>Delete terminal job artifacts.</td></tr>
 </tbody></table></div>
-<p>Limit: 200 MiB per source, up to 12 source files per job (query the selected engine’s smaller limit), one running job, eight queued jobs. Uploads and outputs expire after the worker's retention window (24 hours by default). Query capabilities for the current limits. A video reconstruction still needs overlap, parallax and usable detail; insufficient evidence returns a failure.</p></section>
+<p>Limit: 200 MiB per photo and 2 GiB per video (2 seconds to 5 minutes), up to 12 source files per job (query the selected engine’s smaller limit), one running job, eight queued jobs. Uploads and outputs expire after the worker's retention window (24 hours by default). Query capabilities for the current limits. A video reconstruction still needs overlap, parallax and usable detail; insufficient evidence returns a failure.</p></section>
 <section><h2>Provision separate private owners</h2><p>Set <code>WORLD_TENANTS_FILE</code> to an absolute private JSON file. Each tenant has a stable operator-chosen ID and the SHA-256 of a randomly generated URL-safe credential (at least 32 random bytes). Distribute only that tenant’s credential through your private channel. The registry must never contain plaintext credentials. This is private provisioned access, not public account registration or payment authorization.</p>
 <pre><code>{
   "schema": "brainsnn.world.tenants.v1",

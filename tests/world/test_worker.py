@@ -65,6 +65,10 @@ def test_resumable_offsets(client):
 
 def test_body_caps_and_size(client):
     assert client.post('/v1/uploads',json={'name':'huge.png','kind':'image','size':201*1024**2},headers=HEADERS).status_code==422
+    # A five-minute walkthrough can be over a gigabyte: videos may be up to 2 GiB, photos stay at 200 MiB.
+    assert client.post('/v1/uploads',json={'name':'walk.mov','kind':'video','size':1536*1024**2},headers=HEADERS).status_code==201
+    assert client.post('/v1/uploads',json={'name':'walk.mov','kind':'video','size':2*1024**3+1},headers=HEADERS).status_code==422
+    assert client.get('/v1/capabilities',headers=HEADERS).json()['limits']['video_bytes']==2*1024**3
     assert client.post('/v1/uploads',content=b'x'*20000,headers=HEADERS).status_code==413
     uid=upload(client);assert client.put(f'/v1/uploads/{uid}?offset=0',content=b'x'*(4*1024**2+1),headers=HEADERS).status_code==413
 
@@ -357,7 +361,31 @@ def test_colmap_video_decodes_actual_mp4_and_rejects_too_short(tmp_path):
     assert not (tmp_path/'manifest.json').exists()
     short=tmp_path/'short.mp4'
     subprocess.run(['ffmpeg','-y','-v','error','-i',str(capture),'-t','0.5','-c','copy',str(short)],check=True,timeout=15)
-    with pytest.raises(ValueError,match='2–120'):extract_video(short,images)
+    with pytest.raises(ValueError,match='2 seconds to 5 minutes'):extract_video(short,images)
+
+
+def test_a_long_video_gets_one_frame_a_second_and_matching_that_scales():
+    from robotics.world_worker import sparse_colmap
+    # Up to a minute: 60 frames, as before. Longer: one a second, up to five minutes.
+    assert [sparse_colmap.frame_budget(d) for d in (2, 30, 60, 90, 300)]==[60,60,60,90,300]
+    assert len(sparse_colmap.image_pairs(60))==60*59//2, 'up to 60 frames every pair is matched'
+    pairs=set(sparse_colmap.image_pairs(300))
+    assert len(pairs)<6000, 'not the 44,850 pairs of matching everything'
+    assert all((i,i+k) in pairs for i in range(285) for k in range(1,16)), 'each frame meets its next 15'
+    far={(i,j) for i,j in pairs if j-i>15}
+    keys={i for pair in far for i in pair}
+    assert len(keys)<=60 and (0,299) in far, 'only keyframes meet far frames, and they close the loop from start to end'
+
+
+def test_a_three_minute_video_is_sampled_at_one_frame_a_second(tmp_path):
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):pytest.skip('FFmpeg not installed')
+    capture=tmp_path/'walk.mp4'
+    subprocess.run(['ffmpeg','-y','-v','error','-f','lavfi','-i','testsrc2=size=320x256:rate=4',
+                    '-t','180','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p',str(capture)],check=True,timeout=120)
+    images=tmp_path/'images';images.mkdir()
+    evidence=extract_video(capture,images)
+    assert evidence['frame_budget']==180 and evidence['sample_fps']==1
+    assert len(list(images.glob('*.jpg')))==180-evidence['near_duplicate_frames']
 
 
 def test_colmap_no_overlap_never_returns_a_success_manifest(tmp_path):
