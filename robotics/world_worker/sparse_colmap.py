@@ -388,6 +388,9 @@ def run(request: dict, densify_model: Path | None = None):
                 'warnings': ['Sparse points do not define a solid surface or free space.',
                              'Glass, blank walls, reflections and moving objects may be missing.'] +
                             (['Some submitted views did not align; reconstruction is incomplete.'] if registered < count else []) +
+                            (['This video is longer than a minute. Videos this long have not yet been checked against a measured room: '
+                              'confirm the scale and some withheld tape measurements before relying on dimensions.']
+                             if capture.get('duration_seconds', 0) > 60 else []) +
                             (['Dense points come from a depth model checked across frames; they are less accurate than the sparse points.']
                              if dense else []),
                 'cameras': cameras}

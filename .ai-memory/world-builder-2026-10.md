@@ -102,6 +102,7 @@ description: World Builder flagship development, real browser inference and reco
       - Frames: 60 up to a minute, then one a second (300 at 5 min). Past 60 frames, matching is each frame with its next 15 plus all pairs of 60 spread keyframes (5,988 pairs at 300, not 44,850).
       - Timeouts: extraction max(90, 3 x duration) (5 min 1080p30 HEVC decodes in 34 s on 2 threads); video engines 3600 s. `WORLD_CPU_THREADS` (default 2; the local worker uses every core).
       - The observations engine still takes 120 s at most.
+      - Oct 25 geometry finding (not caused by the long-video code): a forward walk 0.75 m from the walls, looking 35 degrees in, registers every frame yet is 20-80 cm off the true path, even through the unchanged 60-frame exhaustive path and at benchmark render quality; the benchmark's 0.95 m / 50 degrees walk scores 1.1 cm. Ruled out: spacing, render quality, pairing, lens (CameraMode.SINGLE fitted the true focal and was worse). Likely repeated procedural wall textures folding the loop. Videos over a minute now carry a warning to confirm with withheld tape measurements.
 
 ## October 24: independent demo correction validation
 

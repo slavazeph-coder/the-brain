@@ -484,6 +484,20 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 
 ## Known weaknesses (room run)
 
+- **A forward walk close to the walls can reconstruct wrong while every frame registers** (found October 25, on
+  synthetic walks of the benchmark room).
+  - **What happens:** with the camera 0.75 m from the walls, looking 35° in from the direction of travel, 60 of 60
+    frames register at a low reprojection error, but the camera path is 20–80 cm off the true one. That holds at the
+    benchmark's own render quality and through the unchanged 60-frame, every-pair path. The benchmark's walk is 0.95 m
+    out, looking 50° in, and scores 1.1 cm on the same room.
+  - **Causes ruled out:** frame spacing (0.23 m and 0.5 m both fail), render quality, the long-video pairing (matching
+    every pair is no better), and the lens. One shared camera fits the true focal length exactly, and the path gets
+    worse.
+  - **Most likely:** opposite walls share a procedural texture and are matched to each other, folding the loop. A real
+    room has more distinct detail, but real phone walkthroughs are filmed forward too.
+  - **Until it is understood:** trust a video's dimensions only after the scale step and some withheld tape
+    measurements agree. Reconstructions from videos over a minute carry a warning saying so. The test renders are
+    reproducible with a lap-and-inset variant of `build_office.py`'s `path()`.
 - **Sofa:** flagged at 6.8 cm. Its 1.25 m-deep box takes in floor in front of it, and part of the capture saw floor under
   the cluster, so its base was not inferred.
 - **Walls:** two cross at the far end and one diagonal is false. The capture orbits a table and never walks the walls.
