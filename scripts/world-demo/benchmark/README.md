@@ -33,21 +33,22 @@ inward. It is 26 mm on a 36 mm sensor, about a phone's main camera.
 
 ## Results (October 25, 2026)
 
-The room was rendered once, 60 frames at 960 × 540, and reconstructed with `colmap-sparse`: all 60 cameras
-registered, 20,844 points, camera alignment within 7.5 mm RMS. Each column compiles that run with a different version
-of the code; the last is a fresh reconstruction on the merged code (#232 plus this branch).
+The room was rendered once, 60 frames at 960 × 540. Two reconstructions with `colmap-sparse` registered all 60 cameras
+(20,908 and 20,844 points), and the camera alignment is within 7.5 mm RMS. The first two columns compile the first
+reconstruction with and without the hand-off fixes, on #232's worker. The last column is the second reconstruction
+on the merged code (#232 plus this branch), and it is the run the demo film is made from.
 
-| | main's hand-off and compiler | hand-off fixes | all fixes, fresh run |
+| | before | hand-off fixes | all fixes, second run |
 |---|---|---|---|
+| Model's up against true up | 9.4° | 0.3° | 0.3° |
+| Model floor against the true floor | +58 cm (near table height) | +4.5 cm | +4.0 cm |
 | Walls matched | 2 of 4 | 4 of 4 | 4 of 4 |
-| Room width, depth error | not measurable | −1.8, −1.8 cm | +0.7, −1.4 cm |
-| Wall face offset, median | 6.7 cm | 0.9 cm | 0.5 cm |
-| Stray wall pieces | — | — | 2 (the credenza and the plant) |
-| Furniture matched | 2 of 10 | 1 of 10 | 4 of 10 |
-| Spurious objects | 3 | 1 | 1 |
+| Room width, depth error | not measurable | −1.8, −1.8 cm | −1.7, −1.5 cm |
+| Wall face offset, median | 6.7 cm | 0.9 cm | 0.7 cm |
+| Furniture matched (of 10) | 2 | 1 | 5 |
+| Spurious objects | 3 | 1 | 2 |
 | Withheld spans usable, within tolerance | 5 of 7, 5 | 7 of 7, 7 | 7 of 7, 7 |
 | Worst withheld error | 4.1 cm | 2.0 cm | 1.9 cm (1.1%) |
-| Floor tilt left in the hand-off | 9.4° | 0.3° | — |
 
 What the runs found, in order:
 
@@ -57,22 +58,26 @@ What the runs found, in order:
    inside the room.
 2. **A floor the cameras barely saw was fitted 9.4° off level, at table height.** Under 1% of the points are on the
    carpet, so the floor fit settled on a tilted plane through wall bottoms and table tops. Fixed: a weakly supported
-   floor is squared to the room's own axes, its largest planes. The floor is then the room's lowest points, and the
-   heading turns to the walls. A well-seen floor (a quarter of the points or more) is unchanged.
+   floor is squared to the room's own axes, its largest planes. Up is the axis's +y side, the side the floor search
+   samples. The floor is then the room's lowest points, and the heading turns to the walls. A well-seen floor (a
+   quarter of the points or more) is unchanged. The first version took up's sign from the fitted plane, and the second
+   reconstruction stood on its wall tops. The truth score now checks level and floor height for that reason: a rigid
+   fit turns a model over and its walls still match.
 3. **Sparse furniture stayed points.** An object needed 0.3% of the whole cloud, and 94% of this cloud is wall, so
    every chair (27 to 67 points) fell under the minimum. Fixed: 0.3% of the candidate points, at least 30.
 
 Still open:
 
-- **Furniture on a sparse cloud is partial.** Four of ten pieces are found, with sizes off by 45 cm at the median,
+- **Furniture on a sparse cloud is partial.** Five of ten pieces are found, with sizes off by 40 cm at the median,
   because each piece carries only tens of points. The table's 139 points break into pieces at 10 cm cells. The
   dense CPU engine (`colmap-dense-cpu`) is the intended answer. Its pinned depth model could not be fetched in this
   environment, so it was not run here.
 - **Compiled wall boxes are centred on the surface the camera saw**, so half of each wall's thickness stands inside
   the room. Between the boxes, the room reads 9 to 11 cm short. Moving each box outward by half its thickness is the
   fix. It changes every exported wall and the fit numbers, so it is left for review.
-- **Furniture faces become wall pieces.** The credenza's front and the plant became short wall stretches. The truth
-  score reports them as stray rather than averaging them into the room.
+- **Furniture faces can become wall pieces.** In the upside-down run the credenza's front and the plant became short
+  wall stretches. The truth score reports such pieces as stray rather than averaging them into the room. The upright
+  run has none.
 
 ## Run it
 
