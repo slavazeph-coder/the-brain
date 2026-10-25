@@ -494,11 +494,18 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
   - **Causes ruled out:** frame spacing (0.23 m and 0.5 m both fail), render quality, the long-video pairing (matching
     every pair is no better), and the lens. One shared camera fits the true focal length exactly, and the path gets
     worse.
-  - **Most likely:** opposite walls share a procedural texture and are matched to each other, folding the loop. A real
-    room has more distinct detail, but real phone walkthroughs are filmed forward too.
-  - **Until it is understood:** trust a video's dimensions only after the scale step and some withheld tape
+  - **Cause, confirmed on the first lap:** `build_office.py`'s materials take their texture coordinates in object
+    space. Every wall that shares a material therefore carries the identical pattern, and opposite walls are matched to
+    each other, folding the loop. The same walk rendered with world-space texture coordinates (each wall's pattern
+    differs) places 45 of 60 frames, 3.8 cm RMS from the true path (median 2.6 cm), against 69 cm with the repeated
+    textures. Fewer frames register, but those that do are right.
+  - **What it means for real rooms:** a real room rarely repeats a pattern exactly, but repeated finishes (matching
+    cabinet fronts, tiles, identical doors) are common, and real phone walkthroughs are filmed forward. The benchmark's
+    own orbit survives the repetition (1.1 cm); a forward walk does not.
+  - **Until a real room is measured:** trust a video's dimensions only after the scale step and some withheld tape
     measurements agree. Reconstructions from videos over a minute carry a warning saying so. The test renders are
-    reproducible with a lap-and-inset variant of `build_office.py`'s `path()`.
+    reproducible with a lap-and-inset variant of `build_office.py`'s `path()`; the world-space variant changes each
+    material's texture coordinate from the object's to the shading point's position.
 - **Sofa:** flagged at 6.8 cm. Its 1.25 m-deep box takes in floor in front of it, and part of the capture saw floor under
   the cluster, so its base was not inferred.
 - **Walls:** two cross at the far end and one diagonal is false. The capture orbits a table and never walks the walls.
