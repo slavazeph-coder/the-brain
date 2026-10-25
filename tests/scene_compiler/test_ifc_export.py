@@ -216,6 +216,16 @@ class IfcExport(unittest.TestCase):
         with self.assertRaises(ValueError):
             ie.write_ifc("unused.ifc", metric_scene(units="arbitrary"))
 
+    def test_the_floor_is_a_slab_by_its_fixed_name_not_its_editable_label(self):
+        scene = metric_scene()
+        scene["objects"][0]["label"] = "Ground floor"  # an operator's display label for the observed floor
+        scene["objects"][1]["label"] = "floor"  # a detected chair someone called floor
+        with tempfile.TemporaryDirectory() as d:
+            ie.emit_ifc(d, scene); rows, _ = parse((Path(d) / "scene.ifc").read_text(encoding="ascii"))
+        slabs = [body for body in rows.values() if body.startswith("IFCSLAB(")]
+        self.assertEqual(len(slabs), 1); self.assertIn("'floor_observed'", slabs[0])
+        self.assertEqual(sum(body.startswith("IFCFURNITURE(") for body in rows.values()), 1, "the chair stays furniture")
+
     def test_unknown_cells_merge_into_runs_and_labels_are_escaped(self):
         self.assertEqual(ie.merge_unknown([[0, 0, .5], [.5, 0, .5], [1.5, 0, .5], [0, .5, .5]]), [(0, 1.0, 0, .5), (1.5, 2.0, 0, .5), (0, .5, .5, .5)])
         self.assertEqual(ie.label("O'Brien\\é😀"), "'O''Brien\\\\\\X2\\00E9\\X0\\?'")

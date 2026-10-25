@@ -188,7 +188,7 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         placement, solid = prism(cx, -cz, cy - sy / 2, sx, sz, sy, yaw=-math.radians(obj.get('yaw_degrees', 0)))
         seed = obj['componentId']
         separated, named = obj.get('kind') == 'separated', obj.get('label') not in (None, 'object')
-        if obj.get('label') == 'floor':
+        if obj.get('name') == 'floor_observed':  # the fixed name, as CAD and Nav2 use: a display label may be edited
             element = w.add(f"IFCSLAB('{ifc_guid(seed)}',$,{label(obj.get('name', 'floor'))},$,$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
         elif separated and not named:
             # A measured cluster of points with no name: a proxy, not furniture, because nothing says what it is.
