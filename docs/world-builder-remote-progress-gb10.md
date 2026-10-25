@@ -1,9 +1,21 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-24T21:10Z
+Last updated: 2026-10-25T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 93 — .env.example committed + pushed; suites re-verified green
+
+- Run 92's pending `.env.example` (2,978 B, documents WORLD_WORKER_TOKEN, WORLD_WORKER_DIR,
+  WORLD_ADAPTERS_FILE, WORLD_TENANTS_FILE, WORLD_REPORT_SIGNING_KEY, WORLD_ALLOWED_ORIGINS,
+  GPU/VLM forwarded vars, test-harness vars) committed and pushed: **`27bfce6`** on
+  `hermes/world-builder-gb10`.
+- Re-ran both suites on the post-commit tree:
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (107 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 9.91 s**
+- No 4090 probe this run (alternation: GB10 task closed this run; next run does 4090).
+- No force-push/merge/deploy; no secrets in the file; Qwen serving, guardrails, no-paid-fallback untouched.
 
 ### Run 89 — all receipt gates re-verified green; 4090 reachable, weights staged this run
 
