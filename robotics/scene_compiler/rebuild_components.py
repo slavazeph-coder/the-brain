@@ -16,7 +16,7 @@ import tempfile
 
 from .component_graph import apply_edits, ensure_component_ids
 from . import nav2_export
-from ..world_worker import cad_export, component_evidence, fit_check, measurement_check
+from ..world_worker import cad_export, component_evidence, component_fit, fit_check, measurement_check
 from ..world_worker.geometry import load_arena_cloud
 
 COMPILER = Path(__file__).with_name('scene_compiler.py')
@@ -94,6 +94,9 @@ def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, al
         (result / 'component-graph.json').write_text(json.dumps(graph, indent=2, allow_nan=False))
         support = component_evidence.write_component_evidence(result, rebuilt, cloud,
             scene_path=result / 'scene.json', cloud_path=result / 'arena-cloud.json', source_dir=source_job)
+        fitted = component_fit.write_component_fit(result, rebuilt, cloud,
+            scene_path=result / 'scene.json', cloud_path=result / 'arena-cloud.json',
+            evidence_path=result / 'component-evidence.json', source_dir=source_job)
         nav = nav2_export.export(rebuilt, work / 'nav2', cloud=cloud,
                                  scene_bytes=(result / 'scene.json').read_bytes(), cloud_bytes=cloud_raw)
         for name in nav['files']:
@@ -105,6 +108,8 @@ def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, al
                    'unverifiedGeometryExperiment': allow_unverified,
                    'componentEvidence': {'written': True, 'projection': support['projection'],
                                          'scope': 'Edited geometry remains unsupported by original point memberships.'},
+                   'componentFit': {'written': True, 'schema': fitted['schema'],
+                                    'components': len(fitted['components']), 'summary': fitted['summary'], 'geometryChanged': False},
                    'metric_verified': False, 'physics_ready': False, 'physicalRobotValidated': False,
                    'scope': 'Operator-authored geometric edits. Point-pair checks compare unchanged source points, not edited BIM elements.',
                    'artifacts': {p.name: {'sha256': _file_hash(p), 'bytes': p.stat().st_size}

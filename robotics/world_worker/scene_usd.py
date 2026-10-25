@@ -22,11 +22,12 @@ import sys
 import time
 
 try:
-    from . import cad_export, component_evidence, detector_names, fit_check, measurement_check, object_names, sparse_colmap
+    from . import cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import cad_export
     import component_evidence
+    import component_fit
     import detector_names
     import fit_check
     import measurement_check
@@ -545,6 +546,21 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
             source_support = {'written': False, 'reason': f'Source component evidence failed ({type(error).__name__}).'}
     else:
         source_support = {'written': False, 'reason': 'Source component evidence requires a metric component graph.'}
+    # A surface fit is a diagnostic of this reconstruction, not a physical accuracy
+    # claim. It may propose a reviewed correction, but never edits the scene here.
+    component_fit_files = []
+    if source_support.get('written'):
+        # Invalid or stale supplied evidence must fail rather than publish an
+        # apparently checked model. The report binds the exact final JSON bytes.
+        fitted = component_fit.write_component_fit(out, scene, cloud,
+            scene_path=out / 'scene.json', cloud_path=out / 'arena-cloud.json',
+            evidence_path=out / 'component-evidence.json', source_dir=support_root)
+        component_fitting = {'written': True, 'schema': fitted['schema'],
+                             'components': len(fitted['components']), 'summary': fitted['summary'], 'metric_verified': False,
+                             'geometryChanged': False}
+        component_fit_files = ['component-fit.json']
+    else:
+        component_fitting = {'written': False, 'reason': 'Component fitting requires bound source component evidence.'}
     nav_files = []
     if cloud['units'] == 'm':
         try:
@@ -565,6 +581,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'naming': naming, 'measurements': measurements, 'bim_review': scene.get('bimReview'),
                 'component_graph': {'written': bool(component_files), 'revision': graph.get('revision') if graph else None},
                 'component_evidence': source_support,
+                'component_fit': component_fitting,
                 'navigation': navigation,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
@@ -590,6 +607,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *({'name': name, 'kind': 'evidence'} for name in measurement_files),
                  *({'name': name, 'kind': 'evidence'} for name in component_files),
                  *({'name': name, 'kind': 'evidence'} for name in source_support_files),
+                 *({'name': name, 'kind': 'evidence'} for name in component_fit_files),
                  *({'name': name, 'kind': 'nav-map'} for name in nav_files),
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))

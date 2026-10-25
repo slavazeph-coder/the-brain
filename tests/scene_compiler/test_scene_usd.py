@@ -224,7 +224,14 @@ scene = attach_component_ids(scene, points_sha256(cloud))
         self.assertFalse(nav['validation']['physicalRobotValidated'])
         self.assertFalse(nav['validation']['nav2RuntimeTested'])
         self.assertEqual(nav['counts']['free'], 0, 'Sparse point spacing cannot manufacture observed free cells')
+        self.assertTrue(evidence['component_fit']['written'])
+        self.assertFalse(evidence['component_fit']['geometryChanged'])
+        component_fit = json.loads((out / 'component-fit.json').read_text())
+        self.assertEqual(component_fit['sourceFiles']['scene']['sha256'], scene_hash)
+        self.assertEqual(component_fit['sourceFiles']['cloud']['sha256'], cloud_hash)
+        self.assertFalse(component_fit['metricVerified'])
         artifacts = json.loads((out / 'manifest.json').read_text())['artifacts']
+        self.assertIn({'name': 'component-fit.json', 'kind': 'evidence'}, artifacts)
         self.assertLessEqual(len(artifacts), 32)
         self.assertEqual({a['name'] for a in artifacts if a['kind'] == 'nav-map'},
                          {'nav2-map.pgm', 'nav2-map.yaml', 'nav2-map.json'})
@@ -234,6 +241,7 @@ scene = attach_component_ids(scene, points_sha256(cloud))
         self.assertEqual(evidence["units"], "arbitrary"); self.assertFalse((out / "scene.usda").exists()); self.assertFalse((out / "scene.ifc").exists())
         self.assertNotIn("scene.usda", [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]])
         self.assertFalse((out / "scene-measurements.json").exists())
+        self.assertFalse((out / 'component-fit.json').exists())
 
     def test_independent_distance_failure_is_returned_without_recalibrating_the_scene(self):
         cloud = handoff("m")
