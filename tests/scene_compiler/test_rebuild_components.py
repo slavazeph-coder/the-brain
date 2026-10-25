@@ -67,6 +67,11 @@ def test_rebuild_retains_originals_and_rebinds_all_reports(tmp_path):
     nav = json.loads((out / 'nav2-map.json').read_text())
     assert nav['source']['sceneSha256'] == current_hash
     assert nav['validation']['nav2RuntimeTested'] is False
+    support = json.loads((out / 'component-evidence.json').read_text())
+    assert support['sourceFiles']['scene']['sha256'] == current_hash
+    assert support['componentGraph']['revision'] == 1
+    moved_wall = next(row for row in support['components'] if row['name'] == 'wall_1')
+    assert moved_wall['status'] == 'unsupported' and moved_wall['supportCount'] is None
     report = json.loads((out / 'scene-measurements.json').read_text())
     assert any(row['basis'] == 'operator-authored-edit' for row in report['dimensions'])
     with pytest.raises(FileExistsError):
