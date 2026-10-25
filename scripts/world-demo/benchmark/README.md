@@ -113,6 +113,12 @@ What it shows:
   no edge along them, and faces under 40 px, are reported with the reason.
 - **The error budget at 0 px.** The wall sheet's corners land up to 1.75 px inside the paper, which costs −0.9%, and
   the wall plane from the points costs −0.4%.
+- **The face must be measured on its own surface.** A sheet standing in front of a wall carries fewer points than the
+  wall, so the largest plane around it can be the wall behind. That scales the model by the ratio of the two depths,
+  and the proportions check still passes. The face is therefore measured on the front-most surface with points on the
+  face itself. A plain face with no points, between surfaces at different depths, is refused. One case remains
+  open: a plain face standing free in front of a single surface is still measured on that surface. Triangulating its
+  corners from two frames would close it.
 
 ```sh
 python scripts/world-demo/benchmark/run_reference_benchmark.py OUT            # oracle at 0/5/10/20 px

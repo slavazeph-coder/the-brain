@@ -275,18 +275,36 @@ def measure(view, corners, points, margin=.25):
         sel = inside(2.0)  # a sheet on a wall: the wall around it is the same plane
     if sel.sum() < 8:
         return None, f'{int(sel.sum())} reconstructed points on or around the face'
-    P = points[sel]; d = np.linalg.norm(cam[sel], axis=1)
+    on_face = inside(1.0)[sel]; P = points[sel]; d = np.linalg.norm(cam[sel], axis=1)
     near = d <= np.percentile(d, 60) * 1.15  # the surface itself, not points seen past its edge
-    P = P[near] if near.sum() >= 8 else P
-    best = None; rng = np.random.default_rng(0)
-    scale = np.median(np.linalg.norm(P - P.mean(0), axis=1)) + 1e-12
-    for _ in range(200):
-        a, b, c = P[rng.choice(len(P), 3, replace=False)]; n = np.cross(b - a, c - a)
-        if np.linalg.norm(n) < 1e-12: continue
-        n /= np.linalg.norm(n); r = np.abs((P - a) @ n); inl = r < .03 * scale
-        if best is None or inl.sum() > best.sum(): best = inl
-    if best is None or best.sum() < 6:
+    if near.sum() >= 8: P, d, on_face = P[near], d[near], on_face[near]
+    rng = np.random.default_rng(0); scale = np.median(np.linalg.norm(P - P.mean(0), axis=1)) + 1e-12
+    def plane_through(free):
+        best, idx = None, np.flatnonzero(free)
+        for _ in range(200 if len(idx) >= 3 else 0):
+            a, b, c = P[rng.choice(idx, 3, replace=False)]; n = np.cross(b - a, c - a)
+            if np.linalg.norm(n) < 1e-12: continue
+            n /= np.linalg.norm(n); inl = free & (np.abs((P - a) @ n) < .03 * scale)
+            if best is None or inl.sum() > best.sum(): best = inl
+        return best if best is not None and best.sum() >= 6 else None
+    # The surfaces here, at distinct depths, largest first. A sheet standing in front of a wall carries fewer points
+    # than the wall, including wall points it hides in this frame (other frames saw them): the largest surface is then
+    # the wall, and measuring on it would scale the model by the ratio of the depths with the proportions still right.
+    layers, free = [], np.ones(len(P), bool)
+    for _ in range(3):
+        inl = plane_through(free)
+        if inl is None: break
+        free &= ~inl; depth = float(np.median(d[inl]))
+        if all(abs(depth / float(np.median(d[o])) - 1) > .1 for o in layers): layers.append(inl)
+    if not layers:
         return None, 'no plane through the points on the face'
+    seen_on_face = [o for o in layers if (o & on_face).sum() >= 3]
+    if seen_on_face:
+        best = min(seen_on_face, key=lambda o: np.median(d[o]))  # the front-most surface with points on the face itself
+    elif len(layers) == 1:
+        best = layers[0]  # the face carries no points: the surface around it is taken for its own (a sheet on a wall)
+    else:
+        return None, f'the face carries no reconstructed points, and the points around it lie at {len(layers)} depths'
     S = P[best]; c = S.mean(0); n = np.linalg.svd(S - c)[2][2]
     C = -R.T @ t; rays = view['unproject'](Q); out = []
     for x, y in rays:

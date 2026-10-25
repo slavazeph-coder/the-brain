@@ -67,6 +67,34 @@ def test_a_sheet_on_a_wall_is_measured_through_the_walls_plane():
     assert e['metresPerUnit'] == pytest.approx(k) and abs(e['shapeError']) < 1e-9
 
 
+def a4_seen_from(C, corners_m, k):
+    view = pinhole_view(look_at(C, corners_m.mean(0) / k), C)
+    return view, view['project']((corners_m / k) @ view['cam_from_world'][:, :3].T + view['cam_from_world'][:, 3])
+
+
+def test_a_sheet_in_front_of_a_wall_is_measured_on_its_own_points_not_the_wall():
+    # A free-standing A4 sheet 2 m in front of a wall: 12 points on it, thousands on the wall, some of them hidden
+    # behind the sheet in this frame. The wall is the largest plane; measuring on it would halve the scale.
+    k = .5; rng = np.random.default_rng(2); corners_m = np.array([[1.0, 1.6, 2], [1.21, 1.6, 2], [1.21, 1.303, 2], [1.0, 1.303, 2]])
+    sheet = np.c_[rng.uniform(1.02, 1.19, 12), rng.uniform(1.32, 1.58, 12), np.full(12, 2.0)] / k
+    wall = np.c_[rng.uniform(-1, 3, 3000), rng.uniform(.2, 3, 3000), np.zeros(3000)] / k
+    view, uv = a4_seen_from(np.array([1.4, 1.5, 4.0]) / k, corners_m, k)
+    P3, used = rs.measure(view, uv, np.r_[sheet, wall])
+    assert P3 is not None, used
+    assert used == 12 and np.allclose(P3, corners_m / k, atol=1e-6)
+    assert rs.estimate(rs.REFERENCES['iso-a4-sheet'], P3)['metresPerUnit'] == pytest.approx(k)
+
+
+def test_a_face_without_points_between_surfaces_at_two_depths_is_refused():
+    # A plain sheet (no points on it) on a wall beside a shelf front 0.4 m nearer: either surface could be its own.
+    k = .5; rng = np.random.default_rng(4); corners_m = np.array([[1.0, 1.6, 0], [1.21, 1.6, 0], [1.21, 1.303, 0], [1.0, 1.303, 0]])
+    wall = np.c_[rng.uniform(1.23, 2, 300), rng.uniform(1.1, 1.8, 300), np.zeros(300)] / k
+    shelf = np.c_[rng.uniform(.6, .98, 300), rng.uniform(1.1, 1.8, 300), np.full(300, .4)] / k
+    view, uv = a4_seen_from(np.array([1.1, 1.45, 2.4]) / k, corners_m, k)
+    P3, reason = rs.measure(view, uv, np.r_[wall, shelf])
+    assert P3 is None and 'depths' in reason, reason
+
+
 def test_proportions_reject_the_wrong_reference():
     P3 = np.array([[0, 0, 0], [.2159, 0, 0], [.2159, .2794, 0], [0, .2794, 0]])  # a US Letter sheet, called A4
     assert abs(rs.estimate(rs.REFERENCES['iso-a4-sheet'], P3)['shapeError']) > rs.SHAPE_TOLERANCE
