@@ -219,6 +219,50 @@ bpy.ops.mesh.primitive_ico_sphere_add(radius=.38, subdivisions=3, location=B(.45
 leaves.data.materials.append(m_leaf); tex = bpy.data.textures.new('leafy', 'CLOUDS'); disp = leaves.modifiers.new('d', 'DISPLACE'); disp.texture = tex; disp.strength = .12
 truth['objects'].append({'name': 'plant', 'label': 'potted plant', 'centre': [.45, .565, .45], 'size': [.76, 1.13, .76], 'yaw_degrees': 0})
 
+# Standard-size references (reference_scale.py's list): paper sheets of ISO 216 sizes and a 355 ml can, at their exact
+# nominal sizes, with each face's corners in truth['references'] (in order around the face).
+def printed(seed):  # a printed sheet: white paper, a white margin, and rows of grey "words" (stretched noise)
+    def build(nt, bsdf):
+        tc = nt.nodes.new('ShaderNodeTexCoord'); sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tc.outputs['Object'], sep.inputs[0])
+        def within(sock, limit):
+            a = nt.nodes.new('ShaderNodeMath'); a.operation = 'ABSOLUTE'; nt.links.new(sock, a.inputs[0])
+            c = nt.nodes.new('ShaderNodeMath'); c.operation = 'LESS_THAN'; nt.links.new(a.outputs[0], c.inputs[0]); c.inputs[1].default_value = limit
+            return c.outputs[0]
+        mask = nt.nodes.new('ShaderNodeMath'); mask.operation = 'MULTIPLY'
+        nt.links.new(within(sep.outputs['X'], .40), mask.inputs[0]); nt.links.new(within(sep.outputs['Z'], .40), mask.inputs[1])
+        mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (18, 18, 90); mp.inputs['Location'].default_value = (seed, seed * 2, 0)
+        nt.links.new(tc.outputs['Object'], mp.inputs['Vector']); noise = nt.nodes.new('ShaderNodeTexNoise'); noise.inputs['Detail'].default_value = 1
+        nt.links.new(mp.outputs['Vector'], noise.inputs['Vector'])
+        ink = ramp(nt, noise.outputs['Fac'], [(0.5, (.93, .93, .91, 1)), (0.56, (.22, .22, .25, 1))])
+        mix = nt.nodes.new('ShaderNodeMixRGB'); mix.inputs['Color1'].default_value = (.93, .93, .91, 1)
+        nt.links.new(mask.outputs[0], mix.inputs['Fac']); nt.links.new(ink, mix.inputs['Color2']); nt.links.new(mix.outputs['Color'], bsdf.inputs['Base Color'])
+        bsdf.inputs['Roughness'].default_value = .8
+    return build
+truth['references'] = []
+def sheet(name, ref, face, u, y, w, h, off):
+    """A sheet w x h (metres, as it hangs) on a wall face, `off` in front of the wall (on a board), or on the table
+    (face 'table': u, y are its x and z)."""
+    t = .0004
+    if face == 'table':
+        c = (u, table_h + t / 2, y); box(name, c, [w, t, h], 0, material(name, printed(len(name))))
+        corners = [(c[0] - w / 2, table_h + t, c[2] - h / 2), (c[0] + w / 2, table_h + t, c[2] - h / 2), (c[0] + w / 2, table_h + t, c[2] + h / 2), (c[0] - w / 2, table_h + t, c[2] + h / 2)]
+    elif face in ('north', 'south'):
+        z = off + t / 2 if face == 'north' else D - off - t / 2; c = (u, y, z); box(name, c, [w, h, t], 0, material(name, printed(len(name))))
+        zf = z + (t / 2 if face == 'north' else -t / 2)
+        corners = [(u - w / 2, y + h / 2, zf), (u + w / 2, y + h / 2, zf), (u + w / 2, y - h / 2, zf), (u - w / 2, y - h / 2, zf)]
+    else:
+        x = off + t / 2 if face == 'west' else W - off - t / 2; c = (x, y, u); box(name, c, [w, h, t], 90, material(name, printed(len(name))))
+        xf = x + (t / 2 if face == 'west' else -t / 2)
+        corners = [(xf, y + h / 2, u - w / 2), (xf, y + h / 2, u + w / 2), (xf, y - h / 2, u + w / 2), (xf, y - h / 2, u - w / 2)]
+    truth['references'].append({'name': name, 'id': ref, 'size': sorted([w, h], reverse=True), 'corners': [[round(v, 6) for v in p] for p in corners]})
+sheet('a4_cork', 'iso-a4-sheet', 'south', .7, 1.55, .210, .297, .021)       # pinned on the cork board, portrait
+sheet('a4_feature', 'iso-a4-sheet', 'east', .6, 1.4, .297, .210, 0)         # taped to the teal wall, landscape
+sheet('a3_north', 'iso-a3-sheet', 'north', 4.25, 1.45, .297, .420, 0)       # between the window and the poster, portrait
+sheet('a4_table', 'iso-a4-sheet', 'table', 2.4, 2.75, .297, .210, 0)        # lying on the table
+bpy.ops.mesh.primitive_cylinder_add(radius=.033, depth=.1222, location=B(3.6, table_h + .0611, 2.45)); can = bpy.context.active_object
+can.data.materials.append(material('can', plain((.72, .08, .08), .3, .6)))
+truth['references'].append({'name': 'can_table', 'id': 'beverage-can-355ml', 'size': [.1222, .066], 'centre': [3.6, round(table_h + .0611, 6), 2.45]})
+
 # Reference spans: one calibration (what a person would tape and type), the rest withheld, in different directions and
 # across the room. They join corners a sparse reconstruction resolves (high-contrast corners on walls and furniture);
 # kept in office-spans.json so pick_references.py can apply them to an earlier render.
