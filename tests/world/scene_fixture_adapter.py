@@ -4,6 +4,8 @@ The boxes are hand-placed, so the scene only exercises the worker → browser ha
 never a claim about any capture.
 """
 import argparse
+import copy
+import hashlib
 import json
 import struct
 import sys
@@ -11,6 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'robotics' / 'scene_compiler'))
 from ifc_export import emit_ifc  # noqa: E402  the real IFC writer, run on the authored scene
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'robotics' / 'world_worker'))
+from measurement_check import build_report  # noqa: E402  real checks on authored transport geometry
 
 # (name, min corner, max corner, linear RGBA, glTF extras), Y-up metres-like units as the compiler writes them.
 BOXES = [
@@ -69,7 +73,9 @@ def main():
     request = json.loads(Path(parser.parse_args().input_manifest).read_text())
     out = Path(request['output_dir'])
     out.mkdir(parents=True, exist_ok=True)
-    scene = dict(SCENE)
+    scene = copy.deepcopy(SCENE)
+    extras = []
+    preceding_artifacts = []
     # A browser point-cloud hand-off (already validated by the worker) keeps its units and scale, as the compiler does.
     cloud = next((json.loads(Path(i['path']).read_text()) for i in request['inputs'] if i['kind'] == 'cloud'), None)
     if cloud:
@@ -79,15 +85,34 @@ def main():
                      counts={**SCENE['counts'], 'points': len(cloud['points'])})
         if metric:
             (out / 'scene.usda').write_text('#usda 1.0\n(\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n')
+            # Match scene-usd's diagnostic-before-GLB ordering. This is an authored transport diagnostic, not fit proof.
+            diagnostic = cloud['points'][:32]
+            (out / 'fit-heatmap.ply').write_text('ply\nformat ascii 1.0\n' + f'element vertex {len(diagnostic)}\n' +
+                'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n' +
+                '\n'.join(' '.join(map(str, row[:3])) + ' 255 0 0' for row in diagnostic) + '\n')
+            preceding_artifacts.append({'name': 'fit-heatmap.ply', 'kind': 'evidence'})
+        if cloud.get('bimReview'):
+            from bim_review import apply_review
+            scene = apply_review(scene, cloud)
         emit_ifc(out, scene)
+        (out / 'arena-cloud.json').write_text(json.dumps(cloud, allow_nan=False))
+        extras.append({'name': 'arena-cloud.json', 'kind': 'evidence'})
+        if metric:
+            report = build_report(scene, cloud)
+            scene_raw = json.dumps(scene).encode()
+            report['sourceFiles'] = {'scene': {'sha256': hashlib.sha256(scene_raw).hexdigest()},
+                                     'cloud': {'sha256': hashlib.sha256((out / 'arena-cloud.json').read_bytes()).hexdigest()}}
+            (out / 'scene-measurements.json').write_text(json.dumps(report, allow_nan=False))
+            extras.append({'name': 'scene-measurements.json', 'kind': 'evidence'})
     (out / 'scene.glb').write_bytes(glb())
     (out / 'scene.json').write_text(json.dumps(scene))
     usd, ifc = scene['usd']['written'], (scene.get('ifc') or {}).get('written', False)
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [
+        *preceding_artifacts,
         {'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': scene['units']},
         *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
         *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
-        {'name': 'scene.json', 'kind': 'evidence'}]}))
+        {'name': 'scene.json', 'kind': 'evidence'}, *extras]}))
 
 
 if __name__ == '__main__':

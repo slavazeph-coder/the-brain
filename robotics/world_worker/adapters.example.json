@@ -122,6 +122,8 @@
     "object_detection": {
       "provider": "on-worker detector",
       "model": "EfficientDet-Lite2 (COCO)"
-    }
+    },
+    "dimension_checks": true,
+    "bim_review": true
   }
 ]

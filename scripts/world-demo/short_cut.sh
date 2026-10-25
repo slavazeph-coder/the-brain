@@ -17,7 +17,7 @@ done
 ffmpeg -y -loglevel error -i "$IN" -filter_complex "$parts${labels}concat=n=$n:v=1:a=0[cut];\
 color=c=0x06060a:s=1080x1350:r=30[bg];[bg][cut]overlay=0:270:shortest=1,\
 drawtext=fontfile=$M:text='BRAINSNN · WORLD BUILDER':fontcolor=0x00f5ff:fontsize=26:x=(w-tw)/2:y=80,\
-drawtext=fontfile=$F/Inter-SemiBold.otf:text='Phone walkthrough → simulation → BIM':fontcolor=0xf1f1f6:fontsize=48:x=(w-tw)/2:y=130,\
+drawtext=fontfile=$F/Inter-SemiBold.otf:text='Test walkthrough → simulation → BIM':fontcolor=0xf1f1f6:fontsize=48:x=(w-tw)/2:y=130,\
 drawtext=fontfile=$F/Inter-Medium.otf:text='$SUB':fontcolor=0x9aa0b4:fontsize=34:x=(w-tw)/2:y=204,\
 drawtext=fontfile=$M:text='GLB · OpenUSD · IFC4 · app and API':fontcolor=0x9aa0b4:fontsize=28:x=(w-tw)/2:y=1118,\
 drawtext=fontfile=$M:text='$FOOT':fontcolor=0x6f7489:fontsize=24:x=(w-tw)/2:y=1168,format=yuv420p" \

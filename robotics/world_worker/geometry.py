@@ -106,9 +106,23 @@ def load_arena_cloud(path: Path):
     if transform is not None and not (isinstance(transform, list) and len(transform) == 3 and all(
             isinstance(row, list) and len(row) == 4 and all(_finite(v) and abs(v) <= MAX_PREVIEW_COORDINATE for v in row) for row in transform)):
         raise ValueError('The hand-off transform must be a 3 x 4 matrix of finite numbers.')
-    return {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
+    cloud = {'version': 1, 'kind': 'colmap-sparse-point-cloud', 'units': units, 'coordinateFrame': 'right-handed-y-up',
             'sourceFrame': value['sourceFrame'], 'source': source[:200] if isinstance(source, str) else 'browser hand-off',
             'points': points, 'floorEstimate': floor, 'scale': scale, 'provenance': {**provenance, 'metricVerified': False},
             **({'multiView': True} if value.get('multiView') is True else {}),
             **({'fromSource': transform} if transform is not None else {}),
             **({'nameObjects': True} if value.get('nameObjects') is True else {})}
+    if 'measurementChecks' in value:
+        # These references audit the current coordinates; they never rescale or approve them.
+        try:
+            from .measurement_check import validate_checks
+        except ImportError:
+            from measurement_check import validate_checks
+        cloud['measurementChecks'] = validate_checks(value['measurementChecks'], cloud)
+    if 'bimReview' in value:
+        try:
+            from .bim_review import validate_review
+        except ImportError:
+            from bim_review import validate_review
+        cloud['bimReview'] = validate_review(value['bimReview'], cloud)
+    return cloud

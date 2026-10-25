@@ -27,8 +27,8 @@ export function sceneFacts(scene) {
   facts.push(unknown === null ? 'Unknown space: not recorded.' : `Unknown: ${plural(unknown, 'floor cell')} no point reached, kept as a tagged volume, never free space.`);
   const scale = scene.scale && typeof scene.scale === 'object' ? scene.scale : null;
   facts.push(scene.units === 'm' ? (scale?.selfReported === true
-      ? `Units: metres, from a distance you measured${Number.isFinite(scale.distance) ? ` (${scale.distance} m)` : ''}. Self-reported, not verified.`
-      : 'Units: metres, from a measured scale.')
+      ? `Units: metres, from an entered distance${Number.isFinite(scale.distance) ? ` (${scale.distance} m)` : ''}. Self-reported, not verified.`
+      : 'Units: metres, from the scale recorded in this scene.')
     : scene.units === 'arbitrary' ? 'Units: arbitrary reconstruction units. No measured scale, so sizes are relative.' : 'Units: not recorded.');
   const usd = scene.usd && typeof scene.usd === 'object' ? scene.usd : null;
   // A video job has no measured scale, so point to the site's metric routes instead of the compiler's advice.
@@ -94,6 +94,49 @@ function unknownRuns(cells) {
   }
   return runs;
 }
+/** Reviewed voids are an explicit scene edit. Reject malformed/stale host snapshots rather than guessing a gap. */
+function checkedOpenings(scene, walls) {
+  const openings = scene.openings ?? [];
+  if (!Array.isArray(openings) || openings.length > 32) throw new Error('Invalid reviewed openings in this scene.');
+  const ids = new Set();
+  for (const o of openings) {
+    const wall = walls.find(w => w?.name === o?.hostWall);
+    if (!o || typeof o.id !== 'string' || ids.has(o.id) || !wall || !triple(wall.centre) || !triple(wall.size)
+      || o.reviewed !== true || !['opening', 'door'].includes(o.kind)
+      || !triple(o.host?.centre) || !triple(o.host?.size)
+      || !Number.isFinite(o.host?.yaw_degrees)
+      || !['offsetMeters', 'widthMeters', 'heightMeters', 'sillMeters'].every(k => Number.isFinite(o[k]))
+      || o.offsetMeters < 0 || o.sillMeters < 0 || o.widthMeters <= 0 || o.heightMeters <= 0
+      || o.offsetMeters + o.widthMeters > wall.size[0] + 1e-8 || o.sillMeters + o.heightMeters > wall.size[1] + 1e-8
+      || wall.centre.some((v, i) => v !== o.host.centre[i]) || wall.size.some((v, i) => v !== o.host.size[i])
+      || (wall.yaw_degrees ?? 0) !== o.host.yaw_degrees) throw new Error('The reviewed opening or its host changed. Review and rebuild the BIM scene.');
+    ids.add(o.id);
+  }
+  for (let i = 0; i < openings.length; i++) for (const b of openings.slice(i + 1)) {
+    const a = openings[i];
+    if (a.hostWall === b.hostWall && Math.min(a.offsetMeters + a.widthMeters, b.offsetMeters + b.widthMeters) - Math.max(a.offsetMeters, b.offsetMeters) > 1e-9
+      && Math.min(a.sillMeters + a.heightMeters, b.sillMeters + b.heightMeters) - Math.max(a.sillMeters, b.sillMeters) > 1e-9)
+      throw new Error('Reviewed openings overlap. Review and rebuild the BIM scene.');
+  }
+  return openings;
+}
+function wallPlanParts(wall, openings, floor) {
+  if (!triple(wall?.centre) || !triple(wall?.size)) return [wall];
+  const [length, height] = wall.size, base = wall.centre[1] - height / 2;
+  const cuts = openings.filter(o => o.hostWall === wall.name && o.kind === 'opening'
+    && base + o.sillMeters <= floor + .02 && base + o.sillMeters + o.heightMeters >= floor + 2)
+    .map(o => [o.offsetMeters, o.offsetMeters + o.widthMeters]).sort((a, b) => a[0] - b[0]);
+  if (!cuts.length) return [wall];
+  const angle = (wall.yaw_degrees ?? 0) * Math.PI / 180, parts = []; let cursor = 0;
+  for (const [start, end] of [...cuts, [length, length]]) {
+    if (start - cursor > 1e-8) {
+      const t = (cursor + start - length) / 2;
+      parts.push({...wall, centre: [wall.centre[0] + t * Math.cos(angle), wall.centre[1], wall.centre[2] + t * Math.sin(angle)], size: [start - cursor, height, wall.size[2]]});
+    }
+    cursor = Math.max(cursor, end);
+  }
+  return parts;
+}
 /** The free point farthest from every box and the floor's edge, on a grid of at most about 20,000 points. */
 function openest(objects, width, depth) {
   const step = Math.max(.1, Math.sqrt(width * depth / 20000));
@@ -118,6 +161,7 @@ export function worldFromScene(scene, name = 'Scene map') {
   const objects = Array.isArray(scene.objects) ? scene.objects : [], walls = Array.isArray(scene.walls) ? scene.walls : [];
   const floor = objects.find(o => o?.name === 'floor_observed'), extent = floor && footprints(floor)[0];
   if (!extent || !Number.isFinite(scene.floor_y)) throw new Error('This scene has no observed floor, so free space cannot be proposed.');
+  const openings = checkedOpenings(scene, walls);
   const cm = v => Math.round(v * 100) / 100, width = cm(extent.x1 - extent.x0), depth = cm(extent.z1 - extent.z0);
   // Round outwards to whole centimetres and clip to the floor, so a box never shrinks below the element it stands for.
   const down = v => Math.floor(v * 100 + 1e-6) / 100, up = v => Math.ceil(v * 100 - 1e-6) / 100;  // tolerant of float noise
@@ -127,7 +171,7 @@ export function worldFromScene(scene, name = 'Scene map') {
     return x1 - x0 >= .02 && z1 - z0 >= .02 ? { ...extra, x: x0, z: z0, w: cm(x1 - x0), d: cm(z1 - z0) } : null;
   };
   const height = b => Math.min(20, Math.max(.02, cm(b.top - scene.floor_y)));
-  const elements = [...walls.map((o, i) => o && { o, id: `wall-${i + 1}`, name: title(o.name || `wall_${i + 1}`), count: 'walls', note: 'Observed wall: boxes around its measured oriented box.' }),
+  const elements = [...walls.map((o, i) => o && { o, pieces: wallPlanParts(o, openings, scene.floor_y), id: `wall-${i + 1}`, name: title(o.name || `wall_${i + 1}`), count: 'walls', note: 'Observed wall: boxes around its oriented box. Reviewed floor openings need at least 2 m of headroom; closed reference doors stay blocked.' }),
     ...objects.map((o, i) => o && o !== floor && o.provenance !== 'detected-unplaced' && { o, id: `object-${i}`,
       name: o.label && o.label !== 'object' ? String(o.label).slice(0, 60) : title(o.name), count: o.kind === 'separated' ? 'separated' : 'detected',
       note: o.kind === 'separated' ? 'Separated from the points: boxes around its measured oriented box. Objects that touch stay one.' : 'Placed from a 2D detection and its supporting points.' })]
@@ -138,7 +182,8 @@ export function worldFromScene(scene, name = 'Scene map') {
   const strips = diagonal && spare > 0 ? Math.min(4, 1 + Math.floor(spare / diagonal)) : 1;
   const counts = { walls: 0, separated: 0, detected: 0, unknown: 0, outside: 0 }, placed = [];
   for (const e of elements) {
-    const parts = footprints(e.o, turned(e.o) ? strips : 1).map((b, k, all) => place(b, { id: all.length > 1 ? `${e.id}-${k + 1}` : e.id,
+    const boxes = (e.pieces || [e.o]).flatMap(p => footprints(p, turned(p) ? strips : 1));
+    const parts = boxes.map((b, k, all) => place(b, { id: all.length > 1 ? `${e.id}-${k + 1}` : e.id,
       name: all.length > 1 ? `${e.name} (part ${k + 1} of ${all.length})` : e.name, kind: 'obstacle', h: height(b), note: e.note })).filter(Boolean);
     if (parts.length) { placed.push(...parts); counts[e.count]++; } else counts.outside++;
   }
@@ -148,9 +193,10 @@ export function worldFromScene(scene, name = 'Scene map') {
   const self = scene.scale?.selfReported === true;
   const world = normalizeWorld({ schema: WORLD_SCHEMA, name: String(name).slice(0, 120), width, depth, provenance: 'observed', scaleReviewed: false, mapReviewed: false,
     geometrySource: { kind: 'compiled-scene', name: String(scene.source || 'scene.json'), warnings: [
-      self ? 'Scale is the distance you measured, not verified.' : 'Scale comes from the scene and is not verified.',
+      self ? 'Scale comes from an entered distance, not verified.' : 'Scale comes from the scene and is not verified.',
       'Obstacles are axis-aligned boxes around walls and separated objects (diagonal ones in strips), so they are a little larger than the objects.',
       'Clusters too small or too low to separate are not obstacles: check for low clutter before a robot runs.',
+      ...(openings.length ? ['Reviewed openings are planar passage suggestions with a 2 m headroom convention. Robot height, swings and physical clearance are not validated; closed reference doors and elevated voids stay blocked.'] : []),
       'Floor no point reached is unknown; the rest of the observed floor is proposed as free.'] },
     start: openest(placed, width, depth), objects: placed });
   const objectCount = counts.separated + counts.detected;

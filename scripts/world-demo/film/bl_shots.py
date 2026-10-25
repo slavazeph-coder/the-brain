@@ -58,10 +58,11 @@ def to_bottom_origin(o):
     o.data.transform(Matrix.Translation(-c)); o.location = c
     return c, max(zs) - min(zs)
 walls = sorted([o for o in sc.objects if o.name.startswith('wall_')], key=lambda o: o.name)
+doors = sorted([o for o in sc.objects if o.name.startswith('door_')], key=lambda o: o.name)
 objects = sorted([o for o in sc.objects if o.name.startswith('object_')], key=lambda o: int(o.name.split('_')[1]))
 floor = sc.objects['floor_observed']; unknown = sc.objects.get('unknown_space')  # only when some floor went unseen
 extras = [unknown] if unknown else []
-for o in walls + objects + [floor] + extras: to_bottom_origin(o)
+for o in walls + doors + objects + [floor] + extras: to_bottom_origin(o)
 named = [o for o in objects if labels.get(o.name) not in (None, 'object')]
 
 BIM = SHOT == 'bim'
@@ -70,16 +71,19 @@ m_wall = material('wall', '#9aa6b8' if BIM else '#dfe6f2', rough=.5, alpha=1.0 i
 m_obj = material('obj', '#f2b8c6' if BIM else '#8b7cf6', rough=.45, emit=None if BIM else '#8b7cf6', strength=0 if BIM else .15)
 m_named = material('named', '#a855f7' if BIM else '#00e5f0', rough=.35, emit=None if BIM else '#00f5ff', strength=0 if BIM else .55)
 m_unknown = material('unknown', '#5b3a6e', rough=.9, emit='#ff4f9a', strength=.04, alpha=.16)
+m_door = material('closed reference door', '#b58c4e', rough=.6)
 floor.data.materials.clear(); floor.data.materials.append(m_floor)
 for o in walls: o.data.materials.clear(); o.data.materials.append(m_wall)
+for o in doors: o.data.materials.clear(); o.data.materials.append(m_door)
 for o in objects: o.data.materials.clear(); o.data.materials.append(m_named if o in named else m_obj)
 for o in extras: o.data.materials.clear(); o.data.materials.append(m_unknown)
-for o in walls + objects: bevel = o.modifiers.new('bevel', 'BEVEL'); bevel.width = .015; bevel.segments = 2
+for o in walls + doors + objects: bevel = o.modifiers.new('bevel', 'BEVEL'); bevel.width = .015; bevel.segments = 2
 CHECK = SHOT == 'check'
 misfits = set(json.load(open(os.path.join(os.path.dirname(SCENE), 'fit-check.json')))['misfits']) if CHECK else set()
 if CHECK:  # the model as a ghost the points are checked against; a misfit glows
     m_ghost = material('ghost', '#cfd8e6', rough=.6, alpha=.07); m_misfit = material('misfit', '#ff4f9a', emit='#ff4f9a', strength=1.2, alpha=.3)
-    for o in walls + objects + [floor]: o.data.materials.clear(); o.data.materials.append(m_misfit if o.name in misfits else m_ghost)
+    for o in walls + doors + objects + [floor]:
+        o.data.materials.clear(); o.data.materials.append(m_misfit if o.name in misfits or o.get('hostWall') in misfits else m_ghost)
 
 # ---------- the run's points (hand-off frame, y up -> Blender z up) ----------
 cloud = json.load(open(CLOUD))['points']
@@ -189,13 +193,13 @@ for f in range(1, FRAMES + 1, 2):  # smooth camera: a key every other frame
 
 pts_mat = m_pts
 if SHOT == 'points':
-    for o in walls + objects + [floor, route_ob, puck] + extras: o.hide_render = True
+    for o in walls + doors + objects + [floor, route_ob, puck] + extras: o.hide_render = True
     for b, ob in enumerate(pts_objs):
         start = 1 + b * 4
         hide(ob, 1, True); hide(ob, start, True); hide(ob, start + 1, False)
 elif SHOT == 'scene':
     for o in [route_ob, puck]: o.hide_render = True
-    for n, o in enumerate(walls):
+    for n, o in enumerate(walls + doors):
         key_scale(o, 1, z=0.001); key_scale(o, 8 + 3 * n, z=0.001); key_scale(o, 26 + 3 * n, z=1)
     for n, o in enumerate(sorted(objects, key=lambda o: -o.dimensions.x * o.dimensions.y)):
         key_scale(o, 1, s=0.001); key_scale(o, 30 + 2 * n, s=0.001); key_scale(o, 40 + 2 * n, s=1.08); key_scale(o, 45 + 2 * n, s=1)

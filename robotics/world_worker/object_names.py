@@ -2,7 +2,7 @@
 
 Each separated object is projected into the reconstruction's registered frames through the hand-off's `fromSource`
 transform (reconstruction coordinates -> hand-off coordinates). The two frames that see it most completely, least
-occluded, are cropped around it with its outline drawn, and sent with its measured size to the model in one request.
+occluded, are cropped around it with its outline drawn, and sent with its reconstruction-derived size in one request.
 The model answers in a fixed JSON schema. Its names are suggestions: the scene marks them unreviewed, low-confidence
 answers are not applied, and an object it cannot name stays "Object N".
 
@@ -22,7 +22,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scene_compiler'))
 
 MODEL = 'claude-opus-5-5'
-PROMPT_VERSION = 'brainsnn-object-names-v1'
+PROMPT_VERSION = 'brainsnn-object-names-v2-geometry-scale'
 MAX_OBJECTS = 40          # two crops each keeps one request well under the API's 100-image limit
 VIEWS_PER_OBJECT = 2
 CROP_EDGE = 512           # pixels on the longer side of each crop sent
@@ -37,13 +37,14 @@ CATEGORIES = ['furniture', 'appliance', 'electronics', 'lighting', 'decor', 'pla
 
 SYSTEM = (
     "You identify objects in a 3D scan of an indoor space. Each object was separated from the scan's points and "
-    "measured. For each one you get one or two photo crops from the walkthrough video, with the object outlined in "
-    "magenta, and its measured size.\n\n"
+    "bounded by reconstructed geometry. For each one you get one or two photo crops from the walkthrough video, "
+    "with the object outlined in magenta, and its geometry-derived size at an entered, unverified scale.\n\n"
     "Name the object inside the outline with a short common noun, as a person would label it on a floor plan: for "
     "example 'sofa', 'dining table', 'floor lamp', 'upright piano'. The outline comes from 3D points, so it can be "
     "loose or take in part of a neighbour; name the main thing it encloses. If it clearly holds two touching objects, "
-    "name both ('sofa and side table'). The size comes from a distance the user measured and may be off by a constant "
-    "factor, so use it as a hint, not a rule.\n\n"
+    "name both ('sofa and side table'). The size uses an entered scale and may contain scale error, missing surfaces "
+    "or a merged neighbouring object, so use it as a hint. Do not propose replacement dimensions or infer a "
+    "standard size from the object's category.\n\n"
     "When the crops do not show what the object is, answer 'unknown' with low confidence. A wrong confident name is "
     "worse than 'unknown', because these names go into a building model. Use high confidence only when the object is "
     "plainly visible in at least one crop.")
@@ -188,11 +189,11 @@ def crop(view, box):
 
 
 def request_content(items):
-    """The user turn: per object, its id, measured size and crops; then what to return."""
+    """The user turn: per object, its id, geometry-derived size and crops; then what to return."""
     content = [{'type': 'text', 'text': f'{len(items)} objects from one scan follow. Name each one.'}]
     for item in items:
         L, W, H = item['size']
-        content.append({'type': 'text', 'text': f"Object {item['id']}: measured {L:.2f} x {W:.2f} m in plan, {H:.2f} m tall."})
+        content.append({'type': 'text', 'text': f"Object {item['id']}: reconstruction box {L:.2f} x {W:.2f} m in plan, {H:.2f} m tall; entered scale, physically unverified."})
         for jpeg in item['crops']:
             content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg',
                                                         'data': base64.standard_b64encode(jpeg).decode('ascii')}})
