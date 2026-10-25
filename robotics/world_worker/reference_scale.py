@@ -53,6 +53,9 @@ REFERENCES = {
     'iso-a3-sheet': {'label': 'A3 sheet of paper (ISO 216), lying flat on a wall, board, door or table',
                      'size': [.420, .297], 'tolerance': .002, 'standard': 'ISO 216 (A3, 297 x 420 mm, +/-2 mm)',
                      'source': 'https://papersizes.org/a-paper-sizes.htm'},
+    'us-letter-sheet': {'label': 'US Letter sheet of paper (8.5 x 11 in), lying flat on a wall, board, door or table',
+                        'size': [.2794, .2159], 'tolerance': .002, 'standard': 'ANSI/ASME Y14.1 ANSI A (8.5 x 11 in)',
+                        'source': 'https://en.wikipedia.org/wiki/Letter_(paper_size)'},
     'ceiling-tile-600': {'label': 'lay-in ceiling tile in a metric 600 mm suspended grid (the tile face, inside the grid)',
                          'size': [.595, .595], 'tolerance': .0005, 'standard': 'EN 13964 600 mm module; lay-in tile 595 mm',
                          'source': 'https://cdn.mediavalet.com/aunsw/autex/2P1vrOWCVE6M_vSFlSrEdw/f5ZQQpLQrU6jl2vud2IzSQ/Original/Grid%20Ceiling%20Tiles_Data%20Sheet.pdf'},
@@ -71,7 +74,7 @@ UNMEASURED = {
 SYSTEM = (
     "You find reference objects of a known standard size in frames from a walkthrough video of an indoor space. The "
     "sizes set the scale of a 3D model, so only objects on the list count, and only when they plainly are that object "
-    "at that standard size. A sheet that might be US Letter rather than A4, a tile that might be a 2 ft tile, a pallet "
+    "at that standard size. A sheet you cannot tell between A4 and US Letter, a tile that might be a 2 ft tile, a pallet "
     "that might not be a EUR pallet: leave it out, or give low confidence. Never use objects without a standard size "
     "(pillows, mugs, chairs, books, posters).\n\n"
     "For each reference whose whole face is visible in a frame, return that frame's index and the face's four corners "
