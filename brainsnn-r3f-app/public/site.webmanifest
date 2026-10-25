@@ -1,0 +1,16 @@
+{
+  "name": "BrainSNN",
+  "short_name": "BrainSNN",
+  "description": "Explore robot-policy test packs from 10 to 100,000 episodes, with transparent runtime-price estimates and visible assumptions. Try the arcade today; hosted testing is pending qualification.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030308",
+  "theme_color": "#030308",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}

@@ -88,10 +88,10 @@ root, home, py = sys.argv[1:4]
 worker = f'{root}/robotics/world_worker'
 engines = [
     {'id': 'colmap-sparse', 'label': 'Multi-view spatial reconstruction (CPU)', 'enabled': True, 'license_reviewed': True,
-     'input_kinds': ['image', 'video'], 'max_inputs': 12, 'timeout_seconds': 1800,
+     'input_kinds': ['image', 'video'], 'max_inputs': 12, 'timeout_seconds': 3600,
      'command': [py, f'{worker}/sparse_colmap.py', '--input-manifest', '{input_manifest}']},
     {'id': 'scene-usd', 'label': 'Simulation scene (GLB/USD/IFC) from a walkthrough', 'enabled': True, 'license_reviewed': True,
-     'input_kinds': ['video', 'cloud'], 'max_inputs': 1, 'timeout_seconds': 1800, 'source_job': True,
+     'input_kinds': ['video', 'cloud'], 'max_inputs': 1, 'timeout_seconds': 3600, 'source_job': True,
      'command': [py, f'{worker}/scene_usd.py', '--input-manifest', '{input_manifest}', '--blender', f'{home}/blender']},
 ]
 json.dump(engines, open(f'{home}/adapters.json', 'w'), indent=1)
@@ -104,7 +104,10 @@ fi
 
 # 6. The worker. Browser calls are allowed from brainsnn.com and from the local site only.
 pkill -f "uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.1 --port $PORT" 2>/dev/null || true
+# Your own computer runs one job at a time, so reconstruction may use all of its cores (a shared worker keeps 2).
+THREADS=$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu 2>/dev/null || echo 4 )
 ( cd "$ROOT" && WORLD_WORKER_TOKEN="$(cat "$DIR/token")" WORLD_WORKER_DIR="$DIR/data" WORLD_ADAPTERS_FILE="$DIR/adapters.json" \
+  WORLD_CPU_THREADS="$THREADS" \
   WORLD_ALLOWED_ORIGINS="https://brainsnn.com,https://www.brainsnn.com,http://127.0.0.1:4181,http://localhost:4181" \
   nohup "$PY" -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.1 --port "$PORT" > "$DIR/worker.log" 2>&1 & )
 for _ in $(seq 1 60); do curl -fs "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1 && break; sleep 1; done
@@ -138,7 +141,7 @@ World Builder worker is running.
 In the site (https://brainsnn.com/world/, or http://127.0.0.1:4181/world/ if you serve it locally):
   1. Capture -> "Process a walkthrough / use an API worker" -> Connect processing worker.
   2. Paste the URL and the token there (only there), then Connect.
-  3. Choose photos, video or map -> pick your walkthrough video (2 to 120 seconds).
+  3. Choose photos, video or map -> pick your walkthrough video (2 seconds to 5 minutes, up to 2 GiB).
   4. Engine: "Multi-view spatial reconstruction (CPU)", tick the consent box, Process all capture files.
      A one-minute video takes 2 to 5 minutes on a laptop.
   5. When the points appear, measure one distance you taped, then build the scene to get IFC, Rhino, DXF and CSV.

@@ -1,0 +1,995 @@
+import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+const sampleContent = 'Most ads ask for attention before earning trust. Show proof first, then invite the buyer to decide.';
+
+function mockAnalysis(content = sampleContent) {
+  return {
+    id: 'scan-e2e',
+    timestamp: '2026-06-24T12:00:00.000Z',
+    title: 'E2E Brain Scan',
+    rawContent: content,
+    contentType: 'text',
+    metrics: {
+      trust: 48,
+      urgency: 70,
+      empathy: 56,
+      fear: 44,
+      anger: 18,
+      excitement: 82,
+      firingRate: 63,
+      plasticity: 58,
+      wavesDamping: 0.32,
+      wavesFrequency: 1.2,
+    },
+    attentionCurve: [
+      { label: 'Opening', value: 82, reason: 'Strong attention signal' },
+      { label: 'Close', value: 54, reason: 'Trust builder' },
+    ],
+    riskRating: 'Medium',
+    riskDescription: 'Unsupported urgency may weaken credibility.',
+    viralScore: 74,
+    gaugeGapScore: 66,
+    summary: 'Strong hook. Trust risk.',
+    insights: [
+      { label: 'What works', text: 'Specific promise and immediate tension.' },
+      { label: 'What hurts', text: 'Scarcity language feels forced.' },
+      { label: 'Best next move', text: 'Keep the opening. Replace the final command with proof.' },
+    ],
+    recommendations: [
+      { id: 'trust', title: 'Build trust earlier', goal: 'Build trust', rationale: 'Proof before pressure improves credibility.', rewriteHint: 'Add a concrete proof point.' },
+      { id: 'risk', title: 'Reduce manipulation', goal: 'Reduce manipulation', rationale: 'Urgency works better with evidence.', rewriteHint: 'Replace forced scarcity with a calm reason.' },
+    ],
+    payloadType: 'content_response_estimate',
+    confidence: 76,
+    crumbModelStats: {
+      model: 'brainsnn-local-demo-v1',
+      latencyMs: 12,
+      tokensEstimated: 18,
+      note: 'AI-estimated content response signals.',
+      layersEvaluated: 13,
+      totalLayersAvailable: 102,
+    },
+    isFallback: true,
+    heatmap: [
+      { id: 'segment-1', text: 'Most ads ask for attention before earning trust.', score: 82, category: 'Strong attention signal', reason: 'Likely to stop the scroll.' },
+      { id: 'segment-2', text: 'Show proof first, then invite the buyer to decide.', score: 64, category: 'Trust builder', reason: 'Proof language supports credibility.' },
+    ],
+    firewallSignals: {
+      emotionalActivation: 0.62,
+      cognitiveSuppression: 0.36,
+      manipulationPressure: 0.66,
+      trustErosion: 0.52,
+      density: 0.2,
+      evidence: [{ label: 'proof', match: 'proof' }],
+      templates: [{ id: 'forced-urgency', label: 'Forced urgency', risk: 'Pressure appears before proof.' }],
+      source: 'deterministic-firewall-fallback',
+    },
+    affectProfile: {
+      dominantAffect: 'curiosity',
+      valence: 58,
+      arousal: 72,
+      clusters: [
+        { id: 'threat', label: 'Threat', value: 44 },
+        { id: 'reward', label: 'Reward', value: 82 },
+        { id: 'social', label: 'Social trust', value: 48 },
+        { id: 'cognitive', label: 'Curiosity / clarity', value: 72 },
+      ],
+    },
+    contextTriggers: {
+      genre: 'paid_ad',
+      entityCandidates: ['BrainSNN'],
+      recurringSignals: ['Forced urgency'],
+      memoryPrompt: 'Track future scans for trust and proof.',
+    },
+    tribeProjection: {
+      source: 'TRIBE-informed local projection',
+      status: 'not_configured',
+      scenario: 'Emotional Salience & Trust',
+      regions: { CTX: 72, HPC: 64, THL: 48, AMY: 62, BG: 74, PFC: 55, CBL: 50 },
+      note: 'TRIBE v2 service is not configured, so BrainSNN used the local projection layer.',
+    },
+    layersUsed: [
+      { id: 3, name: 'TRIBE v2 Frames', group: 'backend', blurb: 'TRIBE v2 projection layer.' },
+      { id: 4, name: 'Cognitive Firewall', group: 'firewall', blurb: 'Deterministic pressure scoring.' },
+      { id: 29, name: 'Affective Decoder', group: 'firewall', blurb: 'Affect trigger decoding.' },
+      { id: 40, name: 'Sentence Heatmap', group: 'firewall', blurb: 'Sentence-level annotation.' },
+      { id: 46, name: 'Firewall Receipts', group: 'share', blurb: 'Deterministic scan receipt.' },
+    ],
+    engineTrace: [
+      { stage: 'L102 Lobster Trap', status: 'local_preflight', note: 'Safety preflight represented.' },
+      { stage: 'L4 Cognitive Firewall', status: 'completed', note: 'Template signals evaluated.' },
+      { stage: 'L3 TRIBE v2 Projection', status: 'not_configured', note: 'Local 7-region projection layer used.' },
+    ],
+    receipt: {
+      id: 'bsnn-e2e',
+      contentHash: 'e2e',
+      resultHash: 'result',
+      generatedAt: '2026-06-24T12:00:00.000Z',
+      disclaimer: 'AI-estimated content response.',
+    },
+    researchNotes: ['TRIBE v2 is used as a projection layer unless configured.'],
+  };
+}
+
+async function mockBackend(page) {
+  await page.route('**/api/analyze', async (route) => {
+    const body = route.request().postDataJSON() as { content?: string } | undefined;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mockAnalysis(body?.content || sampleContent)) });
+  });
+  await page.route('**/api/engines/status', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      totalLayers: 102,
+      engines: {
+        stripe: { configured: false, status: 'not_configured' },
+        supabase: { configured: false, status: 'not_configured' },
+        openai: { configured: false, status: 'not_configured' },
+        gemini: { configured: false, status: 'not_configured' },
+        gemma: { configured: false, status: 'not_configured' },
+        tribe: { configured: false, status: 'not_configured' },
+      },
+    }),
+  }));
+  await page.route('**/api/billing/checkout', (route) => route.fulfill({
+    status: 501,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: 'Stripe Checkout is not configured.', status: 'not_configured' }),
+  }));
+}
+
+async function runScan(page) {
+  await page.getByLabel('Passage to review').fill('Last chance to book a demo today. Act now before prices double. We measured a 42% drop in onboarding cost across 18 pilot customers.');
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
+}
+
+test.beforeEach(async ({ page }) => {
+  // Keep CI deterministic and off software WebGL: force the 2D brain fallback.
+  await page.addInitScript(() => localStorage.setItem('brainsnn:force-brain-2d', '1'));
+  await mockBackend(page);
+});
+
+test('content reaction lab runs a fully local simulation in the Arcade', async ({ page }) => {
+  const analyzeRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/analyze')) analyzeRequests.push(request.url());
+  });
+
+  await page.goto('/arcade?lab=content#playground');
+  await expect(page.getByRole('heading', { name: 'Arcade', exact: true })).toBeVisible();
+  await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
+
+  await page.getByLabel('Content to simulate').fill('Only forty were ever made. Private viewings close this week, and the small circle of people who understand why that matters is almost full.');
+  await page.getByRole('button', { name: 'Run simulation' }).click();
+
+  // Four headline tiles fill with numeric values from the in-browser engine.
+  await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
+  await expect(page.locator('.gg-content-score')).toHaveCount(4);
+  await expect(page).toHaveURL(/\/arcade\?lab=content/);
+  expect(analyzeRequests).toEqual([]);
+
+  // Rewrite panel produces a scored alternative without leaving the page.
+  // ContentReactionLab exposes each rewrite action as a native button.
+  await page.getByRole('button', { name: 'Reduce manipulation', exact: true }).click();
+  await expect(page.getByTestId('content-rewrite')).toBeVisible();
+
+  // The escape hatch into the full analyst app carries the content along.
+  await page.getByRole('button', { name: /Open full analysis/ }).click();
+  await expect(page).toHaveURL(/\/office\?tab=passage$/);
+  await expect(page.getByLabel('Passage to review')).not.toHaveValue('');
+});
+
+test('spiking network lab runs in a worker and shows the regimes', async ({ page }) => {
+  await page.goto('/arcade?lab=spiking#playground');
+  await expect(page.getByTestId('spiking-network-lab')).toBeVisible();
+  // The first run is kicked off on mount and executes off the main thread.
+  await expect(page.getByTestId('snn-hud')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('snn-hud')).toContainText(/Hz/i);
+
+  // Sub-threshold external drive must silence the network entirely.
+  await page.getByRole('button', { name: 'Below threshold' }).click();
+  await page.getByRole('button', { name: /Run network/ }).click();
+  await expect(page.getByTestId('snn-hud')).toContainText('0 Hz', { timeout: 30_000 });
+});
+
+test('defend the brain mission is machine-checked and losable', async ({ page }) => {
+  await page.goto('/arcade?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.getByTestId('brain-game-hud')).toContainText(/Hijack/i);
+
+  // Doing nothing must actually lose — the arcade's first real fail state.
+  await expect(page.getByTestId('brain-game-banner')).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByTestId('brain-game-banner')).toContainText('Judgment offline');
+
+  // Replaying and intervening keeps the run alive past the point it just failed.
+  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: /Silence threat/ }).click();
+  await expect(page.getByTestId('brain-game-hud')).toContainText('5/6');
+});
+
+test('content lab shows per-sentence math with a jackknife band', async ({ page }) => {
+  await page.goto('/arcade?lab=content#playground');
+  await page.getByLabel('Content to simulate').fill(
+    'Our team shipped a small update to the billing page this week. '
+    + 'URGENT: verify your account within 24 hours or it will be permanently deleted, click immediately!',
+  );
+  await page.getByRole('button', { name: 'Run simulation' }).click();
+
+  const math = page.getByTestId('content-math');
+  await expect(math).toBeVisible();
+  // The pressure sentence, not the benign opener, should own the risk score.
+  await expect(math.locator('.gg-content-drivers li').first()).toContainText('URGENT');
+  await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Manipulation Risk');
+
+  // Every score states where it sits against the labelled corpus, rather than
+  // implying the index is a percentage.
+  await expect(page.locator('.gg-content-score small').first()).toContainText(/percentile|higher than|lower than/);
+  await expect(page.getByTestId('calibration-card')).toContainText(/Ranks \d+% of \d+ labelled comparisons/);
+
+  // Switching the explained score re-attributes.
+  await math.getByRole('tab', { name: 'Attention' }).click();
+  await expect(math.locator('.gg-content-drivers li em').first()).toContainText('% of Attention');
+});
+
+test('shared challenge link prefills and auto-runs the content lab', async ({ page }) => {
+  const sample = 'Only forty were ever made. Private viewings close this week.';
+  await page.goto(`/arcade?lab=content&state=${encodeURIComponent(sample)}#playground`);
+  await expect(page.getByLabel('Content to simulate')).toHaveValue(sample);
+  await expect(page.locator('.gg-content-score strong').first()).toHaveText(/^\d+$/, { timeout: 5_000 });
+});
+
+test('arcade selector opens the content lab from the featured row', async ({ page }) => {
+  await page.goto('/arcade');
+  await page.getByRole('tab', { name: /Mind-Hack Autopsy/ }).click();
+  await expect(page.getByTestId('content-reaction-lab')).toBeVisible();
+  await expect(page).toHaveURL(/lab=content/);
+});
+
+test('reconstruct redirects to source-anchored Claim split', async ({ page }) => {
+  await page.goto('/reconstruct');
+  await expect(page).toHaveURL(/office\?tab=claims/);
+  await page.getByLabel('Claim passage').fill('Our product will save time. We tested it on three tasks.');
+  await page.getByRole('button', { name: 'Split claim cues' }).click();
+  await expect(page.getByRole('region', { name: 'Claim split results' })).toContainText('Claim support remains unverified.');
+  await page.getByRole('region', { name: 'Claim split results' }).locator('.review-findings a').first().click();
+  await expect(page.locator('#review-source-claims mark')).not.toBeEmpty();
+});
+
+test('Arcade opens the shared Review workbench', async ({ page }) => {
+  await page.goto('/arcade');
+  await page.getByRole('navigation', { name: 'Main navigation', exact: true }).getByRole('link', { name: 'Review', exact: true }).click();
+  await expect(page.getByTestId('review-workbench')).toBeVisible();
+});
+
+test('3D brain mounts or falls back cleanly without console errors', async ({ page }) => {
+  test.skip(test.info().project.name === 'mobile', 'Mobile always uses the 2D fallback by design.');
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  // No force-2d flag on this navigation: clear it before load. The 3D brain
+  // now lives inside the arcade's content lab.
+  await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
+  await page.goto('/arcade?lab=content#playground');
+  await page.waitForTimeout(4000);
+  const has3d = await page.locator('.brain3d canvas').count();
+  const hasFallback = await page.locator('.brain-visualizer').count();
+  expect(has3d + hasFallback).toBeGreaterThan(0);
+  // Resource-load failures (fonts/CDN blocked in CI sandboxes) are not app
+  // errors; this test guards against exceptions from the 3D mount itself.
+  const fatal = errors.filter((text) => !/favicon|manifest|WebGL warning|Failed to load resource/i.test(text));
+  expect(fatal).toEqual([]);
+});
+
+test('review edits, saves versions, queues and exports without leaving the workbench', async ({ page }) => {
+  await page.goto('/app'); await runScan(page);
+  await page.getByRole('button', { name: 'Save on this device' }).click();
+  await page.getByRole('button', { name: 'Edit this draft' }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+  await page.getByText('Send this through review', { exact: true }).click();
+  await page.getByRole('button', { name: 'Save as version' }).click();
+  await page.getByRole('button', { name: 'Mark for approval' }).click();
+  await page.getByText('Saved reviews on this device', { exact: false }).click();
+  await expect(page.getByRole('button', { name: 'Open queued draft' })).toBeVisible();
+  await page.getByRole('button', { name: 'Approve this draft' }).click();
+  await expect(page.locator('.review-saved')).toContainText('Approved');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download queued record' }).click();
+  expect((await download).suggestedFilename()).toBe('brainsnn-review.json');
+  await page.reload();
+  await page.getByText('Saved reviews on this device', { exact: false }).click();
+  await expect(page.locator('.review-saved')).toContainText('Approved');
+  await expect(page.locator('.review-saved')).toContainText('Versions (2)');
+});
+
+test('saved reviews reopen within the four accessible Review tabs', async ({ page }) => {
+  await page.goto('/app'); await runScan(page);
+  await page.getByRole('button', { name: 'Save on this device' }).click();
+  await page.reload();
+  await page.getByText('Saved reviews on this device', { exact: false }).click();
+  await page.getByRole('button', { name: 'Open source', exact: true }).first().click();
+  await expect(page.getByLabel('Passage to review')).toHaveValue(/Last chance/);
+  await expect(page.locator('#review-tabs a')).toHaveCount(4);
+  const scan = await new AxeBuilder({ page }).include('#review-main').withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(scan.violations.filter(v => ['serious', 'critical'].includes(v.impact || ''))).toEqual([]);
+});
+
+test('shared navigation fits on a phone and Lab opens from overflow', async ({ page }) => {
+  await page.goto('/app');
+  const nav = page.getByRole('navigation', { name: 'Main navigation', exact: true });
+  await expect(nav).toBeVisible(); await nav.getByLabel('More navigation').click();
+  await nav.getByRole('link', { name: 'Lab', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Lab', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
+
+test('defend the brain renders a real 3D board driven by detected techniques', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  // The suite-wide beforeEach forces the 2D fallback to keep CI off software
+  // WebGL; this test is specifically about the 3D board, so clear it.
+  await page.addInitScript(() => localStorage.removeItem('brainsnn:force-brain-2d'));
+  await page.goto('/arcade?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.locator('[data-testid="brain-game-3d"]')).toBeVisible({ timeout: 45_000 });
+  await expect(page.locator('[data-testid="brain-game-3d"] canvas')).toBeVisible({ timeout: 45_000 });
+
+  // The attack is built from the persuasion detector, so the panel names real
+  // taxonomy classes and quotes the phrases that triggered them.
+  const breakdown = page.getByTestId('brain-game-breakdown');
+  await expect(breakdown).toBeVisible();
+  await expect(breakdown).toContainText(/Appeal to Time|Exaggeration|Bandwagon|Doubt/);
+
+  // Switching levels rebuilds the attack from a different passage.
+  await page.getByTestId('brain-game-level').selectOption('guru-urgency-pitch');
+  await expect(breakdown.locator('li')).toHaveCount(5, { timeout: 20_000 });
+
+  expect(errors).toEqual([]);
+});
+
+test('defend the brain falls back to the 2D board without WebGL', async ({ page }) => {
+  // The 3D board is an upgrade, never a requirement: the game has to stay
+  // playable when WebGL is unavailable.
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function patched(type: string, ...rest: unknown[]) {
+      if (type === 'webgl' || type === 'webgl2') return null;
+      return original.call(this, type, ...rest);
+    };
+  });
+
+  await page.goto('/arcade?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.locator('[data-testid="brain-game-3d"]')).toHaveCount(0);
+  await expect(page.locator('canvas.gg-brain-game-canvas')).toBeVisible();
+  await expect(page.getByTestId('brain-game-hud')).toContainText(/Hijack/i);
+});
+
+test('a run proof carries no text from the level it was played on', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/arcade?lab=braingame#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+
+  // Build a level from text with distinctive words, then export a proof and
+  // assert none of those words made it in. A proof is meant to be shared.
+  await page.getByTestId('brain-game-level').selectOption('custom');
+  await page.getByTestId('brain-game-custom-text')
+    .fill('URGENT: doors close tonight, zebra pineapple, and everyone else has already joined.');
+  await page.getByRole('button', { name: 'Build the level' }).click();
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: /Export run proof/ }).click();
+  const file = await download;
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const proof = Buffer.concat(chunks).toString('utf8').toLowerCase();
+
+  expect(proof).toContain('defend_the_brain_run');
+  for (const secret of ['zebra', 'pineapple', 'doors close', 'urgent']) {
+    expect(proof).not.toContain(secret);
+  }
+});
+
+test('a shared challenge link restores the level it was played on', async ({ page }) => {
+  // braingame used to write ?state= and never read it back, so every shared
+  // link opened the default level. Both halves of the round trip are covered.
+  await page.goto('/arcade?lab=braingame&state=challenge~outrage-bait-post#playground');
+  await expect(page.getByTestId('brain-game-lab')).toBeVisible();
+  await expect(page.getByTestId('brain-game-level')).toHaveValue('outrage-bait-post');
+  await expect(page.locator('.gg-deep-toggle button.active')).toHaveText('Challenge');
+
+  // A pasted passage travels with the link and rebuilds the same attack.
+  const shared = 'mission~custom~Doors close tonight, and everyone else has already joined.';
+  await page.goto(`/arcade?lab=braingame&state=${encodeURIComponent(shared)}#playground`);
+  await expect(page.getByTestId('brain-game-level')).toHaveValue('custom');
+  await expect(page.getByTestId('brain-game-custom-text')).toHaveValue(/Doors close tonight/);
+  await expect(page.getByTestId('brain-game-breakdown').locator('li').first()).toBeVisible();
+});
+
+test('the neuro powder lab runs a live simulation at /lab', async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  // The full 14-material palette, and the four brain materials among them.
+  await expect(page.locator('.powder-swatch')).toHaveCount(14);
+  await expect(page.getByTestId('powder-palette')).toContainText('Neuro');
+  await expect(page.getByTestId('powder-palette')).toContainText('Synapse');
+
+  // The opening scene is seeded, so the HUD reports a real circuit rather than
+  // an empty grid, and the loop is actually running.
+  const hud = page.getByTestId('powder-hud');
+  await expect(hud).toContainText(/Neurons/);
+  await expect(hud).toContainText(/Synapses/);
+  await expect(async () => {
+    const text = (await hud.textContent()) || '';
+    const fps = Number(/FPS\s*(\d+)/.exec(text)?.[1] ?? 0);
+    expect(fps).toBeGreaterThan(20);
+  }).toPass({ timeout: 15_000 });
+
+  // The model toggle swaps in the Brunel-derived parameters and says so.
+  await page.getByTestId('powder-model-real').click();
+  await expect(page.locator('.powder-model-note')).toContainText(/Threshold 20 mV/);
+
+  expect(errors).toEqual([]);
+});
+
+test('the powder lab lede does not overclaim the model it loads with', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+
+  const lede = page.locator('.powder-lede');
+  // The page loads on the tuned constants, whose own note calls them
+  // arbitrary. The lede used to end "not numbers invented for a game", which
+  // contradicted that note three panels away.
+  await expect(lede).not.toContainText(/not numbers invented for a game/i);
+  await expect(lede).toContainText(/start tuned/i);
+  await expect(lede).toContainText(/Brunel/);
+
+  // And the note it must stay consistent with is the one on screen by default.
+  await expect(page.locator('.powder-model-note')).toContainText(/[Aa]rbitrary constants/);
+});
+
+test('the powder lab is reachable through Lab from the homepage', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.bh-footer').getByRole('link', { name: 'Lab', exact: true }).click();
+  await page.getByRole('link', { name: /Neuro Powder Lab/ }).click();
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+  await expect(page).toHaveURL(/\/lab\/powder$/);
+});
+
+test('Arcade links back to the Lab index and powder experiment', async ({ page }) => {
+  await page.goto('/arcade');
+  await page.locator('.bh-footer').getByRole('link', { name: 'Lab', exact: true }).click();
+  await page.getByRole('link', { name: /Neuro Powder Lab/ }).click();
+  await expect(page.getByTestId('powder-lab')).toBeVisible();
+});
+
+test('powder lab objectives are earned by building, not handed out', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  const panel = page.getByTestId('powder-missions');
+  await expect(panel).toBeVisible();
+
+  // Clear first: nothing on the grid means nothing can have been earned.
+  await page.getByTestId('powder-clear').click();
+  const spark = panel.locator('[data-mission="first-spark"]');
+  const dopamine = panel.locator('[data-mission="dopamine"]');
+  await expect(spark).toHaveAttribute('data-complete', 'false');
+
+  // Draw a neuron and stimulate it. That, and only that, should complete it.
+  await page.locator('.powder-swatch[data-material="10"]').click(); // Neuro
+  const canvas = page.getByTestId('powder-canvas');
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.4);
+  await page.getByTestId('powder-stimulate').click();
+
+  await expect(spark).toHaveAttribute('data-complete', 'true', { timeout: 20_000 });
+  // Nothing was drawn for this one, so it must still be outstanding.
+  await expect(dopamine).toHaveAttribute('data-complete', 'false');
+
+  // Progress is progress, not a drawing: it survives Clear and a reload.
+  await page.getByTestId('powder-clear').click();
+  await expect(spark).toHaveAttribute('data-complete', 'true');
+  await page.goto('/lab/powder');
+  await expect(
+    page.getByTestId('powder-missions').locator('[data-mission="first-spark"]'),
+  ).toHaveAttribute('data-complete', 'true');
+});
+
+test('the powder lab measures its own firing regime, and says when it will not', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+  const readout = page.getByTestId('powder-regime-label');
+
+  // Game feel: the dimensionless statistics are measured, but a rate in hertz
+  // and a calibrated regime label are both withheld, and the page says why.
+  await expect(readout).toContainText(/no duration/, { timeout: 30_000 });
+  await expect(page.getByTestId('powder-regime')).toContainText('—'); // rate, withheld
+
+  // Real model: the opening scene has enough neurons firing to classify.
+  await page.getByTestId('powder-model-real').click();
+  await expect(readout).toContainText(
+    /Asynchronous|Synchronous|Silent/,
+    { timeout: 45_000 },
+  );
+
+  // Whatever it landed on, the numbers behind it have to be real numbers.
+  const panel = (await page.getByTestId('powder-regime').textContent()) || '';
+  expect(panel).toMatch(/CV of ISI/);
+  expect(panel).not.toMatch(/NaN|undefined/);
+});
+
+test('drawing in the powder lab puts material on the grid', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  // Clear first so the count reflects only what this test drew.
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze so nothing falls away
+
+  const canvas = page.getByTestId('powder-canvas');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.35, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-pause').click(); // resume so stats publish
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    const particles = Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0);
+    expect(particles).toBeGreaterThan(0);
+  }).toPass({ timeout: 15_000 });
+});
+
+test('a powder lab link carries the whole grid, with no server involved', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze, so the shared grid is exactly what was drawn
+
+  // Wall does not fall, so the grid is stable enough to compare across a reload.
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  const canvas = page.getByTestId('powder-canvas');
+  // On the narrow viewport the palette pushes the canvas below the fold, and
+  // page.mouse works in viewport coordinates — without this the drag lands on
+  // nothing and the test fails two steps later for the wrong reason.
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0)).toBeGreaterThan(50);
+  }).toPass({ timeout: 10_000 });
+
+  await page.getByTestId('powder-share').click();
+  await expect(page).toHaveURL(/[?&]grid=p1%3A240x160%3A/);
+  const shared = page.url();
+
+  // A fresh load of that URL restores the drawing rather than the demo scene.
+  await page.goto(shared);
+  await expect(page.getByTestId('powder-lab')).toContainText('Loaded a shared grid.');
+  await page.getByTestId('powder-pause').click();
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Particles\s*(\d+)/.exec(text)?.[1] ?? 0)).toBeGreaterThan(50);
+    // The demo scene is full of synapses; a wall line has none.
+    expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
+  }).toPass({ timeout: 15_000 });
+});
+
+test('a powder lab drawing survives a reload through the local save slot', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/lab/powder');
+  await expect(page.getByTestId('powder-canvas')).toBeVisible();
+
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click();
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  await page.getByTestId('powder-canvas').scrollIntoViewIfNeeded();
+  const box = (await page.getByTestId('powder-canvas').boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.6, { steps: 10 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-save').click();
+  await expect(page.getByTestId('powder-lab')).toContainText('Saved to this browser.');
+
+  await page.goto('/lab/powder');
+  await page.getByTestId('powder-load').click();
+  await expect(page.getByTestId('powder-lab')).toContainText('Restored your saved grid.');
+  await expect(async () => {
+    const text = (await page.getByTestId('powder-hud').textContent()) || '';
+    expect(Number(/Synapses\s*(\d+)/.exec(text)?.[1] ?? 999)).toBe(0);
+  }).toPass({ timeout: 15_000 });
+});
+
+test('public navigation contains no paid action before the model gate', async ({ page }) => {
+  for (const path of ['/', '/office', '/arcade', '/lab']) {
+    await page.goto(path); await expect(page.locator('.public-nav')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Pricing', exact: true })).toHaveAttribute('href', '/arena/#campaigns');
+    await expect(page.getByRole('link', { name: /Buy now|Checkout|Purchase/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Buy now|Checkout|Upgrade|Pro \/ Pilot/ })).toHaveCount(0);
+  }
+});
+
+test('Arcade exposes the same primary destinations at every breakpoint', async ({ page }) => {
+  await page.goto('/arcade');
+  await expect(page.getByRole('navigation', { name: 'Main navigation', exact: true }).locator('> a')).toHaveText(['Robot arcade', 'Pricing']);
+});
+
+test('Lab overflow closes on Escape and outside click', async ({ page }) => {
+  await page.goto('/arcade');
+  const overflow = page.locator('.public-overflow');
+  await overflow.locator('summary').click(); await expect(overflow).toHaveAttribute('open', '');
+  await page.keyboard.press('Escape'); await expect(overflow).not.toHaveAttribute('open', '');
+  await overflow.locator('summary').click(); await page.getByRole('heading', { name: 'Arcade', exact: true }).click();
+  await expect(overflow).not.toHaveAttribute('open', '');
+});
+
+test('old app links arrive at Review without pricing tiers', async ({ page }) => {
+  await page.goto('/app'); await expect(page.getByTestId('review-workbench')).toBeVisible();
+  await expect(page.getByTestId('pricing-workspace')).toHaveCount(0);
+});
+
+test('Arcade has no email capture or invented customer proof', async ({ page }) => {
+  await page.goto('/arcade'); await expect(page.getByRole('heading', { name: 'Arcade', exact: true })).toBeVisible();
+  await expect(page.getByTestId('lead-form')).toHaveCount(0);
+  await expect(page.locator('input[type="email"]')).toHaveCount(0);
+});
+
+test('Review offers local work without a signup capture', async ({ page }) => {
+  await page.goto('/office'); await expect(page.getByTestId('review-workbench')).toBeVisible();
+  await expect(page.locator('input[type="email"]')).toHaveCount(0);
+});
+
+test('real interaction reaches the analytics sink, and carries no pasted text', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // track() forwarded to VITE_ANALYTICS_URL, which was unset, so every call site
+  // in the app fed a function that sent nothing anywhere. It now defaults to
+  // this app's own /api/events. This asserts the wire end to end — a real click
+  // in a real browser producing a real request — because the previous failure
+  // was invisible from inside the app.
+  const posted: any[] = [];
+  await page.route('**/api/events', async (route) => {
+    try {
+      posted.push(JSON.parse(route.request().postData() || '{}'));
+    } catch {
+      posted.push({ unparseable: true });
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/arcade');
+  await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_landing_viewed');
+
+  // A lab click is one of the sixteen names the allowlist used to drop on the
+  // floor, so this is the specific regression under test.
+  const labButton = page.getByRole('tab', { name: /Mind-Hack Autopsy/ });
+  await labButton.scrollIntoViewIfNeeded();
+  await labButton.click();
+  await expect.poll(() => posted.map((event) => event.event)).toContain('gaugegap_lab_selected');
+
+  // Every event carries a path and a timestamp, and none of them carries the
+  // content fields the product exists to analyse.
+  for (const event of posted) {
+    expect(typeof event.path).toBe('string');
+    expect(event.at).toBeTruthy();
+    for (const field of ['content', 'rawContent', 'text']) {
+      expect(event.properties?.[field]).toBeUndefined();
+    }
+  }
+});
+
+test('the evidence page publishes the engine\'s own worst number, computed live', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // STRANGER_CLIENT_PASS.md carried "publish one real case study" as an open
+  // item and none existed. This is it, and the property that makes it worth
+  // anything is that every figure is computed in the browser from the same
+  // modules the product runs on — so it cannot drift from the code.
+  await page.goto('/evidence');
+  await expect(page.getByTestId('evidence-page')).toBeVisible();
+
+  // All 17 held-out passages are shown, not a flattering subset.
+  const passages = page.getByTestId('evidence-passage');
+  await expect(passages).toHaveCount(17);
+
+  // The headline is the generalisation gap, and it must run the unflattering
+  // way: worse on text the detector never saw. If these two were ever equal the
+  // holdout would have been contaminated.
+  const figures = page.getByTestId('evidence-headline').locator('.evidence-figure strong');
+  const inSample = Number(await figures.nth(0).innerText());
+  const heldOut = Number(await figures.nth(1).innerText());
+  expect(Number.isFinite(inSample)).toBe(true);
+  expect(heldOut).toBeLessThan(inSample);
+
+  // The verdict sentence quotes the same figures rather than restating them.
+  await expect(page.getByTestId('evidence-verdict')).toContainText(String(heldOut));
+
+  // Misses and false alarms are on the page, not just the wins.
+  await expect(page.getByTestId('evidence-missed').first()).toBeVisible();
+  await expect(page.getByTestId('evidence-falsealarm').first()).toBeVisible();
+
+  // Every detection names the phrase that triggered it, so a reader can check
+  // it against the passage instead of trusting a score.
+  const firstDetection = page.locator('.evidence-matches').first();
+  await expect(firstDetection).toContainText(/triggered by/);
+
+  // This is the page meant to be forwarded to someone else's accessibility
+  // team, so it does not get to be the one page that fails.
+  const audit = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(audit.violations).toEqual([]);
+});
+
+test('the evidence page is reachable from the landing page and has its own social card', async ({ page, request }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Inspect evidence', exact: true }).click();
+  await expect(page.getByTestId('evidence-page')).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe('/evidence');
+
+  // Scrapers do not run JavaScript, so the card has to be in the served HTML.
+  const html = await (await request.get('/evidence')).text();
+  expect(html).toContain('never seen');
+  const og = html.match(/<meta property="og:description" content="([^"]*)"/)?.[1] || '';
+  // The description quotes the measured figures, so it must carry decimals
+  // rather than an adjective.
+  expect(og).toMatch(/0\.\d+/);
+});
+
+// --- Discovery and sharing surfaces -----------------------------------------
+//
+// These assert what the server sends, not what React renders, so they only mean
+// anything against a production server — same as the social-card test above.
+// Run them with PLAYWRIGHT_BASE_URL pointed at `npm start`; against the dev
+// server Vite serves index.html untouched and they will fail for that reason
+// rather than for a real one.
+
+test('the sitemap lists every route the app serves', async ({ request }) => {
+  const response = await request.get('/sitemap.xml');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('xml');
+
+  const xml = await response.text();
+  for (const path of ['/', '/lab', '/office', '/evidence', '/lab/powder']) {
+    expect(xml).toContain(`<loc>https://www.brainsnn.com${path}</loc>`);
+  }
+});
+
+test('robots.txt points crawlers at the sitemap and keeps them out of the API', async ({ request }) => {
+  const body = await (await request.get('/robots.txt')).text();
+  expect(body).toContain('Sitemap: https://www.brainsnn.com/sitemap.xml');
+  expect(body).toContain('Disallow: /api/');
+  // Assistant crawlers are a channel this site wants, named explicitly so the
+  // answer does not change silently when a default does.
+  expect(body).toContain('GPTBot');
+  expect(body).toContain('ClaudeBot');
+});
+
+test('every route serves content a crawler can read without running JavaScript', async ({ request }) => {
+  const headings = new Set<string>();
+
+  for (const path of ['/', '/lab', '/office', '/evidence', '/lab/powder']) {
+    const html = await (await request.get(path)).text();
+    const heading = html.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1] || '';
+    expect(heading.length).toBeGreaterThan(2);
+    headings.add(heading);
+
+    // Inside #root, so React replaces it on mount rather than leaving it under
+    // the running app.
+    expect(html).toContain('<div id="root"><main data-prerendered="1"');
+  }
+
+  // The homepage is the one that regressed before: express.static answered "/"
+  // off disk, so it never reached the per-route rendering at all.
+  expect(headings.size).toBe(5);
+});
+
+test('a shared circuit previews as itself rather than as the site card', async ({ page, request }) => {
+  test.setTimeout(90_000);
+
+  await page.goto('/lab/powder');
+  const canvas = page.getByTestId('powder-canvas');
+  await expect(canvas).toBeVisible();
+  await page.getByTestId('powder-clear').click();
+  await page.getByTestId('powder-pause').click(); // freeze, so the card shows what was drawn
+
+  // Wall, because it does not fall: the card has to match the link.
+  await page.locator('.powder-swatch[data-material="3"]').click();
+  await canvas.scrollIntoViewIfNeeded();
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.5, { steps: 10 });
+  await page.mouse.up();
+
+  await page.getByTestId('powder-share').click();
+  await expect(page).toHaveURL(/[?&]grid=p1%3A240x160%3A/);
+
+  const shared = new URL(page.url());
+  // The link carries its own source tag, so a visit through it is not
+  // indistinguishable from someone typing the URL.
+  expect(shared.searchParams.get('s')).toBe('lab');
+  const grid = shared.searchParams.get('grid')!;
+
+  const html = await (await request.get(`/lab?grid=${encodeURIComponent(grid)}`)).text();
+  const image = html.match(/<meta property="og:image" content="([^"]*)"/)?.[1] || '';
+  expect(image).toContain('/api/og/lab?grid=');
+
+  const card = await request.get(`/api/og/lab?grid=${encodeURIComponent(grid)}`);
+  expect(card.status()).toBe(200);
+  expect(card.headers()['content-type']).toContain('image/png');
+
+  const bytes = Buffer.from(await card.body());
+  expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  expect(bytes.readUInt32BE(16)).toBe(1200); // IHDR width
+  expect(bytes.readUInt32BE(20)).toBe(630); // IHDR height
+});
+
+test('a card is refused for a link that does not carry a grid', async ({ request }) => {
+  for (const grid of ['', 'garbage', 'p1:240x160:truncated']) {
+    const response = await request.get(`/api/og/lab?grid=${encodeURIComponent(grid)}`);
+    expect(response.status()).toBe(404);
+  }
+});
+
+test('a visit through a tagged link reports where it came from, and keeps reporting it', async ({ page }) => {
+  test.setTimeout(90_000);
+
+  // Attribution is the part that makes every other traffic change checkable, so
+  // it is asserted the same way the sink itself is: a real navigation in a real
+  // browser producing a real request.
+  const posted: any[] = [];
+  await page.route('**/api/events', async (route) => {
+    try {
+      posted.push(JSON.parse(route.request().postData() || '{}'));
+    } catch {
+      posted.push({ unparseable: true });
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/lab?s=lab&utm_source=hn&utm_medium=social');
+  await expect.poll(() => posted.map((event) => event.event)).toContain('visit');
+
+  const visit = posted.find((event) => event.event === 'visit');
+  expect(visit.from.share).toBe('lab');
+  expect(visit.from.utm_source).toBe('hn');
+  expect(visit.from.utm_medium).toBe('social');
+
+  // First touch. A second page load with no tags at all must still report the
+  // original source — otherwise a visitor who arrives from a shared link and
+  // then clicks anything becomes "direct", which is how a referral channel
+  // disappears from its own report.
+  posted.length = 0;
+  await page.goto('/');
+  await expect.poll(() => posted.length).toBeGreaterThan(0);
+  for (const event of posted) {
+    expect(event.from?.utm_source).toBe('hn');
+    expect(event.from?.share).toBe('lab');
+  }
+
+  // Host only, ever. No value may carry a path or a query — on a search engine
+  // that query is the visitor's own words.
+  for (const event of posted) {
+    for (const value of Object.values(event.from || {})) {
+      expect(String(value)).not.toContain('/');
+      expect(String(value)).not.toContain('?');
+    }
+  }
+});
+
+test('one-click fixes edit the draft and the copied result contains no coaching text', async ({ page }) => {
+  test.setTimeout(90_000);
+  const draft = 'Last chance to book a demo today. Act now before prices double. We measured a 42% drop in onboarding cost across 18 pilot customers.';
+
+  await page.goto('/app');
+  await page.getByLabel('Passage to review').fill(draft);
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
+
+  // The results rail leads with the count rather than a vague next step.
+  await page.getByRole('button', { name: 'Edit this draft', exact: true }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+
+  const editor = page.getByTestId('synapse-workspace').getByRole('textbox').nth(1);
+  await expect(editor).toHaveValue(draft);
+
+  // Default goal is "Build trust", which owns the structural fix only — the
+  // pressure-phrase swaps belong to "Reduce manipulation". A goal offering
+  // every fix regardless would make the selector meaningless.
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+  await expect(editor).toHaveValue(/^We measured a 42% drop/);
+
+  // Undo restores the original exactly, because the draft is rebuilt from the
+  // source rather than reverse-edited.
+  await page.getByRole('button', { name: /^Undo:/ }).first().click();
+  await expect(editor).toHaveValue(draft);
+
+  // SegmentedControl renders its options as role="radio", not buttons.
+  await page.getByRole('radio', { name: 'Reduce manipulation' }).click();
+  await page.getByRole('button', { name: /Apply all/ }).click();
+  const fixed = await editor.inputValue();
+  expect(fixed).not.toMatch(/last chance/i);
+  expect(fixed).not.toMatch(/act now/i);
+
+  // The regression that motivated this feature: the rewrite used to prepend and
+  // append instructions addressed to the author, so anyone who copied the
+  // result shipped our coaching notes to their own reader.
+  expect(fixed).not.toMatch(/before you publish/i);
+  expect(fixed).not.toMatch(/Here is the clearest reason/i);
+  expect(fixed).not.toMatch(/Add one concrete proof point/i);
+  // No sentence is invented: the fixed draft has the same sentence count.
+  expect((fixed.match(/[.!?]/g) || []).length).toBe((draft.match(/[.!?]/g) || []).length);
+
+  await page.getByRole('button', { name: /^Reset$/ }).click();
+  await expect(editor).toHaveValue(draft);
+});
+
+test('the diff shows a sentence move, which a word-set diff cannot', async ({ page }) => {
+  test.setTimeout(90_000);
+  // "Move the proof in front of the ask" changes no words, so the previous
+  // Set-based diff rendered the change completely unmarked: the user applied
+  // the headline fix and "What changed" showed nothing changed.
+  const draft = 'Book a call with our team today. We measured a 42% drop in onboarding cost across 18 pilot customers.';
+
+  await page.goto('/app');
+  await page.getByLabel('Passage to review').fill(draft);
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
+
+  // The next step leads the rail rather than sitting under four scorecards.
+  await page.getByRole('button', { name: 'Edit this draft', exact: true }).click();
+  await expect(page.getByTestId('synapse-workspace')).toBeVisible();
+
+  await page.getByRole('button', { name: /^Apply: Move the proof/ }).click();
+
+  const diff = page.locator('.before-after-diff');
+  await expect(diff).toBeVisible();
+  await expect(diff.getByText('2 sentences moved')).toBeVisible();
+  await expect(diff.locator('.diff-moved').first()).toBeVisible();
+});
+
+test('the improve screen leads with one action, not six', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/app');
+  await page.getByLabel('Passage to review').fill('Last chance to book a demo today. Act now before prices double.');
+  await page.getByRole('button', { name: 'Review passage', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Passage results' })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit this draft', exact: true }).click();
+
+  await expect(page.getByRole('button', { name: /Copy final draft/ })).toBeVisible();
+  // The review workflow is folded away, not deleted — still reachable.
+  await expect(page.getByRole('button', { name: /Mark for approval/ })).toBeHidden();
+  await page.getByText('Send this through review').click();
+  await expect(page.getByRole('button', { name: /Mark for approval/ })).toBeVisible();
+});

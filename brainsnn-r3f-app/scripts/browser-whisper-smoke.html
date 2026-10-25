@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BrainSNN Whisper browser smoke</title>
+</head>
+<body data-status="pending">
+  <h1>BrainSNN browser-local Whisper smoke</h1>
+  <pre id="log">starting…</pre>
+  <script type="module">
+    import { transcribeAudioLocally } from '/src/lib/localTranscription.js';
+
+    const log = document.querySelector('#log');
+    const TEST_AUDIO_URL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav';
+
+    function write(message) {
+      log.textContent += `\n${message}`;
+      console.log(`[whisper-smoke] ${message}`);
+    }
+
+    function fail(error) {
+      const message = error?.stack || error?.message || String(error);
+      document.body.dataset.status = 'fail';
+      document.body.dataset.error = String(error?.message || error || 'unknown failure').slice(0, 500);
+      write(`FAIL: ${message}`);
+    }
+
+    function parseWav(arrayBuffer) {
+      const view = new DataView(arrayBuffer);
+      const text = (offset, length) => String.fromCharCode(...new Uint8Array(arrayBuffer, offset, length));
+      if (text(0, 4) !== 'RIFF' || text(8, 4) !== 'WAVE') throw new Error('Smoke fixture is not a RIFF/WAVE file.');
+
+      let offset = 12;
+      let format = null;
+      let dataOffset = -1;
+      let dataSize = 0;
+      while (offset + 8 <= view.byteLength) {
+        const id = text(offset, 4);
+        const size = view.getUint32(offset + 4, true);
+        const payload = offset + 8;
+        if (id === 'fmt ') {
+          format = {
+            audioFormat: view.getUint16(payload, true),
+            channels: view.getUint16(payload + 2, true),
+            sampleRate: view.getUint32(payload + 4, true),
+            bitsPerSample: view.getUint16(payload + 14, true),
+          };
+        } else if (id === 'data') {
+          dataOffset = payload;
+          dataSize = size;
+          break;
+        }
+        offset = payload + size + (size % 2);
+      }
+
+      if (!format || dataOffset < 0) throw new Error('WAV fmt/data chunks were not found.');
+      const bytesPerSample = format.bitsPerSample / 8;
+      const frameBytes = bytesPerSample * format.channels;
+      const frameCount = Math.floor(dataSize / frameBytes);
+      const mono = new Float32Array(frameCount);
+
+      function readSample(position) {
+        if (format.audioFormat === 1 && format.bitsPerSample === 16) return view.getInt16(position, true) / 32768;
+        if (format.audioFormat === 1 && format.bitsPerSample === 24) {
+          let value = view.getUint8(position) | (view.getUint8(position + 1) << 8) | (view.getUint8(position + 2) << 16);
+          if (value & 0x800000) value |= 0xff000000;
+          return value / 8388608;
+        }
+        if (format.audioFormat === 1 && format.bitsPerSample === 32) return view.getInt32(position, true) / 2147483648;
+        if (format.audioFormat === 3 && format.bitsPerSample === 32) return view.getFloat32(position, true);
+        throw new Error(`Unsupported WAV format ${format.audioFormat}/${format.bitsPerSample}-bit.`);
+      }
+
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        let sum = 0;
+        for (let channel = 0; channel < format.channels; channel += 1) {
+          sum += readSample(dataOffset + (frame * frameBytes) + (channel * bytesPerSample));
+        }
+        mono[frame] = sum / format.channels;
+      }
+      return { samples: mono, sampleRate: format.sampleRate, duration: frameCount / format.sampleRate };
+    }
+
+    async function run() {
+      write(`fetching speech fixture: ${TEST_AUDIO_URL}`);
+      const response = await fetch(TEST_AUDIO_URL);
+      if (!response.ok) throw new Error(`Speech fixture fetch failed: HTTP ${response.status}`);
+      const decoded = parseWav(await response.arrayBuffer());
+      write(`decoded ${decoded.duration.toFixed(2)}s @ ${decoded.sampleRate} Hz`);
+
+      const progress = [];
+      const result = await transcribeAudioLocally({
+        samples: decoded.samples,
+        sampleRate: decoded.sampleRate,
+        duration: decoded.duration,
+        preferWebGPU: false,
+        onProgress: (event) => {
+          progress.push(event.stage);
+          const percent = event.fraction == null ? '' : ` ${Math.round(event.fraction * 100)}%`;
+          write(`${event.stage}${percent}${event.file ? ` · ${event.file}` : ''}`);
+        },
+      });
+
+      const normalized = result.text.toLowerCase();
+      const keywordPass = normalized.includes('country') && (normalized.includes('american') || normalized.includes('fellow'));
+      const checks = {
+        statusReady: result.status === 'ready',
+        wasmDevice: result.device === 'wasm',
+        wordTiming: result.timing === 'model-word-timestamps',
+        wordCount: result.words.length >= 6,
+        segmentCount: result.segments.length >= 1,
+        expectedSpeech: keywordPass,
+        rawAudioUploadedFalse: result.rawAudioUploaded === false,
+        progressComplete: progress.includes('complete'),
+      };
+
+      write(`transcript: ${result.text}`);
+      write(`timed text: ${result.timedText.replace(/\n/g, ' | ')}`);
+      write(`checks: ${JSON.stringify(checks)}`);
+      const failed = Object.entries(checks).filter(([, value]) => !value).map(([key]) => key);
+      if (failed.length) throw new Error(`Smoke assertions failed: ${failed.join(', ')}`);
+
+      document.body.dataset.status = 'pass';
+      document.body.dataset.words = String(result.words.length);
+      document.body.dataset.segments = String(result.segments.length);
+      document.body.dataset.device = result.device;
+      write('PASS');
+    }
+
+    const watchdog = window.setTimeout(() => fail(new Error('Browser smoke timed out after 5 minutes.')), 300000);
+    run().then(() => window.clearTimeout(watchdog)).catch((error) => {
+      window.clearTimeout(watchdog);
+      fail(error);
+    });
+  </script>
+</body>
+</html>
