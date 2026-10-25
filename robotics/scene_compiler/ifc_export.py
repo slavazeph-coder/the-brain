@@ -116,10 +116,6 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
     if scene.get('units') != 'm':
         raise ValueError(IFC_NEEDS_METRES)
     openings = _reviewed_openings(scene)
-    # GlobalIds are unique per model: seeded with the building model's ID when the scene has one (two captures never
-    # share an ID), and with element IDs rather than names, which follow the compiler's order.
-    model = (scene.get('model') or {}).get('id')
-    gid = (lambda seed: ifc_guid(f'{model}:{seed}')) if model else ifc_guid
     w = _Writer()
     origin = w.add('IFCCARTESIANPOINT((0.,0.,0.))')
     z_axis, x_axis = w.add('IFCDIRECTION((0.,0.,1.))'), w.add('IFCDIRECTION((1.,0.,0.))')
@@ -129,16 +125,16 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
     body = w.add(f"IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,{context},$,.MODEL_VIEW.,$)")
     units = [w.add(f'IFCSIUNIT(*,.{kind}.,$,.{unit}.)') for kind, unit in
              [('LENGTHUNIT', 'METRE'), ('AREAUNIT', 'SQUARE_METRE'), ('VOLUMEUNIT', 'CUBIC_METRE'), ('PLANEANGLEUNIT', 'RADIAN')]]
-    project = w.add(f"IFCPROJECT('{gid('project')}',$,{label(name)},{label('Compiled by BrainSNN World Builder from a reconstruction; not a surveyed model.')},"
+    project = w.add(f"IFCPROJECT('{ifc_guid('project')}',$,{label(name)},{label('Compiled by BrainSNN World Builder from a reconstruction; not a surveyed model.')},"
                     f"$,$,$,({context}),{w.add('IFCUNITASSIGNMENT((' + ','.join(units) + '))')})")
     site_place = w.add(f'IFCLOCALPLACEMENT($,{world})')
-    site = w.add(f"IFCSITE('{gid('site')}',$,'Site',$,$,{site_place},$,$,.ELEMENT.,$,$,$,$,$)")
+    site = w.add(f"IFCSITE('{ifc_guid('site')}',$,'Site',$,$,{site_place},$,$,.ELEMENT.,$,$,$,$,$)")
     building_place = w.add(f'IFCLOCALPLACEMENT({site_place},{world})')
-    building = w.add(f"IFCBUILDING('{gid('building')}',$,'Building',$,$,{building_place},$,$,.ELEMENT.,$,$,$)")
+    building = w.add(f"IFCBUILDING('{ifc_guid('building')}',$,'Building',$,$,{building_place},$,$,.ELEMENT.,$,$,$)")
     storey_place = w.add(f'IFCLOCALPLACEMENT({building_place},{world})')
-    storey = w.add(f"IFCBUILDINGSTOREY('{gid('storey')}',$,'Scanned floor',$,$,{storey_place},$,$,.ELEMENT.,0.)")
+    storey = w.add(f"IFCBUILDINGSTOREY('{ifc_guid('storey')}',$,'Scanned floor',$,$,{storey_place},$,$,.ELEMENT.,0.)")
     for i, (parent, child) in enumerate([(project, site), (site, building), (building, storey)]):
-        w.add(f"IFCRELAGGREGATES('{gid(f'aggregate-{i}')}',$,$,$,{parent},({child}))")
+        w.add(f"IFCRELAGGREGATES('{ifc_guid(f'aggregate-{i}')}',$,$,$,{parent},({child}))")
 
     def prism(cx, cy, z0, length, width, height, yaw=0.0, placement_parent=storey_place):
         """A rectangular prism centred on (cx, cy), from z0 up, its length rotated by yaw about Z."""
@@ -161,11 +157,11 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             literal = (f'IFCBOOLEAN(.{"T" if value else "F"}.)' if isinstance(value, bool) else f'IFCINTEGER({value})' if isinstance(value, int)
                        else f'IFCREAL({real(value)})' if isinstance(value, float) else f'IFCLABEL({label(value)})')
             props.append(w.add(f"IFCPROPERTYSINGLEVALUE({label(key)},$,{literal},$)"))
-        pset = w.add(f"IFCPROPERTYSET('{gid(seed + '-pset')}',$,'Pset_BrainSNN',$,({','.join(props)}))")
-        w.add(f"IFCRELDEFINESBYPROPERTIES('{gid(seed + '-rel')}',$,$,$,({element}),{pset})")
+        pset = w.add(f"IFCPROPERTYSET('{ifc_guid(seed + '-pset')}',$,'Pset_BrainSNN',$,({','.join(props)}))")
+        w.add(f"IFCRELDEFINESBYPROPERTIES('{ifc_guid(seed + '-rel')}',$,$,$,({element}),{pset})")
 
     scale = scene.get('scale') if isinstance(scene.get('scale'), dict) else {}
-    properties(project, 'project', {'ModelId': model, 'SceneSchema': scene.get('schema'), 'Units': 'm', 'ScaleSource': scale.get('source', 'unknown'),
+    properties(project, 'project', {'SceneSchema': scene.get('schema'), 'Units': 'm', 'ScaleSource': scale.get('source', 'unknown'),
                                     'MetresPerUnit': scale.get('metresPerUnit'), 'MeasuredDistanceMetres': scale.get('distance'),
                                     'SelfReported': scale.get('selfReported', True), 'MetricVerified': False})
     elements, counts = [], {'walls': 0, 'slabs': 0, 'objects': 0, 'separated': 0, 'unknownRuns': 0}
@@ -174,23 +170,23 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             continue  # unplaced detections have no geometry; they stay in scene.json with their reason
         (cx, cy, cz), (sx, sy, sz) = obj['centre'], obj['size']
         placement, solid = prism(cx, -cz, cy - sy / 2, sx, sz, sy, yaw=-math.radians(obj.get('yaw_degrees', 0)))
-        seed = 'object-' + str(obj.get('id') or obj.get('name'))
+        seed = 'object-' + str(obj.get('name'))
         separated, named = obj.get('kind') == 'separated', obj.get('label') not in (None, 'object')
         if obj.get('label') == 'floor':
-            element = w.add(f"IFCSLAB('{gid(seed)}',$,{label(obj.get('name', 'floor'))},$,$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
+            element = w.add(f"IFCSLAB('{ifc_guid(seed)}',$,{label(obj.get('name', 'floor'))},$,$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
         elif separated and not named:
             # A measured cluster of points with no name: a proxy, not furniture, because nothing says what it is.
             title = str(obj.get('name', 'object')).replace('_', ' ').capitalize()
-            element = w.add(f"IFCBUILDINGELEMENTPROXY('{gid(seed)}',$,{label(title)},{label('Separated from the reconstructed points; not identified.')},"
+            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(title)},{label('Separated from the reconstructed points; not identified.')},"
                             f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
         elif separated and obj.get('ifcClass') == 'IfcBuildingElementProxy':
             # Named by a model, but not furniture (a plant, a lamp, a radiator): a proxy that carries the suggested name.
-            element = w.add(f"IFCBUILDINGELEMENTPROXY('{gid(seed)}',$,{label(obj['label'])},{label('Separated from the reconstructed points; name suggested by a model, not reviewed.')},"
+            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(obj['label'])},{label('Separated from the reconstructed points; name suggested by a model, not reviewed.')},"
                             f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
         else:
-            element = w.add(f"IFCFURNITURE('{gid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
+            element = w.add(f"IFCFURNITURE('{ifc_guid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
             counts['separated' if separated else 'objects'] += 1
-        properties(element, seed, {'ElementId': obj.get('id'), 'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
+        properties(element, seed, {'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
                                    'Detector': obj.get('detector') or obj.get('labelSource'), 'Separated': True if separated else None,
                                    'LabelConfidence': obj.get('labelConfidence'), 'LabelReviewed': obj.get('labelReviewed'),
                                    'Base': obj.get('base'),
@@ -203,9 +199,9 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             continue
         (cx, cy, cz), (length, height, thickness) = wall['centre'], wall['size']
         placement, solid = prism(cx, -cz, cy - height / 2, length, thickness, height, yaw=-math.radians(wall.get('yaw_degrees', 0)))
-        seed = 'wall-' + str(wall.get('id') or wall.get('name'))
-        element = w.add(f"IFCWALL('{gid(seed)}',$,{label(wall.get('name', 'wall'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
-        properties(element, seed, {'ElementId': wall.get('id'), 'Provenance': wall.get('provenance', 'observed'), 'Label': 'wall', 'SupportPoints': wall.get('support_points')})
+        seed = 'wall-' + str(wall.get('name'))
+        element = w.add(f"IFCWALL('{ifc_guid(seed)}',$,{label(wall.get('name', 'wall'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
+        properties(element, seed, {'Provenance': wall.get('provenance', 'observed'), 'Label': 'wall', 'SupportPoints': wall.get('support_points')})
         wall_refs[wall['name']] = (element, placement)
         elements.append(element); counts['walls'] += 1
     if openings:
@@ -218,10 +214,10 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         placement, solid = prism(ox, 0, opening['sillMeters'], opening['widthMeters'], thickness + .02,
                                  opening['heightMeters'], placement_parent=host_place)
         seed = 'opening-' + opening['id']
-        element = w.add(f"IFCOPENINGELEMENT('{gid(seed)}',$,{label(opening['id'])},"
+        element = w.add(f"IFCOPENINGELEMENT('{ifc_guid(seed)}',$,{label(opening['id'])},"
                         f"{label('Operator-reviewed opening; dimensions and clearance not independently verified.')},"
                         f"$,{placement},{shape([solid])},$,.OPENING.)")
-        w.add(f"IFCRELVOIDSELEMENT('{gid(seed + '-voids')}',$,$,$,{host_element},{element})")
+        w.add(f"IFCRELVOIDSELEMENT('{ifc_guid(seed + '-voids')}',$,$,$,{host_element},{element})")
         properties(element, seed, {'Provenance': 'operator-reviewed', 'ReviewSelfReported': True, 'Reviewed': True,
                                    'HostWall': opening['hostWall'], 'WidthMetres': float(opening['widthMeters']),
                                    'HeightMetres': float(opening['heightMeters']), 'SillMetres': float(opening['sillMeters']),
@@ -231,11 +227,11 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             door_place, door_solid = prism(0, 0, 0, opening['widthMeters'], min(.05, thickness),
                                            opening['heightMeters'], placement_parent=placement)
             door_seed = 'door-' + opening['id']
-            door = w.add(f"IFCDOOR('{gid(door_seed)}',$,{label(opening['id'] + ' door')},"
+            door = w.add(f"IFCDOOR('{ifc_guid(door_seed)}',$,{label(opening['id'] + ' door')},"
                          f"{label('Closed reference leaf; handing, swing and physical passage not verified.')},"
                          f"$,{door_place},{shape([door_solid])},$,{real(opening['heightMeters'])},"
                          f"{real(opening['widthMeters'])},.DOOR.,.NOTDEFINED.,$)")
-            w.add(f"IFCRELFILLSELEMENT('{gid(door_seed + '-fills')}',$,$,$,{element},{door})")
+            w.add(f"IFCRELFILLSELEMENT('{ifc_guid(door_seed + '-fills')}',$,$,$,{element},{door})")
             properties(door, door_seed, {'Provenance': 'operator-reviewed', 'ReviewSelfReported': True,
                                          'Reviewed': True, 'LeafRepresentation': 'closed-reference',
                                          'SwingVerified': False, 'MetricVerified': False, 'ClearanceVerified': False})
@@ -249,12 +245,12 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
             position = w.add(f'IFCAXIS2PLACEMENT3D({point},{z_axis},{x_axis})')
             profile = w.add(f"IFCRECTANGLEPROFILEDEF(.AREA.,$,{origin2d},{real(x1 - x0)},{real(c)})")
             solids.append(w.add(f'IFCEXTRUDEDAREASOLID({profile},{position},{z_axis},{real(UNKNOWN_HEIGHT)})'))
-        element = w.add(f"IFCBUILDINGELEMENTPROXY('{gid('unknown-space')}',$,'Unknown space (not free)',"
+        element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid('unknown-space')}',$,'Unknown space (not free)',"
                         f"{label('Floor area no reconstructed point reached. Not evidence of free space.')},$,{storey_place},{shape(solids)},$,.NOTDEFINED.)")
         properties(element, 'unknown-space', {'Provenance': 'unknown', 'Label': 'unknown', 'Cells': len(scene.get('unknown', []))})
         elements.append(element); counts['unknownRuns'] = len(runs)
     if elements:
-        w.add(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('{gid('contained')}',$,$,$,({','.join(elements)}),{storey})")
+        w.add(f"IFCRELCONTAINEDINSPATIALSTRUCTURE('{ifc_guid('contained')}',$,$,$,({','.join(elements)}),{storey})")
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
     text = ['ISO-10303-21;', 'HEADER;', "FILE_DESCRIPTION(('ViewDefinition [ReferenceView_V1.2]'),'2;1');",
             f"FILE_NAME('scene.ifc','{stamp}',(''),('BrainSNN'),'BrainSNN scene compiler','BrainSNN World Builder','');",

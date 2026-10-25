@@ -8,19 +8,6 @@ Turns a World Builder hand-off into a simulation-ready scene, headless, with Ble
 Outputs: `scene.glb` (browser Arena), `scene.usda` (Isaac Sim / Omniverse; written directly because Ubuntu's Blender lacks the
 USD exporter), `scene.blend`, `scene.json` (every object with label, size, centre, provenance and support-point count).
 
-`building.json` (`brainsnn.building.v1`, written by `building_model.py`) is the model the exports describe, parameter by
-parameter:
-- **IDs.** The model ID comes from the cloud's points, so two captures never share one. An element's ID comes from the
-  model ID and its geometry, once. A recompile given `--previous-building` keeps each ID wherever the geometry still
-  matches (walls within 10° and 25 cm, objects at 30% plan overlap), whatever order the compiler finds them in. The rest
-  are listed as added and removed. Matching works within one frame: a recapture matches nothing until it is registered.
-- **Walls** are the observed face, base and height, with the thickness marked inferred and the centreline half a
-  thickness behind the face, away from the room.
-- **Openings** are hosted by wall ID, at an offset along the face from its start.
-- **Review state** carries over with an ID, and turns to `needs-review` once the element has moved more than 2 cm.
-
-`scene.json`'s records carry the same IDs, and IFC GlobalIds are seeded from them inside the model's namespace.
-
 `scene.ifc` (IFC4, metres, written by `ifc_export.py` without IfcOpenShell) follows the same rule for BIM tools: walls as `IfcWall`,
 the floor as `IfcSlab`, placed detections as `IfcFurniture`, unknown space as `IfcBuildingElementProxy`, provenance in `Pset_BrainSNN`.
 In metric scenes every cluster of points above the floor that is not a wall is separated and measured: walls are vertical planes found by

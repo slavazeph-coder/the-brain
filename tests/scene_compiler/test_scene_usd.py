@@ -121,7 +121,6 @@ class CompileScene(unittest.TestCase):
             out = Path(command[command.index('--out') + 1]); out.mkdir(parents=True, exist_ok=True)
             (out / 'scene.glb').write_bytes(b'glTF')
             (out / 'scene.json').write_text(json.dumps({'schema': 'brainsnn.scene.v1', 'usd': {'written': written}}))
-            (out / 'building.json').write_text('{}')
             if write_file: (out / 'scene.usda').write_text('#usda 1.0\n')
         return run
 
@@ -148,15 +147,9 @@ cloud, out = json.loads(Path(args[args.index("--cloud") + 1]).read_text()), Path
 out.mkdir(parents=True, exist_ok=True); metric = cloud["units"] == "m"
 (out / "scene.glb").write_bytes(b"glTF-stand-in")
 if metric: (out / "scene.usda").write_text("#usda 1.0\\n"); (out / "scene.ifc").write_text("ISO-10303-21;\\n")
-scene = {"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud["scale"],
-    "usd": {"written": metric}, "ifc": {"written": metric}, "counts": {"points": len(cloud["points"]), "walls": 0, "objects": 0, "unplaced": 0, "unknown_cells": 0}, "walls": []}
-# The building model is the real one: the stand-in only replaces Blender.
-sys.path.insert(0, "@COMPILER@"); import building_model
-prev = Path(args[args.index("--previous-building") + 1]) if "--previous-building" in args else None
-building = building_model.build(scene, cloud["points"], previous=json.loads(prev.read_text()) if prev else None)
-building_model.stamp(scene, building)
-(out / "scene.json").write_text(json.dumps(scene)); (out / "building.json").write_text(json.dumps(building))
-'''.replace("@COMPILER@", str(Path(__file__).resolve().parents[2] / "robotics" / "scene_compiler"))
+(out / "scene.json").write_text(json.dumps({"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud["scale"],
+    "usd": {"written": metric}, "ifc": {"written": metric}, "counts": {"points": len(cloud["points"]), "walls": 0, "objects": 0, "unplaced": 0, "unknown_cells": 0}, "walls": []}))
+'''
 
 
 def handoff(units="m", source_frame="colmap"):
@@ -183,7 +176,7 @@ class CloudHandoff(unittest.TestCase):
         self.assertEqual(evidence["handoff"]["scale"]["selfReported"], True)
         self.assertTrue(any("self-reported" in w for w in evidence["warnings"]))
         names = [a["name"] for a in json.loads((out / "manifest.json").read_text())["artifacts"]]
-        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.ifc", "building.json", "scene.json", "scene-usd.json", "scene-measurements.json", "arena-cloud.json"])
+        self.assertEqual(names, ["scene.glb", "scene.usda", "scene.ifc", "scene.json", "scene-usd.json", "scene-measurements.json", "arena-cloud.json"])
         report = json.loads((out / "scene-measurements.json").read_text())
         self.assertEqual(report["status"], "no-held-out")
         self.assertFalse(report["metric_verified"])
@@ -200,26 +193,6 @@ class CloudHandoff(unittest.TestCase):
         self.assertEqual((evidence["fit"]["written"], evidence["fit"]["within_5cm"], evidence["fit"]["misfits"]), (True, 1.0, []))
         self.assertEqual(json.loads((out / "fit-check.json").read_text())["points"], 100)
         self.assertEqual(json.loads((out / "scene.json").read_text())["fit"]["within_5cm"], 1.0, "the summary travels with the scene")
-
-    def test_a_recompile_of_a_scene_job_keeps_its_building_model_ids(self):
-        floor = ('"floor_y": 0, "objects": [{"name": "floor_observed", "label": "floor", "centre": [0.45, -0.01, 0.45], '
-                 '"size": [0.9, 0.02, 0.9], "min": [0, -0.02, 0], "max": [0.9, 0, 0.9]}], "walls": []}')
-        fake = FAKE_BLENDER.replace('"walls": []}', floor)
-        _, first = self.run_handoff(handoff("m"), fake=fake)
-        built = json.loads((first / "building.json").read_text())
-        self.assertIn({"name": "building.json", "kind": "model"}, json.loads((first / "manifest.json").read_text())["artifacts"])
-        d = Path(tempfile.mkdtemp()); blender = d / "blender"; blender.write_text(fake); blender.chmod(0o755)
-        path = d / "cloud.json"; path.write_text(json.dumps(handoff("m")))
-        request = {"schema": "brainsnn.adapter.v1", "output_dir": str(d / "job" / "output"), "inputs": [{"kind": "cloud", "path": str(path), "name": path.name}],
-                   "source": {"job": "b" * 32, "engine": "scene-usd", "path": str(first.parent)}}
-        evidence = su.run(request, blender=str(blender))
-        again = json.loads((d / "job" / "output" / "building.json").read_text())
-        self.assertEqual(again["model"]["id"], built["model"]["id"])
-        self.assertEqual([e["id"] for e in again["elements"]], [e["id"] for e in built["elements"]])
-        self.assertEqual(evidence["building"]["identity"], {"previousModel": built["model"]["id"], "matched": {"storey": 1, "slab": 1}, "added": [], "removed": []})
-        (first / "building.json").write_text(json.dumps({"schema": "something-else"}))
-        with self.assertRaisesRegex(ValueError, "unknown schema"):
-            su.run(request, blender=str(blender))
 
     def test_unscaled_cloud_writes_no_usd(self):
         evidence, out = self.run_handoff(handoff("arbitrary"))
