@@ -93,6 +93,13 @@ description: World Builder flagship development, real browser inference and reco
     - After the fixes, merged with #232: level 0.3 degrees, floor +4.0 cm, walls 4 of 4 within 1.7 cm, faces 0.7 cm, furniture 5 of 10 (sizes rough on sparse points), withheld 7 of 7 (worst 1.9 cm). The LinkedIn film is this run, labelled synthetic.
     - Open: wall boxes centred on the seen face read the room 9-11 cm short between boxes (owner's call); the dense engine's depth model can't be fetched from cloud sessions (Hugging Face blocked).
     - Oct 25 reference scale (#233, `reference_scale.py`): Claude marks standard-size references (A4/A3/Letter, 595 mm ceiling tile, EUR pallet; no pillows or mugs), corners refined from the image, faces measured on the cloud's plane, proportions checked; cross-checked when 2+ agree within 2%, never "verified". Oracle stand-in on the rendered room: -0.45% at 0-5 px corner error, nothing at 15 px; sheets are 40-70 px across a room, so film references from about 1 m. Claude run pending a real key: the owner's `apikey_01...` value is a key ID (401), not the `sk-ant-` secret.
+    - #233 merged Oct 25 (`5f6c81d`, release checks green). Codex's one finding was real and fixed before the merge: a sheet in front of a denser wall was measured on the wall (2x scale, proportions still passing); the face is now measured on the front-most surface carrying its own points.
+    - Oct 25 building model (`building_model.py`, `building.json`, brainsnn.building.v1), the owner's first priority:
+      - IDs: model ID from the cloud's points; element IDs carried across recompiles by geometric matching (walls 10 degrees/25 cm/50% overlap, objects 30% plan IoU).
+      - Fixed: IFC GlobalIds were constants (`ifc_guid('project')`, `wall-wall_N`) shared by every export ever made; now seeded per model and per element ID.
+      - Walls: observed face/base/height, inferred thickness, centreline behind the face. Openings hosted by wall ID. Review state turns `needs-review` after a 2 cm move.
+      - Matching is same-frame only; a recapture needs registration first.
+      - Next: edits (move wall with its openings and joins, widen an opening, save/reopen), exporters from building.json, site review by host ID, then Nav2 with about 200 sim tasks (19/20 only bounds success at 75%).
 
 ## October 24: independent demo correction validation
 

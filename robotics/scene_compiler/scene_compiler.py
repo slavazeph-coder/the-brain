@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ifc_export import emit_ifc  # noqa: E402  (pure Python; runs inside Blender too)
+import building_model  # noqa: E402  (pure Python too)
 from opening_geometry import wall_parts, door_parts  # noqa: E402
 
 try:
@@ -35,6 +36,7 @@ def args():
     p.add_argument("--names", help="object-names JSON from the worker's naming step: model suggestions for separated objects")
     p.add_argument("--out", required=True); p.add_argument("--min-cluster", type=int, default=12)
     p.add_argument("--allow-unverified", action="store_true", help="compile non-multi-view clouds anyway (experiments only)")
+    p.add_argument("--previous-building", help="the previous building.json of this capture: its IDs carry over where the geometry matches")
     return p.parse_args(argv)
 
 
@@ -534,6 +536,20 @@ def main():
                 leaf['provenance'], 'door', (0.42, 0.30, 0.18, 1))
             ob['hostWall'] = leaf['hostWall']; ob['clearanceVerified'] = False
         scene['bimReview']['representationScope'] = 'Hosted IFC voids; matching GLB/USD wall cuts and closed reference door leaves; CAD and planar maps derive from these reviewed openings.'
+
+    # The building model: an ID for the model and for every element, carried over from the previous model where the
+    # geometry still matches, and written into the scene's records (and the GLB's extras) before anything is exported.
+    previous = json.loads(Path(a.previous_building).read_text()) if a.previous_building else None
+    building = building_model.build(scene, pts, previous=previous); building_model.stamp(scene, building)
+    for rec in scene["walls"] + scene["objects"]:
+        ob = bpy.data.objects.get(rec.get("name") or "")
+        if ob is not None and rec.get("id"):
+            ob["element_id"] = rec["id"]
+    hosts = {w["name"]: w["id"] for w in scene["walls"] if w.get("id")}
+    for ob in bpy.data.objects:
+        if ob.get("hostWall") in hosts:
+            ob["host_id"] = hosts[ob["hostWall"]]
+    (out / "building.json").write_text(json.dumps(building, indent=1))
 
     bpy.ops.export_scene.gltf(filepath=str(out / "scene.glb"), export_format="GLB", export_extras=True, export_apply=True)
     emit_usd(out, scene, pts)

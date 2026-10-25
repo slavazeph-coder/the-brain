@@ -33,6 +33,7 @@ except ImportError:
     from geometry import load_arena_cloud
 
 SCENE_COMPILER = Path(__file__).resolve().parents[1] / 'scene_compiler' / 'scene_compiler.py'
+BUILDING_SCHEMA = 'brainsnn.building.v1'  # robotics/scene_compiler/building_model.py writes it
 ARENA_MAX_POINTS = 50_000
 BLENDER_TIMEOUT = 900
 
@@ -405,13 +406,30 @@ def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None
     return None, {**attempts[-1], **({'model_attempt': attempts[0]} if len(attempts) > 1 else {})}
 
 
-def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = None):
+def previous_building(request: dict):
+    """The building.json of the scene job this one recompiles, so element IDs carry over; None when there is none
+    (a first compile, or a scene made before building models). The API resolves source_job and enforces ownership."""
+    source = request.get('source') if isinstance(request.get('source'), dict) else {}
+    if source.get('engine') != 'scene-usd' or source.get('missing'):
+        return None
+    path = Path(source['path']) / 'output' / 'building.json'
+    if not path.exists():
+        return None
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 16 * 1024 * 1024:
+        raise ValueError('The previous building model is invalid.')
+    if json.loads(path.read_text()).get('schema') != BUILDING_SCHEMA:
+        raise ValueError('The previous building model has an unknown schema.')
+    return path
+
+
+def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = None, previous: Path | None = None):
     """Headless scene compiler; Blender only exits non-zero for Python errors when asked to."""
     out.mkdir(parents=True, exist_ok=True)
     command = [blender, '-b', '--python-exit-code', '1', '--python', str(SCENE_COMPILER), '--',
-               '--cloud', str(cloud), '--out', str(out), *(['--names', str(names)] if names else [])]
+               '--cloud', str(cloud), '--out', str(out), *(['--names', str(names)] if names else []),
+               *(['--previous-building', str(previous)] if previous else [])]
     subprocess.run(command, check=True, stdin=subprocess.DEVNULL, timeout=BLENDER_TIMEOUT)
-    for name in ['scene.glb', 'scene.json']:
+    for name in ['scene.glb', 'scene.json', 'building.json']:
         if not (out / name).is_file() or (out / name).stat().st_size == 0:
             raise RuntimeError(f'Scene compiler did not write {name}.')
     scene = json.loads((out / 'scene.json').read_text())
@@ -420,6 +438,15 @@ def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = 
         if bool((scene.get(key) or {}).get('written')) != ((out / name).is_file() and (out / name).stat().st_size > 0):
             raise RuntimeError(f'Scene compiler {key.upper()} output does not match scene.json.')
     return scene
+
+
+def building_summary(path: Path):
+    """The model ID and what carried over from the previous model, for the job's evidence."""
+    building = json.loads(path.read_text())
+    counts = {}
+    for element in building['elements']:
+        counts[element['kind']] = counts.get(element['kind'], 0) + 1
+    return {'schema': building['schema'], 'model_id': building['model']['id'], 'elements': counts, 'identity': building['identity']}
 
 
 def blender_version(blender: str):
@@ -469,11 +496,11 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
     names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect)
-    scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names)
+    scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names, previous=previous_building(request))
     if cloud.get('bimReview') and not scene.get('bimReview'):
         raise RuntimeError('The scene compiler did not apply the supplied BIM review. Update the complete worker checkout.')
     usd, ifc = (bool((scene.get(key) or {}).get('written')) for key in ['usd', 'ifc'])
-    for name in ['scene.glb', 'scene.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
+    for name in ['scene.glb', 'scene.json', 'building.json'] + (['scene.usda'] if usd else []) + (['scene.ifc'] if ifc else []):
         shutil.copyfile(work / name, out / name)
     # CAD and estimating files from the same scene.json: a DXF plan, a Rhino model and a quantities sheet (metric only).
     try:
@@ -517,6 +544,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'coordinate_frame': 'right-handed-y-up', 'metric_verified': False, 'physics_ready': False,
                 'policy_executed': False, 'model_weights_used': False, 'usd': scene.get('usd'), 'ifc': scene.get('ifc'), 'cad': cad, 'fit': fit,
                 'naming': naming, 'measurements': measurements, 'bim_review': scene.get('bimReview'),
+                'building': building_summary(work / 'building.json'),
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
                 'handoff': {'floorEstimate': cloud['floorEstimate'], 'scale': cloud['scale'], 'provenance': cloud['provenance'],
@@ -536,6 +564,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
+                 {'name': 'building.json', 'kind': 'model'},
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
                  *({'name': name, 'kind': 'evidence'} for name in measurement_files),

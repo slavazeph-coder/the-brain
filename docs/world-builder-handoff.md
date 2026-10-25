@@ -175,6 +175,26 @@ The status is `cross-checked` when two or more references agree within 2%, `sing
 - **Site UI:** a "Find scale references" step with its own consent line (frames go to Anthropic). It belongs on top of
   #232's Scale step after #232 merges; building it now would conflict with #232's `app.mjs`.
 
+## The building model (brainsnn.building.v1)
+
+`robotics/scene_compiler/building_model.py` writes `building.json` next to `scene.json`. It is the shared contract that
+editing, the BIM round trip and the robot package build on.
+- **Two ID defects it fixes.** Walls were named `wall_N` in the order the compiler found them, and IFC GlobalIds were
+  seeded from those names, with a constant seed for the project, site, building and storey. So every IFC ever exported
+  carried the same GlobalIds, and federating two buildings collided. A recompile could also give the same face a
+  different name. Now the model ID comes from the cloud, element IDs are carried by geometric matching, and the
+  GlobalIds are seeded from both.
+- **Per-parameter provenance.** A wall's face, base and height are observed. Its thickness and which side the room is
+  on are inferred. The centreline is half a thickness behind the face: this is the honest geometry for the 9 to 11 cm
+  boxes, and the exporters move to it when they read the building model.
+- **Recompiles.** A `scene-usd` job whose source job is an earlier scene job reads that job's `building.json`, keeps
+  matching IDs and review states, and lists what was added and removed in `scene-usd.json`. A recapture is in a new
+  frame and matches nothing until it is registered to the old one; the note says so.
+- **Checked** on the benchmark hand-off with real Blender: 6 walls and 5 objects; a recompile matched all 13 elements
+  and produced identical IFC GlobalIds, none shared with the earlier export. IfcOpenShell reports 0 issues.
+- **Not yet:** edits (moving a wall and its openings, widening an opening), exporters drawing from `building.json`,
+  the site's review choosing hosts by ID, source frames per element, and registration of a recapture.
+
 ## Use it: a commercial space, start to finish
 
 ### 1. Film it (about 10 minutes on site)
@@ -269,7 +289,7 @@ curl -s -o scene.ifc "$W<url from the ticket>"
 
 ## What each file is
 
-A metric `scene-usd` job returns twelve files. All are in metres in the scene's frame, except the plans: plan X is the
+A metric `scene-usd` job returns thirteen files. All are in metres in the scene's frame, except the plans: plan X is the
 scene's x and plan Y is minus its z, as in the IFC.
 
 | File | For | What is in it |
@@ -282,6 +302,7 @@ scene's x and plan Y is minus its z, as in the IFC.
 | `fit-heatmap.ply` | QA, the film | Every point coloured by its distance to the model |
 | `scene.glb` | Web, Blender, the site's viewer | The compiled scene |
 | `scene.usda` | Isaac Sim, Omniverse | OpenUSD, `metersPerUnit = 1` |
+| `building.json` | Editing, re-runs, BIM round trips | `brainsnn.building.v1`: the model ID, and every element with an ID that survives a recompile. Walls are observed face, base and height, with an inferred thickness and the centreline behind the face. Openings are hosted by wall ID. Each parameter is marked observed, inferred, reviewed or unknown. What carried over from the previous model is listed |
 | `scene.json` | Everything above, and the site | Every element: label, box, centre, size, yaw, provenance, base; counts; naming; the fit summary |
 | `scene-usd.json` | Audit | Evidence: inputs and their hashes, the hand-off's floor fit, compiler counts, CAD and fit results, warnings, timing |
 | `arena-cloud.json` | Robot Arena, re-runs | The measured, leveled hand-off |
@@ -435,11 +456,13 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    - Run it through #232's flow: Scale, then Review with the withheld checks, then Export.
    - Render with `regenerate_reference.py --capture-kind phone-video --render`. The film then carries a reference-check
      chapter, with failures shown: the first error figure measured against reality rather than against points.
-2. **Check main after #232 and #233 merged** (both October 25). Confirm "BrainSNN app release checks" and "Verify
-   BrainSNN live deploy" passed before relying on the live site.
-3. **Centre wall boxes behind the surface they saw** (owner's call). Today a compiled wall is centred on the face the
-   camera saw, so half its thickness stands in the room. On the benchmark, the room between the boxes reads 9 to 11 cm
-   short. Moving each box outward by half its thickness changes every exported wall and the fit numbers.
+2. **Edits on the building model.** Moving a wall moves its hosted openings and stretches the walls joined to it;
+   widening an opening checks it still fits its host; the result saves to `building.json` and reopens identically.
+   Then the exporters (IFC, DXF, 3DM, GLB/USD, CSV) draw from `building.json`, which also places each wall box behind
+   the face it saw (the benchmark's 9 to 11 cm), and the site's review picks hosts by ID.
+3. **The robot package.** A Nav2 occupancy map, transforms, footprint, and visual and collision geometry from the same
+   model. Score navigation on clearances measured independently (door widths, table-to-wall gaps), over about 200
+   simulated tasks: 19 of 20 only bounds the success rate at 75%.
 4. **Run the dense CPU engine on the benchmark.** Five of ten pieces of furniture are found on the sparse cloud. The
    dense engine is the intended answer, but its pinned depth model (Hugging Face) can't be fetched from these
    cloud sessions.
