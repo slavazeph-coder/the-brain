@@ -55,8 +55,9 @@ MAPPING_SECONDS = 900
 # false matches, yet every frame registers at a low reprojection error. On synthetic walks of the benchmark room, five
 # laps registered all 300 frames at 0.39 px and the path was 1.1 m RMS off. Frames filmed one after the other are the
 # pairs whose matches can be trusted, so the model's turn between them is checked against the turn their own matches
-# give. Over ten synthetic runs the three correct models disagreed by at most 5.1 degrees and the six folded ones
-# (0.7 to 1.8 m RMS off) by 71 degrees or more. It catches folds, not every error: a 21-frame partial model 15 cm off passed.
+# give. Over 18 mappings of synthetic walks the four correct models disagreed by at most 5.1 degrees and the 13 folded
+# ones (0.6 to 1.8 m RMS off) by 59 degrees or more. Mapping the same matches with another seed unfolded one of eight,
+# so a fold is reported for a recapture, not retried. It catches folds, not every error: a 21-frame partial model 15 cm off passed.
 FOLD_DEGREES = 15
 FOLD_MIN_MATCHES = 30
 FOLD_LISTED = 20

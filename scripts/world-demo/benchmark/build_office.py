@@ -29,10 +29,8 @@ def material(name, build):
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree
     bsdf = nt.nodes['Principled BSDF']; build(nt, bsdf); return m
 def coord(nt, scale=1.0):
-    # World position, not object coordinates: in object coordinates every wall sharing a material carries the same
-    # pattern, and a forward walk matched opposite walls to each other and folded the room (handoff, known weaknesses).
-    tc = nt.nodes.new('ShaderNodeNewGeometry'); mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (scale,) * 3
-    nt.links.new(tc.outputs['Position'], mp.inputs['Vector']); return mp.outputs['Vector']
+    tc = nt.nodes.new('ShaderNodeTexCoord'); mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (scale,) * 3
+    nt.links.new(tc.outputs['Object'], mp.inputs['Vector']); return mp.outputs['Vector']
 def ramp(nt, src, stops):
     r = nt.nodes.new('ShaderNodeValToRGB'); cr = r.color_ramp; cr.elements[0].position, cr.elements[0].color = stops[0]
     cr.elements[1].position, cr.elements[1].color = stops[1]
