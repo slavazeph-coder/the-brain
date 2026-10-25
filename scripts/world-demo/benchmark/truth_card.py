@@ -40,10 +40,11 @@ def dashed(draw, pts, colour, width=2, dash=10):
             draw.line([tuple(a + (b - a) * k / n), tuple(a + (b - a) * min(k + 1, n) / n)], fill=colour, width=width)
 
 
-def layers(truth, score, measurements, size, references=None):
+def layers(truth, score, measurements, size, references=None, reserve=0):
     """The card as transparent layers, in the order a viewer should see them: the heading and the true plan, the
-    compiled model over it, then each row of numbers."""
-    W, H = size; m = int(W * .083)
+    compiled model over it, then each row of numbers. `reserve` keeps that many pixels free at the bottom, for the film's
+    own evidence strip (capture credit and scale status) when the card is a chapter of it."""
+    W, H = size; m = int(W * .083); bottom = H - reserve
     blank = lambda: Image.new('RGBA', size, (0, 0, 0, 0))
     base, model = blank(), blank(); d, dm = ImageDraw.Draw(base, 'RGBA'), ImageDraw.Draw(model, 'RGBA')
     # Heading: what this is, before anything else.
@@ -58,7 +59,7 @@ def layers(truth, score, measurements, size, references=None):
     d.text((m, 184), f"Rendered meeting room, {room['width']:.1f} × {room['depth']:.1f} m by construction · "
                      f"scale from one {cal['distanceMeters']:.1f} m span", font=font(22), fill=GREY)
     # The plan, north up: x to the right, z down the page.
-    box = (m, 240, W - m, int(H * .62)); T = room.get('wallThickness', .12)
+    box = (m, 240, W - m, int(H * .62) if not reserve else bottom - 420); T = room.get('wallThickness', .12)
     # The frame takes in every compiled piece, a stray one outside the room included, up to 2 m beyond the walls.
     xs = [q[0] for e in score['compiledWalls'] + score['objects'] for q in e['plan']]; zs = [q[1] for e in score['compiledWalls'] + score['objects'] for q in e['plan']]
     x0, x1 = max(-2, min([-T] + xs)) - .3, min(room['width'] + 2, max([room['width'] + T] + xs)) + .3
@@ -90,7 +91,8 @@ def layers(truth, score, measurements, size, references=None):
         else: d.line([x, y + 11, x + 22, y + 11], fill=colour, width=4)
         d.text((x + 30, y), label, font=f, fill=GREY); x += 30 + d.textlength(label, font=f) + 26
         if x > W - m - 220: x, y = m, y + 30
-    d.text((m, H - 64), 'A render, not a capture: real phones add lens, motion and lighting error this room does not.', font=font(19), fill=DIM)
+    if not reserve:  # as a chapter, the film's strip says what the capture is
+        d.text((m, H - 64), 'A render, not a capture: real phones add lens, motion and lighting error this room does not.', font=font(19), fill=DIM)
     # The numbers.
     sm = score['summary']; r = score['room']; rows = [
         ('Room width', f"{r['width']['measuredMeters']:.3f} m" if r['width'].get('measuredMeters') is not None else 'not compiled', cm(sm['roomWidthErrorMeters'])),
@@ -108,7 +110,7 @@ def layers(truth, score, measurements, size, references=None):
         layer = blank(); dr = ImageDraw.Draw(layer, 'RGBA')
         dr.line([m, y - 12, W - m, y - 12], fill=STEEL, width=1)
         dr.text((m, y), label, font=label_f, fill=GREY); dr.text((m + 250, y), value, font=value_f, fill=WHITE)
-        dr.text((W - m - dr.textlength(error, font=value_f), y), error, font=value_f, fill=AMBER); y += 48
+        dr.text((W - m - dr.textlength(error, font=value_f), y), error, font=value_f, fill=AMBER); y += 48 if not reserve else 44
         out.append(layer)
     return out
 
@@ -126,10 +128,10 @@ def card(truth, score, measurements, size, references=None):
     stack = layers(truth, score, measurements, size, references); return compose(stack, [1] * len(stack), size)
 
 
-def clip(truth, score, measurements, size, out, seconds=6.0, fps=30, references=None):
+def clip(truth, score, measurements, size, out, seconds=6.0, fps=30, references=None, reserve=0):
     """The card as a chapter: the true plan, then the compiled model over it, then the rows one by one, then a hold.
     Written as H.264 with a silent stereo track, so feeds that expect audio accept it."""
-    stack = layers(truth, score, measurements, size, references); n = int(round(seconds * fps))
+    stack = layers(truth, score, measurements, size, references, reserve); n = int(round(seconds * fps))
     ease = lambda u: 0 if u <= 0 else 1 if u >= 1 else 1 - (1 - u) ** 3
     proc = subprocess.Popen(['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{size[0]}x{size[1]}',
                              '-r', str(fps), '-i', '-', '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
@@ -148,11 +150,12 @@ def main():
     ap.add_argument('--measurements', type=Path); ap.add_argument('--out', type=Path, required=True); ap.add_argument('--size', default='1080x1350')
     ap.add_argument('--seconds', type=float, help='write an animated chapter of this length (.mp4) instead of a still')
     ap.add_argument('--references', type=Path, help="the run's references.json, for the spans it actually used")
+    ap.add_argument('--reserve', type=int, default=0, help="pixels kept free at the bottom for the film's evidence strip (170 for compose_film)")
     a = ap.parse_args(); size = tuple(int(v) for v in a.size.lower().split('x'))
     measurements = json.loads(a.measurements.read_text()) if a.measurements else None
     truth, score = json.loads(a.truth.read_text()), json.loads(a.score.read_text())
     references = json.loads(a.references.read_text()) if a.references else None
-    if a.seconds: clip(truth, score, measurements, size, a.out, a.seconds, references=references)
+    if a.seconds: clip(truth, score, measurements, size, a.out, a.seconds, references=references, reserve=a.reserve)
     else: card(truth, score, measurements, size, references).save(a.out)
     print(a.out)
 
