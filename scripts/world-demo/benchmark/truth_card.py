@@ -59,7 +59,10 @@ def layers(truth, score, measurements, size, references=None):
                      f"scale from one {cal['distanceMeters']:.1f} m span", font=font(22), fill=GREY)
     # The plan, north up: x to the right, z down the page.
     box = (m, 240, W - m, int(H * .62)); T = room.get('wallThickness', .12)
-    x0, x1, z0, z1 = -T - .3, room['width'] + T + .3, -T - .3, room['depth'] + T + .3
+    # The frame takes in every compiled piece, a stray one outside the room included, up to 2 m beyond the walls.
+    xs = [q[0] for e in score['compiledWalls'] + score['objects'] for q in e['plan']]; zs = [q[1] for e in score['compiledWalls'] + score['objects'] for q in e['plan']]
+    x0, x1 = max(-2, min([-T] + xs)) - .3, min(room['width'] + 2, max([room['width'] + T] + xs)) + .3
+    z0, z1 = max(-2, min([-T] + zs)) - .3, min(room['depth'] + 2, max([room['depth'] + T] + zs)) + .3
     s = min((box[2] - box[0]) / (x1 - x0), (box[3] - box[1]) / (z1 - z0))
     ox = box[0] + ((box[2] - box[0]) - s * (x1 - x0)) / 2 - s * x0; oz = box[1] + ((box[3] - box[1]) - s * (z1 - z0)) / 2 - s * z0
     px = lambda q: (ox + s * q[0], oz + s * q[1])
@@ -75,6 +78,8 @@ def layers(truth, score, measurements, size, references=None):
         u, v = px(q); dm.ellipse([u - 3, v - 3, u + 3, v + 3], fill=GREY + (200,))
     a, b = truth['landmarks'][cal['from']], truth['landmarks'][cal['to']]
     dm.line([px((a[0], a[2])), px((b[0], b[2]))], fill=MAGENTA, width=4)
+    clip = Image.new('L', size, 0); ImageDraw.Draw(clip).rectangle(box, fill=255)  # nothing past the plan's frame
+    model.putalpha(Image.fromarray(np.minimum(np.asarray(model.getchannel('A')), np.asarray(clip))))
     # Legend.
     y = box[3] + 18; f = font(20); x = m
     for colour, label, kind in ((WHITE, 'true walls and objects (exact)', 'line'), (AMBER, 'compiled walls', 'fill'),
