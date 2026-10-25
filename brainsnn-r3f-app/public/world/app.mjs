@@ -288,7 +288,10 @@ async function openArtifact(index){
     const source={name:item.name,size:item.size,kind:'visual',url:null,visual:{...parsed,origin:'worker',photo:false},derivation:{job:sourceJob.id,engine:sourceJob.engine,sha256:item.sha256,coordinateFrame:item.coordinate_frame,metricVerified:false}};
     const evidenceIndex=sourceJob.artifacts.findIndex(a=>a.name==='reconstruction.json');
     if(evidenceIndex>=0){try{const evidence=JSON.parse(new TextDecoder().decode(await sourceClient.previewArtifact(sourceJob,evidenceIndex,controller.signal)));if(evidence?.schema==='brainsnn.reconstruction.v1'){source.reconstruction=evidence;source.derivation.evidenceSha256=sourceJob.artifacts[evidenceIndex].sha256;}}catch(e){if(controller.signal.aborted)return;event('reconstruction_evidence_unavailable',e.message);}}
-    sources.push(source);bimWorkflow.reset();activeSource=source;display='visual';event('artifact_opened',source.derivation);setTab('capture');update();status('Reconstruction loaded. Compare with the source; independently review scale and obstacles before planning.'+(sourceJob.artifacts.some(a=>/\.glb$/i.test(a.name))?' Its simulation scene is under Evidence.':''));
+    sources.push(source);bimWorkflow.reset();activeSource=source;display='visual';event('artifact_opened',source.derivation);setTab('capture');update();
+    // The worker checks a video's model against its own consecutive frames; a model that contradicts them is folded.
+    const folded=source.reconstruction?.capture?.consistency?.status==='folded';
+    status(folded?'This reconstruction contradicts its own frames: the room is likely folded onto itself. Do not use its layout or dimensions; recapture the room.':'Reconstruction loaded. Compare with the source; independently review scale and obstacles before planning.'+(sourceJob.artifacts.some(a=>/\.glb$/i.test(a.name))?' Its simulation scene is under Evidence.':''),folded);
   }catch(e){if(!controller.signal.aborted)status('Artifact preview failed: '+e.message,true);}
   finally{if(artifactAbort===controller)artifactAbort=null;}
 }
