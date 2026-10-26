@@ -1,9 +1,67 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-25T00:00Z
+Last updated: 2026-10-26T12:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 100 — cancellation regression fix: settle loop now waits for operator.log + cancelled
+- Picked up previous run's drafted (uncommitted) fix to
+  `tests/world/test_report_receipts.py` — the settle loop in
+  `test_delete_artifacts_is_refused_while_job_is_running`.
+- Root cause confirmed from source: `cancel_job` (app.py:678) awaits
+  `stop_process(jid)` and returns 200 with DB status `cancelled`, but the
+  execution thread's `finally` block (app.py:477-481) has not yet run
+  `running.discard(jid)`. The test's old loop only waited for
+  `status != 'running'` (immediately true after DB update), then fired
+  `DELETE /artifacts` while `jid` was still in the `running` set → 409.
+- Fix: mirror the reaped-adapter test's settle condition — poll until
+  `operator.log` is gone AND DB status is `cancelled`. By then the
+  `finally` block has completed and the `running` guard is clear.
+- Verified:
+  - `pytest tests/world/test_report_receipts.py::test_delete_artifacts_is_refused_while_job_is_running -q` → **1 passed in 4.76 s**
+  - `pytest tests/world/test_report_receipts.py -q` → **30 passed in 14.77 s**
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (127 ms)
+- Commit: **`f2ccaf4`** `fix(world): settle loop waits for operator.log gone +
+  status cancelled in delete_artifacts test` (1 file, +43/−4). Pushed.
+- No 4090 probe this run (alternation: GB10 build task closed). Serving
+  Qwen/backup, licensed gates, no-paid-fallback untouched.
+- Next bounded action: 4090 MapAnything held-out-frame inference smoke —
+  short SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
+  confirm hostname + GPU before running. Reuse verified pinned weights from
+  GB10; do not replace base conda env. No permanent tunnel.
+
+### Run 99 — live smoke CORS fix: worker and page bind separate reserved ports; chromium live PASS
+- Picked up previous run's uncommitted CORS fix to
+  `tests/world/report_receipt_ui_smoke_live.py` (working tree was dirty
+  since run 98).
+- Fix: `start_live_server` now takes `worker_port` (reserved via probe
+  server **before** `create_app()`), sets `WORLD_ALLOWED_ORIGINS` to the
+  full page origin URL, and uvicorn binds that exact reserved port.
+  `main()` reserves **both** worker and page ports up front; the page
+  `ThreadingHTTPServer` binds the reserved `page_port`, so the page's
+  real origin equals the one baked into the allowed list — cross-origin
+  `fetch()` passes real CORS on the wire (same-port binding would be
+  `EADDRINUSE`). `run_browser_journey` gained the `page_port` param.
+- Base verified green before running live smoke:
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (64 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **29 passed in 10.19 s**
+- Live smoke (this run, `WORLD_BROWSERS=chromium`):
+  - `tests/world/report_receipt_ui_smoke_live.py` → worker uvicorn live on
+    127.0.0.1:39641, CORS origin 127.0.0.1:39973, job complete
+    (c9b06417…), signed receipt keyId=193bd492…,
+    **chromium: PASS**, **ALL PASS: 1 browser(s)**.
+  - Receipt on disk (`chromium-live-ui-receipt.json`): `liveHttp: true,
+    realEd25519: true, realPrivateWorker: true, pageErrors: [],
+    failed: false` + screenshot `chromium-live-receipt.png` (Oct 26 10:55).
+- Commit: **`e61cb5e`** `fix(world): live smoke CORS — worker and page bind
+  separate reserved ports` (3 files, +44/−17). Pushed. No force-push/merge/deploy.
+- No 4090 probe this run (alternation: GB10 build task closed this run).
+  Serving Qwen/backup, licensed gates, no-paid-fallback untouched.
+- Next bounded action: 4090 MapAnything held-out-frame inference smoke —
+  short SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
+  confirm hostname + GPU before running. Reuse verified pinned weights from
+  GB10; do not replace base conda env. No permanent tunnel.
 
 ### Run 98 — loopback 413 wire test verified green; run log synced; 4090 idle confirmed
 - Previous run's `1ecfb3c` (loopback 413 wire test, `tests/world/test_report_receipts_loopback.py`)
