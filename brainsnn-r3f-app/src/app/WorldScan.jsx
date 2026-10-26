@@ -111,7 +111,7 @@ export function WorldScan() {
           {/* A video-only list gets the phone gallery's plain video picker; galleries treat a mixed photo and video list differently. */}
           <button type="button" className="world-button world-button-outline" onClick={() => videoInput.current?.click()}><FileVideo size={16} aria-hidden="true" /> Choose a walkthrough video</button>
           <input ref={videoInput} type="file" accept="video/*" hidden onChange={event => { chooseFiles(event.target.files); event.target.value = ''; }} aria-label="Select a walkthrough video"/>
-          <p className="world-capture-note">On a phone, a long video can take a minute to prepare after you pick it; keep this page open.</p>
+          <p className="world-capture-note">On iPhone, Photo Library converts a video before this page gets it, which can take minutes for a long 4K video. Faster: in Photos, Share → Save to Files, then pick it here with Choose File.</p>
           {error && <p className="world-capture-alert" role="alert">{error}</p>}
           {current && <div className="world-upload-preview">
             {isVideo(current.file)
