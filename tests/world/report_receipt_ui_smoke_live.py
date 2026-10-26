@@ -71,13 +71,14 @@ def req(base, method, path, token=None, body=None, content=None):
         return error.code, json.loads(error.read())
 
 
-def start_live_server(tmp_base, page_origin, page_port=None):
-    """Start uvicorn on an ephemeral port with real Ed25519 signing key.
+def start_live_server(tmp_base, page_origin, worker_port):
+    """Start uvicorn on a pre-reserved port with a real Ed25519 signing key.
 
-    CORS is configured via WORLD_ALLOWED_ORIGINS so the browser (served from
-    page_origin) can fetch() the worker cross-origin. If page_port is given,
-    uvicorn binds to that exact port so the origin baked into the app matches
-    the real server.
+    CORS is configured via WORLD_ALLOWED_ORIGINS so the browser page (served
+    from page_origin, a DIFFERENT reserved port) can fetch() the worker
+    cross-origin. worker_port is reserved BEFORE create_app() so we can bake
+    the page origin into the allowed list while uvicorn binds that exact
+    port — the app's allowed-origin check and the real listener always agree.
     """
     import uvicorn
 
@@ -95,7 +96,7 @@ def start_live_server(tmp_base, page_origin, page_port=None):
     # create_app() reads WORLD_ALLOWED_ORIGINS from os.environ directly,
     # so it must be set there (not in a local env dict that is never used).
     saved_origin = os.environ.get('WORLD_ALLOWED_ORIGINS')
-    os.environ['WORLD_ALLOWED_ORIGINS'] = page_origin.split('/')[2]  # e.g. '127.0.0.1:PORT'
+    os.environ['WORLD_ALLOWED_ORIGINS'] = page_origin  # e.g. 'http://127.0.0.1:PORT'
     try:
         app = create_app(root=worker_root, token=token, report_key=str(private))
     finally:
@@ -103,11 +104,11 @@ def start_live_server(tmp_base, page_origin, page_port=None):
             os.environ['WORLD_ALLOWED_ORIGINS'] = saved_origin
         else:
             os.environ.pop('WORLD_ALLOWED_ORIGINS', None)
-    config = uvicorn.Config(app, host='127.0.0.1', port=page_port or 0, log_level='warning')
+    config = uvicorn.Config(app, host='127.0.0.1', port=worker_port, log_level='warning')
     server = uvicorn.Server(config)
     server.config = config
 
-    print(f'[live] init-key OK; create_app OK; starting uvicorn on 127.0.0.1:{page_port}', flush=True)
+    print(f'[live] init-key OK; create_app OK; starting uvicorn on 127.0.0.1:{worker_port}', flush=True)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
     deadline = time.monotonic() + 15
@@ -127,18 +128,25 @@ def main():
     receipt_dir = ROOT / 'output' / 'playwright' / 'world' / 'report-receipt'
     receipt_dir.mkdir(parents=True, exist_ok=True)
 
-    # Reserve the page server's port BEFORE the worker app is created. The
-    # CORS origin must be baked into WORLD_ALLOWED_ORIGINS at create_app()
-    # time, so we know it in advance. uvicorn reuses this exact port.
+    # Reserve BOTH server ports BEFORE the worker app is created. CORS is
+    # baked into WORLD_ALLOWED_ORIGINS at create_app() time, so the page
+    # origin must be known in advance; the worker port is reserved too so
+    # uvicorn binds the exact port it announced (no port drift).
     class _Probe(SimpleHTTPRequestHandler):
         def log_message(self, *a): pass
+    worker_probe = ThreadingHTTPServer(('127.0.0.1', 0), _Probe)
+    worker_port = worker_probe.server_port
+    worker_probe.server_close()
     page_probe = ThreadingHTTPServer(('127.0.0.1', 0), _Probe)
     page_port = page_probe.server_port
     page_origin = f'http://127.0.0.1:{page_port}'
     page_probe.server_close()
 
     base, token, keys, worker_root, server = start_live_server(
-        tmp_base, page_origin, page_port)
+        tmp_base, page_origin, worker_port)
+    # The worker bound the reserved worker_port; the page is served from the
+    # separately reserved page_port, whose origin is exactly the one baked
+    # into WORLD_ALLOWED_ORIGINS, so the cross-origin fetch() passes CORS.
     print(f'Live worker: {base}  |  token {token[:8]}…  |  CORS origin {page_origin}', flush=True)
 
     # Upload real PNG bytes over live HTTP.
@@ -190,7 +198,7 @@ def main():
         print(f'Running browser: {browser_name}', flush=True)
         receipt_file = receipt_dir / f'{browser_name}-live-ui-receipt.json'
         try:
-            receipt = run_browser_journey(browser_name, base, token, jid, keys, receipt_dir)
+            receipt = run_browser_journey(browser_name, base, token, jid, keys, receipt_dir, page_port)
         except Exception as exc:
             receipt = {'browser': browser_name, 'failed': str(exc)}
             print(f'Browser {browser_name} FAILED: {exc}', flush=True)
@@ -205,7 +213,7 @@ def main():
     return 0 if all_pass else 1
 
 
-def run_browser_journey(browser_name, base, token, jid, keys, out_dir):
+def run_browser_journey(browser_name, base, token, jid, keys, out_dir, page_port):
     """Drive one browser through the full live-server UI journey via real CORS."""
     from playwright.sync_api import sync_playwright
 
@@ -301,7 +309,13 @@ main().catch(e => {{
 
     class Quiet(SimpleHTTPRequestHandler):
         def log_message(self, format, *args): pass
-    http_server = ThreadingHTTPServer(('127.0.0.1', 0),
+    # Serve the page on the reserved page_port: the origin of that port is
+    # the one baked into WORLD_ALLOWED_ORIGINS at create_app() time, so the
+    # page's real origin matches the allowed origin and the cross-origin
+    # fetch() to the worker passes CORS. (The worker itself listens on a
+    # DIFFERENT reserved port — same-port binding would be EADDRINUSE and
+    # still could not serve both.)
+    http_server = ThreadingHTTPServer(('127.0.0.1', page_port),
                                       functools.partial(Quiet, directory=str(page_dir)))
     threading.Thread(target=http_server.serve_forever, daemon=True).start()
     page_url = f'http://127.0.0.1:{http_server.server_port}/smoke.html'

@@ -1,0 +1,13 @@
+{
+  "browser": "chromium",
+  "server": "http://127.0.0.1:39641",
+  "status": "ALL PASS",
+  "job": "job complete: c9b06417fbea2ce985d194f10e67a54b",
+  "receipt": "receipt OK: keyId=193bd492ae9e9a4ade1b818428ac10049ad82ed2db5e4343bb5fc944c0a98c79",
+  "verify": "verify OK",
+  "pageErrors": [],
+  "liveHttp": true,
+  "realEd25519": true,
+  "realPrivateWorker": true,
+  "failed": false
+}
