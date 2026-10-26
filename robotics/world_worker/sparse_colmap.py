@@ -51,6 +51,16 @@ SELECTED_MODEL = 'selected.txt'  # in the sparse folder: which of COLMAP's model
 MAPPING_SEEDS = (0, 1, 2)
 JOINED_FRACTION = 0.9
 MAPPING_SECONDS = 900
+# A walk past repeated surfaces can fold: opposite walls are matched to each other and the model is built round the
+# false matches, yet every frame registers at a low reprojection error. On synthetic walks of the benchmark room, five
+# laps registered all 300 frames at 0.39 px and the path was 1.1 m RMS off. Frames filmed one after the other are the
+# pairs whose matches can be trusted, so the model's turn between them is checked against the turn their own matches
+# give. Over 18 mappings of synthetic walks the four correct models disagreed by at most 5.1 degrees and the 13 folded
+# ones (0.6 to 1.8 m RMS off) by 59 degrees or more. Mapping the same matches with another seed unfolded one of eight,
+# so a fold is reported for a recapture, not retried. It catches folds, not every error: a 21-frame partial model 15 cm off passed.
+FOLD_DEGREES = 15
+FOLD_MIN_MATCHES = 30
+FOLD_LISTED = 20
 
 
 def map_frames(database: Path, images: Path, workspace: Path, count: int):
@@ -82,6 +92,43 @@ def map_frames(database: Path, images: Path, workspace: Path, count: int):
     (workspace / 'sparse' / SELECTED_MODEL).write_text(str(index))
     for attempt in workspace.glob('sparse-seed-*'): shutil.rmtree(attempt)
     return models, index, model, attempts
+
+
+def consecutive_turns(database, model, names):
+    """For each two registered frames filmed one after the other: how far the model's turn between them is from the
+    turn COLMAP's own two-view pose gives from their verified matches (essential, fundamental or homography, by the
+    pair's geometry). database is an open pycolmap.Database; names are all frames in filming order.
+    Returns the checked pairs and how many consecutive pairs could not be checked."""
+    import numpy as np
+    import pycolmap
+    by_name = {model.image(image_id).name: model.image(image_id) for image_id in model.reg_image_ids()}
+    order = [name for name in names if name in by_name]
+    turns, skipped = [], 0
+    for first, second in zip(order, order[1:]):
+        a, b = by_name[first], by_name[second]
+        if not database.exists_two_view_geometry(a.image_id, b.image_id):
+            skipped += 1; continue
+        geometry = database.read_two_view_geometry(a.image_id, b.image_id)
+        if len(geometry.inlier_matches) < FOLD_MIN_MATCHES or not pycolmap.estimate_two_view_geometry_pose(
+                model.camera(a.camera_id), database.read_keypoints(a.image_id)[:, :2].astype(float),
+                model.camera(b.camera_id), database.read_keypoints(b.image_id)[:, :2].astype(float), geometry):
+            skipped += 1; continue
+        matched = geometry.cam2_from_cam1.rotation.matrix()
+        modelled = (b.cam_from_world().rotation * a.cam_from_world().rotation.inverse()).matrix()
+        cosine = (np.trace(matched.T @ modelled) - 1) / 2
+        turns.append({'from': first, 'to': second, 'matches': len(geometry.inlier_matches),
+                      'disagreementDegrees': round(math.degrees(math.acos(max(-1.0, min(1.0, cosine)))), 2)})
+    return turns, skipped
+
+
+def fold_check(turns, skipped):
+    """The consistency record: a model that turns a camera differently from its own consecutive frames is folded."""
+    folds = [turn for turn in turns if turn['disagreementDegrees'] > FOLD_DEGREES]
+    return {'method': 'model turn against two-view turn, consecutive registered frames', 'thresholdDegrees': FOLD_DEGREES,
+            'status': 'folded' if folds else 'consistent' if turns else 'not-checked',
+            'pairsChecked': len(turns), 'pairsSkipped': skipped, 'pairsDisagreeing': len(folds),
+            'worstDisagreementDegrees': max((turn['disagreementDegrees'] for turn in turns), default=None),
+            'disagreeing': sorted(folds, key=lambda turn: -turn['disagreementDegrees'])[:FOLD_LISTED]}
 
 
 def file_sha256(path: Path):
@@ -340,6 +387,17 @@ def run(request: dict, densify_model: Path | None = None):
     registered = model.num_reg_images()
     if registered < 3 or model.num_points3D() < 30:
         raise ValueError('Insufficient reconstructed geometry: at least 3 camera positions and 30 points are required.')
+    # Photos have no filming order, so only a video's consecutive frames are checked.
+    if video:
+        opened = pycolmap.Database.open(str(database))
+        try:
+            consistency = fold_check(*consecutive_turns(opened, model, names))
+        finally:
+            opened.close()
+    else:
+        consistency = {'status': 'not-checked', 'reason': 'Photos have no filming order; consecutive frames are checked for videos only.'}
+    capture['consistency'] = consistency
+    folded = consistency['status'] == 'folded'
     model.extract_colors_for_all_images(images, num_threads=THREADS)
     points = sorted(model.points3D.items())
     stride = max(1, math.ceil(len(points) / MAX_POINTS))
@@ -383,9 +441,14 @@ def run(request: dict, densify_model: Path | None = None):
                 'coordinate_frame': 'colmap', 'units': 'arbitrary', 'metric_verified': False,
                 'physics_ready': False, 'policy_executed': False, 'model_weights_used': dense is not None,
                 'camera_intrinsics': 'estimated from resized images; not measured calibration',
-                'review_required': ['Verify scale against a measured distance', 'Align floor and up axis',
+                'review_required': (['Recapture: the model contradicts its own consecutive frames'] if folded else []) +
+                                   ['Verify scale against a measured distance', 'Align floor and up axis',
                                     'Inspect missing surfaces and author collision geometry'],
-                'warnings': ['Sparse points do not define a solid surface or free space.',
+                'warnings': ([f"The model contradicts its own frames: between {consistency['pairsDisagreeing']} pairs of frames filmed "
+                              f"one after the other it turns the camera by up to {consistency['worstDisagreementDegrees']:.0f} degrees "
+                              'more or less than those frames show. This is how a walk past repeated surfaces folds the room onto itself. '
+                              "Do not use this model's layout or dimensions; recapture the room."] if folded else []) +
+                            ['Sparse points do not define a solid surface or free space.',
                              'Glass, blank walls, reflections and moving objects may be missing.'] +
                             (['Some submitted views did not align; reconstruction is incomplete.'] if registered < count else []) +
                             (['This video is longer than a minute. Videos this long have not yet been checked against a measured room: '

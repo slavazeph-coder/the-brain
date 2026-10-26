@@ -12,7 +12,7 @@ export class WorkerClient {
       const chunks=[];let size=0;while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1024*1024){await reader.cancel();throw new Error('Worker JSON exceeded the 1 MiB response limit.');}chunks.push(value);}
       const all=new Uint8Array(size);let offset=0;for(const c of chunks){all.set(c,offset);offset+=c.length;}
       let data;try{data=JSON.parse(new TextDecoder().decode(all));}catch{throw new Error('Worker returned invalid JSON.');}
-      if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail.slice(0,300):`Worker request failed (${response.status}).`);
+      if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail.slice(0,300):typeof data.detail?.[0]?.msg==='string'?`Worker refused the request: ${data.detail[0].msg.slice(0,300)}`:`Worker request failed (${response.status}).`);
       return data;
     }finally{clearTimeout(timer);signal?.removeEventListener('abort',relay);}
   }

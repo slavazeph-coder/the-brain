@@ -31,6 +31,19 @@ restart. This folder holds a setup for a long-running worker on a GPU host such 
 6. **Hand over.** Send the owner the URL and the token directly, never through the repository. In World Builder, use
    Capture → Process a walkthrough / use an API worker → Worker connection.
 
+## Update a running worker
+
+The browser and the worker ship separately: updating brainsnn.com does not update a worker. A worker from before
+October 25 takes videos up to 2 minutes and 200 MiB, and refuses longer ones. The site says so when it sees a worker
+that reports no `video_bytes` limit. To update one:
+
+1. In the checkout, `git fetch origin main` and check out the new qualified commit.
+2. Reinstall `robotics/world_worker/requirements.txt` (and the engines' requirement files) into the same virtual
+   environment.
+3. Compare your adapters file with `adapters.gb10.json` and copy the changed fields across, such as the video engines'
+   `timeout_seconds` (3,600 for five-minute videos). Your copy is not updated by the checkout.
+4. `sudo systemctl restart brainsnn-world-worker`, then run the outside check in step 5 above.
+
 Adapters run as child processes of this service. Systemd does not isolate them from each other, so keep the
 per-adapter guards (memory, time, output size) in place.
 
