@@ -9,15 +9,39 @@ URL=os.environ.get('WORLD_URL','http://127.0.0.1:8765/world/index.html')
 OUTPUT=ROOT/'output/playwright/world'
 OUTPUT.mkdir(parents=True,exist_ok=True)
 
+def open_world(view, url, *, require_response=False):
+    """Wait for the actual World app, independently of unrelated network traffic.
+
+    The built root mounts its iframe after React starts. Waiting for document
+    parsing alone and immediately counting frames can race that mount; network
+    idle additionally waits on assets such as the outer shell's remote fonts.
+    Keep readiness tied to the same exact app-content assertion in both routes.
+    """
+    response=view.goto(url,wait_until='domcontentloaded')
+    # A same-document or history-restored navigation can return no response.
+    # Fresh route-boundary checks still require HTTP 200. WebKit may expose a
+    # valid cache revalidation as 304 on subsequent returns to the same page.
+    # Every navigation must still reach the exact app-content readiness check.
+    if require_response:
+        assert response is not None, 'The route check must issue a document request'
+    if response is not None:
+        assert response.status==200 or (not require_response and response.status==304), \
+            f'World document returned HTTP {response.status}: {response.url}'
+    selector='iframe[src="/world/index.html"]'
+    view.wait_for_function("document.querySelector('iframe[src=\"/world/index.html\"]') !== null || document.querySelectorAll('.system-card').length===22")
+    if view.locator(selector).count():
+        handle=view.locator(selector).element_handle()
+        page=handle.content_frame()
+        assert page is not None, 'The World iframe must expose its document'
+    else:
+        page=view
+    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    return page
+
 def check(browser, mobile=False):
     ctx=browser.new_context(viewport={'width':390,'height':844} if mobile else {'width':1440,'height':1000},device_scale_factor=1,has_touch=mobile)
     page=ctx.new_page();view=page;errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(URL,wait_until='networkidle')
-    # The production root embeds the same real HTTP document in an iframe.
-    if page.locator('iframe[src="/world/index.html"]').count():
-        page=page.frame(url=re.compile(r'/world/index\.html$'))
-        assert page is not None
-    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page=open_world(view,URL)
     assert page.locator('.system-card').count()==22
     assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
@@ -109,10 +133,8 @@ def check_routes(browser, base):
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     for route in ['/', '/world', '/world/']:
-        response=page.goto(base+route,wait_until='networkidle')
-        assert response.status==200
-        frame=page.frame(url=re.compile(r'/world/index\.html$'))
-        assert frame is not None
+        frame=open_world(page,base+route,require_response=True)
+        assert frame is not page, 'Production World routes must retain the iframe shell'
         frame.locator('#hero-capture').click()
         assert frame.locator('[data-action=files]').is_visible()
         assert frame.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
@@ -125,14 +147,12 @@ def check_routes(browser, base):
     page.locator('#lobby-title').wait_for()
     assert page.locator('iframe[src="/world/index.html"]').count()==0
     page.set_viewport_size({'width':1440,'height':1000})
-    page.goto(base+'/',wait_until='networkidle')
-    frame=page.frame(url=re.compile(r'/world/index\.html$'))
+    frame=open_world(page,base+'/')
     frame.locator('a[href="/lab"]').last.click()
     page.wait_for_url(base+'/lab')
     page.get_by_role('heading',name='Lab',exact=True).wait_for()
     assert page.locator('iframe[src="/world/index.html"]').count()==0
-    page.goto(base+'/',wait_until='networkidle')
-    frame=page.frame(url=re.compile(r'/world/index\.html$'))
+    frame=open_world(page,base+'/')
     frame.locator('a[href="/arena/"]').last.click()
     page.wait_for_url(base+'/arena/')
     page.locator('#page-title').wait_for(state='attached')
@@ -144,9 +164,7 @@ def check_measurements(browser):
     """Authored input fixture exercises self-reported evidence; no physical measurement is claimed."""
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     view=ctx.new_page();errors=[];view.on('pageerror',lambda e:errors.append(str(e)))
-    view.goto(URL,wait_until='networkidle')
-    page=view.frame(url=re.compile(r'/world/index\.html$')) or view
-    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page=open_world(view,URL)
     authored={'schema':'brainsnn.world.v1','name':'Measurement contract fixture','width':8,'depth':8,'provenance':'observed','scaleReviewed':True,'mapReviewed':True,'start':{'x':1,'z':1},'objects':[{'id':'unknown-corner','name':'Unobserved corner','kind':'unknown','x':4,'z':4,'w':1,'d':1,'h':1}]}
     def import_map(value):
         page.locator('#files').set_input_files({'name':'measurement-fixture.json','mimeType':'application/json','buffer':json.dumps(value).encode()})
@@ -232,8 +250,7 @@ def check_inference(browser, photo):
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True)
     requests=[];ctx.on('request',lambda request:requests.append({'method':request.method,'url':request.url,'body':request.post_data}))
     view=ctx.new_page();errors=[];view.on('pageerror',lambda error:errors.append(str(error)))
-    view.goto(URL,wait_until='networkidle')
-    page=view.frame(url=re.compile(r'/world/index\.html$')) or view
+    page=open_world(view,URL)
     page.locator('#files').set_input_files(photo)
     assert page.locator('#run').is_disabled()
     assert not any('huggingface.co' in item['url'] for item in requests),'No model fetch before consent'

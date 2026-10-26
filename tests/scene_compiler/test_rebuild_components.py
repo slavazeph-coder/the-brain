@@ -72,6 +72,15 @@ def test_rebuild_retains_originals_and_rebinds_all_reports(tmp_path):
     assert support['componentGraph']['revision'] == 1
     moved_wall = next(row for row in support['components'] if row['name'] == 'wall_1')
     assert moved_wall['status'] == 'unsupported' and moved_wall['supportCount'] is None
+    fitted = json.loads((out / 'component-fit.json').read_text())
+    assert fitted['sourceFiles']['scene']['sha256'] == current_hash
+    assert fitted['sourceFiles']['cloud']['sha256'] == hashlib.sha256(originals[1]).hexdigest()
+    assert fitted['componentGraph']['revision'] == 1
+    assert fitted['metricVerified'] is False
+    assert receipt['componentFit']['written'] is True
+    assert receipt['componentFit']['geometryChanged'] is False
+    fit_artifact = receipt['artifacts']['component-fit.json']
+    assert fit_artifact['sha256'] == hashlib.sha256((out / 'component-fit.json').read_bytes()).hexdigest()
     report = json.loads((out / 'scene-measurements.json').read_text())
     assert any(row['basis'] == 'operator-authored-edit' for row in report['dimensions'])
     with pytest.raises(FileExistsError):
