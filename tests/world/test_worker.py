@@ -402,6 +402,64 @@ def test_colmap_no_overlap_never_returns_a_success_manifest(tmp_path):
     assert not (tmp_path/'output'/'manifest.json').exists()
 
 
+def walk_and_matches():
+    """Five frames of a walk past a wall of points, with COLMAP's own two-view geometry between consecutive frames."""
+    pycolmap=pytest.importorskip('pycolmap')
+    import numpy as np,types
+    rng=np.random.default_rng(3)
+    points=np.c_[rng.uniform(-3,3,400),rng.uniform(-1,1.5,400),rng.uniform(4,6,400)]
+    camera=pycolmap.Camera(model='PINHOLE',width=640,height=480,params=[500,500,320,240],camera_id=1)
+    def turn(degrees):
+        a=np.radians(degrees);return np.array([[np.cos(a),0,-np.sin(a)],[0,1,0],[np.sin(a),0,np.cos(a)]])
+    poses=[]
+    for k in range(5):  # 0.3 m a frame along x, turning 4 degrees a frame
+        R=turn(4*k-8);poses.append(pycolmap.Rigid3d(pycolmap.Rotation3d(R),-R@np.array([.3*k-.6,0,0])))
+    pixels=[]
+    for pose in poses:
+        local=points@pose.rotation.matrix().T+pose.translation
+        pixels.append(np.c_[500*local[:,0]/local[:,2]+320,500*local[:,1]/local[:,2]+240])
+    every=np.c_[np.arange(len(points)),np.arange(len(points))].astype(np.uint32)
+    geometries={(a,a+1):pycolmap.estimate_calibrated_two_view_geometry(camera,pixels[a-1],camera,pixels[a],every) for a in range(1,5)}
+    database=types.SimpleNamespace(exists_two_view_geometry=lambda a,b:(a,b) in geometries,
+        read_two_view_geometry=lambda a,b:geometries[(a,b)],read_keypoints=lambda image:np.c_[pixels[image-1],np.zeros((len(points),4))])
+    def model(poses):
+        images={k+1:types.SimpleNamespace(name=f'image_{k:04d}.jpg',image_id=k+1,camera_id=1,cam_from_world=lambda pose=pose:pose)
+                for k,pose in enumerate(poses)}
+        return types.SimpleNamespace(reg_image_ids=lambda:list(images),image=images.__getitem__,camera=lambda _:camera)
+    return pycolmap,database,model,poses,turn,[f'image_{k:04d}.jpg' for k in range(5)]
+
+def test_a_model_that_agrees_with_its_consecutive_frames_is_consistent():
+    from robotics.world_worker import sparse_colmap
+    pycolmap,database,model,poses,turn,names=walk_and_matches()
+    turns,skipped=sparse_colmap.consecutive_turns(database,model(poses),names)
+    check=sparse_colmap.fold_check(turns,skipped)
+    assert check['status']=='consistent' and check['pairsChecked']==4 and skipped==0
+    assert check['worstDisagreementDegrees']<.5, check
+
+def test_a_model_turned_against_its_own_frames_is_folded():
+    # The fold: one frame placed facing the opposite wall, as false matches between two alike walls put it.
+    from robotics.world_worker import sparse_colmap
+    pycolmap,database,model,poses,turn,names=walk_and_matches()
+    folded=list(poses);R=turn(180)@poses[3].rotation.matrix();folded[3]=pycolmap.Rigid3d(pycolmap.Rotation3d(R),poses[3].translation)
+    check=sparse_colmap.fold_check(*sparse_colmap.consecutive_turns(database,model(folded),names))
+    assert check['status']=='folded' and check['pairsDisagreeing']==2
+    assert {(t['from'],t['to']) for t in check['disagreeing']}=={('image_0002.jpg','image_0003.jpg'),('image_0003.jpg','image_0004.jpg')}
+    assert 170<check['worstDisagreementDegrees']<=180
+    # A frame the model left out: the frames either side of it are compared if they were matched, and skipped if not.
+    unregistered=model(poses);unregistered.reg_image_ids=lambda:[1,2,4,5]
+    turns,skipped=sparse_colmap.consecutive_turns(database,unregistered,names)
+    assert [(t['from'],t['to']) for t in turns]==[('image_0000.jpg','image_0001.jpg'),('image_0003.jpg','image_0004.jpg')] and skipped==1
+
+def test_a_check_with_nothing_to_compare_says_so():
+    from robotics.world_worker import sparse_colmap
+    assert sparse_colmap.fold_check([],3)=={'method':'model turn against two-view turn, consecutive registered frames',
+        'thresholdDegrees':15,'status':'not-checked','pairsChecked':0,'pairsSkipped':3,'pairsDisagreeing':0,
+        'worstDisagreementDegrees':None,'disagreeing':[]}
+    many=[{'from':str(k),'to':str(k+1),'matches':99,'disagreementDegrees':20+k} for k in range(30)]
+    check=sparse_colmap.fold_check(many,0)
+    assert check['pairsDisagreeing']==30 and len(check['disagreeing'])==20 and check['disagreeing'][0]['disagreementDegrees']==49
+
+
 def fake_mapper(monkeypatch,joined_by_seed):
     """A stand-in pycolmap whose mapping joins joined_by_seed[seed] frames per model (an empty list finds none)."""
     import types

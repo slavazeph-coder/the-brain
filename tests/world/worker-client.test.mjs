@@ -146,3 +146,24 @@ test('rejected HTTP status cancels an unread artifact stream', {timeout:3000}, a
     finally{clearTimeout(deadline);}
   }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
+
+test('a worker that refuses an upload says why, including a validation refusal from an older worker',async()=>{
+  // Workers from before October 25 cap uploads at 200 MiB in request validation, which answers with a list of errors.
+  const replies=[{status:422,body:{detail:[{type:'less_than_equal',loc:['body','size'],msg:'Input should be less than or equal to 209715200'}]}},
+                 {status:422,body:{detail:'Photos are limited to 200 MiB; videos to 2 GiB.'}},{status:500,body:{}}];
+  const server=createServer((request,response)=>{const reply=replies.shift();response.writeHead(reply.status,{'Content-Type':'application/json'});response.end(JSON.stringify(reply.body));});
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const client=new WorkerClient(`http://127.0.0.1:${server.address().port}`,'s'.repeat(40));
+    await assert.rejects(client.upload(file,'video'),/^Error: Worker refused the request: Input should be less than or equal to 209715200$/);
+    await assert.rejects(client.upload(file,'image'),/^Error: Photos are limited to 200 MiB; videos to 2 GiB\.$/);
+    await assert.rejects(client.upload(file,'image'),/Worker request failed \(500\)/);
+  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+});
+
+test('a video without its usual extension is uploaded under a name the worker accepts',async()=>{
+  const client=makeClient(),posted=[];const video=new File(['movie bytes'],'IMG_2222',{type:'video/quicktime'});
+  client.request=async(path,options={})=>{if(options.method==='POST'){posted.push(options.body);return{id,offset:0,size:video.size};}return{offset:video.size};};
+  await client.upload(video,'video');
+  assert.deepEqual(posted,[{name:'IMG_2222.mov',size:video.size,kind:'video'}]);
+});

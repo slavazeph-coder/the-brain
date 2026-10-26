@@ -502,10 +502,30 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
   - **What it means for real rooms:** a real room rarely repeats a pattern exactly, but repeated finishes (matching
     cabinet fronts, tiles, identical doors) are common, and real phone walkthroughs are filmed forward. The benchmark's
     own orbit survives the repetition (1.1 cm); a forward walk does not.
+  - **Five minutes, both ways** (same 5-lap, 300-frame path; both runs used the long-video pairing):
+
+    | Wall textures | Frames placed | Path error, RMS | Worst frame | Reprojection |
+    |---|---|---|---|---|
+    | Repeated (object space) | 300 / 300 | 109.5 cm | 370 cm | 0.39 px |
+    | Distinct (world space) | 300 / 300 | 0.56 cm | 1.9 cm | 0.52 px |
+
+    The five-minute path itself holds: each lap of the good run is 0.45–0.66 cm RMS, so error does not build up.
+    Registration and reprojection error do not tell the two runs apart.
+  - **Detected since October 25:** for a video, the worker compares the model's turn between every two consecutive
+    frames with the turn their own matches give (`capture.consistency` in `reconstruction.json`). A disagreement over
+    15° marks the model `folded`, adds a warning and a recapture item, and the site shows it as an error when the
+    reconstruction is opened. Over 18 mappings, the four correct models disagreed by at most 5.1° and the 13 folded ones
+    by 59° or more. It does not catch every error: a 21-frame partial model 15 cm off passed.
+  - **Folding is not repeatable.** Mapping the same matches with eight seeds folded seven times and gave 2.2 cm once,
+    so the worker reports a fold for a recapture rather than retrying.
+  - **Fixed in the benchmark room (October 26):** `build_office.py` keeps object coordinates, so each pattern stays at
+    its object's scale, and moves each object's pattern by the object's own random number. On the same first lap this
+    places 45 of 60 frames at 0.88 cm RMS (worst 2.25 cm); the fold check reads consistent. World-space coordinates also
+    removed the repetition, but made the wall patterns 3–6 times finer: the benchmark room then gave a quarter of the
+    points, and its calibration corner was not reconstructed.
   - **Until a real room is measured:** trust a video's dimensions only after the scale step and some withheld tape
     measurements agree. Reconstructions from videos over a minute carry a warning saying so. The test renders are
-    reproducible with a lap-and-inset variant of `build_office.py`'s `path()`; the world-space variant changes each
-    material's texture coordinate from the object's to the shading point's position.
+    reproducible with a lap-and-inset variant of `build_office.py`'s `path()`.
 - **Sofa:** flagged at 6.8 cm. Its 1.25 m-deep box takes in floor in front of it, and part of the capture saw floor under
   the cluster, so its base was not inferred.
 - **Walls:** two cross at the far end and one diagonal is false. The capture orbits a table and never walks the walls.

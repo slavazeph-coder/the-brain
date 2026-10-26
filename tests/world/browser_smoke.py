@@ -82,6 +82,18 @@ def check(browser, mobile=False):
     assert page.locator('#run').is_disabled()
     assert page.locator('#media-preview img').count()==1
     assert 'Source preview' in page.locator('#media-preview').inner_text()
+    # A walkthrough video has its own picker that accepts video only: phone galleries list videos for it whatever they
+    # make of the mixed photo, video and 3D-file list.
+    page.locator('[data-tab=capture]').click()
+    with view.expect_file_chooser() as chooser:page.locator('[data-action=video]').click()
+    assert chooser.value.element.get_attribute('accept')=='video/*' and not chooser.value.is_multiple()
+    # A picker that returns nothing (on iPhone, a Photo Library conversion that failed) says so. Checked before a file
+    # is added: an added video's preview reports later and replaces the status line.
+    page.locator('#video-file').dispatch_event('cancel')
+    assert 'No file came back' in page.locator('#status').inner_text()
+    # A phone video handed over without its usual extension is taken by its media type.
+    chooser.value.set_files({'name':'IMG_2222','mimeType':'video/quicktime','buffer':b'not a real movie'})
+    page.wait_for_function("[...document.querySelectorAll('.source-row button[data-source]')].some(b=>b.textContent==='IMG_2222')",timeout=12000)
     # JSON imports explicitly marked generated remain non-plannable.
     w['provenance']='generated';w['scaleReviewed']=True;w['mapReviewed']=True
     page.locator('#files').set_input_files({'name':'generated.json','mimeType':'application/json','buffer':json.dumps(w).encode()})

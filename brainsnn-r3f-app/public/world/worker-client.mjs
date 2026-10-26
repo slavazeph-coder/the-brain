@@ -1,4 +1,4 @@
-import {workerURL} from './core.mjs';
+import {workerURL,uploadName} from './core.mjs';
 /** Private worker connection. Credentials never enter URLs or persistent storage. */
 export class WorkerClient {
   constructor(url, token) { this.base=workerURL(url); if(typeof token!=='string'||token.length<32)throw new Error('Use a worker access token with at least 32 characters.'); this.token=token;this.uploads=new WeakMap(); }
@@ -12,7 +12,7 @@ export class WorkerClient {
       const chunks=[];let size=0;while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1024*1024){await reader.cancel();throw new Error('Worker JSON exceeded the 1 MiB response limit.');}chunks.push(value);}
       const all=new Uint8Array(size);let offset=0;for(const c of chunks){all.set(c,offset);offset+=c.length;}
       let data;try{data=JSON.parse(new TextDecoder().decode(all));}catch{throw new Error('Worker returned invalid JSON.');}
-      if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail.slice(0,300):`Worker request failed (${response.status}).`);
+      if(!response.ok)throw new Error(typeof data.detail==='string'?data.detail.slice(0,300):typeof data.detail?.[0]?.msg==='string'?`Worker refused the request: ${data.detail[0].msg.slice(0,300)}`:`Worker request failed (${response.status}).`);
       return data;
     }finally{clearTimeout(timer);signal?.removeEventListener('abort',relay);}
   }
@@ -20,7 +20,7 @@ export class WorkerClient {
   async upload(file, kind, signal, progress=()=>{}){
     let item=this.uploads.get(file);
     if(item){try{item=await this.request(`/v1/uploads/${item.id}`,{signal});}catch(e){if(signal?.aborted)throw e;item=null;}}
-    if(!item)item=await this.request('/v1/uploads',{method:'POST',body:{name:file.name,size:file.size,kind},signal});
+    if(!item)item=await this.request('/v1/uploads',{method:'POST',body:{name:uploadName(file),size:file.size,kind},signal});
     if(!/^[a-f0-9]{32}$/.test(item.id))throw new Error('Invalid upload identifier.');this.uploads.set(file,item);
     let offset=item.offset;const advertised=this.caps?.limits?.chunk_bytes??4*1024**2;
     if(!Number.isSafeInteger(offset)||offset<0||offset>file.size||item.size!==file.size)throw new Error('Invalid upload offset or size.');
