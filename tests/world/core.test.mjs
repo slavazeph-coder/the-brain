@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SCHEMA,LIMITS,ROBOTS,clone,normalizeWorld,sampleWorld,planningGate,planWorld,estimate,classifyFile,workerURL,proofPack,arenaMap,usdScene} from '../../brainsnn-r3f-app/public/world/core.mjs';
+import {SCHEMA,LIMITS,ROBOTS,clone,normalizeWorld,sampleWorld,planningGate,planWorld,estimate,classifyFile,uploadName,workerURL,proofPack,arenaMap,usdScene} from '../../brainsnn-r3f-app/public/world/core.mjs';
 const robot={...ROBOTS.cleaner,margin:.1};
 test('authored sample is deterministic, bounded and explicitly not a robot policy',()=>{const a=planWorld(sampleWorld(),robot),b=planWorld(sampleWorld(),robot);assert.deepEqual(a,b);assert.ok(a.route.length<12002);assert.ok(a.distance>0);assert.equal(a.policyExecuted,false);assert.equal(a.safetyCertified,false);});
 test('every route point clears inflated obstacles and floor boundaries',()=>{const w=sampleWorld(),r=planWorld(w,robot),radius=Math.hypot(robot.width,robot.depth)/2+robot.margin;for(let i=0;i<r.route.length;i++){const p=r.route[i];assert.ok(p.x>=radius&&p.z>=radius&&p.x<=w.width-radius&&p.z<=w.depth-radius);for(const o of w.objects){assert.ok(p.x<o.x-radius||p.x>o.x+o.w+radius||p.z<o.z-radius||p.z>o.z+o.d+radius);}if(i)assert.ok(Math.hypot(p.x-r.route[i-1].x,p.z-r.route[i-1].z)<=r.cell*Math.SQRT2+.00001);}});
@@ -30,3 +30,13 @@ test('worker URL prohibits credentials, non-HTTPS remote, and query strings',()=
 test('Arena export converts top-left boxes to centre-based coordinates',()=>{const w=sampleWorld(),a=arenaMap(w);assert.equal(a.schemaVersion,'brainsnn.site.v1');assert.equal(a.obstacles[0].x,w.objects[0].x+w.objects[0].w/2);assert.ok(a.obstacles.some(o=>o.label.includes('unknown')));assert.equal(a.source.kind,'sample');assert.throws(()=>arenaMap({...w,provenance:'generated'}));});
 test('OpenUSD export uses meters, Y-up and static collision proxies',()=>{const s=usdScene(sampleWorld());assert.match(s,/metersPerUnit = 1/);assert.match(s,/upAxis = "Y"/);assert.match(s,/PhysicsCollisionAPI/);assert.equal((s.match(/def Cube/g)||[]).length,sampleWorld().objects.length+1);});
 test('proof hash authenticates content but never claims authorship',async()=>{const p=await proofPack(sampleWorld(),null,{},[],[{type:'test'}]);const {integrity,...body}=p;const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(body)));assert.equal(integrity.value,Buffer.from(h).toString('hex'));assert.equal(integrity.authenticatesAuthor,false);assert.equal(p.signature,null);});
+
+test('a phone file named without its usual extension is taken by its media type and uploaded with one',()=>{
+  const video={name:'IMG_2222',type:'video/quicktime',size:300*1024**2};
+  assert.equal(classifyFile(video),'video');assert.equal(uploadName(video),'IMG_2222.mov');
+  assert.equal(classifyFile({name:'clip.m4v',type:'video/x-m4v',size:40}),'video');assert.equal(uploadName({name:'clip.m4v',type:'video/x-m4v',size:40}),'clip.m4v.mp4');
+  assert.equal(uploadName({name:'walk.MOV',type:'video/quicktime',size:40}),'walk.MOV','a usual name is kept as it is');
+  assert.equal(classifyFile({name:'scan',type:'image/jpeg',size:40}),'image');
+  assert.throws(()=>classifyFile({name:'photo.heic',type:'image/heic',size:40}),/photo\.heic \(image\/heic\) is not a supported file/);
+  assert.throws(()=>classifyFile({name:'notes',type:'text/plain',size:40}),/notes \(text\/plain\)/);
+});

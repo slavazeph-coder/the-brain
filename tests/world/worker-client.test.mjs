@@ -160,3 +160,10 @@ test('a worker that refuses an upload says why, including a validation refusal f
     await assert.rejects(client.upload(file,'image'),/Worker request failed \(500\)/);
   }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
+
+test('a video without its usual extension is uploaded under a name the worker accepts',async()=>{
+  const client=makeClient(),posted=[];const video=new File(['movie bytes'],'IMG_2222',{type:'video/quicktime'});
+  client.request=async(path,options={})=>{if(options.method==='POST'){posted.push(options.body);return{id,offset:0,size:video.size};}return{offset:video.size};};
+  await client.upload(video,'video');
+  assert.deepEqual(posted,[{name:'IMG_2222.mov',size:video.size,kind:'video'}]);
+});
