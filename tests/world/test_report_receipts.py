@@ -532,6 +532,49 @@ def test_cancelled_running_adapter_process_is_reaped_and_job_stays_cancelled(con
         assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
 
 
+def test_delete_artifacts_is_refused_while_job_is_running(configured, tmp_path):
+    # Cancellation regression for the running phase: delete_artifacts must
+    # return 409 while the job is still active — the owner cannot wipe a
+    # job's output directory mid-execution (that would destroy evidence the
+    # adapter is still writing and the receipt path would later re-hash).
+    # Only after the job stops (cancelled or complete) does the same call
+    # succeed. This pins app.py's ACTIVE/running guard on DELETE /artifacts.
+    options, config = configured
+    adapters = tmp_path / 'adapters.json'
+    adapters.write_text(json.dumps([{'id': 'hold', 'command': [sys.executable, '-c', 'import time; time.sleep(30)'], 'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'], 'timeout_seconds': 40}]))
+    options['adapters'] = str(adapters)
+    registry(config, [row('alpha', A, engines=['inspect', 'hold']), row('beta', B)])
+    with TestClient(create_app(**options)) as client:
+        uid = upload(client, A)
+        jid = prepare(client, A, uid, 'hold').json()['id']
+        assert client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={}).status_code == 200
+        for _ in range(100):
+            if client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'running': break
+            time.sleep(.02)
+        else: raise AssertionError('Hold adapter did not start')
+        # While the adapter subprocess is alive, the job is ACTIVE/running:
+        # deleting its artifacts must be refused, not silently rmtree'd.
+        refused = client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A))
+        assert refused.status_code == 409, refused.text
+        # The output directory must still exist — the refusal did not delete it.
+        assert (options['root'] / 'jobs' / jid).exists()
+        # Cancel so the running job stops and releases its ACTIVE status.
+        assert client.delete('/v1/jobs/' + jid, headers=headers(A)).status_code == 200
+        # Wait for the execution thread to finish its cleanup: stop_process
+        # kills the adapter and closes operator.log; execute()'s finally
+        # block removes jid from `running` before the thread fully exits.
+        # Poll until the log file is gone AND the DB shows cancelled — by
+        # then the finally block has run and the `running` guard is clear.
+        for _ in range(200):
+            job = client.get('/v1/jobs/' + jid, headers=headers(A)).json()
+            if not (options['root'] / 'jobs' / jid / 'operator.log').exists() and job['status'] == 'cancelled':
+                break
+            time.sleep(.02)
+        # Now the job is no longer active/running: the same delete_artifacts
+        # call succeeds, proving the 409 above was the guard, not a generic error.
+        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
+
+
 def test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature(signed_options, monkeypatch):
     # Regression pin for the cancel-while-final-source-hashes gap: the receipt
     # path creates a LOCAL threading.Event (report_receipt line 694) that only
