@@ -108,3 +108,68 @@ explain its source binding, private-frame retention and unavailable timestamps. 
 - **Captions ignore the pointer.** Captions need `pointer-events:none`, or orbit drags select their text.
 - **Use an implied phone height near 1.3–1.6 m.** On the Mip-NeRF room, a typed scale of 0.66 m per unit keeps
   walls inside the 1.3–2.3 m band the wall finder uses; 0.41 drops them below it.
+
+## Repeatable private video qualification
+
+`qualify_video.py` tests a supplied video through real local worker HTTP endpoints. It checks a partial upload,
+retained offset, rejected stale chunk, resumed bytes and source SHA-256. The full mode then runs CPU COLMAP,
+validates its camera ledger, compiles an unscaled GLB in native Blender and verifies every signed download.
+It records the checkout commit/tree, dirty state, tracked diff hash, runner hashes and actual adapter versions.
+No video, extracted frames, credentials or derived artifacts belong in git or ordinary CI.
+
+From the repository root, prepare Python using the existing pinned worker dependencies. Install FFmpeg/FFprobe
+and Blender 4.2 LTS separately; the runner does not download tools or model weights.
+
+```sh
+python3 -m venv /tmp/brainsnn-video-venv
+/tmp/brainsnn-video-venv/bin/python -m pip install \
+  -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-colmap.txt
+
+# Upload/resume/integrity only, with no reconstruction or geometry acceptance.
+/tmp/brainsnn-video-venv/bin/python scripts/world-demo/qualify_video.py \
+  --video /absolute/path/walkthrough.mp4 --out ../private-upload-001 --upload-only
+
+# Full real run. Use a fresh output directory outside the checkout.
+/tmp/brainsnn-video-venv/bin/python scripts/world-demo/qualify_video.py \
+  --video /absolute/path/walkthrough.mp4 --out ../private-video-001 \
+  --blender /absolute/path/blender
+
+# Recheck saved bytes and geometry without another reconstruction or Blender run.
+python3 scripts/world-demo/qualify_video.py \
+  --review ../private-video-001 --out ../private-review-001
+```
+
+Videos must contain a video stream, last 2–300 seconds and fit the 2 GiB worker limit. Optional
+`--expected-video-sha256` admits one exact source. Optional `--expected-head` guards the full checkout SHA for
+execution, including a feature branch; it does not assume the branch is merged. The default interpreter is the
+invoking Python, preserving virtual environments. `--timeout` is a 60–3600-second budget per adapter job.
+The worker is private, bound to loopback, with random ephemeral credentials, redirects/proxies disabled,
+access logs off and model-offline flags. Those flags are not an OS network sandbox. Ctrl-C and SIGTERM request
+cancellation and stop the worker process group. Outputs retain the uploaded video and worker intermediates;
+delete the private run directory when no longer needed. Do not publish the directory wholesale.
+
+The runner writes `status.json`, `progress.jsonl`, `summary.json`, `geometry-quality.json`, verified downloads
+and their hash manifests. A review requires both reconstruction and scene manifests, except when the original
+reconstruction is folded and scene generation was skipped. A deleted scene manifest cannot downgrade a full
+review into a reconstruction-only pass. Review verifies saved artifacts and bindings; it does not execute or
+revalidate the original upload, native projection parity or physical measurements.
+
+`softwareWorkflowPassed` and `geometryQuality.screeningPassed` are separate. Geometry screening defaults to
+at least 90% registered selected frames, one discovered model, an actually checked consistent fold test,
+bounded gaps in the extracted image sequence, at least 20 supporting points per wall primitive and at least
+20% fitted-floor inliers with floor alignment. Missing/malformed evidence requires review. The fraction and
+wall-support thresholds can be changed explicitly; all thresholds are heuristics, not measured tolerances.
+Extracted indices are not original video PTS or elapsed-time coverage. Small reprojection error alone cannot
+establish accurate geometry. COLMAP results, selected fragments and fold status can vary across runs; there is
+no golden point count. Repeated runs that alternate between incomplete and folded output are not accepted.
+
+Exit codes: **0** requested workflow and screening passed (upload-only leaves geometry unevaluated),
+**2** geometry requires review, **1** execution/integrity failure, **130** interrupted. Folded reconstructions
+are never compiled. Without a measured reference, units remain arbitrary and metric BIM/CAD/USD/Nav2 exports
+and component fitting stay gated. Even an exit-0 full run does not validate physical accuracy or robot safety.
+This is a worker test, not physical iPhone picker or public hosted-service qualification. For the independent
+browser journey, see the opt-in `tests/world/worker_video_browser_smoke.py`.
+
+Ordinary CI runs `test_video_qualification.py` and `test_qualify_video_cli.py`: synthetic evidence, integrity and
+binding failures, malformed GLB, cancellation cleanup and a real HTTP upload-only run from a generated clip.
+Private walkthrough reconstruction remains an explicit operator-run test.

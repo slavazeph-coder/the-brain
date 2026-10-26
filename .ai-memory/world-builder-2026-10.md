@@ -122,3 +122,18 @@ See docs/world-component-fit.md and its qualification record. The authored 30 mm
 depth-biased wall fixture passed native IFC/Rhino/GLB consistency checks after refinement.
 The AGENTS memory-sync helper is absent on this host; memory changes are committed
 with the feature branch through ordinary git.
+
+
+### Repeatable video qualification, 26 October 2026
+
+`scripts/world-demo/qualify_video.py` makes private upload/resume/SHA256, real CPU
+reconstruction, source-bound camera ledger and native unscaled GLB checks repeatable.
+It has upload-only and retained-review modes; private outputs stay outside git.
+Separate workflow success from heuristic geometry screening (registration, fragments,
+extracted-sequence gaps, wall support and floor evidence). Exit 2 means review
+required, not a transport failure. No measured reference means no physical accuracy,
+metric component-fit, BIM/CAD/USD or Nav2 acceptance. Pure screening/integrity and
+real HTTP upload-only regression tests run in World Builder CI. SIGTERM follows
+cancellation/worker cleanup; a virtualenv Python path must not be resolved through
+its symlink to the base interpreter. See scripts/world-demo/README.md for commands.
+The memory-sync helper is absent here; this note is committed with the test change.
