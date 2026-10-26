@@ -52,6 +52,8 @@ export function WorldScan() {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
   const videoInput = useRef(null);
+  // Each choice (and Clear) starts a new selection; a video's length check that finishes after a newer one is dropped.
+  const selection = useRef(0);
   const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files]);
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export function WorldScan() {
   async function chooseFiles(list) {
     const received = Array.from(list || []);
     if (!received.length) return;
+    const mine = ++selection.current;
     if (received.length > MAX_FILES) { setError('Choose up to eight photos, or one video.'); return; }
     if (received.some(file => !isSupported(file))) { setError('Use JPG, PNG, WebP, MP4, MOV or WebM files.'); return; }
     if (received.filter(isVideo).length > 1) { setError('Choose one video at a time, or up to eight still photos.'); return; }
@@ -71,6 +74,7 @@ export function WorldScan() {
       setError('Videos can be up to 2 GB and photos up to 200 MB each. Record at 1080p for a smaller file.'); return;
     }
     const seconds = received.some(isVideo) ? await videoSeconds(received[0]) : null;
+    if (mine !== selection.current) return;
     if (seconds !== null && seconds > MAX_VIDEO_SECONDS + 1) { setError(`This video is ${(seconds / 60).toFixed(1)} minutes long. Walkthroughs can be up to five minutes; trim it, then choose it again.`); return; }
     setFiles(received);
     setActiveIndex(0);
@@ -82,7 +86,7 @@ export function WorldScan() {
     setDragOver(false);
     chooseFiles(event.dataTransfer?.files);
   }
-  function remove() { setFiles([]); setActiveIndex(0); setError(''); }
+  function remove() { selection.current += 1; setFiles([]); setActiveIndex(0); setError(''); }
   const current = previews[activeIndex] || null;
   const video = files.some(isVideo);
   const needMorePhotos = files.length > 0 && !video && files.length < 6;
