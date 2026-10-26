@@ -52,6 +52,7 @@ export function WorldScan() {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
   const videoInput = useRef(null);
+  const anyInput = useRef(null);
   // Each choice (and Clear) starts a new selection; a video's length check that finishes after a newer one is dropped.
   const selection = useRef(0);
   const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files]);
@@ -61,6 +62,13 @@ export function WorldScan() {
     track('world_capture_opened');
   }, []);
   useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews]);
+  // A picker that returns no file (closed, or on iPhone a video whose conversion failed) says so instead of doing nothing.
+  useEffect(() => {
+    const inputs = [videoInput.current, anyInput.current].filter(Boolean);
+    const none = () => setError('No file came back from your phone\'s picker. On iPhone, a video picked from Photo Library is converted first and that can fail for a long video: in Photos, tap Share → Save to Files, then pick it here with Choose File.');
+    inputs.forEach(input => input.addEventListener('cancel', none));
+    return () => inputs.forEach(input => input.removeEventListener('cancel', none));
+  }, []);
 
   async function chooseFiles(list) {
     const received = Array.from(list || []);
@@ -110,7 +118,7 @@ export function WorldScan() {
             <strong>{files.length ? 'Replace this capture' : 'Drop your video or photos here'}</strong>
             <span>or tap to choose files from your device</span>
             <small>MP4, MOV, WebM, JPG, PNG, WebP · videos up to 5 min and 2 GB · photos up to 200 MB each</small>
-            <input type="file" accept={ACCEPT} multiple onChange={event => { chooseFiles(event.target.files); event.target.value = ''; }} aria-label="Select phone video or photographs"/>
+            <input ref={anyInput} type="file" accept={ACCEPT} multiple onChange={event => { chooseFiles(event.target.files); event.target.value = ''; }} aria-label="Select phone video or photographs"/>
           </label>
           {/* A video-only list gets the phone gallery's plain video picker; galleries treat a mixed photo and video list differently. */}
           <button type="button" className="world-button world-button-outline" onClick={() => videoInput.current?.click()}><FileVideo size={16} aria-hidden="true" /> Choose a walkthrough video</button>

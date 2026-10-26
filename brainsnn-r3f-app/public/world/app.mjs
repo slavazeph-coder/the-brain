@@ -155,6 +155,7 @@ async function addFiles(list){
   capture.stop();
   for(const file of Array.from(list)){
     depthAbort?.abort();artifactAbort?.abort();depthStatus='';
+    status(`Received ${file.name||'a file'} (${(file.size/1024**2).toFixed(file.size<10*1024**2?1:0)} MB${file.type?`, ${file.type}`:''}). Checking it…`);
     try{const kind=classifyFile(file);if(kind==='map'){const json=JSON.parse(await file.text());
       if(json?.schema==='brainsnn.reconstruction.v1'){const target=[...sources].reverse().find(s=>s.visual&&s.visual.origin!=='depth');if(!target)throw new Error('Import the reconstruction point cloud (PLY) first, then its reconstruction.json.');
         target.reconstruction=json;activeSource=target;display='visual';event('reconstruction_evidence_attached',{source:target.name,file:file.name,cameras:Array.isArray(json.cameras)?json.cameras.length:0});setTab('capture');update();status('Reconstruction evidence attached. Propose a planning map from the Capture panel.');continue;}
@@ -423,7 +424,10 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.remove!==undefined){bimWorkflow.reset();const i=Number(b.dataset.remove),s=sources[i];observations.removeSource(s);URL.revokeObjectURL(s.url);sources.splice(i,1);if(activeSource===s){depthAbort?.abort();activeSource=sources[0]||null;}renderPanel();renderMedia();update();return;}
   if(b.dataset.artifact!==undefined&&client&&job){client.download(job.id,Number(b.dataset.artifact)).then(url=>{const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer';a.click();status('Download started using a short-lived ticket; the file is not buffered by the page.');}).catch(e=>status(e.message,true));}
 });
-document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(id==='files'||id==='video-file'||id==='phone-camera'){void addFiles(e.target.files);return;}if(id==='objects'){selected=v;renderInspector();return;}
+// A picker that returns no file (closed, or on iPhone a video whose conversion failed) says so instead of doing nothing.
+const PICKERS=['files','video-file','phone-camera'],NO_FILE='No file came back from your phone\'s picker. On iPhone, a video picked from Photo Library is converted first and that can fail for a long video: in Photos, tap Share → Save to Files, then pick it here with Choose File.';
+document.addEventListener('cancel',e=>{if(PICKERS.includes(e.target?.id))status(NO_FILE,true);},true);
+document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(PICKERS.includes(id)){if(!e.target.files?.length){status(NO_FILE,true);return;}void addFiles(e.target.files);return;}if(id==='objects'){selected=v;renderInspector();return;}
   if(id==='robot'){robotId=v;robot={...ROBOTS[v],margin:robot.margin};invalidate();renderPanel();return;}
   if(id.startsWith('robot-')){const k=id.slice(6),next=Number(v),range={width:[.1,5],depth:[.1,5],speed:[.01,3],margin:[0,2]}[k];if(!range||!Number.isFinite(next)||next<range[0]||next>range[1]){status('Robot parameter is outside the supported range.',true);renderPanel();return;}robot[k]=next;invalidate();return;}
   if(Object.hasOwn(assumptions,id)){const next={...assumptions,[id]:v===''?null:Number(v)};try{estimate(result||{travelSeconds:0,turns:0},next);assumptions=next;update();renderPanel();}catch(err){status(err.message,true);renderPanel();}return;}

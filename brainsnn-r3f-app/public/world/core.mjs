@@ -121,9 +121,22 @@ export function estimate(result, values) {
   const robotRate = rate(values.robotRate, 'Robot hourly cost'), labourRate = rate(values.labourRate, 'Labour hourly cost');
   return { minutes, assistanceMinutes, cost: robotRate === null || labourRate === null ? null : minutes / 60 * robotRate + (setupMinutes + assistanceMinutes) / 60 * labourRate, currency: 'CAD', assumptions: { setupMinutes, turnSeconds, assistanceMinutes, robotRate, labourRate }, measured: false };
 }
+// A phone can hand over a file whose name has no usual extension; its media type then decides.
+const VIDEO_TYPES = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'video/x-m4v': 'mp4' };
+const IMAGE_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+function extensionOf(file) {
+  const named = file.name.includes('.') ? file.name.toLowerCase().split('.').pop() : '';
+  if (['mp4', 'mov', 'webm', 'jpg', 'jpeg', 'png', 'webp', 'json', 'ply', 'splat', 'spz', 'ksplat', 'glb', 'heic', 'heif'].includes(named)) return named;
+  return VIDEO_TYPES[file.type] || IMAGE_TYPES[file.type] || named;
+}
+/** The name to give the worker: the file's own name, with the extension its media type implies when it has none. */
+export function uploadName(file) {
+  const ext = extensionOf(file), named = file.name.toLowerCase().split('.').pop();
+  return file.name.includes('.') && named === ext ? file.name : `${file.name || 'capture'}.${ext}`;
+}
 export function classifyFile(file) {
   if (!file || !file.size) throw new Error('Choose a non-empty file.');
-  const ext = file.name.toLowerCase().split('.').pop();
+  const ext = extensionOf(file);
   if (['mp4', 'mov', 'webm'].includes(ext)) {
     if (file.size > LIMITS.video) throw new Error('Videos can be up to 2 GiB. Record at 1080p, or keep the walk under five minutes.');
     return 'video';
@@ -132,7 +145,7 @@ export function classifyFile(file) {
   if (ext === 'json') { if (file.size > LIMITS.json) throw new Error('Map JSON must be at most 2 MiB.'); return 'map'; }
   if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image';
   if (['ply', 'splat', 'spz', 'ksplat', 'glb'].includes(ext)) return 'visual';
-  throw new Error('Use JPG, PNG, WebP, MP4, MOV, WebM, GLB, PLY, SPLAT, SPZ or a World v1 map. Convert HEIC to JPEG first.');
+  throw new Error(`${file.name}${file.type ? ` (${file.type})` : ''} is not a supported file. Use JPG, PNG, WebP, MP4, MOV, WebM, GLB, PLY, SPLAT, SPZ or a World v1 map. Convert HEIC to JPEG first.`);
 }
 export function workerURL(value) {
   const u = new URL(value);

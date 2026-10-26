@@ -1,4 +1,4 @@
-import {workerURL} from './core.mjs';
+import {workerURL,uploadName} from './core.mjs';
 /** Private worker connection. Credentials never enter URLs or persistent storage. */
 export class WorkerClient {
   constructor(url, token) { this.base=workerURL(url); if(typeof token!=='string'||token.length<32)throw new Error('Use a worker access token with at least 32 characters.'); this.token=token;this.uploads=new WeakMap(); }
@@ -20,7 +20,7 @@ export class WorkerClient {
   async upload(file, kind, signal, progress=()=>{}){
     let item=this.uploads.get(file);
     if(item){try{item=await this.request(`/v1/uploads/${item.id}`,{signal});}catch(e){if(signal?.aborted)throw e;item=null;}}
-    if(!item)item=await this.request('/v1/uploads',{method:'POST',body:{name:file.name,size:file.size,kind},signal});
+    if(!item)item=await this.request('/v1/uploads',{method:'POST',body:{name:uploadName(file),size:file.size,kind},signal});
     if(!/^[a-f0-9]{32}$/.test(item.id))throw new Error('Invalid upload identifier.');this.uploads.set(file,item);
     let offset=item.offset;const advertised=this.caps?.limits?.chunk_bytes??4*1024**2;
     if(!Number.isSafeInteger(offset)||offset<0||offset>file.size||item.size!==file.size)throw new Error('Invalid upload offset or size.');
