@@ -18,7 +18,9 @@ its numbers or frames are shown, and never present it as a customer site or as a
 - posters, a clock, sockets and an acoustic panel.
 
 Every material is procedural, so the repo needs no image files. The walls are patterned enough for structure from
-motion to find features. The carpet and the plain furniture are not, and that is on purpose: low-texture floors
+motion to find features. Each object's pattern is moved by the object's own random number, so walls that share a
+material do not repeat one pattern. Before October 26 they did, and a forward walk matched opposite walls to each other
+and folded the room (see the handoff's known weaknesses). The carpet and the plain furniture are not, and that is on purpose: low-texture floors
 and furniture are what real offices have. The camera walks once round the room, 0.95 m inside the walls at 1.5 m height, looking 50°
 inward. It is 26 mm on a 36 mm sensor, about a phone's main camera.
 
@@ -33,22 +35,29 @@ inward. It is 26 mm on a 36 mm sensor, about a phone's main camera.
 
 ## Results (October 25, 2026)
 
-The room was rendered once, 60 frames at 960 × 540. Two reconstructions with `colmap-sparse` registered all 60 cameras
+On October 25 the room was rendered once, 60 frames at 960 × 540. Two reconstructions with `colmap-sparse` registered all 60 cameras
 (20,908 and 20,844 points), and the camera alignment is within 7.5 mm RMS. The first two columns compile the first
-reconstruction with and without the hand-off fixes, on #232's worker. The last column is the second reconstruction
+reconstruction with and without the hand-off fixes, on #232's worker. The third column is the second reconstruction
 on the merged code (#232 plus this branch), and it is the run the demo film is made from.
 
-| | before | hand-off fixes | all fixes, second run |
-|---|---|---|---|
-| Model's up against true up | 9.4° | 0.3° | 0.3° |
-| Model floor against the true floor | +58 cm (near table height) | +4.5 cm | +4.0 cm |
-| Walls matched | 2 of 4 | 4 of 4 | 4 of 4 |
-| Room width, depth error | not measurable | −1.8, −1.8 cm | −1.7, −1.5 cm |
-| Wall face offset, median | 6.7 cm | 0.9 cm | 0.7 cm |
-| Furniture matched (of 10) | 2 | 1 | 5 |
-| Spurious objects | 3 | 1 | 2 |
-| Withheld spans usable, within tolerance | 5 of 7, 5 | 7 of 7, 7 | 7 of 7, 7 |
-| Worst withheld error | 4.1 cm | 2.0 cm | 1.9 cm (1.1%) |
+| | before | hand-off fixes | all fixes, second run | distinct patterns, Oct 26 |
+|---|---|---|---|---|
+| Model's up against true up | 9.4° | 0.3° | 0.3° | 0.8° |
+| Model floor against the true floor | +58 cm (near table height) | +4.5 cm | +4.0 cm | +4.0 cm |
+| Walls matched | 2 of 4 | 4 of 4 | 4 of 4 | 4 of 4 |
+| Room width, depth error | not measurable | −1.8, −1.8 cm | −1.7, −1.5 cm | −1.6, −1.7 cm |
+| Wall face offset, median | 6.7 cm | 0.9 cm | 0.7 cm | 0.8 cm |
+| Furniture matched (of 10) | 2 | 1 | 5 | 6 |
+| Spurious objects | 3 | 1 | 2 | 1 |
+| Withheld spans usable, within tolerance | 5 of 7, 5 | 7 of 7, 7 | 7 of 7, 7 | 5 of 7, 5 |
+| Worst withheld error | 4.1 cm | 2.0 cm | 1.9 cm (1.1%) | 2.1 cm (1.7%) |
+| Clear distance between the wall boxes | | | −11.7, −11.5 cm | −1.6, −1.7 cm |
+
+The last column is the room rendered again on October 26 with each object's pattern shifted, on main after #242. The
+reconstruction registered all 60 cameras (21,556 points), the camera alignment is 5.4 mm RMS, and the fold check reads
+consistent (worst 3.7°). The walls now stand behind their faces (#240), so the clear distance between the wall boxes is
+the faces' own error. Both credenza spans became unusable: no reconstructed point lay within 5 cm of a credenza-top
+corner, and spans with an unfound endpoint are reported as unusable, never estimated.
 
 What the runs found, in order:
 
