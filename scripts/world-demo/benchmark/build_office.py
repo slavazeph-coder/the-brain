@@ -29,10 +29,16 @@ def material(name, build):
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree
     bsdf = nt.nodes['Principled BSDF']; build(nt, bsdf); return m
 def coord(nt, scale=1.0):
-    # World position, not object coordinates: in object coordinates every wall sharing a material carries the same
-    # pattern, and a forward walk matched opposite walls to each other and folded the room (handoff, known weaknesses).
-    tc = nt.nodes.new('ShaderNodeNewGeometry'); mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (scale,) * 3
-    nt.links.new(tc.outputs['Position'], mp.inputs['Vector']); return mp.outputs['Vector']
+    # Object coordinates keep each pattern at its object's scale. Each object's own random number then moves it to another
+    # part of the pattern: walls sharing a material carried the identical pattern before, and a forward walk matched
+    # opposite walls to each other and folded the room (docs/world-builder-handoff.md, known weaknesses).
+    tc = nt.nodes.new('ShaderNodeTexCoord'); info = nt.nodes.new('ShaderNodeObjectInfo')
+    shift = nt.nodes.new('ShaderNodeVectorMath'); shift.operation = 'SCALE'; shift.inputs[0].default_value = (97.0, 89.0, 83.0)
+    nt.links.new(info.outputs['Random'], shift.inputs['Scale'])
+    moved = nt.nodes.new('ShaderNodeVectorMath'); moved.operation = 'ADD'
+    nt.links.new(tc.outputs['Object'], moved.inputs[0]); nt.links.new(shift.outputs['Vector'], moved.inputs[1])
+    mp = nt.nodes.new('ShaderNodeMapping'); mp.inputs['Scale'].default_value = (scale,) * 3
+    nt.links.new(moved.outputs['Vector'], mp.inputs['Vector']); return mp.outputs['Vector']
 def ramp(nt, src, stops):
     r = nt.nodes.new('ShaderNodeValToRGB'); cr = r.color_ramp; cr.elements[0].position, cr.elements[0].color = stops[0]
     cr.elements[1].position, cr.elements[1].color = stops[1]
