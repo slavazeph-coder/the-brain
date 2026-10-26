@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Bot, Camera, CircleHelp, FileVideo, LockKeyhole, ScanLine, UploadCloud } from 'lucide-react';
 import { PublicNav, PublicFooter } from './PublicNav.jsx';
 import { track } from '../lib/analytics.js';
@@ -15,8 +15,11 @@ const USE_CASES = [
 ];
 const ACCEPT = 'video/mp4,video/quicktime,video/webm,image/jpeg,image/png,image/webp';
 const MAX_FILES = 8;
-const MAX_SINGLE = 150 * 1024 * 1024;
-const MAX_TOTAL = 250 * 1024 * 1024;
+// The same limits as World Builder, where the capture is processed: photos 200 MiB each, one video of up to five
+// minutes and 2 GiB. A 2:22 phone video at 1080p60 or 4K is 200-400 MB, over the 150 MB this page allowed before.
+const MAX_PHOTO = 200 * 1024 * 1024;
+const MAX_VIDEO = 2 * 1024 ** 3;
+const MAX_VIDEO_SECONDS = 300;
 function formatSize(size) { return (size / 1024 / 1024).toFixed(size < 10 * 1024 * 1024 ? 1 : 0) + ' MB'; }
 function useCaseFromURL() {
   if (typeof window === 'undefined') return 'general';
@@ -28,6 +31,18 @@ function isSupported(file) {
     || /\.(mp4|mov|webm|jpe?g|png|webp)$/i.test(file.name);
 }
 function isVideo(file) { return file.type.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.name); }
+/** A video's length from its metadata; null when this browser cannot tell (World Builder's worker checks again). */
+function videoSeconds(file) {
+  return new Promise(resolve => {
+    const node = document.createElement('video'), url = URL.createObjectURL(file);
+    let timer = 0;
+    const done = value => { if (!timer) return; clearTimeout(timer); timer = 0; node.removeAttribute('src'); node.load(); URL.revokeObjectURL(url); resolve(Number.isFinite(value) && value > 0 ? value : null); };
+    timer = setTimeout(() => done(null), 8000);
+    node.preload = 'metadata'; node.muted = true;
+    node.onloadedmetadata = () => done(node.duration); node.onerror = () => done(null);
+    node.src = url;
+  });
+}
 
 export function WorldScan() {
   const [useCase, setUseCase] = useState(useCaseFromURL);
@@ -36,6 +51,7 @@ export function WorldScan() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
+  const videoInput = useRef(null);
   const previews = useMemo(() => files.map(file => ({ file, url: URL.createObjectURL(file) })), [files]);
 
   useEffect(() => {
@@ -44,16 +60,18 @@ export function WorldScan() {
   }, []);
   useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews]);
 
-  function chooseFiles(list) {
+  async function chooseFiles(list) {
     const received = Array.from(list || []);
     if (!received.length) return;
-    if (received.length > MAX_FILES) { setError('Choose up to eight photos, or one short video.'); return; }
+    if (received.length > MAX_FILES) { setError('Choose up to eight photos, or one video.'); return; }
     if (received.some(file => !isSupported(file))) { setError('Use JPG, PNG, WebP, MP4, MOV or WebM files.'); return; }
-    if (received.some(file => file.size > MAX_SINGLE) || received.reduce((sum,file) => sum + file.size, 0) > MAX_TOTAL) {
-      setError('Keep files under 150 MB each and 250 MB combined.'); return;
-    }
     if (received.filter(isVideo).length > 1) { setError('Choose one video at a time, or up to eight still photos.'); return; }
     if (received.some(isVideo) && received.length > 1) { setError('Choose a single video or a group of photos, not both in the same capture.'); return; }
+    if (received.some(file => isVideo(file) ? file.size > MAX_VIDEO : file.size > MAX_PHOTO)) {
+      setError('Videos can be up to 2 GB and photos up to 200 MB each. Record at 1080p for a smaller file.'); return;
+    }
+    const seconds = received.some(isVideo) ? await videoSeconds(received[0]) : null;
+    if (seconds !== null && seconds > MAX_VIDEO_SECONDS + 1) { setError(`This video is ${(seconds / 60).toFixed(1)} minutes long. Walkthroughs can be up to five minutes; trim it, then choose it again.`); return; }
     setFiles(received);
     setActiveIndex(0);
     setError('');
@@ -87,9 +105,13 @@ export function WorldScan() {
             <UploadCloud size={35} strokeWidth={1.5} aria-hidden="true"/>
             <strong>{files.length ? 'Replace this capture' : 'Drop your video or photos here'}</strong>
             <span>or tap to choose files from your device</span>
-            <small>MP4, MOV, WebM, JPG, PNG, WebP · up to 250 MB total</small>
+            <small>MP4, MOV, WebM, JPG, PNG, WebP · videos up to 5 min and 2 GB · photos up to 200 MB each</small>
             <input type="file" accept={ACCEPT} multiple onChange={event => { chooseFiles(event.target.files); event.target.value = ''; }} aria-label="Select phone video or photographs"/>
           </label>
+          {/* A video-only list gets the phone gallery's plain video picker; galleries treat a mixed photo and video list differently. */}
+          <button type="button" className="world-button world-button-outline" onClick={() => videoInput.current?.click()}><FileVideo size={16} aria-hidden="true" /> Choose a walkthrough video</button>
+          <input ref={videoInput} type="file" accept="video/*" hidden onChange={event => { chooseFiles(event.target.files); event.target.value = ''; }} aria-label="Select a walkthrough video"/>
+          <p className="world-capture-note">On a phone, a long video can take a minute to prepare after you pick it; keep this page open.</p>
           {error && <p className="world-capture-alert" role="alert">{error}</p>}
           {current && <div className="world-upload-preview">
             {isVideo(current.file)
