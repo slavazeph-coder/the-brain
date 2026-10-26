@@ -176,6 +176,23 @@ def test_a_deleted_scene_manifest_cannot_downgrade_a_full_review_to_reconstructi
     assert q.review(review_args(run, tmp_path / 'review')) == 1
 
 
+def test_folded_review_preserves_the_geometry_failure_when_scene_was_correctly_skipped(tmp_path):
+    run = tmp_path / 'retained'
+    artifacts, receipt, ledger = retained_run(run)
+    receipt['capture']['consistency'].update(status='folded', pairsDisagreeing=1, worstDisagreementDegrees=25)
+    q.save_json(artifacts / 'reconstruction.json', receipt)
+    ledger['reconstruction']['sha256'] = q.digest(artifacts / 'reconstruction.json')
+    q.save_json(artifacts / 'camera-frames.json', ledger)
+    write_manifest(run)
+    (run / 'scene-download-verification.json').unlink()
+    report = tmp_path / 'folded-review'
+    assert q.review(review_args(run, report)) == 2
+    summary = q.read_json(report / 'summary.json')
+    assert summary['artifactIntegrityPassed'] is True
+    assert summary['geometryQuality']['screeningPassed'] is False
+    assert summary['geometryQuality']['metrics']['sceneAssessed'] is False
+
+
 def test_upload_must_match_the_source_admitted_before_processing():
     source = {'bytes': 10, 'sha256': 'a' * 64}
     q.check_admitted_upload({'bytes': 10, 'sha256': 'a' * 64}, source)

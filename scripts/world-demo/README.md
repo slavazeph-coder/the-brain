@@ -160,7 +160,8 @@ bounded gaps in the extracted image sequence, at least 20 supporting points per 
 20% fitted-floor inliers with floor alignment. Missing/malformed evidence requires review. The fraction and
 wall-support thresholds can be changed explicitly; all thresholds are heuristics, not measured tolerances.
 Extracted indices are not original video PTS or elapsed-time coverage. Small reprojection error alone cannot
-establish accurate geometry. COLMAP results can vary slightly across runs; there is no golden point count.
+establish accurate geometry. COLMAP results, selected fragments and fold status can vary across runs; there is
+no golden point count. Repeated runs that alternate between incomplete and folded output are not accepted.
 
 Exit codes: **0** requested workflow and screening passed (upload-only leaves geometry unevaluated),
 **2** geometry requires review, **1** execution/integrity failure, **130** interrupted. Folded reconstructions
