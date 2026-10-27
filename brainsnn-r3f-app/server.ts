@@ -38,6 +38,7 @@ import { analyzeContentWithGpu, createGpuInferenceClient } from "./src/server/gp
 import { createGpuBridge } from "./src/server/gpuBridge.js";
 import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
+import { createWorldWorkerProxy } from "./src/server/worldWorkerProxy.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 
 
@@ -65,6 +66,9 @@ app.use('/arena', (req, res, next) => {
 });
 // Authenticate and bound worker bodies before the general JSON parser/limiter.
 app.use('/api/gpu-worker', gpuBridge.handle);
+// World Builder processing on this site: streamed 4 MiB upload chunks, so also ahead of the parser and limiter.
+const worldProcessing = createWorldWorkerProxy(process.env);
+app.use('/api/world', worldProcessing.handle);
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
   const feed = await readAgentLabFeed();
