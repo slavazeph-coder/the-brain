@@ -402,8 +402,9 @@ def test_colmap_no_overlap_never_returns_a_success_manifest(tmp_path):
     assert not (tmp_path/'output'/'manifest.json').exists()
 
 
-def walk_and_matches():
-    """Five frames of a walk past a wall of points, with COLMAP's own two-view geometry between consecutive frames."""
+def walk_and_matches(bridged=False):
+    """Five frames of a walk past a wall of points, with COLMAP's own two-view geometry between consecutive frames, and
+    between frames two apart too when bridged."""
     pycolmap=pytest.importorskip('pycolmap')
     import numpy as np,types
     rng=np.random.default_rng(3)
@@ -419,7 +420,8 @@ def walk_and_matches():
         local=points@pose.rotation.matrix().T+pose.translation
         pixels.append(np.c_[500*local[:,0]/local[:,2]+320,500*local[:,1]/local[:,2]+240])
     every=np.c_[np.arange(len(points)),np.arange(len(points))].astype(np.uint32)
-    geometries={(a,a+1):pycolmap.estimate_calibrated_two_view_geometry(camera,pixels[a-1],camera,pixels[a],every) for a in range(1,5)}
+    pairs=[(a,a+1) for a in range(1,5)]+([(a,a+2) for a in range(1,4)] if bridged else [])
+    geometries={(a,b):pycolmap.estimate_calibrated_two_view_geometry(camera,pixels[a-1],camera,pixels[b-1],every) for a,b in pairs}
     database=types.SimpleNamespace(exists_two_view_geometry=lambda a,b:(a,b) in geometries,
         read_two_view_geometry=lambda a,b:geometries[(a,b)],read_keypoints=lambda image:np.c_[pixels[image-1],np.zeros((len(points),4))])
     def model(poses):
@@ -449,6 +451,44 @@ def test_a_model_turned_against_its_own_frames_is_folded():
     unregistered=model(poses);unregistered.reg_image_ids=lambda:[1,2,4,5]
     turns,skipped=sparse_colmap.consecutive_turns(database,unregistered,names)
     assert [(t['from'],t['to']) for t in turns]==[('image_0000.jpg','image_0001.jpg'),('image_0003.jpg','image_0004.jpg')] and skipped==1
+
+def test_a_hinge_is_folded_when_the_pairs_across_it_confirm_it():
+    # A hinge: the walk after frame 2 is joined at 25 degrees. Only one consecutive pair turns wrongly, as one pair's own
+    # misread two-view pose would, but every pair that bridges it turns wrongly too.
+    from robotics.world_worker import sparse_colmap
+    def hinged(bridged):
+        pycolmap,database,model,poses,turn,names=walk_and_matches(bridged)
+        moved=list(poses)
+        for k in (3,4):
+            R=turn(25)@poses[k].rotation.matrix();moved[k]=pycolmap.Rigid3d(pycolmap.Rotation3d(R),R@poses[k].rotation.matrix().T@poses[k].translation)
+        return sparse_colmap.fold_check(*sparse_colmap.consecutive_turns(database,model(moved),names))
+    check=hinged(True)
+    assert check['status']=='folded' and check['pairsDisagreeing']==1 and 24<check['worstDisagreementDegrees']<26, check
+    bridges=check['disagreeing'][0]['bridges']
+    assert [(b['from'],b['to']) for b in bridges]==[('image_0001.jpg','image_0003.jpg'),('image_0002.jpg','image_0004.jpg')]
+    assert all(24<b['disagreementDegrees']<26 for b in bridges)
+    # Where nothing bridges the pair, one moderate pair cannot be told from a misread one: unconfirmed, with the pair listed.
+    check=hinged(False)
+    assert check['status']=='unconfirmed' and check['disagreeing'][0]['bridges']==[], check
+
+def test_a_lone_pair_is_unconfirmed_only_while_nothing_else_points_to_a_fold():
+    from robotics.world_worker import sparse_colmap
+    def pair(degrees,bridges=None,k=0):
+        turn={'from':f'image_{k:04d}.jpg','to':f'image_{k+1:04d}.jpg','matches':76,'disagreementDegrees':degrees}
+        if bridges is not None:turn['bridges']=[{'from':'a','to':'b','matches':60,'disagreementDegrees':d} for d in bridges]
+        return turn
+    calm=[pair(3,k=k) for k in range(1,9)]
+    status=lambda turns:sparse_colmap.fold_check(turns,0)['status']
+    # The real case: frames 38 and 39 read 23.6 degrees from 76 matches, nothing bridged them, the cameras matched a
+    # consistent mapping of the same video to 0.4 degrees.
+    assert status(calm+[pair(23.6,[])])=='unconfirmed'
+    assert status(calm+[pair(23.6,[2.1,4.0])])=='unconfirmed'
+    assert status(calm+[pair(23.6,[2.1,19.0])])=='folded'      # a bridge turns wrongly too
+    assert status(calm+[pair(46,[])])=='folded'                # beyond any misread seen; folds read 59 or more
+    assert status(calm+[pair(20,[],k=10),pair(20,[],k=20)])=='folded'
+    assert status(calm+[pair(15,[])])=='consistent'
+    check=sparse_colmap.fold_check(calm+[pair(23.6,[])],0)
+    assert check['pairsDisagreeing']==1 and check['disagreeing'][0]['disagreementDegrees']==23.6
 
 def test_a_check_with_nothing_to_compare_says_so():
     from robotics.world_worker import sparse_colmap
