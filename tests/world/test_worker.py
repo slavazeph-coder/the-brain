@@ -24,6 +24,29 @@ from robotics.world_worker.mapanything_apache import preview_from_predictions, c
 TOKEN='test-operator-token-not-production-'+'x'*32
 HEADERS={'Authorization':'Bearer '+TOKEN}
 
+def available_video_encoder() -> str | None:
+    """First ffmpeg H.264-capable encoder present in the local build.
+
+    GB10 builds ship libx264; the 4090 worker build only exposes mpeg4
+    (its libopenh264 is version-mismatched), so the fixture encoders must
+    be discovered rather than hard-coded. Returns None when no candidate
+    encoder exists in the local ffmpeg build.
+    """
+    if not shutil.which('ffmpeg'):
+        return None
+    for candidate in ('libx264', 'libopenh264', 'mpeg4'):
+        try:
+            probe = subprocess.run(
+                ['ffmpeg', '-hide_banner', '-v', 'error', '-f', 'lavfi',
+                 '-i', 'testsrc2=size=64x64:rate=5', '-t', '0.2', '-c:v', candidate,
+                 '-pix_fmt', 'yuv420p', '-f', 'null', 'pipe:1'],
+                capture_output=True, timeout=15, check=False)
+            if probe.returncode == 0:
+                return candidate
+        except (subprocess.SubprocessError, OSError):
+            continue
+    raise AssertionError('no H.264-capable ffmpeg encoder available (libx264/libopenh264/mpeg4)')
+
 def photo():
     buf=io.BytesIO();Image.new('RGB',(12,12),(70,120,160)).save(buf,format='PNG');return buf.getvalue()
 
@@ -240,10 +263,12 @@ def test_colmap_photos_strip_location_metadata_and_resize(tmp_path):
 
 
 def test_colmap_video_decodes_actual_mp4_and_rejects_too_short(tmp_path):
-    if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):pytest.skip('FFmpeg not installed')
+    encoder=available_video_encoder()
+    if not shutil.which('ffmpeg') or not shutil.which('ffprobe') or not encoder:
+        pytest.skip('FFmpeg with an H.264-capable encoder required')
     capture=tmp_path/'capture.mp4'
     subprocess.run(['ffmpeg','-y','-v','error','-f','lavfi','-i','testsrc2=size=320x256:rate=10',
-                    '-t','2','-c:v','libx264','-pix_fmt','yuv420p',str(capture)],check=True,timeout=15)
+                    '-t','2','-c:v',encoder,'-pix_fmt','yuv420p',str(capture)],check=True,timeout=15)
     images=tmp_path/'images';images.mkdir()
     evidence=extract_video(capture,images)
     assert evidence['duration_seconds']==2
@@ -288,8 +313,9 @@ def test_real_colmap_upload_job_if_dataset_provided(tmp_path,capture_kind):
         frames=tmp_path/'video-source';frames.mkdir()
         for index,path in enumerate(photos):prepare_photo(path,frames/f'frame_{index:04d}.jpg')
         capture=tmp_path/'photograph-sequence.mp4'
+        video_encoder=available_video_encoder()
         subprocess.run(['ffmpeg','-v','error','-framerate','2','-i',str(frames/'frame_%04d.jpg'),'-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2',
-                        '-c:v','libx264','-pix_fmt','yuv420p',str(capture)],check=True,timeout=30)
+                        '-c:v',video_encoder,'-pix_fmt','yuv420p',str(capture)],check=True,timeout=30)
         captures=[capture]
     config=tmp_path/'adapters.json'
     config.write_text(json.dumps([{'id':'colmap-sparse','label':'Real CPU reconstruction','enabled':True,
