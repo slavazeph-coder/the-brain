@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-27T04:00Z
+Last updated: 2026-10-27T13:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -432,6 +432,29 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 **Actual blocker:** none this run. HTTP report UI (browser) validation still pending (loopback only). 4090 untouched this run (GB10 verification pass); 4090 has its own branch per world-builder-4090.json.
 
 **Next bounded action:** one useful 4090 GPU/reconstruction task via short authenticated SSH (confirm hostname+GPU first), e.g. re-verify a held-out control render or run a bounded colmap/encoder smoke there. Alternate back to GB10 receipt work.
+
+## Run 112 — 2026-10-27 (4090 COLMAP sparse reconstruction smoke: PASSED)
+
+- Host `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09` confirmed idle before run (28 MiB, 0 %).
+- `qualification-input/` present (11 PNGs + fountain-clip.mp4); `recon-venv` intact at `/workspace/slava/build-runtime/recon-venv` (torch 2.5.1+cu121 cuda=True, pycolmap 4.2.1, cv2 5.0.0).
+- Ran `sparse_colmap.run()` on all 11 qualification frames, 20 GiB budget untouched (CPU path):
+  - **11/11 images registered**, **6,047 reconstructed points**, **mean reprojection error 0.2754 px**, 1 model, elapsed **14.92 s**.
+  - Evidence JSON: `metric_verified: false`, `model_weights_used: false` (correct — no model download), 11 camera poses written.
+  - SHA256 of `reconstruction.json`: `2310a2b4…13c7a7`.
+- GB10 suites at clean tree `853f650`: node 8/8, pytest 31/31.
+
+**Blocker:** none — sparse COLMAP path proven end-to-end on held-out qualification input.
+**Next bounded action:** 4090 MapAnything dense-inference smoke (held-out GPU run; pinned weights, 20 GiB watchdog).
+
+## Run 113 — 2026-10-27 (GB10 base suites verified GREEN on clean tree `853f650`)
+
+- 4090 confirmed idle before any work: `d130b6c7f3f4`, `GPU-3390c2ec…`, 28 MiB used, 0 % util.
+- GB10 suites: `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (66 ms); `pytest tests/world/test_report_receipts.py -q` → **31 passed** in 20.65 s.
+- Run 112's sparse COLMAP smoke receipt (11/11 registered, 6,047 pts, 0.2754 px reprojection, 14.92 s, `2310a2b4…13c7a7`) committed this run after being orphaned in prior notes.
+- Signed-receipt docs already closed (run 31, "Report receipts (signed verification)" in `docs/world-studio-implementation.md`); 5 cancellation regressions already green.
+
+**Blocker:** none this run.
+**Next bounded action:** 4090 MapAnything dense-inference smoke (remaining held-out GPU qualification gate). No force-push/merge/deploy; serving Qwen/backup and licensed gates untouched.
 
 ## Run 110 — 2026-10-27 (4090 env-var wiring complete)
 
