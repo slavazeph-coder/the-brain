@@ -29,6 +29,9 @@ const VISITOR_ENGINES = new Set(['colmap-sparse', 'scene-usd']);
 // A visitor job needs one upload (a video, or a cloud for the scene), so this many unfinished uploads per session and
 // uploads per connection per job allowed are plenty, and a visitor cannot fill the worker's upload slots for others.
 const VISITOR_OPEN_UPLOADS = 2;
+// The worker counts a created but unstarted job as active, and allows one per tenant. The page starts a job straight
+// after creating it, so one still unstarted after this long was abandoned (a closed tab, a lost connection): cancel it.
+const PREPARED_LEASE_MS = 120_000;
 const VISITOR_UPLOADS_PER_JOB = 3;
 
 const digest = (value) => createHash('sha256').update(String(value)).digest();
@@ -88,7 +91,8 @@ export function route(method, path, query) {
   return null;
 }
 
-export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () => randomBytes(32).toString('base64url') } = {}) {
+export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () => randomBytes(32).toString('base64url'),
+  preparedLeaseMs = PREPARED_LEASE_MS } = {}) {
   let upstream = null;
   try {
     const url = new URL(String(env.WORLD_WORKER_INTERNAL_URL || ''));
@@ -101,7 +105,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
   const visitorsReady = Boolean(upstream && env.WORLD_SITE_VISITORS === '1' && CREDENTIAL.test(visitorToken) && visitorToken !== ownerToken);
   const perConnection = integer(env.WORLD_SITE_VISITOR_JOBS_PER_DAY, 2, 1, 20);
   const perDay = integer(env.WORLD_SITE_VISITOR_JOBS_TOTAL, 20, 1, 500);
-  const sessions = new Map(), failures = new Map(), visitorJobs = new Map();
+  const sessions = new Map(), failures = new Map(), visitorJobs = new Map(), leases = new Map();
   const client = upstream?.protocol === 'https:' ? https : http;
 
   const status = () => ({ available: ownerReady || visitorsReady, passcode: ownerReady, visitors: visitorsReady,
@@ -144,6 +148,29 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     const key = token();
     sessions.set(key, { kind, address, expires: now() + SESSION_MS[kind], uploads: new Set(), used: new Set(), jobs: new Set() });
     return reply(res, 201, { token: key, kind, expiresInSeconds: SESSION_MS[kind] / 1000 });
+  }
+
+  /** A small JSON call the site makes on its own behalf, outside any browser request. */
+  function own(method, path, credential) {
+    return new Promise((resolve) => {
+      const outgoing = client.request(new URL(path, upstream), { method, headers: { authorization: `Bearer ${credential}` }, timeout: 30_000 }, (answer) => {
+        const chunks = [];
+        answer.on('data', (chunk) => chunks.push(chunk));
+        answer.once('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { resolve(null); } });
+      });
+      outgoing.on('timeout', () => outgoing.destroy(new Error('timeout')));
+      outgoing.on('error', () => resolve(null));
+      outgoing.end();
+    });
+  }
+
+  function lease(job, credential) {
+    const timer = setTimeout(async () => {
+      leases.delete(job);
+      if ((await own('GET', `/v1/jobs/${job}`, credential))?.status === 'prepared') await own('DELETE', `/v1/jobs/${job}`, credential);
+    }, preparedLeaseMs);
+    timer.unref?.();
+    leases.set(job, timer);
   }
 
   function forward(req, res, path, { credential, body, inspect }) {
@@ -233,9 +260,12 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
         if (!ID.test(data?.id)) return;
         current.jobs.add(data.id);
         for (const upload of uploads) current.used.add(upload);
+        lease(data.id, credential);
         for (const key of counted || []) visitorJobs.set(key, (visitorJobs.get(key) || 0) + 1);
       } });
     }
+    if (call.name === 'job' && req.method === 'POST' && path.endsWith('/start'))
+      return forward(req, res, target, { credential, body, inspect: () => { clearTimeout(leases.get(call.job)); leases.delete(call.job); } });
     if (call.name === 'ticket')  // the worker signs /v1/download/...; the browser reaches it under this site's prefix
       return forward(req, res, target, { credential, body, inspect: (data) => {
         if (typeof data?.url === 'string' && data.url.startsWith('/v1/download/')) data.url = prefix + data.url;
@@ -255,5 +285,5 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     return next();
   }
 
-  return { handle, status, sessions };
+  return { handle, status, sessions, leases };
 }

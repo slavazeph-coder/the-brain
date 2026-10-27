@@ -49,6 +49,14 @@ def test_visitors_together_leave_the_owner_room_inside_the_workers_global_caps()
     assert visitors['storage_bytes'] <= owner['storage_bytes'] // 2
 
 
+def test_every_tenant_can_hold_one_job_or_the_worker_does_not_start():
+    from tenants import ONE_JOB
+    small = registry({'WORLD_SITE_PASSCODE': 'garage-walk-2026'}, 7_000_000_000, ['colmap-sparse'])
+    assert all(t['limits']['storage_bytes'] >= ONE_JOB for t in small['tenants']), 'a visitor job fits on an 8 GB volume'
+    with pytest.raises(ValueError, match='at least'):
+        registry({'WORLD_SITE_PASSCODE': 'garage-walk-2026'}, 4_500_000_000, ['colmap-sparse'])
+
+
 def test_the_passcode_alone_gives_the_worker_the_sites_credentials():
     # Pinned against the site's derivedCredential() (brainsnn-r3f-app/src/server/worldWorkerProxy.test.js pins the same).
     assert derived_credential('garage-walk-2026', 'site-owner') == 'YKSyflk5DI5jVbtSo_hHapM4BbBylsGbT7ZZXYarmjM'

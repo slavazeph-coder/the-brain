@@ -35,7 +35,8 @@ page, "Process on BrainSNN" then works with no worker address or token to type.
      WORLD_CPU_THREADS=4
      ```
 
-     - `WORLD_STORAGE_BYTES` is a little below the volume size: 19000000000 for 20 GB, and at least 5 GB.
+     - `WORLD_STORAGE_BYTES` is a little below the volume size: 19000000000 for 20 GB. The minimum is 7000000000 on an
+       8 GB volume, because each job reserves 4 GiB beside its video.
      - `WORLD_CPU_THREADS` is the service's vCPU count.
    - **Deploy.** The first build downloads Blender (about 400 MB). When it is healthy, the log ends with
      `Uvicorn running on http://[::]:8080`.

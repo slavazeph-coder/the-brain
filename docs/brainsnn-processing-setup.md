@@ -33,7 +33,7 @@ phone / browser ──HTTPS──▶ brainsnn.com (existing site service)
 ## Before you start
 
 - [ ] Access to the Railway project that runs brainsnn.com, and permission to merge PRs in `slavazeph-coder/the-brain`.
-- [ ] A Railway plan that allows a second service with a **20 GB volume**. Smaller works down to 5 GB; see step 3.6.
+- [ ] A Railway plan that allows a second service with a **20 GB volume**. Smaller works down to 8 GB; see step 3.6.
 - [ ] A passcode: **at least 12 characters**, easy to type on a phone (three random words, for example
   `copper-lantern-meadow`). Keep it in your password manager. Never paste it into a chat, an issue, a commit or a
   screenshot.
@@ -102,7 +102,7 @@ Nothing changes for visitors until Part 4. The page looks exactly as before.
    - **`WORLD_STORAGE_BYTES`:** a little below the volume size, in bytes.
      - 20 GB volume: `19000000000`;
      - 10 GB: `9000000000`;
-     - 5 GB: `4500000000` (the minimum that still fits one job).
+     - 8 GB: `7000000000` (the minimum: each job reserves 4 GiB beside its video, up to 2 GiB).
    - **`WORLD_CPU_THREADS`:** the vCPUs Railway gives the service (Settings → Resources). More threads make each job
      faster, but don't set it above what the service has.
 8. **Deploy.** Press **Deploy** (or **Redeploy**). The first build takes 10–20 minutes, mostly downloading Blender
@@ -227,7 +227,7 @@ Exit codes:
 | "Unauthorized." from the worker, or the check script's step 3 fails | The two services derive different credentials | The same passcode on both (shared variable), then redeploy **both** |
 | Worker build log shows `vite build` / `node dist/server.cjs` | The root `railway.toml` was used | Step 3.3: config file `/robotics/world_worker/deploy/railway/railway.toml` |
 | Worker log: `Set WORLD_SITE_PASSCODE (12 characters or more …)` | The worker cannot see the passcode | Step 3.7's `WORLD_SITE_PASSCODE` line, and the shared variable in production |
-| Worker log: `Storage capacity must exceed …` | `WORLD_STORAGE_BYTES` is below about 4.5 GB | Step 3.7's table. A value that is not a plain number is ignored, and the worker assumes 20 GB |
+| Worker log: `WORLD_STORAGE_BYTES must be at least 6979321856 …` | The budget cannot hold one job: the 4 GiB job reservation plus its video | An 8 GB or larger volume, and step 3.7's table. A value that is not a plain number is ignored, and the worker assumes 20 GB |
 | Worker log: `could not bind on any address` | The environment has no IPv6 | Add `WORLD_WORKER_HOST=0.0.0.0` on the worker. Newer Railway environments resolve internal names over IPv4 too |
 | "Upload quota reached" / "Owner upload quota reached" | Old uploads still within their 24 hours | Wait, or remove the volume's `/data/worker` contents from a Railway shell |
 | "Views could not be aligned …" | Too little overlap or texture in the video | Re-film: slower, walls first, more corners in view |
@@ -262,6 +262,8 @@ Exit codes:
   - it ends after 12 hours (visitors: 2), or when the site restarts.
 - **Isolation:**
   - each session reaches only the uploads and jobs it created;
+  - a job created but not started within 2 minutes (a closed tab) is cancelled, so it cannot hold the worker's one
+    active slot;
   - job listings are refused;
   - download links are signed by the worker, last 60 seconds, and need no session.
 - **No public address:** the worker has none. Everything reaches it through the site.

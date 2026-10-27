@@ -17,7 +17,7 @@ async function serve(handler) {
 
 /** A worker stand-in that records what reached it and answers like the real API. */
 async function fakeWorker() {
-  const seen = []; let next = 0;
+  const seen = [], jobs = new Map(); let next = 0;
   const worker = await serve((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
@@ -27,16 +27,22 @@ async function fakeWorker() {
       res.setHeader('Content-Type', 'application/json');
       if (req.url.startsWith('/v1/download/')) { res.setHeader('Content-Type', 'application/octet-stream'); return res.end('PLY BYTES'); }
       if (req.method === 'POST' && req.url === '/v1/uploads') { res.statusCode = 201; return res.end(JSON.stringify({ id: id(++next), offset: 0, size: 5 })); }
-      if (req.method === 'POST' && req.url === '/v1/jobs') { res.statusCode = 201; return res.end(JSON.stringify({ id: id(++next), status: 'prepared' })); }
+      if (req.method === 'POST' && req.url === '/v1/jobs') { const job = id(++next); jobs.set(job, 'prepared'); res.statusCode = 201; return res.end(JSON.stringify({ id: job, status: 'prepared' })); }
+      const job = req.url.match(/^\/v1\/jobs\/([a-f0-9]{32})(\/start)?$/);
+      if (job && jobs.has(job[1])) {
+        if (req.method === 'POST' && job[2]) jobs.set(job[1], 'queued');
+        if (req.method === 'DELETE' && !job[2]) jobs.set(job[1], 'cancelled');
+        return res.end(JSON.stringify({ id: job[1], status: jobs.get(job[1]) }));
+      }
       if (req.method === 'POST' && req.url.endsWith('/ticket')) return res.end(JSON.stringify({ url: `/v1/download/eyJhIjoxfQ.${'e'.repeat(64)}`, expires_in: 60 }));
       res.end(JSON.stringify({ ok: true, url: req.url }));
     });
   });
-  return { ...worker, seen };
+  return { ...worker, seen, jobs };
 }
 
-async function site(env) {
-  const proxy = createWorldWorkerProxy(env);
+async function site(env, options) {
+  const proxy = createWorldWorkerProxy(env, options);
   const app = express(); app.set('trust proxy', 1); app.use('/api/world', proxy.handle);
   const server = await serve(app);
   const call = async (path, { method = 'GET', token, body, headers = {}, raw } = {}) => {
@@ -157,6 +163,21 @@ it('world processing: a visitor cannot hoard upload reservations', async () => {
     assert.equal(before, 3, 'refused reservations never reach the worker');
     const owner = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
     assert.equal((await web.call('/api/world/worker/v1/uploads', { method: 'POST', token: owner, body: { name: 'walk.mov', size: 5, kind: 'video' } })).status, 201);
+  } finally { await web.close(); await worker.close(); }
+});
+
+it('world processing: a job nobody starts is cancelled, so it cannot hold the one active slot', async () => {
+  const worker = await fakeWorker(), web = await site(env(worker), { preparedLeaseMs: 50 });
+  try {
+    const token = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
+    const upload = (await web.call('/api/world/worker/v1/uploads', { method: 'POST', token, body: { name: 'walk.mov', size: 5, kind: 'video' } })).data.id;
+    const job = () => web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine: 'colmap-sparse', upload_ids: [upload], consent: true } });
+    const abandoned = (await job()).data.id, started = (await job()).data.id;
+    assert.equal((await web.call(`/api/world/worker/v1/jobs/${started}/start`, { method: 'POST', token, body: {} })).status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(worker.jobs.get(abandoned), 'cancelled');
+    assert.equal(worker.jobs.get(started), 'queued', 'a started job is never touched');
+    assert.equal(web.proxy.leases.size, 0);
   } finally { await web.close(); await worker.close(); }
 });
 

@@ -17,6 +17,9 @@ import sys
 
 CREDENTIAL = re.compile(r'^[A-Za-z0-9_-]{43,128}$')
 GIB = 1024 ** 3
+# What one job holds at once: the worker's 4 GiB job reservation beside a 2 GiB video, plus the scene step's cloud and
+# finished outputs. A tenant with less storage can upload but never start a job.
+ONE_JOB = 6.5 * GIB
 
 
 def derived_credential(passcode, tenant):
@@ -26,6 +29,9 @@ def derived_credential(passcode, tenant):
 
 
 def registry(env, storage_bytes, engines):
+    if storage_bytes < ONE_JOB:
+        raise ValueError(f'WORLD_STORAGE_BYTES must be at least {int(ONE_JOB)} (an 8 GB volume): '
+                         'each job reserves 4 GiB beside its video.')
     passcode = env.get('WORLD_SITE_PASSCODE', '')
     derive = lambda tenant: derived_credential(passcode, tenant) if len(passcode) >= 12 else ''
     owner = env.get('WORLD_WORKER_SITE_OWNER_TOKEN') or derive('site-owner')
@@ -40,10 +46,11 @@ def registry(env, storage_bytes, engines):
         if not CREDENTIAL.fullmatch(visitor) or visitor == owner:
             raise ValueError('WORLD_WORKER_SITE_VISITOR_TOKEN must be its own 43-128 character credential.')
         # Visitors share one tenant, so its limits are what all visitors together can hold. They stay well inside the
-        # worker's global caps (50 uploads, 6 GiB of reservations), so the owner can always upload a 2 GiB video.
+        # worker's global caps (50 uploads, 6 GiB of reservations), so the owner can always upload a 2 GiB video. Their
+        # storage is half the volume, but never less than one job; on a small volume they and the owner take turns.
         tenants.append({'id': 'site-visitors', 'token_sha256': hashlib.sha256(visitor.encode()).hexdigest(), 'engines': engines,
                         'limits': {**limits, 'upload_count': 20, 'upload_bytes': 2 * GIB, 'job_count': 20,
-                                   'storage_bytes': storage_bytes // 2}})
+                                   'storage_bytes': min(storage_bytes, max(int(ONE_JOB), storage_bytes // 2))}})
     return {'schema': 'brainsnn.world.tenants.v1', 'tenants': tenants}
 
 
