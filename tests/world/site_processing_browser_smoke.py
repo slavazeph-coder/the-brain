@@ -90,9 +90,10 @@ def main():
         video = tmp / 'walk.mp4'
         subprocess.run(['ffmpeg', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=3:size=320x240:rate=10',
                         '-pix_fmt', 'yuv420p', str(video)], check=True)
-        owner, passcode = secrets.token_urlsafe(32), 'site-passcode-' + secrets.token_hex(4)
+        # As deployed: the passcode is the one shared secret, and both sides derive the worker credentials from it.
+        passcode = 'site-passcode-' + secrets.token_hex(4)
         tenants = tmp / 'tenants.json'
-        tenants.write_text(json.dumps(registry({'WORLD_WORKER_SITE_OWNER_TOKEN': owner}, 20 * 1024 ** 3, ['colmap-sparse'])))
+        tenants.write_text(json.dumps(registry({'WORLD_SITE_PASSCODE': passcode}, 20 * 1024 ** 3, ['colmap-sparse'])))
         adapters = tmp / 'adapters.json'
         adapters.write_text(json.dumps([{'id': 'colmap-sparse', 'label': 'Reconstruction transport fixture (no COLMAP)',
             'enabled': True, 'license_reviewed': True, 'input_kinds': ['image', 'video'], 'max_inputs': 12, 'timeout_seconds': 60,
@@ -103,8 +104,7 @@ def main():
         worker_env = {**os.environ, 'WORLD_WORKER_TOKEN': secrets.token_urlsafe(32), 'WORLD_WORKER_DIR': str(tmp / 'data'),
                       'WORLD_ADAPTERS_FILE': str(adapters), 'WORLD_TENANTS_FILE': str(tenants)}
         site_env = {**os.environ, 'NODE_ENV': 'production', 'PORT': str(site_port),
-                    'WORLD_WORKER_INTERNAL_URL': f'http://127.0.0.1:{worker_port}/', 'WORLD_WORKER_SITE_OWNER_TOKEN': owner,
-                    'WORLD_SITE_PASSCODE': passcode}
+                    'WORLD_WORKER_INTERNAL_URL': f'http://127.0.0.1:{worker_port}/', 'WORLD_SITE_PASSCODE': passcode}
         try:
             for label, command, env, cwd in [
                 ('worker', [sys.executable, '-m', 'uvicorn', 'robotics.world_worker.app:create_app', '--factory',

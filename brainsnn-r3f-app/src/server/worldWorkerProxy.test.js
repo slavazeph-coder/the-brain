@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import express from 'express';
 import { it } from '../test/tinyVitest.js';
-import { createWorldWorkerProxy, route } from './worldWorkerProxy.js';
+import { createWorldWorkerProxy, derivedCredential, route } from './worldWorkerProxy.js';
 
 const nativeFetch = globalThis.fetch;  // other suites stub fetch; these talk to real local servers
 const OWNER = 'o'.repeat(43), VISITOR = 'v'.repeat(43), PASSCODE = 'garage-walk-2026';
@@ -141,6 +141,22 @@ it('world processing: visitors are off by default, then capped per connection pe
     assert.equal(third.status, 429); assert.match(third.data.detail, /2 jobs a day/);
     assert.ok(worker.seen.filter((r) => r.auth).every((r) => r.auth === `Bearer ${VISITOR}`));
   } finally { await web.close(); await worker.close(); }
+});
+
+it('world processing: the passcode alone gives both sides the same tenant credentials', async () => {
+  // Pinned against robotics/world_worker/deploy/railway/tenants.py (tests/world/test_site_worker_deploy.py pins the same).
+  assert.equal(derivedCredential('garage-walk-2026', 'site-owner'), 'YKSyflk5DI5jVbtSo_hHapM4BbBylsGbT7ZZXYarmjM');
+  assert.equal(derivedCredential('garage-walk-2026', 'site-visitors'), '81ToJqJYH2C-yj2NZH2SCRF2-sGYrKniyrVDLFwbzhU');
+  const worker = await fakeWorker(), web = await site({ WORLD_WORKER_INTERNAL_URL: worker.url + '/', WORLD_SITE_PASSCODE: PASSCODE, WORLD_SITE_VISITORS: '1' });
+  try {
+    assert.deepEqual((await web.call('/api/world/processing')).data, { available: true, passcode: true, visitors: true, visitorJobsPerDay: 2 });
+    const owner = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
+    const visitor = (await web.call('/api/world/session', { method: 'POST', body: {} })).data.token;
+    await web.call('/api/world/worker/v1/capabilities', { token: owner });
+    await web.call('/api/world/worker/v1/capabilities', { token: visitor });
+    assert.deepEqual(worker.seen.map((r) => r.auth), [`Bearer ${derivedCredential(PASSCODE, 'site-owner')}`, `Bearer ${derivedCredential(PASSCODE, 'site-visitors')}`]);
+  } finally { await web.close(); await worker.close(); }
+  assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_SITE_PASSCODE: 'too-short' }).status().available, false);
 });
 
 it('world processing: only the site flow is routable', () => {

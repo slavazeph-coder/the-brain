@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
 
@@ -6,9 +6,11 @@ import https from 'node:https';
  * brainsnn.com's own World Builder processing: the site holds the worker credentials and hands each browser a short
  * session instead, so nobody types a worker address or token.
  *
- * - Owner sessions need WORLD_SITE_PASSCODE and use the worker tenant WORLD_WORKER_SITE_OWNER_TOKEN.
- * - Visitor sessions exist only with WORLD_SITE_VISITORS=1. They use WORLD_WORKER_SITE_VISITOR_TOKEN, and get a daily
- *   job cap per connection and overall.
+ * - Owner sessions need WORLD_SITE_PASSCODE and use the worker tenant "site-owner".
+ * - Visitor sessions exist only with WORLD_SITE_VISITORS=1. They use the tenant "site-visitors", and get a daily job cap
+ *   per connection and overall.
+ * - Both tenant credentials derive from the passcode (derivedCredential), so the site and the worker share one secret.
+ *   WORLD_WORKER_SITE_OWNER_TOKEN and WORLD_WORKER_SITE_VISITOR_TOKEN override that on both sides.
  *
  * Every session reaches only the uploads and jobs it created: visitors share one worker tenant, so the worker's own
  * owner checks cannot keep them apart. One process only (Railway runs one replica): sessions and counters live in
@@ -31,6 +33,11 @@ const integer = (value, fallback, low, high) => {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isSafeInteger(parsed) && parsed >= low && parsed <= high ? parsed : fallback;
 };
+
+/** A worker tenant credential from the passcode; robotics/world_worker/deploy/railway/tenants.py derives the same. */
+export function derivedCredential(passcode, tenant) {
+  return createHmac('sha256', String(passcode)).update(`brainsnn.world.${tenant}.v1`).digest('base64url');
+}
 
 function reply(res, status, body) {
   if (res.headersSent || res.destroyed) return;
@@ -83,8 +90,9 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     const url = new URL(String(env.WORLD_WORKER_INTERNAL_URL || ''));
     if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && url.pathname === '/' && !url.search) upstream = url;
   } catch { /* not configured */ }
-  const ownerToken = String(env.WORLD_WORKER_SITE_OWNER_TOKEN || ''), visitorToken = String(env.WORLD_WORKER_SITE_VISITOR_TOKEN || '');
-  const passcode = String(env.WORLD_SITE_PASSCODE || '');
+  const passcode = String(env.WORLD_SITE_PASSCODE || ''), derive = (tenant) => passcode.length >= 12 ? derivedCredential(passcode, tenant) : '';
+  const ownerToken = String(env.WORLD_WORKER_SITE_OWNER_TOKEN || derive('site-owner'));
+  const visitorToken = String(env.WORLD_WORKER_SITE_VISITOR_TOKEN || derive('site-visitors'));
   const ownerReady = Boolean(upstream && CREDENTIAL.test(ownerToken) && passcode.length >= 12);
   const visitorsReady = Boolean(upstream && env.WORLD_SITE_VISITORS === '1' && CREDENTIAL.test(visitorToken) && visitorToken !== ownerToken);
   const perConnection = integer(env.WORLD_SITE_VISITOR_JOBS_PER_DAY, 2, 1, 20);
