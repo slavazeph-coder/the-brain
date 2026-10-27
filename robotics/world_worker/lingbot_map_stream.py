@@ -208,7 +208,8 @@ def matches(raster_a, raster_b):
 
 def turn_check(cameras, rasters, names):
     """capture.consistency for model poses: each consecutive pair's modelled turn against the turn its matches give.
-    Same thresholds and record shape as sparse_colmap.fold_check, so the site and the qualification read both alike."""
+    Same threshold and record shape as sparse_colmap.fold_check, so the site and the qualification read both alike. It
+    keeps the strict rule (any pair over the threshold is a fold) until GPU qualification measures this engine's pairs."""
     turns, skipped, reasons = [], 0, {}
     for index in range(len(cameras) - 1):
         a, b = matches(rasters[index], rasters[index + 1])
