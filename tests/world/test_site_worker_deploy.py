@@ -34,6 +34,21 @@ def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     assert identities.authenticate('Bearer ' + VISITOR).owner_id == 'site-visitors'
 
 
+def test_the_scene_engine_offers_what_the_site_needs_to_build_a_metric_scene():
+    # app.mjs metricSceneCard() refuses to compile without both: the page would ask to update the worker.
+    scene = next(e for e in json.loads(ADAPTERS.read_text()) if e['id'] == 'scene-usd')
+    assert scene['dimension_checks'] is True and scene['bim_review'] is True and scene['source_job'] is True
+
+
+def test_visitors_together_leave_the_owner_room_inside_the_workers_global_caps():
+    from robotics.world_worker.app import UPLOADS_BYTES, VIDEO_BYTES
+    value = registry({'WORLD_SITE_PASSCODE': 'garage-walk-2026'}, 18 * 1024 ** 3, ['colmap-sparse'])
+    owner, visitors = (t['limits'] for t in value['tenants'])
+    assert visitors['upload_count'] + owner['upload_count'] <= 50, 'the worker admits 50 uploads in all'
+    assert UPLOADS_BYTES - visitors['upload_bytes'] >= VIDEO_BYTES, 'the owner can still reserve a full-size video'
+    assert visitors['storage_bytes'] <= owner['storage_bytes'] // 2
+
+
 def test_the_passcode_alone_gives_the_worker_the_sites_credentials():
     # Pinned against the site's derivedCredential() (brainsnn-r3f-app/src/server/worldWorkerProxy.test.js pins the same).
     assert derived_credential('garage-walk-2026', 'site-owner') == 'YKSyflk5DI5jVbtSo_hHapM4BbBylsGbT7ZZXYarmjM'

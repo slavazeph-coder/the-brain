@@ -143,6 +143,23 @@ it('world processing: visitors are off by default, then capped per connection pe
   } finally { await web.close(); await worker.close(); }
 });
 
+it('world processing: a visitor cannot hoard upload reservations', async () => {
+  const worker = await fakeWorker(), web = await site(env(worker, { WORLD_SITE_VISITORS: '1', WORLD_WORKER_SITE_VISITOR_TOKEN: VISITOR, WORLD_SITE_VISITOR_JOBS_PER_DAY: '1' }));
+  try {
+    const token = (await web.call('/api/world/session', { method: 'POST', body: {} })).data.token;
+    const upload = () => web.call('/api/world/worker/v1/uploads', { method: 'POST', token, body: { name: 'walk.mov', size: 5, kind: 'video' } });
+    const first = await upload(), second = await upload(), third = await upload();
+    assert.deepEqual([first.status, second.status, third.status], [201, 201, 429], 'two unused reservations at a time');
+    assert.equal((await web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine: 'colmap-sparse', upload_ids: [first.data.id], consent: true } })).status, 201);
+    assert.equal((await upload()).status, 201, 'an upload given to a job frees its place');
+    assert.equal((await upload()).status, 429, 'and the connection has used its day: three uploads per job allowed');
+    const before = worker.seen.filter((r) => r.url === '/v1/uploads').length;
+    assert.equal(before, 3, 'refused reservations never reach the worker');
+    const owner = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
+    assert.equal((await web.call('/api/world/worker/v1/uploads', { method: 'POST', token: owner, body: { name: 'walk.mov', size: 5, kind: 'video' } })).status, 201);
+  } finally { await web.close(); await worker.close(); }
+});
+
 it('world processing: the passcode alone gives both sides the same tenant credentials', async () => {
   // Pinned against robotics/world_worker/deploy/railway/tenants.py (tests/world/test_site_worker_deploy.py pins the same).
   assert.equal(derivedCredential('garage-walk-2026', 'site-owner'), 'YKSyflk5DI5jVbtSo_hHapM4BbBylsGbT7ZZXYarmjM');

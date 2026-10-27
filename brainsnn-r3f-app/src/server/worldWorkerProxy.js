@@ -26,6 +26,10 @@ const MAX_SESSIONS = 2000;
 const SESSION_MS = { owner: 12 * 3600_000, visitor: 2 * 3600_000 };
 const PASSCODE_FAILURES = 10;  // per address per hour, then the passcode is not checked at all
 const VISITOR_ENGINES = new Set(['colmap-sparse', 'scene-usd']);
+// A visitor job needs one upload (a video, or a cloud for the scene), so this many unfinished uploads per session and
+// uploads per connection per job allowed are plenty, and a visitor cannot fill the worker's upload slots for others.
+const VISITOR_OPEN_UPLOADS = 2;
+const VISITOR_UPLOADS_PER_JOB = 3;
 
 const digest = (value) => createHash('sha256').update(String(value)).digest();
 const day = (now) => new Date(now).toISOString().slice(0, 10);
@@ -138,7 +142,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     // A flood of visitor sessions never locks the owner out.
     if (kind === 'visitor' && sessions.size >= MAX_SESSIONS) return reply(res, 503, { detail: 'Too many people are processing right now. Try again later.' });
     const key = token();
-    sessions.set(key, { kind, address, expires: now() + SESSION_MS[kind], uploads: new Set(), jobs: new Set() });
+    sessions.set(key, { kind, address, expires: now() + SESSION_MS[kind], uploads: new Set(), used: new Set(), jobs: new Set() });
     return reply(res, 201, { token: key, kind, expiresInSeconds: SESSION_MS[kind] / 1000 });
   }
 
@@ -194,8 +198,22 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     if (req.method === 'POST') {
       try { body = await readBody(req, JSON_BYTES); } catch (error) { return reply(res, error.status, { detail: error.message }); }
     }
-    if (call.name === 'create-upload')
-      return forward(req, res, target, { credential, body, inspect: (data) => { if (ID.test(data?.id)) current.uploads.add(data.id); } });
+    if (call.name === 'create-upload') {
+      let counted = null;
+      if (current.kind === 'visitor') {
+        prune();
+        const key = `${day(now())}|uploads|${current.address}`;
+        const open = [...current.uploads].filter((id) => !current.used.has(id)).length;  // not yet given to a job
+        if (open >= VISITOR_OPEN_UPLOADS || (visitorJobs.get(key) || 0) >= perConnection * VISITOR_UPLOADS_PER_JOB)
+          return reply(res, 429, { detail: 'Free processing takes one video at a time. Process it, or try again tomorrow.' });
+        counted = key;
+      }
+      return forward(req, res, target, { credential, body, inspect: (data) => {
+        if (!ID.test(data?.id)) return;
+        current.uploads.add(data.id);
+        if (counted) visitorJobs.set(counted, (visitorJobs.get(counted) || 0) + 1);
+      } });
+    }
     if (call.name === 'create-job') {
       let request;
       try { request = JSON.parse(body.toString('utf8')); } catch { return reply(res, 400, { detail: 'Send JSON.' }); }
@@ -214,6 +232,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
       return forward(req, res, target, { credential, body, inspect: (data) => {
         if (!ID.test(data?.id)) return;
         current.jobs.add(data.id);
+        for (const upload of uploads) current.used.add(upload);
         for (const key of counted || []) visitorJobs.set(key, (visitorJobs.get(key) || 0) + 1);
       } });
     }

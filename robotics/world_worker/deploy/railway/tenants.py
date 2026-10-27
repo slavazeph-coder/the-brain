@@ -39,8 +39,11 @@ def registry(env, storage_bytes, engines):
     if visitor:
         if not CREDENTIAL.fullmatch(visitor) or visitor == owner:
             raise ValueError('WORLD_WORKER_SITE_VISITOR_TOKEN must be its own 43-128 character credential.')
+        # Visitors share one tenant, so its limits are what all visitors together can hold. They stay well inside the
+        # worker's global caps (50 uploads, 6 GiB of reservations), so the owner can always upload a 2 GiB video.
         tenants.append({'id': 'site-visitors', 'token_sha256': hashlib.sha256(visitor.encode()).hexdigest(), 'engines': engines,
-                        'limits': {**limits, 'upload_count': 50, 'job_count': 50}})
+                        'limits': {**limits, 'upload_count': 20, 'upload_bytes': 2 * GIB, 'job_count': 20,
+                                   'storage_bytes': storage_bytes // 2}})
     return {'schema': 'brainsnn.world.tenants.v1', 'tenants': tenants}
 
 
