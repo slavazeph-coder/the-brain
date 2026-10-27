@@ -1,14 +1,20 @@
-# Railway config for BrainSNN when the service deploys from the repository root.
-# Mirrors brainsnn-r3f-app/railway.toml. The root Dockerfile builds the
-# TypeScript/Vite SPA and serves it with the bundled Express server.
+# DEPLOYMENT-ONLY BRANCH: deploy/world-worker-20261027.
+# Do not merge this root configuration into main: main deploys the website.
+# The new worker service's explicit Dockerfile settings were overridden by
+# root auto-discovery during its first deployment on 2026-10-27. Keep the
+# correct worker configuration here while project-wide Railway IaC migration
+# is reviewed. Application and worker code otherwise come from main.
+# Build context is the repository root; worker has no public domain.
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "robotics/world_worker/deploy/railway/Dockerfile"
+watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "railway.toml"]
 
 [deploy]
-startCommand = "node dist/server.cjs"
+startCommand = "/app/robotics/world_worker/deploy/railway/start.sh"
+healthcheckPath = "/healthz"
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-healthcheckPath = "/healthz"
-healthcheckTimeout = 30
+numReplicas = 1
