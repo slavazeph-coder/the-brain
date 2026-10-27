@@ -2,8 +2,10 @@
 source-bound dimensional status -> checked IFC download -> optional planar route -> IFC opened in a BIM parser.
 
 usage: WORKER_URL=... WORKER_TOKEN=... ENGINE=colmap-dense-cpu record_scan2model.py <site-world-url> <walkthrough video> <ifc-viewer-url> <output.mp4> [--dry-run]
-The worker URL and token are typed under a title card, so they never appear in the recording. Every number shown comes
-from the real run; the distance typed in is illustrative and the closing card says so.
+       BRAINSNN_PASSCODE=... record_scan2model.py ...   (no WORKER_URL: "Process on BrainSNN", the site's own worker)
+The worker URL and token are typed under a title card, so they never appear in the recording. The passcode is typed on
+camera into a password field, so only dots show. Every number shown comes from the real run; the distance typed in is
+illustrative and the closing card says so.
 """
 import base64, hashlib, html, json, os, re, subprocess, sys, time
 from pathlib import Path
@@ -22,8 +24,10 @@ METRES_PER_UNIT = .66  # illustrative: about a 4 x 8 m room for the Mip-NeRF 360
 CAPTURE_CREDIT = os.environ.get('CAPTURE_CREDIT', 'Mip-NeRF 360 “room” photographs (Barron et al.), encoded as a test video; not a physical phone capture').strip()
 if not CAPTURE_CREDIT or len(CAPTURE_CREDIT) > 600:
     raise SystemExit('CAPTURE_CREDIT must identify the actual input in 1 to 600 characters.')
-WORKER, TOKEN = os.environ['WORKER_URL'], os.environ['WORKER_TOKEN']
-HOST = WORKER.split('://', 1)[-1].split('/', 1)[0]
+PASSCODE = os.environ.get('BRAINSNN_PASSCODE', '')
+SITE = bool(PASSCODE) and 'WORKER_URL' not in os.environ  # the site's own worker: there is no worker host to hide
+WORKER, TOKEN = ('', '') if SITE else (os.environ['WORKER_URL'], os.environ['WORKER_TOKEN'])
+HOST = None if SITE else WORKER.split('://', 1)[-1].split('/', 1)[0]
 SIZE = {'width': 1600, 'height': 900}  # CSS pixels; at 1.2x this records 1920 x 1080
 SCALE, VIDEO_SIZE = 1.2, (1920, 1080)
 OVERLAY = (Path(__file__).parent / 'record_demo.py').read_text().split('OVERLAY = r"""', 1)[1].split('"""', 1)[0]
@@ -77,25 +81,46 @@ def run(page):
         panel = page.locator('.processing-options')
         if panel.get_attribute('open') is None: panel.locator('summary').click()
     def onscreen_clean():
-        assert not page.evaluate('h => document.body.innerText.includes(h)', HOST), 'worker host visible on screen'
+        assert not HOST or not page.evaluate('h => document.body.innerText.includes(h)', HOST), 'worker host visible on screen'
 
     page.goto(URL, wait_until='networkidle'); page.mouse.move(800, 450)
     START.append(time.time())  # frames before the title card (page load) are dropped
-    card('<p>BRAINSNN · WORLD BUILDER · SCAN TO MODEL</p><h1>One test walkthrough.<br><em>Observed objects as scaled boxes.</em></h1><p>Robot simulation · GLB, OpenUSD and IFC</p>'); hold(3.8); card('')
+    card(f'<p>BRAINSNN · WORLD BUILDER · {"PROCESS ON BRAINSNN" if SITE else "SCAN TO MODEL"}</p><h1>One test walkthrough.<br><em>Observed objects as scaled boxes.</em></h1><p>Robot simulation · GLB, OpenUSD and IFC</p>'); hold(3.8); card('')
     say(('Live on <b>brainsnn.com</b>' if LIVE else 'World Builder') + ' · real reconstruction, nothing faked'); hold(2.4)
 
     say('<b>1</b> · Upload the test walkthrough video')
     glide(page.locator('#hero-capture')); hold(.8)
     page.locator('#files').set_input_files(VIDEO); hold(2.6)
 
-    card('<p>CONNECTING A PRIVATE PROCESSING WORKER</p><h1>Your capture goes only<br><em>where you approve it.</em></h1><p>operator credential · held in page memory</p>')
-    page.evaluate("document.getElementById('connection').style.opacity = '0'")
-    panel_open(); page.locator('[data-action=connection]').click()
-    page.locator('#worker-url').fill(WORKER); page.locator('#worker-token').fill(TOKEN); page.locator('#connect').click()
-    page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')", timeout=60_000)
-    page.locator('#connection [aria-label=Close]').click(); page.evaluate("document.getElementById('connection').style.opacity = ''"); hold(2.2); card('')
+    if SITE:
+        panel_open(); button = page.locator('[data-action=connection]')
+        if 'Process on BrainSNN' not in button.inner_text():
+            raise SystemExit('This site does not offer BrainSNN processing: set WORLD_WORKER_INTERNAL_URL and WORLD_SITE_PASSCODE on it.')
+        say('<b>2</b> · Process on BrainSNN: one passcode, no worker to install')
+        page.locator('.processing-options').scroll_into_view_if_needed(); hold(.6); glide(button)
+        page.locator('#connection').wait_for(state='visible')
+        # The dialog is modal (browser top layer), so the caption and cursor move inside it while it is open.
+        page.evaluate("() => document.getElementById('connection').append(document.getElementById('demo-caption'), document.getElementById('demo-cursor'))")
+        field = page.locator('#site-passcode'); glide(field)
+        if RECORD: field.press_sequentially(PASSCODE, delay=90)
+        else: field.fill(PASSCODE)
+        hold(.5); glide(page.locator('#site-connect'))
+        # On success the page closes the dialog; on failure it stays open with the reason.
+        page.wait_for_function("!document.getElementById('connection').open || !/^(Opening.*)?$/.test(document.querySelector('#site-processing-status').textContent)", timeout=60_000)
+        problem = page.evaluate("document.getElementById('connection').open && document.querySelector('#site-processing-status').textContent")
+        page.evaluate("() => document.body.append(document.getElementById('demo-caption'), document.getElementById('demo-cursor'))")
+        if problem: raise SystemExit('BrainSNN processing: ' + problem)
+        hold(1.2)
+    else:
+        card('<p>CONNECTING A PRIVATE PROCESSING WORKER</p><h1>Your capture goes only<br><em>where you approve it.</em></h1><p>operator credential · held in page memory</p>')
+        page.evaluate("document.getElementById('connection').style.opacity = '0'")
+        panel_open(); page.locator('[data-action=connection]').click()
+        page.locator('#worker-url').fill(WORKER); page.locator('#worker-token').fill(TOKEN); page.locator('#connect').click()
+        page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')", timeout=60_000)
+        page.locator('#connection [aria-label=Close]').click(); page.evaluate("document.getElementById('connection').style.opacity = ''"); hold(2.2); card('')
 
-    say(('<b>2</b> · Dense 3D reconstruction' if DENSE else '<b>2</b> · 3D reconstruction') + ' on a CPU worker, only after explicit consent')
+    say(('<b>2</b> · Dense 3D reconstruction' if DENSE else '<b>2</b> · 3D reconstruction')
+        + (' on BrainSNN’s own CPU server' if SITE else ' on a CPU worker') + ', only after explicit consent')
     panel_open(); page.locator('.processing-options').scroll_into_view_if_needed(); hold(.6)
     page.locator('#engine').select_option(ENGINE); hold(.8)
     glide(page.locator('#consent')); hold(.5); onscreen_clean()
@@ -104,7 +129,8 @@ def run(page):
     # keeps compositing stale tiles of whatever was on screen at those coordinates (otherwise the section below).
     speed(1000); page.locator('#workspace').evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})"); settle(); hold(2.0)
     speed(60, 'upload + CPU reconstruction' + (' and depth' if DENSE else '') + ' · sped up 60×')
-    page.wait_for_function("/Reconstruction loaded|failed/.test(document.querySelector('#status').textContent)", timeout=1_800_000)
+    # A folded model (the worker's fold check) is reported as "contradicts its own frames": stop rather than wait it out.
+    page.wait_for_function("/Reconstruction loaded|failed|contradicts its own frames/.test(document.querySelector('#status').textContent)", timeout=1_800_000)
     # Cut, not sped up: while the CPU reconstruction saturates the machine, Chrome composites stale tiles for a moment
     # as the panel re-renders, so the frames until the 3D view has settled are dropped.
     speed(1000)
@@ -236,8 +262,10 @@ def run(page):
          f'The {distance} m distance was typed for the demo; the capture was not independently measured.<br>'
          + (f'Names are suggestions from {namer}, not reviewed; touching objects stay one.' if named else 'Objects were not named in this run; touching objects stay one.') + '</h1>'
          + ('<p>Dense points: a depth model on CPU, checked across frames' if DENSE else '<p>Sparse points: COLMAP on CPU')
-         + '<br>Scale self-reported, not verified · IFC viewer: web-ifc, not part of brainsnn.com</p>'); hold(6.0)
-    return {'engine': ENGINE, 'capture_credit': CAPTURE_CREDIT,
+         + '<br>Scale self-reported, not verified · IFC viewer: web-ifc, not part of brainsnn.com'
+         + ('<br>Recorded on a local production build with brainsnn.com’s processing container, before deployment' if SITE and not LIVE else '')
+         + '</p>'); hold(6.0)
+    return {'engine': ENGINE, 'capture_credit': CAPTURE_CREDIT, 'connection': 'brainsnn-passcode' if SITE else 'operator-worker',
             'source_video': {'name': Path(VIDEO).name, 'size': Path(VIDEO).stat().st_size, 'sha256': file_sha256(VIDEO)},
             'downloaded_ifc': {'name': ifc.name, 'size': ifc.stat().st_size, 'sha256': file_sha256(ifc)},
             'named': named and named.group(0), 'distance_m': distance, 'span_units': span, 'facts': facts,
@@ -264,7 +292,7 @@ if __name__ == '__main__':
         # Recording only: the site scrolls smoothly, and mid-scroll screencast frames composite stale tiles, so scroll instantly.
         ctx.add_init_script("addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = 'html{scroll-behavior:auto!important}'; document.head.append(s); })")
         # Recording-only redaction: the consent text names the worker host (a product feature); blur that host on screen.
-        ctx.add_init_script("""(host => { const blur = root => { const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        if HOST: ctx.add_init_script("""(host => { const blur = root => { const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           const hits = []; while (walker.nextNode()) if (walker.currentNode.nodeValue.includes(host) && !walker.currentNode.parentElement?.classList.contains('demo-redact')) hits.push(walker.currentNode);
           for (const node of hits) { const parts = node.nodeValue.split(host), frag = document.createDocumentFragment();
             parts.forEach((part, i) => { frag.append(part); if (i < parts.length - 1) { const s = document.createElement('span'); s.className = 'demo-redact'; s.textContent = 'private-worker.example';
