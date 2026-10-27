@@ -31,6 +31,22 @@ def test_the_fits_recover_a_known_transform():
     assert np.allclose(R, turn(-75)) and np.allclose(t, [-4, 0, 9])
 
 
+@pytest.mark.parametrize('frame', ['colmap', 'right-handed-y-up'])
+def test_the_handoff_reads_each_engines_cloud_in_its_own_frame(tmp_path, frame):
+    """COLMAP's sparse cloud is y-down; LingBot-Map's dense cloud is already Y-up. Each hand-off point taken back through
+    its own transform is the PLY's point, so a landmark located in the reconstruction's frame lands on the right point."""
+    from geometry import write_point_cloud
+    rng = np.random.default_rng(5)
+    points = rng.uniform(-2, 2, (300, 3))
+    write_point_cloud(tmp_path / 'cloud.ply', points, np.full((300, 3), 128), coordinate_frame=frame)
+    cloud = pr.handoff(tmp_path / 'cloud.ply', tmp_path / 'out.json', ROOT / 'brainsnn-r3f-app/public/world', frame)
+    assert cloud['sourceFrame'] == frame
+    M = np.asarray(cloud['fromSource'], float)
+    back = np.linalg.solve(M[:, :3], (np.asarray([p[:3] for p in cloud['points']]) - M[:, 3]).T).T
+    nearest = np.abs(back[:, None, :] - points[None]).sum(-1).min(1)
+    assert nearest.max() < 1e-5
+
+
 def test_the_fingerprint_is_232s_byte_layout():
     pts = [[1.5, -2.0, 0.25, 10, 20, 30], [0, 0, 0, 255, 0, 1]]
     h = hashlib.sha256(b'brainsnn.dimension-points.v1\0right-handed-y-up\0m\0')

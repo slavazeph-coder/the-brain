@@ -451,36 +451,40 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    - **On the benchmark hand-off:** the room between boxes went from −11.7/−11.5 cm to −1.7/−1.5 cm, the faces'
      own error. The wall fit median went from 4.2 to 0.8 cm. IfcOpenShell reports 0 issues.
    - **Consequence:** a reviewed opening from an older compile no longer matches its host and must be reviewed again.
-4. **Run the dense CPU engine on the benchmark.** Five of ten pieces of furniture are found on the sparse cloud. The
+4. **Qualify LingBot-Map on the 4090** (Hermes or owner; `docs/hermes-gpu-tasks.md` §6). The `lingbot-map-stream`
+   engine is built and tested on the CPU without weights. It still needs a GPU run: pin the checkpoint hash, then
+   score it against COLMAP on the synthetic room and run the garage video. It is the candidate answer to forward walks
+   folding, and to five-minute videos past repeated surfaces, but only once its turn check and truth score say so.
+5. **Run the dense CPU engine on the benchmark.** Five of ten pieces of furniture are found on the sparse cloud. The
    dense engine is the intended answer, but its pinned depth model (Hugging Face) can't be fetched from these
    cloud sessions.
-5. **Metric LiDAR import.**
+6. **Metric LiDAR import.**
    - Accept an iPhone Pro LiDAR export (PLY from Polycam, Scaniverse or 3D Scanner App, or Splatcatcher's COLMAP export)
      as a source with scale "device LiDAR", so no distance is typed.
    - Today the metric scene needs a worker reconstruction (`multiView`, `app.mjs:71`) and a typed distance
      (`app.mjs:64`).
-6. **MuJoCo export (`scene.mjcf`).**
+7. **MuJoCo export (`scene.mjcf`).**
    - Floor, walls and objects as static boxes, keeping the fit numbers and inferred marks; tested by loading and stepping
      it with the `mujoco` package in CI.
    - It makes scanned spaces usable as evaluation scenes in DeepMind's simulator and in the Robot Arena, which already
      runs MuJoCo 3.2.3.
    - About a day, all on CPU.
-7. **Rooms in IFC.** Doors arrive with #232. Still missing:
+8. **Rooms in IFC.** Doors arrive with #232. Still missing:
    - the room as an `IfcSpace`, with its area in `quantities.csv`;
    - the site button rename: it still says "(GLB, USD, IFC)" though it also writes DXF, 3DM, CSV and the fit check.
-8. **Gemini Robotics-ER 2 as a naming option.**
+9. **Gemini Robotics-ER 2 as a naming option.**
    - Use `gemini-robotics-er-2-preview` through the Gemini API, alongside Claude and the detector.
    - It returns 2D points and boxes; the worker lifts them into 3D with the COLMAP poses.
    - It needs `GEMINI_API_KEY` on the worker, a consent box like Claude naming, and a check of preview pricing and data
      terms.
-9. **The GPU stack on the 4090:**
+10. **The GPU stack on the 4090:**
    - splats (splatfacto) and planar meshes (PGSR) for photoreal review;
    - OpenUSD's splat prim;
    - SAM 2 masks to split touching objects.
 
    Keep IFC as the source of truth.
-10. **A review UI for names** (accept, edit or reject per object), then map "door" to `IfcDoor`.
-11. **Objects from one photo for visitors**, through a spend-capped server route. It needs a key in Railway and the
+11. **A review UI for names** (accept, edit or reject per object), then map "door" to `IfcDoor`.
+12. **Objects from one photo for visitors**, through a spend-capped server route. It needs a key in Railway and the
    owner's approval for public spend.
 
 ## Known weaknesses (room run)

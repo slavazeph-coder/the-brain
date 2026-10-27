@@ -4,7 +4,7 @@ calibration span the way a person does in the site, and write the withheld spans
 usage: python pick_references.py --truth truth.json --frames frames/ --reconstruction <reconstruction job dir> --out OUT
                                  [--radius 0.05] [--world brainsnn-r3f-app/public/world] [--spans office-spans.json]
 <reconstruction job dir> holds output/ (sparse-preview.ply, reconstruction.json) and colmap-work/images (the frames the
-worker sampled). Writes into OUT:
+worker sampled); for a lingbot-map-stream job, output/dense-preview.ply and lingbot-images, the same frames. Writes into OUT:
 - brainsnn-point-cloud.json: the site's hand-off (toArenaCloud), scaled by the calibration span alone;
 - dimension-checks.json: #232's schema, with point indices into that hand-off;
 - references.json: each landmark's picked point and how far it sits from the landmark, every span's true and
@@ -65,8 +65,8 @@ def fingerprint(points):
     return h.hexdigest()
 
 
-def handoff(ply, out, world, k=1.0, distance=None, span=None):
-    cmd = ['node', str(Path(__file__).with_name('handoff.mjs')), str(ply), str(out), repr(k), str(Path(world).resolve())]
+def handoff(ply, out, world, frame, k=1.0, distance=None, span=None):
+    cmd = ['node', str(Path(__file__).with_name('handoff.mjs')), str(ply), str(out), repr(k), str(Path(world).resolve()), frame]
     if distance is not None: cmd += [repr(distance), repr(span)]
     subprocess.run(cmd, check=True, capture_output=True, cwd=ROOT)
     return json.loads(Path(out).read_text())
@@ -87,15 +87,18 @@ def main():
     if a.spans:
         truth['spans'] = [{**sp, 'distanceMeters': round(math.dist(truth['landmarks'][sp['from']], truth['landmarks'][sp['to']]), 6)}
                           for sp in json.loads(a.spans.read_text())]
+    # LingBot-Map writes its denser cloud and its cameras in the viewer's Y-up frame; COLMAP keeps its own.
+    lingbot = rec.get('pipeline') == 'lingbot-map-stream'
+    frame = 'right-handed-y-up' if lingbot else 'colmap'
     # 1. Which rendered frame each sampled image is, then align camera centres to the true camera positions.
-    matched = match_frames(a.reconstruction / 'colmap-work/images', a.frames)
+    matched = match_frames(a.reconstruction / ('lingbot-images' if lingbot else 'colmap-work/images'), a.frames)
     true_pos = {c['frame']: c['position'] for c in truth['cameras']}
     pairs = [(c['camera_center'], true_pos[matched[c['image']]['frame']]) for c in rec['cameras'] if c['image'] in matched]
     s, R, t = similarity([p for p, _ in pairs], [q for _, q in pairs])
     residual = float(np.sqrt(np.mean([np.sum((s * R @ np.asarray(p) + t - np.asarray(q)) ** 2) for p, q in pairs])))
     # 2. The hand-off in reconstruction units: the same points, order and framing as the metric one (only scaled).
-    ply = a.reconstruction / 'output/sparse-preview.ply'
-    unit = handoff(ply, a.out / 'unit-cloud.json', a.world); P1 = np.asarray([p[:3] for p in unit['points']], float)
+    ply = a.reconstruction / 'output' / ('dense-preview.ply' if lingbot else 'sparse-preview.ply')
+    unit = handoff(ply, a.out / 'unit-cloud.json', a.world, frame); P1 = np.asarray([p[:3] for p in unit['points']], float)
     def locate(name):
         """The hand-off point nearest a true landmark, and its distance from it in true metres."""
         g = np.asarray(truth['landmarks'][name], float); c = R.T @ (g - t) / s  # truth -> reconstruction frame
@@ -112,7 +115,7 @@ def main():
     # 3. Scale from the calibration span alone, exactly as a person types a taped distance in the site.
     span_units = float(np.linalg.norm(P1[found[cal['from']]['index']] - P1[found[cal['to']]['index']]))
     k = cal['distanceMeters'] / span_units
-    cloud = handoff(ply, a.out / 'brainsnn-point-cloud.json', a.world, k, cal['distanceMeters'], span_units)
+    cloud = handoff(ply, a.out / 'brainsnn-point-cloud.json', a.world, frame, k, cal['distanceMeters'], span_units)
     Pk = np.asarray([p[:3] for p in cloud['points']], float)
     # The same source points in the same order: each hand-off's points taken back through its own transform. (Positions
     # alone could differ: the floor fit at another scale may round to a slightly different plane.)
