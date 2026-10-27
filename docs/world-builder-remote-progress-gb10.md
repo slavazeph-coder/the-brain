@@ -5,6 +5,24 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 125 — malformed ReportBody 422 schema rejection tests
+- Baseline exact: `pytest tests/world/test_report_receipts.py -q` → **31 passed in 20.55 s**; `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail (103 ms)** at `e569568`.
+- Added `test_report_receipt_malformed_body_is_rejected_422` to `tests/world/test_report_receipts.py` (+54 lines):
+  parametrised schema-level `ReportBody` rejects over HTTP —
+  `scenarioSha256` (63/65-char, non-hex), `geometrySha256` (wrong len, non-hex),
+  `artifactRefs` name (empty, >256, `../evil`), `artifactRefs` sha256 (62-char,
+  non-hex), >32 refs, extra top-level field, non-object body, null body.
+  All must 422 without touching the job slot; a valid request still signs 200.
+- Verified (exact):
+  - `pytest tests/world/test_report_receipts.py -q` → **32 passed in 13.85 s**
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail (103 ms)**
+- Commit: **`a7966d5`** `test(world): add malformed ReportBody 422 schema rejection tests`
+  (1 file, +54). Pushed to `hermes/world-builder-gb10`; `git ls-remote` = `a7966d5`.
+  No force-push/merge/deploy.
+- Remaining pending: HTTP report UI browser-journey validation (live signed
+  endpoint UI); 4090 MapAnything single-held-out-frame `infer()` smoke.
+- Serving Qwen/backup, licensed model/guardrail gates, no-paid-fallback untouched.
+
 ### Run 122 — tenant job-quota regression: completed rows consume quota, only row-removing DELETE frees slot
 - Tree verified clean at `d57d0cd` on `hermes/world-builder-gb10` before editing
   (run 121's drafted quota test was never written to disk — confirmed by
