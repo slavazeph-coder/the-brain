@@ -153,3 +153,19 @@ WebXR or LiDAR; frame-posing models are 1B+ parameters), so the site runs the ex
 In the container through the site proxy, an 8 s rendered walk took 105 s for colmap-sparse (24/24 frames, 0.61 px)
 and 99 s for scene-usd. CI: tests/world/site_processing_browser_smoke.py (fixture adapter in place of COLMAP).
 Live only after the owner creates the Railway service and sets the variables (deploy/railway/README.md).
+
+### LingBot-Map streaming engine, 27 October 2026
+
+`robotics/world_worker/lingbot_map_stream.py` (`lingbot-map-stream`): one video (the same frames as colmap-sparse) or
+3-12 ordered photos through LingBot-Map (Apache-2.0 code, robbyant/lingbot-map @ b9dd1b1), streaming, CUDA only,
+offline, tensors-only checkpoint load, refuses missing weights. Points come from depth through each predicted camera
+(consistent by construction), Y-up like MapAnything, so the site reads it unchanged. Every consecutive pair's
+modelled turn is checked against the turn its SIFT matches give (OpenCV essential matrix with the model's
+intrinsics). That goes in `capture.consistency`, with the same 15 degree threshold and record shape as COLMAP's fold
+check. Synthetic room: true poses median 0.48, worst 1.14 degrees; a 40 degree jump is flagged; an 8 degree one is
+not (worst 7.7 against median 0.6 is visible in the record). Pairs that fit a homography as well (flat wall, turning
+on the spot) are skipped, not trusted.
+Never run with real weights: Hugging Face is blocked from cloud sessions. MODEL_SHA256 is None until GPU qualification
+pins it (lingbot-map.pt and lingbot-map-long.pt are the same size). The real architecture with random weights ran on
+CPU through the adapter's load/infer code. Qualification steps: docs/hermes-gpu-tasks.md section 6.
+`run_benchmark.py --engine lingbot-map-stream` scores it against truth beside COLMAP.

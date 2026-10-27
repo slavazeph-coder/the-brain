@@ -3,6 +3,7 @@
 -r ../../robotics/world_worker/requirements-colmap.txt
 -r ../../robotics/world_worker/requirements-observations.txt
 -r ../../robotics/world_worker/requirements-cad.txt
+opencv-python-headless==4.14.0.94  # the LingBot-Map turn check: SIFT matches and an essential matrix
 pytest==9.1.1
 httpx==0.28.1
 playwright==1.64.0

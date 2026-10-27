@@ -36,7 +36,7 @@ def check(browser, url):
         page.on('dialog',lambda dialog:dialog.accept())
         page.goto(url,wait_until='networkidle')
         assert not errors, errors
-        page.wait_for_function("document.querySelectorAll('.system-card').length===22", timeout=5000)
+        page.wait_for_function("document.querySelectorAll('.system-card').length===23", timeout=5000)
         page.locator('#hero-capture').click()
         page.locator('[data-action=record]').click()
         assert page.locator('[data-action=record]').inner_text() == 'Cancel camera request'

@@ -83,7 +83,7 @@ def run(page, record):
             hold(.25); page.mouse.down(); hold(.08); page.mouse.up()
 
     page.goto(URL, wait_until='networkidle')
-    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.wait_for_function("document.querySelectorAll('.system-card').length===23")
     page.mouse.move(*position)
     card('<p>BRAINSNN · WORLD BUILDER</p><h1>Turn any photo into a world.<br><em>Turn any world into a robot simulation.</em></h1><p>brainsnn.com</p>')
     hold(3.2); card('')

@@ -81,3 +81,43 @@ The approval's conditions:
   false. The site credits NVIDIA Cosmos.
 
 Done when the receipts are posted for review. Nothing goes on brainsnn.com until the owner has seen them.
+
+## 6. LingBot-Map on the 4090: qualify the streaming engine (October 27, 2026)
+
+`robotics/world_worker/lingbot_map_stream.py` adds `lingbot-map-stream`. It runs one walkthrough video (or 3–12 photos in
+order) through LingBot-Map (Apache-2.0 code, `robbyant/lingbot-map`), which poses every frame of a long walk in one
+streaming pass. COLMAP folds on repeated surfaces instead. Each pair of consecutive frames is then checked: the
+model's turn between them against the turn their own SIFT matches give. The result is written to `capture.consistency`,
+which the site already shows as an error when it reads `folded`. It uses the same frames as `colmap-sparse`, so the
+two engines can be compared directly.
+
+It has never run with real weights. Cloud sessions can't download the 4.6 GB checkpoint. On the CPU, with random
+weights, the real architecture returned the shapes and camera conventions the adapter reads (`tests/world/test_lingbot_map.py`).
+
+1. **Environment.** A separate venv, Python 3.11:
+   - `pip install -r robotics/world_worker/requirements-lingbot.txt` (CUDA 12.8 wheels; see the file);
+   - a clean clone of `github.com/robbyant/lingbot-map` at `b9dd1b1de535e6d36e777fb42b8433c781bfd783`, not pip-installed
+     (the adapter imports it from that checkout and refuses any other copy).
+2. **Pin the checkpoint.**
+   - Download `lingbot-map.pt` from `robbyant/lingbot-map` on Hugging Face, and record the revision.
+   - Run `python robotics/world_worker/lingbot_map_stream.py --hash-checkpoint /path/to/lingbot-map.pt`.
+   - Put its `sha256` in `MODEL_SHA256` in a PR. `lingbot-map-long.pt` is the same size, so the size alone proves nothing.
+   - The adapter loads tensors only (`weights_only=True`). If the file holds anything else, it refuses: report that,
+     and don't loosen the check.
+3. **Configure.**
+   - Copy the `lingbot-map-stream` entry from `adapters.example.json`.
+   - Set `WORLD_LINGBOT_SOURCE_DIR` and `WORLD_LINGBOT_MODEL_PATH`. Optionally set `WORLD_LINGBOT_BACKEND=flashinfer`
+     (default `sdpa`, which needs no JIT toolchain).
+   - Prove it with `check_worker --require lingbot-map-stream:video`.
+4. **Score it on the synthetic room**, next to COLMAP's Oct 26 column in `scripts/world-demo/benchmark/README.md`:
+   - render: `build_office.py -- OUT --frames 60 --width 960 --height 540`;
+   - run: `run_benchmark.py OUT --jobs <worker>/jobs --engine lingbot-map-stream --refs refs-lingbot`;
+   - record from `refs-lingbot/truth-score.json` and the job's `reconstruction.json`: camera alignment RMS, the turn check
+     (pairs checked, median and worst disagreement), room width and depth error, withheld spans usable and within
+     tolerance, peak GPU memory and time.
+5. **One real phone video** (the owner's garage walk, 2:20). Record `capture.consistency`, time, peak memory, and whether
+   the site proposes a planning map from it.
+
+Done when the hash-pin PR and the receipts from steps 4 and 5 are posted. Leave the entry `enabled: false` on any
+public worker until the owner has seen them. LingBot-Map's scale is the model's own: a measured distance is still
+needed, and `metric_verified` stays false.

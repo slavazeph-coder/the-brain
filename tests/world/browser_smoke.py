@@ -28,21 +28,21 @@ def open_world(view, url, *, require_response=False):
         assert response.status==200 or (not require_response and response.status==304), \
             f'World document returned HTTP {response.status}: {response.url}'
     selector='iframe[src="/world/index.html"]'
-    view.wait_for_function("document.querySelector('iframe[src=\"/world/index.html\"]') !== null || document.querySelectorAll('.system-card').length===22")
+    view.wait_for_function("document.querySelector('iframe[src=\"/world/index.html\"]') !== null || document.querySelectorAll('.system-card').length===23")
     if view.locator(selector).count():
         handle=view.locator(selector).element_handle()
         page=handle.content_frame()
         assert page is not None, 'The World iframe must expose its document'
     else:
         page=view
-    page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.wait_for_function("document.querySelectorAll('.system-card').length===23")
     return page
 
 def check(browser, mobile=False):
     ctx=browser.new_context(viewport={'width':390,'height':844} if mobile else {'width':1440,'height':1000},device_scale_factor=1,has_touch=mobile)
     page=ctx.new_page();view=page;errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page=open_world(view,URL)
-    assert page.locator('.system-card').count()==22
+    assert page.locator('.system-card').count()==23
     assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     view.screenshot(path=str(OUTPUT/(browser.browser_type.name+('-mobile.png' if mobile else '-desktop.png'))),full_page=True)
@@ -123,7 +123,7 @@ def check(browser, mobile=False):
     page.locator('#system-search').fill('');local_count=page.locator('.system-card[data-state=local]').count()
     assert local_count>0
     page.locator('[data-filter=local]').click();assert page.locator('.system-card').count()==local_count
-    page.locator('[data-filter=all]').click();assert page.locator('.system-card').count()==22
+    page.locator('[data-filter=all]').click();assert page.locator('.system-card').count()==23
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     assert errors==[],errors
     ctx.close()
@@ -294,7 +294,7 @@ def check_app_shell(browser):
     base=url.rsplit('/',1)[0]
     ctx=browser.new_context(viewport={'width':390,'height':844},has_touch=True,user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.add_init_script("Object.defineProperty(navigator,'maxTouchPoints',{get:()=>5})")
-    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===23")
     manifest=page.request.get(base+'/manifest.webmanifest');assert manifest.ok;data=manifest.json()
     assert data['scope']=='/world/' and data['display']=='standalone' and any(i.get('purpose')=='maskable' for i in data['icons'])
     # In production /world/ is the outer site shell; the installed app must start on the World document itself.
@@ -309,9 +309,9 @@ def check_app_shell(browser):
       return {state:sw.state,names,keys}}""")
     assert sw['state']=='activated' and len(sw['names'])==1 and '/world/app.mjs' in sw['keys'] and '/world/index.html' in sw['keys'],sw
     page.reload(wait_until='networkidle');assert page.evaluate('navigator.serviceWorker.controller!==null')
-    ctx.set_offline(True);page.reload(wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000)
+    ctx.set_offline(True);page.reload(wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===23",timeout=15000)
     # Launching the installed app offline opens its start URL from the cache.
-    page.goto(url.split('/world/')[0]+data['start_url'],wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===22",timeout=15000)
+    page.goto(url.split('/world/')[0]+data['start_url'],wait_until='domcontentloaded');page.wait_for_function("document.querySelectorAll('.system-card').length===23",timeout=15000)
     ctx.set_offline(False)
     page.evaluate("Promise.allSettled([fetch('/v1/site-scans/capabilities'),fetch('https://example.invalid/x')])")
     assert not any('/v1/' in k for k in page.evaluate("async()=>{const names=(await caches.keys()).filter(n=>n.startsWith('world-shell-'));return (await Promise.all(names.map(n=>caches.open(n).then(c=>c.keys())))).flat().map(r=>r.url)}"))
@@ -332,7 +332,7 @@ def check_app_shell(browser):
     # On the homepage the app is framed: Install opens the standalone World document at the top level, where it applies.
     page.goto(url.split('/world/')[0]+'/',wait_until='networkidle')
     if page.locator('iframe[src="/world/index.html"]').count():
-        frame=page.frame(url=re.compile(r'/world/index\.html$'));frame.wait_for_function("document.querySelectorAll('.system-card').length===22")
+        frame=page.frame(url=re.compile(r'/world/index\.html$'));frame.wait_for_function("document.querySelectorAll('.system-card').length===23")
         frame.locator('[data-tab=capture]').click();frame.locator('[data-action=install]').click()
         page.wait_for_url(re.compile(r'/world/index\.html\?install=1$'));page.wait_for_function("/Add to Home Screen/.test(document.querySelector('#status').textContent)")
     assert not errors,errors;ctx.close()
@@ -343,7 +343,7 @@ def check_capture_keeps_user_map(browser):
     import io
     url=URL if URL.endswith('/world/index.html') else URL.rstrip('/')+'/world/index.html'
     ctx=browser.new_context();page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===23")
     page.locator('[data-tab=world]').click();page.locator('#map-name').fill('My measured gym');page.locator('#map-name').press('Enter')
     b=io.BytesIO();Image.new('RGB',(20,20)).save(b,format='PNG')
     page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
