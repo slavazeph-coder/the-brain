@@ -1,5 +1,7 @@
 # Railway config for the World Builder worker service (a second service next to the site, from the same repository).
-# In that service's settings, set "Config file" to robotics/world_worker/deploy/railway/railway.toml. Setup: README.md here.
+# In that service's settings, set "Config file" to /robotics/world_worker/deploy/railway/railway.toml (leading slash:
+# Railway reads it from the repository root; without it the root railway.toml builds the website instead).
+# Setup: docs/brainsnn-processing-setup.md.
 
 [build]
 builder = "DOCKERFILE"

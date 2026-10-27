@@ -1,5 +1,7 @@
 # brainsnn.com's own processing, on Railway
 
+Step by step, with screenshots of what to expect and a troubleshooting table: `docs/brainsnn-processing-setup.md`.
+
 A second Railway service runs the World Builder worker on CPU next to the site. The site's server talks to it over
 Railway's private network, holds its credentials, and gives each browser a short session instead. On the World Builder
 page, "Process on BrainSNN" then works with no worker address or token to type.
@@ -20,7 +22,8 @@ page, "Process on BrainSNN" then works with no worker address or token to type.
    - In the Railway project: New → GitHub Repo → this repository.
    - Name the service `world-worker`.
    - Settings:
-     - **Config file:** `robotics/world_worker/deploy/railway/railway.toml`.
+     - **Config file:** `/robotics/world_worker/deploy/railway/railway.toml` (with the leading slash: Railway reads it
+       from the repository root). Without it, the service picks up the root `railway.toml` and builds the website.
      - **Networking:** no public domain. The site reaches it privately.
    - **Volume:** add one mounted at `/data`, 20 GB.
    - **Variables:**

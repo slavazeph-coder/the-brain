@@ -119,6 +119,16 @@ def main():
                 for name in os.environ.get('WORLD_BROWSERS', 'chromium,webkit').split(','):
                     check(pw, name.strip(), site, passcode, video)
                     print(f'{name.strip()}: Process on BrainSNN -> passcode -> site proxy -> worker -> cloud loaded', flush=True)
+            # The owner's command-line check takes the same path: setup, upload, job, hashed downloads.
+            checked = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site,
+                                      '--video', str(video), '--out', str(tmp / 'check'), '--poll', '0.5'],
+                                     env={**os.environ, 'BRAINSNN_PASSCODE': passcode}, capture_output=True, text=True, timeout=180)
+            print(checked.stdout, flush=True)
+            assert checked.returncode == 0, checked.stdout + checked.stderr
+            assert passcode not in checked.stdout + checked.stderr, 'the passcode is never printed'
+            wrong = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site],
+                                   env={**os.environ, 'BRAINSNN_PASSCODE': 'not-the-passcode'}, capture_output=True, text=True, timeout=60)
+            assert wrong.returncode == 1 and 'FAIL  passcode opens a session' in wrong.stdout
         except Exception:
             for path in [tmp / 'worker.log', tmp / 'site.log', *sorted((tmp / 'data/jobs').glob('*/operator.log'))]:
                 if path.exists():

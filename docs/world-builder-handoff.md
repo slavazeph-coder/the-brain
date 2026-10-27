@@ -63,7 +63,7 @@ Before assuming any deploy, check that main is green.
 - **No worker is connected to brainsnn.com yet** (see Blocked). Every run in this handoff used a local worker.
   The site can now run its own CPU worker on Railway: "Process on BrainSNN", behind a passcode, with no worker
   address or token for the person to type. It goes live once the owner creates the worker service and sets the
-  variables in `robotics/world_worker/deploy/railway/README.md`.
+  variables in `docs/brainsnn-processing-setup.md` (step by step, with a troubleshooting table).
 
 **PRs merged on October 24:**
 - **#223:** dense CPU points, object separation, scene route, doorway split.
