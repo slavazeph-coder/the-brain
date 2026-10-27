@@ -1,9 +1,41 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-26T12:00Z
+Last updated: 2026-10-27T04:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 101 — cancellation regression: hold command needs {input_manifest} placeholder
+- Picked up previous run's uncommitted draft `test_cancel_queued_job_cancels_receipt_slot`
+  in `tests/world/test_report_receipts.py` (working tree dirty since run 100).
+- Root cause confirmed by reading source + running the failing test:
+  - The draft hold-adapter command was `[sys.executable, '-c', hold_script]` with
+    **no** `{input_manifest}` placeholder.
+  - `app.py:448` substitutes `{input_manifest}` → request-file path into each
+    command arg. Without the placeholder, the substituted command is
+    `[sys.executable, '-c', hold_script]` → `sys.argv[1]` is empty.
+  - The hold script does `json.load(open(sys.argv[1]))` → `FileNotFoundError`
+    → subprocess exits 1 → `app.py:462` raises `ValueError('Adapter failed.
+    Check operator logs…')` → job status `failed`.
+  - Test error before fix: `job … status=failed detail=Adapter failed. Check
+    operator logs; no successful output was claimed.` (1 failed, 30 passed).
+- Fix: add `'{input_manifest}'` as the last command arg so the worker
+  substitutes the request-file path into `sys.argv[1]`. The hold script then
+  reads the manifest, writes `hold-artifact.json` + `manifest.json` under
+  `output_dir`, and the job completes.
+- Verified:
+  - `pytest tests/world/test_report_receipts.py -q` → **31 passed in 20.10 s**
+    (was 30 passed + 1 failed).
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass, 0 fail** (104 ms).
+- Commit: **`03f84bc`** `fix(world): cancellation regression — hold command
+  needs {input_manifest} placeholder` (1 file, +121). Pushed.
+  No force-push/merge/deploy.
+- No 4090 probe this run (alternation: GB10 build task closed this run).
+  Serving Qwen/backup, licensed gates, no-paid-fallback untouched.
+- Next bounded action: 4090 MapAnything held-out-frame inference smoke —
+  short SSH to `root@ssh2.vast.ai:23990` (key `/root/.ssh/gb10-rebuild`),
+  confirm hostname + GPU before running. Reuse verified pinned weights from
+  GB10; do not replace base conda env. No permanent tunnel.
 
 ### Run 100 — cancellation regression fix: settle loop now waits for operator.log + cancelled
 - Picked up previous run's drafted (uncommitted) fix to
