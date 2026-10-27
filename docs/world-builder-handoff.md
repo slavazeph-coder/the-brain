@@ -61,6 +61,9 @@ Before assuming any deploy, check that main is green.
   suggestions. **Visitors get dots, not separated objects.** Separation needs a worker.
 - **Walkthrough, with a worker connected** (Capture → Worker connection): see "Use it" below.
 - **No worker is connected to brainsnn.com yet** (see Blocked). Every run in this handoff used a local worker.
+  The site can now run its own CPU worker on Railway: "Process on BrainSNN", behind a passcode, with no worker
+  address or token for the person to type. It goes live once the owner creates the worker service and sets the
+  variables in `robotics/world_worker/deploy/railway/README.md`.
 
 **PRs merged on October 24:**
 - **#223:** dense CPU points, object separation, scene route, doorway split.
@@ -411,7 +414,9 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 
 ## Blocked, and on whom
 
-1. **No GPU worker connected to brainsnn.com (owner and Hermes).**
+1. **No GPU worker connected to brainsnn.com (owner and Hermes).** CPU processing no longer waits on it: the Railway
+   worker (`robotics/world_worker/deploy/railway/`) runs `colmap-sparse` and `scene-usd` for the site itself, once
+   the owner sets up the service. The GPU is still needed for dense engines (MapAnything, LingBot-Map).
    - **The 4090:** the owner shared SSH access in chat, deliberately not recorded here. Cloud sessions can't reach it,
      because the network policy allows HTTPS only.
    - **The path:** run the worker on the 4090 with `robotics/world_worker/deploy/` behind a stable HTTPS hostname. Prove

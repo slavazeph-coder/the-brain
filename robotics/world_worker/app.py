@@ -279,8 +279,11 @@ def visual_metadata(entry):
 
 
 def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, ttl: int = 86400,
-               storage_limit: int = 20 * 1024 ** 3, job_limit: int = 4 * 1024 ** 3):
+               storage_limit: int | None = None, job_limit: int = 4 * 1024 ** 3):
     token = token or os.environ.get('WORLD_WORKER_TOKEN', '')
+    if storage_limit is None:  # WORLD_STORAGE_BYTES: below the disk's size, e.g. 9 GiB on a 10 GB Railway volume
+        value = os.environ.get('WORLD_STORAGE_BYTES', '')
+        storage_limit = int(value) if value.isdigit() else 20 * 1024 ** 3
     if len(token) < 32:
         raise RuntimeError('Set WORLD_WORKER_TOKEN to a random secret of at least 32 characters.')
     if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:

@@ -1,0 +1,19 @@
+#!/opt/bpy/bin/python
+"""Runs `blender -b --python script -- args` with the bpy module (Blender 4.2 as a Python module), as
+scripts/world-demo/local-worker/start.sh does for a worker on your own computer."""
+import os, runpy, sys
+argv = sys.argv[1:]
+if '--version' in argv:
+    import bpy
+    print('Blender %d.%d.%d (bpy module)' % bpy.app.version); sys.stdout.flush(); os._exit(0)
+script = argv[argv.index('--python') + 1]
+sys.argv = ['blender', '--', *(argv[argv.index('--') + 1:] if '--' in argv else [])]
+code = 0
+try:
+    runpy.run_path(script, run_name='__main__')
+except SystemExit as e:
+    code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+except BaseException:
+    import traceback; traceback.print_exc(); code = 1
+sys.stdout.flush(); sys.stderr.flush()
+os._exit(code)  # bpy can crash while the interpreter shuts down, after every file is written
