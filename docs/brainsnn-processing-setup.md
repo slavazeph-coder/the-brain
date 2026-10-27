@@ -162,6 +162,9 @@ Nothing changes for visitors until Part 4. The page looks exactly as before.
 7. **Success:** "Reconstruction loaded. Compare with the source; …" and a point cloud you can orbit.
    - "This reconstruction contradicts its own frames: the room is likely folded onto itself" is the fold check: process
      it again, or re-film (Part 6).
+   - The check script's "fold check unconfirmed" means one pair of neighbouring frames disagreed with the model and
+     nothing confirmed it. That is usually a weak match, not a fold, so the page loads the model. Look at it around the
+     frames named in `reconstruction.json`'s warnings before you trust a dimension there.
 
 ### From a computer, without a browser
 
