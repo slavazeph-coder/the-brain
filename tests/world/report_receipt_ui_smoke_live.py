@@ -330,8 +330,7 @@ main().catch(e => {{
             page.goto(page_url)
             page.wait_for_function(
                 "() => document.getElementById('status').textContent.includes('ALL PASS') "
-                "|| document.getElementById('status').textContent.includes('FAIL') "
-                "|| document.getElementById('status').textContent.includes('OK')",
+                "|| document.getElementById('status').textContent.includes('FAIL')",
                 timeout=30_000)
             status = page.evaluate("() => document.getElementById('status').textContent")
             job_txt = page.evaluate("() => document.getElementById('job').textContent")
