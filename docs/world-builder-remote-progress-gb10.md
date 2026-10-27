@@ -416,3 +416,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - No force-push, no merge, no deploy. GB10 build/verification only this run
   (4090 GPU work on its separate branch/config).
 - Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+
+## Run 103 — 2026-10-27 (checkpoint encoder fix, verify receipt suites)
+
+**Checkpoint:** committed run 102's still-uncommitted encoder-probe fix → **63fd739** `fix(tests/world): encoder probe uses -f null for non-seekable pipe; discover encoders` (1 file, +29/-3). Pushed `3b51d3f..63fd739` to `hermes/world-builder-gb10`. No force-push, no merge/deploy.
+
+**Verified (exact):**
+- `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (duration_ms 69.8)
+- `pytest tests/world/test_report_receipts.py -q` → **31 passed** in 20.52s
+
+**Both "first run" items confirmed done:**
+- Signed-receipt API/env docs → "Report receipts (signed verification)" subsection in `docs/world-studio-implementation.md` (Worker operation), env keys documented. Verified present via grep.
+- Cancellation regression → 5 cancellation tests in `test_report_receipts.py` (rehash-abort, exact-file-reader deadline, queued-never-starts+no-restart, completed-no-interrupt, running-adapter-reaped) all passing; plus `test_worker.py` cancellation tests.
+
+**Actual blocker:** none this run. HTTP report UI (browser) validation still pending (loopback only). 4090 untouched this run (GB10 verification pass); 4090 has its own branch per world-builder-4090.json.
+
+**Next bounded action:** one useful 4090 GPU/reconstruction task via short authenticated SSH (confirm hostname+GPU first), e.g. re-verify a held-out control render or run a bounded colmap/encoder smoke there. Alternate back to GB10 receipt work.
