@@ -129,7 +129,8 @@ def run(page):
     # keeps compositing stale tiles of whatever was on screen at those coordinates (otherwise the section below).
     speed(1000); page.locator('#workspace').evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})"); settle(); hold(2.0)
     speed(60, 'upload + CPU reconstruction' + (' and depth' if DENSE else '') + ' · sped up 60×')
-    page.wait_for_function("/Reconstruction loaded|failed/.test(document.querySelector('#status').textContent)", timeout=1_800_000)
+    # A folded model (the worker's fold check) is reported as "contradicts its own frames": stop rather than wait it out.
+    page.wait_for_function("/Reconstruction loaded|failed|contradicts its own frames/.test(document.querySelector('#status').textContent)", timeout=1_800_000)
     # Cut, not sped up: while the CPU reconstruction saturates the machine, Chrome composites stale tiles for a moment
     # as the panel re-renders, so the frames until the 3D view has settled are dropped.
     speed(1000)
