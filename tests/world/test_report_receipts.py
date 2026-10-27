@@ -786,3 +786,124 @@ def test_report_signing_key_inside_worker_storage_is_rejected(configured, tmp_pa
             create_app(**options)
     finally:
         monkeypatch.delenv('WORLD_REPORT_SIGNING_KEY', raising=False)
+
+
+def test_cancel_queued_job_cancels_receipt_slot(signed_options, tmp_path, monkeypatch):
+    # Cancellation coverage for the queued phase: while the processing queue
+    # is full (8 queued jobs held by the admission gate), a concurrent
+    # report-receipt on a completed job occupies the single report slot.
+    # The owner cancels a QUEUED job: cancel_job marks it 'cancelled' and
+    # stop_process is a no-op (no subprocess yet) -> 200 cancelled. The
+    # queued cancel must NOT touch the in-flight receipt — the receipt uses
+    # a local threading.Event, so it still signs 200. After the gate opens,
+    # the queued jobs run to completion and the receipt verifies offline.
+    options, config, key, _ = signed_options
+    options = dict(options)
+    # Eight 4 GiB job reservations (one per queued hold job) plus the
+    # completed job must fit under the worker disk budget, so raise the
+    # worker default of 20 GiB here: 8 * 4 GiB = 32 GiB needs ~34 GiB.
+    options['storage_limit'] = 40 * 1024 ** 3
+    adapters = tmp_path / 'adapters.json'
+    # The hold adapter must write a bounded manifest.json + artifact so
+    # artifact_manifest() succeeds after the gate opens (app.py:364).
+    hold_script = (
+        'import json,os,sys,time; time.sleep(0.4); '
+        'r=json.load(open(sys.argv[1])); '
+        'out=r.get("output_dir","."); '
+        'open(os.path.join(out,"hold-artifact.json"),"w").write('
+        'json.dumps({"schema":"brainsnn.hold.v1","ok":True})); '
+        'open(os.path.join(out,"manifest.json"),"w").write('
+        'json.dumps({"artifacts":[{"name":"hold-artifact.json","kind":"evidence"}]}))'
+    )
+    # command[0] must be an absolute existing path (app.py:253). {input_manifest}
+    # is substituted by the worker into the request-file path, which becomes
+    # sys.argv[1] for the hold script — the draft test's command omitted the
+    # placeholder, so sys.argv[1] was empty and the adapter crashed on
+    # open(sys.argv[1]) -> "Adapter failed. Check operator logs".
+    adapters.write_text(json.dumps([{'id': 'hold', 'command': [sys.executable, '-c', hold_script, '{input_manifest}'],
+                                     'enabled': True, 'license_reviewed': True, 'input_kinds': ['image'],
+                                     'timeout_seconds': 5}]))
+    options['adapters'] = str(adapters)
+    registry(config, [row('alpha', A, engines=['inspect', 'hold']), row('beta', B)])
+    gate = asyncio.Event()
+    with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
+        hook = client.app.state.queue_admission_hook
+        async def hold_gate(jid):
+            # Park the consumer on every job until gate.set(). With maxsize=8
+            # the queue holds 7 items (1 is dequeued by the parked consumer),
+            # so the 9th start is admitted (202), confirming the queue is
+            # busy and the consumer is parked.
+            await gate.wait()
+        # Completed job owned by A: the receipt target. The admission
+        # hook is armed only AFTER this completes so complete() does not
+        # park on gate.wait() itself and exhaust the finished() window.
+        done_jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + done_jid, headers=headers(A)).json())
+        client.app.state.queue_admission_hook = hold_gate
+        try:
+            # Fill the queue with 8 queued jobs owned by the operator
+            # (active_jobs 50), each gated at the admission hook so the
+            # consumer parks on gate.wait() and the queue stays full.
+            jids = []
+            for _ in range(8):
+                uid = upload(client, OPERATOR)
+                jid = prepare(client, OPERATOR, uid, 'hold').json()['id']
+                response = client.post(f'/v1/jobs/{jid}/start', headers=headers(OPERATOR), json={})
+                assert response.status_code == 200, response.text
+                jids.append(jid)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if all(client.get('/v1/jobs/' + jid, headers=headers(OPERATOR)).json()['status'] == 'queued' for jid in jids):
+                    break
+                time.sleep(0.02)
+            assert client.get('/v1/jobs/' + jids[0], headers=headers(OPERATOR)).json()['status'] == 'queued'
+            # One consumer is always parked holding one dequeued slot, so the
+            # queue itself holds the other 7 (8 admitted in total). The 9th
+            # start succeeds (queue not yet at maxsize from the consumer's
+            # perspective), confirming the queue is busy.
+            assert client.app.state.queue.qsize() == 7
+            # Hold the receipt slot deterministically.
+            entered, release = threading.Event(), threading.Event()
+            def slow(*args, **kwargs):
+                entered.set(); assert release.wait(5)
+                return file_digest(*args, **kwargs)
+            monkeypatch.setattr('robotics.world_worker.app.file_digest', slow)
+            # Concurrent receipt on the completed job: occupies report_task.
+            future = executor.submit(receipt, client, done_jid, A, body)
+            try:
+                assert entered.wait(5)
+                # Queue holds 7 (8 admitted, 1 dequeued by the parked consumer),
+                # maxsize is 8, so the 9th start is admitted (200), not 429.
+                # This confirms the queue is busy and the consumer is parked.
+                uid_more = upload(client, OPERATOR)
+                jid_more = prepare(client, OPERATOR, uid_more, 'hold').json()['id']
+                assert client.post(f'/v1/jobs/{jid_more}/start', headers=headers(OPERATOR), json={}).status_code == 200
+                assert client.app.state.queue.qsize() == 8
+                # Cancel a QUEUED job while the receipt is in flight:
+                # stop_process is a no-op (no subprocess yet); the queued
+                # cancel must not disturb the report slot.
+                cancel = client.delete('/v1/jobs/' + jids[0], headers=headers(OPERATOR))
+                assert cancel.status_code == 200 and cancel.json()['status'] == 'cancelled'
+            finally:
+                release.set()
+            # The queued cancel did not interrupt the in-flight receipt:
+            # it signs 200 and verifies against the independent key.
+            response = future.result(5)
+            assert response.status_code == 200, response.text
+            verify_receipt(response.json(), key, SCENARIO)
+            # Release the gate: the 7 remaining queued jobs run the hold
+            # adapter; the cancelled one is skipped by the consumer.
+            gate.set()
+            monkeypatch.undo()  # slow file_digest must not block the job's source re-hash
+            for jid in jids[1:] + [jid_more]:
+                job = finished(client, jid, OPERATOR)
+                assert job['status'] == 'complete', f"job {jid} status={job['status']} detail={job.get('detail') or job.get('error')}"
+            # The cancelled job never ran: no job directory, no completion.
+            assert not (options['root'] / 'jobs' / jids[0]).exists()
+            assert client.get('/v1/jobs/' + jids[0], headers=headers(OPERATOR)).json()['status'] == 'cancelled'
+            # Offline verification of the receipt is independent of the
+            # queued churn: the signed payload is already on hand.
+            verify_receipt(response.json(), key, SCENARIO)
+        finally:
+            client.app.state.queue_admission_hook = hook
+            gate.set()
