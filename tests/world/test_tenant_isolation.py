@@ -318,6 +318,29 @@ def test_restart_invalidates_tickets_without_changing_ownership(configured):
         assert client.get(renewed).status_code == 200
 
 
+def test_owner_job_quota_counts_completed_rows_and_delete_frees_slot(configured):
+    options, config = configured
+    options |= {'storage_limit': 32 * MIB, 'job_limit': 2 * MIB}
+    registry(config, [row('alpha', A, limits={'job_count': 2, 'active_jobs': 5}), row('beta', B)])
+    with TestClient(create_app(**options)) as client:
+        uid = upload(client, A)
+        j1 = prepare(client, A, uid).json()['id']
+        j2 = prepare(client, A, uid).json()['id']
+        assert client.post(f'/v1/jobs/{j1}/start', headers=headers(A), json={}).status_code == 200
+        assert finished(client, j1, A)['status'] == 'complete'
+        # A completed row still consumes quota; only a row-removing DELETE frees it.
+        assert prepare(client, A, uid).status_code == 429
+        assert client.delete(f'/v1/jobs/{j1}/artifacts', headers=headers(A)).json() == {'deleted': True}
+        j3 = prepare(client, A, uid).json()['id']
+        assert client.get('/v1/jobs', headers=headers(A)).json()['jobs'] and {j['id'] for j in client.get('/v1/jobs', headers=headers(A)).json()['jobs']} == {j2, j3}
+        # Cancelling (row kept) does not free quota; a queued/active job keeps blocking.
+        assert client.delete('/v1/jobs/' + j3, headers=headers(A)).json()['status'] == 'cancelled'
+        assert prepare(client, A, uid).status_code == 429
+        # Foreign owner is unaffected by this owner's quota and cannot free the row.
+        assert upload(client, B) is not None
+        assert client.delete(f'/v1/jobs/{j2}/artifacts', headers=headers(B)).status_code == 404
+
+
 def test_legacy_operator_keeps_existing_prepared_job_admission(configured):
     options, _ = configured
     options |= {'storage_limit': 32 * MIB, 'job_limit': MIB}
