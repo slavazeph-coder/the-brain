@@ -26,13 +26,14 @@ const MAX_SESSIONS = 2000;
 const SESSION_MS = { owner: 12 * 3600_000, visitor: 2 * 3600_000 };
 const PASSCODE_FAILURES = 10;  // per address per hour, then the passcode is not checked at all
 const VISITOR_ENGINES = new Set(['colmap-sparse', 'scene-usd']);
-// A visitor job needs one upload (a video, or a cloud for the scene), so this many unfinished uploads per session and
-// uploads per connection per job allowed are plenty, and a visitor cannot fill the worker's upload slots for others.
-const VISITOR_OPEN_UPLOADS = 2;
+// A visitor job needs at most one batch of uploads: a video, or up to 12 photos (COLMAP needs 3 or more), then a cloud
+// for the scene. So a session holds at most one unused batch, and a connection gets a batch and a cloud per job allowed.
+// All visitors together stay inside their tenant's 20 uploads, which leaves the owner's room in the worker's 50.
+const VISITOR_OPEN_UPLOADS = 12;
+const VISITOR_UPLOADS_PER_JOB = 13;
 // The worker counts a created but unstarted job as active, and allows one per tenant. The page starts a job straight
 // after creating it, so one still unstarted after this long was abandoned (a closed tab, a lost connection): cancel it.
 const PREPARED_LEASE_MS = 120_000;
-const VISITOR_UPLOADS_PER_JOB = 3;
 
 const digest = (value) => createHash('sha256').update(String(value)).digest();
 const day = (now) => new Date(now).toISOString().slice(0, 10);

@@ -149,18 +149,20 @@ it('world processing: visitors are off by default, then capped per connection pe
   } finally { await web.close(); await worker.close(); }
 });
 
-it('world processing: a visitor cannot hoard upload reservations', async () => {
+it('world processing: a visitor gets one photo batch at a time, not the worker\'s upload slots', async () => {
   const worker = await fakeWorker(), web = await site(env(worker, { WORLD_SITE_VISITORS: '1', WORLD_WORKER_SITE_VISITOR_TOKEN: VISITOR, WORLD_SITE_VISITOR_JOBS_PER_DAY: '1' }));
   try {
     const token = (await web.call('/api/world/session', { method: 'POST', body: {} })).data.token;
-    const upload = () => web.call('/api/world/worker/v1/uploads', { method: 'POST', token, body: { name: 'walk.mov', size: 5, kind: 'video' } });
-    const first = await upload(), second = await upload(), third = await upload();
-    assert.deepEqual([first.status, second.status, third.status], [201, 201, 429], 'two unused reservations at a time');
-    assert.equal((await web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine: 'colmap-sparse', upload_ids: [first.data.id], consent: true } })).status, 201);
-    assert.equal((await upload()).status, 201, 'an upload given to a job frees its place');
-    assert.equal((await upload()).status, 429, 'and the connection has used its day: three uploads per job allowed');
-    const before = worker.seen.filter((r) => r.url === '/v1/uploads').length;
-    assert.equal(before, 3, 'refused reservations never reach the worker');
+    const upload = () => web.call('/api/world/worker/v1/uploads', { method: 'POST', token, body: { name: 'photo.jpg', size: 5, kind: 'image' } });
+    const batch = [];
+    for (let i = 0; i < 12; i++) batch.push(await upload());
+    assert.ok(batch.every((r) => r.status === 201), 'a full 12-photo batch is admitted');
+    assert.equal((await upload()).status, 429, 'but not a second unused batch');
+    const job = await web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine: 'colmap-sparse', upload_ids: batch.map((r) => r.data.id), consent: true } });
+    assert.equal(job.status, 201);
+    assert.equal((await upload()).status, 201, 'uploads given to a job free their places: the scene step\'s cloud');
+    assert.equal((await upload()).status, 429, 'and the connection has used its day: one batch and a cloud per job allowed');
+    assert.equal(worker.seen.filter((r) => r.url === '/v1/uploads').length, 13, 'refused reservations never reach the worker');
     const owner = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
     assert.equal((await web.call('/api/world/worker/v1/uploads', { method: 'POST', token: owner, body: { name: 'walk.mov', size: 5, kind: 'video' } })).status, 201);
   } finally { await web.close(); await worker.close(); }
