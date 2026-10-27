@@ -249,7 +249,7 @@ def check_browser(pw, name, origin, worker_url, token, photo, fixture):
     prefix = OUTPUT / ('observations-' + name)
     try:
         page.goto(origin + '/world/index.html', wait_until='networkidle')
-        page.wait_for_function("document.querySelectorAll('.system-card').length === 22")
+        page.wait_for_function("document.querySelectorAll('.system-card').length === 23")
         stale_gate_url = check_stale_connection(page, worker_url, origin, token)
         # An authored test map makes geometry and mixed review flags observable.
         # It is intentionally not derived from the generated fixture photograph.

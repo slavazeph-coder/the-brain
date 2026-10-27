@@ -74,7 +74,7 @@ def main():
                 page = browser.new_page(viewport={'width': 1440, 'height': 1000})
                 errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
                 page.goto(origin + '/world/index.html', wait_until='networkidle')
-                page.wait_for_function("document.querySelectorAll('.system-card').length===22")
+                page.wait_for_function("document.querySelectorAll('.system-card').length===23")
                 page.locator('#files').set_input_files(photos)
                 page.wait_for_function("count => document.querySelectorAll('.source-row').length===count", arg=len(photos))
                 page.locator('.processing-options summary').click()
