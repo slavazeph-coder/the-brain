@@ -432,3 +432,28 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 **Actual blocker:** none this run. HTTP report UI (browser) validation still pending (loopback only). 4090 untouched this run (GB10 verification pass); 4090 has its own branch per world-builder-4090.json.
 
 **Next bounded action:** one useful 4090 GPU/reconstruction task via short authenticated SSH (confirm hostname+GPU first), e.g. re-verify a held-out control render or run a bounded colmap/encoder smoke there. Alternate back to GB10 receipt work.
+
+## Run 110 — 2026-10-27 (4090 env-var wiring complete)
+
+**4090 verification (short SSH, hostname d130b6c7f3f4, GPU UUID 3390c2ec… verified):**
+- GPU idle at start: 28 MiB used, no active jobs.
+- DINOv2 source: HEAD `7764ea0f912e53c92e82eb78a2a1631e92725fc8` (matches `DINOV2_REVISION`).
+- MapAnything source: HEAD `3d10cf7a3016fc0f9bb13a071ee66c47b10be0d9` (matches `SOURCE_REVISION`).
+- model.safetensors: 4,914,062,480 bytes, SHA256 `fa06c0fd…5201` (matches `MODEL_SHA256`).
+- config.json: 5,776 bytes, SHA256 `65701d09…b676c5` (matches `CONFIG_SHA256`).
+
+**Change:** appended three reconstruction env vars to `/workspace/slava/world-builder-env.sh`:
+```
+export WORLD_MAPANYTHING_SOURCE_DIR=/workspace/slava/world-builder/sources/map-anything
+export WORLD_DINOV2_SOURCE_DIR=/workspace/slava/world-builder/sources/dinov2
+export WORLD_MAPANYTHING_MODEL_DIR=/workspace/slava/models/map-anything-apache/00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a
+```
+Verified with `cat` after append. Exit 0.
+
+**GB10 suites (this run, exact):**
+- `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail**
+- `pytest tests/world/test_report_receipts.py -q` → **31 passed** in 20.36s
+
+**Actual blocker:** none. 4090 env now fully wired; next bounded action is a held-out MapAnything inference smoke test on 4090 with the pinned runtime (separate venv, 20 GiB limit, no base conda replacement).
+
+**Guardrails:** no force-push, no merge/deploy, no paid fallback. 4090 branch `hermes/world-builder-4090` untouched. Serving Qwen/backup untouched.
