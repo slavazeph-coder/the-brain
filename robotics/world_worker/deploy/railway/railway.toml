@@ -1,0 +1,17 @@
+# Railway config for the World Builder worker service (a second service next to the site, from the same repository).
+# In that service's settings, set "Config file" to /robotics/world_worker/deploy/railway/railway.toml (leading slash:
+# Railway reads it from the repository root; without it the root railway.toml builds the website instead).
+# Setup: docs/brainsnn-processing-setup.md.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "robotics/world_worker/deploy/railway/Dockerfile"
+watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**"]
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+# One replica: jobs, uploads and the queue live on its volume.
+numReplicas = 1

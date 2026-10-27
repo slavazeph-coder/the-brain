@@ -137,3 +137,19 @@ real HTTP upload-only regression tests run in World Builder CI. SIGTERM follows
 cancellation/worker cleanup; a virtualenv Python path must not be resolved through
 its symlink to the base interpreter. See scripts/world-demo/README.md for commands.
 The memory-sync helper is absent here; this note is committed with the test change.
+
+
+### brainsnn.com's own processing on Railway, 27 October 2026
+
+Owner: "ignore the GPU, do it all on the website". The website can't run reconstruction in the browser (iOS Safari: no
+WebXR or LiDAR; frame-posing models are 1B+ parameters), so the site runs the existing CPU worker itself:
+- `robotics/world_worker/deploy/railway/` is a second Railway service (Ubuntu 24.04, COLMAP, bpy 4.2 on a copied Python
+  3.11) on a /data volume;
+- the site's `src/server/worldWorkerProxy.js` at /api/world holds the worker credentials and gives each browser a
+  passcode session (visitor sessions with a daily cap only with WORLD_SITE_VISITORS=1). Each session reaches only its
+  own uploads and jobs, and download links get the site prefix from the proxy. Don't use uvicorn --root-path: the
+  worker's middleware then sees neither /healthz nor /v1/download/ as public;
+- the World Builder dialog shows "Process on BrainSNN".
+In the container through the site proxy, an 8 s rendered walk took 105 s for colmap-sparse (24/24 frames, 0.61 px)
+and 99 s for scene-usd. CI: tests/world/site_processing_browser_smoke.py (fixture adapter in place of COLMAP).
+Live only after the owner creates the Railway service and sets the variables (deploy/railway/README.md).

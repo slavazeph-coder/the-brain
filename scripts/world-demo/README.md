@@ -45,6 +45,17 @@ only for a recording made on the live site.
 The worker URL and token are typed under a title card, and an init script blurs the worker host wherever the page
 shows it, so neither appears in the video. Never commit a recording's proof JSON: it contains the worker URL.
 
+**Process on BrainSNN.** To record the site's own processing instead of an operator worker, leave out `WORKER_URL`
+and `WORKER_TOKEN` and set `BRAINSNN_PASSCODE`. The recorder opens "Process on BrainSNN" and types the passcode on
+camera into the password field, so only dots show. The site must have `WORLD_WORKER_INTERNAL_URL` and
+`WORLD_SITE_PASSCODE` set (see `docs/brainsnn-processing-setup.md`). The engine is `colmap-sparse`, the only
+reconstruction engine that worker runs. Against a local build, the closing card says the recording was made before
+deployment.
+```sh
+BRAINSNN_PASSCODE=... python scripts/world-demo/record_scan2model.py https://www.brainsnn.com/world/index.html \
+  walkthrough.mp4 http://127.0.0.1:4190/ out/process-on-brainsnn.mp4
+```
+
 ## The feed film (`film/`)
 
 A designed 4:5 film (1080 × 1350, about 33 s) built from one finished run, not a screen recording. It shows:
