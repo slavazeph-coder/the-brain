@@ -58,7 +58,12 @@ MAPPING_SECONDS = 900
 # give. Over 18 mappings of synthetic walks the four correct models disagreed by at most 5.1 degrees and the 13 folded
 # ones (0.6 to 1.8 m RMS off) by 59 degrees or more. Mapping the same matches with another seed unfolded one of eight,
 # so a fold is reported for a recapture, not retried. It catches folds, not every error: a 21-frame partial model 15 cm off passed.
+# A fold or a misplaced frame turns more than one consecutive pair, or one pair by far more, or the pairs that bridge it
+# too. One pair's own two-view pose can be wrong alone: on the Mip-NeRF 360 room walk, frames 38 and 39 (76 matches) read
+# 6 degrees on two mappings and 24 on a third whose cameras matched theirs to 0.4 degrees, and a 454-match pair read 13.
+# So a lone pair up to FOLD_LONE_DEGREES that no bridging pair confirms is reported unconfirmed, not folded.
 FOLD_DEGREES = 15
+FOLD_LONE_DEGREES = 45
 FOLD_MIN_MATCHES = 30
 FOLD_LISTED = 20
 
@@ -94,38 +99,54 @@ def map_frames(database: Path, images: Path, workspace: Path, count: int):
     return models, index, model, attempts
 
 
-def consecutive_turns(database, model, names):
-    """For each two registered frames filmed one after the other: how far the model's turn between them is from the
-    turn COLMAP's own two-view pose gives from their verified matches (essential, fundamental or homography, by the
-    pair's geometry). database is an open pycolmap.Database; names are all frames in filming order.
-    Returns the checked pairs and how many consecutive pairs could not be checked."""
+def model_against_matches(database, model, a, b):
+    """How far the model's turn from registered image a to b is from the turn COLMAP's own two-view pose gives from their
+    verified matches (essential, fundamental or homography, by the pair's geometry), or None when they were not matched
+    well enough to tell."""
     import numpy as np
     import pycolmap
+    if not database.exists_two_view_geometry(a.image_id, b.image_id):
+        return None
+    geometry = database.read_two_view_geometry(a.image_id, b.image_id)
+    if len(geometry.inlier_matches) < FOLD_MIN_MATCHES or not pycolmap.estimate_two_view_geometry_pose(
+            model.camera(a.camera_id), database.read_keypoints(a.image_id)[:, :2].astype(float),
+            model.camera(b.camera_id), database.read_keypoints(b.image_id)[:, :2].astype(float), geometry):
+        return None
+    matched = geometry.cam2_from_cam1.rotation.matrix()
+    modelled = (b.cam_from_world().rotation * a.cam_from_world().rotation.inverse()).matrix()
+    cosine = (np.trace(matched.T @ modelled) - 1) / 2
+    return {'from': a.name, 'to': b.name, 'matches': len(geometry.inlier_matches),
+            'disagreementDegrees': round(math.degrees(math.acos(max(-1.0, min(1.0, cosine)))), 2)}
+
+
+def consecutive_turns(database, model, names):
+    """For each two registered frames filmed one after the other, model_against_matches. A pair over FOLD_DEGREES also
+    gets its bridges: the same check from the frame before it to its second frame and from its first frame to the frame
+    after it, where those were matched. database is an open pycolmap.Database; names are all frames in filming order.
+    Returns the checked pairs and how many consecutive pairs could not be checked."""
     by_name = {model.image(image_id).name: model.image(image_id) for image_id in model.reg_image_ids()}
-    order = [name for name in names if name in by_name]
+    order = [by_name[name] for name in names if name in by_name]
     turns, skipped = [], 0
-    for first, second in zip(order, order[1:]):
-        a, b = by_name[first], by_name[second]
-        if not database.exists_two_view_geometry(a.image_id, b.image_id):
+    for index, (a, b) in enumerate(zip(order, order[1:])):
+        turn = model_against_matches(database, model, a, b)
+        if turn is None:
             skipped += 1; continue
-        geometry = database.read_two_view_geometry(a.image_id, b.image_id)
-        if len(geometry.inlier_matches) < FOLD_MIN_MATCHES or not pycolmap.estimate_two_view_geometry_pose(
-                model.camera(a.camera_id), database.read_keypoints(a.image_id)[:, :2].astype(float),
-                model.camera(b.camera_id), database.read_keypoints(b.image_id)[:, :2].astype(float), geometry):
-            skipped += 1; continue
-        matched = geometry.cam2_from_cam1.rotation.matrix()
-        modelled = (b.cam_from_world().rotation * a.cam_from_world().rotation.inverse()).matrix()
-        cosine = (np.trace(matched.T @ modelled) - 1) / 2
-        turns.append({'from': first, 'to': second, 'matches': len(geometry.inlier_matches),
-                      'disagreementDegrees': round(math.degrees(math.acos(max(-1.0, min(1.0, cosine)))), 2)})
+        if turn['disagreementDegrees'] > FOLD_DEGREES:
+            ends = [(index - 1, index + 1), (index, index + 2)]
+            bridges = (model_against_matches(database, model, order[x], order[y]) for x, y in ends if x >= 0 and y < len(order))
+            turn['bridges'] = [bridge for bridge in bridges if bridge]
+        turns.append(turn)
     return turns, skipped
 
 
 def fold_check(turns, skipped):
-    """The consistency record: a model that turns a camera differently from its own consecutive frames is folded."""
+    """The consistency record: a model that turns a camera differently from its own consecutive frames is folded, unless
+    the only disagreement is one pair up to FOLD_LONE_DEGREES that no bridging pair confirms: that one is unconfirmed."""
     folds = [turn for turn in turns if turn['disagreementDegrees'] > FOLD_DEGREES]
+    lone = (len(folds) == 1 and folds[0]['disagreementDegrees'] <= FOLD_LONE_DEGREES
+            and not any(bridge['disagreementDegrees'] > FOLD_DEGREES for bridge in folds[0].get('bridges', [])))
     return {'method': 'model turn against two-view turn, consecutive registered frames', 'thresholdDegrees': FOLD_DEGREES,
-            'status': 'folded' if folds else 'consistent' if turns else 'not-checked',
+            'status': 'unconfirmed' if lone else 'folded' if folds else 'consistent' if turns else 'not-checked',
             'pairsChecked': len(turns), 'pairsSkipped': skipped, 'pairsDisagreeing': len(folds),
             'worstDisagreementDegrees': max((turn['disagreementDegrees'] for turn in turns), default=None),
             'disagreeing': sorted(folds, key=lambda turn: -turn['disagreementDegrees'])[:FOLD_LISTED]}
@@ -448,6 +469,11 @@ def run(request: dict, densify_model: Path | None = None):
                               f"one after the other it turns the camera by up to {consistency['worstDisagreementDegrees']:.0f} degrees "
                               'more or less than those frames show. This is how a walk past repeated surfaces folds the room onto itself. '
                               "Do not use this model's layout or dimensions; recapture the room."] if folded else []) +
+                            ([f"One pair of frames filmed one after the other ({consistency['disagreeing'][0]['from']} to "
+                              f"{consistency['disagreeing'][0]['to']}) turns {consistency['disagreeing'][0]['disagreementDegrees']:.0f} "
+                              f"degrees differently in the model than in their own {consistency['disagreeing'][0]['matches']} matches, "
+                              'and no other pair confirms it. A lone pair like this is usually a weak match, not a folded room: '
+                              'check the model around those frames.'] if consistency['status'] == 'unconfirmed' else []) +
                             ['Sparse points do not define a solid surface or free space.',
                              'Glass, blank walls, reflections and moving objects may be missing.'] +
                             (['Some submitted views did not align; reconstruction is incomplete.'] if registered < count else []) +

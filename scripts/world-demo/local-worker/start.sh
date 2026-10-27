@@ -92,6 +92,7 @@ engines = [
      'command': [py, f'{worker}/sparse_colmap.py', '--input-manifest', '{input_manifest}']},
     {'id': 'scene-usd', 'label': 'Simulation scene (GLB/USD/IFC) from a walkthrough', 'enabled': True, 'license_reviewed': True,
      'input_kinds': ['video', 'cloud'], 'max_inputs': 1, 'timeout_seconds': 3600, 'source_job': True,
+     'dimension_checks': True, 'bim_review': True,  # the site builds the metric scene only when both are offered
      'command': [py, f'{worker}/scene_usd.py', '--input-manifest', '{input_manifest}', '--blender', f'{home}/blender']},
 ]
 json.dump(engines, open(f'{home}/adapters.json', 'w'), indent=1)
