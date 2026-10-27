@@ -781,6 +781,54 @@ def test_artifact_delete_during_inflight_receipt_hash_blocks_signature(signed_op
             'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0] == 0
 
 
+def test_delete_receipt_target_job_during_inflight_receipt_is_noop_and_receipt_still_signs(signed_options, monkeypatch):
+    # Concurrent DELETE on the receipt-target job while its receipt hash is
+    # in flight. The job is already 'complete' (not ACTIVE), so cancel_job
+    # (app.py:670-679) is a no-op: status stays 'complete', no
+    # hash_cancellations entry, no row deletion. The receipt path uses its
+    # own local threading.Event (not hash_cancellations), so the concurrent
+    # cancel cannot interrupt it. The receipt signs 200, verifies against
+    # the independent key, and the job row still exists (no DB row removed).
+    # Distinct from test_artifact_delete_during_inflight_receipt_hash_blocks_signature
+    # (run 42): that test uses DELETE /artifacts (row removal → 409);
+    # this test uses DELETE /v1/jobs/{jid} (cancel → no-op for complete).
+    import robotics.world_worker.app as app_mod
+    options, _, key, _ = signed_options
+    with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
+        jid, _, _ = complete(client, A)
+        body = request_body(client.get('/v1/jobs/' + jid, headers=headers(A)).json())
+        entered, release = threading.Event(), threading.Event()
+        original = app_mod.file_digest
+
+        def slow_digest(*args, **kwargs):
+            entered.set()
+            assert release.wait(5)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(app_mod, 'file_digest', slow_digest)
+        future = executor.submit(receipt, client, jid, A, body)
+        try:
+            assert entered.wait(5)
+            # Fire the concurrent DELETE (cancel) on the receipt-target job
+            # while the hash thread is parked. The job is 'complete' →
+            # cancel_job is a no-op: 200 with status still 'complete'.
+            cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
+            assert cancel.status_code == 200, cancel.text
+            assert cancel.json()['status'] == 'complete'
+            # The row must still exist in the DB (no deletion happened).
+            row_count = client.app.state.store.db.execute(
+                'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0]
+            assert row_count == 1
+        finally:
+            release.set()
+        # The receipt thread finishes and signs 200 normally.
+        response = future.result(5)
+        assert response.status_code == 200, response.text
+        verify_receipt(response.json(), key, SCENARIO)
+        # Job status is still 'complete' after the cancel attempt.
+        assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
+
+
 def test_report_signing_key_environment_variable_wiring(configured, tmp_path, monkeypatch):
     # create_app line: key_path = report_key or os.environ.get('WORLD_REPORT_SIGNING_KEY')
     # No existing test exercises the env-var path — every other test passes
