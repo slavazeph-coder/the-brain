@@ -216,8 +216,12 @@ def test_loopback_413_oversized_artifact_refs_and_oversized_body(worker):
     assert status == 413, (status, detail)
 
     # 413: PUT upload with > 4 MiB body (declared Content-Length gate).
+    # Declare 4 MiB in the upload record but send a 5 MiB body: the
+    # middleware gate (app.py declared-size check) rejects on the declared
+    # Content-Length before the body is fully streamed, so the 413 is
+    # deterministic on the wire with no socket-reset race.
     status, up3 = req(base, 'POST', '/v1/uploads', token,
-                      {'name': 'huge.png', 'kind': 'image', 'size': 5 * 1024 * 1024})
+                      {'name': 'huge.png', 'kind': 'image', 'size': 4 * 1024 * 1024})
     assert status == 201, up3
     uid3 = up3['id']
     chunk = b'x' * (5 * 1024 * 1024)
