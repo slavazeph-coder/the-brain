@@ -5,6 +5,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 128 — 2026-10-27 (concurrent DELETE of receipt-target job during in-flight receipt: no-op, receipt still signs)
+- Baseline exact (clean tree at `b09131c`): `pytest tests/world/test_report_receipts.py -q` → **32 passed in 20.43 s**; `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail (102 ms)**.
+- Added `test_delete_receipt_target_job_during_inflight_receipt_is_noop_and_receipt_still_signs` to `tests/world/test_report_receipts.py` (+48 lines):
+  - Grounding from source: `cancel_job` (app.py:670-679) only sets `hash_cancellations[jid]` when `status in ACTIVE`; a `complete` job is not ACTIVE → cancel is a no-op (200, status stays `complete`, no row deletion). The receipt path uses its own local `threading.Event` (app.py:722), never `hash_cancellations`, so the concurrent cancel cannot interrupt in-flight hashing.
+  - Scenario: complete job → receipt hash thread parked via monkeypatched `file_digest` → concurrent `DELETE /v1/jobs/{jid}` → assert 200/status `complete`/row still in DB → release hash thread → assert receipt signs 200, `verify_receipt` passes, job status still `complete`.
+  - Distinct from `test_artifact_delete_during_inflight_receipt_hash_blocks_signature` (run 42, DELETE /artifacts → 409/row removed) and `test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature` (632, credential revocation → 401).
+- Verified (exact, post-commit):
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed in 20.88 s** (was 32)
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail (70 ms)**
+- Commit: **`668adea`** `test(world): concurrent DELETE of receipt-target job during in-flight receipt is no-op; receipt still signs 200` (1 file, +48). Pushed to `hermes/world-builder-gb10`; `git rev-parse --short HEAD` = `668adea`. No force-push/merge/deploy.
+- No 4090 probe this run (alternation: GB10 build task closed this run).
+- Serving Qwen/backup, licensed model/guardrail gates, no-paid-fallback untouched.
+
 ### Run 125 — malformed ReportBody 422 schema rejection tests
 - Baseline exact: `pytest tests/world/test_report_receipts.py -q` → **31 passed in 20.55 s**; `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail (103 ms)** at `e569568`.
 - Added `test_report_receipt_malformed_body_is_rejected_422` to `tests/world/test_report_receipts.py` (+54 lines):
