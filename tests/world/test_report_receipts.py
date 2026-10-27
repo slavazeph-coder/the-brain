@@ -93,6 +93,60 @@ def test_signatures_are_domain_separated_and_reject_hash_signature_key_or_payloa
             verify_receipt(signed | {'signature': base64.urlsafe_b64encode(signature).decode().rstrip('=')}, key)
 
 
+def test_report_receipt_malformed_body_is_rejected_422(signed_options):
+    """Schema-level ReportBody rejections must be 422, not 500 or 200.
+
+    Covers the Pydantic model's validation surface that the earlier suite
+    only exercised via duplicate-name handling:
+      - scenarioSha256 not 64 hex chars (63, 65, non-hex)
+      - geometrySha256 not 64 hex when present
+      - artifactRefs name not matching [A-Za-z0-9._-]{1,256}
+      - artifactRefs sha256 not 64 hex
+      - more than 32 artifactRefs
+      - extra top-level field
+    Each must produce 422 over HTTP without touching the job slot.
+    """
+    options, _, _, _ = signed_options
+    with TestClient(create_app(**options)) as client:
+        jid, _, _ = complete(client, A)
+        job = client.get('/v1/jobs/' + jid, headers=headers(A)).json()
+        ref = job['artifacts'][0]
+        good_ref = {'name': ref['name'], 'sha256': ref['sha256']}
+        good = {'scenarioSha256': hashlib.sha256(SCENARIO).hexdigest(),
+                'geometrySha256': None, 'artifactRefs': [good_ref]}
+
+        cases = [
+            # scenarioSha256: wrong length / non-hex
+            dict(good, scenarioSha256='0' * 63),
+            dict(good, scenarioSha256='0' * 65),
+            dict(good, scenarioSha256='g' * 64),
+            # geometrySha256: not null and not 64-hex
+            dict(good, geometrySha256='0' * 63),
+            dict(good, geometrySha256='zz' * 32),
+            # artifactRefs name pattern
+            dict(good, artifactRefs=[dict(good_ref, name='')]),
+            dict(good, artifactRefs=[dict(good_ref, name='a' * 257)]),
+            dict(good, artifactRefs=[dict(good_ref, name='../evil')]),
+            # artifactRefs sha256
+            dict(good, artifactRefs=[dict(good_ref, sha256='0' * 62)]),
+            dict(good, artifactRefs=[dict(good_ref, sha256='z' * 64)]),
+            # more than 32 refs
+            dict(good, artifactRefs=[good_ref] * 33),
+            # extra top-level field
+            dict(good, extraField='x'),
+            # non-object body
+            'not-an-object',
+            # null body
+            None,
+        ]
+        for body in cases:
+            response = client.post(f'/v1/jobs/{jid}/report-receipt', headers=headers(A), json=body)
+            assert response.status_code == 422, (
+                f'body={body} expected 422 got {response.status_code}: {response.text[:200]}')
+        # The job slot must be untouched: a valid request still succeeds.
+        assert receipt(client, jid, A, good).status_code == 200
+
+
 @pytest.mark.parametrize('mutation', ['bytes', 'delete', 'symlink'])
 def test_issuance_rehashes_artifact_and_refuses_changed_or_missing_bytes(signed_options, mutation, tmp_path):
     options, _, _, _ = signed_options
