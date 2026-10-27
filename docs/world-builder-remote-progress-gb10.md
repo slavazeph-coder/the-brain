@@ -1,9 +1,48 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-27T13:30Z
+Last updated: 2026-10-27T14:10Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 122 — tenant job-quota regression: completed rows consume quota, only row-removing DELETE frees slot
+- Tree verified clean at `d57d0cd` on `hermes/world-builder-gb10` before editing
+  (run 121's drafted quota test was never written to disk — confirmed by
+  `git status` empty + reading `tests/world/test_tenant_isolation.py`).
+- This run's bounded task (chosen per run 121's "next bounded action"): a
+  tenant job-quota regression in `tests/world/test_tenant_isolation.py`.
+- Grounding verified from source before writing:
+  - `check_owner_jobs` (app.py:336-340) counts every owned row **incl.
+    completed** (`SELECT id,status FROM jobs WHERE owner_id=?`), and 429s when
+    `len(owned)+adding > job_count` or `active+adding > active_jobs`.
+  - `DELETE /v1/jobs/{jid}/artifacts` (app.py:681-689) is refused while
+    `status in ACTIVE or jid in running` (409), else `DELETE FROM jobs` (row
+    removed → quota freed) and returns `{'deleted': True}`.
+  - `cancel_job` (app.py:669-679) sets status `cancelled` but **keeps** the row.
+- New test `test_owner_job_quota_counts_completed_rows_and_delete_frees_slot`:
+  `job_count: 2, active_jobs: 5`. j1 prepared→started→complete; 3rd `prepare`
+  → **429** (completed row still counts); `DELETE /artifacts` on j1 → frees slot
+  → new `prepare` → 201 (j3). Cancelling j3 (row kept) → 3rd `prepare` → **429**
+  again (queued/cancelled rows block). Foreign owner B: upload ok, `DELETE
+  /artifacts` on j2 → **404** (cannot free another owner's row).
+- Verified (exact):
+  - `pytest tests/world/test_tenant_isolation.py -q` → **30 passed in 2.03 s**
+  - Baseline (stash the change) → **29 passed in 1.96 s** (delta = exactly +1 test)
+  - Re-verified post-stash-pop → **30 passed in 2.11 s**; tree restored clean.
+- Commit: **`1ca9588`** `test(world): owner job-quota regression — completed
+  rows consume quota, only row-removing DELETE frees the slot` (1 file, +23).
+  Pushed to `hermes/world-builder-gb10`; `git ls-remote origin` = `1ca9588`
+  = HEAD; `git status --porcelain` empty. No force-push/merge/deploy.
+- No 4090 probe this run (alternation: GB10 build task closed this run).
+  4090 was confirmed idle at run 121 (`d130b6c7f3f4`, 0% util); MapAnything
+  single-held-out-frame `infer()` smoke still pending.
+- Serving Qwen/backup, licensed model/guardrail gates, no-paid-fallback
+  untouched.
+- Next bounded action: 4090 MapAnything single-held-out-frame `infer()` smoke
+  as ONE bounded SSH command to `root@ssh2.vast.ai:23990` (key
+  `/root/.ssh/gb10-rebuild`), confirm hostname+GPU first, 20 GiB watchdog,
+  pinned weights at `fa06c0fd…5201`, no permanent tunnel, preserve 4090
+  experiments + GPU budget.
 
 ### Run 101 — cancellation regression: hold command needs {input_manifest} placeholder
 - Picked up previous run's uncommitted draft `test_cancel_queued_job_cancels_receipt_slot`
