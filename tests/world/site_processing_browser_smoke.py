@@ -119,12 +119,22 @@ def main():
                 for name in os.environ.get('WORLD_BROWSERS', 'chromium,webkit').split(','):
                     check(pw, name.strip(), site, passcode, video)
                     print(f'{name.strip()}: Process on BrainSNN -> passcode -> site proxy -> worker -> cloud loaded', flush=True)
-            # The owner's command-line check takes the same path: setup, upload, job, hashed downloads.
+            # Setup succeeds, but this transport fixture cannot qualify reconstruction geometry.
+            setup = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site],
+                                   env={**os.environ, 'BRAINSNN_PASSCODE': passcode}, capture_output=True, text=True, timeout=60)
+            assert setup.returncode == 0, setup.stdout + setup.stderr
+            assert passcode not in setup.stdout + setup.stderr
+            # The owner's command-line check still exercises upload, job and hashed downloads before refusing
+            # missing fold evidence. Do not give the fixture a fabricated successful geometry check.
             checked = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site,
                                       '--video', str(video), '--out', str(tmp / 'check'), '--poll', '0.5'],
                                      env={**os.environ, 'BRAINSNN_PASSCODE': passcode}, capture_output=True, text=True, timeout=180)
             print(checked.stdout, flush=True)
-            assert checked.returncode == 0, checked.stdout + checked.stderr
+            assert checked.returncode == 1 and 'FAIL  reconstruction passed the fold check  not-checked' in checked.stdout, checked.stdout + checked.stderr
+            receipt = json.loads((tmp / 'check/check-results.json').read_text())
+            assert receipt['passed'] is False and receipt['metric_verified'] is False
+            assert receipt['jobs'][0]['status'] == 'complete' and receipt['jobs'][0]['fold_status'] == 'not-checked'
+            assert {item['name'] for item in receipt['jobs'][0]['downloads']} == {'sparse-preview.ply', 'reconstruction.json'}
             assert passcode not in checked.stdout + checked.stderr, 'the passcode is never printed'
             wrong = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site],
                                    env={**os.environ, 'BRAINSNN_PASSCODE': 'not-the-passcode'}, capture_output=True, text=True, timeout=60)

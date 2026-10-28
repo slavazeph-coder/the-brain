@@ -46,7 +46,7 @@ phone / browser ──HTTPS──▶ brainsnn.com (existing site service)
 3. Press **Merge** and confirm.
 4. Railway deploys `main` once "BrainSNN app release checks" passes. Then "Verify BrainSNN live deploy" checks the live
    files. Both run in the GitHub **Actions** tab; wait until both are green.
-5. **Check:** open <https://brainsnn.com/api/world/processing>. You should see:
+5. **Check:** open <https://www.brainsnn.com/api/world/processing>. You should see:
 
    ```json
    {"available":false,"passcode":false,"visitors":false,"visitorJobsPerDay":null}
@@ -137,7 +137,7 @@ Nothing changes for visitors until Part 4. The page looks exactly as before.
    - It is `http`, not `https`: the private network is already encrypted.
    - Keep the port `8080` and the trailing slash.
 3. Railway redeploys the site. Wait for **Active**.
-4. **Check:** <https://brainsnn.com/api/world/processing> now reads:
+4. **Check:** <https://www.brainsnn.com/api/world/processing> now reads:
 
    ```json
    {"available":true,"passcode":true,"visitors":false,"visitorJobsPerDay":null}
@@ -147,7 +147,7 @@ Nothing changes for visitors until Part 4. The page looks exactly as before.
 
 ### On your phone
 
-1. Open <https://brainsnn.com/world/>.
+1. Open <https://www.brainsnn.com/world/>.
 2. Tap **Choose walkthrough video** → **Choose Files**, and pick a short video (any 5–30 s walk round a room).
    - On iPhone, the fast route skips Photos' conversion: in Photos, Share → **Save to Files** first.
    - The status line reads "Walkthrough ready …".
@@ -171,13 +171,13 @@ Nothing changes for visitors until Part 4. The page looks exactly as before.
 Run this from a checkout of the repository. It needs Python 3.10 or newer and nothing else:
 
 ```sh
-python3 scripts/world-demo/site_processing_check.py --site https://brainsnn.com
+python3 scripts/world-demo/site_processing_check.py --site https://www.brainsnn.com
 # asks for the passcode without echo (or reads BRAINSNN_PASSCODE); prints PASS/FAIL per step:
 #   PASS  site says processing is set up
 #   PASS  passcode opens a session
 #   PASS  worker answers through the site  owner site-owner, engines ['colmap-sparse', 'scene-usd']
 
-python3 scripts/world-demo/site_processing_check.py --site https://brainsnn.com --video ~/Desktop/garage.mov --scene
+python3 scripts/world-demo/site_processing_check.py --site https://www.brainsnn.com --video ~/Desktop/garage.mov --scene
 # uploads, reconstructs, downloads every result through the site with its SHA-256 checked, and prints, for example,
 #   frames 140, registered 138, points 21000, reprojection 0.80 px, fold check consistent
 # results go to ./brainsnn-check-<time>/ (never into the repository)

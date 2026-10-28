@@ -153,6 +153,41 @@ class IfcExport(unittest.TestCase):
             self.assertEqual(opening.VoidsElements[0].RelatingBuildingElement.GlobalId, wall.GlobalId)
             self.assertEqual(door.FillsVoids[0].RelatingOpeningElement.GlobalId, opening.GlobalId)
 
+    def test_wall_candidate_and_legacy_spread_labels_never_become_verified_measurements(self):
+        scene = metric_scene()
+        wall = scene['walls'][0]
+        wall.update(thicknessBasis='measured: both faces seen', thicknessMeasured=True)
+        with tempfile.TemporaryDirectory() as d:
+            ie.emit_ifc(d, scene)
+            legacy = (Path(d) / 'scene.ifc').read_text()
+            self.assertNotIn('measured: both faces seen', legacy)
+            self.assertIn("IFCPROPERTYSINGLEVALUE('ThicknessMeasured',$,IFCBOOLEAN(.F.),$)", legacy)
+            wall['wallEvidence'] = {'schema': 'brainsnn.wall-evidence.v1', 'status': 'two-surface-candidate',
+                                    'thickness_m': .08, 'matched_cells': 12, 'subset_reviewed': False}
+            ie.emit_ifc(d, scene)
+            text = (Path(d) / 'scene.ifc').read_text()
+        self.assertIn("IFCPROPERTYSINGLEVALUE('ThicknessCandidateMetres',$,IFCREAL(0.08),$)", text)
+        self.assertIn("IFCPROPERTYSINGLEVALUE('PhysicalThicknessVerified',$,IFCBOOLEAN(.F.),$)", text)
+        self.assertIn("IFCLABEL('candidate finish-face separation: unverified')", text)
+
+    def test_ifcopenshell_reopens_candidate_limits(self):
+        try:
+            import ifcopenshell
+            import ifcopenshell.util.element
+        except ImportError:
+            self.skipTest('IfcOpenShell is needed for actual evidence roundtrip validation.')
+        scene = metric_scene()
+        scene['walls'][0]['wallEvidence'] = {'schema': 'brainsnn.wall-evidence.v1', 'status': 'two-surface-candidate',
+                                           'thickness_m': .08, 'matched_cells': 12, 'subset_reviewed': False}
+        with tempfile.TemporaryDirectory() as d:
+            ie.emit_ifc(d, scene)
+            model = ifcopenshell.open(Path(d) / 'scene.ifc')
+            props = ifcopenshell.util.element.get_pset(model.by_type('IfcWall')[0], 'Pset_BrainSNN')
+        self.assertEqual(props['ThicknessCandidateMetres'], .08)
+        self.assertFalse(props['PhysicalThicknessVerified'])
+        self.assertFalse(props['ThicknessMeasured'])
+        self.assertFalse(props['ThicknessSubsetReviewed'])
+
     def test_metric_scene_writes_a_self_consistent_ifc4_file(self):
         with tempfile.TemporaryDirectory() as d:
             scene = metric_scene(); record = ie.emit_ifc(d, scene)
