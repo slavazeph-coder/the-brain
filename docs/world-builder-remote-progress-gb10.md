@@ -1,9 +1,17 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-28T03:10Z
+Last updated: 2026-10-28T05:52Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 142 — 2026-10-28 (GB10 baseline re-verified at `96a0ea7`; progress entry for run 96a0ea7 written)
+- Clean tree at `96a0ea7` (`hermes/world-builder-gb10`).
+- Exact suites:
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (63 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.49 s
+- Wrote the missing progress entry for commit `96a0ea7` (per-request images dir isolation guard + idempotent staging test) — this entry documents that run's work.
+- Next bounded action: 4090 1-frame held-out MapAnything GPU inference (confirm hostname `d130b6c7f3f4` + GPU UUID first).
 
 ### Run 141 — 2026-10-28 (4090 11-frame held-out MapAnything GPU inference: PASSED, receipt captured)
 - GB10 baseline re-verified at `0122035` (clean tree):
