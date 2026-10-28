@@ -1,0 +1,26 @@
+name: World launch extensions
+on:
+  pull_request:
+    paths:
+      - 'robotics/world_worker/simready_bridge.py'
+      - 'robotics/world_worker/capture_evidence.py'
+      - 'tests/world/test_launch_extensions.py'
+      - '.github/workflows/world-launch-extensions.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  launch-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install bounded CPU test dependencies
+        run: python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8
+      - name: Require real USD dependency rather than accepting skipped tests
+        run: python -c 'from pxr import Usd, UsdGeom, UsdPhysics, Sdf'
+      - name: Execute capture, evidence and USD roundtrip contracts
+        run: python -m unittest discover -s tests/world -p 'test_launch_extensions.py' -v
