@@ -190,7 +190,10 @@ def package_scene(source, output, request, workspace):
         raise ValueError('An existing metric BrainSNN scene is required; no invented metre scale.')
     if bridge.file_hash(scene_path) != request.get('scene_sha256') or bridge.file_hash(cloud_path) != request.get('cloud_sha256'):
         raise ValueError('Scene or cloud changed since package review.')
-    catalog = installed_assets(workspace); placements = validate_request(request, catalog)
+    # A captured-scene-only export must not depend on the optional asset cache.
+    # Nonempty placements still undergo the complete inventory/hash/USD audit.
+    catalog = installed_assets(workspace) if request.get('placements') else []
+    placements = validate_request(request, catalog)
     usd = bridge.local(source, 'scene.usda'); audit_dependencies(usd, source)
     existing = Usd.Stage.Open(str(usd))
     if not existing or existing.GetCompositionErrors() or not existing.GetDefaultPrim() or not existing.HasAuthoredMetadata('metersPerUnit') or not existing.HasAuthoredMetadata('upAxis') or UsdGeom.GetStageMetersPerUnit(existing) != 1 or UsdGeom.GetStageUpAxis(existing) != UsdGeom.Tokens.y:

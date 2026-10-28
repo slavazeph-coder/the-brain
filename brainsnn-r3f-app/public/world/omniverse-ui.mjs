@@ -29,12 +29,23 @@ export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
   const button=el('button','Build Omniverse pack');button.type='button';button.className='primary wide';
   const cancel=el('button','Cancel package job');cancel.type='button';cancel.hidden=true;
   const message=el('p');message.setAttribute('role','status');const links=el('div');section.append(button,cancel,message,links);host.append(section);
-  let controller=null,jobId=null,disposed=false;
+  let controller=null,jobId=null,disposed=false,submission=null,cancellation=null;
+  const dialog=host.closest('dialog');
   const valid=()=>!disposed&&isCurrent();
   const selected=()=>assets.find(a=>a.asset===select.value);
   const render=()=>{const a=selected();inputs.forEach(n=>n.disabled=!a);license.disabled=physics.disabled=!a;detail.textContent=a?`${a.author} · ${a.license}. Historical failed features: ${(a.upstream_failed_features||[]).join(', ')||'none reported here'}. No Isaac Sim execution is claimed.`:(caps.simready_error||'A source-only package contains no NVIDIA library assets.');};
   select.onchange=()=>{license.checked=physics.checked=false;render();};render();
-  async function stop(){controller?.abort();if(jobId){const id=jobId;await client.request(`/v1/jobs/${id}`,{method:'DELETE'});if(jobId===id)jobId=null;}}
+  async function stop(){
+    controller?.abort();
+    // A create request may already have allocated a job. Retain its response
+    // so closing the dialog during submission can still cancel that exact job.
+    if(submission){try{await submission;}catch{/* No job id was returned. */}}
+    if(cancellation)return cancellation;
+    if(!jobId)return;
+    const id=jobId;
+    cancellation=client.request(`/v1/jobs/${id}`,{method:'DELETE'}).then(()=>{if(jobId===id)jobId=null;}).finally(()=>{cancellation=null;});
+    return cancellation;
+  }
   cancel.onclick=async()=>{try{await stop();message.textContent='Package cancellation confirmed.';}catch(error){message.textContent='Could not confirm cancellation: '+error.message;}};
   button.onclick=async()=>{
     if(controller)return;
@@ -47,9 +58,14 @@ export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
       const file=new File([JSON.stringify(data)],'omniverse-request.json',{type:'application/json'});
       message.textContent='Uploading the reviewed source-bound package request…';
       const upload=await client.upload(file,'cloud',signal);
+      signal.throwIfAborted();
       if(!valid())throw Error('Scene changed before job submission.');
-      let job=await client.request('/v1/jobs',{method:'POST',body:{engine:'omniverse-pack',upload_ids:[upload],source_job:context.job,consent:true},signal});
-      jobId=job.id;await client.request(`/v1/jobs/${jobId}/start`,{method:'POST',signal});
+      // Do not discard a side-effecting create response when the local UI aborts.
+      submission=client.request('/v1/jobs',{method:'POST',body:{engine:'omniverse-pack',upload_ids:[upload],source_job:context.job,consent:true}}).then(created=>{jobId=created.id;return created;});
+      let job=await submission;submission=null;
+      signal.throwIfAborted();
+      if(!valid())throw Error('Scene changed during job submission.');
+      await client.request(`/v1/jobs/${jobId}/start`,{method:'POST',signal});
       const deadline=Date.now()+12*60*1000;
       while(!['complete','failed','cancelled'].includes(job.status)){
         if(Date.now()>deadline)throw Error('Package exceeded the browser wait limit.');
@@ -66,7 +82,17 @@ export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
       message.textContent='Portable package ready. Extract it, run verify_pack.py, then open world.usda. Physics has not been tested.';
       event('omniverse_package_created',{job:job.id,sourceJob:context.job,assets:request.placements.length});jobId=null;
     }catch(error){if(!disposed){message.textContent=error.name==='AbortError'?'Package cancelled.':error.message;status(message.textContent,true);}try{await stop();}catch(cancelError){if(!disposed)message.textContent+=' Cancellation unconfirmed: '+cancelError.message;}}
-    finally{controller=null;if(!disposed){button.disabled=false;cancel.hidden=true;}}
+    finally{submission=null;controller=null;if(!disposed){button.disabled=false;cancel.hidden=true;}}
   };
-  return ()=>{disposed=true;void stop().catch(error=>status('Package cancellation could not be confirmed: '+error.message,true));section.remove();};
+  function dispose(){
+    if(disposed)return;
+    disposed=true;
+    dialog?.removeEventListener('close',dispose);
+    window.removeEventListener('pagehide',dispose);
+    void stop().catch(error=>status('Package cancellation could not be confirmed: '+error.message,true));
+    section.remove();
+  }
+  dialog?.addEventListener('close',dispose);
+  window.addEventListener('pagehide',dispose);
+  return dispose;
 }
