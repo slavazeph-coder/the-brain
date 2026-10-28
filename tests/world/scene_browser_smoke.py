@@ -24,7 +24,7 @@ from realtosim_browser_smoke import K, SCROLL_SETTLED, VISIBLE_POINT_TARGETS, ca
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'output/playwright/world'
-FACTS = ['Observed: 0 reconstructed points, the floor and 1 wall.',
+FACTS = ['Observed: 0 reconstructed points, a floor bounding extent and 1 wall.',
          'Detected: no objects placed, 1 left unplaced.',
          'Unknown: 1 floor cell no point reached, kept as a tagged volume, never free space.',
          'Units: arbitrary reconstruction units. No measured scale, so sizes are relative.']
@@ -155,7 +155,7 @@ def check_metric(pw, name, origin, worker_url, token, phone=False):
         page.locator('#scene-plan').click()
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
         assert page.locator('#status').inner_text() == ('Map built from the simulation scene: 1 wall and 0 objects as obstacles, 1 unobserved area, '
-                                                        '4 × 3 m of observed floor. Review scale and obstacles, then plan.'), page.locator('#status').inner_text()
+                                                        '4 × 3 m floor bounding extent. Review scale and obstacles, then plan.'), page.locator('#status').inner_text()
         assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
         page.locator('#run').click()
         page.wait_for_timeout(200)
