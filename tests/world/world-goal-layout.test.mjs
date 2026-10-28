@@ -12,6 +12,8 @@ test('homepage links to existing scan route for every goal', () => {
   }
   assert.match(html, /id="workspace"/);
   assert.match(html, /id="what-to-create"/);
+  assert.match(html, /href="#what-to-create"/);
+  assert.match(html, /id="hero-capture"/);
   assert.match(worldCSS, /\.goal-entry-grid/);
 });
 
