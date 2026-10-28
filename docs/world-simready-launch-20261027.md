@@ -1,0 +1,94 @@
+# BrainSNN launch extensions — October 27, 2026
+
+## Scope and status
+
+This integration extends the original operator-side tools with native capture through the authenticated worker and a browser import UI. It does not establish completion of the phone-to-BIM roadmap, enable unqualified GPU engines, or submit third-party scans.
+
+- `robotics/world_worker/simready_bridge.py`: inspect locally pulled NVIDIA SimReady Central packages; bind review to exact package bytes; prepare a bounded placement plan; optionally compose a separate portable OpenUSD additions layer.
+- `robotics/world_worker/capture_evidence.py`: validate an explicit native-capture bundle, hashes, timing, calibration and rigid poses; convert ARKit camera-to-world poses to COLMAP camera-coordinate priors. It also estimates conservative paired-wall-surface candidates from reviewed point subsets.
+- `tests/world/test_launch_extensions.py`: 34 tests. Local run: 31 passed, 3 USD tests skipped because pxr was unavailable. The dedicated CI job installs usd-core and requires its import before running tests, so dependency absence cannot silently qualify the USD path.
+
+The follow-up integration connects a bounded native capture sidecar and its 3–11 original photos to the existing authenticated worker. Source-bound per-frame calibration is fixed during COLMAP matching/solving; native poses are used for checked post-solve alignment, explicitly not optimizer constraints. The scene compiler now evaluates conservative wall-surface candidates, retains unverified labels through IFC/Rhino/quantities, and invalidates evidence after geometry edits. Native phone apps, GPU inference, detailed pipe/duct fitting and independent room measurements remain separate work.
+
+The browser's ordinary video flow remains available. PR #253's native-capture backend is already deployed; authenticated live reconstruction remains unverified. Existing native bundles can use `scripts/world-demo/native_capture_submit.py`; it validates every source before upload, requires `--consent`, reads the passcode from the environment or a hidden prompt, and verifies downloaded SHA-256 hashes. PR #256 adds the browser import flow described in [native capture](world-native-capture.md); its production release is pending at this October 28 handoff.
+
+## Live infrastructure checked
+
+Railway project `wonderful-charisma`, production: the existing website and the private `world-worker` reached SUCCESS. Worker resources: one instance, 4-vCPU / 8-GB limits, 10-GB /data volume. The worker follows `deploy/world-worker-20261027`; the website follows main. The dedicated worker branch isolates its root Railway config from the website config. WORLD_WORKER_HOST was set to 0.0.0.0 after the IPv6-only listener failed health checks. Never expose the worker directly.
+
+Public browser checks of the Railway site observed /healthz = 200, /api/world/processing = 200 with available=true, passcode=true and visitors=false, and unauthenticated capabilities = 401. This does not prove authenticated reconstruction or metric exports. No customer video was processed in this implementation slice.
+
+Railway domain-status reported brainsnn.com requires a traffic-routing DNS update to `tnoamdbj.up.railway.app`, with the certificate still issuing. Check the DNS provider before changing anything; preserve mail records. Temporary website: https://the-brain-production.up.railway.app/world/. Passcode remains in Railway shared variables; no secret is included here.
+
+## SimReady Central input
+
+Reference: https://github.com/NVIDIA-Omniverse/simready-central and its `docs/examples/index_to_library.py`. Its submission index pins individual asset packages to immutable Hugging Face commits; do not download an entire library just to test one scene. The repository's code license is not the license of every asset. Review each package license and its reported validation profile.
+
+Use the upstream documented local index-to-library workflow to pull a small selection, then:
+
+```sh
+python -m robotics.world_worker.simready_bridge \
+  --library /data/simready/library.json --workspace /data/simready \
+  --out /data/simready/brainsnn-inspected.json
+```
+
+The output includes `source.url`, `license` and `receipt.sha256`. After actually reviewing an asset and placement, create a `brainsnn.simready-placements.v1` document whose `placements` is a list of records containing:
+
+- `id`: unique USD identifier;
+- `source_url`: exact immutable URL from the inspected record;
+- `translation_m`: three metre coordinates; optional `rotation_xyz_deg`;
+- `approval`: exact `package_sha256`, exact `license`, `license_reviewed: true`, `placement_reviewed: true`;
+- optional `collision_policy: convexHull` only after `approval.approximation_reviewed: true`.
+
+```sh
+python -m robotics.world_worker.simready_bridge \
+  --library /data/simready/library.json --workspace /data/simready \
+  --placements /data/simready/placements.json --out /data/simready/reviewed-plan.json
+
+# Requires usd-core in a separate environment; use a fresh output folder.
+python -m robotics.world_worker.simready_bridge \
+  --library /data/simready/library.json --workspace /data/simready \
+  --placements /data/simready/placements.json --compose --out /data/simready/assembly
+```
+
+Composition preserves the assets' authored transforms and colliders, adds an outer placement/basis transform, requires explicit metre units and Y/Z-up, and references copied package files. It refuses missing colliders, changed packages and external/escaping USD composition dependencies. It validates active asset-valued dependency paths (including instance proxies and authored time samples), but does not execute shader/MDL programs, inspect their transitive imports or replace an OS sandbox: use reviewed packages in an isolated no-network environment. No production endpoint should execute this against untrusted uploads.
+
+Defaults are authored colliders, no resizing, at most 16 unique assets and 64 placements. Convex hulls can close bins and openings; never apply them globally to a scanned room or container. Packages with reset transform stacks (including instance proxies) are rejected because they bypass outer placement. Convex-hull overrides on instanced assets are rejected. Outputs must be outside source packages. The output keeps library provenance and physics_ready=false. Real pinned NVIDIA byte verification, two-placement composition, collider/rigid-body/joint comparison and relocation now run in the [qualification workflow](world-simready-qualification.md). No Isaac Sim simulation, 1,000-object stress test, robot deployment or synthetic-label generation ran here.
+
+## Capture bundle contract
+
+A directory plus JSON, not an invented standard .arkit archive. Root keys: `schema: brainsnn.capture.v1`, `pose_convention: arkit-camera-to-world`, `units: m`, `pixel_convention: integer-centres`, and `frames`.
+
+Each frame carries `id`, original monotonic `timestamp_seconds`, relative JPEG/PNG `image`, `image_sha256`, `image_size: [width,height]`, 3x3 `intrinsics`, 4x4 rigid `camera_to_world`, and `tracking_state: normal|limited|not-available`. The image is in its original calibrated raster orientation. Any native app that rotates/resizes a raster must transform calibration consistently before writing the bundle. Lens distortion is not modeled by this initial contract. Reject unsupported captures rather than silently dropping it.
+
+```sh
+python -m robotics.world_worker.capture_evidence \
+  --bundle /data/capture/bundle.json --root /data/capture \
+  --out /data/capture/validated-evidence.json
+```
+
+The standalone validator outputs priors. The integrated worker consumes the original intrinsics with raster-resize and half-pixel conversion, fixes them in the real COLMAP solve, checks image-based fold consistency, and aligns solved cameras and points only if native pose residuals agree. Degenerate baselines, inconsistent attitudes/positions, lens distortion, skew and rotated EXIF rasters are rejected. The output includes `native-capture.json` bound by SHA-256; downstream units remain arbitrary and `metric_verified=false` until independent dimensional review. A native capture app and physical qualification remain outstanding.
+
+```sh
+python scripts/world-demo/native_capture_submit.py \
+  --bundle /data/capture/bundle.json --root /data/capture \
+  --site https://www.brainsnn.com --out /data/capture/result-001 --consent
+```
+
+The worker profile accepts 3–11 images and one JSON sidecar up to 1 MiB, within existing 12-input tenant/resource limits. Image names must exactly match unique uploaded basenames. No ZIP extraction or filesystem paths from metadata are accepted.
+
+## Wall evidence
+
+`wall_candidate(points, origin, normal, along)` operates on a reviewed wall subset in metres. It requires distinct surface-density modes, a low-density gap, and overlapping locally supported cells. It returns a candidate finish-face separation and spatial p05/p95 variation, not an independent confidence interval or structural core thickness. Single broad/noisy surfaces, insufficient overlap and bad axes are rejected. Duplicated reconstruction surfaces can still mimic two faces; camera-source evidence and independent dimensions are required before relying on thickness.
+
+## Acceptance still required
+
+1. Resolve custom-domain DNS/TLS and rerun public/authentication checks.
+2. Run the existing site_processing_check.py with the secret from the operator environment and a permitted short capture, including checksum-checked downloads. Do not print the secret.
+3. Execute the USD CI tests, then one reviewed NVIDIA package in the intended Isaac Sim version; measure actual colliders, memory and task behavior.
+4. Exercise the integrated native-capture path through the deployed authenticated service using original phone rasters and independently measured dimensions; synthetic solver tests do not qualify physical captures.
+5. Reopen actual IFC/Rhino exports after an approved edit and compare held-out room measurements. Keep sparse previews, learned completion, observed surfaces and library assets distinct.
+
+## Launch check behavior
+
+`site_processing_check.py` defaults to the working `www` domain, bounds each job with `--timeout`, requests cancellation on timeout or lost transport, refuses empty/unsafe/changed artifacts, and accepts reconstruction screening only when the fold check actually says `consistent`. Each video run writes `check-results.json` with input/output hashes and terminal results, never credentials. `--scene` runs only after reconstruction screening passes. This check does not certify metric exports or physical accuracy.

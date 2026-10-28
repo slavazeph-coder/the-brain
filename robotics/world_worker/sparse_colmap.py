@@ -23,10 +23,11 @@ import warnings
 
 try:
     from .geometry import write_point_cloud
-    from . import densify
+    from . import densify, native_capture
 except ImportError:
     from geometry import write_point_cloud
     import densify
+    import native_capture
 
 PYCOLMAP_VERSION = '4.2.1'
 MAX_IMAGES = 60
@@ -68,7 +69,7 @@ FOLD_MIN_MATCHES = 30
 FOLD_LISTED = 20
 
 
-def map_frames(database: Path, images: Path, workspace: Path, count: int):
+def map_frames(database: Path, images: Path, workspace: Path, count: int, *, calibrated=False):
     """Incremental mapping into workspace/sparse, retrying other seeds while too few frames joined one model."""
     import pycolmap
     best, attempts, deadline = None, [], time.monotonic() + MAPPING_SECONDS
@@ -81,6 +82,12 @@ def map_frames(database: Path, images: Path, workspace: Path, count: int):
         mapping = pycolmap.IncrementalPipelineOptions({'num_threads': THREADS, 'random_seed': seed,
                                                       'min_model_size': 3, 'max_num_models': 3,
                                                       'max_runtime_seconds': max(60, int(remaining))})
+        if calibrated:
+            mapping.ba_refine_focal_length = False
+            mapping.ba_refine_principal_point = False
+            mapping.ba_refine_extra_params = False
+            mapping.mapper.abs_pose_refine_focal_length = False
+            mapping.mapper.abs_pose_refine_extra_params = False
         models = pycolmap.incremental_mapping(database, images, target, options=mapping)
         if not models:
             attempts.append({'seed': seed, 'registered_images': 0, 'models_found': 0}); continue
@@ -361,10 +368,13 @@ def run(request: dict, densify_model: Path | None = None):
     if pycolmap.__version__ != PYCOLMAP_VERSION:
         raise RuntimeError(f'This adapter is validated with pycolmap=={PYCOLMAP_VERSION}.')
     inputs = request.get('inputs', [])
+    native = None
+    if any(item.get('kind') == 'capture' for item in inputs):
+        inputs, native = native_capture.inputs_evidence(inputs)
     photo_set = 3 <= len(inputs) <= 12 and all(item.get('kind') == 'image' for item in inputs)
     video = len(inputs) == 1 and inputs[0].get('kind') == 'video'
     if request.get('schema') != 'brainsnn.adapter.v1' or not (photo_set or video):
-        raise ValueError('Use 3–12 overlapping photos or one walkthrough video.')
+        raise ValueError('Use 3–12 overlapping photos, one walkthrough video, or native capture JSON with 3–11 photos.')
     out = Path(request['output_dir']).resolve()
     out.mkdir(parents=True, exist_ok=True)
     # Intermediate files remain outside published artifacts and share worker retention.
@@ -393,9 +403,11 @@ def run(request: dict, densify_model: Path | None = None):
     database = workspace / 'database.db'
     extraction = pycolmap.FeatureExtractionOptions({'num_threads': THREADS, 'max_image_size': MAX_IMAGE_EDGE,
                                                     'sift': {'max_num_features': 4096}})
-    pycolmap.extract_features(database, images, camera_mode=pycolmap.CameraMode.AUTO,
-                              reader_options={'camera_model': 'SIMPLE_RADIAL'},
+    pycolmap.extract_features(database, images, camera_mode=pycolmap.CameraMode.PER_IMAGE if native else pycolmap.CameraMode.AUTO,
+                              reader_options={'camera_model': 'PINHOLE' if native else 'SIMPLE_RADIAL'},
                               extraction_options=extraction, device=pycolmap.Device.cpu)
+    if native:
+        native_capture.apply_calibration(database, associations, native)
     matching = pycolmap.FeatureMatchingOptions({'num_threads': THREADS})
     names = sorted(path.name for path in images.glob('*.jpg'))  # filming order
     pairs = image_pairs(count)
@@ -407,12 +419,15 @@ def run(request: dict, densify_model: Path | None = None):
         pycolmap.match_image_pairs(database, matching_options=matching, pairing_options=pycolmap.ImportedPairingOptions({'match_list_path': str(listing)}),
                                    device=pycolmap.Device.cpu)
     capture['matching'] = {'method': 'exhaustive' if count <= EXHAUSTIVE_FRAMES else f'{NEIGHBOURS} neighbours and keyframes', 'pairs': len(pairs)}
-    models, index, model, attempts = map_frames(database, images, workspace, count)
+    if native:
+        models, index, model, attempts = map_frames(database, images, workspace, count, calibrated=True)
+    else:
+        models, index, model, attempts = map_frames(database, images, workspace, count)
     registered = model.num_reg_images()
     if registered < 3 or model.num_points3D() < 30:
         raise ValueError('Insufficient reconstructed geometry: at least 3 camera positions and 30 points are required.')
     # Photos have no filming order, so only a video's consecutive frames are checked.
-    if video:
+    if video or native:
         opened = pycolmap.Database.open(str(database))
         try:
             consistency = fold_check(*consecutive_turns(opened, model, names))
@@ -422,6 +437,15 @@ def run(request: dict, densify_model: Path | None = None):
         consistency = {'status': 'not-checked', 'reason': 'Photos have no filming order; consecutive frames are checked for videos only.'}
     capture['consistency'] = consistency
     folded = consistency['status'] == 'folded'
+    if native:
+        if folded:
+            raise ValueError('Native reconstruction contradicts its own consecutive image matches; recapture before pose alignment.')
+        native['alignment'] = native_capture.align_model(model, associations, native)
+        native['reconstruction_executed'] = True
+        native['calibration_consumed'] = 'Resized per-frame PINHOLE intrinsics fixed during image matching and bundle adjustment.'
+        native['limitations'] = ['Native pose estimates are used for checked post-solve alignment, not as optimizer constraints.',
+                                 'Independent physical dimensions remain required; no native capture app is included.']
+        model.write(workspace / 'sparse' / str(index))
     model.extract_colors_for_all_images(images, num_threads=THREADS)
     points = sorted(model.points3D.items())
     stride = max(1, math.ceil(len(points) / MAX_POINTS))
@@ -464,7 +488,8 @@ def run(request: dict, densify_model: Path | None = None):
                 'elapsed_seconds': round(time.monotonic() - started, 3),
                 'coordinate_frame': 'colmap', 'units': 'arbitrary', 'metric_verified': False,
                 'physics_ready': False, 'policy_executed': False, 'model_weights_used': dense is not None,
-                'camera_intrinsics': 'estimated from resized images; not measured calibration',
+                'camera_intrinsics': ('source-bound native calibration, transformed to resized COLMAP half-pixel coordinates; held fixed during solve'
+                                      if native else 'estimated from resized images; not measured calibration'),
                 'review_required': (['Recapture: the model contradicts its own consecutive frames'] if folded else []) +
                                    ['Verify scale against a measured distance', 'Align floor and up axis',
                                     'Inspect missing surfaces and author collision geometry'],
@@ -499,13 +524,20 @@ def run(request: dict, densify_model: Path | None = None):
                                          'camera_pixels': 'Native COLMAP parameters use top-left centre (.5,.5); the shared raster projector subtracts .5. Calibration parameters are not silently shifted.',
                                          'timestamps': 'Original video PTS unavailable for the FFmpeg resampled path; photos have no video timestamp.'}
     if dense: evidence['dense'] = dense
+    native_artifacts = []
+    if native:
+        (out / 'native-capture.json').write_text(json.dumps(native, indent=2, allow_nan=False))
+        evidence['native_capture'] = {'artifact': 'native-capture.json', 'sha256': file_sha256(out / 'native-capture.json'),
+                                      'bundle_sha256': native['bundle_sha256'], 'alignment': native['alignment']}
+        evidence['camera_frame_evidence']['timestamps'] = 'Original native timestamps are bound to image hashes in native-capture.json; image sources have no video PTS.'
+        native_artifacts = [{'name': 'native-capture.json', 'kind': 'evidence'}]
     (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     ledger = {'schema': 'brainsnn.camera-frames.v1', 'sources': sources,
               'reconstruction': camera_frames.file_record(out.parent, out / 'reconstruction.json'),
               'clouds': clouds, 'frames': frame_records, 'metric_verified': False}
     camera_frames.write(out.parent, ledger, output_path=out / 'camera-frames.json')
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [*artifacts, {'name': 'reconstruction.json', 'kind': 'evidence'},
-                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}]}, allow_nan=False))
+                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}, *native_artifacts]}, allow_nan=False))
     return evidence
 
 

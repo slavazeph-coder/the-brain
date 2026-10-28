@@ -16,8 +16,12 @@ for executable commands, validation scope and remaining physics/robot gates. Vis
 `scene.ifc` (IFC4, metres, written by `ifc_export.py` without IfcOpenShell) follows the same rule for BIM tools: walls as `IfcWall`,
 the floor as `IfcSlab`, placed detections as `IfcFurniture`, unknown space as `IfcBuildingElementProxy`, provenance in `Pset_BrainSNN`.
 A wall seen from inside the room is its observed face, with an assumed 0.1 m behind it, so the box's inner face is the
-surface the camera saw (`faceCentre`, `thicknessBasis`). The faces of a partition seen from both sides stand toward each
-other, and a wall whose points span both faces keeps its measured thickness.
+surface the camera saw (`faceCentre`, `thicknessBasis`). Nearby parallel faces stand toward one another as a modelling
+assumption. A supported pair of reconstructed surface-density modes may size a visual box with its candidate finish-face
+separation; `wallEvidence` preserves local overlap, variation and the automatic, unreviewed subset selection. Broad noise
+is never treated as two faces. `thicknessMeasured` and physical verification remain false, and IFC, Rhino and quantities
+exports retain these limits. Geometry edits invalidate this evidence. Physical thickness still needs source review and
+independent dimensions; even duplicated reconstruction surfaces can pass the candidate test.
 In metric scenes every cluster of points above the floor that is not a wall is separated and measured: walls are vertical planes found by
 RANSAC above furniture height (split at doorways, so an opening stays an opening), objects are face-connected 10 cm cells fitted with the
 smallest oriented box. An unnamed object is an

@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scene_compiler'))
 from opening_geometry import wall_parts, door_parts, plan_wall_parts, wall_openings
 from ifc_export import ifc_guid
 from component_graph import ensure_component_ids, derive_id
+from wall_evidence import thickness_properties
 
 LAYERS = {'FLOOR': 8, 'WALLS': 7, 'OBJECTS': 4, 'UNKNOWN': 6, 'DIMENSIONS': 2, 'LABELS': 7}  # AutoCAD colour indices
 RHINO_LAYERS = {'Floor': (216, 205, 184), 'Walls': (154, 166, 184), 'Objects': (168, 85, 247), 'Unknown space (not free)': (255, 79, 154)}
@@ -76,6 +77,7 @@ def elements(scene):
         holes = wall_openings(w, scene.get('openings', []))
         out.append({'kind': 'wall', 'name': w['name'], 'label': w.get('label', 'wall'), 'ifc': 'IfcWall', 'corners': footprint(w['centre'][0], w['centre'][2], L, t, w.get('yaw_degrees', 0)),
                     'length': L, 'width': t, 'height': h, 'base': w['centre'][1] - h / 2, 'provenance': w.get('provenance', 'observed'),
+                    'thickness_properties': thickness_properties(w),
                     'net_face_area': L * h - sum(o['widthMeters'] * o['heightMeters'] for o in holes),
                     'componentId': w['componentId'], 'openingComponentIds': [o['componentId'] for o in holes], **lineage(w),
                     'solid_parts': [rect(part) for part in wall_parts(w, holes)],
@@ -142,6 +144,8 @@ def quantities(scene, items):
         area = i.get('net_face_area', i['length'] * i['height']) if i['kind'] == 'wall' else i['length'] * i['width']
         note = 'net one-face area after reviewed voids' if i['kind'] == 'wall' else ('closed reference leaf; no clearance validation' if i['kind'] == 'door' else 'plan area') + (f"; name from {i['label_source']}, unreviewed" if i['label'] and i.get('label_source') else '') \
             + ('; base inferred: the floor under it went unseen' if i.get('base_inferred') else '')
+        if i['kind'] == 'wall':
+            note += '; ' + i['thickness_properties']['ThicknessBasis']
         rows.append([i['kind'], i['name'], i['ifc'], i['label'] or i['name'].replace('_', ' ').capitalize(), f"{i['length']:.3f}", f"{i['width']:.3f}",
                      f"{i['height']:.3f}", f'{area:.2f}', note])
     return rows, totals
@@ -240,6 +244,9 @@ def write_3dm(scene, items, path):
                                ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower()),
                                ('base', 'inferred' if i.get('base_inferred') else '')):
                 if value: attrs.SetUserString(key, value)
+            for key, value in i.get('thickness_properties', {}).items():
+                if value is not None:
+                    attrs.SetUserString(key, str(value).lower() if isinstance(value, bool) else str(value))
             model.Objects.AddBrep(brep, attrs)
     if not model.Write(str(path), 8):
         raise OSError(f'Rhino could not write {path}.')

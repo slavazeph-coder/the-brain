@@ -1,0 +1,55 @@
+name: World Omniverse qualification
+on:
+  pull_request:
+    paths:
+      - 'robotics/world_worker/simready_bridge.py'
+      - 'robotics/world_worker/nvidia_pack.py'
+      - 'robotics/world_worker/qualify_simready.py'
+      - 'tests/world/test_launch_extensions.py'
+      - 'tests/world/test_simready_instances.py'
+      - 'tests/world/test_nvidia_qualification.py'
+      - '.github/workflows/world-omniverse-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  omniverse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install and require USD test runtime
+        run: |
+          python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8 pytest==9.1.1
+          python -c 'from pxr import Sdf, Usd, UsdGeom, UsdPhysics'
+      - name: Source integrity, instance and dependency contracts
+        run: python -m pytest tests/world/test_launch_extensions.py tests/world/test_simready_instances.py tests/world/test_nvidia_qualification.py -q
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/brainsnn-nvidia
+          key: nvidia-simready-653d91e182011f357cf1644013cc94ddf194d349-IV-pole-a01-v1
+      - name: Download pinned NVIDIA asset with source hashes checked
+        run: |
+          if [ ! -d /tmp/brainsnn-nvidia/IV_pole_a01 ]; then
+            python -m robotics.world_worker.nvidia_pack --workspace /tmp/brainsnn-nvidia
+          fi
+      - name: Reverify source bytes, compose two placements and reopen after relocation
+        # These reviewed, isolated test placements preserve the CC-BY-4.0 package and attribution.
+        # This runs OpenUSD composition only; it does not execute Isaac/PhysX or qualify robot physics.
+        run: |
+          python -m robotics.world_worker.qualify_simready \
+            --workspace /tmp/brainsnn-nvidia --out qualification \
+            --license-reviewed --placement-reviewed
+      - name: Retain exact source snapshot
+        if: always()
+        run: mkdir -p qualification && git archive --format=zip HEAD -o qualification/source.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: omniverse-qualification
+          path: qualification/
+          retention-days: 7
+          if-no-files-found: error

@@ -246,3 +246,28 @@ def test_legacy_rhino_namespace_is_deterministic_and_label_independent(tmp_path)
     assert {str(o.Attributes.Id) for o in models[0].Objects} == {str(o.Attributes.Id) for o in models[1].Objects}
     assert models[0].Strings['BrainSNN.sourceSha256'] != models[2].Strings['BrainSNN.sourceSha256']
     assert 'componentGraph' not in first
+
+
+def test_wall_evidence_survives_quantities_and_rhino_without_measured_claims(tmp_path):
+    data = scene()
+    data['walls'][0]['wallEvidence'] = {'schema': 'brainsnn.wall-evidence.v1', 'status': 'two-surface-candidate',
+                                      'thickness_m': .08, 'matched_cells': 12, 'subset_reviewed': False}
+    data['walls'][1].update(thicknessMeasured=True, thicknessBasis='measured: both faces seen')
+    rows, _ = ce.quantities(data, ce.elements(data))
+    wall_rows = [r for r in rows if r[0] == 'wall']
+    assert 'candidate finish-face separation: unverified' in wall_rows[0][-1]
+    assert 'evidence unavailable; unverified' in wall_rows[1][-1]
+    assert not any('measured: both faces seen' in str(r) for r in rows)
+
+
+def test_rhino_reopens_wall_candidate_limits(tmp_path):
+    rhino3dm = pytest.importorskip('rhino3dm')
+    data = scene()
+    data['walls'][0]['wallEvidence'] = {'schema': 'brainsnn.wall-evidence.v1', 'status': 'two-surface-candidate',
+                                      'thickness_m': .08, 'matched_cells': 12, 'subset_reviewed': False}
+    assert ce.export(data, tmp_path)['3dm']['written']
+    model = rhino3dm.File3dm.Read(str(tmp_path / 'scene.3dm'))
+    wall = next(o for o in model.Objects if o.Attributes.Name == 'wall_1')
+    assert wall.Attributes.GetUserString('ThicknessCandidateMetres') == '0.08'
+    assert wall.Attributes.GetUserString('PhysicalThicknessVerified') == 'false'
+    assert wall.Attributes.GetUserString('ThicknessMeasured') == 'false'

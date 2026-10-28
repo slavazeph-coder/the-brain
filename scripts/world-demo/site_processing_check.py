@@ -1,6 +1,6 @@
 """Check brainsnn.com's own processing end to end, the way the World Builder page uses it, without a browser.
 
-usage: python scripts/world-demo/site_processing_check.py --site https://brainsnn.com [--video walk.mov]
+usage: python scripts/world-demo/site_processing_check.py --site https://www.brainsnn.com [--video walk.mov]
                                                           [--engine colmap-sparse] [--scene] [--out DIR]
 The passcode is read from BRAINSNN_PASSCODE, or asked for without echo; it is never printed or written. Standard library
 only, so any Python 3.10+ runs it.
@@ -16,6 +16,7 @@ import argparse
 import getpass
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -65,43 +66,83 @@ def step(name, ok, detail=''):
     return ok
 
 
-def run_job(site, engine, upload_id, poll):
+def run_job(site, engine, upload_id, poll, timeout=1200, *, on_job=None):
     started = time.monotonic()
-    job = site.json('POST', '/api/world/worker/v1/jobs', {'engine': engine, 'upload_ids': [upload_id], 'consent': True})
-    site.json('POST', f"/api/world/worker/v1/jobs/{job['id']}/start")
-    last = None
-    while job['status'] not in ('complete', 'failed', 'cancelled'):
-        time.sleep(poll)
-        job = site.json('GET', f"/api/world/worker/v1/jobs/{job['id']}")
-        if job['status'] != last:
-            print(f"      {engine}: {job['status']} after {time.monotonic() - started:.0f} s", flush=True)
-            last = job['status']
+    deadline = started + timeout
+    ids = upload_id if isinstance(upload_id, list) else [upload_id]
+    job = site.json('POST', '/api/world/worker/v1/jobs', {'engine': engine, 'upload_ids': ids, 'consent': True})
+    try:
+        if on_job is not None:
+            on_job(job)
+        site.json('POST', f"/api/world/worker/v1/jobs/{job['id']}/start", timeout=min(120, timeout))
+        last = None
+        while job['status'] not in ('complete', 'failed', 'cancelled'):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError(f'exceeded {timeout:g} seconds')
+            time.sleep(min(poll, remaining))
+            job = site.json('GET', f"/api/world/worker/v1/jobs/{job['id']}", timeout=max(1, min(120, deadline - time.monotonic())))
+            if on_job is not None:
+                on_job(job)
+            if job['status'] != last:
+                print(f"      {engine}: {job['status']} after {time.monotonic() - started:.0f} s", flush=True)
+                last = job['status']
+    except (RuntimeError, OSError, KeyboardInterrupt) as error:
+        cancelled = False
+        try:
+            site.json('DELETE', f"/api/world/worker/v1/jobs/{job['id']}", timeout=15)
+            cancelled = True
+        except (RuntimeError, OSError):
+            pass
+        if isinstance(error, KeyboardInterrupt):
+            raise
+        state = 'cancellation accepted' if cancelled else 'cancellation could not be confirmed'
+        raise RuntimeError(f"{engine} job {job['id']}: {error}; {state}. Check the job before retrying.") from error
     return job, time.monotonic() - started
 
 
 def download_all(site, job, out):
     names = []
-    for index, artifact in enumerate(job.get('artifacts', [])):
+    artifacts = job.get('artifacts', [])
+    if not artifacts:
+        raise RuntimeError('Completed job returned no artifacts.')
+    for index, artifact in enumerate(artifacts):
+        name = artifact.get('name')
+        if not isinstance(name, str) or name in ('', '.', '..') or Path(name).name != name or '\\' in name or name in names:
+            raise RuntimeError('Worker returned an unsafe or duplicate artifact name.')
         link = site.json('POST', f"/api/world/worker/v1/jobs/{job['id']}/ticket", {'artifact': index})['url']
         if not link.startswith('/api/world/worker/v1/download/'):
             raise RuntimeError(f'Download link is not under the site: {link[:60]}')
         status, payload = site.call('GET', link, timeout=600)
         if status != 200 or hashlib.sha256(payload).hexdigest() != artifact['sha256']:
             raise RuntimeError(f"{artifact['name']}: download failed or its SHA-256 does not match")
-        (out / artifact['name']).write_bytes(payload)
-        names.append(artifact['name'])
+        with (out / name).open('xb') as stream:
+            stream.write(payload)
+        names.append(name)
     return names
+
+
+def reconstruction_screen(evidence):
+    """A completed job alone does not prove that its geometry passed the fold check."""
+    capture = evidence.get('capture') or {}
+    status = (capture.get('consistency') or {}).get('status')
+    return status == 'consistent', status or 'not-checked'
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('--site', default='https://brainsnn.com')
+    parser.add_argument('--site', default='https://www.brainsnn.com')
     parser.add_argument('--video', type=Path)
     parser.add_argument('--engine', default='colmap-sparse')
     parser.add_argument('--scene', action='store_true', help='also run the scene engine (scene-usd) on the same video')
     parser.add_argument('--out', type=Path)
     parser.add_argument('--poll', type=float, default=5.0)
+    parser.add_argument('--timeout', type=float, default=1200, help='maximum seconds per job (60–3600)')
     args = parser.parse_args()
+    if not math.isfinite(args.timeout) or not 60 <= args.timeout <= 3600:
+        parser.error('--timeout must be between 60 and 3600 seconds')
+    if not math.isfinite(args.poll) or not 0 < args.poll <= 60:
+        parser.error('--poll must be greater than zero and at most 60 seconds')
     site = Site(args.site)
 
     status = site.json('GET', '/api/world/processing')
@@ -131,40 +172,57 @@ def main():
     out = args.out or Path(f'brainsnn-check-{time.strftime("%Y%m%d-%H%M%S")}')
     out.mkdir(parents=True, exist_ok=False)
     data = args.video.read_bytes()
+    receipt = {'schema': 'brainsnn.site-processing-check.v1', 'site': site.base,
+               'input_sha256': hashlib.sha256(data).hexdigest(), 'input_bytes': len(data),
+               'metric_verified': False, 'jobs': [], 'passed': False}
     print(f'      uploading {args.video.name}: {len(data) / 1024 ** 2:.0f} MB in {max(1, -(-len(data) // CHUNK))} chunks', flush=True)
 
     def upload():
         item = site.json('POST', '/api/world/worker/v1/uploads', {'name': args.video.name, 'size': len(data), 'kind': 'video'})
         offset = 0
         while offset < len(data):
-            offset = site.json('PUT', f"/api/world/worker/v1/uploads/{item['id']}?offset={offset}", raw=data[offset:offset + CHUNK])['offset']
+            chunk = data[offset:offset + CHUNK]
+            following = site.json('PUT', f"/api/world/worker/v1/uploads/{item['id']}?offset={offset}", raw=chunk)['offset']
+            if type(following) is not int or following != offset + len(chunk):
+                raise RuntimeError('Upload acknowledgment did not match the bytes sent.')
+            offset = following
         return item['id']
 
     ok = True
     try:
-        job, seconds = run_job(site, args.engine, upload(), args.poll)
+        job, seconds = run_job(site, args.engine, upload(), args.poll, args.timeout)
+        receipt['jobs'].append({'engine': args.engine, 'id': job['id'], 'status': job['status'], 'seconds': seconds})
         ok &= step(f'{args.engine} finished', job['status'] == 'complete', f"{job['status']} in {seconds:.0f} s {job.get('error') or ''}".strip())
         if job['status'] == 'complete':
             names = download_all(site, job, out)
+            receipt['jobs'][-1]['downloads'] = [{'name': n, 'sha256': hashlib.sha256((out / n).read_bytes()).hexdigest()} for n in names]
             step('results downloaded through the site, SHA-256 checked', True, ', '.join(names))
             if 'reconstruction.json' in names:
                 evidence = json.loads((out / 'reconstruction.json').read_text())
                 capture = evidence.get('capture', {})
-                consistency = (capture.get('consistency') or {}).get('status')
+                screened, consistency = reconstruction_screen(evidence)
+                receipt['jobs'][-1]['fold_status'] = consistency
                 print(f"      frames {capture.get('images')}, registered {capture.get('registered_images')}, "
                       f"points {evidence.get('reconstructed_points')}, reprojection "
                       f"{evidence.get('mean_reprojection_error_pixels', float('nan')):.2f} px, fold check {consistency}")
-                ok &= step('reconstruction is not folded', consistency != 'folded',
-                           'folded: re-record the room or process it again' if consistency == 'folded' else '')
-        if args.scene:
-            scene, seconds = run_job(site, 'scene-usd', upload(), args.poll)
+                ok &= step('reconstruction passed the fold check', screened, consistency)
+            else:
+                ok &= step('reconstruction evidence returned', False, 'reconstruction.json is missing')
+        if args.scene and ok:
+            scene, seconds = run_job(site, 'scene-usd', upload(), args.poll, args.timeout)
+            receipt['jobs'].append({'engine': 'scene-usd', 'id': scene['id'], 'status': scene['status'], 'seconds': seconds})
             ok &= step('scene-usd finished', scene['status'] == 'complete', f"{scene['status']} in {seconds:.0f} s {scene.get('error') or ''}".strip())
             if scene['status'] == 'complete':
                 (out / 'scene').mkdir()
-                step('scene downloaded', True, ', '.join(download_all(site, scene, out / 'scene')))
-    except RuntimeError as error:
+                names = download_all(site, scene, out / 'scene')
+                receipt['jobs'][-1]['downloads'] = [{'name': n, 'sha256': hashlib.sha256((out / 'scene' / n).read_bytes()).hexdigest()} for n in names]
+                step('scene downloaded', True, ', '.join(names))
+        receipt['passed'] = bool(ok)
+    except (RuntimeError, OSError) as error:
         step('processing', False, str(error))
         return 1
+    finally:
+        (out / 'check-results.json').write_text(json.dumps(receipt, indent=2, allow_nan=False) + '\n')
     print(f'Results in {out.resolve()} (outside git; delete when done).')
     return 0 if ok else 1
 
