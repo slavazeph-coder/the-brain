@@ -104,7 +104,27 @@ def wall_spans(t, a0, a1):
     return [(float(s0), float(s1)) for s0, s1 in zip([a0, *t[gaps + 1]], [*t[gaps], a1])]
 
 
-def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
+def wall_surface_evidence(points, centre, normal, along, *, metric=True):
+    """Evaluate only a supported RANSAC wall segment, retaining that selection is automatic, not reviewed.
+
+    The helper tests local density and overlap; it cannot distinguish a duplicated reconstruction surface
+    from the back of a physical wall. Candidates may size a visual model but never verify a measurement.
+    """
+    base = {"schema": "brainsnn.wall-evidence.v1", "status": "insufficient-evidence", "thickness_m": None,
+            "thickness_source": "unknown", "metric_verified": False, "physical_two_sides_verified": False,
+            "support_points": len(points), "subset_selection": "ransac-wall-segment", "subset_reviewed": False}
+    if not metric or len(points) < 60:
+        return {**base, "reason": "A metric wall subset with at least 60 support points is required."}
+    # Blender invokes this file as a script, so make the sibling worker package importable too.
+    root = str(Path(__file__).resolve().parents[2])
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from robotics.world_worker.capture_evidence import wall_candidate
+    return {**base, **wall_candidate(points, [centre[0], 0, centre[1]],
+                                    [normal[0], 0, normal[1]], [along[0], 0, along[1]])}
+
+
+def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True):
     """Walls by RANSAC on vertical planes. Returns (walls, rest): walls with centre (x, z), yaw, length, thickness, y0, y1,
     support and member indices; rest, the indices of points above the floor margin that belong to no wall. A plane with a
     doorway in it gives one wall per stretch either side; the points above the opening stay with the wall."""
@@ -138,14 +158,22 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0):
         if np.percentile(P[members, 1], 95) - np.percentile(P[members, 1], 5) < WALL_MIN_SPAN: continue
         y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
         if y1 - y0 < WALL_MIN_HEIGHT: continue
-        taken[members] = True; planes += 1; on = np.isin(above, members); spread = n[on]
-        measured = float(np.percentile(spread, 90) - np.percentile(spread, 10)); thickness = max(0.1, measured)
+        taken[members] = True; planes += 1; on = np.isin(above, members)
         low = t[(np.abs(n) < band) & (P[above, 1] < floor_y + WALL_DOOR_TOP)]
         for s0, s1 in wall_spans(low, a0, a1):
             s0, s1 = min(s0, (s0 + s1) / 2 - 0.05), max(s1, (s0 + s1) / 2 + 0.05)  # a stub between two openings stays a wall
             mine = members[(t[on] >= s0 - 0.1) & (t[on] <= s1 + 0.1)]; mid = centre + direction * (s0 + s1) / 2
+            evidence = wall_surface_evidence(P[mine], mid, normal, direction, metric=metric)
+            candidate = evidence["status"] == "two-surface-candidate"
+            thickness = evidence["thickness_m"] if candidate else 0.1
+            if candidate:
+                # The fit can favour one surface: place the visual box at the paired surfaces' midpoint.
+                mid = mid + normal * sum(evidence["surface_offsets_m"]) / 2
             walls.append({"centre": [float(mid[0]), float(mid[1])], "yaw": math.atan2(direction[1], direction[0]), "length": float(s1 - s0),
-                          "thickness": thickness, "thicknessMeasured": measured >= 0.1, "y0": y0, "y1": y1, "support": int(len(mine)),
+                          "thickness": thickness, "thicknessMeasured": False, "thicknessCandidate": candidate,
+                          "thicknessBasis": ("candidate finish-face separation: unverified" if candidate else
+                                             "assumed 0.1 m: thickness unresolved" if metric else "assumed 0.1 scene units: thickness unresolved"),
+                          "wallEvidence": evidence, "y0": y0, "y1": y1, "support": int(len(mine)),
                           "band": band, "members": mine.tolist()})
     return walls, [int(i) for i in above if not taken[i]]
 
@@ -260,8 +288,8 @@ def place_behind_faces(walls, room):
     thickness behind the face, so its inner face is the surface the camera saw. Left centred on the face, half of every
     wall stood in the room, and the room read 9 to 11 cm short between boxes on the benchmark.
     Behind means away from the room, unless a parallel wall 5 to 35 cm away overlaps it: the two are the faces of one
-    partition seen from both sides, and each box goes toward the other. A wall whose points span both faces has a
-    measured thickness and its centre between them, and stays where it is."""
+    possible partition, and each box goes toward the other. A supported two-surface candidate has a visual
+    thickness and its centre between the paired surfaces, and stays where it is. Neither case verifies physical thickness."""
     def partner(w):
         (cx, cz), d = w["centre"], (math.cos(w["yaw"]), math.sin(w["yaw"]))
         for o in walls:
@@ -275,7 +303,7 @@ def place_behind_faces(walls, room):
     shifts = []
     for w in walls:
         (cx, cz), yaw = w["centre"], w["yaw"]
-        if w.get("thicknessMeasured"):
+        if w.get("thicknessCandidate"):
             shifts.append(None); continue
         nx, nz = -math.sin(yaw), math.cos(yaw)  # (nx, nz) will point to the side the camera saw
         other = partner(w)
@@ -298,7 +326,7 @@ def room_centre(pts):
 
 def analyse(pts, floor_y, metric):
     """Walls and separated objects of a cloud, exactly as main() compiles them; the naming step runs this outside Blender."""
-    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin)
+    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin, metric=metric)
     place_behind_faces(walls, room_centre(pts))
     return margin, walls, rest, (separate_objects(pts, floor_y, rest, floor=floor_coverage(pts, floor_y, margin)) if metric else [])
 
@@ -444,7 +472,8 @@ def write_usda(path, scene, pts):
                            original=quote(prim.get('sourceProvenance', prim['provenance'])),
                            dimension=quote(prim.get('dimensionProvenance', 'compiled-geometry')))
     head = ('#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n'
-            '    customLayerData = { string schema = "%s", string units = "%s" }\n)\n\ndef Xform "World"\n{\n') % (scene["schema"], scene["units"])
+            '    customLayerData = {\n        string schema = %s\n        string units = %s\n    }\n)\n\ndef Xform "World"\n{\n') % (
+                json.dumps(scene["schema"], ensure_ascii=False), json.dumps(scene["units"], ensure_ascii=False))
     openings = scene.get('openings', [])
     body = [head] + [cube(o) for o in scene["objects"] if "centre" in o] \
         + [cube(part) for w in scene["walls"] for part in wall_parts(w, openings)] \
@@ -612,7 +641,7 @@ def main():
         _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1))
         if w.get("face"):  # the surface the camera saw, and the box behind it
             rec["faceCentre"] = [w["face"][0], rec["centre"][1], w["face"][1]]
-        rec["thicknessBasis"] = "measured: both faces seen" if w.get("thicknessMeasured") else "assumed 0.1 m: one face seen"
+        rec.update({key: w[key] for key in ("thicknessBasis", "thicknessMeasured", "thicknessCandidate", "wallEvidence")})
         scene["walls"].append(rec)
     scene["separation"] = ({"done": True, "cell_m": OBJECT_CELL, "floor_margin_m": round(margin, 3), "max_height_m": OBJECT_MAX_HEIGHT} if metric
                            else {"done": False, "reason": "Object sizes need a measured scale."})

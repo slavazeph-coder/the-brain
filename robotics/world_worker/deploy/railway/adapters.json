@@ -4,7 +4,7 @@
     "label": "Multi-view spatial reconstruction (CPU)",
     "enabled": true,
     "license_reviewed": true,
-    "input_kinds": ["image", "video"],
+    "input_kinds": ["image", "video", "capture"],
     "max_inputs": 12,
     "timeout_seconds": 3600,
     "command": ["/opt/worker/bin/python", "/app/robotics/world_worker/sparse_colmap.py", "--input-manifest", "{input_manifest}"]

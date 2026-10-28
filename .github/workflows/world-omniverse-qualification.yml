@@ -1,0 +1,75 @@
+name: World Omniverse qualification
+on:
+  pull_request:
+    paths:
+      - 'robotics/world_worker/**'
+      - 'tests/world/**'
+      - '.github/workflows/world-omniverse-qualification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  omniverse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install USD test runtime
+        run: python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8
+      - name: Existing source and USD contracts
+        run: python -m unittest discover -s tests/world -p 'test_launch_extensions.py' -v
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/brainsnn-nvidia
+          key: nvidia-simready-653d91e182011f357cf1644013cc94ddf194d349-IV-pole-a01-v1
+      - name: Download pinned NVIDIA asset with source hashes checked
+        run: |
+          if [ ! -d /tmp/brainsnn-nvidia/IV_pole_a01 ]; then
+            python -m robotics.world_worker.nvidia_pack --workspace /tmp/brainsnn-nvidia
+          fi
+      - name: Verify cached bytes and inspect actual USD (not a physics run)
+        run: |
+          mkdir -p qualification/vendor
+          python - <<'PY'
+          import json, hashlib, shutil
+          from pathlib import Path
+          from pxr import Sdf, Usd, UsdGeom, UsdPhysics
+          root = Path('/tmp/brainsnn-nvidia')
+          receipt = json.loads((root / 'IV_pole_a01.receipt.json').read_text())
+          for item in receipt['files']:
+              p = root / item['path']
+              assert p.stat().st_size == item['size']
+              assert hashlib.sha256(p.read_bytes()).hexdigest() == item['sha256'], item['path']
+          folder = root / 'IV_pole_a01'
+          source = folder / receipt['root_usd']
+          s = Usd.Stage.Open(str(source))
+          assert s and s.GetDefaultPrim()
+          default = s.GetDefaultPrim()
+          summary = {'asset': receipt['asset'], 'files':len(receipt['files']), 'bytes':receipt['bytes'],
+                     'meters_per_unit':UsdGeom.GetStageMetersPerUnit(s), 'up_axis':str(UsdGeom.GetStageUpAxis(s)),
+                     'default_prim':str(default.GetPath()), 'variants':{},
+                     'colliders':sum(p.HasAPI(UsdPhysics.CollisionAPI) for p in s.Traverse()),
+                     'rigid_bodies':sum(p.HasAPI(UsdPhysics.RigidBodyAPI) for p in s.Traverse()),
+                     'physics_tested':False}
+          for name in default.GetVariantSets().GetNames():
+              v = default.GetVariantSet(name)
+              summary['variants'][name] = {'selected':v.GetVariantSelection(), 'choices':v.GetVariantNames()}
+          Sdf.Layer.FindOrOpen(str(source)).Export('qualification/vendor/root.usda')
+          shutil.copytree(folder / '.metadata', 'qualification/vendor/metadata')
+          shutil.copy(root / 'IV_pole_a01.receipt.json', 'qualification/vendor/download-receipt.json')
+          Path('qualification/vendor/usd-inspection.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
+          PY
+      - name: Retain exact source snapshot
+        if: always()
+        run: mkdir -p qualification && git archive --format=zip HEAD -o qualification/source.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: omniverse-qualification
+          path: qualification/
+          retention-days: 7
+          if-no-files-found: error
