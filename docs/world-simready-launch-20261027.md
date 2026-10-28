@@ -8,7 +8,9 @@ This is an implemented operator-side integration slice, not a claim that the ent
 - `robotics/world_worker/capture_evidence.py`: validate an explicit native-capture bundle, hashes, timing, calibration and rigid poses; convert ARKit camera-to-world poses to COLMAP camera-coordinate priors. It also estimates conservative paired-wall-surface candidates from reviewed point subsets.
 - `tests/world/test_launch_extensions.py`: 34 tests. Local run: 31 passed, 3 USD tests skipped because pxr was unavailable. The dedicated CI job installs usd-core and requires its import before running tests, so dependency absence cannot silently qualify the USD path.
 
-These modules are NOT yet wired into browser uploads, the main reconstruction solver, automatic segmentation or the existing scene compiler. The wall helper does not modify production wall geometry or repair its existing thickness labels. Native iPhone capture, GPU inference, detailed pipe/duct fitting and independent room measurements remain separate work.
+The follow-up integration connects a bounded native capture sidecar and its 3–11 original photos to the existing authenticated worker. Source-bound per-frame calibration is fixed during COLMAP matching/solving; native poses are used for checked post-solve alignment, explicitly not optimizer constraints. The scene compiler now evaluates conservative wall-surface candidates, retains unverified labels through IFC/Rhino/quantities, and invalidates evidence after geometry edits. Native phone apps, GPU inference, detailed pipe/duct fitting and independent room measurements remain separate work.
+
+The browser's ordinary video flow remains available. Existing native bundles can use `scripts/world-demo/native_capture_submit.py`; it validates every source before upload, requires `--consent`, reads the passcode from the environment or a hidden prompt, and verifies downloaded SHA-256 hashes. The production worker must be updated to an integration revision before this input kind is advertised.
 
 ## Live infrastructure checked
 
@@ -51,7 +53,7 @@ python -m robotics.world_worker.simready_bridge \
 
 Composition preserves the assets' authored transforms and colliders, adds an outer placement/basis transform, requires explicit metre units and Y/Z-up, and references copied package files. It refuses missing colliders, changed packages and external/escaping USD composition dependencies. It does not validate arbitrary shader/texture dependencies or replace an OS sandbox: use reviewed packages in an isolated no-network environment. No production endpoint should execute this against untrusted uploads.
 
-Defaults are authored colliders, no resizing, at most 16 unique assets and 64 placements. Convex hulls can close bins and openings; never apply them globally to a scanned room or container. The output keeps library provenance and physics_ready=false. No Isaac Sim simulation, 1,000-object stress test, NVIDIA asset benchmark, robot deployment or synthetic-label generation ran here.
+Defaults are authored colliders, no resizing, at most 16 unique assets and 64 placements. Convex hulls can close bins and openings; never apply them globally to a scanned room or container. Packages with reset transform stacks (including instance proxies) are rejected because they bypass outer placement. Convex-hull overrides on instanced assets are rejected. Outputs must be outside source packages. The output keeps library provenance and physics_ready=false. No Isaac Sim simulation, 1,000-object stress test, NVIDIA asset benchmark, robot deployment or synthetic-label generation ran here.
 
 ## Capture bundle contract
 
@@ -65,7 +67,15 @@ python -m robotics.world_worker.capture_evidence \
   --out /data/capture/validated-evidence.json
 ```
 
-The output contains COLMAP camera-coordinate pose priors but is not a COLMAP model or measured calibration. Integer-centre intrinsics remain explicitly labeled; the consuming solver must perform its pixel convention conversion. Estimated metre scale is never marked verified. A native capture app and solver integration still need implementation and physical qualification.
+The standalone validator outputs priors. The integrated worker consumes the original intrinsics with raster-resize and half-pixel conversion, fixes them in the real COLMAP solve, checks image-based fold consistency, and aligns solved cameras and points only if native pose residuals agree. Degenerate baselines, inconsistent attitudes/positions, lens distortion, skew and rotated EXIF rasters are rejected. The output includes `native-capture.json` bound by SHA-256; downstream units remain arbitrary and `metric_verified=false` until independent dimensional review. A native capture app and physical qualification remain outstanding.
+
+```sh
+python scripts/world-demo/native_capture_submit.py \
+  --bundle /data/capture/bundle.json --root /data/capture \
+  --site https://www.brainsnn.com --out /data/capture/result-001 --consent
+```
+
+The worker profile accepts 3–11 images and one JSON sidecar up to 1 MiB, within existing 12-input tenant/resource limits. Image names must exactly match unique uploaded basenames. No ZIP extraction or filesystem paths from metadata are accepted.
 
 ## Wall evidence
 
@@ -76,5 +86,9 @@ The output contains COLMAP camera-coordinate pose priors but is not a COLMAP mod
 1. Resolve custom-domain DNS/TLS and rerun public/authentication checks.
 2. Run the existing site_processing_check.py with the secret from the operator environment and a permitted short capture, including checksum-checked downloads. Do not print the secret.
 3. Execute the USD CI tests, then one reviewed NVIDIA package in the intended Isaac Sim version; measure actual colliders, memory and task behavior.
-4. Wire accepted capture evidence and detailed geometry into reconstruction without bypassing existing tenant, consent, resource and fold checks.
+4. Exercise the integrated native-capture path through the deployed authenticated service using original phone rasters and independently measured dimensions; synthetic solver tests do not qualify physical captures.
 5. Reopen actual IFC/Rhino exports after an approved edit and compare held-out room measurements. Keep sparse previews, learned completion, observed surfaces and library assets distinct.
+
+## Launch check behavior
+
+`site_processing_check.py` defaults to the working `www` domain, bounds each job with `--timeout`, requests cancellation on timeout or lost transport, refuses empty/unsafe/changed artifacts, and accepts reconstruction screening only when the fold check actually says `consistent`. Each video run writes `check-results.json` with input/output hashes and terminal results, never credentials. `--scene` runs only after reconstruction screening passes. This check does not certify metric exports or physical accuracy.

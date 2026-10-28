@@ -50,7 +50,7 @@ page, "Process on BrainSNN" then works with no worker address or token to type.
    To open processing to visitors later, add `WORLD_SITE_VISITORS=1` here only. Optionally also set
    `WORLD_SITE_VISITOR_JOBS_PER_DAY` (default 2) and `WORLD_SITE_VISITOR_JOBS_TOTAL` (default 20).
 5. **Check it.**
-   - Open `https://brainsnn.com/api/world/processing`. It should read `"available":true,"passcode":true`.
+   - Open `https://www.brainsnn.com/api/world/processing`. It should read `"available":true,"passcode":true`.
    - Then, on the World Builder page:
      1. Choose walkthrough video.
      2. Open "Process a walkthrough", then Process on BrainSNN.

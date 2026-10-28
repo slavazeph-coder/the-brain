@@ -50,6 +50,39 @@ class ReviewedOpenings(unittest.TestCase):
         self.assertEqual(scene['walls'][0]['size'], [4, 3, .2])
 
 
+    def test_usd_reopens_with_layer_metadata_cut_walls_points_and_unknown_space(self):
+        try:
+            from pxr import Usd, UsdGeom
+        except ImportError:
+            self.skipTest('usd-core is needed to parse and reopen the actual exported scene.')
+        import tempfile
+        # Cover nested dictionaries/prims and escaped strings, not a substring-only serialization check.
+        wall = {**self.wall, 'componentId': 'source-wall', 'label': 'North "wall"'}
+        scene = {'schema': 'brainsnn.scene.v1', 'units': 'm', 'floor_y': .5,
+                 'objects': [{'name': 'object-1', 'centre': [1, 1, 1], 'size': [1, 1, 1],
+                              'label': 'chair', 'provenance': 'detected'}], 'walls': [wall],
+                 'unknown': [[0, 0, .5]], 'openings': [{**self.opening, 'kind': 'door'}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'scene.usda'
+            sc.write_usda(path, scene, [[0, 1, 2, 10, 20, 30]])
+            stage = Usd.Stage.Open(str(path))
+            self.assertTrue(stage)
+            self.assertEqual(stage.GetDefaultPrim().GetPath().pathString, '/World')
+            self.assertEqual(stage.GetRootLayer().customLayerData, {'schema': 'brainsnn.scene.v1', 'units': 'm'})
+            self.assertEqual(UsdGeom.GetStageMetersPerUnit(stage), 1)
+            self.assertEqual(UsdGeom.GetStageUpAxis(stage), 'Y')
+            cut = stage.GetPrimAtPath('/World/wall_1_part_1')
+            self.assertEqual(cut.GetAttribute('componentId').Get(), 'source-wall')
+            self.assertEqual(cut.GetAttribute('label').Get(), 'North "wall"')
+            self.assertEqual(stage.GetPrimAtPath('/World/object_1').GetAttribute('provenance').Get(), 'detected')
+            self.assertTrue(stage.GetPrimAtPath('/World/door_reference_1'))
+            self.assertEqual(stage.GetPrimAtPath('/World/unknown_space').GetAttribute('provenance').Get(), 'unknown')
+            points = UsdGeom.Points(stage.GetPrimAtPath('/World/observed_points')).GetPointsAttr().Get()
+            self.assertEqual(tuple(points[0]), (0, 1, 2))
+            saved = Path(tmp) / 'saved.usda'; self.assertTrue(stage.GetRootLayer().Export(str(saved)))
+            self.assertTrue(Usd.Stage.Open(str(saved)))
+
+
 def wall_cloud(yaw_deg, length=6.0, height=3.0, n=4000, seed=1):
     rng = random.Random(seed); ca, sa = math.cos(math.radians(yaw_deg)), math.sin(math.radians(yaw_deg))
     pts = []
@@ -147,8 +180,33 @@ class WallPlacement(unittest.TestCase):
     def test_a_thin_wall_seen_from_both_sides_keeps_its_centre_between_the_faces(self):
         _, walls, _, _ = sc.analyse(faces_cloud([-3.0, -2.92]), 0.0, True)
         self.assertEqual(len(walls), 1); w = walls[0]
-        self.assertTrue(w["thicknessMeasured"]); self.assertIsNone(w["face"])
+        self.assertFalse(w["thicknessMeasured"]); self.assertTrue(w["thicknessCandidate"]); self.assertIsNone(w["face"])
+        self.assertAlmostEqual(w["thickness"], .08, delta=.01)
         self.assertAlmostEqual(w["centre"][1], -2.96, delta=.02)
+        self.assertEqual(w["wallEvidence"]["status"], "two-surface-candidate")
+        self.assertFalse(w["wallEvidence"]["physical_two_sides_verified"])
+        self.assertFalse(w["wallEvidence"]["subset_reviewed"])
+        self.assertGreaterEqual(w["wallEvidence"]["matched_cells"], 6)
+
+    def test_a_broad_noisy_single_face_is_never_called_measured_or_two_sided(self):
+        pts = faces_cloud([-3.0]); rng = random.Random(20)
+        for p in pts[:2500]:
+            p[2] += rng.gauss(0, .055)
+        _, walls, _, _ = sc.analyse(pts, 0.0, True)
+        self.assertEqual(len(walls), 1)
+        wall = walls[0]
+        self.assertFalse(wall["thicknessMeasured"])
+        self.assertFalse(wall["thicknessCandidate"])
+        self.assertEqual(wall["thickness"], .1)
+        self.assertEqual(wall["wallEvidence"]["status"], "insufficient-evidence")
+        self.assertIn("assumed", wall["thicknessBasis"])
+
+    def test_unscaled_and_small_subsets_do_not_create_metric_candidates(self):
+        _, walls, _, _ = sc.analyse(faces_cloud([-3.0, -2.92]), 0.0, False)
+        self.assertFalse(any(w["thicknessCandidate"] for w in walls))
+        self.assertTrue(all(w["wallEvidence"]["thickness_m"] is None for w in walls))
+        evidence = sc.wall_surface_evidence([[0, 0, 0]] * 59, [0, 0], [0, 1], [1, 0])
+        self.assertEqual(evidence["status"], "insufficient-evidence")
 
     def test_the_two_faces_of_a_partition_each_stand_toward_the_other(self):
         # Faces 20 cm apart are found as two walls; the far one was seen from the far side, not from this room.

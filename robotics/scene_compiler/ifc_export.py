@@ -14,8 +14,10 @@ from pathlib import Path
 
 try:
     from .component_graph import ensure_component_ids, derive_id
+    from .wall_evidence import thickness_properties
 except ImportError:  # Blender/script entry points expose this directory directly.
     from component_graph import ensure_component_ids, derive_id
+    from wall_evidence import thickness_properties
 
 IFC_NEEDS_METRES = ("BIM tools read IFC in metres, and this cloud is in arbitrary units, so no scene.ifc was written. "
                     "Set a measured scale in World Builder and build a metric scene.")
@@ -220,7 +222,7 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         seed = wall['componentId']
         wall_label = wall.get('label') if wall.get('label') not in (None, 'wall') else wall.get('name', 'wall')
         element = w.add(f"IFCWALL('{ifc_guid(seed)}',$,{label(wall_label)},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
-        properties(element, seed, {**lineage(wall), 'ComponentId': seed, 'SourceSha256': source_sha256,
+        properties(element, seed, {**lineage(wall), **thickness_properties(wall), 'ComponentId': seed, 'SourceSha256': source_sha256,
                                    'ElementName': wall.get('name'), 'Provenance': wall.get('provenance', 'observed'),
                                    'Label': wall.get('label', 'wall'), 'LabelProvenance': wall.get('labelProvenance'),
                                    'SupportPoints': wall.get('support_points')})

@@ -379,7 +379,8 @@ def apply_edits(scene, contract):
             item.pop('max', None)
             # Where the compiler put the box against the face it saw; no longer true of the edited box.
             item.pop('faceCentre', None)
-            item.pop('thicknessBasis', None)
+            for key in ('thicknessBasis', 'thicknessMeasured', 'thicknessCandidate', 'wallEvidence'):
+                item.pop(key, None)
             if item != before:
                 _authored_geometry(item, edit, 'observed')
         elif operation == 'opening':

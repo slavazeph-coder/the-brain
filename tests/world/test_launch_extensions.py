@@ -107,6 +107,23 @@ class UsdTests(Fixtures,unittest.TestCase):
     def test_reject_absent_colliders(self):
         r=self.records()
         with self.assertRaises(ValueError): b.compose(b.plan(r,self.placements(r)),self.root,self.root/'out')
+    def test_reject_reset_transform_stack(self):
+        from pxr import Usd,UsdGeom
+        self.authored()
+        s=Usd.Stage.Open(str(self.root/'bin/bin.usda'))
+        for path in ['/Bin', '/Bin/Body']:
+            UsdGeom.Xformable(s.GetPrimAtPath(path)).SetResetXformStack(True)
+            s.GetRootLayer().Save()
+            r=self.records()
+            with self.subTest(path=path),self.assertRaisesRegex(ValueError,'Reset transform'):
+                b.compose(b.plan(r,self.placements(r)),self.root,self.root/'out')
+            self.assertFalse((self.root/'out').exists())
+            UsdGeom.Xformable(s.GetPrimAtPath(path)).SetResetXformStack(False)
+    def test_output_cannot_recurse_into_source(self):
+        self.authored(); r=self.records()
+        with self.assertRaisesRegex(ValueError,'outside every source'):
+            b.compose(b.plan(r,self.placements(r)),self.root,self.root/'bin/out')
+        self.assertFalse((self.root/'bin/out').exists())
 
 class CaptureTests(unittest.TestCase):
     def setUp(self):
