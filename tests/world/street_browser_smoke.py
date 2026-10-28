@@ -47,6 +47,47 @@ def close_drawer(street, name):
         expect(panel).not_to_have_class(re.compile(r"\bopen\b"))
 
 
+def dialog_diagnostics(page):
+    """Record viewport geometry and actual hit testing without moving the UI."""
+    return page.evaluate("""() => {
+      const host=document.getElementById('street-mount'), root=host?.shadowRoot;
+      const label=el=>el ? el.localName+(el.id?'#'+el.id:'') : null;
+      const bounds=el=>{
+        if(!el)return null;
+        const r=el.getBoundingClientRect();
+        return {x:r.x,y:r.y,top:r.top,right:r.right,bottom:r.bottom,left:r.left,width:r.width,height:r.height};
+      };
+      const describe=el=>{
+        if(!el)return null;
+        const style=getComputedStyle(el);
+        return {element:label(el),bounds:bounds(el),scrollTop:el.scrollTop,scrollLeft:el.scrollLeft,
+          styles:Object.fromEntries(['display','position','overflowX','overflowY','contain','isolation','zIndex','pointerEvents','transform'].map(key=>[key,style[key]]))};
+      };
+      const hitTest=el=>{
+        if(!el)return null;
+        const r=el.getBoundingClientRect(), x=r.left+r.width/2, y=r.top+r.height/2;
+        const path=[];
+        let scope=document;
+        for(let depth=0;scope&&depth<8;depth++){
+          const hit=scope.elementFromPoint?.(x,y);
+          path.push(label(hit));
+          if(!hit?.shadowRoot||hit.shadowRoot===scope)break;
+          scope=hit.shadowRoot;
+        }
+        return {x,y,path,
+          documentStack:[...document.elementsFromPoint(x,y)].map(label),
+          shadowStack:root?.elementsFromPoint ? [...root.elementsFromPoint(x,y)].map(label) : null};
+      };
+      const dialog=root?.querySelector('#export-dialog'), close=root?.querySelector('#export-close'), json=root?.querySelector('#export-json');
+      return {viewport:{width:innerWidth,height:innerHeight,scrollX,scrollY},frame:bounds(window.frameElement),
+        host:describe(host),surface:describe(root?.querySelector('.street-surface')),
+        dialog:describe(dialog),close:describe(close),json:describe(json),prepared:describe(root?.querySelector('#prepared-download')),
+        open:dialog?.open,modal:dialog?.matches(':modal'),
+        activeElement:label(document.activeElement),shadowActiveElement:label(root?.activeElement),
+        closeHit:hitTest(close),jsonHit:hitTest(json)};
+    }""")
+
+
 def receipt(page, view, *, name, errors, detail=None):
     """Keep DOM diagnostics with both successful and failing CI runs."""
     result = {"browser": name, "errors": errors, "detail": detail or {}}
@@ -64,6 +105,7 @@ def receipt(page, view, *, name, errors, detail=None):
             parentTabs:[...document.querySelectorAll('.sandbox-tools [data-tab]')].map(b=>({tab:b.dataset.tab,selected:b.getAttribute('aria-selected')})),
             sources:document.getElementById('sandbox-source-count')?.textContent};
         }""")
+        result["dialog"] = dialog_diagnostics(page)
         view.screenshot(path=str(OUTPUT / (name + ".png")), full_page=True)
     except Exception as error:
         result["diagnosticError"] = type(error).__name__
@@ -145,6 +187,7 @@ def check_integrated(browser, mobile=False):
         assert street.locator("#prepared-download").get_attribute("href").startswith("blob:")
         detail["exportSHA256"] = hashlib.sha256(export.read_bytes()).hexdigest()
         detail["editedBarrier"] = barrier["transform"]
+        detail["preparedDialog"] = dialog_diagnostics(page)
         street.locator("#export-close").click()
         expect(page.locator(".sandbox-tools #tab-understand")).to_have_attribute("aria-selected", "true")
         assert not uploads, "Local editing and capture handoff sent an unexpected upload"
