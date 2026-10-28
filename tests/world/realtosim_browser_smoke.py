@@ -163,9 +163,10 @@ def calibrate(page, mobile, label):
     page.locator('[data-tab=capture]').click()
     page.locator('[data-action=pick-scale]').click()
     assert page.locator('[data-action=pick-scale]').get_attribute('aria-pressed') == 'true'
-    # The page scrolls smoothly; an animating scroll would move the canvas under the taps. Jump, then wait until still.
-    page.locator('#visual-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
+    # Picking brings the canvas into view. Wait for that product scroll; do not scroll it here on the user's behalf.
     page.evaluate(SCROLL_SETTLED)
+    assert page.locator('#visual-canvas').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}'), page.evaluate(VISIBLE_POINT_TARGETS)
+    assert 'Selected points turn cyan' in page.locator('#scene-help').inner_text()
     trail = []
     # Tap where points are actually drawn, as a person would: lit pixels of the rendered cloud (the WebGL canvas
     # preserves its drawing buffer). One end on the left of the cloud, then the other on the right.
@@ -186,6 +187,8 @@ def calibrate(page, mobile, label):
             page.screenshot(path=str(OUTPUT / f'{label}-calibration-failed.png'), full_page=True)
         assert page.evaluate(done), {'side': side, 'statuses': trail, 'targets': targets, 'zoom': page.evaluate('visualViewport.scale')}
     assert 'Enter the distance you measured' in page.locator('#status').inner_text()
+    page.evaluate(SCROLL_SETTLED)
+    assert page.locator('#measured-distance').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}')
     page.screenshot(path=str(OUTPUT / f'{label}-calibration.png'))
     span = float(page.locator('#picked-span').inner_text().split(':')[1].split()[0])
     # The fixture's true metric distance between any two of its points is the COLMAP span divided by K.

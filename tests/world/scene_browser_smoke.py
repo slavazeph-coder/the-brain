@@ -29,6 +29,28 @@ FACTS = ['Observed: 0 reconstructed points, the floor and 1 wall.',
          'Unknown: 1 floor cell no point reached, kept as a tagged volume, never free space.',
          'Units: arbitrary reconstruction units. No measured scale, so sizes are relative.']
 
+CANVAS_GEOMETRY = """() => {
+    const c = document.querySelector('#visual-canvas'), r = c.getBoundingClientRect();
+    return {rect: [r.left, r.top, r.width, r.height], buffer: [c.width, c.height],
+            viewport: [innerWidth, innerHeight], scroll: [scrollX, scrollY],
+            status: document.querySelector('#status').textContent,
+            pick: document.querySelector('[data-action=pick-dimension]')?.textContent};
+}"""
+
+
+def check_canvas_stability(page):
+    """Additional sidebar controls must not resize or reproject the reconstruction."""
+    page.locator('#visual-canvas').wait_for(state='visible')
+    page.evaluate(SCROLL_SETTLED)
+    before = page.evaluate(CANVAS_GEOMETRY)
+    options = page.locator('.native-capture-options')
+    options.locator('summary').click()
+    page.evaluate(SCROLL_SETTLED)
+    expanded = page.evaluate(CANVAS_GEOMETRY)
+    assert before['rect'][2:] == expanded['rect'][2:], {'before': before, 'expanded': expanded}
+    assert expanded['rect'][3] <= max(425, expanded['viewport'][1]), expanded
+    options.locator('summary').click()
+
 
 def calibrate(page, mobile, label):
     try:
@@ -192,7 +214,7 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
     mobile = name == 'webkit' or phone
     view_name = name + ('-phone' if phone else '')
     context = browser.new_context(viewport={'width': 390, 'height': 844} if mobile else {'width': 1440, 'height': 1000}, has_touch=mobile)
-    page = context.new_page(); errors, jobs = [], []
+    page = context.new_page(); errors, jobs, picks = [], [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('request', lambda request: jobs.append(request.post_data_json) if request.method == 'POST' and request.url.endswith('/v1/jobs') else None)
     try:
@@ -205,20 +227,35 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
         calibrate(page, mobile, f'bim-review-{view_name}')
         page.locator('[data-tab=capture]').click()
         page.locator('[data-action=pick-dimension]').wait_for()
+        check_canvas_stability(page)
         # Try points inside the visible core, distinct from the outer pair used by the calibration smoke.
         accepted = False
         for pick in (2, 3, 1):
             page.locator('[data-action=pick-dimension]').click()
-            page.locator('#visual-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
             page.evaluate(SCROLL_SETTLED)
-            targets = page.evaluate(VISIBLE_POINT_TARGETS)
-            assert targets['left'] and targets['right'], targets
+            assert page.locator('#visual-canvas').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}'), page.evaluate(CANVAS_GEOMETRY)
+            assert 'Selected points turn cyan' in page.locator('#scene-help').inner_text()
+            page.screenshot(path=str(OUTPUT / f'bim-picking-{view_name}.png'))
             for side in ('left', 'right'):
+                # A control update can move the page on a phone. Pick the pixels currently drawn,
+                # and verify the first pick before attempting the second one.
+                page.evaluate(SCROLL_SETTLED)
+                targets = page.evaluate(VISIBLE_POINT_TARGETS)
+                assert targets[side], targets
                 x, y = targets[side][pick]
+                before = page.evaluate(CANVAS_GEOMETRY)
                 if mobile: page.touchscreen.tap(x, y)
                 else: page.mouse.click(x, y)
-                page.wait_for_timeout(200)
-            page.locator('#dimension-distance').wait_for()
+                page.evaluate(SCROLL_SETTLED)
+                after = page.evaluate(CANVAS_GEOMETRY)
+                picks.append({'side': side, 'target': [x, y], 'before': before, 'after': after})
+                assert before['rect'][2:] == after['rect'][2:], picks[-1]
+                if side == 'left':
+                    assert before['rect'] == after['rect'], picks[-1]
+                    assert '1 of 2 points' in after['pick'], picks[-1]
+                else:
+                    assert page.locator('#dimension-distance').count() == 1, picks[-1]
+                    assert page.locator('#dimension-distance').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}'), picks[-1]
             page.locator('#dimension-label').fill('Synthetic withheld span')
             page.locator('#dimension-distance').fill('100')
             page.locator('#dimension-uncertainty').fill('0.005')
@@ -281,6 +318,12 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
         page.wait_for_function("/active reconstruction or scale differs/.test(document.querySelector('#scene-status').textContent)")
         assert len(jobs) == 2, 'a stale review must not start another worker job'
         assert not errors, errors
+    except Exception:
+        diagnostics = {'picks': picks, 'current': page.evaluate(CANVAS_GEOMETRY), 'errors': errors}
+        print('Dimensional review UI diagnostics:', json.dumps(diagnostics), file=sys.stderr, flush=True)
+        (OUTPUT / f'bim-review-{view_name}-failure.json').write_text(json.dumps(diagnostics, indent=2))
+        page.screenshot(path=str(OUTPUT / f'bim-review-{view_name}-failure.png'), full_page=True)
+        raise
     finally:
         browser.close()
 
