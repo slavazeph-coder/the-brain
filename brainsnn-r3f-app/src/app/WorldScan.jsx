@@ -112,7 +112,8 @@ export function WorldScan() {
     setHandoffBusy(true);
     setError('');
     try {
-      const { stageLocalCapture, clearLocalCapture } = await import(/* @vite-ignore */ '/world/capture-handoff.mjs');
+      const moduleUrl = new URL('/world/capture-handoff.mjs', window.location.origin).href;
+      const { stageLocalCapture, clearLocalCapture } = await import(/* @vite-ignore */ moduleUrl);
       const id = await stageLocalCapture(files, { goal });
       if (chosen !== selection.current) { await clearLocalCapture(id); return; }
       track('world_capture_local_handoff', { goal, count: files.length, kind: files.some(isVideo) ? 'video' : 'photos' });
