@@ -11,6 +11,7 @@ import {DETECTOR} from './detections.mjs';
 import {importWorld} from './import-world.mjs';
 import {createObservationReview} from './observation-ui.mjs';
 import {createCaptureClient} from './capture-client.mjs';
+import {parseHandoffHash, readLocalCapture, clearLocalCapture} from './capture-handoff.mjs';
 import {readNativeCapture,prepareNativeCapture,NATIVE_CAPTURE} from './native-capture.mjs';
 import {createMeasurementReview} from './measurement-ui.mjs';
 import {createBimWorkflow} from './bim-workflow-ui.mjs';
@@ -532,6 +533,34 @@ $('scene-plan').onclick=async()=>{try{if(!sceneMap)return;const {worldFromScene}
 window.addEventListener('pagehide',e=>{nativeCheckAbort?.abort();nativeCheckAbort=null;cancelConnection();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();capture.stop({discard:true});stopReplay();planner?.terminate();planner=null;planning=false;remoteAbort?.abort();remoteAbort=null;clearTimeout(poll);if(e.persisted)return;observations.clear();visualViewer?.destroy();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;sources.forEach(s=>URL.revokeObjectURL(s.url));renderer?.destroy();});
 window.addEventListener('pageshow',e=>{if(!e.persisted)return;renderPanel();renderMedia();update();if(job&&client&&!['complete','failed','cancelled'].includes(job.status)){remoteAbort=new AbortController();void checkJob(remoteAbort.signal).catch(error=>{remoteAbort=null;status('Could not resume job status: '+error.message,true);});}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopReplay();capture.stop();}});
+// One-time same-origin handoff from /scan. The fragment does not enter HTTP requests.
+// Importing a File is not worker consent; the operator still must check the upload box.
+async function receiveCaptureHandoff() {
+  const id=parseHandoffHash(location.hash);
+  if (!id) return;
+  setTab('capture');
+  status('Opening your private capture from this browser…');
+  let alreadyLoaded=false;
+  try {
+    const record=await readLocalCapture(id);
+    if (!record) throw new Error('The local transfer expired, was cleared, or belongs to another browser.');
+    const previous=sources.length;
+    await addFiles(record.files);
+    const imported=sources.length-previous;
+    if (imported!==record.files.length) throw new Error('Some selected files could not be opened.');
+    alreadyLoaded=true;
+    await clearLocalCapture(id);
+    event('local_capture_handoff_received',{goal:record.goal,files:imported});
+    status(`Loaded ${imported} local capture file${imported===1?'':'s'} from Capture Studio. No upload was made. To reconstruct, connect a worker and explicitly approve processing.`);
+  } catch (error) {
+    status((alreadyLoaded?'Your file opened, but its temporary browser copy could not be deleted. Clear site storage if it contains sensitive media. ':'Private handoff unavailable. Open the file picker and choose the original media again. ')+(error?.message||'Local storage failed.'),true);
+  } finally {
+    // No personal file details or local transfer token remain in browser history.
+    history.replaceState(history.state,'',location.pathname+location.search+'#workspace');
+    setTab('capture');
+  }
+}
 renderer?.setWorld(world);renderInspector();setTab('world');renderSystems();update();void loadSiteProcessing();
+void receiveCaptureHandoff();
 // Arriving from the homepage's install button: show the iOS steps on the page they apply to.
 if(new URLSearchParams(location.search).has('install')&&!standalone())void installApp();
