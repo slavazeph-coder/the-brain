@@ -28,3 +28,16 @@ SimReady imports reject reset transform stacks including instance proxies, unsaf
 Working public URL is https://www.brainsnn.com/world/ (TLS valid, health and processing200, unauthenticated capabilities401). Apex brainsnn.com still points to GoDaddy and returns404 on deep links; GoDaddy browser access is signed out. Railway connector works but redacts passcode; local CLI is unauthorized. User was asked to refresh local railway login, never paste secrets. Authenticated live reconstruction remains pending.
 
 Website follows main. Worker follows deploy/world-worker-20261027 with worker-specific root railway.toml; preserve that config and WORLD_WORKER_HOST=0.0.0.0. Do not merge worker root config into main.
+
+
+## October 28 follow-up — browser capture and real NVIDIA composition
+
+User requested finishing the launch through the Railway and GoDaddy plugins. Both production deployments from PR #253 remain healthy. Railway OAuth still redacts variable values; local CLI is unauthorized. GoDaddy plugin exposes only domain search, and Safari is at sign-in. The user was asked to sign in to GoDaddy and run `railway login`; no credentials were replaced and no DNS changed.
+
+The browser now recognizes native capture metadata, offers a calibrated-capture picker, checks exact original image hashes locally before uploading, and sends JSON plus photos through existing capabilities/consent/authentication. Missing/changed inputs send zero uploads. Chromium and WebKit mobile-sized flows passed against a real authenticated local worker and actual COLMAP with the synthetic known-camera room. All 139 JS tests, app typecheck and production build passed. These are synthetic software tests, not physical phone qualification.
+
+The native submission CLI requires source-bound native evidence, a consistent fold check, nonempty finite sparse geometry and a valid camera ledger, with matching original sources and hashes. A failed submission keeps a credential-free receipt and last observed job ID/status; cancellation is requested on timeout. Focused review caught and closed absent geometry, lost timeout receipt and invalid camera source-index acceptance.
+
+The real pinned NVIDIA IV_pole_a01 package contains 16 enabled colliders inside instance proxies (the old inspection counted zero). All 118 files / 421,351,635 bytes were checked against the immutable upstream tree. Two relocated placements preserve 32 colliders, 32 rigid bodies and 30 joints; their active dependencies stay in the portable package. The qualifier checks requested placement, source containment before writes, unchanged package bytes and attribution. Independent artifact rehash/reopen passed. No Isaac/PhysX dynamics were run; physics readiness and metric verification remain false.
+
+A read-only preflight reached the existing RTX 4090 and confirmed its expected identity; it is idle with ample space but has no Isaac/Omniverse runtime or NVIDIA Vulkan ICD in this container. It remains separate from the working private CPU production worker. Native phone app, real captures with held-out dimensions, apex routing and Isaac simulation remain open; do not call the full launch physically qualified.

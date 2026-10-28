@@ -78,3 +78,33 @@ def test_hull_policy_on_instance_is_rejected_before_copy(tmp_path):
     with pytest.raises(ValueError, match='[Ii]nstan'):
         bridge.compose(plan, tmp_path, tmp_path / 'out')
     assert not (tmp_path / 'out').exists()
+
+
+@pytest.mark.parametrize('sampled', [False, True])
+@pytest.mark.parametrize('asset_path', ['missing.png', '../outside.png'])
+def test_missing_or_escaping_material_asset_inside_proxy_is_rejected(tmp_path, sampled, asset_path):
+    from pxr import Sdf
+    plan = instance_plan(tmp_path)
+    source = tmp_path / 'bin/bin.usda'
+    stage = Usd.Stage.Open(str(source))
+    attr = stage.GetPrimAtPath('/Template/Piece').CreateAttribute('texture', Sdf.ValueTypeNames.Asset)
+    # An active instance proxy's material references were previously outside the dependency audit.
+    (tmp_path / 'outside.png').write_bytes(b'outside the reviewed package')
+    attr.Set(Sdf.AssetPath(asset_path), 1 if sampled else Usd.TimeCode.Default())
+    stage.GetRootLayer().Save()
+    plan['placements'][0]['asset']['receipt'] = bridge.receipt(tmp_path / 'bin')
+    with pytest.raises(ValueError, match='missing or escapes'):
+        bridge.compose(plan, tmp_path, tmp_path / 'out')
+    assert not (tmp_path / 'out').exists()
+
+
+def test_remote_material_asset_is_rejected_even_with_authored_collider(tmp_path):
+    from pxr import Sdf
+    plan = instance_plan(tmp_path)
+    stage = Usd.Stage.Open(str(tmp_path / 'bin/bin.usda'))
+    stage.GetPrimAtPath('/Template/Piece').CreateAttribute('texture', Sdf.ValueTypeNames.Asset).Set(Sdf.AssetPath('https://example.invalid/file.png'))
+    stage.GetRootLayer().Save()
+    plan['placements'][0]['asset']['receipt'] = bridge.receipt(tmp_path / 'bin')
+    with pytest.raises(ValueError, match='Remote or absolute'):
+        bridge.compose(plan, tmp_path, tmp_path / 'out')
+    assert not (tmp_path / 'out').exists()

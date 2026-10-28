@@ -24,16 +24,18 @@ def test_timeout_requests_cancellation(monkeypatch):
     monkeypatch.setattr(check.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(check.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
     calls = []
+    observed = []
 
     class Site:
         def json(self, method, path, *args, **kwargs):
             calls.append((method, path))
-            return {'id': 'job', 'status': 'running'}
+            return {'id': 'job', 'status': 'queued' if method == 'POST' else 'running'}
 
     with pytest.raises(RuntimeError, match='exceeded'):
-        check.run_job(Site(), 'colmap-sparse', 'upload', poll=5, timeout=10)
+        check.run_job(Site(), 'colmap-sparse', 'upload', poll=5, timeout=10, on_job=lambda job: observed.append(job['status']))
     assert ('DELETE', '/api/world/worker/v1/jobs/job') in calls
     assert clock[0] == 10
+    assert observed == ['queued', 'running', 'running']
 
 
 def test_transport_timeout_also_cancels_known_job(monkeypatch):

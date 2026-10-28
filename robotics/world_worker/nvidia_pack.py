@@ -139,6 +139,52 @@ def download(asset: str, workspace: Path, opener=open_url) -> dict:
     return result
 
 
+
+def verify_download(asset: str, workspace: Path, opener=open_url) -> dict:
+    """Recheck a cached package against the immutable source tree, not its mutable local receipt."""
+    from .simready_bridge import local, file_hash
+    workspace = workspace.resolve()
+    folder = local(workspace, asset, directory=True)
+    rows = listing(asset, opener)
+    expected_paths = {row['path'] for row in rows}
+    actual_paths = set()
+    for path in folder.rglob('*'):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ValueError('Cached NVIDIA package contains a non-regular entry.')
+        if path.is_file():
+            actual_paths.add(path.relative_to(workspace).as_posix())
+    if actual_paths != expected_paths:
+        raise ValueError('Cached NVIDIA package file set differs from the pinned source tree.')
+    receipts = []
+    for row in rows:
+        path = local(workspace, row['path'])
+        if path.stat().st_size != row['size']:
+            raise ValueError('Cached NVIDIA file size differs from the pinned source: ' + row['path'])
+        digest = file_hash(path)
+        source_hash = row.get('lfs', {}).get('oid')
+        if source_hash:
+            valid = digest == source_hash
+        else:
+            git = hashlib.sha1(f"blob {row['size']}\0".encode())
+            with path.open('rb') as stream:
+                for block in iter(lambda: stream.read(1024**2), b''):
+                    git.update(block)
+            valid = git.hexdigest() == row['oid']
+        if not valid:
+            raise ValueError('Cached NVIDIA file hash differs from the pinned source: ' + row['path'])
+        receipts.append({'path': row['path'], 'size': row['size'], 'sha256': digest})
+    manifest = json.loads((folder / 'com.nvidia.simready.packaging.json').read_text())
+    if manifest.get('license') != 'CC-BY-4.0' or not str(manifest.get('package_id', '')).startswith(f'simready.hf.nvidia.simready-assets.{asset}.'):
+        raise ValueError('NVIDIA package identity or license requires renewed review.')
+    local(folder, '.metadata/LICENSE.txt')
+    return {'schema': 'brainsnn.nvidia-download.v1', 'asset': asset, 'repo': REPO, 'revision': REVISION,
+            'source_url': f'https://huggingface.co/datasets/{REPO}/resolve/{REVISION}/{asset}/com.nvidia.simready.packaging.json',
+            'package_id': manifest['package_id'], 'root_usd': package_root(folder).relative_to(folder).as_posix(),
+            'license': manifest['license'], 'author': 'NVIDIA', 'files': receipts,
+            'bytes': sum(item['size'] for item in receipts), 'file_hashes_checked': True,
+            'source_tree_rechecked': True, 'physics_tested': False}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0]); p.add_argument('--asset', choices=ASSETS, default='IV_pole_a01')
     p.add_argument('--workspace', type=Path, required=True); a = p.parse_args()
