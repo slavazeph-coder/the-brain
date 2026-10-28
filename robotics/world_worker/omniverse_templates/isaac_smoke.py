@@ -1,6 +1,7 @@
 """Run with Isaac Sim's python.sh. Bounded CPU-physics smoke, not a robot trial."""
 from pathlib import Path
-import argparse,json,time
+import argparse,json,time,sys
+sys.dont_write_bytecode=True
 from verify_pack import verify
 p=argparse.ArgumentParser();p.add_argument('--steps',type=int,default=120);p.add_argument('--out',type=Path,required=True)
 a=p.parse_args()

@@ -48,7 +48,7 @@ class Client:
             if j['status']!='complete':raise RuntimeError(f'{engine}: {j["status"]}')
             return j
         except Exception:
-            try:self.json(f'/api/world/worker/v1/jobs/{jid}/cancel',body={})
+            try:self.json(f'/api/world/worker/v1/jobs/{jid}',method='DELETE')
             except Exception:pass
             raise
     def artifacts(self,job):

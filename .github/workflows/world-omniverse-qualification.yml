@@ -27,9 +27,13 @@ jobs:
       - name: Source, package and real HTTP contracts
         run: |
           python -m unittest discover -s tests/world -p 'test_launch_extensions.py' -v
-          python -m unittest discover -s tests/world -p 'test_omniverse_pack.py' -v
-          python -m unittest discover -s tests/world -p 'test_omniverse_http.py' -v
+          python -m unittest discover -s tests/world -p 'test_omniverse*.py' -v
           node --test tests/world/omniverse-ui.test.mjs
+      - name: Chromium review/export UI with explicit mock transport
+        run: |
+          python -m pip install playwright==1.64.0
+          python -m playwright install --with-deps chromium
+          python tests/world/omniverse_browser_smoke.py
       - uses: actions/cache@v4
         with:
           path: /tmp/brainsnn-nvidia

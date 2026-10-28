@@ -12,6 +12,8 @@ export function packageRequest({sceneSha,cloudSha,reviewed,asset,position=[0,0,0
 }
 export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
   const client=context.sourceClient,caps=client.caps;
+  // The hosted visitor proxy intentionally does not authorize this engine.
+  if(client.site&&caps?.owner_id==='site-visitors')return ()=>{};
   if(!caps?.engines?.some(e=>e.id==='omniverse-pack'&&e.available))return ()=>{};
   const section=el('section');section.id='scene-omniverse';section.className='dimension-card';
   section.append(el('h3','Export an Omniverse pack'),el('p','Your metric scene plus optional NVIDIA library assets. Library additions are not observations from the scan. Original BIM/CAD exports remain unchanged.'));
@@ -32,14 +34,14 @@ export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
   const selected=()=>assets.find(a=>a.asset===select.value);
   const render=()=>{const a=selected();inputs.forEach(n=>n.disabled=!a);license.disabled=physics.disabled=!a;detail.textContent=a?`${a.author} · ${a.license}. Historical failed features: ${(a.upstream_failed_features||[]).join(', ')||'none reported here'}. No Isaac Sim execution is claimed.`:(caps.simready_error||'A source-only package contains no NVIDIA library assets.');};
   select.onchange=()=>{license.checked=physics.checked=false;render();};render();
-  async function stop(){controller?.abort();if(jobId){const id=jobId;jobId=null;await client.request(`/v1/jobs/${id}/cancel`,{method:'POST'}).catch(()=>{});}}
-  cancel.onclick=()=>{void stop();message.textContent='Package cancellation requested.';};
+  async function stop(){controller?.abort();if(jobId){const id=jobId;await client.request(`/v1/jobs/${id}`,{method:'DELETE'});if(jobId===id)jobId=null;}}
+  cancel.onclick=async()=>{try{await stop();message.textContent='Package cancellation confirmed.';}catch(error){message.textContent='Could not confirm cancellation: '+error.message;}};
   button.onclick=async()=>{
     if(controller)return;
     try{
       if(!valid()||context.dirty)throw Error('Reopen the matching compiled scene; save or discard pending BIM edits before packaging.');
       const cloudArtifact=context.artifacts.find(a=>a.name==='arena-cloud.json');
-      const request=packageRequest({sceneSha,cloudSha:cloudArtifact?.sha256,reviewed:review.checked,asset:selected(),position:inputs.slice(0,3).map(i=>Number(i.value)),yaw:Number(inputs[3].value),licenseReviewed:license.checked,physicsReviewed:physics.checked});
+      const request=packageRequest({sceneSha,cloudSha:cloudArtifact?.sha256,reviewed:review.checked,asset:selected(),position:inputs.slice(0,3).map(i=>i.value===''?NaN:Number(i.value)),yaw:inputs[3].value===''?NaN:Number(inputs[3].value),licenseReviewed:license.checked,physicsReviewed:physics.checked});
       const data=structuredClone(context.cloud);data.omniversePack=request;
       controller=new AbortController();const signal=controller.signal;button.disabled=true;cancel.hidden=false;links.replaceChildren();
       const file=new File([JSON.stringify(data)],'omniverse-request.json',{type:'application/json'});
@@ -57,13 +59,14 @@ export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
       if(job.status!=='complete')throw Error(job.error||`Package ${job.status}.`);
       if(!valid())return;
       for(let i=0;i<job.artifacts.length;i++){
-        const artifact=job.artifacts[i],a=el('a',`Download ${artifact.name}`);a.href=await client.download(job.id,i,signal);a.download=artifact.name;a.rel='noopener';a.style.display='block';links.append(a);
+        const artifact=job.artifacts[i],a=el('button',`Download ${artifact.name}`);a.type='button';a.style.display='block';
+        a.onclick=async()=>{a.disabled=true;try{if(!valid())throw Error('Reopen the matching scene before downloading.');const url=await client.download(job.id,i);const link=el('a');link.href=url;link.download=artifact.name;link.rel='noopener';document.body.append(link);link.click();link.remove();}catch(error){message.textContent=error.message;}finally{a.disabled=false;}};links.append(a);
         links.append(el('small',`SHA-256: ${artifact.sha256}`));
       }
       message.textContent='Portable package ready. Extract it, run verify_pack.py, then open world.usda. Physics has not been tested.';
       event('omniverse_package_created',{job:job.id,sourceJob:context.job,assets:request.placements.length});jobId=null;
-    }catch(error){if(!disposed){message.textContent=error.name==='AbortError'?'Package cancelled.':error.message;status(message.textContent,true);}await stop();}
+    }catch(error){if(!disposed){message.textContent=error.name==='AbortError'?'Package cancelled.':error.message;status(message.textContent,true);}try{await stop();}catch(cancelError){if(!disposed)message.textContent+=' Cancellation unconfirmed: '+cancelError.message;}}
     finally{controller=null;if(!disposed){button.disabled=false;cancel.hidden=true;}}
   };
-  return ()=>{disposed=true;void stop();section.remove();};
+  return ()=>{disposed=true;void stop().catch(error=>status('Package cancellation could not be confirmed: '+error.message,true));section.remove();};
 }
