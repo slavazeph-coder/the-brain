@@ -1,3 +1,4 @@
+import {mountFootholdReview} from './foothold-ui.mjs';
 /** Source-bound portable USD export. Tokens remain in the existing WorkerClient. */
 const el=(tag,text)=>Object.assign(document.createElement(tag),text===undefined?{}:{textContent:text});
 export function packageRequest({sceneSha,cloudSha,reviewed,asset,position=[0,0,0],yaw=0,licenseReviewed=false,physicsReviewed=false}){
@@ -11,10 +12,11 @@ export function packageRequest({sceneSha,cloudSha,reviewed,asset,position=[0,0,0
   return {schema:'brainsnn.omniverse-request.v1',scene_sha256:sceneSha,cloud_sha256:cloudSha,reviewed:true,placements};
 }
 export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
+  const disposeFootholds=mountFootholdReview({host,context,sceneSha,isCurrent});
   const client=context.sourceClient,caps=client.caps;
   // The hosted visitor proxy intentionally does not authorize this engine.
-  if(client.site&&caps?.owner_id==='site-visitors')return ()=>{};
-  if(!caps?.engines?.some(e=>e.id==='omniverse-pack'&&e.available))return ()=>{};
+  if(client.site&&caps?.owner_id==='site-visitors')return disposeFootholds;
+  if(!caps?.engines?.some(e=>e.id==='omniverse-pack'&&e.available))return disposeFootholds;
   const section=el('section');section.id='scene-omniverse';section.className='dimension-card';
   section.append(el('h3','Export an Omniverse pack'),el('p','Your metric scene plus optional NVIDIA library assets. Library additions are not observations from the scan. Original BIM/CAD exports remain unchanged.'));
   const select=el('select');select.setAttribute('aria-label','NVIDIA library asset');select.append(new Option('Captured scene only',''));
@@ -86,7 +88,7 @@ export function mountOmniverse({host,context,sceneSha,isCurrent,status,event}){
   };
   function dispose(){
     if(disposed)return;
-    disposed=true;
+    disposed=true;disposeFootholds();
     dialog?.removeEventListener('close',dispose);
     window.removeEventListener('pagehide',dispose);
     void stop().catch(error=>status('Package cancellation could not be confirmed: '+error.message,true));
