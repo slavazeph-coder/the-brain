@@ -11,7 +11,7 @@ def metric_scene(**over):
     scene = {"schema": "brainsnn.scene.v1", "units": "m", "floor_y": -0.4,
              "scale": {"source": "user-measured", "metresPerUnit": 0.136, "distance": 2.976, "selfReported": True, "verified": False},
              "objects": [{"name": "floor_observed", "label": "floor", "provenance": "observed", "centre": [0, -0.41, 2], "size": [3, 0.02, 2.4]},
-                         {"name": "chair_0", "label": "chair", "provenance": "detected", "centre": [1, 0, 2], "size": [0.5, 0.9, 0.5], "support_points": 40, "detector": "detr"},
+                         {"name": "chair_0", "label": "chair", "ifcClass": "IfcFurniture", "provenance": "detected", "centre": [1, 0, 2], "size": [0.5, 0.9, 0.5], "support_points": 40, "detector": "detr"},
                          {"name": "tv_1", "label": "tv", "provenance": "detected-unplaced", "reason": "no camera pose"}],
              "walls": [{"name": "wall_1", "label": "wall", "provenance": "observed", "centre": [0, 0.5, 3], "size": [2, 1.8, 0.2], "yaw_degrees": 90, "support_points": 120}],
              "unknown": [[0, 0, 0.5], [0.5, 0, 0.5], [1.5, 0, 0.5], [0, 0.5, 0.5]]}
@@ -214,14 +214,14 @@ class IfcExport(unittest.TestCase):
     def test_separated_objects_keep_their_orientation_and_measurements(self):
         separated = [{"name": "object_1", "label": "object", "provenance": "observed", "kind": "separated", "centre": [1, 0.45, -2],
                       "size": [1.6, 0.9, 0.8], "yaw_degrees": 90, "support_points": 300},
-                     {"name": "object_2", "label": "chair", "provenance": "observed", "kind": "separated", "centre": [0, 0.45, 0],
+                     {"name": "object_2", "label": "chair", "ifcClass": "IfcFurniture", "provenance": "observed", "kind": "separated", "centre": [0, 0.45, 0],
                       "size": [0.5, 0.9, 0.5], "yaw_degrees": 0, "support_points": 120, "labelSource": "detr"}]
         with tempfile.TemporaryDirectory() as d:
             record = ie.emit_ifc(d, metric_scene(objects=separated, walls=[], unknown=[]))
             text = (Path(d) / "scene.ifc").read_text(encoding="ascii")
         self.assertEqual(record["elements"], {"walls": 0, "slabs": 0, "objects": 0, "separated": 2, "unknownRuns": 0})
         rows, refs = parse(text); self.assertLessEqual(refs, set(rows))
-        # Unnamed: a proxy called "Object 1", not furniture. Named by a detector: furniture.
+        # Unclassified: a proxy called "Object 1". Explicit furniture type: furniture.
         self.assertIn("IFCBUILDINGELEMENTPROXY(", text); self.assertIn("'Object 1'", text); self.assertIn("IFCFURNITURE(", text); self.assertIn("'chair'", text)
         for key, value in (("LengthMetres", "1.6"), ("WidthMetres", "0.8"), ("HeightMetres", "0.9"), ("Detector", "'detr'")):
             self.assertRegex(text, rf"IFCPROPERTYSINGLEVALUE\('{key}',\$,IFC(REAL|LABEL)\({value}")
@@ -237,7 +237,7 @@ class IfcExport(unittest.TestCase):
             record = ie.emit_ifc(d, metric_scene(objects=named, walls=[], unknown=[]))
             text = (Path(d) / "scene.ifc").read_text(encoding="ascii")
         self.assertEqual(record["elements"]["separated"], 2)
-        self.assertRegex(text, r"IFCFURNITURE\('[^']+',\$,'sofa'"); self.assertRegex(text, r"IFCBUILDINGELEMENTPROXY\('[^']+',\$,'potted plant','[^']*not reviewed")
+        self.assertRegex(text, r"IFCFURNITURE\('[^']+',\$,'sofa'"); self.assertRegex(text, r"IFCBUILDINGELEMENTPROXY\('[^']+',\$,'potted plant','[^']*not independently verified")
         self.assertEqual(text.count("IFCPROPERTYSINGLEVALUE('LabelReviewed',$,IFCBOOLEAN(.F.),$)"), 2)
         self.assertIn("IFCPROPERTYSINGLEVALUE('Detector',$,IFCLABEL('claude-opus-5-5'),$)", text)
         self.assertIn("IFCPROPERTYSINGLEVALUE('LabelConfidence',$,IFCLABEL('medium'),$)", text)
@@ -258,8 +258,71 @@ class IfcExport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             ie.emit_ifc(d, scene); rows, _ = parse((Path(d) / "scene.ifc").read_text(encoding="ascii"))
         slabs = [body for body in rows.values() if body.startswith("IFCSLAB(")]
-        self.assertEqual(len(slabs), 1); self.assertIn("'floor_observed'", slabs[0])
+        self.assertEqual(len(slabs), 1); self.assertIn("'Floor bounding extent'", slabs[0])
         self.assertEqual(sum(body.startswith("IFCFURNITURE(") for body in rows.values()), 1, "the chair stays furniture")
+
+    def test_floor_export_discloses_derived_extent_without_changing_source(self):
+        scene = metric_scene(); before = copy.deepcopy(scene)
+        with tempfile.TemporaryDirectory() as d:
+            ie.emit_ifc(d, scene)
+            text = (Path(d) / 'scene.ifc').read_text()
+        self.assertEqual(scene['objects'], before['objects'])
+        self.assertIn("'Floor bounding extent'", text)
+        self.assertIn("'GeometryScope',$,IFCLABEL('derived-point-cloud-floor-bounding-extent')", text)
+        self.assertIn("'RoomBoundaryVerified',$,IFCBOOLEAN(.F.)", text)
+        self.assertIn("'ElementName',$,IFCLABEL('floor_observed')", text)
+        self.assertIn("'SlabThicknessScope',$,IFCLABEL('display thickness; not a measured floor assembly')", text)
+
+    def test_generic_and_unsupported_objects_are_proxies_even_when_named(self):
+        items = []
+        cases = [('untyped', None, 'chair', 'IfcBuildingElementProxy'),
+                 ('duct', 'IfcDuctSegment', 'duct', 'IfcBuildingElementProxy'),
+                 ('truss', 'IfcBeam', 'truss', 'IfcBuildingElementProxy'),
+                 ('plant', 'IfcBuildingElementProxy', 'plant', 'IfcBuildingElementProxy'),
+                 ('furniture', 'IfcFurniture', 'sofa', 'IfcFurniture')]
+        for index, (name, assigned, label, expected) in enumerate(cases):
+            item = {'name': name, 'label': label, 'provenance': 'detected',
+                    'centre': [index, .5, 0], 'size': [.5, 1, .5]}
+            if assigned is not None:
+                item['ifcClass'] = assigned
+            self.assertEqual(ie.object_ifc_class(item), expected)
+            items.append(item)
+        scene = metric_scene(objects=items, walls=[], unknown=[])
+        with tempfile.TemporaryDirectory() as d:
+            ie.write_ifc(Path(d) / 'scene.ifc', scene)
+            text = (Path(d) / 'scene.ifc').read_text()
+        for name, _assigned, label, expected in cases:
+            self.assertRegex(text, rf"{expected.upper()}\('[^']+',\$,'{label}'")
+        self.assertNotIn('IFCDUCTSEGMENT(', text); self.assertNotIn('IFCBEAM(', text)
+        self.assertIn("'RequestedIfcClass',$,IFCLABEL('IfcDuctSegment')", text)
+
+    def test_ifcopenshell_reopens_floor_scope_and_supported_object_classes(self):
+        try:
+            import ifcopenshell
+            import ifcopenshell.util.element
+            import ifcopenshell.validate
+        except ImportError:
+            self.skipTest('IfcOpenShell is needed for actual type and scope validation.')
+        scene = metric_scene()
+        scene['objects'].append({'name': 'duct', 'label': 'duct', 'ifcClass': 'IfcDuctSegment',
+                                 'provenance': 'observed', 'centre': [0, 3, 0], 'size': [2, .4, .4]})
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / 'scene.ifc'; ie.write_ifc(path, scene)
+            model = ifcopenshell.open(path)
+            log = ifcopenshell.validate.json_logger()
+            ifcopenshell.validate.validate(model, log, express_rules=True)
+            self.assertEqual(log.statements, [])
+            model.write(Path(d) / 'reopened.ifc'); model = ifcopenshell.open(Path(d) / 'reopened.ifc')
+        props = lambda e: ifcopenshell.util.element.get_pset(e, 'Pset_BrainSNN')
+        floor = model.by_type('IfcSlab')[0]
+        self.assertEqual(floor.Name, 'Floor bounding extent')
+        self.assertEqual(props(floor)['Provenance'], 'observed')
+        self.assertEqual(props(floor)['GeometryScope'], 'derived-point-cloud-floor-bounding-extent')
+        self.assertFalse(props(floor)['RoomBoundaryVerified'])
+        duct = next(e for e in model.by_type('IfcElement') if e.Name == 'duct')
+        self.assertEqual(duct.is_a(), 'IfcBuildingElementProxy')
+        self.assertEqual(props(duct)['RequestedIfcClass'], 'IfcDuctSegment')
+        self.assertEqual(len(model.by_type('IfcFurniture')), 1)
 
     def test_unknown_cells_merge_into_runs_and_labels_are_escaped(self):
         self.assertEqual(ie.merge_unknown([[0, 0, .5], [.5, 0, .5], [1.5, 0, .5], [0, .5, .5]]), [(0, 1.0, 0, .5), (1.5, 2.0, 0, .5), (0, .5, .5, .5)])

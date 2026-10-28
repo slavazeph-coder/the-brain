@@ -107,6 +107,22 @@ test('reviewed recompilation rejects unrelated geometry, source labels and scale
   assert.equal(h.calls.recompile.length,0);
 });
 
+test('building downloads expose actual destination files and retain their manifest indices',async t=>{
+  const h=harness(t);
+  await h.show({artifacts:[{name:'camera-frames.json'},{name:'scene.ifc'},
+    {name:'xactimate-underlay.png'},{name:'building-schedule.csv'},
+    {name:'building-handoff.json'},{name:'BUILDING-IMPORT.txt'},{name:'unrelated.png'}]});
+  const html=h.field('scene-bim-files').innerHTML;
+  for(const index of [1,2,3,4,5])assert.match(html,new RegExp(`data-scene-download="${index}"`));
+  assert.ok(!html.includes('data-scene-download="0"')&&!html.includes('data-scene-download="6"'));
+  assert.match(html,/linking keeps the source model read-only/);
+  assert.match(html,/Import Underlay Image/);
+  assert.match(html,/then trace and review the rooms/);
+  assert.ok(!/native RVT|ESX download|direct Xactimate import/i.test(html));
+  await h.show({artifacts:[{name:'scene.glb'}]});
+  assert.ok(!h.field('scene-bim-files').innerHTML.includes('Open xactimate-underlay.png'));
+});
+
 test('opening review is explicit, recompilation retains the previous job, and removal clears original review',async t=>{
   const h=harness(t);
   h.data.cloud.bimReview={schema:'brainsnn.bim-review.v1',cloudPointsSha256:await pointsSHA256(h.data.cloud),openings:[{

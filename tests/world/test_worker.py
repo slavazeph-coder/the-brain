@@ -267,6 +267,29 @@ def test_navigation_output_extensions_do_not_expand_allowed_uploads(client):
                        headers=HEADERS).status_code == 422
 
 
+def test_building_import_instructions_are_a_private_download_not_an_upload(tmp_path):
+    payload = b'Building export instructions\nDimensions remain unverified.\n'
+    config = adapter_config(tmp_path,
+        "import json,sys\nfrom pathlib import Path\n"
+        "out=Path(json.loads(Path(sys.argv[1]).read_text())['output_dir'])\n"
+        f"(out/'BUILDING-IMPORT.txt').write_bytes({payload!r})\n"
+        "(out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':'BUILDING-IMPORT.txt','kind':'instructions'}]}))\n")
+    with TestClient(create_app(root=tmp_path/'data', token=TOKEN, adapters=str(config))) as c:
+        jid, _ = make_job(c, 'test-adapter')
+        c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS)
+        job = wait(c, jid)
+        assert job['status'] == 'complete', job
+        assert job['artifacts'][0]['sha256'] == hashlib.sha256(payload).hexdigest()
+        assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}).status_code == 401
+        url = c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}, headers=HEADERS).json()['url']
+        response = c.get(url)
+        assert response.content == payload
+        assert response.headers['content-disposition'].startswith('attachment')
+        for kind in ('image', 'video', 'cloud'):
+            assert c.post('/v1/uploads', json={'name': 'BUILDING-IMPORT.txt', 'kind': kind, 'size': 10},
+                          headers=HEADERS).status_code == 422
+
+
 @pytest.mark.parametrize('count', [32, 33])
 def test_adapter_artifact_count_stays_bounded_at_32(tmp_path, count):
     config = adapter_config(tmp_path,
