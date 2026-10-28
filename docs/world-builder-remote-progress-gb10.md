@@ -5,6 +5,23 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 146 — 2026-10-28 (Node non-UTF-8 scenario regression: prepare/verify fail closed; both suites green)
+- Clean tree at `1f9c08f` before editing.
+- 4090 probe: `ssh2.vast.ai:23990` connection refused (instance down for a 3rd consecutive run since 144). No 4090 GPU work.
+- Baseline (pre-edit, exact):
+  - `node --test tests/world/report-receipts.test.mjs` → **9 pass / 0 fail** (103 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.53 s
+- Added `non-UTF-8 scenario text fails closed instead of silently mismatching the receipt hash` to `tests/world/report-receipts.test.mjs` (+21 lines):
+  - The receipt chain hashes the **UTF-8 bytes** of the scenario (`reportSHA256(encode(scenarioText))`). If any layer (proofPack, reportSHA256, the verify byte-hash) round-tripped non-UTF-8 bytes through a lossy encode/decode, the scenario hash would silently disagree between prepare and verify.
+  - Pins that `prepareReportRequest` rejects non-UTF-8 scenario text (bytes `0x00,0xFF`, lone `0x80`, and `0x24,0xFF,0x24`) with a distinct error — never a silent pass.
+  - Pins that `verifySignedReport` fails closed at the top-level verify entrypoint (which re-hashes the bytes) for the same input, rather than falling through to a `Exact scenario file bytes do not match` mismatch.
+- Verified (exact, post-commit):
+  - `node --test tests/world/report-receipts.test.mjs` → **10 pass / 0 fail** (70 ms) (was 9)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.53 s
+- Commit: **`6bab8ea`** `test(world): non-UTF-8 scenario text fails closed — receipt hash chain never silently mismatches` (1 file, +21). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+- Next bounded action: 4090 bounded GPU/reconstruction task once instance is reachable (confirm hostname+GPU first). If 4090 remains down, continue GB10 receipt work or integration-gap review (signed-report receipt files + Hermes queue continuation absent from main per WORLD_BUILDER_CURRENT.md).
+
 ### Run 145 — 2026-10-28 (Node cancellation regression: verifySignedReport status gate; both suites green)
 - Tree clean at `f2f5123` before editing (run 144 left no uncommitted changes).
 - 4090 probe: `ssh2.vast.ai:23990` connection refused (instance still down since run 144). No 4090 GPU work.
