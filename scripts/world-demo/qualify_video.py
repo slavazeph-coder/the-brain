@@ -2,8 +2,9 @@
 """Repeatable, private video upload and CPU reconstruction qualification.
 
 Run with --video FILE --out NEW_DIRECTORY outside this checkout. --upload-only
-checks real upload transport without COLMAP/Blender; --review RUN_DIRECTORY
-rechecks retained downloads and geometry without executing another job.
+checks real upload transport; --reconstruction-only runs CPU COLMAP without
+Blender or indoor scene checks. --review RUN_DIRECTORY rechecks retained
+downloads and geometry in the recorded scope without executing another job.
 Exit 0: requested workflow and screening passed; 2: geometry needs review;
 1: execution/integrity failure; 130: interrupted. No physical accuracy claim.
 """
@@ -152,6 +153,44 @@ def check_admitted_upload(upload, source):
             'Video changed after preflight; uploaded bytes do not match the admitted capture.')
 
 
+def retained_mode(directory, admitted):
+    """A missing scene is allowed only for a recorded reconstruction-only run.
+
+    Legacy runs default to the full workflow. The request written before a new
+    run is hash-bound by its summary and tied to the admitted source, so deleting
+    a full run's scene or changing only its reported mode cannot downgrade it.
+    These local hashes detect inconsistency, not a rewritten or signed history.
+    """
+    summary_path = directory / 'summary.json'
+    if not summary_path.exists():
+        return 'full'
+    require(summary_path.is_file() and not summary_path.is_symlink(), 'Invalid retained run summary.')
+    summary = read_json(summary_path)
+    mode = summary.get('mode', 'full')
+    require(mode in ('full', 'reconstruction-only'), 'Retained run has no reconstruction qualification scope.')
+    if mode == 'full':
+        return mode
+    require(summary.get('schema') == 'brainsnn.video-qualification.v1', 'Unexpected retained run summary schema.')
+    record = summary.get('request', {})
+    path = directory / 'qualification-request.json'
+    require(record.get('name') == path.name and path.is_file() and not path.is_symlink()
+            and path.resolve().is_relative_to(directory.resolve()), 'Reconstruction-only request evidence is missing.')
+    require(path.stat().st_size == record.get('bytes') and digest(path) == record.get('sha256'),
+            'Retained qualification request failed size/hash verification.')
+    request = read_json(path)
+    require(request.get('schema') == 'brainsnn.video-qualification-request.v1'
+            and request.get('mode') == mode, 'Retained request and summary disagree on qualification scope.')
+    source = request.get('source', {})
+    require(all(source.get(key) == admitted.get(key) for key in ('name', 'kind', 'sha256'))
+            and type(source.get('bytes')) is int and source['bytes'] > 0,
+            'Retained qualification request belongs to another source.')
+    require(all(summary.get('source', {}).get(key) == source.get(key) for key in ('name', 'sha256', 'bytes')),
+            'Retained run summary and request belong to different sources.')
+    require(not summary.get('sceneJob') and 'scene' not in summary,
+            'A reconstruction-only run cannot contain a scene execution.')
+    return mode
+
+
 def review(args):
     """Re-evaluate retained evidence; never pretend this executes a new worker job."""
     output = args.out.absolute()
@@ -188,9 +227,13 @@ def review(args):
                 'Camera ledger is bound to another point cloud.')
         require(reconstruction.get('units') == 'arbitrary' and reconstruction.get('metric_verified') is False,
                 'Retained unmeasured reconstruction claims metric scale.')
+        mode = retained_mode(source, admitted)
+        report['originalMode'] = mode
         folded = reconstruction.get('capture', {}).get('consistency', {}).get('status') == 'folded'
-        require('scene' in verified or folded,
+        require('scene' in verified or folded or mode == 'reconstruction-only',
                 'Scene download manifest is required for a non-folded full qualification review.')
+        require(mode != 'reconstruction-only' or 'scene' not in verified,
+                'Unexpected scene artifacts in a reconstruction-only review.')
         receipt = None
         if 'scene' in verified:
             scene_dir = source / 'downloads/scene'
@@ -232,12 +275,18 @@ class Run:
         self.active_job = None
         self.initialized = False
         self.started = time.monotonic()
+        self.mode = ('upload-only' if args.upload_only else
+                     'reconstruction-only' if args.reconstruction_only else 'full')
         self.summary = {'schema': 'brainsnn.video-qualification.v1', 'startedAt': stamp(),
+            'mode': self.mode,
             'status': 'starting', 'softwareWorkflowPassed': False, 'metricBimProduced': False,
             'physicalAccuracyValidated': False, 'robotValidated': False, 'paidModelCalls': 0,
             'scaleSupplied': False, 'measurementsSupplied': False,
             'layoutUsableClaim': False,
-            'scope': 'Private HTTP upload and optional CPU reconstruction/unscaled scene; heuristic geometry screening, no physical accuracy acceptance.'}
+            'scope': ('Private HTTP upload and CPU sparse reconstruction only; no scene, metric scale, '
+                      'surface completeness, geographic alignment or physical accuracy acceptance.'
+                      if self.mode == 'reconstruction-only' else
+                      'Private HTTP upload and optional CPU reconstruction/unscaled scene; heuristic geometry screening, no physical accuracy acceptance.')}
 
     def safe_error(self, error):
         return str(error).replace(self.token, '[redacted ephemeral credential]')[:1600]
@@ -260,7 +309,7 @@ class Run:
         dirty = bool(git('status', '--porcelain'))
         diff = subprocess.check_output(['git', '-C', str(self.repo), 'diff', 'HEAD', '--binary'])
         paths = [self.video, self.args.python]
-        if not self.args.upload_only:
+        if self.mode == 'full':
             paths.append(self.args.blender)
         for path in paths:
             require(path is not None and path.is_absolute() and path.is_file(),
@@ -301,11 +350,18 @@ class Run:
             'qualifierSha256': digest(Path(__file__)),
             'evaluatorSha256': digest(Path(__file__).with_name('video_qualification.py'))},
             source=source, runtime={
-            'workerPython': str(self.args.python), 'blenderExecutable': str(self.args.blender) if self.args.blender else None,
+            'workerPython': str(self.args.python),
+            'blenderExecutable': str(self.args.blender) if self.mode == 'full' and self.args.blender else None,
             'cpuThreads': 2, 'adapterTimeoutSeconds': self.args.timeout,
             'requestScope': 'Loopback HTTP with proxies and redirects disabled; offline model flags are not a network sandbox.'})
+        request_path = self.out / 'qualification-request.json'
+        save_json(request_path, {'schema': 'brainsnn.video-qualification-request.v1', 'mode': self.mode,
+                                'source': {'name': source['name'], 'kind': 'video', 'sha256': source_hash,
+                                           'bytes': source['bytes']}})
+        self.summary['request'] = {'name': request_path.name, 'bytes': request_path.stat().st_size,
+                                   'sha256': digest(request_path)}
         self.event('preflight-passed', checkoutCommit=head, dirty=dirty, videoBytes=source['bytes'],
-                   durationSeconds=duration, frameBudget=source['framesBudget'], videoSha256=source['sha256'])
+                   durationSeconds=duration, frameBudget=source['framesBudget'], videoSha256=source['sha256'], mode=self.mode)
 
     def request(self, method, path, *, body=None, raw=None, expected=(200,), auth=True, timeout=30):
         headers = {'Authorization': 'Bearer ' + self.token} if auth else {}
@@ -343,6 +399,8 @@ class Run:
                          '--blender', str(self.args.blender)]}]
         if self.args.upload_only:
             adapters = []
+        elif self.args.reconstruction_only:
+            adapters = adapters[:1]
         config = self.out / 'adapters.json'; save_json(config, adapters)
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0)); port = listener.getsockname()[1]
@@ -373,7 +431,8 @@ class Run:
         capabilities = self.request('GET', '/v1/capabilities')
         available = {item['id'] for item in capabilities['engines'] if item.get('available')}
         if not self.args.upload_only:
-            require({'colmap-sparse', 'scene-usd'} <= available, 'Required real reconstruction/scene adapters are unavailable.')
+            required = {'colmap-sparse'} if self.args.reconstruction_only else {'colmap-sparse', 'scene-usd'}
+            require(required <= available, 'Required real reconstruction/scene adapters are unavailable.')
         require(capabilities['limits']['video_bytes'] >= self.video.stat().st_size,
                 'Worker rejects the attached video size.')
         self.chunk_bytes = int(capabilities['limits']['chunk_bytes'])
@@ -590,11 +649,20 @@ class Run:
             ledger = read_json(self.out / 'downloads/reconstruction/camera-frames.json')
             receipt = None
             folded = (reconstruction['capture'].get('consistency') or {}).get('status') == 'folded'
+            if self.args.reconstruction_only:
+                # Execution/integrity can succeed even when the actual geometry
+                # fails screening. Full mode still requires scene execution.
+                self.summary['softwareWorkflowPassed'] = True
             if folded:
                 self.summary['status'] = 'recapture-required-folded'
                 self.summary['sceneSkippedReason'] = 'Reconstruction contradicts its consecutive frames; no layout usability claim.'
                 self.event('scene-skipped-folded', physicalAccuracyValidated=False)
                 exit_code = 2
+            elif self.args.reconstruction_only:
+                self.summary['sceneSkippedReason'] = 'Reconstruction-only scope requested; no indoor scene or floor screening.'
+                self.summary['softwareWorkflowPassed'] = True
+                self.event('reconstruction-only-verified', units='arbitrary', metricVerified=False,
+                           sceneAssessed=False, surfaceCompletenessValidated=False, geographicAlignmentValidated=False)
             else:
                 receipt = self.compile_scene(rec_job, reconstruction)
                 self.summary['softwareWorkflowPassed'] = True
@@ -604,7 +672,8 @@ class Run:
             self.summary['geometryQuality'] = quality
             save_json(self.out / 'geometry-quality.json', quality)
             if not folded:
-                self.summary['status'] = 'complete-unscaled' if quality['screeningPassed'] else 'geometry-review-required'
+                success = 'complete-reconstruction-only' if self.args.reconstruction_only else 'complete-unscaled'
+                self.summary['status'] = success if quality['screeningPassed'] else 'geometry-review-required'
                 exit_code = 0 if quality['screeningPassed'] else 2
         except BaseException as error:
             self.summary['status'] = 'interrupted' if isinstance(error, KeyboardInterrupt) else 'failed'
@@ -632,14 +701,17 @@ def main():
     parser.add_argument('--repo', type=Path, default=DEFAULT_REPO)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--video', type=Path, help='Private local walkthrough video, never added to git.')
-    mode.add_argument('--review', type=Path, help='Existing full run directory; verify retained download hashes and reassess geometry.')
+    mode.add_argument('--review', type=Path, help='Existing run directory; verify retained hashes and reassess its recorded scope.')
     parser.add_argument('--python', type=Path, default=Path(sys.executable))
     parser.add_argument('--blender', type=Path, default=Path(shutil.which('blender')) if shutil.which('blender') else None)
     parser.add_argument('--expected-head', help='Optional exact checkout SHA guard, including feature branches.')
     parser.add_argument('--expected-video-sha256', help='Optional admitted source SHA256 guard.')
     parser.add_argument('--out', type=Path, required=True, help='Fresh private output directory, outside git.')
     parser.add_argument('--timeout', type=int, default=3600, help='Each actual adapter job budget, at most 3600 seconds.')
-    parser.add_argument('--upload-only', action='store_true', help='Only real HTTP upload/resume/integrity; no geometry claim.')
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument('--upload-only', action='store_true', help='Only real HTTP upload/resume/integrity; no geometry claim.')
+    scope.add_argument('--reconstruction-only', action='store_true',
+                       help='Real HTTP upload and CPU sparse reconstruction only; no Blender, scene, metric or geographic claim.')
     parser.add_argument('--min-registration-fraction', type=float, default=0.90, help='Heuristic fraction of selected frames registered, default 0.90.')
     parser.add_argument('--min-wall-support', type=int, default=20, help='Heuristic minimum points per wall primitive, default 20.')
     args = parser.parse_args()
@@ -660,8 +732,8 @@ def main():
     if args.blender:
         args.blender = args.blender.resolve()
     if args.review:
-        if args.upload_only:
-            parser.error('--upload-only cannot be combined with --review.')
+        if args.upload_only or args.reconstruction_only:
+            parser.error('--review uses the recorded scope; do not pass --upload-only or --reconstruction-only.')
         if args.expected_head:
             parser.error('--expected-head guards execution and cannot be combined with --review.')
         return review(args)
