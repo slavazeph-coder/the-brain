@@ -41,3 +41,8 @@
 @media(max-width:1000px){.goal-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.goal-entry-card{min-height:200px}}
 @media(max-width:650px){.goal-entry{padding:17px 14px}.goal-entry-grid{grid-template-columns:1fr}.goal-entry-card{min-height:0;gap:9px}.goal-entry-heading h2{font-size:29px}}
 @media(prefers-reduced-motion:reduce){.goal-entry-card{transition:none}}
+
+/* The main action opens the goal chooser; the expert workspace shortcut remains available. */
+.hero-actions{flex-wrap:wrap}
+.goal-hero-primary{display:inline-flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--cyan);border-radius:7px}
+@media(max-width:650px){.hero-actions>a,.hero-actions>button{flex:1 1 100%;justify-content:center;text-align:center}}
