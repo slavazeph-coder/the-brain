@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from urllib.parse import urlsplit
 
 from PIL import Image
@@ -36,6 +37,14 @@ def wait_street(page, *, visible=True):
     expect(street.locator("iframe")).to_have_count(0)
     expect(street.locator(".street-surface")).to_have_count(1)
     return street
+
+
+def close_drawer(street, name):
+    """Dismiss the visible mobile overlay through its ordinary close button."""
+    panel = street.locator("#" + ("object-panel" if name == "objects" else "inspector-panel"))
+    if "open" in (panel.get_attribute("class") or "").split():
+        street.locator('[data-close-panel="' + name + '"]').click()
+        expect(panel).not_to_have_class(re.compile(r"\bopen\b"))
 
 
 def receipt(page, view, *, name, errors, detail=None):
@@ -80,6 +89,9 @@ def check_integrated(browser, mobile=False):
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth+1")
         page.evaluate("window.__streetCanvasUnderTest = document.getElementById('street-mount').shadowRoot.querySelector('#scene-canvas canvas')")
 
+        if mobile:
+            # Edit opens Objects on a phone; dismiss it before using the viewport.
+            close_drawer(street, "objects")
         street.locator("#barrier-select").click()
         width = street.locator("#barrier-width")
         width.fill("3")
@@ -92,6 +104,8 @@ def check_integrated(browser, mobile=False):
         detail["barrierWidthM"] = float(width.input_value())
         assert detail["barrierWidthM"] == 3
         expect(page.locator("#sandbox-scene-state")).to_contain_text("272 objects")
+        if mobile:
+            close_drawer(street, "inspector")
 
         page.locator(".sandbox-tools #tab-capture").click()
         expect(page.locator("#workspace")).to_have_attribute("data-sandbox", "capture")
@@ -107,10 +121,13 @@ def check_integrated(browser, mobile=False):
         assert float(street.locator("#barrier-width").input_value()) == 3
         expect(page.locator("#sandbox-source-count")).to_have_text("1 local source")
         # Internal navigation keeps the parent toolbar current.
-        if mobile:
+        if mobile and "open" not in (street.locator("#object-panel").get_attribute("class") or "").split():
+            # Return to Edit already reopens Objects; do not click through its backdrop.
             street.locator("#mobile-objects").click()
         street.locator("#tab-evidence").click()
         expect(page.locator(".sandbox-tools #tab-understand")).to_have_attribute("aria-selected", "true")
+        if mobile:
+            close_drawer(street, "objects")
         street.locator("#export-open").click()
         expect(page.locator(".sandbox-tools #tab-evidence")).to_have_attribute("aria-selected", "true")
         with view.expect_download(timeout=30000) as event:
