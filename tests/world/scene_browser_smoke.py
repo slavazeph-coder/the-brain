@@ -8,6 +8,9 @@ and the provenance shown from scene.json are real. Chromium runs at desktop size
   WORLD_SERVER_PYTHON=/path/to/python-with-fastapi-and-uvicorn python tests/world/scene_browser_smoke.py
   WORLD_BROWSERS=chromium WORLD_PHONE_VIEWPORT=1 python tests/world/scene_browser_smoke.py
 """
+import csv
+import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -20,7 +23,7 @@ from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from observations_browser_smoke import port, processing_options, ready
-from realtosim_browser_smoke import K, SCROLL_SETTLED, VISIBLE_POINT_TARGETS, calibrate as calibrate_source, fixture
+from realtosim_browser_smoke import K, SCROLL_SETTLED, VISIBLE_POINT_TARGETS, calibrate as calibrate_source, fixture, wait_in_view
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'output/playwright/world'
@@ -29,6 +32,28 @@ FACTS = ['Observed: 0 reconstructed points, a floor bounding extent and 1 wall.'
          'Unknown: 1 floor cell no point reached, kept as a tagged volume, never free space.',
          'Units: arbitrary reconstruction units. No measured scale, so sizes are relative.']
 
+CANVAS_GEOMETRY = """() => {
+    const c = document.querySelector('#visual-canvas'), r = c.getBoundingClientRect();
+    return {rect: [r.left, r.top, r.width, r.height], buffer: [c.width, c.height],
+            viewport: [innerWidth, innerHeight], scroll: [scrollX, scrollY],
+            status: document.querySelector('#status').textContent,
+            pick: document.querySelector('[data-action=pick-dimension]')?.textContent};
+}"""
+
+
+def check_canvas_stability(page):
+    """Additional sidebar controls must not resize or reproject the reconstruction."""
+    page.locator('#visual-canvas').wait_for(state='visible')
+    page.evaluate(SCROLL_SETTLED)
+    before = page.evaluate(CANVAS_GEOMETRY)
+    options = page.locator('.native-capture-options')
+    options.locator('summary').click()
+    page.evaluate(SCROLL_SETTLED)
+    expanded = page.evaluate(CANVAS_GEOMETRY)
+    assert before['rect'][2:] == expanded['rect'][2:], {'before': before, 'expanded': expanded}
+    assert expanded['rect'][3] <= max(425, expanded['viewport'][1]), expanded
+    options.locator('summary').click()
+
 
 def calibrate(page, mobile, label):
     try:
@@ -36,6 +61,15 @@ def calibrate(page, mobile, label):
     except Exception:
         print('Calibration UI status:', page.locator('#status').inner_text(), file=sys.stderr, flush=True)
         page.screenshot(path=str(OUTPUT / f'{label}-failure.png'), full_page=True)
+        raise
+
+
+def wait_visual_source(page, label, errors):
+    try:
+        page.wait_for_function("/Visual asset loaded/.test(document.querySelector('#status').textContent)")
+    except Exception:
+        print('Visual import failed:', {'status': page.locator('#status').inner_text(), 'errors': errors}, file=sys.stderr, flush=True)
+        page.screenshot(path=str(OUTPUT / f'{label}-source-failed.png'), full_page=True)
         raise
 
 
@@ -108,6 +142,44 @@ def connect(page, worker_url, token):
     page.locator('#connection [aria-label=Close]').click()
 
 
+def download_building_handoff(page, label):
+    """Use actual private download buttons and reopen the authored fixture's PNG/CSV evidence."""
+    folder = OUTPUT / 'building' / label
+    folder.mkdir(parents=True, exist_ok=True)
+    names = ('xactimate-underlay.png', 'building-schedule.csv', 'building-handoff.json',
+             'BUILDING-IMPORT.txt', 'scene.json', 'scene.ifc')
+    blobs = {}
+    for name in names:
+        button = page.locator('#scene-bim-files button').filter(has=page.get_by_text(name, exact=True))
+        with page.expect_download() as download:
+            button.click()
+        assert download.value.suggested_filename == name
+        blobs[name] = Path(download.value.path()).read_bytes()
+        (folder / name).write_bytes(blobs[name])
+    handoff = json.loads(blobs['building-handoff.json'])
+    assert handoff['schema'] == 'brainsnn.building-handoff.v1'
+    assert handoff['sourceFiles']['scene']['binding'] == 'exact-file-bytes'
+    assert handoff['sourceFiles']['scene']['sha256'] == hashlib.sha256(blobs['scene.json']).hexdigest()
+    assert handoff['destinations']['revit']['existingIfc']['sha256'] == hashlib.sha256(blobs['scene.ifc']).hexdigest()
+    for name in ('xactimate-underlay.png', 'building-schedule.csv', 'BUILDING-IMPORT.txt'):
+        assert handoff['files'][name]['sha256'] == hashlib.sha256(blobs[name]).hexdigest()
+    with Image.open(io.BytesIO(blobs['xactimate-underlay.png'])) as image:
+        assert image.format == 'PNG' and image.size == (1800, 1400)
+        image.verify()
+    rows = list(csv.DictReader(io.StringIO(blobs['building-schedule.csv'].decode())))
+    assert rows and all(row['review_status'] == 'unverified' for row in rows)
+    assert all(row['scene_sha256'] == handoff['canonicalSceneSha256'] for row in rows)
+    assert all(row['revision'] == str(handoff['componentRevision']) for row in rows)
+    assert all(not row['area_m2'] for row in rows if row['kind'] == 'floor')
+    assert 'The PNG requires tracing.' in blobs['BUILDING-IMPORT.txt'].decode()
+    assert handoff['metricVerified'] is False and handoff['physicalDimensionsVerified'] is False
+    assert handoff['readiness']['roomQuantities'] is False
+    assert handoff['readiness']['nativeRevitValidated'] is False
+    assert handoff['readiness']['xactimateApplicationValidated'] is False
+    assert 'Import Underlay Image' in page.locator('#scene-bim-files').inner_text()
+    return handoff
+
+
 def check_metric(pw, name, origin, worker_url, token, phone=False):
     """A measured multi-view reconstruction uploads as a point-cloud hand-off and comes back as a metric scene with USD."""
     executable = os.environ.get('PLAYWRIGHT_' + name.upper() + '_PATH')
@@ -126,7 +198,7 @@ def check_metric(pw, name, origin, worker_url, token, phone=False):
         ply, evidence = fixture()
         page.goto(origin + '/world/index.html', wait_until='networkidle')
         page.locator('#files').set_input_files({'name': 'room.ply', 'mimeType': 'application/octet-stream', 'buffer': ply})
-        page.wait_for_function("/Visual asset loaded/.test(document.querySelector('#status').textContent)")
+        wait_visual_source(page, f'scene-metric-{view_name}', errors)
         page.locator('#files').set_input_files({'name': 'reconstruction.json', 'mimeType': 'application/json', 'buffer': evidence})
         page.locator('[data-action=propose-map]').wait_for()
         connect(page, worker_url, token)
@@ -192,33 +264,47 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
     mobile = name == 'webkit' or phone
     view_name = name + ('-phone' if phone else '')
     context = browser.new_context(viewport={'width': 390, 'height': 844} if mobile else {'width': 1440, 'height': 1000}, has_touch=mobile)
-    page = context.new_page(); errors, jobs = [], []
+    page = context.new_page(); errors, jobs, picks = [], [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('request', lambda request: jobs.append(request.post_data_json) if request.method == 'POST' and request.url.endswith('/v1/jobs') else None)
     try:
         ply, evidence = fixture()
         page.goto(origin + '/world/index.html', wait_until='networkidle')
         page.locator('#files').set_input_files({'name': 'synthetic-room.ply', 'mimeType': 'application/octet-stream', 'buffer': ply})
-        page.wait_for_function("/Visual asset loaded/.test(document.querySelector('#status').textContent)")
+        wait_visual_source(page, f'bim-review-{view_name}', errors)
         page.locator('#files').set_input_files({'name': 'reconstruction.json', 'mimeType': 'application/json', 'buffer': evidence})
         connect(page, worker_url, token)
         calibrate(page, mobile, f'bim-review-{view_name}')
         page.locator('[data-tab=capture]').click()
         page.locator('[data-action=pick-dimension]').wait_for()
+        check_canvas_stability(page)
         # Try points inside the visible core, distinct from the outer pair used by the calibration smoke.
         accepted = False
         for pick in (2, 3, 1):
             page.locator('[data-action=pick-dimension]').click()
-            page.locator('#visual-canvas').evaluate("el => el.scrollIntoView({block: 'center', behavior: 'instant'})")
-            page.evaluate(SCROLL_SETTLED)
-            targets = page.evaluate(VISIBLE_POINT_TARGETS)
-            assert targets['left'] and targets['right'], targets
+            wait_in_view(page, '#visual-canvas', f'{view_name}-dimension-picking')
+            assert 'Selected points turn cyan' in page.locator('#scene-help').inner_text()
+            page.screenshot(path=str(OUTPUT / f'bim-picking-{view_name}.png'))
             for side in ('left', 'right'):
+                # A control update can move the page on a phone. Pick the pixels currently drawn,
+                # and verify the first pick before attempting the second one.
+                page.evaluate(SCROLL_SETTLED)
+                targets = page.evaluate(VISIBLE_POINT_TARGETS)
+                assert targets[side], targets
                 x, y = targets[side][pick]
+                before = page.evaluate(CANVAS_GEOMETRY)
                 if mobile: page.touchscreen.tap(x, y)
                 else: page.mouse.click(x, y)
-                page.wait_for_timeout(200)
-            page.locator('#dimension-distance').wait_for()
+                page.evaluate(SCROLL_SETTLED)
+                after = page.evaluate(CANVAS_GEOMETRY)
+                picks.append({'side': side, 'target': [x, y], 'before': before, 'after': after})
+                assert before['rect'][2:] == after['rect'][2:], picks[-1]
+                if side == 'left':
+                    assert before['rect'] == after['rect'], picks[-1]
+                    assert '1 of 2 points' in after['pick'], picks[-1]
+                else:
+                    assert page.locator('#dimension-distance').count() == 1, picks[-1]
+                    wait_in_view(page, '#dimension-distance', f'{view_name}-dimension-entry', focus=True)
             page.locator('#dimension-label').fill('Synthetic withheld span')
             page.locator('#dimension-distance').fill('100')
             page.locator('#dimension-uncertainty').fill('0.005')
@@ -235,6 +321,8 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
         assert '100.000 m reference' in page.locator('#scene-measurement-report').inner_text()
         assert ' m reconstruction / ' in page.locator('#scene-measurement-report').inner_text()
         assert '0 of 1' in page.locator('#scene-measurement-report').inner_text()
+        original_handoff = download_building_handoff(page, f'{view_name}-before-opening')
+        assert original_handoff['openings'] == []
         host = page.locator('#bim-wall-locator [data-host-wall="0"]')
         assert host.get_by_text('wall_1', exact=True).count() == 1
         assert 'selected' in host.get_attribute('class')
@@ -265,6 +353,10 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
         ifc = Path(download.value.path()).read_text()
         assert 'IFCOPENINGELEMENT(' in ifc and 'IFCRELVOIDSELEMENT(' in ifc
         assert 'IFCDOOR(' not in ifc, 'an empty opening is not silently promoted to a door'
+        reviewed_handoff = download_building_handoff(page, f'{view_name}-reviewed-opening')
+        assert len(reviewed_handoff['openings']) == 1
+        assert reviewed_handoff['sourceFiles']['scene']['sha256'] != original_handoff['sourceFiles']['scene']['sha256']
+        assert reviewed_handoff['destinations']['revit']['existingIfc']['sha256'] != original_handoff['destinations']['revit']['existingIfc']['sha256']
         page.screenshot(path=str(OUTPUT / f'bim-review-{view_name}.png'), full_page=False)
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
         page.keyboard.press('Escape')
@@ -281,6 +373,12 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
         page.wait_for_function("/active reconstruction or scale differs/.test(document.querySelector('#scene-status').textContent)")
         assert len(jobs) == 2, 'a stale review must not start another worker job'
         assert not errors, errors
+    except Exception:
+        diagnostics = {'picks': picks, 'current': page.evaluate(CANVAS_GEOMETRY), 'errors': errors}
+        print('Dimensional review UI diagnostics:', json.dumps(diagnostics), file=sys.stderr, flush=True)
+        (OUTPUT / f'bim-review-{view_name}-failure.json').write_text(json.dumps(diagnostics, indent=2))
+        page.screenshot(path=str(OUTPUT / f'bim-review-{view_name}-failure.png'), full_page=True)
+        raise
     finally:
         browser.close()
 

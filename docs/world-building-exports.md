@@ -89,6 +89,11 @@ component edits and exact final scene-byte bindings, and check private download
 transport. The orchestration fixture explicitly stands in for Blender; it is
 not a physical-room reconstruction qualification.
 
+The browser smoke downloads the PNG, schedule, instructions, IFC and exact source
+scene through authenticated artifact tickets, verifies their hashes and repeats
+the handoff after an opening review. These checks exercise the actual export
+writers and file transport; they do not launch Revit or Xactimate.
+
 Use the user's real capture for reconstruction acceptance separately. Require
 complete coverage of the needed rooms, defensible scale and held-out physical
 dimensions before accepting quantities. Camera registration percentage and

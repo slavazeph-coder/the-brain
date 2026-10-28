@@ -31,8 +31,8 @@ permissions:
 jobs:
   world-contracts:
     runs-on: ubuntu-24.04
-    # The install step has its own 11-minute cap; this leaves room after it for the cache save and the tests.
-    timeout-minutes: 20
+    # Bound each download phase separately, leaving time for the unchanged tests on a cold runner.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -70,12 +70,34 @@ jobs:
           restore-keys: |
             world-apt-ubuntu-24.04-${{ hashFiles('tests/world/requirements-ci.txt') }}-
             world-apt-ubuntu-24.04-
-      - name: Install CPU worker and browser test dependencies
-        timeout-minutes: 11
+      - name: Install CPU worker test dependencies
+        timeout-minutes: 5
+        run: python -m pip install -r tests/world/requirements-ci.txt
+      - name: Restore Playwright browser binaries
+        id: browser-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: world-browsers-ubuntu-24.04-${{ hashFiles('tests/world/requirements-ci.txt') }}
+      - name: Install Playwright browser binaries with a bounded retry
+        id: browser-install
+        timeout-minutes: 7
         run: |
-          python -m pip install -r tests/world/requirements-ci.txt
-          # Use the Python SDK's binaries; npm Playwright has a separate version.
-          python -m playwright install chromium webkit
+          # A CDN connection once took ten minutes before Playwright retried at full speed.
+          # Limit the whole attempt, not just the socket-connect timeout. Use the Python SDK's version.
+          if ! timeout --kill-after=10 180 python -m playwright install chromium webkit; then
+            echo "::warning::Browser download stalled; retrying with a fresh connection."
+            timeout --kill-after=10 180 python -m playwright install chromium webkit
+          fi
+      - name: Save completed browser binaries before later steps can fail
+        if: always() && steps.browser-install.outcome == 'success' && steps.browser-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: world-browsers-ubuntu-24.04-${{ hashFiles('tests/world/requirements-ci.txt') }}
+      - name: Install FFmpeg and browser system dependencies
+        timeout-minutes: 9
+        run: |
           mkdir -p "$HOME/apt-archives/partial"
           printf 'Dir::Cache::Archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$HOME/apt-archives" | sudo tee /etc/apt/apt.conf.d/90world-archives
           sudo apt-get update
@@ -129,6 +151,8 @@ jobs:
           # Permission fixtures test cancellation; native canvas MP4 is separate
           # from physical phone/camera qualification.
           python tests/world/capture_browser_smoke.py
+          # Original capture hashes and consent, then real CPU reconstruction of an authored synthetic room.
+          python tests/world/native_capture_browser_smoke.py
           # Reconstruction -> proposed map -> review gate -> plan, on a synthetic room in an arbitrary frame.
           python tests/world/realtosim_browser_smoke.py
           # brainsnn.com's own processing: passcode -> the site's /api/world proxy -> a real worker -> cloud loaded.

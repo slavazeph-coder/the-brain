@@ -24,7 +24,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
-→ [World launch integration](world-simready-launch-2026-10-27.md) — source-bound native capture, conservative wall evidence, portable USD corrections and current deployment/access limits.
+→ [World launch integration](world-simready-launch-2026-10-27.md) — browser native-capture import, source-bound CLI acceptance, real NVIDIA portable composition and current deployment/access limits.
 
 → [World Builder handoff, October 24](../docs/world-builder-handoff.md). **Start here for World Builder:** what is live, how to run it, what is blocked (4090 access, rotating the Anthropic key, physical iPhone test), and the next steps in order. Demo recorders: `scripts/world-demo/`.
 
@@ -61,7 +61,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
-→ [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — metric scene/revision handoff, calibrated underlay, quantity scope and actual capture limits.
+→ [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — current-main integration, calibrated underlay, source/revision-bound browser downloads and actual capture limits.
 
 → [World Builder dimensional evidence](world-builder-dimensions-2026-10-24.md) — source-bound backend physical-reference checks, semantic sizing boundaries and the next BIM qualification slice.
 

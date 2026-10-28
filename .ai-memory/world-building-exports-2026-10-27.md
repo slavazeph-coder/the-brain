@@ -32,3 +32,23 @@ Guide: `docs/world-building-exports.md`. Worker and site deployments still requi
 their separate release branches; never merge the worker-specific root Railway
 configuration into the website branch. AGENTS memory sync helper is absent in
 this environment; commit this note with the implementation.
+
+## Current-main integration review — October 28
+
+Merged main `ed7b353` into PR255, preserving the native capture importer,
+bounded measurement canvas, deferred input focus and current NVIDIA qualification.
+The browser scene fixture now runs the real handoff writer. Chromium desktop,
+Chromium phone and WebKit downloaded/reopened the PNG and CSV, verified exact
+scene/IFC/companion hashes and exercised fresh exports after an opening edit.
+The fixture remains authored geometry; no Blender or destination application ran.
+
+All 140 world JavaScript tests and the production build passed. Focused Python
+checks passed except the existing rebuild publication check on macOS, where
+production correctly refuses without Linux `renameat2`. Its complete revision,
+component identity and file-hash assertions passed with an explicitly temporary
+local publication transport substitute; Linux CI must qualify the real publisher.
+No production publication guarantee was relaxed. Actual PNG/IFC/DXF/Rhino
+writers/readers were exercised, and the generated underlay was visually reviewed.
+
+No native RVT/ESX output, Revit/Xactimate application import, physical phone
+capture or physical dimensional accuracy is claimed by these checks.
