@@ -10,8 +10,8 @@
 /* The native modal can extend beyond the stage; keep only style containment. */
 :host{display:block;min-width:0;height:clamp(660px,82dvh,850px);contain:style;isolation:isolate}
 .export-dialog{position:fixed;inset:0;margin:auto}
-/* The decorative icon must leave pointer targeting to its close button. */
-#export-close svg,#export-close svg *{pointer-events:none}
+/* Decorative icons leave pointer targeting to the buttons that own their actions. */
+button svg,button svg *{pointer-events:none}
 .street-surface{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;border:1px solid #ffffff10;border-radius:12px;overflow:hidden}
 .app-header{height:56px;min-height:56px;flex:0 0 56px;padding:0 18px;gap:16px}
 .workspace{height:auto;flex:1;min-height:0;position:relative;grid-template-rows:minmax(0,1fr)}
