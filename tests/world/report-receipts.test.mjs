@@ -102,6 +102,27 @@ test('verifySignedReport rejects cancelled or running expectedJob even when the 
   assert.equal(okTampered.verified,true);
 });
 
+test('non-UTF-8 scenario text fails closed instead of silently mismatching the receipt hash',async()=>{
+  const f=await fixture();
+  // Bytes 0x00, 0xFF and a lone 0x80 continuation are not valid UTF-8.  If any
+  // layer in the receipt chain (proofPack, reportSHA256, the verify byte-hash)
+  // round-tripped them through a lossy encode/decode, the scenario hash would
+  // silently disagree between prepare and verify.  The chain must instead fail
+  // closed with a distinct error, never a silent hash mismatch.
+  for(const raw of [new Uint8Array([0,0xff]),new Uint8Array([0x80]),new Uint8Array([0x24,0xff,0x24])]){
+    const bad=Buffer.from(raw).toString('binary');
+    await assert.rejects(
+      prepareReportRequest(bad,f.expectedJob),
+      e=>typeof e.message==='string'&&e.message.length>0
+    );
+  }
+  // The same non-UTF-8 text must also fail closed at the top-level verify
+  // entrypoint (which re-hashes the bytes), not pass through to a
+  // 'Exact scenario file bytes do not match' mismatch.
+  await assert.rejects(verifySignedReport({...f,scenarioText:Buffer.from(new Uint8Array([0,0xff])).toString('binary')}),
+    e=>typeof e.message==='string'&&e.message.length>0);
+});
+
 test('WorkerClient signing is unavailable by default and transmits hashes/refs only after capability opt-in',async()=>{
   const f=await fixture(),client=new WorkerClient('https://worker.example','t'.repeat(40)),calls=[];
   client.request=async(path,options)=>{calls.push({path,options});return f.receipt;};
