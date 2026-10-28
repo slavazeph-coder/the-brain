@@ -1,0 +1,160 @@
+{
+  "title": "Toronto block \u2014 open airborne LiDAR reference",
+  "source_kind": "external_airborne_lidar_reference_not_phone_reconstruction",
+  "source_url": "https://canelevation-lidar-point-clouds.s3.ca-central-1.amazonaws.com/pointclouds_nuagespoints/TRCA/GTA_2023/ON_TRCA2023_20230511_NAD83CSRS_UTMZ17_1km_E6250_N48420_CLASS.copc.laz",
+  "source_provider": "Toronto and Region Conservation Authority",
+  "distribution": "Natural Resources Canada CanElevation",
+  "source_project": "GTA_2023",
+  "source_tile": "ON_TRCA2023_20230511_NAD83CSRS_UTMZ17_1km_E6250_N48420_CLASS.copc.laz",
+  "acquisition_date_filename": "2023-05-11",
+  "source_las_file_creation_date": "2024-02-19",
+  "point_acquisition_utc_range": [
+    "2023-04-11T06:03:16.184341+00:00",
+    "2023-04-11T06:49:17.783186+00:00"
+  ],
+  "gps_conversion": "Adjusted standard GPS seconds + 1e9, GPS epoch 1980-01-06, minus 18 leap seconds",
+  "source_gps_time_range": [
+    365228214.1843408,
+    365230975.7831858
+  ],
+  "horizontal_crs": "EPSG:2958",
+  "horizontal_epsg": 2958,
+  "vertical_datum": "CGVD2013 orthometric height (EPSG:6647)",
+  "compound_crs_wkt": "COMPOUNDCRS[\"NAD83(CSRS) / UTM zone 17N + CGVD2013\",PROJCRS[\"NAD83(CSRS) / UTM zone 17N\",BASEGEOGCRS[\"NAD83(CSRS)\",DATUM[\"NAD83 Canadian Spatial Reference System\",ELLIPSOID[\"GRS 1980\",6378137,298.257222101,LENGTHUNIT[\"metre\",1]]],PRIMEM[\"Greenwich\",0,ANGLEUNIT[\"degree\",0.0174532925199433]],ID[\"EPSG\",4617]],CONVERSION[\"UTM zone 17N\",METHOD[\"Transverse Mercator\",ID[\"EPSG\",9807]],PARAMETER[\"Latitude of natural origin\",0,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8801]],PARAMETER[\"Longitude of natural origin\",-81,ANGLEUNIT[\"degree\",0.0174532925199433],ID[\"EPSG\",8802]],PARAMETER[\"Scale factor at natural origin\",0.9996,SCALEUNIT[\"unity\",1],ID[\"EPSG\",8805]],PARAMETER[\"False easting\",500000,LENGTHUNIT[\"metre\",1],ID[\"EPSG\",8806]],PARAMETER[\"False northing\",0,LENGTHUNIT[\"metre\",1],ID[\"EPSG\",8807]]],CS[Cartesian,2],AXIS[\"easting\",east,ORDER[1],LENGTHUNIT[\"metre\",1]],AXIS[\"northing\",north,ORDER[2],LENGTHUNIT[\"metre\",1]],ID[\"EPSG\",2958]],VERTCRS[\"CGVD2013\",VDATUM[\"Canadian Geodetic Vertical Datum of 2013\"],CS[vertical,1],AXIS[\"gravity-related height\",up,LENGTHUNIT[\"metre\",1]],ID[\"EPSG\",6647]]]",
+  "source_coordinate_quantization_m": [
+    0.01,
+    0.01,
+    0.01
+  ],
+  "quantization_is_not_accuracy": true,
+  "pin_wgs84": {
+    "latitude": 43.7234276,
+    "longitude": -79.443862
+  },
+  "local_origin_native_m": [
+    625341.0626837035,
+    4842330.960845888,
+    184.11
+  ],
+  "local_axes": [
+    "UTM grid east",
+    "UTM grid north",
+    "height above chosen local ground baseline"
+  ],
+  "vertical_baseline_method": "Median ground-class elevation within 20 m of projected map pin",
+  "vertical_baseline_support_points": 12635,
+  "native_crop_bbox_m": [
+    625041.0626837035,
+    4842030.960845888,
+    625641.0626837035,
+    4842630.960845888
+  ],
+  "crop_dimensions_m": [
+    600,
+    600
+  ],
+  "full_resolution_point_count": 10267145,
+  "class_counts": {
+    "1": 3875914,
+    "2": 5092424,
+    "6": 1268576,
+    "7": 2443,
+    "17": 27705,
+    "18": 83
+  },
+  "display_point_count": 150000,
+  "display_sampling": "Uniform deterministic sample without replacement; seed 20261027; excludes noise classes 7 and 18",
+  "display_coloring": "Class colours; source contains no RGB imagery",
+  "class_palette_rgb": {
+    "0": [
+      155,
+      155,
+      170
+    ],
+    "1": [
+      156,
+      172,
+      195
+    ],
+    "2": [
+      138,
+      151,
+      167
+    ],
+    "3": [
+      92,
+      159,
+      103
+    ],
+    "4": [
+      68,
+      167,
+      110
+    ],
+    "5": [
+      50,
+      185,
+      125
+    ],
+    "6": [
+      244,
+      174,
+      67
+    ],
+    "9": [
+      81,
+      157,
+      226
+    ],
+    "10": [
+      192,
+      166,
+      146
+    ],
+    "17": [
+      179,
+      153,
+      214
+    ]
+  },
+  "display_point_columns": [
+    "grid_east_m",
+    "grid_north_m",
+    "up_m",
+    "r",
+    "g",
+    "b"
+  ],
+  "network": {
+    "reserved_range_bytes": 86852052,
+    "range_requests": 414
+  },
+  "licence": "Open Government Licence \u2013 Canada",
+  "licence_url": "https://open.canada.ca/en/open-government-licence-canada",
+  "attribution": "Contains information licensed under the Open Government Licence \u2013 Canada. LiDAR: Toronto and Region Conservation Authority, distributed by Natural Resources Canada (CanElevation), GTA_2023 project.",
+  "fetched_at_utc": "2026-10-28T00:50:19.063133+00:00",
+  "no_video_alignment_performed": true,
+  "limitations": [
+    "The 2023 reference may differ from the site shown in the provided video; the video's actual recording date is unverified.",
+    "Airborne sampling is strongest on roofs and ground; vertical and occluded surfaces may be sparse.",
+    "The geographic map pin identifies the area; no metric transform from the video model has been established.",
+    "The 1 cm coordinate quantization is not a statement of measurement accuracy."
+  ],
+  "files": {
+    "full_resolution_laz": "toronto_block_20230511_full_resolution.laz",
+    "native_display_npz": "block_display_native.npz",
+    "display_json": "block_display_points.json"
+  },
+  "acquisition_date_display": "2023 reference LiDAR; cropped point GPS timestamps indicate 11 April 2023",
+  "date_evidence_status": "The dates describe different scopes: NRCan filename convention uses project acquisition end date, while per-point GPS timestamps describe the cropped measurements. Thus project-end 2023-05-11 and point date 2023-04-11 are consistent.",
+  "validation": {
+    "laz_reopened": true,
+    "laz_header_point_count": 10267145,
+    "initial_points_read_and_bounds_checked": 10000,
+    "display_shapes_and_finite_coordinates_checked": true
+  },
+  "project_acquisition_end_date_from_filename": "2023-05-11",
+  "date_convention_source_url": "https://natural-resources.canada.ca/science-data/science-research/natural-hazards/flood-mapping/federal-airborne-lidar-data-acquisition-guideline",
+  "date_convention_section": "6.3.5, Table 12, Project Collection Date",
+  "source_coordinate_epoch": "2010, per CanElevation product specification"
+}

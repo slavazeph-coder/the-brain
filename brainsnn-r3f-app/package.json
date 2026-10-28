@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-deformable.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-street-renderer.mjs && node scripts/build-deformable.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node mission-market-schema-bootstrap.cjs && node --require ./sponsorship/gt3/server.cjs --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -20,7 +20,7 @@
     "og:toys": "node scripts/render-toy-og.mjs",
     "test:analysis": "node --test arena-analysis/tests/*.test.cjs",
     "analysis:admin": "node arena-analysis/admin.cjs",
-    "test:world": "node --test ../tests/world/*.test.mjs",
+    "test:world": "node --test ../tests/world/*.test.mjs src/world/street/tests/*.test.mjs",
     "world:propose": "node scripts/world-propose-map.mjs"
   },
   "dependencies": {
