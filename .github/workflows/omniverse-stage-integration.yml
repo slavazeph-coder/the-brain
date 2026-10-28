@@ -1,4 +1,4 @@
-# One-time exact-source edit on the isolated Omniverse branch. Removed after application.
+# One-time exact-source integration on the isolated owner branch; removed before merge.
 name: Apply source-bound Omniverse integration
 on:
   pull_request:
@@ -13,33 +13,48 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Apply exact-source integration
         run: |
           python - <<'PY'
           from pathlib import Path
           import hashlib
-          paths = {'robotics/world_worker/app.py':'8ebf85de73d02ddcdbf87ca1a6b5c152e7192d5235bc2ad3b1620c223142d17b', 'brainsnn-r3f-app/public/world/bim-workflow-ui.mjs':'e11b7ae650fe3470c4365b27f8dca58f77e930b1bf4ff877020f6f7b97c162c8'}
-          for path, sha in paths.items():
-              assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == sha, 'Concurrent source changed: ' + path
+          paths={'robotics/world_worker/app.py':'8ebf85de73d02ddcdbf87ca1a6b5c152e7192d5235bc2ad3b1620c223142d17b','brainsnn-r3f-app/public/world/bim-workflow-ui.mjs':'e11b7ae650fe3470c4365b27f8dca58f77e930b1bf4ff877020f6f7b97c162c8'}
+          for path,sha in paths.items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==sha,'Concurrent source changed: '+path
           p=Path('robotics/world_worker/app.py');s=p.read_text()
-          s=s.replace("'.csv','.pgm','.yaml']", "'.csv','.pgm','.yaml','.zip']")
+          s=s.replace("'.csv','.pgm','.yaml']","'.csv','.pgm','.yaml','.zip']")
           block="    # Pinned operator-installed packages only; no downloads from user jobs.\n    simready_assets, simready_error = [], None\n    if engines.get('omniverse-pack', {}).get('available'):\n        try:\n            from .omniverse_pack import installed_assets\n            simready_assets = installed_assets(Path('/opt/brainsnn-simready'))\n        except Exception as error:\n            logging.getLogger(__name__).warning('SimReady catalog unavailable (%s)', type(error).__name__)\n            simready_error = 'Installed library failed verification; library additions unavailable.'\n"
           s=s.replace('    identities = Identities(token, tenants',block+'    identities = Identities(token, tenants')
-          s=s.replace("                'owner_id':principal.owner_id, 'owner_limits':principal.limits,", "                'owner_id':principal.owner_id, 'owner_limits':principal.limits,\n                **({'simready_assets':simready_assets,'simready_error':simready_error}\n                   if 'omniverse-pack' in principal.engines and engines.get('omniverse-pack',{}).get('available') else {}),")
+          s=s.replace("                'owner_id':principal.owner_id, 'owner_limits':principal.limits,","                'owner_id':principal.owner_id, 'owner_limits':principal.limits,\n                **({'simready_assets':simready_assets,'simready_error':simready_error}\n                   if 'omniverse-pack' in principal.engines and engines.get('omniverse-pack',{}).get('available') else {}),")
           compile(s,str(p),'exec');p.write_text(s)
           p=Path('brainsnn-r3f-app/public/world/bim-workflow-ui.mjs');s=p.read_text()
           s="import {mountOmniverse} from './omniverse-ui.mjs';\n"+s
-          s=s.replace('let session={visual:null,key:null,picks:[],picking:false,readings:[]}, sceneContext=null,sceneEpoch=0;', 'let session={visual:null,key:null,picks:[],picking:false,readings:[]}, sceneContext=null,sceneEpoch=0,disposeOmniverse=null;')
-          s=s.replace('function clearScene(){sceneEpoch++;', 'function clearScene(){disposeOmniverse?.();disposeOmniverse=null;sceneEpoch++;')
+          s=s.replace('let session={visual:null,key:null,picks:[],picking:false,readings:[]}, sceneContext=null,sceneEpoch=0;','let session={visual:null,key:null,picks:[],picking:false,readings:[]}, sceneContext=null,sceneEpoch=0,disposeOmniverse=null;')
+          s=s.replace('function clearScene(){sceneEpoch++;','function clearScene(){disposeOmniverse?.();disposeOmniverse=null;sceneEpoch++;')
           s=s.replace('    renderOpenings();\n  }','    renderOpenings();\n    if(signal?.aborted||sceneContext!==context)return;\n    disposeOmniverse=mountOmniverse({host:files,context,sceneSha,isCurrent:()=>sceneContext===context,status,event});\n  }',1)
           p.write_text(s)
           PY
           node --check brainsnn-r3f-app/public/world/bim-workflow-ui.mjs
           node --test tests/world/omniverse-ui.test.mjs
-      - name: Commit only the two reviewed integration files without force
-        run: |
           git config user.name 'BrainSNN build automation'
           git config user.email 'build@users.noreply.github.com'
           git add robotics/world_worker/app.py brainsnn-r3f-app/public/world/bim-workflow-ui.mjs
           git commit -m 'feat(world): connect Omniverse packages to worker and reviewed scene UI'
+      - name: Preserve pinned concurrent capture work; resolve only known adapter addition
+        run: |
+          if ! git merge --no-commit b96c8cb653f608bdee46d41d6e9fe1abe4bbafb5; then
+            test "$(git diff --name-only --diff-filter=U)" = 'robotics/world_worker/deploy/railway/adapters.json'
+          fi
+          python - <<'PY'
+          import json,subprocess
+          from pathlib import Path
+          p='robotics/world_worker/deploy/railway/adapters.json'
+          ours=json.loads(subprocess.check_output(['git','show','HEAD:'+p]))
+          latest=json.loads(subprocess.check_output(['git','show','b96c8cb653f608bdee46d41d6e9fe1abe4bbafb5:'+p]))
+          latest.append(next(e for e in ours if e['id']=='omniverse-pack'))
+          Path(p).write_text(json.dumps(latest,indent=2)+'\n')
+          PY
+          git add robotics/world_worker/deploy/railway/adapters.json
+          git commit -m 'merge: preserve calibrated capture and wall evidence alongside Omniverse'
           git push origin HEAD:codex/omniverse-pack-integration-20261027
