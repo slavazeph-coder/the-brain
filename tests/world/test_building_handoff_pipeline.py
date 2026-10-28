@@ -57,4 +57,3 @@ def test_metric_scene_publishes_handoff_from_final_scene_bytes(tmp_path, monkeyp
     assert handoff['readiness']['roomQuantities'] is False
     assert result['metric_verified'] is False
     assert not any(name.endswith(('.esx', '.skx', '.rvt')) for name in names)
-

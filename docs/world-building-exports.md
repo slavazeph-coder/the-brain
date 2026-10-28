@@ -100,4 +100,3 @@ pixel reprojection error alone do not establish room completeness or accuracy.
 - [Autodesk: About Linking to IFC Files](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-Model/files/GUID-BAA2ED9C-5107-4F21-ABE1-1ACF609AEEE3.htm)
 - [Xactware: Importing and using underlays](https://xactware.helpdocs.io/l/enUS/article/pdlwk5k8zd-importing-using-underlays)
 - [Verisk: Sketch Integration APIs](https://developerportal.verisk.com/solutions/estimation)
-
