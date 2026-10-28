@@ -89,6 +89,12 @@ function calibrationCard(visual){const c=calibrationFor(visual),done=c.picks.len
 function numericField(title,id,value,min,max,step=.1,disabled=false){return `<label>${title}<input ${disabled?'disabled':''} id="${id}" type="number" value="${value??''}" min="${min}" max="${max}" step="${step}"></label>`;}
 function setTab(next,focus=false){tab=next;document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});$('panel').setAttribute('aria-labelledby','tab-'+tab);renderPanel();renderMedia();update();if(focus)$('tab-'+tab).focus();}
 function visualHelp(){return calibration.picking||bimWorkflow.picking?'Tap both measured endpoints. Selected points turn cyan. Drag to orbit.':'Drag to orbit · Pinch or scroll to zoom · Missing surfaces remain unknown';}
+function revealMeasurement(id){
+  const field=$(id);
+  // Finish pointer dispatch before transferring focus from the canvas. This handoff should not
+  // compete with the document's smooth scroll or leave the next required field offscreen.
+  requestAnimationFrame(()=>{if(!field?.isConnected||$(id)!==field)return;field.focus({preventScroll:true});field.scrollIntoView({block:'center',behavior:'instant'});});
+}
 function renderMedia(){
   const box=$('media-preview'), source=activeSource, capture=!!source&&(tab==='capture'||!world);
   const visual=capture&&source.visual&&display==='visual';
@@ -506,11 +512,11 @@ $('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopRepl
   canvas.addEventListener('pointerdown',e=>{down=e.isPrimary&&e.button===0?[e.clientX,e.clientY]:null;});
   canvas.addEventListener('pointerup',e=>{const c=calibration,visual=activeSource?.visual;if(!down||!visualViewer||(!c.picking&&!bimWorkflow.picking)||c.visual!==visual||visibleVisual!==visual||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;down=null;
     const index=visualViewer.pick(e.clientX,e.clientY);if(index<0){status('No reconstructed point there. Zoom in and tap directly on a point.',true);return;}
-    if(bimWorkflow.pick(index)){if(!bimWorkflow.picking)$('dimension-distance')?.scrollIntoView({block:'center'});return;}
+    if(bimWorkflow.pick(index)){if(!bimWorkflow.picking)revealMeasurement('dimension-distance');return;}
     if(c.picks.includes(index)){status('That point is already picked. Tap the other end of the distance.',true);return;}
     c.picks.push(index);visualViewer.setMarkers(c.picks);if(c.picks.length===2)c.picking=false;
     renderPanel();status(c.picks.length===2?'Both points picked. Enter the distance you measured between them.':'Now tap the other end of the distance you measured.');
-    if(c.picks.length===2){$('measured-distance')?.focus({preventScroll:true});$('measured-distance')?.scrollIntoView({block:'center'});}});}
+    if(c.picks.length===2)revealMeasurement('measured-distance');});}
 document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const ids=['capture','world','understand','test','evidence'];const i=ids.indexOf(tab),n=e.key==='Home'?0:e.key==='End'?4:(i+(['ArrowRight','ArrowDown'].includes(e.key)?1:4))%5;setTab(ids[n],true);});
 $('workspace').addEventListener('dragover',e=>{e.preventDefault();});$('workspace').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files.length)void addFiles(e.dataTransfer.files);});
 $('connection').addEventListener('close',cancelConnection);

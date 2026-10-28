@@ -10,6 +10,7 @@ import json
 import math
 import os
 import struct
+import sys
 import threading
 from playwright.sync_api import sync_playwright
 
@@ -140,6 +141,39 @@ SCROLL_SETTLED = """() => new Promise(resolve => {
   requestAnimationFrame(tick);
 })"""
 
+IN_VIEW = """({selector, focus}) => {
+  const el = document.querySelector(selector), r = el?.getBoundingClientRect();
+  return r && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight && (!focus || document.activeElement === el);
+}"""
+VIEW_STATE = """selector => {
+  const el = document.querySelector(selector), r = el?.getBoundingClientRect(), v = visualViewport;
+  return {selector, rect: r ? [r.left, r.top, r.width, r.height] : null,
+    viewport: [innerWidth, innerHeight], scroll: [scrollX, scrollY], documentHeight: document.documentElement.scrollHeight,
+    visualViewport: v ? [v.offsetLeft, v.offsetTop, v.width, v.height, v.scale] : null,
+    activeElement: document.activeElement?.id, scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+    status: document.querySelector('#status')?.textContent};
+}"""
+
+
+def wait_in_view(page, selector, label, *, focus=False):
+    """Wait for the user's next target, without moving it on the user's behalf."""
+    evidence = {'before': page.evaluate(VIEW_STATE, selector)}
+    destination = OUTPUT / f'{label}-visibility.json'
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    try:
+        # Quiet frames alone do not prove a pending smooth scroll has started or completed.
+        page.wait_for_function(IN_VIEW, arg={'selector': selector, 'focus': focus}, timeout=5000)
+        page.evaluate(SCROLL_SETTLED)
+        assert page.evaluate(IN_VIEW, {'selector': selector, 'focus': focus})
+    except Exception:
+        evidence['failed'] = page.evaluate(VIEW_STATE, selector)
+        destination.write_text(json.dumps(evidence, indent=2))
+        print('Measurement visibility diagnostics:', json.dumps(evidence), file=sys.stderr, flush=True)
+        page.screenshot(path=str(OUTPUT / f'{label}-visibility-failed.png'), full_page=True)
+        raise
+    evidence['after'] = page.evaluate(VIEW_STATE, selector)
+    destination.write_text(json.dumps(evidence, indent=2))
+
 # Client coordinates of lit (drawn) pixels on the 3D view, inside the visible viewport: candidates from the left and right.
 VISIBLE_POINT_TARGETS = """() => {
   const canvas = document.querySelector('#visual-canvas'), rect = canvas.getBoundingClientRect(), w = canvas.width, h = canvas.height;
@@ -164,8 +198,7 @@ def calibrate(page, mobile, label):
     page.locator('[data-action=pick-scale]').click()
     assert page.locator('[data-action=pick-scale]').get_attribute('aria-pressed') == 'true'
     # Picking brings the canvas into view. Wait for that product scroll; do not scroll it here on the user's behalf.
-    page.evaluate(SCROLL_SETTLED)
-    assert page.locator('#visual-canvas').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}'), page.evaluate(VISIBLE_POINT_TARGETS)
+    wait_in_view(page, '#visual-canvas', f'{label}-calibration-picking')
     assert 'Selected points turn cyan' in page.locator('#scene-help').inner_text()
     trail = []
     # Tap where points are actually drawn, as a person would: lit pixels of the rendered cloud (the WebGL canvas
@@ -187,8 +220,7 @@ def calibrate(page, mobile, label):
             page.screenshot(path=str(OUTPUT / f'{label}-calibration-failed.png'), full_page=True)
         assert page.evaluate(done), {'side': side, 'statuses': trail, 'targets': targets, 'zoom': page.evaluate('visualViewport.scale')}
     assert 'Enter the distance you measured' in page.locator('#status').inner_text()
-    page.evaluate(SCROLL_SETTLED)
-    assert page.locator('#measured-distance').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}')
+    wait_in_view(page, '#measured-distance', f'{label}-calibration-entry', focus=True)
     page.screenshot(path=str(OUTPUT / f'{label}-calibration.png'))
     span = float(page.locator('#picked-span').inner_text().split(':')[1].split()[0])
     # The fixture's true metric distance between any two of its points is the COLMAP span divided by K.

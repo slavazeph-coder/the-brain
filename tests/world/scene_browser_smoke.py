@@ -20,7 +20,7 @@ from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from observations_browser_smoke import port, processing_options, ready
-from realtosim_browser_smoke import K, SCROLL_SETTLED, VISIBLE_POINT_TARGETS, calibrate as calibrate_source, fixture
+from realtosim_browser_smoke import K, SCROLL_SETTLED, VISIBLE_POINT_TARGETS, calibrate as calibrate_source, fixture, wait_in_view
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / 'output/playwright/world'
@@ -232,8 +232,7 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
         accepted = False
         for pick in (2, 3, 1):
             page.locator('[data-action=pick-dimension]').click()
-            page.evaluate(SCROLL_SETTLED)
-            assert page.locator('#visual-canvas').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}'), page.evaluate(CANVAS_GEOMETRY)
+            wait_in_view(page, '#visual-canvas', f'{view_name}-dimension-picking')
             assert 'Selected points turn cyan' in page.locator('#scene-help').inner_text()
             page.screenshot(path=str(OUTPUT / f'bim-picking-{view_name}.png'))
             for side in ('left', 'right'):
@@ -255,7 +254,7 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
                     assert '1 of 2 points' in after['pick'], picks[-1]
                 else:
                     assert page.locator('#dimension-distance').count() == 1, picks[-1]
-                    assert page.locator('#dimension-distance').evaluate('el => {const r=el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;}'), picks[-1]
+                    wait_in_view(page, '#dimension-distance', f'{view_name}-dimension-entry', focus=True)
             page.locator('#dimension-label').fill('Synthetic withheld span')
             page.locator('#dimension-distance').fill('100')
             page.locator('#dimension-uncertainty').fill('0.005')
