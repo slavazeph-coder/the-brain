@@ -46,6 +46,29 @@ test('source upload detects missing progress instead of looping',async()=>{
   await assert.rejects(client.upload(file,'image'),/offset mismatch/);
 });
 
+test('owner cancellation during an in-flight chunk PUT aborts it and never completes the upload',async()=>{
+  const client=makeClient();
+  const calls=[];let beginChunk;const chunkStarted=new Promise(resolve=>{beginChunk=resolve;});
+  client.request=async(path,options={})=>{
+    calls.push({path,method:options.method,signal:options.signal});
+    if(options.method==='PUT')return new Promise((_,reject)=>{
+      options.signal?.addEventListener('abort',()=>reject(options.signal.reason),{once:true});
+      beginChunk();
+    });
+    return{id,offset:0,size:file.size};
+  };
+  const caller=new AbortController();
+  const pending=client.upload(file,'image',caller.signal);
+  const rejected=assert.rejects(pending,error=>error.name==='AbortError');
+  await chunkStarted;
+  assert.deepEqual(calls.map(c=>c.method),['POST','PUT'],'resume check skipped for a fresh file; the chunk PUT is in flight');
+  assert.equal(calls[1].signal,caller.signal,'upload() relays the owner signal into the chunk PUT');
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  await rejected;
+  assert.equal(calls.filter(c=>c.signal===caller.signal).length,2,'no later request outlives the owner signal');
+  assert.equal(calls[1].path,`/v1/uploads/${id}?offset=0`,'no chunk was acked after cancellation');
+});
+
 test('download tickets stay on the configured worker path',async()=>{
   for(const url of ['https://elsewhere.example/v1/download/token','https://worker.example/other/token','https://worker.example/prefix/v1/download/../../other']){
     const client=makeClient();client.request=async()=>({url});
