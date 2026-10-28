@@ -28,3 +28,34 @@ SimReady imports reject reset transform stacks including instance proxies, unsaf
 Working public URL is https://www.brainsnn.com/world/ (TLS valid, health and processing200, unauthenticated capabilities401). Apex brainsnn.com still points to GoDaddy and returns404 on deep links; GoDaddy browser access is signed out. Railway connector works but redacts passcode; local CLI is unauthorized. User was asked to refresh local railway login, never paste secrets. Authenticated live reconstruction remains pending.
 
 Website follows main. Worker follows deploy/world-worker-20261027 with worker-specific root railway.toml; preserve that config and WORLD_WORKER_HOST=0.0.0.0. Do not merge worker root config into main.
+
+
+## October 28 follow-up — browser capture and real NVIDIA composition
+
+User requested finishing the launch through the Railway and GoDaddy plugins. Both production deployments from PR #253 remain healthy. Railway OAuth still redacts variable values; local CLI is unauthorized. GoDaddy plugin exposes only domain search, and Safari is at sign-in. The user was asked to sign in to GoDaddy and run `railway login`; no credentials were replaced and no DNS changed.
+
+The browser now recognizes native capture metadata, offers a calibrated-capture picker, checks exact original image hashes locally before uploading, and sends JSON plus photos through existing capabilities/consent/authentication. Missing/changed inputs send zero uploads. Chromium and WebKit mobile-sized flows passed against a real authenticated local worker and actual COLMAP with the synthetic known-camera room. All 139 JS tests, app typecheck and production build passed. These are synthetic software tests, not physical phone qualification.
+
+The native submission CLI requires source-bound native evidence, a consistent fold check, nonempty finite sparse geometry and a valid camera ledger, with matching original sources and hashes. A failed submission keeps a credential-free receipt and last observed job ID/status; cancellation is requested on timeout. Focused review caught and closed absent geometry, lost timeout receipt and invalid camera source-index acceptance.
+
+The real pinned NVIDIA IV_pole_a01 package contains 16 enabled colliders inside instance proxies (the old inspection counted zero). All 118 files / 421,351,635 bytes were checked against the immutable upstream tree. Two relocated placements preserve 32 colliders, 32 rigid bodies and 30 joints; their active dependencies stay in the portable package. The qualifier checks requested placement, source containment before writes, unchanged package bytes and attribution. Independent artifact rehash/reopen passed. No Isaac/PhysX dynamics were run; physics readiness and metric verification remain false.
+
+A read-only preflight reached the existing RTX 4090 and confirmed its expected identity; it is idle with ample space but has no Isaac/Omniverse runtime or NVIDIA Vulkan ICD in this container. It remains separate from the working private CPU production worker. Native phone app, real captures with held-out dimensions, apex routing and Isaac simulation remain open; do not call the full launch physically qualified.
+
+
+### Measurement-view regression found during PR #256 release checks
+
+The first Linux CI head timed out in the dimensional point-picking browser test. That exact timing failure did not reproduce locally; a deterministic layout regression did: expanding the new capture controls grew the desktop canvas from about 2,809 to 3,036 px. Desktop stage alignment and a 425–680 px viewport now prevent sidebar forms from resizing/reprojecting the cloud. Starting scale/dimension picking scrolls the canvas into view once; the second pick brings the distance input into view, and the inline canvas hint explains selection.
+
+Browser tests now assert stable canvas dimensions and position after the first pick, recompute visible point targets for each tap, verify both selections and product-driven scrolling, and retain failure geometry/screenshots. No test-driven canvas scroll masks the user flow. Full scene matrix passed Chromium desktop/phone and WebKit; standalone real-to-sim passed four desktop/phone contexts; all 139 JS tests, typecheck and production build passed. Recheck the new remote CI head before merging.
+
+
+Linux WebKit then exposed a second-pick input visibility failure in two CI runs: both points were selected, but the distance field was not in view. The handoff now defers focus to the next animation frame after pointer dispatch and explicitly centers the still-connected input with instant scrolling. Scale and dimensional checks share that path. Tests wait up to five seconds for the unchanged fully-visible condition and additionally require focus; they never scroll for the product. Success/failure receipts include field rect, scroll, active element and visual viewport. The precise Linux smooth-scroll/focus scheduling cause was not established from the earlier logs, so do not claim it was.
+
+### PR #254 Omniverse export integration follow-up
+
+Merged main into the existing Omniverse branch with ordinary merge topology, preserving capture/focus changes and the exact-source/request-transform NVIDIA qualifier. The hosted owner export keeps scene/cloud hash and same-owner source binding, license/physics acknowledgments, original exports, separate library placement, fresh signed downloads, and false physics/metric flags. Source/library-contained output paths fail before writes. USD composition errors and missing explicit source units are rejected; the shell caches the new module for offline startup.
+
+Real upstream-pinned IV_pole_a01 bytes were reverified (118 files). The portable hosted ZIP verified 128 files after extraction/relocation, preserving 16 library colliders, 16 bodies and 15 joints with zero requested-transform error. Separate local Blender5.1 compiled 6,273 synthetic points into four walls and a floor, then produced a 140-file verified pack with all source exports unchanged and five environment proxies. Production Blender4.2 still requires hosted acceptance; no phone/Isaac/physical qualification is implied.
+
+Acceptance review found that an empty package artifact list could be reported successful and an earlier /data success could survive a failed rerun. The script now requires ZIP+receipt, exact source/archive hashes, requested asset/placement, and false physics/metric flags. It atomically writes a new run/deployment/commit/script-hash receipt before network access and always writes terminal failure/success, logging only error type. Focused acceptance regressions cover malformed/missing outputs and stale receipts. A 30-minute cooperative budget is checked between requests/read blocks, with bounded socket inactivity; it is not a hard process-kill deadline. No Railway or DNS changes were made by this integration task.

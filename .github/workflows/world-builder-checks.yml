@@ -31,6 +31,7 @@ permissions:
 jobs:
   world-contracts:
     runs-on: ubuntu-24.04
+    # Bound each download phase separately, leaving time for the unchanged tests on a cold runner.
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -57,6 +58,9 @@ jobs:
       - name: World geometry, import, viewer parsing and worker client contracts
         working-directory: brainsnn-r3f-app
         run: npm run test:world
+      # Azure's Ubuntu mirror has served the FFmpeg and WebKit .debs at ~50 KB/s, running this job past
+      # its timeout. Restore earlier downloads so apt only fetches what changed, and save them even when the
+      # job fails or times out, so a stalled run still leaves the next one less to fetch.
       - name: Restore downloaded Ubuntu packages
         id: apt-restore
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -79,29 +83,12 @@ jobs:
         id: browser-install
         timeout-minutes: 7
         run: |
+          # A CDN connection once took ten minutes before Playwright retried at full speed.
+          # Limit the whole attempt, not just the socket-connect timeout. Use the Python SDK's version.
           if ! timeout --kill-after=10 180 python -m playwright install chromium webkit; then
             echo "::warning::Browser download stalled; retrying with a fresh connection."
             timeout --kill-after=10 180 python -m playwright install chromium webkit
           fi
-      - name: Provide root screenshot CLI using the same Playwright SDK and browsers
-        run: |
-          # Some smoke drivers launch node_modules/.bin/playwright from the repo
-          # root. npm dependencies live under brainsnn-r3f-app instead. Invoke the
-          # installed Python SDK's real CLI so its browser revisions match; do not
-          # install a second, mismatched Playwright or omit screenshot execution.
-          test ! -e node_modules/.bin/playwright
-          mkdir -p node_modules/.bin
-          printf '#!/bin/sh\nexec python -m playwright "$@"\n' > node_modules/.bin/playwright
-          chmod 755 node_modules/.bin/playwright
-          node_modules/.bin/playwright --version
-          python - <<'PY'
-          import hashlib, json, subprocess
-          from pathlib import Path
-          p = Path('tests/world/browser_smoke.py')
-          print(json.dumps({'checkout':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
-                            'smoke_sha256':hashlib.sha256(p.read_bytes()).hexdigest(),
-                            'smoke_lines':len(p.read_text().splitlines())}))
-          PY
       - name: Save completed browser binaries before later steps can fail
         if: always() && steps.browser-install.outcome == 'success' && steps.browser-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -114,6 +101,8 @@ jobs:
           mkdir -p "$HOME/apt-archives/partial"
           printf 'Dir::Cache::Archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$HOME/apt-archives" | sudo tee /etc/apt/apt.conf.d/90world-archives
           sudo apt-get update
+          # Download FFmpeg and Playwright's system packages first: a download can be stopped safely, an install cannot.
+          # If the mirror stalls, fetch the rest from archive.ubuntu.com; completed .debs are kept either way.
           packages="ffmpeg $(python -m playwright install-deps --dry-run chromium webkit | sed -n 's/^  \([a-z0-9][^ ]*\)$/\1/p' | tr '\n' ' ')"
           fetch() { sudo timeout 180 apt-get install -y --download-only --no-install-recommends $packages; }
           if ! fetch; then
@@ -146,6 +135,7 @@ jobs:
           WORLD_URL: http://127.0.0.1:4180/
           WORLD_SITE_URL: http://127.0.0.1:4180
           WORLD_BROWSERS: chromium,webkit
+          # Model inference is an opt-in qualification, not a mocked CI output.
           WORLD_PHOTO: ""
         run: |
           mkdir -p output/playwright/world
@@ -158,9 +148,16 @@ jobs:
           done
           curl -fsS http://127.0.0.1:4180/healthz >/dev/null
           python tests/world/browser_smoke.py
+          # Permission fixtures test cancellation; native canvas MP4 is separate
+          # from physical phone/camera qualification.
           python tests/world/capture_browser_smoke.py
+          # Original capture hashes and consent, then real CPU reconstruction of an authored synthetic room.
+          python tests/world/native_capture_browser_smoke.py
+          # Reconstruction -> proposed map -> review gate -> plan, on a synthetic room in an arbitrary frame.
           python tests/world/realtosim_browser_smoke.py
+          # brainsnn.com's own processing: passcode -> the site's /api/world proxy -> a real worker -> cloud loaded.
           python tests/world/site_processing_browser_smoke.py
+          # Reuse the Python SDK's installed binaries with the npm test driver.
           python - <<'PY'
           import os, subprocess
           from playwright.sync_api import sync_playwright

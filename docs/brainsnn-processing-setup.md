@@ -1,272 +1,201 @@
-# Turn on BrainSNN processing: step by step
+# BrainSNN processing: current operations and launch acceptance
 
-This guide turns on video processing on brainsnn.com itself. You upload a walkthrough on the World Builder page and get
-back a 3D reconstruction, then a measured scene: no GPU, no worker address or token to type, and no computer of yours
-left running. It takes about 20 minutes, almost all of it waiting for Railway to build.
+The CPU worker is already deployed and configured behind <https://www.brainsnn.com/world/>. Use **Process on BrainSNN**
+with the owner's passcode. Do not create a second worker or repeat the original PR #248 provisioning instructions.
+This guide records the October 28, 2026 deployment and the checks still needed to finish launch acceptance.
 
-The code is in PR #248:
-- `robotics/world_worker/deploy/railway/`: the worker container;
-- `brainsnn-r3f-app/src/server/worldWorkerProxy.js`: the site side;
-- `scripts/world-demo/site_processing_check.py`: the check.
+## Verified deployment
 
-The short version is `robotics/world_worker/deploy/railway/README.md`.
+Read-only checks at **2026-10-28 01:49 UTC** found both services live, with no staged Railway changes:
 
-## What you are setting up
+| Item | Current value |
+|---|---|
+| Railway project / environment | `wonderful-charisma` / `production` |
+| Project ID | `c7f26b12-f812-4785-bbaf-a49b9caeb228` |
+| Environment ID | `96828263-a5d4-442f-ae6f-df7bff99aab8` |
+| Website | `the-brain`, service `924291ad-28bb-4a28-91d4-1d639739550f`; branch `main`, source root `brainsnn-r3f-app` |
+| Website revision / deployment | `05a9cea0fd05eec95267ffc506463af62408ca3e` / `2187c1c4-153c-4b4d-b6a0-deff0116e3c8` (`SUCCESS`) |
+| Worker | `world-worker`, service `8980d2e7-a8d5-4332-84c7-3407dd99e31a`; branch `deploy/world-worker-20261027`, repository root |
+| Worker revision / deployment | `20c55b4df1d8c029b9caedab691eafc10cf31f37` / `e97417c3-fac8-4bdd-bece-5595302a0d60` (`SUCCESS`) |
+| Worker capacity | One replica, 4 CPU / 8 GB RAM; 10 GB volume at `/data`; no public domain or TCP proxy |
+| Worker startup | Application startup complete, listening on `0.0.0.0:8080`, Railway health probe 200 at 01:36 UTC |
+| Website startup | New deployment started at 01:40 UTC; fresh public checks passed afterward |
 
+The worker deployment branch keeps a **worker-specific root `railway.toml`**. Its root config must not be merged into
+website `main`. Preserve the working `WORLD_WORKER_HOST=0.0.0.0` override: the earlier IPv6 listener failed its health
+check in this environment.
+
+```text
+browser → HTTPS www.brainsnn.com
+          /api/world/session       passcode → temporary browser session
+          /api/world/worker/...    uploads, jobs, tickets and downloads
+                    ↓ private Railway network
+          http://world-worker.railway.internal:8080/
+          colmap-sparse + scene-usd, CPU
+          /data volume, uploads/results retained up to 24 hours
 ```
-phone / browser ──HTTPS──▶ brainsnn.com (existing site service)
-                              │  /api/world/session    passcode → session (kept in page memory only)
-                              │  /api/world/worker/... forwards uploads, jobs and downloads
-                              ▼  Railway private network, http://world-worker.railway.internal:8080
-                           world-worker (new service, no public address)
-                              ├─ colmap-sparse: video → posed frames + 3D points   (COLMAP, CPU)
-                              └─ scene-usd:     measured points → GLB / USD / IFC  (Blender 4.2, CPU)
-                              /data volume: uploads and results, deleted after 24 hours
+
+## Public checks and their limits
+
+These unauthenticated requests were verified at the time above:
+
+| URL on `https://www.brainsnn.com` | Expected and observed response |
+|---|---|
+| `/healthz` | 200, `{"status":"ok"}` |
+| `/world/` | 200, World Builder HTML over valid TLS |
+| `/api/world/processing` | 200, `{"available":true,"passcode":true,"visitors":false,"visitorJobsPerDay":null}` |
+| `/api/world/worker/v1/capabilities` without a session | 401, reconnect-session message |
+
+`available:true` reflects the site's configuration; it does **not** ping the worker or prove a job completed. Railway's
+worker health check proves startup, not COLMAP/Blender execution. The 401 is the expected authentication boundary.
+Visitor processing is disabled.
+
+For a quick read-only repeat:
+
+```sh
+curl --fail --silent --show-error https://www.brainsnn.com/healthz
+curl --fail --silent --show-error https://www.brainsnn.com/api/world/processing
+curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' https://www.brainsnn.com/world/
+curl --silent --show-error --output /dev/null --write-out '%{http_code}\n' https://www.brainsnn.com/api/world/worker/v1/capabilities
 ```
 
-- **The only secret is your passcode.** Both services derive the worker credentials from it. It never appears in the
-  repository, a URL or the browser's storage.
-- **Only you can process at first.** Opening it to visitors is one setting (Part 8), with a daily cap.
-- **It is not a survey.** The scale comes from one distance you measure with a tape. The fold check catches a room
-  that COLMAP put together wrong, but not every error.
+## Remaining acceptance checklist
 
-## Before you start
+Retain the revision, deployment IDs, input hashes, job IDs, timings and downloaded evidence for each actual run.
+Outputs belong in a fresh private directory outside the checkout. Never include passcodes or session tokens in a receipt.
 
-- [ ] Access to the Railway project that runs brainsnn.com, and permission to merge PRs in `slavazeph-coder/the-brain`.
-- [ ] A Railway plan that allows a second service with a **20 GB volume**. Smaller works down to 8 GB; see step 3.6.
-- [ ] A passcode: **at least 12 characters**, easy to type on a phone (three random words, for example
-  `copper-lantern-meadow`). Keep it in your password manager. Never paste it into a chat, an issue, a commit or a
-  screenshot.
+- [x] Website and private worker deployments succeeded; public health, page, configuration and authentication boundary
+  were checked as above.
+- [ ] **Authenticated live capability check.** Run the setup check below and confirm the deployed worker advertises
+  the required available engines. It has not yet been verified in the live launch receipt.
+- [ ] **Actual live reconstruction and unscaled scene.** Run the video command below on an approved capture; require
+  completed jobs, matching artifact SHA-256 values, and a `consistent` reconstruction fold screen. Preserve
+  `check-results.json` with `passed:true`. Missing or unconfirmed fold evidence is not a pass.
+- [ ] **Native capture through the live site.** Use the native submission CLI below with a valid sidecar and original
+  photos. Retain `native-capture.json`, `reconstruction.json`, the camera-frame ledger and submission receipt. Confirm
+  their source hashes and alignment evidence. A synthetic fixture must remain labelled synthetic.
+- [ ] **Metric scene and export.** In the browser, reconstruct an actual permitted room capture, enter one measured
+  calibration span, record at least three held-out readings, review an opening and download the scene/IFC/CAD outputs.
+  Retain the original readings and `scene-measurements.json`; keep failures visible. Follow
+  [demo acceptance](world-demo-release-checklist.md) for target-application opening, editing and reopening checks.
+- [ ] **Physical browser/device receipt.** Exercise the actual phone browser with upload consent, reconstruction,
+  scale/review/export and cancellation. Desktop and phone-sized Chromium/WebKit fixtures do not satisfy this gate.
+- [ ] **Apex routing.** Repair `brainsnn.com`, then verify valid HTTPS and deep-link/query preservation as described below.
 
-## Part 1: Merge the code (2 minutes, then about 10 minutes of checks)
+The first two unchecked items establish live processing. Metric/physical acceptance is separate: native pose scale,
+synthetic truth scores, model-to-point fit and library asset dimensions do not certify a captured room. The native input
+adapter is not a native phone app. Asset composition and any Isaac Sim execution have their own qualification in
+[launch extensions](world-simready-launch-20261027.md).
 
-1. Open PR #248 in GitHub ("brainsnn.com processes walkthroughs itself, on a CPU worker on Railway").
-2. Check that both checks are green: **test** and **world-contracts**. If either is red, stop and ask the agent that
-   opened it.
-3. Press **Merge** and confirm.
-4. Railway deploys `main` once "BrainSNN app release checks" passes. Then "Verify BrainSNN live deploy" checks the live
-   files. Both run in the GitHub **Actions** tab; wait until both are green.
-5. **Check:** open <https://www.brainsnn.com/api/world/processing>. You should see:
+## Run the authenticated checks
 
-   ```json
-   {"available":false,"passcode":false,"visitors":false,"visitorJobsPerDay":null}
-   ```
-
-   That is correct at this point: the new code is live and waits for Parts 2–4. A page that says "Not found" means the
-   deploy has not finished.
-
-Nothing changes for visitors until Part 4. The page looks exactly as before.
-
-## Part 2: Store the passcode once (2 minutes)
-
-1. Open the Railway project → **Settings** (the project's, not a service's) → **Shared Variables**.
-2. Choose the **production** environment.
-3. Add a variable:
-   - **Name:** `WORLD_SITE_PASSCODE`;
-   - **Value:** your passcode.
-4. Save. Shared variables are not used until a service references them, so nothing redeploys yet.
-
-## Part 3: Create the worker service (5 minutes, then a 10–20 minute first build)
-
-1. **New service.** On the project canvas: **+ New** (or **Create**) → **GitHub Repo** → `slavazeph-coder/the-brain`.
-   - Railway may start building straight away. That first build uses the wrong configuration (step 3.3 fixes it), so
-     cancel it or let it fail.
-2. **Name it.** Open the new service → **Settings** → **Service name** → `world-worker`. The site finds it by exactly this
-   name.
-3. **Config file (required).** Settings → **Config-as-code** (or "Railway Config File") → enter:
-
-   ```
-   /robotics/world_worker/deploy/railway/railway.toml
-   ```
-
-   - **Keep the leading slash**: Railway reads the path from the repository root.
-   - **Why this matters:** without it, the service uses the root `railway.toml`, which builds and starts the **website**.
-     Its log would then show `vite build` and `node dist/server.cjs` instead of the worker.
-4. **Source.** Settings → **Source** → branch `main`. Leave **Root Directory** empty.
-5. **Networking.** Do **not** press "Generate Domain". The worker must have no public address: only the site reaches it,
-   over the private network, and Railway gives every service `world-worker.railway.internal` automatically.
-6. **Volume.** On the canvas: **+ New** → **Volume** → attach it to `world-worker`:
-   - **Mount path:** `/data`;
-   - **Size:** 20 GB.
-
-   If your plan's maximum is smaller, note the size: it sets `WORLD_STORAGE_BYTES` in the next step.
-7. **Variables.** `world-worker` → **Variables** → **Raw Editor**. Paste these lines exactly, then save:
-
-   ```
-   PORT=8080
-   WORLD_SITE_PASSCODE=${{shared.WORLD_SITE_PASSCODE}}
-   WORLD_STORAGE_BYTES=19000000000
-   WORLD_CPU_THREADS=4
-   ```
-
-   - **`WORLD_STORAGE_BYTES`:** a little below the volume size, in bytes.
-     - 20 GB volume: `19000000000`;
-     - 10 GB: `9000000000`;
-     - 8 GB: `7000000000` (the minimum: each job reserves 4 GiB beside its video, up to 2 GiB).
-   - **`WORLD_CPU_THREADS`:** the vCPUs Railway gives the service (Settings → Resources). More threads make each job
-     faster, but don't set it above what the service has.
-8. **Deploy.** Press **Deploy** (or **Redeploy**). The first build takes 10–20 minutes, mostly downloading Blender
-   (about 400 MB) and COLMAP. Later builds reuse the cached layers.
-9. **What success looks like** in **Deployments → View logs**:
-   - **Build log:**
-     - `FROM ubuntu:24.04`;
-     - `pip install ... bpy==4.2.23`;
-     - finally `Successfully built` / `Build complete`.
-   - **Deploy log**, ending with:
-
-     ```
-     INFO:     Started server process [..]
-     INFO:     Application startup complete.
-     INFO:     Uvicorn running on http://[::]:8080 (Press CTRL+C to quit)
-     ```
-
-   - **Status:** the service shows **Active** with a passing health check (`/healthz`).
-10. **What failure looks like:** see the troubleshooting table below. The most common one is the config file path from
-    step 3.3.
-
-## Part 4: Point the site at the worker (2 minutes, then about 3 minutes of redeploy)
-
-1. Open the **existing** site service (the one that serves brainsnn.com) → **Variables** → **Raw Editor**.
-2. Add these two lines, leaving everything else as it is, then save:
-
-   ```
-   WORLD_WORKER_INTERNAL_URL=http://world-worker.railway.internal:8080/
-   WORLD_SITE_PASSCODE=${{shared.WORLD_SITE_PASSCODE}}
-   ```
-
-   - It is `http`, not `https`: the private network is already encrypted.
-   - Keep the port `8080` and the trailing slash.
-3. Railway redeploys the site. Wait for **Active**.
-4. **Check:** <https://www.brainsnn.com/api/world/processing> now reads:
-
-   ```json
-   {"available":true,"passcode":true,"visitors":false,"visitorJobsPerDay":null}
-   ```
-
-## Part 5: Check it works (5 minutes)
-
-### On your phone
-
-1. Open <https://www.brainsnn.com/world/>.
-2. Tap **Choose walkthrough video** → **Choose Files**, and pick a short video (any 5–30 s walk round a room).
-   - On iPhone, the fast route skips Photos' conversion: in Photos, Share → **Save to Files** first.
-   - The status line reads "Walkthrough ready …".
-3. Open **Process a walkthrough / use an API worker** → tap **Process on BrainSNN**.
-4. In the dialog, type the passcode → **Use BrainSNN processing**. The dialog closes and the status reads
-   "BrainSNN processing connected. Tick the consent box, then Process all capture files."
-5. Engine: **Multi-view spatial reconstruction (CPU)**, which is already selected → tick **I approve sending …** →
-   **Process all capture files**.
-6. **Wait.** The upload goes first, then the job:
-   - a 10 s video takes about 2 minutes;
-   - a 2-minute video several minutes (about 140 frames).
-7. **Success:** "Reconstruction loaded. Compare with the source; …" and a point cloud you can orbit.
-   - "This reconstruction contradicts its own frames: the room is likely folded onto itself" is the fold check: process
-     it again, or re-film (Part 6).
-   - The check script's "fold check unconfirmed" means one pair of neighbouring frames disagreed with the model and
-     nothing confirmed it. That is usually a weak match, not a fold, so the page loads the model. Look at it around the
-     frames named in `reconstruction.json`'s warnings before you trust a dimension there.
-
-### From a computer, without a browser
-
-Run this from a checkout of the repository. It needs Python 3.10 or newer and nothing else:
+Use Python 3.10+ for `site_processing_check.py`; it needs only the standard library. The script prompts for the passcode
+without echo, or reads an already securely supplied `BRAINSNN_PASSCODE` environment variable. Do not put the passcode
+in a command argument, shell history, chat, source file or screenshot. The Railway connector currently redacts values;
+refresh authorized local Railway access or use the owner's password manager to obtain it privately.
 
 ```sh
 python3 scripts/world-demo/site_processing_check.py --site https://www.brainsnn.com
-# asks for the passcode without echo (or reads BRAINSNN_PASSCODE); prints PASS/FAIL per step:
-#   PASS  site says processing is set up
-#   PASS  passcode opens a session
-#   PASS  worker answers through the site  owner site-owner, engines ['colmap-sparse', 'scene-usd']
 
-python3 scripts/world-demo/site_processing_check.py --site https://www.brainsnn.com --video ~/Desktop/garage.mov --scene
-# uploads, reconstructs, downloads every result through the site with its SHA-256 checked, and prints, for example,
-#   frames 140, registered 138, points 21000, reprojection 0.80 px, fold check consistent
-# results go to ./brainsnn-check-<time>/ (never into the repository)
+mkdir -p "$HOME/brainsnn-launch-receipts"
+python3 scripts/world-demo/site_processing_check.py \
+  --site https://www.brainsnn.com \
+  --video /absolute/path/to/approved-walkthrough.mov \
+  --scene --timeout 1800 \
+  --out "$HOME/brainsnn-launch-receipts/video-20261028-01"
 ```
 
-Exit codes:
-- **0:** everything passed;
-- **1:** a step failed, and the FAIL line says which;
-- **2:** the site is not set up yet (Part 4).
+Without `--video`, exit 0 means configuration, passcode session and available engine checks passed. With `--video`, the
+script uploads the file, executes reconstruction, downloads artifacts with SHA-256 checks and requires the fold status
+`consistent`. `--scene` then uploads the same video for a **separate unscaled** `scene-usd` job. It does not enter a metric
+scale, exercise held-out checks or validate metric IFC/CAD exports. Exit 1 means failure; exit 2 means site processing is
+not configured. A timeout or transport failure after job creation requests cancellation and reports whether cancellation
+was accepted. Keep that job ID if cancellation could not be confirmed.
 
-## Part 6: The first real capture (the garage)
+Choose a new `--out` for every run. The script's default output is relative to the current directory, so explicitly use
+an outside-checkout path as above. Do not mistake downloaded files alone for a passing receipt.
 
-**Film** (about 10 minutes):
-- Phone in **landscape**, 1080p or 4K, 30 fps, lights on.
-- **Walk the walls first:** about 1 m from each wall, camera level, slowly (a step a second), so every wall is seen floor
-  to ceiling. Then cross the middle once. Never spin on the spot.
-- 60–120 s for one garage; at most 5 minutes and 2 GB.
-- Keep people, mirrors and moving things out of frame. Corners, doors and fixtures in view help. Blank walls do not.
+For an existing calibrated native capture, install the dependencies in [native capture](world-native-capture.md), then:
 
-**Measure** with a tape or laser, and write each down with what it is between:
-1. **Calibration:** one long wall, end to end. This is the one you type into the site.
-2. **Withheld checks:** a door width and one fixed object (the cart's length, a workbench). Do not type these in to
-   scale anything: they are how you find out whether the model is right.
+```sh
+python scripts/world-demo/native_capture_submit.py \
+  --site https://www.brainsnn.com \
+  --bundle /absolute/path/to/capture/capture.json \
+  --root /absolute/path/to/capture \
+  --out "$HOME/brainsnn-launch-receipts/native-20261028-01" \
+  --consent
+```
 
-**Process and scale:**
-1. Process the video as in Part 5.
-2. In the cloud, tap the two ends of the measured wall and type its length. The site now uses metres.
-3. Press **Build metric simulation scene (GLB, USD, IFC) →**. This runs the scene engine on the measured cloud.
-4. **Read the "Fit" line** in the scene dialog, and compare your withheld measurements with the model's:
-   - **2 cm or less on a few metres:** good;
-   - **10 cm or more:** re-film.
+This requires 3–11 original calibrated JPEG/PNG images and the matching sidecar, not an arbitrary video or a ZIP.
+Check the native guide for current evidence requirements. Physical dimensions remain unverified.
 
-**Send back** (to whoever asked; never the passcode):
-- frames registered of frames sampled;
-- the fold check status;
-- processing time;
-- the three tape readings, and the model's value for each;
-- the Fit line.
+## Repair the apex domain without disturbing the working site
 
-## Troubleshooting
+Use `www.brainsnn.com` for launch links now. On October 28 the apex resolved to GoDaddy addresses `3.33.251.168` and
+`15.197.225.128`; `/world/`, `/healthz` and both tested API paths returned 404. Railway's apex status was:
 
-| What you see | Why | Fix |
-|---|---|---|
-| `/api/world/processing` says "Not found" | The site has not deployed #248 yet | Wait for "Verify BrainSNN live deploy" (Part 1) |
-| `"available":false` after Part 4 | A site variable is missing, misspelt, or the passcode is under 12 characters | Check both lines in Part 4 and the shared variable; the site redeploys after a change |
-| No "Process on BrainSNN" button | The page loaded before the site redeployed | Reload the page |
-| "Wrong passcode." | Typo, or the shared variable differs between services | Both services must reference `${{shared.WORLD_SITE_PASSCODE}}` |
-| "Too many wrong passcodes. Try again in an hour." | Ten wrong tries from your connection within an hour | Wait an hour, or redeploy the site (sessions and counters reset) |
-| "BrainSNN processing is unavailable right now." (502) | The site cannot reach the worker | Worker Active? `PORT=8080` on the worker? URL exactly `http://world-worker.railway.internal:8080/`? Service named `world-worker`? |
-| "Unauthorized." from the worker, or the check script's step 3 fails | The two services derive different credentials | The same passcode on both (shared variable), then redeploy **both** |
-| Worker build log shows `vite build` / `node dist/server.cjs` | The root `railway.toml` was used | Step 3.3: config file `/robotics/world_worker/deploy/railway/railway.toml` |
-| Worker log: `Set WORLD_SITE_PASSCODE (12 characters or more …)` | The worker cannot see the passcode | Step 3.7's `WORLD_SITE_PASSCODE` line, and the shared variable in production |
-| Worker log: `WORLD_STORAGE_BYTES must be at least 6979321856 …` | The budget cannot hold one job: the 4 GiB job reservation plus its video | An 8 GB or larger volume, and step 3.7's table. A value that is not a plain number is ignored, and the worker assumes 20 GB |
-| Worker log: `could not bind on any address` | The environment has no IPv6 | Add `WORLD_WORKER_HOST=0.0.0.0` on the worker. Newer Railway environments resolve internal names over IPv4 too |
-| "Upload quota reached" / "Owner upload quota reached" | Old uploads still within their 24 hours | Wait, or remove the volume's `/data/worker` contents from a Railway shell |
-| "Views could not be aligned …" | Too little overlap or texture in the video | Re-film: slower, walls first, more corners in view |
-| "…the room is likely folded onto itself" | COLMAP matched repeated surfaces to each other | Process again (COLMAP is not deterministic), or re-film with more distinct views |
-| A job ends `failed` after an hour | The 3600 s limit; a 5-minute 4K walk on 2 threads can reach it | More vCPUs and `WORLD_CPU_THREADS`, or a shorter or 1080p video |
+- required traffic target: `brainsnn.com` CNAME → `tnoamdbj.up.railway.app` (unset / requires update);
+- domain ownership verified, but Railway certificate still `ISSUING`.
 
-## Part 8: Running it
+Re-read Railway's current target before changing DNS. Its [domain guide](https://docs.railway.com/networking/domains/working-with-domains)
+requires root flattening/ALIAS and lists GoDaddy as unsupported for that method; a static A record is not a supported
+replacement. GoDaddy's newer [HTTPS/SVCB AliasMode announcement](https://www.godaddy.com/resources/news/beyond-cname-flattening)
+does not establish compatibility with Railway routing and certificate validation.
 
-- **Change the passcode:** edit the shared variable, then redeploy **both** services. Old sessions end.
-- **Open it to visitors:** on the site service only, add `WORLD_SITE_VISITORS=1`. Optionally also add
-  `WORLD_SITE_VISITOR_JOBS_PER_DAY` (default 2 per connection) and `WORLD_SITE_VISITOR_JOBS_TOTAL` (default 20 a day in
-  all).
-  - Visitors then see "Use BrainSNN processing" with no passcode needed.
-  - Their files stay on your volume for up to 24 hours, so add that to the site's privacy note first.
-- **Pause it:** remove `WORLD_WORKER_INTERNAL_URL` from the site, and the button disappears. Stop the worker service as
-  well to stop its costs.
-- **Costs:** Railway bills the worker's CPU time and the volume. Each job is CPU-bound for its whole run.
-- **Updates:** a merge to `main` that touches `robotics/world_worker/**` or `robotics/scene_compiler/**` rebuilds the
-  worker (`watchPatterns` in its `railway.toml`).
-- **Logs:**
-  - the worker's deploy log shows each request;
-  - each job's own log is `/data/worker/jobs/<id>/operator.log` on the volume.
+[GoDaddy HTTPS forwarding](https://www.godaddy.com/help/forward-my-godaddy-domain-12123) to the canonical `www` origin is a
+possible route, but do not declare it fixed until actual deep paths and query strings survive the redirect. If forwarding
+cannot preserve them, use a DNS arrangement that Railway explicitly supports. Any nameserver change needs a complete
+record inventory and a separately reviewed migration; this handoff does not authorize one by itself.
 
-## Security notes
+Keep existing `www`, mail and unrelated records. After the selected change, verify apex HTTPS, `/world/`,
+`/healthz`, `/api/world/processing` and a harmless query such as `/world/?launch-check=1`. Either serve the correct site
+or preserve the full path/query when redirecting to `www`; a root-only redirect with deep-link 404s fails acceptance.
+Also verify `www` remains healthy. A GoDaddy-owned forwarding certificate and a Railway-served apex certificate are
+different routing arrangements; check the certificate for the route actually selected.
 
-- **Credentials:**
-  - the passcode lives only in Railway's variables;
-  - the worker writes SHA-256 hashes of the derived credentials, never the credentials;
-  - its operator credential is new on every start, and nobody is given it.
-- **Sessions:**
-  - a browser session is a random 43-character value, held in page memory and never in storage;
-  - it ends after 12 hours (visitors: 2), or when the site restarts.
-- **Isolation:**
-  - each session reaches only the uploads and jobs it created;
-  - a job created but not started within 2 minutes (a closed tab) is cancelled, so it cannot hold the worker's one
-    active slot;
-  - job listings are refused;
-  - download links are signed by the worker, last 60 seconds, and need no session.
-- **No public address:** the worker has none. Everything reaches it through the site.
+## Release and recovery procedure
+
+1. Require the appropriate checks at the exact release head: `World Builder contracts`, `World launch extensions`
+   and, when relevant, `World Omniverse qualification`. Their current workflow files contain the full commands. Browser
+   fixture passes establish software behavior, not a physical capture. The Omniverse inspection job alone is not physics.
+2. Merge checked application changes to `main`; wait for the website deployment to succeed, then repeat the public checks.
+3. In the separate worker deployment checkout, merge the checked main revision forward into
+   `deploy/world-worker-20261027`. Preserve its worker-specific root `railway.toml`, one replica, `/data` volume and
+   working host override. Review the resulting diff; the release recorded here differs from main only in root
+   `railway.toml`. Do not merge that file back to website main.
+4. Inspect active jobs before rollout when authenticated operator visibility is available. Health and low CPU alone
+   cannot prove the queue is empty. A restart ends in-memory site sessions, so reconnect before a new check.
+5. Wait for the worker deployment and its `/healthz` probe, then repeat authenticated capability and actual job checks.
+   A website release does not automatically advance the worker's separate branch.
+
+For recovery, compare existing settings rather than replacing all service variables:
+
+| Service | Required configuration |
+|---|---|
+| Website | `WORLD_WORKER_INTERNAL_URL=http://world-worker.railway.internal:8080/`; the same `WORLD_SITE_PASSCODE` as the worker; visitors remain off unless intentionally enabled |
+| Worker | Dockerfile `robotics/world_worker/deploy/railway/Dockerfile`; start script `/app/robotics/world_worker/deploy/railway/start.sh`; `PORT=8080`, `WORLD_WORKER_HOST=0.0.0.0`, `WORLD_CPU_THREADS=4`, persistent `/data`, no public domain |
+| Worker storage | Budget below the mounted volume size: `WORLD_STORAGE_BYTES=9000000000` is the recommended target for a 10 GB volume; verify the live value privately before changing it |
+| Credentials | Keep the existing shared passcode arrangement. Rotation requires updating both services and redeploying both; it is not part of a routine code release |
+
+The generic [Railway kit](../robotics/world_worker/deploy/railway/README.md) describes provisioning from scratch. Its
+config-file-path approach must not replace this already working deployment-branch arrangement without a separately
+verified migration. If logs show `vite build` or `node dist/server.cjs` for the worker, the website root config was selected.
+
+## Troubleshooting and retention
+
+| Observation | Check or next action |
+|---|---|
+| `/api/world/processing` is 404 | Confirm canonical `www` and the website deployment; the apex currently fails this way |
+| Processing says `available:false` | Check site variable names, internal URL and passcode configuration; this is not a worker health response |
+| Unauthenticated capabilities is 401 | Expected; use the passcode session for the authenticated check |
+| Authenticated capabilities is 502 | Inspect private worker startup/health, port 8080 and the site's internal URL |
+| Authenticated capabilities is unauthorized | Verify both services use the same existing credentials privately |
+| Worker cannot bind | Preserve `WORLD_WORKER_HOST=0.0.0.0` for this environment |
+| Upload quota reached | Inspect retained uploads/jobs and wait for normal expiry; do not delete the entire `/data/worker` tree while jobs or evidence may be needed |
+| Job fails, times out or returns inconsistent/unconfirmed geometry | Retain the failure receipt, inspect its logs and source coverage, then retry or recapture only with an explicit reason |
+| Session ended after deployment | Reconnect; site sessions live in memory and are invalidated by a site restart |
+
+Worker job logs live at `/data/worker/jobs/<id>/operator.log`. Uploads/results normally expire after 24 hours; retain
+needed acceptance evidence privately before expiry. Sessions are scoped to their own uploads and jobs; job listing is
+refused by the public proxy. Artifact tickets last 60 seconds. Visitor processing remains disabled, and changing that
+policy requires a separate operational decision with retention, quota and cost limits reviewed.

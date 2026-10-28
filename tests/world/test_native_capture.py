@@ -214,6 +214,26 @@ def test_full_native_adapter_solves_rendered_room_and_reopens_bound_camera_evide
     native = out / 'native-capture.json'
     assert hashlib.sha256(native.read_bytes()).hexdigest() == result['native_capture']['sha256']
     assert json.loads(native.read_text())['reconstruction_executed'] is True
+    cli = native_submission_cli()
+    expected = nc.inputs_evidence(request['inputs'])[1]
+    names = ['reconstruction.json', 'native-capture.json', 'camera-frames.json', 'sparse-preview.ply']
+    checked = cli['verify_result'](out, names, expected)
+    assert checked['source_frames'] == 5 and checked['fold_status'] == 'consistent'
+    # A successful JSON transport cannot substitute different or empty geometry.
+    original = (out / 'reconstruction.json').read_bytes()
+    for mutate in [lambda record: record.update(reconstructed_points=0),
+                   lambda record: record['capture'].update(registered_images=0),
+                   lambda record: record['sources'][0].update(name='other.png'),
+                   lambda record: record['point_clouds'][0].update(sha256='0'*64)]:
+        record = json.loads(original); mutate(record)
+        (out / 'reconstruction.json').write_text(json.dumps(record))
+        with pytest.raises(RuntimeError): cli['verify_result'](out, names, expected)
+    (out / 'reconstruction.json').write_bytes(original)
+    ledger_bytes = (out / 'camera-frames.json').read_bytes()
+    broken = json.loads(ledger_bytes); broken['frames'][0]['origin']['sourceIndex'] = 99
+    (out / 'camera-frames.json').write_text(json.dumps(broken))
+    with pytest.raises(RuntimeError, match='camera ledger'): cli['verify_result'](out, names, expected)
+    (out / 'camera-frames.json').write_bytes(ledger_bytes)
     ledger = camera_frames.load_record(out.parent, ledger_path=out / 'camera-frames.json')
     assert len(ledger['frames']) == 5
     # The transformed cameras must still project the transformed cloud; a persisted
@@ -246,12 +266,16 @@ def test_native_capture_upload_cannot_cross_tenant_boundary(tmp_path):
         assert client.post('/v1/jobs', json={'engine': 'capture-test', 'upload_ids': [uid], 'consent': True}, headers=b).status_code == 404
 
 
-def test_native_submission_validates_sources_and_checks_upload_offsets(tmp_path):
+def native_submission_cli():
     import runpy
     script = Path(__file__).resolve().parents[2] / 'scripts/world-demo/native_capture_submit.py'
     sys.path.insert(0, str(script.parent))
-    try: cli = runpy.run_path(str(script))
+    try: return runpy.run_path(str(script))
     finally: sys.path.remove(str(script.parent))
+
+
+def test_native_submission_validates_sources_and_checks_upload_offsets(tmp_path):
+    cli = native_submission_cli()
     inputs, _ = bundle_inputs(tmp_path)
     submitted = cli['capture_inputs'](Path(inputs[0]['path']), tmp_path)
     assert len(submitted) == 4
@@ -261,6 +285,54 @@ def test_native_submission_validates_sources_and_checks_upload_offsets(tmp_path)
     with pytest.raises(RuntimeError, match='offset'): cli['upload'](WrongOffset(), submitted[0])
     (tmp_path / 'photo-0.png').write_bytes(b'changed bytes')
     with pytest.raises(ValueError, match='hash'): cli['capture_inputs'](Path(inputs[0]['path']), tmp_path)
+
+
+@pytest.mark.parametrize('mutation', ['missing', 'fold', 'missing-fold', 'hash', 'bundle', 'frame', 'not-executed', 'not-aligned', 'metric'])
+def test_native_submission_rejects_unqualified_completed_results(tmp_path, mutation):
+    cli = native_submission_cli()
+    expected = {'bundle_sha256': 'a' * 64, 'frames': [{'image': 'frame.png', 'image_sha256': 'b' * 64}]}
+    native = {'schema': 'brainsnn.capture-evidence.v1', **expected, 'reconstruction_executed': True,
+              'metric_verified': False, 'alignment': {'applied': True, 'metric_verified': False}}
+    native = json.loads(json.dumps(native))
+    if mutation == 'frame': native['frames'][0]['image_sha256'] = 'c' * 64
+    if mutation == 'not-executed': native['reconstruction_executed'] = False
+    if mutation == 'not-aligned': native['alignment']['applied'] = False
+    data = json.dumps(native).encode()
+    (tmp_path / 'native-capture.json').write_bytes(data)
+    result = {'capture': {'consistency': {'status': 'consistent'}}, 'metric_verified': False, 'units': 'arbitrary',
+              'native_capture': {'artifact': 'native-capture.json', 'sha256': hashlib.sha256(data).hexdigest(),
+                                 'bundle_sha256': expected['bundle_sha256'], 'alignment': native['alignment']}}
+    if mutation == 'fold': result['capture']['consistency']['status'] = 'folded'
+    if mutation == 'missing-fold': result['capture'] = {}
+    if mutation == 'hash': result['native_capture']['sha256'] = '0' * 64
+    if mutation == 'bundle': result['native_capture']['bundle_sha256'] = 'd' * 64
+    if mutation == 'metric': result['metric_verified'] = True
+    (tmp_path / 'reconstruction.json').write_text(json.dumps(result))
+    names = ['native-capture.json', 'reconstruction.json', 'camera-frames.json', 'sparse-preview.ply'] if mutation != 'missing' else ['native-capture.json']
+    with pytest.raises(RuntimeError): cli['verify_result'](tmp_path, names, expected)
+
+
+def test_native_submission_timeout_keeps_receipt_and_known_job_id(tmp_path, monkeypatch):
+    cli = native_submission_cli()
+    inputs, _ = bundle_inputs(tmp_path)
+    output = tmp_path / 'submitted'
+    monkeypatch.setenv('BRAINSNN_PASSCODE', 'test-only-secret-never-record')
+    monkeypatch.setattr(sys, 'argv', ['native_capture_submit.py', '--bundle', inputs[0]['path'], '--out', str(output), '--consent'])
+    class Site:
+        def __init__(self, base): self.base = base
+        def json(self, *args, **kwargs):
+            return {'token': 'session-secret-never-record', 'engines': [{'id': 'colmap-sparse', 'available': True, 'input_kinds': ['capture']}]}
+    def timed_out(*args, on_job, **kwargs):
+        on_job({'id': 'known-native-job', 'status': 'queued'})
+        raise RuntimeError('known-native-job exceeded deadline; cancellation accepted')
+    monkeypatch.setitem(cli['main'].__globals__, 'Site', Site)
+    monkeypatch.setitem(cli['main'].__globals__, 'upload', lambda *args: 'upload')
+    monkeypatch.setitem(cli['main'].__globals__, 'run_job', timed_out)
+    with pytest.raises(RuntimeError, match='cancellation accepted'): cli['main']()
+    text = (output / 'submission.json').read_text(); receipt = json.loads(text)
+    assert receipt['passed'] is False and receipt['job_id'] == 'known-native-job'
+    assert receipt['status'] == 'queued'  # last known, not a fabricated terminal status
+    assert 'secret-never-record' not in text
 
 
 def test_alignment_respects_native_basis_with_nonidentity_rotation_and_translation(tmp_path):

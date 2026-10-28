@@ -16,25 +16,26 @@ concurrency:
 jobs:
   omniverse:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Install test runtime
-        run: python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8 httpx==0.28.1 -r robotics/world_worker/requirements.txt
-      - name: Source, package and real HTTP contracts
+      - name: Install and require USD test runtime
         run: |
-          python -m unittest discover -s tests/world -p 'test_launch_extensions.py' -v
-          python -m unittest discover -s tests/world -p 'test_omniverse*.py' -v
+          python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8 pytest==9.1.1 httpx==0.28.1 -r robotics/world_worker/requirements.txt
+          python -c 'from pxr import Sdf, Usd, UsdGeom, UsdPhysics'
+      - name: Source, instance, package and real HTTP contracts
+        run: |
+          python -m pytest tests/world/test_launch_extensions.py tests/world/test_simready_instances.py tests/world/test_nvidia_qualification.py tests/world/test_omniverse*.py -q
           node --test tests/world/omniverse-ui.test.mjs
       - name: Chromium review/export UI with explicit mock transport
         run: |
           python -m pip install playwright==1.64.0
           python -m playwright install --with-deps chromium
           python tests/world/omniverse_browser_smoke.py
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: /tmp/brainsnn-nvidia
           key: nvidia-simready-653d91e182011f357cf1644013cc94ddf194d349-IV-pole-a01-v1
@@ -43,21 +44,31 @@ jobs:
           if [ ! -d /tmp/brainsnn-nvidia/IV_pole_a01 ]; then
             python -m robotics.world_worker.nvidia_pack --workspace /tmp/brainsnn-nvidia
           fi
-      - name: Verify, compose, archive, relocate and reopen real NVIDIA asset
+      - name: Reverify source bytes, compose two placements and reopen after relocation
+        # Reviewed isolated test placements preserve the CC-BY-4.0 package and attribution.
+        # OpenUSD composition does not execute Isaac/PhysX or qualify robot physics.
+        run: |
+          python -m robotics.world_worker.qualify_simready \
+            --workspace /tmp/brainsnn-nvidia --out qualification \
+            --license-reviewed --placement-reviewed
+      - name: Verify, compose, archive, relocate and reopen hosted NVIDIA package
         run: python scripts/world-demo/qualify_omniverse.py --workspace /tmp/brainsnn-nvidia --out /tmp/omniverse-real
       - name: Retain test receipts and exact source
         if: always()
         run: |
           mkdir -p qualification
           git archive --format=zip HEAD -o qualification/source.zip
-          if [ -f /tmp/omniverse-real/result/qualification.json ]; then cp /tmp/omniverse-real/result/*.json qualification/; fi
-      - uses: actions/upload-artifact@v4
+          if [ -f /tmp/omniverse-real/result/qualification.json ]; then
+            mkdir -p qualification/hosted-pack
+            cp /tmp/omniverse-real/result/*.json qualification/hosted-pack/
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: omniverse-qualification
           path: qualification/
           retention-days: 7
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: brainsnn-omniverse-demo-pack
           path: /tmp/omniverse-real/result/scene-omniverse.zip

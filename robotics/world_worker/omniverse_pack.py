@@ -132,7 +132,7 @@ def installed_assets(workspace, *, verify=True):
             raise ValueError('Unlisted or missing NVIDIA package files.')
         root = bridge.local(folder, data.get('root_usd')); audit_dependencies(root, folder)
         stage = Usd.Stage.Open(str(root))
-        if not stage or not stage.GetDefaultPrim() or not stage.HasAuthoredMetadata('metersPerUnit') or not stage.HasAuthoredMetadata('upAxis'):
+        if not stage or stage.GetCompositionErrors() or not stage.GetDefaultPrim() or not stage.HasAuthoredMetadata('metersPerUnit') or not stage.HasAuthoredMetadata('upAxis'):
             raise ValueError('NVIDIA stage lacks an explicit root, units or up axis.')
         axis, units = str(UsdGeom.GetStageUpAxis(stage)), UsdGeom.GetStageMetersPerUnit(stage)
         if units != 1.0 or axis not in ('Y', 'Z'):
@@ -193,7 +193,7 @@ def package_scene(source, output, request, workspace):
     catalog = installed_assets(workspace); placements = validate_request(request, catalog)
     usd = bridge.local(source, 'scene.usda'); audit_dependencies(usd, source)
     existing = Usd.Stage.Open(str(usd))
-    if not existing or not existing.GetDefaultPrim() or UsdGeom.GetStageMetersPerUnit(existing) != 1 or UsdGeom.GetStageUpAxis(existing) != UsdGeom.Tokens.y:
+    if not existing or existing.GetCompositionErrors() or not existing.GetDefaultPrim() or not existing.HasAuthoredMetadata('metersPerUnit') or not existing.HasAuthoredMetadata('upAxis') or UsdGeom.GetStageMetersPerUnit(existing) != 1 or UsdGeom.GetStageUpAxis(existing) != UsdGeom.Tokens.y:
         raise ValueError('Expected a metre-authored Y-up source USD.')
     if output.exists():
         raise ValueError('Package output must be a new directory.')
@@ -211,6 +211,9 @@ def package_scene(source, output, request, workspace):
         shutil.copyfile(p,destination); copied.append(name)
     if not {'scene.usda','scene.json','arena-cloud.json'} <= set(copied):
         raise ValueError('Source manifest does not bind the scene, USD and cloud.')
+    for name,expected in (('scene.json',request['scene_sha256']),('arena-cloud.json',request['cloud_sha256'])):
+        if bridge.file_hash(output/'source'/name)!=expected:
+            raise ValueError('Source scene or cloud changed during packaging.')
     copied_assets = set()
     for item in placements:
         a = item['asset']
@@ -250,7 +253,7 @@ def package_scene(source, output, request, workspace):
         labels.append({'prim':path, 'label':a['asset'], 'instance':item['id'], 'provenance':'library-asset'})
     stage.GetRootLayer().Save(); audit_dependencies(output/'world.usda',output)
     reopened = Usd.Stage.Open(str(output/'world.usda'))
-    if not reopened or not reopened.GetDefaultPrim():
+    if not reopened or reopened.GetCompositionErrors() or not reopened.GetDefaultPrim():
         raise ValueError('Pack did not reopen.')
     for item in placements:
         p = reopened.GetPrimAtPath('/World/LibraryAdditions/'+item['id']+'/Basis/Asset')
@@ -293,7 +296,10 @@ def run(request, workspace):
     options = raw.get('omniversePack')
     if not isinstance(options,dict):
         raise ValueError('Explicit source-bound Omniverse package review is required.')
-    out = Path(request['output_dir']); out.mkdir(parents=True,exist_ok=True)
+    out = Path(request['output_dir']).resolve()
+    if out.is_relative_to(source_dir.resolve()) or out.is_relative_to(workspace.resolve()):
+        raise ValueError('Package output must be outside its source and library roots.')
+    out.mkdir(parents=True,exist_ok=True)
     for name in ('scene-omniverse.zip','omniverse-receipt.json','manifest.json'):
         if (out/name).exists():
             raise ValueError('Refusing to overwrite an earlier package result.')

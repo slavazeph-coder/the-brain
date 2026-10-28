@@ -7,12 +7,15 @@ from pathlib import Path
 import shutil,sys,zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from pxr import Usd,UsdGeom,UsdPhysics
-from robotics.world_worker import omniverse_pack as o, simready_bridge as b
+from robotics.world_worker import omniverse_pack as o, simready_bridge as b, nvidia_pack, qualify_simready
 from robotics.world_worker.omniverse_templates.verify_pack import verify
 
 
 def qualify(workspace,out):
+    workspace,out=workspace.resolve(),out.resolve()
+    if out.is_relative_to(workspace):raise ValueError('Qualification output must be outside the library root.')
     if out.exists():raise ValueError('Fresh qualification output required.')
+    verified=nvidia_pack.verify_download('IV_pole_a01',workspace)
     source=out/'scene-job/output';source.mkdir(parents=True)
     cloud={'version':1,'kind':'colmap-sparse-point-cloud','coordinateFrame':'right-handed-y-up','sourceFrame':'colmap',
            'source':'synthetic qualification fixture; not a phone reconstruction','units':'m',
@@ -38,14 +41,24 @@ def qualify(workspace,out):
     with zipfile.ZipFile(out/'result/scene-omniverse.zip') as z:z.extractall(moved)
     verify(moved);o.audit_dependencies(moved/'world.usda',moved)
     stage=Usd.Stage.Open(str(moved/'world.usda'));assert stage and stage.GetDefaultPrim()
+    assert not stage.GetCompositionErrors()
     rigid=sum(p.HasAPI(UsdPhysics.RigidBodyAPI) for p in o.traversed(stage))
     colliders=sum(p.HasAPI(UsdPhysics.CollisionAPI) for p in o.traversed(stage))
     assert colliders>1 and rigid>0
     assert b.receipt(moved/'assets'/a['asset'])['sha256']==a['package_sha256']
+    original=Usd.Stage.Open(str(workspace/a['asset']/a['root_usd']));source_prim=original.GetDefaultPrim()
+    placed=stage.GetPrimAtPath('/World/LibraryAdditions/sample_pole/Basis/Asset')
+    source_inventory=qualify_simready.inventory(source_prim,workspace/a['asset'])
+    placed_inventory=qualify_simready.inventory(placed,moved/'assets'/a['asset'])
+    transforms=qualify_simready.compare_placement(source_prim,placed,placed.GetParent(),source_inventory,placed_inventory,
+                                                 request=options['placements'][0])
     report={'schema':'brainsnn.omniverse-qualification.v1','source_kind':'synthetic-room-plus-real-nvidia-asset',
             'asset':a,'portable_usd_reopened':True,'all_dependencies_local':True,'authored_rigid_bodies':rigid,
             'authored_colliders':colliders,'archive_sha256':proof['archive_sha256'],
+            'source_tree_rechecked':verified['source_tree_rechecked'],'source_files_verified':len(verified['files']),
+            'library_joints':len(placed_inventory['joints']),'placement_check':transforms,
             'physics_executed':False,'rendering_executed':False,'phone_reconstruction_executed':False}
+    o.json_write(out/'result/source-verification.json',verified)
     o.json_write(out/'result/qualification.json',report);print(json.dumps(report,indent=2));shutil.rmtree(moved)
 
 if __name__=='__main__':
