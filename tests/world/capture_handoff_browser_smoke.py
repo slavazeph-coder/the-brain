@@ -30,7 +30,21 @@ def check(browser):
         "name": "living-room.png", "mimeType": "image/png", "buffer": raw.getvalue(),
     })
     page.get_by_role("button", name="Continue with this capture").click()
-    page.wait_for_url(lambda url: str(url).endswith("/world/index.html#workspace"), timeout=30000)
+    try:
+        page.wait_for_url(
+            lambda url: str(url).endswith("/world/index.html#workspace"),
+            wait_until="domcontentloaded",
+            timeout=30000,
+        )
+    except Exception:
+        print("handoff navigation did not complete", {
+            "browser": browser.browser_type.name,
+            "url": page.url,
+            "alerts": page.locator(".world-capture-alert").all_text_contents(),
+            "status": page.locator("#status").all_text_contents(),
+            "errors": errors,
+        }, flush=True)
+        raise
     page.wait_for_function(
         "document.querySelector('#status')?.textContent?.includes('Loaded 1 local capture')",
         timeout=30000,
