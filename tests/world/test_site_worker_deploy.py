@@ -21,7 +21,7 @@ ADAPTERS = ROOT / 'robotics/world_worker/deploy/railway/adapters.json'
 
 def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     engines = enabled_engines(ADAPTERS)
-    assert engines == ['colmap-sparse', 'scene-usd']
+    assert engines == ['colmap-sparse', 'scene-usd', 'omniverse-pack']
     value = registry({'WORLD_WORKER_SITE_OWNER_TOKEN': OWNER, 'WORLD_WORKER_SITE_VISITOR_TOKEN': VISITOR}, 9 * 1024 ** 3, engines)
     raw = json.dumps(value)
     assert OWNER not in raw and VISITOR not in raw
@@ -38,6 +38,15 @@ def test_the_scene_engine_offers_what_the_site_needs_to_build_a_metric_scene():
     # app.mjs metricSceneCard() refuses to compile without both: the page would ask to update the worker.
     scene = next(e for e in json.loads(ADAPTERS.read_text()) if e['id'] == 'scene-usd')
     assert scene['dimension_checks'] is True and scene['bim_review'] is True and scene['source_job'] is True
+
+
+def test_omniverse_pack_is_bounded_and_requires_an_existing_scene_source():
+    entry = next(e for e in json.loads(ADAPTERS.read_text()) if e['id'] == 'omniverse-pack')
+    assert entry['enabled'] is True and entry['license_reviewed'] is True
+    assert entry['input_kinds'] == ['cloud'] and entry['max_inputs'] == 1
+    assert entry['source_job'] is True and entry['timeout_seconds'] == 600
+    assert entry['command'] == ['/opt/worker/bin/python', '/app/robotics/world_worker/omniverse_pack.py',
+                                '--input-manifest', '{input_manifest}', '--workspace', '/opt/brainsnn-simready']
 
 
 def test_visitors_together_leave_the_owner_room_inside_the_workers_global_caps():

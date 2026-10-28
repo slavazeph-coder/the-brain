@@ -24,10 +24,13 @@ COPY robotics/world_worker/requirements.txt robotics/world_worker/requirements-c
 # The worker, COLMAP and the CAD exports on Python 3.12 (their pinned numpy needs it).
 RUN python3.12 -m venv /opt/worker && /opt/worker/bin/pip install --no-cache-dir \
       -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-colmap.txt \
-      -r robotics/world_worker/requirements-cad.txt
+      -r robotics/world_worker/requirements-cad.txt usd-core==25.8
 # Blender 4.2 as a Python module, which the scene engine runs as its `blender` (about 400 MB).
 RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==4.2.23
 
+# The bounded NVIDIA package is pinned, hash-checked, and outside the /data volume.
+COPY robotics/world_worker/nvidia_pack.py /tmp/nvidia_pack.py
+RUN /opt/worker/bin/python /tmp/nvidia_pack.py --workspace /opt/brainsnn-simready
 COPY robotics /app/robotics
 RUN chmod 755 robotics/world_worker/deploy/railway/start.sh robotics/world_worker/deploy/railway/blender
 
