@@ -1,9 +1,21 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-28T05:52Z
+Last updated: 2026-10-28T06:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 143 — 2026-10-28 (fixed tampered-bundle assertion in offline-bundle test; both suites green)
+- Picked up run 143's uncommitted diff (two new assertions in `tests/world/report-receipts.test.mjs` for the offline-bundle test). The tree was dirty since the prior run.
+- One of the two new assertions was wrong: tampering `scenarioText` by replacing `"schema"` with `"schemaX"` produces valid JSON with a wrong schema value, so `parseScenario` hits the schema check (`fail('Use the exact exported BrainSNN proof JSON.')`) rather than the JSON-parse check. The assertion expected `/not valid JSON/` which never matches.
+- Fix: changed the expected regex to `/exact exported BrainSNN proof JSON/` (one line). The other new assertion (missing `publicKey` field → `/fields/`) was correct and passed.
+- Exact suites (post-fix, clean tree at `faa50f4`):
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (69 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.41 s
+- Commit: **`faa50f4`** `test(world): fix tampered-bundle assertion — schema mutation hits schema check, not JSON parse` (1 file, +3). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- 4090 probe this run: `ssh2.vast.ai:23990` **reachable again** — hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, 0 % util, 28 MiB. (Was connection-refused at ~06:00 UTC in run 142.) No 4090 GPU work performed this run (GB10 build task closed first).
+- Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+- Next bounded action: 4090 bounded GPU/reconstruction task (e.g. single-view consistency check on the 11-frame held-out set, or a second independent MapAnything run to confirm reproducibility). Confirm hostname+GPU before running.
 
 ### Run 142 — 2026-10-28 (GB10 baseline re-verified at `96a0ea7`; progress entry for run 96a0ea7 written)
 - Clean tree at `96a0ea7` (`hermes/world-builder-gb10`).
