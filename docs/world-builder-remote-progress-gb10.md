@@ -5,6 +5,26 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 145 — 2026-10-28 (Node cancellation regression: verifySignedReport status gate; both suites green)
+- Tree clean at `f2f5123` before editing (run 144 left no uncommitted changes).
+- 4090 probe: `ssh2.vast.ai:23990` connection refused (instance still down since run 144). No 4090 GPU work.
+- Baseline (pre-edit, exact):
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (69 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.47 s
+- Added `verifySignedReport rejects cancelled or running expectedJob even when the signature is valid` to `tests/world/report-receipts.test.mjs` (+23 lines):
+  - Pins the `checkedJob` status gate (report-receipts.mjs:38): `job.status !== 'complete'` → `fail('A completed worker job is required.')`.
+  - Parametrised over `cancelled` and `running` — both rejected with `/completed worker job/`.
+  - Tampered-but-validly-signed receipt (ownerId unchanged, payload re-signed) against a `cancelled` job → rejected at the status gate, proving the gate is independent of signature validity.
+  - Same tampered receipt against a `complete` job → passes (signature valid, payload valid), confirming the gate is the status check, not the signature.
+- Verified (exact, post-commit):
+  - `node --test tests/world/report-receipts.test.mjs` → **9 pass / 0 fail** (68 ms) (was 8)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.43 s
+- Commit: **`<hash>`** `test(world): Node cancellation regression — verifySignedReport status gate independent of signature validity` (1 file, +23). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+- Next bounded action: 4090 bounded GPU/reconstruction task once instance is reachable (confirm hostname+GPU first). If 4090 remains down, continue GB10 receipt work or integration-gap review (signed-report receipt files + Hermes queue continuation absent from main per WORLD_BUILDER_CURRENT.md).
+
+### Run 144 — GB10 build task (4090 unreachable; Vast instance down, port 23990 refused, no new endpoint). No commits this run.
+
 ### Run 143 — 2026-10-28 (fixed tampered-bundle assertion in offline-bundle test; both suites green)
 - Picked up run 143's uncommitted diff (two new assertions in `tests/world/report-receipts.test.mjs` for the offline-bundle test). The tree was dirty since the prior run.
 - One of the two new assertions was wrong: tampering `scenarioText` by replacing `"schema"` with `"schemaX"` produces valid JSON with a wrong schema value, so `parseScenario` hits the schema check (`fail('Use the exact exported BrainSNN proof JSON.')`) rather than the JSON-parse check. The assertion expected `/not valid JSON/` which never matches.

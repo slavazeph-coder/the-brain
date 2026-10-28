@@ -79,6 +79,29 @@ test('verification snapshots receipt, trust and expected artifact metadata befor
   assert.equal((await pending).verified,true);
 });
 
+test('verifySignedReport rejects cancelled or running expectedJob even when the signature is valid',async()=>{
+  const f=await fixture();
+  // The fixture's receipt is correctly signed by the primary key against a
+  // complete job.  Flipping expectedJob.status to a non-complete value must
+  // fail the status gate independently of signature validity.
+  for(const status of ['cancelled','running']){
+    const badJob={...f.expectedJob,status};
+    await assert.rejects(verifySignedReport({...f,expectedJob:badJob}),/completed worker job/);
+  }
+  // A tampered receipt that still verifies (signature valid) must also be
+  // rejected when the job is not complete — the gate is the status check,
+  // not the signature.
+  const tampered=clone(f.receipt);
+  tampered.payloadText=JSON.stringify({...JSON.parse(tampered.payloadText),ownerId:'fixture-owner'});
+  tampered.payloadSha256=hash(tampered.payloadText);
+  const signedTampered=signed(JSON.parse(tampered.payloadText));
+  await assert.rejects(verifySignedReport({...f,receipt:signedTampered,expectedJob:{...f.expectedJob,status:'cancelled'}}),/completed worker job/);
+  // The same tampered receipt against a complete job still passes the
+  // signature gate (ownerId is unchanged so the payload is valid).
+  const okTampered=await verifySignedReport({...f,receipt:signedTampered,expectedJob:f.expectedJob});
+  assert.equal(okTampered.verified,true);
+});
+
 test('WorkerClient signing is unavailable by default and transmits hashes/refs only after capability opt-in',async()=>{
   const f=await fixture(),client=new WorkerClient('https://worker.example','t'.repeat(40)),calls=[];
   client.request=async(path,options)=>{calls.push({path,options});return f.receipt;};
