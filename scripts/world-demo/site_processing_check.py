@@ -66,12 +66,14 @@ def step(name, ok, detail=''):
     return ok
 
 
-def run_job(site, engine, upload_id, poll, timeout=1200):
+def run_job(site, engine, upload_id, poll, timeout=1200, *, on_job=None):
     started = time.monotonic()
     deadline = started + timeout
     ids = upload_id if isinstance(upload_id, list) else [upload_id]
     job = site.json('POST', '/api/world/worker/v1/jobs', {'engine': engine, 'upload_ids': ids, 'consent': True})
     try:
+        if on_job is not None:
+            on_job(job)
         site.json('POST', f"/api/world/worker/v1/jobs/{job['id']}/start", timeout=min(120, timeout))
         last = None
         while job['status'] not in ('complete', 'failed', 'cancelled'):
@@ -80,6 +82,8 @@ def run_job(site, engine, upload_id, poll, timeout=1200):
                 raise RuntimeError(f'exceeded {timeout:g} seconds')
             time.sleep(min(poll, remaining))
             job = site.json('GET', f"/api/world/worker/v1/jobs/{job['id']}", timeout=max(1, min(120, deadline - time.monotonic())))
+            if on_job is not None:
+                on_job(job)
             if job['status'] != last:
                 print(f"      {engine}: {job['status']} after {time.monotonic() - started:.0f} s", flush=True)
                 last = job['status']

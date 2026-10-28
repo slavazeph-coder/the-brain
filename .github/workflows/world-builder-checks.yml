@@ -151,6 +151,8 @@ jobs:
           # Permission fixtures test cancellation; native canvas MP4 is separate
           # from physical phone/camera qualification.
           python tests/world/capture_browser_smoke.py
+          # Original capture hashes and consent, then real CPU reconstruction of an authored synthetic room.
+          python tests/world/native_capture_browser_smoke.py
           # Reconstruction -> proposed map -> review gate -> plan, on a synthetic room in an arbitrary frame.
           python tests/world/realtosim_browser_smoke.py
           # brainsnn.com's own processing: passcode -> the site's /api/world proxy -> a real worker -> cloud loaded.

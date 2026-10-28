@@ -174,6 +174,43 @@ def audit_layers(path, root, Sdf):
             todo.append(local(root, target.relative_to(root.resolve()).as_posix()))
 
 
+
+def audit_asset_dependencies(prim, root):
+    """Check authored asset-valued attributes, including active instance-proxy materials.
+
+    This validates referenced file presence and containment, not shader/MDL program semantics.
+    All authored time samples are checked. Inactive composition-layer references are checked
+    separately; inactive asset-valued attributes are outside this audit.
+    """
+    from pxr import Sdf, Usd
+    count, files = 0, set()
+    for child in Usd.PrimRange(prim, Usd.TraverseInstanceProxies()):
+        for attr in child.GetAttributes():
+            if str(attr.GetTypeName()) not in ('asset', 'asset[]'):
+                continue
+            times = attr.GetTimeSamples()
+            if len(times) > 4096:
+                raise ValueError('Too many sampled asset dependencies.')
+            for time in [Usd.TimeCode.Default(), *times]:
+                values = attr.Get(time)
+                values = values if str(attr.GetTypeName()) == 'asset[]' else [values]
+                for value in values or []:
+                    if value is None or not isinstance(value, Sdf.AssetPath) or not value.path:
+                        continue
+                    count += 1
+                    if count > 100000:
+                        raise ValueError('Too many asset-valued dependencies.')
+                    if ':' in value.path or '\\' in value.path or Path(value.path).is_absolute():
+                        raise ValueError('Remote or absolute asset-valued dependency rejected.')
+                    resolved = value.resolvedPath
+                    if not resolved or not Path(resolved).resolve().is_relative_to(root.resolve()):
+                        raise ValueError('Asset-valued dependency is missing or escapes its package.')
+                    target = local(root, Path(resolved).resolve().relative_to(root.resolve()).as_posix())
+                    files.add(target.relative_to(root.resolve()).as_posix())
+    return {'asset_values_checked': count, 'unique_files': len(files), 'files': sorted(files),
+            'shader_programs_executed': False, 'scope': 'active variants; default and authored time samples'}
+
+
 def compose(data, workspace, out):
     """Optional usd-core path. An additions layer, not a scan or physics certificate."""
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
@@ -194,6 +231,9 @@ def compose(data, workspace, out):
         axis = str(UsdGeom.GetStageUpAxis(stage))
         if axis not in ('Y', 'Z') or abs(UsdGeom.GetStageMetersPerUnit(stage) - 1.0) > 1e-12:
             raise ValueError('Requires metre-authored Y/Z-up assets; no silent physics-unit conversion.')
+        if stage.GetCompositionErrors():
+            raise ValueError('Source USD has composition errors.')
+        audit_asset_dependencies(stage.GetDefaultPrim(), folder)
         prims = list(Usd.PrimRange(stage.GetDefaultPrim(), Usd.TraverseInstanceProxies()))
         if not any(p.HasAPI(UsdPhysics.CollisionAPI) for p in prims):
             raise ValueError('No authored collider in the referenced asset.')
@@ -228,6 +268,8 @@ def compose(data, workspace, out):
         prim.GetReferences().AddReference('assets/' + digest + '/' + a['root_usd'])
         prim.SetCustomDataByKey('brainsnn:provenance', 'library-asset')
         prim.SetCustomDataByKey('brainsnn:sourceURL', a['source']['url'])
+        prim.SetCustomDataByKey('brainsnn:license', a['license'])
+        prim.SetCustomDataByKey('brainsnn:packageSHA256', a['receipt']['sha256'])
         prim.SetCustomDataByKey('brainsnn:physicsReady', False)
         if item['collision_policy'] == 'convexHull':
             for child in Usd.PrimRange(prim):
@@ -235,8 +277,11 @@ def compose(data, workspace, out):
                     UsdPhysics.MeshCollisionAPI.Apply(child).CreateApproximationAttr().Set('convexHull')
     stage.GetRootLayer().Save()
     reopened = Usd.Stage.Open(str(out / 'simready-additions.usda'))
-    if not reopened or not reopened.GetDefaultPrim():
-        raise ValueError('Serialized USD did not reopen.')
+    if not reopened or not reopened.GetDefaultPrim() or reopened.GetCompositionErrors():
+        raise ValueError('Serialized USD did not reopen without composition errors.')
+    for item in data['placements']:
+        prim = reopened.GetPrimAtPath('/SimReadyAdditions/' + item['id'] + '/Basis/Asset')
+        audit_asset_dependencies(prim, out / 'assets' / item['asset']['receipt']['sha256'])
     report = {**data, 'usd_reopened': True, 'usd_sha256': file_hash(out / 'simready-additions.usda')}
     (out / 'simready-receipt.json').write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
     return report
