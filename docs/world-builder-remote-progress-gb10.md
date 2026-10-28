@@ -5,6 +5,29 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 141 — 2026-10-28 (4090 11-frame held-out MapAnything GPU inference: PASSED, receipt captured)
+- GB10 baseline re-verified at `0122035` (clean tree):
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (111 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.74 s
+- 4090 confirmed live: host `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09` (idle 28 MiB, 0%).
+- The 11-frame held-out MapAnything GPU inference launched at 05:23:23 UTC (run 140) **completed exit=0** at ~05:23:45 UTC (~22 s wall).
+- Artifacts on 4090: `/workspace/slava/qualification-mapanything-receipt-11f/`
+  - `reconstruction.json` (SHA `fb9619bd…d9803d`), `dense-preview.ply` (4,254,237 B, SHA `9c386e2f…c85`), `manifest.json` (385 B)
+- Key metrics from `reconstruction.json`:
+  - `device: cuda`, torch 2.5.1+cu121
+  - Model: `facebook/map-anything-apache` @ `00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a`, SHA256 `fa06c0fd…5201`
+  - 11 source frames (0000–0010), all with SHAs recorded
+  - `peak_cuda_allocated_bytes: 8385236992` (~8.4 GB — fits 24 GB card)
+  - `elapsed_seconds: 14.027` (inference only)
+  - `preview_points: 98,796` (vs 96,276 for 2-frame run — consistent)
+  - `metric_verified: false`, `physics_ready: false` (correct for held-out smoke)
+  - 11 camera poses + intrinsics written (OpenCV → right-handed y-up)
+  - Per-view predicted_pixels: 181,300; valid_points: 138,894–145,006; preview_points: 8,681–9,063
+- Comparison to 2-frame run (run 134, `509074c`): peak VRAM 7.7 GB → 8.4 GB (+9%), inference 12.68 s → 14.03 s (+11%), points 96,276 → 98,796 (+3%). Linear scaling confirmed.
+- No force-push/merge/deploy; no GB10 code changes this run.
+- Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+- Next bounded action: GB10 receipt work (e.g. one more cancellation regression or loopback test) or 4090 single-view consistency check.
+
 ### Run 137 — 2026-10-28 (baseline green; 401/409 re-check already covered; progress entries written)
 - Clean tree at `509074c` (`hermes/world-builder-gb10`), no uncommitted changes.
 - Exact suites:
