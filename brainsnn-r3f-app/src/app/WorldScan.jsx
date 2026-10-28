@@ -57,6 +57,7 @@ export function WorldScan() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
+  const [handoffBusy, setHandoffBusy] = useState(false);
   const videoInput = useRef(null);
   const anyInput = useRef(null);
   // Each choice (and Clear) starts a new selection; a video's length check that finishes after a newer one is dropped.
@@ -103,6 +104,23 @@ export function WorldScan() {
     chooseFiles(event.dataTransfer?.files);
   }
   function remove() { selection.current += 1; setFiles([]); setActiveIndex(0); setError(''); }
+  // Explicit click, local same-origin transfer, no worker upload. iOS may refuse large IndexedDB writes,
+  // in which case the fallback leaves the original capture untouched and asks for a fresh picker.
+  async function continueWithCapture() {
+    if (!files.length || handoffBusy) return;
+    const chosen = selection.current;
+    setHandoffBusy(true);
+    setError('');
+    try {
+      const { stageLocalCapture, clearLocalCapture } = await import(/* @vite-ignore */ '/world/capture-handoff.mjs');
+      const id = await stageLocalCapture(files, { goal });
+      if (chosen !== selection.current) { await clearLocalCapture(id); return; }
+      track('world_capture_local_handoff', { goal, count: files.length, kind: files.some(isVideo) ? 'video' : 'photos' });
+      window.location.assign('/world/index.html#handoff=' + id);
+    } catch (reason) {
+      setError('This browser could not move the selected capture privately to World Builder. Your original file is unchanged. Open World Builder below and choose the file again. ' + (reason?.message || 'Local storage failed.'));
+    } finally { setHandoffBusy(false); }
+  }
   function selectGoal(id) {
     const next = goalById(id);
     setGoal(next.id);
@@ -194,12 +212,13 @@ export function WorldScan() {
             </label>
           </div>
           </details>
-          <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files and space name stay on this page. No media is sent to BrainSNN or any worker automatically.</p>
+          <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files stay on this device until you approve a worker upload. Continue privately stores a temporary local browser copy, valid for 20 minutes and cleared after import. Unused copies are deleted when the handoff is revisited after expiry.</p>
           {files.length > 0 && <div className="world-scan-ready">
             <h3>Capture prepared</h3>
-            <p>{video ? 'Your video can be previewed here. In World Builder, a connected reconstruction worker can turn it into points and camera poses, then a proposed robot planning map. Select the file again there.' : 'Your photos are ready for review. Multi-photo reconstruction will require a supported frame archive and connected worker; this page does not yet convert individual photos into a scene.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
+            <p>{video ? 'Your video is ready for World Builder. A compatible connected worker can reconstruct camera poses and points. Reconstruction can be partial and must be reviewed before using dimensions or routes.' : 'Your photos are ready to explore in World Builder. Individual photos support visual previews; calibrated multi-photo reconstruction still needs a compatible capture and worker.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
             <div className="world-scan-actions">
-              <a href={workerUrl} className="world-button world-button-primary" onClick={() => track('world_capture_worker_handoff', { use_case: useCase })}>Open World Builder <ArrowRight size={15} aria-hidden="true" /></a>
+              <button type="button" disabled={handoffBusy} className="world-button world-button-primary" onClick={continueWithCapture}>{handoffBusy ? 'Preparing private handoff…' : 'Continue with this capture'} <ArrowRight size={15} aria-hidden="true" /></button>
+              <a href={workerUrl} className="world-button world-button-outline">Open without transfer</a>
               <a href={'mailto:info@xioai.ca?subject=' + pilotSubject} className="world-button world-button-outline">Request pilot access <ArrowRight size={15} aria-hidden="true" /></a>
             </div>
           </div>}
@@ -211,8 +230,8 @@ export function WorldScan() {
             <div className="world-guide-step"><span>02</span><div><strong>Overlap your views</strong><p>Film the same surfaces from several angles. Move around furniture and reveal corners where possible.</p></div></div>
             <div className="world-guide-step"><span>03</span><div><strong>Include a measurement</strong><p>Record a known dimension or reference marker if you intend to use the reconstruction for measurements.</p></div></div>
             <div className="world-guide-cta">
-              <a className="world-button world-button-outline" href={workerUrl}><Bot size={16} aria-hidden="true" /> Continue in World Builder <ArrowRight size={16} aria-hidden="true" /></a>
-              <small>World Builder processes captures through a separately connected, compatible worker. You will need to select your file again there.</small>
+              {files.length ? <button type="button" disabled={handoffBusy} className="world-button world-button-outline" onClick={continueWithCapture}><Bot size={16} aria-hidden="true" /> {handoffBusy ? 'Preparing transfer…' : 'Continue with selected file'} <ArrowRight size={16} aria-hidden="true" /></button> : <a className="world-button world-button-outline" href={workerUrl}><Bot size={16} aria-hidden="true" /> Open World Builder <ArrowRight size={16} aria-hidden="true" /></a>}
+              <small>Files are transferred within this browser after you choose Continue; they are not uploaded to any worker automatically. If transfer is unavailable, open World Builder and select the file there.</small>
             </div>
           </section>
           <div className="world-privacy-card"><CircleHelp size={20} aria-hidden="true"/><div><strong>What's available now?</strong><p>This page previews files privately. Advanced reconstruction and IFC/Rhino exports require an authorized worker, measurements and human review. Public hosted signup is not available.</p></div></div>
