@@ -17,7 +17,8 @@ def preflight():
     blockers = []; versions = {}
     if platform.system() != 'Linux' or platform.machine() not in ('x86_64','AMD64'):
         blockers.append('Matched stack is restricted to a Linux x86-64 GPU host')
-    for package, expected in [('isaaclab','2.3.0'),('rsl-rl-lib','3.3.0')]:
+    # The Isaac Lab v2.3.0 release installs extension package isaaclab==0.47.2.
+    for package, expected in [('isaaclab','0.47.2'),('rsl-rl-lib','3.3.0')]:
         try:
             value = metadata.version(package); versions[package] = value
             if value.split('+')[0] != expected:
