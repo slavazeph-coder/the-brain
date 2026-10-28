@@ -1,9 +1,24 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-28T20:46Z
+Last updated: 2026-10-28T20:55Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 152 — 2026-10-28 (inter-chunk abort regression: upload() relays caller signal to each chunk PUT; both suites green)
+
+- 4090 skipped this run (6 consecutive connection refused; per "if blocker repeats, choose another useful task").
+- Picked up run 150's committed state; verified `upload()` at `brainsnn-r3f-app/public/world/worker-client.mjs` already relays `this.request({...,signal})` — the fix from `0e4aafc` is correct; only the regression test was missing.
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10`):**
+  - `tests/world/worker-client.test.mjs`: added inter-chunk-abort regression test. Stubs `client.request`, drives a real in-flight chunk PUT, aborts the owner `AbortController` mid-upload, asserts: (a) the PUT received the caller's exact signal, (b) the promise rejects with `AbortError`, (c) no later request outlives the signal, (d) no chunk was acked past offset 0.
+- **Verified (exact, GB10, post-commit):**
+  - `node --test tests/world/worker-client.test.mjs` → **10 pass / 0 fail** (123 ms, up from 9)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (104 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** (20.4 s)
+- **Commit:** `724e976` `test(world): inter-chunk abort regression - upload() relays caller signal to each chunk PUT, rejects AbortError mid-upload` (1 file). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- **Actual blocker:** 4090 GPU unreachable (connection refused, 6 consecutive). HTTP report-UI (browser) validation still pending (loopback only).
+- **Next bounded action:** complete signed-receipt API/env documentation; then 4090 MapAnything held-out dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first).
+- **Guardrails:** no force-push, no merge/deploy, no paid fallback. Serving Qwen/backup and licensed model/guardrail gates untouched. 4090 branch `hermes/world-builder-4090` untouched.
 
 ### Run 150 — 2026-10-28 (post-await abort guards in request() + reportReceipt(): signed receipt discarded after caller aborts; both suites green)
 
