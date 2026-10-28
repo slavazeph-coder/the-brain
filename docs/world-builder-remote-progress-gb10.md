@@ -19,7 +19,7 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - Verified (exact, post-commit):
   - `node --test tests/world/report-receipts.test.mjs` → **9 pass / 0 fail** (68 ms) (was 8)
   - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.43 s
-- Commit: **`<hash>`** `test(world): Node cancellation regression — verifySignedReport status gate independent of signature validity` (1 file, +23). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- Commit: **`74a51a8`** `test(world): Node cancellation regression — verifySignedReport status gate independent of signature validity` (2 files, +43). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
 - Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
 - Next bounded action: 4090 bounded GPU/reconstruction task once instance is reachable (confirm hostname+GPU first). If 4090 remains down, continue GB10 receipt work or integration-gap review (signed-report receipt files + Hermes queue continuation absent from main per WORLD_BUILDER_CURRENT.md).
 
