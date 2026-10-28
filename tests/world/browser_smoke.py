@@ -337,6 +337,73 @@ def check_app_shell(browser):
         page.wait_for_url(re.compile(r'/world/index\.html\?install=1$'));page.wait_for_function("/Add to Home Screen/.test(document.querySelector('#status').textContent)")
     assert not errors,errors;ctx.close()
 
+def check_capture_handoff(browser):
+    """Capture Studio transfers an actual File locally, without submitting it to a worker."""
+    import io
+    from PIL import Image
+    site=URL.split('/world/')[0]
+    ctx=browser.new_context(viewport={'width':390,'height':844})
+    page=ctx.new_page()
+    errors=[]
+    requests=[]
+    page.on('pageerror',lambda error:errors.append(str(error)))
+    page.on('request',lambda request:requests.append((request.method,request.url)))
+    page.goto(site+'/scan?goal=room',wait_until='domcontentloaded')
+    page.locator('.world-goal-card').first.wait_for()
+    assert page.locator('.world-goal-card').count()==4
+    image=io.BytesIO()
+    Image.new('RGB',(24,24),color=(26,110,145)).save(image,format='PNG')
+    page.locator('input[aria-label="Select phone video or photographs"]').set_input_files(
+        {'name':'living-room.png','mimeType':'image/png','buffer':image.getvalue()})
+    page.get_by_role('button',name='Continue with this capture').click()
+    page.wait_for_url(re.compile(r'/world/index\\.html#workspace
+    """Adding a capture replaces only the untouched sample; an edited or imported authored map is the user's work."""
+    from PIL import Image
+    import io
+    url=URL if URL.endswith('/world/index.html') else URL.rstrip('/')+'/world/index.html'
+    ctx=browser.new_context();page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===23")
+    page.locator('[data-tab=world]').click();page.locator('#map-name').fill('My measured gym');page.locator('#map-name').press('Enter')
+    b=io.BytesIO();Image.new('RGB',(20,20)).save(b,format='PNG')
+    page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
+    page.locator('[data-tab=world]').click()
+    assert page.locator('#map-name').input_value()=='My measured gym','edited authored map was discarded'
+    page.locator('#hero-sample').click()
+    page.locator('#files').set_input_files({'name':'camera-2.png','mimeType':'image/png','buffer':b.getvalue()})
+    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
+    assert not errors,errors;ctx.close()
+
+if __name__=='__main__':
+    with sync_playwright() as p:
+        for name in os.environ.get('WORLD_BROWSERS','chromium').split(','):
+            executable=os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
+            browser=getattr(p,name).launch(headless=True, **({'executable_path':executable} if name=='chromium' and executable else {}))
+            check(browser,False);check(browser,True);check_measurements(browser);check_app_shell(browser);check_capture_handoff(browser);check_capture_keeps_user_map(browser)
+            if os.environ.get('WORLD_SITE_URL'):check_routes(browser,os.environ['WORLD_SITE_URL'].rstrip('/'))
+            if os.environ.get('WORLD_PHOTO'):check_inference(browser,os.environ['WORLD_PHOTO'])
+            browser.close()
+            print(name+': desktop and mobile smoke checks passed')
+),timeout=30000)
+    page.wait_for_function("document.querySelector('#status')?.textContent?.includes('Loaded 1 local capture')",timeout=30000)
+    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE'
+    assert page.locator('.source-row button[data-source]').filter(has_text='living-room.png').count()==1
+    assert page.locator('[data-tab=capture]').get_attribute('aria-selected')=='true'
+    assert not any('/v1/uploads' in url or '/v1/jobs' in url for _,url in requests),requests
+    # The temporary media record was deleted after the original File became a local source.
+    remaining=page.evaluate("""async () => new Promise((resolve,reject) => {
+      const open=indexedDB.open('brainsnn-capture-handoff-v1',1);
+      open.onerror=()=>reject(open.error);
+      open.onsuccess=()=>{
+        const db=open.result,request=db.transaction('captures','readonly').objectStore('captures').count();
+        request.onsuccess=()=>{resolve(request.result);db.close();};
+        request.onerror=()=>reject(request.error);
+      };
+    })""")
+    assert remaining==0,remaining
+    assert not errors,errors
+    ctx.close()
+
+
 def check_capture_keeps_user_map(browser):
     """Adding a capture replaces only the untouched sample; an edited or imported authored map is the user's work."""
     from PIL import Image
