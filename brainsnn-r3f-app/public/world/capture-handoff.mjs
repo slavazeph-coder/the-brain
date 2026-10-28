@@ -1,6 +1,10 @@
 // Same-origin, short-lived capture transfer between /scan and the World Builder document.
-// IndexedDB stores the original File objects on this device. It never contacts a worker.
+// IndexedDB stores portable bytes rather than a File object (WebKit cannot reliably clone Files).
+// Media is never sent to a worker by the handoff.
 export const HANDOFF_TTL_MS = 20 * 60 * 1000;
+// A bounded browser copy avoids huge ArrayBuffer allocations on memory-limited phones.
+// Larger videos remain selectable directly within World Builder (up to the worker's own limits).
+export const HANDOFF_MAX_BYTES = 128 * 1024 * 1024;
 const DB_NAME = 'brainsnn-capture-handoff-v1';
 const STORE = 'captures';
 const MAX_BYTES = 2 * 1024 ** 3;
@@ -85,6 +89,7 @@ const indexedDbStore = {
 export async function stageLocalCapture(input, { goal = 'room', store = indexedDbStore, now = Date.now(), makeId = () => globalThis.crypto.randomUUID() } = {}) {
   const files = validateCaptureFiles(input);
   const size = files.reduce((sum, file) => sum + file.size, 0);
+  if (size > HANDOFF_MAX_BYTES) throw new Error('Private handoff supports up to 128 MiB. Use Open without transfer for a larger video; the worker still supports its normal capture limits.');
   if (!GOALS.has(goal)) throw new Error('Choose a supported activity.');
   const id = makeId();
   if (!VALID_ID.test(id)) throw new Error('Could not create a secure local transfer identifier.');
@@ -99,7 +104,16 @@ export async function stageLocalCapture(input, { goal = 'room', store = indexedD
     }
   }
   await store.prune?.(now);
-  await store.put({ id, version: 1, goal, createdAt: now, expiresAt: now + HANDOFF_TTL_MS, files });
+  // WebKit's IndexedDB File/Blob structured cloning can abort a transaction.
+  // Store byte buffers plus verified metadata; never save source filenames in the URL.
+  const encoded = store === indexedDbStore
+    ? await Promise.all(files.map(async file => ({
+        name: file.name, type: file.type || '', size: file.size,
+        lastModified: Number.isFinite(file.lastModified) ? file.lastModified : now,
+        bytes: await file.arrayBuffer(),
+      })))
+    : files;
+  await store.put({ id, version: store === indexedDbStore ? 2 : 1, goal, createdAt: now, expiresAt: now + HANDOFF_TTL_MS, files: encoded });
   return id;
 }
 
@@ -107,13 +121,23 @@ export async function readLocalCapture(id, { store = indexedDbStore, now = Date.
   if (!VALID_ID.test(id ?? '')) return null;
   const record = await store.get(id);
   if (!record) return null;
-  if (record.version !== 1 || record.id !== id || !(record.expiresAt > now) || !GOALS.has(record.goal)) {
+  if (![1, 2].includes(record.version) || record.id !== id || !(record.expiresAt > now) || !GOALS.has(record.goal)) {
     await store.delete(id);
     return null;
   }
-  try { validateCaptureFiles(record.files); }
-  catch { await store.delete(id); return null; }
-  return record;
+  try {
+    if (record.version === 2) {
+      if (!Array.isArray(record.files) || record.files.some(file => !(file.bytes instanceof ArrayBuffer) || file.bytes.byteLength !== file.size))
+        throw new Error('Invalid local file bytes.');
+      const reconstructed = record.files.map(file => new File([file.bytes], file.name, {
+        type: file.type, lastModified: file.lastModified,
+      }));
+      validateCaptureFiles(reconstructed);
+      return { ...record, files: reconstructed };
+    }
+    validateCaptureFiles(record.files);
+    return record;
+  } catch { await store.delete(id); return null; }
 }
 
 export async function clearLocalCapture(id, { store = indexedDbStore } = {}) {
