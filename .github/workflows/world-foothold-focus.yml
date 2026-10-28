@@ -1,0 +1,50 @@
+name: World foothold perception
+on:
+  pull_request:
+    paths:
+      - 'robotics/world_worker/foothold_perception.py'
+      - 'robotics/world_worker/fpm_bridge.py'
+      - 'robotics/world_worker/omniverse_pack.py'
+      - 'brainsnn-r3f-app/public/world/foothold*.mjs'
+      - 'brainsnn-r3f-app/public/world/omniverse-ui.mjs'
+      - 'tests/world/*foothold*'
+      - 'scripts/world-demo/qualify_foothold_focus.py'
+      - '.github/workflows/world-foothold-focus.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  observation-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install isolated CPU predictor and test runtime
+        run: |
+          python -m pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pytest==9.1.1 playwright==1.64.0
+      - name: Reject missing terrain, invalid frames and forged models
+        run: |
+          python -m pytest tests/world/test_foothold_focus.py -q
+          node --test tests/world/foothold-focus.test.mjs tests/world/omniverse*.test.mjs
+      - name: Real pinned predictor and independent tensor-layout check
+        run: python scripts/world-demo/qualify_foothold_focus.py
+      - name: Real HTTP browser evidence inspection
+        run: |
+          python -m playwright install --with-deps chromium
+          python tests/world/foothold_browser_smoke.py
+      - name: Preserve receipts and exact implementation
+        if: always()
+        run: |
+          mkdir -p qualification/footholds
+          git archive --format=zip HEAD -o qualification/footholds/source.zip
+          cp -r output/playwright/footholds qualification/footholds/browser || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: brainsnn-foothold-evidence
+          path: qualification/footholds/
+          retention-days: 7
