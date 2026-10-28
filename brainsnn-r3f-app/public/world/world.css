@@ -27,3 +27,34 @@
 .sandbox-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:14px 18px;background:linear-gradient(105deg,#0c1620,#10101a);border-bottom:1px solid var(--border);flex-wrap:wrap}.sandbox-scene-label{display:flex;align-items:center;gap:14px;margin:0;font:9px var(--mono);letter-spacing:.1em;color:var(--cyan)}.sandbox-scene-label select{min-width:250px;margin:0;letter-spacing:0;font:12px var(--font);padding:9px 11px}.sandbox-session-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.sandbox-context{margin:0;padding:10px 18px;color:var(--muted);font-size:11px;line-height:1.5;border-bottom:1px solid var(--border)}.tabs.sandbox-tools{flex-direction:row;padding:7px 12px;gap:6px;background:#0a0d16;justify-content:flex-start}.tabs.sandbox-tools button{min-width:110px;text-align:center;flex:1;padding:10px 9px}.tabs.sandbox-tools button span{margin-left:9px}.street-workspace{position:relative;min-height:640px;background:#0a0e15}.street-workspace[hidden],#map-workspace[hidden],#capture-progress[hidden],.sandbox-loading[hidden],#sandbox-return[hidden],#sandbox-link[hidden],#sandbox-source-count[hidden],#fork[hidden]{display:none!important}#street-mount{height:clamp(640px,78dvh,850px);min-height:640px;position:relative;isolation:isolate}.sandbox-loading{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:28px;background:#0a0e15;color:var(--muted);text-align:center}.sandbox-loading p{max-width:480px}.sandbox-loading .primary{font-size:12px}#sandbox-link{flex-basis:100%;font:11px var(--mono)}[data-sandbox=map] #sandbox-scene-state,[data-sandbox=capture] #sandbox-scene-state{display:none}.hero-actions{flex-wrap:wrap}.hero-actions .small{border-color:transparent;color:var(--muted)}
 @media(min-width:1100px){.workspace[data-sandbox=street]{margin-left:-2%;margin-right:-2%}}
 @media(max-width:720px){.sandbox-toolbar{padding:12px;gap:10px}.sandbox-scene-label{width:100%;justify-content:space-between}.sandbox-scene-label select{min-width:0;max-width:73%;font-size:11px}.sandbox-session-actions{width:100%;gap:10px;justify-content:flex-end}.sandbox-session-actions .micro{margin-right:auto;font-size:9px}.tabs.sandbox-tools{gap:2px;padding:6px}.tabs.sandbox-tools button{min-width:0;padding:9px 3px;font-size:8px}.tabs.sandbox-tools button span{margin-left:3px;font-size:10px}.sandbox-context{padding:10px 12px;font-size:10px}.street-workspace{min-height:590px}#street-mount{height:72dvh;min-height:590px}.hero-actions .small{padding-left:0}.workspace-header .badge{max-width:205px;line-height:1.7}}
+
+/* Goal-led homepage entry. Keep the existing dark/cyan/violet World Builder look. */
+.goal-entry{margin:0 0 46px;padding:28px;border:1px solid #28263d;border-radius:15px;background:linear-gradient(145deg,#0d1020,#080a12 70%)}
+.goal-entry-heading{display:flex;align-items:end;justify-content:space-between;gap:22px;flex-wrap:wrap;margin-bottom:23px}
+.goal-entry-heading .eyebrow{margin:0 0 10px}
+.goal-entry-heading h2{font-size:clamp(27px,3.3vw,44px);font-weight:550;letter-spacing:-.05em;margin:0}
+.goal-entry-heading>p{max-width:395px;color:#b4bbcb;font-size:14px;line-height:1.75;margin:0}
+.goal-entry-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.goal-entry-card{display:flex;flex-direction:column;align-items:start;gap:13px;min-height:228px;padding:20px 18px;border:1px solid #34384b;border-radius:12px;background:linear-gradient(145deg,#141725,#0a0c16);transition:border-color .16s ease,background .16s ease}
+.goal-entry-card:hover,.goal-entry-card:focus-visible{border-color:var(--cyan);background:#13202b}
+.goal-entry-card .goal-entry-index{font:11px/1.5 var(--mono);color:#92ebf2;letter-spacing:.015em}
+.goal-entry-card h3{font-size:clamp(18px,1.7vw,23px);letter-spacing:-.035em;margin:0;line-height:1.2}
+.goal-entry-card p{color:#b4bdca;font-size:13px;line-height:1.62;letter-spacing:0;margin:0}
+.goal-entry-card .goal-entry-link{margin-top:auto;border-top:1px solid #34384b;padding-top:11px;width:100%;color:#b4faff;font-size:13px;font-weight:650}
+.goal-entry-note{color:#b5bbc8;font-size:12px;line-height:1.7;margin:17px 0 0}
+@media(max-width:1000px){.goal-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.goal-entry-card{min-height:200px}}
+@media(max-width:650px){.goal-entry{padding:17px 14px}.goal-entry-grid{grid-template-columns:1fr}.goal-entry-card{min-height:0;gap:9px}.goal-entry-heading h2{font-size:29px}}
+@media(prefers-reduced-motion:reduce){.goal-entry-card{transition:none}}
+
+/* The main action opens the goal chooser; the expert workspace shortcut remains available. */
+.hero-actions{flex-wrap:wrap}
+.goal-hero-primary{display:inline-flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--cyan);border-radius:7px}
+@media(max-width:650px){.hero-actions>a,.hero-actions>button{flex:1 1 100%;justify-content:center;text-align:center}}
+
+/* Component registration recovery; warns rather than claiming measured accuracy. */
+.capture-recovery{margin:17px 0;padding:18px;border:1px solid #a855f766;border-left:3px solid #bb8cff;border-radius:9px;background:linear-gradient(140deg,#1d1729,#10111c)}
+.capture-recovery h4{font-size:16px;font-weight:650;color:#f1e6ff;margin:0 0 10px}
+.capture-recovery p{font-size:12px;line-height:1.7;color:#d5cce1}
+.capture-recovery ol{padding-left:20px;margin:10px 0}.capture-recovery li{font-size:12px;line-height:1.75;color:#e2dbea;padding-bottom:4px}
+.capture-recovery button{min-height:44px;border-color:#b98bff66;color:#ead7ff}
+@media(max-width:650px){.capture-recovery{padding:15px}.capture-recovery p,.capture-recovery li{font-size:14px}}

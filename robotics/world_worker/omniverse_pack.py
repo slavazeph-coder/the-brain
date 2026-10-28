@@ -278,6 +278,22 @@ def package_scene(source, output, request, workspace):
     templates = Path(__file__).parent / 'omniverse_templates'
     for name in ('verify_pack.py','isaac_smoke.py'):
         shutil.copyfile(templates/name,output/name)
+    # Optional research tools contain no checkpoint and execute nothing during export.
+    research = output / 'research'; research.mkdir()
+    for name in ('foothold_perception.py', 'fpm_bridge.py'):
+        shutil.copyfile(Path(__file__).parent / name, research / name)
+    (research / 'README.txt').write_text(
+        'Watch Your Step / BrainSNN terrain-focus research tools\n'
+        'Reference: https://leggedrobotics.github.io/watch-your-step/ (ETH Zurich, 2026).\n'
+        'foothold_perception.py inspects source/arena-cloud.json with an explicit query.\n'
+        'Query schema: brainsnn.foothold-query.v1; base_position_brainsnn_m: [X,Y,Z];\n'
+        'yaw_rad: positive left about Isaac Z-up; footholds_base_xy_m: [[forward,left],[forward,left]].\n'
+        'Inspection assumes an upright base. Missing or ambiguous cells remain unknown.\n'
+        'fpm_bridge.py download --out ../../fpm-model --license-reviewed fetches only the pinned MIT predictor.\n'
+        'fpm_bridge.py predict --model-dir ../../fpm-model --state ../../state.json --out ../../predictions.json\n'
+        'requires PyTorch and upstream 70-value unscaled SystemStateCfg order with reviewed joint ordering.\n'
+        'Save all results and model downloads OUTSIDE this immutable package.\n'
+        'No full locomotion policy, Isaac runtime, learned safety result or actuator transport is included.\n', encoding='utf-8')
     all_files = sorted(p for p in output.rglob('*') if p.is_file())
     if sum(p.stat().st_size for p in all_files) > MAX_TOTAL + 256*1024**2:
         raise ValueError('Assembled package budget exceeded.')

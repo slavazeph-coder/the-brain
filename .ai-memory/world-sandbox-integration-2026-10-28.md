@@ -42,6 +42,20 @@ return preserving edits, moving route and prepared JSON export. New CI smoke
 covers Chromium/WebKit desktop/phone and real JSON download. Recheck the exact
 release head's CI and Railway status before describing the integration as live.
 
+The release also incorporates main db2f422 (goal-led capture, private local
+capture handoff, partial reconstruction recovery and terrain/foothold evidence).
+Keep both the street browser flow and capture-handoff flow in the World Builder
+CI gate. A concurrent main update can suppress PR workflows through merge
+conflicts even when a cached PR snapshot still shows the older base SHA; fetch
+the actual branch ref before treating missing checks as an Actions outage.
+
+WebKit's hit-test APIs disagree for an SVG `use` element inside the shadow-root
+top-layer dialog. Street button SVGs are decorative, so pointer events belong
+to their owning buttons (`button svg, button svg * { pointer-events: none; }`).
+Keep ordinary browser clicks in the desktop and phone smoke tests; do not hide
+this behavior with forced clicks. Canvas and manipulation controls retain their
+own pointer handling.
+
 The local memory-sync helper is absent; this note is committed with the feature.
 Do not change the private worker's `deploy/world-worker-20261027` root Railway
 configuration. Website service follows main and waits for checks.

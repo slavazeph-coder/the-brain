@@ -4,15 +4,22 @@ import {createBimWorkflow} from '../../brainsnn-r3f-app/public/world/bim-workflo
 import {pointsSHA256} from '../../brainsnn-r3f-app/public/world/dimension-review.mjs';
 import {STRIDE} from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
-// The workflow only reads field values and writes escaped HTML. A tiny document
-// keeps these contract checks independent of a browser or a WebGL renderer.
-class Element {
-  value=''; checked=false; focused=false; #html=''; #text='';
-  set innerHTML(value){this.#html=value;this.#text='';}
+// Minimal DOM fixture: includes the source-bound terrain panel mounted by the
+// real BIM workflow. It deliberately does not emulate layout or parse HTML;
+// the separate Chromium smoke test covers those browser behaviors.
+class Element extends EventTarget {
+  value=''; checked=false; focused=false; children=[]; style={}; parent=null;
+  #html=''; #text='';
+  constructor(tag='div'){super();this.tagName=tag;}
+  set innerHTML(value){this.replaceChildren();this.#html=value;}
   get innerHTML(){return this.#html;}
-  set textContent(value){this.#text=value;this.#html='';}
+  set textContent(value){this.replaceChildren();this.#text=value;}
   get textContent(){return this.#text;}
-  replaceChildren(){this.#html='';this.#text='';}
+  setAttribute(name,value){this[name]=String(value);}
+  append(...nodes){for(const node of nodes){node.parent=this;this.children.push(node);}}
+  replaceChildren(...nodes){for(const node of this.children)node.parent=null;this.children=[];this.#html='';this.#text='';this.append(...nodes);}
+  closest(tag){return this.tagName===tag?this:this.parent?.closest(tag)??null;}
+  remove(){if(this.parent){this.parent.children=this.parent.children.filter(node=>node!==this);this.parent=null;}}
   focus(){this.focused=true;}
 }
 function fixture({thinned=false}={}) {
@@ -34,7 +41,7 @@ function fixture({thinned=false}={}) {
 }
 function harness(t,options={}) {
   const data=fixture(options), elements=new Map(), oldDocument=globalThis.document;
-  globalThis.document={getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);}};
+  globalThis.document={createElement:tag=>new Element(tag),getElementById(id){if(!elements.has(id))elements.set(id,new Element());return elements.get(id);}};
   t.after(()=>{if(oldDocument===undefined)delete globalThis.document;else globalThis.document=oldDocument;});
   const field=id=>globalThis.document.getElementById(id), calls={status:[],event:[],markers:[],recompile:[]};
   let activeCloud=data.cloud;
@@ -128,4 +135,19 @@ test('opening review is explicit, recompilation retains the previous job, and re
   await h.workflow.recompile();
   assert.equal(h.calls.recompile[1][3],'previous-metric-job');
   assert.equal(Object.hasOwn(h.calls.recompile[1][0],'bimReview'),false);
+});
+
+// Without an available packaging engine the local inspector still mounts, and
+// replacing/clearing a scene must dispose it rather than retain stale evidence.
+test('scene replacement and clearing dispose the local terrain inspector',async t=>{
+  const h=harness(t),host=h.field('scene-bim-files');
+  await h.show();
+  const first=host.children.find(node=>node.id==='scene-foothold-focus');
+  assert.ok(first,'metric scene mounts the local inspector without worker capabilities');
+  await h.show();
+  assert.equal(first.parent,null);
+  assert.equal(host.children.filter(node=>node.id==='scene-foothold-focus').length,1);
+  h.workflow.clearScene();
+  assert.equal(host.children.length,0);
+  assert.equal(h.workflow.hasScene,false);
 });
