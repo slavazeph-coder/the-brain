@@ -46,3 +46,11 @@
 .hero-actions{flex-wrap:wrap}
 .goal-hero-primary{display:inline-flex;align-items:center;justify-content:center;min-height:46px;border:1px solid var(--cyan);border-radius:7px}
 @media(max-width:650px){.hero-actions>a,.hero-actions>button{flex:1 1 100%;justify-content:center;text-align:center}}
+
+/* Component registration recovery; warns rather than claiming measured accuracy. */
+.capture-recovery{margin:17px 0;padding:18px;border:1px solid #a855f766;border-left:3px solid #bb8cff;border-radius:9px;background:linear-gradient(140deg,#1d1729,#10111c)}
+.capture-recovery h4{font-size:16px;font-weight:650;color:#f1e6ff;margin:0 0 10px}
+.capture-recovery p{font-size:12px;line-height:1.7;color:#d5cce1}
+.capture-recovery ol{padding-left:20px;margin:10px 0}.capture-recovery li{font-size:12px;line-height:1.75;color:#e2dbea;padding-bottom:4px}
+.capture-recovery button{min-height:44px;border-color:#b98bff66;color:#ead7ff}
+@media(max-width:650px){.capture-recovery{padding:15px}.capture-recovery p,.capture-recovery li{font-size:14px}}
