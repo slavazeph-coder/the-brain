@@ -12,6 +12,7 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.49 s
 - Wrote the missing progress entry for commit `96a0ea7` (per-request images dir isolation guard + idempotent staging test) — this entry documents that run's work.
 - Next bounded action: 4090 1-frame held-out MapAnything GPU inference (confirm hostname `d130b6c7f3f4` + GPU UUID first).
+- **4090 note (this run):** `ssh2.vast.ai:23990` connection refused (2 attempts, ~06:00 UTC). Instance may have been stopped or port changed. No 4090 work performed this run.
 
 ### Run 141 — 2026-10-28 (4090 11-frame held-out MapAnything GPU inference: PASSED, receipt captured)
 - GB10 baseline re-verified at `0122035` (clean tree):
