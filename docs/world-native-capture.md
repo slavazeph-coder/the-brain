@@ -12,6 +12,8 @@ Output includes `native-capture.json`, bound by SHA-256 from `reconstruction.jso
 
 ## Submit in World Builder
 
+PR #253's native-capture backend is already deployed. The browser import UI below is introduced by PR #256; its production release is pending at this October 28 handoff. Authenticated live reconstruction remains unverified.
+
 Open the **Capture** tab, expand **Have a calibrated capture?**, and choose **Import calibrated capture**. Select the capture JSON and its 3–11 original JPEG/PNG photos from Files. You may add the JSON first and the photos afterward. Keep their original filenames and bytes: an edited photo or a phone-gallery conversion will fail the hash check.
 
 Open **Process capture / use an API worker**, connect BrainSNN processing or your private worker, select a configured engine that supports capture bundles, and approve the upload. The browser checks for missing, extra or changed photos before sending bytes. Calibration and pose validation still happen on the worker. All original files remain unchanged. Cancel stops a pending local check or upload/job through the existing controls.

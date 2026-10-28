@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-This is an implemented operator-side integration slice, not a claim that the entire phone-to-BIM roadmap is complete. It does not change the public website, enable unqualified GPU engines, or submit third-party scans.
+This integration extends the original operator-side tools with native capture through the authenticated worker and a browser import UI. It does not establish completion of the phone-to-BIM roadmap, enable unqualified GPU engines, or submit third-party scans.
 
 - `robotics/world_worker/simready_bridge.py`: inspect locally pulled NVIDIA SimReady Central packages; bind review to exact package bytes; prepare a bounded placement plan; optionally compose a separate portable OpenUSD additions layer.
 - `robotics/world_worker/capture_evidence.py`: validate an explicit native-capture bundle, hashes, timing, calibration and rigid poses; convert ARKit camera-to-world poses to COLMAP camera-coordinate priors. It also estimates conservative paired-wall-surface candidates from reviewed point subsets.
@@ -10,7 +10,7 @@ This is an implemented operator-side integration slice, not a claim that the ent
 
 The follow-up integration connects a bounded native capture sidecar and its 3–11 original photos to the existing authenticated worker. Source-bound per-frame calibration is fixed during COLMAP matching/solving; native poses are used for checked post-solve alignment, explicitly not optimizer constraints. The scene compiler now evaluates conservative wall-surface candidates, retains unverified labels through IFC/Rhino/quantities, and invalidates evidence after geometry edits. Native phone apps, GPU inference, detailed pipe/duct fitting and independent room measurements remain separate work.
 
-The browser's ordinary video flow remains available. Existing native bundles can use `scripts/world-demo/native_capture_submit.py`; it validates every source before upload, requires `--consent`, reads the passcode from the environment or a hidden prompt, and verifies downloaded SHA-256 hashes. The production worker must be updated to an integration revision before this input kind is advertised.
+The browser's ordinary video flow remains available. PR #253's native-capture backend is already deployed; authenticated live reconstruction remains unverified. Existing native bundles can use `scripts/world-demo/native_capture_submit.py`; it validates every source before upload, requires `--consent`, reads the passcode from the environment or a hidden prompt, and verifies downloaded SHA-256 hashes. PR #256 adds the browser import flow described in [native capture](world-native-capture.md); its production release is pending at this October 28 handoff.
 
 ## Live infrastructure checked
 
