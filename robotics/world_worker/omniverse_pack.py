@@ -62,6 +62,10 @@ def audit_dependencies(path, root):
         refs = set(layer.GetExternalReferences())
         def visit(p):
             spec = layer.GetObjectAtPath(p)
+            # Relationship targets and connections may have a traversed path,
+            # but no spec or metadata of their own. Their parent is inspected.
+            if spec is None:
+                return
             for key in spec.ListInfoKeys():
                 if key == 'subLayerOffsets':
                     continue
@@ -133,6 +137,8 @@ def installed_assets(workspace, *, verify=True):
         axis, units = str(UsdGeom.GetStageUpAxis(stage)), UsdGeom.GetStageMetersPerUnit(stage)
         if units != 1.0 or axis not in ('Y', 'Z'):
             raise ValueError('Only metre-authored Y/Z-up physical assets are admitted.')
+        if any(UsdGeom.Xformable(p) and UsdGeom.Xformable(p).GetResetXformStack() for p in traversed(stage)):
+            raise ValueError('Asset reset transform stacks would bypass reviewed placement.')
         metadata = stage.GetRootLayer().customLayerData.get('SimReady_Metadata', {})
         colliders = sum(p.HasAPI(UsdPhysics.CollisionAPI) for p in traversed(stage))
         result.append({'asset':asset, 'source_url':expected_url, 'revision':REVISION,
@@ -176,6 +182,8 @@ def package_scene(source, output, request, workspace):
     """Compose a separate stage; original scene files are copied byte-for-byte."""
     from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
     source, output, workspace = source.resolve(), output.resolve(), workspace.resolve()
+    if output.is_relative_to(source) or output.is_relative_to(workspace):
+        raise ValueError('Package output must be outside its source and library roots.')
     scene_path, cloud_path = (bridge.local(source, name) for name in ('scene.json', 'arena-cloud.json'))
     scene, cloud = bridge.read_json(scene_path), load_arena_cloud(cloud_path)
     if scene.get('schema') != 'brainsnn.scene.v1' or scene.get('units') != 'm' or cloud['units'] != 'm':
