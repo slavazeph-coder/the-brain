@@ -1,9 +1,32 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-27T14:10Z
+Last updated: 2026-10-28T02:05Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 134 — 2026-10-28 (4090 held-out MapAnything GPU inference: PASSED, receipt signed)
+- 4090 host re-confirmed: `d130b6c7f3f4`, 24564 MiB / 0 %, torch 2.5.1+cu121 CUDA available.
+- Local GB10 baseline (clean tree at `5a6dcc0`):
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed**
+- **Held-out 2-image GPU smoke executed and PASSED** (driver `run_ma_heldout.sh`,
+  launched via SSH from GB10, watchdog `timeout 3600`):
+  - Host: `d130b6c7f3f4`, CUDA, 24564 MiB
+  - Model: `facebook/map-anything-apache` @ `00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a`
+  - SHA256: `fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201`
+  - Inputs: `qualification-input/0000.png` (SHA `5ad005e5…`), `0001.png` (SHA `d19bd9a0…`)
+  - Output: `dense-preview.ply` (4.1 MB, 96,276 points), `reconstruction.json`, `manifest.json`
+  - Wall time: ~90 s end-to-end; `elapsed_seconds: 12.68` (inference only)
+  - `peak_cuda_allocated_bytes: 7725528064` (~7.7 GB, 24 GB card → comfortable margin)
+  - `device: cuda`, `metric_verified: false`, `physics_ready: false` (correct for 2-frame)
+  - Exit code 0; GPU returned to 0 % / 28 MiB after run
+- Artifacts on 4090: `/workspace/slava/qualification-mapanything-receipt/`
+- No commits this run (receipt is on 4090, not in the GB10 repo tree).
+- No force-push/merge/deploy; Qwen/backup, license & no-paid-fallback gates untouched.
+- Next bounded action: extend to 11-frame full held-out set or single-view consistency check;
+  commit signed receipt JSON into `docs/world-builder-remote-progress-gb10.md` if owner wants
+  the full artifact in-tree.
 
 ### Run 128 — 2026-10-27 (concurrent DELETE of receipt-target job during in-flight receipt: no-op, receipt still signs)
 - Baseline exact (clean tree at `b09131c`): `pytest tests/world/test_report_receipts.py -q` → **32 passed in 20.43 s**; `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail (102 ms)**.
