@@ -296,6 +296,15 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:
         raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))
+    # Pinned operator-installed packages only; no downloads from user jobs.
+    simready_assets, simready_error = [], None
+    if engines.get('omniverse-pack', {}).get('available'):
+        try:
+            from .omniverse_pack import installed_assets
+            simready_assets = installed_assets(Path('/opt/brainsnn-simready'))
+        except Exception as error:
+            logging.getLogger(__name__).warning('SimReady catalog unavailable (%s)', type(error).__name__)
+            simready_error = 'Installed library failed verification; library additions unavailable.'
     identities = Identities(token, tenants or os.environ.get('WORLD_TENANTS_FILE'), engines, storage_limit)
     # Never sign capabilities with a credential handed to any browser, including
     # the legacy operator credential. Restart intentionally expires old tickets.
@@ -356,7 +365,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if not isinstance(entry, dict):
                 raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip']:
                 raise ValueError('Unsafe artifact name or type.')
             seen.add(name)
             path = out / name
@@ -527,6 +536,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         return {'api_version':'brainsnn.worker.v1','operator_only':True,
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
+                **({'simready_assets':simready_assets,'simready_error':simready_error}
+                   if 'omniverse-pack' in principal.engines and engines.get('omniverse-pack',{}).get('available') else {}),
                 'engines':[{**{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']},
                             # Naming is offered only when the adapter's secrets are actually set on this worker.
                             **({'object_naming':e['object_naming']} if e.get('object_naming') and all(os.environ.get(x) for x in e.get('secrets', [])) else {}),

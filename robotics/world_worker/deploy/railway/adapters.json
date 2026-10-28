@@ -4,23 +4,61 @@
     "label": "Multi-view spatial reconstruction (CPU)",
     "enabled": true,
     "license_reviewed": true,
-    "input_kinds": ["image", "video", "capture"],
+    "input_kinds": [
+      "image",
+      "video",
+      "capture"
+    ],
     "max_inputs": 12,
     "timeout_seconds": 3600,
-    "command": ["/opt/worker/bin/python", "/app/robotics/world_worker/sparse_colmap.py", "--input-manifest", "{input_manifest}"]
+    "command": [
+      "/opt/worker/bin/python",
+      "/app/robotics/world_worker/sparse_colmap.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
   },
   {
     "id": "scene-usd",
     "label": "Simulation scene (GLB/USD/IFC) from a walkthrough",
     "enabled": true,
     "license_reviewed": true,
-    "input_kinds": ["video", "cloud"],
+    "input_kinds": [
+      "video",
+      "cloud"
+    ],
     "max_inputs": 1,
     "timeout_seconds": 3600,
     "source_job": true,
     "dimension_checks": true,
     "bim_review": true,
-    "command": ["/opt/worker/bin/python", "/app/robotics/world_worker/scene_usd.py", "--input-manifest", "{input_manifest}",
-                "--blender", "/app/robotics/world_worker/deploy/railway/blender"]
+    "command": [
+      "/opt/worker/bin/python",
+      "/app/robotics/world_worker/scene_usd.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--blender",
+      "/app/robotics/world_worker/deploy/railway/blender"
+    ]
+  },
+  {
+    "id": "omniverse-pack",
+    "label": "Omniverse package with reviewed NVIDIA library additions",
+    "enabled": true,
+    "license_reviewed": true,
+    "input_kinds": [
+      "cloud"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 600,
+    "source_job": true,
+    "command": [
+      "/opt/worker/bin/python",
+      "/app/robotics/world_worker/omniverse_pack.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--workspace",
+      "/opt/brainsnn-simready"
+    ]
   }
 ]
