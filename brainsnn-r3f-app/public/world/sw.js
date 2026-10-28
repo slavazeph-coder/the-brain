@@ -4,7 +4,7 @@
 const CACHE = 'world-shell-capture-handoff-v2';
 const SHELL = ['./index.html', './world.css', './app.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './visual-viewer.mjs',
   './visual-geometry.mjs', './worker-client.mjs', './artifact-review.mjs', './depth-client.mjs', './depth-worker.mjs', './import-world.mjs', './observation-ui.mjs', './observations.mjs',
-  './dimension-review.mjs', './bim-workflow-ui.mjs', './omniverse-ui.mjs', './measurement-ui.mjs', './measurement-evidence.mjs', './planner-worker.mjs', './capture-client.mjs', './capture-handoff.mjs', './native-capture.mjs', './reconstruction-map.mjs',
+  './dimension-review.mjs', './bim-workflow-ui.mjs', './omniverse-ui.mjs', './measurement-ui.mjs', './measurement-evidence.mjs', './planner-worker.mjs', './capture-client.mjs', './capture-handoff.mjs', './reconstruction-recovery.mjs', './native-capture.mjs', './reconstruction-map.mjs',
   './detections.mjs', './detect-client.mjs', './detect-worker.mjs',
   './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', '../arena/site-core.js'];
 // The module graph imports one file outside /world/ (RoomPlan/Arena import); without it the shell cannot start offline.
