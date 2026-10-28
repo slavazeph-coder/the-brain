@@ -1,9 +1,37 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-28T02:05Z
+Last updated: 2026-10-28T03:10Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 137 — 2026-10-28 (baseline green; 401/409 re-check already covered; progress entries written)
+- Clean tree at `509074c` (`hermes/world-builder-gb10`), no uncommitted changes.
+- Exact suites:
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail** (123 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.95 s
+- Re-read `robotics/world_worker/app.py` `report_receipt` handler (lines 690–754) and `report_receipts.py` to confirm the 401/409 post-verification re-check path:
+  - Post-IO re-auth re-reads the registry; a revoked tenant → **401** (line 742–743).
+  - Evidence re-check via `validate_evidence`; hash mismatch → **409** (line 749–750).
+  - Both paths are already pinned by existing tests:
+    - `test_rechecks_owner_and_job_after_expensive_verification` (line 240, parametrized `revoke`→401, `delete-job`→404; concurrent request during hash → 429).
+    - `test_cancel_during_inflight_receipt_hash_does_not_interrupt_signature` (line 632, credential revocation during in-flight hash → 401).
+    - `test_artifact_delete_during_inflight_receipt_hash_blocks_signature` (line 735, artifact delete during in-flight hash → 409, `missing or changed` detail).
+  - No new regression needed; the 401/409 post-verification recheck is fully covered.
+- This run's contribution: wrote the missing progress-file entries for runs 136+137 (previously the file ended at run 134; runs 136 and 137 had no entries despite their commits existing in the log).
+- No force-push/merge/deploy; no 4090 work this run.
+- Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+- Next bounded action: one useful 4090 GPU/reconstruction task via short authenticated SSH (confirm hostname+GPU first), e.g. extend the held-out MapAnything smoke to 11 frames or run a single-view consistency check.
+
+### Run 136 — 2026-10-28 (tool-budget exhaustion; verification only, no commit)
+- Ran both suites to confirm baseline green before writing progress entries (which was the pending task from run 134's next-action note).
+- Exact suites:
+  - `node --test tests/world/report-receipts.test.mjs` → **8 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed**
+- Tool budget exhausted before the progress-file write could be completed; no commit this run.
+- No force-push/merge/deploy; no 4090 work this run.
+- Next bounded action: write run 136+137 entries into `docs/world-builder-remote-progress-gb10.md`, commit, push.
+
 
 ### Run 134 — 2026-10-28 (4090 held-out MapAnything GPU inference: PASSED, receipt signed)
 - 4090 host re-confirmed: `d130b6c7f3f4`, 24564 MiB / 0 %, torch 2.5.1+cu121 CUDA available.
