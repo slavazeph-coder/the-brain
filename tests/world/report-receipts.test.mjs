@@ -66,6 +66,9 @@ test('offline bundle preserves signed text exactly and remains explicitly untrus
   assert.equal((await verifySignedReportBundle(raw,trust)).verified,true);
   assert.throws(()=>parseSignedReportBundle(JSON.stringify({...bundle,verified:true})),/fields/);
   assert.throws(()=>parseSignedReportBundle(' '.repeat(REPORT_LIMITS.bundle+1)),/size limit/);
+  assert.throws(()=>parseSignedReportBundle(JSON.stringify({schema:'brainsnn.world.signed-report.v1',scenarioText:f.scenarioText,receipt:bundle.receipt})),/fields/);
+  const tampered=JSON.parse(raw);tampered.scenarioText=tampered.scenarioText.replace('"schema"','"schemaX"');
+  await assert.rejects(verifySignedReportBundle(JSON.stringify(tampered),trust),/exact exported BrainSNN proof JSON/);
   await assert.rejects(prepareReportRequest(' '.repeat(REPORT_LIMITS.scenario+1),job),/scenario text/);
   await assert.rejects(prepareReportRequest(f.scenarioText,{...job,artifacts:[{...job.artifacts[0],size:256*1024**2+1}]}),/256 MiB/);
 });
