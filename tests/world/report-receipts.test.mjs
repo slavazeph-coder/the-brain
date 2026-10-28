@@ -166,3 +166,29 @@ test('aborting a report-receipt request mid-flight discards the signed result as
   abort.abort();
   await assert.rejects(promise,e=>e.name==='AbortError');
 });
+
+test('aborted report-receipt signal is still discarded when the worker already returned a receipt',async()=>{
+  // The relayed in-flight abort can fire AFTER fetch has already delivered a
+  // signed receipt body. The client must not surface the completed receipt in
+  // that race — the abort signal means the caller no longer wants the result,
+  // and returning a half-consumed signed payload would let the caller treat a
+  // cancelled report as delivered. Model the race by resolving fetch's signal
+  // contract immediately, so the receipt is "returned" in the same tick the
+  // caller aborts; the client must still reject with AbortError.
+  const f=await fixture(),client=new WorkerClient('https://worker.example','t'.repeat(40));
+  client.caps={reportSigning:{available:true,algorithm:'Ed25519',keyId:primary.key.keyId}};
+  let requestSignal=null;
+  client.request=async(path,opts)=>{
+    requestSignal=opts.signal;
+    // Model fetch completing AFTER the caller aborts: wait for the abort to
+    // fire, then still deliver the signed body — the real fetch can have
+    // already buffered the response before the relayed controller abort lands.
+    if(!requestSignal.aborted)await new Promise(r=>requestSignal.addEventListener('abort',r,{once:true}));
+    return f.receipt;
+  };
+  const abort=new AbortController(),promise=client.reportReceipt(job,f.scenarioText,abort.signal);
+  for(let i=0;i<200&&!requestSignal;i++)await new Promise(r=>setTimeout(r,5));
+  assert.ok(requestSignal,'request never captured its abort signal');
+  abort.abort();
+  await assert.rejects(promise,e=>e.name==='AbortError');
+});

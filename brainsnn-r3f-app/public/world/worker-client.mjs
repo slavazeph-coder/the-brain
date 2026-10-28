@@ -7,7 +7,8 @@ export class WorkerClient {
     const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),60000);
     const relay=()=>controller.abort();signal?.addEventListener('abort',relay,{once:true});if(signal?.aborted)relay();
     try{
-      const response=await fetch(this.base+path,{method,body:raw?body:body===undefined?undefined:JSON.stringify(body),headers:{Authorization:`Bearer ${this.token}`,...(body===undefined?{}:{'Content-Type':raw?'application/octet-stream':'application/json'})},signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer'});
+      const response=await fetch(this.base+path,{method,body:raw?body:body===undefined?undefined:JSON.stringify(body),headers:{Authorization:`*** ${this.token}`,...(body===undefined?{}:{'Content-Type':raw?'application/octet-stream':'application/json'})},signal:controller.signal,credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer'});
+      if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
       const reader=response.body?.getReader();if(!reader)throw new Error('Empty worker response.');
       const chunks=[];let size=0;while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>1024*1024){await reader.cancel();throw new Error('Worker JSON exceeded the 1 MiB response limit.');}chunks.push(value);}
       const all=new Uint8Array(size);let offset=0;for(const c of chunks){all.set(c,offset);offset+=c.length;}
@@ -23,7 +24,9 @@ export class WorkerClient {
     const snapshot=structuredClone(job),{prepareReportRequest}=await import('./report-receipts.mjs');
     const body=await prepareReportRequest(scenarioText,snapshot);
     if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
-    return this.request(`/v1/jobs/${snapshot.id}/report-receipt`,{method:'POST',body,signal});
+    const data=await this.request(`/v1/jobs/${snapshot.id}/report-receipt`,{method:'POST',body,signal});
+    if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
+    return data;
   }
   async upload(file, kind, signal, progress=()=>{}){
     let item=this.uploads.get(file);
