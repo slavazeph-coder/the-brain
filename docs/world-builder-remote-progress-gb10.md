@@ -1,9 +1,26 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-28T06:15Z
+Last updated: 2026-10-28T20:46Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 150 — 2026-10-28 (post-await abort guards in request() + reportReceipt(): signed receipt discarded after caller aborts; both suites green)
+
+- 4090 skipped this run (was down last run; not re-testing the same blocker per "if blocker repeats, choose another useful task").
+- Picked up run 149's dirty tree at `ac39b05` (two files: `worker-client.mjs`, `report-receipts.test.mjs`).
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10`):**
+  - `worker-client.mjs`: added two post-await `signal?.aborted` guards:
+    1. In `request()` immediately after `fetch()` resolves: if the caller's signal fired while `fetch` was in flight (response already buffered by the browser), throw `AbortError` before consuming the body. Without this guard, a caller who aborts during the fetch's network phase can still receive the full signed receipt body.
+    2. In `reportReceipt()` immediately after `this.request()` resolves: same guard at the `reportReceipt` call-site, so even if `request()`'s internal guard is bypassed by a future refactor, the signed receipt is never returned to a caller who has aborted.
+  - `report-receipts.test.mjs`: added `aborted report-receipt signal is still discarded when the worker already returned a receipt` (+26 lines). The mock models the exact race: `fetch`'s signal contract resolves (body delivered) in the same tick the caller's abort fires, so the receipt is "returned" before the abort is observed. The client must still reject with `AbortError`. The mock uses `await new Promise(r => requestSignal.addEventListener('abort', r, {once: true}))` to wait for the caller's abort before delivering the receipt — the old `setImmediate` mock resolved before the test's 5 ms poll loop could call `abort.abort()`, so `signal.aborted` was still false at the post-await check.
+- **Verified (exact, GB10, post-commit):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (96.3 ms) (was 11)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 21.03 s
+- **Commit:** `0e4aafc` `fix(world): post-await abort guards in request() and reportReceipt() discard signed receipt after caller aborts` (2 files, +31/−2). Pushed to `hermes/world-builder-gb10`; `git ls-remote` = `0e4aafc`. No force-push/merge/deploy.
+- **Actual blocker:** none this run. 4090 GPU still unreachable (connection refused, 5 consecutive). MapAnything dense-inference smoke still gated on 4090 reachability. HTTP report-UI (browser) validation still pending (loopback only).
+- **Next bounded action:** 4090 MapAnything held-out dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first; pinned weights, 20 GiB watchdog, no base conda replacement); else next GB10 receipt/queue integration-gap item.
+- **Guardrails:** no force-push, no merge/deploy, no paid fallback. Serving Qwen/backup and licensed model/guardrail gates untouched. 4090 branch `hermes/world-builder-4090` untouched.
 
 ### Run 146 — 2026-10-28 (Node non-UTF-8 scenario regression: prepare/verify fail closed; both suites green)
 - Clean tree at `1f9c08f` before editing.
