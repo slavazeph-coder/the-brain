@@ -1,6 +1,13 @@
 # brainsnn.com's own processing, on Railway
 
-Step by step, with screenshots of what to expect and a troubleshooting table: `docs/brainsnn-processing-setup.md`.
+Current service IDs, release procedure, acceptance commands and troubleshooting:
+[processing operations](../../../../docs/brainsnn-processing-setup.md).
+
+**Production is already deployed (October 28, 2026).** The website follows `main`; the private worker follows
+`deploy/world-worker-20261027` with a worker-specific root `railway.toml`, one replica and a 10 GB `/data` volume.
+Preserve `WORLD_WORKER_HOST=0.0.0.0`. Do not reprovision it using the generic fresh-install steps below or merge the
+worker's root config back into website main. `www.brainsnn.com` is healthy; authenticated live execution and the apex
+domain still need the receipts listed in the operations guide.
 
 A second Railway service runs the World Builder worker on CPU next to the site. The site's server talks to it over
 Railway's private network, holds its credentials, and gives each browser a short session instead. On the World Builder

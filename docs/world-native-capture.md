@@ -10,7 +10,17 @@ The solved model is then aligned to the native camera poses after position and a
 
 Output includes `native-capture.json`, bound by SHA-256 from `reconstruction.json`, plus the normal point cloud and camera-frame ledger. Original timestamps remain bound to source image hashes in the native evidence; image sources do not acquire invented video PTS. Saved COLMAP cameras and points share the same transformed coordinates as the artifacts. The native scale is only an estimate: public `units` remains `arbitrary`, `metric_verified` remains false, and independent dimensions are still required before using a model as measured geometry.
 
-## Submit a capture
+## Submit in World Builder
+
+PR #253's native-capture backend is already deployed. The browser import UI below is introduced by PR #256; its production release is pending at this October 28 handoff. Authenticated live reconstruction remains unverified.
+
+Open the **Capture** tab, expand **Have a calibrated capture?**, and choose **Import calibrated capture**. Select the capture JSON and its 3–11 original JPEG/PNG photos from Files. You may add the JSON first and the photos afterward. Keep their original filenames and bytes: an edited photo or a phone-gallery conversion will fail the hash check.
+
+Open **Process capture / use an API worker**, connect BrainSNN processing or your private worker, select a configured engine that supports capture bundles, and approve the upload. The browser checks for missing, extra or changed photos before sending bytes. Calibration and pose validation still happen on the worker. All original files remain unchanged. Cancel stops a pending local check or upload/job through the existing controls.
+
+A completed reconstruction opens as **SCALE UNVERIFIED**. Download `native-capture.json` from **Evidence** to retain the source hashes, timestamps and alignment report. Native tracking estimates do not replace independent measurements. This import path requires an existing calibrated capture; the browser recorder does not produce ARKit metadata.
+
+## Submit from the command line
 
 Install the worker's Python dependencies in an isolated environment. Put the sidecar and its original images in one folder, using the schema documented in `world-simready-launch-20261027.md`. The site and worker must both run this revision; the configured `colmap-sparse` engine must advertise `capture` among its input kinds.
 
@@ -23,7 +33,7 @@ python scripts/world-demo/native_capture_submit.py \
   --consent
 ```
 
-The CLI validates the complete local bundle before upload. It reads `BRAINSNN_PASSCODE` from the environment or prompts without echo; no passcode is accepted as an argument or written into artifacts. It uploads in bounded chunks, starts one `colmap-sparse` job, waits at most 3,700 seconds by default, requests cancellation on timeout, then SHA-256 checks every downloaded artifact. Use a fresh output directory. The endpoint must be an HTTPS origin you control and intend to send these images to.
+The CLI validates the complete local bundle before upload. It reads `BRAINSNN_PASSCODE` from the environment or prompts without echo; no passcode is accepted as an argument or written into artifacts. It uploads in bounded chunks, starts one `colmap-sparse` job, waits at most 3,700 seconds by default, requests cancellation on timeout, then SHA-256 checks every downloaded artifact. Success also requires a passing fold check, native evidence bound to the original inputs, nonempty geometry and a matching camera ledger. `submission.json` records the result; on failure it retains `passed: false` and the last known job ID/status when available. That status may be stale after a transport failure: check the job before retrying. Use a fresh output directory. The endpoint must be an HTTPS origin you control and intend to send these images to.
 
 ## Qualification boundary
 

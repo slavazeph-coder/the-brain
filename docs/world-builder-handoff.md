@@ -1,7 +1,8 @@
-# World Builder handoff (October 25, 2026)
+# World Builder handoff (October 28, 2026)
 
-The state of BrainSNN World Builder after #226–#229 and the synthetic benchmark in #233, written so the owner, or the
-next agent (Claude, Codex or Hermes), can use it and carry on without the session.
+Current operations after launch integration PR #253, followed by dated implementation and benchmark history. The
+deployment and acceptance sections below supersede older setup instructions and local-only deployment statements.
+The measured test-dataset results remain scoped to their original runs.
 
 Deeper notes:
 - `docs/world-studio-implementation.md`: how each part works, with measured numbers;
@@ -9,20 +10,25 @@ Deeper notes:
 - `docs/hermes-gpu-tasks.md`: GPU work;
 - `scripts/world-demo/README.md`: demo recorders and the film;
 - `scripts/world-demo/benchmark/README.md`: the synthetic meeting room, its results and how to rerun it.
+- [Processing operations and launch acceptance](brainsnn-processing-setup.md): current Railway services, live checks,
+  domain repair and the remaining acceptance receipts;
+- [Native capture](world-native-capture.md) and [launch extensions](world-simready-launch-20261027.md): supported inputs,
+  source binding, wall evidence and portable USD asset composition.
 
 ## In one paragraph
 
 A phone walkthrough becomes a measured, checked building model:
 1. **Reconstruct.** COLMAP poses the frames and reconstructs points on a CPU worker.
 2. **Measure.** The person taps one known distance to set the scale.
-3. **Compile.** The scene compiler levels the floor, finds the walls (split at doorways) and separates every object into
-   a measured box.
+3. **Compile.** The scene compiler estimates the floor and walls and separates supported object candidates into boxes.
+   Missing surfaces and assumed geometry remain explicit.
 4. **Export.** It writes GLB, OpenUSD and IFC4, plus a DXF plan, a Rhino 3DM model and a quantities CSV.
 5. **Check.** It measures every point against the model (`fit-check.json` and a heatmap) and flags the parts that don't
    fit.
 6. **Route.** A robot can plan a route in the same model.
 
-On the room test it took 135 s of reconstruction and 5 s of scene building on a CPU, for a 62 s video.
+On the historical Mip-NeRF 360 room dataset it took 135 s of reconstruction and 5 s of scene building on a CPU, for a
+62 s derived video. This is not a physical phone-capture receipt.
 
 What it is not:
 - It is not a survey: the scale is one typed distance, and the fit is model to points.
@@ -40,30 +46,64 @@ Since #232, World Builder has:
 It is deployed with main, but not physically qualified. Use [BIM review](world-bim-review.md),
 [dimensional evidence](world-dimension-checks.md) and [demo acceptance](world-demo-release-checklist.md) for this flow.
 The local worker qualification records software execution separately from an actual phone-room demonstration.
-Original tilted footage and its derivatives still require recovery and replacement using the
-[regeneration runbook](../scripts/world-demo/REGENERATE.md).
+The historical recovery and private replacement-film receipts are recorded below. Before reusing footage, locate and
+verify the exact source and corrected artifacts with the [regeneration runbook](../scripts/world-demo/REGENERATE.md).
 
-## What is live on brainsnn.com
+## Current deployment and remaining launch acceptance
 
 Railway deploys main after "BrainSNN app release checks". "Verify BrainSNN live deploy" then checks that the World Builder
-and Arena files are byte-identical to the commit.
+and Arena files match the commit. The private worker follows a separate deployment branch; a main merge alone does not
+update it.
 
-Deploy state on October 24:
-- **#227** passed both, plus the GT3 and sponsor checks.
-- **#228's merge failed the release checks** on its own new test, which was flaky (17 of 40 runs). It was never verified
-  live.
-- **#229** fixes that test's cause and passed the release checks at 21:11 UTC. "Verify BrainSNN live deploy" passed
-  at 21:15 UTC, so #228 and #229 are both live on brainsnn.com.
+Verified October 28 at 01:49 UTC in Railway project `wonderful-charisma`, production:
 
-Before assuming any deploy, check that main is green.
+| Surface | Verified state |
+|---|---|
+| Website `the-brain` | `main` at `05a9cea0fd05eec95267ffc506463af62408ca3e` (PR #253); deployment `2187c1c4-153c-4b4d-b6a0-deff0116e3c8` succeeded |
+| Private `world-worker` | `deploy/world-worker-20261027` at `20c55b4df1d8c029b9caedab691eafc10cf31f37`; deployment `e97417c3-fac8-4bdd-bece-5595302a0d60` succeeded; no public domain, one replica, 4 CPU / 8 GB RAM, 10 GB `/data` volume |
+| Canonical website | <https://www.brainsnn.com/world/> and `/healthz` return 200 with valid TLS |
+| Processing configuration | `/api/world/processing` returns `available:true`, `passcode:true`, `visitors:false`; unauthenticated worker capabilities return 401 |
+| Apex domain | `https://brainsnn.com/world/` and the tested API paths return 404. Railway reports its required `tnoamdbj.up.railway.app` traffic CNAME unset and its certificate still issuing |
+
+The public processing response establishes configuration, not authenticated worker execution. No live passcode session,
+upload/reconstruction or metric export has yet been verified in this launch receipt. The local and CI browser flows
+and synthetic reconstruction tests are separate evidence.
+
+Remaining acceptance, in order:
+
+1. **Authenticated live service:** run `scripts/world-demo/site_processing_check.py` against the canonical `www`
+   origin, then run it with an approved video, `--scene` and a fresh output directory outside the checkout. Retain
+   `check-results.json`, actual job IDs and SHA-256-checked downloads. Only `consistent` passes its fold screen.
+   `--scene` checks an unscaled video-to-scene job; it does not validate metric IFC/CAD or physical dimensions.
+2. **Apex domain:** complete the DNS/HTTPS routing repair and verify both `/world/` and API paths, including any
+   redirect's path/query preservation. Keep `www` canonical. Follow the domain section in the processing guide;
+   do not substitute an arbitrary Railway IP for its required DNS target.
+3. **Native capture:** submit an existing valid sidecar plus original images using
+   `scripts/world-demo/native_capture_submit.py`, or use the browser path once its own checks are complete. Retain
+   native evidence and camera-ledger bindings. This is an input pipeline, not a shipped native phone app or verified
+   physical scale.
+4. **Measured room and application acceptance:** run the capture → scale → held-out checks → reviewed opening →
+   export flow in [demo acceptance](world-demo-release-checklist.md), using an actual permitted capture and independent
+   readings. Keep failed checks. Reopen the actual IFC/CAD outputs in the target application before claiming that
+   application was tested.
+5. **Asset composition:** follow [launch extension qualification](world-simready-launch-20261027.md). Byte verification,
+   USD opening, bridge composition and physics execution require separate receipts; none implies Isaac Sim execution.
+
+The concrete commands, credential handling, release procedure and acceptance status are maintained in
+[processing operations](brainsnn-processing-setup.md).
+
+## What the live site offers
 
 - **One photo.** It gives an on-device depth preview (Depth Anything V2 Small, Apache-2.0) and on-device COCO label
   suggestions. **Visitors get dots, not separated objects.** Separation needs a worker.
-- **Walkthrough, with a worker connected** (Capture → Worker connection): see "Use it" below.
-- **No worker is connected to brainsnn.com yet** (see Blocked). Every run in this handoff used a local worker.
-  The site can now run its own CPU worker on Railway: "Process on BrainSNN", behind a passcode, with no worker
-  address or token for the person to type. It goes live once the owner creates the worker service and sets the
-  variables in `docs/brainsnn-processing-setup.md` (step by step, with a troubleshooting table).
+- **Walkthrough processing:** "Process on BrainSNN" uses the configured private Railway CPU worker behind a passcode;
+  no worker address or token is entered by the person. Visitor processing is disabled. See "Use it" below.
+- **Native capture input:** the deployed worker accepts source-bound calibrated sidecars and photos as described in
+  [native capture](world-native-capture.md). Physical device accuracy remains unqualified.
+- **Conservative wall evidence and USD:** PR #253 replaced scatter-as-thickness claims with surface-pair candidates,
+  fixed exported USDA metadata, and added reviewed asset composition with explicit provenance and limits.
+
+## Historical implementation receipts
 
 **PRs merged on October 24:**
 - **#223:** dense CPU points, object separation, scene route, doorway split.
@@ -146,8 +186,8 @@ It found four defects in the shipped pipeline, all fixed on this branch with tes
 | Furniture matched | 2 of 10 | 5 of 10 (sizes off by 40 cm, median) |
 | Withheld spans within tolerance, worst error | 5 of 7 usable, 4.1 cm | 7 of 7, 1.9 cm (1.1%) |
 
-A local merge of #232 into this branch passes all of #232's tests, along with this branch's. Only the docs, the
-memory notes and the CI test list conflict. Keep both test lists when merging.
+The benchmark and #232 integration above are historical receipts. For current test coverage, use the workflows at the
+release commit rather than these earlier test counts or branch instructions.
 
 **The LinkedIn film** is made from the "after" run through #232's `regenerate_reference.py`. The truth chapter
 (`truth_card.py --seconds 6`) is spliced in before the end card with `film_with_truth.py`, which also writes captions and a
@@ -208,10 +248,10 @@ The status is `cross-checked` when two or more references agree within 2%, `sing
 
 ### 2. Reconstruct and scale (site)
 
-1. Open `/world/`. In Capture → Worker connection, enter the worker URL and token. Only the owner holds them; they are
-   never in the repo.
-2. Add the walkthrough video, choose `colmap-sparse` (or `colmap-dense-cpu` for denser, less accurate points) and run
-   it.
+1. Open <https://www.brainsnn.com/world/>. Choose **Process on BrainSNN** and enter the passcode in its dialog.
+   The private worker needs no address or token from the user. See [processing setup](brainsnn-processing-setup.md).
+2. Add the walkthrough video, choose `colmap-sparse`, give upload consent and run it. The current Railway service
+   exposes CPU reconstruction and scene compilation; a separate qualified worker is needed for other engines.
    - About 2–4 minutes on a 4-core CPU.
    - `reconstruction.json` reports how many frames were posed, for example "57 of 60".
 3. Open the reconstruction, tap the two ends of your measured wall, and type the tape distance.
@@ -220,6 +260,8 @@ The status is `cross-checked` when two or more references agree within 2%, `sing
 
 1. Press **"Build metric simulation scene (GLB, USD, IFC) →"**. This runs `scene-usd` on the measured cloud.
 2. **Naming is optional:**
+   These options require separately configured dependencies and credentials; their availability is not established by
+   the current Railway health checks.
    - **Claude** names objects only after a second consent box ("Also send crops of each separated object …").
    - **The on-worker detector** (EfficientDet-Lite2, COCO) names sofas, chairs, plants and the like with no key, and
      sends nothing out.
@@ -248,9 +290,11 @@ What to do with it:
 "Plan a robot route in this scene" builds an unreviewed map from `scene.json`. Unknown floor stays blocked, and the robot
 plans only after a person reviews the scale and the map.
 
-### The same thing through the worker API
+### Direct API example for a separately operated worker
 
-Use the site for the measurement. The API alone gives arbitrary units: no IFC, CAD or fit.
+The production Railway worker is private; the direct commands below are for a separately operated worker with its own
+credentials. Use `scripts/world-demo/site_processing_check.py` for the production site proxy. A video-only job gives
+arbitrary units; metric exports require the measured cloud handoff from the site.
 
 ```sh
 # $W is the worker URL, $T the token (both from the owner; never commit them).
@@ -330,8 +374,8 @@ python scripts/world-demo/film/compose_film.py film <walkthrough frames> $J rout
 **Post text for the room film.** It is private only: the Mip-NeRF 360 photographs state no licence for commercial
 reuse. Edit the numbers when the capture changes, and do not name competitors.
 
-> A 62-second phone video in. A checked BIM model out, 2.3 minutes later on a CPU.
-> World Builder reconstructs the room, separates and measures every wall and object, and writes IFC4, a Rhino model, a
+> A 62-second video derived from the Mip-NeRF 360 room dataset produced a proposed model in about 2.3 minutes on a CPU.
+> World Builder reconstructs supported surfaces, proposes wall and object boxes, and writes IFC4, a Rhino model, a
 > dimensioned DXF plan and a quantity takeoff.
 > Then it checks itself. Every one of 10,925 points is measured against the model: floor 0.7 cm, walls 2.7 cm, objects
 > 5.6 cm median, 63% within 5 cm. The one box that doesn't fit is flagged for review, not hidden.
@@ -341,9 +385,9 @@ reuse. Edit the numbers when the capture changes, and do not name competitors.
 
 | Say | Don't say |
 |---|---|
-| "Phone video in, IFC / Rhino / DXF / CSV out, about 2–3 minutes of CPU processing per room" (measured: 135 s + 5 s) | "Survey-grade", "millimetre", or any comparison to a laser scanner's 2 mm |
+| "The Mip-NeRF 360 room dataset run took 135 s for reconstruction plus 5 s for scene compilation" | A measured phone-capture or production latency claim from that dataset result; "survey-grade" or "millimetre" accuracy |
 | "Every point checked against the model; misfits flagged" | "Accurate to X cm" (the fit is model to points; only a tape check gives real error) |
-| "Opens in Revit through IFC" | "Native Revit" (no `.rvt` is written) |
+| "IFC4 output for import into BIM software; validate in the target application" | "Tested in Revit" without an application receipt; "native Revit" (no `.rvt` is written) |
 | "Open files for estimating" | "Xactimate integration" or "ESX" (ESX needs Verisk's partner programme) |
 | "Furniture is measured as boxes" | "As-built LOD 300", "every pipe and fitting" (no MEP, no meshes) |
 | "Navigation and coverage scenes for robots" | "Manipulation-ready" (boxes at 3–6 cm cannot support grasping) |
@@ -351,14 +395,12 @@ reuse. Edit the numbers when the capture changes, and do not name competitors.
 | "On a synthetic test room with exact dimensions: walls within 2 cm, withheld spans within 1.9 cm" | The same numbers without "synthetic", or as the accuracy on real rooms |
 | "5 of 10 pieces of furniture found on a sparse cloud" | "Every object" for sparse captures (that needs the dense engine) |
 
-**Against laser-scan-to-BIM services,** for internal use only:
-- They start from a laser scanner, take 48 h and claim about 2 mm.
-- This starts from a phone, takes minutes and shows a few centimetres.
-- Win on time, cost and self-serve access, and on showing the fit openly. Don't compete on millimetres.
+Do not infer comparative speed, cost or physical accuracy against surveying services from these internal test runs.
 
 ## Running it locally
 
-**Test video on brainsnn.com today** with a worker on your own computer: `scripts/world-demo/local-worker/start.sh`.
+**Optional local development:** `scripts/world-demo/local-worker/start.sh` runs a worker on your own computer.
+Production passcode processing uses the private Railway worker described above.
 Run it on Linux or macOS, or in WSL on Windows. The script:
 - installs the worker and Blender's Python module into `~/.brainsnn-worker`;
 - starts the worker on `127.0.0.1:8040`, allowing browser calls from brainsnn.com;
@@ -366,8 +408,7 @@ Run it on Linux or macOS, or in WSL on Windows. The script:
 
 With `--tunnel` it also opens a Cloudflare quick tunnel, which gives an `https://` address a phone can use. Tested
 here: the site connected, a 30 s video went up, `colmap-sparse` finished in 162 s, and the points loaded with the
-scale step next. A hosted worker (this deploy kit on the 4090, or a service next to the site) is still what makes video
-work for visitors.
+scale step next. This is a historical local-worker receipt. Public visitor processing on Railway remains disabled.
 
 ```sh
 # Worker: Python 3.11+ for bpy 4.2; see robotics/world_worker/README.md and robotics/world_worker/deploy/README.md.
@@ -387,7 +428,7 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 
 **Checks:**
 - `cd brainsnn-r3f-app && npm run test:world && npm run lint`.
-- Python, exactly as CI runs it:
+- A limited local Python check (the complete current list is in `.github/workflows/world-builder-checks.yml`):
 
   ```sh
   python -m pytest tests/world/test_worker.py tests/world/test_tenant_isolation.py tests/world/test_observations.py \
@@ -412,19 +453,14 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 | Operator kit | `robotics/world_worker/deploy/` (systemd, env template, Cloudflare tunnel); `python -m robotics.world_worker.check_worker` |
 | Demo and film | `scripts/world-demo/` (recorders, `short_cut.sh`) and `scripts/world-demo/film/` (`plan_route.mjs`, `bl_shots.py`, `compose_film.py`) |
 
-## Blocked, and on whom
+## Remaining inputs and optional work
 
-1. **No GPU worker connected to brainsnn.com (owner and Hermes).** CPU processing no longer waits on it: the Railway
-   worker (`robotics/world_worker/deploy/railway/`) runs `colmap-sparse` and `scene-usd` for the site itself, once
-   the owner sets up the service. The GPU is still needed for dense engines (MapAnything, LingBot-Map).
-   - **The 4090:** the owner shared SSH access in chat, deliberately not recorded here. Cloud sessions can't reach it,
-     because the network policy allows HTTPS only.
-   - **The path:** run the worker on the 4090 with `robotics/world_worker/deploy/` behind a stable HTTPS hostname. Prove
-     it with `check_worker --require scene-usd:video,cloud --upload-probe`, then give the URL and token to the owner
-     directly.
-   - **The GB10** is rented out.
-2. **The Anthropic key (owner).** A key was pasted into a session chat on October 24 and must be rotated. Set the new key
-   only in the worker's environment file (`ANTHROPIC_API_KEY`), never in the repo, the site or chat.
+1. **Live acceptance and domain access (owner/operator).** Railway health is green, but the authenticated live job and
+   apex routing gates above remain open. Connector responses redact secret values, and local Railway/GoDaddy login
+   access must be restored before those operations can be completed. Never ask for a passcode in chat.
+2. **Optional GPU and naming engines.** CPU processing is deployed. GPU engines and external naming are separate
+   additions with their own credentials, licensing and execution checks; no current GPU-host availability is implied
+   by this handoff. Historical Anthropic credential-rotation notes remain unresolved until independently verified.
 3. **A commercial capture (owner).** Film one space as in "Film it", with the tape measurements. Until then the films
    show either the residential test room (private) or the synthetic meeting room (public, labelled synthetic).
 4. **Licence reviews (owner), before enabling or using commercially:**
@@ -438,7 +474,10 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
 6. **Unverified on real devices and apps (owner):** a physical iPhone Safari run (WebKit emulation passes in CI), and
    opening `scene.3dm` in Rhino itself.
 
-## Next steps, in order
+## Backlog after launch acceptance
+
+These are follow-on product ideas and historical priorities, not prerequisites for the deployed CPU path. Complete the
+current acceptance checklist above before using them as a launch-completion claim.
 
 1. **A commercial capture, then a commercial film (owner, then any agent).**
    - Film as in "Film it", with one calibration span and at least three withheld readings.
@@ -450,9 +489,9 @@ python -m uvicorn robotics.world_worker.app:create_app --factory --host 127.0.0.
    registered to the old one. After that, carry IDs over by geometric matching (walls within 10°, 25 cm and half
    their length; objects at 30% plan overlap; the matcher is in `cef5fff`). Porting the matcher before registration
    exists would only loosen #234's strict ID contract.
-3. **Walls stand behind the surface they saw** (done October 25). A wall seen from one side is its observed face with
-   an assumed 0.1 m behind it; the face of a partition seen from both sides stands toward its partner; a wall whose
-   points span both faces keeps its measured thickness. Each record says which (`faceCentre`, `thicknessBasis`).
+3. **Walls stand behind the surface they saw** (initial implementation October 25, corrected by #253). A wall seen
+   from one side keeps an assumed thickness. Paired-surface evidence may support a thickness candidate, but point
+   scatter alone does not establish measured wall thickness. Each record retains its evidence and verification state.
    - **On the benchmark hand-off:** the room between boxes went from −11.7/−11.5 cm to −1.7/−1.5 cm, the faces'
      own error. The wall fit median went from 4.2 to 0.8 cm. IfcOpenShell reports 0 issues.
    - **Consequence:** a reviewed opening from an older compile no longer matches its host and must be reviewed again.

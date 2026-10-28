@@ -2,8 +2,12 @@ name: World Omniverse qualification
 on:
   pull_request:
     paths:
-      - 'robotics/world_worker/**'
-      - 'tests/world/**'
+      - 'robotics/world_worker/simready_bridge.py'
+      - 'robotics/world_worker/nvidia_pack.py'
+      - 'robotics/world_worker/qualify_simready.py'
+      - 'tests/world/test_launch_extensions.py'
+      - 'tests/world/test_simready_instances.py'
+      - 'tests/world/test_nvidia_qualification.py'
       - '.github/workflows/world-omniverse-qualification.yml'
   workflow_dispatch:
 permissions:
@@ -13,14 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
-      - name: Install USD test runtime
-        run: python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8
-      - name: Existing source and USD contracts
-        run: python -m unittest discover -s tests/world -p 'test_launch_extensions.py' -v
+      - name: Install and require USD test runtime
+        run: |
+          python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8 pytest==9.1.1
+          python -c 'from pxr import Sdf, Usd, UsdGeom, UsdPhysics'
+      - name: Source integrity, instance and dependency contracts
+        run: python -m pytest tests/world/test_launch_extensions.py tests/world/test_simready_instances.py tests/world/test_nvidia_qualification.py -q
       - uses: actions/cache@v4
         with:
           path: /tmp/brainsnn-nvidia
@@ -30,43 +36,17 @@ jobs:
           if [ ! -d /tmp/brainsnn-nvidia/IV_pole_a01 ]; then
             python -m robotics.world_worker.nvidia_pack --workspace /tmp/brainsnn-nvidia
           fi
-      - name: Verify cached bytes and inspect actual USD (not a physics run)
+      - name: Reverify source bytes, compose two placements and reopen after relocation
+        # These reviewed, isolated test placements preserve the CC-BY-4.0 package and attribution.
+        # This runs OpenUSD composition only; it does not execute Isaac/PhysX or qualify robot physics.
         run: |
-          mkdir -p qualification/vendor
-          python - <<'PY'
-          import json, hashlib, shutil
-          from pathlib import Path
-          from pxr import Sdf, Usd, UsdGeom, UsdPhysics
-          root = Path('/tmp/brainsnn-nvidia')
-          receipt = json.loads((root / 'IV_pole_a01.receipt.json').read_text())
-          for item in receipt['files']:
-              p = root / item['path']
-              assert p.stat().st_size == item['size']
-              assert hashlib.sha256(p.read_bytes()).hexdigest() == item['sha256'], item['path']
-          folder = root / 'IV_pole_a01'
-          source = folder / receipt['root_usd']
-          s = Usd.Stage.Open(str(source))
-          assert s and s.GetDefaultPrim()
-          default = s.GetDefaultPrim()
-          summary = {'asset': receipt['asset'], 'files':len(receipt['files']), 'bytes':receipt['bytes'],
-                     'meters_per_unit':UsdGeom.GetStageMetersPerUnit(s), 'up_axis':str(UsdGeom.GetStageUpAxis(s)),
-                     'default_prim':str(default.GetPath()), 'variants':{},
-                     'colliders':sum(p.HasAPI(UsdPhysics.CollisionAPI) for p in s.Traverse()),
-                     'rigid_bodies':sum(p.HasAPI(UsdPhysics.RigidBodyAPI) for p in s.Traverse()),
-                     'physics_tested':False}
-          for name in default.GetVariantSets().GetNames():
-              v = default.GetVariantSet(name)
-              summary['variants'][name] = {'selected':v.GetVariantSelection(), 'choices':v.GetVariantNames()}
-          Sdf.Layer.FindOrOpen(str(source)).Export('qualification/vendor/root.usda')
-          shutil.copytree(folder / '.metadata', 'qualification/vendor/metadata')
-          shutil.copy(root / 'IV_pole_a01.receipt.json', 'qualification/vendor/download-receipt.json')
-          Path('qualification/vendor/usd-inspection.json').write_text(json.dumps(summary, indent=2))
-          print(json.dumps(summary, indent=2))
-          PY
+          python -m robotics.world_worker.qualify_simready \
+            --workspace /tmp/brainsnn-nvidia --out qualification \
+            --license-reviewed --placement-reviewed
       - name: Retain exact source snapshot
         if: always()
         run: mkdir -p qualification && git archive --format=zip HEAD -o qualification/source.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: omniverse-qualification
