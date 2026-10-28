@@ -21,38 +21,53 @@ jobs:
         run: python -m pip install numpy==2.2.6 Pillow==11.3.0 usd-core==25.8
       - name: Existing source and USD contracts
         run: python -m unittest discover -s tests/world -p 'test_launch_extensions.py' -v
-      - name: Capture immutable package metadata (no asset execution)
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/brainsnn-nvidia
+          key: nvidia-simready-653d91e182011f357cf1644013cc94ddf194d349-IV-pole-a01-v1
+      - name: Download pinned NVIDIA asset with source hashes checked
         run: |
-          mkdir -p qualification
+          if [ ! -d /tmp/brainsnn-nvidia/IV_pole_a01 ]; then
+            python -m robotics.world_worker.nvidia_pack --workspace /tmp/brainsnn-nvidia
+          fi
+      - name: Verify cached bytes and inspect actual USD (not a physics run)
+        run: |
+          mkdir -p qualification/vendor
           python - <<'PY'
-          import json, urllib.request
+          import json, hashlib, shutil
           from pathlib import Path
-          root = Path('qualification')
-          revision = '653d91e182011f357cf1644013cc94ddf194d349'
-          urls = {
-              'nvidia-package.json': f'https://huggingface.co/datasets/nvidia/simready-assets/resolve/{revision}/IV_pole_a01/com.nvidia.simready.packaging.json',
-              'nvidia-files.json': f'https://huggingface.co/api/datasets/nvidia/simready-assets/tree/{revision}/IV_pole_a01?recursive=true&expand=false',
-          }
-          result = {}
-          for name, url in urls.items():
-              try:
-                  with urllib.request.urlopen(url, timeout=45) as r:
-                      data = r.read(2 * 1024**2 + 1)
-                  if len(data) > 2 * 1024**2:
-                      raise ValueError('metadata limit exceeded')
-                  payload = json.loads(data)
-                  (root / name).write_text(json.dumps(payload, indent=2))
-                  result[name] = {'status':'downloaded', 'url':url, 'bytes':len(data)}
-              except Exception as e:
-                  result[name] = {'status':'failed', 'url':url, 'error':str(e)}
-          (root / 'metadata-status.json').write_text(json.dumps(result, indent=2))
-          print(json.dumps(result, indent=2))
+          from pxr import Sdf, Usd, UsdGeom, UsdPhysics
+          root = Path('/tmp/brainsnn-nvidia')
+          receipt = json.loads((root / 'IV_pole_a01.receipt.json').read_text())
+          for item in receipt['files']:
+              p = root / item['path']
+              assert p.stat().st_size == item['size']
+              assert hashlib.sha256(p.read_bytes()).hexdigest() == item['sha256'], item['path']
+          folder = root / 'IV_pole_a01'
+          source = folder / receipt['root_usd']
+          s = Usd.Stage.Open(str(source))
+          assert s and s.GetDefaultPrim()
+          default = s.GetDefaultPrim()
+          summary = {'asset': receipt['asset'], 'files':len(receipt['files']), 'bytes':receipt['bytes'],
+                     'meters_per_unit':UsdGeom.GetStageMetersPerUnit(s), 'up_axis':str(UsdGeom.GetStageUpAxis(s)),
+                     'default_prim':str(default.GetPath()), 'variants':{},
+                     'colliders':sum(p.HasAPI(UsdPhysics.CollisionAPI) for p in s.Traverse()),
+                     'rigid_bodies':sum(p.HasAPI(UsdPhysics.RigidBodyAPI) for p in s.Traverse()),
+                     'physics_tested':False}
+          for name in default.GetVariantSets().GetNames():
+              v = default.GetVariantSet(name)
+              summary['variants'][name] = {'selected':v.GetVariantSelection(), 'choices':v.GetVariantNames()}
+          Sdf.Layer.FindOrOpen(str(source)).Export('qualification/vendor/root.usda')
+          shutil.copytree(folder / '.metadata', 'qualification/vendor/metadata')
+          shutil.copy(root / 'IV_pole_a01.receipt.json', 'qualification/vendor/download-receipt.json')
+          Path('qualification/vendor/usd-inspection.json').write_text(json.dumps(summary, indent=2))
+          print(json.dumps(summary, indent=2))
           PY
-      - name: Retain exact source snapshot and portable USD wheel for offline checks
-        run: |
-          git archive --format=zip HEAD -o qualification/source.zip
-          python -m pip download --no-deps --only-binary=:all: --python-version 313 --implementation cp --abi cp313 --platform manylinux_2_17_x86_64 usd-core==25.8 -d qualification/wheels || true
+      - name: Retain exact source snapshot
+        if: always()
+        run: mkdir -p qualification && git archive --format=zip HEAD -o qualification/source.zip
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: omniverse-qualification
           path: qualification/
