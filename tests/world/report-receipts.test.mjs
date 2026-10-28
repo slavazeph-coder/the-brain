@@ -135,3 +135,34 @@ test('WorkerClient signing is unavailable by default and transmits hashes/refs o
   assert.equal((await verifySignedReport({...f,expectedJob:publicJob})).verified,true);
   const abort=new AbortController();abort.abort();await assert.rejects(client.reportReceipt(job,f.scenarioText,abort.signal),e=>e.name==='AbortError');assert.equal(calls.length,1);
 });
+
+test('aborting a report-receipt request mid-flight discards the signed result as AbortError',async()=>{
+  // Cancellation gap in the client receipt path: WorkerClient.request relays the
+  // caller's AbortSignal into a local AbortController that fetch consumes. Aborting
+  // the signal while the worker is still streaming a signed receipt back must make
+  // the request reject with an AbortError and discard the bytes — never silently
+  // complete with a half-read signed payload. The prior test only aborted before
+  // the request (capability gate); this pins the in-flight abort by modelling
+  // fetch's signal contract: the read rejects as soon as the relayed signal fires.
+  const f=await fixture(),client=new WorkerClient('https://worker.example','t'.repeat(40));
+  client.caps={reportSigning:{available:true,algorithm:'Ed25519',keyId:primary.key.keyId}};
+  let requestSignal=null;
+  client.request=async(path,opts)=>{
+    requestSignal=opts.signal;
+    // Model fetch({signal}): the body read rejects with AbortError the moment
+    // the relayed signal aborts, before the signed payload could be returned.
+    await new Promise((resolve,reject)=>{
+      const onAbort=()=>reject(new DOMException('Aborted','AbortError'));
+      opts.signal.addEventListener('abort',onAbort,{once:true});
+      setTimeout(()=>{opts.signal.removeEventListener('abort',onAbort);resolve();},20);
+    });
+    return f.receipt; // unreachable after an in-flight abort
+  };
+  const abort=new AbortController(),promise=client.reportReceipt(job,f.scenarioText,abort.signal);
+  // Wait until the in-flight request has captured its relayed signal, then abort.
+  for(let i=0;i<200&&!requestSignal;i++)await new Promise(r=>setTimeout(r,5));
+  assert.ok(requestSignal,'in-flight request never captured its abort signal');
+  assert.ok(!requestSignal.aborted,'signal was aborted before the in-flight request began');
+  abort.abort();
+  await assert.rejects(promise,e=>e.name==='AbortError');
+});

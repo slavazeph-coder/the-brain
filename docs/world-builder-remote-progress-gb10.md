@@ -658,6 +658,22 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 **Blocker:** none this run.
 **Next bounded action:** 4090 MapAnything dense-inference smoke (remaining held-out GPU qualification gate). No force-push/merge/deploy; serving Qwen/backup and licensed gates untouched.
 
+## Run 148 — 2026-10-28 (GB10: in-flight abort of reportReceipt pins client cancellation contract)
+
+**4090:** `ssh2.vast.ai:23990` connection refused — 4th consecutive down. No 4090 GPU work this run; not repeating the probe.
+
+**Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ a5a4574):** added the in-flight-abort regression to `tests/world/report-receipts.test.mjs`. `WorkerClient.reportReceipt` relays the caller's `AbortSignal` into a local `AbortController` that `fetch` consumes; aborting the signal while the worker is still streaming the signed receipt back must reject with an `AbortError` and discard the bytes — never silently complete with a half-read signed payload. The earlier cancellation tests only aborted *before* the request (capability gate); this one models `fetch`'s signal contract by having the mocked body read reject as soon as the relayed signal fires, then asserts the client rejects with `name==='AbortError'` and the signed receipt is never returned.
+
+**Verification (exact, GB10):**
+- `node --test tests/world/report-receipts.test.mjs` → **11 pass / 0 fail** (was 10, duration_ms 128)
+- `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.87s
+
+**Actual blocker:** 4090 GPU unreachable (connection refused, 4 consecutive). MapAnything dense-inference smoke still gated on 4090 reachability. HTTP report-UI (browser) validation still pending (loopback only).
+
+**Next bounded action:** 4090 MapAnything held-out dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first; pinned weights, 20 GiB watchdog, no base conda replacement); else next GB10 receipt/queue integration-gap item (signed-report receipt files + Hermes queue continuation absent from main).
+
+**Guardrails:** no force-push, no merge/deploy, no paid fallback. Serving Qwen/backup and licensed model/guardrail gates untouched. 4090 branch `hermes/world-builder-4090` untouched.
+
 ## Run 110 — 2026-10-27 (4090 env-var wiring complete)
 
 **4090 verification (short SSH, hostname d130b6c7f3f4, GPU UUID 3390c2ec… verified):**
