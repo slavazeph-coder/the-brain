@@ -213,7 +213,7 @@ export function WorldScan() {
             </label>
           </div>
           </details>
-          <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files stay on this device until you approve a worker upload. Continue privately stores a temporary local browser copy, valid for 20 minutes and cleared after import. Unused copies are deleted when the handoff is revisited after expiry.</p>
+          <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files stay on this device until you separately approve a worker upload. Continue creates a temporary local browser copy (up to 128 MiB) that expires in 20 minutes and is cleared after import. For larger videos, use Open without transfer and choose the file in World Builder.</p>
           {files.length > 0 && <div className="world-scan-ready">
             <h3>Capture prepared</h3>
             <p>{video ? 'Your video is ready for World Builder. A compatible connected worker can reconstruct camera poses and points. Reconstruction can be partial and must be reviewed before using dimensions or routes.' : 'Your photos are ready to explore in World Builder. Individual photos support visual previews; calibrated multi-photo reconstruction still needs a compatible capture and worker.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
