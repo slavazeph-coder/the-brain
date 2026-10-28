@@ -183,6 +183,8 @@ def compose(data, workspace, out):
     for item in data['placements']:
         a = item['asset']
         folder = local(workspace, a['directory'], True)
+        if out.resolve().is_relative_to(folder.resolve()):
+            raise ValueError('Output must be outside every source package.')
         if receipt(folder) != a['receipt']:
             raise ValueError('Asset bytes changed after review.')
         audit_layers(folder / a['root_usd'], folder, Sdf)
@@ -192,8 +194,14 @@ def compose(data, workspace, out):
         axis = str(UsdGeom.GetStageUpAxis(stage))
         if axis not in ('Y', 'Z') or abs(UsdGeom.GetStageMetersPerUnit(stage) - 1.0) > 1e-12:
             raise ValueError('Requires metre-authored Y/Z-up assets; no silent physics-unit conversion.')
-        if not any(p.HasAPI(UsdPhysics.CollisionAPI) for p in Usd.PrimRange(stage.GetDefaultPrim())):
+        prims = list(Usd.PrimRange(stage.GetDefaultPrim(), Usd.TraverseInstanceProxies()))
+        if not any(p.HasAPI(UsdPhysics.CollisionAPI) for p in prims):
             raise ValueError('No authored collider in the referenced asset.')
+        if any(UsdGeom.Xformable(p) and UsdGeom.Xformable(p).GetResetXformStack()
+               for p in prims):
+            raise ValueError('Reset transform stacks would bypass placement and axis conversion.')
+        if item['collision_policy'] == 'convexHull' and any(p.IsInstance() for p in prims):
+            raise ValueError('Convex hull overrides on instanced assets require separate authoring and review.')
         sources[a['receipt']['sha256']] = (folder, axis)
     out.mkdir(parents=True)
     stage = Usd.Stage.CreateNew(str(out / 'simready-additions.usda'))

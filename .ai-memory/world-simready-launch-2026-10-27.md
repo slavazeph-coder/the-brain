@@ -16,3 +16,15 @@ Public browser verification on the Railway website hostname observed healthz=200
 Railway domain-status says brainsnn.com traffic DNS requires tnoamdbj.up.railway.app and its certificate is issuing. Resolve via the actual DNS provider; preserve unrelated DNS and mail records. The temporary website hostname is the-brain-production.up.railway.app.
 
 Full commands, schema and limitations: docs/world-simready-launch-20261027.md. Do not report library assets as observed capture geometry or promote tests/scale priors to physical qualification.
+
+## October 28 integration follow-up
+
+The ZIP exactly matched PR253 source. Isolated integration checkout: `/Users/slavaz/the-brain-launch-integration`; original dirty checkouts preserved. Native capture JSON +3–11 original photos now enter the existing authenticated worker, supply fixed calibrated COLMAP cameras, and undergo checked post-solve ARKit alignment. No phone app or physical scale certification is implied. See docs/world-native-capture.md.
+
+Production scene compiler now uses conservative surface-pair candidates instead of p90–p10 scatter falsely labeled measured. IFC/Rhino/quantity labels keep verification false; geometry edits discard stale evidence. Native Blender5.1 synthetic runs revealed invalid comma-separated USD customLayerData: fixed and independently reopened with usd-core25.8. Production Blender4.2 still requires its deployment check.
+
+SimReady imports reject reset transform stacks including instance proxies, unsafe convex-hull overrides on instanced assets, and output paths inside source packages. Exact upstream NVIDIA library schema was checked. Real NVIDIA asset/Isaac physics qualification is still absent.
+
+Working public URL is https://www.brainsnn.com/world/ (TLS valid, health and processing200, unauthenticated capabilities401). Apex brainsnn.com still points to GoDaddy and returns404 on deep links; GoDaddy browser access is signed out. Railway connector works but redacts passcode; local CLI is unauthorized. User was asked to refresh local railway login, never paste secrets. Authenticated live reconstruction remains pending.
+
+Website follows main. Worker follows deploy/world-worker-20261027 with worker-specific root railway.toml; preserve that config and WORLD_WORKER_HOST=0.0.0.0. Do not merge worker root config into main.

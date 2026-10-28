@@ -8,12 +8,15 @@ import argparse
 import json
 from pathlib import Path
 import numpy as np
-from .simready_bridge import file_hash, local, read_json
+try:
+    from .simready_bridge import file_hash, local, read_json
+except ImportError:
+    from simready_bridge import file_hash, local, read_json
 
 
-def validate_bundle(bundle, root):
+def validate_bundle(bundle, root, *, image_paths=None):
     """Validate a proposed native capture bundle without extracting archives."""
-    if bundle.get('schema') != 'brainsnn.capture.v1' or bundle.get('pose_convention') != 'arkit-camera-to-world':
+    if not isinstance(bundle, dict) or bundle.get('schema') != 'brainsnn.capture.v1' or bundle.get('pose_convention') != 'arkit-camera-to-world':
         raise ValueError('Expected brainsnn.capture.v1 with explicit ARKit camera-to-world poses.')
     if bundle.get('units') != 'm' or bundle.get('pixel_convention') != 'integer-centres':
         raise ValueError('Capture units and pixel convention must be explicit.')
@@ -23,6 +26,8 @@ def validate_bundle(bundle, root):
     from PIL import Image
     last, ids, paths, records, usable, total = -float('inf'), set(), set(), [], 0, 0
     for frame in frames:
+        if not isinstance(frame, dict):
+            raise ValueError('Each frame must be an object.')
         name = frame.get('id')
         if not isinstance(name, str) or not name or len(name) > 100 or name in ids:
             raise ValueError('Frame ids must be unique bounded strings.')
@@ -31,8 +36,18 @@ def validate_bundle(bundle, root):
         if type(stamp) not in (float, int) or not np.isfinite(stamp) or stamp < 0 or stamp <= last:
             raise ValueError('Original timestamps must be finite, nonnegative and strictly increasing.')
         last = stamp
-        image = local(root, frame.get('image'))
-        if image in paths or image.suffix.lower() not in ('.jpg', '.jpeg', '.png'):
+        relative = frame.get('image')
+        if image_paths is None:
+            image = local(root, relative)
+        else:
+            # The worker maps exact uploaded names to owner-authorized files. Never
+            # resolve any bundle-supplied path against the worker filesystem.
+            if not isinstance(relative, str) or relative not in image_paths:
+                raise ValueError('Capture frame has no exact uploaded source.')
+            image = Path(image_paths[relative])
+            if image.is_symlink() or not image.is_file():
+                raise ValueError('Capture source must be a regular uploaded file.')
+        if image in paths or Path(relative).suffix.lower() not in ('.jpg', '.jpeg', '.png'):
             raise ValueError('Each frame needs its own JPEG or PNG.')
         paths.add(image)
         total += image.stat().st_size
@@ -45,15 +60,22 @@ def validate_bundle(bundle, root):
             width, height = im.size
             if width * height > 24_000_000 or width < 256 or height < 256:
                 raise ValueError('Capture resolution is outside the supported profile.')
+            if im.format not in ('JPEG', 'PNG'):
+                raise ValueError('Native capture requires original JPEG/PNG rasters.')
             im.verify()
+        with Image.open(image) as im:
+            if im.getexif().get(274, 1) != 1:
+                raise ValueError('Native capture requires original upright rasters (EXIF orientation 1).')
         if [width, height] != frame.get('image_size'):
             raise ValueError('Image dimensions disagree with recorded calibration.')
         K = np.asarray(frame.get('intrinsics'), dtype=float)
         T = np.asarray(frame.get('camera_to_world'), dtype=float)
         if K.shape != (3, 3) or T.shape != (4, 4) or not np.isfinite(K).all() or not np.isfinite(T).all():
             raise ValueError('Invalid camera matrices.')
-        if K[0,0] <= 0 or K[1,1] <= 0 or not np.allclose(K[2], [0,0,1]) or abs(K[1,0]) > 1e-8:
+        if K[0,0] <= 0 or K[1,1] <= 0 or not np.allclose(K[2], [0,0,1]) or abs(K[1,0]) > 1e-8 or abs(K[0,1]) > 1e-8:
             raise ValueError('Invalid intrinsic calibration.')
+        if any(key in frame or key in bundle for key in ('distortion', 'distortion_coefficients', 'lens_distortion')):
+            raise ValueError('Lens distortion is not supported by capture.v1; do not silently discard it.')
         if not (0 <= K[0,2] < width and 0 <= K[1,2] < height):
             raise ValueError('Principal point lies outside the original raster.')
         R = T[:3,:3]
@@ -67,6 +89,7 @@ def validate_bundle(bundle, root):
         rotation = np.diag([1., -1., -1.]) @ R.T
         translation = -rotation @ T[:3,3]
         records.append({'id': name, 'image': frame['image'], 'image_sha256': digest,
+                        'image_size': [width, height],
                         'timestamp_seconds': stamp, 'tracking_state': tracking,
                         'world_to_colmap_camera': np.column_stack((rotation, translation)).tolist(),
                         'intrinsics_integer_centres': K.tolist(), 'pose_is_prior': True})
@@ -136,6 +159,7 @@ def wall_candidate(points, origin, normal, along, *, cell_m=.25):
         return {**base, 'reason': 'Both surface candidates do not overlap in enough local cells.'}
     thickness=np.array([tables[1][k]-tables[0][k] for k in shared])
     return {**base, 'status':'two-surface-candidate', 'thickness_m':float(np.median(thickness)),
+            'surface_offsets_m': [float(np.median([table[k] for k in shared])) for table in tables],
             'thickness_source':'paired-reconstructed-surfaces-unverified', 'matched_cells':len(shared),
             'cell_coverage':coverage, 'cell_thickness_p05_p95_m':np.quantile(thickness,[.05,.95]).tolist(),
             'reason':'Candidate finish-face separation only; duplicated surfaces and registration bias require independent review.'}

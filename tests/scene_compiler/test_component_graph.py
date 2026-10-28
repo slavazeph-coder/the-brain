@@ -139,14 +139,19 @@ class ComponentGraph(unittest.TestCase):
         # The compiled box stood behind the face the camera saw; once an operator moves it, that face no longer bounds it
         # and a scorer reading faceCentre would measure the old position.
         original = fixture()
-        original['walls'][0].update(faceCentre=[2, 1.5, .1], thicknessBasis='assumed 0.1 m: one face seen')
+        original['walls'][0].update(faceCentre=[2, 1.5, .1], thicknessBasis='assumed 0.1 m: one face seen',
+                                    thicknessMeasured=False, thicknessCandidate=True,
+                                    wallEvidence={'schema': 'brainsnn.wall-evidence.v1', 'status': 'two-surface-candidate', 'thickness_m': .1})
         scene = attach_component_ids(original, 'a' * 64)
         edited = apply_edits(scene, self.contract([{'op': 'wall', 'componentId': self.wall_id,
                                                      'translationMeters': [0, 0, .3]}], scene))
         wall = edited['walls'][0]
         self.assertEqual(wall['centre'], [2, 1.5, .3])
         self.assertNotIn('faceCentre', wall)
-        self.assertNotIn('thicknessBasis', wall)
+        for key in ('thicknessBasis', 'thicknessMeasured', 'thicknessCandidate', 'wallEvidence'):
+            self.assertNotIn(key, wall)
+        from wall_evidence import thickness_properties
+        self.assertEqual(thickness_properties(wall)['ThicknessBasis'], 'operator-authored thickness: unverified')
         self.assertIn('faceCentre', scene['walls'][0], 'the source scene keeps its record')
 
     def test_combined_wall_and_opening_resize_checks_final_geometry(self):
