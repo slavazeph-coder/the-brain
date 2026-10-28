@@ -177,3 +177,8 @@ CPU through the adapter's load/infer code. Qualification steps: docs/hermes-gpu-
 - Low-resolution video extraction now preserves native size instead of enlarging to 1280 pixels. Larger videos retain the existing 1280-pixel cap. Real FFmpeg regressions cover both portrait and landscape.
 - Production `/api/world/processing` reports available and passcode-enabled, visitors disabled. Railway reports the site and private world-worker healthy. OAuth exposes variable names only, so hosted processing still requires the owner to unlock with the passcode. Do not reset credentials or open visitor processing to work around this.
 - The room compiler remains indoor-oriented. An outdoor sparse point cloud is not a complete block, metric BIM, terrain surface, or validated navigation map. Source MP4s, frames and trial artifacts remain private and outside the repository.
+
+
+### October 28 launch integration
+
+PR252 was merged with main ed7b353 after the native-capture and measurement handoff release, without source conflicts. 119 focused video CLI, quality screening, real FFmpeg native-resolution and native-capture regression tests passed. No additional private captures were submitted. This is an independent video extraction/qualification improvement, not a dependency or proof of full outdoor/physical geometry.
