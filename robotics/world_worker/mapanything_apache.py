@@ -165,7 +165,15 @@ def run(request):
     if not torch.cuda.is_available():
         raise RuntimeError('This adapter requires a separately qualified CUDA worker. No CPU fallback is claimed.')
     out = Path(request['output_dir']).resolve();out.mkdir(parents=True, exist_ok=True)
-    images = out.parent / 'mapanything-images';images.mkdir(exist_ok=False)
+    # Per-request staging dir keeps one reconstruction from globbing another
+    # run's frames. Start clean: a fresh empty dir is idempotent, while a
+    # populated one fails fast rather than mixing prior frames into this run.
+    images = out / 'mapanything-images'
+    if images.exists():
+        if any(images.iterdir()):
+            raise RuntimeError(f'Per-request images dir is not empty; rerun with a clean output_dir: {images}')
+    else:
+        images.mkdir()
     sources = []
     for item in items:
         path = Path(item['path'])

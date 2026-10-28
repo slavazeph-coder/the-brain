@@ -9,6 +9,7 @@ import io
 import os
 import shutil
 import subprocess
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -424,6 +425,77 @@ def test_mapanything_model_dir_symlink_rejected_before_hash(monkeypatch, tmp_pat
     (link / 'model.safetensors').write_bytes(b'wrong')
     with pytest.raises(RuntimeError, match='model.safetensors'):
         local_installation()
+
+
+def test_mapanything_per_request_images_dir_is_isolated_and_idempotent(monkeypatch, tmp_path):
+    # The per-request staging dir lives under output_dir (not the shared
+    # parent), so one reconstruction never globs another run's frames.
+    # prepare_photo copies this run's photo INTO the dir before the model
+    # loads, so after a run the dir holds exactly this run's frame; a retry
+    # on the same output_dir is idempotent only once that frame is cleaned,
+    # and a foreign stale frame fails fast rather than mixing into the run.
+    # The CUDA + model-load work after the guard is isolated out so the test
+    # targets the images-dir guard and prepare_photo's copy.
+    from robotics.world_worker import mapanything_apache as worker_module
+    monkeypatch.setattr(worker_module, 'local_installation',
+                        lambda: (tmp_path / 'src', tmp_path / 'dino', tmp_path / 'model'))
+    monkeypatch.setattr(worker_module.importlib.metadata, 'version',
+                        lambda name: '0.1.7')
+    fake_torch = type(sys)('torch')
+    fake_torch.cuda = type('cuda', (), {'is_available': staticmethod(lambda: True)})()
+    monkeypatch.setitem(sys.modules, 'torch', fake_torch)
+    for module, attr in [('mapanything.models', 'MapAnything'),
+                         ('mapanything.utils.image', 'load_images')]:
+        fake = type(sys)(module)
+        fake_torch.cuda.reset_peak_memory_stats = lambda: None
+        if attr == 'MapAnything':
+            fake.MapAnything = type('MapAnything', (), {})
+        else:
+            fake.load_images = lambda *a, **k: []
+        monkeypatch.setitem(sys.modules, module, fake)
+    output = tmp_path / 'out'
+    # A diagonal R/G gradient passes prepare_photo's brightness/texture gate
+    # (mean ~127, stddev ~65); a flat fill raises 'too dark or lacks texture'.
+    grad = np.zeros((300, 300, 3), dtype='uint8')
+    xs = np.linspace(0, 255, 300)
+    grad[:, :, 0] = np.tile(xs[None, :], (300, 1))
+    grad[:, :, 1] = np.tile(xs[:, None].T, (300, 1))
+    grad[:, :, 2] = 128
+    buf = io.BytesIO()
+    Image.fromarray(grad).save(buf, format='PNG')
+    (tmp_path / 'a.png').write_bytes(buf.getvalue())
+    request = {'schema': 'brainsnn.adapter.v1', 'output_dir': str(output),
+               'inputs': [{'name': 'a.png', 'kind': 'image',
+                           'path': str(tmp_path / 'a.png')}]}
+    # First pass: the guard creates an empty staging dir under the output
+    # dir, then prepare_photo copies this run's frame into it before the
+    # isolated-out model load raises. Exactly one frame must be present.
+    with pytest.raises(AttributeError):
+        worker_module.run(dict(request))
+    images = output / 'mapanything-images'
+    assert images.is_dir(), 'staging dir must live under the output dir'
+    assert [p.name for p in images.iterdir()] == ['image_0000.jpg'], \
+        "prepare_photo must stage this run's frame under the output dir"
+    # Idempotency: clean this run's frame, then a retry on the same output
+    # dir recreates the empty dir and re-stages the frame without the
+    # old FileExistsError (the dir now lives per-request, not global).
+    (images / 'image_0000.jpg').unlink()
+    with pytest.raises(AttributeError):
+        worker_module.run(dict(request))
+    assert [p.name for p in images.iterdir()] == ['image_0000.jpg'], \
+        "retry must re-stage this run's frame after cleaning"
+    # A foreign stale frame -> fail fast rather than mixing prior frames.
+    (images / 'image_0000.jpg').unlink()
+    (images / 'stale.jpg').write_bytes(b'stale')
+    with pytest.raises(RuntimeError, match='Per-request images dir is not empty'):
+        worker_module.run(dict(request))
+    # Isolation: a sibling output dir stages its own frame independently of
+    # the original's populated dir.
+    sibling = dict(request, output_dir=str(tmp_path / 'sibling'))
+    with pytest.raises(AttributeError):
+        worker_module.run(sibling)
+    assert [p.name for p in (tmp_path / 'sibling' / 'mapanything-images').iterdir()] == ['image_0000.jpg'], \
+        'sibling output dir must stage its own frame, isolated from the original'
 
 
 def test_mapanything_source_pin_rejects_different_revision(tmp_path):
