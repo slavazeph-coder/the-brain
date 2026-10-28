@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stageLocalCapture, readLocalCapture, clearLocalCapture, validateCaptureFiles, parseHandoffHash, HANDOFF_TTL_MS } from '../../brainsnn-r3f-app/public/world/capture-handoff.mjs';
+import { stageLocalCapture, readLocalCapture, clearLocalCapture, validateCaptureFiles, parseHandoffHash, HANDOFF_TTL_MS, HANDOFF_MAX_BYTES } from '../../brainsnn-r3f-app/public/world/capture-handoff.mjs';
 
 const ID = '11111111-2222-4333-8444-555555555555';
 function fakeFile(name, size, type) { return { name, size, type }; }
@@ -45,4 +45,24 @@ test('handoff identifier stays in URL fragment, never query or media URL', () =>
   assert.equal(parseHandoffHash('#workspace'), null);
   assert.equal(parseHandoffHash('#handoff=../bad'), null);
   assert.equal(parseHandoffHash('#handoff=' + ID + '&other=1'), null);
+});
+
+test('bounded private handoff gives an honest large-video fallback', async () => {
+  await assert.rejects(stageLocalCapture(
+    [fakeFile('oversize.mp4', HANDOFF_MAX_BYTES + 1, 'video/mp4')],
+    { goal: 'room', store: memoryStore(), makeId: () => ID },
+  ), /128 MiB/);
+});
+
+test('portable ArrayBuffer record restores original bytes, name and type', async () => {
+  const store = memoryStore();
+  const bytes = new Uint8Array([11, 20, 64, 255]).buffer;
+  store.records.set(ID, {
+    id: ID, goal: 'room', version: 2, expiresAt: HANDOFF_TTL_MS + 100,
+    files: [{ name: 'sample.png', type: 'image/png', size: 4, lastModified: 123, bytes }],
+  });
+  const record = await readLocalCapture(ID, { store, now: 100 });
+  assert.equal(record.files[0].name, 'sample.png');
+  assert.equal(record.files[0].type, 'image/png');
+  assert.deepEqual(Array.from(new Uint8Array(await record.files[0].arrayBuffer())), [11, 20, 64, 255]);
 });
