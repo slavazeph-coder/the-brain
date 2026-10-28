@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bot, Camera, CircleHelp, FileVideo, LockKeyhole, ScanLine, UploadCloud } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Camera, CircleHelp, FileVideo, LockKeyhole, ScanLine, Type, UploadCloud, Volume2 } from 'lucide-react';
 import { PublicNav, PublicFooter } from './PublicNav.jsx';
 import { track } from '../lib/analytics.js';
+import { WORLD_GOALS, goalById, goalFromSearch } from './worldGoals.js';
 import '../styles/world-engine.css';
 
 const USE_CASES = [
@@ -45,12 +46,18 @@ function videoSeconds(file) {
 }
 
 export function WorldScan() {
-  const [useCase, setUseCase] = useState(useCaseFromURL);
+  const [goal, setGoal] = useState(() => goalFromSearch(typeof window === 'undefined' ? '' : window.location.search));
+  const [useCase, setUseCase] = useState(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('use')) return useCaseFromURL();
+    return goalById(goalFromSearch(typeof window === 'undefined' ? '' : window.location.search)).useCase;
+  });
+  const [largeText, setLargeText] = useState(false);
   const [spaceName, setSpaceName] = useState('');
   const [files, setFiles] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
+  const [handoffBusy, setHandoffBusy] = useState(false);
   const videoInput = useRef(null);
   const anyInput = useRef(null);
   // Each choice (and Clear) starts a new selection; a video's length check that finishes after a newer one is dropped.
@@ -62,6 +69,8 @@ export function WorldScan() {
     track('world_capture_opened');
   }, []);
   useEffect(() => () => previews.forEach(item => URL.revokeObjectURL(item.url)), [previews]);
+  // Spoken guidance is opt-in and uses the browser's own voice; no capture is sent to speech services by this page.
+  useEffect(() => () => { if (typeof window !== 'undefined') window.speechSynthesis?.cancel(); }, []);
   // A picker that returns no file (closed, or on iPhone a video whose conversion failed) says so instead of doing nothing.
   useEffect(() => {
     const inputs = [videoInput.current, anyInput.current].filter(Boolean);
@@ -95,12 +104,48 @@ export function WorldScan() {
     chooseFiles(event.dataTransfer?.files);
   }
   function remove() { selection.current += 1; setFiles([]); setActiveIndex(0); setError(''); }
+  // Explicit click, local same-origin transfer, no worker upload. iOS may refuse large IndexedDB writes,
+  // in which case the fallback leaves the original capture untouched and asks for a fresh picker.
+  async function continueWithCapture() {
+    if (!files.length || handoffBusy) return;
+    const chosen = selection.current;
+    setHandoffBusy(true);
+    setError('');
+    try {
+      const moduleUrl = new URL('/world/capture-handoff.mjs', window.location.origin).href;
+      const { stageLocalCapture, clearLocalCapture } = await import(/* @vite-ignore */ moduleUrl);
+      const id = await stageLocalCapture(files, { goal });
+      if (chosen !== selection.current) { await clearLocalCapture(id); return; }
+      track('world_capture_local_handoff', { goal, count: files.length, kind: files.some(isVideo) ? 'video' : 'photos' });
+      window.location.assign('/world/index.html#handoff=' + id);
+    } catch (reason) {
+      setError('This browser could not move the selected capture privately to World Builder. Your original file is unchanged. Open World Builder below and choose the file again. ' + (reason?.message || 'Local storage failed.'));
+    } finally { setHandoffBusy(false); }
+  }
+  function selectGoal(id) {
+    const next = goalById(id);
+    setGoal(next.id);
+    setUseCase(next.useCase);
+    setError('');
+    track('world_capture_goal_selected', { goal: next.id });
+  }
+  function speakGuide() {
+    if (typeof window === 'undefined' || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') {
+      setError('Spoken instructions are unavailable in this browser. All the steps are written below.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(selectedGoal.title + '. ' + selectedGoal.guidance + ' ' + selectedGoal.captureTip);
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  }
+  const selectedGoal = goalById(goal);
   const current = previews[activeIndex] || null;
   const video = files.some(isVideo);
   const needMorePhotos = files.length > 0 && !video && files.length < 6;
   const pilotSubject = encodeURIComponent('BrainSNN World Engine pilot - ' + USE_CASES.find(item => item.id === useCase)?.label);
   const workerUrl = '/world/index.html#workspace';
-  return <div className="bh-site world-site world-capture-page" data-build-marker="world-engine-capture-v1">
+  return <div className={'bh-site world-site world-capture-page' + (largeText ? ' is-large-text' : '')} data-build-marker="world-engine-capture-v1">
     <a className="bh-skip" href="#capture-main">Skip to capture</a>
     <PublicNav active="scan" />
     <main id="capture-main" className="world-capture-main">
@@ -108,11 +153,33 @@ export function WorldScan() {
       <header className="world-capture-header">
         <p className="world-section-kicker">BRAINSNN CAPTURE STUDIO / EARLY ACCESS</p>
         <h1>Capture a space.<br/><span>Make it a world.</span></h1>
-        <p>Start with an ordinary video or photo set. Preview it privately in your browser, follow the capture checklist, and continue in World Builder to create a 3D preview, reconstruct a walkthrough with a connected worker and plan a robot route.</p>
+        <p>Take a photo or video. Choose what you want to do, follow a few simple steps and explore your space. Advanced reconstruction, building models and robot planning require a connected worker and review.</p>
       </header>
+      <section className="world-goal-section" aria-labelledby="world-goal-title">
+        <div className="world-goal-header">
+          <div>
+            <p className="world-section-kicker">START WITH YOUR GOAL</p>
+            <h2 id="world-goal-title">What would you like to do?</h2>
+          </div>
+          <div className="world-goal-accessibility" aria-label="Reading options">
+            <button type="button" aria-pressed={largeText} onClick={() => setLargeText(value => !value)}><Type size={18} aria-hidden="true" /> Larger text</button>
+            <button type="button" onClick={speakGuide}><Volume2 size={18} aria-hidden="true" /> Hear the steps</button>
+          </div>
+        </div>
+        <div className="world-goal-grid" role="group" aria-label="Choose an activity">
+          {WORLD_GOALS.map((item, index) => <button type="button" key={item.id} className={'world-goal-card' + (goal === item.id ? ' is-selected' : '')} aria-pressed={goal === item.id} onClick={() => selectGoal(item.id)}>
+            <span className="world-goal-availability">{String(index + 1).padStart(2, '0')} / {item.availability}</span>
+            <strong>{item.title}</strong>
+            <span>{item.summary}</span>
+          </button>)}
+        </div>
+        <p className="world-goal-guidance" role="status">{selectedGoal.guidance}</p>
+        <a className="world-goal-next" href="#capture-card">Continue to capture <ArrowRight size={16} aria-hidden="true" /></a>
+      </section>
       <div className="world-capture-layout">
-        <section className="world-drop-card" aria-labelledby="world-upload-title">
+        <section id="capture-card" className="world-drop-card" aria-labelledby="world-upload-title">
           <div className="world-drop-top"><strong id="world-upload-title">01 / Your capture</strong><span>Local preview · no auto-upload</span></div>
+          <p className="world-goal-capture-tip">{selectedGoal.captureTip}</p>
           <label className={'world-dropzone' + (dragOver ? ' is-over' : '')} onDragEnter={event => { event.preventDefault(); setDragOver(true); }} onDragLeave={event => { event.preventDefault(); setDragOver(false); }} onDragOver={event => event.preventDefault()} onDrop={handleDrop}>
             <UploadCloud size={35} strokeWidth={1.5} aria-hidden="true"/>
             <strong>{files.length ? 'Replace this capture' : 'Drop your video or photos here'}</strong>
@@ -134,6 +201,7 @@ export function WorldScan() {
           {previews.length > 1 && <div className="world-file-list" role="group" aria-label="Preview selected photos">
             {previews.map((item, index) => <button type="button" aria-pressed={index === activeIndex} onClick={() => setActiveIndex(index)} key={index}>{index + 1}. {item.file.name}</button>)}
           </div>}
+          <details className="world-capture-advanced"><summary>More details (optional)</summary>
           <div className="world-capture-options">
             <label className="world-capture-field">What will you use the 3D world for?
               <select value={useCase} onChange={event => setUseCase(event.target.value)}>
@@ -144,12 +212,14 @@ export function WorldScan() {
               <input type="text" maxLength={80} placeholder="e.g. Gym floor, living room" value={spaceName} onChange={event => setSpaceName(event.target.value)} />
             </label>
           </div>
-          <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files and space name stay on this page. No media is sent to BrainSNN or any worker automatically.</p>
+          </details>
+          <p className="world-capture-note"><LockKeyhole size={15} aria-hidden="true"/> Your files stay on this device until you separately approve a worker upload. Continue creates a temporary local browser copy (up to 128 MiB) that expires in 20 minutes and is cleared after import. For larger videos, use Open without transfer and choose the file in World Builder.</p>
           {files.length > 0 && <div className="world-scan-ready">
             <h3>Capture prepared</h3>
-            <p>{video ? 'Your video can be previewed here. In World Builder, a connected reconstruction worker can turn it into points and camera poses, then a proposed robot planning map. Select the file again there.' : 'Your photos are ready for review. Multi-photo reconstruction will require a supported frame archive and connected worker; this page does not yet convert individual photos into a scene.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
+            <p>{video ? 'Your video is ready for World Builder. A compatible connected worker can reconstruct camera poses and points. Reconstruction can be partial and must be reviewed before using dimensions or routes.' : 'Your photos are ready to explore in World Builder. Individual photos support visual previews; calibrated multi-photo reconstruction still needs a compatible capture and worker.'} {needMorePhotos ? ' For better geometry, capture more overlapping views before reconstructing.' : ''}</p>
             <div className="world-scan-actions">
-              <a href={workerUrl} className="world-button world-button-primary" onClick={() => track('world_capture_worker_handoff', { use_case: useCase })}>Open World Builder <ArrowRight size={15} aria-hidden="true" /></a>
+              <button type="button" disabled={handoffBusy} className="world-button world-button-primary" onClick={continueWithCapture}>{handoffBusy ? 'Preparing private handoff…' : 'Continue with this capture'} <ArrowRight size={15} aria-hidden="true" /></button>
+              <a href={workerUrl} className="world-button world-button-outline">Open without transfer</a>
               <a href={'mailto:info@xioai.ca?subject=' + pilotSubject} className="world-button world-button-outline">Request pilot access <ArrowRight size={15} aria-hidden="true" /></a>
             </div>
           </div>}
@@ -161,11 +231,11 @@ export function WorldScan() {
             <div className="world-guide-step"><span>02</span><div><strong>Overlap your views</strong><p>Film the same surfaces from several angles. Move around furniture and reveal corners where possible.</p></div></div>
             <div className="world-guide-step"><span>03</span><div><strong>Include a measurement</strong><p>Record a known dimension or reference marker if you intend to use the reconstruction for measurements.</p></div></div>
             <div className="world-guide-cta">
-              <a className="world-button world-button-outline" href={workerUrl}><Bot size={16} aria-hidden="true" /> Continue in World Builder <ArrowRight size={16} aria-hidden="true" /></a>
-              <small>World Builder processes captures through a separately connected, compatible worker. You will need to select your file again there.</small>
+              {files.length ? <button type="button" disabled={handoffBusy} className="world-button world-button-outline" onClick={continueWithCapture}><Bot size={16} aria-hidden="true" /> {handoffBusy ? 'Preparing transfer…' : 'Continue with selected file'} <ArrowRight size={16} aria-hidden="true" /></button> : <a className="world-button world-button-outline" href={workerUrl}><Bot size={16} aria-hidden="true" /> Open World Builder <ArrowRight size={16} aria-hidden="true" /></a>}
+              <small>Files are transferred within this browser after you choose Continue; they are not uploaded to any worker automatically. If transfer is unavailable, open World Builder and select the file there.</small>
             </div>
           </section>
-          <div className="world-privacy-card"><CircleHelp size={20} aria-hidden="true"/><div><strong>What's available now?</strong><p>This page is a private capture preview and guide, not a live consumer reconstruction service. Dense reconstruction, automatic object segmentation and calibrated professional exports are planned capabilities.</p></div></div>
+          <div className="world-privacy-card"><CircleHelp size={20} aria-hidden="true"/><div><strong>What's available now?</strong><p>This page previews files privately. Advanced reconstruction and IFC/Rhino exports require an authorized worker, measurements and human review. Public hosted signup is not available.</p></div></div>
         </aside>
       </div>
     </main>
