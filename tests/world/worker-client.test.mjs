@@ -69,6 +69,43 @@ test('owner cancellation during an in-flight chunk PUT aborts it and never compl
   assert.equal(calls[1].path,`/v1/uploads/${id}?offset=0`,'no chunk was acked after cancellation');
 });
 
+test('abort during the cached-upload GET re-fetch rejects with AbortError and never re-uploads from scratch',async()=>{
+  // upload() keeps a WeakMap of in-flight upload items. On a retry it first
+  // GETs the item back to learn the current offset. If the caller aborts while
+  // that GET is in flight, the client must reject with AbortError — not catch
+  // the abort and fall through to item=null, which would silently discard the
+  // cached item and start a fresh upload from byte 0, re-sending every byte.
+  // Pin the contract: the GET receives the caller's signal, the promise rejects
+  // with AbortError, and no POST/PUT request outlives the abort.
+  const client=makeClient();
+  client.uploads.set(file,{id,offset:0,size:file.size}); // cache hit → will issue a GET
+  const calls=[];
+  let beginGet;const getStarted=new Promise(resolve=>{beginGet=resolve;});
+  client.request=async(path,options={})=>{
+    const{method='GET',signal,raw}=options; // mirror request()'s defaults
+    calls.push({path,method,signal});
+    if(method==='GET'){
+      // Model fetch({signal}): the GET resolves/rejects based on the relayed signal.
+      return new Promise((_,reject)=>{
+        options.signal?.addEventListener('abort',()=>reject(options.signal.reason),{once:true});
+        beginGet();
+      });
+    }
+    return{id,offset:0,size:file.size}; // unreachable after abort
+  };
+  const caller=new AbortController();
+  const pending=client.upload(file,'image',caller.signal);
+  const rejected=assert.rejects(pending,error=>error.name==='AbortError');
+  await getStarted;
+  assert.equal(calls.length,1,'no POST or PUT was issued before the abort');
+  assert.equal(calls[0].method,'GET','cache hit issued the resume-check GET');
+  assert.equal(calls[0].signal,caller.signal,'upload() relays the owner signal into the GET');
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  await rejected;
+  assert.equal(calls.length,1,'no later request outlives the owner signal');
+  assert.equal(client.uploads.get(file)?.id,id,'the original cache entry is untouched; no silent re-upload replaced it');
+});
+
 test('download tickets stay on the configured worker path',async()=>{
   for(const url of ['https://elsewhere.example/v1/download/token','https://worker.example/other/token','https://worker.example/prefix/v1/download/../../other']){
     const client=makeClient();client.request=async()=>({url});
