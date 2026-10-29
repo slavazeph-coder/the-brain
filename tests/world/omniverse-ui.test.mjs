@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {packageRequest} from '../../brainsnn-r3f-app/public/world/omniverse-ui.mjs';
+const base={sceneSha:'a'.repeat(64),cloudSha:'b'.repeat(64),reviewed:true};
+const asset={asset:'IV_pole_a01',available:true,package_sha256:'c'.repeat(64)};
+test('source-only pack preserves explicit source hashes',()=>assert.equal(packageRequest(base).placements.length,0));
+test('refuses missing review and hash',()=>{assert.throws(()=>packageRequest({...base,reviewed:false}));assert.throws(()=>packageRequest({...base,cloudSha:'x'}));});
+test('library placement requires both approvals',()=>{assert.throws(()=>packageRequest({...base,asset}));assert.throws(()=>packageRequest({...base,asset,licenseReviewed:true}));});
+test('authored collider and immutable physical scale',()=>{const r=packageRequest({...base,asset,licenseReviewed:true,physicsReviewed:true,position:[1,2,3],yaw:30});assert.equal(r.placements[0].collision_policy,'authored');assert.equal(r.placements[0].scale,1);assert.deepEqual(r.placements[0].rotation_xyz_deg,[0,30,0]);});
+test('rejects invalid placement',()=>assert.throws(()=>packageRequest({...base,asset,licenseReviewed:true,physicsReviewed:true,position:[0,NaN,0]})));

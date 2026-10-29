@@ -24,7 +24,9 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
-→ [World launch integration](world-simready-launch-2026-10-27.md) — browser native-capture import, source-bound CLI acceptance, real NVIDIA portable composition and current deployment/access limits.
+→ [Unified world sandbox](world-sandbox-integration-2026-10-28.md) — native street objects, capture handoff, navigation and current scene exports inside the production World Builder.
+
+→ [World launch integration](world-simready-launch-2026-10-27.md) — native-capture import, source-bound acceptance, real NVIDIA composition and Omniverse export integration; current deployment/access limits.
 
 → [World Builder handoff, October 24](../docs/world-builder-handoff.md). **Start here for World Builder:** what is live, how to run it, what is blocked (4090 access, rotating the Anthropic key, physical iPhone test), and the next steps in order. Demo recorders: `scripts/world-demo/`.
 

@@ -1,0 +1,147 @@
+{
+  "schema": "brainsnn.municipal-block-reference.v1",
+  "anchor": {
+    "longitude": -79.443862,
+    "latitude": 43.7234276,
+    "crs": "EPSG:4326",
+    "source": "User-supplied Google Maps pin; coordinate anchor only",
+    "camera_trajectory_provided": false,
+    "video_alignment_established": false
+  },
+  "location": {
+    "nearest_city_centreline_name": "Green Gardens Blvd",
+    "approximate_distance_to_centreline_m": 4.319,
+    "city_neighbourhood": "Englemount-Lawrence",
+    "city_neighbourhood_code": "032",
+    "redevelopment_context": "Lawrence Heights Phase 1",
+    "address_not_verified": true
+  },
+  "licence": {
+    "name": "Open Government Licence \u2013 Toronto",
+    "url": "https://www.toronto.ca/city-government/data-research-maps/open-data/open-data-licence/",
+    "attribution": "Contains information licensed under the Open Government Licence \u2013 Toronto.",
+    "evidence": "Official open.toronto.ca dataset pages show this licence; 3D Massing catalogue description explicitly references the Open Government Licence. CKAN generic licence fields are notspecified/null."
+  },
+  "layers": [
+    {
+      "file": "toronto-massing-2025-300m.geojson",
+      "kind": "municipal reference massing polygons",
+      "count": 168,
+      "count_unit": "polygon parts, not distinct buildings",
+      "source_dataset": "https://open.toronto.ca/dataset/3d-massing/",
+      "source_archive": {
+        "file": "3dmassingshapefile_2025_wgs84.zip",
+        "url": "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/387b2e3b-2a76-4199-8b3b-0b7d22e2ec10/resource/667237d6-4d3c-4cf3-8cb7-e91c48d59375/download/3dmassingshapefile_2025_wgs84.zip",
+        "bytes": 81415175,
+        "sha256": "9617089710518f1a24f70ca11b4a7c20ae45ab8e52a6fbed1bc088192efe6285",
+        "resource_last_modified": "2025-12-02T19:10:20",
+        "dataset_last_refreshed": "2025-12-05 13:38:35",
+        "retrieved_utc": "2026-10-28T00:50:14.612941+00:00"
+      },
+      "source_crs": "EPSG:3857 from included .prj; archive WGS84 filename is not geographic-degree coordinates",
+      "delivered_crs": "EPSG:4326",
+      "transformation": "Inverse spherical Web Mercator (R=6378137m) to WGS84 longitude/latitude. Whole features whose nearest boundary is within approximately 300m of pin are retained. Feature geometry is not cut at circle boundary.",
+      "geometry_types": {
+        "Polygon": 167,
+        "MultiPolygon": 1
+      },
+      "polygon_ring_counts": {
+        "one": 163,
+        "two": 3,
+        "four": 1
+      },
+      "source_z_values": "All clipped source vertex Z values are 0.0 and must not be treated as measured roof or ground elevations.",
+      "height_field": "AVG_HEIGHT",
+      "height_unit": "metres above source surface",
+      "height_min_m": 2.9758,
+      "height_max_m": 41.4,
+      "height_positive_count": 168,
+      "height_sources": {
+        "Lidar-Derived": 115,
+        "Site Plan": 53
+      },
+      "height_vintage": "Included README identifies LiDAR-derived heights as 2015 LiDAR. Site Plan dates and construction status are unspecified.2025 is release/export year, not a common survey date.",
+      "ground_field": "SURF_ELEV",
+      "absolute_top_field": "HEIGHT_MSL",
+      "vertical_datum": "Not specified in included metadata; HEIGHT_MSL described as mean-sea-level metres. Do not assume equivalence with CGVD2013, CGVD28 or WGS84 ellipsoid heights.",
+      "use": "Can extrude AVG_HEIGHT above a flat display baseline for clearly labelled reference massing. Source imagery, permits and video observations remain separate evidence.",
+      "current_as_built_verified": false
+    },
+    {
+      "file": "toronto-building-outlines-300m.geojson",
+      "kind": "municipal roof-outline reference",
+      "count": 124,
+      "count_unit": "polygons including garages/miscellaneous structures, not distinct buildings",
+      "source_dataset": "https://open.toronto.ca/dataset/topographic-mapping-building-outlines/",
+      "source_service": "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial3/FeatureServer/2",
+      "source_crs": "EPSG:2952; service EPSG:3857; output requested EPSG:4326",
+      "delivered_crs": "EPSG:4326",
+      "query": "Point -79.443862,43.7234276 with 300 m distance, ArcGIS spatial intersects, whole features returned",
+      "catalogue_last_refreshed": "2026-04-05 00:37:00.808852",
+      "feature_last_geometry_maintenance_dates": {
+        "2021-10-04": 1,
+        "2021-10-05": 100,
+        "2021-10-06": 23
+      },
+      "actual_acquisition_date": "Unspecified; maintenance dates are edits, not observation dates",
+      "ELEVATION_definition": "Ground elevation of the feature (official CKAN field dictionary)",
+      "DERIVED_HEIGHT_definition": "Height of the feature derived from LiDAR data (official CKAN field dictionary)",
+      "derived_height_present_count": 123,
+      "derived_height_min": 2.8599999,
+      "derived_height_max": 14.5299997,
+      "vertical_datum": "Unspecified",
+      "limitations": "Data is collected via manual digitization from aerial imagery. It has a ground accuracy of +/- 30cm. Added/deleted/moved features may not be reflected in the dataset immediately due to operational constraints. Due to the inability to see features located close to tall buildings, or in areas of deep shadow; some features may not be collected. Based on the sheer scale and physical area of the City of Toronto not all features are collected annually. This data is not to be used as a substitute for a legal survey. The data is to be used for analysis and visualization purposes.",
+      "current_as_built_verified": false
+    },
+    {
+      "file": "toronto-selected-roads-300m.geojson",
+      "kind": "selected municipal street centreline context",
+      "count": 26,
+      "count_unit": "line segments",
+      "source_dataset": "https://open.toronto.ca/dataset/toronto-centreline-tcl/",
+      "catalogue_last_refreshed": "2026-10-27 18:15:14.023857",
+      "delivered_crs": "EPSG:4326",
+      "selection": "CKAN rows for a bounded list of nearby street names, then whole segments within approximately 300m of pin. This is not an exhaustive road network.",
+      "street_names": [
+        "Green Gardens Blvd",
+        "Ranee Ave",
+        "Varna Dr",
+        "Turtle Island Rd",
+        "Lawrence Heights Way"
+      ],
+      "widths_and_elevations_provided": false,
+      "physical_road_completion_verified": false
+    },
+    {
+      "file": "neighbourhood-at-pin.geojson",
+      "kind": "containing municipal neighbourhood polygon",
+      "count": 1,
+      "source_dataset": "https://open.toronto.ca/dataset/neighbourhoods/",
+      "catalogue_last_refreshed": "2026-02-20 19:15:31.440337",
+      "delivered_crs": "EPSG:4326",
+      "selection": "Point-in-polygon against all 158 official neighbourhood records",
+      "name": "Englemount-Lawrence",
+      "code": "032"
+    }
+  ],
+  "construction_context_sources": [
+    {
+      "url": "https://torontohousing.ca/building-construction-and-revitalization/revitalization/lawrence-heights",
+      "finding": "Official project page lists Green Gardens Boulevard in Phase 1 and anticipates 2026 completion of remaining low-rise units and municipal roads; it is not completion proof for a particular structure."
+    },
+    {
+      "url": "https://secure.toronto.ca/council/agenda-item.do?item=2025.NY27.3",
+      "finding": "City decision identifies townhouse development at 340\u2013472 Lawrence Heights Way and 2\u201366 Green Gardens Boulevard as Phase 1Fb; geographically nearby project context, not an identification of the exact pin property."
+    }
+  ],
+  "claims": {
+    "video_produced_entire_block": false,
+    "current_as_built_verified": false,
+    "video_metric_scale_verified": false,
+    "video_to_map_alignment_verified": false,
+    "surface_completeness_verified": false,
+    "absolute_vertical_alignment_verified": false
+  },
+  "modified_data_notice": "City data was spatially subsetted; the 2025 massing coordinates were reprojected; stable source-row references, distance-to-pin and evidence annotations were added. Original source files/metadata are retained.",
+  "created_utc": "2026-10-28T00:55:45.499669+00:00"
+}
