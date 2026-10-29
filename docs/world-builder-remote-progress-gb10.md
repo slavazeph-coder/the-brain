@@ -1,9 +1,24 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-29T14:30Z
+Last updated: 2026-10-29T15:40Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 168 — 2026-10-29 (GB10 suites re-verified green; 4090 PLY z-flip smoke queued; no code change)
+
+- **GB10 suites (exact, post-run):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (~130 ms)
+  - `node --test tests/world/worker-client.test.mjs` → **16 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.33 s
+- **4090 probed & verified** (`d130b6c7f3f4`, GPU `GPU-3390c2ec-…5bb09`, both match config):
+  - branch `hermes/world-builder-4090` at `96e7ff9` (verify_ply_zflip.py); untracked `robotics/experiments/` + `verify_ply_zflip_receipt.json` preserved.
+  - **Torch is available in pinned runtime** — run 167's "model missing, nothing to run" was about the MapAnything weights, not torch: `/workspace/slava/build-runtime/recon-venv/bin/python` → `2.5.1+cu121`, `cuda.is_available()=True`. The plain `python3` (3.10.13, /opt/conda) has no torch — do not use it for CUDA work.
+  - GPU idle: 30 MiB used, 35 °C.
+  - **Next run's bounded 4090 task (ready, no model needed):** run `tests/world/verify_ply_zflip.py` against a small synthetic PLY (or the existing 98796-vertex ascii `dense-preview.ply` if restored) with recon-venv python, write a fresh JSON receipt, verify `y_up_likely`/`z_up_likely` fields parse. This closes the last untested file on the 4090 branch with a real GPU-host execution, no download.
+- **No code change this run** (all suites already green at `b0f5dfb`; no uncommitted diff to checkpoint).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup untouched.
+- **Next bounded action:** next run, on 4090, execute the verify_ply_zflip synthetic-PLY smoke with recon-venv python and record the exact receipt JSON.
 
 ### Run 164 — 2026-10-29 (download() abort regression committed: 3 cancellation tests, all suites green)
 
