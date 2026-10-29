@@ -1,9 +1,21 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-29T13:05Z
+Last updated: 2026-10-29T13:42Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 161 — 2026-10-29 (all tests green; commit 84b0eb4 pushed; GitHub verified)
+
+- **All verification passes (GB10, local only):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail**
+  - `node --test tests/world/worker-client.test.mjs` → **13 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 16.07 s
+- **Committed & pushed:** `84b0eb4` on `hermes/world-builder-gb10` → GitHub verified via web page (Oct 29, 2026).
+  - `worker-client.mjs` (+2): abort guard after `prepareReportRequest` await
+  - `worker-client.test.mjs` (+30): cancellation between prepare and POST — polls for in-flight POST (fixes cold-import race)
+  - `scripts/bisect-worker-client.mjs` (new, untracked → added to commit)
+- **No force-push, no merge/deploy, no paid fallback.**
 
 ### Run 155 — 2026-10-29 (reportReceipt abort-before-clone fix: DataCloneError masked AbortError)
 
