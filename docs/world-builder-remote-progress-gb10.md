@@ -1,9 +1,18 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-29T15:40Z
+Last updated: 2026-10-29T16:40Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 169 — 2026-10-29 (4090 PLY z-flip smoke PASSED, both formats; no code change)
+
+- **4090 SSH verified** (short authenticated commands, no tunnel): hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-a2d1-879e-f361-691455575bb0` (matches config), branch `hermes/world-builder-4090` at `96e7ff9`, recon-venv torch present, GPU idle.
+- **PLY z-flip smoke — PASSED.** Generated two synthetic 4-vertex PLYs (ascii + binary_little_endian; known extents x=[0,2], y=[0,2], z=[0,1]) in 4090 `/tmp`; ran `tests/world/verify_ply_zflip.py` with `/workspace/slava/build-runtime/recon-venv/bin/python` — both exit 0 (script is stdlib-only; torch import not needed).
+- **Exact receipts (both formats identical):** vcount=4; original x=[0.0,2.0,2.0] y=[0.0,2.0,2.0] z=[0.0,1.0,1.0]; after_zflip x=[0.0,2.0,2.0] y=[0.0,2.0,2.0] z=[-1.0,-0.0,1.0]; y_extent=2.0, z_extent=1.0; y_up_likely=true, z_up_likely=false. Receipt JSON written to `/tmp/zflip-run/verify_ply_zflip_receipt.json` (4090 tmp, ephemeral — receipt path is CWD-relative by design, no repo pollution on the 4090 branch).
+- **GB10:** working tree clean, branch `hermes/world-builder-gb10` green at `6e39102` (run 168). No code change this run — 4090 task closed the budget.
+- **No force-push, no merge/deploy, no paid fallback.** 4090 branch/experiments untouched; serving Qwen/backup untouched.
+- **Next bounded action (GB10):** add `tests/world/verify_ply_zflip.test.mjs` (node --test) generating a temp ascii PLY, invoking `verify_ply_zflip.py` via node subprocess, and asserting the receipt JSON structure + z-flip sign inversion — regression-protects the PLY check without needing the 4090. Alternates: signed-receipt API/env doc completion; cancellation regression.
 
 ### Run 168 — 2026-10-29 (GB10 suites re-verified green; 4090 PLY z-flip smoke queued; no code change)
 
