@@ -140,6 +140,20 @@ test('artifact previews fail closed for changed, truncated and oversized bytes',
   assert.equal(mock.mock.callCount(),3,'invalid manifests are rejected before an artifact fetch');
 });
 
+test('reportReceipt rejects AbortError before cloning when the signal is already aborted',async()=>{
+  const client=makeClient();
+  client.caps={reportSigning:{available:true}};
+  const caller=new AbortController();
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  // job contains a non-cloneable value (function) — if structuredClone runs
+  // before the abort check it throws DataCloneError, masking the AbortError.
+  const job={id:'x'.repeat(32),artifacts:[{}],_fn:()=>{}};
+  await assert.rejects(
+    client.reportReceipt(job,'schema',caller.signal),
+    error=>error.name==='AbortError',
+  );
+});
+
 test('preview deadline cancels a real stalled HTTP body and cleans up ticket/preview timers',async(t)=>{
   const timers=new Map(),realSetTimeout=globalThis.setTimeout,realClearTimeout=globalThis.clearTimeout;
   t.mock.method(globalThis,'setTimeout',(callback,delay,...args)=>{

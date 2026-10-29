@@ -21,6 +21,7 @@ export class WorkerClient {
   async reportKey(signal){return this.request('/v1/report-key',{signal});}
   async reportReceipt(job,scenarioText,signal){
     if(this.caps?.reportSigning?.available!==true)throw new Error('This worker has not enabled report signing.');
+    if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
     const snapshot=structuredClone(job),{prepareReportRequest}=await import('./report-receipts.mjs');
     const body=await prepareReportRequest(scenarioText,snapshot);
     if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');

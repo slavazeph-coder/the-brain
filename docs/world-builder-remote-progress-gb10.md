@@ -1,9 +1,37 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-28T20:55Z
+Last updated: 2026-10-29T13:05Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 155 — 2026-10-29 (reportReceipt abort-before-clone fix: DataCloneError masked AbortError)
+
+- Picked up run 154's identified bug: `reportReceipt()` called `structuredClone(job)` before the post-`prepareReportRequest` abort check (worker-client.mjs:24). If `job` references a non-cloneable value, the clone throws `DataCloneError` when the signal is already aborted, masking the expected `AbortError`.
+- **Fix (worker-client.mjs):** added `if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError')` immediately after the `caps.reportSigning.available` gate — before `structuredClone(job)`. Now an already-aborted signal rejects with `AbortError` regardless of cloneability.
+- **Regression test (worker-client.test.mjs):** `reportReceipt rejects AbortError before cloning when the signal is already aborted` — pre-aborts the caller signal, passes a job containing a non-cloneable function value, asserts the rejection is `AbortError` (not `DataCloneError`).
+- **Verified (exact, GB10, post-commit):**
+  - `node --test tests/world/worker-client.test.mjs` → **12 pass / 0 fail** (188 ms, up from 11)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (126 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** (21.38 s)
+- **Commit:** (see below)
+- **4090:** not probed this run (GB10 task closed the budget; alternation). Was unreachable at run 154 (connection refused).
+- **Next bounded action:** 4090 MapAnything held-out dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first; pinned weights, 20 GiB watchdog, no base conda replacement). HTTP report-UI (browser) validation still pending.
+- **Guardrails:** no force-push, no merge/deploy, no paid fallback. Serving Qwen/backup and licensed model/guardrail gates untouched. 4090 branch `hermes/world-builder-4090` untouched.
+
+### Run 153 — 2026-10-29 (fixed run-152's unclosed test + wrong assertion; cached-upload GET abort regression committed)
+
+- Picked up run 152's dirty tree: `tests/world/worker-client.test.mjs` had a new test added but (a) the closing `});` was missing and (b) the final assertion was wrong.
+- **Fix 1 — syntax:** restored the missing `});` after the last assertion of `abort during the cached-upload GET re-fetch rejects with AbortError and never re-uploads from scratch`.
+- **Fix 2 — assertion:** the old assertion `assert.ok(!client.uploads.has(file))` was incorrect. `upload()` (worker-client.mjs:32-35) does `this.uploads.set(file, item)` *after* the GET resume-check resolves. When the GET is aborted mid-flight, the catch at line 33 re-throws (`signal?.aborted` → `throw e`), so line 35 is never reached and the original entry stays in the WeakMap unchanged. The correct pin is `assert.equal(client.uploads.get(file)?.id, id)` — the entry is untouched, not deleted; no silent re-upload replaced it.
+- **Verified (exact, GB10, post-commit):**
+  - `node --test tests/world/worker-client.test.mjs` → **11 pass / 0 fail** (108 ms, up from 10)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (85 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** (20.75 s)
+- **Commit:** `5b729ad` `test(world): cached-upload GET abort regression - signal relay + AbortError, no silent re-upload` (1 file, +37). Pushed to `hermes/world-builder-gb10`. No force-push/merge/deploy.
+- **4090:** not probed this run (GB10 task closed the budget; alternation). Was unreachable 6 consecutive runs ago (152).
+- **Next bounded action:** 4090 MapAnything held-out dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first; pinned weights, 20 GiB watchdog, no base conda replacement). HTTP report-UI (browser) validation still pending.
+- **Guardrails:** no force-push, no merge/deploy, no paid fallback. Serving Qwen/backup and licensed model/guardrail gates untouched. 4090 branch `hermes/world-builder-4090` untouched.
 
 ### Run 152 — 2026-10-28 (inter-chunk abort regression: upload() relays caller signal to each chunk PUT; both suites green)
 
