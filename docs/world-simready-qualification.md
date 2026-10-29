@@ -74,3 +74,53 @@ Sim graphics/runtime installation. Actual Isaac loading, SDF-collider contacts,
 articulated motion, mass/inertia behavior, task collisions, memory under simulation
 and stress tests remain necessary before physical use. No robot or captured-room
 accuracy is established by this composition check.
+
+## Hosted scene package
+
+The authenticated owner's compiled metric scene offers **Export an Omniverse pack**
+when the private worker has the `omniverse-pack` adapter. Choose a source-only pack
+or an installed NVIDIA asset, review its license and reported failed features, enter
+the placement, and explicitly approve compilation. Pending BIM edits must be
+compiled first. The request binds the exact scene/cloud hashes to a completed job
+owned by the same tenant. Visitor sessions do not authorize this engine.
+
+The ZIP retains original scene/BIM/CAD files under `source/`, copies each selected
+NVIDIA package once, and adds `world.usda`, attribution, semantic labels, file hashes,
+and a receipt. Static collision proxies and assumed gravity are labeled as such.
+Extract it and run `python verify_pack.py` before opening `world.usda`; a changed,
+missing, additional or symlinked file fails verification. The included
+`isaac_smoke.py` needs a separately installed compatible Isaac runtime and writes
+its result outside the immutable package. No simulator is run by the web export.
+
+The CI workflow also executes:
+
+```sh
+python scripts/world-demo/qualify_omniverse.py \
+  --workspace /tmp/brainsnn-nvidia --out /tmp/brainsnn-hosted-pack-check
+```
+
+This command rechecks the upstream source bytes, packages an explicitly synthetic
+floor with the real asset, verifies every extracted file, relocates the ZIP contents,
+and compares the requested transform and collider/body/joint records to the source.
+The local October 28 run verified 128 packaged files, 17 colliders (one synthetic
+floor plus 16 library colliders), 16 bodies and 15 joints. All 16 library collider
+transforms matched exactly. Rendering, physics and real phone capture were not run.
+
+A second local test used the actual scene compiler in Blender 5.1.0 on a 6,273-point
+synthetic room before packaging. Four compiled walls and a floor produced five
+environment proxies; all 140 packaged files verified after relocation, every copied
+source export was unchanged, and USD reopened without composition errors. This is
+local compiler evidence; the production Blender 4.2 runtime still needs its hosted
+acceptance check.
+
+The opt-in deployed-site test is
+`robotics/world_worker/deploy/railway/acceptance.py --confirm-synthetic-deployment-test`.
+It uses the existing shared passcode only in memory, runs the actual hosted scene
+compiler on synthetic geometry, and checks signed downloads and receipt binding.
+Before network access, `/data/omniverse-acceptance.json` records a fresh run ID,
+deployment/commit identifiers when available, and the acceptance script hash. Its
+terminal status is `passed` or `failed`; a prior success cannot remain the current
+receipt after a later failed run. A passing receipt requires the ZIP and evidence,
+matching source/archive hashes and placement, and false physical qualification
+flags. This is an explicit deployment check, not a launch-time substitute for
+physical capture or Isaac acceptance.

@@ -52,3 +52,29 @@ writers/readers were exercised, and the generated underlay was visually reviewed
 
 No native RVT/ESX output, Revit/Xactimate application import, physical phone
 capture or physical dimensional accuracy is claimed by these checks.
+
+## Sandbox release integration — October 29
+
+Merged main `bdd375c` into the existing PR255 branch without replacing the new
+sandbox, guided capture, terrain controls or deferred measurement focus. Kept
+both Omniverse ZIP downloads and building TXT instructions in the worker output
+allowlist. The service-worker cache includes all current sandbox modules.
+
+The complete scene browser matrix passed Chromium desktop, Chromium phone and
+WebKit, including actual private PNG/CSV/TXT/manifest/IFC downloads before and
+after a reviewed opening edit. A startup-only test failure had a completely
+uninitialized module UI; the test now waits for an app-rendered control before
+setting a file input and reports failed module requests. No app behavior was
+changed for that test. All 240 World JS tests and the production build passed;
+152 focused Python tests plus 8 subtests passed (2 dependency skips, 1 Linux-only
+publication test deselected). All 3 rebuild tests additionally passed with an
+explicit local publication transport substitute; Linux CI retains the actual
+`renameat2` test and production publisher is unchanged.
+
+Hosted synthetic acceptance now requires all four building outputs, source scene,
+IFC and cloud; verifies download bytes/hashes, cloud-point identity, scale,
+canonical scene/revision, companion bindings, real PNG/ruler, schedule row counts
+and source/revision, instruction content and unqualified destination flags. It
+fails before the NVIDIA pack job if building outputs are missing or malformed.
+These remain software/export checks, not physical measurement or native
+Revit/Xactimate application qualification.

@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {roundEven,samplePatches,cloudGrid,inspectCloud} from '../../brainsnn-r3f-app/public/world/foothold-focus.mjs';
+test('nearest-even rounds positive and negative ties like torch',()=>{assert.deepEqual([-.5,.5,1.5,2.5,-1.5,-2.5].map(roundEven),[0,0,2,2,-2,-2]);});
+test('102 observations use interleaved footholds and x-major patches',()=>{const r=samplePatches(Array.from({length:693},(_,i)=>i/1000),[[0,.1],[.1,-.1]]);assert.equal(r.observation_raw.length,102);assert.deepEqual(r.observation_raw.slice(51,53),[.1,-.1]);assert.deepEqual(r.patches[0].indices.slice(0,7),[310,343,376,409,442,475,508]);});
+test('edge patch abstains instead of clamping',()=>{const r=samplePatches(Array(693).fill(0),[[.8,.5],[0,0]]);assert.equal(r.sample_complete,false);assert.equal(r.observation_raw,null);assert.equal(r.patches[0].known_count,16);});
+test('missing sample is not a zero height',()=>{const scan=Array(693).fill(.3);scan[346]=null;const r=samplePatches(scan,[[0,0],[0,0]]);assert.equal(r.observation_clipped,null);assert.equal(r.patches[0].known_count,48);});
+test('schema dimensions numbers and metres fail closed',()=>{assert.throws(()=>samplePatches(Array(693).fill(NaN),[[0,0],[0,0]]));assert.throws(()=>samplePatches(Array(693).fill(0),[[0,0]]));assert.throws(()=>cloudGrid({units:'arbitrary',points:[[0,0,0]]},[0,1,0]));assert.throws(()=>inspectCloud({},{}));});
+test('ambiguous height cells remain unknown',()=>{const r=cloudGrid({units:'m',coordinateFrame:'right-handed-y-up',points:[[0,0,0],[.001,.2,.001]]},[0,.8,0]);assert.equal(r.height_scan[346],null);assert.equal(r.cell_status[346],'mixed-height');});
+test('sensor coordinates may differ from base predictions',()=>{const r=samplePatches(Array(693).fill(.2),[[.2,.1],[.3,-.1]],[[0,0],[0,0]]);assert.deepEqual(r.observation_raw.slice(0,2),[.2,.1]);assert.deepEqual(r.patches[0].anchor_xy,[16,10]);});

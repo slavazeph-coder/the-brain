@@ -64,6 +64,27 @@ def calibrate(page, mobile, label):
         raise
 
 
+def open_workspace(page, origin):
+    # A file input can accept files before its module has attached its change
+    # listener. Require an app-rendered control, not just network quietness.
+    failed_modules = []
+    def failed(request):
+        if request.url.split('?')[0].endswith('.mjs'):
+            failed_modules.append({'module': request.url.rsplit('/', 1)[-1], 'error': request.failure})
+    page.on('requestfailed', failed)
+    try:
+        page.goto(origin + '/world/index.html', wait_until='networkidle')
+        page.locator('#objects option').first.wait_for(state='attached')
+    except Exception:
+        print('Workspace startup failed:', {'modules': failed_modules,
+              'document': page.evaluate('document.readyState'),
+              'status': page.locator('#status').inner_text()}, file=sys.stderr, flush=True)
+        page.screenshot(path=str(OUTPUT / 'scene-startup-failed.png'), full_page=True)
+        raise
+    finally:
+        page.remove_listener('requestfailed', failed)
+
+
 def wait_visual_source(page, label, errors):
     try:
         page.wait_for_function("/Visual asset loaded/.test(document.querySelector('#status').textContent)")
@@ -85,7 +106,7 @@ def check_browser(pw, name, origin, worker_url, token, photo, phone=False):
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('dialog', lambda dialog: dialog.accept())
     try:
-        page.goto(origin + '/world/index.html', wait_until='networkidle')
+        open_workspace(page, origin)
         page.locator('#files').set_input_files(photo)
         page.locator('[data-tab=capture]').click()
         processing_options(page)
@@ -196,7 +217,7 @@ def check_metric(pw, name, origin, worker_url, token, phone=False):
     page.on('request', lambda request: jobs.append(request.post_data_json['engine']) if request.method == 'POST' and request.url.endswith('/v1/jobs') else None)
     try:
         ply, evidence = fixture()
-        page.goto(origin + '/world/index.html', wait_until='networkidle')
+        open_workspace(page, origin)
         page.locator('#files').set_input_files({'name': 'room.ply', 'mimeType': 'application/octet-stream', 'buffer': ply})
         wait_visual_source(page, f'scene-metric-{view_name}', errors)
         page.locator('#files').set_input_files({'name': 'reconstruction.json', 'mimeType': 'application/json', 'buffer': evidence})
@@ -269,7 +290,7 @@ def check_dimensional_bim_review(pw, name, origin, worker_url, token, phone=Fals
     page.on('request', lambda request: jobs.append(request.post_data_json) if request.method == 'POST' and request.url.endswith('/v1/jobs') else None)
     try:
         ply, evidence = fixture()
-        page.goto(origin + '/world/index.html', wait_until='networkidle')
+        open_workspace(page, origin)
         page.locator('#files').set_input_files({'name': 'synthetic-room.ply', 'mimeType': 'application/octet-stream', 'buffer': ply})
         wait_visual_source(page, f'bim-review-{view_name}', errors)
         page.locator('#files').set_input_files({'name': 'reconstruction.json', 'mimeType': 'application/json', 'buffer': evidence})

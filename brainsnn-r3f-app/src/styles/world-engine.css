@@ -179,3 +179,34 @@
 .world-scan-actions .world-button{font-size:.75rem;padding:12px}
 @media(max-width:850px){.world-capture-layout{grid-template-columns:1fr}.world-capture-main{padding:35px 0 80px}}
 @media(max-width:570px){.world-capture-header h1{font-size:clamp(2.7rem,11vw,4rem)}.world-drop-card{padding:15px}.world-dropzone{padding:19px;min-height:210px}.world-capture-options{grid-template-columns:1fr}.world-guide-card{padding:20px}.world-scan-actions{flex-direction:column}.world-scan-actions .world-button{width:100%}}
+
+/* Goal-led entry, using the existing BrainSNN cyan/violet palette. */
+.world-goal-section{margin:0 0 30px;scroll-margin-top:24px}
+.world-goal-header{display:flex;justify-content:space-between;align-items:end;gap:24px;flex-wrap:wrap;margin-bottom:19px}
+.world-goal-header .world-section-kicker{margin-bottom:10px}
+.world-goal-header h2{font-size:clamp(1.65rem,3.1vw,2.5rem);font-weight:580;letter-spacing:-.045em;margin:0}
+.world-goal-accessibility{display:flex;flex-wrap:wrap;gap:9px}
+.world-goal-accessibility button{display:inline-flex;align-items:center;gap:9px;min-height:48px;padding:10px 14px;border:1px solid rgba(173,207,227,.23);border-radius:11px;background:#111a25;color:#dcecf4;font-size:.86rem;cursor:pointer}
+.world-goal-accessibility button[aria-pressed="true"]{border-color:#68eaff;color:#eaffff}
+.world-goal-accessibility button:hover{border-color:#68eaff}
+.world-goal-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.world-goal-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-height:177px;padding:19px 17px;border:1px solid rgba(173,207,227,.18);border-radius:16px;background:linear-gradient(150deg,#0f1926,#090e17);color:#e8f3f9;text-align:left;cursor:pointer;white-space:normal}
+.world-goal-card:hover,.world-goal-card.is-selected{border-color:rgba(104,234,255,.76);background:linear-gradient(145deg,#11232e,#100f1d)}
+.world-goal-card.is-selected{box-shadow:inset 0 0 0 1px rgba(104,234,255,.19)}
+.world-goal-card .world-goal-availability{font:650 .62rem/1.5 var(--bsn-font-mono,ui-monospace,monospace);color:#92ddeb;letter-spacing:.035em}
+.world-goal-card strong{font-size:1.12rem;line-height:1.25;letter-spacing:-.02em}
+.world-goal-card>span:last-child{color:#a4b6c6;font-size:.79rem;line-height:1.55}
+.world-goal-guidance{color:#c7d6e3;font-size:.87rem;line-height:1.7;margin:15px 0 12px}
+.world-goal-next{display:inline-flex;align-items:center;gap:9px;color:#a7f5ff!important;font-size:.85rem;font-weight:690;min-height:44px;text-decoration:underline;text-underline-offset:4px}
+.world-goal-capture-tip{border-left:2px solid rgba(104,234,255,.65);padding-left:14px;margin:0 0 16px;font-size:.84rem;line-height:1.65;color:#c4d3df}
+.world-capture-advanced{margin-top:17px;border-top:1px solid var(--world-line);padding-top:13px}
+.world-capture-advanced summary{cursor:pointer;list-style-position:outside;min-height:44px;padding:10px 7px;color:#b5dce7;font-size:.8rem}
+.world-capture-advanced[open] summary{margin-bottom:10px}
+.world-capture-advanced .world-capture-options{margin-top:0}
+.world-capture-page.is-large-text .world-goal-card strong{font-size:1.38rem}
+.world-capture-page.is-large-text .world-goal-card>span:last-child,.world-capture-page.is-large-text .world-goal-guidance,.world-capture-page.is-large-text .world-goal-capture-tip,.world-capture-page.is-large-text .world-guide-step p,.world-capture-page.is-large-text .world-capture-note,.world-capture-page.is-large-text .world-capture-field,.world-capture-page.is-large-text .world-scan-ready p,.world-capture-page.is-large-text .world-privacy-card p{font-size:1rem;line-height:1.75}
+.world-capture-page.is-large-text .world-goal-card .world-goal-availability{font-size:.82rem}
+.world-capture-page.is-large-text .world-capture-field input,.world-capture-page.is-large-text .world-capture-field select{font-size:1rem;min-height:48px}
+@media(max-width:1000px){.world-goal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.world-goal-card{min-height:160px}}
+@media(max-width:570px){.world-goal-grid{grid-template-columns:1fr}.world-goal-card{min-height:0}.world-goal-header{align-items:start}.world-goal-accessibility button{flex:1}.world-goal-header h2{font-size:1.75rem}}
+@media(prefers-reduced-motion:reduce){.world-goal-card{transition:none}}

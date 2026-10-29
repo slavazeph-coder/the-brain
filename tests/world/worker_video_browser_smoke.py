@@ -114,15 +114,17 @@ def main():
                 assert derived['engine'] == 'colmap-sparse' and derived['metricVerified'] is False
                 assert len(derived['sha256']) == 64
                 assert proof['sources'][0]['kind'] == 'video'
-                # Video -> sim: hand the reconstruction to the Arena workspace in the same browser.
-                with page.expect_download() as event, page.expect_popup() as popup:
+                # Export stays in the unified sandbox. Open Arena explicitly to
+                # retain separate downstream point-cloud import coverage.
+                with page.expect_download() as event:
                     page.locator('[data-tab=capture]').click()
                     page.locator('[data-action=arena-cloud]').click()
                 event.value.save_as(output / 'browser-video-arena-cloud.json')
                 cloud = json.loads((output / 'browser-video-arena-cloud.json').read_text())
                 assert cloud['kind'] == 'colmap-sparse-point-cloud' and 1 <= len(cloud['points']) <= 50000 and cloud['units'] == 'arbitrary'
                 timings['arena_cloud_points'] = len(cloud['points'])
-                arena = popup.value; arena.on('pageerror', lambda error: errors.append('arena: ' + str(error)))
+                arena = page.context.new_page(); arena.on('pageerror', lambda error: errors.append('arena: ' + str(error)))
+                arena.goto(origin + '/arena/#playground?robot=g1&view=site', wait_until='domcontentloaded')
                 arena.wait_for_selector('[data-site-step=capture]', timeout=30000)
                 arena.locator('[data-site-step=capture]').click()
                 arena.locator('#site-asset-input').set_input_files(str(output / 'browser-video-arena-cloud.json'))
