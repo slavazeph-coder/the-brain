@@ -154,6 +154,36 @@ test('reportReceipt rejects AbortError before cloning when the signal is already
   );
 });
 
+test('owner cancellation between prepareReportRequest and the POST rejects AbortError and never transmits the signed receipt',async()=>{
+  const client=makeClient();
+  client.caps={reportSigning:{available:true}};
+  const job={id:'a'.repeat(32),status:'complete',engine:'vggt',
+    artifacts:[{name:'preview.ply',kind:'binary',size:16,sha256:'b'.repeat(64)}]};
+  const calls=[];
+  // Mirror request()'s defaults; the modelled fetch only resolves/rejects on the relayed signal.
+  client.request=async(path,{signal:relaySignal,method}={})=>{
+    calls.push({path,method,signal:relaySignal});
+    if(method==='POST')return new Promise((_,reject)=>{
+      relaySignal?.addEventListener('abort',()=>reject(relaySignal.reason),{once:true});
+    });
+    return{};
+  };
+  const caller=new AbortController();
+  const scenarioText=JSON.stringify({schema:'brainsnn.proof.v1',world:null});
+  const pending=client.reportReceipt(job,scenarioText,caller.signal);
+  // Wait for the dynamic import of report-receipts.mjs and prepareReportRequest
+  // to resolve so reportReceipt reaches this.request() — the POST is in flight.
+  // Poll for the call rather than a fixed setImmediate, which is too short when
+  // the import is cold (fresh process) or the microtask queue is longer.
+  await new Promise(r=>{const tick=()=>calls.length>0?r():setTimeout(tick,1);tick();});
+  assert.equal(calls.length,1,'the signed POST is in flight before cancellation');
+  assert.equal(calls[0].path,'/v1/jobs/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/report-receipt');
+  assert.equal(calls[0].signal,caller.signal,'reportReceipt() relays the owner signal into the POST');
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  await assert.rejects(pending,error=>error.name==='AbortError');
+  assert.equal(calls.length,1,'no later request outlives the owner signal');
+});
+
 test('preview deadline cancels a real stalled HTTP body and cleans up ticket/preview timers',async(t)=>{
   const timers=new Map(),realSetTimeout=globalThis.setTimeout,realClearTimeout=globalThis.clearTimeout;
   t.mock.method(globalThis,'setTimeout',(callback,delay,...args)=>{

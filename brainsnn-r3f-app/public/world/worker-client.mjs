@@ -24,6 +24,8 @@ export class WorkerClient {
     if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
     const snapshot=structuredClone(job),{prepareReportRequest}=await import('./report-receipts.mjs');
     const body=await prepareReportRequest(scenarioText,snapshot);
+    // Abort between prepareReportRequest and request() must not transmit the
+    // signed body to the worker — the caller has cancelled the report.
     if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
     const data=await this.request(`/v1/jobs/${snapshot.id}/report-receipt`,{method:'POST',body,signal});
     if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
