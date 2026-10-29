@@ -5,6 +5,7 @@ automatic episode resets, robot networking, asset substitution or infinite floor
 """
 from __future__ import annotations
 import argparse
+from functools import wraps
 import json
 import math
 from pathlib import Path
@@ -89,6 +90,7 @@ def main():
             raise ValueError('Ambiguous matched predictor directory')
         diagnostics = {'samples':0,'all_samples_finite':True}
 
+        @wraps(foothold_scan)
         def guarded_scan(environment, **kwargs):
             """Keep exact upstream arithmetic; reject the samples it would otherwise fill/clamp."""
             observed = foothold_scan(environment,**kwargs)
