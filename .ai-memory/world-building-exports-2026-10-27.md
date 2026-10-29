@@ -66,7 +66,7 @@ after a reviewed opening edit. A startup-only test failure had a completely
 uninitialized module UI; the test now waits for an app-rendered control before
 setting a file input and reports failed module requests. No app behavior was
 changed for that test. All 240 World JS tests and the production build passed;
-152 focused Python tests plus 8 subtests passed (2 dependency skips, 1 Linux-only
+152 focused Python tests plus 8 subtests passed (2 optional capture skips, 1 Linux-only
 publication test deselected). All 3 rebuild tests additionally passed with an
 explicit local publication transport substitute; Linux CI retains the actual
 `renameat2` test and production publisher is unchanged.
@@ -78,3 +78,9 @@ and source/revision, instruction content and unqualified destination flags. It
 fails before the NVIDIA pack job if building outputs are missing or malformed.
 These remain software/export checks, not physical measurement or native
 Revit/Xactimate application qualification.
+
+The latest native-video fix from main `b0a9045` merged cleanly afterward. The
+combined 119 video/native-capture tests and 53 hosted-acceptance tests passed
+(172 total); 15 building/Omniverse/deployment compatibility tests plus 5 subtests
+also passed. The existing production build remains applicable because this
+follow-up main merge changes only backend/CLI/tests/memory.
