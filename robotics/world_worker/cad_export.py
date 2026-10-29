@@ -4,12 +4,12 @@ All three come from scene.json, the source of the GLB, USD and IFC, so their num
 the IFC export's frame: plan X is the scene's x and plan Y is minus its z (seen from above, y up); 3DM is Z-up with
 the same X and Y. Every file says where its scale came from, and none claims a verified measurement:
 - scene-plan.dxf (ezdxf): layers FLOOR, WALLS, OBJECTS, UNKNOWN, DIMENSIONS and LABELS in metres, with each wall's
-  length dimensioned and the observed floor extent as a rectangle (an extent, not the room's outline).
+  length dimensioned and the floor bounding extent as a rectangle (not the room's outline).
 - scene.3dm (rhino3dm): named BREP solids on floor, wall, object and unknown-space layers; reviewed wall voids
   leave separate solid parts. Shared component IDs and deterministic object UUIDs retain IFC correspondence,
   with measurements, IFC class and provenance as user text and semantic voids in document metadata.
 - quantities.csv: one row per element (length, width, height, plan or face area) under a summary of totals, led by
-  the floor the capture saw (the extent less unknown cells), not the extent's bounding rectangle.
+  the point-covered footprint estimate (extent less unknown cells), not a measured room/floor area.
 Both libraries are optional (requirements-cad.txt); without one, that file is skipped and the evidence says why.
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scene_compiler'))
 from opening_geometry import wall_parts, door_parts, plan_wall_parts, wall_openings
-from ifc_export import ifc_guid
+from ifc_export import ifc_guid, object_ifc_class, floor_extent_properties
 from component_graph import ensure_component_ids, derive_id
 from wall_evidence import thickness_properties
 
@@ -57,13 +57,14 @@ def elements(scene):
             continue  # Unplaced detections remain in scene.json; they provide no CAD solid or quantity.
         if o.get('name') == 'floor_observed':
             (x0, _, z0), (x1, _, z1) = o['min'], o['max']
-            out.append({'kind': 'floor', 'name': o['name'], 'label': 'floor', 'ifc': 'IfcSlab', 'corners': [(x0, -z0), (x1, -z0), (x1, -z1), (x0, -z1)],
+            out.append({'kind': 'floor', 'name': o['name'], 'label': 'Floor bounding extent', 'ifc': 'IfcSlab', 'corners': [(x0, -z0), (x1, -z0), (x1, -z1), (x0, -z1)],
                         'length': x1 - x0, 'width': z1 - z0, 'height': o['size'][1], 'base': o['min'][1], 'provenance': o.get('provenance', 'observed'),
-                        'componentId': o['componentId'], **lineage(o)})
+                        'componentId': o['componentId'], 'extent_properties': floor_extent_properties(), **lineage(o)})
         else:
             L, h, t = o['size']
             label = o.get('label') if o.get('label') not in (None, 'object') else None
-            out.append({'kind': 'object', 'name': o['name'], 'label': label, 'ifc': o.get('ifcClass', 'IfcBuildingElementProxy'),
+            out.append({'kind': 'object', 'name': o['name'], 'label': label, 'ifc': object_ifc_class(o),
+                        'requested_ifc_class': o.get('ifcClass') if isinstance(o.get('ifcClass'), str) else None,
                         'corners': footprint(o['centre'][0], o['centre'][2], L, t, o.get('yaw_degrees', 0)), 'length': L, 'width': t, 'height': h,
                         'base': o['centre'][1] - h / 2, 'provenance': o.get('provenance', 'observed'), 'label_source': o.get('labelSource'),
                         'label_provenance': o.get('labelProvenance'),
@@ -115,8 +116,9 @@ def quantities(scene, items):
     walls = [i for i in items if i['kind'] == 'wall']; objects = [i for i in items if i['kind'] == 'object']
     doors = [i for i in items if i['kind'] == 'door']
     unknown = [i for i in items if i['kind'] == 'unknown']
-    # The floor the capture saw: the extent less the unknown cells inside it. The extent alone is a bounding rectangle,
-    # which for a room turned against the axes takes in empty corners.
+    # Grid cells can contain points from furniture, walls or overhead services.
+    # Extent less unknown cells is a point-covered footprint estimate, not proof
+    # that the floor surface was observed and not a room polygon or floor takeoff.
     def inside(u):
         (ux0, uy0), (ux1, uy1) = u['corners'][0], u['corners'][2]
         (fx0, fy0), (fx1, fy1) = floor['corners'][0], floor['corners'][2]
@@ -127,6 +129,9 @@ def quantities(scene, items):
     totals = {'floor_extent_m': [round(floor['length'], 3), round(floor['width'], 3)] if floor else None,
               'floor_extent_area_m2': round(floor['length'] * floor['width'], 2) if floor else None,
               'observed_floor_area_m2': round(observed, 2) if floor else None,
+              'point_covered_footprint_area_m2': round(observed, 2) if floor else None,
+              'floor_quantity_scope': 'point-covered footprint estimate; not a measured room or floor area',
+              'observed_floor_area_m2_is_legacy_alias': True,
               'walls': len(walls), 'wall_length_m': round(sum(w['length'] for w in walls), 2),
               'wall_face_area_m2': round(sum(w.get('net_face_area', w['length'] * w['height']) for w in walls), 2),
               'openings': len(scene.get('openings', [])), 'doors': len(doors),
@@ -134,11 +139,11 @@ def quantities(scene, items):
               'unknown_area_m2': round(sum(u['length'] * u['width'] for u in unknown), 2)}
     head = ['section', 'element', 'ifc_class', 'name', 'length_m', 'width_m', 'height_m', 'area_m2', 'notes']
     rows = [head,
-            ['summary', 'floor_observed', 'IfcSlab', 'floor', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['observed_floor_area_m2'], 'floor the capture saw: the extent less unknown cells'],
-            ['summary', 'floor_extent', 'IfcSlab', 'floor extent', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['floor_extent_area_m2'], 'bounding rectangle of the observed floor, not the room outline'],
+            ['summary', 'point_covered_footprint', '', 'Point-covered footprint estimate', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['point_covered_footprint_area_m2'], 'extent less unknown grid cells; support may be above the floor; not a measured room or floor area'],
+            ['summary', 'floor_extent', 'IfcSlab', 'Floor bounding extent', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['floor_extent_area_m2'], 'point-cloud bounding rectangle; not a room outline or measured floor assembly'],
             ['summary', 'walls', 'IfcWall', f"{totals['walls']} walls", f"{totals['wall_length_m']:.2f}", '', '', totals['wall_face_area_m2'], 'total length; net one-face area after reviewed voids'],
             ['summary', 'objects', '', f"{totals['objects']} objects", '', '', '', '', f"{totals['named_objects']} named, unreviewed"],
-            ['summary', 'unknown_space', 'IfcBuildingElementProxy', 'unknown space', '', '', '', totals['unknown_area_m2'], 'floor no point reached: not free space'],
+            ['summary', 'unknown_space', 'IfcBuildingElementProxy', 'unknown space', '', '', '', totals['unknown_area_m2'], 'footprint cells no reconstructed point reached; not free space'],
             ['summary', 'scale', '', '', '', '', '', '', scale_note(scene)]]
     for i in walls + objects + doors:
         area = i.get('net_face_area', i['length'] * i['height']) if i['kind'] == 'wall' else i['length'] * i['width']
@@ -186,7 +191,7 @@ def write_dxf(scene, items, path):
         msp.add_aligned_dim(p1=(left, min(y0, y1)), p2=(left, max(y0, y1)), distance=0.6, dxfattribs={'layer': 'DIMENSIONS'},
                             override={'dimtxt': 0.14, 'dimasz': 0.1, 'dimdec': 2}).render()
         note = ['BrainSNN World Builder - plan from a walkthrough reconstruction, metres', scale_note(scene),
-                'Observed floor extent shown as a rectangle; unknown space hatched, never free. Not a survey.']
+                'Floor bounding extent shown as a rectangle; no verified room outline. Unknown cells hatched. Not a survey.']
         for k, s in enumerate(note):
             msp.add_text(s, height=0.09, dxfattribs={'layer': 'LABELS'}).set_placement((left, min(y0, y1) - 0.5 - 0.16 * k), align=TextEntityAlignment.LEFT)
     doc.saveas(path)
@@ -228,7 +233,7 @@ def write_3dm(scene, items, path):
             part_key = i.get('partKey', f'solid-part:{part_no}')
             attrs.Id = uuid.uuid5(uuid.UUID(component_id), part_key)
             attrs.LayerIndex = index[{'floor': 'Floor', 'wall': 'Walls', 'object': 'Objects', 'door': 'Objects', 'unknown': 'Unknown space (not free)'}[i['kind']]]
-            attrs.Name = i['label'] if i['label'] and (i['kind'] in ('object', 'door') or i['kind'] == 'wall' and i['label'] != 'wall') else i['name']
+            attrs.Name = i['label'] if i['label'] and (i['kind'] in ('floor', 'object', 'door') or i['kind'] == 'wall' and i['label'] != 'wall') else i['name']
             if len(i.get('solid_parts', [])) > 1: attrs.Name += f' part {part_no}'
             for key, value in (('element', i['name']), ('componentId', component_id), ('ifcGlobalId', ifc_guid(component_id)),
                                ('sourceSha256', source_sha256), ('partKey', part_key),
@@ -238,13 +243,14 @@ def write_3dm(scene, items, path):
                                ('parameterProvenance', json.dumps(i['parameterProvenance'], sort_keys=True, separators=(',', ':')) if i.get('parameterProvenance') else ''),
                                ('hostComponentId', i.get('hostComponentId', '')), ('openingComponentId', i.get('openingComponentId', '')),
                                ('openingComponentIds', json.dumps(i['openingComponentIds']) if i.get('openingComponentIds') else ''),
-                               ('ifcClass', i['ifc']), ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
+                               ('ifcClass', i['ifc']), ('requestedIfcClass', i.get('requested_ifc_class') or ''),
+                               ('provenance', i['provenance']), ('length_m', f"{i['length']:.3f}"),
                                ('width_m', f"{i['width']:.3f}"), ('height_m', f"{i['height']:.3f}"), ('labelSource', i.get('label_source') or ''),
                                ('labelProvenance', i.get('label_provenance') or ''),
                                ('labelReviewed', '' if i.get('label_reviewed') is None else str(i['label_reviewed']).lower()),
                                ('base', 'inferred' if i.get('base_inferred') else '')):
                 if value: attrs.SetUserString(key, value)
-            for key, value in i.get('thickness_properties', {}).items():
+            for key, value in {**i.get('thickness_properties', {}), **i.get('extent_properties', {})}.items():
                 if value is not None:
                     attrs.SetUserString(key, str(value).lower() if isinstance(value, bool) else str(value))
             model.Objects.AddBrep(brep, attrs)

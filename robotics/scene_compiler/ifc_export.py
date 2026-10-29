@@ -1,4 +1,4 @@
-"""IFC4 (BIM) export of a compiled scene: observed floor and walls, detected objects and unknown space, in metres.
+"""IFC4 (BIM) export of a compiled scene: floor bounding extent, walls, objects and unknown space, in metres.
 
 Written directly as IFC-SPF text so it runs wherever the compiler does (Blender's Python has no IfcOpenShell). Only metric
 scenes are exported: IFC lengths are metres, and an arbitrary-unit scene would be off by an unknown factor. Every element
@@ -23,6 +23,30 @@ IFC_NEEDS_METRES = ("BIM tools read IFC in metres, and this cloud is in arbitrar
                     "Set a measured scale in World Builder and build a metric scene.")
 UNKNOWN_HEIGHT = 0.3  # the compiler's unknown-space volume height
 _GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$'
+_OBJECT_IFC_CLASSES = frozenset(('IfcFurniture', 'IfcBuildingElementProxy'))
+
+
+def object_ifc_class(item):
+    """Only emit object classes whose entity signature this exporter implements.
+
+    A display label (including an edited label) is not a type assignment. Legacy
+    detections without an explicit supported class remain generic envelopes.
+    CAD uses this same mapping so its type metadata agrees with the IFC file.
+    """
+    assigned = item.get('ifcClass')
+    return assigned if isinstance(assigned, str) and assigned in _OBJECT_IFC_CLASSES else 'IfcBuildingElementProxy'
+
+
+def floor_extent_properties():
+    """The compiler's floor box is a derived extent, not a measured room/slab.
+
+    Preserve the original component's provenance separately: the scope below
+    explains what the exported solid represents without rewriting source data.
+    """
+    return {'GeometryScope': 'derived-point-cloud-floor-bounding-extent',
+            'QuantityScope': 'bounding rectangle; not a room or measured floor area',
+            'RoomBoundaryVerified': False,
+            'SlabThicknessScope': 'display thickness; not a measured floor assembly'}
 
 
 def ifc_guid(seed: str) -> str:
@@ -190,21 +214,25 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
         placement, solid = prism(cx, -cz, cy - sy / 2, sx, sz, sy, yaw=-math.radians(obj.get('yaw_degrees', 0)))
         seed = obj['componentId']
         separated, named = obj.get('kind') == 'separated', obj.get('label') not in (None, 'object')
+        is_floor = obj.get('name') == 'floor_observed'
+        ifc_class = 'IfcSlab' if is_floor else object_ifc_class(obj)
         if obj.get('name') == 'floor_observed':  # the fixed name, as CAD and Nav2 use: a display label may be edited
-            element = w.add(f"IFCSLAB('{ifc_guid(seed)}',$,{label(obj.get('name', 'floor'))},$,$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
-        elif separated and not named:
-            # A measured cluster of points with no name: a proxy, not furniture, because nothing says what it is.
-            title = str(obj.get('name', 'object')).replace('_', ' ').capitalize()
-            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(title)},{label('Separated from the reconstructed points; not identified.')},"
-                            f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
-        elif separated and obj.get('ifcClass') == 'IfcBuildingElementProxy':
-            # Named by a model, but not furniture (a plant, a lamp, a radiator): a proxy that carries the suggested name.
-            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(obj['label'])},{label('Separated from the reconstructed points; name suggested by a model, not reviewed.')},"
-                            f"$,{placement},{shape([solid])},$,.NOTDEFINED.)"); counts['separated'] += 1
+            element = w.add(f"IFCSLAB('{ifc_guid(seed)}',$,'Floor bounding extent',"
+                            f"{label('Point-cloud bounding rectangle; not a room outline or measured floor assembly.')},"
+                            f"$,{placement},{shape([solid])},$,.FLOOR.)"); counts['slabs'] += 1
+        elif ifc_class == 'IfcBuildingElementProxy':
+            title = obj['label'] if named else str(obj.get('name', 'object')).replace('_', ' ').capitalize()
+            element = w.add(f"IFCBUILDINGELEMENTPROXY('{ifc_guid(seed)}',$,{label(title)},"
+                            f"{label('Object envelope; classification and dimensions not independently verified.')},"
+                            f"$,{placement},{shape([solid])},$,.NOTDEFINED.)")
+            counts['separated' if separated else 'objects'] += 1
         else:
             element = w.add(f"IFCFURNITURE('{ifc_guid(seed)}',$,{label(obj.get('label', 'object'))},$,$,{placement},{shape([solid])},$,.NOTDEFINED.)")
             counts['separated' if separated else 'objects'] += 1
         properties(element, seed, {**lineage(obj), 'ComponentId': seed, 'SourceSha256': source_sha256,
+                                   **(floor_extent_properties() if is_floor else {}),
+                                   'ElementName': obj.get('name'), 'ExportedIfcClass': ifc_class,
+                                   'RequestedIfcClass': obj.get('ifcClass') if isinstance(obj.get('ifcClass'), str) else None,
                                    'Provenance': obj.get('provenance'), 'Label': obj.get('label'), 'SupportPoints': obj.get('support_points'),
                                    'Detector': obj.get('detector') or obj.get('labelSource'), 'Separated': True if separated else None,
                                    'LabelConfidence': obj.get('labelConfidence'), 'LabelReviewed': obj.get('labelReviewed'),

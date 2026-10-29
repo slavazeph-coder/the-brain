@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'robotics' / 'scene
 from ifc_export import emit_ifc  # noqa: E402  the real IFC writer, run on the authored scene
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'robotics' / 'world_worker'))
 from measurement_check import build_report  # noqa: E402  real checks on authored transport geometry
+from building_handoff import write_building_handoff  # noqa: E402  real PNG/CSV writer; no native destination app
 
 # (name, min corner, max corner, linear RGBA, glTF extras), Y-up metres-like units as the compiler writes them.
 BOXES = [
@@ -59,7 +60,8 @@ def glb(boxes=BOXES):
 
 
 SCENE = {'schema': 'brainsnn.scene.v1', 'units': 'arbitrary', 'scale': None, 'source': 'authored transport fixture', 'floor_y': 0,
-         'objects': [{'name': 'floor_observed', 'label': 'floor', 'provenance': 'observed', 'centre': [2, -.01, 1.5], 'size': [4, .02, 3]},
+         'objects': [{'name': 'floor_observed', 'label': 'floor', 'provenance': 'observed', 'centre': [2, -.01, 1.5], 'size': [4, .02, 3],
+                      'min': [0, -.02, 0], 'max': [4, 0, 3]},
                      {'name': 'chair', 'label': 'chair', 'provenance': 'detected-unplaced', 'reason': 'no camera pose for this frame in the cloud\'s frame'}],
          'walls': [{'name': 'wall_1', 'label': 'wall', 'provenance': 'observed', 'centre': [2, 1.2, .05], 'size': [4, 2.4, .1], 'yaw_degrees': 0, 'support_points': 40}],
          'unknown': [[3, 2, 1]],
@@ -106,6 +108,10 @@ def main():
             extras.append({'name': 'scene-measurements.json', 'kind': 'evidence'})
     (out / 'scene.glb').write_bytes(glb())
     (out / 'scene.json').write_text(json.dumps(scene))
+    if cloud and cloud['units'] == 'm':
+        handoff = write_building_handoff(scene, out, scene_path=out / 'scene.json')
+        assert handoff['written'], handoff
+        extras.extend(handoff['artifacts'])
     usd, ifc = scene['usd']['written'], (scene.get('ifc') or {}).get('written', False)
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [
         *preceding_artifacts,

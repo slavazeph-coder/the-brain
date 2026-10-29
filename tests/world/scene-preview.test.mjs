@@ -5,7 +5,7 @@ import {planWorld,planningGate,ROBOTS,LIMITS} from '../../brainsnn-r3f-app/publi
 const scene=(over={})=>({schema:SCENE_SCHEMA,units:'arbitrary',counts:{points:6195,walls:1,objects:0,unplaced:2,unknown_cells:14},usd:{written:false,reason:'Isaac Sim reads USD in metres.'},...over});
 test('scene facts come only from scene.json and say what was observed, detected and unknown',()=>{
   const f=sceneFacts(scene());
-  assert.equal(f[0],'Observed: 6,195 reconstructed points, the floor and 1 wall.');
+  assert.equal(f[0],'Observed: 6,195 reconstructed points, a floor bounding extent and 1 wall.');
   assert.equal(f[1],'Detected: no objects placed, 2 left unplaced.');
   assert.match(f[2],/^Unknown: 14 floor cells .*never free space\.$/);
   assert.match(f[3],/arbitrary reconstruction units/);
@@ -62,7 +62,7 @@ const inBox=(o,x,z,r=0)=>x>=o.x-r&&x<=o.x+o.w+r&&z>=o.z-r&&z<=o.z+o.d+r;
 test('a metric scene becomes an unreviewed planning map whose boxes contain every wall and object',()=>{
   const {world,counts,summary}=worldFromScene(metric(),'Scene map / test');
   assert.deepEqual(counts,{walls:2,separated:1,detected:1,unknown:1,outside:0});
-  assert.equal(summary,'Map built from the simulation scene: 2 walls and 2 objects as obstacles, 1 unobserved area, 4 × 6 m of observed floor. Review scale and obstacles, then plan.');
+  assert.equal(summary,'Map built from the simulation scene: 2 walls and 2 objects as obstacles, 1 unobserved area, 4 × 6 m floor bounding extent. Review scale and obstacles, then plan.');
   assert.equal(world.provenance,'observed');assert.equal(world.scaleReviewed,false);assert.equal(world.mapReviewed,false);
   assert.match(planningGate(world),/scale/);assert.equal(world.geometrySource.kind,'compiled-scene');
   assert.ok(world.geometrySource.warnings.some(w=>/entered distance, not verified/.test(w)));
@@ -82,7 +82,7 @@ test('a metric scene becomes an unreviewed planning map whose boxes contain ever
   assert.ok(!world.objects.some(o=>inBox(o,world.start.x,world.start.z,.3)),'the start is clear of every box');
   // An element entirely beyond the observed floor is left out and said so; one partly on it is clipped to the floor.
   const beyond=worldFromScene(metric({walls:[...metric().walls,{name:'wall_3',centre:[9,1.18,0],size:[2,2.4,.2],yaw_degrees:0},{name:'wall_4',centre:[2,1.18,0],size:[1,2.4,.2],yaw_degrees:0}]}));
-  assert.equal(beyond.counts.outside,1);assert.match(beyond.summary,/4 × 6 m of observed floor \(1 beyond it left out\)\./);
+  assert.equal(beyond.counts.outside,1);assert.match(beyond.summary,/4 × 6 m floor bounding extent \(1 beyond it left out\)\./);
   const clipped=beyond.world.objects.find(o=>o.id==='wall-4');assert.deepEqual([clipped.x,clipped.w],[3.5,.5]);});
 test('a reviewed scene map plans a route that never enters a wall, object or unobserved area',()=>{
   const {world}=worldFromScene(metric()),robot=ROBOTS.vacuum,plan=planWorld({...world,scaleReviewed:true,mapReviewed:true},robot);
@@ -92,8 +92,8 @@ test('a reviewed scene map plans a route that never enters a wall, object or uno
 test('scenes without metres, a floor or valid json are refused, never guessed',()=>{
   assert.throws(()=>worldFromScene(null),/No valid scene\.json/);
   assert.throws(()=>worldFromScene(metric({units:'arbitrary'})),/metric scene/);
-  assert.throws(()=>worldFromScene(metric({objects:[]})),/no observed floor/);
-  assert.throws(()=>worldFromScene(metric({floor_y:NaN})),/no observed floor/);
+  assert.throws(()=>worldFromScene(metric({objects:[]})),/no floor bounding extent/);
+  assert.throws(()=>worldFromScene(metric({floor_y:NaN})),/no floor bounding extent/);
   // Malformed elements and cells are skipped rather than placed somewhere.
   const {counts}=worldFromScene(metric({walls:[null,{name:'wall_x',centre:[0,1],size:[1,1,1],yaw_degrees:0}],unknown:[[0,0],[0,0,-1],'x']}));
   assert.deepEqual(counts,{walls:0,separated:1,detected:1,unknown:0,outside:0});

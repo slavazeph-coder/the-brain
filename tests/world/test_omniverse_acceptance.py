@@ -81,3 +81,101 @@ def test_success_retains_run_identity_and_terminal_status(tmp_path):
 def test_whole_run_deadline_applies_to_artifact_stream():
     client=a.Client();client.deadline=0
     with pytest.raises(TimeoutError,match='deadline'):client.remaining()
+
+
+def building_fixture(tmp_path):
+    """Real PNG/CSV/IFC writers; authored scene, no Blender or physical capture."""
+    import hashlib
+    from robotics.world_worker import building_handoff
+    from robotics.scene_compiler.component_graph import attach_component_ids
+    from robotics.scene_compiler.ifc_export import emit_ifc
+    from robotics.world_worker.measurement_check import points_sha256
+    from tests.world.test_building_handoff import scene as authored_scene
+    cloud=a.synthetic_room();scene=authored_scene();scene['scale']=cloud['scale']
+    scene['cloudPointsSha256']=points_sha256(cloud)
+    scene=attach_component_ids(scene,scene['cloudPointsSha256'])
+    emit_ifc(tmp_path,scene)
+    (tmp_path/'scene.json').write_text(json.dumps(scene))
+    (tmp_path/'arena-cloud.json').write_text(json.dumps(cloud))
+    building_handoff.write_building_handoff(scene,tmp_path,scene_path=tmp_path/'scene.json')
+    names=['scene.json','arena-cloud.json','scene.ifc',*a.BUILDING_FILES]
+    raw={name:(tmp_path/name).read_bytes() for name in names}
+    records=[{'name':name,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest(),'hash_verified':True}
+             for name,data in raw.items()]
+    payloads={name:json.loads(data) if name in a.EVIDENCE_JSON else data for name,data in raw.items() if name!='scene.ifc'}
+    return records,payloads,cloud,raw
+
+
+def test_real_building_files_reopen_and_bind_to_the_request(tmp_path):
+    records,payloads,cloud,_=building_fixture(tmp_path)
+    result=a.validate_building(records,payloads,cloud)
+    assert result=={'building_handoff_verified':True,'building_schedule_rows':5,
+                   'building_wall_count':2,'building_component_revision':0}
+
+
+@pytest.mark.parametrize('name',['scene.json','arena-cloud.json','scene.ifc',*a.BUILDING_FILES])
+def test_missing_required_building_file_fails(tmp_path,name):
+    records,payloads,cloud,_=building_fixture(tmp_path)
+    with pytest.raises(ValueError,match='Required building artifacts'):
+        a.validate_building([row for row in records if row['name']!=name],payloads,cloud)
+
+
+@pytest.mark.parametrize('mutation',[
+    'source_hash','companion_hash','ifc_hash','revision','scale','cloud','unverified_download','graph_source','scene_cloud',
+    'png','png_size','csv','csv_revision','csv_count','wall_count','ruler','instructions','qualification',
+])
+def test_corrupt_or_unbound_building_evidence_fails(tmp_path,mutation):
+    import io
+    from PIL import Image
+    records,payloads,cloud,_=building_fixture(tmp_path);h=payloads['building-handoff.json']
+    if mutation=='source_hash':h['sourceFiles']['scene']['sha256']='f'*64
+    elif mutation=='companion_hash':h['files']['building-schedule.csv']['sha256']='f'*64
+    elif mutation=='ifc_hash':h['destinations']['revit']['existingIfc']['sha256']='f'*64
+    elif mutation=='revision':h['componentRevision']=9
+    elif mutation=='scale':h['scale']['metresPerUnit']=2
+    elif mutation=='cloud':payloads['arena-cloud.json']['points'][0][0]=99
+    elif mutation=='graph_source':payloads['scene.json']['componentGraph']['sourceSha256']='f'*64
+    elif mutation=='scene_cloud':payloads['scene.json']['cloudPointsSha256']='f'*64
+    elif mutation=='unverified_download':records[0]['hash_verified']=False
+    elif mutation=='png':payloads['xactimate-underlay.png']=b'not a PNG'
+    elif mutation=='png_size':
+        out=io.BytesIO();Image.new('RGB',(1,1)).save(out,format='PNG');payloads['xactimate-underlay.png']=out.getvalue()
+    elif mutation=='csv':payloads['building-schedule.csv']=b'not,a,schedule\n'
+    elif mutation=='csv_revision':
+        text=payloads['building-schedule.csv'].decode();payloads['building-schedule.csv']=text.replace(',0\r\n',',99\r\n').encode()
+    elif mutation=='csv_count':h['scheduleRows']+=1
+    elif mutation=='wall_count':h['walls'].pop()
+    elif mutation=='ruler':h['calibration']['lengthMetres']*=2
+    elif mutation=='instructions':payloads['BUILDING-IMPORT.txt']=b'placeholder'
+    elif mutation=='qualification':h['readiness']['xactimateApplicationValidated']=True
+    with pytest.raises(ValueError):a.validate_building(records,payloads,cloud)
+
+
+def test_artifact_transport_retains_bounded_building_content(tmp_path,monkeypatch):
+    import io
+    records,_,cloud,raw=building_fixture(tmp_path)
+    client=a.Client()
+    monkeypatch.setattr(client,'json',lambda path,body:{'url':'/api/world/worker/v1/download/'+str(body['artifact'])})
+    monkeypatch.setattr(client,'call',lambda path:io.BytesIO(raw[records[int(path.rsplit('/',1)[-1])]['name']]))
+    job={'id':'fixture','artifacts':[dict(row,size=row['bytes']) for row in records]}
+    downloaded,payloads=client.artifacts(job)
+    assert isinstance(payloads['xactimate-underlay.png'],bytes)
+    assert a.validate_building(downloaded,payloads,cloud)['building_handoff_verified'] is True
+    job['artifacts'][3]['sha256']='f'*64
+    with pytest.raises(ValueError,match='Artifact hash mismatch'):client.artifacts(job)
+
+
+def test_execute_rejects_missing_building_output_before_pack(tmp_path,monkeypatch):
+    records,payloads,cloud,_=building_fixture(tmp_path)
+    monkeypatch.setenv('WORLD_SITE_PASSCODE','synthetic-fixture-passcode')
+    monkeypatch.setattr(a,'synthetic_room',lambda:cloud)
+    class FixtureClient:
+        def __init__(self):self.engines=[]
+        def json(self,path,**kwargs):
+            return {'token':'fixture'} if path.endswith('/session') else {'engines':[{'id':'omniverse-pack','available':True}],
+                'simready_assets':[{'available':True,'asset':'fixture','package_sha256':'c'*64}]}
+        def run(self,engine,*args):self.engines.append(engine);return {'id':'scene'}
+        def artifacts(self,job):return [row for row in records if row['name']!='xactimate-underlay.png'],payloads
+    client=FixtureClient()
+    with pytest.raises(ValueError,match='Required building artifacts'):a.execute(client)
+    assert client.engines==['scene-usd']

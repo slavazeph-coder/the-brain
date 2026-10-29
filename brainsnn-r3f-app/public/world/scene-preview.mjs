@@ -21,7 +21,7 @@ export function sceneFacts(scene) {
   const [points, walls, objects, unplaced, unknown] = ['points', 'walls', 'objects', 'unplaced', 'unknown_cells'].map(k => count(c[k]));
   const facts = [];
   facts.push(points === null || walls === null ? 'Observed: counts not recorded.'
-    : `Observed: ${plural(points, 'reconstructed point')}, the floor and ${plural(walls, 'wall')}.`);
+    : `Observed: ${plural(points, 'reconstructed point')}, a floor bounding extent and ${plural(walls, 'wall')}.`);
   if (objects === null) facts.push('Detected: not recorded.');
   else facts.push(`Detected: ${objects ? plural(objects, 'object') + ' placed from 2D detections' : 'no objects placed'}${unplaced ? `, ${unplaced.toLocaleString('en')} left unplaced` : ''}.`);
   facts.push(unknown === null ? 'Unknown space: not recorded.' : `Unknown: ${plural(unknown, 'floor cell')} no point reached, kept as a tagged volume, never free space.`);
@@ -152,15 +152,15 @@ function openest(objects, width, depth) {
   return best;
 }
 
-/** A metric scene.json -> an unreviewed World v1 planning map in the scene's own frame, shifted so the observed floor
+/** A metric scene.json -> an unreviewed World v1 planning map in the scene's own frame, shifted so the floor bounding extent
  * starts at 0, 0. Walls and separated or detected objects are obstacles (the boxes around them); floor cells no point
- * reached are unknown; the rest of the observed floor is proposed as free and still needs review. */
+ * reached are unknown; the remaining point-covered footprint still needs floor and clearance review. */
 export function worldFromScene(scene, name = 'Scene map') {
   if (!scene || typeof scene !== 'object' || scene.schema !== SCENE_SCHEMA) throw new Error('No valid scene.json came with this scene, so it cannot become a planning map.');
   if (scene.units !== 'm') throw new Error('A planning map needs a metric scene. Measure a known distance on the reconstruction, then build the scene again.');
   const objects = Array.isArray(scene.objects) ? scene.objects : [], walls = Array.isArray(scene.walls) ? scene.walls : [];
   const floor = objects.find(o => o?.name === 'floor_observed'), extent = floor && footprints(floor)[0];
-  if (!extent || !Number.isFinite(scene.floor_y)) throw new Error('This scene has no observed floor, so free space cannot be proposed.');
+  if (!extent || !Number.isFinite(scene.floor_y)) throw new Error('This scene has no floor bounding extent, so free space cannot be proposed.');
   const openings = checkedOpenings(scene, walls);
   const cm = v => Math.round(v * 100) / 100, width = cm(extent.x1 - extent.x0), depth = cm(extent.z1 - extent.z0);
   // Round outwards to whole centimetres and clip to the floor, so a box never shrinks below the element it stands for.
@@ -197,10 +197,10 @@ export function worldFromScene(scene, name = 'Scene map') {
       'Obstacles are axis-aligned boxes around walls and separated objects (diagonal ones in strips), so they are a little larger than the objects.',
       'Clusters too small or too low to separate are not obstacles: check for low clutter before a robot runs.',
       ...(openings.length ? ['Reviewed openings are planar passage suggestions with a 2 m headroom convention. Robot height, swings and physical clearance are not validated; closed reference doors and elevated voids stay blocked.'] : []),
-      'Floor no point reached is unknown; the rest of the observed floor is proposed as free.'] },
+      'Cells no point reached are unknown; points above a cell do not establish observed or clear floor.'] },
     start: openest(placed, width, depth), objects: placed });
   const objectCount = counts.separated + counts.detected;
   const summary = `Map built from the simulation scene: ${plural(counts.walls, 'wall')} and ${plural(objectCount, 'object')} as obstacles, `
-    + `${plural(counts.unknown, 'unobserved area')}, ${width} × ${depth} m of observed floor${counts.outside ? ` (${counts.outside} beyond it left out)` : ''}. Review scale and obstacles, then plan.`;
+    + `${plural(counts.unknown, 'unobserved area')}, ${width} × ${depth} m floor bounding extent${counts.outside ? ` (${counts.outside} beyond it left out)` : ''}. Review scale and obstacles, then plan.`;
   return { world, counts, summary };
 }

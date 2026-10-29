@@ -6,9 +6,12 @@ artifact through the site proxy with hashes checked. Not a phone or physics test
 """
 from __future__ import annotations
 import argparse
+import csv
 from datetime import datetime, timezone
 import hashlib
+import io
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -17,6 +20,8 @@ import time
 import urllib.request
 import uuid
 SITE='https://the-brain-production.up.railway.app'
+BUILDING_FILES=('xactimate-underlay.png','building-schedule.csv','BUILDING-IMPORT.txt','building-handoff.json')
+EVIDENCE_JSON={'scene.json','arena-cloud.json','omniverse-receipt.json','building-handoff.json'}
 
 class Client:
     def __init__(self):self.token=None;self.deadline=time.monotonic()+1800
@@ -73,13 +78,95 @@ class Client:
                     size+=len(block)
                     if size>a['size']:raise ValueError('Download size exceeded')
                     digest.update(block)
-                    if a['name'] in ('scene.json','arena-cloud.json','omniverse-receipt.json'):
+                    if a['name'] in EVIDENCE_JSON or a['name'] in BUILDING_FILES:
                         if size>16*1024**2:raise ValueError('Evidence size exceeded')
                         parts.append(block)
             if size!=a['size'] or digest.hexdigest()!=a['sha256']:raise ValueError('Artifact hash mismatch')
             records.append({'name':a['name'],'bytes':size,'sha256':digest.hexdigest(),'hash_verified':True})
-            if parts:payloads[a['name']]=json.loads(b''.join(parts))
+            if parts:
+                data=b''.join(parts)
+                payloads[a['name']]=json.loads(data) if a['name'] in EVIDENCE_JSON else data
         return records,payloads
+
+
+def validate_building(records,payloads,requested_cloud):
+    """Require deployed destination files, not merely hashes of whatever exists."""
+    from PIL import Image
+    # Also supports direct execution from the Railway image's script path.
+    sys.path.insert(0,str(Path(__file__).resolve().parents[4]))
+    from robotics.world_worker.measurement_check import points_sha256
+    by_name={row['name']:row for row in records}
+    required={'scene.json','arena-cloud.json','scene.ifc',*BUILDING_FILES}
+    if len(by_name)!=len(records) or not required<=by_name.keys():
+        raise ValueError('Required building artifacts missing or duplicated')
+    if any(row.get('hash_verified') is not True or not isinstance(row.get('bytes'),int) or row['bytes']<=0
+           for row in by_name.values()):raise ValueError('Building artifacts lack verified downloads')
+    scene=payloads.get('scene.json');cloud=payloads.get('arena-cloud.json');handoff=payloads.get('building-handoff.json')
+    if not all(isinstance(value,dict) for value in (scene,cloud,handoff)):
+        raise ValueError('Building evidence is missing')
+    if scene.get('schema')!='brainsnn.scene.v1' or handoff.get('schema')!='brainsnn.building-handoff.v1':
+        raise ValueError('Building evidence schema mismatch')
+    scale=requested_cloud['scale']
+    if any(value.get('units')!='m' or value.get('scale')!=scale for value in (scene,cloud,handoff)):
+        raise ValueError('Building evidence scale mismatch')
+    if cloud.get('points')!=requested_cloud['points']:
+        raise ValueError('Building evidence cloud mismatch')
+    graph=scene.get('componentGraph',{})
+    points_hash=points_sha256(cloud)
+    if graph.get('sourceSha256')!=points_hash or scene.get('cloudPointsSha256')!=points_hash:
+        raise ValueError('Building scene is not bound to the requested cloud')
+    canonical=hashlib.sha256(json.dumps(scene,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode('ascii')).hexdigest()
+    if (handoff.get('canonicalSceneSha256')!=canonical or handoff.get('sourceSha256')!=graph.get('sourceSha256')
+            or handoff.get('componentRevision')!=graph.get('revision') or not isinstance(graph.get('revision'),int)
+            or not re.fullmatch(r'[a-f0-9]{64}',str(graph.get('sourceSha256','')))):
+        raise ValueError('Building evidence source or revision mismatch')
+    source=handoff.get('sourceFiles',{}).get('scene',{})
+    if source.get('binding')!='exact-file-bytes' or source.get('name')!='scene.json':
+        raise ValueError('Building scene binding missing')
+    for actual,name in [(source,'scene.json'),
+                        (handoff.get('destinations',{}).get('revit',{}).get('existingIfc',{}),'scene.ifc'),
+                        *[(handoff.get('files',{}).get(name,{}),name) for name in BUILDING_FILES[:-1]]]:
+        if actual.get('sha256')!=by_name[name]['sha256'] or actual.get('bytes')!=by_name[name]['bytes']:
+            raise ValueError('Building companion hash mismatch')
+    if any(handoff.get(field) is not False for field in ('metricVerified','physicalDimensionsVerified','floorExtentIsRoomBoundary')):
+        raise ValueError('Unsupported building qualification')
+    readiness=handoff.get('readiness',{})
+    if readiness.get('roomBoundaries')!='not-established' or any(readiness.get(field) is not False for field in
+            ('roomQuantities','ceilingQuantities','nativeRevitValidated','xactimateProjectGenerated','xactimateApplicationValidated')):
+        raise ValueError('Unsupported destination qualification')
+    transform=handoff.get('planTransform',{});ruler=handoff.get('calibration',{})
+    factor=transform.get('pixelsPerMetre');length=ruler.get('lengthMetres')
+    if (transform.get('coordinateFrame')!='plan-x-minus-z' or transform.get('sceneToPlan')!=['x','-z']
+            or not isinstance(factor,(int,float)) or not math.isfinite(factor) or factor<=0
+            or not isinstance(length,(int,float)) or not math.isfinite(length) or length<=0
+            or ruler.get('independentMeasurement') is not False):raise ValueError('Building plan calibration invalid')
+    try:
+        pixels=math.dist(ruler['startPixel'],ruler['endPixel'])
+        if not math.isclose(pixels/factor,length,rel_tol=1e-9) or not math.isclose(ruler['lengthFeet']*.3048,length,rel_tol=1e-9):
+            raise ValueError('Building plan ruler scale mismatch')
+        with Image.open(io.BytesIO(payloads['xactimate-underlay.png'])) as image:
+            if image.format!='PNG' or image.size!=(1800,1400) or list(image.size)!=transform.get('imageSizePixels'):
+                raise ValueError('Building PNG dimensions mismatch')
+            image.verify()
+        rows=list(csv.DictReader(io.StringIO(payloads['building-schedule.csv'].decode('utf-8'))))
+        instructions=payloads['BUILDING-IMPORT.txt'].decode('utf-8')
+    except (KeyError,TypeError,OSError,UnicodeError,csv.Error) as error:
+        raise ValueError('Building artifact content invalid') from error
+    if not rows or len(rows)!=handoff.get('scheduleRows'):
+        raise ValueError('Building schedule count mismatch')
+    if any(row.get('scene_sha256')!=canonical or row.get('source_sha256')!=graph['sourceSha256']
+           or row.get('revision')!=str(graph['revision']) or row.get('review_status')!='unverified' for row in rows):
+        raise ValueError('Building schedule source or revision mismatch')
+    if any(row.get('area_m2') or row.get('area_ft2') for row in rows if row.get('kind')=='floor'):
+        raise ValueError('Building floor extent became a room quantity')
+    walls=scene.get('walls',[]);openings=scene.get('openings',[])
+    if (not walls or len(handoff.get('walls',[]))!=len(walls) or len(handoff.get('openings',[]))!=len(openings)
+            or sum(row.get('kind')=='wall' for row in rows)!=len(walls)):
+        raise ValueError('Building wall or opening count mismatch')
+    if 'Import Underlay Image' not in instructions or 'The PNG requires tracing.' not in instructions:
+        raise ValueError('Building import instructions missing')
+    return {'building_handoff_verified':True,'building_schedule_rows':len(rows),
+            'building_wall_count':len(walls),'building_component_revision':graph['revision']}
 
 
 def validate_pack(records,payloads,options):
@@ -135,7 +222,8 @@ def execute(client):
     if caps is None:raise RuntimeError('Updated worker was not reachable through website')
     asset=next((x for x in caps.get('simready_assets',[]) if x.get('available')),None)
     if asset is None:raise RuntimeError('NVIDIA asset catalog was not available')
-    started=time.monotonic();scene=client.run('scene-usd',synthetic_room());scene_records,payloads=client.artifacts(scene)
+    started=time.monotonic();requested_cloud=synthetic_room();scene=client.run('scene-usd',requested_cloud);scene_records,payloads=client.artifacts(scene)
+    building=validate_building(scene_records,payloads,requested_cloud)
     options={'schema':'brainsnn.omniverse-request.v1','reviewed':True,
              'scene_sha256':next(a['sha256'] for a in scene['artifacts'] if a['name']=='scene.json'),
              'cloud_sha256':next(a['sha256'] for a in scene['artifacts'] if a['name']=='arena-cloud.json'),
@@ -144,7 +232,7 @@ def execute(client):
     cloud=payloads['arena-cloud.json'];cloud['omniversePack']=options
     pack=client.run('omniverse-pack',cloud,scene['id']);pack_records,pack_payloads=client.artifacts(pack)
     validate_pack(pack_records,pack_payloads,options)
-    return {'source_kind':'synthetic-room',
+    return {'source_kind':'synthetic-room',**building,
             'site':SITE,'scene_job':scene['id'],'pack_job':pack['id'],'scene_artifacts':scene_records,
             'pack_artifacts':pack_records,'asset':asset['asset'],'elapsed_seconds':round(time.monotonic()-started,2),
             'authenticated_site_proxy':True,'actual_scene_compiler':True,'all_download_hashes_verified':True,
