@@ -14,7 +14,7 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `node --test tests/world/worker-client.test.mjs` → **12 pass / 0 fail** (188 ms, up from 11)
   - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (126 ms)
   - `pytest tests/world/test_report_receipts.py -q` → **33 passed** (21.38 s)
-- **Commit:** (see below)
+- **Commit:** `f5e6c13` — worker-client abort-before-clone fix + regression test + progress file
 - **4090:** not probed this run (GB10 task closed the budget; alternation). Was unreachable at run 154 (connection refused).
 - **Next bounded action:** 4090 MapAnything held-out dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first; pinned weights, 20 GiB watchdog, no base conda replacement). HTTP report-UI (browser) validation still pending.
 - **Guardrails:** no force-push, no merge/deploy, no paid fallback. Serving Qwen/backup and licensed model/guardrail gates untouched. 4090 branch `hermes/world-builder-4090` untouched.
