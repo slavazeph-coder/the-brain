@@ -1,9 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-29T13:42Z
+Last updated: 2026-10-29T14:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 162 — 2026-10-29 (HTTP report-UI validation closed: ALL PASS both browsers; 3 suites green)
+
+- **Actual HTTP report-UI validation — gate closed.** Ran `tests/world/report_receipt_ui_smoke_live.py` (real uvicorn on ephemeral port, real Ed25519 key, real Playwright browser journey over live HTTP with cross-origin CORS):
+  - `chromium: PASS` — status=ALL PASS, job complete, receipt OK (keyId=bae65ac6…), verify OK, 0 page errors, liveHttp=true, realEd25519=true
+  - `webkit: PASS` — identical result
+  - Artifacts: `output/playwright/world/report-receipt/{chromium,webkit}-live-ui-receipt.json` + screenshots
+- **All standard suites green (GB10, local only):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail**
+  - `node --test tests/world/worker-client.test.mjs` → **13 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.78 s
+- **4090:** unreachable this run (permission denied on key; no GPU work).
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** signed-receipt API/env documentation (pending); 4090 dense-inference smoke once reachable.
 
 ### Run 161 — 2026-10-29 (all tests green; commit 84b0eb4 pushed; GitHub verified)
 
