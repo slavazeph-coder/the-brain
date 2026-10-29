@@ -46,7 +46,11 @@ export class WorkerClient {
     }
     return item.id;
   }
-  async download(job,id,signal){if(!/^[a-f0-9]{32}$/.test(job)||!Number.isInteger(id)||id<0||id>31)throw new Error('Invalid artifact identifier.');const r=await this.request(`/v1/jobs/${job}/ticket`,{method:'POST',body:{artifact:id},signal});const url=new URL(r.url,this.base+'/');if(url.origin!==new URL(this.base).origin||!url.pathname.startsWith(new URL(this.base+'/v1/download/').pathname))throw new Error('Worker returned an untrusted download URL.');return url.href;}
+  async download(job,id,signal){if(!/^[a-f0-9]{32}$/.test(job)||!Number.isInteger(id)||id<0||id>31)throw new Error('Invalid artifact identifier.');
+    if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
+    const r=await this.request(`/v1/jobs/${job}/ticket`,{method:'POST',body:{artifact:id},signal});
+    if(signal?.aborted)throw signal.reason||new DOMException('Aborted','AbortError');
+    const url=new URL(r.url,this.base+'/');if(url.origin!==new URL(this.base).origin||!url.pathname.startsWith(new URL(this.base+'/v1/download/').pathname))throw new Error('Worker returned an untrusted download URL.');return url.href;}
   async previewArtifact(job,index,signal){
     const item=job.artifacts?.[index],limit=64*1024**2;
     if(!item||!Number.isSafeInteger(item.size)||item.size<1||item.size>limit)throw new Error('In-browser previews are limited to 64 MiB. Download larger artifacts for a desktop viewer.');

@@ -233,6 +233,54 @@ test('caller cancellation stops an in-flight artifact fetch and removes its rela
   await assert.rejects(client.previewArtifact({id,artifacts:[artifact]},0,caller.signal),error=>error.name==='AbortError');
 });
 
+test('download rejects AbortError when the caller signal is already aborted before the ticket POST',async()=>{
+  const client=makeClient();
+  const calls=[];
+  client.request=async(path,options)=>{calls.push({path,signal:options.signal});return{url:'/v1/download/ticket'};};
+  const caller=new AbortController();
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  await assert.rejects(
+    client.download(id,0,caller.signal),
+    error=>error.name==='AbortError',
+  );
+  assert.equal(calls.length,0,'no ticket POST was issued after the caller aborted');
+});
+
+test('download rejects AbortError between the ticket POST and the fetch when the caller aborts in flight',async(t)=>{
+  const client=makeClient();
+  const calls=[];let beginTicket;const ticketStarted=new Promise(resolve=>{beginTicket=resolve;});
+  // The ticket POST is in flight when the caller aborts — the relayed signal fires.
+  client.request=async(path,{signal,method}={})=>{
+    calls.push({path,method,signal});
+    return new Promise((_,reject)=>{
+      signal?.addEventListener('abort',()=>reject(signal.reason),{once:true});
+      beginTicket();
+    });
+  };
+  const caller=new AbortController();
+  const pending=client.download(id,0,caller.signal);
+  await ticketStarted;
+  assert.equal(calls.length,1,'the ticket POST is in flight before cancellation');
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  await assert.rejects(pending,error=>error.name==='AbortError');
+});
+
+test('download rejects AbortError when the caller aborts after the ticket resolves',async(t)=>{
+  // Pin the post-ticket guard in download(): the ticket POST resolves, then
+  // the caller aborts before the URL is returned. Without the post-await
+  // guard, the caller would receive a valid download URL after aborting,
+  // allowing a stale download to proceed.
+  const client=makeClient();
+  const caller=new AbortController();
+  // Ticket resolves immediately (no in-flight abort).
+  client.request=async()=>({url:'/v1/download/ticket'});
+  const ticketPromise=client.download(id,0,caller.signal);
+  // download() is async — abort fires between the request resolution and
+  // the post-await guard check.
+  caller.abort(new DOMException('Owner cancelled','AbortError'));
+  await assert.rejects(ticketPromise,error=>error.name==='AbortError');
+});
+
 test('rejected HTTP status cancels an unread artifact stream', {timeout:3000}, async()=>{
   let closed;const bodyClosed=new Promise(resolve=>{closed=resolve;});
   const server=createServer((_request,response)=>{

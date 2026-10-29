@@ -5,6 +5,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 164 — 2026-10-29 (download() abort regression committed: 3 cancellation tests, all suites green)
+
+- Picked up run 162's uncommitted work: `worker-client.mjs` had two new `signal?.aborted` guards in `download()` (pre-ticket-POST and post-ticket) and `worker-client.test.mjs` had 3 new regression tests. This run verified, fixed one wrong comment (referenced a non-existent "guard at line 52"), and committed.
+- **Fix (worker-client.mjs:49-53):** `download()` now rejects `AbortError` if the caller signal is already aborted before the ticket POST, and again after the ticket resolves but before the URL is returned — a stale download URL is never handed to a cancelled caller.
+- **Regression tests (worker-client.test.mjs, +50):** pre-POST abort (no ticket POST issued), in-flight ticket abort (relay fires, `AbortError`), post-ticket abort (guard catches before URL return).
+- **Verified (exact, GB10, post-commit):**
+  - `node --test tests/world/worker-client.test.mjs` → **16 pass / 0 fail** (142 ms, up from 13)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.80 s
+- **4090:** not probed this run (GB10 task closed the budget; alternation). Was unreachable at run 162 (key permission denied).
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** 4090 dense-inference smoke once reachable (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` first).
+
 ### Run 162 — 2026-10-29 (HTTP report-UI validation closed: ALL PASS both browsers; 3 suites green)
 
 - **Actual HTTP report-UI validation — gate closed.** Ran `tests/world/report_receipt_ui_smoke_live.py` (real uvicorn on ephemeral port, real Ed25519 key, real Playwright browser journey over live HTTP with cross-origin CORS):
