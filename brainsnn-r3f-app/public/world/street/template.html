@@ -1,0 +1,92 @@
+<div class="street-surface">
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Z M3 8l9 5 9-5 M12 13v8"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 6-10 6L2 9l10-6Z M3 13l9 5 9-5 M3 17l9 5 9-5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 2 8M3 3v7h7"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-orbit" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="5" transform="rotate(-30 12 12)"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="14" cy="4" r="2"/><path d="m7 12 4-4 4 1 3 4 3 1M12 8l-2 7-5 6M10 15l5 2 1 5"/></symbol>
+    <symbol id="i-frame" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8V4Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-robot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 3v4M1 11v6m22-6v6M8 16h8"/><circle cx="8" cy="12" r=".5"/><circle cx="16" cy="12" r=".5"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12S6 5 12 5s10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20m-7-7-3-3-3 3m6 14-3 3-3-3M5 9l-3 3 3 3m14-6 3 3-3 3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 3h18v18H3V3Zm6 0v18m6-18v18M3 9h18M3 15h18"/></symbol>
+  </defs></svg>
+  <header class="app-header">
+    <div class="project-title"><strong>Green Gardens</strong><span>Toronto · geographic reference</span></div>
+    <span class="version-pill"><span class="status-dot"></span>Scene sandbox</span>
+    <div class="header-actions">
+      <button id="reset-all" class="button quiet" title="Restore original scene"><svg><use href="#i-reset"/></svg><span>Reset</span></button>
+      <button id="export-open" class="button primary"><svg><use href="#i-download"/></svg><span>Export scene</span></button>
+    </div>
+  </header>
+  <main class="workspace">
+    <aside id="object-panel" class="panel object-panel" aria-label="Scene objects">
+      <div class="panel-top"><span class="eyebrow">WORKSPACE</span><button class="icon-button mobile-only" data-close-panel="objects" aria-label="Close objects"><svg><use href="#i-close"/></svg></button></div>
+      <div class="scene-heading"><div class="scene-avatar"><svg><use href="#i-pin"/></svg></div><div><h2 class="scene-name">Green Gardens</h2><p>43.723428° N · 79.443862° W</p></div></div>
+      <div class="panel-tabs" role="tablist" aria-label="Scene panel"><button class="active" id="tab-objects" role="tab" aria-selected="true">Objects <span id="object-count">—</span></button><button id="tab-evidence" role="tab" aria-selected="false">Evidence</button></div>
+      <section id="objects-content" class="panel-content">
+        <label class="search-box"><svg><use href="#i-search"/></svg><input id="object-search" type="search" placeholder="Find an object…" autocomplete="off" aria-label="Find a scene object"><span>/</span></label>
+        <div class="outliner-summary"><span>SCENE HIERARCHY</span><button id="collapse-groups" title="Collapse object groups" aria-label="Collapse object groups">−</button></div>
+        <div id="object-tree" class="object-tree"></div>
+      </section>
+      <section id="evidence-content" class="panel-content evidence-content" hidden>
+        <div class="section-label">CAPTURE &amp; GEOGRAPHIC ALIGNMENT</div>
+
+        <p class="muted small">Add captures through the workspace’s Capture tool. The geographic scene is an independent reference: source cameras have not been registered to these building footprints.</p>
+        <article class="evidence-card"><span class="source-dot reference"></span><div><h3>Municipal geometry</h3><p>2025 Toronto massing dataset. Footprints and source heights; construction state is unverified.</p><a href="https://open.toronto.ca/dataset/3d-massing/" target="_blank" rel="noreferrer">Source catalogue ↗</a></div></article>
+        <article class="evidence-card"><span class="source-dot lidar"></span><div><h3>Ground reference</h3><p>Interpolated from classified 2023 LiDAR ground points. Terrain detail below the grid spacing is not represented.</p></div></article>
+        <article class="evidence-card"><span class="source-dot authored"></span><div><h3>Authored detail</h3><p>Façades, doors, windows, paving and props are editable design examples. Their dimensions and appearance are assumed.</p></div></article>
+        <div class="evidence-note"><svg><use href="#i-info"/></svg><p>This is a geographic prototype. It is not an as-built survey, a reconstructed photorealistic mesh, or a validated robot test environment.</p></div>
+      </section>
+      <footer class="object-footer"><span class="status-dot"></span><span id="save-state">Edits saved on this device</span><button id="show-about" class="text-button" aria-label="About this scene"><svg><use href="#i-info"/></svg></button></footer>
+    </aside>
+    <section class="viewport" aria-label="Interactive 3D scene">
+      <div id="scene-canvas" class="scene-canvas" tabindex="0" aria-label="3D street view. Drag to orbit. Select a component to inspect it."></div>
+      <div id="loading" class="loading-screen"><div class="loading-glyph"><svg><use href="#i-cube"/></svg></div><h2>Assembling the street</h2><p>Geometry, materials and object identities</p><span class="loading-line"></span></div>
+      <div class="viewport-header"><div class="viewport-heading"><span class="eyebrow">OBJECT SCENE / 001</span><h2>A street you can work with.</h2><p>Explore. Select. Change. Simulate.</p></div><button id="mobile-objects" class="icon-button mobile-only" aria-label="Open scene objects"><svg><use href="#i-layers"/></svg></button></div>
+      <div class="view-tools"><div class="segmented" aria-label="Camera mode"><button id="camera-orbit" class="active" title="Orbit camera"><svg><use href="#i-orbit"/></svg><span>Orbit</span></button><button id="camera-walk" title="Walk camera"><svg><use href="#i-walk"/></svg><span>Walk</span></button></div><button id="frame-view" class="floating-button" aria-label="Frame selected object or reset view" title="Frame selection"><svg><use href="#i-frame"/></svg></button></div>
+      <div class="layer-tools"><button id="show-context" class="layer-chip" aria-pressed="false" title="Show surrounding municipal forms"><svg><use href="#i-layers"/></svg>Context</button><button id="show-colliders" class="layer-chip" aria-pressed="false"><svg><use href="#i-grid"/></svg>Colliders</button><button id="show-sources" class="layer-chip" aria-pressed="false"><span class="source-colors"><i></i><i></i><i></i></span>Sources</button></div>
+      <div id="source-legend" class="source-legend" hidden><span><i class="source-dot reference"></i>Reference</span><span><i class="source-dot lidar"></i>LiDAR ground</span><span><i class="source-dot authored"></i>Authored</span></div>
+      <div id="walk-help" class="walk-help" hidden><strong>Walk mode</strong><span>WASD / arrows to move · drag to look · Esc to orbit</span></div>
+      <div id="touch-pad" class="touch-pad" hidden><button data-walk="forward" aria-label="Walk forward">↑</button><button data-walk="left" aria-label="Walk left">←</button><button data-walk="back" aria-label="Walk backward">↓</button><button data-walk="right" aria-label="Walk right">→</button></div>
+      <div class="viewport-bottom"><div class="interaction-hint" id="interaction-hint"><span class="mouse-symbol"></span>Drag to orbit <span>·</span> Scroll to zoom <span>·</span> Click to inspect</div><span class="compatibility-label" title="Simplified rendering because this browser does not provide WebGL. Geometry, editing and exports remain available.">Compatibility view</span><span class="units-label">METRES <span>Y ↑</span></span></div>
+      <div class="simulation-dock">
+        <div class="sim-identity"><span class="robot-icon"><svg><use href="#i-robot"/></svg></span><div><strong>Route lab <span>KINEMATIC</span></strong><p id="sim-status">Ready to explore the street</p></div></div>
+        <div class="sim-metrics"><div><strong id="route-length">—</strong><span>route metres</span></div><div><strong id="route-revision">01</strong><span>revision</span></div></div>
+        <div class="sim-actions"><button id="barrier-select" class="button secondary" title="Select and move the obstacle"><svg><use href="#i-move"/></svg><span>Move barrier</span></button><button id="robot-toggle" class="button primary"><svg id="robot-action-icon"><use href="#i-play"/></svg><span>Run route</span></button><button id="robot-reset" class="icon-button" aria-label="Reset route" title="Reset route"><svg><use href="#i-reset"/></svg></button></div>
+      </div>
+      <button id="mobile-inspector" class="mobile-inspector-button mobile-only" hidden><svg><use href="#i-cube"/></svg><span>Inspect selection</span><svg><use href="#i-arrow"/></svg></button>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </section>
+    <aside id="inspector-panel" class="panel inspector-panel" aria-label="Object inspector">
+      <div class="panel-top"><span class="eyebrow">INSPECTOR</span><span id="inspector-index" class="mono">—</span><button class="icon-button mobile-only" data-close-panel="inspector" aria-label="Close inspector"><svg><use href="#i-close"/></svg></button></div>
+      <div id="inspector-empty" class="inspector-empty"><span class="empty-cube"><svg><use href="#i-cube"/></svg></span><h2>Every part has an identity.</h2><p>Select a building, window, door or street object to see its geometry and source.</p><button class="button secondary" id="inspect-barrier-empty">Try the movable barrier <svg><use href="#i-arrow"/></svg></button></div>
+      <div id="inspector-content" hidden></div>
+      <div class="inspector-footnote"><svg><use href="#i-check"/></svg><span>Stable IDs travel with your export.</span></div>
+    </aside>
+  </main>
+  <div class="panel-backdrop" id="panel-backdrop" hidden></div>
+  <dialog id="export-dialog" class="export-dialog">
+    <div class="dialog-heading"><div><span class="eyebrow">TAKE IT FURTHER</span><h2>Your scene, ready for the next tool.</h2></div><button id="export-close" class="icon-button" aria-label="Close export"><svg><use href="#i-close"/></svg></button></div>
+    <p class="muted">Export the current objects and edits, or download the original assembly with source notes and validation results.</p>
+    <div class="export-options">
+      <button id="export-glb" class="export-option"><span class="file-badge">GLB</span><span><strong>Current visual scene</strong><small>Geometry, materials, object IDs and source labels</small></span><svg><use href="#i-download"/></svg></button>
+      <button id="export-usd" class="export-option"><span class="file-badge">USD</span><span><strong>Current simulation assembly</strong><small>Mesh geometry and explicit collision schemas</small></span><svg><use href="#i-download"/></svg></button>
+      <button id="export-json" class="export-option"><span class="file-badge">JSON</span><span><strong>Current object manifest</strong><small>Editable scene state, provenance and route settings</small></span><svg><use href="#i-download"/></svg></button>
+      <a id="export-bundle" class="export-option" data-local-href="./exports/BrainSNN_Street_Studio_Package.zip" download><span class="file-badge">ZIP</span><span><strong>Original asset package</strong><small>Baseline GLB + USD + manifest + source notes</small></span><svg><use href="#i-download"/></svg></a>
+    </div>
+    <a id="prepared-download" class="prepared-download" download hidden></a>
+    <div class="export-note"><svg><use href="#i-info"/></svg><p>The browser demonstrates clearance-aware, kinematic navigation. GLB is a visual interchange; USD includes collision intent. A simulator import, contact test and engine-specific tuning are still required.</p></div>
+    <div class="dialog-bottom"><span id="export-state">No account or external upload required.</span><label class="text-button import-label">Import scene edits<input id="import-scene" type="file" accept="application/json,.json" hidden></label></div>
+  </dialog>
+  <noscript>This interactive scene needs JavaScript enabled.</noscript>
+</div>

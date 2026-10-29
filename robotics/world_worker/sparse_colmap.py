@@ -278,9 +278,12 @@ def extract_video(source: Path, images: Path, *, max_images: int | None = None):
     budget = frame_budget(duration) if max_images is None else min(max_images, frame_budget(duration))
     fps = min(3, budget / duration)
     # Every frame is decoded to sample a few: about 3 s per minute of 1080p on 2 threads, 4 times that for 4K.
+    # Bound the fit by the decoded raster as well as the cap: a smaller upload must not be enlarged.
+    # iw/ih reflect FFmpeg autorotation, unlike the stored dimensions from the container probe.
+    scale = f"scale='min(iw,{MAX_IMAGE_EDGE})':'min(ih,{MAX_IMAGE_EDGE})':force_original_aspect_ratio=decrease"
     subprocess.run([ffmpeg, '-nostdin', '-hide_banner', '-loglevel', 'error', '-threads', str(THREADS),
                     *options, '-i', str(source), '-map', '0:v:0', '-an', '-sn', '-dn',
-                    '-vf', f'fps={fps:.8f},scale={MAX_IMAGE_EDGE}:{MAX_IMAGE_EDGE}:force_original_aspect_ratio=decrease',
+                    '-vf', f'fps={fps:.8f},{scale}',
                     '-frames:v', str(budget), '-q:v', '3', str(raw / 'frame_%04d.jpg')],
                    check=True, timeout=max(90, 3 * duration))
     accepted, discarded, duplicates = 0, 0, 0

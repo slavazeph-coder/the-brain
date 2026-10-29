@@ -148,6 +148,8 @@ jobs:
           done
           curl -fsS http://127.0.0.1:4180/healthz >/dev/null
           python tests/world/browser_smoke.py
+          # Native street workspace uses the actual Express asset transport, shadow DOM, edits and exports.
+          python tests/world/street_browser_smoke.py
           # Same-origin IndexedDB file handoff; no upload or external model calls.
           python tests/world/capture_handoff_browser_smoke.py
           # Permission fixtures test cancellation; native canvas MP4 is separate

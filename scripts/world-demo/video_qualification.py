@@ -143,6 +143,7 @@ def assess_quality(reconstruction, ledger, scene_receipt=None, *,
                'ledgerFrames': len(frames) if isinstance(frames, list) else None,
                'reconstructedPoints': points if _positive_int(points) else None,
                'meanReprojectionErrorPixels': _number(error), 'extractedSequence': sequence,
+               'consistencyStatus': consistency.get('status') if isinstance(consistency.get('status'), str) else None,
                'sceneAssessed': scene_receipt is not None}
 
     if scene_receipt is not None:
@@ -175,6 +176,8 @@ def assess_quality(reconstruction, ledger, scene_receipt=None, *,
             'status': 'passes-screening' if passed else 'review-required', 'screeningPassed': passed,
             'physicalAccuracyValidated': False, 'layoutUsableClaim': False,
             'bimValidated': False, 'robotValidated': False,
+            'surfaceCompletenessValidated': False, 'geographicAlignmentValidated': False,
+            'assessmentScope': 'reconstruction-and-scene' if scene_receipt is not None else 'reconstruction-only',
             'scope': 'Heuristic review of reported geometry evidence. File integrity, source binding and physical accuracy require separate checks.',
             'thresholds': {'kind': 'heuristic, not physical accuracy tolerances',
                            'minRegistrationFraction': min_registration_fraction,

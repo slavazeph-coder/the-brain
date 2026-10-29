@@ -1,15 +1,13 @@
 # DEPLOYMENT-ONLY BRANCH: deploy/world-worker-20261027.
-# Do not merge this root configuration into main: main deploys the website.
-# Application code is the tested main release; only this deployment config differs.
-# Acceptance is an explicitly enabled synthetic test, never a physical qualification.
-
+# Keep the website's root configuration on main unchanged.
+# The G1 startup check records installed code and runtime readiness; it never starts physics.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "robotics/world_worker/deploy/railway/Dockerfile"
-watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "railway.toml"]
+watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "robotics/g1_trial/**", "railway.toml"]
 
 [deploy]
-startCommand = "/bin/sh -c 'if [ \"${WORLD_DEPLOY_SMOKE:-0}\" = \"1\" ]; then /opt/worker/bin/python /app/robotics/world_worker/deploy/railway/acceptance.py --confirm-synthetic-deployment-test & fi; exec /app/robotics/world_worker/deploy/railway/start.sh'"
+startCommand = "/bin/sh -c 'cd /app && /opt/worker/bin/python -B -c \"import hashlib,json,os,pathlib; from robotics.g1_trial.runtime import preflight; root=pathlib.Path(\\\"robotics/g1_trial\\\"); print(\\\"G1_DEPLOYMENT_CHECK \\\"+json.dumps({\\\"schema\\\":\\\"brainsnn.g1-deployment.v1\\\",\\\"commit_sha\\\":os.environ.get(\\\"RAILWAY_GIT_COMMIT_SHA\\\"),\\\"modules\\\":{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.glob(\\\"*.py\\\"))},\\\"runtime\\\":preflight(),\\\"simulation_started\\\":False},sort_keys=True),flush=True)\" && { if [ \"${WORLD_DEPLOY_SMOKE:-0}\" = \"1\" ]; then /opt/worker/bin/python /app/robotics/world_worker/deploy/railway/acceptance.py --confirm-synthetic-deployment-test & fi; exec /app/robotics/world_worker/deploy/railway/start.sh; }'"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
