@@ -22,9 +22,10 @@ import sys
 import time
 
 try:
-    from . import cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, sparse_colmap
+    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
+    import building_handoff
     import cad_export
     import component_evidence
     import component_fit
@@ -500,6 +501,13 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     if fit.get('written'):  # the summary travels with the scene, so the site's scene dialog can say it
         scene['fit'] = {key: fit[key] for key in ('within_5cm', 'modelled_median_cm', 'by_kind', 'misfits')}
         (out / 'scene.json').write_text(json.dumps(scene, indent=1, allow_nan=False))
+    # Destination handoffs bind the same final scene bytes as the review reports.
+    # An underlay is a tracing aid, not an ESX project or independent measurement.
+    try:
+        building = building_handoff.write_building_handoff(scene, out, scene_path=out / 'scene.json')
+    except Exception as error:
+        building = {'written': False, 'reason': f'{type(error).__name__}: {str(error)[:200]}'}
+    building_files = building.get('artifacts', []) if building.get('written') else []
     if names:
         shutil.copyfile(names, out / 'object-names.json')
         naming['applied'] = (scene.get('naming') or {}).get('named', 0)
@@ -582,6 +590,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'component_graph': {'written': bool(component_files), 'revision': graph.get('revision') if graph else None},
                 'component_evidence': source_support,
                 'component_fit': component_fitting,
+                'building_handoff': building,
                 'navigation': navigation,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
@@ -602,6 +611,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
+                 *building_files,
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
                  *({'name': name, 'kind': 'evidence'} for name in measurement_files),

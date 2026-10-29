@@ -48,11 +48,17 @@ def test_the_quantities_sheet_totals_every_element(tmp_path):
     assert q['floor_extent_area_m2'] == 12 and q['walls'] == 2 and q['wall_length_m'] == 7 and q['wall_face_area_m2'] == pytest.approx(17.2)
     assert q['objects'] == 2 and q['named_objects'] == 1 and q['unknown_area_m2'] == .5
     assert q['observed_floor_area_m2'] == pytest.approx(11.625, abs=.01), 'the extent less the unknown inside it'
+    assert q['point_covered_footprint_area_m2'] == q['observed_floor_area_m2']
+    assert q['observed_floor_area_m2_is_legacy_alias'] is True
+    assert 'not a measured room or floor area' in q['floor_quantity_scope']
     rows = list(csv.reader((tmp_path / 'quantities.csv').open()))
     assert rows[0][:4] == ['section', 'element', 'ifc_class', 'name'] and q['rows'] == len(rows) - 1
     sofa = next(r for r in rows if r[1] == 'object_1')
     assert sofa[2:8] == ['IfcFurniture', 'sofa', '2.000', '0.900', '0.800', '1.80'] and 'unreviewed' in sofa[8]
     assert any('verified False' in r[8] for r in rows if r[1] == 'scale'), 'the sheet says the scale is not verified'
+    assert next(r for r in rows if r[1] == 'point_covered_footprint')[3] == 'Point-covered footprint estimate'
+    assert next(r for r in rows if r[1] == 'floor_extent')[3] == 'Floor bounding extent'
+    assert 'floor the capture saw' not in (tmp_path / 'quantities.csv').read_text()
 
 
 def test_unplaced_detection_does_not_invent_cad_geometry_or_quantities(tmp_path):
@@ -75,6 +81,7 @@ def test_the_dxf_plan_is_in_metres_with_layers_dimensions_and_the_scale_note(tmp
     assert dims == [3.0, 3.0, 4.0, 4.0], 'each wall and both floor sides'
     texts = [t.dxf.text for t in msp.query('TEXT')]
     assert 'sofa' in texts and '2.00 x 0.90 m' in texts and any('verified False' in t for t in texts)
+    assert any('Floor bounding extent' in t and 'no verified room outline' in t for t in texts)
 
 
 def test_the_rhino_model_holds_named_measured_solids_in_metres(tmp_path):
@@ -91,6 +98,34 @@ def test_the_rhino_model_holds_named_measured_solids_in_metres(tmp_path):
     assert (bb.Min.X + bb.Max.X) / 2 == pytest.approx(2) and (bb.Min.Y + bb.Max.Y) / 2 == pytest.approx(-1.5), 'plan Y is minus the scene z'
     wall = by_name['wall_2'].Geometry.GetBoundingBox()
     assert wall.Max.Y - wall.Min.Y == pytest.approx(3) and wall.Max.X - wall.Min.X == pytest.approx(.1)
+    floor = by_name['Floor bounding extent']
+    assert floor.Attributes.GetUserString('element') == 'floor_observed'
+    assert floor.Attributes.GetUserString('provenance') == 'observed'
+    assert floor.Attributes.GetUserString('GeometryScope') == 'derived-point-cloud-floor-bounding-extent'
+    assert floor.Attributes.GetUserString('RoomBoundaryVerified') == 'false'
+
+
+def test_cad_and_ifc_use_the_same_supported_object_classes_without_retyping_source(tmp_path):
+    from ifc_export import write_ifc
+    data = scene()
+    extra = [('duct', 'IfcDuctSegment'), ('truss', 'IfcBeam'), ('appliance', None), ('explicit_proxy', 'IfcBuildingElementProxy')]
+    for index, (name, assigned) in enumerate(extra):
+        item = {'name': name, 'label': name, 'provenance': 'detected',
+                'centre': [index, FLOOR_Y + 2, 1], 'size': [.5, .5, .5]}
+        if assigned:
+            item['ifcClass'] = assigned
+        data['objects'].append(item)
+    before = copy.deepcopy(data)
+    ce.export(data, tmp_path); write_ifc(tmp_path / 'scene.ifc', data)
+    assert data == before, 'classification fallbacks describe exports and preserve source evidence'
+    text = (tmp_path / 'scene.ifc').read_text()
+    for item in ce.elements(data):
+        if item['kind'] != 'object':
+            continue
+        assert f"{item['ifc'].upper()}('{ce.ifc_guid(item['componentId'])}'" in text
+    for name, _assigned in extra:
+        assert next(i for i in ce.elements(data) if i['name'] == name)['ifc'] == 'IfcBuildingElementProxy'
+    assert next(i for i in ce.elements(data) if i['name'] == 'object_1')['ifc'] == 'IfcFurniture'
 
 
 def test_nothing_is_written_for_an_unscaled_scene_and_a_missing_library_is_named(tmp_path, monkeypatch):

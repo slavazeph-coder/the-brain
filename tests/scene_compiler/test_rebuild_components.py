@@ -64,6 +64,12 @@ def test_rebuild_retains_originals_and_rebinds_all_reports(tmp_path):
     current_hash = hashlib.sha256((out / 'scene.json').read_bytes()).hexdigest()
     for name in ('scene-measurements.json', 'component-graph.json'):
         assert json.loads((out / name).read_text())['sourceFiles']['scene']['sha256'] == current_hash
+    handoff = json.loads((out / 'building-handoff.json').read_text())
+    assert handoff['sourceFiles']['scene']['sha256'] == current_hash
+    assert handoff['componentRevision'] == 1
+    assert receipt['buildingHandoff']['written'] is True
+    assert receipt['artifacts']['xactimate-underlay.png']['sha256'] == hashlib.sha256((out / 'xactimate-underlay.png').read_bytes()).hexdigest()
+    assert handoff['walls'][0]['componentId'] == json.loads((out / 'scene.json').read_text())['walls'][0]['componentId']
     nav = json.loads((out / 'nav2-map.json').read_text())
     assert nav['source']['sceneSha256'] == current_hash
     assert nav['validation']['nav2RuntimeTested'] is False
