@@ -157,8 +157,14 @@ def test_unaligned_or_weak_floor_requires_review(change):
 
 def test_scene_is_optional_but_supplied_malformed_scene_fails_closed():
     rec, ledger, _ = evidence()
-    assert assess_quality(rec, ledger)['screeningPassed'] is True
-    assert assess_quality(rec, ledger)['metrics']['sceneAssessed'] is False
+    result = assess_quality(rec, ledger)
+    assert result['screeningPassed'] is True
+    assert result['metrics']['sceneAssessed'] is False
+    assert result['assessmentScope'] == 'reconstruction-only'
+    assert result['metrics']['consistencyStatus'] == 'consistent'
+    assert result['surfaceCompletenessValidated'] is False
+    assert result['geographicAlignmentValidated'] is False
+    assert not {'floor-evidence', 'wall-support'} & {row['id'] for row in result['checks']}
     assert {'wall-support', 'floor-evidence'} <= failed_ids(assess_quality(rec, ledger, {}))
 
 

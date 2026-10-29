@@ -125,6 +125,8 @@ explain its source binding, private-frame retention and unavailable timestamps. 
 `qualify_video.py` tests a supplied video through real local worker HTTP endpoints. It checks a partial upload,
 retained offset, rejected stale chunk, resumed bytes and source SHA-256. The full mode then runs CPU COLMAP,
 validates its camera ledger, compiles an unscaled GLB in native Blender and verifies every signed download.
+The explicit reconstruction-only mode stops after COLMAP and its source-bound camera/cloud evidence. It is suitable
+for inspecting exterior footage without treating a street as an indoor room, and needs no Blender installation.
 It records the checkout commit/tree, dirty state, tracked diff hash, runner hashes and actual adapter versions.
 No video, extracted frames, credentials or derived artifacts belong in git or ordinary CI.
 
@@ -140,6 +142,11 @@ python3 -m venv /tmp/brainsnn-video-venv
 /tmp/brainsnn-video-venv/bin/python scripts/world-demo/qualify_video.py \
   --video /absolute/path/walkthrough.mp4 --out ../private-upload-001 --upload-only
 
+# Sparse reconstruction and evidence only; no indoor scene or Blender.
+# This does not validate complete surfaces, a whole block, scale or geographic alignment.
+/tmp/brainsnn-video-venv/bin/python scripts/world-demo/qualify_video.py \
+  --video /absolute/path/exterior.mp4 --out ../private-exterior-001 --reconstruction-only
+
 # Full real run. Use a fresh output directory outside the checkout.
 /tmp/brainsnn-video-venv/bin/python scripts/world-demo/qualify_video.py \
   --video /absolute/path/walkthrough.mp4 --out ../private-video-001 \
@@ -148,6 +155,10 @@ python3 -m venv /tmp/brainsnn-video-venv
 # Recheck saved bytes and geometry without another reconstruction or Blender run.
 python3 scripts/world-demo/qualify_video.py \
   --review ../private-video-001 --out ../private-review-001
+
+# Review a reconstruction-only run in its original recorded scope.
+python3 scripts/world-demo/qualify_video.py \
+  --review ../private-exterior-001 --out ../private-exterior-review-001
 ```
 
 Videos must contain a video stream, last 2–300 seconds and fit the 2 GiB worker limit. Optional
@@ -158,17 +169,28 @@ The worker is private, bound to loopback, with random ephemeral credentials, red
 access logs off and model-offline flags. Those flags are not an OS network sandbox. Ctrl-C and SIGTERM request
 cancellation and stop the worker process group. Outputs retain the uploaded video and worker intermediates;
 delete the private run directory when no longer needed. Do not publish the directory wholesale.
+The native COLMAP model remains in `worker/jobs/<reconstruction job>/colmap-work/sparse/`; `selected.txt` identifies
+the selected model directory. This retains all reconstructed points for private diagnostics even when
+`sparse-preview.ply` is capped at 50,000. A retained model contains only what reconstruction recovered; it is not
+a completed surface or independent evidence of physical dimensions.
 
 The runner writes `status.json`, `progress.jsonl`, `summary.json`, `geometry-quality.json`, verified downloads
-and their hash manifests. A review requires both reconstruction and scene manifests, except when the original
-reconstruction is folded and scene generation was skipped. A deleted scene manifest cannot downgrade a full
-review into a reconstruction-only pass. Review verifies saved artifacts and bindings; it does not execute or
+and their hash manifests. New runs also write `qualification-request.json` before execution, preserving the mode
+and admitted source; its exact hash is retained in the run summary. A review requires both reconstruction and
+scene manifests, except when the original reconstruction is folded and scene generation was skipped, or a
+reconstruction-only request is recorded and bound to that same video. A deleted scene manifest or changed summary
+mode cannot downgrade a full review into a reconstruction-only pass. `--review` uses the recorded scope and
+refuses execution-scope flags. These local hashes detect inconsistent retained data; they are not signed
+attestations against someone rewriting the entire history. Review verifies saved artifacts and bindings; it does not execute or
 revalidate the original upload, native projection parity or physical measurements.
 
 `softwareWorkflowPassed` and `geometryQuality.screeningPassed` are separate. Geometry screening defaults to
 at least 90% registered selected frames, one discovered model, an actually checked consistent fold test,
-bounded gaps in the extracted image sequence, at least 20 supporting points per wall primitive and at least
-20% fitted-floor inliers with floor alignment. Missing/malformed evidence requires review. The fraction and
+and bounded gaps in the extracted image sequence. In full mode the scene additionally needs at least 20
+supporting points per wall primitive and at least 20% fitted-floor inliers with floor alignment. The thresholds
+and full-mode acceptance are unchanged by reconstruction-only mode. Its report has
+`assessmentScope: reconstruction-only` and `sceneAssessed: false`; neither wall nor floor screening applies.
+Missing/malformed evidence requires review. The fraction and
 wall-support thresholds can be changed explicitly; all thresholds are heuristics, not measured tolerances.
 Extracted indices are not original video PTS or elapsed-time coverage. Small reprojection error alone cannot
 establish accurate geometry. COLMAP results, selected fragments and fold status can vary across runs; there is
@@ -176,8 +198,16 @@ no golden point count. Repeated runs that alternate between incomplete and folde
 
 Exit codes: **0** requested workflow and screening passed (upload-only leaves geometry unevaluated),
 **2** geometry requires review, **1** execution/integrity failure, **130** interrupted. Folded reconstructions
-are never compiled. Without a measured reference, units remain arbitrary and metric BIM/CAD/USD/Nav2 exports
+are never compiled and still return 2 in reconstruction-only mode. In that mode `softwareWorkflowPassed` may
+be true while geometry screening fails: the requested upload/reconstruction executed, but its geometry is not
+accepted. A successful sparse run has status `complete-reconstruction-only`; the full mode retains
+`complete-unscaled`. Without a measured reference, units remain arbitrary and metric BIM/CAD/USD/Nav2 exports
 and component fitting stay gated. Even an exit-0 full run does not validate physical accuracy or robot safety.
+An exit-0 reconstruction-only run establishes only the stated sparse screening checks. It does not establish
+sufficient parallax, depth observability, whole-block coverage, solid surfaces, geographic coordinates or metric
+scale. In particular, a mostly stationary pan can have many registered views and still be unsuitable for 3D
+reconstruction. Inspect camera baselines and ray angles and preserve failures rather than using map coordinates
+to imply missing geometry was observed. An optional user-supplied location is not a camera trajectory or scale.
 This is a worker test, not physical iPhone picker or public hosted-service qualification. For the independent
 browser journey, see the opt-in `tests/world/worker_video_browser_smoke.py`.
 

@@ -1,4 +1,4 @@
-"""Integrity/review failures and a real HTTP upload-only CLI run; no model weights or Blender."""
+"""Integrity/scope regressions and real HTTP uploads; geometry fixtures are synthetic."""
 import importlib.util
 import json
 from pathlib import Path
@@ -176,6 +176,99 @@ def test_a_deleted_scene_manifest_cannot_downgrade_a_full_review_to_reconstructi
     assert q.review(review_args(run, tmp_path / 'review')) == 1
 
 
+def record_reconstruction_only_scope(root, *, request_mode='reconstruction-only'):
+    """Synthetic run-scope metadata; never evidence of an actual reconstruction."""
+    request_path = root / 'qualification-request.json'
+    source = {'name': 'synthetic.mp4', 'kind': 'video', 'sha256': 'a' * 64, 'bytes': 100}
+    q.save_json(request_path, {'schema': 'brainsnn.video-qualification-request.v1',
+                              'mode': request_mode, 'source': source})
+    q.save_json(root / 'summary.json', {'schema': 'brainsnn.video-qualification.v1',
+                                      'mode': 'reconstruction-only', 'source': source,
+                                      'request': {'name': request_path.name, 'bytes': request_path.stat().st_size,
+                                                  'sha256': q.digest(request_path)}})
+    (root / 'scene-download-verification.json').unlink()
+    shutil.rmtree(root / 'downloads/scene')
+
+
+def test_recorded_reconstruction_only_review_preserves_scope_and_source_without_scene(tmp_path):
+    run = tmp_path / 'retained'
+    retained_run(run)
+    record_reconstruction_only_scope(run)
+    report = tmp_path / 'review'
+    assert q.review(review_args(run, report)) == 0
+    summary = q.read_json(report / 'summary.json')
+    assert summary['originalMode'] == 'reconstruction-only'
+    assert summary['softwareWorkflowExecuted'] is False
+    quality = summary['geometryQuality']
+    assert quality['assessmentScope'] == 'reconstruction-only'
+    assert quality['metrics']['sceneAssessed'] is False
+    assert quality['surfaceCompletenessValidated'] is False
+    assert quality['geographicAlignmentValidated'] is False
+    assert not any(row['id'] in ('floor-evidence', 'wall-support') for row in quality['checks'])
+
+
+@pytest.mark.parametrize('damage', ['missing-summary', 'missing-request', 'corrupt-request',
+                                   'full-request', 'another-source', 'scene-execution'])
+def test_missing_or_changed_scope_evidence_cannot_bypass_a_missing_scene(tmp_path, damage):
+    run = tmp_path / 'retained'
+    retained_run(run)
+    record_reconstruction_only_scope(run, request_mode='full' if damage == 'full-request' else 'reconstruction-only')
+    request_path = run / 'qualification-request.json'
+    if damage == 'missing-summary':
+        (run / 'summary.json').unlink()
+    elif damage == 'missing-request':
+        request_path.unlink()
+    elif damage == 'corrupt-request':
+        request_path.write_bytes(request_path.read_bytes() + b' ')
+    elif damage == 'another-source':
+        request = q.read_json(request_path)
+        request['source']['sha256'] = 'b' * 64
+        q.save_json(request_path, request)
+        summary = q.read_json(run / 'summary.json')
+        summary['request'].update(bytes=request_path.stat().st_size, sha256=q.digest(request_path))
+        q.save_json(run / 'summary.json', summary)
+    elif damage == 'scene-execution':
+        summary = q.read_json(run / 'summary.json')
+        summary['sceneJob'] = 'synthetic-scene-job'
+        q.save_json(run / 'summary.json', summary)
+    assert q.review(review_args(run, tmp_path / 'review')) == 1
+
+
+@pytest.mark.parametrize('change', ['fragmented', 'partial', 'unconfirmed', 'folded'])
+def test_reconstruction_only_review_keeps_existing_geometry_failures(tmp_path, change):
+    run = tmp_path / 'retained'
+    artifacts, receipt, ledger = retained_run(run)
+    if change == 'fragmented':
+        receipt['capture']['models_found'] = 2
+    elif change == 'partial':
+        receipt['capture'].update(images=20, registration_fraction=.5)
+    else:
+        receipt['capture']['consistency'].update(status=change, pairsDisagreeing=1, worstDisagreementDegrees=25)
+    q.save_json(artifacts / 'reconstruction.json', receipt)
+    ledger['reconstruction']['sha256'] = q.digest(artifacts / 'reconstruction.json')
+    q.save_json(artifacts / 'camera-frames.json', ledger)
+    write_manifest(run)
+    record_reconstruction_only_scope(run)
+    report = tmp_path / 'review'
+    assert q.review(review_args(run, report)) == 2
+    summary = q.read_json(report / 'summary.json')
+    assert summary['artifactIntegrityPassed'] is True
+    assert summary['geometryQuality']['screeningPassed'] is False
+    assert summary['geometryQuality']['physicalAccuracyValidated'] is False
+
+
+@pytest.mark.parametrize('flags', [['--upload-only', '--reconstruction-only'],
+                                  ['--review', 'unused', '--reconstruction-only']])
+def test_cli_rejects_conflicting_or_review_scope_override(tmp_path, flags):
+    command = [sys.executable, str(SCRIPTS / 'qualify_video.py'), '--out', str(tmp_path / 'unused')]
+    if '--review' not in flags:
+        command += ['--video', str(tmp_path / 'unused.mp4')]
+    result = subprocess.run(command + flags, cwd=ROOT, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 2
+    assert 'error:' in result.stderr
+    assert not (tmp_path / 'unused').exists()
+
+
 def test_folded_review_preserves_the_geometry_failure_when_scene_was_correctly_skipped(tmp_path):
     run = tmp_path / 'retained'
     artifacts, receipt, ledger = retained_run(run)
@@ -263,3 +356,55 @@ def test_cli_upload_resume_over_real_http_preserves_venv_and_source_bytes(tmp_pa
     assert summary['geometryQuality']['status'] == 'not-evaluated'
     assert summary['physicalAccuracyValidated'] is False
     assert not list((output / 'worker/jobs').glob('*/input.json'))
+
+
+@pytest.mark.skipif(not (shutil.which('ffmpeg') and shutil.which('ffprobe')), reason='FFmpeg required for native HTTP upload test')
+def test_reconstruction_only_http_workflow_never_requires_or_runs_blender(tmp_path, monkeypatch):
+    """Real preflight/worker/upload, synthetic reconstruction receipt; no COLMAP claim."""
+    video = tmp_path / 'synthetic.mp4'
+    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=96x64:rate=10',
+                    '-t', '2.2', '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', str(video)],
+                   check=True, timeout=20)
+    output = tmp_path / 'actual-upload-synthetic-geometry'
+    args = SimpleNamespace(repo=ROOT, video=video, out=output, python=Path(sys.executable).absolute(),
+                           blender=None, expected_head=None, expected_video_sha256=None, timeout=60,
+                           upload_only=False, reconstruction_only=True, min_registration_fraction=.9,
+                           min_wall_support=20)
+
+    def fixture_reconstruction(self):
+        upload = self.upload(self.video, 'video', test_resume=True)
+        q.check_admitted_upload(upload, self.summary['source'])
+        self.summary['upload'] = upload
+        config = q.read_json(self.out / 'adapters.json')
+        assert [item['id'] for item in config] == ['colmap-sparse']
+        receipt = {'reconstructed_points': 100, 'mean_reprojection_error_pixels': .5,
+                   'capture': {'images': 10, 'registered_images': 10, 'registration_fraction': 1.0,
+                               'models_found': 1, 'consistency': {'status': 'consistent', 'pairsChecked': 9,
+                               'pairsSkipped': 0, 'pairsDisagreeing': 0, 'worstDisagreementDegrees': 1,
+                               'thresholdDegrees': 15}}}
+        q.save_json(self.out / 'downloads/reconstruction/camera-frames.json',
+                    {'frames': [{'image': {'name': f'image_{i:04d}.jpg'}} for i in range(10)]})
+        return {'id': 'synthetic-only'}, receipt
+
+    def forbidden_scene(*_):
+        pytest.fail('Reconstruction-only scope must never execute the indoor scene compiler.')
+
+    monkeypatch.setattr(q.Run, 'reconstruct', fixture_reconstruction)
+    monkeypatch.setattr(q.Run, 'compile_scene', forbidden_scene)
+    assert q.Run(args).run() == 0
+    summary = q.read_json(output / 'summary.json')
+    assert summary['status'] == 'complete-reconstruction-only'
+    assert summary['mode'] == 'reconstruction-only'
+    assert summary['runtime']['blenderExecutable'] is None
+    assert summary['softwareWorkflowPassed'] is True
+    assert summary['upload']['sha256'] == q.digest(video)
+    assert summary['upload']['partialResumeChecked'] and summary['upload']['staleOffsetRejected']
+    assert summary['geometryQuality']['metrics']['sceneAssessed'] is False
+    assert summary['physicalAccuracyValidated'] is False
+    assert summary['workerStopped'] and summary['ephemeralTokenPersisted'] is False
+    assert not list((output / 'downloads/scene').iterdir())
+    # The same absent Blender remains a hard failure for the original full mode.
+    args.reconstruction_only = False
+    args.out = tmp_path / 'full-requires-blender'
+    assert q.Run(args).run() == 1
+    assert not args.out.exists()
