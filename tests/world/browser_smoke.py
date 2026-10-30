@@ -85,6 +85,13 @@ def check(browser, mobile=False):
     # A walkthrough video has its own picker that accepts video only: phone galleries list videos for it whatever they
     # make of the mixed photo, video and 3D-file list.
     page.locator('[data-tab=capture]').click()
+    # With a photo open, its 3D preview comes first and the other ways in start folded away; the route bar, which
+    # describes the map, stays out of the way.
+    assert page.locator('#panel h3').first.inner_text()=='Your photo is ready.'
+    assert 'primary' in page.locator('[data-action=depth]').get_attribute('class')
+    assert page.locator('.transport').is_hidden() and page.locator('.metrics').is_hidden()
+    fold=page.locator('details.more-sources');assert fold.get_attribute('open') is None and page.locator('[data-action=video]').is_hidden()
+    fold.locator(':scope > summary').click()
     with view.expect_file_chooser() as chooser:page.locator('[data-action=video]').click()
     assert chooser.value.element.get_attribute('accept')=='video/*' and not chooser.value.is_multiple()
     # A picker that returns nothing (on iPhone, a Photo Library conversion that failed) says so. Checked before a file
