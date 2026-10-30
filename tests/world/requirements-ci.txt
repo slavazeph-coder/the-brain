@@ -1,6 +1,6 @@
 # CPU contracts and real HTTP browsers. No learned model weights are downloaded.
 -r ../../robotics/world_worker/requirements.txt
--r ../../robotics/world_worker/requirements-colmap.txt
+-r ../../robotics/world_worker/requirements-comparison.txt
 -r ../../robotics/world_worker/requirements-observations.txt
 -r ../../robotics/world_worker/requirements-cad.txt
 opencv-python-headless==4.14.0.94  # the LingBot-Map turn check: SIFT matches and an essential matrix

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>BrainSNN reconstruction comparison annotations</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#080f16;color:#edf3f8}*{box-sizing:border-box}body{margin:0 auto;max-width:1480px;padding:24px}h1{font-size:26px;margin:4px 0 10px}h2{font-size:18px;margin:0 0 12px}p{max-width:1000px;line-height:1.55;color:#b9c7d4}a{color:#6ee1e1}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#f3b637}section,.panel{background:#101b26;border:1px solid #2b3b4b;border-radius:10px;padding:18px;margin:16px 0}label{font-size:13px;display:grid;gap:6px;color:#c4d0da}input,select{min-width:0;max-width:100%}input,select,button{font:inherit;color:inherit;background:#07121c;border:1px solid #45576a;border-radius:5px;padding:9px;min-height:40px}button{cursor:pointer}button:hover{border-color:#7edddc}button:disabled{opacity:.45;cursor:default}button.primary{background:#f0b333;color:#111820;border-color:#f0b333;font-weight:650}input:focus,select:focus,button:focus{outline:2px solid #75dcdc;outline-offset:2px}input[type=file]{max-width:100%}.row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.row>label{flex:1;min-width:150px}.grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:18px}.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px}.toolbar select{flex:1;min-width:0}canvas{display:block;max-width:100%;width:100%;height:auto;cursor:crosshair;background:#030608;touch-action:manipulation;border:1px solid #374c5e}small,.small{font-size:12px;color:#a8bac9;line-height:1.5}.hash{font-family:ui-monospace,monospace;font-size:11px;word-break:break-all}.status{padding:12px 14px;border:1px solid #408c8e;border-radius:6px;min-height:44px}.status.error{border-color:#e08477;color:#ffb8ab}ul{padding-left:20px}li{margin:6px 0}.observations{width:100%;border-collapse:collapse;font-size:12px}.observations td,.observations th{padding:8px 5px;border-bottom:1px solid #2b3b4b;text-align:left}.observations button{padding:4px 7px;min-height:30px}.span{padding:14px;border:1px solid #35485b;border-radius:8px;margin:12px 0}.span .row{margin:9px 0}.span label{min-width:115px}.span input{width:100%}.span .remove{font-size:12px;min-height:30px;padding:5px 9px}.footer{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:22px 0}.basis{max-width:350px}.tag{color:#76dddd;font-size:12px}details{margin-top:12px}summary{cursor:pointer}.file-label{display:block}#importFile{margin-top:6px}.empty{color:#9bb0c0;font-size:13px}.hint{color:#e6bd66}#landmarkList{width:100%}@media(max-width:800px){body{padding:14px}.grid{grid-template-columns:1fr}h1{font-size:23px}.row>label{min-width:120px}section,.panel{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">BrainSNN World Builder · reconstruction comparison</div>
+  <h1>Mark the same evidence for every engine.</h1>
+  <p>Choose identifiable endpoints in the prepared frames, then enter independently measured distances. Declare these landmarks and readings before viewing engine results. One span calibrates scale; the others stay withheld from fitting.</p>
+  <p class="small">This worksheet evaluates camera-derived triangulated landmark distances. It does not validate final mesh or BIM dimensions, opening completeness, survey accuracy, free space or physical robot operation. Inputs remain in this browser until you download the JSON.</p>
+</header>
+<div id="status" class="status" role="status" aria-live="polite">Loading the local capture receipt…</div>
+<section>
+  <h2>1. Bound source frames</h2>
+  <div id="captureInfo" class="hash"></div>
+  <div class="grid">
+    <div>
+      <div class="toolbar"><button id="previous" type="button" aria-label="Previous frame">←</button><select id="frameSelect" aria-label="Prepared frame"></select><button id="next" type="button" aria-label="Next frame">→</button></div>
+      <canvas id="frameCanvas" width="640" height="360" aria-label="Click the selected landmark in this prepared frame"></canvas>
+      <p id="frameInfo" class="small"></p>
+      <p class="small">Click records a pixel centre in this exact prepared image. Each landmark needs the same physical feature in at least two frames, with sideways camera motion. Do not mark a reflection, moving object or hidden corner.</p>
+    </div>
+    <div>
+      <h2>2. Landmark observations</h2>
+      <label>Landmark ID to add<input id="newLandmark" placeholder="door_left" maxlength="64" autocomplete="off"></label>
+      <div class="footer"><button id="addLandmark" type="button">Add landmark</button><button id="removeLandmark" type="button">Remove selected</button></div>
+      <label>Selected landmark<select id="landmarkList" size="5" aria-label="Selected landmark"></select></label>
+      <p class="small">Choose a landmark, then click it in each frame. An existing observation cannot be overwritten by another click. Remove its row to correct it.</p>
+      <table class="observations"><thead><tr><th>Frame</th><th>Pixel (x, y)</th><th></th></tr></thead><tbody id="observationRows"></tbody></table>
+      <p id="landmarkSummary" class="small"></p>
+    </div>
+  </div>
+</section>
+<section>
+  <h2>3. Independent distance readings</h2>
+  <div class="row">
+    <label class="basis">Reference basis<select id="referenceBasis"><option value="physical-readings">Self-reported physical readings</option><option value="synthetic-fixture">Synthetic fixture only</option></select></label>
+    <label>Optional floor landmark IDs, comma separated<input id="floorLandmarks" placeholder="floor_a, floor_b, floor_c" autocomplete="off"></label>
+  </div>
+  <p class="small">Floor landmarks fit a plane in the engine's arbitrary coordinate frame. They do not establish independently measured gravity. Reading uncertainty is reported separately and does not widen acceptance thresholds.</p>
+  <details><summary>Apply common reading metadata to every span</summary><div class="row"><label>Method<select id="commonMethod"><option value="laser">Laser</option><option value="tape">Tape</option><option value="synthetic">Synthetic</option></select></label><label>Instrument<input id="commonInstrument" maxlength="160" placeholder="Instrument and reference"></label><label>Measured on<input id="commonDate" type="date"></label><label>Uncertainty, metres<input id="commonUncertainty" type="number" min="0" max="10" step="any" placeholder="Enter stated uncertainty"></label><button id="applyMetadata" type="button">Apply metadata</button></div></details>
+  <div id="spanRows"></div>
+  <button id="addSpan" type="button">Add withheld span</button>
+</section>
+<section>
+  <h2>Save the predeclared worksheet</h2>
+  <p class="small">Download validates the worksheet first: exactly one calibration span, at least one withheld span, distinct endpoint pairs, complete reading metadata, and two or more observations per used landmark. The promotion comparison additionally requires at least seven valid withheld spans. Keep unsuccessful landmarks and captures in the evaluation record.</p>
+  <div class="footer"><button id="validate" type="button">Validate worksheet</button><button id="download" class="primary" type="button">Download annotations.json</button></div>
+  <label class="file-label">Resume from a previously downloaded worksheet<input id="importFile" type="file" accept="application/json,.json"></label>
+  <p class="small hint">Import replaces this browser's current worksheet only after the file passes validation and matches this capture SHA-256. Download changes before leaving the page. Nothing is automatically saved.</p>
+</section>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const idPattern = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const shaPattern = /^[a-f0-9]{64}$/;
+let capture = null, currentIndex = 0, selected = '', landmarks = [], spans = [], loadedImage = null;
+let imageGeneration = 0;
+const canvas = $('frameCanvas'), ctx = canvas.getContext('2d');
+function status(message, error=false) { $('status').textContent=message; $('status').classList.toggle('error',error); }
+function fail(message) { throw new Error(message); }
+function finiteNumber(value, min, max, description) {
+  if (value === '' || value === null || typeof value === 'boolean') fail(description+' is required.');
+  const n=Number(value); if (!Number.isFinite(n)||n<min||n>max) fail(description+' is outside the allowed range.'); return n;
+}
+function node(tag, text, parent, attrs={}) { const el=document.createElement(tag); if(text!==null)el.textContent=text;for(const [k,v]of Object.entries(attrs))el.setAttribute(k,v);if(parent)parent.appendChild(el);return el; }
+function inputField(parent, title, value, onChange, attributes={}) {
+  const label=node('label',title,parent), input=node('input',null,label,attributes);input.value=value;input.addEventListener('input',()=>onChange(input.value));return input;
+}
+function selectField(parent,title,options,value,onChange) {
+  const label=node('label',title,parent), select=node('select',null,label);for(const [v,t]of options)node('option',t,select,{value:v});select.value=value;select.addEventListener('change',()=>onChange(select.value));return select;
+}
+function frameMap() { return new Map(capture.frames.map(frame=>[frame.image,frame])); }
+function draw() {
+  if(!loadedImage)return;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(loadedImage,0,0);
+  const name=capture.frames[currentIndex].image, factor=Math.max(1,canvas.width/900);
+  for(const landmark of landmarks)for(const observation of landmark.observations)if(observation.image===name){
+    const [x,y]=observation.xy, active=landmark.id===selected;ctx.strokeStyle=active?'#ffd26a':'#67efed';ctx.lineWidth=2*factor;ctx.beginPath();ctx.arc(x+.5,y+.5,6*factor,0,Math.PI*2);ctx.stroke();ctx.font=(13*factor)+'px system-ui';ctx.fillStyle='#07121c';const w=ctx.measureText(landmark.id).width;ctx.fillRect(x+9*factor,y-18*factor,w+8*factor,20*factor);ctx.fillStyle=ctx.strokeStyle;ctx.fillText(landmark.id,x+13*factor,y-3*factor);
+  }
+}
+async function loadFrame(index) {
+  currentIndex=Math.max(0,Math.min(capture.frames.length-1,index));$('frameSelect').value=String(currentIndex);$('previous').disabled=currentIndex===0;$('next').disabled=currentIndex===capture.frames.length-1;
+  const frame=capture.frames[currentIndex], generation=++imageGeneration;loadedImage=null;ctx.clearRect(0,0,canvas.width,canvas.height);$('frameInfo').textContent='Verifying '+frame.image+'…';renderObservations();
+  let url=null;
+  try {
+    const response=await fetch('./frames/'+encodeURIComponent(frame.image),{cache:'no-store'});if(!response.ok)fail('Cannot load '+frame.image+'.');const bytes=await response.arrayBuffer();if(bytes.byteLength!==frame.bytes)fail('Raster byte count does not match the capture receipt.');const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');if(digest!==frame.sha256)fail('Raster SHA-256 does not match the capture receipt. Reprepare this capture.');if(generation!==imageGeneration)return;
+    url=URL.createObjectURL(new Blob([bytes],{type:'image/jpeg'}));const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);if(generation!==imageGeneration)return;if(img.naturalWidth!==frame.width||img.naturalHeight!==frame.height){status('Raster dimensions do not match the receipt. Reprepare this capture.',true);return;}loadedImage=img;canvas.width=frame.width;canvas.height=frame.height;draw();$('frameInfo').textContent=frame.image+' · '+frame.width+' × '+frame.height+' · SHA-256 verified · integer-centred prepared pixels';};img.onerror=()=>{URL.revokeObjectURL(url);if(generation===imageGeneration)status('Cannot decode '+frame.image+'.',true);};img.src=url;
+  } catch(error) {if(url)URL.revokeObjectURL(url);if(generation===imageGeneration)status(error.message,true);}
+}
+function renderLandmarks() {
+  const list=$('landmarkList');list.replaceChildren();for(const landmark of landmarks)node('option',landmark.id+' ('+landmark.observations.length+' views)',list,{value:landmark.id});if(!landmarks.some(l=>l.id===selected))selected=landmarks[0]?.id||'';list.value=selected;renderObservations();draw();renderSpans();
+}
+function renderObservations() {
+  const body=$('observationRows');body.replaceChildren();const landmark=landmarks.find(l=>l.id===selected);if(!landmark){const row=node('tr',null,body);node('td','Add and select a landmark first.',row,{colspan:'3'});$('landmarkSummary').textContent='';return;}
+  for(const observation of landmark.observations){const row=node('tr',null,body);node('td',observation.image,row);node('td',observation.xy.map(n=>n.toFixed(2)).join(', '),row);const cell=node('td',null,row),button=node('button','Remove',cell,{type:'button','aria-label':'Remove '+landmark.id+' in '+observation.image});button.onclick=()=>{landmark.observations=landmark.observations.filter(o=>o!==observation);renderLandmarks();};}
+  $('landmarkSummary').textContent=landmark.id+': '+landmark.observations.length+' frame observations. '+(landmark.observations.length<2?'Needs at least two.':'Different viewpoints are still required for triangulation.');
+}
+function blankSpan(index) {return{id:index===0?'calibration':'check_'+index,label:index===0?'Scale calibration':'Withheld check '+index,role:index===0?'calibration':'held-out',landmarks:['',''],distanceMeters:'',uncertaintyMeters:'',method:'laser',instrument:'',measuredOn:''};}
+function renderSpans() {
+  const container=$('spanRows');container.replaceChildren();const pointOptions=[['','Choose endpoint'],...landmarks.map(l=>[l.id,l.id])];
+  for(const span of spans){const box=node('div',null,container,{class:'span'}),first=node('div',null,box,{class:'row'});inputField(first,'ID',span.id,v=>span.id=v,{maxlength:'64'});inputField(first,'Label',span.label,v=>span.label=v,{maxlength:'120'});selectField(first,'Role',[['calibration','Scale calibration'],['held-out','Withheld check']],span.role,v=>span.role=v);const remove=node('button','Remove span',first,{type:'button',class:'remove'});remove.onclick=()=>{spans=spans.filter(s=>s!==span);renderSpans();};
+    const second=node('div',null,box,{class:'row'});selectField(second,'Endpoint A',pointOptions,span.landmarks[0],v=>span.landmarks[0]=v);selectField(second,'Endpoint B',pointOptions,span.landmarks[1],v=>span.landmarks[1]=v);inputField(second,'Distance, metres',span.distanceMeters,v=>span.distanceMeters=v,{type:'number',min:'.001',max:'200',step:'any'});inputField(second,'Uncertainty, metres',span.uncertaintyMeters,v=>span.uncertaintyMeters=v,{type:'number',min:'0',max:'10',step:'any'});
+    const third=node('div',null,box,{class:'row'});selectField(third,'Method',[['laser','Laser'],['tape','Tape'],['synthetic','Synthetic']],span.method,v=>span.method=v);inputField(third,'Instrument / source',span.instrument,v=>span.instrument=v,{maxlength:'160'});inputField(third,'Measured on',span.measuredOn,v=>span.measuredOn=v,{type:'date'});
+  }
+}
+function buildWorksheet() {
+  return {schema:'brainsnn.comparison-annotations.v1',captureSha256:capture.captureSha256,referenceBasis:$('referenceBasis').value,landmarks:structuredClone(landmarks),spans:spans.map(span=>({...span,landmarks:[...span.landmarks],distanceMeters:finiteNumber(span.distanceMeters,.001,200,span.id+' distance'),uncertaintyMeters:finiteNumber(span.uncertaintyMeters,0,10,span.id+' uncertainty')})),...($('floorLandmarks').value.trim()?{floorLandmarks:$('floorLandmarks').value.split(',').map(v=>v.trim())}:{})};
+}
+function validateWorksheet(value) {
+  if(new TextEncoder().encode(JSON.stringify(value)).length>262144)fail('Worksheet is larger than 256 KiB.');
+  if(!value||typeof value!=='object'||Array.isArray(value)||value.schema!=='brainsnn.comparison-annotations.v1'||value.captureSha256!==capture.captureSha256)fail('Worksheet schema or capture SHA-256 does not match this case.');
+  const topAllowed=['schema','captureSha256','referenceBasis','landmarks','spans','floorLandmarks'];if(Object.keys(value).some(k=>!topAllowed.includes(k)))fail('Worksheet contains unsupported fields.');
+  if(!['physical-readings','synthetic-fixture'].includes(value.referenceBasis))fail('Choose a supported reference basis.');
+  if(!Array.isArray(value.landmarks)||value.landmarks.length<2||value.landmarks.length>128)fail('Provide 2 to 128 landmarks.');
+  const ids=new Set(), frames=frameMap();for(const landmark of value.landmarks){if(!landmark||Object.keys(landmark).sort().join(',')!=='id,observations'||!idPattern.test(landmark.id)||ids.has(landmark.id))fail('Landmark IDs must be unique bounded identifiers.');ids.add(landmark.id);if(!Array.isArray(landmark.observations)||landmark.observations.length<2||landmark.observations.length>Math.min(12,capture.frames.length))fail(landmark.id+' needs 2 or more distinct frame observations.');const seen=new Set();for(const o of landmark.observations){if(!o||Object.keys(o).sort().join(',')!=='image,xy'||!frames.has(o.image)||seen.has(o.image))fail(landmark.id+' has an unknown or duplicate frame.');seen.add(o.image);const frame=frames.get(o.image);if(!Array.isArray(o.xy)||o.xy.length!==2||o.xy.some(n=>typeof n!=='number'||!Number.isFinite(n))||o.xy[0]<0||o.xy[1]<0||o.xy[0]>frame.width-1||o.xy[1]>frame.height-1)fail(landmark.id+' contains an out-of-bounds pixel centre.');}}
+  if(!Array.isArray(value.spans)||value.spans.length<2||value.spans.length>64)fail('Provide one calibration and 1 to 63 withheld spans.');
+  let calibrations=0,heldOut=0;const spanIds=new Set(),pairs=new Set();const fields=['id','label','role','landmarks','distanceMeters','uncertaintyMeters','method','instrument','measuredOn'].sort().join(',');for(const span of value.spans){if(!span||Object.keys(span).sort().join(',')!==fields||!idPattern.test(span.id)||spanIds.has(span.id))fail('Span IDs must be unique bounded identifiers.');spanIds.add(span.id);if(typeof span.label!=='string'||!span.label.trim()||span.label.length>120)fail(span.id+' needs a label.');if(span.role==='calibration')calibrations++;else if(span.role==='held-out')heldOut++;else fail(span.id+' has an invalid role.');if(!Array.isArray(span.landmarks)||span.landmarks.length!==2||span.landmarks.some(id=>!ids.has(id))||span.landmarks[0]===span.landmarks[1])fail(span.id+' needs two different known endpoints.');const pair=[...span.landmarks].sort().join('\0');if(pairs.has(pair))fail('An endpoint pair cannot be reused, including calibration as withheld.');pairs.add(pair);if(typeof span.distanceMeters!=='number'||typeof span.uncertaintyMeters!=='number')fail(span.id+' requires numeric distance and uncertainty.');finiteNumber(span.distanceMeters,.001,200,span.id+' distance');finiteNumber(span.uncertaintyMeters,0,10,span.id+' uncertainty');const physical=value.referenceBasis==='physical-readings';if(!(physical?['tape','laser']:['synthetic']).includes(span.method))fail(span.id+' method must match the chosen reference basis.');if(typeof span.instrument!=='string'||!span.instrument.trim()||span.instrument.length>160)fail(span.id+' needs an instrument or synthetic source.');if(typeof span.measuredOn!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(span.measuredOn)||Number.isNaN(Date.parse(span.measuredOn+'T00:00:00Z'))||new Date(span.measuredOn+'T00:00:00Z').toISOString().slice(0,10)!==span.measuredOn)fail(span.id+' needs a valid reading date.');}
+  if(calibrations!==1||heldOut<1)fail('Use exactly one scale calibration and at least one withheld span.');
+  if(value.floorLandmarks!==undefined&&(!Array.isArray(value.floorLandmarks)||value.floorLandmarks.length<3||value.floorLandmarks.length>128||new Set(value.floorLandmarks).size!==value.floorLandmarks.length||value.floorLandmarks.some(id=>!ids.has(id))))fail('Floor plane needs at least 3 distinct known landmark IDs.');
+  return {heldOut,landmarks:value.landmarks.length};
+}
+function attempt(action) {try{action();}catch(error){status(error.message,true);}}
+$('addLandmark').onclick=()=>attempt(()=>{const id=$('newLandmark').value.trim();if(!idPattern.test(id))fail('Use a landmark ID starting with a letter or number, then letters, numbers, underscores or hyphens, up to 64 characters.');if(landmarks.some(l=>l.id===id))fail('That landmark ID already exists.');if(landmarks.length>=128)fail('The worksheet allows at most 128 landmarks.');landmarks.push({id,observations:[]});selected=id;$('newLandmark').value='';renderLandmarks();status('Select '+id+' in at least two different frames.');});
+$('newLandmark').onkeydown=event=>{if(event.key==='Enter')$('addLandmark').click();};
+$('removeLandmark').onclick=()=>attempt(()=>{if(!selected)return;const referenced=spans.some(s=>s.landmarks.includes(selected));if(referenced)fail('Remove this landmark from span endpoints before removing it.');landmarks=landmarks.filter(l=>l.id!==selected);selected='';renderLandmarks();});
+$('landmarkList').onchange=()=>{selected=$('landmarkList').value;renderObservations();draw();};
+$('frameSelect').onchange=()=>loadFrame(Number($('frameSelect').value));$('previous').onclick=()=>loadFrame(currentIndex-1);$('next').onclick=()=>loadFrame(currentIndex+1);
+canvas.onclick=event=>attempt(()=>{if(!loadedImage||!capture)fail('Wait for the bound frame to load.');const landmark=landmarks.find(l=>l.id===selected);if(!landmark)fail('Add and select a landmark first.');const frame=capture.frames[currentIndex];if(landmark.observations.some(o=>o.image===frame.image))fail('An observation already exists for this landmark and frame. Remove its row before correcting it.');if(landmark.observations.length>=12)fail('Use at most 12 frame observations per landmark.');const rect=canvas.getBoundingClientRect(),borderX=canvas.clientLeft,borderY=canvas.clientTop,displayWidth=rect.width-2*borderX,displayHeight=rect.height-2*borderY;const x=(event.clientX-rect.left-borderX)*canvas.width/displayWidth-.5,y=(event.clientY-rect.top-borderY)*canvas.height/displayHeight-.5;if(x<0||y<0||x>frame.width-1||y>frame.height-1)fail('Click inside the image pixel centres.');landmark.observations.push({image:frame.image,xy:[Number(x.toFixed(4)),Number(y.toFixed(4))]});renderLandmarks();status(selected+' recorded in '+frame.image+'.');});
+$('addSpan').onclick=()=>attempt(()=>{if(spans.length>=64)fail('The worksheet allows at most 64 spans.');let index=1;while(spans.some(s=>s.id==='check_'+index))index++;spans.push(blankSpan(index));renderSpans();});
+$('applyMetadata').onclick=()=>{for(const span of spans){span.method=$('commonMethod').value;span.instrument=$('commonInstrument').value;span.measuredOn=$('commonDate').value;span.uncertaintyMeters=$('commonUncertainty').value;}renderSpans();status('Common metadata applied. Check every reading before export.');};
+$('validate').onclick=()=>attempt(()=>{const result=validateWorksheet(buildWorksheet());status('Valid worksheet: '+result.landmarks+' landmarks, one calibration, '+result.heldOut+' withheld spans.'+(result.heldOut<7?' Promotion comparison requires at least seven valid withheld spans.':''));});
+$('download').onclick=()=>attempt(()=>{const worksheet=buildWorksheet(),result=validateWorksheet(worksheet);const blob=new Blob([JSON.stringify(worksheet,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),anchor=node('a',null,document.body,{href:url,download:'annotations.json'});anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);status('Downloaded annotations.json with '+result.heldOut+' withheld spans. This page remains unsaved until you download again.');});
+$('importFile').onchange=async()=>{try{const file=$('importFile').files[0];if(!file)return;if(file.size>262144)fail('Worksheet is larger than 256 KiB.');const value=JSON.parse(await file.text());validateWorksheet(value);landmarks=structuredClone(value.landmarks);spans=structuredClone(value.spans);$('referenceBasis').value=value.referenceBasis;$('floorLandmarks').value=(value.floorLandmarks||[]).join(', ');selected=landmarks[0]?.id||'';renderLandmarks();status('Worksheet restored for this exact capture.');}catch(error){status(error.message,true);}finally{$('importFile').value='';}};
+async function init() {
+  try{if(location.protocol==='file:')fail('Serve this prepared case with python -m http.server 8000 --bind 127.0.0.1 --directory CASE, then open http://127.0.0.1:8000/annotate.html.');const response=await fetch('./capture.json',{cache:'no-store'});if(!response.ok)fail('Cannot read local capture.json.');const value=await response.json();if(value.schema!=='brainsnn.comparison-frames.v1'||!shaPattern.test(value.captureSha256)||!Array.isArray(value.frames)||value.frames.length<3||value.frames.length>60)fail('Invalid capture receipt.');const seen=new Set();for(const frame of value.frames){if(!/^frame_\d{4}\.jpg$/.test(frame.image)||seen.has(frame.image)||!Number.isInteger(frame.width)||!Number.isInteger(frame.height)||frame.width<1||frame.height<1||frame.width*frame.height>24000000||!Number.isInteger(frame.bytes)||frame.bytes<1||frame.bytes>67108864||!shaPattern.test(frame.sha256))fail('Invalid prepared frame record.');seen.add(frame.image);}capture=value;$('captureInfo').textContent=capture.frames.length+' prepared frames · capture SHA-256 '+capture.captureSha256;for(const [i,frame]of capture.frames.entries())node('option',(i+1)+' / '+capture.frames.length+' · '+frame.image,$('frameSelect'),{value:String(i)});spans=Array.from({length:8},(_,i)=>blankSpan(i));renderLandmarks();await loadFrame(0);status('Capture loaded. Add a landmark and mark the same physical feature in multiple frames.');}catch(error){status(error.message,true);for(const button of document.querySelectorAll('button'))button.disabled=true;}
+}
+init();
+</script>
+</body>
+</html>
