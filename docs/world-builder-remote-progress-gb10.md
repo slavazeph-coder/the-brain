@@ -1,9 +1,19 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-29T16:40Z
+Last updated: 2026-10-30T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 171 — 2026-10-30 (GB10: PLY z-flip node regression fixed and green; all 3 suites verified)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10`):** fixed the 2 failing cases in `tests/world/verify_ply_zflip.test.mjs`. Root cause: the Python receipt emits `-0.0` for the z-flip max (0 flipped to -0) and Node's `assert.strictEqual(0, -0)` is strict — `-0 !== 0` under strictEqual. Fixed both assertions to accept either `+0` or `-0` (sign of zero is semantically irrelevant for geometric extents): `assert.ok(v === 0 || Object.is(v, -0))`.
+- **GB10 suites (exact, post-fix):**
+  - `node --test tests/world/verify_ply_zflip.test.mjs` → **4 pass / 0 fail** (was 2 pass / 2 fail)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** in 20.45 s
+- **No force-push, no merge/deploy, no paid fallback.** 4090 branch/experiments untouched; serving Qwen/backup untouched.
+- **Next bounded action:** signed-receipt API/env documentation completion (env-var contract + API surface doc); or cancellation regression hardening. HTTP report-UI browser validation still pending.
 
 ### Run 169 — 2026-10-29 (4090 PLY z-flip smoke PASSED, both formats; no code change)
 
