@@ -46,3 +46,50 @@ User attached four research briefs and requested the next build. Read them from 
 component-evidence.json binds finalrawscene/cloudbytes+pointHash+graphrevision, recomputes original compiler memberships and projects50boundedcomponents intoatmost2 of60frames, samples≤256indices; authored/unknown/unattributedgeometry unsupported. Worker andcontrolledrebuild publishfreshsidecars, neveroldauthority. ActualcrossruntimeBlender/NumPyvariation ~1e-16m/1e-14degrees requiredrecorded1e-10arithmeticallowance, notphysicaltolerance. GenuineFountainCPU11/11photos6044points, nativeprojection1100obs parity2.34e-13pixels (implementationonly); actualBlenderworker5925retainedpoints,3wallproxies2clustersfloorproxy:all6have actualmemberships+2frames, unknownunsupported,2.835s. Separate12renderedlowresoffice registeredonly4/12,132pts,noobjects; namingcorrectlyskipped. No realphone metricaccuracy, semanticrecognition, GPUinference orrobotvalidation. CLIverify_camera_frames.py +component_evidence modulecommands and fullscope in docs/world-camera-evidence.md and docs/world-camera-qualification-2026-10-25.md. Branchcodex/world-camera-evidence-20261025 builds on still-draftPR234head5a26; separate reviewplanned tokeepmilestones isolated.
 
 Final local qualification for this camera slice:523Pythonpassed/95subtests/2realcaptureoptinsskipped,131Nodepassed. GenuineFountain scene worker nativeexit0/2.835s:all3wallproxies,2clustersandfloor haveoriginalmemberships+2frames each; unknownunsupported. Camera verifier checks1100nativeobservations; parity2.34e-13px is implementationagreementonly. Numerical crossruntime geometryallowance isexplicitabs1e-10 with exactsourcehashes; synthetic mismatches1e-7m rejected. RootQA fixedsamebasename detectorcachealiasing, stale-imagecached-use, customoutputdir/relativeledgerpaths, bool/numberraw-binding, distant-outlier toleranceinflation andhugescale0.5mfalseassociation. Originalprivateimages stayunpublished. Layer is isolated oncodex/world-camera-evidence-20261025, dependentonPR234; no merge/deploy yet.
+
+## Same-frame reconstruction comparison, October 25
+
+Owner approved building the COLMAP versus VGGT test. Fresh branch starts from main8e644b7, which already contains the merged #234/#237 component/camera work in7edb269 and the #235 video-length changes. This slice does not change the production engine default.
+
+`robotics.world_worker.reconstruction_comparison` prepares one hashed 3–60-frame image set from local photos or a five-minute video. Photo EXIF/resize transforms and actual decoded video frame indices/PTS/time bases are retained. All arms read the same JPEGs in fresh bounded child processes; timeouts, failures, process RSS, CPU/GPU distinction, dependency versions and cold load/export costs remain visible. Optional annotations are frozen before execution, unavailable spans stay in the denominator, and one calibration span alone sets scale. Scoring triangulates the same annotated pixels through each arm's actual lens/preprocessing convention. This measures camera-derived landmark distances, not dense geometry, IFC/Rhino dimensions, opening completeness, gravity or robot operation.
+
+VGGT uses a clean pinned official source and exact approved `VGGT-1B-Commercial` safetensors hash. Original NC and Omega checkpoints are rejected; no execution-time downloads. Custom BA uses the commercial checkpoint's native tracker on a fixed grid plus PyCOLMAP4.2.1, not the paper's extra tracker/detector recipe. Raw depth preview is explicitly unrefined; refined sparse points are separate. No actual GPU or VGGT inference was available in this session.
+
+Local worksheet in `scripts/world-demo/benchmark/comparison_annotator.html` and run guide `docs/world-reconstruction-comparison.md` make references executable. Narrow candidate screen requires predeclared physical readings, all requested spans (at least7), >=20% lower median error, no worse maximum error, >=2x total speed. Overall promotion remains unapproved until repeated multi-capture results and separate geometry/coverage review. Authored self-test cannot qualify physically. Actual retained Fountain11photo CPU baseline:11/11registered6047points,18.7478s process+0.2137s preparation,764608512-byte process RSS,0.277105px internal reprojection. No phone capture, physical readings or dataset footage publication is implied.
+
+Local qualification:133 new tests passed; combined World/compiler661passed95subtests2realcaptureoptinsskipped. Actual PyCOLMAP authored50point BA reduces observed residual; cachedpoint errors updated before reporting. Parent timeout kills dedicated process group even if the parent exits while a descendant remains. Live logs stay outside fresh VGGT output until process completion. Native Chromium annotation QA passed desktop/mobile with hash checks and exact downloaded JSON. GPU source/checkpoint preparation and actual target-host inference remain pending; no paid inference or new hardware purchased.
+
+## Repeated measured experiment, October 30
+
+Owner requested the next layer after the October 24–30 research brief. Current main
+was 11095d0. PR #239 was closed without merging at the owner's earlier request to
+keep only main open; its closing comment explicitly permits picking it back up
+after integrating main's fold check. The benchmark is now integrated with current
+native-capture, building-export and robot-trial work on a separate review branch.
+No production engine or worker configuration changes.
+
+`reconstruction_qualification` snapshots prepared frames and one calibration plus
+at least seven withheld tape/laser spans before execution. Three different capture
+conditions, three rotated repetitions and three engines produce 9 trials/27 engine
+processes. Original-source hashes detect duplicate captures, code and annotation
+bindings reject stale inputs, an atomic execution journal preserves the complete
+matrix, and budgets/interruption/timeouts remain unavailable evidence. Reports
+recompute actual camera triangulation, retain every span and refuse changed raw
+camera/run artifacts. The current COLMAP consecutive-frame detector is preserved;
+detected folding blocks the candidate screen.
+
+Ready-for-geometry-review requires every trial to satisfy the existing 20% median
+error improvement, no worse maximum and 2x complete processing speed, plus every
+withheld span for both arms within max(5 cm, 2% of reference). Synthetic or incomplete
+designs cannot qualify. Production promotion, BIM surfaces, gravity, survey accuracy
+and physical robot validation remain false. New guide: docs/world-measured-qualification.md.
+
+Local focused qualification: 259 tests passed, including 158 comparison/experiment
+tests and current camera/native-capture/video tests. Actual CPU decoding, SIFT,
+mapping and turn checking executed on an authored room video. Orchestration tests
+use explicitly fake engine transport and authored references. No actual VGGT
+weights/CUDA inference, physical readings, phone accuracy improvement, paid API
+calls or deployment occurred. The runtime has no exposed NVIDIA device. Real
+experiment still needs matched physical readings, approved weights and a qualified
+idle target GPU. Estimated operator effort one day after inputs are ready;
+estimated compute budget up to US$10 excluding labour, not a measured bill.
