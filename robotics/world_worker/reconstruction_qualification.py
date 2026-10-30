@@ -233,6 +233,8 @@ def trial_report(root, plan, cell, recorded):
             raise ValueError('Hardware/runtime identity changed during the experiment.')
         case, _, marked = snapshot_case(root, entry)
         comparison = rc.score_run(case=case, run=directory, annotations=case / 'annotations.json')
+        result['comparison'] = {'name': f'runs/{cell["id"]}/comparison.json',
+                                'sha256': rc.sha(directory / 'comparison.json')}
         for arm in comparison['runs']:
             summary = arm.get('measurementReport', {}).get('summary', {})
             spans = [s for s in arm.get('measurementReport', {}).get('spans', []) if s['role'] == 'held-out']
@@ -244,7 +246,12 @@ def trial_report(root, plan, cell, recorded):
                     if measured.get('status') != 'available' or measured['absoluteErrorMeters'] > max(
                             plan['screen']['absoluteToleranceMetres'], plan['screen']['relativeTolerance'] * span['distanceMeters']):
                         failures.append(span['id'])
-            result['arms'].append({**arm, 'requestedHeldOutCount': sum(s['role'] == 'held-out' for s in marked['spans']),
+            # Full landmarks and span-level diagnostics stay in the bound trial
+            # report. Repeating them for 108 possible engine runs can exceed the
+            # aggregate JSON budget without adding evidence.
+            compact = {k: v for k, v in arm.items() if k != 'measurementReport'}
+            compact['measurementReport'] = {'summary': summary, 'sources': arm.get('measurementReport', {}).get('sources', {})}
+            result['arms'].append({**compact, 'requestedHeldOutCount': sum(s['role'] == 'held-out' for s in marked['spans']),
                                   'availableHeldOutCount': summary.get('validHeldOutCount', 0),
                                   'outsideToleranceOrMissingSpanIds': failures,
                                   'allHeldOutWithinTolerance': bool(spans) and not failures})

@@ -150,6 +150,9 @@ def test_every_requested_trial_is_scored_with_real_triangulation_but_no_inferenc
     assert report['completeExperimentDesign']
     assert all(c['readyForGeometryReview'] and len(c['passedTrials']) == 9 for c in report['candidates'])
     assert all(t['status'] == 'scored' for t in report['trials'])
+    for trial in report['trials']:
+        assert rc.sha(root / trial['comparison']['name']) == trial['comparison']['sha256']
+        assert all('landmarks' not in arm['measurementReport'] for arm in trial['arms'])
     assert not report['productionPromotionApproved'] and not report['surveyAccuracyValidated']
     assert not report['bimSurfacesValidated'] and not report['physicalRobotValidated']
     assert '27' in (root / 'qualification.md').read_text()
