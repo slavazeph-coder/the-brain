@@ -175,3 +175,46 @@ def test_run_publishes_actual_cloud_hashes_and_ledger_with_authored_mapping_stan
     native = model.camera(7).img_from_cam(local)
     assert views[0]['project'](np.array([local]))[0] == pytest.approx(native - .5, abs=1e-10)
     assert not ledger['metric_verified'] and not evidence['physics_ready']
+
+
+@pytest.mark.parametrize('outcome', ['estimated', 'failed'])
+def test_run_records_the_scale_estimate_and_never_fails_the_reconstruction_over_it(tmp_path, monkeypatch, outcome):
+    """The estimate rides along in reconstruction.json; units stay arbitrary and a failed estimate leaves the job intact."""
+    pycolmap = pytest.importorskip('pycolmap')
+    inputs = []
+    for index in range(3):
+        source = tmp_path / f'photo-{index}.png'; textured(source, seed=index)
+        inputs.append({'path': str(source), 'name': source.name, 'kind': 'image'})
+    model = authored_model(tmp_path / 'authored-model', [f'image_{i:04d}.jpg' for i in range(3)], points=30)
+    monkeypatch.setattr(pycolmap, 'extract_features', lambda *args, **kwargs: None)
+    monkeypatch.setattr(pycolmap, 'match_exhaustive', lambda *args, **kwargs: None)
+    monkeypatch.setattr(sc, 'map_frames', lambda *args: ({0: model}, 0, model, [{'seed': 0, 'registered_images': 3, 'models_found': 1}]))
+    session = object()
+    monkeypatch.setattr(sc.metric_scale, 'load_session', lambda path, threads: session)
+    def estimate(reconstruction, images, given):
+        assert reconstruction is model and given is session and images.name == 'images'
+        if outcome == 'failed':
+            raise ValueError('stand-in failure')
+        return {'status': 'estimated', 'metres_per_unit': .4321, 'frames_used': 3, 'model': {'repo': 'stand-in'}}
+    monkeypatch.setattr(sc.metric_scale, 'estimate', estimate)
+    out = tmp_path / 'output'
+    evidence = sc.run({'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(out)}, scale_model=tmp_path / 'scale.onnx')
+    stored = json.loads((out / 'reconstruction.json').read_text())
+    assert stored['scale_estimate'] == evidence['scale_estimate']
+    assert stored['units'] == 'arbitrary' and stored['metric_verified'] is False and stored['model_weights_used'] is True
+    assert 'Verify scale against a measured distance' in stored['review_required']
+    if outcome == 'estimated':
+        assert stored['scale_estimate']['metres_per_unit'] == .4321
+        assert any('1 unit is about 0.432 m. It is not measured' in w for w in stored['warnings'])
+    else:
+        assert stored['scale_estimate']['status'] == 'failed' and 'stand-in failure' in stored['scale_estimate']['reason']
+        assert not any('1 unit is about' in w for w in stored['warnings'])
+
+
+def test_a_wrong_scale_model_file_is_refused_before_any_work(tmp_path):
+    pytest.importorskip('pycolmap')
+    bad = tmp_path / 'scale.onnx'; bad.write_bytes(b'other weights')
+    inputs = [{'path': str(tmp_path / f'p{i}.jpg'), 'name': f'p{i}.jpg', 'kind': 'image'} for i in range(3)]
+    with pytest.raises(RuntimeError, match='not the pinned'):
+        sc.run({'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(tmp_path / 'out')}, scale_model=bad)
+    assert not (tmp_path / 'out').exists() and not (tmp_path / 'colmap-work').exists()

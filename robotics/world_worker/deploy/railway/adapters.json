@@ -15,7 +15,9 @@
       "/opt/worker/bin/python",
       "/app/robotics/world_worker/sparse_colmap.py",
       "--input-manifest",
-      "{input_manifest}"
+      "{input_manifest}",
+      "--scale-model",
+      "/opt/brainsnn-models/moge-2-vitb-normal.onnx"
     ]
   },
   {

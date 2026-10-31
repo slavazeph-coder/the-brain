@@ -105,23 +105,33 @@ function readMeasurement(measurement){
   return {a:a.slice(),b:b.slice(),distance,span};
 }
 
+/** The worker's estimated metric scale (reconstruction.json scale_estimate), or null when there is none to use.
+ *  It comes from a depth model, not a measurement: a proposal at this scale is labelled estimated. */
+export function readScaleEstimate(reconstruction){
+  const e=reconstruction?.scale_estimate;
+  if(!e||e.status!=='estimated'||!Number.isFinite(e.metres_per_unit)||!(e.metres_per_unit>1e-6&&e.metres_per_unit<1e6))return null;
+  return{metresPerUnit:e.metres_per_unit,spreadPercent:Number.isFinite(e.frame_spread_percent)?e.frame_spread_percent:null,
+    frames:Number.isInteger(e.frames_used)?e.frames_used:null,model:String(e.model?.base_model||e.model?.repo||'a depth model').slice(0,80)};
+}
+
 /**
- * Scale comes from `measurement` (two picked points + the real distance between them) when given,
- * otherwise from the assumed height the phone was held at.
+ * Scale comes from `measurement` (two picked points + the real distance between them) when given, else from the
+ * worker's estimated metric scale when the reconstruction has one and `useEstimate` is on, else from the assumed height
+ * the phone was held at.
  * @param {{points:Float32Array|number[][],stride?:number,reconstruction:object,name?:string,cameraHeight?:number,robotHeight?:number,
  *   measurement?:{a:number[],b:number[],distance:number}}} input
  * @returns {{world:object,report:object}}
  */
-export function proposeWorld({points,stride=14,reconstruction,name='Reconstructed space',cameraHeight=PROPOSAL.cameraHeight,robotHeight=PROPOSAL.robotHeight,measurement=null}){
-  const measured=readMeasurement(measurement);
-  if(!measured&&(!Number.isFinite(cameraHeight)||cameraHeight<PROPOSAL.minCameraHeight||cameraHeight>PROPOSAL.maxCameraHeight))throw new Error(`Camera height must be between ${PROPOSAL.minCameraHeight} and ${PROPOSAL.maxCameraHeight} m.`);
+export function proposeWorld({points,stride=14,reconstruction,name='Reconstructed space',cameraHeight=PROPOSAL.cameraHeight,robotHeight=PROPOSAL.robotHeight,measurement=null,useEstimate=true}){
+  const measured=readMeasurement(measurement),estimated=!measured&&useEstimate?readScaleEstimate(reconstruction):null;
+  if(!measured&&!estimated&&(!Number.isFinite(cameraHeight)||cameraHeight<PROPOSAL.minCameraHeight||cameraHeight>PROPOSAL.maxCameraHeight))throw new Error(`Camera height must be between ${PROPOSAL.minCameraHeight} and ${PROPOSAL.maxCameraHeight} m.`);
   if(!Number.isFinite(robotHeight)||robotHeight<.2||robotHeight>3)throw new Error('Robot height must be between 0.2 and 3 m.');
   const cameras=readCameras(reconstruction),cloud=pointsOf(points,stride),{up,agreement}=upAxis(cameras);
   const {floor,camera,support}=floorHeight(cloud.map(p=>dot(p,up)),cameras.map(c=>dot(c.centre,up)));
   const unitHeight=camera-floor;
   if(!(unitHeight>0))throw new Error('Cameras are not above the detected floor. Check that this is a walkthrough.');
-  // Metres per reconstruction unit: from the measured pair, else from the assumed height the phone was held at.
-  const scale=measured?measured.distance/measured.span:cameraHeight/unitHeight,impliedCameraHeight=scale*unitHeight;
+  // Metres per reconstruction unit: from the measured pair, else the depth model's estimate, else the assumed phone height.
+  const scale=measured?measured.distance/measured.span:estimated?estimated.metresPerUnit:cameraHeight/unitHeight,impliedCameraHeight=scale*unitHeight;
   // A measurement that puts the phone below knee height or above a raised arm is a wrong pick or a typo, not a room.
   if(measured&&(impliedCameraHeight<PROPOSAL.minCameraHeight||impliedCameraHeight>PROPOSAL.maxCameraHeight))
     throw new Error(`A ${measured.distance} m measurement between these points puts the phone ${impliedCameraHeight.toFixed(2)} m above the floor while recording. Check the two picked points and the distance.`);
@@ -135,7 +145,7 @@ export function proposeWorld({points,stride=14,reconstruction,name='Reconstructe
   const xs=[...relevant.map(p=>p[0]),...C.map(p=>p[0])].sort((a,b)=>a-b),zs=[...relevant.map(p=>p[2]),...C.map(p=>p[2])].sort((a,b)=>a-b);
   const pad=.5,minX=Math.min(quantile(xs,.01),...C.map(p=>p[0]))-pad,maxX=Math.max(quantile(xs,.99),...C.map(p=>p[0]))+pad;
   const minZ=Math.min(quantile(zs,.01),...C.map(p=>p[2]))-pad,maxZ=Math.max(quantile(zs,.99),...C.map(p=>p[2]))+pad;
-  if(maxX-minX>79||maxZ-minZ>79)throw new Error(`At this scale (phone ${impliedCameraHeight.toFixed(2)} m above the floor) the space spans more than 80 m. Check the ${measured?'measured distance':'camera height'} or capture a smaller area.`);
+  if(maxX-minX>79||maxZ-minZ>79)throw new Error(`At this scale (phone ${impliedCameraHeight.toFixed(2)} m above the floor) the space spans more than 80 m. Check the ${measured?'measured distance':estimated?'estimated scale with a measured distance':'camera height'} or capture a smaller area.`);
 
   // Whole-centimetre cells keep every coordinate a clean decimal; coarser cells only if the map needs fewer boxes.
   const CELLS=[20,25,30,40,50,60,80,100];let cell=PROPOSAL.cell,result=null;
@@ -190,7 +200,9 @@ export function proposeWorld({points,stride=14,reconstruction,name='Reconstructe
   const area=n=>Math.round(n*cell*cell*10)/10;
   const warnings=[
     measured?`Scale from a self-reported ${measured.distance} m measurement between two picked points (1 reconstruction unit ≈ ${scale.toFixed(3)} m; implied phone height ${impliedCameraHeight.toFixed(2)} m). Check a second known distance before trusting clearances.`
+      :estimated?`Scale estimated by a metric-depth model (${estimated.model}${estimated.frames?` on ${estimated.frames} frames`:''}): 1 reconstruction unit ≈ ${scale.toFixed(3)} m, phone ${impliedCameraHeight.toFixed(2)} m above the floor. Not measured: on laser-measured test scenes it read 6–16% high. Measure one distance before trusting clearances.`
       :`Scale estimated from an assumed ${cameraHeight} m camera height (1 reconstruction unit ≈ ${scale.toFixed(3)} m). Confirm with a measured distance.`,
+    ...(estimated&&(impliedCameraHeight<PROPOSAL.minCameraHeight||impliedCameraHeight>PROPOSAL.maxCameraHeight)?[`At the estimated scale the phone was ${impliedCameraHeight.toFixed(2)} m above the floor while recording, which is unusual: the floor or the estimate may be wrong. Measure a distance.`]:[]),
     'Free space is where the camera passed (steps up to 1 m) and where floor points were seen; gaps up to one cell were joined. Unobserved areas are blocked.',
     `Obstacles are point clusters between ${PROPOSAL.obstacleMin} m and ${robotHeight} m above the detected floor. Glass, plain walls and moving people may be missing.`,
     'Proposed from a reconstruction. Not reviewed, not metric-verified, not a safety assessment.',
@@ -198,7 +210,7 @@ export function proposeWorld({points,stride=14,reconstruction,name='Reconstructe
   const world=normalizeWorld({schema:SCHEMA,name:String(name).slice(0,160),width:m(nx),depth:m(nz),provenance:'observed',scaleReviewed:false,mapReviewed:false,start,objects,
     geometrySource:{kind:'reconstruction-proposal',name:String(name).slice(0,160),warnings}});
   const report={schema:'brainsnn.map-proposal.v1',method:'camera-up/floor-histogram/occupancy-grid-v1',alignment:basis.method,cameras:cameras.length,points:cloud.length,upAgreement:Math.round(basis.agreement*1000)/1000,
-    floorSupport:Math.round(support*1000)/1000,scaleSource:measured?'measured-pair':'assumed-camera-height',assumedCameraHeight:measured?null:cameraHeight,
+    floorSupport:Math.round(support*1000)/1000,scaleSource:measured?'measured-pair':estimated?'estimated-metric-depth':'assumed-camera-height',assumedCameraHeight:measured||estimated?null:cameraHeight,scaleEstimate:estimated,
     impliedCameraHeight:Math.round(impliedCameraHeight*1000)/1000,measurement:measured,metresPerUnit:scale,robotHeight,cell,grid:[nx,nz],walkedDistance:Math.round(result.walkedDistance*100)/100,
     area:{free:area(result.counts.free),obstacle:area(result.counts.obstacle),unknown:area(result.counts.unknown)},objects:{obstacles:obstacles.length,unknown:unknown.length},
     // Input coordinates -> map metres: x=dot(p,ex)*scale-offset[0], y=(dot(p,up)-floor)*scale, z=dot(p,ez)*scale-offset[1].

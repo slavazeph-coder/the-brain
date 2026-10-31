@@ -20,11 +20,18 @@ RUN ldconfig && python3.11 -c 'import ssl, sqlite3, ctypes, lzma, bz2'
 
 WORKDIR /app
 COPY robotics/world_worker/requirements.txt robotics/world_worker/requirements-colmap.txt \
-     robotics/world_worker/requirements-cad.txt robotics/world_worker/
-# The worker, COLMAP and the CAD exports on Python 3.12 (their pinned numpy needs it).
+     robotics/world_worker/requirements-dense.txt robotics/world_worker/requirements-cad.txt robotics/world_worker/
+# The worker, COLMAP (with ONNX Runtime for the scale model) and the CAD exports on Python 3.12 (their pinned numpy needs it).
 RUN python3.12 -m venv /opt/worker && /opt/worker/bin/pip install --no-cache-dir \
-      -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-colmap.txt \
+      -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-dense.txt \
       -r robotics/world_worker/requirements-cad.txt usd-core==25.8
+# MoGe-2 ViT-B (MIT) for the estimated metric scale of each reconstruction (about 420 MB): the revision and hash pinned in
+# metric_scale.py MODEL, checked here and again by the adapter before every use. Nothing is downloaded at run time.
+RUN mkdir -p /opt/brainsnn-models && /opt/worker/bin/python -c "import hashlib, urllib.request; \
+path = '/opt/brainsnn-models/moge-2-vitb-normal.onnx'; \
+urllib.request.urlretrieve('https://huggingface.co/Ruicheng/moge-2-vitb-normal-onnx/resolve/2d247a122ada42ce700fe59273cd62e076da1f32/model.onnx', path); \
+digest = hashlib.sha256(open(path, 'rb').read()).hexdigest(); \
+assert digest == 'bbf14e07a30f11e69d36ab861590123f5598ababcbc8946a063eb4a966f35a21', digest"
 # Blender 4.2 as a Python module, which the scene engine runs as its `blender` (about 400 MB).
 RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==4.2.23
 

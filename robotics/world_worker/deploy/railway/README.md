@@ -13,9 +13,13 @@ A second Railway service runs the World Builder worker on CPU next to the site. 
 Railway's private network, holds its credentials, and gives each browser a short session instead. On the World Builder
 page, "Process on BrainSNN" then works with no worker address or token to type.
 
-- **Engines:** `colmap-sparse` (COLMAP reconstruction), `locate-photo` (finds where a photo was taken in one of those
-  reconstructions, for "Send the robot to a photo"; owner sessions only, the site proxy keeps visitors to the first and
-  `scene-usd`) and `scene-usd` (the scene compiler, Blender 4.2 as a Python module). No GPU, no model weights, no API keys.
+- **Engines:** `colmap-sparse` (COLMAP reconstruction, plus an estimated metric scale from MoGe-2 ViT-B), `locate-photo`
+  (finds where a photo was taken in one of those reconstructions, for "Send the robot to a photo"; owner sessions only,
+  the site proxy keeps visitors to the first and `scene-usd`) and `scene-usd` (the scene compiler, Blender 4.2 as a Python
+  module). No GPU and no API keys. One set of model weights: MoGe-2 ViT-B (MIT, about 420 MB), downloaded at image build
+  from a pinned Hugging Face revision and hash-checked there and before every use (`metric_scale.py`); nothing is
+  downloaded at run time. The estimate adds about 30 s and 1.3 GB peak memory to a reconstruction on 2 threads. Its scale
+  is labelled estimated on the site and a measured distance replaces it.
 - **Who can process:**
   - you, with a passcode;
   - any visitor, only if you switch it on, with a daily cap per connection and per day.

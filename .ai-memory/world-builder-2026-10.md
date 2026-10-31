@@ -224,3 +224,45 @@ robot). Our honest version: phone photo localises in a COLMAP scan; tap the floo
   checked by eye on lawn and paving. The furnished room at the assumed 1.35 m scale leaves no start for even the vacuum;
   the garden works. `feed_cut.sh` now takes TITLE/SUBTITLE/FOOTER/NOTE: its default "A real run on brainsnn.com" is
   wrong for local recordings.
+
+## Estimated metric scale (MoGe-2) — 2026-10-31
+
+Branch `claude/metric-scale`. The owner asked to fix the assumed scale using Hugging Face or Omniverse references.
+- **Worker:** `robotics/world_worker/metric_scale.py`, run by `sparse_colmap.py --scale-model <onnx>`. It uses MoGe-2 ViT-B
+  ONNX (`Ruicheng/moge-2-vitb-normal-onnx`, revision and SHA-256 pinned in `MODEL`; the weights are MIT, and the ONNX repo
+  has no licence tag of its own).
+  - On 10 evenly spaced registered frames: the depth shift is solved with COLMAP's focal, then metric depth is divided by
+    COLMAP camera depth at each observed 3D point. The median per frame, then the median across frames, is written to
+    `reconstruction.json` `scale_estimate` (status `estimated`, `unavailable` or `failed`).
+  - A wrong model file is refused before any work. A failed estimate never fails the job. `units` stays arbitrary and
+    `metric_verified` stays false.
+- **Measured** against ETH3D laser ground truth, 12 DSLR photos per scene:
+
+  | Scene | ViT-B | ViT-S | Old 1.35 m guess |
+  |---|---|---|---|
+  | office | +6% | +4% | +198% |
+  | pipes | +9% | +11% | +134% |
+  | terrace | +16% | +32% | −37% |
+
+  - Metric3D ViT-S ONNX was −19% on office, so it was dropped.
+  - The frames agree within 1–3%, which understates the true error.
+  - Garden: ViT-B 0.555 m/unit, ViT-S 0.638. Room: 0.482.
+  - Scripts were in the session scratchpad (`metric/proto.py`, `eth_run.py`); not committed.
+- **Hosted worker:** the Dockerfile installs `requirements-dense.txt` (onnxruntime) and downloads the pinned ONNX at build
+  with a hash assert (about 420 MB). The Railway `adapters.json` passes `--scale-model`. Runtime is about 15–30 s on
+  4 threads.
+- **Site:**
+  - `readScaleEstimate()` reads the estimate; `proposeWorld` scale order is measured pair, then estimate (`useEstimate`),
+    then phone height. `scaleSource: 'estimated-metric-depth'`; the first warning names the model and the ETH3D error.
+  - The Real → sim card shows an amber "Scale estimated · 1 unit ≈ X m" chip and one "Make the robot map →" button. The
+    phone-height field appears only when there is no estimate.
+  - The CLI uses the estimate unless `--camera-height` is passed. The service worker cache is v9.
+  - `openArtifact` proposes the map automatically when the reconstruction has an estimate, did not fold, and the map is
+    empty or the untouched sample (`untouchedSample`; an edited sample is kept, as Codex caught on PR #265). `reconstruction_fixture_adapter.py` gives the
+    hosted-processing smoke a stand-in estimate (1.08/K; model 'transport-fixture').
+- **Not done:** the Omniverse/SimReady reference-size cross-check (`reference_scale.py` uses Claude on a closed list of
+  standard objects). The estimate is not yet shown on `/scan` or in Arena exports.
+- **LinkedIn demo (51 s, 1920×1080 and 4:5):** `record_locate.py` with `SHORT=1` on the garden walkthrough (local
+  worker plus the static site). It shows the estimate 0.555 m/unit, "Make the robot map", photo DSC08100 placed (1,086 of
+  1,122 points agree), and a 4.2 m vacuum route. The video files and the post draft live in the session scratchpad (`li/`),
+  not the repo.

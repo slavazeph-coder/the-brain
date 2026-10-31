@@ -51,7 +51,9 @@
       "--input-manifest",
       "{input_manifest}",
       "--densify-model",
-      "/absolute/path/to/depth-anything-v2-small/onnx/model.onnx"
+      "/absolute/path/to/depth-anything-v2-small/onnx/model.onnx",
+      "--scale-model",
+      "/absolute/path/to/moge-2-vitb-normal-onnx/model.onnx"
     ]
   },
   {
