@@ -21,7 +21,7 @@ Status (October 31, 2026): built on `main` and deployed to brainsnn.com. This br
 | Anthropic key | Rotate the key that was pasted in chat, and set it only in the worker environment. |
 
 Branch: feature/world-builder-flagship (historical, last commit 80fae28 on October 22). Its specification and fixes reached
-`main` through PR #198 and later. The four fixes after that merge (the untouched-sample guard, resilient job polling, the
+`main` through PR #198 and later. The fixes made after that merge (the untouched-sample guard, resilient job polling, the
 MapAnything poses, the Arena floor-estimate guard and the framed install) are on `main` in equivalent form. Build on `main`,
 not on this branch.
 Goal: turn a photo or iPhone walkthrough into an explorable world, then a reviewed robot planning scenario.
