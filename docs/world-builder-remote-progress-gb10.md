@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-30T00:00Z
+Last updated: 2026-10-31T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 177c — 2026-10-31 (GB10: flake root cause found + fixed; suites green; committed 8ceb0b1)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `b593b00` → `8ceb0b1`):**
+  - Root cause: two `monkeypatch.setattr` calls on `app.file_digest` conflicted — the second shadowed the first's closure, causing a race with real rehash IO.
+  - Fix: single two-phase wrapper in one `monkeypatch.setattr`. Phase 1 blocks until cancel signal; Phase 2 delegates to real `file_digest` (raises `TimeoutError` → row gate at `app.py:463` prevents `complete()`). No `app.py` changes.
+  - Isolated: **5/5 pass** (0.35 s each, no flake).
+  - Full suite (fresh): **pytest 33/33 pass** (20.62 s); **node 12/12 pass** (88 ms).
+- 4090: not probed this run (connection refused 3× prior runs; blocker-repeat rule → local task instead).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** (a) item 8 pre-work on GB10 (privacy/retention/access checklist inventory in `docs/world-studio-implementation.md`); (b) re-probe 4090 for PLY z-flip parity lane once reachable.
 
 ### Run 176 — 2026-10-31 (GB10: item 7 closed in implementation doc; committed uncommitted webkit live-UI receipt; suites green)
 
