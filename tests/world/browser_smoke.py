@@ -126,6 +126,11 @@ def check(browser, mobile=False):
     assert page.locator('#tab-world').get_attribute('aria-selected')=='true'
     page.locator('#scale-reviewed').uncheck()
     assert 'REVIEW REQUIRED' in page.locator('#scene-basis').inner_text()
+    # Hero demo: the sample and reviewed states draw the real sample and planner; generated invents nothing and links to the photo flow.
+    assert 'AUTHORED SAMPLE' in page.locator('#hero-demo-badge').inner_text()
+    page.locator('[data-demo=generated]').click();assert page.locator('#hero-demo-canvas').is_hidden() and page.locator('#hero-demo-link').get_attribute('href')=='/scan?goal=play'
+    page.locator('[data-demo=reviewed]').click();assert 'm² reached' in page.locator('#hero-demo-text').inner_text() and page.locator('#hero-demo-canvas').is_visible()
+    page.locator('[data-demo=sample]').click()
     page.locator('#system-search').fill('Lyra');assert page.locator('.system-card').count()==1
     page.locator('#system-search').fill('');local_count=page.locator('.system-card[data-state=local]').count()
     assert local_count>0

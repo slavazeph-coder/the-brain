@@ -1,5 +1,6 @@
 import {SCHEMA,LIMITS,ROBOTS,clone,normalizeWorld,sampleWorld,planningGate,estimate,classifyFile,proofPack,arenaMap,usdScene} from './core.mjs';
 import {createRenderer} from './renderer.mjs';
+import {createHeroDemo} from './hero-demo.mjs';
 import {WorkerClient} from './worker-client.mjs';
 import {automaticReviewArtifact} from './artifact-review.mjs';
 import {SYSTEMS} from './catalog.mjs';
@@ -539,6 +540,8 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(
   if(id.startsWith('object-')){const key=id.slice(7);mutate(w=>{const o=w.objects.find(o=>o.id===selected);if(o)o[key]=['name','kind'].includes(key)?v:Number(v);});}
 });
 $('hero-capture').onclick=()=>{if(sandbox)void sandbox.select('capture');else setTab('capture');$('workspace').scrollIntoView();};$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
+// The hero demo opens the same training floor as the hero link; its reviewed state lands on Simulate, where the route runs.
+createHeroDemo($('hero-demo'),{onOpen:state=>{$('hero-sample').click();if(state==='reviewed'&&world?.provenance==='authored'){if(sandbox)void sandbox.select('map','simulate');else setTab('test');}}});
 $('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopReplay();renderer?.setCursor(Number($('scrub').value)/1000);};$('reset-view').onclick=()=>{if(!$('visual-canvas').hidden)visualViewer?.reset();else renderer?.reset();};$('show-source').onclick=()=>{display='source';renderMedia();};$('show-visual').onclick=()=>{display='visual';renderMedia();};$('depth-start').onclick=()=>void buildDepth();$('detect-start').onclick=()=>void identifyObjects();$('flip-visual').onclick=()=>visualViewer?.flip();$('export').onclick=()=>sandbox?.isStreet()?sandbox.openExport():action('proof');$('fork').onclick=()=>{if(!result){status('Run a planning preview before saving a comparison baseline.',true);return;}baseline={world:clone(world),result:clone(result),assumptions:clone(assumptions)};event('scenario_forked',{distance:result.distance,minutes:estimate(result,assumptions).minutes});status('Baseline saved. Edit an obstacle or robot parameter and run again to compare.');setTab('test');};$('connect').onclick=connect;$('site-connect').onclick=connectSite;$('system-search').oninput=renderSystems;$('systems-more').onclick=()=>{systemsOpen=!systemsOpen;renderSystems();if(!systemsOpen)$('systems').scrollIntoView({block:'start'});};
 // A tap (not a drag) on the 3D view picks a calibration point while picking is on; the viewer keeps handling orbit and zoom.
 {let down=null;const canvas=$('visual-canvas');
