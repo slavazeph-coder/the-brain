@@ -5,6 +5,14 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 173 — 2026-10-30 (GB10: actual HTTP report UI validation PASSED live — last pending gate closed)
+
+- **Bounded task (GB10, branch `hermes/world-builder-gb10`):** ran `tests/world/report_receipt_ui_smoke_live.py` — the real live-server UI smoke: real uvicorn on reserved port, real Ed25519 `init-key`, real upload/job/start over HTTP, cross-origin browser fetch via `WORLD_ALLOWED_ORIGINS`, signed receipt + verify CLI.
+- **Exact outcome:** exit 0; **ALL PASS: 2 browser(s)** — chromium PASS and webkit PASS, zero pageErrors. Live worker on ephemeral port; job `48e25028760ae8796863446b731522c8` complete; signed receipt keyId `33972fdd…a127`; artifacts written to `output/playwright/world/report-receipt/{chromium,webkit}-live-ui-receipt.json` + screenshots, committed with this entry.
+- **This closes the "actual HTTP report UI validation" gate** (previously pending since the TestClient-based run; 94af5c8's ALL PASS claim is now confirmed by a fresh live run).
+- 4090 lane: not probed this run (run 172 recorded it down; no repeated research per blocker-repeat rule — chose the local validation task instead). No force-push, no merge/deploy, no paid fallback; serving Qwen/backup untouched.
+- **Next bounded action:** re-probe 4090 for the reconstruction/GPU lane; if still down, continue full-implementation gates on GB10 (e.g. PLY z-flip 4090 parity re-run once reachable, or the remaining release-gate checklist in `docs/world-studio-implementation.md`).
+
 ### Run 171 — 2026-10-30 (GB10: PLY z-flip node regression fixed and green; all 3 suites verified)
 
 - **Bounded improvement (GB10, branch `hermes/world-builder-gb10`):** fixed the 2 failing cases in `tests/world/verify_ply_zflip.test.mjs`. Root cause: the Python receipt emits `-0.0` for the z-flip max (0 flipped to -0) and Node's `assert.strictEqual(0, -0)` is strict — `-0 !== 0` under strictEqual. Fixed both assertions to accept either `+0` or `-0` (sign of zero is semantically irrelevant for geometric extents): `assert.ok(v === 0 || Object.is(v, -0))`.
