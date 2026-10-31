@@ -1,7 +1,16 @@
 # BrainSNN World Builder — Flagship Product Specification
 
-Status: implementation in progress on the development branch; see [current implementation and validation](world-studio-implementation.md). Experimental features must not be advertised as live.
-Branch: feature/world-builder-flagship
+Status (October 31, 2026): built on `main` and deployed to brainsnn.com. This branch's work shipped in PR #198, and the homepage items below in PR #263. Evidence, and the requirements still open, are in [current implementation and validation](world-studio-implementation.md) under "Full objective still open". Experimental features must not be advertised as live.
+
+| Milestone | State |
+|---|---|
+| 1. Hero, sample world, mobile upload, job status, processing states, failure fallback | Done. The hero carries the headline, "Create a world" and "Explore Arena", and an above-the-fold Sample / Generated / Reviewed demo drawn from the real sample and planner. Uploads and jobs run through an operator's private worker; public hosted processing is still off. |
+| 2. Single photo to 3D | An on-device relative-depth preview is done and labelled visual only. No licensed generative model has run: Lyra 1 waits on GB10 qualification, and Lyra 2 is excluded under its checkpoint terms. |
+| 3. Phone walkthrough to reviewed map, path preview and estimates | Done with a connected worker; verified on the live site on October 22 with the operator's CPU worker. The gym and cleaner field validation is open. |
+| 4. Video-model tags, rescan guidance, scenario comparison, signed report | Frame-bound observations with human review are implemented but not benchmarked. Capture guidance, partial-reconstruction recovery and scenario forks exist. Reports carry a SHA-256 hash, not a signature. |
+| Acceptance | Phone-sized WebKit runs in CI. Physical iPhone Safari and a supervised robot comparison are still open. |
+
+Branch: feature/world-builder-flagship (historical; merged as PR #198)
 Goal: turn a photo or iPhone walkthrough into an explorable world, then a reviewed robot planning scenario.
 
 ## Brand and landing page

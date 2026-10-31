@@ -11,7 +11,7 @@ export function createSandboxUI({setMapTab, getMap, getSourceCount, status, even
   const mapBody = $('map-workspace'), progress = $('capture-progress');
   const tools = {world:'edit', test:'simulate', understand:'evidence', evidence:'export'};
   const tabs = {edit:'world', simulate:'test', evidence:'understand', export:'evidence'};
-  let street = null, pending = null, loading = false, disposed = false, suspended = false, syncing = false;
+  let street = null, pending = null, loading = false, disposed = false, suspended = false, syncing = false, inStreet = false;
   let resumeToken = null;
 
   function route() {
@@ -101,6 +101,7 @@ export function createSandboxUI({setMapTab, getMap, getSourceCount, status, even
   }
   async function activate(token, {writeRoute = true} = {}) {
     street?.setActive(false);
+    if (token.workspace !== 'street') inStreet = false;
     if (token.workspace !== 'map') pauseMap(token.workspace);
     if (token.workspace === 'capture') mapTab(token.tool === 'edit' ? 'capture' : tabs[token.tool]);
     else if (token.workspace === 'map') mapTab(tabs[token.tool]);
@@ -111,7 +112,9 @@ export function createSandboxUI({setMapTab, getMap, getSourceCount, status, even
       const controller = await getStreet();
       if (suspended || !session.isCurrent(token)) return;
       controller.setActive(true);
-      controller.setTool(token.tool);
+      // A tool picked inside the street opens its phone drawer; arriving in the street keeps the scene in view.
+      controller.setTool(token.tool, {reveal: inStreet});
+      inStreet = true;
       const state = controller.getState();
       $('sandbox-scene-state').textContent = `${state.objectCount} objects · edit ${state.editRevision}`;
       status('Street scene ready. Object edits, navigation and exports use this scene.');
