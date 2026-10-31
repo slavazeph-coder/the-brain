@@ -33,9 +33,10 @@ export function createRenderer(canvas, {wheelZoom = true} = {}) {
     for(let z = 0; z <= D; z += Math.max(1, Math.ceil(D / 40))) line([0,0,z],[W,0,z], '#00f5ff16');
     ctx.restore();
     if (result?.route.length) {
-      ctx.beginPath(); result.route.forEach((p,i) => { const v = project(p.x,.025,p.z); i ? ctx.lineTo(...v.slice(0,2)) : ctx.moveTo(...v.slice(0,2)); }); ctx.lineWidth=.65; ctx.strokeStyle='#00f5ff2b'; ctx.stroke();
+      // A route to a chosen goal is a single path, drawn bolder than the dense coverage sweep.
+      ctx.beginPath(); result.route.forEach((p,i) => { const v = project(p.x,.025,p.z); i ? ctx.lineTo(...v.slice(0,2)) : ctx.moveTo(...v.slice(0,2)); }); const toGoal=!!result.goal; ctx.lineWidth=toGoal?1.6:.65; ctx.strokeStyle=toGoal?'#00f5ff55':'#00f5ff2b'; ctx.stroke();
       const end = Math.min(result.route.length, Math.max(1, Math.floor(cursor * (result.route.length - 1)) + 1));
-      ctx.beginPath(); for(let i=0; i<end; i++){ const v=project(result.route[i].x,.03,result.route[i].z); i?ctx.lineTo(v[0],v[1]):ctx.moveTo(v[0],v[1]); } ctx.lineWidth=1.35;ctx.strokeStyle='#00f5ffa6';ctx.stroke();
+      ctx.beginPath(); for(let i=0; i<end; i++){ const v=project(result.route[i].x,.03,result.route[i].z); i?ctx.lineTo(v[0],v[1]):ctx.moveTo(v[0],v[1]); } ctx.lineWidth=toGoal?2.8:1.35;ctx.strokeStyle=toGoal?'#00f5ffe6':'#00f5ffa6';ctx.stroke();
     }
     const objects = [...world.objects].sort((a,b) => project(a.x,0,a.z)[2]-project(b.x,0,b.z)[2]);
     for(const o of objects){
