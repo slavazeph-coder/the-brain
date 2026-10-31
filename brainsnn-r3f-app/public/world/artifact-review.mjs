@@ -3,6 +3,7 @@
 export function automaticReviewArtifact(job){
   const artifacts=Array.isArray(job?.artifacts)?job.artifacts:[];
   const find=(type,predicate)=>{const index=artifacts.findIndex(predicate);return index<0?null:{type,index};};
+  if(job?.engine==='locate-photo')return find('localization',a=>a.name==='localization.json'&&a.kind==='evidence');
   if(job?.engine==='scene-usd'){
     const scene=find('scene',a=>a.kind==='visual'&&a.name==='scene.glb');
     if(scene)return scene;

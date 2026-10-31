@@ -18,3 +18,8 @@ test('observation results retain review priority over evidence and unsupported p
   assert.deepEqual(automaticReviewArtifact({engine:'mesh',artifacts:[visual('model.glb')]}),{type:'scene',index:0});
   assert.equal(automaticReviewArtifact(null),null);
 });
+test('a photo localisation opens its result, and only from the locate-photo engine',()=>{
+  assert.deepEqual(automaticReviewArtifact({engine:'locate-photo',artifacts:[evidence('localization.json')]}),{type:'localization',index:0});
+  assert.equal(automaticReviewArtifact({engine:'locate-photo',artifacts:[]}),null);
+  assert.equal(automaticReviewArtifact({engine:'colmap-sparse',artifacts:[evidence('localization.json')]}),null);
+});
