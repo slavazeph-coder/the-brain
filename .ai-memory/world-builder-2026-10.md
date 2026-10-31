@@ -257,6 +257,9 @@ Branch `claude/metric-scale`. The owner asked to fix the assumed scale using Hug
   - The Real → sim card shows an amber "Scale estimated · 1 unit ≈ X m" chip and one "Make the robot map →" button. The
     phone-height field appears only when there is no estimate.
   - The CLI uses the estimate unless `--camera-height` is passed. The service worker cache is v9.
+  - `openArtifact` proposes the map automatically when the reconstruction has an estimate, did not fold, and the map is
+    the sample or empty (adding a capture clears the untouched sample). `reconstruction_fixture_adapter.py` gives the
+    hosted-processing smoke a stand-in estimate (1.08/K; model 'transport-fixture').
 - **Not done:** the Omniverse/SimReady reference-size cross-check (`reference_scale.py` uses Claude on a closed list of
   standard objects). The estimate is not yet shown on `/scan` or in Arena exports.
 - **LinkedIn demo (51 s, 1920×1080 and 4:5):** `record_locate.py` with `SHORT=1` on the garden walkthrough (local
