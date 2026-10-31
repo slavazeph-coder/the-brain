@@ -10,7 +10,20 @@ Status (October 31, 2026): built on `main` and deployed to brainsnn.com. This br
 | 4. Video-model tags, rescan guidance, scenario comparison, signed report | Frame-bound observations with human review are implemented but not benchmarked. Capture guidance, partial-reconstruction recovery and scenario forks exist. Reports carry a SHA-256 hash, not a signature. |
 | Acceptance | Phone-sized WebKit runs in CI. Physical iPhone Safari and a supervised robot comparison are still open. |
 
-Branch: feature/world-builder-flagship (historical; merged as PR #198)
+**Still open, and each needs the owner** (nothing more can be built for these from the repository):
+
+| Item | What unblocks it |
+|---|---|
+| Lyra generative 3D | GB10 time for Lyra 1 qualification, and a check of the individual checkpoint licences before any commercial use. |
+| GPU worker | Update the repository's GPU Remote Validation SSH port variable and host key to the current machine; the last run recorded no markers. |
+| Physical iPhone Safari | One walkthrough on a real iPhone through `/scan`. CI covers phone-sized WebKit only. |
+| Free visitor processing | Set `WORLD_SITE_VISITORS=1` on the site service. Until then only passcode sessions process. |
+| Anthropic key | Rotate the key that was pasted in chat, and set it only in the worker environment. |
+
+Branch: feature/world-builder-flagship (historical, last commit 80fae28 on October 22). Its specification and fixes reached
+`main` through PR #198 and later. The four fixes after that merge (the untouched-sample guard, resilient job polling, the
+MapAnything poses, the Arena floor-estimate guard and the framed install) are on `main` in equivalent form. Build on `main`,
+not on this branch.
 Goal: turn a photo or iPhone walkthrough into an explorable world, then a reviewed robot planning scenario.
 
 ## Brand and landing page
