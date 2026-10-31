@@ -1,0 +1,13 @@
+{
+  "browser": "webkit",
+  "server": "http://127.0.0.1:36859",
+  "status": "ALL PASS",
+  "job": "job complete: 48e25028760ae8796863446b731522c8",
+  "receipt": "receipt OK: keyId=33972fdd1f3d9ed543053e6aa7d83abba12c7b96046ecb05803822917e3c5f78",
+  "verify": "verify OK",
+  "pageErrors": [],
+  "liveHttp": true,
+  "realEd25519": true,
+  "realPrivateWorker": true,
+  "failed": false
+}

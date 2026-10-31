@@ -5,6 +5,16 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 176 — 2026-10-31 (GB10: item 7 closed in implementation doc; committed uncommitted webkit live-UI receipt; suites green)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10`):** closed the stale release-checklist item 7 in `docs/world-studio-implementation.md` — "authenticated report signatures and scenario evidence linkage" is implemented and live-validated; marked it with the exact evidence (job `48e25028760ae8796863446b731522c8`, `keyId=33972fdd…c5f78`, verify exit 0, zero pageErrors, both engines). Also staged + committed `output/playwright/world/report-receipt/webkit-live-ui-receipt.json`, which run 173 produced but left uncommitted.
+- **Exact verification this run (fresh, pre-edit):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (123 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → first full pass **1 flaky** (`test_owner_cancellation_aborts_job_source_rehash_and_never_completes`), re-run full suite → **33 passed** in 20.81 s; isolated re-run of the flaky test **1 passed** in 0.36 s. Flagged as a timing-sensitive cancellation test; no code change made this run.
+- 4090: not probed this run (run 174/175 recorded `Connection refused` ssh2.vast.ai:23990; blocker-repeat rule → local task instead).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched; 4090 branch untouched.
+- **Next bounded action:** (a) harden the flaky `test_owner_cancellation_aborts_job_source_rehash_and_never_completes` timing (deterministic signal delivery instead of racing rehash IO), and/or (b) item 8 pre-work on GB10 (privacy/retention/access checklist inventory); re-probe 4090 for PLY z-flip parity lane once reachable.
+
 ### Run 173 — 2026-10-30 (GB10: actual HTTP report UI validation PASSED live — last pending gate closed)
 
 - **Bounded task (GB10, branch `hermes/world-builder-gb10`):** ran `tests/world/report_receipt_ui_smoke_live.py` — the real live-server UI smoke: real uvicorn on reserved port, real Ed25519 `init-key`, real upload/job/start over HTTP, cross-origin browser fetch via `WORLD_ALLOWED_ORIGINS`, signed receipt + verify CLI.
