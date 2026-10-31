@@ -42,7 +42,7 @@ def ready(url, process):
     raise RuntimeError('Local test server did not start: ' + url)
 
 
-def check(pw, name, site, passcode, video):
+def check(pw, name, site, passcode, video, edit_first=False):
     executable = os.environ.get('PLAYWRIGHT_CHROMIUM_PATH') if name == 'chromium' else None
     browser = getattr(pw, name).launch(headless=True, **({'executable_path': executable} if executable else {}))
     try:
@@ -50,6 +50,8 @@ def check(pw, name, site, passcode, video):
         errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(site + '/world/index.html', wait_until='domcontentloaded')
         page.wait_for_function("document.querySelectorAll('.system-card').length>0")
+        if edit_first:  # an edited sample is the person's work: a scan must never replace it unasked
+            page.locator('#map-name').fill('My edited floor'); page.locator('#map-name').press('Tab')
         page.locator('#files').set_input_files(str(video))
         page.wait_for_function("document.querySelectorAll('.source-row').length===1")
         open_options = "document.querySelector('.processing-options').open=true"
@@ -69,6 +71,12 @@ def check(pw, name, site, passcode, video):
         assert page.locator('#engine').input_value() == 'colmap-sparse', 'the CPU reconstruction is preselected'
         page.locator('#consent').check()
         page.locator('[data-action=process]').click()
+        if edit_first:
+            page.wait_for_function("document.querySelector('#status').textContent.startsWith('Reconstruction loaded with an estimated scale')", timeout=120000)
+            page.locator('[data-tab=world]').click()
+            assert page.locator('#map-name').input_value() == 'My edited floor', 'the edited map is kept'
+            assert not errors, errors
+            return
         # The worker's scale estimate comes with the reconstruction, so the robot map is proposed straight away, unreviewed.
         page.wait_for_function("document.querySelector('#status').textContent.startsWith('Map proposed from')", timeout=120000)
         proposed = page.locator('#status').inner_text()
@@ -124,7 +132,9 @@ def main():
             with sync_playwright() as pw:
                 for name in os.environ.get('WORLD_BROWSERS', 'chromium,webkit').split(','):
                     check(pw, name.strip(), site, passcode, video)
-                    print(f'{name.strip()}: Process on BrainSNN -> passcode -> site proxy -> worker -> cloud loaded', flush=True)
+                    print(f'{name.strip()}: Process on BrainSNN -> passcode -> site proxy -> worker -> cloud loaded -> map proposed', flush=True)
+                    check(pw, name.strip(), site, passcode, video, edit_first=True)
+                    print(f'{name.strip()}: an edited sample map is kept when the scan arrives', flush=True)
             # Setup succeeds, but this transport fixture cannot qualify reconstruction geometry.
             setup = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site],
                                    env={**os.environ, 'BRAINSNN_PASSCODE': passcode}, capture_output=True, text=True, timeout=60)

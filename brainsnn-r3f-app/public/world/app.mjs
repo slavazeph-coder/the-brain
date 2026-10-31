@@ -449,9 +449,9 @@ async function openArtifact(index){
     const est=readScaleEstimate(source.reconstruction);
     status(folded?'This reconstruction contradicts its own frames: the room is likely folded onto itself. Do not use its layout or dimensions; recapture the room.':(est?`Reconstruction loaded with an estimated scale (1 unit ≈ ${est.metresPerUnit.toFixed(3)} m, not measured). Next: Make the robot map.`:'Reconstruction loaded. Compare with the source; independently review scale and obstacles before planning.')+(sourceJob.artifacts.some(a=>/\.glb$/i.test(a.name))?' Its simulation scene is under Evidence.':''),folded);
     // Real to sim straight away: with an estimated scale nothing more is needed to propose the robot map, so it is proposed
-    // now, unless that would replace a map the person made or imported (adding a capture clears the untouched sample, so
-    // there may be no map at all). It stays unreviewed and blocked until they check it.
-    if(est&&!folded&&(!world||world.provenance==='authored')&&activeSource===source)await action('propose-map');
+    // now, unless that would replace a map the person made, edited or imported: only an empty map or the untouched sample
+    // (adding a capture clears it) is replaced. It stays unreviewed and blocked until they check it.
+    if(est&&!folded&&(!world||untouchedSample(world))&&activeSource===source)await action('propose-map');
   }catch(e){if(!controller.signal.aborted)status('Artifact preview failed: '+e.message,true);}
   finally{if(artifactAbort===controller)artifactAbort=null;}
 }
