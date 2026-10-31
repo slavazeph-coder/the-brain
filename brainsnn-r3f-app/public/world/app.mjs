@@ -315,10 +315,14 @@ async function locatePhoto(file){
   await runJob('locate-photo',[{file,kind:'image',name:file.name}],{source_job:mapProposal.job});
 }
 async function openLocalization(index){
-  const sourceJob=job;
+  const sourceJob=job,request=located;
   try{
-    const data=JSON.parse(new TextDecoder().decode(await client.previewArtifact(sourceJob,index)));const photo=readLocalization(data);
-    located={...(located||{}),photo,tap:null,goal:null,camera:null};
+    const data=JSON.parse(new TextDecoder().decode(await client.previewArtifact(sourceJob,index)));
+    // Choosing another photo, or another map, replaces `located` while this result downloads: the result belongs to the
+    // photo that asked for it, so a late one is dropped rather than placing the newer photo with the older one's camera.
+    if(!request||located!==request)return;
+    const photo=readLocalization(data);
+    located={...request,photo,tap:null,goal:null,camera:null};
     if(photo.located&&mapProposal?.transform&&data.source_job===mapProposal.job){
       located.camera=photoOnMap(photo,mapProposal.transform);renderer?.setMarks({camera:located.camera});
       located.note=`Placed in the scan: ${photo.inliers} of ${photo.correspondences} matched points agree, ${photo.reprojection} px apart. Tap a spot on the floor in the photo to send the robot there.`;
