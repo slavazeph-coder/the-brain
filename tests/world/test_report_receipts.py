@@ -333,31 +333,48 @@ def test_owner_cancellation_aborts_job_source_rehash_and_never_completes(signed_
     # Unverified cancellation path: hash_cancellations (app.py cancel_job -> set)
     # must abort the job's own source re-hash loop in execute(). Prove the loop
     # stops, the job is cancelled, and no completion record or receipt is signed.
+    # Single two-phase wrapper (not two monkeypatch.setattr calls, which conflict):
+    #   Phase 1 — block until release.set() so cancel_job can set hash_cancellations.
+    #   Phase 2 — call the real file_digest, which observes cancelled.is_set()
+    #              and raises TimeoutError; execute() catches it, checks the row
+    #              state (app.py:463) is 'cancelled', and returns without completing.
     options, _, _, _ = signed_options
-    with TestClient(create_app(**options)) as client:
-        entered, release = threading.Event(), threading.Event()
-        def slow_job_hash(*args, **kwargs):
-            entered.set(); assert release.wait(5)
+    release = threading.Event()
+    release_entered, real_entered, real_done = (threading.Event() for _ in range(3))
+    def two_phase_wrapper(*args, **kwargs):
+        if not release_entered.is_set():
+            release_entered.set()          # Phase 1: block until cancel
+            assert release.wait(5), 'never released after cancel'
+        # Phase 2: call the real digest. If cancelled.is_set() (set by
+        # cancel_job), the real file_digest raises TimeoutError, which
+        # execute() catches; the row-state gate (app.py:463) then prevents
+        # complete(). If not cancelled, it returns a hash dict normally.
+        real_entered.set()
+        try:
             return file_digest(*args, **kwargs)
-        monkeypatch.setattr('robotics.world_worker.app.file_digest', slow_job_hash)
+        finally:
+            real_done.set()
+    monkeypatch.setattr('robotics.world_worker.app.file_digest', two_phase_wrapper)
+    with TestClient(create_app(**options)) as client:
         uid = upload(client, A)
         jid = prepare(client, A, uid).json()['id']
         client.post(f'/v1/jobs/{jid}/start', headers=headers(A), json={})
-        assert entered.wait(5), 'execute never entered the source re-hash loop'
-        # Owner cancels while the re-hash thread is blocked. cancel_job sets the
-        # hash_cancellations event; the loop must observe it and stop.
+        assert release_entered.wait(5), 'execute never entered the source re-hash loop'
+        # Owner cancels while the re-hash thread is blocked in Phase 1.
+        # cancel_job sets the row state to 'cancelled' and hash_cancellations.
         response = client.delete('/v1/jobs/' + jid, headers=headers(A))
         assert response.status_code == 200 and response.json()['status'] == 'cancelled'
         release.set()
-        # The blocked thread unblocks, calls real file_digest, which sees
-        # cancelled.is_set() and raises TimeoutError. execute() catches it,
-        # sees status != 'cancelled' is False, and returns without completing.
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             if client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled':
                 break
             time.sleep(0.05)
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled'
+        # The real file_digest was reached after release (Phase 2 ran) and the
+        # job stayed cancelled — the row gate (app.py:463) prevented complete().
+        assert real_entered.is_set() or not release_entered.is_set(), \
+            'wrapper did not reach the real digest'
         # No completion record: the re-hash never finished, so complete() was
         # never called. Deleting artifacts is allowed only for non-complete jobs.
         assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
