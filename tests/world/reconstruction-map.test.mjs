@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {proposeWorld,readCameras,toMap,PROPOSAL} from '../../brainsnn-r3f-app/public/world/reconstruction-map.mjs';
+import {proposeWorld,readCameras,readScaleEstimate,toMap,PROPOSAL} from '../../brainsnn-r3f-app/public/world/reconstruction-map.mjs';
 import {planWorld,planningGate,ROBOTS,LIMITS} from '../../brainsnn-r3f-app/public/world/core.mjs';
 import {K,toColmap,room} from './fixtures/synthetic-room.mjs';
 
@@ -109,4 +109,33 @@ test('MapAnything camera-to-world poses propose the same map as the equivalent C
   assert.ok(Math.abs(b.report.metresPerUnit-a.report.metresPerUnit)<1e-9);
   assert.deepEqual(b.world.objects,a.world.objects);assert.deepEqual(b.world.start,a.world.start);
   assert.deepEqual(readCameras(mapanything).map(c=>c.name).slice(0,2),['view_0000','view_0001']);
+});
+
+test('the worker\'s estimated scale is used by default, labelled estimated, and a measurement replaces it',()=>{
+  const r=room(),truth=1/K,estimate={status:'estimated',metres_per_unit:truth*1.08,frame_spread_percent:1.4,frames_used:10,
+    model:{repo:'Ruicheng/moge-2-vitb-normal-onnx',base_model:'Ruicheng/moge-2-vitb-normal'}};
+  const reconstruction={...r.reconstruction,scale_estimate:estimate};
+  // A phone height that would give a very different scale is ignored while an estimate exists.
+  const {world,report}=proposeWorld({points:r.points,reconstruction,cameraHeight:.5});
+  assert.equal(report.scaleSource,'estimated-metric-depth');assert.equal(report.assumedCameraHeight,null);
+  assert.equal(report.metresPerUnit,estimate.metres_per_unit);
+  assert.deepEqual(report.scaleEstimate,{metresPerUnit:estimate.metres_per_unit,spreadPercent:1.4,frames:10,model:'Ruicheng/moge-2-vitb-normal'});
+  assert.ok(Math.abs(report.impliedCameraHeight-1.35*1.08)<.1,`implied ${report.impliedCameraHeight}`);
+  assert.equal(world.scaleReviewed,false);assert.equal(report.scaleVerified,false);
+  assert.match(world.geometrySource.warnings[0],/estimated by a metric-depth model \(Ruicheng\/moge-2-vitb-normal on 10 frames\).*Not measured/);
+  // The phone height can still be chosen on purpose, and a measured pair always wins.
+  assert.equal(proposeWorld({points:r.points,reconstruction,useEstimate:false}).report.scaleSource,'assumed-camera-height');
+  const a=toColmap([2,1,6]),b=toColmap([2.9,1,6]),measured=proposeWorld({points:r.points,reconstruction,measurement:{a,b,distance:.9}}).report;
+  assert.equal(measured.scaleSource,'measured-pair');assert.ok(Math.abs(measured.metresPerUnit-truth)<1e-9);assert.equal(measured.scaleEstimate,null);
+  // An estimate that puts the phone at an implausible height is still a proposal, with a warning to measure.
+  const odd=proposeWorld({points:r.points,reconstruction:{...r.reconstruction,scale_estimate:{...estimate,metres_per_unit:truth*.15}}}).report;
+  assert.ok(odd.warnings.some(w=>/which is unusual/.test(w)));
+});
+
+test('only a usable scale estimate is read',()=>{
+  const ok={status:'estimated',metres_per_unit:.3,frames_used:8,model:{repo:'r'}};
+  assert.equal(readScaleEstimate({scale_estimate:ok}).model,'r');
+  for(const bad of [undefined,{...ok,status:'unavailable'},{...ok,status:'failed'},{...ok,metres_per_unit:0},{...ok,metres_per_unit:-1},{...ok,metres_per_unit:NaN},{...ok,metres_per_unit:'0.3'}])
+    assert.equal(readScaleEstimate({scale_estimate:bad}),null);
+  assert.equal(readScaleEstimate(null),null);
 });
