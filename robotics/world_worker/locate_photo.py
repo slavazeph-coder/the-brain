@@ -24,6 +24,11 @@ MAX_ERROR_PIXELS = 8.0  # RANSAC inlier threshold at the prepared 1280-px size
 # walkthrough never filmed, or a different place.
 MIN_INLIERS = 30
 MIN_INLIER_RATIO = 0.2
+# Every frame is ranked with a sample of the photo's features, and only the frames sharing the most are matched in full:
+# a garden photo has about 6,500 features (two orientations per keypoint), and matching all of them against 62 frames
+# took 55 s on CPU.
+RETRIEVAL_SAMPLE = 1024
+TOP_FRAMES = 12
 RECONSTRUCTION_ENGINES = {'colmap-sparse', 'colmap-dense-cpu'}
 
 
@@ -45,13 +50,14 @@ def match(query, frame):
     if len(query) < 2 or len(frame) < 2:
         return np.zeros((0, 2), dtype=int)
     similarity = query @ frame.T  # unit SIFT descriptors: distance is sqrt(2 - 2 * similarity)
-    top = np.argpartition(-similarity, 1, axis=1)[:, :2]
     rows = np.arange(len(query))
-    a, b = similarity[rows, top[:, 0]], similarity[rows, top[:, 1]]
-    best = np.where(a >= b, top[:, 0], top[:, 1])
+    back = np.argmax(similarity, axis=0)  # each frame feature's nearest photo feature, for the mutual check
+    best = np.argmax(similarity, axis=1)
+    a = similarity[rows, best]
+    similarity[rows, best] = -2  # the second nearest is the largest that remains
+    b = similarity.max(axis=1)
     distance = lambda s: np.sqrt(np.maximum(2 - 2 * s, 0))
-    keep = distance(np.maximum(a, b)) < RATIO * distance(np.minimum(a, b))
-    keep &= np.argmax(similarity, axis=0)[best] == rows
+    keep = (distance(a) < RATIO * distance(b)) & (back[best] == rows)
     return np.stack([rows[keep], best[keep]], axis=1)
 
 
@@ -120,7 +126,9 @@ def locate(workspace: Path, photo: Path, scratch: Path) -> dict:
     by_point, frames = {}, []
     database = pycolmap.Database.open(str(workspace / 'database.db'))
     try:
-        for image_id in sorted(model.reg_image_ids()):
+        sample = query[np.linspace(0, len(query) - 1, min(len(query), RETRIEVAL_SAMPLE)).astype(int)]
+        shared = {image_id: len(match(sample, unit_rows(database.read_descriptors(image_id)))) for image_id in model.reg_image_ids()}
+        for image_id in sorted(shared, key=lambda i: (-shared[i], i))[:TOP_FRAMES]:
             image = model.image(image_id)
             pairs = match(query, unit_rows(database.read_descriptors(image_id)))
             observed = image.points2D
@@ -143,9 +151,10 @@ def locate(workspace: Path, photo: Path, scratch: Path) -> dict:
               'units': 'reconstruction units: metric only after a measured distance',
               'photo': {'sha256': preparation['sourceSha256'], 'width': width, 'height': height,
                         'source_width': preparation['sourceWidth'], 'source_height': preparation['sourceHeight']},
-              'features': int(len(keypoints)), 'correspondences': len(pairs2d3d),
+              'features': int(len(keypoints)), 'frames_ranked': len(shared), 'correspondences': len(pairs2d3d),
               'frames_matched': frames[:5], 'thresholds': {'min_inliers': MIN_INLIERS, 'min_inlier_ratio': MIN_INLIER_RATIO,
-                                                            'max_error_pixels': MAX_ERROR_PIXELS, 'ratio_test': RATIO},
+                                                            'max_error_pixels': MAX_ERROR_PIXELS, 'ratio_test': RATIO,
+                                                            'frames_matched_in_full': TOP_FRAMES, 'retrieval_sample': RETRIEVAL_SAMPLE},
               'policy_executed': False, 'metric_verified': False}
     if len(pairs2d3d) < MIN_INLIERS or not frames:
         result['reason'] = 'Too few of this photo\'s features match the reconstruction. It may show a part of the place the walkthrough did not film.'
