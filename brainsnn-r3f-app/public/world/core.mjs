@@ -127,13 +127,14 @@ export function routeWorld(input, robotInput, goalInput) {
   if (error) throw new Error(error);
   const robot = { width: numeric(robotInput.width, 0.1, 5, 'Robot width'), depth: numeric(robotInput.depth, 0.1, 5, 'Robot depth'), speed: numeric(robotInput.speed, 0.01, 3, 'Robot speed'), margin: numeric(robotInput.margin ?? 0.1, 0, 2, 'Clearance margin') };
   const goal = { x: numeric(goalInput?.x, 0, world.width, 'Goal x'), z: numeric(goalInput?.z, 0, world.depth, 'Goal z') };
-  const { cell, nx, nz, n, radius, blocked, point, free, start } = planningGrid(world, robot);
+  const { cell, nx, nz, n, radius, blocked, point, free, freeCount, start } = planningGrid(world, robot);
   const gx = Math.floor(goal.x / cell), gz = Math.floor(goal.z / cell), target = gz * nx + gx;
   if (gx >= nx || gz >= nz || !free[target] || blocked(goal, radius)) throw new Error('That spot is too close to an obstacle, a wall or unknown space for this robot. Choose open floor.');
-  // Breadth-first search finds the fewest cells on a uniform 4-connected grid, which is the shortest route here.
+  // Breadth-first search finds the fewest cells on a uniform 4-connected grid, which is the shortest route here. It runs
+  // over the whole reachable floor, so the reachable and unreachable areas are reported as planWorld reports them.
   const previous = new Int32Array(n).fill(-1), queue = new Int32Array(n); let head = 0, tail = 0;
   previous[start] = start; queue[tail++] = start;
-  while (head < tail && previous[target] < 0) {
+  while (head < tail) {
     const current = queue[head++], x = current % nx, z = Math.floor(current / nx);
     for (const next of [x + 1 < nx ? current + 1 : -1, z + 1 < nz ? current + nx : -1, x > 0 ? current - 1 : -1, z > 0 ? current - nx : -1])
       if (next >= 0 && free[next] && previous[next] < 0) { previous[next] = current; queue[tail++] = next; }
@@ -148,7 +149,7 @@ export function routeWorld(input, robotInput, goalInput) {
     prior = angle;
   }
   return { algorithm: 'conservative-grid-bfs-route-v1', basis: world.provenance, cell, route, goal, distance, travelSeconds: distance / robot.speed, turns,
-    reachableArea: tail * cell * cell, unreachableArea: 0, robot, policyExecuted: false, safetyCertified: false,
+    reachableArea: tail * cell * cell, unreachableArea: (freeCount - tail) * cell * cell, robot, policyExecuted: false, safetyCertified: false,
     limitations: ['Planar circumscribed-circle footprint with in-place turns; no robot dynamics.', 'Shortest route on a 4-connected grid; real robots smooth corners.', 'Unknown regions are blocked. Appearance is not collision geometry.'] };
 }
 export function estimate(result, values) {

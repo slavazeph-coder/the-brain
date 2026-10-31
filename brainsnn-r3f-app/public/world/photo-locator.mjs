@@ -2,6 +2,10 @@
 // reconstruction: where it was taken, which way it looked, and which floor spot a tap on it points at.
 import {toMap} from './reconstruction-map.mjs';
 
+/** Which proposal binding a map applied with these options keeps: an edit keeps the current one, a new proposal brings its
+ *  own, and any other map (import, restore, sample, scene) has none, so a photo is never placed through another map's transform. */
+export const proposalAfterApply=(current,{review=false,proposal}={})=>proposal!==undefined?proposal:review?current:null;
+
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const finite=v=>Array.isArray(v)&&v.length>=3&&v.slice(0,3).every(Number.isFinite);
 

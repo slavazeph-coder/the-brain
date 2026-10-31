@@ -18,7 +18,7 @@ import {readNativeCapture,prepareNativeCapture,NATIVE_CAPTURE} from './native-ca
 import {createMeasurementReview} from './measurement-ui.mjs';
 import {createBimWorkflow} from './bim-workflow-ui.mjs';
 import {proposeWorld,PROPOSAL} from './reconstruction-map.mjs';
-import {readLocalization,photoOnMap,floorFromTap} from './photo-locator.mjs';
+import {readLocalization,photoOnMap,floorFromTap,proposalAfterApply} from './photo-locator.mjs';
 import {createSandboxUI} from './sandbox-ui.mjs';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let world=sampleWorld(), tab='world', selected='storage', result=null, baseline=null, epoch=0, planner=null, planning=false, sandbox=null;
@@ -42,7 +42,7 @@ const observations=createObservationReview({getSources:()=>sources,status,event}
 const measurements=createMeasurementReview({getWorld:()=>world,status,event,download});
 function stopReplay(){cancelAnimationFrame(replayFrame);replayFrame=null;$('replay').textContent='Replay';}
 function invalidate(){epoch++;planner?.terminate();planner=null;planning=false;result=null;stopReplay();renderer?.setResult(null);$('scrub').value=0;update();renderMedia();}
-function apply(next,message,{review=false}={}){const w=normalizeWorld(next);if(w.geometrySource?.kind!=='reconstruction-proposal')mapProposal=null;if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);if(message)status(message);}
+function apply(next,message,{review=false,proposal}={}){const w=normalizeWorld(next);mapProposal=proposalAfterApply(mapProposal,{review,proposal});if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);if(message)status(message);}
 function mutate(fn){try{const next=clone(world);fn(next);apply(next,'Map updated. Review changed geometry before planning.',{review:true});event('geometry_edit',selected||'floor');}catch(e){status(e.message,true);renderInspector();renderPanel();}}
 // Exports: on touch devices with the Web Share API the files go to the native share sheet (Files, AirDrop, Mail…); anywhere
 // else, or if sharing fails, each file downloads. One share per gesture, so multi-file exports pass every file in one call.
@@ -539,9 +539,8 @@ async function action(name){try{
     else cameraHeight=Number($('camera-height')?.value);
     const {world:proposed,report}=proposeWorld({points:visual.points,reconstruction:activeSource.reconstruction,name:`Proposed map / ${activeSource.name}`,cameraHeight,measurement});
     if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with a map proposed from this reconstruction?'))return;
-    const derived=activeSource.derivation||{};
-    apply(proposed,`Map proposed from ${report.cameras} camera poses and ${report.points.toLocaleString()} points${measurement?` at your measured ${measurement.distance} m scale (phone ${report.impliedCameraHeight} m above the floor)`:''}: ${report.area.free} m² seen free, ${report.area.obstacle} m² obstacles, ${report.area.unknown} m² unknown. Review scale and obstacles, then plan.`);
-    mapProposal={transform:report.transform,job:/^colmap-/.test(derived.engine||'')?derived.job:null,source:activeSource.name};
+    const derived=activeSource.derivation||{},binding={transform:report.transform,job:/^colmap-/.test(derived.engine||'')?derived.job:null,source:activeSource.name};
+    apply(proposed,`Map proposed from ${report.cameras} camera poses and ${report.points.toLocaleString()} points${measurement?` at your measured ${measurement.distance} m scale (phone ${report.impliedCameraHeight} m above the floor)`:''}: ${report.area.free} m² seen free, ${report.area.obstacle} m² obstacles, ${report.area.unknown} m² unknown. Review scale and obstacles, then plan.`,{proposal:binding});
     event('map_proposed',{source:activeSource.name,...(activeSource.derivation||{}),method:report.method,cameras:report.cameras,points:report.points,scaleSource:report.scaleSource,assumedCameraHeight:report.assumedCameraHeight,impliedCameraHeight:report.impliedCameraHeight,
       ...(report.measurement?{measurement:{a:report.measurement.a,b:report.measurement.b,distance:report.measurement.distance,spanUnits:report.measurement.span,selfReported:true}}:{}),metresPerUnit:report.metresPerUnit,area:report.area,scaleVerified:false});
     setTab('world');
