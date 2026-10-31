@@ -182,3 +182,14 @@ CPU through the adapter's load/infer code. Qualification steps: docs/hermes-gpu-
 ### October 28 launch integration
 
 PR252 was merged with main ed7b353 after the native-capture and measurement handoff release, without source conflicts. 119 focused video CLI, quality screening, real FFmpeg native-resolution and native-capture regression tests passed. No additional private captures were submitted. This is an independent video extraction/qualification improvement, not a dependency or proof of full outdoor/physical geometry.
+
+## Layout simplification — 2026-10-31
+
+Branch `claude/photo-path-simpler`. The owner asked for a simpler, more consistent site; these are the rules the pages now follow.
+- **One header everywhere.** World Builder (`public/world/index.html`) and the API guide (`api.html`) use the same header as the React pages (`src/app/PublicNav.jsx`): gradient B mark, World Builder / Create a world / Robot Arena / Developers, a More menu (Capture studio, pricing, Review, Evidence, Lab, Classic) and a "Start scanning" button to `/scan`. Change both when the navigation changes. Links in the framed World page keep `target="_top"`.
+- **Hero.** Two actions (Choose what to make, Explore the street block); the advanced workspace and training floor are text links with the same ids (`#hero-capture`, `#hero-sample`) that the smokes click. The headline is unchanged: which headline leads is the owner's call.
+- **System catalog** shows its first 6 cards (3 on phones) with "Show all 23 systems"; search or a filter always shows every match. All 23 cards stay in the DOM, so the smokes' 23-card wait still works.
+- **Step tracker** (`#capture-progress`, Phone to BIM) shows only while a walkthrough is under way (video source, job or scene) or on the Capture tab, and never for a single photo. `sandbox-ui.mjs` still hides it with `hidden` for the street; app.mjs uses the `off-path` class.
+- **Readable text.** No visible text under 10 px on desktop. On phones, prose is at least 11 px, and only short uppercase labels and step numbers are 10 px. The phone rules used to shrink text below desktop sizes.
+- **Street sandbox.** The accent is the site cyan (`--accent`); mint stays only as the LiDAR legend colour. On a phone, arriving in the street (hero button, scene menu, return from Capture) keeps the scene in view: `setTool(tool,{reveal})` opens the Objects drawer only when the person picks Edit or Evidence while already in the street.
+- Measured: World page height on a 390 px phone went from 10,337 to about 6,000 px, and from 5,180 to 3,800 px on desktop.

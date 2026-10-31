@@ -155,7 +155,9 @@ def check_routes(browser, base):
     assert page.locator('iframe[src="/world/index.html"]').count()==0
     page.set_viewport_size({'width':1440,'height':1000})
     frame=open_world(page,base+'/')
-    frame.locator('a[href="/lab"]').last.click()
+    # Lab sits in the header's More menu, as it does in the site-wide header.
+    frame.locator('.nav-more summary').click()
+    frame.locator('.nav-more a[href="/lab"]').click()
     page.wait_for_url(base+'/lab')
     page.get_by_role('heading',name='Lab',exact=True).wait_for()
     assert page.locator('iframe[src="/world/index.html"]').count()==0
