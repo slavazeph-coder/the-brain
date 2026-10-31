@@ -135,7 +135,7 @@ def run(page):
     if estimated:
         unit = re.search(r'1 unit ≈ ([\d.]+) m', chip.inner_text()).group(1)
         say(f'<b>{n()}</b> · Real scale estimated by a depth model: 1 unit ≈ <b>{unit} m</b> · not measured')
-        into_view('.proposal-card'); hold(3.2)
+        into_view('.scale-chip'); hold(3.2)
     say(f'<b>{n()}</b> · {"One click: the robot map. Review it." if estimated else "Propose a planning map from it, then review it"}')
     glide(page.locator('[data-action=propose-map]'))
     proposed = wait_status('Map proposed|could not', 30_000)

@@ -259,3 +259,7 @@ Branch `claude/metric-scale`. The owner asked to fix the assumed scale using Hug
   - The CLI uses the estimate unless `--camera-height` is passed. The service worker cache is v9.
 - **Not done:** the Omniverse/SimReady reference-size cross-check (`reference_scale.py` uses Claude on a closed list of
   standard objects). The estimate is not yet shown on `/scan` or in Arena exports.
+- **LinkedIn demo (51 s, 1920×1080 and 4:5):** `record_locate.py` with `SHORT=1` on the garden walkthrough (local
+  worker plus the static site). It shows the estimate 0.555 m/unit, "Make the robot map", photo DSC08100 placed (1,086 of
+  1,122 points agree), and a 4.2 m vacuum route. The video files and the post draft live in the session scratchpad (`li/`),
+  not the repo.

@@ -10,7 +10,7 @@ hashes, scale or corrected floor evidence are missing. Existing film filenames i
 | Script | What it records |
 |---|---|
 | `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: test walkthrough → CPU reconstruction → illustrative entered distance → observed clusters as scaled boxes (with suggested names, if offered) → planar robot route → `scene.ifc` opened in a web-ifc viewer. Touching objects can remain grouped; the fixture has no independent physical readings. |
-| `record_locate.py` | Visual positioning, about 1.5 minutes: walkthrough → CPU reconstruction → proposed map → a new photo placed in the scan ("Photo taken here") → a tap on the floor in it → the simulated robot routes there; then a second photo from elsewhere in the same map |
+| `record_locate.py` | Visual positioning, about 1.5 minutes (or a 51 s feed cut with `SHORT=1` that shows the estimated scale): walkthrough → CPU reconstruction → proposed map → a new photo placed in the scan ("Photo taken here") → a tap on the floor in it → the simulated robot routes there; then a second photo from elsewhere in the same map |
 | `record_demo.py` | The earlier photo → depth → map demo. It also holds the caption, cursor and title-card overlay (`OVERLAY`) that `record_scan2model.py` reuses |
 | `feed_cut.sh` | A 4:5 feed version (1080 × 1350) of a 16:9 recording, with a title band and footer |
 | `short_cut.sh` | A short 4:5 feed clip from chosen moments of a recording (hard cuts), with your own subtitle and footer |
@@ -106,6 +106,20 @@ WORKER_URL=http://127.0.0.1:8040 WORKER_TOKEN=... ROBOT=vacuum PHOTOS=a.jpg,b.jp
 A tap the planner refuses (too close to an obstacle, off the map) is cut from the video, and the closing card says the
 points were chosen on open floor. Its `.proof.json` records the photos' hashes, the matched points and the routes; it
 does not contain the worker URL.
+
+`SHORT=1` with one photo makes the feed cut (51 s on the garden walkthrough): shorter holds, the reconstruction sped up
+60×, one closing card. When the worker has `--scale-model`, the video shows the estimated scale as its own step and the
+closing card says it is estimated, not measured; otherwise it says the scale was assumed from a 1.35 m phone height. Tap
+points depend on the scale, so rank them again when it changes, and check by eye that each lies on floor in the photo
+(on the garden at the estimated scale, DSC07980's best taps landed on the table top; DSC08100's lie on the paving).
+
+```sh
+SHORT=1 WORKER_URL=http://127.0.0.1:8040 WORKER_TOKEN=... PHOTOS=DSC08100.JPG TAPS='0.9,0.82;0.94,0.82;0.86,0.78' \
+  python scripts/world-demo/record_locate.py http://127.0.0.1:4181/world/ garden-walkthrough.mp4 out/metric-scale.mp4
+TITLE='Scan → robot map in metres' SUBTITLE='Scale estimated by a depth model · local CPU run' \
+  FOOTER='MoGe-2 metric depth · COLMAP · app and API' NOTE='Test walkthrough · scale estimated not measured · robot simulated' \
+  sh scripts/world-demo/feed_cut.sh out/metric-scale.mp4 out/metric-scale-4x5.mp4
+```
 
 ## Honesty rules the recordings follow
 
