@@ -13,8 +13,9 @@ A second Railway service runs the World Builder worker on CPU next to the site. 
 Railway's private network, holds its credentials, and gives each browser a short session instead. On the World Builder
 page, "Process on BrainSNN" then works with no worker address or token to type.
 
-- **Engines:** `colmap-sparse` (COLMAP reconstruction) and `scene-usd` (the scene compiler, Blender 4.2 as a Python
-  module). No GPU, no model weights, no API keys.
+- **Engines:** `colmap-sparse` (COLMAP reconstruction), `locate-photo` (finds where a photo was taken in one of those
+  reconstructions, for "Send the robot to a photo"; owner sessions only, the site proxy keeps visitors to the first and
+  `scene-usd`) and `scene-usd` (the scene compiler, Blender 4.2 as a Python module). No GPU, no model weights, no API keys.
 - **Who can process:**
   - you, with a passcode;
   - any visitor, only if you switch it on, with a daily cap per connection and per day.

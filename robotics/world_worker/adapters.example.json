@@ -164,5 +164,23 @@
       "--input-manifest",
       "{input_manifest}"
     ]
+  },
+  {
+    "id": "locate-photo",
+    "label": "Find where a photo was taken in a reconstruction (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 300,
+    "source_job": true,
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/locate_photo.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
   }
 ]

@@ -10,6 +10,7 @@ hashes, scale or corrected floor evidence are missing. Existing film filenames i
 | Script | What it records |
 |---|---|
 | `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: test walkthrough → CPU reconstruction → illustrative entered distance → observed clusters as scaled boxes (with suggested names, if offered) → planar robot route → `scene.ifc` opened in a web-ifc viewer. Touching objects can remain grouped; the fixture has no independent physical readings. |
+| `record_locate.py` | Visual positioning, about 1.5 minutes: walkthrough → CPU reconstruction → proposed map → a new photo placed in the scan ("Photo taken here") → a tap on the floor in it → the simulated robot routes there; then a second photo from elsewhere in the same map |
 | `record_demo.py` | The earlier photo → depth → map demo. It also holds the caption, cursor and title-card overlay (`OVERLAY`) that `record_scan2model.py` reuses |
 | `feed_cut.sh` | A 4:5 feed version (1080 × 1350) of a 16:9 recording, with a title band and footer |
 | `short_cut.sh` | A short 4:5 feed clip from chosen moments of a recording (hard cuts), with your own subtitle and footer |
@@ -91,6 +92,20 @@ Phone-labelled jobs require that report. It is recomputed and checked against th
 summary before rendering. Capture descriptions and physical readings remain self-reported; matching spans do not
 certify the BIM model. The 3D shots are renders of exported files, and the film says so. See [the saved phone-job
 workflow](REGENERATE.md#render-a-new-phone-run-from-its-preserved-worker-artifacts) for measured capture and rendering.
+
+## Running the visual-positioning recording
+
+The worker needs `colmap-sparse` and `locate-photo` (see `adapters.example.json`). `PHOTOS` are photographs of the same place
+that are not frames of the walkthrough; `TAPS` lists candidate floor points in each, as fractions of its width and height.
+
+```sh
+WORKER_URL=http://127.0.0.1:8040 WORKER_TOKEN=... ROBOT=vacuum PHOTOS=a.jpg,b.jpg TAPS='0.6,0.7;0.5,0.8|0.4,0.75' \
+  python scripts/world-demo/record_locate.py http://127.0.0.1:4181/world/index.html walkthrough.mp4 out/locate.mp4
+```
+
+A tap the planner refuses (too close to an obstacle, off the map) is cut from the video, and the closing card says the
+points were chosen on open floor. Its `.proof.json` records the photos' hashes, the matched points and the routes; it
+does not contain the worker URL.
 
 ## Honesty rules the recordings follow
 

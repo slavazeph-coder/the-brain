@@ -194,3 +194,33 @@ Branch `claude/photo-path-simpler`. The owner asked for a simpler, more consiste
 - **Readable text.** No visible text under 10 px on desktop. On phones, prose is at least 11 px, and only short uppercase labels and step numbers are 10 px. The phone rules used to shrink text below desktop sizes.
 - **Street sandbox.** The accent is the site cyan (`--accent`); mint stays only as the LiDAR legend colour. On a phone, arriving in the street (hero button, scene menu, return from Capture) keeps the scene in view: `setTool(tool,{reveal})` opens the Objects drawer only when the person picks Edit or Evidence while already in the street.
 - Measured: World page height on a 390 px phone went from 10,337 to about 6,000 px, and from 5,180 to 3,800 px on desktop.
+
+## Visual positioning: locate a photo in a scan, send the robot — 2026-10-31
+
+Branch `claude/locate-photo`. The owner asked for a demo like Bilawal Sidhu's MultiSet post (a city-block splat scan used
+as a shared map that glasses, a robot, a drone and a phone localise against; a waypoint dropped in the glasses sends the
+robot). Our honest version: phone photo localises in a COLMAP scan; tap the floor in it; the simulated robot routes there.
+- **Worker:** `robotics/world_worker/locate_photo.py`, engine `locate-photo` (`source_job: true`, one image). It reads the
+  source job's `colmap-work` (database + `sparse/selected.txt`), so it only works while that job is retained.
+  - Matching: SIFT on the photo, ranked against every frame with 1,024 sampled features, then full mutual-NN plus ratio
+    0.8 against the 12 best frames, to 2D-3D pairs.
+  - Pose: LO-RANSAC PnP with focal refinement, then a second pass with the refined focal.
+  - Placed only with 30 or more inliers and at least 20% of the matches; otherwise it says why. `pycolmap.Sift` ignores
+    `max_num_features` per orientation: photos come back with about 6,500 features.
+- **Measured:**
+  - ETH3D office (12 scan photos, 14 held out, metric ground truth): 6 placed, median 1.3 cm, worst 11.1 cm, rotation
+    under 1°; 8 refused, none misplaced; about 1.5 s each.
+  - Mip-NeRF room video: 31 of 32 other photos placed, median 0.3% of the camera spread against the dataset's 311-photo
+    model.
+  - Garden: 31 of 31, about 11 s each on 4 CPU threads.
+  - Scripts were in the session scratchpad (`eval_eth3d.py`, `eval_room.py`); not committed.
+- **Site:** under a map proposed from a worker reconstruction (`mapProposal` keeps `report.transform` and the colmap job),
+  the Simulate tab's "Send the robot to a photo" card runs the job. `photo-locator.mjs` reads `localization.json`, places
+  the camera through `toMap` ("Photo taken here" cone, `renderer.setMarks`), and turns a tap into a ray to the floor plane.
+  `core.routeWorld` plans a 4-connected shortest route on `planWorld`'s shared `planningGrid`. The scene-usd map path is
+  not supported yet (different transform).
+- **Demo:** `scripts/world-demo/record_locate.py` on the Mip-NeRF 360 garden walkthrough, photos DSC07986 and DSC08064 (not
+  video frames), robot vacuum. Taps were chosen with a ranking (every tap that `floorFromTap` + `routeWorld` accept), then
+  checked by eye on lawn and paving. The furnished room at the assumed 1.35 m scale leaves no start for even the vacuum;
+  the garden works. `feed_cut.sh` now takes TITLE/SUBTITLE/FOOTER/NOTE: its default "A real run on brainsnn.com" is
+  wrong for local recordings.
