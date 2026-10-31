@@ -69,8 +69,14 @@ def check(pw, name, site, passcode, video):
         assert page.locator('#engine').input_value() == 'colmap-sparse', 'the CPU reconstruction is preselected'
         page.locator('#consent').check()
         page.locator('[data-action=process]').click()
-        page.wait_for_function("document.querySelector('#status').textContent.startsWith('Reconstruction loaded.')", timeout=120000)
+        # The worker's scale estimate comes with the reconstruction, so the robot map is proposed straight away, unreviewed.
+        page.wait_for_function("document.querySelector('#status').textContent.startsWith('Map proposed from')", timeout=120000)
+        proposed = page.locator('#status').inner_text()
+        assert 'at the estimated scale, 1 unit ≈ 2.919 m (not measured)' in proposed, proposed
+        page.locator('[data-tab=capture]').click()
         assert page.locator('#provenance').inner_text() == 'VISUAL / SCALE UNVERIFIED'
+        chip = page.locator('.scale-chip').inner_text()
+        assert 'Scale estimated' in chip and '2.919 m' in chip, chip
         stored = page.evaluate("JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)])")
         assert passcode not in stored, 'the passcode is never stored'
         page.locator('#viewport').screenshot(path=str(OUTPUT / f'site-processing-{name}.png'))

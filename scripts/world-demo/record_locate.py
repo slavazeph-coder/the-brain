@@ -126,19 +126,26 @@ def run(page):
     glide(page.locator('[data-action=process]'))
     say(f'<b>{n()}</b> · The worker rebuilds it in 3D on CPU, and estimates its real scale'); into_view('#workspace', 'start')
     speed(60 if SHORT else 30, f'sped up {60 if SHORT else 30}×')
-    loaded = wait_status('Reconstruction loaded|failed|contradicts', 1_800_000); speed(1)
-    if 'Reconstruction loaded' not in loaded: raise SystemExit('reconstruction: ' + loaded)
-    into_view('#visual-canvas'); hold(3.0)
+    loaded = wait_status('Reconstruction loaded|Map proposed|failed|contradicts', 1_800_000); speed(1)
+    if not re.match('Reconstruction loaded|Map proposed', loaded): raise SystemExit('reconstruction: ' + loaded)
+    # With an estimated scale the site proposes the robot map as soon as the reconstruction loads.
+    automatic = loaded.startswith('Map proposed')
+    if automatic: proposed = loaded
     if not page.locator('[data-action=propose-map]').is_visible(): page.locator('[data-tab=capture]').click()
+    into_view('#visual-canvas'); hold(3.0)
     chip = page.locator('.scale-chip')
     estimated = chip.count() > 0
     if estimated:
         unit = re.search(r'1 unit ≈ ([\d.]+) m', chip.inner_text()).group(1)
         say(f'<b>{n()}</b> · Real scale estimated by a depth model: 1 unit ≈ <b>{unit} m</b> · not measured')
         into_view('.scale-chip'); hold(3.2)
-    say(f'<b>{n()}</b> · {"One click: the robot map. Review it." if estimated else "Propose a planning map from it, then review it"}')
-    glide(page.locator('[data-action=propose-map]'))
-    proposed = wait_status('Map proposed|could not', 30_000)
+    if automatic:
+        say(f'<b>{n()}</b> · The robot map is proposed straight away. Review it.')
+        page.locator('[data-tab=world]').click()
+    else:
+        say(f'<b>{n()}</b> · {"One click: the robot map. Review it." if estimated else "Propose a planning map from it, then review it"}')
+        glide(page.locator('[data-action=propose-map]'))
+        proposed = wait_status('Map proposed|could not', 30_000)
     into_view('#world-canvas'); hold(2.4)
     glide(page.locator('#scale-reviewed')); hold(.3); glide(page.locator('#map-reviewed')); hold(.6)
     say(f'<b>{n()}</b> · Take a new photo anywhere in the place')
