@@ -5,6 +5,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 180 — 2026-11-01 (GB10: item-8 bool-rejection guards verified green; committed + pushed)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `71147a3`):**
+  - `robotics/world_worker/app.py:301,303` — added explicit `isinstance(..., bool)` rejection to the retention (`ttl`) and storage (`storage_limit`/`job_limit`) type guards. Python `bool` subclasses `int`, so `True`/`False` would otherwise pass the `type(...) is not int` check; the documented contract is whole integer seconds.
+  - `tests/world/test_worker.py` — added `test_retention_bool_rejected` (rejects `ttl=True`, `storage_limit=True`, `job_limit=True`).
+- **Fresh test results (this run, exact):**
+  - `pytest tests/world/test_worker.py -q` → **50 passed, 3 skipped** (6.29 s)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (87 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** (20.64 s)
+- **Blocker cleared:** previous run could not resolve the pytest interpreter; qualified venv is `/workspace/brainsnn-world-builder/.venv/bin/python` (3.12.3, pytest 9.1.1) — all suites green.
+- 4090: not probed this run (blocker-repeat rule → local task).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+
 ### Run 178d — 2026-11-01 (GB10: doc line-141 precision fix committed; suites green; pushed d11cd3f)
 
 - **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `6ebfabe` → `d11cd3f`):**

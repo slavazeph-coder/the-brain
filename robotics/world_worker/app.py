@@ -298,9 +298,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         raise RuntimeError('Set WORLD_WORKER_TOKEN to a random secret of at least 32 characters.')
     if ttl is None:
         ttl = int(os.environ.get('WORLD_RETENTION_SECONDS', '86400'))
-    if type(ttl) is not int or not 60 <= ttl:
+    if type(ttl) is not int or isinstance(ttl, bool) or not 60 <= ttl:
         raise ValueError('Artifact retention must be a positive whole number of seconds of at least 60.')
-    if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:
+    if type(storage_limit) is not int or isinstance(storage_limit, bool) or type(job_limit) is not int or isinstance(job_limit, bool) or not 0 < job_limit < storage_limit - MIB:
         raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))
     identities = Identities(token, tenants or os.environ.get('WORLD_TENANTS_FILE'), engines, storage_limit)

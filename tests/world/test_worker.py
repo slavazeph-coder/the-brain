@@ -152,6 +152,12 @@ def test_retention_env_invalid(tmp_path,monkeypatch):
     monkeypatch.setenv('WORLD_RETENTION_SECONDS','abc')
     with pytest.raises(ValueError):create_app(root=tmp_path,token=TOKEN)
 
+def test_retention_bool_rejected(tmp_path):
+    # bool subclasses int in Python; the documented contract is whole integer seconds.
+    with pytest.raises(ValueError):create_app(root=tmp_path,token=TOKEN,ttl=True)
+    with pytest.raises(ValueError):create_app(root=tmp_path,token=TOKEN,storage_limit=True)
+    with pytest.raises(ValueError):create_app(root=tmp_path,token=TOKEN,job_limit=True)
+
 def test_small_depth_lifting_math_without_model():
     import numpy as np
     points,colours=lift_depth(np.zeros((4,5,3),dtype=np.uint8),np.ones((4,5)))
