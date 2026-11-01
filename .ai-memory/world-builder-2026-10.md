@@ -292,3 +292,20 @@ The owner chose this as the interim for the photo leg while Lyra is blocked.
 - **Demo (56 s, 16:9 and 4:5):** `scripts/world-demo/record_photo_metric.py` on Mip-NeRF 360 room photo DSCF4766
   (images_4). The worker took 13 s; the preview showed 1.3–4.3 m. The zoom and orbit are time-lapsed (8–16×) because
   headless software WebGL draws a frame in about 1.5 s; the caption says so. PR #266 is merged and live (verify passed).
+
+## Share video (captioned flythrough) — 2026-11-01
+
+Idea from Chaitanya Bharech's "2D to 4D using AI" LinkedIn post: PDF bridge drawings to a Blender model, IFC and a
+drone-style flythrough whose captions name each component. In that post the AI also asked questions about drawing
+inconsistencies before modelling.
+- **Export tab:** "Make a share video ↗" records about 25 s in the browser with `share-video.mjs` (MediaRecorder on a canvas
+  stream; no worker or GPU).
+  - Scenes: a title card, then an orbit with the size, obstacle count and unknown area, then the 3 largest obstacles
+    called out with name and size, then the route replay with the run's numbers, then a closing card.
+  - Every scene carries `scaleLabel(world)` (authored / estimated / measured / assumed, plus "checked by you").
+  - Format: MP4 (H.264) where the browser offers it, else WebM. The container's Chromium build records VP9 in MP4; real
+    Chrome and Safari give H.264.
+- **Renderer:** `createRenderer(canvas, {fixed: {width, height}})` for an off-screen canvas, and `setView({yaw, zoom})`.
+- **Tests:** `share-video.test.mjs` (storyboard, labels, format choice). `browser_smoke.check_share_video` covers Chromium only,
+  cancel then a full record; headless WebKit has no canvas MediaRecorder.
+- **Next idea from the same post:** turn the map's warnings into 1–3 plain "check before you plan" questions.
