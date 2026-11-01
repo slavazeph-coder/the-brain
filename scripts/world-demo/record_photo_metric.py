@@ -57,10 +57,14 @@ def run(page):
     card('<p>CONNECTING AN OPERATOR CPU WORKER</p><h1>Private worker<br><em>token typed off screen</em></h1>')
     page.locator('#hero-capture').click(); page.locator('#files').set_input_files(str(PHOTO))
     page.wait_for_function("document.querySelectorAll('.source-row').length===1")
+    # The dialog opens with showModal(), in the browser's top layer above the title card: hide it (and its backdrop) while
+    # the worker address and token are typed, or they would be recorded.
+    hidden = page.add_style_tag(content='#connection,#connection::backdrop{opacity:0!important}')
     open_options(); page.locator('[data-action=connection]').click()
+    assert page.evaluate("getComputedStyle(document.getElementById('connection')).opacity") == '0', 'worker dialog would be recorded'
     page.locator('#worker-url').fill(WORKER); page.locator('#worker-token').fill(TOKEN); page.locator('#connect').click()
     page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')", timeout=60_000)
-    page.locator('#connection [aria-label=Close]').click(); open_options()
+    page.locator('#connection [aria-label=Close]').click(); hidden.evaluate('el => el.remove()'); open_options()
     engine = page.locator('#engine').input_value()
     if engine != 'photo-metric': raise SystemExit('the metric photo preview was not preselected: ' + engine)
     page.locator('#workspace').evaluate("el => el.scrollIntoView({block: 'start', behavior: 'instant'})"); hold(.6); card('')
