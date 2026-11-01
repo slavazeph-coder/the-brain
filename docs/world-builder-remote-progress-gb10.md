@@ -5,6 +5,20 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 200 — 2026-11-01 (GB10: PLY zflip endian-parity validation added + committed + pushed; 4090 port dead)
+
+- Bounded improvement: closed the one real coverage gap in the zflip verifier — `verify_ply_zflip.py` handles `binary_big_endian` (its own endian map) but only `ascii` and `binary_little_endian` fixtures existed, so any cross-host parity claim between GB10 and 4090 had no big-endian evidence.
+  - New `tests/world/fixture_binary_be.ply` (4 verts, same geometry as the existing fixtures, `format binary_big_endian 1.0`).
+  - New `tests/world/verify_ply_zflip_parity.test.mjs` — 3 tests: BE fixture parses (format+vcount); ascii/LE/BE receipts are geometry-identical (source path excluded); BE zflip sign inversion + y_up verdict.
+- **Fresh test results (this run, exact, pre-commit):**
+  - `node --test tests/world/verify_ply_zflip.test.mjs` → **4 pass / 0 fail** (94.28 ms)
+  - `node --test tests/world/verify_ply_zflip_parity.test.mjs` → **3 pass / 0 fail** (143.15 ms)
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (96.25 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 20.61 s**
+- 4090 alternation: probed once via short authenticated SSH (`root@ssh2.vast.ai:23990`, key `/root/.ssh/gb10-rebuild`) → `Connection refused`. Port has rotated again since 2026-10-24 (was 23990, then dead at run-199 re-probe, still dead now). Needs owner/Vast-console for a fresh port; no blind retry storm.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** obtain current Vast SSH port for the 4090 instance, confirm hostname `d130b6c7f4` + GPU UUID `GPU-3390c2ec-...`, then run the PLY zflip parity fixture set on the 4090 and diff receipts against GB10 (this run's tests define the expected geometry); else continue GB10 integration-gap work.
+
 ### Run 194/195 — 2026-11-01 (GB10: live-HTTP retention (ttl) validation committed 45c98f8 + pushed; all suites green)
 
 - Finished Run 194's pending chain: the live-HTTP retention test file `tests/world/retention_live_http.py` was on disk but uncommitted (iteration cap hit before commit/push). Re-ran the validation fresh, re-verified regressions, then committed + pushed.
