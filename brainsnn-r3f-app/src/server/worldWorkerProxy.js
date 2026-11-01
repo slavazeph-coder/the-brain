@@ -7,8 +7,9 @@ import https from 'node:https';
  * session instead, so nobody types a worker address or token.
  *
  * - Owner sessions need WORLD_SITE_PASSCODE and use the worker tenant "site-owner".
- * - Visitor sessions exist only with WORLD_SITE_VISITORS=1. They use the tenant "site-visitors", and get a daily job cap
- *   per connection and overall.
+ * - Visitor sessions are on whenever their tenant credential exists (the owner turned them on, November 1 2026);
+ *   WORLD_SITE_VISITORS=0 turns them off. They use the tenant "site-visitors", and get a daily job cap per connection
+ *   and overall.
  * - Both tenant credentials derive from the passcode (derivedCredential), so the site and the worker share one secret.
  *   WORLD_WORKER_SITE_OWNER_TOKEN and WORLD_WORKER_SITE_VISITOR_TOKEN override that on both sides.
  *
@@ -104,7 +105,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
   const ownerToken = String(env.WORLD_WORKER_SITE_OWNER_TOKEN || derive('site-owner'));
   const visitorToken = String(env.WORLD_WORKER_SITE_VISITOR_TOKEN || derive('site-visitors'));
   const ownerReady = Boolean(upstream && CREDENTIAL.test(ownerToken) && passcode.length >= 12);
-  const visitorsReady = Boolean(upstream && env.WORLD_SITE_VISITORS === '1' && CREDENTIAL.test(visitorToken) && visitorToken !== ownerToken);
+  const visitorsReady = Boolean(upstream && env.WORLD_SITE_VISITORS !== '0' && CREDENTIAL.test(visitorToken) && visitorToken !== ownerToken);
   const perConnection = integer(env.WORLD_SITE_VISITOR_JOBS_PER_DAY, 2, 1, 20);
   const perDay = integer(env.WORLD_SITE_VISITOR_JOBS_TOTAL, 20, 1, 500);
   const sessions = new Map(), failures = new Map(), visitorJobs = new Map(), leases = new Map();

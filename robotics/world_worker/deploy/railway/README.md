@@ -60,7 +60,8 @@ page, "Process on BrainSNN" then works with no worker address or token to type.
    WORLD_SITE_PASSCODE=${{shared.WORLD_SITE_PASSCODE}}
    ```
 
-   To open processing to visitors later, add `WORLD_SITE_VISITORS=1` here only. Optionally also set
+   Visitors can process too, by default since November 1 2026: up to 2 jobs per visitor and 20 a day in total, on their
+   own tenant. To close it to visitors, add `WORLD_SITE_VISITORS=0` here. To change the caps, set
    `WORLD_SITE_VISITOR_JOBS_PER_DAY` (default 2) and `WORLD_SITE_VISITOR_JOBS_TOTAL` (default 20).
 5. **Check it.**
    - Open `https://www.brainsnn.com/api/world/processing`. It should read `"available":true,"passcode":true`.
