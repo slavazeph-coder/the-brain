@@ -1,8 +1,8 @@
 // World Builder shell worker. Network first, cache as an offline fallback for the app shell only.
 // Models, worker-API calls, uploads and cross-origin requests are never cached: fresh code and
 // fresh evidence always win; the cache only lets an installed app open without a connection.
-const CACHE = 'world-shell-building-sandbox-v10';
-const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', './sandbox-session.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './hero-demo.mjs', './photo-locator.mjs', './visual-viewer.mjs',
+const CACHE = 'world-shell-building-sandbox-v11';
+const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', './sandbox-session.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './hero-demo.mjs', './photo-locator.mjs', './share-video.mjs', './visual-viewer.mjs',
   './visual-geometry.mjs', './worker-client.mjs', './artifact-review.mjs', './depth-client.mjs', './depth-worker.mjs', './import-world.mjs', './observation-ui.mjs', './observations.mjs',
   './dimension-review.mjs', './bim-workflow-ui.mjs', './omniverse-ui.mjs', './foothold-focus.mjs', './foothold-ui.mjs', './measurement-ui.mjs', './measurement-evidence.mjs', './planner-worker.mjs', './capture-client.mjs', './capture-handoff.mjs', './reconstruction-recovery.mjs', './native-capture.mjs', './reconstruction-map.mjs',
   './detections.mjs', './detect-client.mjs', './detect-worker.mjs',

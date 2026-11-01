@@ -368,12 +368,31 @@ def check_capture_keeps_user_map(browser):
     assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
     assert not errors,errors;ctx.close()
 
+def check_share_video(browser):
+    """The captioned share video records the real map and run on the device, labelled as the map is (Chromium only:
+    headless WebKit has no MediaRecorder for canvas streams)."""
+    url=URL if URL.endswith('/world/index.html') else URL.rstrip('/')+'/world/index.html'
+    ctx=browser.new_context(accept_downloads=True);page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===23")
+    page.locator('#run').click();page.wait_for_function("/Planning preview complete/.test(document.querySelector('#status').textContent)",timeout=60000)
+    page.locator('[data-tab=evidence]').click();button=page.locator('[data-action=share-video]')
+    assert 'this robot run' in page.locator('#share-video-status').inner_text()
+    # Cancelling stops the recording and saves nothing.
+    button.click();page.wait_for_function("document.querySelector('[data-action=share-video]').textContent==='Cancel the share video'")
+    page.locator('[data-action=share-video]').click();page.wait_for_function("document.querySelector('#status').textContent==='Share video cancelled.'",timeout=10000)
+    with page.expect_download(timeout=90000) as event:page.locator('[data-action=share-video]').click()
+    saved=event.value;out=OUTPUT/('share-video'+Path(saved.suggested_filename).suffix);saved.save_as(out)
+    assert saved.suggested_filename.startswith('brainsnn-studio-01-training-floor.') and out.stat().st_size>100_000
+    assert re.match(r'Share video saved \(2\d s, (MP4|WEBM)\)\. It shows this map and this robot run',page.locator('#status').inner_text())
+    assert not errors,errors;ctx.close()
+
 if __name__=='__main__':
     with sync_playwright() as p:
         for name in os.environ.get('WORLD_BROWSERS','chromium').split(','):
             executable=os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
             browser=getattr(p,name).launch(headless=True, **({'executable_path':executable} if name=='chromium' and executable else {}))
             check(browser,False);check(browser,True);check_measurements(browser);check_app_shell(browser);check_capture_keeps_user_map(browser)
+            if name=='chromium':check_share_video(browser)
             if os.environ.get('WORLD_SITE_URL'):check_routes(browser,os.environ['WORLD_SITE_URL'].rstrip('/'))
             if os.environ.get('WORLD_PHOTO'):check_inference(browser,os.environ['WORLD_PHOTO'])
             browser.close()

@@ -1,11 +1,14 @@
 /** Dependency-free, perspective-projected planning geometry, not a reconstructed splat. */
-export function createRenderer(canvas, {wheelZoom = true} = {}) {
+/** `fixed` ({width, height}) draws at that size without watching the element, for an off-screen canvas (share-video.mjs). */
+export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas is unavailable. Map editing and exports still work.');
   let world = null, result = null, marks = null, cursor = 0, selected = '', yaw = -0.55, zoom = 1, mode = 'iso', drag = null, raf = 0;
   let width = 600, height = 400;
-  const ro = new ResizeObserver(() => { const r = canvas.getBoundingClientRect(); width = Math.max(1, r.width); height = Math.max(1, r.height); const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); });
-  ro.observe(canvas);
+  let ro = { disconnect() {} };
+  if (fixed) { width = fixed.width; height = fixed.height; canvas.width = width; canvas.height = height; }
+  else { ro = new ResizeObserver(() => { const r = canvas.getBoundingClientRect(); width = Math.max(1, r.width); height = Math.max(1, r.height); const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); });
+    ro.observe(canvas); }
   function project(x, y, z) {
     const W = world?.width || 18, D = world?.depth || 13;
     x -= W / 2; z -= D / 2;
@@ -68,5 +71,5 @@ export function createRenderer(canvas, {wheelZoom = true} = {}) {
   function wheel(e){if(e.ctrlKey)return;e.preventDefault();zoom=Math.max(.5,Math.min(2.3,zoom*Math.exp(-e.deltaY*.001)));draw();}
   function key(e){if(!['ArrowLeft','ArrowRight','+','-','=','0'].includes(e.key))return;e.preventDefault();if(e.key==='ArrowLeft')yaw-=.12;if(e.key==='ArrowRight')yaw+=.12;if(['+','='].includes(e.key))zoom=Math.min(2.3,zoom*1.1);if(e.key==='-')zoom=Math.max(.5,zoom/1.1);if(e.key==='0'){zoom=1;yaw=-.55;}draw();}
   canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);if(wheelZoom)canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('keydown',key);
-  return {setWorld(w){world=w;draw();},setResult(r){result=r;cursor=0;draw();},setMarks(m){marks=m||null;draw();},setCursor(c){cursor=Math.max(0,Math.min(1,c));draw();},setSelected(id){selected=id;draw();},setMode(m){mode=m;draw();},reset(){zoom=1;yaw=-.55;draw();},destroy(){ro.disconnect();cancelAnimationFrame(raf);for(const [event,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['wheel',wheel],['keydown',key]])canvas.removeEventListener(event,fn);}};
+  return {setWorld(w){world=w;draw();},setResult(r){result=r;cursor=0;draw();},setMarks(m){marks=m||null;draw();},setCursor(c){cursor=Math.max(0,Math.min(1,c));draw();},setSelected(id){selected=id;draw();},setMode(m){mode=m;draw();},setView(v){if(Number.isFinite(v?.yaw))yaw=v.yaw;if(Number.isFinite(v?.zoom))zoom=Math.max(.5,Math.min(2.3,v.zoom));draw();},reset(){zoom=1;yaw=-.55;draw();},destroy(){ro.disconnect();cancelAnimationFrame(raf);for(const [event,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['wheel',wheel],['keydown',key]])canvas.removeEventListener(event,fn);}};
 }
