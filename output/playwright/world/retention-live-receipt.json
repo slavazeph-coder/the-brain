@@ -1,0 +1,35 @@
+{
+  "test": "retention-live-http",
+  "checks": {
+    "env_override_advertised": {
+      "passed": true,
+      "advertised": 3600,
+      "capabilities_status": 200
+    },
+    "invalid_env_refused": {
+      "passed": true,
+      "error": "Artifact retention must be a positive whole number of seconds of at least 60."
+    },
+    "default_advertised": {
+      "passed": true,
+      "advertised": 86400
+    },
+    "prune_expired_job": {
+      "passed": true,
+      "row_gone": true,
+      "artifact_dir_gone": true,
+      "live_get_after_prune_status": 404,
+      "live_get_after_prune_detail": "Job not found."
+    },
+    "maintenance_loop_prune": {
+      "skipped": "set WORLD_RETENTION_WAIT to run"
+    },
+    "prune_expired_upload": {
+      "passed": true,
+      "stale_row_gone": true,
+      "stale_file_gone": true,
+      "fresh_row_kept": true
+    }
+  },
+  "status": "PASS"
+}
