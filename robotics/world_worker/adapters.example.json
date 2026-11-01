@@ -184,5 +184,24 @@
       "--input-manifest",
       "{input_manifest}"
     ]
+  },
+  {
+    "id": "photo-metric",
+    "label": "One photo to a 3D preview in estimated metres (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 300,
+    "command": [
+      "/absolute/path/to/colmap-dense-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/photo_metric.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--model",
+      "/absolute/path/to/moge-2-vitb-normal-onnx/model.onnx"
+    ]
   }
 ]

@@ -23,3 +23,6 @@ test('a photo localisation opens its result, and only from the locate-photo engi
   assert.equal(automaticReviewArtifact({engine:'locate-photo',artifacts:[]}),null);
   assert.equal(automaticReviewArtifact({engine:'colmap-sparse',artifacts:[evidence('localization.json')]}),null);
 });
+test('a metric photo preview opens its point cloud, never its evidence file',()=>{
+  assert.deepEqual(automaticReviewArtifact({engine:'photo-metric',artifacts:[visual('photo-metric.ply'),evidence('photo-metric.json')]}),{type:'visual',index:0});
+});

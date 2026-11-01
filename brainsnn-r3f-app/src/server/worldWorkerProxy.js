@@ -25,7 +25,8 @@ const RESPONSE_JSON_BYTES = 1024 ** 2;
 const MAX_SESSIONS = 2000;
 const SESSION_MS = { owner: 12 * 3600_000, visitor: 2 * 3600_000 };
 const PASSCODE_FAILURES = 10;  // per address per hour, then the passcode is not checked at all
-const VISITOR_ENGINES = new Set(['colmap-sparse', 'scene-usd']);
+// photo-metric is one photo to a 3D preview in estimated metres: one upload and about ten seconds of CPU.
+const VISITOR_ENGINES = new Set(['colmap-sparse', 'photo-metric', 'scene-usd']);
 // A visitor job needs at most one batch of uploads: a video, or up to 12 photos (COLMAP needs 3 or more), then a cloud
 // for the scene. So a session holds at most one unused batch, and a connection gets a batch and a cloud per job allowed.
 // All visitors together stay inside their tenant's 20 uploads, which leaves the owner's room in the worker's 50.
