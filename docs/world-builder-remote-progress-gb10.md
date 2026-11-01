@@ -1,9 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-11-01T01:00Z
+Last updated: 2026-11-01T03:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 188 — 2026-11-01 (GB10: previous-run test fix verified + committed + pushed adc875f)
+
+- Picked up run 187's dirty tree (commit/push cut off at iteration cap):
+  - `tests/world/test_worker.py` (+55) — `test_requeue_after_restart_skips_cancelled_queued_rows` fix from run 187 (restart-1 assertion corrected `complete` → `failed` for the in-flight row; unused `release` gate renamed `_release`; docstring documents `Store.__init__` reconciliation).
+  - `docs/world-builder-remote-handoff.md` + `docs/world-builder-remote-progress-gb10.md` — run-187 doc corrections carried in the same commit.
+- **Fresh test results (this run, exact, pre-commit):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (94.4 ms)
+  - `pytest tests/world/test_report_receipts.py -q` (world-builder venv) → **33 passed in 18.52 s**
+  - `pytest tests/world/test_worker.py -q` → **52 passed, 3 skipped in 6.61 s** (includes the fixed cancellation regression test)
+- **Commit + push verified:** `adc875f` on `hermes/world-builder-gb10`; `git ls-remote` = `adc875f`. No force-push/merge/deploy.
+- 4090: not probed this run (GB10 checkpoint task closed the budget; next run alternates to 4090).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** 4090 reconstruction/GPU task via short authenticated SSH (confirm hostname + GPU per `world-builder-4090.json` first); then alternate back to GB10 for the remaining full-implementation gates.
 
 ### Run 185 — 2026-11-01 (GB10: live-HTTP UI gate closed; socket-leak fix + receipt outputs committed + pushed)
 
@@ -602,10 +616,9 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Current status
 
-- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `27ce1cb`
-- Run 185 closed the last pending gate: live-HTTP report-UI validation PASS (chromium + webkit), socket-leak fix and receipt outputs committed.
-- Run 187 fixed the stale docs: handoff item 1 marked CLOSED; this log de-duplicated (frozen run-85 status block + 7 duplicate stale entries removed).
-- Both receipt suites verified green this run: node 12/12, pytest 33/33.
+- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `adc875f`
+- Run 188 verified and committed run 187's cancellation regression fix (`test_requeue_after_restart_skips_cancelled_queued_rows`); all suites green (node 12/12, pytest receipts 33/33, pytest worker 52/3s).
+- Run 187 de-duplicated the stale log and marked handoff item 1 CLOSED; run 185 closed the live-HTTP report-UI gate.
 
 ## Blockers
 
