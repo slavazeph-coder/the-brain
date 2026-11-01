@@ -291,11 +291,15 @@ def visual_metadata(entry):
     return result
 
 
-def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, report_key: str | None = None, ttl: int = 86400,
+def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, report_key: str | None = None, ttl: int | None = None,
                storage_limit: int = 20 * 1024 ** 3, job_limit: int = 4 * 1024 ** 3):
     token = token or os.environ.get('WORLD_WORKER_TOKEN', '')
     if len(token) < 32:
         raise RuntimeError('Set WORLD_WORKER_TOKEN to a random secret of at least 32 characters.')
+    if ttl is None:
+        ttl = int(os.environ.get('WORLD_RETENTION_SECONDS', '86400'))
+    if type(ttl) is not int or not 60 <= ttl:
+        raise ValueError('Artifact retention must be a positive whole number of seconds of at least 60.')
     if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:
         raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))

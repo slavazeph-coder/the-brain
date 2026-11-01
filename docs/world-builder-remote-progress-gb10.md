@@ -5,6 +5,18 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 177f — 2026-11-01 (GB10: retention override + item 8 checklist committed; all suites green)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `d1c3e31` → this commit):**
+  - Committed pending retention work from Run 177e: `app.py` `ttl` param now `int | None`; `None` → `WORLD_RETENTION_SECONDS` env (default 86400, min 60, invalid → startup `ValueError`); advertised as `limits.retention_seconds` on `GET /v1/capabilities`.
+  - `robotics/world_worker/.env.example` documents `WORLD_RETENTION_SECONDS`.
+  - New tests in `tests/world/test_worker.py`: `test_retention_env_override` (env 3600 → capabilities advertises 3600), `test_retention_env_invalid` (30 and abc → `ValueError`).
+  - `docs/world-studio-implementation.md` item 8 checklist added: retention (`store.prune` after `ttl`, env-overridable, advertised in capabilities) and access (single operator token, optional tenants, no public signup, process isolation still open per item 2).
+- **Fresh test results (this run):** node `report-receipts` 12/12 pass (106 ms); pytest `test_report_receipts.py` 33/33 pass (20.53 s); pytest `test_worker.py` 49 passed, 3 skipped (6.47 s).
+- 4090: not probed this run (connection refused in prior runs; blocker-repeat rule → local task instead).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** (a) live-HTTP retention override validation on GB10 (set `WORLD_RETENTION_SECONDS`, verify capabilities + prune behavior over real HTTP); (b) item 8 privacy/access checklist audit against `docs/world-studio-implementation.md` section "Worker operation"; (c) re-probe 4090 for PLY z-flip parity lane once reachable.
+
 ### Run 177c — 2026-10-31 (GB10: flake root cause found + fixed; suites green; committed 8ceb0b1)
 
 - **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `b593b00` → `8ceb0b1`):**

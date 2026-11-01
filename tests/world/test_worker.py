@@ -141,6 +141,17 @@ def test_retention(tmp_path):
         assert c.get('/v1/uploads/'+uid,headers=HEADERS).status_code==404
         assert c.get('/v1/jobs/'+jid,headers=HEADERS).status_code==404
 
+def test_retention_env_override(tmp_path,monkeypatch):
+    monkeypatch.setenv('WORLD_RETENTION_SECONDS','3600')
+    with TestClient(create_app(root=tmp_path,token=TOKEN)) as c:
+        assert c.get('/v1/capabilities',headers=HEADERS).json()['limits']['retention_seconds']==3600
+
+def test_retention_env_invalid(tmp_path,monkeypatch):
+    monkeypatch.setenv('WORLD_RETENTION_SECONDS','30')
+    with pytest.raises(ValueError):create_app(root=tmp_path,token=TOKEN)
+    monkeypatch.setenv('WORLD_RETENTION_SECONDS','abc')
+    with pytest.raises(ValueError):create_app(root=tmp_path,token=TOKEN)
+
 def test_small_depth_lifting_math_without_model():
     import numpy as np
     points,colours=lift_depth(np.zeros((4,5,3),dtype=np.uint8),np.ones((4,5)))
