@@ -114,10 +114,14 @@ def run(page):
         page.wait_for_load_state('networkidle'); page.wait_for_timeout(500)
         if panel.get_attribute('open') is None: panel.locator('summary').click()
     open_panel()
+    # The dialog opens with showModal(), in the browser's top layer above the title card: hide it (and its backdrop) while
+    # the worker address and token are typed, or they would be recorded.
+    hidden = page.add_style_tag(content='#connection,#connection::backdrop{opacity:0!important}')
     page.locator('[data-action=connection]').click()
+    assert page.evaluate("getComputedStyle(document.getElementById('connection')).opacity") == '0', 'worker dialog would be recorded'
     page.locator('#worker-url').fill(WORKER); page.locator('#worker-token').fill(TOKEN); page.locator('#connect').click()
     page.wait_for_function("document.querySelector('#connection-status').textContent.startsWith('Connected.')", timeout=60_000)
-    page.locator('#connection [aria-label=Close]').click(); hold(1.2); card('')
+    page.locator('#connection [aria-label=Close]').click(); hidden.evaluate('el => el.remove()'); hold(1.2); card('')
     say(f'<b>{n()}</b> · Upload a walkthrough of the place')
     open_panel()
     into_view('.processing-options'); hold(.6)

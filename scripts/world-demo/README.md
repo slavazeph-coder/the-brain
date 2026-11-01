@@ -11,6 +11,7 @@ hashes, scale or corrected floor evidence are missing. Existing film filenames i
 |---|---|
 | `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: test walkthrough → CPU reconstruction → illustrative entered distance → observed clusters as scaled boxes (with suggested names, if offered) → planar robot route → `scene.ifc` opened in a web-ifc viewer. Touching objects can remain grouped; the fixture has no independent physical readings. |
 | `record_locate.py` | Visual positioning, about 1.5 minutes (or a 51 s feed cut with `SHORT=1` that shows the estimated scale): walkthrough → CPU reconstruction → proposed map → a new photo placed in the scan ("Photo taken here") → a tap on the floor in it → the simulated robot routes there; then a second photo from elsewhere in the same map |
+| `record_photo_metric.py` | The metric photo preview, under a minute: one photo → the worker's `photo-metric` engine → a 3D point preview in estimated metres, zoomed and orbited, with the depth range read from the site's status line |
 | `record_demo.py` | The earlier photo → depth → map demo. It also holds the caption, cursor and title-card overlay (`OVERLAY`) that `record_scan2model.py` reuses |
 | `feed_cut.sh` | A 4:5 feed version (1080 × 1350) of a 16:9 recording, with a title band and footer |
 | `short_cut.sh` | A short 4:5 feed clip from chosen moments of a recording (hard cuts), with your own subtitle and footer |
@@ -119,6 +120,19 @@ SHORT=1 WORKER_URL=http://127.0.0.1:8040 WORKER_TOKEN=... PHOTOS=DSC08100.JPG TA
 TITLE='Scan → robot map in metres' SUBTITLE='Scale estimated by a depth model · local CPU run' \
   FOOTER='MoGe-2 metric depth · COLMAP · app and API' NOTE='Test walkthrough · scale estimated not measured · robot simulated' \
   sh scripts/world-demo/feed_cut.sh out/metric-scale.mp4 out/metric-scale-4x5.mp4
+```
+
+## Running the metric photo preview recording
+
+The worker needs `photo-metric` (see `adapters.example.json`). Software WebGL in a headless browser draws the 120,000-point
+preview in about a second and a half per frame, so the zoom and the orbit are time-lapsed to a few seconds each; the caption
+says they are sped up, and `.proof.json` records each factor (about 8–16× on the 4-thread container).
+
+```sh
+WORKER_URL=http://127.0.0.1:8040 WORKER_TOKEN=... PHOTO_CREDIT='Photo from ...' \
+  python scripts/world-demo/record_photo_metric.py http://127.0.0.1:4181/world/ photo.jpg out/photo-preview.mp4
+TITLE='One photo → 3D in metres' SUBTITLE='Estimated by a depth model · local CPU run' FOOTER='MoGe-2 metric depth · app and API' \
+  NOTE='Test photo · estimated not measured · nothing invented' sh scripts/world-demo/feed_cut.sh out/photo-preview.mp4 out/photo-preview-4x5.mp4
 ```
 
 ## Honesty rules the recordings follow
