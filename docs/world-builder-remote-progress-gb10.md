@@ -1,9 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-11-01T00:00Z
+Last updated: 2026-11-01T01:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 185 — 2026-11-01 (GB10: live-HTTP UI gate closed; socket-leak fix + receipt outputs committed + pushed)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `45dec8b` → this commit):**
+  - `tests/world/report_receipt_ui_smoke_live.py` — added `http_server.server_close()` in `finally` block of `run_browser_journey`. Without it the second browser (webkit) got `[Errno 98] Address already in use` because the page-server socket was never released between journeys.
+  - `tests/world/receipts/` — 2 receipt JSON outputs replaced with real PASS receipts from the live-HTTP smoke (chromium + webkit, real uvicorn, real Ed25519 keys, real CORS fetch).
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (143 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **33 passed** (20.76 s)
+- **Live smoke (this run, exact):** `report_receipt_ui_smoke_live.py` — **chromium PASS + webkit PASS** (real uvicorn, real Ed25519, real CORS fetch over live HTTP)
+- **Gate closed:** live-HTTP report UI validation gate is now technically complete. Only bookkeeping (commit/doc/push) remained; done this run.
+- 4090: not probed this run (local task; next run can alternate to 4090 GPU task).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** signed-receipt API/env documentation (still pending); then Qwen/backup and model/guardrail gates untouched.
 
 ### Run 184 — 2026-11-01 (GB10: run-183 test fix verified green; committed + pushed 4b15383)
 

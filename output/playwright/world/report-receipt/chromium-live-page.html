@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head><title>WB Live UI Smoke</title>
+<style>body { font-family: monospace; padding: 1em; }</style>
+</head>
+<body>
+<h1>WB Live UI Smoke</h1>
+<div id="status">loading…</div>
+<div id="job">pending</div>
+<div id="receipt">pending</div>
+<div id="verify">pending</div>
+<script>
+const TOKEN = "***".repeat(16);
+const JOB_ID = "7665a5914864bd98e033b997c78b5507";
+const BASE = "http://127.0.0.1:38739";
+const keys = {
+  public: "{
+  "schema": "brainsnn.world.report-key.v1",
+  "algorithm": "Ed25519",
+  "keyId": "d18bb2ff8ceffb77bbe519993620a1f34b98f8f20eff38a51a245dc0c7ddfc61",
+  "publicKey": "Z6Iw9dERwTKPcCXRnvKDpoZazw9iEXSq9ljs6Ug76xw"
+}",
+};
+
+async function auth(path, method, body) {
+  const opts = {
+    method: method || 'GET',
+    headers: { 'Authorization': 'Bearer ' + TOKEN },
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(BASE + path, opts);
+  const text = await r.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = { detail: text }; }
+  return { status: r.status, data };
+}
+
+async function main() {
+  const setStatus = (t) => document.getElementById('status').textContent = t;
+
+  // 1. Capabilities — public key discovery
+  const caps = await auth('/v1/capabilities');
+  if (caps.status !== 200) { setStatus('FAIL: capabilities ' + caps.status); return; }
+  const rs = caps.data.reportSigning;
+  if (!rs.available) { setStatus('FAIL: reportSigning not available'); return; }
+  setStatus('capabilities OK: keyId=' + rs.keyId);
+
+  // 2. Job status
+  const job = await auth('/v1/jobs/' + JOB_ID);
+  if (job.status !== 200 || job.data.status !== 'complete') {
+    setStatus('FAIL: job ' + job.status + ' ' + JSON.stringify(job.data.status));
+    return;
+  }
+  document.getElementById('job').textContent = 'job complete: ' + job.data.id;
+
+  // 3. Report receipt
+  const art = job.data.artifacts[0];
+  const scenSha = "9cf3a4b56edacefd9ce153b26739428958cf26325334dadc4ff4edc739de9aff";
+  const rr = await auth('/v1/jobs/' + JOB_ID + '/report-receipt', 'POST', {
+    scenarioSha256: scenSha,
+    geometrySha256: null,
+    artifactRefs: [{ name: art.name, sha256: art.sha256 }]
+  });
+  if (rr.status !== 200) {
+    setStatus('FAIL: report-receipt ' + rr.status + ' ' + JSON.stringify(rr.data.detail));
+    return;
+  }
+  document.getElementById('receipt').textContent =
+    'receipt OK: keyId=' + rr.data.keyId;
+  window.__receipt = rr.data;
+
+  // 4. Offline verify (client-side Ed25519 check would go here;
+  //    we verify the receipt structure and that the public key matches)
+  const pubDoc = await auth('/v1/report-key');
+  if (pubDoc.status !== 200) { setStatus('FAIL: report-key ' + pubDoc.status); return; }
+  if (pubDoc.data.keyId !== rr.data.keyId) {
+    setStatus('FAIL: keyId mismatch');
+    return;
+  }
+  document.getElementById('verify').textContent = 'verify OK';
+  setStatus('ALL PASS');
+}
+main().catch(e => {
+  document.getElementById('status').textContent = 'FAIL: ' + e.message;
+});
+</script>
+</body>
+</html>

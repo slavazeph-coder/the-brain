@@ -1,0 +1,75 @@
+{
+  "schema": "brainsnn.proof.v1",
+  "createdAt": "2026-10-27T10:52:13.539Z",
+  "world": {
+    "schema": "brainsnn.world.v1",
+    "name": "Explicit report test map",
+    "width": 8,
+    "depth": 8,
+    "objects": [],
+    "provenance": "observed",
+    "scaleReviewed": true,
+    "mapReviewed": false,
+    "start": {
+      "x": 1,
+      "z": 1
+    }
+  },
+  "result": null,
+  "estimate": null,
+  "sources": [
+    {
+      "name": "explicit-authored-fixture.png",
+      "size": 96,
+      "kind": "image"
+    }
+  ],
+  "events": [
+    {
+      "time": "2026-10-27T10:52:10.988Z",
+      "type": "source_added",
+      "detail": "explicit-authored-fixture.png (image), local only"
+    },
+    {
+      "time": "2026-10-27T10:52:11.309Z",
+      "type": "worker_connected",
+      "detail": "http://127.0.0.1:60445"
+    },
+    {
+      "time": "2026-10-27T10:52:11.555Z",
+      "type": "job_submitted",
+      "detail": {
+        "engine": "inspect",
+        "files": [
+          "explicit-authored-fixture.png"
+        ]
+      }
+    },
+    {
+      "time": "2026-10-27T10:52:13.075Z",
+      "type": "worker_complete",
+      "detail": {
+        "engine": "inspect",
+        "job": "08ca320614d9aaf91ee3f58af82e2d80"
+      }
+    },
+    {
+      "time": "2026-10-27T10:52:13.103Z",
+      "type": "map_import",
+      "detail": "authored-test-map.json"
+    },
+    {
+      "time": "2026-10-27T10:52:13.139Z",
+      "type": "human_review",
+      "detail": "scale-reviewed: true"
+    }
+  ],
+  "claim": "Planning preview; no real robot or learned policy executed.",
+  "signature": null,
+  "integrity": {
+    "algorithm": "SHA-256",
+    "scope": "JSON.stringify(body) before integrity property",
+    "value": "43d56e6bbb7f9ed1d6b55b6cdf4c9e998f664a807b17e26769ce200a230b3cca",
+    "authenticatesAuthor": false
+  }
+}

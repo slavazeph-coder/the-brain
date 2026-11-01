@@ -1,0 +1,18 @@
+{
+  "schema": "brainsnn.world.signed-report.v1",
+  "scenarioText": "{\n  \"schema\": \"brainsnn.proof.v1\",\n  \"createdAt\": \"2026-10-27T10:52:13.539Z\",\n  \"world\": {\n    \"schema\": \"brainsnn.world.v1\",\n    \"name\": \"Explicit report test map\",\n    \"width\": 8,\n    \"depth\": 8,\n    \"objects\": [],\n    \"provenance\": \"observed\",\n    \"scaleReviewed\": true,\n    \"mapReviewed\": false,\n    \"start\": {\n      \"x\": 1,\n      \"z\": 1\n    }\n  },\n  \"result\": null,\n  \"estimate\": null,\n  \"sources\": [\n    {\n      \"name\": \"explicit-authored-fixture.png\",\n      \"size\": 96,\n      \"kind\": \"image\"\n    }\n  ],\n  \"events\": [\n    {\n      \"time\": \"2026-10-27T10:52:10.988Z\",\n      \"type\": \"source_added\",\n      \"detail\": \"explicit-authored-fixture.png (image), local only\"\n    },\n    {\n      \"time\": \"2026-10-27T10:52:11.309Z\",\n      \"type\": \"worker_connected\",\n      \"detail\": \"http://127.0.0.1:60445\"\n    },\n    {\n      \"time\": \"2026-10-27T10:52:11.555Z\",\n      \"type\": \"job_submitted\",\n      \"detail\": {\n        \"engine\": \"inspect\",\n        \"files\": [\n          \"explicit-authored-fixture.png\"\n        ]\n      }\n    },\n    {\n      \"time\": \"2026-10-27T10:52:13.075Z\",\n      \"type\": \"worker_complete\",\n      \"detail\": {\n        \"engine\": \"inspect\",\n        \"job\": \"08ca320614d9aaf91ee3f58af82e2d80\"\n      }\n    },\n    {\n      \"time\": \"2026-10-27T10:52:13.103Z\",\n      \"type\": \"map_import\",\n      \"detail\": \"authored-test-map.json\"\n    },\n    {\n      \"time\": \"2026-10-27T10:52:13.139Z\",\n      \"type\": \"human_review\",\n      \"detail\": \"scale-reviewed: true\"\n    }\n  ],\n  \"claim\": \"Planning preview; no real robot or learned policy executed.\",\n  \"signature\": null,\n  \"integrity\": {\n    \"algorithm\": \"SHA-256\",\n    \"scope\": \"JSON.stringify(body) before integrity property\",\n    \"value\": \"43d56e6bbb7f9ed1d6b55b6cdf4c9e998f664a807b17e26769ce200a230b3cca\",\n    \"authenticatesAuthor\": false\n  }\n}",
+  "receipt": {
+    "schema": "brainsnn.world.signed-report-receipt.v1",
+    "algorithm": "Ed25519",
+    "keyId": "ac2b1540796cd24782496e274fc9f0728ba1849043aa038b3ed6ac9e4ed49095",
+    "payloadText": "{\"evidence\":{\"artifacts\":[{\"kind\":\"integrity\",\"name\":\"capture-integrity.json\",\"sha256\":\"e38b2e743140d2aa7702db85f740d44620ee91318afad2982fd384c0e81501d5\",\"size\":337}],\"authority\":\"worker-verified-bytes\",\"sources\":[{\"id\":\"0c86b33881e29af341adab967334fabe\",\"kind\":\"image\",\"sha256\":\"3fb6ef23870b7e920cc2d4d3db8cb0aafd5b769d203aa20f2c95b4807a55b20b\",\"size\":96}]},\"independentHostAttestation\":false,\"issuedAt\":\"2026-10-27T10:52:13.545Z\",\"job\":{\"engine\":\"inspect\",\"id\":\"08ca320614d9aaf91ee3f58af82e2d80\"},\"keyId\":\"ac2b1540796cd24782496e274fc9f0728ba1849043aa038b3ed6ac9e4ed49095\",\"metricVerified\":false,\"ownerId\":\"operator\",\"policyExecuted\":false,\"safetyCertified\":false,\"scenario\":{\"authority\":\"owner-declared\",\"geometrySha256\":\"69df16dc463c296a99b620e0fa1159be0064ba693ebe61573944cb818f56b89f\",\"sha256\":\"69d2955692173cb1bfff80df39a7db80b1cc08e28e079cd23cac35edfff921ab\"},\"schema\":\"brainsnn.world.report-receipt.v1\"}",
+    "payloadSha256": "a6f79f6185b39fe9c764f4c150a9b2ddd4268e4b854ddcaf9dfc6fde464ddb88",
+    "signature": "ZpqsFLOXH-YAD4RzNAocF9dueB9a9ZagrFrkyeo81LKHIhX0KAnLZKfDS2SyEFmEvH7cq0jQAtT1pzC36IcWAg"
+  },
+  "publicKey": {
+    "schema": "brainsnn.world.report-key.v1",
+    "algorithm": "Ed25519",
+    "keyId": "ac2b1540796cd24782496e274fc9f0728ba1849043aa038b3ed6ac9e4ed49095",
+    "publicKey": "ZTqlnTfh05OpCfO54LLpbWYWZ_lhf2lAihMYLmqfdIs"
+  }
+}

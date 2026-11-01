@@ -340,6 +340,7 @@ main().catch(e => {{
             ctx.close()
     finally:
         http_server.shutdown()
+        http_server.server_close()
 
     passed = status == 'ALL PASS' and not errors
     return {
