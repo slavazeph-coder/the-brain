@@ -289,3 +289,6 @@ The owner chose this as the interim for the photo leg while Lyra is blocked.
   - `openArtifact` reads `photo-metric.json` and shows the depth range, with no map card and no auto-proposal.
   - The photo panel points to it when a worker or BrainSNN processing is available.
   - End to end on the local worker: a room photo took 15 s and showed "most of it 1.3–4.3 m from the camera".
+- **Demo (56 s, 16:9 and 4:5):** `scripts/world-demo/record_photo_metric.py` on Mip-NeRF 360 room photo DSCF4766
+  (images_4). The worker took 13 s; the preview showed 1.3–4.3 m. The zoom and orbit are time-lapsed (8–16×) because
+  headless software WebGL draws a frame in about 1.5 s; the caption says so. PR #266 is merged and live (verify passed).
