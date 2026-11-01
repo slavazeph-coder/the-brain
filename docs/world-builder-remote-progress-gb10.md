@@ -5,6 +5,16 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 178b — 2026-11-01 (GB10: cancellation-test 409 race fix committed; all suites green; pushed 6ebfabe)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `860e4ef` → `6ebfabe`):**
+  - Root cause of intermittent 409 in `test_owner_cancellation_aborts_job_source_rehash_and_never_completes`: the `execute()` worker task returns before its `finally` block (`app.py:485`, `running.discard(jid)`) is scheduled — that scheduling happens only after `release.set()` yields control. `DELETE /artifacts` (`app.py:690`, gate `jid in running`) can still 409 in that window.
+  - Fix: replaced the two single-shot delete asserts with a bounded poll-wait (10 s deadline, 50 ms step, retry only on 409) on both `DELETE /v1/jobs/{jid}/artifacts` and `DELETE /v1/uploads/{uid}`; exact 200 assertion preserved on final response. No app code changes.
+- **Fresh test results (this run):** pytest `test_report_receipts.py` **33/33 pass** (20.73 s); node `report-receipts.test.mjs` **12/12 pass** (87.8 ms).
+- 4090: not probed this run (4th consecutive refused; blocker-repeat rule → local task instead).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** (a) live-HTTP retention override validation on GB10; (b) item 8 privacy/access checklist audit against `docs/world-studio-implementation.md` section "Worker operation"; (c) re-probe 4090 for PLY z-flip parity lane once reachable.
+
 ### Run 177f — 2026-11-01 (GB10: retention override + item 8 checklist committed; all suites green)
 
 - **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `d1c3e31` → this commit):**
