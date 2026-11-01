@@ -182,3 +182,139 @@ CPU through the adapter's load/infer code. Qualification steps: docs/hermes-gpu-
 ### October 28 launch integration
 
 PR252 was merged with main ed7b353 after the native-capture and measurement handoff release, without source conflicts. 119 focused video CLI, quality screening, real FFmpeg native-resolution and native-capture regression tests passed. No additional private captures were submitted. This is an independent video extraction/qualification improvement, not a dependency or proof of full outdoor/physical geometry.
+
+## Layout simplification — 2026-10-31
+
+Branch `claude/photo-path-simpler`. The owner asked for a simpler, more consistent site; these are the rules the pages now follow.
+- **One header everywhere.** World Builder (`public/world/index.html`) and the API guide (`api.html`) use the same header as the React pages (`src/app/PublicNav.jsx`): gradient B mark, World Builder / Create a world / Robot Arena / Developers, a More menu (Capture studio, pricing, Review, Evidence, Lab, Classic) and a "Start scanning" button to `/scan`. Change both when the navigation changes. Links in the framed World page keep `target="_top"`.
+- **Hero.** The spec's two actions: Create a world (opens the goal chooser) and Explore Arena (`/arena/`, `target="_top"`). The street block, advanced workspace and training floor are text links with the same ids (`#hero-street`, `#hero-capture`, `#hero-sample`) that the smokes click. The headline is back to the owner's brief, "Turn any photo into a world. Turn any world into a robot simulation.", with the brief's intro. Later agent PRs had replaced it (#232 "Walk the space…", the street sandbox "Capture a place…") without an owner request; `routeMeta.js` and the nav already used the brief's line. Keep it unless the owner asks otherwise. The live retirement script waits for any h1, not its wording.
+- **Hero demo** (`hero-demo.mjs`, the spec's above-the-fold demo): Sample / Generated / Reviewed tabs. Sample draws `sampleWorld()` with the map renderer (`createRenderer(canvas,{wheelZoom:false})` so the page still scrolls); Reviewed draws the real `planWorld` pass for the cleaning robot (116 m², 1,152 m, about 64 min on the sample); Generated shows no picture, because no generated result exists until someone brings a photo, and links to `/scan?goal=play`. Never put an invented generated scene there. `hero-demo.mjs` is in the service-worker shell (cache v7).
+- **System catalog** shows its first 6 cards (3 on phones) with "Show all 23 systems"; search or a filter always shows every match. All 23 cards stay in the DOM, so the smokes' 23-card wait still works.
+- **Step tracker** (`#capture-progress`, Phone to BIM) shows only while a walkthrough is under way (video source, job or scene) or on the Capture tab, and never for a single photo. `sandbox-ui.mjs` still hides it with `hidden` for the street; app.mjs uses the `off-path` class.
+- **Readable text.** No visible text under 10 px on desktop. On phones, prose is at least 11 px, and only short uppercase labels and step numbers are 10 px. The phone rules used to shrink text below desktop sizes.
+- **Street sandbox.** The accent is the site cyan (`--accent`); mint stays only as the LiDAR legend colour. On a phone, arriving in the street (hero button, scene menu, return from Capture) keeps the scene in view: `setTool(tool,{reveal})` opens the Objects drawer only when the person picks Edit or Evidence while already in the street.
+- Measured: World page height on a 390 px phone went from 10,337 to about 6,000 px, and from 5,180 to 3,800 px on desktop.
+
+## Visual positioning: locate a photo in a scan, send the robot — 2026-10-31
+
+Branch `claude/locate-photo`. The owner asked for a demo like Bilawal Sidhu's MultiSet post (a city-block splat scan used
+as a shared map that glasses, a robot, a drone and a phone localise against; a waypoint dropped in the glasses sends the
+robot). Our honest version: phone photo localises in a COLMAP scan; tap the floor in it; the simulated robot routes there.
+- **Worker:** `robotics/world_worker/locate_photo.py`, engine `locate-photo` (`source_job: true`, one image). It reads the
+  source job's `colmap-work` (database + `sparse/selected.txt`), so it only works while that job is retained.
+  - Matching: SIFT on the photo, ranked against every frame with 1,024 sampled features, then full mutual-NN plus ratio
+    0.8 against the 12 best frames, to 2D-3D pairs.
+  - Pose: LO-RANSAC PnP with focal refinement, then a second pass with the refined focal.
+  - Placed only with 30 or more inliers and at least 20% of the matches; otherwise it says why. `pycolmap.Sift` ignores
+    `max_num_features` per orientation: photos come back with about 6,500 features.
+- **Measured:**
+  - ETH3D office (12 scan photos, 14 held out, metric ground truth): 6 placed, median 1.3 cm, worst 11.1 cm, rotation
+    under 1°; 8 refused, none misplaced; about 1.5 s each.
+  - Mip-NeRF room video: 31 of 32 other photos placed, median 0.3% of the camera spread against the dataset's 311-photo
+    model.
+  - Garden: 31 of 31, about 11 s each on 4 CPU threads.
+  - Scripts were in the session scratchpad (`eval_eth3d.py`, `eval_room.py`); not committed.
+- **Site:** under a map proposed from a worker reconstruction (`mapProposal` keeps `report.transform` and the colmap job),
+  the Simulate tab's "Send the robot to a photo" card runs the job. `photo-locator.mjs` reads `localization.json`, places
+  the camera through `toMap` ("Photo taken here" cone, `renderer.setMarks`), and turns a tap into a ray to the floor plane.
+  `core.routeWorld` plans a 4-connected shortest route on `planWorld`'s shared `planningGrid`. The scene-usd map path is
+  not supported yet (different transform).
+- **Demo:** `scripts/world-demo/record_locate.py` on the Mip-NeRF 360 garden walkthrough, photos DSC07986 and DSC08064 (not
+  video frames), robot vacuum. Taps were chosen with a ranking (every tap that `floorFromTap` + `routeWorld` accept), then
+  checked by eye on lawn and paving. The furnished room at the assumed 1.35 m scale leaves no start for even the vacuum;
+  the garden works. `feed_cut.sh` now takes TITLE/SUBTITLE/FOOTER/NOTE: its default "A real run on brainsnn.com" is
+  wrong for local recordings.
+
+## Estimated metric scale (MoGe-2) — 2026-10-31
+
+Branch `claude/metric-scale`. The owner asked to fix the assumed scale using Hugging Face or Omniverse references.
+- **Worker:** `robotics/world_worker/metric_scale.py`, run by `sparse_colmap.py --scale-model <onnx>`. It uses MoGe-2 ViT-B
+  ONNX (`Ruicheng/moge-2-vitb-normal-onnx`, revision and SHA-256 pinned in `MODEL`; the weights are MIT, and the ONNX repo
+  has no licence tag of its own).
+  - On 10 evenly spaced registered frames: the depth shift is solved with COLMAP's focal, then metric depth is divided by
+    COLMAP camera depth at each observed 3D point. The median per frame, then the median across frames, is written to
+    `reconstruction.json` `scale_estimate` (status `estimated`, `unavailable` or `failed`).
+  - A wrong model file is refused before any work. A failed estimate never fails the job. `units` stays arbitrary and
+    `metric_verified` stays false.
+- **Measured** against ETH3D laser ground truth, 12 DSLR photos per scene:
+
+  | Scene | ViT-B | ViT-S | Old 1.35 m guess |
+  |---|---|---|---|
+  | office | +6% | +4% | +198% |
+  | pipes | +9% | +11% | +134% |
+  | terrace | +16% | +32% | −37% |
+
+  - Metric3D ViT-S ONNX was −19% on office, so it was dropped.
+  - The frames agree within 1–3%, which understates the true error.
+  - Garden: ViT-B 0.555 m/unit, ViT-S 0.638. Room: 0.482.
+  - Scripts were in the session scratchpad (`metric/proto.py`, `eth_run.py`); not committed.
+- **Hosted worker:** the Dockerfile installs `requirements-dense.txt` (onnxruntime) and downloads the pinned ONNX at build
+  with a hash assert (about 420 MB). The Railway `adapters.json` passes `--scale-model`. Runtime is about 15–30 s on
+  4 threads.
+- **Site:**
+  - `readScaleEstimate()` reads the estimate; `proposeWorld` scale order is measured pair, then estimate (`useEstimate`),
+    then phone height. `scaleSource: 'estimated-metric-depth'`; the first warning names the model and the ETH3D error.
+  - The Real → sim card shows an amber "Scale estimated · 1 unit ≈ X m" chip and one "Make the robot map →" button. The
+    phone-height field appears only when there is no estimate.
+  - The CLI uses the estimate unless `--camera-height` is passed. The service worker cache is v9.
+  - `openArtifact` proposes the map automatically when the reconstruction has an estimate, did not fold, and the map is
+    empty or the untouched sample (`untouchedSample`; an edited sample is kept, as Codex caught on PR #265). `reconstruction_fixture_adapter.py` gives the
+    hosted-processing smoke a stand-in estimate (1.08/K; model 'transport-fixture').
+- **Not done:** the Omniverse/SimReady reference-size cross-check (`reference_scale.py` uses Claude on a closed list of
+  standard objects). The estimate is not yet shown on `/scan` or in Arena exports.
+- **LinkedIn demo (51 s, 1920×1080 and 4:5):** `record_locate.py` with `SHORT=1` on the garden walkthrough (local
+  worker plus the static site). It shows the estimate 0.555 m/unit, "Make the robot map", photo DSC08100 placed (1,086 of
+  1,122 points agree), and a 4.2 m vacuum route. The video files and the post draft live in the session scratchpad (`li/`),
+  not the repo.
+
+## Metric single-photo preview (`photo-metric`) — 2026-11-01
+
+The owner chose this as the interim for the photo leg while Lyra is blocked.
+- **Worker:** `robotics/world_worker/photo_metric.py`, run as `--model <MoGe-2 ViT-B onnx>`, the same pinned file as
+  `metric_scale.MODEL`.
+  - It prepares the photo like a scan frame. The longer side becomes 644 px.
+  - With the camera unknown, the focal length and the depth shift are solved together; the best focal has a closed form for
+    each candidate shift, found by golden-section search.
+  - Points are dropped where the model marks no geometry and at depth edges (3x3 range over 4% of the depth).
+  - Outputs: `photo-metric.ply` (right-handed y-up, camera looking down -z; manifest units stay `arbitrary`) and
+    `photo-metric.json` (schema `brainsnn.photo-metric.v1`; measured, metric_verified, generative and collision_ready all
+    false).
+- **Measured:** 18 ETH3D photos (6 each from office, pipes and terrace). Truth was COLMAP points times the scan's true
+  scale. Depth was off by a median 7.9% (worst 27.3%, terrace); the field of view was estimated within about 7°.
+  `metric/photo_eval.py` is in the scratchpad.
+- **Hosted:** in the Railway `adapters.json` and the example adapters. The site proxy's `VISITOR_ENGINES` gains
+  `photo-metric`.
+- **Site:**
+  - `preferredEngine()` preselects `photo-metric` when the session holds exactly one photo.
+  - `openArtifact` reads `photo-metric.json` and shows the depth range, with no map card and no auto-proposal.
+  - The photo panel points to it when a worker or BrainSNN processing is available.
+  - End to end on the local worker: a room photo took 15 s and showed "most of it 1.3–4.3 m from the camera".
+- **Demo (56 s, 16:9 and 4:5):** `scripts/world-demo/record_photo_metric.py` on Mip-NeRF 360 room photo DSCF4766
+  (images_4). The worker took 13 s; the preview showed 1.3–4.3 m. The zoom and orbit are time-lapsed (8–16×) because
+  headless software WebGL draws a frame in about 1.5 s; the caption says so. PR #266 is merged and live (verify passed).
+
+## Share video (captioned flythrough) — 2026-11-01
+
+Idea from Chaitanya Bharech's "2D to 4D using AI" LinkedIn post: PDF bridge drawings to a Blender model, IFC and a
+drone-style flythrough whose captions name each component. In that post the AI also asked questions about drawing
+inconsistencies before modelling.
+- **Export tab:** "Make a share video ↗" records about 25 s in the browser with `share-video.mjs` (MediaRecorder on a canvas
+  stream; no worker or GPU).
+  - Scenes: a title card, then an orbit with the size, obstacle count and unknown area, then the 3 largest obstacles
+    called out with name and size, then the route replay with the run's numbers, then a closing card.
+  - Every scene carries `scaleLabel(world)` (authored / estimated / measured / assumed, plus "checked by you").
+  - Format: MP4 (H.264) where the browser offers it, else WebM. The container's Chromium build records VP9 in MP4; real
+    Chrome and Safari give H.264.
+- **Renderer:** `createRenderer(canvas, {fixed: {width, height}})` for an off-screen canvas, and `setView({yaw, zoom})`.
+- **Tests:** `share-video.test.mjs` (storyboard, labels, format choice). `browser_smoke.check_share_video` covers Chromium only,
+  cancel then a full record; headless WebKit has no canvas MediaRecorder.
+- **Next idea from the same post:** turn the map's warnings into 1–3 plain "check before you plan" questions.
+
+## Visitor processing on by default — 2026-11-01
+
+The owner chose visitors on but could not set `WORLD_SITE_VISITORS=1` on the Railway site service (the live status kept
+reading `"visitors":false`). With the owner's explicit approval, `worldWorkerProxy.js` now opens visitor sessions whenever
+the passcode derives their tenant credential, unless `WORLD_SITE_VISITORS=0`. The caps are unchanged: 2 jobs per
+connection a day, 20 a day in total, and the visitor tenant's 2 GiB of uploads. The worker needed no change:
+`tenants.py` already registers `site-visitors` from the same passcode. Proxy tests: the `env()` fixture is owner-only
+(`WORLD_SITE_VISITORS: '0'`), and a new test pins the default.

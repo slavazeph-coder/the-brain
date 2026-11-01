@@ -5,7 +5,8 @@
  *   node scripts/world-propose-map.mjs --points sparse-preview.ply --evidence reconstruction.json --out world.json
  *     [--report proposal.json] [--camera-height 1.35 | --measure "ax,ay,az;bx,by,bz;metres"] [--robot-height 1.9] [--name text]
  *
- * The map keeps scaleReviewed/mapReviewed false. Import it into World Builder and review scale and obstacles
+ * Scale: --measure when given, else the worker's estimated scale (reconstruction.json scale_estimate) when present, else the
+ * phone height (--camera-height forces it). The map keeps scaleReviewed/mapReviewed false. Import it into World Builder and review scale and obstacles
  * before planning or exporting to Arena / OpenUSD; this tool never marks a map reviewed. */
 import {parseArgs} from 'node:util';
 import {readFile,stat,writeFile} from 'node:fs/promises';
@@ -45,13 +46,15 @@ export async function main(argv=process.argv.slice(2)){
   const {world,report}=proposeWorld({points:visual.points,reconstruction,name:values.name||`Proposed map / ${points.receipt.file}`,
     cameraHeight:values['camera-height']===undefined?PROPOSAL.cameraHeight:Number(values['camera-height']),
     robotHeight:values['robot-height']===undefined?PROPOSAL.robotHeight:Number(values['robot-height']),
-    measurement:values.measure?parseMeasure(values.measure):null});
+    measurement:values.measure?parseMeasure(values.measure):null,
+    // The worker's estimated scale is used unless a phone height is given on purpose; a measurement replaces both.
+    useEstimate:values['camera-height']===undefined});
   // The receipts tie the map to the exact artifacts; compare them with the worker's manifest SHA-256 values.
   const full={...report,inputs:{points:points.receipt,evidence:{...evidence.receipt,pipeline:String(reconstruction.pipeline||'unknown')}},tool:'brainsnn world-propose-map'};
   await writeFile(values.out,JSON.stringify(world,null,2)+'\n');
   if(values.report)await writeFile(values.report,JSON.stringify(full,null,2)+'\n');
   console.log(`Proposed ${world.width} × ${world.depth} m map from ${report.cameras} cameras and ${report.points.toLocaleString('en')} points `+
-    `(${report.scaleSource==='measured-pair'?`measured ${report.measurement.distance} m scale`:`assumed ${report.assumedCameraHeight} m phone height`}): `+
+    `(${report.scaleSource==='measured-pair'?`measured ${report.measurement.distance} m scale`:report.scaleSource==='estimated-metric-depth'?`estimated scale, 1 unit ≈ ${report.metresPerUnit.toFixed(3)} m, not measured`:`assumed ${report.assumedCameraHeight} m phone height`}): `+
     `${report.area.free} m² free, ${report.area.obstacle} m² obstacles, ${report.area.unknown} m² unknown. Unreviewed: review scale and obstacles in World Builder before planning.`);
   return full;
 }

@@ -21,7 +21,7 @@ ADAPTERS = ROOT / 'robotics/world_worker/deploy/railway/adapters.json'
 
 def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     engines = enabled_engines(ADAPTERS)
-    assert engines == ['colmap-sparse', 'scene-usd', 'omniverse-pack']
+    assert engines == ['colmap-sparse', 'locate-photo', 'photo-metric', 'scene-usd', 'omniverse-pack']
     value = registry({'WORLD_WORKER_SITE_OWNER_TOKEN': OWNER, 'WORLD_WORKER_SITE_VISITOR_TOKEN': VISITOR}, 9 * 1024 ** 3, engines)
     raw = json.dumps(value)
     assert OWNER not in raw and VISITOR not in raw
@@ -95,3 +95,36 @@ def test_storage_budget_follows_the_volume(tmp_path, monkeypatch):
     monkeypatch.setenv('WORLD_STORAGE_BYTES', str(1024 ** 3))  # smaller than one job's 4 GiB budget
     with pytest.raises(ValueError, match='Storage capacity'):
         create_app(root=tmp_path / 'small', token='w' * 43)
+
+
+def test_hosted_metric_scale_photo_preview_and_model_pins_match_worker_image():
+    """Prevent deployment-branch drift: both model engines, exact checked checkpoint, and worker-only Railway boot."""
+    from robotics.world_worker import metric_scale
+
+    adapter_by_id = {entry['id']: entry for entry in json.loads(ADAPTERS.read_text())}
+    model_file = '/opt/brainsnn-models/moge-2-vitb-normal.onnx'
+    colmap = adapter_by_id['colmap-sparse']
+    photo = adapter_by_id['photo-metric']
+    assert colmap['enabled'] and colmap['license_reviewed']
+    assert photo['enabled'] and photo['license_reviewed']
+    assert colmap['command'][-2:] == ['--scale-model', model_file]
+    assert photo['command'][-2:] == ['--model', model_file]
+    assert photo['input_kinds'] == ['image'] and photo['max_inputs'] == 1
+    assert photo['timeout_seconds'] == 300
+
+    docker = (ROOT / 'robotics/world_worker/deploy/railway/Dockerfile').read_text()
+    dense = (ROOT / 'robotics/world_worker/requirements-dense.txt').read_text()
+    assert metric_scale.MODEL['revision'] in docker
+    assert metric_scale.MODEL['sha256'] in docker
+    assert 'requirements-dense.txt' in docker
+    assert '-r requirements-colmap.txt' in dense
+    assert 'onnxruntime==' in dense
+    assert 'photo_metric.py' in photo['command'][1]
+    assert 'sparse_colmap.py' in colmap['command'][1]
+
+    # Deployment-only branch, do not replace with website main's root railway.toml.
+    railway = (ROOT / 'railway.toml').read_text()
+    assert 'robotics/world_worker/deploy/railway/Dockerfile' in railway
+    assert 'robotics/world_worker/deploy/railway/start.sh' in railway
+    assert 'G1_DEPLOYMENT_CHECK' in railway
+    assert 'brainsnn-r3f-app/railway.toml' not in railway
