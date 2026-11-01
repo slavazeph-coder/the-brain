@@ -816,6 +816,61 @@ def test_durable_queue_double_restart_is_idempotent(tmp_path):
         assert c.get('/v1/jobs/' + jids[0], headers=HEADERS).json()['status'] == 'failed'
 
 
+def test_requeue_after_restart_skips_cancelled_queued_rows(tmp_path):
+    """A job cancelled while still 'queued' survives the restart in the DB.
+
+    requeue_pending (app.py) only SELECTs status='queued', so the cancelled
+    row is excluded from recovery and never executed.  The runner's stale-item
+    guard (store.job 404 -> return) covers a different path — deletion; this
+    pins the cancel case, which previously had no coverage.
+
+    Phase 1: 2 jobs, job[0] running (blocked by the release gate), job[1]
+    queued; owner cancels job[1] (active cancel — the row is kept, not
+    deleted, so it is visible to restart reconciliation).
+    Restart 1: Store.__init__ fails the running row (in-flight, unrecoverable);
+    requeue_pending returns [] — the cancelled row is skipped and nothing is
+    re-enqueued.  job[0] lands 'failed', job[1] stays 'cancelled' with no
+    execution traces (no operator.log, no output artifacts).
+    Restart 2: still [] — the skip is stable across repeated restarts.
+    """
+    config, _release = blocking_adapter(tmp_path)
+    root = tmp_path / 'data'
+    options = {'root': root, 'token': TOKEN, 'adapters': str(config),
+               'storage_limit': 8 * 1024**2, 'job_limit': 2 * 1024**2}
+
+    with TestClient(create_app(**options)) as c:
+        jids = []
+        for _ in range(2):
+            jid, _ = make_job(c, 'test-adapter')
+            assert c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS).status_code == 200
+            jids.append(jid)
+        assert c.get('/v1/jobs/' + jids[0], headers=HEADERS).json()['status'] == 'running'
+        assert c.get('/v1/jobs/' + jids[1], headers=HEADERS).json()['status'] == 'queued'
+        # Cancel the queued job while it is still active (queued is active).
+        cancelled = c.delete('/v1/jobs/' + jids[1], headers=HEADERS).json()
+        assert cancelled['status'] == 'cancelled', f'cancel: {cancelled}'
+
+    # Restart 1: only status='queued' rows are re-enqueued — the cancelled
+    # row is excluded, so recovery is a no-op.
+    with TestClient(create_app(**options)) as c:
+        recovered = c.app.state.requeue_pending_return
+        assert recovered == [], f'cancelled row re-enqueued: {recovered}'
+        # The cancelled row still exists in the DB (cancel keeps it).
+        assert c.get('/v1/jobs/' + jids[1], headers=HEADERS).json()['status'] == 'cancelled'
+        # The running row was in-flight at restart; Store.__init__ fails it.
+        assert c.get('/v1/jobs/' + jids[0], headers=HEADERS).json()['status'] == 'failed'
+        # The cancelled job was never executed: no execution traces at all.
+        assert c.get('/v1/jobs/' + jids[1], headers=HEADERS).json()['status'] == 'cancelled'
+        assert not (root / 'jobs' / jids[1] / 'operator.log').exists()
+        assert not (root / 'jobs' / jids[1] / 'output').exists()
+
+    # Restart 2: the skip is stable — still nothing queued in the DB.
+    with TestClient(create_app(**options)) as c:
+        assert c.app.state.requeue_pending_return == []
+        assert c.get('/v1/jobs/' + jids[1], headers=HEADERS).json()['status'] == 'cancelled'
+        assert c.get('/v1/jobs/' + jids[0], headers=HEADERS).json()['status'] == 'failed'
+
+
 def test_queued_job_rechecks_capacity_before_spawning_adapter(tmp_path):
     config,_=blocking_adapter(tmp_path)
     root=tmp_path/'data'
