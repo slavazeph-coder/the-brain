@@ -7,8 +7,9 @@ import https from 'node:https';
  * session instead, so nobody types a worker address or token.
  *
  * - Owner sessions need WORLD_SITE_PASSCODE and use the worker tenant "site-owner".
- * - Visitor sessions exist only with WORLD_SITE_VISITORS=1. They use the tenant "site-visitors", and get a daily job cap
- *   per connection and overall.
+ * - Visitor sessions are on whenever their tenant credential exists (the owner turned them on, November 1 2026);
+ *   WORLD_SITE_VISITORS=0 turns them off. They use the tenant "site-visitors", and get a daily job cap per connection
+ *   and overall.
  * - Both tenant credentials derive from the passcode (derivedCredential), so the site and the worker share one secret.
  *   WORLD_WORKER_SITE_OWNER_TOKEN and WORLD_WORKER_SITE_VISITOR_TOKEN override that on both sides.
  *
@@ -25,7 +26,8 @@ const RESPONSE_JSON_BYTES = 1024 ** 2;
 const MAX_SESSIONS = 2000;
 const SESSION_MS = { owner: 12 * 3600_000, visitor: 2 * 3600_000 };
 const PASSCODE_FAILURES = 10;  // per address per hour, then the passcode is not checked at all
-const VISITOR_ENGINES = new Set(['colmap-sparse', 'scene-usd']);
+// photo-metric is one photo to a 3D preview in estimated metres: one upload and about ten seconds of CPU.
+const VISITOR_ENGINES = new Set(['colmap-sparse', 'photo-metric', 'scene-usd']);
 // A visitor job needs at most one batch of uploads: a video, or up to 12 photos (COLMAP needs 3 or more), then a cloud
 // for the scene. So a session holds at most one unused batch, and a connection gets a batch and a cloud per job allowed.
 // All visitors together stay inside their tenant's 20 uploads, which leaves the owner's room in the worker's 50.
@@ -103,7 +105,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
   const ownerToken = String(env.WORLD_WORKER_SITE_OWNER_TOKEN || derive('site-owner'));
   const visitorToken = String(env.WORLD_WORKER_SITE_VISITOR_TOKEN || derive('site-visitors'));
   const ownerReady = Boolean(upstream && CREDENTIAL.test(ownerToken) && passcode.length >= 12);
-  const visitorsReady = Boolean(upstream && env.WORLD_SITE_VISITORS === '1' && CREDENTIAL.test(visitorToken) && visitorToken !== ownerToken);
+  const visitorsReady = Boolean(upstream && env.WORLD_SITE_VISITORS !== '0' && CREDENTIAL.test(visitorToken) && visitorToken !== ownerToken);
   const perConnection = integer(env.WORLD_SITE_VISITOR_JOBS_PER_DAY, 2, 1, 20);
   const perDay = integer(env.WORLD_SITE_VISITOR_JOBS_TOTAL, 20, 1, 500);
   const sessions = new Map(), failures = new Map(), visitorJobs = new Map(), leases = new Map();

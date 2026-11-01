@@ -1,7 +1,29 @@
 # BrainSNN World Builder — Flagship Product Specification
 
-Status: implementation in progress on the development branch; see [current implementation and validation](world-studio-implementation.md). Experimental features must not be advertised as live.
-Branch: feature/world-builder-flagship
+Status (October 31, 2026): built on `main` and deployed to brainsnn.com. This branch's work shipped in PR #198, and the homepage items below in PR #263. Evidence, and the requirements still open, are in [current implementation and validation](world-studio-implementation.md) under "Full objective still open". Experimental features must not be advertised as live.
+
+| Milestone | State |
+|---|---|
+| 1. Hero, sample world, mobile upload, job status, processing states, failure fallback | Done. The hero carries the headline, "Create a world" and "Explore Arena", and an above-the-fold Sample / Generated / Reviewed demo drawn from the real sample and planner. Uploads and jobs run through an operator's private worker; public hosted processing is still off. |
+| 2. Single photo to 3D | An on-device relative-depth preview is done and labelled visual only. Since November 1 the worker's `photo-metric` engine turns one photo into a 3D point preview in estimated metres (MoGe-2 ViT-B, MIT), in about 15 s on CPU. Against ETH3D laser truth over 18 photos its depth was off by a median 7.9% (worst 27%, outdoors). It is labelled not measured and not generative, and it never becomes a map. No licensed generative model has run: Lyra 1 waits on GB10 qualification, and Lyra 2 is excluded under its checkpoint terms. |
+| 3. Phone walkthrough to reviewed map, path preview and estimates | Done with a connected worker; verified on the live site on October 22 with the operator's CPU worker. Since October 31 the worker estimates each scan's metric scale with MoGe-2 ViT-B (MIT) and the map is proposed at that scale as soon as the scan loads (unless it would replace the person's own map), labelled estimated and unreviewed; a measured distance replaces it. On three ETH3D scenes with laser-measured ground truth it read 6%, 9% and 16% high, where the old fixed 1.35 m phone-height guess was 198% high, 134% high and 37% low. The gym and cleaner field validation is open. |
+| 4. Video-model tags, rescan guidance, scenario comparison, signed report | Frame-bound observations with human review are implemented but not benchmarked. Capture guidance, partial-reconstruction recovery and scenario forks exist. Reports carry a SHA-256 hash, not a signature. |
+| Acceptance | Phone-sized WebKit runs in CI. Physical iPhone Safari and a supervised robot comparison are still open. |
+
+**Still open, and each needs the owner** (nothing more can be built for these from the repository):
+
+| Item | What unblocks it |
+|---|---|
+| Lyra generative 3D | GB10 time for Lyra 1 qualification, and a check of the individual checkpoint licences before any commercial use. |
+| GPU worker | Update the repository's GPU Remote Validation SSH port variable and host key to the current machine; the last run recorded no markers. |
+| Physical iPhone Safari | One walkthrough on a real iPhone through `/scan`. CI covers phone-sized WebKit only. |
+| Free visitor processing | On by default since November 1 (the owner could not set the flag): 2 jobs per visitor, 20 a day. `WORLD_SITE_VISITORS=0` on the site service turns it off. |
+| Anthropic key | Rotate the key that was pasted in chat, and set it only in the worker environment. |
+
+Branch: feature/world-builder-flagship (historical, last commit 80fae28 on October 22). Its specification and fixes reached
+`main` through PR #198 and later. The fixes made after that merge (the untouched-sample guard, resilient job polling, the
+MapAnything poses, the Arena floor-estimate guard and the framed install) are on `main` in equivalent form. Build on `main`,
+not on this branch.
 Goal: turn a photo or iPhone walkthrough into an explorable world, then a reviewed robot planning scenario.
 
 ## Brand and landing page

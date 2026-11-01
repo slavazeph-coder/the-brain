@@ -8,6 +8,10 @@ With --densify-model (the pinned local Depth Anything V2 Small ONNX file), it al
 writes dense-preview.ply: per-frame model depth aligned to the frame's own SfM
 points and kept only where neighbouring frames agree (see densify.py). The dense
 cloud is listed first, so the site opens it; the sparse cloud stays alongside it.
+
+With --scale-model (the pinned MoGe-2 ViT-B ONNX file), reconstruction.json also carries scale_estimate: metres per
+reconstruction unit estimated by a metric-depth model at the reconstruction's own points (see metric_scale.py). It is
+labelled estimated, never measured; units stay arbitrary and metric_verified stays false until a measured distance.
 """
 from __future__ import annotations
 import argparse
@@ -23,10 +27,11 @@ import warnings
 
 try:
     from .geometry import write_point_cloud
-    from . import densify, native_capture
+    from . import densify, metric_scale, native_capture
 except ImportError:
     from geometry import write_point_cloud
     import densify
+    import metric_scale
     import native_capture
 
 PYCOLMAP_VERSION = '4.2.1'
@@ -362,7 +367,7 @@ def camera_frame_records(model, images, associations, sources, job_root):
     return frames
 
 
-def run(request: dict, densify_model: Path | None = None):
+def run(request: dict, densify_model: Path | None = None, scale_model: Path | None = None):
     import numpy as np
     import pycolmap
     if pycolmap.__version__ != PYCOLMAP_VERSION:
@@ -375,6 +380,8 @@ def run(request: dict, densify_model: Path | None = None):
     video = len(inputs) == 1 and inputs[0].get('kind') == 'video'
     if request.get('schema') != 'brainsnn.adapter.v1' or not (photo_set or video):
         raise ValueError('Use 3–12 overlapping photos, one walkthrough video, or native capture JSON with 3–11 photos.')
+    # A wrong or missing model file is an operator error: refused before any work, not discovered after mapping.
+    scale_session = metric_scale.load_session(scale_model, THREADS) if scale_model else None
     out = Path(request['output_dir']).resolve()
     out.mkdir(parents=True, exist_ok=True)
     # Intermediate files remain outside published artifacts and share worker retention.
@@ -467,6 +474,14 @@ def run(request: dict, densify_model: Path | None = None):
                  'model': {k: densify.MODEL[k] for k in ('repo', 'revision', 'file', 'sha256', 'license')},
                  **frame_stats, **fuse_stats, 'tolerance': 0.02, 'min_agree': 2, 'neighbours': 4,
                  'elapsed_seconds': round(time.monotonic() - dense_started, 3)}
+    scale_estimate = None
+    if scale_session is not None:
+        try:
+            scale_estimate = metric_scale.estimate(model, images, scale_session)
+        except Exception as error:  # the reconstruction stands without an estimate; the site falls back to a measurement
+            scale_estimate = {'status': 'failed', 'reason': f'The scale estimate failed: {str(error)[:240]}',
+                              'model': {k: metric_scale.MODEL[k] for k in ('repo', 'revision', 'file', 'sha256', 'base_model', 'license')}}
+    estimated = bool(scale_estimate and scale_estimate['status'] == 'estimated')
     frame_records = camera_frame_records(model, images, associations, sources, out.parent)
     by_image = {Path(frame['image']['name']).name: frame for frame in frame_records}
     cameras = []
@@ -487,7 +502,7 @@ def run(request: dict, densify_model: Path | None = None):
                 'mean_reprojection_error_pixels': model.compute_mean_reprojection_error(),
                 'elapsed_seconds': round(time.monotonic() - started, 3),
                 'coordinate_frame': 'colmap', 'units': 'arbitrary', 'metric_verified': False,
-                'physics_ready': False, 'policy_executed': False, 'model_weights_used': dense is not None,
+                'physics_ready': False, 'policy_executed': False, 'model_weights_used': dense is not None or scale_session is not None,
                 'camera_intrinsics': ('source-bound native calibration, transformed to resized COLMAP half-pixel coordinates; held fixed during solve'
                                       if native else 'estimated from resized images; not measured calibration'),
                 'review_required': (['Recapture: the model contradicts its own consecutive frames'] if folded else []) +
@@ -509,7 +524,10 @@ def run(request: dict, densify_model: Path | None = None):
                               'confirm the scale and some withheld tape measurements before relying on dimensions.']
                              if capture.get('duration_seconds', 0) > 60 else []) +
                             (['Dense points come from a depth model checked across frames; they are less accurate than the sparse points.']
-                             if dense else []),
+                             if dense else []) +
+                            ([f"Scale is estimated by a metric-depth model ({metric_scale.MODEL['base_model']}): 1 unit is about "
+                              f"{scale_estimate['metres_per_unit']:.3f} m. It is not measured; on laser-measured test scenes it read "
+                              '6 to 16% high. Measure one distance before relying on clearances.'] if estimated else []),
                 'cameras': cameras}
     try:
         from . import camera_frames
@@ -524,6 +542,7 @@ def run(request: dict, densify_model: Path | None = None):
                                          'camera_pixels': 'Native COLMAP parameters use top-left centre (.5,.5); the shared raster projector subtracts .5. Calibration parameters are not silently shifted.',
                                          'timestamps': 'Original video PTS unavailable for the FFmpeg resampled path; photos have no video timestamp.'}
     if dense: evidence['dense'] = dense
+    if scale_estimate: evidence['scale_estimate'] = scale_estimate
     native_artifacts = []
     if native:
         (out / 'native-capture.json').write_text(json.dumps(native, indent=2, allow_nan=False))
@@ -545,11 +564,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-manifest', required=True)
     parser.add_argument('--densify-model', type=Path, help='pinned Depth Anything V2 Small ONNX file; adds dense-preview.ply')
+    parser.add_argument('--scale-model', type=Path, help='pinned MoGe-2 ViT-B ONNX file; adds an estimated metric scale')
     args = parser.parse_args()
     request = Path(args.input_manifest)
     if request.stat().st_size > 65536:
         raise ValueError('Input manifest is too large.')
-    run(json.loads(request.read_text()), densify_model=args.densify_model)
+    run(json.loads(request.read_text()), densify_model=args.densify_model, scale_model=args.scale_model)
 
 
 if __name__ == '__main__':
