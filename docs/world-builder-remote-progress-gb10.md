@@ -1,9 +1,19 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-10-31T00:00Z
+Last updated: 2026-11-01T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 178d — 2026-11-01 (GB10: doc line-141 precision fix committed; suites green; pushed d11cd3f)
+
+- **Bounded improvement (GB10, branch `hermes/world-builder-gb10` @ `6ebfabe` → `d11cd3f`):**
+  - `docs/world-studio-implementation.md` line 141: "256 MiB total cap" → "256 MiB cap on the per-request sum of selected artifact sizes, 1–32 refs". Verified against `report_receipts.py:25` (`MAX_ARTIFACT_BYTES = 256 * 1024**2`) and `app.py:722` (`sum(item['size'] for item in selected) > MAX_ARTIFACT_BYTES`) — cap is per-request over `artifactRefs` (1–32, `app.py:66`), not total job storage.
+  - All other previously flagged doc gaps confirmed already covered (signed-receipt section matches `app.py` routes, env vars, status codes, CLI).
+- **Fresh test results (this run):** pytest `test_report_receipts.py` **33/33 pass** (20.56 s); node `report-receipts.test.mjs` **12/12 pass** (133 ms).
+- 4090: not probed this run (5+ consecutive refused; blocker-repeat rule → local task instead).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** (a) live-HTTP retention override validation on GB10; (b) item 8 privacy/access checklist audit against "Worker operation" section; (c) re-probe 4090 for PLY z-flip parity lane once reachable.
 
 ### Run 178b — 2026-11-01 (GB10: cancellation-test 409 race fix committed; all suites green; pushed 6ebfabe)
 
