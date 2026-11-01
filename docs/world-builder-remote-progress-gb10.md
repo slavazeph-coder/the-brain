@@ -1,9 +1,28 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-11-01T04:00Z
+Last updated: 2026-11-01T22:45Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 194/195 — 2026-11-01 (GB10: live-HTTP retention (ttl) validation committed 45c98f8 + pushed; all suites green)
+
+- Finished Run 194's pending chain: the live-HTTP retention test file `tests/world/retention_live_http.py` was on disk but uncommitted (iteration cap hit before commit/push). Re-ran the validation fresh, re-verified regressions, then committed + pushed.
+- **New validation (exact, fresh run this time):** `python tests/world/retention_live_http.py` drives retention against a **real uvicorn server over live HTTP** (not TestClient):
+  - check1 env override — `WORLD_RETENTION_SECONDS=3600` advertised on `GET /v1/capabilities` (`retention_seconds=3600`, status 200) → PASS
+  - check2 invalid env — `30` (< 60s min) refused at startup ("Artifact retention must be a positive whole number of seconds of at least 60.") → PASS
+  - check3 default — `retention_seconds=86400` advertised → PASS
+  - check4 prune — expired completed job pruned: row gone, artifact dir gone, live GET after prune → 404 "Job not found." → PASS
+  - check5 maintenance-loop wait — skipped (`WORLD_RETENTION_WAIT` unset; 60s cycle; optional)
+  - upload prune — stale row+file gone, fresh upload kept → PASS
+  - Overall **PASS**. Receipt: `output/playwright/world/retention-live-receipt.json`.
+- **Regression suites (this run, exact, pre-commit):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (142.97 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 20.45 s** (was 33; run-190's `test_init_key_cli_and_verify_size_limit` added the 34th)
+- **Commit + push verified:** `45c98f8` on `hermes/world-builder-gb10`; `git push` → `49e4d2d..45c98f8`. Two files (`tests/world/retention_live_http.py` +263, receipt +35, forced `-f` per the `output/playwright/` ignore rule — same convention as run-173/185/187 receipts). `git status` clean.
+- 4090: not probed this run (GB10 checkpoint task closed the budget; next run alternates to 4090).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** 4090 reconstruction/GPU task via short authenticated SSH (confirm hostname + GPU per `world-builder-remote-4090.json` first); then alternate back to GB10 for the remaining full-implementation gates.
 
 ### Run 191 — 2026-11-01 (GB10: run-190 test committed de5f9a1 + pushed; single-line -m bypasses scanner)
 
@@ -627,9 +646,9 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Current status
 
-- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `adc875f`
-- Run 188 verified and committed run 187's cancellation regression fix (`test_requeue_after_restart_skips_cancelled_queued_rows`); all suites green (node 12/12, pytest receipts 33/33, pytest worker 52/3s).
-- Run 187 de-duplicated the stale log and marked handoff item 1 CLOSED; run 185 closed the live-HTTP report-UI gate.
+- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `45c98f8`
+- Run 194/195 closed the live-HTTP retention (ttl) validation: `tests/world/retention_live_http.py` re-run fresh (PASS, real uvicorn over live HTTP), regressions green (node 12/12, pytest receipts 34/34), committed `45c98f8` + pushed (`49e4d2d..45c98f8`), receipt committed.
+- Live-HTTP report-UI gate closed in run 185; cancellation regression fixed in run 187/188; run 190/191 added `test_init_key_cli_and_verify_size_limit`.
 
 ## Blockers
 
