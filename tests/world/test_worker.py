@@ -594,6 +594,59 @@ def test_queued_and_prepared_jobs_reserve_global_disk_capacity(tmp_path):
         assert wait(c,ids[0])['status']=='complete'
 
 
+def test_reclaim_disk_budget_on_queued_cancel(tmp_path):
+    # Cancellation regression for the queued phase: disk reservation is charged
+    # while a job's status is ACTIVE (prepared/queued/running), so a job held
+    # in the queue must keep its reservation. Gating the single queue consumer
+    # at queue_admission_hook keeps it 'queued' (charged) while the test runs,
+    # so the 429->cancel->201 transition is proved at status-flip time: the
+    # reservation drops the moment cancel_job flips queued->cancelled, NOT when
+    # the consumer later processes the cancelled job (it never will be
+    # released, so no consumer-side cleanup can explain the freed capacity).
+    import asyncio
+    config,release=blocking_adapter(tmp_path)
+    with TestClient(create_app(root=tmp_path/'data',token=TOKEN,adapters=str(config),storage_limit=8*1024**2,job_limit=2*1024**2)) as c:
+        gate=asyncio.Event()
+        original=c.app.state.queue_admission_hook
+        async def hold_gate(jid):await gate.wait()
+        c.app.state.queue_admission_hook=hold_gate
+        try:
+            body={'engine':'test-adapter','upload_ids':[upload(c)],'consent':True}
+            # Fill the worker budget: three jobs each reserve the 2 MiB job_limit,
+            # so a fourth cannot be admitted.
+            ids=[]
+            for _ in range(3):
+                response=c.post('/v1/jobs',json=body,headers=HEADERS)
+                assert response.status_code==201,response.text
+                ids.append(response.json()['id'])
+            assert c.post('/v1/jobs',json=body,headers=HEADERS).status_code==429
+            # Move one job into the queue and hold the consumer so it stays
+            # 'queued' (still charged) instead of completing and freeing its
+            # slot through normal execution.
+            c.post(f'/v1/jobs/{ids[0]}/start',json={},headers=HEADERS)
+            deadline=time.monotonic()+5
+            while time.monotonic()<deadline:
+                if c.get('/v1/jobs/'+ids[0],headers=HEADERS).json()['status']=='queued':break
+                time.sleep(.02)
+            assert c.get('/v1/jobs/'+ids[0],headers=HEADERS).json()['status']=='queued'
+            assert c.post('/v1/jobs',json=body,headers=HEADERS).status_code==429
+            # The consumer is still gated, so only the status flip can free
+            # the reservation. Cancel returns immediately and admission recovers
+            # in the same loop without releasing the gate: the reclaimed slot
+            # is proved by 201 here, while the two remaining jobs stay 'prepared'
+            # (still charged, not yet dequeued), so a further admission attempt
+            # is still refused -- confirming the freed capacity came from ids[0]
+            # and not from the two that were never started.
+            assert c.delete('/v1/jobs/'+ids[0],headers=HEADERS).json()['status']=='cancelled'
+            assert c.get('/v1/jobs/'+ids[0],headers=HEADERS).json()['status']=='cancelled'
+            assert c.post('/v1/jobs',json=body,headers=HEADERS).status_code==201
+            for jid in (ids[1],ids[2]):
+                assert c.get('/v1/jobs/'+jid,headers=HEADERS).json()['status']=='prepared'
+        finally:
+            c.app.state.queue_admission_hook=original
+            gate.set()
+
+
 def test_concurrent_uploads_reserve_declared_bytes_before_chunks_arrive(tmp_path):
     from concurrent.futures import ThreadPoolExecutor
     with TestClient(create_app(root=tmp_path,token=TOKEN,storage_limit=8*1024**2,job_limit=2*1024**2)) as c:
