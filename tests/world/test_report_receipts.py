@@ -377,9 +377,25 @@ def test_owner_cancellation_aborts_job_source_rehash_and_never_completes(signed_
             'wrapper did not reach the real digest'
         # No completion record: the re-hash never finished, so complete() was
         # never called. Deleting artifacts is allowed only for non-complete jobs.
-        assert client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A)).status_code == 200
-        # The source upload is no longer in use (running set cleared).
-        assert client.delete('/v1/uploads/' + uid, headers=headers(A)).status_code == 200
+        # The execute() task has returned, but its finally block clears the
+        # running set (app.py:485) only when the event loop schedules it — that
+        # scheduling happens after the release.set() below yields control — so
+        # delete_artifacts (app.py:690, 'jid in running') can still 409 while
+        # the worker task is between return and finally. Poll until the
+        # running set actually clears instead of single-shot asserting.
+        deadline = time.monotonic() + 10
+        response = client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A))
+        while response.status_code == 409 and time.monotonic() < deadline:
+            time.sleep(0.05)
+            response = client.delete(f'/v1/jobs/{jid}/artifacts', headers=headers(A))
+        assert response.status_code == 200, response.text
+        # The source upload is no longer in use once the running set clears.
+        deadline = time.monotonic() + 10
+        response = client.delete('/v1/uploads/' + uid, headers=headers(A))
+        while response.status_code == 409 and time.monotonic() < deadline:
+            time.sleep(0.05)
+            response = client.delete('/v1/uploads/' + uid, headers=headers(A))
+        assert response.status_code == 200, response.text
 
 
 def test_report_receipt_exceeding_wait_budget_returns_504_and_releases_slot(signed_options, monkeypatch):
