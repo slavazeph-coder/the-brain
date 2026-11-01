@@ -21,7 +21,7 @@ ADAPTERS = ROOT / 'robotics/world_worker/deploy/railway/adapters.json'
 
 def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     engines = enabled_engines(ADAPTERS)
-    assert engines == ['colmap-sparse', 'locate-photo', 'scene-usd', 'omniverse-pack']
+    assert engines == ['colmap-sparse', 'locate-photo', 'photo-metric', 'scene-usd', 'omniverse-pack']
     value = registry({'WORLD_WORKER_SITE_OWNER_TOKEN': OWNER, 'WORLD_WORKER_SITE_VISITOR_TOKEN': VISITOR}, 9 * 1024 ** 3, engines)
     raw = json.dumps(value)
     assert OWNER not in raw and VISITOR not in raw

@@ -266,3 +266,26 @@ Branch `claude/metric-scale`. The owner asked to fix the assumed scale using Hug
   worker plus the static site). It shows the estimate 0.555 m/unit, "Make the robot map", photo DSC08100 placed (1,086 of
   1,122 points agree), and a 4.2 m vacuum route. The video files and the post draft live in the session scratchpad (`li/`),
   not the repo.
+
+## Metric single-photo preview (`photo-metric`) — 2026-11-01
+
+The owner chose this as the interim for the photo leg while Lyra is blocked.
+- **Worker:** `robotics/world_worker/photo_metric.py`, run as `--model <MoGe-2 ViT-B onnx>`, the same pinned file as
+  `metric_scale.MODEL`.
+  - It prepares the photo like a scan frame. The longer side becomes 644 px.
+  - With the camera unknown, the focal length and the depth shift are solved together; the best focal has a closed form for
+    each candidate shift, found by golden-section search.
+  - Points are dropped where the model marks no geometry and at depth edges (3x3 range over 4% of the depth).
+  - Outputs: `photo-metric.ply` (right-handed y-up, camera looking down -z; manifest units stay `arbitrary`) and
+    `photo-metric.json` (schema `brainsnn.photo-metric.v1`; measured, metric_verified, generative and collision_ready all
+    false).
+- **Measured:** 18 ETH3D photos (6 each from office, pipes and terrace). Truth was COLMAP points times the scan's true
+  scale. Depth was off by a median 7.9% (worst 27.3%, terrace); the field of view was estimated within about 7°.
+  `metric/photo_eval.py` is in the scratchpad.
+- **Hosted:** in the Railway `adapters.json` and the example adapters. The site proxy's `VISITOR_ENGINES` gains
+  `photo-metric`.
+- **Site:**
+  - `preferredEngine()` preselects `photo-metric` when the session holds exactly one photo.
+  - `openArtifact` reads `photo-metric.json` and shows the depth range, with no map card and no auto-proposal.
+  - The photo panel points to it when a worker or BrainSNN processing is available.
+  - End to end on the local worker: a room photo took 15 s and showed "most of it 1.3–4.3 m from the camera".
