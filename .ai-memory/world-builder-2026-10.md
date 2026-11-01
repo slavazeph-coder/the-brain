@@ -309,3 +309,12 @@ inconsistencies before modelling.
 - **Tests:** `share-video.test.mjs` (storyboard, labels, format choice). `browser_smoke.check_share_video` covers Chromium only,
   cancel then a full record; headless WebKit has no canvas MediaRecorder.
 - **Next idea from the same post:** turn the map's warnings into 1–3 plain "check before you plan" questions.
+
+## Visitor processing on by default — 2026-11-01
+
+The owner chose visitors on but could not set `WORLD_SITE_VISITORS=1` on the Railway site service (the live status kept
+reading `"visitors":false`). With the owner's explicit approval, `worldWorkerProxy.js` now opens visitor sessions whenever
+the passcode derives their tenant credential, unless `WORLD_SITE_VISITORS=0`. The caps are unchanged: 2 jobs per
+connection a day, 20 a day in total, and the visitor tenant's 2 GiB of uploads. The worker needed no change:
+`tenants.py` already registers `site-visitors` from the same passcode. Proxy tests: the `env()` fixture is owner-only
+(`WORLD_SITE_VISITORS: '0'`), and a new test pins the default.
