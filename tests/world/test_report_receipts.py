@@ -329,6 +329,54 @@ def test_offline_cli_verifies_actual_scenario_file_and_refuses_changed_bytes(sig
     assert result.returncode == 2 and 'rejected' in result.stderr and not result.stdout
 
 
+def test_init_key_cli_and_verify_size_limit(signed_options, tmp_path):
+    # Covers the two CLI paths the existing offline test does not touch:
+    #   1. `init-key` subcommand — prints a JSON public-key document to stdout
+    #      (keyId, schema, algorithm, publicKey) and exits 0.
+    #   2. `verify` size-limit path — `read()` in report_receipts.py:285-287
+    #      rejects a receipt larger than MAX_RECEIPT_BYTES (64 KiB) with
+    #      exit 2 and "size limit" in stderr.
+    # init-key: distinct absolute paths under tmp_path.
+    priv, pub = tmp_path / 'cli-priv.key', tmp_path / 'cli-pub.json'
+    result = subprocess.run(
+        [sys.executable, '-m', 'robotics.world_worker.report_receipts', 'init-key',
+         '--private-key', str(priv), '--public-key', str(pub)],
+        cwd=ROOT, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    doc = json.loads(result.stdout)
+    assert doc['schema'] == 'brainsnn.world.report-key.v1'
+    assert doc['algorithm'] == 'Ed25519'
+    assert len(doc['keyId']) == 64 and all(c in '0123456789abcdef' for c in doc['keyId'])
+    assert len(doc['publicKey']) == 43  # base64url of 32 bytes, no padding
+    # Private key file must exist, be exactly 32 bytes, and never be printed.
+    assert priv.stat().st_size == 32
+    assert not priv.read_bytes().hex() in result.stdout
+    # init-key refuses to overwrite an existing key.
+    result = subprocess.run(
+        [sys.executable, '-m', 'robotics.world_worker.report_receipts', 'init-key',
+         '--private-key', str(priv), '--public-key', str(pub)],
+        cwd=ROOT, capture_output=True, text=True, timeout=10)
+    assert result.returncode != 0 and result.stdout == ''
+    # verify size-limit: receipt file > 64 KiB is rejected at read() before
+    # any signature or hash work. read() raises ValueError('size limit'),
+    # verify_cli catches it and prints the generic rejection line to stderr.
+    with TestClient(create_app(**signed_options[0])) as client:
+        jid, _, _ = complete(client, A)
+        receipt = client.get(f'/v1/jobs/{jid}/receipt', headers=headers(A)).json()
+    scenario = tmp_path / 'scenario.json'; scenario.write_bytes(SCENARIO)
+    big = tmp_path / 'big-receipt.json'
+    # Pad the receipt with extra whitespace so raw bytes exceed 64 KiB.
+    padding = b' ' * (64 * 1024 - len(json.dumps(receipt).encode()) + 1024)
+    big.write_bytes(json.dumps(receipt).encode() + padding)
+    result = subprocess.run(
+        [sys.executable, '-m', 'robotics.world_worker.report_receipts', 'verify',
+         '--receipt', str(big), '--trusted-public-key', str(pub), '--scenario', str(scenario)],
+        cwd=ROOT, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 2, result.stdout
+    assert 'rejected' in result.stderr, result.stderr
+    assert result.stdout == ''
+
+
 def test_owner_cancellation_aborts_job_source_rehash_and_never_completes(signed_options, monkeypatch):
     # Unverified cancellation path: hash_cancellations (app.py cancel_job -> set)
     # must abort the job's own source re-hash loop in execute(). Prove the loop
