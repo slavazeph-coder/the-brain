@@ -81,6 +81,7 @@ jobs:
       SSH_HOST: ${{ vars.BRAINSNN_GPU_SSH_HOST }}
       SSH_PORT: ${{ vars.BRAINSNN_GPU_SSH_PORT }}
       SSH_USER: ${{ vars.BRAINSNN_GPU_SSH_USER }}
+      REMOTE_PYTHON: ${{ vars.BRAINSNN_GPU_PYTHON }}
       # NOTE: SSH_KEY / KNOWN / EVIDENCE are deliberately NOT set here. The
       # `runner` context is not available to job-level `env:` (only github,
       # needs, strategy, matrix, vars, secrets and inputs are), and using it
@@ -263,11 +264,18 @@ jobs:
       - name: "Phase 5: prove real CUDA execution through the existing PyTorch"
         run: |
           set -euo pipefail
-          rsh 'bash -s' > "$EVIDENCE/03-pytorch-cuda.txt" 2>&1 <<'REMOTE' || true
+          rsh "bash -s '${REMOTE_PYTHON:-}'" > "$EVIDENCE/03-pytorch-cuda.txt" 2>&1 <<'REMOTE' || true
           set -u
           # Inspection and a bounded computation only. Nothing is installed,
-          # upgraded, or removed in Simon's Python environment.
-          python3 - <<'PY'
+          # upgraded, or removed in the box's Python environment. The box may keep
+          # torch in a venv rather than the system python: prefer the configured
+          # interpreter (repo var BRAINSNN_GPU_PYTHON), then known venvs, then python3.
+          PYBIN=python3
+          for cand in "${1:-}" /workspace/brainsnn-workspace/.venv/bin/python /workspace/slava/vllm-venv/bin/python python3; do
+            [ -n "$cand" ] && "$cand" -c 'import torch' >/dev/null 2>&1 && { PYBIN="$cand"; break; }
+          done
+          echo "PYTHON_BIN=$PYBIN"
+          "$PYBIN" - <<'PY'
           import json, time
           try:
               import torch
