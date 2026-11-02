@@ -49,6 +49,7 @@ THREADS = int(os.environ.get('WORLD_CPU_THREADS', '2')) if os.environ.get('WORLD
 THREADS = max(1, min(64, THREADS))  # a shared worker keeps 2; a worker on its own machine can give it all its cores
 MAX_PIXELS = 24_000_000
 MAX_IMAGE_EDGE = 1280
+MIN_IMAGE_SIDE = 256
 MAX_POINTS = 50_000
 SELECTED_MODEL = 'selected.txt'  # in the sparse folder: which of COLMAP's models the outputs come from
 # Mapping can split one walkthrough into several models depending on its seed. From the same matches, a 62 s room video
@@ -214,8 +215,8 @@ def prepare_photo(source: Path, target: Path, *, with_evidence=False):
                 raise ValueError('Unsupported EXIF orientation; use an orientation from 1 to 8.')
             image = ImageOps.exif_transpose(original).convert('RGB')
             oriented_width, oriented_height = image.size
-            if min(image.size) < 256:
-                raise ValueError('Use photographs at least 256 pixels on each side.')
+            if min(image.size) < MIN_IMAGE_SIDE:
+                raise ValueError(f'Use photographs at least {MIN_IMAGE_SIDE} pixels on each side.')
             image.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE))
             stats = ImageStat.Stat(image.convert('L'))
             if stats.mean[0] < 5 or stats.stddev[0] < 2:
@@ -278,6 +279,10 @@ def extract_video(source: Path, images: Path, *, max_images: int | None = None):
     if (not math.isfinite(duration) or not 2 <= duration <= MAX_VIDEO_SECONDS or not streams
             or any(not 1 <= stream.get('width', 0) * stream.get('height', 0) <= MAX_PIXELS for stream in streams)):
         raise ValueError('Use a video of 2 seconds to 5 minutes, at most 24 megapixels per frame.')
+    width, height = streams[0]['width'], streams[0]['height']
+    if min(width, height) < MIN_IMAGE_SIDE:
+        raise ValueError(f'Video frames are {width} x {height} pixels. Use the original video with at least '
+                         f'{MIN_IMAGE_SIDE} pixels on each side. Moving or upscaling this copy cannot restore captured detail.')
     raw = images.parent / 'video-frames'
     raw.mkdir()
     budget = frame_budget(duration) if max_images is None else min(max_images, frame_budget(duration))
