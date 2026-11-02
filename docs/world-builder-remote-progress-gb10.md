@@ -647,6 +647,29 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - Serving Qwen/backup, licensed gates, no paid fallback untouched.
 
 
+### Run 203 — 2026-11-02 (GB10: cancellation regression + signed-receipt docs both confirmed closed; suites green; run-202 doc committed)
+
+- Baseline: HEAD `4d7e93b` (run-204 cancellation fix already committed; tree clean except uncommitted run-202 progress doc entry).
+- Re-ran both receipt suites fresh this run:
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (167 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.23 s**
+- Verified `test_cancel_completed_job_interrupts_inflight_receipt_verification` exists in `tests/world/test_report_receipts.py` (added by `4d7e93b`): cancel on a complete job with in-flight receipt verification → 200 `status=complete` on the job row, 409 `missing or changed` on the receipt, no signature, job stays `complete`. Cancellation regression is **closed**.
+- Verified signed-receipt API/env documentation: `WORLD_REPORT_SIGNING_KEY`, Ed25519 key requirements, `GET /v1/report-key`, `POST /v1/jobs/{id}/report-receipt` are all documented in `docs/world-studio-implementation.md` (lines 129–141) and `.env.example` (line 36). Documentation gap is **closed**.
+- Committed + pushed run-202 progress doc entry and this run-203 entry. No force-push/merge/deploy.
+- Actual blocker: none on GB10. 4090 not re-probed (run-200 connection-refused; repeat-blocker rule).
+- Serving Qwen/backup, licensed model/guardrail gates, no paid fallback — untouched.
+
+### Run 202 — 2026-11-02 (GB10: world node suite green after fixing one catalog contract test)
+
+- Continued run 201's open item: `tests/world/catalog.test.mjs` was 5 pass / 1 fail.
+- Failing test identified: `node --test tests/world/catalog.test.mjs` → `not ok 4 - gated systems disclose licensing/restriction rather than implying free use`.
+- Root cause: test 4 required license-class keywords (`licen|restrict|terms|commercial|internal`) in every gated entry's gate. System 11 (Image2Splat + Brush) legitimately discloses a paid-policy restriction instead — "Paid fal.ai generation and a separate Brush training step. No automatic paid calls." — so the test asserted the wrong invariant, not a data bug.
+- Fix: widened test 4 to the real invariant — a gated entry must name license class, paid-policy, or non-production scope in its gate text. 6/6 pass.
+- Full world node suite: `node --test tests/world/*.test.mjs` → **107 pass / 0 fail**.
+- Committed + pushed: `c170ffc` on `hermes/world-builder-gb10` (`4d21226..c170ffc`), only `tests/world/catalog.test.mjs` changed.
+- Actual blocker: none on GB10. 4090 not re-probed this run (run-200 probe was connection-refused; repeat-blocker rule).
+- No force-push/merge/deploy; serving Qwen/backup, licensed model/guardrail gates, no paid fallback untouched.
+
 ### Run 187 — 2026-11-01 (GB10: stale progress log de-duplicated + handoff item 1 marked closed; suites green)
 
 - Baseline: clean tree at `27ce1cb` (run 185). Suites re-verified this run before doc edits:
@@ -660,17 +683,18 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Current status
 
-- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `45c98f8`
-- Run 194/195 closed the live-HTTP retention (ttl) validation: `tests/world/retention_live_http.py` re-run fresh (PASS, real uvicorn over live HTTP), regressions green (node 12/12, pytest receipts 34/34), committed `45c98f8` + pushed (`49e4d2d..45c98f8`), receipt committed.
-- Live-HTTP report-UI gate closed in run 185; cancellation regression fixed in run 187/188; run 190/191 added `test_init_key_cli_and_verify_size_limit`.
+- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `4d7e93b`
+- Run 203 confirmed both handoff "open" items are closed: cancellation regression test (`test_cancel_completed_job_interrupts_inflight_receipt_verification`) in `4d7e93b`; signed-receipt API/env docs in `world-studio-implementation.md` + `.env.example`.
+- Receipt suites re-verified green: node 12/12, pytest 34/34.
+- Live-HTTP report-UI gate closed in run 185; live-HTTP retention (ttl) in 194/195; world node suite green in 202 (107/107).
 
 ## Blockers
 
-- None on GB10. 4090 alternation pending: next bounded action is a short authenticated 4090 task (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` per `world-builder-4090.json` before running; Vast endpoint can change — do not hardcode ports).
+- None on GB10. 4090 endpoint `ssh2.vast.ai:23990` connection-refused on run-200 probe; per repeat-blocker rule, do not re-probe — pick another useful task.
 
 ## Next bounded action
 
-- 4090 reconstruction/GPU task via short authenticated SSH (held-out control verification or bounded encoder/inference smoke), then alternate back to GB10. If the 4090 probe fails again, choose another useful GB10 task rather than repeating the probe.
+- GB10: all handoff "open" items now closed. Next: pick a bounded verification from the remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task (confirm hostname `d130b6c7f3f4` + GPU `GPU-3390c2ec…` per `world-builder-4090.json` before running; Vast endpoint can change — do not hardcode ports).
 
 ## Guardrails
 
