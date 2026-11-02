@@ -12,17 +12,51 @@ on:
 permissions:
   contents: read
 
-# Railway posts in_progress, success and inactive statuses. Grouping by state means a
-# later status for another deployment never cancels a running success verification,
-# while a newer successful deploy does supersede an older one still being verified.
-concurrency:
-  group: brainsnn-live-verify-${{ github.event.deployment_status.state || 'manual' }}
-  cancel-in-progress: true
-
 jobs:
-  verify-live-deploy:
+  deployment-target:
+    # Railway reports both website and private worker deployments with the same
+    # project/environment payload. Read their exact committed build target.
     if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && contains(github.event.deployment.environment, 'production'))
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      website: ${{ steps.target.outputs.website }}
+    steps:
+      - name: Checkout the deployed target
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.deployment.sha || github.sha }}
+          persist-credentials: false
+      - name: Identify website or private worker
+        id: target
+        run: |
+          python3 - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import tomllib
+
+          config = tomllib.loads(Path('railway.toml').read_text())
+          target = config.get('build', {}).get('dockerfilePath')
+          if target == 'Dockerfile':
+              website = 'true'
+          elif target == 'robotics/world_worker/deploy/railway/Dockerfile':
+              website = 'false'
+          else:
+              raise SystemExit(f'Unknown Railway build target: {target!r}; refusing to skip website verification.')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write(f'website={website}\n')
+          print(f'Railway build target: {target}; verify website: {website}')
+          PYTHON
+
+  verify-live-deploy:
+    needs: deployment-target
+    if: needs.deployment-target.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    # Only classified website jobs may supersede another website verification.
+    # Private worker events never enter this concurrency group.
+    concurrency:
+      group: brainsnn-live-verify-${{ github.event.deployment_status.state || 'manual' }}
+      cancel-in-progress: true
     timeout-minutes: 20
     steps:
       - name: Checkout the deployed commit
