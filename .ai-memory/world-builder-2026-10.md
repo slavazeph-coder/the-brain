@@ -318,3 +318,19 @@ the passcode derives their tenant credential, unless `WORLD_SITE_VISITORS=0`. Th
 connection a day, 20 a day in total, and the visitor tenant's 2 GiB of uploads. The worker needed no change:
 `tenants.py` already registers `site-visitors` from the same passcode. Proxy tests: the `env()` fixture is owner-only
 (`WORLD_SITE_VISITORS: '0'`), and a new test pins the default.
+
+## "Before you plan, check" — 2026-11-02
+
+The second idea from the 2D-to-4D post: ask about inconsistencies before using the model. `review-questions.mjs` produces
+up to 3 questions for reconstruction proposals only, shown in the Edit tab until both review boxes are ticked.
+- **Scale:**
+  - Estimated: the scale is checked against the implied phone height (read from the map warning). A height outside
+    1.0–1.9 m asks "Is that right?"; otherwise the question confirms the size.
+  - Assumed: says it assumed 1.35 m.
+  - Measured: not asked.
+- **Unseen area:** asked when it is at least 2 m² and at least 10% of the floor.
+- **Start:** asked when the robot starts within 0.6 m of an obstacle or unknown area.
+- **Glass:** a reminder about glass, mirrors and white walls fills any spare slot.
+- Actions: `data-workflow="scale"` (measure a distance) and `data-action="add-object"`.
+- Tests: `review-questions.test.mjs`. `realtosim_browser_smoke` checks the card, the scale button and that it hides after
+  both reviews are ticked.
