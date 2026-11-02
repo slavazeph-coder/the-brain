@@ -111,8 +111,12 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
   const sessions = new Map(), failures = new Map(), visitorJobs = new Map(), leases = new Map();
   const client = upstream?.protocol === 'https:' ? https : http;
 
+  // Why visitors cannot process, as a reason code (never a value), so the owner knows which site variable to change.
+  const visitorsOff = visitorsReady ? null : !upstream ? 'no-worker' : env.WORLD_SITE_VISITORS === '0' ? 'switched-off'
+    : !CREDENTIAL.test(visitorToken) ? (env.WORLD_WORKER_SITE_VISITOR_TOKEN ? 'visitor-token-invalid' : 'no-passcode')
+      : 'visitor-token-is-owner-token';
   const status = () => ({ available: ownerReady || visitorsReady, passcode: ownerReady, visitors: visitorsReady,
-    visitorJobsPerDay: visitorsReady ? perConnection : null });
+    visitorJobsPerDay: visitorsReady ? perConnection : null, visitorsOff });
 
   function prune() {
     const time = now();
