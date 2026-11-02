@@ -1,0 +1,113 @@
+# Demo video export
+
+Create a private, precomputed reconstruction replay from one completed job.
+The final point cloud remains visible throughout. An orange estimated capture
+path and selected source-frame inset replay the saved cameras. No point-arrival
+times, live SLAM, continuous original video or physical robot motion are invented.
+
+## Product flow
+
+On a private worker configured with `demo-replay`, open **Evidence** after a
+reconstruction, or the compiled building-model review. Choose **Export demo
+video**, enter its title and actual source credit, select the capture type and
+ending, and approve including the retained frames. Download the landscape,
+social and short MP4 files and `demo-receipt.json`. Anonymous visitor sessions do
+not show this private export. No automatic public publishing occurs.
+
+The reconstruction ending needs retained `camera-frames.json`, its exact rasters,
+bound `reconstruction.json` and the original point-cloud artifact. A final PLY
+alone is insufficient. Deleted private rasters or expired source jobs stop export.
+The browser never supplies server filesystem paths. Recompiled scene jobs may
+follow up to eight same-owner job relationships to their retained reconstruction.
+
+The building ending renders the actual `scene.glb` triangles. It does not show
+an IFC/Rhino application's interface or claim destination-app qualification.
+The robot ending runs the existing website's planar planner and retains its
+source hash, robot envelope and automated review flags. It is a simulation;
+automated planner flags do not constitute human acceptance or physical validation.
+Both endings require a metric scene and recorded floor-alignment evidence.
+Scale and independent gravity remain unverified.
+
+Original source hashes, frame/raster identities, selected-frame ordering, source
+artifact hashes, warnings, scale limits, withheld-check summary and video hashes
+are retained. If all video PTS are available, their exact order and relative timing
+are used. Otherwise playback is explicitly selected-frame order with source time
+unavailable. Gaps between posed frame ordinals are dashed in the camera path.
+Missing poses stay in the displayed input denominator. A folded or partial model
+keeps a prominent warning, including when point-pair readings happen to pass.
+
+## Operator setup
+
+Use an isolated CPU environment:
+
+```sh
+python -m pip install -r robotics/world_worker/requirements-demo.txt
+```
+
+Install FFmpeg with libx264 and DejaVu Sans fonts. The robot ending additionally
+needs Node 22+ and the existing `scripts/world-demo/film/plan_route.mjs`, website
+`core.mjs`, `scene-preview.mjs` and `arena/site-core.js` at their normal repo paths.
+No learned weights, GPU, model API key or network download is used during export.
+
+The example adapter and Railway profile include a disabled `demo-replay` entry.
+After installing and qualifying the dependencies, configure its absolute Python
+and script paths, then enable and license-review that adapter through normal
+operator configuration. The Railway Dockerfile stages these dependencies; its
+image build and deployed rollout are separate checks. This change does not
+automatically enable a public renderer or alter the production worker.
+
+Export a reconstruction directly, using a fresh output folder separate from jobs:
+
+```sh
+python -m robotics.world_worker.demo_replay \
+  --reconstruction /data/worker/jobs/ACTUAL_RECONSTRUCTION_JOB \
+  --out /data/demo-export-01 \
+  --title 'Walk the space. Keep the evidence.' \
+  --credit 'Actual capture owner and permitted source credit' \
+  --capture-kind phone-video
+```
+
+For a compiled model, add `--scene-job /data/worker/jobs/ACTUAL_SCENE_JOB` and
+`--ending bim` or `--ending robot`. These commands use the existing saved outputs;
+they do not reconstruct or modify the scene. The original capture kind/credit
+remains operator-declared. Use `unknown` when the source type is uncertain.
+
+Outputs are H.264 without audio: landscape 1280×720/35 s, social 1080×1350/35 s,
+short 1080×1350/15 s, at 24 fps. All cuts retain the warnings and credit. The
+receipt does not certify survey accuracy, BIM geometry or physical robot operation.
+No output is published as successful until source/raster hashes are rechecked.
+
+## Qualification
+
+```sh
+python -m pytest tests/world/test_demo_replay.py tests/world/test_worker.py \
+  tests/world/test_tenant_isolation.py -q
+node --test tests/world/demo-replay-ui.test.mjs
+python tests/world/demo_replay_browser_smoke.py
+```
+
+Browser tests use authored rasters/geometry and the real private HTTP worker,
+request upload, encoder, signed movie download and disposal. They do not execute
+a reconstruction model. Existing World Builder browser flows cover the app shell.
+Renderer tests exercise real H.264, a self-contained GLB, actual planar planning,
+input tampering, unknown time, partial coverage and interrupted source bindings.
+
+## November 2 private capture check
+
+The original owner-provided `IMG_9824.mp4` and saved result archives were recovered
+without changing them. A fresh CPU COLMAP run of the entire 140.13 s input posed
+50 of 140 selected frames and retained 3,132 sparse points. Its consecutive-turn
+check reported consistent; registration remains partial and no physical readings
+or metric scale were supplied. These facts are not layout or physical accuracy
+qualification. Source SHA-256:
+`5586218ce0992ae9587a2995c2fe8bf6f77f835b2314c44e3eb58e50438e20d2`.
+
+Three genuine replay cuts were encoded from this new run with explicit partial,
+unscaled, source-type-unverified and precomputed-replay labels. They are private
+diagnostic previews, not the successful BIM/robot promo. Original media, prepared
+rasters, job artifacts and rendered movies stay outside git. The earlier folded
+and partial runs remain separate historical evidence.
+
+The remaining input for the polished measured BIM demo is a sufficiently complete
+capture with an entered measured calibration span and withheld physical readings,
+followed by reviewed scene exports. Rendering cannot repair absent geometry.

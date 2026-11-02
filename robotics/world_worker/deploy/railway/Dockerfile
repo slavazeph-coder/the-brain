@@ -9,7 +9,7 @@ FROM ubuntu:24.04
 # needs it); bpy needs these X/GL libraries even headless.
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates ffmpeg python3.12 python3.12-venv \
+      ca-certificates ffmpeg fonts-dejavu-core python3.12 python3.12-venv \
       libgl1 libegl1 libx11-6 libxrender1 libxxf86vm1 libxfixes3 libxi6 libxkbcommon0 libsm6 libice6 libgomp1 \
       libssl3t64 libffi8 libsqlite3-0 libexpat1 libbz2-1.0 liblzma5 zlib1g \
     && rm -rf /var/lib/apt/lists/*
@@ -39,6 +39,14 @@ RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==
 COPY robotics/world_worker/nvidia_pack.py /tmp/nvidia_pack.py
 RUN /opt/worker/bin/python /tmp/nvidia_pack.py --workspace /opt/brainsnn-simready
 COPY robotics /app/robotics
+# Saved-output replay uses CPU rendering only. Keep its optional engine disabled
+# until operator qualification; include the same planner used by the website.
+RUN /opt/worker/bin/pip install --no-cache-dir -r robotics/world_worker/requirements-demo.txt
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY scripts/world-demo/film/plan_route.mjs /app/scripts/world-demo/film/plan_route.mjs
+COPY brainsnn-r3f-app/package.json /app/brainsnn-r3f-app/package.json
+COPY brainsnn-r3f-app/public/world/core.mjs brainsnn-r3f-app/public/world/scene-preview.mjs /app/brainsnn-r3f-app/public/world/
+COPY brainsnn-r3f-app/public/arena/site-core.js /app/brainsnn-r3f-app/public/arena/site-core.js
 RUN chmod 755 robotics/world_worker/deploy/railway/start.sh robotics/world_worker/deploy/railway/blender
 
 # Uploads and job outputs live on the Railway volume mounted at /data; jobs are deleted after 24 hours.

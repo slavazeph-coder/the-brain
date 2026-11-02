@@ -99,5 +99,23 @@
       "--workspace",
       "/opt/brainsnn-simready"
     ]
+  },
+  {
+    "id": "demo-replay",
+    "label": "Demo videos from saved reconstruction outputs",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "replay"
+    ],
+    "max_inputs": 1,
+    "source_job": true,
+    "timeout_seconds": 900,
+    "command": [
+      "/opt/worker/bin/python",
+      "/app/robotics/world_worker/demo_replay.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
   }
 ]
