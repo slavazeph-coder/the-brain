@@ -679,6 +679,15 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if active:
                 store.state(jid,'cancelled')
                 if jid in hash_cancellations: hash_cancellations[jid].set()
+            elif job['status']=='complete' and jid in hash_cancellations:
+                # An in-flight receipt verification on a complete job must
+                # also be abortable. The receipt handler awaits a time-
+                # bounded task; the cancel signal is set so the hashing
+                # thread stops at its next poll. The job row stays
+                # 'complete' and the response returns the job as-is, so
+                # cancel remains a no-op at the job-state level even
+                # though it interrupts the in-flight hash.
+                hash_cancellations[jid].set()
         if active:await stop_process(jid)
         return store.job(jid, owner)
 
@@ -724,6 +733,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if report_task is not None and not report_task.done():
                 raise HTTPException(429, 'Another report verification is running. Try again after it finishes.')
             cancelled = threading.Event()
+            hash_cancellations[jid] = cancelled
             def check_artifacts():
                 deadline = time.monotonic() + REPORT_HASH_SECONDS
                 for item in selected:
@@ -736,11 +746,19 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         try:
             await asyncio.wait_for(asyncio.shield(task), REPORT_WAIT_SECONDS)
         except (TimeoutError, asyncio.TimeoutError):
+            # A cancellation (active or complete-job) raises the same
+            # TimeoutError as a deadline overrun, but it is not an evidence
+            # failure: map it to 409 'missing or changed' so the caller can
+            # re-report. The hash_cancellations entry is popped in `finally`
+            # below, so the cancelled event is still available here.
+            if cancelled.is_set():
+                raise HTTPException(409, 'Evidence is missing or changed; report the job again.') from None
             raise HTTPException(504, 'Report evidence verification exceeded its time budget.') from None
         except (OSError, ValueError):
             raise HTTPException(409, 'A selected artifact is missing or changed. No receipt was signed.') from None
         finally:
             cancelled.set()
+            hash_cancellations.pop(jid, None)
         # Verification awaited IO: a revoked identity or deleted job must not
         # receive a fresh signature based on the earlier authorization snapshot.
         async with io_lock:

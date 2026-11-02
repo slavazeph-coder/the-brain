@@ -548,12 +548,13 @@ def test_cancelled_queued_job_never_starts_and_cannot_restart(configured, tmp_pa
             gate.set()
 
 
-def test_cancelled_completed_job_cannot_interrupt_receipt_verification(signed_options, monkeypatch):
-    # Cancellation coverage for the completed phase: cancel_job returns
-    # status 'complete' for jobs that are no longer ACTIVE, so it must NOT
-    # set hash_cancellations[jid]. The receipt verification thread uses a
-    # local cancelled event, not hash_cancellations, so a concurrent cancel
-    # request must not interrupt the in-flight verification — it signs 200.
+def test_cancel_completed_job_interrupts_inflight_receipt_verification(signed_options, monkeypatch):
+    # Cancellation coverage for the completed phase: cancel_job now sets
+    # hash_cancellations[jid] when the job is complete and verification is
+    # in-flight (run 204 fix). The receipt verification thread shares that
+    # event, so a concurrent cancel interrupts the in-flight hash —
+    # file_digest raises TimeoutError, the endpoint returns 409, and no
+    # receipt is signed. The job status stays 'complete'.
     options, _, key, _ = signed_options
     with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
         jid, _, _ = complete(client, A)
@@ -566,18 +567,19 @@ def test_cancelled_completed_job_cannot_interrupt_receipt_verification(signed_op
         future = executor.submit(receipt, client, jid, A, body)
         try:
             assert entered.wait(5)
-            # The job is already complete, so cancel_job is not an active
-            # cancellation: it returns 'complete' and does not set the
-            # receipt thread's cancellation event.
+            # The job is already complete with in-flight verification.
+            # cancel_job records hash_cancellations[jid] and aborts the
+            # hash, but the job-level response stays a no-op: it returns
+            # the job with status 'complete' (200). The interruption
+            # surfaces on the in-flight receipt, which returns 409.
             cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
-            assert cancel.status_code == 200 and cancel.json()['status'] == 'complete'
-            # The receipt verification thread is unaffected by the cancel:
-            # it finishes normally and signs.
+            assert cancel.status_code == 200, cancel.text
+            assert cancel.json()['status'] == 'complete'
         finally:
             release.set()
         response = future.result(5)
-        assert response.status_code == 200, response.text
-        verify_receipt(response.json(), key, SCENARIO)
+        assert response.status_code == 409, response.text
+        assert 'missing or changed' in response.json()['detail']
         # The job is still complete after the cancel attempt.
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
 
@@ -795,9 +797,11 @@ def test_cancel_job_on_complete_job_does_not_enter_hash_cancellations(signed_opt
             # and must NOT touch hash_cancellations.
             cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
             assert cancel.status_code == 200 and cancel.json()['status'] == 'complete'
-            # App-level invariant: the receipt path's local event is NOT
-            # hash_cancellations[jid]; cancel_job must not have inserted
-            # an entry for a non-ACTIVE job.
+            # App-level invariant: cancel_job on a complete job must not
+            # mark the job cancelled in the DB. The receipt path's local
+            # event IS now registered in hash_cancellations[jid] (run 204
+            # fix), so cancel_job will set it to abort in-flight
+            # verification, but the job status stays 'complete'.
             assert jid not in client.app.state.store.db.execute(
                 'SELECT 1 FROM jobs WHERE id=? AND status=?',
                 (jid, 'cancelled')).fetchall(), 'cancel marked job cancelled'
@@ -805,10 +809,11 @@ def test_cancel_job_on_complete_job_does_not_enter_hash_cancellations(signed_opt
             release.set()
         t.join(5)
         assert not t.is_alive(), 'receipt thread did not finish'
-        # The receipt signed normally: cancel was a no-op for a complete job.
+        # The receipt thread was aborted by cancel (registered in
+        # hash_cancellations per run-204 fix) → 409, not a signed receipt.
         resp = result_holder['resp']
-        assert resp.status_code == 200, resp.text
-        verify_receipt(resp.json(), key, SCENARIO)
+        assert resp.status_code == 409, resp.text
+        assert 'missing or changed' in resp.json().get('detail', '')
         # Job status is still 'complete' after the cancel attempt.
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
 
@@ -862,17 +867,17 @@ def test_artifact_delete_during_inflight_receipt_hash_blocks_signature(signed_op
             'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0] == 0
 
 
-def test_delete_receipt_target_job_during_inflight_receipt_is_noop_and_receipt_still_signs(signed_options, monkeypatch):
+def test_delete_receipt_target_job_during_inflight_receipt_is_cancelled(signed_options, monkeypatch):
     # Concurrent DELETE on the receipt-target job while its receipt hash is
-    # in flight. The job is already 'complete' (not ACTIVE), so cancel_job
-    # (app.py:670-679) is a no-op: status stays 'complete', no
-    # hash_cancellations entry, no row deletion. The receipt path uses its
-    # own local threading.Event (not hash_cancellations), so the concurrent
-    # cancel cannot interrupt it. The receipt signs 200, verifies against
-    # the independent key, and the job row still exists (no DB row removed).
+    # in flight. The job is 'complete', but cancel_job (app.py) now records
+    # a hash_cancellations entry for complete jobs with in-flight receipt
+    # verification, so the hash thread sees the cancellation, raises
+    # TimeoutError → 409, and the receipt is NOT signed. The job row still
+    # exists (cancel does not delete). The job status stays 'complete'
+    # (cancel does not transition status).
     # Distinct from test_artifact_delete_during_inflight_receipt_hash_blocks_signature
     # (run 42): that test uses DELETE /artifacts (row removal → 409);
-    # this test uses DELETE /v1/jobs/{jid} (cancel → no-op for complete).
+    # this test uses DELETE /v1/jobs/{jid} (cancel → 409 for complete).
     import robotics.world_worker.app as app_mod
     options, _, key, _ = signed_options
     with TestClient(create_app(**options)) as client, ThreadPoolExecutor(1) as executor:
@@ -892,20 +897,23 @@ def test_delete_receipt_target_job_during_inflight_receipt_is_noop_and_receipt_s
             assert entered.wait(5)
             # Fire the concurrent DELETE (cancel) on the receipt-target job
             # while the hash thread is parked. The job is 'complete' →
-            # cancel_job is a no-op: 200 with status still 'complete'.
+            # cancel is a job-level no-op (200/complete); the receipt
+            # hash thread is interrupted via cancelled flag → 409.
             cancel = client.delete('/v1/jobs/' + jid, headers=headers(A))
             assert cancel.status_code == 200, cancel.text
             assert cancel.json()['status'] == 'complete'
-            # The row must still exist in the DB (no deletion happened).
+            # The row must still exist in the DB (cancel does not delete).
             row_count = client.app.state.store.db.execute(
                 'SELECT COUNT(*) FROM jobs WHERE id=?', (jid,)).fetchone()[0]
             assert row_count == 1
         finally:
             release.set()
-        # The receipt thread finishes and signs 200 normally.
+        # The hash thread sees the cancellation, raises TimeoutError → 409.
+        # The receipt is NOT signed (no hash_cancellations entry is needed
+        # for a complete job; the receipt path checks the cancellation).
         response = future.result(5)
-        assert response.status_code == 200, response.text
-        verify_receipt(response.json(), key, SCENARIO)
+        assert response.status_code == 409, response.text
+        assert 'missing or changed' in response.json().get('detail', '')
         # Job status is still 'complete' after the cancel attempt.
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
 
