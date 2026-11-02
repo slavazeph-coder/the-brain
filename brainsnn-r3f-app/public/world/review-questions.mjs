@@ -43,8 +43,10 @@ export function reviewQuestions(world) {
       questions.push({id: 'scale', action: measure,
         ask: `Is the space about ${size}? The scale is estimated, not measured${Number.isFinite(phone) ? `, and it puts your phone a typical ${one(phone)} m above the floor` : ''}. Measure one distance to make it exact.`});
   } else {
+    // The height the person entered (default 1.35 m), as the map's own warning records it.
+    const assumed = said.match(/assumed (\d+(?:\.\d+)?) m camera height/)?.[1];
     questions.push({id: 'scale', action: measure,
-      ask: `Is the space about ${size}? Its scale assumes you held the phone 1.35 m high. Measure one distance to make it exact.`});
+      ask: `Is the space about ${size}? Its scale assumes you held the phone ${assumed ? `${assumed} m high` : 'at a typical height'}. Measure one distance to make it exact.`});
   }
   const unknown = world.objects.filter(o => o.kind === 'unknown').reduce((sum, o) => sum + o.w * o.d, 0);
   if (unknown >= Math.max(2, .1 * floorArea(world)))

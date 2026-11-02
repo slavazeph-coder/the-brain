@@ -25,6 +25,9 @@ test('an estimated scale is checked against how high the phone must have been he
 
 test('an assumed scale says what it assumed; a measured one is not asked again',()=>{
   assert.match(reviewQuestions(proposed())[0].ask,/Its scale assumes you held the phone 1\.35 m high\./);
+  // A height the person entered is the one the question names, not the default.
+  const r0=room(),taller=proposeWorld({points:r0.points,reconstruction:r0.reconstruction,cameraHeight:1.7}).world;
+  assert.match(reviewQuestions(taller)[0].ask,/Its scale assumes you held the phone 1\.7 m high\./);
   const r=room(),a=toColmap([2,1,6]),b=toColmap([2.9,1,6]);
   const measured=proposeWorld({points:r.points,reconstruction:r.reconstruction,measurement:{a,b,distance:.9}}).world;
   assert.ok(!reviewQuestions(measured).some(q=>q.id==='scale'));
