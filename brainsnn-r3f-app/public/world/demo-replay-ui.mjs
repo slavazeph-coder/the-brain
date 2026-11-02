@@ -1,7 +1,9 @@
 /** Private saved-output replay. Rendering does not run SLAM or control a robot. */
 const el=(tag,text)=>Object.assign(document.createElement(tag),text===undefined?{}:{textContent:text});
 export function demoRequest({artifacts,title,credit,captureKind,ending,reviewed}){
-  const source=artifacts?.find(a=>a.name==='scene.json')??artifacts?.find(a=>a.name==='reconstruction.json');
+  const source=ending==='reconstruction'
+    ?artifacts?.find(a=>a.name==='reconstruction.json')??artifacts?.find(a=>a.name==='scene.json')
+    :artifacts?.find(a=>a.name==='scene.json');
   if(!source||!/^[a-f0-9]{64}$/.test(source.sha256))throw Error('Open a completed reconstruction or scene with a source hash.');
   if(!reviewed)throw Error('Review the source credit and approve including its retained frames.');
   for(const [value,max] of [[title,80],[credit,180]])if(typeof value!=='string'||!value.trim()||value.trim().length>max||/\p{C}/u.test(value))throw Error('Enter a title and source credit without control characters.');

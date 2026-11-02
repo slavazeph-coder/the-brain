@@ -6,6 +6,9 @@ const options=()=>({artifacts:[{name:'reconstruction.json',sha256:'a'.repeat(64)
 test('request binds the exact source and preserves unverified capture type',()=>{
   const value=demoRequest(options());assert.equal(value.source_sha256,'a'.repeat(64));assert.equal(value.capture_kind,'unknown');assert.equal(value.reviewed,true);
   assert.equal(Object.keys(value).length,8);
+  const both=options();both.artifacts.unshift({name:'scene.json',sha256:'b'.repeat(64)});
+  assert.equal(demoRequest(both).source_artifact,'reconstruction.json');
+  both.ending='bim';assert.equal(demoRequest(both).source_artifact,'scene.json');
 });
 for(const [name,change] of Object.entries({unreviewed:o=>o.reviewed=false,credit:o=>o.credit='',control:o=>o.title='bad\ncaption',hash:o=>o.artifacts[0].sha256='wrong',ending:o=>o.ending='bim',kind:o=>o.captureKind='survey'})){
   test(`refuses ${name}`,()=>{const o=options();change(o);assert.throws(()=>demoRequest(o));});

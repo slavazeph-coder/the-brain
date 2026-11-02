@@ -123,6 +123,12 @@ def test_metric_scene_uses_actual_glb_and_rejects_wrong_source_cloud(tmp_path):
     scene=tmp_path/'scene';options=scene_job(scene,reconstruction)
     bundle=dr.prepare(scene,reconstruction,options)
     assert len(bundle['mesh'][0])==12 and bundle['scene']['units']=='m'
+    # Unscaled compiled jobs still support truthful reconstruction playback.
+    unscaled=dr.read_json(scene/'output/scene.json');unscaled.update(units='arbitrary',scale=None);dump(scene/'output/scene.json',unscaled)
+    cloud=dr.read_json(scene/'output/arena-cloud.json');cloud.update(units='arbitrary',scale=None);dump(scene/'output/arena-cloud.json',cloud)
+    options.update(source_sha256=dr.sha(scene/'output/scene.json'),ending='reconstruction')
+    assert dr.prepare(scene,reconstruction,options)['scene']['units']=='arbitrary'
+    with pytest.raises(ValueError,match='metric'):dr.prepare(scene,reconstruction,{**options,'ending':'bim'})
     cloud=dr.read_json(scene/'output/arena-cloud.json');cloud['points'][0][0]+=.2;dump(scene/'output/arena-cloud.json',cloud)
     with pytest.raises(ValueError):dr.prepare(scene,reconstruction,options)
 

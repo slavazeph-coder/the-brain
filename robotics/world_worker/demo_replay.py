@@ -111,9 +111,11 @@ def prepare(source_root, reconstruction_root, options):
     if options['source_artifact'] == 'scene.json':
         scene = read_json(source_file)
         cloud = load_arena_cloud(cf._path(source_root, 'output/arena-cloud.json'))
-        if scene.get('schema') != 'brainsnn.scene.v1' or scene.get('units') != 'm' or cloud['units'] != 'm' \
+        if scene.get('schema') != 'brainsnn.scene.v1' or scene.get('units') != cloud['units'] \
                 or scene.get('scale') != cloud['scale']:
-            raise ValueError('Select a matching compiled metric scene and cloud.')
+            raise ValueError('Select a matching compiled scene and cloud.')
+        if options['ending']!='reconstruction' and scene['units']!='m':
+            raise ValueError('BIM and robot endings require a compiled metric scene.')
         if options['ending'] in ('bim','robot') and cloud.get('provenance',{}).get('floorAligned') is not True:
             raise ValueError('The model ending requires recorded floor-alignment evidence. Independent gravity remains unverified.')
         try:
@@ -341,7 +343,7 @@ def painter(bundle, width, height, route=None):
         d.text((margin,y),label,font=large,fill='#ffb52c');y+=42
         lines = [f'{len(bundle["frames"])}/{bundle["total"]} frames posed  |  {len(cloud):,} retained points',
                  bundle['warning'],
-                 'Scale entered and unverified' if bundle['scene'] else 'Scale unverified - no metric dimensions',
+                 'Scale entered and unverified' if bundle['scene'] and bundle['scene']['units']=='m' else 'Scale unverified - no metric dimensions',
                  'Precomputed replay - not live processing']
         if bundle['measurements']:
             s=bundle['measurements']['summary']; lines[1]=f'Held-out checks: {s["heldOutWithinTolerance"]}/{s["heldOutCount"]} within tolerance; {s["heldOutCount"]-s["heldOutWithinTolerance"]} failed. Point pairs only.'
