@@ -1,12 +1,12 @@
-name: GPU Remote Validation (Simon 4090)
+name: GPU Remote Validation (remote GPU box)
 
 # Manual-only. This is the ONLY workflow that uses SSH credentials, and it is
 # deliberately kept out of pull_request/push triggers so a fork or a branch
-# cannot reach Simon's container. Evidence is uploaded as a sanitized artifact.
+# cannot reach the GPU box. Evidence is uploaded as a sanitized artifact.
 #
 # What this proves (when the corresponding level runs and the marker appears):
 #   SSH_EXTERNAL_OK             external SSH from a GitHub-hosted runner
-#   GPU_VISIBLE_OK              the physical RTX 4090 is visible to the container
+#   GPU_VISIBLE_OK              a physical NVIDIA GPU (RTX 4090 or GB10) is visible to the container
 #   GPU_COMPUTE_OK              PyTorch executed a real CUDA kernel
 #   WORKSPACE_PERSIST_OK        /workspace/slava survives an SSH reconnect
 #                               (NOT container stop/recreate - separate claim)
@@ -238,7 +238,7 @@ jobs:
           echo "SSH_EXTERNAL_OK=YES" >> "$GITHUB_ENV"
 
       # ---------------------------------------------------------------- 02
-      - name: "Phase 4: prove the physical RTX 4090 (read-only)"
+      - name: "Phase 4: prove the physical GPU (read-only)"
         run: |
           set -euo pipefail
           rsh 'bash -s' > "$EVIDENCE/02-gpu-nvidia-smi.txt" 2>&1 <<'REMOTE' || true
@@ -252,10 +252,10 @@ jobs:
           nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader 2>&1 || true
           REMOTE
           cat "$EVIDENCE/02-gpu-nvidia-smi.txt"
-          if grep -qi '4090' "$EVIDENCE/02-gpu-nvidia-smi.txt"; then
+          if grep -Eqi 'RTX 4090|NVIDIA GB10' "$EVIDENCE/02-gpu-nvidia-smi.txt"; then
             echo "GPU_VISIBLE_OK=YES" | tee -a "$EVIDENCE/02-gpu-nvidia-smi.txt" >> "$GITHUB_ENV"
           else
-            echo "::error::no RTX 4090 reported by nvidia-smi in this container"
+            echo "::error::no RTX 4090 or GB10 reported by nvidia-smi in this container"
             exit 1
           fi
 
@@ -622,7 +622,7 @@ jobs:
           cat "$EVIDENCE/07-adapter-probe.json" >> "$EVIDENCE/07-real-inference.txt"
 
       # ---------------------------------------------------------------- 11
-      - name: "Phase 14: real backend recovery on the RTX 4090"
+      - name: "Phase 14: real backend recovery on the GPU"
         if: ${{ inputs.level == 'recovery-and-queue' }}
         run: |
           set -euo pipefail
