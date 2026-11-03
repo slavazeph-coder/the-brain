@@ -84,21 +84,21 @@ function makeBrains() {
   const geometry=fallback?new T.SphereGeometry(1,32,24):brainGeometry($('quality').value);
   if(fallback) geometry.scale(1.08,.82,.91).translate(0,.95,0);
   const Material=activeMode==='webgl'?T.MeshStandardMaterial:T.MeshStandardNodeMaterial;
-  const material=new Material({color:0x92b9d8,roughness:.5,metalness:.18});
-  const brains=new T.InstancedMesh(geometry,material,count),matrix=new T.Matrix4();
-  const q=new T.Quaternion(),pos=new T.Vector3(),scale=new T.Vector3(1,1,1),axis=new T.Vector3(0,1,0);
+  const materials=[0x68eaff,0x947cff,0xbedcf7].map(color=>new Material({color,roughness:.5,metalness:.18}));
+  // Follow r187's individual-mesh example. The tested software adapter lost its
+  // device on the native InstancedMesh meshlet control, so do not use that path.
+  const brains=fallback?new T.Group():new T.BundleGroup();
+  if(!fallback)brains.static=true;
   const side=Math.ceil(Math.sqrt(count));
   for(let i=0;i<count;i++) {
-    pos.set((i%side-(side-1)/2)*3,0,(Math.floor(i/side)-(side-1)/2)*3);
-    q.setFromAxisAngle(axis,(i*2.3999632297)%(Math.PI*2));
-    brains.setMatrixAt(i,matrix.compose(pos,q,scale));
-    brains.setColorAt(i,new T.Color(i%3===0?0x68eaff:i%3===1?0x947cff:0xbedcf7));
+    const brain=new T.Mesh(geometry,materials[i%3]);
+    brain.position.set((i%side-(side-1)/2)*3,0,(Math.floor(i/side)-(side-1)/2)*3);
+    brain.rotation.y=(i*2.3999632297)%(Math.PI*2);brains.add(brain);
   }
-  brains.instanceMatrix.needsUpdate=true;
-  brains.computeBoundingSphere(); scene.add(brains);
+  scene.add(brains);
   counts={objects:count,requestedObjects:requested,sourceTriangles:(geometry.index?.count||geometry.attributes.position.count)/3*count,
     uniqueGeometryTriangles:(geometry.index?.count||geometry.attributes.position.count)/3};
-  source={kind:'procedural-brain-field',seed:'deterministic-grid-v1',detail:fallback?'webgl-low':$('quality').value,
+  source={kind:'procedural-brain-field',seed:'deterministic-mesh-grid-v2',detail:fallback?'webgl-low':$('quality').value,
     originalCapture:false,sharedGeometry:true};
   $('source-label').textContent='PROCEDURAL SAMPLE · NOT A RECONSTRUCTION';
   $('source-detail').textContent=`${count.toLocaleString()} instances share one procedural geometry. This is not ${count.toLocaleString()} unique scans or a cognitive simulation.`;

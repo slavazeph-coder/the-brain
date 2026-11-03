@@ -19,9 +19,10 @@ await build({stdin:{contents:`
   const r=new T.WebGPURenderer({antialias:false});await r.init();r.setSize(400,300);document.body.append(r.domElement);
   const p=new MeshletDrawingPipeline({occlusionCulling:false});r.drawingPipeline=p;
   const s=new T.Scene(),c=new T.PerspectiveCamera(50,4/3,.1,100);c.position.z=4;
-  const mesh=new T.InstancedMesh(new T.SphereGeometry(1,128,96),new T.MeshStandardNodeMaterial({color:0x68eaff}),25);
-  for(let i=0;i<25;i++)mesh.setMatrixAt(i,new T.Matrix4().makeTranslation((i%5-2)*3,0,(Math.floor(i/5)-2)*3));
-  s.add(mesh);s.add(new T.HemisphereLight(0xffffff,0x222244,2));
+  const group=new T.BundleGroup();group.static=true;
+  const geometry=new T.SphereGeometry(1,128,96),material=new T.MeshStandardNodeMaterial({color:0x68eaff});
+  for(let i=0;i<25;i++){const mesh=new T.Mesh(geometry,material);mesh.position.set((i%5-2)*3,0,(Math.floor(i/5)-2)*3);group.add(mesh);}
+  s.add(group);s.add(new T.HemisphereLight(0xffffff,0x222244,2));
   window.control={pipeline:p,renderer:r,error:null};r.backend.device.lost.then(i=>window.control.error=i.reason+': '+i.message);
   r.backend.device.addEventListener('uncapturederror',e=>window.control.error=e.error.message);
   await r.compileAsync(s,c);r.setAnimationLoop(()=>r.render(s,c));
