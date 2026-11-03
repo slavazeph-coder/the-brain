@@ -24,3 +24,14 @@ actual WebGPU meshlets and a matched-load standard run on software Vulkan. Only
 the hosted result can establish those browser passes. Hardware GPU/mobile speed,
 complete real scan geometry, metric accuracy and native BIM editing remain open.
 Runbook: docs/meshlets-lab.md. Memory-sync helper unavailable; commit with code.
+
+Continuation: PR279 is draft, not deployed. Production /lab URL redirect regression
+from the new public directory was fixed; full World Builder browser suite passed
+at fd3ebbbe7387012604a8315830b27c81023badea. Async r187 renderer disposal is awaited;
+Playwright pinned1.64.0 with full Chromium for GPU work. Tiny native meshlet control
+passed16clusters/1024paddedtriangles. Dense25-object controls lost their device on
+software Vulkan in both InstancedMesh and static BundleGroup paths, separately
+from app code. Root driver/library cause is unproven. Preserve failed strict GPU
+qualification; do not promote fallback passes into dense GPU or hardware claims.
+Native GPU test command is documented. Current field follows the upstream static
+individual-mesh example; repeated geometry is not independent scans.

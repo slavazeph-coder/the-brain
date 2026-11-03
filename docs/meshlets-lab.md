@@ -13,6 +13,8 @@ research weights or arbitrary remote scan URLs are requested by the lab.
   source triangles per instance. Source counts are computed, never hard-coded as
   performance results. These are repeated procedural meshes, not unique scans,
   cognitive layers or executed simulations.
+  The GPU field uses individual meshes in a static BundleGroup, following the
+  original upstream meshes example; source identity is deterministic-mesh-grid-v2.
 - Cluster colouring, occlusion and projected pixel-error controls use the actual
   experimental `MeshletDrawingPipeline`. r187's utility uses **64-triangle**
   clusters, including padding. Its asynchronous counters describe its own draws;
@@ -58,6 +60,10 @@ npm run lint
 npm test
 npx playwright install --with-deps chromium
 node scripts/test-meshlets-browser.mjs
+# On a workstation with native Vulkan drivers and an actual visible GPU:
+MESHLETS_GPU_BACKEND=native node scripts/test-meshlets-browser.mjs
+# For an installed system Chromium, including a GB10 ARM64 workstation:
+MESHLETS_CHROMIUM_PATH=/usr/bin/chromium MESHLETS_GPU_BACKEND=native node scripts/test-meshlets-browser.mjs
 ```
 
 `Meshlets lab browsers` exercises the built production server, desktop/phone-sized
@@ -66,6 +72,27 @@ receipts, actual WebGPU meshlets and cluster debugging, then a matched-load
 standard run. Hosted WebGPU uses **software Vulkan/SwiftShader**, not GB10/RTX
 4090 hardware. Test-only browser flags are never instructions to disable security
 in a customer's browser. CI snapshots/receipts use authored geometry only.
+
+## Current negative qualification result
+
+Hosted Chromium/WebGL rendered desktop and phone-sized views, loaded the exact
+authored local GLB and downloaded correct source-hash/cadence receipts. A tiny
+native r187 meshlet control produced 16 clusters / 1,024 drawn (padded) triangles.
+However, both a native 25-object instanced control and a native 25-mesh/static
+control using shared approximately 24k-triangle spheres lost their WebGPU device
+on SwiftShader, with `Device was destroyed` and cancelled `popErrorScope` work.
+The native controls run independently of our app. This does not identify the
+ultimate driver/library cause and does not prove the app would pass on hardware.
+The strict GPU qualification remains failed; do not release or market this lab as
+a validated dense-mesh renderer from the WebGL passes or tiny control alone.
+
+Renderer cleanup now awaits r187's asynchronous disposal. The default CI uses
+software Vulkan; `MESHLETS_GPU_BACKEND=native` requests the native adapter instead.
+Neither that variable nor a passing requestAdapter proves RTX/GB10 execution.
+Retain actual adapter/browser information, strict GPU result, source and receipts.
+The runner saves `adapter-info.json`; use the actual installed Chromium path when
+the bundled browser does not support the workstation architecture.
+No performance figures from the reel are reproduced.
 
 ## Next hardware experiment
 

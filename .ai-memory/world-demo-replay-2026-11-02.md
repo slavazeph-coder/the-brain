@@ -51,3 +51,14 @@ enables reviewed replay for owner sessions; worker tenant allowlists now also
 exclude private engines from visitors. Generic example stays disabled. Requires
 fresh image/software checks before deployment. The memory-sync helper is unavailable
 in this environment; memory changes are published with the checked code commit.
+
+Release completed: PR277 merged as666683874e37c4d04901fb5f32bd824bcc27e9f1 after
+all four exact-head checks passed on e7ebcf95033b40eb7208f8bd2d9f4a65e986b801.
+Railway website deploymentd45916f7-3ab8-4613-a0ca-3f2798bd6a98 and private worker
+deployment9c3af587-9a90-44d8-b7e8-e9ff5b1ff6d3 reachedSUCCESS. Worker release
+d8958938a82b742741a650b224e747f9b34cbf07 merged checked main with prior worker
+history and differs only in its preserved rootrailway.toml. Volume, host and
+service settings retained. Fresh www HTTPS health200; processing configured with
+passcode and visitors explicitlyoff; replay module exactsource hash matched;
+unauthenticated worker capabilities401. Fresh authenticated production upload not
+executed because local owner passcode was unavailable. Do not claim it ran.

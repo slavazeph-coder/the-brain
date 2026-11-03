@@ -8,6 +8,9 @@ import { chromium } from '@playwright/test';
 import { build } from 'esbuild';
 import { inspectGlb } from '../src/lab/meshlets/metrics.mjs';
 const port=Number(process.env.MESHLETS_TEST_PORT||4197),base=`http://127.0.0.1:${port}`;
+const nativeGpu=process.env.MESHLETS_GPU_BACKEND==='native';
+const gpuRun=nativeGpu?'native-adapter':'software-vulkan';
+const browserExecutable=process.env.MESHLETS_CHROMIUM_PATH;
 const out=new URL('../../output/playwright/meshlets/',import.meta.url);await mkdir(out,{recursive:true});
 const server=spawn(process.execPath,['dist/server.cjs'],{env:{...process.env,NODE_ENV:'production',PORT:String(port)},stdio:['ignore','pipe','pipe']});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',b=>{serverLog=(serverLog+b).slice(-20000);});
@@ -64,7 +67,7 @@ try {
   const manifest=await(await fetch(base+'/lab/meshlets/runtime/manifest.json')).json();
   assert.equal(manifest.three,'0.187.0');assert.equal(manifest.meshletTriangles,64);
   for(const file of manifest.assets){const r=await fetch(base+'/lab/meshlets/runtime/'+file.path);assert.equal(r.status,200);const b=Buffer.from(await r.arrayBuffer());assert.equal(b.length,file.bytes);assert.equal(createHash('sha256').update(b).digest('hex'),file.sha256);}
-  const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftshader-webgl','--enable-unsafe-swiftshader']});
+  const browser=await chromium.launch({executablePath:browserExecutable,args:['--use-gl=angle','--use-angle=swiftshader-webgl','--enable-unsafe-swiftshader']});
   browsers.push(browser);
   for(const [width,height] of [[1440,1000],[390,844]]) {
     const page=await browser.newPage({viewport:{width,height},acceptDownloads:true});const errors=[],external=[];
@@ -90,12 +93,24 @@ try {
   await fallback.goto(base+'/lab/meshlets/');await fallback.selectOption('#count','25');await fallback.click('#start');
   await fallback.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGL · CAPPED FALLBACK',null,{timeout:60000});
   await fallback.close();await browser.close();
-  const gpu=await chromium.launch({channel:'chromium',args:['--enable-unsafe-webgpu','--enable-unsafe-swiftshader','--enable-features=Vulkan','--use-angle=vulkan','--use-vulkan=swiftshader','--use-webgpu-adapter=swiftshader','--disable-vulkan-surface']});
+  const gpu=await chromium.launch({channel:browserExecutable?undefined:'chromium',executablePath:browserExecutable,dumpio:true,args:[
+    '--enable-unsafe-webgpu','--enable-unsafe-swiftshader','--enable-features=Vulkan','--use-angle=vulkan',
+    nativeGpu?'--use-vulkan=native':'--use-vulkan=swiftshader',
+    nativeGpu?'--use-webgpu-adapter=default':'--use-webgpu-adapter=swiftshader','--disable-vulkan-surface']});
   browsers.push(gpu);
   const control=await gpu.newPage();activePage=control;
   control.on('console',event=>console.log('GPU_CONTROL '+event.type()+': '+event.text()));
   control.on('pageerror',error=>console.log('GPU_CONTROL_ERROR '+error.message));
   await control.goto(base+'/lab/meshlets/runtime/control.html');
+  const adapterInfo=await control.evaluate(async()=>{
+    const adapter=await navigator.gpu.requestAdapter({featureLevel:'compatibility'});
+    if(!adapter)return null;
+    return {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,
+      device:adapter.info?.device,description:adapter.info?.description,
+      features:[...adapter.features],maxBufferSize:adapter.limits.maxBufferSize};
+  });
+  await writeFile(new URL('adapter-info.json',out),JSON.stringify({requestedBackend:gpuRun,browser:await gpu.version(),adapterInfo},null,2));
+  console.log('GPU_ADAPTER '+JSON.stringify(adapterInfo));
   await control.waitForFunction(()=>window.control?.error||window.control?.pipeline.info.clusters>0,null,{timeout:30000});
   const controlResult=await control.evaluate(()=>({error:window.control.error,clusters:window.control.pipeline.info.clusters,triangles:window.control.pipeline.info.triangles}));
   console.log('GPU_CONTROL_RESULT '+JSON.stringify(controlResult));assert.equal(controlResult.error,null);
@@ -113,15 +128,15 @@ try {
   assert.equal(await page.locator('#mode-label').textContent(),'WEBGPU · MESHLETS',await page.locator('#status').textContent());
   await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='NOT RUNNING'||Number(document.getElementById('clusters').textContent.replaceAll(',',''))>0,null,{timeout:120000});
   assert.equal(await page.locator('#mode-label').textContent(),'WEBGPU · MESHLETS',await page.locator('#status').textContent());
-  const meshlets=await measurement(page,'webgpu-meshlets-software-vulkan');assert(meshlets.counts.meshletClusters>0);
+  const meshlets=await measurement(page,'webgpu-meshlets-'+gpuRun);assert(meshlets.counts.meshletClusters>0);
   await page.check('#debug');await page.click('#start');await page.waitForFunction(()=>!document.getElementById('benchmark').disabled,null,{timeout:120000});
   await page.screenshot({path:new URL('webgpu-clusters.png',out).pathname,fullPage:true});
   await page.uncheck('#debug');await page.selectOption('#mode','standard');await page.click('#start');
   await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGPU · STANDARD'&&!document.getElementById('benchmark').disabled,null,{timeout:120000});
-  const standard=await measurement(page,'webgpu-standard-software-vulkan');assert.equal(standard.counts.sourceTriangles,meshlets.counts.sourceTriangles);
+  const standard=await measurement(page,'webgpu-standard-'+gpuRun);assert.equal(standard.counts.sourceTriangles,meshlets.counts.sourceTriangles);
   assert.deepEqual(standard.source,meshlets.source);assert.deepEqual(standard.settings.camera,meshlets.settings.camera);
   assert.deepEqual(errors,[]);await page.close();await gpu.close();
-  console.log('Actual WebGPU meshlets, cluster debug and matched-load standard run passed on software Vulkan; no hardware FPS claim.');
+  console.log('Actual WebGPU meshlets, cluster debug and matched-load standard run passed on '+gpuRun+'; adapter-specific qualification only.');
 } catch(error) {
   if(activePage&&!activePage.isClosed()) {
     await activePage.screenshot({path:new URL('failure.png',out).pathname,fullPage:true}).catch(()=>{});

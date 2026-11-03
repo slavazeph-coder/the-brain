@@ -85,8 +85,8 @@ function makeBrains() {
   if(fallback) geometry.scale(1.08,.82,.91).translate(0,.95,0);
   const Material=activeMode==='webgl'?T.MeshStandardMaterial:T.MeshStandardNodeMaterial;
   const materials=[0x68eaff,0x947cff,0xbedcf7].map(color=>new Material({color,roughness:.5,metalness:.18}));
-  // Follow r187's individual-mesh example. The tested software adapter lost its
-  // device on the native InstancedMesh meshlet control, so do not use that path.
+  // Follow r187's individual-mesh example. Dense controls on the CI software
+  // adapter lost their device; retain strict GPU qualification before release.
   const brains=fallback?new T.Group():new T.BundleGroup();
   if(!fallback)brains.static=true;
   const side=Math.ceil(Math.sqrt(count));
@@ -101,7 +101,7 @@ function makeBrains() {
   source={kind:'procedural-brain-field',seed:'deterministic-mesh-grid-v2',detail:fallback?'webgl-low':$('quality').value,
     originalCapture:false,sharedGeometry:true};
   $('source-label').textContent='PROCEDURAL SAMPLE · NOT A RECONSTRUCTION';
-  $('source-detail').textContent=`${count.toLocaleString()} instances share one procedural geometry. This is not ${count.toLocaleString()} unique scans or a cognitive simulation.`;
+  $('source-detail').textContent=`${count.toLocaleString()} meshes share one procedural geometry. This is not ${count.toLocaleString()} unique scans or a cognitive simulation.`;
 }
 async function makeAsset() {
   const loaded=await new Promise((resolve,reject)=>new GLTFLoader().parse(asset.buffer.slice(0),'',resolve,reject));
