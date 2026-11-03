@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Demo replay export](world-demo-replay-2026-11-02.md) — private saved-frame/camera replay videos, real partial capture evidence, source-bound exports and release limits.
+
 → [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — sandbox integration, calibrated underlay, source/revision-bound downloads and required deployed acceptance.
 
 → [World Builder dimensional evidence](world-builder-dimensions-2026-10-24.md) — source-bound backend physical-reference checks, semantic sizing boundaries and the next BIM qualification slice.

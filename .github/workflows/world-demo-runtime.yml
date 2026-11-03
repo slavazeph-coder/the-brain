@@ -1,0 +1,43 @@
+name: World demo runtime image
+on:
+  pull_request:
+    paths:
+      - robotics/world_worker/**
+      - robotics/scene_compiler/**
+      - scripts/world-demo/qualify_demo_runtime.py
+      - scripts/world-demo/film/plan_route.mjs
+      - brainsnn-r3f-app/public/world/core.mjs
+      - brainsnn-r3f-app/public/world/scene-preview.mjs
+      - brainsnn-r3f-app/public/arena/site-core.js
+      - .github/workflows/world-demo-runtime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: demo-image-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  runtime-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Build the exact Railway worker image, without publishing or deploying
+        run: docker build -f robotics/world_worker/deploy/railway/Dockerfile -t brainsnn-world-demo-qualification .
+      - name: Exercise offline fonts, all H.264 sizes, actual GLB and actual website planner
+        run: |
+          mkdir -p output/demo-image
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,size=512m \
+            --mount "type=bind,src=$PWD/output/demo-image,dst=/qualification" \
+            --entrypoint /opt/worker/bin/python brainsnn-world-demo-qualification \
+            /app/scripts/world-demo/qualify_demo_runtime.py --out /qualification
+      - name: Retain authored qualification receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: demo-runtime-qualification
+          path: output/demo-image/
+          if-no-files-found: warn
+          retention-days: 14

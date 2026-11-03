@@ -48,7 +48,10 @@ def registry(env, storage_bytes, engines):
         # Visitors share one tenant, so its limits are what all visitors together can hold. They stay well inside the
         # worker's global caps (50 uploads, 6 GiB of reservations), so the owner can always upload a 2 GiB video. Their
         # storage is half the volume, but never less than one job; on a small volume they and the owner take turns.
-        tenants.append({'id': 'site-visitors', 'token_sha256': hashlib.sha256(visitor.encode()).hexdigest(), 'engines': engines,
+        # Match the site's visitor allowlist at the worker too. Private replay,
+        # naming/location and packaging engines stay with owner sessions.
+        visitor_engines = [engine for engine in engines if engine in ('colmap-sparse', 'photo-metric', 'scene-usd')]
+        tenants.append({'id': 'site-visitors', 'token_sha256': hashlib.sha256(visitor.encode()).hexdigest(), 'engines': visitor_engines,
                         'limits': {**limits, 'upload_count': 20, 'upload_bytes': 2 * GIB, 'job_count': 20,
                                    'storage_bytes': min(storage_bytes, max(int(ONE_JOB), storage_bytes // 2))}})
     return {'schema': 'brainsnn.world.tenants.v1', 'tenants': tenants}
