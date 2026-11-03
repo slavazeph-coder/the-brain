@@ -9,6 +9,7 @@ const stage=$('stage'), status=$('status');
 let renderer, scene, camera, controls, pipeline, observer, generation=0, disposed=false;
 let activeMode=null, asset=null, source, counts, compileMs=0, running=false, preparing=false;
 let frameTimes=[], previousTime=null, lastHud=0, benchmark=null, lastReceipt=null;
+const closingRenderers=new WeakSet();
 const number = n => Number.isFinite(n) ? n.toLocaleString('en-CA') : 'Unavailable';
 const sha = async data => [...new Uint8Array(await crypto.subtle.digest('SHA-256',data))].map(v=>v.toString(16).padStart(2,'0')).join('');
 const message = text => { status.textContent=text; };
@@ -33,13 +34,15 @@ function disposeScene() {
   for(const r of resources) r.dispose?.();
   scene=null;
 }
-function stop() {
+async function stop() {
   running=false; previousTime=null;
-  renderer?.setAnimationLoop(null); observer?.disconnect(); observer=null;
+  const previous=renderer;renderer=null;pipeline=null;
+  if(previous)closingRenderers.add(previous);
+  observer?.disconnect(); observer=null;
   controls?.dispose(); controls=null;
   disposeScene();
-  renderer?.dispose(); renderer=null; pipeline=null;
   stage.replaceChildren();
+  if(previous) {await previous.setAnimationLoop(null);await previous.dispose();}
 }
 function resetCamera() {
   if(!camera) return;
@@ -127,11 +130,14 @@ async function makeAsset() {
 async function start() {
   if(preparing || disposed)return;
   if(benchmark)finishBenchmark(true);
+  busy(true);
   const current=++generation;
-  stop();busy(true);frameTimes=[];lastReceipt=null;$('download').disabled=true;
-  for(const id of ['fps','total','drawn','clusters','compile'])$(id).textContent=id==='fps'?'Not measured':'Unavailable';
   const started=performance.now();
   try {
+    await stop();
+    if(disposed || current!==generation)return;
+    frameTimes=[];lastReceipt=null;$('download').disabled=true;
+    for(const id of ['fps','total','drawn','clusters','compile'])$(id).textContent=id==='fps'?'Not measured':'Unavailable';
     activeMode=$('mode').value;
     if(activeMode!=='webgl') {
       try {
@@ -139,7 +145,8 @@ async function start() {
         renderer=new T.WebGPURenderer({antialias:true});await renderer.init();
         if(!renderer.backend.isWebGPUBackend)throw new Error('No WebGPU adapter');
       } catch {
-        renderer?.dispose();renderer=null;activeMode='webgl';$('mode').value='webgl';
+        if(renderer){closingRenderers.add(renderer);await renderer.dispose();}
+        renderer=null;activeMode='webgl';$('mode').value='webgl';
         message('WebGPU was unavailable. Starting the capped WebGL fallback.');
       }
     }
@@ -147,7 +154,7 @@ async function start() {
       const {WebGLRenderer}=await import('three');
       renderer=new WebGLRenderer({antialias:true});
     }
-    if(disposed || current!==generation) { stop();return; }
+    if(disposed || current!==generation) { await stop();return; }
     renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(stage.clientWidth,stage.clientHeight);
     renderer.toneMapping=T.ACESFilmicToneMapping;
     stage.append(renderer.domElement);scene=new T.Scene();scene.background=new T.Color(0x070c16);
@@ -167,7 +174,7 @@ async function start() {
     resetCamera();observer=new ResizeObserver(resize);observer.observe(stage);
     if(renderer.compileAsync)await renderer.compileAsync(scene,camera);else renderer.compile(scene,camera);
     compileMs=performance.now()-started;
-    if(disposed || current!==generation) { stop();return; }
+    if(disposed || current!==generation) { await stop();return; }
     $('compile').textContent=compileMs.toFixed(0)+' ms';$('total').textContent=number(counts.sourceTriangles);
     $('mode-label').textContent=activeMode==='meshlets'?'WEBGPU · MESHLETS':activeMode==='standard'?'WEBGPU · STANDARD':'WEBGL · CAPPED FALLBACK';
     message(activeMode==='webgl'?'WebGL fallback active. Procedural count is capped at 100 with lower detail.':
@@ -175,16 +182,18 @@ async function start() {
     running=true;busy(false);
     renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();fail('Graphics context lost. Start again to retry.');});
     renderer.backend?.device?.addEventListener('uncapturederror',event=>console.error('Meshlets WebGPU validation:',event.error.message));
-    renderer.backend?.device?.lost.then(info=>{if(current===generation&&!disposed) {
+    const ownedRenderer=renderer;
+    renderer.backend?.device?.lost.then(info=>{if(current===generation&&!disposed&&!closingRenderers.has(ownedRenderer)) {
       console.error('Meshlets WebGPU device lost:',info.reason,info.message);
       fail('WebGPU device lost. Choose WebGL fallback or start again.');
     }});
     renderer.setAnimationLoop(animate);
   } catch(error) { if(current===generation&&!disposed)fail(error.message); }
 }
-function fail(reason) {
+async function fail(reason) {
   if(benchmark)finishBenchmark(true);
-  ++generation;stop();busy(false);message(`Rendering stopped: ${reason}`);
+  ++generation;busy(true);
+  try {await stop();} finally {busy(false);message(`Rendering stopped: ${reason}`);}
   $('mode-label').textContent='NOT RUNNING';$('fps').textContent='Not measured';
   $('drawn').textContent=$('clusters').textContent='Unavailable';
 }

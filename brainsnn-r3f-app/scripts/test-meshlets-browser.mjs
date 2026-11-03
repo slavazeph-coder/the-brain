@@ -85,7 +85,8 @@ try {
   await page.goto(base+'/lab/meshlets/');await page.selectOption('#count','25');await page.click('#start');
   await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='NOT RUNNING'||(document.getElementById('mode-label').textContent==='WEBGPU · MESHLETS'&&!document.getElementById('benchmark').disabled),null,{timeout:120000});
   assert.equal(await page.locator('#mode-label').textContent(),'WEBGPU · MESHLETS',await page.locator('#status').textContent());
-  await page.waitForFunction(()=>Number(document.getElementById('clusters').textContent.replaceAll(',',''))>0,null,{timeout:120000});
+  await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='NOT RUNNING'||Number(document.getElementById('clusters').textContent.replaceAll(',',''))>0,null,{timeout:120000});
+  assert.equal(await page.locator('#mode-label').textContent(),'WEBGPU · MESHLETS',await page.locator('#status').textContent());
   const meshlets=await measurement(page,'webgpu-meshlets-software-vulkan');assert(meshlets.counts.meshletClusters>0);
   await page.check('#debug');await page.click('#start');await page.waitForFunction(()=>!document.getElementById('benchmark').disabled,null,{timeout:120000});
   await page.screenshot({path:new URL('webgpu-clusters.png',out).pathname,fullPage:true});
