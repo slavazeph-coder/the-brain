@@ -57,7 +57,8 @@ def test_the_scene_step_records_the_snapshot_and_vocabulary_that_named(views, tm
     path, evidence = su.name_step(cloud(), request, tmp_path, views=views, detect=detect)
     assert evidence['status'] == 'named' and evidence['provider'] == 'on-worker detector' and evidence['crops_sent'] == 0
     assert evidence['requested_model'] == 'f' * 64 and evidence['prompt_version'] == ov.RULES_VERSION
-    assert evidence['model']['provider'] == ov.PROVIDER and 'golf cart' in evidence['model']['vocabulary']
+    assert evidence['model'].startswith(ov.PROVIDER) and 'snapshot ffffffffffff' in evidence['model']
+    assert 'golf cart' in evidence['detector']['vocabulary'] and evidence['detector']['snapshot_digest'] == 'f' * 64
     by_label = {o['label']: o for o in json.loads(path.read_text())['objects']}
     assert by_label['refrigerator']['category'] == 'appliance' and by_label['unknown']['confidence'] == 'low'
 

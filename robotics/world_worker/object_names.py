@@ -431,6 +431,7 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
                       'frameEvidence': [frame_evidence(pick, None if detect else crops[n][1]) for n, pick in enumerate(picks)]})
     if not items:
         raise NamingSkipped('No separated object was seen whole and unoccluded in any frame.')
+    detector = None
     if detect:
         try:
             from . import detector_names
@@ -444,7 +445,8 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
             log(f'naming {len(items)} objects with the open-vocabulary detector ({len(detect.vocabulary)} terms)')
             answers, served, usage = open_vocab_names.answer(items, detect)
             provider, requested, version = 'on-worker detector', detect.model['snapshot_digest'], open_vocab_names.RULES_VERSION
-            served = {'provider': served, **detect.model, 'vocabulary': sorted(detect.vocabulary)}
+            detector = {**detect.model, 'vocabulary': sorted(detect.vocabulary)}
+            served = f"{served} · {detect.model['repo']} · snapshot {detect.model['snapshot_digest'][:12]}"
         else:
             log(f'naming {len(items)} objects with the on-worker detector')
             answers, served, usage = detector_names.answer(items, detect)
@@ -463,6 +465,7 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
     for record, item in zip(names['objects'], [i for i in items if i['id'] in answers]):
         record['frameEvidence'] = item['frameEvidence']
     evidence = {'provider': provider, 'requested_model': requested, 'model': served, 'prompt_version': version,
+                **({'detector': detector} if detector else {}),
                 'objects_separated': len(separated), ('objects_checked' if detect else 'objects_sent'): len(items),
                 'crops_sent': sum(len(i['crops']) for i in items),
                 'answered': len(answers), 'skipped': skipped + [{'id': f"object_{i['id']}", 'reason': 'no answer'} for i in items if i['id'] not in answers],
