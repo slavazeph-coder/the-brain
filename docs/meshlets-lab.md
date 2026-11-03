@@ -22,7 +22,8 @@ research weights or arbitrary remote scan URLs are requested by the lab.
 - A fixed-view measurement warms up for two seconds, then records ten seconds of
   foreground animation-frame intervals, median, p95 and average frame cadence.
   The downloadable receipt includes raw samples, viewport, browser, camera,
-  preparation time, settings, source and scope. No GPU execution duration or
+  preparation time, applied settings, runtime asset hashes, source and scope.
+  Changing settings blocks measurement until Start applies them. No GPU execution duration or
   60 FPS guarantee is inferred. Resizing/hiding the page interrupts measurement.
 - WebGL fallback caps procedural count at 100 with lower-detail geometry. Its
   reduced load is disclosed and cannot be presented as a matched-load benchmark.
@@ -93,6 +94,14 @@ Retain actual adapter/browser information, strict GPU result, source and receipt
 The runner saves `adapter-info.json`; use the actual installed Chromium path when
 the bundled browser does not support the workstation architecture.
 No performance figures from the reel are reproduced.
+
+The conservative no-multisampling/no-occlusion control at `ce6cf54` still lost its
+device after six frames, before the required eight-frame control checkpoint:
+[strict run 41558875856](https://github.com/slavazeph-coder/the-brain/actions/runs/41558875856).
+Its transient 310 clusters / 19,840 padded triangles are not a stable benchmark.
+The draft remains blocked on GPU qualification, including sustained real-scene
+rendering and the matched standard comparison. WebGL passes establish fallback
+behavior only. Defaults keep optional multisampling and occlusion off in WebGPU.
 
 ## Next hardware experiment
 

@@ -35,3 +35,9 @@ from app code. Root driver/library cause is unproven. Preserve failed strict GPU
 qualification; do not promote fallback passes into dense GPU or hardware claims.
 Native GPU test command is documented. Current field follows the upstream static
 individual-mesh example; repeated geometry is not independent scans.
+
+Final conservative control at ce6cf54 failed after six frames with optional AA
+and occlusion off (run41558875856). Preserve failure, not a transient counter as
+success. Applied-setting snapshots, dirty-control measurement lock and runtime
+manifest hashes now bind receipts; WebGL AA is true and meshlet-only settings are
+null/false outside that pipeline. GPU hardware access is still unavailable here.

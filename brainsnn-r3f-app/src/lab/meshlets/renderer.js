@@ -9,6 +9,7 @@ const stage=$('stage'), status=$('status');
 let renderer, scene, camera, controls, pipeline, observer, generation=0, disposed=false;
 let activeMode=null, asset=null, source, counts, compileMs=0, running=false, preparing=false;
 let frameTimes=[], previousTime=null, lastHud=0, benchmark=null, lastReceipt=null;
+let activeSettings=null,runtimeManifest=null,settingsDirty=false;
 const closingRenderers=new WeakSet();
 const number = n => Number.isFinite(n) ? n.toLocaleString('en-CA') : 'Unavailable';
 const sha = async data => [...new Uint8Array(await crypto.subtle.digest('SHA-256',data))].map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -17,9 +18,15 @@ const message = text => { status.textContent=text; };
 function busy(value) {
   preparing=value;
   for(const id of ['start','mode','count','quality','lod','debug','occlusion','file','sample']) $(id).disabled=value;
-  $('benchmark').disabled=value || !running;
+  $('benchmark').disabled=value || !running || settingsDirty;
   $('reset').disabled=value || !running;
   if(asset) { $('count').disabled=true; $('quality').disabled=true; }
+  if($('mode').value!=='meshlets')for(const id of ['lod','debug','occlusion'])$(id).disabled=true;
+}
+function changedSettings() {
+  if(preparing||benchmark)return;
+  if(running){settingsDirty=true;lastReceipt=null;$('download').disabled=true;message('Settings changed. Click Start experiment to apply them before measuring.');}
+  busy(false);
 }
 function disposeScene() {
   const resources=new Set();
@@ -53,9 +60,8 @@ function finishBenchmark(interrupted=false) {
   if(!benchmark) return;
   lastReceipt=receipt({mode:activeMode,source,counts:{...counts,
     meshletTriangles:pipeline?.info?.triangles??null,meshletClusters:pipeline?.info?.clusters??null},
-    samples:benchmark.samples, viewport:benchmark.viewport,compileMs,
-    settings:{lodPixels:Number($('lod').value),occlusion:$('occlusion').checked,
-      debugClusters:$('debug').checked,camera:benchmark.camera,warmupSeconds:2,
+    samples:benchmark.samples, viewport:benchmark.viewport,compileMs,runtime:runtimeManifest,
+    settings:{...activeSettings,autoOrbit:false,camera:benchmark.camera,warmupSeconds:2,
       requestedSeconds:10,measuredSeconds:benchmark.samples.reduce((a,b)=>a+b,0)/1000},interrupted});
   benchmark=null; controls.enabled=true;controls.enableDamping=true; $('download').disabled=false;
   $('benchmark').textContent='Measure fixed view for 10 seconds'; busy(false);
@@ -137,6 +143,10 @@ async function start() {
   try {
     await stop();
     if(disposed || current!==generation)return;
+    if(!runtimeManifest){const response=await fetch('/lab/meshlets/runtime/manifest.json',{cache:'no-store'});
+      if(!response.ok)throw new Error('Runtime manifest is unavailable. Rebuild or reload this lab.');
+      runtimeManifest=await response.json();
+      if(runtimeManifest.schema!=='brainsnn.meshlets-runtime.v1'||runtimeManifest.three!=='0.187.0')throw new Error('Runtime version changed. Reload this lab.');}
     frameTimes=[];lastReceipt=null;$('download').disabled=true;
     for(const id of ['fps','total','drawn','clusters','compile'])$(id).textContent=id==='fps'?'Not measured':'Unavailable';
     activeMode=$('mode').value;
@@ -155,6 +165,9 @@ async function start() {
       const {WebGLRenderer}=await import('three');
       renderer=new WebGLRenderer({antialias:true});
     }
+    activeSettings={lodPixels:activeMode==='meshlets'?Number($('lod').value):null,
+      occlusion:activeMode==='meshlets'&&$('occlusion').checked,
+      debugClusters:activeMode==='meshlets'&&$('debug').checked,multisampling:activeMode==='webgl'};
     if(disposed || current!==generation) { await stop();return; }
     renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(stage.clientWidth,stage.clientHeight);
     renderer.toneMapping=T.ACESFilmicToneMapping;
@@ -180,7 +193,7 @@ async function start() {
     $('mode-label').textContent=activeMode==='meshlets'?'WEBGPU · MESHLETS':activeMode==='standard'?'WEBGPU · STANDARD':'WEBGL · CAPPED FALLBACK';
     message(activeMode==='webgl'?'WebGL fallback active. Procedural count is capped at 100 with lower detail.':
       'Live view. Use the fixed-view measurement for a downloadable browser receipt.');
-    running=true;busy(false);
+    settingsDirty=false;running=true;busy(false);
     renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();fail('Graphics context lost. Start again to retry.');});
     renderer.backend?.device?.addEventListener('uncapturederror',event=>console.error('Meshlets WebGPU validation:',event.error.message));
     const ownedRenderer=renderer;
@@ -221,6 +234,8 @@ function animate(time) {
 $('start').addEventListener('click',start);
 $('reset').addEventListener('click',resetCamera);
 $('lod').addEventListener('input',()=>{$('lod-value').value=$('lod').value;});
+for(const id of ['mode','count','quality','debug','occlusion'])$(id).addEventListener('change',changedSettings);
+$('lod').addEventListener('input',changedSettings);
 $('rotate').addEventListener('change',()=>{if(controls&&!benchmark)controls.autoRotate=$('rotate').checked;});
 $('file').addEventListener('change',async()=>{
   const file=$('file').files[0];if(!file||preparing)return;
@@ -233,7 +248,7 @@ $('file').addEventListener('change',async()=>{
 });
 $('sample').addEventListener('click',()=>{asset=null;$('file').value='';$('sample').hidden=true;start();});
 $('benchmark').addEventListener('click',()=>{
-  if(!running||preparing||benchmark)return;
+  if(!running||preparing||benchmark||settingsDirty)return;
   controls.autoRotate=false;$('rotate').checked=false;controls.enableDamping=false;resetCamera();controls.enabled=false;
   benchmark={started:performance.now(),previous:null,samples:[],viewport:{width:stage.clientWidth,height:stage.clientHeight,
     pixelRatio:renderer.getPixelRatio(),userAgent:navigator.userAgent},

@@ -32,8 +32,8 @@ export function inspectGlb(buffer) {
   return json;
 }
 
-export function receipt({mode, source, counts, samples, viewport, compileMs, settings, interrupted=false}) {
-  return { schema:'brainsnn.meshlets-benchmark.v1', three:'0.187.0', mode, source, counts,
+export function receipt({mode, source, counts, samples, viewport, compileMs, settings, runtime, interrupted=false}) {
+  return { schema:'brainsnn.meshlets-benchmark.v1', three:'0.187.0', mode, source, counts, runtime,
     viewport, compileMs, settings, interrupted, cadence:frameSummary(samples),frameIntervalsMs:[...samples],
     timingScope:'requestAnimationFrame intervals during a fixed-camera foreground run; not GPU execution timestamps',
     physicalAccuracyValidated:false, simulationValidated:false,

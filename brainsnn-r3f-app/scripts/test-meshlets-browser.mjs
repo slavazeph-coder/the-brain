@@ -79,7 +79,13 @@ try {
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
     await page.screenshot({path:new URL(`webgl-${width}.png`,out).pathname,fullPage:true});
     if(width===1440) {
+      await page.selectOption('#count','100');assert(await page.locator('#benchmark').isDisabled(),'Unapplied settings cannot produce a misleading receipt.');
+      await page.selectOption('#count','25');await page.click('#start');
+      await page.waitForFunction(()=>!document.getElementById('benchmark').disabled,null,{timeout:60000});
       const r=await measurement(page,'webgl-procedural');assert.equal(r.mode,'webgl');assert.equal(r.counts.objects,25);
+      assert.equal(r.settings.multisampling,true);assert.equal(r.settings.lodPixels,null);
+      assert.equal(r.settings.occlusion,false);assert.equal(r.settings.debugClusters,false);
+      assert.deepEqual(r.runtime,manifest,'Receipt retains the exact runtime asset hashes.');
       const bytes=glb();inspectGlb(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));
       await page.setInputFiles('#file',{name:'authored-wall.glb',mimeType:'model/gltf-binary',buffer:bytes});
       await page.waitForFunction(()=>document.getElementById('source-label').textContent.startsWith('YOUR GLB')&&!document.getElementById('benchmark').disabled,null,{timeout:60000});
