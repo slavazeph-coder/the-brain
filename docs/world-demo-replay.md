@@ -56,6 +56,25 @@ operator configuration. The Railway Dockerfile stages these dependencies; its
 image build and deployed rollout are separate checks. This change does not
 automatically enable a public renderer or alter the production worker.
 
+`World demo runtime image` now builds this exact Railway Dockerfile on relevant
+pull requests and runs `scripts/world-demo/qualify_demo_runtime.py` inside it,
+offline with a read-only filesystem and a temporary output mount. It checks the
+installed fonts, each actual output resolution with 24 encoded H.264 frames,
+actual GLB triangle parsing and the existing website planner. Its authored source
+has deliberate gaps and unknown source times. Retain the workflow result and
+`demo-runtime-qualification` artifact for the exact release head. A local run of
+the script tests the local runtime only; it does not prove an image build. These
+one-second smoke cuts do not replace full-duration replay or live-site acceptance.
+
+```sh
+docker build -f robotics/world_worker/deploy/railway/Dockerfile -t brainsnn-world-demo-qualification .
+mkdir -p /absolute/private/demo-qualification
+docker run --rm --network none --read-only --tmpfs /tmp:rw,size=512m \
+  --mount type=bind,src=/absolute/private/demo-qualification,dst=/qualification \
+  --entrypoint /opt/worker/bin/python brainsnn-world-demo-qualification \
+  /app/scripts/world-demo/qualify_demo_runtime.py --out /qualification
+```
+
 Export a reconstruction directly, using a fresh output folder separate from jobs:
 
 ```sh

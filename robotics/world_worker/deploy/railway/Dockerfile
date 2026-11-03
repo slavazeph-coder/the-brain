@@ -44,6 +44,7 @@ COPY robotics /app/robotics
 RUN /opt/worker/bin/pip install --no-cache-dir -r robotics/world_worker/requirements-demo.txt
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY scripts/world-demo/film/plan_route.mjs /app/scripts/world-demo/film/plan_route.mjs
+COPY scripts/world-demo/qualify_demo_runtime.py /app/scripts/world-demo/qualify_demo_runtime.py
 COPY brainsnn-r3f-app/package.json /app/brainsnn-r3f-app/package.json
 COPY brainsnn-r3f-app/public/world/core.mjs brainsnn-r3f-app/public/world/scene-preview.mjs /app/brainsnn-r3f-app/public/world/
 COPY brainsnn-r3f-app/public/arena/site-core.js /app/brainsnn-r3f-app/public/arena/site-core.js

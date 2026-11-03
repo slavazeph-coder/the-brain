@@ -38,3 +38,12 @@ test added for Chromium/WebKit desktop and phone-sized component flows using an
 actual private worker and authored rasters. Local Playwright binary downloads were
 truncated, so local browser execution was unavailable; hosted results are recorded
 separately in the PR. Runtime image build/deployment remain separate checks.
+
+Next-all continuation: inspected Railway production read-only. Website and private
+worker remain healthy on their existing separate branches, with no staged changes.
+PR277 has no submitted reviews or inline threads at this check. Added an exact
+Railway-image hosted build and offline runtime smoke: actual target-size H.264,
+DejaVu font, GLB triangle parser and website planner. Local script execution passed
+on authored inputs; only the hosted Docker workflow can establish image build
+qualification. The adapter stays disabled. The memory-sync helper is unavailable
+in this environment; memory changes are published with the checked code commit.
