@@ -5,12 +5,27 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
+import { build } from 'esbuild';
 import { inspectGlb } from '../src/lab/meshlets/metrics.mjs';
 const port=Number(process.env.MESHLETS_TEST_PORT||4197),base=`http://127.0.0.1:${port}`;
 const out=new URL('../../output/playwright/meshlets/',import.meta.url);await mkdir(out,{recursive:true});
 const server=spawn(process.execPath,['dist/server.cjs'],{env:{...process.env,NODE_ENV:'production',PORT:String(port)},stdio:['ignore','pipe','pipe']});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',b=>{serverLog=(serverLog+b).slice(-20000);});
 const browsers=[];let activePage=null;const consoleLog=[];
+// Minimal native control separates a runner/driver failure from our app lifecycle.
+await build({stdin:{contents:`
+  import * as T from 'three-meshlets/webgpu';
+  import {MeshletDrawingPipeline} from 'three-meshlets/addons/pipelines/MeshletDrawingPipeline.js';
+  const r=new T.WebGPURenderer({antialias:false});await r.init();r.setSize(400,300);document.body.append(r.domElement);
+  const p=new MeshletDrawingPipeline({occlusionCulling:false});r.drawingPipeline=p;
+  const s=new T.Scene(),c=new T.PerspectiveCamera(50,4/3,.1,100);c.position.z=4;
+  s.add(new T.Mesh(new T.SphereGeometry(1,32,24),new T.MeshBasicNodeMaterial({color:0x68eaff})));
+  window.control={pipeline:p,renderer:r,error:null};r.backend.device.lost.then(i=>window.control.error=i.reason+': '+i.message);
+  r.backend.device.addEventListener('uncapturederror',e=>window.control.error=e.error.message);
+  await r.compileAsync(s,c);r.setAnimationLoop(()=>r.render(s,c));
+`,resolveDir:process.cwd(),sourcefile:'authored-meshlet-control.js'},alias:{three:'three-meshlets'},
+  outfile:'dist/lab/meshlets/runtime/control.js',bundle:true,format:'esm',target:'es2022',logLevel:'warning'});
+await writeFile('dist/lab/meshlets/runtime/control.html','<!doctype html><title>Authored WebGPU control</title><script type="module" src="./control.js"></script>');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const glb=()=>{
   const bin=new Float32Array([-1,0,0,1,0,0,0,2,0,0,0,1,0,0,1,0,0,1]);
@@ -72,8 +87,16 @@ try {
   await fallback.goto(base+'/lab/meshlets/');await fallback.selectOption('#count','25');await fallback.click('#start');
   await fallback.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGL · CAPPED FALLBACK',null,{timeout:60000});
   await fallback.close();await browser.close();
-  const gpu=await chromium.launch({args:['--enable-unsafe-webgpu','--enable-features=Vulkan','--use-angle=vulkan','--use-vulkan=swiftshader','--use-webgpu-adapter=swiftshader','--disable-vulkan-surface']});
+  const gpu=await chromium.launch({channel:'chromium',args:['--enable-unsafe-webgpu','--enable-unsafe-swiftshader','--enable-features=Vulkan','--use-angle=vulkan','--use-vulkan=swiftshader','--use-webgpu-adapter=swiftshader','--disable-vulkan-surface']});
   browsers.push(gpu);
+  const control=await gpu.newPage();activePage=control;
+  control.on('console',event=>console.log('GPU_CONTROL '+event.type()+': '+event.text()));
+  control.on('pageerror',error=>console.log('GPU_CONTROL_ERROR '+error.message));
+  await control.goto(base+'/lab/meshlets/runtime/control.html');
+  await control.waitForFunction(()=>window.control?.error||window.control?.pipeline.info.clusters>0,null,{timeout:30000});
+  const controlResult=await control.evaluate(()=>({error:window.control.error,clusters:window.control.pipeline.info.clusters,triangles:window.control.pipeline.info.triangles}));
+  console.log('GPU_CONTROL_RESULT '+JSON.stringify(controlResult));assert.equal(controlResult.error,null);
+  assert(controlResult.clusters>0);await control.close();
   const page=await gpu.newPage({viewport:{width:1100,height:950},acceptDownloads:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   page.on('console',event=>{const line=event.type()+': '+event.text();consoleLog.push(line);console.log('GPU_BROWSER '+line);});
   await page.addInitScript(()=>{
