@@ -38,6 +38,7 @@ async function measurement(page,name) {
 try {
   for(let i=0;i<60;i++){try{if((await fetch(base+'/healthz')).ok)break;}catch{}await delay(500);}
   assert.equal((await fetch(base+'/healthz')).status,200);
+  assert.equal((await fetch(base+'/lab',{redirect:'manual'})).status,200,'Existing Lab URL must not acquire a directory redirect.');
   const bare=await fetch(base+'/lab/meshlets?receipt=1',{redirect:'manual'});
   assert.equal(bare.status,308);assert.equal(bare.headers.get('location'),'/lab/meshlets/?receipt=1');
   const missing=await fetch(base+'/lab/meshlets/missing.js');assert.equal(missing.status,404);
@@ -75,9 +76,15 @@ try {
   browsers.push(gpu);
   const page=await gpu.newPage({viewport:{width:1100,height:950},acceptDownloads:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   page.on('console',event=>{const line=event.type()+': '+event.text();consoleLog.push(line);console.log('GPU_BROWSER '+line);});
+  await page.addInitScript(()=>{
+    if(!globalThis.GPUDevice)return;
+    const destroy=GPUDevice.prototype.destroy;
+    GPUDevice.prototype.destroy=function(...args){console.log('DEVICE_DESTROY_CALL '+new Error().stack);return destroy.apply(this,args);};
+  });
   activePage=page;
   await page.goto(base+'/lab/meshlets/');await page.selectOption('#count','25');await page.click('#start');
-  await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGPU · MESHLETS'&&!document.getElementById('benchmark').disabled,null,{timeout:120000});
+  await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='NOT RUNNING'||(document.getElementById('mode-label').textContent==='WEBGPU · MESHLETS'&&!document.getElementById('benchmark').disabled),null,{timeout:120000});
+  assert.equal(await page.locator('#mode-label').textContent(),'WEBGPU · MESHLETS',await page.locator('#status').textContent());
   await page.waitForFunction(()=>Number(document.getElementById('clusters').textContent.replaceAll(',',''))>0,null,{timeout:120000});
   const meshlets=await measurement(page,'webgpu-meshlets-software-vulkan');assert(meshlets.counts.meshletClusters>0);
   await page.check('#debug');await page.click('#start');await page.waitForFunction(()=>!document.getElementById('benchmark').disabled,null,{timeout:120000});

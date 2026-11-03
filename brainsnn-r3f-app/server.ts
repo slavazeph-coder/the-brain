@@ -1174,6 +1174,13 @@ export async function startServer() {
     // index.html happen to be the homepage's own. Anything the server computes
     // per route, including the content a crawler reads, was silently skipped
     // there. Letting "/" fall through to the catch-all fixes that.
+    // public/lab now contains a standalone sub-lab. Preserve the existing /lab
+    // SPA URL instead of express.static redirecting it just because a directory exists.
+    app.get(['/lab', '/lab/'], (req, res) => {
+      const [pathname, search = ''] = req.originalUrl.split('?');
+      const html = readFileSync(path.join(distPath, 'index.html'), 'utf8');
+      res.type('html').send(applyRouteMeta(html, pathname, search, APP_URL.replace(/\/$/, '')));
+    });
     app.use(express.static(distPath, { index: false }));
 
     // Every route used to be served the identical index.html, so a shared
