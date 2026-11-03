@@ -83,7 +83,8 @@ function makeBrains() {
   const requested=Number($('count').value),count=fallback?Math.min(requested,100):requested;
   const geometry=fallback?new T.SphereGeometry(1,32,24):brainGeometry($('quality').value);
   if(fallback) geometry.scale(1.08,.82,.91).translate(0,.95,0);
-  const material=new T.MeshStandardMaterial({color:0x92b9d8,roughness:.5,metalness:.18});
+  const Material=activeMode==='webgl'?T.MeshStandardMaterial:T.MeshStandardNodeMaterial;
+  const material=new Material({color:0x92b9d8,roughness:.5,metalness:.18});
   const brains=new T.InstancedMesh(geometry,material,count),matrix=new T.Matrix4();
   const q=new T.Quaternion(),pos=new T.Vector3(),scale=new T.Vector3(1,1,1),axis=new T.Vector3(0,1,0);
   const side=Math.ceil(Math.sqrt(count));
