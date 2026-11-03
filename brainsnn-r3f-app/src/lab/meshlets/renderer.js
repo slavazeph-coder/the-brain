@@ -174,7 +174,11 @@ async function start() {
       'Live view. Use the fixed-view measurement for a downloadable browser receipt.');
     running=true;busy(false);
     renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();fail('Graphics context lost. Start again to retry.');});
-    renderer.backend?.device?.lost.then(()=>{if(current===generation&&!disposed)fail('WebGPU device lost. Choose WebGL fallback or start again.');});
+    renderer.backend?.device?.addEventListener('uncapturederror',event=>console.error('Meshlets WebGPU validation:',event.error.message));
+    renderer.backend?.device?.lost.then(info=>{if(current===generation&&!disposed) {
+      console.error('Meshlets WebGPU device lost:',info.reason,info.message);
+      fail('WebGPU device lost. Choose WebGL fallback or start again.');
+    }});
     renderer.setAnimationLoop(animate);
   } catch(error) { if(current===generation&&!disposed)fail(error.message); }
 }
@@ -235,3 +239,4 @@ $('download').addEventListener('click',()=>{
 });
 document.addEventListener('visibilitychange',()=>{previousTime=null;if(document.hidden&&benchmark)finishBenchmark(true);});
 window.addEventListener('pagehide',()=>{disposed=true;++generation;if(benchmark)finishBenchmark(true);stop();},{once:true});
+window.addEventListener('pageshow',event=>{if(event.persisted){disposed=false;message('Graphics were released while away. Start the experiment to resume.');}});

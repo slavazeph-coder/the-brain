@@ -10,7 +10,7 @@ const port=Number(process.env.MESHLETS_TEST_PORT||4197),base=`http://127.0.0.1:$
 const out=new URL('../../output/playwright/meshlets/',import.meta.url);await mkdir(out,{recursive:true});
 const server=spawn(process.execPath,['dist/server.cjs'],{env:{...process.env,NODE_ENV:'production',PORT:String(port)},stdio:['ignore','pipe','pipe']});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',b=>{serverLog=(serverLog+b).slice(-20000);});
-const browsers=[];let activePage=null;
+const browsers=[];let activePage=null;const consoleLog=[];
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const glb=()=>{
   const bin=new Float32Array([-1,0,0,1,0,0,0,2,0,0,0,1,0,0,1,0,0,1]);
@@ -74,6 +74,7 @@ try {
   const gpu=await chromium.launch({args:['--enable-unsafe-webgpu','--enable-features=Vulkan','--use-angle=vulkan','--use-vulkan=swiftshader','--use-webgpu-adapter=swiftshader','--disable-vulkan-surface']});
   browsers.push(gpu);
   const page=await gpu.newPage({viewport:{width:1100,height:950},acceptDownloads:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',event=>{const line=event.type()+': '+event.text();consoleLog.push(line);console.log('GPU_BROWSER '+line);});
   activePage=page;
   await page.goto(base+'/lab/meshlets/');await page.selectOption('#count','25');await page.click('#start');
   await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGPU · MESHLETS'&&!document.getElementById('benchmark').disabled,null,{timeout:120000});
@@ -95,5 +96,6 @@ try {
   throw error;
 } finally {
   await Promise.allSettled(browsers.map(browser=>browser.close()));
+  await writeFile(new URL('browser-console.log',out),consoleLog.join('\n'));
   server.kill('SIGTERM');await writeFile(new URL('server.log',out),serverLog);
 }
