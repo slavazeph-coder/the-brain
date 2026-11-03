@@ -24,3 +24,6 @@ output/playwright/
 brainsnn-r3f-app/public/arena/deformable/vendor/
 brainsnn-r3f-app/public/arena/deformable/renderer.js
 brainsnn-r3f-app/public/arena/deformable/runtime-manifest.json
+
+# Optional Three.js r187 lab is assembled from the npm lockfile.
+brainsnn-r3f-app/public/lab/meshlets/runtime/

@@ -59,6 +59,11 @@ app.use((req, res, next) => {
 const arenaRouter = createArenaRouter({
   directory: path.join(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/arena' : 'public/arena'),
 });
+// Isolated lab document and assets must never fall through to the React shell.
+app.use('/lab/meshlets', createArenaRouter({
+  label: 'Meshlets lab',
+  directory: path.join(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/lab/meshlets' : 'public/lab/meshlets'),
+}));
 app.use('/arena', (req, res, next) => {
   // Curated synthetic tasks use the shared React shell; the robot arena stays standalone.
   if (req.path === '/tasks' || req.path.startsWith('/tasks/')) return next();
