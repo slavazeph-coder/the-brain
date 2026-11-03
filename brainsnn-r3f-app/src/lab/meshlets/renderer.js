@@ -143,7 +143,7 @@ async function start() {
     if(activeMode!=='webgl') {
       try {
         if(!isSecureContext || !navigator.gpu)throw new Error('WebGPU unavailable');
-        renderer=new T.WebGPURenderer({antialias:true});await renderer.init();
+        renderer=new T.WebGPURenderer({antialias:false});await renderer.init();
         if(!renderer.backend.isWebGPUBackend)throw new Error('No WebGPU adapter');
       } catch {
         if(renderer){closingRenderers.add(renderer);await renderer.dispose();}

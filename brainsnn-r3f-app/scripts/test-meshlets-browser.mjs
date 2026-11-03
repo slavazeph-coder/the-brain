@@ -26,9 +26,9 @@ await build({stdin:{contents:`
   const geometry=new T.SphereGeometry(1,128,96),material=new T.MeshStandardNodeMaterial({color:0x68eaff});
   for(let i=0;i<25;i++){const mesh=new T.Mesh(geometry,material);mesh.position.set((i%5-2)*3,0,(Math.floor(i/5)-2)*3);group.add(mesh);}
   s.add(group);s.add(new T.HemisphereLight(0xffffff,0x222244,2));
-  window.control={pipeline:p,renderer:r,error:null};r.backend.device.lost.then(i=>window.control.error=i.reason+': '+i.message);
+  window.control={pipeline:p,renderer:r,error:null,frames:0};r.backend.device.lost.then(i=>window.control.error=i.reason+': '+i.message);
   r.backend.device.addEventListener('uncapturederror',e=>window.control.error=e.error.message);
-  await r.compileAsync(s,c);r.setAnimationLoop(()=>r.render(s,c));
+  await r.compileAsync(s,c);r.setAnimationLoop(()=>{r.render(s,c);window.control.frames++;});
 `,resolveDir:process.cwd(),sourcefile:'authored-meshlet-control.js'},alias:{three:'three-meshlets'},
   outfile:'dist/lab/meshlets/runtime/control.js',bundle:true,format:'esm',target:'es2022',logLevel:'warning'});
 await writeFile('dist/lab/meshlets/runtime/control.html','<!doctype html><title>Authored WebGPU control</title><script type="module" src="./control.js"></script>');
@@ -111,8 +111,8 @@ try {
   });
   await writeFile(new URL('adapter-info.json',out),JSON.stringify({requestedBackend:gpuRun,browser:await gpu.version(),adapterInfo},null,2));
   console.log('GPU_ADAPTER '+JSON.stringify(adapterInfo));
-  await control.waitForFunction(()=>window.control?.error||window.control?.pipeline.info.clusters>0,null,{timeout:30000});
-  const controlResult=await control.evaluate(()=>({error:window.control.error,clusters:window.control.pipeline.info.clusters,triangles:window.control.pipeline.info.triangles}));
+  await control.waitForFunction(()=>window.control?.error||(window.control?.frames>=8&&window.control?.pipeline.info.clusters>0),null,{timeout:30000});
+  const controlResult=await control.evaluate(()=>({error:window.control.error,frames:window.control.frames,clusters:window.control.pipeline.info.clusters,triangles:window.control.pipeline.info.triangles}));
   console.log('GPU_CONTROL_RESULT '+JSON.stringify(controlResult));assert.equal(controlResult.error,null);
   assert(controlResult.clusters>0);await control.close();
   const page=await gpu.newPage({viewport:{width:1100,height:950},acceptDownloads:true});const errors=[];page.on('pageerror',e=>errors.push(e.message));
