@@ -50,7 +50,7 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   const buffer=gl.createBuffer(), vao=gl.createVertexArray();gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
   const uniforms=Object.fromEntries(['view','projection','viewport','focal','size','mode','cloud'].map(n=>[n,gl.getUniformLocation(program,n)]));
-  let points=new Float32Array(), sorted=new Float32Array(), order=[], yaw=.65, pitch=.5, distance=13, target=[0,1,0], mode=0, pointSize=1, disposed=false, frame=0, auto=false, last=0;
+  let points=new Float32Array(), sorted=new Float32Array(), order=[], yaw=.65, pitch=.5, distance=13, target=[0,1,0], mode=0, pointSize=1, disposed=false, frame=0, auto=false, last=0, sway=null;
   let walking=false, sortDirty=true, visible=true, gesture=null, cloud=true, radius=1, sourcePhoto=false, lost=false, markers=[], markerCount=0, uploaded=false, lastSort=0, settle=0;
   // Picked reference points for scale calibration: drawn larger, in cyan, after the scene.
   const markerBuffer=gl.createBuffer(), markerVao=gl.createVertexArray();gl.bindVertexArray(markerVao);gl.bindBuffer(gl.ARRAY_BUFFER,markerBuffer);
@@ -67,7 +67,8 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   function schedule(){if(!disposed&&!frame)frame=requestAnimationFrame(render);}
   function resize(){const r=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,1.5);const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;sortDirty=true;}schedule();}
   function render(now){frame=0;if(disposed||lost||!visible||document.hidden)return;
-    if(auto&&!matchMedia('(prefers-reduced-motion: reduce)').matches){yaw+=Math.min(40,now-(last||now))*.00008;sortDirty=true;}last=now;
+    // A sway turns the view out to each side and back to where it started (one sine period), then stops; any input cancels it.
+    if(auto&&!matchMedia('(prefers-reduced-motion: reduce)').matches){if(sway){const t=(now-sway.start)/sway.ms;yaw=sway.base+(t<1?sway.amp*Math.sin(2*Math.PI*t):0);if(t>=1){auto=false;sway=null;}}else yaw+=Math.min(40,now-(last||now))*.00008;sortDirty=true;}last=now;
     const {view,projection}=camera();
     // Large clouds: a full back-to-front sort every frame of a drag or orbit blocks the main thread on phones. Re-sort them
     // at most every 200 ms while the view moves, and once more when it settles.
@@ -95,13 +96,14 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   const observer=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting??true;if(visible)schedule();});observer.observe(canvas);resize();
   function fit(photo=false){if(!points.length)return;const b=frameBounds(points);radius=b.radius;target=b.center;const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*(b.trimmed?.9:1.15);yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
   return {
-    setPoints(p,{photo=false,kind='point-cloud',orbit=false}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);uploaded=false;markers=[];updateMarkers();fit(photo);auto=orbit&&!matchMedia('(prefers-reduced-motion: reduce)').matches;schedule();},
+    setPoints(p,{photo=false,kind='point-cloud',orbit=false}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);uploaded=false;markers=[];updateMarkers();fit(photo);sway=null;auto=orbit&&!matchMedia('(prefers-reduced-motion: reduce)').matches;schedule();},
     clear(){points=new Float32Array();sorted=new Float32Array();order=[];markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
     setMode(m){mode=Number.isInteger(m)?Math.max(0,Math.min(2,m)):0;schedule();},
     setSize(n){if(Number.isFinite(n))pointSize=Math.max(.25,Math.min(3,n));schedule();},
     reset(){fit(sourcePhoto);},photoCamera(){fit(true);},
     flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
-    orbit(on=!auto){auto=!!on;schedule();return auto;},
+    orbit(on=!auto){auto=!!on;sway=null;schedule();return auto;},
+    sway(degrees=25,ms=4000){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return false;sway={start:performance.now(),base:yaw,amp:degrees*Math.PI/180,ms};auto=true;schedule();return true;},
     walk(){walking=!walking;if(walking){pitch=0;distance=Math.min(distance,radius*.5);sortDirty=true;schedule();}else fit();return walking;},
     snapshot(){return canvas.toDataURL('image/png');},
     /** Index (in setPoints order) of the point under a client position, or -1 if none is within `tolerance` CSS pixels.

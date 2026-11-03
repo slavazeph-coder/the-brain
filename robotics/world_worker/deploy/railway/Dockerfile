@@ -9,7 +9,7 @@ FROM ubuntu:24.04
 # needs it); bpy needs these X/GL libraries even headless.
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates ffmpeg python3.12 python3.12-venv \
+      ca-certificates ffmpeg fonts-dejavu-core python3.12 python3.12-venv \
       libgl1 libegl1 libx11-6 libxrender1 libxxf86vm1 libxfixes3 libxi6 libxkbcommon0 libsm6 libice6 libgomp1 \
       libssl3t64 libffi8 libsqlite3-0 libexpat1 libbz2-1.0 liblzma5 zlib1g \
     && rm -rf /var/lib/apt/lists/*
@@ -20,11 +20,18 @@ RUN ldconfig && python3.11 -c 'import ssl, sqlite3, ctypes, lzma, bz2'
 
 WORKDIR /app
 COPY robotics/world_worker/requirements.txt robotics/world_worker/requirements-colmap.txt \
-     robotics/world_worker/requirements-cad.txt robotics/world_worker/
-# The worker, COLMAP and the CAD exports on Python 3.12 (their pinned numpy needs it).
+     robotics/world_worker/requirements-dense.txt robotics/world_worker/requirements-cad.txt robotics/world_worker/
+# The worker, COLMAP (with ONNX Runtime for the scale model) and the CAD exports on Python 3.12 (their pinned numpy needs it).
 RUN python3.12 -m venv /opt/worker && /opt/worker/bin/pip install --no-cache-dir \
-      -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-colmap.txt \
+      -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-dense.txt \
       -r robotics/world_worker/requirements-cad.txt usd-core==25.8
+# MoGe-2 ViT-B (MIT) for the estimated metric scale of each reconstruction (about 420 MB): the revision and hash pinned in
+# metric_scale.py MODEL, checked here and again by the adapter before every use. Nothing is downloaded at run time.
+RUN mkdir -p /opt/brainsnn-models && /opt/worker/bin/python -c "import hashlib, urllib.request; \
+path = '/opt/brainsnn-models/moge-2-vitb-normal.onnx'; \
+urllib.request.urlretrieve('https://huggingface.co/Ruicheng/moge-2-vitb-normal-onnx/resolve/2d247a122ada42ce700fe59273cd62e076da1f32/model.onnx', path); \
+digest = hashlib.sha256(open(path, 'rb').read()).hexdigest(); \
+assert digest == 'bbf14e07a30f11e69d36ab861590123f5598ababcbc8946a063eb4a966f35a21', digest"
 # Blender 4.2 as a Python module, which the scene engine runs as its `blender` (about 400 MB).
 RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==4.2.23
 
@@ -32,6 +39,15 @@ RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==
 COPY robotics/world_worker/nvidia_pack.py /tmp/nvidia_pack.py
 RUN /opt/worker/bin/python /tmp/nvidia_pack.py --workspace /opt/brainsnn-simready
 COPY robotics /app/robotics
+# Saved-output replay uses CPU rendering only. The reviewed Railway profile is
+# owner-only; include the same planner used by the website and qualify in CI.
+RUN /opt/worker/bin/pip install --no-cache-dir -r robotics/world_worker/requirements-demo.txt
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY scripts/world-demo/film/plan_route.mjs /app/scripts/world-demo/film/plan_route.mjs
+COPY scripts/world-demo/qualify_demo_runtime.py /app/scripts/world-demo/qualify_demo_runtime.py
+COPY brainsnn-r3f-app/package.json /app/brainsnn-r3f-app/package.json
+COPY brainsnn-r3f-app/public/world/core.mjs brainsnn-r3f-app/public/world/scene-preview.mjs /app/brainsnn-r3f-app/public/world/
+COPY brainsnn-r3f-app/public/arena/site-core.js /app/brainsnn-r3f-app/public/arena/site-core.js
 RUN chmod 755 robotics/world_worker/deploy/railway/start.sh robotics/world_worker/deploy/railway/blender
 
 # Uploads and job outputs live on the Railway volume mounted at /data; jobs are deleted after 24 hours.

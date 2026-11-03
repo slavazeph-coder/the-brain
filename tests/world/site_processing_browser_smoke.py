@@ -42,15 +42,21 @@ def ready(url, process):
     raise RuntimeError('Local test server did not start: ' + url)
 
 
-def check(pw, name, site, passcode, video):
+def check(pw, name, site, passcode, video, edit_first=False, small_video=None):
     executable = os.environ.get('PLAYWRIGHT_CHROMIUM_PATH') if name == 'chromium' else None
     browser = getattr(pw, name).launch(headless=True, **({'executable_path': executable} if executable else {}))
     try:
         page = browser.new_page(viewport={'width': 1280, 'height': 900})
         errors = []; page.on('pageerror', lambda error: errors.append(str(error)))
+        worker_posts = []
+        page.on('request', lambda request: worker_posts.append(request.url) if request.method == 'POST'
+                and '/api/world/worker/' in request.url else None)
         page.goto(site + '/world/index.html', wait_until='domcontentloaded')
         page.wait_for_function("document.querySelectorAll('.system-card').length>0")
-        page.locator('#files').set_input_files(str(video))
+        if edit_first:  # an edited sample is the person's work: a scan must never replace it unasked
+            page.locator('#map-name').fill('My edited floor'); page.locator('#map-name').press('Tab')
+        selected = small_video if small_video and not edit_first else video
+        page.locator('#files').set_input_files(str(selected))
         page.wait_for_function("document.querySelectorAll('.source-row').length===1")
         open_options = "document.querySelector('.processing-options').open=true"
         page.evaluate(open_options)
@@ -69,8 +75,31 @@ def check(pw, name, site, passcode, video):
         assert page.locator('#engine').input_value() == 'colmap-sparse', 'the CPU reconstruction is preselected'
         page.locator('#consent').check()
         page.locator('[data-action=process]').click()
-        page.wait_for_function("document.querySelector('#status').textContent.startsWith('Reconstruction loaded.')", timeout=120000)
+        if small_video and not edit_first:
+            page.wait_for_function("document.querySelector('#status').textContent.includes('224×128 pixels. Reconstruction needs at least 256')")
+            assert worker_posts == [], 'undersized input sends no upload or job request'
+            assert page.locator('.source-row').count() == 1, 'the source stays available for local preview'
+            page.locator('[data-remove="0"]').click()
+            page.locator('#files').set_input_files(str(video))
+            page.wait_for_function("document.querySelectorAll('.source-row').length===1")
+            page.evaluate(open_options)
+            assert page.locator('#engine').input_value() == 'colmap-sparse'
+            page.locator('#consent').check()
+            page.locator('[data-action=process]').click()
+        if edit_first:
+            page.wait_for_function("document.querySelector('#status').textContent.startsWith('Reconstruction loaded with an estimated scale')", timeout=120000)
+            page.locator('[data-tab=world]').click()
+            assert page.locator('#map-name').input_value() == 'My edited floor', 'the edited map is kept'
+            assert not errors, errors
+            return
+        # The worker's scale estimate comes with the reconstruction, so the robot map is proposed straight away, unreviewed.
+        page.wait_for_function("document.querySelector('#status').textContent.startsWith('Map proposed from')", timeout=120000)
+        proposed = page.locator('#status').inner_text()
+        assert 'at the estimated scale, 1 unit ≈ 2.919 m (not measured)' in proposed, proposed
+        page.locator('[data-tab=capture]').click()
         assert page.locator('#provenance').inner_text() == 'VISUAL / SCALE UNVERIFIED'
+        chip = page.locator('.scale-chip').inner_text()
+        assert 'Scale estimated' in chip and '2.919 m' in chip, chip
         stored = page.evaluate("JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)])")
         assert passcode not in stored, 'the passcode is never stored'
         page.locator('#viewport').screenshot(path=str(OUTPUT / f'site-processing-{name}.png'))
@@ -88,8 +117,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix='brainsnn-site-processing-') as directory:
         tmp = Path(directory)
         video = tmp / 'walk.mp4'
-        subprocess.run(['ffmpeg', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=3:size=320x240:rate=10',
+        subprocess.run(['ffmpeg', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=3:size=320x256:rate=10',
                         '-pix_fmt', 'yuv420p', str(video)], check=True)
+        small_video = tmp / 'compressed.mp4'
+        subprocess.run(['ffmpeg', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=3:size=224x128:rate=10',
+                        '-pix_fmt', 'yuv420p', str(small_video)], check=True)
         # As deployed: the passcode is the one shared secret, and both sides derive the worker credentials from it.
         passcode = 'site-passcode-' + secrets.token_hex(4)
         tenants = tmp / 'tenants.json'
@@ -117,8 +149,10 @@ def main():
             site = f'http://127.0.0.1:{site_port}'
             with sync_playwright() as pw:
                 for name in os.environ.get('WORLD_BROWSERS', 'chromium,webkit').split(','):
-                    check(pw, name.strip(), site, passcode, video)
-                    print(f'{name.strip()}: Process on BrainSNN -> passcode -> site proxy -> worker -> cloud loaded', flush=True)
+                    check(pw, name.strip(), site, passcode, video, small_video=small_video)
+                    print(f'{name.strip()}: undersized video blocked before upload; Process on BrainSNN -> passcode -> site proxy -> worker -> cloud loaded -> map proposed', flush=True)
+                    check(pw, name.strip(), site, passcode, video, edit_first=True)
+                    print(f'{name.strip()}: an edited sample map is kept when the scan arrives', flush=True)
             # Setup succeeds, but this transport fixture cannot qualify reconstruction geometry.
             setup = subprocess.run([sys.executable, str(ROOT / 'scripts/world-demo/site_processing_check.py'), '--site', site],
                                    env={**os.environ, 'BRAINSNN_PASSCODE': passcode}, capture_output=True, text=True, timeout=60)

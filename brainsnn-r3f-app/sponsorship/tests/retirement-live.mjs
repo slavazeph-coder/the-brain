@@ -32,7 +32,7 @@ try{
   for(const width of [1440,390]){
     // `/` is the World Builder flagship, which frames /world/index.html; neither document may link to the retired page.
     await page.setViewportSize({width,height:1000});await page.goto(base+'/',{waitUntil:'domcontentloaded',timeout:90000});
-    const world=page.frameLocator('iframe[src="/world/index.html"]');await world.getByRole('heading',{level:1,name:/Walk the space/}).waitFor();await page.waitForTimeout(1000);
+    const world=page.frameLocator('iframe[src="/world/index.html"]');await world.getByRole('heading',{level:1}).first().waitFor();await page.waitForTimeout(1000);
     assert.equal(await page.locator('a[href*="/sponsor"]').count()+await world.locator('a[href*="/sponsor"]').count(),0);
     assert.equal(await world.getByRole('link',{name:'Sponsor Robot 001',exact:true}).count(),0);
     const worldName='brainsnn-world-home-'+width+'.png';await page.screenshot({path:path.join(out,worldName),timeout:90000});evidence.screenshots.push(worldName);
