@@ -31,11 +31,15 @@ def qualify(out):
     out.mkdir(parents=True, exist_ok=True)
     if any(out.iterdir()):
         raise ValueError('Use an empty qualification directory.')
-    # Exercise the actual image dependencies; the adapter stays disabled.
+    # Exercise the actual image dependencies and private deployment profile.
     config = json.loads((dr.ROOT/'robotics/world_worker/deploy/railway/adapters.json').read_text())
     adapter = next(a for a in config if a['id'] == 'demo-replay')
-    if adapter['enabled'] or adapter['license_reviewed']:
-        raise ValueError('This qualification expects the unactivated adapter.')
+    if adapter['enabled'] is not True or adapter['license_reviewed'] is not True:
+        raise ValueError('This qualification expects the reviewed private replay profile.')
+    from robotics.world_worker.deploy.railway.tenants import registry
+    tenants = registry({'WORLD_SITE_PASSCODE':'authored-qualification-passcode'}, 9_000_000_000, [a['id'] for a in config if a['enabled'] and a['license_reviewed']])['tenants']
+    if 'demo-replay' not in tenants[0]['engines'] or 'demo-replay' in tenants[1]['engines']:
+        raise ValueError('Replay must be available only to the owner tenant.')
     node = subprocess.check_output(['node', '--version'], text=True).strip()
     if int(node.lstrip('v').split('.')[0]) < 22:
         raise ValueError('Node 22+ is required by the real planner.')
@@ -109,7 +113,7 @@ def qualify(out):
             'scope':'offline authored fixtures in the current runtime; image-build provenance is recorded separately by CI',
             'python':platform.python_version(),'node':node,'threeCuts':videos,
             'actualGlbTriangles':12,'actualWebsitePlanner':True,'sourceCoverage':{'posed':3,'selected':5},
-            'metricAccuracyValidated':False,'physicalRobotValidated':False,'adapterActivated':False,
+            'metricAccuracyValidated':False,'physicalRobotValidated':False,'productionProfileEnabled':True,'serviceDeployed':False,
             'sourceSha256':options['source_sha256'],'glbSha256':dr.sha(so/'scene.glb')}
         dump(out/'demo-runtime-qualification.json',report)
         shutil.copy(root/'movies/demo-receipt.json',out/'authored-demo-receipt.json')

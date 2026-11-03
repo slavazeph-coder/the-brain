@@ -45,5 +45,9 @@ PR277 has no submitted reviews or inline threads at this check. Added an exact
 Railway-image hosted build and offline runtime smoke: actual target-size H.264,
 DejaVu font, GLB triangle parser and website planner. Local script execution passed
 on authored inputs; only the hosted Docker workflow can establish image build
-qualification. The adapter stays disabled. The memory-sync helper is unavailable
+qualification. The initial image qualification passed on hosted exact head
+0d7378a6b2801ab6eb0f200580f3f7a2ee1f67b7, run41551540001. Next, the Railway profile
+enables reviewed replay for owner sessions; worker tenant allowlists now also
+exclude private engines from visitors. Generic example stays disabled. Requires
+fresh image/software checks before deployment. The memory-sync helper is unavailable
 in this environment; memory changes are published with the checked code commit.

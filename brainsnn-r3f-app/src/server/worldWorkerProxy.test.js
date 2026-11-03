@@ -155,6 +155,7 @@ it('world processing: visitors switched off get no session; switched on, they ar
     const upload = (await web.call('/api/world/worker/v1/uploads', { method: 'POST', token, body: { name: 'walk.mov', size: 5, kind: 'video' } })).data.id;
     const job = (engine) => web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine, upload_ids: [upload], consent: true } });
     assert.equal((await job('lingbot-map-stream')).status, 403);
+    assert.equal((await job('demo-replay')).status, 403);
     assert.equal((await job('colmap-sparse')).status, 201);
     assert.equal((await job('colmap-sparse')).status, 201);
     const third = await job('colmap-sparse');

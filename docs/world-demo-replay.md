@@ -49,12 +49,12 @@ needs Node 22+ and the existing `scripts/world-demo/film/plan_route.mjs`, websit
 `core.mjs`, `scene-preview.mjs` and `arena/site-core.js` at their normal repo paths.
 No learned weights, GPU, model API key or network download is used during export.
 
-The example adapter and Railway profile include a disabled `demo-replay` entry.
-After installing and qualifying the dependencies, configure its absolute Python
-and script paths, then enable and license-review that adapter through normal
-operator configuration. The Railway Dockerfile stages these dependencies; its
-image build and deployed rollout are separate checks. This change does not
-automatically enable a public renderer or alter the production worker.
+The generic example adapter stays disabled until its dependencies are installed
+and reviewed. The Railway profile enables the reviewed CPU `demo-replay` engine
+for the owner after image qualification. Its tenant registry excludes private
+engines from visitors, matching the site's existing visitor allowlist. The
+Dockerfile stages these dependencies; exact image build and deployed rollout
+are separately recorded. This does not enable visitor or public video export.
 
 `World demo runtime image` now builds this exact Railway Dockerfile on relevant
 pull requests and runs `scripts/world-demo/qualify_demo_runtime.py` inside it,
@@ -62,7 +62,8 @@ offline with a read-only filesystem and a temporary output mount. It checks the
 installed fonts, each actual output resolution with 24 encoded H.264 frames,
 actual GLB triangle parsing and the existing website planner. Its authored source
 has deliberate gaps and unknown source times. Retain the workflow result and
-`demo-runtime-qualification` artifact for the exact release head. A local run of
+`demo-runtime-qualification` artifact for the exact release head. The smoke also
+requires replay in the owner profile and excludes it from visitors. A local run of
 the script tests the local runtime only; it does not prove an image build. These
 one-second smoke cuts do not replace full-duration replay or live-site acceptance.
 

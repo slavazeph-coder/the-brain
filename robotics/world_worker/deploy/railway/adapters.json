@@ -103,8 +103,8 @@
   {
     "id": "demo-replay",
     "label": "Demo videos from saved reconstruction outputs",
-    "enabled": false,
-    "license_reviewed": false,
+    "enabled": true,
+    "license_reviewed": true,
     "input_kinds": [
       "replay"
     ],
