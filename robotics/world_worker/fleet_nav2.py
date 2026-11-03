@@ -104,6 +104,59 @@ def world_point_clear(bundle:MapBundle,x_m:float,y_m:float,radius_m:float) -> bo
             if math.hypot(dx,dy)<=radius_m:return False
     return True
 
+def swept_disc_clear(bundle: MapBundle, start: tuple[float,float], end: tuple[float,float], radius_m:float) -> bool:
+    """Exact static 2D swept-disc versus occupied/unknown cell rectangles.
+
+    Checks the line segment continuously, rather than sampling a set of points
+    that might miss an obstacle corner. This is not body kinematics, contact
+    physics, localization validation or a physical motion-safety certificate.
+    """
+    ax,ay=start;bx,by=end
+    if not all(math.isfinite(v) for v in (ax,ay,bx,by,radius_m)) or radius_m<0:
+        return False
+    if not world_point_clear(bundle,ax,ay,radius_m) or not world_point_clear(bundle,bx,by,radius_m):
+        return False
+    s=bundle.scene.cell_size_m
+    left,top=bundle.top_left_m
+    c0=max(0,math.floor((min(ax,bx)-radius_m-left)/s)-1)
+    c1=min(bundle.scene.width-1,math.floor((max(ax,bx)+radius_m-left)/s)+1)
+    r0=max(0,math.floor((top-max(ay,by)-radius_m)/s)-1)
+    r1=min(bundle.scene.height-1,math.floor((top-min(ay,by)+radius_m)/s)+1)
+
+    def point_segment_distance_sq(px,py,x0,y0,x1,y1):
+        dx=x1-x0;dy=y1-y0;d=dx*dx+dy*dy
+        t=max(0.,min(1.,((px-x0)*dx+(py-y0)*dy)/d)) if d else 0.
+        return (px-(x0+t*dx))**2+(py-(y0+t*dy))**2
+
+    def intersect_rect(xlo,ylo,xhi,yhi):
+        # Liang-Barsky segment clipping, including touching an obstacle.
+        dx=bx-ax;dy=by-ay
+        near,far=0.,1.
+        for p,q in ((-dx,ax-xlo),(dx,xhi-ax),(-dy,ay-ylo),(dy,yhi-ay)):
+            if abs(p)<1e-15:
+                if q<0:return False
+                continue
+            v=q/p
+            if p<0:near=max(near,v)
+            else:far=min(far,v)
+            if near>far:return False
+        return True
+
+    for row in range(r0,r1+1):
+        for col in range(c0,c1+1):
+            if bundle.scene.rows[row][col]=='.':continue
+            xlo=left+col*s;xhi=xlo+s;yhi=top-row*s;ylo=yhi-s
+            if intersect_rect(xlo,ylo,xhi,yhi):return False
+            d2=min(
+                max(xlo-ax,0.,ax-xhi)**2+max(ylo-ay,0.,ay-yhi)**2,
+                max(xlo-bx,0.,bx-xhi)**2+max(ylo-by,0.,by-yhi)**2,
+                *(point_segment_distance_sq(x,y,ax,ay,bx,by)
+                  for x in (xlo,xhi) for y in (ylo,yhi)),
+            )
+            if d2<=radius_m*radius_m:return False
+    return True
+
+
 def load_nav2_map(folder: Path) -> MapBundle:
     """Recheck byte-for-byte BrainSNN Nav2 export, not a generic PGM/YAML parser."""
     folder=Path(folder)
@@ -207,14 +260,11 @@ def import_reviewed_episode(map_bundle:MapBundle, manifest:dict, raw_csv:bytes):
             dist=math.hypot(cur['x_m']-previous_sample['x_m'],cur['y_m']-previous_sample['y_m'])
             if dist/(delta_ns/1e9)>robot.max_speed_m_s*1.30+0.01:
                 raise ValueError('Unphysical pose jump for configured robot speed')
-            # Check every point on the observed segment, including intermediate unknowns.
-            for i in range(1,max(2,math.ceil(dist/(s/6)))+1):
-                t=i/max(2,math.ceil(dist/(s/6)))
-                x=previous_sample['x_m']+(cur['x_m']-previous_sample['x_m'])*t
-                y=previous_sample['y_m']+(cur['y_m']-previous_sample['y_m'])*t
-                cell=map_bundle.cell_from_pose(x,y)
-                if not world_point_clear(map_bundle,x,y,robot.footprint_radius_m):
-                    raise ValueError('Pose segment crosses blocked/unknown map cell or wall clearance')
+            # Exact continuous swept disc against static occupied/unknown cells.
+            if not swept_disc_clear(map_bundle,
+                                    (previous_sample['x_m'],previous_sample['y_m']),
+                                    (cur['x_m'],cur['y_m']),robot.footprint_radius_m):
+                raise ValueError('Pose segment crosses blocked/unknown map cell or wall clearance')
         target=map_bundle.cell_from_pose(cur['x_m'],cur['y_m'])
         if not world_point_clear(map_bundle,cur['x_m'],cur['y_m'],robot.footprint_radius_m):
             raise ValueError('Source sample intersects blocked/unknown map cell or wall clearance')
