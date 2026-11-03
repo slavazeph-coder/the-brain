@@ -43,7 +43,7 @@ ACTIVE = ('prepared', 'queued', 'running')
 class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=160)
-    kind: Literal['image', 'video', 'cloud', 'capture']
+    kind: Literal['image', 'video', 'cloud', 'capture', 'replay']
     size: int = Field(gt=0, le=VIDEO_BYTES, strict=True)
 
 class JobBody(BaseModel):
@@ -174,6 +174,13 @@ def sha256_file(path: Path) -> str:
 
 
 def validate_media(path: Path, kind: str):
+    if kind == 'replay':
+        from .demo_replay import read_json, validate_options
+        try:
+            validate_options(read_json(path, 8192))
+        except (OSError, ValueError, TypeError) as error:
+            raise HTTPException(422, str(error)[:300])
+        return
     if kind == 'capture':
         from .native_capture import read_metadata
         try:
@@ -213,7 +220,7 @@ def configured_engines(config):
         if not Path(command[0]).is_absolute() or not Path(command[0]).is_file():
             raise ValueError('Adapter executable must be an existing absolute path.')
         kinds = entry.get('input_kinds', [])
-        if not kinds or any(k not in ['image', 'video', 'cloud', 'capture'] for k in kinds):
+        if not kinds or any(k not in ['image', 'video', 'cloud', 'capture', 'replay'] for k in kinds):
             raise ValueError('Invalid adapter input kinds.')
         # Secrets this adapter alone receives from the worker's environment, by name (for example ANTHROPIC_API_KEY).
         secrets_ = entry.get('secrets', [])
@@ -414,6 +421,26 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 try:
                     source = store.job(job['source_job'], job['owner_id'])
                     request['source'] = {'job': source['id'], 'engine': source['engine'], 'path': str(store.root / 'jobs' / source['id'])}
+                    if job['engine'] == 'demo-replay':
+                        # Follow only server-stored same-owner job relationships.
+                        # Browser options never select a filesystem path or a
+                        # second owner's reconstruction, even after BIM rebuilds.
+                        ancestor, seen = source, set()
+                        for _ in range(8):
+                            if ancestor['id'] in seen or ancestor['status'] != 'complete':
+                                break
+                            seen.add(ancestor['id'])
+                            parent = store.root / 'jobs' / ancestor['id']
+                            if (parent / 'output/camera-frames.json').is_file():
+                                request['source']['reconstruction'] = {'job': ancestor['id'], 'engine': ancestor['engine'], 'path': str(parent)}
+                                break
+                            if not ancestor.get('source_job'):
+                                break
+                            ancestor = store.job(ancestor['source_job'], job['owner_id'])
+                        else:
+                            ancestor = None
+                        if 'reconstruction' not in request['source']:
+                            request['source']['reconstruction'] = {'missing': True}
                 except HTTPException:
                     request['source'] = {'job': job['source_job'], 'missing': True}
             request_file = directory / 'input.json'
@@ -551,7 +578,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def create_upload(body: UploadBody, request:Request):
         principal = request.state.principal
         suffix=Path(body.name).suffix.lower()
-        if suffix not in {'image':['.jpg','.jpeg','.png','.webp'],'video':['.mp4','.mov','.webm'],'cloud':['.json'],'capture':['.json']}[body.kind]: raise HTTPException(422,'Unsupported file type.')
+        if suffix not in {'image':['.jpg','.jpeg','.png','.webp'],'video':['.mp4','.mov','.webm'],'cloud':['.json'],'capture':['.json'],'replay':['.json']}[body.kind]: raise HTTPException(422,'Unsupported file type.')
+        if body.kind=='replay' and body.size>8192: raise HTTPException(422,'Replay requests are limited to 8 KiB.')
         if body.kind=='capture' and body.size>MIB: raise HTTPException(422,'Native capture metadata is limited to 1 MiB.')
         if body.kind=='cloud' and body.size>ARENA_CLOUD_MAX_BYTES: raise HTTPException(422,'Point-cloud hand-offs are limited to 16 MiB.')
         if body.kind!='video' and body.size>FILE_BYTES: raise HTTPException(422,'Photos are limited to 200 MiB; videos to 2 GiB.')

@@ -3,6 +3,10 @@
 These scripts record the product demos on the real site against a real worker: nothing on screen is mocked.
 They are reference tools, not part of CI.
 
+**FoundationVIO-style replay export:** [demo replay setup and private export](../../docs/world-demo-replay.md)
+describes the new saved-frame/camera-path renderer, landscape/social/short MP4s,
+the product export panel, source binding and diagnostic versus measured-demo limits.
+
 **Replacing the affected tilted demos:** use [REGENERATE.md](REGENERATE.md) for the asset inventory, original-capture
 requirements, corrected-job archive and fresh rendering commands. `regenerate_reference.py` fails closed when source
 hashes, scale or corrected floor evidence are missing. Existing film filenames in this README are examples.
