@@ -61,6 +61,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [TViz and Arena inspection research](brainsnn-inspection-layer-2026-10.md). October16 source audit and historical proposal; native implementation now tracked above, ROS/SSH viewer remains optional.
 
+→ [Fleet Learning Phase 2](world-fleet-learning-phase2-2026-11-02.md) — Nav2/ROS map-frame source bindings, 24 held-out offline tasks and an adverse synthetic result; physical validation pending.
+
 ## Active Work
 
 → [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — sandbox integration, calibrated underlay, source/revision-bound downloads and required deployed acceptance.
