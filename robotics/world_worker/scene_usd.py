@@ -22,7 +22,7 @@ import sys
 import time
 
 try:
-    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, sparse_colmap
+    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, open_vocab_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import building_handoff
@@ -33,6 +33,7 @@ except ImportError:
     import fit_check
     import measurement_check
     import object_names
+    import open_vocab_names
     import sparse_colmap
     from geometry import load_arena_cloud
 
@@ -354,7 +355,8 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
 
 
 # ---------- Blender ----------
-def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None, detector_model: Path | None = None, detect=None):
+def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None, detector_model: Path | None = None, detect=None,
+              open_vocab_model: Path | None = None):
     """Suggested names for the separated objects. The vision model names them when the person asked for it with this
     hand-off; an on-worker detector (detector_model, or detect for tests) names them when it is configured and the model
     did not. Returns the names file for the compiler (or None) and what happened. Provider failures keep an unnamed
@@ -381,7 +383,7 @@ def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None
             return path, {'status': 'reused', 'source_job': source.get('job'), 'model_executed': False,
                           'model': payload.get('model'), 'prompt_version': payload.get('prompt_version'),
                           'source_sha256': hashlib.sha256(old_names.read_bytes()).hexdigest()}
-    providers = (['model'] if cloud.get('nameObjects') else []) + (['detector'] if detector_model or detect else [])
+    providers = (['model'] if cloud.get('nameObjects') else []) + (['detector'] if detector_model or detect or open_vocab_model else [])
     attempts = []
     for provider in providers:
         try:
@@ -395,7 +397,11 @@ def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None
             if provider == 'model' and client is None and not os.environ.get('ANTHROPIC_API_KEY'):
                 raise object_names.NamingSkipped('This worker has no Anthropic API key configured.')
             if provider == 'detector' and detect is None:
-                detect = detector_names.load(detector_model)
+                if open_vocab_model:
+                    # The request may name what to look for (a list of phrases); otherwise the default vocabulary.
+                    detect = open_vocab_names.load(open_vocab_model, cloud.get('vocabulary') or request.get('vocabulary'))
+                else:
+                    detect = detector_names.load(detector_model)
             names, evidence = object_names.name_objects(cloud, Path(source['path']), client=client, views=views,
                                                         detect=detect if provider == 'detector' else None)
             work.mkdir(parents=True, exist_ok=True)
@@ -451,7 +457,8 @@ def handoff_input(request: dict):
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def run(request: dict, *, blender: str, naming_client=None, naming_views=None, detector_model: Path | None = None, naming_detect=None):
+def run(request: dict, *, blender: str, naming_client=None, naming_views=None, detector_model: Path | None = None, naming_detect=None,
+        open_vocab_model: Path | None = None):
     if not SCENE_COMPILER.is_file():
         raise RuntimeError(f'Scene compiler not found at {SCENE_COMPILER}.')
     if not Path(blender).is_absolute() or not Path(blender).is_file():
@@ -474,7 +481,8 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     (out / 'arena-cloud.json').write_text(json.dumps(cloud, allow_nan=False))
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
-    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect)
+    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect,
+                              open_vocab_model=open_vocab_model)
     scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names)
     if cloud.get('bimReview') and not scene.get('bimReview'):
         raise RuntimeError('The scene compiler did not apply the supplied BIM review. Update the complete worker checkout.')
@@ -629,11 +637,12 @@ def main():
     parser.add_argument('--input-manifest', required=True)
     parser.add_argument('--blender', default=shutil.which('blender') or '/usr/bin/blender')
     parser.add_argument('--detector-model', type=Path, help='pinned EfficientDet-Lite2 .tflite; names objects on the worker when the vision model does not')
+    parser.add_argument('--open-vocab-model', type=Path, help='local OWLv2 snapshot directory; names objects from a per-site vocabulary (takes precedence over --detector-model)')
     args = parser.parse_args()
     request = Path(args.input_manifest)
     if request.stat().st_size > 65536:
         raise ValueError('Input manifest is too large.')
-    evidence = run(json.loads(request.read_text()), blender=args.blender, detector_model=args.detector_model)
+    evidence = run(json.loads(request.read_text()), blender=args.blender, detector_model=args.detector_model, open_vocab_model=args.open_vocab_model)
     reconstruction = evidence['reconstruction'] or {}
     print('SCENE_USD_OK', json.dumps({'input': evidence['input']['kind'], 'points': reconstruction.get('reconstructed_points', evidence['handoff']['points']),
                                       'registered': (reconstruction.get('capture') or {}).get('registered_images'),

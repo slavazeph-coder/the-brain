@@ -436,9 +436,19 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
             from . import detector_names
         except ImportError:
             import detector_names
-        log(f'naming {len(items)} objects with the on-worker detector')
-        answers, served, usage = detector_names.answer(items, detect)
-        provider, requested, version = 'on-worker detector', detector_names.MODEL['sha256'], detector_names.RULES_VERSION
+        if getattr(detect, 'vocabulary', None) is not None:   # open_vocab_names.load: its own answer rules and model identity
+            try:
+                from . import open_vocab_names
+            except ImportError:
+                import open_vocab_names
+            log(f'naming {len(items)} objects with the open-vocabulary detector ({len(detect.vocabulary)} terms)')
+            answers, served, usage = open_vocab_names.answer(items, detect)
+            provider, requested, version = 'on-worker detector', detect.model['snapshot_digest'], open_vocab_names.RULES_VERSION
+            served = {'provider': served, **detect.model, 'vocabulary': sorted(detect.vocabulary)}
+        else:
+            log(f'naming {len(items)} objects with the on-worker detector')
+            answers, served, usage = detector_names.answer(items, detect)
+            provider, requested, version = 'on-worker detector', detector_names.MODEL['sha256'], detector_names.RULES_VERSION
     else:
         if client is None:
             import anthropic
