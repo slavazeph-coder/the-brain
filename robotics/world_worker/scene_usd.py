@@ -434,6 +434,21 @@ def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = 
     return scene
 
 
+STAND_INS = Path(__file__).resolve().parent / 'stand_ins.py'
+STAND_IN_CATALOG = Path(__file__).resolve().parent / 'catalog'
+
+
+def place_stand_ins(work: Path, catalog: Path, *, blender: str):
+    """Run stand_ins.py inside Blender on the compiled scene.blend; returns its stand-ins.json report."""
+    command = [blender, '-b', str(work / 'scene.blend'), '--python-exit-code', '1', '--python', str(STAND_INS), '--',
+               '--scene', str(work / 'scene.json'), '--catalog', str(catalog), '--out', str(work)]
+    subprocess.run(command, check=True, stdin=subprocess.DEVNULL, timeout=BLENDER_TIMEOUT)
+    report = json.loads((work / 'stand-ins.json').read_text())
+    if report.get('schema') != 'brainsnn.stand-ins.v1':
+        raise RuntimeError('stand_ins.py did not write a brainsnn.stand-ins.v1 report.')
+    return report
+
+
 def blender_version(blender: str):
     probe = subprocess.run([blender, '--version'], capture_output=True, text=True, timeout=60)
     return probe.stdout.strip().splitlines()[0] if probe.stdout.strip() else None
@@ -498,6 +513,18 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  if (cad.get(key) or {}).get('written')]
     for name in cad_files:
         shutil.copyfile(work / name, out / name)
+    # Stand-ins: real-size licensed models where named objects stand (metric scenes with a catalog only). Never fatal.
+    stand_in_files, stand_ins = [], {'skipped': 'No named object, or no catalog.'}
+    catalog = STAND_IN_CATALOG if STAND_IN_CATALOG.is_dir() and (STAND_IN_CATALOG / 'catalog.json').is_file() else None
+    if names and cloud['units'] == 'm' and catalog:
+        try:
+            stand_ins = place_stand_ins(work, catalog, blender=blender)
+            if stand_ins.get('written'):
+                for name in ['scene-stand-ins.glb', 'scene-stand-ins.usda']:
+                    if (work / name).is_file() and (work / name).stat().st_size: shutil.copyfile(work / name, out / name); stand_in_files.append(name)
+            shutil.copyfile(work / 'stand-ins.json', out / 'stand-ins.json'); stand_in_files.append('stand-ins.json')
+        except Exception as error:
+            stand_ins = {'failed': f'{type(error).__name__}: {str(error)[:200]}'}
     # The fit check: how closely the model follows the points, as numbers and as a heatmap of every point.
     try:
         fit = fit_check.export(scene, cloud['points'], work)
@@ -614,11 +641,13 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 + (['Review the suggested object names before relying on them'] if names else []),
                 'warnings': (reconstruction['warnings'] if reconstruction else [])
                 + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured + named}
+    evidence['stand_ins'] = {k: v for k, v in stand_ins.items() if k != 'placed'} | ({'placed': len(stand_ins['placed'])} if 'placed' in stand_ins else {})
     (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     artifacts = [{'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': cloud['units']},
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
+                 *({'name': name, 'kind': 'evidence' if name.endswith('.json') else 'visual', **({'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm', 'provenance': 'stand-in models, not scanned geometry'} if not name.endswith('.json') else {})} for name in stand_in_files),
                  *building_files,
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
