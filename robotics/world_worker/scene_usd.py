@@ -433,6 +433,74 @@ def blender_version(blender: str):
     return probe.stdout.strip().splitlines()[0] if probe.stdout.strip() else None
 
 
+METRIC_PIPELINES = {'mapanything-apache', 'lingbot-map-stream'}
+PHONE_HEIGHT_RANGE_M = (0.9, 1.9)  # a phone held between waist and eye level; outside it the predicted scale deserves doubt
+
+
+def reconstruction_input(request: dict):
+    """The one validated reconstruction hand-off of a request (a GPU adapter's reconstruction.json with its dense
+    point cloud beside it), or None. The GPU host reconstructs; this host compiles. Scale is the model's own estimate."""
+    inputs = request.get('inputs', [])
+    if not any(item.get('kind') == 'reconstruction' for item in inputs):
+        return None
+    if request.get('schema') != 'brainsnn.adapter.v1' or len(inputs) != 1:
+        raise ValueError('Send one reconstruction hand-off on its own.')
+    path = Path(inputs[0]['path'])
+    if not path.is_absolute() or path.is_symlink() or not path.is_file() or path.name != 'reconstruction.json' or path.stat().st_size > 4_000_000:
+        raise ValueError('A reconstruction hand-off is the adapter\'s reconstruction.json, as a regular local file.')
+    evidence = json.loads(path.read_text())
+    cameras = evidence.get('cameras')
+    if (evidence.get('schema') != 'brainsnn.reconstruction.v1' or evidence.get('pipeline') not in METRIC_PIPELINES
+            or evidence.get('coordinate_frame') != 'right-handed-y-up' or evidence.get('metric_verified') is not False
+            or not isinstance(cameras, list) or len(cameras) < 2):
+        raise ValueError('The scene compiler needs a metric multi-view reconstruction from a reviewed GPU adapter.')
+    ply = path.with_name('dense-preview.ply')
+    if ply.is_symlink() or not ply.is_file():
+        raise ValueError('The reconstruction hand-off needs its dense-preview.ply beside reconstruction.json.')
+    rows = read_ply(ply)
+    views = len(cameras)
+    cloud = to_arena_cloud(rows, coordinate_frame='right-handed-y-up', source=f"{evidence['pipeline']} · {views} views · model-metric scale",
+                           metres_per_unit=1.0, measurement={'distance': None, 'span': None, 'method': 'model-predicted metric scale; no measured reference'})
+    cloud['multiView'] = True
+    cloud['scale'] = {'source': 'model-metric-estimate', 'metresPerUnit': 1.0, 'selfReported': False, 'verified': False,
+                      'model': str(evidence.get('model', ''))[:120], 'modelSha256': str(evidence.get('model_sha256', ''))[:64],
+                      'cameraHeightCheck': camera_height_check(cloud, cameras)}
+    return cloud, {'kind': 'reconstruction-handoff', 'pipeline': evidence['pipeline'], 'views': views,
+                   'name': str(inputs[0].get('name', ''))[:160], 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def camera_height_check(cloud: dict, cameras: list):
+    """How high the cameras sit above the estimated floor, in the hand-off frame: the one scale sanity check a walkthrough
+    carries with it. A phone held at chest height is about 1.2–1.6 m up; a predicted scale that puts it at 0.4 m or 3 m is
+    wrong before any tape measure is involved. A check, not a verification."""
+    floor = cloud.get('floorEstimate')
+    M = cloud.get('fromSource')
+    if not floor or not M or 'y' not in floor:
+        return {'status': 'no-floor', 'note': 'No confident floor; the camera height cannot be read.'}
+    heights = []
+    for camera in cameras:
+        pose = camera.get('camera_to_world_y_up')
+        if not isinstance(pose, list) or len(pose) != 4 or any(len(row) != 4 for row in pose):
+            continue
+        x, y, z = (float(pose[i][3]) for i in range(3))
+        if not all(math.isfinite(v) for v in (x, y, z)):
+            continue
+        hx = M[0][0] * x + M[0][1] * y + M[0][2] * z + M[0][3]
+        hy = M[1][0] * x + M[1][1] * y + M[1][2] * z + M[1][3]
+        hz = M[2][0] * x + M[2][1] * y + M[2][2] * z + M[2][3]
+        heights.append(hy - float(floor['y']))
+    if len(heights) < 2:
+        return {'status': 'no-cameras', 'note': 'Too few camera poses to read a height.'}
+    heights.sort()
+    median = heights[len(heights) // 2]
+    lo, hi = PHONE_HEIGHT_RANGE_M
+    plausible = lo <= median <= hi
+    return {'status': 'plausible' if plausible else 'implausible', 'medianM': round(median, 3), 'minM': round(heights[0], 3),
+            'maxM': round(heights[-1], 3), 'cameras': len(heights), 'expectedRangeM': [lo, hi],
+            'note': ('The cameras sit where a hand-held phone would. The predicted scale passes its one free sanity check; it is still unverified against a measurement.'
+                     if plausible else 'The cameras do not sit where a hand-held phone would. Treat every dimension as suspect until one distance is measured.')}
+
+
 def handoff_input(request: dict):
     """The one validated browser hand-off of a cloud request, or None for a walkthrough request."""
     inputs = request.get('inputs', [])
@@ -458,7 +526,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
         raise RuntimeError('Blender must be an existing absolute path.')
     started = time.monotonic()
     out = Path(request['output_dir']).resolve()
-    handoff = handoff_input(request)
+    handoff = reconstruction_input(request) or handoff_input(request)
     if handoff:
         cloud, source = handoff
         out.mkdir(parents=True, exist_ok=True)

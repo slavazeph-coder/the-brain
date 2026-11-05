@@ -31,8 +31,10 @@ MODEL_REVISION = '00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a'
 MODEL_SHA256 = 'fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201'
 MODEL_BYTES = 4_914_062_480
 CONFIG_SHA256 = '65701d09d99ed37a21d295f0d138978b3d584ab3bccdbcb4a2853da212b676c5'
-MAX_VIEWS = 12
-MAX_POINTS = 100_000
+DEFAULT_VIEWS = 12  # the qualified default; a request may ask for more, up to MAX_VIEWS
+MAX_VIEWS = 64  # 48 views at 518 px peaked at 10.6 GB on an RTX 4090 (about 0.22 GB per view); 64 fits a 24 GB card
+DEFAULT_POINTS = 100_000  # browser preview budget
+MAX_POINTS = 1_000_000  # scene-compiler budget: enough for objects to keep their shape
 
 
 def file_hash(path):
@@ -105,7 +107,7 @@ def preview_from_predictions(predictions, *, max_points=MAX_POINTS):
     """
     import numpy as np
     if not isinstance(predictions, (list, tuple)) or not 1 <= len(predictions) <= MAX_VIEWS:
-        raise ValueError('Expected 1–12 model prediction views.')
+        raise ValueError(f'Expected 1–{MAX_VIEWS} model prediction views.')
     if type(max_points) is not int or not len(predictions) <= max_points <= MAX_POINTS:
         raise ValueError('Invalid preview point budget.')
     all_points, all_colours, counts = [], [], []
@@ -280,12 +282,23 @@ def write_camera_frame_evidence(predictions, model_views, paths, preparations, s
     return record
 
 
+def budgets(request):
+    """View and point budgets of a request: the qualified defaults unless the request asks for more, within the caps."""
+    views, points = request.get('max_views', DEFAULT_VIEWS), request.get('preview_points', DEFAULT_POINTS)
+    if type(views) is not int or not 1 <= views <= MAX_VIEWS:
+        raise ValueError(f'max_views must be an integer from 1 to {MAX_VIEWS}.')
+    if type(points) is not int or not views <= points <= MAX_POINTS:
+        raise ValueError(f'preview_points must be an integer from the view count to {MAX_POINTS}.')
+    return views, points
+
+
 def run(request):
     items = request.get('inputs', [])
-    photos = 1 <= len(items) <= MAX_VIEWS and all(item.get('kind') == 'image' for item in items)
+    max_views, max_points = budgets(request)
+    photos = 1 <= len(items) <= max_views and all(item.get('kind') == 'image' for item in items)
     video = len(items) == 1 and items[0].get('kind') == 'video'
     if request.get('schema') != 'brainsnn.adapter.v1' or not (photos or video):
-        raise ValueError('Use 1–12 photos or one walkthrough video.')
+        raise ValueError(f'Use 1–{max_views} photos or one walkthrough video.')
     source, dino, snapshot = local_installation()
     os.environ.update({'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'HF_HUB_DISABLE_TELEMETRY': '1'})
     sys.addaudithook(deny_network)
@@ -306,7 +319,7 @@ def run(request):
         if not path.is_absolute() or path.is_symlink() or not path.is_file():
             raise ValueError('Inputs must be regular local files.')
         sources.append({'name': item['name'], 'kind': item['kind'], 'sha256': file_hash(path)})
-    capture = extract_video(Path(items[0]['path']), images, max_images=MAX_VIEWS) if video else {}
+    capture = extract_video(Path(items[0]['path']), images, max_images=max(6, max_views)) if video else {}
     preparations = capture.get('frames', []) if video else []
     if photos:
         for index, item in enumerate(items):
@@ -331,7 +344,7 @@ def run(request):
     torch.cuda.synchronize()
     if len(predictions) != len(paths):
         raise ValueError('The model did not return every submitted view.')
-    points, colours, counts = preview_from_predictions(predictions)
+    points, colours, counts = preview_from_predictions(predictions, max_points=max_points)
     visual = write_point_cloud(out / 'dense-preview.ply', points, colours, coordinate_frame='right-handed-y-up')
     evidence = {'schema': 'brainsnn.reconstruction.v1', 'pipeline': 'mapanything-apache',
                 'model': MODEL_ID, 'model_revision': MODEL_REVISION, 'model_sha256': MODEL_SHA256,
@@ -339,7 +352,7 @@ def run(request):
                 'code_license': 'Apache-2.0', 'checkpoint_license': 'Apache-2.0', 'device': 'cuda',
                 'torch_version': torch.__version__, 'peak_cuda_allocated_bytes': torch.cuda.max_memory_allocated(),
                 'elapsed_seconds': round(time.monotonic() - started, 3), 'sources': sources,
-                'capture': {**capture, 'images': len(paths)}, 'view_counts': counts,
+                'capture': {**capture, 'images': len(paths)}, 'view_counts': counts, 'budgets': {'max_views': max_views, 'preview_points': max_points},
                 'preview_points': len(points), 'coordinate_frame': 'right-handed-y-up',
                 'source_coordinate_frame': 'OpenCV; x right, y down, z forward',
                 'scale_basis': 'model-predicted metric scale; no independent measurement',
