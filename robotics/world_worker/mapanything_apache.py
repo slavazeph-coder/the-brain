@@ -345,7 +345,7 @@ def run(request):
     if len(predictions) != len(paths):
         raise ValueError('The model did not return every submitted view.')
     points, colours, counts = preview_from_predictions(predictions, max_points=max_points)
-    visual = write_point_cloud(out / 'dense-preview.ply', points, colours, coordinate_frame='right-handed-y-up')
+    visual = write_point_cloud(out / 'dense-preview.ply', points, colours, coordinate_frame='right-handed-y-up', max_points=max(max_points, 200_000))
     evidence = {'schema': 'brainsnn.reconstruction.v1', 'pipeline': 'mapanything-apache',
                 'model': MODEL_ID, 'model_revision': MODEL_REVISION, 'model_sha256': MODEL_SHA256,
                 'config_sha256': CONFIG_SHA256, 'source_revision': SOURCE_REVISION, 'dinov2_source_revision': DINOV2_REVISION,
