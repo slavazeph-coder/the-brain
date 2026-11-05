@@ -16,6 +16,7 @@ import {readVideoMetadata,videoResolutionIssue} from './video-metadata.mjs';
 import {parseHandoffHash, readLocalCapture, clearLocalCapture} from './capture-handoff.mjs';
 import {reconstructionRecovery} from './reconstruction-recovery.mjs';
 import {captureBefore,compare as compareWhatIf,whatIfCard} from './what-if.mjs';
+import {capturePath,viewAt,pathLength} from './capture-path.mjs';
 import {readNativeCapture,prepareNativeCapture,NATIVE_CAPTURE} from './native-capture.mjs';
 import {createMeasurementReview} from './measurement-ui.mjs';
 import {createBimWorkflow} from './bim-workflow-ui.mjs';
@@ -36,7 +37,7 @@ let videoAbort=null,replayFrame=null,replayStart=0,filter='all',systemsOpen=fals
 let calibration={visual:null,picks:[],picking:false,distance:''};
 // The map proposed from a worker reconstruction keeps that reconstruction's job and its map transform, so a photo located
 // in the same reconstruction can be placed on the map. located is that photo, its pose and the floor spot tapped in it.
-let mapProposal=null,located=null,whatIf=null,goalSpot=null;
+let mapProposal=null,located=null,whatIf=null,goalSpot=null,pathPlay=null;
 const isRemoteActive=()=>nativeCheckAbort||remoteAbort||job&&!['complete','failed','cancelled'].includes(job.status);
 let detectAbort=null;
 let visualViewer=null,visibleVisual=null,display='visual',depthAbort=null,depthStatus='',artifactAbort=null,connectionAbort=null;
@@ -134,6 +135,14 @@ function recoveryCard(evidence) {
 }
 function numericField(title,id,value,min,max,step=.1,disabled=false){return `<label>${title}<input ${disabled?'disabled':''} id="${id}" type="number" value="${value??''}" min="${min}" max="${max}" step="${step}"></label>`;}
 function setTab(next,focus=false){tab=next;document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});$('panel').setAttribute('aria-labelledby','tab-'+tab);renderPanel();renderMedia();update();sandbox?.observeMapTab(next);if(focus)$('tab-'+tab).focus();}
+function renderCapturePath(source){
+  let strip=$('capture-path');if(!strip){strip=document.createElement('div');strip.id='capture-path';strip.className='capture-path';$('visual-canvas').insertAdjacentElement('afterend',strip);}
+  const path=source?.reconstruction?capturePath(source.reconstruction):[];strip.hidden=!path.length;if(!path.length){stopPathPlay();return;}
+  const n=path.length,len=pathLength(path);
+  strip.innerHTML=`<span class="micro">View from the capture path · ${n} camera${n===1?'':'s'} · ${len.toFixed(1)} along the walk (units as the scale says)</span><div class="field-row"><button data-action="path-step" data-value="-1" title="Previous camera">‹</button><input id="path-scrub" type="range" min="0" max="${n-1}" step="0.05" value="${$('path-scrub')?.value??0}" aria-label="Camera along the capture path"><button data-action="path-step" data-value="1" title="Next camera">›</button><button data-action="path-play">${pathPlay?'Stop':'Fly along'}</button><button data-action="path-exit" title="Back to the orbit view">Orbit</button></div><p class="micro">The view the phone had, inside the room. Appearance only: the reviewed map stays the collision surface.</p>`;
+}
+function pathView(source,t){const path=source?.reconstruction?capturePath(source.reconstruction):[];const v=viewAt(path,t);if(!v)return false;const ok=getVisualViewer().lookFrom(v.eye,v.forward);if(ok){$('scene-help').textContent=`Camera ${v.index+1} of ${path.length}${v.fraction>0.01?' (between cameras)':''} · drag to look around from here`;}return ok;}
+function stopPathPlay(){if(pathPlay){cancelAnimationFrame(pathPlay.raf);pathPlay=null;}}
 function visualHelp(){return calibration.picking||bimWorkflow.picking?'Tap both measured endpoints. Selected points turn cyan. Drag to orbit.':'Drag to orbit · Pinch or scroll to zoom · Missing surfaces remain unknown';}
 function revealMeasurement(id){
   const field=$(id);
@@ -161,6 +170,7 @@ function renderMedia(){
     catch(e){$('visual-canvas').hidden=true;box.hidden=false;const p=document.createElement('p');p.textContent=e.message;box.append(p);status(e.message,true);}
     $('scene-basis').textContent=source.visual.origin==='depth'?'GENERATIVE VISUAL PREVIEW / RELATIVE DEPTH / NOT METRIC':source.visual.kind==='gaussian-splat'?'IMPORTED GAUSSIAN SPLATS / SCALE UNVERIFIED':'POINT CLOUD / SCALE UNVERIFIED';
     $('scene-help').textContent=visualHelp();
+    renderCapturePath(source);
     return;
   }
   if(!capture){
@@ -530,7 +540,7 @@ async function openSceneArtifact(index){
 function renderSystems(){const q=$('system-search').value.toLowerCase().trim();const list=SYSTEMS.filter(s=>(filter==='all'||s.state===filter)&&[s.name,s.description,s.gate].join(' ').toLowerCase().includes(q));$('systems-grid').innerHTML=list.length?list.map(s=>`<article class="system-card" data-state="${s.state}"><div class="system-top"><span>${s.id} / SYSTEM</span><span>${s.state==='local'?'LOCAL TOOL':s.state==='adapter'?'WORKER / LOADER INTERFACE':s.state==='gated'?'GATED CANDIDATE':'PLANNED'}</span></div><h3>${esc(s.name)}</h3><p>${esc(s.description)}</p><p class="system-gate">${esc(s.gate)}</p>${s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">Primary source ↗</a>`:''}</article>`).join(''):'<p class="micro">No matching systems.</p>';
   // The full catalog folds to its first rows until asked for; a search or filter always shows every match.
   const browsing=filter==='all'&&!q,more=$('systems-more');$('systems-grid').toggleAttribute('data-collapsed',browsing&&!systemsOpen);more.hidden=!browsing;more.setAttribute('aria-expanded',String(systemsOpen));more.textContent=systemsOpen?'Show fewer systems':`Show all ${list.length} systems`;}
-async function action(name){try{
+async function action(name,value){try{
   if(name==='files')$('files').click();
   if(name==='locate-photo')$('locate-file').click();
   if(name==='native-capture')$('native-capture-files').click();
@@ -555,6 +565,11 @@ async function action(name){try{
   if(name==='route-spot'&&world){const goal={x:Number($('goal-x').value),z:Number($('goal-z').value)};if(!Number.isFinite(goal.x)||!Number.isFinite(goal.z)){status('Enter the goal as x and z in metres.',true);return;}const gate=planningGate(world);if(gate){status(gate,true);setTab('world');return;}
     let route;try{route=routeWorld(world,robot,goal);}catch(error){renderer?.setMarks({goal});status(error.message,true);return;}goalSpot=goal;invalidate();result=route;renderer?.setResult(result);renderer?.setMarks({goal});renderer?.setCursor(.015);
     status(`Route to the spot: ${route.distance.toFixed(1)} m, about ${Math.max(1,Math.round(route.travelSeconds/60))} min for this robot. A simulation on the reviewed map; no robot was moved.`);event('goal_routed',{metres:route.distance,goal,policyExecuted:false});replay();return;}
+  if(name==='path-step'&&activeSource?.reconstruction){stopPathPlay();const s=$('path-scrub');s.value=String(Math.max(0,Math.min(Number(s.max),Math.round(Number(s.value))+Number(value))));pathView(activeSource,Number(s.value));renderCapturePath(activeSource);return;}
+  if(name==='path-play'&&activeSource?.reconstruction){if(pathPlay){stopPathPlay();renderCapturePath(activeSource);return;}const s=$('path-scrub'),max=Number(s.max),source=activeSource;let t=Number(s.value)>=max-.01?0:Number(s.value),last=performance.now();
+    const tick=now=>{if(activeSource!==source||$('visual-canvas').hidden){stopPathPlay();return;}t+=(now-last)/1000*0.8;last=now;if(t>=max){t=max;pathView(source,t);stopPathPlay();renderCapturePath(source);return;}pathView(source,t);const scrub=$('path-scrub');if(scrub)scrub.value=String(t);pathPlay.raf=requestAnimationFrame(tick);};
+    pathPlay={raf:requestAnimationFrame(tick)};event('capture_path_flyalong',{cameras:max+1});renderCapturePath(activeSource);return;}
+  if(name==='path-exit'){stopPathPlay();getVisualViewer().reset();$('scene-help').textContent=visualHelp();renderCapturePath(activeSource);return;}
   if(name==='what-if-clear'){whatIf=null;renderer?.setGhost(null);renderPanel();return;}
   if(name==='remove-object'&&world)mutate(w=>{w.objects=w.objects.filter(o=>o.id!==selected);},'removed');
   if(name==='save-map'&&world){localStorage.setItem('brainsnn.world.v1',JSON.stringify(world));status('Map saved locally. Source media and worker tokens were not saved.');}
@@ -622,7 +637,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.bimRemove!==undefined){bimWorkflow.removeOpening(Number(b.dataset.bimRemove));return;}
   if(b.dataset.bimAction){try{if(b.dataset.bimAction==='add')bimWorkflow.addOpening();else if(b.dataset.bimAction==='recompile')void bimWorkflow.recompile().catch(error=>sceneStatus(error.message,true));}catch(error){sceneStatus(error.message,true);}return;}
   if(b.dataset.sceneDownload!==undefined){void bimWorkflow.downloadScene(Number(b.dataset.sceneDownload)).catch(error=>sceneStatus(error.message,true));return;}
-  if(b.dataset.tab){if(sandbox)void sandbox.handleTab(b.dataset.tab);else setTab(b.dataset.tab);return;}if(b.dataset.action){void action(b.dataset.action);return;}
+  if(b.dataset.tab){if(sandbox)void sandbox.handleTab(b.dataset.tab);else setTab(b.dataset.tab);return;}if(b.dataset.action){void action(b.dataset.action,b.dataset.value);return;}
   if(b.dataset.view){renderer?.setMode(b.dataset.view);document.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setTab('world');return;}
   if(b.dataset.filter){filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderSystems();return;}
   if(b.dataset.reviewArtifact!==undefined){void openObservationArtifact(Number(b.dataset.reviewArtifact));return;}
@@ -637,6 +652,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
 // A picker that returns no file (closed, or on iPhone a video whose conversion failed) says so instead of doing nothing.
 const PICKERS=['files','video-file','phone-camera','native-capture-files'],NO_FILE='No file came back from your phone\'s picker. On iPhone, a video picked from Photo Library is converted first and that can fail for a long video: in Photos, tap Share → Save to Files, then pick it here with Choose File.';
 document.addEventListener('cancel',e=>{if(PICKERS.includes(e.target?.id))status(NO_FILE,true);},true);
+document.addEventListener('input',e=>{if(e.target.id==='path-scrub'&&activeSource?.reconstruction){stopPathPlay();pathView(activeSource,Number(e.target.value));}});
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(id==='locate-file'){const file=e.target.files?.[0];e.target.value='';if(file)void locatePhoto(file);return;}if(PICKERS.includes(id)){if(!e.target.files?.length){status(NO_FILE,true);return;}void addFiles(e.target.files,{nativeCapture:id==='native-capture-files'});return;}if(id==='objects'){selected=v;renderInspector();return;}
   if(id==='robot'){robotId=v;robot={...ROBOTS[v],margin:robot.margin};invalidate();renderPanel();return;}
   if(id==='goal-x'||id==='goal-z'){goalSpot={x:Number($('goal-x').value),z:Number($('goal-z').value)};return;}
