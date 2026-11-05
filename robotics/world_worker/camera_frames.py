@@ -9,6 +9,14 @@ from __future__ import annotations
 
 import copy
 import hashlib
+
+
+def _sha256_stream(stream, chunk=1 << 20):
+    """SHA-256 of an open binary stream, in chunks. hashlib.file_digest is 3.11+; the GPU workers run 3.10."""
+    digest = hashlib.sha256()
+    for block in iter(lambda: stream.read(chunk), b''):
+        digest.update(block)
+    return digest.hexdigest()
 import json
 import math
 from pathlib import Path, PurePosixPath
@@ -108,7 +116,7 @@ def _ledger_name(root, value):
 
 def _digest(path):
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        return _sha256_stream(stream)
 
 
 def file_record(job_root, path, **extra):
