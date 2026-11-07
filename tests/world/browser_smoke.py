@@ -163,7 +163,12 @@ def check_routes(browser, base):
     # Lab sits in the header's More menu, as it does in the site-wide header.
     frame.locator('.nav-more summary').click()
     frame.locator('.nav-more a[href="/lab"]').click()
-    page.wait_for_url(base+'/lab')
+    try:
+        page.wait_for_url(base+'/lab')
+    except Exception:
+        print('Lab navigation failure:',page.url,flush=True)
+        print(page.locator('body').inner_text()[:2000],flush=True)
+        raise
     page.get_by_role('heading',name='Lab',exact=True).wait_for()
     assert page.locator('iframe[src="/world/index.html"]').count()==0
     frame=open_world(page,base+'/')

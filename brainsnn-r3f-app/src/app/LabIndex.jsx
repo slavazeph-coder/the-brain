@@ -1,6 +1,7 @@
 import React from 'react';
 import { PublicNav, PublicFooter } from './PublicNav.jsx';
 const EXPERIMENTS = [
+  ['/lab/meshlets/', 'Meshlets Lab', 'Explore dense geometry with measured WebGPU counters and a WebGL fallback.'],
   ['/play', 'Sapient Playground', 'Poke, drag and shake the jelly brain simulation.'],
   ['/lab/powder', 'Neuro Powder Lab', 'Draw circuits and explore a falling-sand world.'],
   ['/arcade', 'Arcade', 'Explore interactive physics, living systems and content experiments.'],

@@ -63,6 +63,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Meshlets Lab](meshlets-lab-2026-11-02.md) — isolated r187 rendering experiment, local GLB source hashes and measured browser receipts; existing R3F unchanged.
 → [Demo replay export](world-demo-replay-2026-11-02.md) — private saved-frame/camera replay videos, real partial capture evidence, source-bound exports and release limits.
 
 → [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — sandbox integration, calibrated underlay, source/revision-bound downloads and required deployed acceptance.
