@@ -1,0 +1,5 @@
+# CPU benchmark preparation, camera scoring and the pinned COLMAP baseline.
+# Install target-host-compatible CUDA PyTorch and VGGT helper dependencies
+# separately using docs/world-reconstruction-comparison.md. No model download.
+-r requirements-colmap.txt
+av==19.0.1
