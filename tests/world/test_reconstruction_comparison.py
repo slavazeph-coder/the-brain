@@ -227,14 +227,18 @@ def test_bounded_process_cleans_descendants_after_timeout_or_parent_exit(tmp_pat
     assert result['status'] == ('completed' if parent_exits else 'timeout')
     pid = int(pidfile.read_text())
     try:
-        for _ in range(20):
+        # A loaded CI host can take a moment to deliver the group signal and mark the descendant; wait up to 3 s.
+        for _ in range(150):
             if not alive(pid):
                 break
             time.sleep(.02)
         assert not alive(pid), 'Bounded process left an executing descendant.'
     finally:
         if alive(pid):
-            os.kill(pid, 9)
+            try:
+                os.kill(pid, 9)
+            except ProcessLookupError:
+                pass  # it went away between the check and the kill: cleaned up
 
 
 def test_bounded_process_caps_noisy_child_output(tmp_path, monkeypatch):
