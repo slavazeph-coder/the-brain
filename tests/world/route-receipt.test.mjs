@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ROBOTS, sampleWorld, routeWorld, blockers} from '../../brainsnn-r3f-app/public/world/core.mjs';
-import {straightLine, tightestClearance, fleetFit, routeReceipt, receiptCard} from '../../brainsnn-r3f-app/public/world/route-receipt.mjs';
+import {straightLine, tightestClearance, fleetFit, routeReceipt, receiptCard, aerialGate, fleetSchedule} from '../../brainsnn-r3f-app/public/world/route-receipt.mjs';
+import {proofPack} from '../../brainsnn-r3f-app/public/world/core.mjs';
 const robot = {...ROBOTS.cleaner, margin: .1};
 test('blockers itemises what planningGrid tests: wall, objects, nothing', () => {
   const w = sampleWorld(), o = w.objects[0];
@@ -30,4 +31,23 @@ test('fleet fit: wider envelopes are refused where narrow ones pass, with the pl
   const fork = f.find(x => x.id === 'forklift'); assert.equal(fork.fits, false); assert.match(fork.reason, /too close|No route|start is blocked/);  // the planner's own words: goal, cut-off or start
   const card = receiptCard(routeReceipt(w, {...ROBOTS.vacuum, margin: .1}, goal, routeWorld(w, {...ROBOTS.vacuum, margin: .1}, goal)));
   assert.match(card, /Compact forklift/); assert.match(card, /cannot/); assert.match(card, /no robot was moved/);
+});
+
+test('aerial is a gate, not a route: it names the tallest object and the missing overhead model', () => {
+  const g = aerialGate(sampleWorld()); assert.equal(g.fits, false); assert.equal(g.planned, false); assert.ok(g.tallestObjectMetres > 0); assert.match(g.reason, /no ceiling/);
+  const card = receiptCard(routeReceipt(sampleWorld(), robot, {x: 16.5, z: 11.5}, routeWorld(sampleWorld(), robot, {x: 16.5, z: 11.5}))); assert.match(card, /Aerial \(drone\)/); assert.match(card, /not planned/);
+});
+test('a fleet from one start is time-separated: nobody leaves while someone is within two radii, and the schedule is deterministic', () => {
+  const w = sampleWorld(), goal = {x: 16.5, z: 11.5}, s = fleetSchedule(w, goal, .1), t = fleetSchedule(w, goal, .1);
+  assert.deepEqual(s, t); assert.ok(s.agents.length >= 2); assert.equal(s.agents[0].departsAt, 0);
+  for (let i = 1; i < s.agents.length; i++) assert.ok(s.agents[i].departsAt > 0, `${s.agents[i].name} must wait: same start as ${s.agents[0].name}`);
+  assert.ok(s.allArrivedAt >= Math.max(...s.agents.map(a => a.arrivesAt))); assert.equal(s.schema, 'brainsnn.fleet-schedule.v1');
+});
+test('the proof pack carries the receipt under the hash', async () => {
+  const w = sampleWorld(), goal = {x: 16.5, z: 11.5}, route = routeWorld(w, robot, goal), receipt = routeReceipt(w, robot, goal, route);
+  const p = await proofPack(w, route, {}, [], [{type: 'test'}], [], null, {routeReceipt: receipt});
+  assert.equal(p.routeReceipt.schema, 'brainsnn.route-receipt.v1'); assert.equal(p.routeReceipt.fleet.length, receipt.fleet.length);
+  const {integrity, ...body} = p; const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
+  assert.equal(integrity.value, Array.from(new Uint8Array(h), v => v.toString(16).padStart(2, '0')).join(''));
+  const q = await proofPack(w, route, {}, [], [{type: 'test'}]); assert.equal(q.routeReceipt, undefined);
 });

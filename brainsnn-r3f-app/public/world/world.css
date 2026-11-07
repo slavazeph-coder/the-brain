@@ -85,3 +85,4 @@
 .fleet-fit li{display:flex;justify-content:space-between;gap:.5rem;font-size:.9rem;padding:.2rem .45rem;border-radius:6px;background:rgba(255,255,255,.04)}
 .fleet-fit li.no-fit{color:#ffb4a8}
 .fleet-fit li.fits span:last-child{color:#8de0b8}
+.fleet-fit li.gated{color:#c9c9d6;opacity:.85}

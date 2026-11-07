@@ -611,7 +611,7 @@ async function action(name,value){try{
       ...(report.measurement?{measurement:{a:report.measurement.a,b:report.measurement.b,distance:report.measurement.distance,spanUnits:report.measurement.span,selfReported:true}}:{}),metresPerUnit:report.metresPerUnit,area:report.area,scaleVerified:false});
     setTab('world');
   }
-  if(name==='proof')download('brainsnn-proof.json',await proofPack(world,result,assumptions,sources,events,observations.proofs(),measurements.session()));
+  if(name==='proof')download('brainsnn-proof.json',await proofPack(world,result,assumptions,sources,events,observations.proofs(),measurements.session(),{routeReceipt:receipt}));
   if(name==='share-video'&&world){
     if(videoAbort){videoAbort.abort();return;}
     const controller=new AbortController();videoAbort=controller;renderPanel();
