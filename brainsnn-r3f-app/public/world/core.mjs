@@ -4,7 +4,7 @@ const siteCore=globalThis.BrainSNNSiteCore;
 export const SCHEMA = 'brainsnn.world.v1';
 // A five-minute walkthrough is about 0.3 GB at 1080p and 1 GB in 4K, so videos get their own limit. Files stay on the
 // device until uploaded in chunks; none is read into memory whole.
-export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
+export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12, fleet: 16 });
 export const ROBOTS = Object.freeze({
   cleaner: { name: 'Cleaning robot', width: 0.58, depth: 0.68, speed: 0.3 },
   vacuum: { name: 'Robot vacuum', width: 0.35, depth: 0.35, speed: 0.3 },
@@ -34,7 +34,18 @@ export function normalizeWorld(input) {
   const provenance = ['authored', 'observed', 'generated'].includes(input.provenance) ? input.provenance : 'observed';
   const floor=input.floor===undefined?undefined:siteCore.normalizeScene({width,depth,floor:input.floor,obstacles:[]}).floor;
   const source=input.geometrySource;
-  return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance,
+  // Optional fleet: named robots with their own start on this floor. A map fact, so it edits under the same review gate.
+  let fleet;
+  if (input.fleet !== undefined) {
+    if (!Array.isArray(input.fleet) || input.fleet.length > LIMITS.fleet) throw new Error(`Use a fleet array with at most ${LIMITS.fleet} entries.`);
+    const seen = new Set();
+    fleet = input.fleet.map((f, i) => {
+      if (!f || typeof f !== 'object' || !ROBOTS[f.robot]) throw new Error(`Fleet entry ${i + 1}: robot must be one of ${Object.keys(ROBOTS).join(', ')}.`);
+      const id = label(f.id, `fleet-${i}`); if (!id || seen.has(id)) throw new Error('Fleet identifiers must be unique.'); seen.add(id);
+      return { id, robot: f.robot, name: label(f.name, ROBOTS[f.robot].name), start: { x: numeric(f.start?.x, 0, width, 'Fleet start X'), z: numeric(f.start?.z, 0, depth, 'Fleet start Z') } };
+    });
+  }
+  return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance, ...(fleet && fleet.length ? { fleet } : {}),
     ...(floor?{floor}:{}),
     ...(source&&typeof source==='object'?{geometrySource:{kind:label(source.kind),name:label(source.name),warnings:Array.isArray(source.warnings)?source.warnings.slice(0,16).map(v=>label(v)):[]}}:{}),
     scaleReviewed: input.scaleReviewed === true && provenance !== 'generated', mapReviewed: input.mapReviewed === true && provenance !== 'generated',

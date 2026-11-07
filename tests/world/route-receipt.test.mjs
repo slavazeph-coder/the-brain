@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ROBOTS, sampleWorld, routeWorld, blockers} from '../../brainsnn-r3f-app/public/world/core.mjs';
+import {ROBOTS, sampleWorld, routeWorld, blockers, normalizeWorld} from '../../brainsnn-r3f-app/public/world/core.mjs';
 import {straightLine, tightestClearance, fleetFit, routeReceipt, receiptCard, aerialGate, fleetSchedule} from '../../brainsnn-r3f-app/public/world/route-receipt.mjs';
 import {proofPack} from '../../brainsnn-r3f-app/public/world/core.mjs';
 const robot = {...ROBOTS.cleaner, margin: .1};
@@ -50,4 +50,19 @@ test('the proof pack carries the receipt under the hash', async () => {
   const {integrity, ...body} = p; const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
   assert.equal(integrity.value, Array.from(new Uint8Array(h), v => v.toString(16).padStart(2, '0')).join(''));
   const q = await proofPack(w, route, {}, [], [{type: 'test'}]); assert.equal(q.routeReceipt, undefined);
+});
+
+test('a fleet on the map: validated, each robot leaves from its own start, far-apart starts leave together', () => {
+  const base = sampleWorld();
+  assert.throws(() => normalizeWorld({...base, fleet: [{robot: 'tank', start: {x: 1, z: 1}}]}), /robot must be one of/);
+  assert.throws(() => normalizeWorld({...base, fleet: [{robot: 'amr', start: {x: 99, z: 1}}]}), /Fleet start X/);
+  assert.throws(() => normalizeWorld({...base, fleet: [{id: 'a', robot: 'amr', start: {x: 1, z: 1}}, {id: 'a', robot: 'vacuum', start: {x: 2, z: 2}}]}), /unique/);
+  const w = normalizeWorld({...base, fleet: [{id: 'v1', robot: 'vacuum', start: {x: 1, z: 1}}, {id: 'v2', robot: 'vacuum', start: {x: 16.5, z: 1.5}}]});
+  assert.equal(w.fleet.length, 2); assert.equal(w.fleet[1].name, 'Robot vacuum');
+  const s = fleetSchedule(w, {x: 9, z: 11.5}, .1); assert.equal(s.perRobotStarts, true); assert.equal(s.agents.length, 2);
+  assert.deepEqual(s.agents.map(a => a.start.x), [1, 16.5]);
+  // both leave at 0 s: the second start is on the far side of the floor, so they meet only near the goal, in turn
+  assert.equal(s.agents[0].departsAt, 0); assert.ok(s.agents[1].departsAt !== null);
+  const card = receiptCard(routeReceipt(w, {...ROBOTS.vacuum, margin: .1}, {x: 9, z: 11.5}, routeWorld(w, {...ROBOTS.vacuum, margin: .1}, {x: 9, z: 11.5})));
+  assert.match(card, /Your fleet/); assert.match(card, /from \(16.5, 1.5\)/);
 });

@@ -86,3 +86,6 @@
 .fleet-fit li.no-fit{color:#ffb4a8}
 .fleet-fit li.fits span:last-child{color:#8de0b8}
 .fleet-fit li.gated{color:#c9c9d6;opacity:.85}
+.fleet-edit{margin-top:.6rem}
+.fleet-row{align-items:center;justify-content:space-between;font-size:.9rem}
+.fleet-row button{padding:.2rem .6rem}

@@ -57,10 +57,13 @@ export function aerialGate(world) {
  *  of two radii of anyone already on the floor. Priority is the order given (first listed leaves first); the delay is
  *  the smallest whole second that keeps every sampled moment clear. A schedule on the map, not a traffic controller. */
 export function fleetSchedule(world, goal, margin = 0.1, robots = ROBOTS, { step = 0.5, maxDelay = 600, dwell = 5 } = {}) {
-  const agents = [];
-  for (const [id, r] of Object.entries(robots)) {
-    const robot = { ...r, margin };
-    try { const route = routeWorld(world, robot, goal); agents.push({ id, name: r.name, radius: Math.hypot(r.width, r.depth) / 2 + margin, speed: robot.speed, route: route.route, distance: route.distance }); } catch { /* cannot make the trip: not in the schedule */ }
+  const w = normalizeWorld(world), agents = [], skipped = [];
+  // With a fleet on the map, each robot leaves from its own start; otherwise every envelope leaves from the map's start.
+  const members = w.fleet?.length ? w.fleet.map(f => ({ id: f.id, name: f.name, envelope: robots[f.robot] || ROBOTS[f.robot], start: f.start })) : Object.entries(robots).map(([id, r]) => ({ id, name: r.name, envelope: r, start: w.start }));
+  for (const m of members) {
+    const robot = { ...m.envelope, margin };
+    try { const route = routeWorld({ ...w, start: m.start }, robot, goal); agents.push({ id: m.id, name: m.name, start: m.start, radius: Math.hypot(robot.width, robot.depth) / 2 + margin, speed: robot.speed, route: route.route, distance: route.distance }); }
+    catch (error) { skipped.push({ id: m.id, name: m.name, reason: error.message }); }
   }
   const cum = pts => { const d = [0]; for (let i = 1; i < pts.length; i++) d.push(d[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z)); return d; };
   const at = (a, t) => { // position at time t since departure; holds at the goal for `dwell` seconds, then it is off the floor (handed over)
@@ -73,7 +76,7 @@ export function fleetSchedule(world, goal, margin = 0.1, robots = ROBOTS, { step
   for (const a of agents) {
     let delay = 0;
     for (; delay <= maxDelay; delay += 1) {
-      const horizon = delay + a.distance / a.speed; let clear = true;
+      const horizon = delay + a.distance / a.speed + dwell; let clear = true;  // including its own dwell at the goal
       for (let t = delay; t <= horizon + step && clear; t += step) {
         const p = at(a, t - delay);
         for (const b of placed) { if (b.departsAt === null) continue; const q = at(b, t - b.departsAt); if (p && q && Math.hypot(p.x - q.x, p.z - q.z) < a.radius + b.radius - 1e-9) { clear = false; break; } }
@@ -84,8 +87,8 @@ export function fleetSchedule(world, goal, margin = 0.1, robots = ROBOTS, { step
   }
   const last = placed.reduce((m, p) => p.arrivesAt === null ? m : Math.max(m, p.arrivesAt), 0);
   return { schema: 'brainsnn.fleet-schedule.v1', goal: { x: r2(goal.x), z: r2(goal.z) }, separation: 'sum of the two planning radii at every sampled moment', stepSeconds: step,
-    agents: placed.map(p => ({ id: p.id, name: p.name, radius: r2(p.radius), distance: r1(p.distance), departsAt: p.departsAt, arrivesAt: p.arrivesAt })), allArrivedAt: last,
-    limitations: ['Every envelope leaves from the map\'s single start; the schema has no per-robot start yet.', `Constant speed along the grid route; an arrival holds the goal for ${dwell} s and is then off the floor (handed over).`, 'A schedule on the map, not a traffic controller; no robot was moved.'] };
+    agents: placed.map(p => ({ id: p.id, name: p.name, start: { x: r2(p.start.x), z: r2(p.start.z) }, radius: r2(p.radius), distance: r1(p.distance), departsAt: p.departsAt, arrivesAt: p.arrivesAt })), skipped, allArrivedAt: last, perRobotStarts: !!w.fleet?.length,
+    limitations: [w.fleet?.length ? 'Each fleet robot leaves from its own start on the map.' : 'No fleet on the map: every envelope leaves from the map\'s single start.', `Constant speed along the grid route; an arrival holds the goal for ${dwell} s and is then off the floor (handed over).`, 'A schedule on the map, not a traffic controller; no robot was moved.'] };
 }
 
 /** The receipt for a routed goal. */
@@ -99,7 +102,7 @@ export function routeReceipt(world, robot, goal, route) {
   return { schema: 'brainsnn.route-receipt.v1', goal: { x: r2(goal.x), z: r2(goal.z) }, robot: { width: robot.width, depth: robot.depth, margin: robot.margin, radius: r2(Math.hypot(robot.width, robot.depth) / 2 + robot.margin) },
     distance: r1(route.distance), straightLine: r1(straight.length), detourMetres: r1(Math.max(0, detour)), blockers: straight.blockers, tightest: tight, fleet, schedule,
     text: `${whyText} ${tightText}`.trim(), fleetText: cannot.length ? `${cannot.map(f => f.name).join(', ')} cannot make this trip on this map; ${fleet.length - 1 - cannot.length} of ${fleet.length - 1} ground envelopes can. Aerial is not planned: no overhead model.` : `All ${fleet.length - 1} ground envelopes can make this trip. Aerial is not planned: no overhead model.`,
-    scheduleText: schedule.agents.length > 1 ? `Together, from the start: ${schedule.agents.map(a => `${a.name} leaves at ${a.departsAt === null ? '—' : a.departsAt + ' s'}`).join(', ')}; all arrived by ${schedule.allArrivedAt} s, never within two radii of each other.` : '',
+    scheduleText: schedule.agents.length > 1 ? `Together${schedule.perRobotStarts ? ', each from its own start' : ', from the start'}: ${schedule.agents.map(a => `${a.name} leaves at ${a.departsAt === null ? '—' : a.departsAt + ' s'}`).join(', ')}; all arrived by ${schedule.allArrivedAt} s, never within two radii of each other.${schedule.skipped.length ? ` Not in the schedule: ${schedule.skipped.map(k => k.name).join(', ')}.` : ''}` : '',
     policyExecuted: false, safetyCertified: false, limitations: ['Circumscribed-circle footprints; no dynamics, no turning radius.', 'Same grid and margin for every envelope; appearance is not collision geometry.'] };
 }
 
@@ -109,5 +112,6 @@ export function receiptCard(receipt) {
   if (!receipt) return '';
   const dep = Object.fromEntries((receipt.schedule?.agents || []).map(a => [a.id, a]));
   const rows = receipt.fleet.map(f => `<li class="${f.fits ? 'fits' : f.planned === false ? 'gated' : 'no-fit'}" title="${esc(f.fits ? '' : f.reason)}"><span>${esc(f.name)}${f.radius === null ? '' : ` · r ${f.radius.toFixed(2)} m`}</span><span>${f.fits ? `${f.distance.toFixed(1)} m${dep[f.id] && dep[f.id].departsAt !== null ? ` · leaves ${dep[f.id].departsAt} s` : ''}` : f.planned === false ? 'not planned' : 'cannot'}</span></li>`).join('');
-  return `<div class="route-receipt" role="note"><h4>Why this route</h4><p>${esc(receipt.text)}</p><p class="micro">${esc(receipt.fleetText)}</p><ul class="fleet-fit">${rows}</ul>${receipt.scheduleText ? `<p class="micro">${esc(receipt.scheduleText)}</p>` : ''}<p class="micro">Same goal, same margin, every envelope. A simulation on the reviewed map; no robot was moved.</p></div>`;
+  const members = receipt.schedule?.perRobotStarts ? `<ul class="fleet-fit">${receipt.schedule.agents.map(a => `<li class="fits"><span>${esc(a.name)} · from (${a.start.x}, ${a.start.z})</span><span>${a.distance.toFixed(1)} m · leaves ${a.departsAt === null ? '—' : a.departsAt + ' s'}</span></li>`).join('')}${receipt.schedule.skipped.map(k => `<li class="no-fit" title="${esc(k.reason)}"><span>${esc(k.name)}</span><span>cannot</span></li>`).join('')}</ul>` : '';
+  return `<div class="route-receipt" role="note"><h4>Why this route</h4><p>${esc(receipt.text)}</p><p class="micro">${esc(receipt.fleetText)}</p><ul class="fleet-fit">${rows}</ul>${members ? `<h4>Your fleet</h4>${members}` : ''}${receipt.scheduleText ? `<p class="micro">${esc(receipt.scheduleText)}</p>` : ''}<p class="micro">Same goal, same margin, every envelope. A simulation on the reviewed map; no robot was moved.</p></div>`;
 }
