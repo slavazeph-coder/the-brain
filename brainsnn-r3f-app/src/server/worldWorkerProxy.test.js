@@ -56,21 +56,35 @@ async function site(env, options) {
   return { ...server, call, proxy };
 }
 
+// An owner-only site (visitors switched off), unless a test opts visitors back in.
 const env = (worker, extra = {}) => ({ WORLD_WORKER_INTERNAL_URL: worker.url + '/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER,
-  WORLD_SITE_PASSCODE: PASSCODE, ...extra });
+  WORLD_SITE_PASSCODE: PASSCODE, WORLD_SITE_VISITORS: '0', ...extra });
 
 it('world processing stays off until the worker, its owner credential and a passcode are all set', async () => {
-  assert.deepEqual(createWorldWorkerProxy({}).status(), { available: false, passcode: false, visitors: false, visitorJobsPerDay: null });
+  assert.deepEqual(createWorldWorkerProxy({}).status(), { available: false, passcode: false, visitors: false, visitorJobsPerDay: null, visitorsOff: 'no-worker' });
   assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER, WORLD_SITE_PASSCODE: 'short' }).status().available, false);
   assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://user:pw@w:1/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER, WORLD_SITE_PASSCODE: PASSCODE }).status().available, false);
   const visitorsWithoutTheirOwnTenant = createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_SITE_VISITORS: '1', WORLD_WORKER_SITE_VISITOR_TOKEN: OWNER, WORLD_WORKER_SITE_OWNER_TOKEN: OWNER });
   assert.equal(visitorsWithoutTheirOwnTenant.status().visitors, false, 'visitors never share the owner tenant');
+  assert.equal(visitorsWithoutTheirOwnTenant.status().visitorsOff, 'visitor-token-is-owner-token');
+});
+
+it('visitors process by default once the passcode gives them their own tenant, and WORLD_SITE_VISITORS=0 turns them off', () => {
+  const base = { WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_SITE_PASSCODE: PASSCODE };
+  assert.deepEqual(createWorldWorkerProxy(base).status(), { available: true, passcode: true, visitors: true, visitorJobsPerDay: 2, visitorsOff: null });
+  assert.deepEqual(createWorldWorkerProxy({ ...base, WORLD_SITE_VISITORS: '1' }).status().visitors, true);
+  assert.deepEqual(createWorldWorkerProxy({ ...base, WORLD_SITE_VISITORS: '0' }).status(), { available: true, passcode: true, visitors: false, visitorJobsPerDay: null, visitorsOff: 'switched-off' });
+  // The reason names the variable to fix, never its value.
+  const badToken = createWorldWorkerProxy({ ...base, WORLD_WORKER_SITE_VISITOR_TOKEN: 'too-short' }).status();
+  assert.equal(badToken.visitorsOff, 'visitor-token-invalid'); assert.ok(!JSON.stringify(badToken).includes('too-short'));
+  // Without a passcode there is no visitor credential to derive, so nothing opens.
+  assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/' }).status().visitorsOff, 'no-passcode');
 });
 
 it('world processing: a passcode opens an owner session, and the worker only ever sees the owner tenant credential', async () => {
   const worker = await fakeWorker(), web = await site(env(worker));
   try {
-    assert.deepEqual((await web.call('/api/world/processing')).data, { available: true, passcode: true, visitors: false, visitorJobsPerDay: null });
+    assert.deepEqual((await web.call('/api/world/processing')).data, { available: true, passcode: true, visitors: false, visitorJobsPerDay: null, visitorsOff: 'switched-off' });
     assert.equal((await web.call('/api/world/session', { method: 'POST', body: {} })).status, 403);
     assert.equal((await web.call('/api/world/session', { method: 'POST', body: { passcode: 'wrong-passcode!' } })).status, 403);
     const opened = await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } });
@@ -129,7 +143,7 @@ it('world processing: download tickets pass without a session or credential', as
   } finally { await web.close(); await worker.close(); }
 });
 
-it('world processing: visitors are off by default, then capped per connection per day on their own tenant', async () => {
+it('world processing: visitors switched off get no session; switched on, they are capped per connection per day on their own tenant', async () => {
   const off = await fakeWorker(), closed = await site(env(off));
   try { assert.equal((await closed.call('/api/world/session', { method: 'POST', body: {} })).status, 403); }
   finally { await closed.close(); await off.close(); }
@@ -141,6 +155,7 @@ it('world processing: visitors are off by default, then capped per connection pe
     const upload = (await web.call('/api/world/worker/v1/uploads', { method: 'POST', token, body: { name: 'walk.mov', size: 5, kind: 'video' } })).data.id;
     const job = (engine) => web.call('/api/world/worker/v1/jobs', { method: 'POST', token, body: { engine, upload_ids: [upload], consent: true } });
     assert.equal((await job('lingbot-map-stream')).status, 403);
+    assert.equal((await job('demo-replay')).status, 403);
     assert.equal((await job('colmap-sparse')).status, 201);
     assert.equal((await job('colmap-sparse')).status, 201);
     const third = await job('colmap-sparse');
@@ -189,7 +204,7 @@ it('world processing: the passcode alone gives both sides the same tenant creden
   assert.equal(derivedCredential('garage-walk-2026', 'site-visitors'), '81ToJqJYH2C-yj2NZH2SCRF2-sGYrKniyrVDLFwbzhU');
   const worker = await fakeWorker(), web = await site({ WORLD_WORKER_INTERNAL_URL: worker.url + '/', WORLD_SITE_PASSCODE: PASSCODE, WORLD_SITE_VISITORS: '1' });
   try {
-    assert.deepEqual((await web.call('/api/world/processing')).data, { available: true, passcode: true, visitors: true, visitorJobsPerDay: 2 });
+    assert.deepEqual((await web.call('/api/world/processing')).data, { available: true, passcode: true, visitors: true, visitorJobsPerDay: 2, visitorsOff: null });
     const owner = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
     const visitor = (await web.call('/api/world/session', { method: 'POST', body: {} })).data.token;
     await web.call('/api/world/worker/v1/capabilities', { token: owner });

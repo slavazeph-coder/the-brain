@@ -99,6 +99,13 @@ def check(browser, url, ply, evidence, mobile=False):
     assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
     assert 'reconstruction-proposal' in page.locator('#panel').inner_text()
     assert not page.locator('#scale-reviewed').is_checked() and not page.locator('#map-reviewed').is_checked()
+    # Before planning, the map asks its own open questions (at most three); the scale one leads to the measuring step.
+    card = page.locator('.check-first')
+    assert card.is_visible() and 'Its scale assumes you held the phone 1.35 m high' in card.inner_text(), card.inner_text()
+    assert 1 <= card.locator('li').count() <= 3
+    card.locator('[data-workflow=scale]').click()
+    assert page.locator('#tab-capture').get_attribute('aria-selected') == 'true'
+    page.locator('[data-tab=world]').click()
     page.locator('#run').click()
     page.wait_for_timeout(200)
     assert 'Confirm independently measured scale' in page.locator('#status').inner_text()
@@ -107,6 +114,7 @@ def check(browser, url, ply, evidence, mobile=False):
     page.locator('#map-reviewed').check()
     page.locator('#run').click()
     page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')", timeout=15000)
+    assert page.locator('.check-first').count() == 0, 'answered questions are not asked again'
     distance = float(page.locator('#metric-distance').inner_text().split()[0])
     assert distance > 3, distance
     page.locator('[data-tab=evidence]').click()

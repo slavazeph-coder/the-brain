@@ -246,13 +246,14 @@ async function init(){
     emitChange();
     return {
       setActive(value){if(disposed)return;active=!!value;syncActivity();emitChange();},
-      setTool(tool){
+      // reveal opens the phone drawer the tool uses; an arrival passes false so the scene stays in view.
+      setTool(tool,{reveal=true}={}){
         if(!['edit','simulate','evidence','export'].includes(tool))throw new Error('Unknown street workspace tool.');
         if(disposed||!active)return;
         if(tool==='export'){openExport(false);return;}
         closeExport(false);rememberTool(tool,false);
-        if(tool==='evidence'){setTab('evidence');if(matchMedia('(max-width:740px)').matches)openPanel('objects');}
-        else if(tool==='edit'){setTab('objects');setMode('orbit');if(matchMedia('(max-width:740px)').matches)openPanel('objects');}
+        if(tool==='evidence'){setTab('evidence');if(reveal&&matchMedia('(max-width:740px)').matches)openPanel('objects');}
+        else if(tool==='edit'){setTab('objects');setMode('orbit');if(reveal&&matchMedia('(max-width:740px)').matches)openPanel('objects');}
         else if(tool==='simulate'){setTab('objects');closePanels();setMode('orbit');$('#robot-toggle').focus({preventScroll:true});}
       },
       getState,getManifest:currentManifest,exportFile,dispose,

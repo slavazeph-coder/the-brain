@@ -85,6 +85,13 @@ def check(browser, mobile=False):
     # A walkthrough video has its own picker that accepts video only: phone galleries list videos for it whatever they
     # make of the mixed photo, video and 3D-file list.
     page.locator('[data-tab=capture]').click()
+    # With a photo open, its 3D preview comes first and the other ways in start folded away; the route bar, which
+    # describes the map, stays out of the way.
+    assert page.locator('#panel h3').first.inner_text()=='Your photo is ready.'
+    assert 'primary' in page.locator('[data-action=depth]').get_attribute('class')
+    assert page.locator('.transport').is_hidden() and page.locator('.metrics').is_hidden()
+    fold=page.locator('details.more-sources');assert fold.get_attribute('open') is None and page.locator('[data-action=video]').is_hidden()
+    fold.locator(':scope > summary').click()
     with view.expect_file_chooser() as chooser:page.locator('[data-action=video]').click()
     assert chooser.value.element.get_attribute('accept')=='video/*' and not chooser.value.is_multiple()
     # A picker that returns nothing (on iPhone, a Photo Library conversion that failed) says so. Checked before a file
@@ -119,6 +126,11 @@ def check(browser, mobile=False):
     assert page.locator('#tab-world').get_attribute('aria-selected')=='true'
     page.locator('#scale-reviewed').uncheck()
     assert 'REVIEW REQUIRED' in page.locator('#scene-basis').inner_text()
+    # Hero demo: the sample and reviewed states draw the real sample and planner; generated invents nothing and links to the photo flow.
+    assert 'AUTHORED SAMPLE' in page.locator('#hero-demo-badge').inner_text()
+    page.locator('[data-demo=generated]').click();assert page.locator('#hero-demo-canvas').is_hidden() and page.locator('#hero-demo-link').get_attribute('href')=='/scan?goal=play'
+    page.locator('[data-demo=reviewed]').click();assert 'm² reached' in page.locator('#hero-demo-text').inner_text() and page.locator('#hero-demo-canvas').is_visible()
+    page.locator('[data-demo=sample]').click()
     page.locator('#system-search').fill('Lyra');assert page.locator('.system-card').count()==1
     page.locator('#system-search').fill('');local_count=page.locator('.system-card[data-state=local]').count()
     assert local_count>0
@@ -148,7 +160,9 @@ def check_routes(browser, base):
     assert page.locator('iframe[src="/world/index.html"]').count()==0
     page.set_viewport_size({'width':1440,'height':1000})
     frame=open_world(page,base+'/')
-    frame.locator('a[href="/lab"]').last.click()
+    # Lab sits in the header's More menu, as it does in the site-wide header.
+    frame.locator('.nav-more summary').click()
+    frame.locator('.nav-more a[href="/lab"]').click()
     page.wait_for_url(base+'/lab')
     page.get_by_role('heading',name='Lab',exact=True).wait_for()
     assert page.locator('iframe[src="/world/index.html"]').count()==0
@@ -354,12 +368,31 @@ def check_capture_keeps_user_map(browser):
     assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
     assert not errors,errors;ctx.close()
 
+def check_share_video(browser):
+    """The captioned share video records the real map and run on the device, labelled as the map is (Chromium only:
+    headless WebKit has no MediaRecorder for canvas streams)."""
+    url=URL if URL.endswith('/world/index.html') else URL.rstrip('/')+'/world/index.html'
+    ctx=browser.new_context(accept_downloads=True);page=ctx.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.goto(url,wait_until='networkidle');page.wait_for_function("document.querySelectorAll('.system-card').length===23")
+    page.locator('#run').click();page.wait_for_function("/Planning preview complete/.test(document.querySelector('#status').textContent)",timeout=60000)
+    page.locator('[data-tab=evidence]').click();button=page.locator('[data-action=share-video]')
+    assert 'this robot run' in page.locator('#share-video-status').inner_text()
+    # Cancelling stops the recording and saves nothing.
+    button.click();page.wait_for_function("document.querySelector('[data-action=share-video]').textContent==='Cancel the share video'")
+    page.locator('[data-action=share-video]').click();page.wait_for_function("document.querySelector('#status').textContent==='Share video cancelled.'",timeout=10000)
+    with page.expect_download(timeout=90000) as event:page.locator('[data-action=share-video]').click()
+    saved=event.value;out=OUTPUT/('share-video'+Path(saved.suggested_filename).suffix);saved.save_as(out)
+    assert saved.suggested_filename.startswith('brainsnn-studio-01-training-floor.') and out.stat().st_size>100_000
+    assert re.match(r'Share video saved \(2\d s, (MP4|WEBM)\)\. It shows this map and this robot run',page.locator('#status').inner_text())
+    assert not errors,errors;ctx.close()
+
 if __name__=='__main__':
     with sync_playwright() as p:
         for name in os.environ.get('WORLD_BROWSERS','chromium').split(','):
             executable=os.environ.get('PLAYWRIGHT_CHROMIUM_PATH')
             browser=getattr(p,name).launch(headless=True, **({'executable_path':executable} if name=='chromium' and executable else {}))
             check(browser,False);check(browser,True);check_measurements(browser);check_app_shell(browser);check_capture_keeps_user_map(browser)
+            if name=='chromium':check_share_video(browser)
             if os.environ.get('WORLD_SITE_URL'):check_routes(browser,os.environ['WORLD_SITE_URL'].rstrip('/'))
             if os.environ.get('WORLD_PHOTO'):check_inference(browser,os.environ['WORLD_PHOTO'])
             browser.close()

@@ -4,12 +4,13 @@ const siteCore=globalThis.BrainSNNSiteCore;
 export const SCHEMA = 'brainsnn.world.v1';
 // A five-minute walkthrough is about 0.3 GB at 1080p and 1 GB in 4K, so videos get their own limit. Files stay on the
 // device until uploaded in chunks; none is read into memory whole.
-export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
+export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12, fleet: 16 });
 export const ROBOTS = Object.freeze({
   cleaner: { name: 'Cleaning robot', width: 0.58, depth: 0.68, speed: 0.3 },
   vacuum: { name: 'Robot vacuum', width: 0.35, depth: 0.35, speed: 0.3 },
   amr: { name: 'Mobile robot', width: 0.85, depth: 1.0, speed: 0.5 },
   humanoid: { name: 'Humanoid envelope', width: 0.7, depth: 0.6, speed: 0.4 },
+  forklift: { name: 'Compact forklift', width: 1.1, depth: 2.4, speed: 1.2 },
 });
 export const clone = value => JSON.parse(JSON.stringify(value));
 export function numeric(value, min, max, name = 'Value') {
@@ -33,7 +34,18 @@ export function normalizeWorld(input) {
   const provenance = ['authored', 'observed', 'generated'].includes(input.provenance) ? input.provenance : 'observed';
   const floor=input.floor===undefined?undefined:siteCore.normalizeScene({width,depth,floor:input.floor,obstacles:[]}).floor;
   const source=input.geometrySource;
-  return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance,
+  // Optional fleet: named robots with their own start on this floor. A map fact, so it edits under the same review gate.
+  let fleet;
+  if (input.fleet !== undefined) {
+    if (!Array.isArray(input.fleet) || input.fleet.length > LIMITS.fleet) throw new Error(`Use a fleet array with at most ${LIMITS.fleet} entries.`);
+    const seen = new Set();
+    fleet = input.fleet.map((f, i) => {
+      if (!f || typeof f !== 'object' || !ROBOTS[f.robot]) throw new Error(`Fleet entry ${i + 1}: robot must be one of ${Object.keys(ROBOTS).join(', ')}.`);
+      const id = label(f.id, `fleet-${i}`); if (!id || seen.has(id)) throw new Error('Fleet identifiers must be unique.'); seen.add(id);
+      return { id, robot: f.robot, name: label(f.name, ROBOTS[f.robot].name), start: { x: numeric(f.start?.x, 0, width, 'Fleet start X'), z: numeric(f.start?.z, 0, depth, 'Fleet start Z') } };
+    });
+  }
+  return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance, ...(fleet && fleet.length ? { fleet } : {}),
     ...(floor?{floor}:{}),
     ...(source&&typeof source==='object'?{geometrySource:{kind:label(source.kind),name:label(source.name),warnings:Array.isArray(source.warnings)?source.warnings.slice(0,16).map(v=>label(v)):[]}}:{}),
     scaleReviewed: input.scaleReviewed === true && provenance !== 'generated', mapReviewed: input.mapReviewed === true && provenance !== 'generated',
@@ -76,10 +88,9 @@ function startBlocked(world, robot, { cell, n, point, blocked, free }) {
   if (size < 0.1) return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}, or any robot at that margin. Review unknown areas and obstacles, check the scale, or capture more open floor.`), { advice: null });
   return Object.assign(new Error(`The start is blocked: no spot in this map fits a ${envelope}. The most open spot, ${at(best)}, fits a robot up to about ${size.toFixed(2)} × ${size.toFixed(2)} m at that margin. Use a smaller envelope or margin, check the scale with a measured distance, or capture more open floor.`), { advice: { start: best, size } });
 }
-export function planWorld(input, robotInput) {
-  const world = normalizeWorld(input), error = planningGate(world);
-  if (error) throw new Error(error);
-  const robot = { width: numeric(robotInput.width, 0.1, 5, 'Robot width'), depth: numeric(robotInput.depth, 0.1, 5, 'Robot depth'), speed: numeric(robotInput.speed, 0.01, 3, 'Robot speed'), margin: numeric(robotInput.margin ?? 0.1, 0, 2, 'Clearance margin') };
+// The planning grid both planners share: cells, the inflated obstacles they avoid and the start cell, so a route to a
+// chosen goal is held to the same clearances as the coverage preview.
+function planningGrid(world, robot) {
   // A finer grid inflates less (half a cell diagonal), so room-sized maps keep their real corridors; large maps
   // still coarsen to stay within LIMITS.cells.
   let cell = Math.max(0.1, Math.sqrt(world.width * world.depth / LIMITS.cells));
@@ -95,6 +106,22 @@ export function planWorld(input, robotInput) {
   for (let i = 0; i < n; i++) if (!blocked(point(i), padding)) { free[i] = 1; freeCount++; }
   const sx = Math.floor(world.start.x / cell), sz = Math.floor(world.start.z / cell), start = sz * nx + sx;
   if (sx >= nx || sz >= nz || !free[start] || blocked(world.start, radius)) throw startBlocked(world, robot, { cell, n, point, blocked, free });
+  return { cell, nx, nz, n, radius, padding, blocked, point, free, freeCount, start };
+}
+/** What stops a point from being clear at radius r: the wall, unknown floor, or named objects. Empty when clear.
+ *  The same tests planningGrid uses, itemised, so a route can say why it went where it went. */
+export function blockers(input, p, r) {
+  const world = normalizeWorld(input), out = [];
+  if (p.x < r || p.z < r || p.x > world.width - r || p.z > world.depth - r) out.push({ kind: 'wall' });
+  if (world.floor && !siteCore.pointClear([p.x, p.z], { floor: world.floor, obstacles: [] }, r)) out.push({ kind: 'unknown' });
+  for (const o of world.objects) if (p.x >= o.x - r && p.x <= o.x + o.w + r && p.z >= o.z - r && p.z <= o.z + o.d + r) out.push({ kind: 'object', id: o.id, name: o.name });
+  return out;
+}
+export function planWorld(input, robotInput) {
+  const world = normalizeWorld(input), error = planningGate(world);
+  if (error) throw new Error(error);
+  const robot = { width: numeric(robotInput.width, 0.1, 5, 'Robot width'), depth: numeric(robotInput.depth, 0.1, 5, 'Robot depth'), speed: numeric(robotInput.speed, 0.01, 3, 'Robot speed'), margin: numeric(robotInput.margin ?? 0.1, 0, 2, 'Clearance margin') };
+  const { cell, nx, nz, n, point, free, freeCount, start } = planningGrid(world, robot);
   const visited = new Uint8Array(n), stack = [start], order = [start]; visited[start] = 1;
   let reached = 1;
   while (stack.length) {
@@ -113,6 +140,38 @@ export function planWorld(input, robotInput) {
   }
   return { algorithm: 'conservative-grid-dfs-v1', basis: world.provenance, cell, route, distance, travelSeconds: distance / robot.speed, turns, reachableArea: reached * cell * cell, unreachableArea: (freeCount - reached) * cell * cell, robot, policyExecuted: false, safetyCertified: false,
     limitations: ['Planar circumscribed-circle footprint with in-place turns; no robot dynamics.', 'Conservative contiguous traversal, not an optimized coverage controller.', 'Reachable centre-grid area does not measure cleaning quality.', 'Unknown regions are blocked. Appearance is not collision geometry.'] };
+}
+/** A shortest route from the start to a goal on planWorld's conservative grid (4-connected, same inflated obstacles).
+ *  The goal must lie in clear floor the start can reach; otherwise it says why, as planWorld does for the start. */
+export function routeWorld(input, robotInput, goalInput) {
+  const world = normalizeWorld(input), error = planningGate(world);
+  if (error) throw new Error(error);
+  const robot = { width: numeric(robotInput.width, 0.1, 5, 'Robot width'), depth: numeric(robotInput.depth, 0.1, 5, 'Robot depth'), speed: numeric(robotInput.speed, 0.01, 3, 'Robot speed'), margin: numeric(robotInput.margin ?? 0.1, 0, 2, 'Clearance margin') };
+  const goal = { x: numeric(goalInput?.x, 0, world.width, 'Goal x'), z: numeric(goalInput?.z, 0, world.depth, 'Goal z') };
+  const { cell, nx, nz, n, radius, blocked, point, free, freeCount, start } = planningGrid(world, robot);
+  const gx = Math.floor(goal.x / cell), gz = Math.floor(goal.z / cell), target = gz * nx + gx;
+  if (gx >= nx || gz >= nz || !free[target] || blocked(goal, radius)) throw new Error('That spot is too close to an obstacle, a wall or unknown space for this robot. Choose open floor.');
+  // Breadth-first search finds the fewest cells on a uniform 4-connected grid, which is the shortest route here. It runs
+  // over the whole reachable floor, so the reachable and unreachable areas are reported as planWorld reports them.
+  const previous = new Int32Array(n).fill(-1), queue = new Int32Array(n); let head = 0, tail = 0;
+  previous[start] = start; queue[tail++] = start;
+  while (head < tail) {
+    const current = queue[head++], x = current % nx, z = Math.floor(current / nx);
+    for (const next of [x + 1 < nx ? current + 1 : -1, z + 1 < nz ? current + nx : -1, x > 0 ? current - 1 : -1, z > 0 ? current - nx : -1])
+      if (next >= 0 && free[next] && previous[next] < 0) { previous[next] = current; queue[tail++] = next; }
+  }
+  if (previous[target] < 0) throw new Error('No route reaches that spot with this robot: it is cut off by obstacles or unknown space.');
+  const cells = [target]; while (cells[cells.length - 1] !== start) cells.push(previous[cells[cells.length - 1]]);
+  const route = [world.start, ...cells.reverse().map(point), goal].filter((p, i, a) => !i || Math.hypot(p.x - a[i - 1].x, p.z - a[i - 1].z) > 1e-8);
+  let distance = 0, turns = 0, prior = null;
+  for (let i = 1; i < route.length; i++) {
+    const dx = route[i].x - route[i - 1].x, dz = route[i].z - route[i - 1].z, angle = Math.atan2(dz, dx);
+    distance += Math.hypot(dx, dz); if (prior !== null && Math.abs(Math.atan2(Math.sin(angle - prior), Math.cos(angle - prior))) > 0.1) turns++;
+    prior = angle;
+  }
+  return { algorithm: 'conservative-grid-bfs-route-v1', basis: world.provenance, cell, route, goal, distance, travelSeconds: distance / robot.speed, turns,
+    reachableArea: tail * cell * cell, unreachableArea: (freeCount - tail) * cell * cell, robot, policyExecuted: false, safetyCertified: false,
+    limitations: ['Planar circumscribed-circle footprint with in-place turns; no robot dynamics.', 'Shortest route on a 4-connected grid; real robots smooth corners.', 'Unknown regions are blocked. Appearance is not collision geometry.'] };
 }
 export function estimate(result, values) {
   const setupMinutes = numeric(values.setupMinutes ?? 0, 0, 240, 'Setup minutes'), turnSeconds = numeric(values.turnSeconds ?? 0, 0, 120, 'Seconds per turn'), assistanceMinutes = numeric(values.assistanceMinutes ?? 0, 0, 240, 'Assistance minutes');
@@ -168,10 +227,11 @@ export function usdScene(input) {
   const cube = (id, x, y, z, sx, sy, sz) => `    def Cube "${id}" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {\n        double size = 1\n        double3 xformOp:translate = (${x}, ${y}, ${z})\n        double3 xformOp:scale = (${sx}, ${sy}, ${sz})\n        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]\n    }`;
   return `#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n# Reviewed static proxy geometry, not a qualified robotics simulation.\ndef Xform "World" {\n${cube('Floor', w.width / 2, -0.05, w.depth / 2, w.width, 0.1, w.depth)}\n${w.objects.map((o, i) => cube(`Obstacle_${i}`, o.x + o.w / 2, Math.max(.02, o.h) / 2, o.z + o.d / 2, o.w, Math.max(.02, o.h), o.d)).join('\n')}\n}\n`;
 }
-export async function proofPack(world, result, assumptions, sources = [], events = [], observations = [], geometryEvidence = null) {
+export async function proofPack(world, result, assumptions, sources = [], events = [], observations = [], geometryEvidence = null, extras = {}) {
   const normalizedWorld = world ? normalizeWorld(world) : null;
   const body = { schema: 'brainsnn.proof.v1', createdAt: new Date().toISOString(), world: normalizedWorld, result: result ? clone(result) : null, estimate: result ? estimate(result, assumptions) : null, sources: sources.map(s => ({ name: label(s.name), size: s.size, kind: s.kind, ...(s.derivation ? {derivation: clone(s.derivation)} : {}) })), events: clone(events.slice(-200)), ...(observations.length?{observations:clone(observations)}:{}), claim: 'Planning preview; no real robot or learned policy executed.', signature: null };
   if(geometryEvidence)body.geometryEvidence=await (await import('./measurement-evidence.mjs')).exportGeometryEvidence(geometryEvidence,normalizedWorld);
+  if (extras && extras.routeReceipt && typeof extras.routeReceipt === 'object') body.routeReceipt = clone(extras.routeReceipt);  // why the routed goal went where it went, and who else fits; hashed with the rest
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
   return { ...body, integrity: { algorithm: 'SHA-256', scope: 'JSON.stringify(body) before integrity property', value: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), authenticatesAuthor: false } };
 }
