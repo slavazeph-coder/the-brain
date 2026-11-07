@@ -15,6 +15,7 @@ import {createCaptureClient} from './capture-client.mjs';
 import {readVideoMetadata,videoResolutionIssue} from './video-metadata.mjs';
 import {parseHandoffHash, readLocalCapture, clearLocalCapture} from './capture-handoff.mjs';
 import {reconstructionRecovery} from './reconstruction-recovery.mjs';
+import {reconstructionFrameAudit,reconstructionFrameCSV} from './reconstruction-frame-audit.mjs';
 import {captureBefore,compare as compareWhatIf,whatIfCard} from './what-if.mjs';
 import {routeReceipt,receiptCard} from './route-receipt.mjs';
 import {capturePath,viewAt,pathLength} from './capture-path.mjs';
@@ -124,11 +125,18 @@ function metricSceneCard(source){if(!multiView(source))return '';const entry=sce
 function calibrationCard(visual){const c=calibrationFor(visual),done=c.picks.length===2&&!c.picking;
   return `<div class="calibration"><p class="micro"><b>Measured scale (recommended).</b> Measure a distance in the room, such as a doorway's width, then tap both ends in the 3D view.</p><button class="wide" data-action="pick-scale" aria-pressed="${c.picking}">${c.picking?`Cancel picking · ${c.picks.length} of 2 points`:done?'Pick the two points again':'Pick two measured points'}</button>${c.picking?`<p class="micro" role="status">Tap point ${c.picks.length+1} of 2 in the 3D view. Drag still orbits; zoom in for precision.</p>`:''}${done?`<p class="micro" id="picked-span">Picked span: ${pickedSpan(visual,c.picks).toPrecision(5)} reconstruction units.</p>${numericField('Measured distance · m','measured-distance',c.distance,PROPOSAL.minMeasuredDistance,PROPOSAL.maxMeasuredDistance,.01)}${activeSource?.reconstruction?'<button class="primary wide" data-action="propose-measured">Propose map at measured scale →</button>':'<p class="micro">Without camera poses there is no map proposal here; the measured scale is applied when you open this cloud in Arena sim.</p>'}${metricSceneCard(activeSource)}<div id="dimension-review-slot">${bimWorkflow.captureHTML(activeSource,measuredScale(visual),c,sceneEngine())}</div>`:''}</div>`;}
 function recoveryCard(evidence) {
-  const result=reconstructionRecovery(evidence);
+  const result=reconstructionRecovery(evidence),audit=reconstructionFrameAudit(evidence);
   if (!result) return '';
+  const displayed=audit?.rows.length>260?Array.from({length:260},(_,i)=>audit.rows[Math.min(audit.rows.length-1,Math.floor(i*audit.rows.length/260))]):audit?.rows;
+  const track=audit?`<div class="pose-audit"><div class="pose-audit-heading"><strong>${audit.registered_frames}/${audit.total_frames} cameras registered</strong><span>${audit.models_found??'—'} camera models</span></div>
+    <div class="pose-strip" role="img" aria-label="Cyan registered frames; red unregistered frames in sampled-video order">${displayed.map(frame=>`<span class="${frame.registered?'pose-ok':'pose-missing'}" title="Sample ${frame.sample_index}: ${frame.registered?'registered':'not registered'}"></span>`).join('')}</div>
+    <p class="micro">Largest missing spans (sample indices): ${audit.missing_spans.slice(0,3).map(run=>`${run.start}–${run.end} (${run.length})`).join(' · ')||'none'}. Camera registration is not verified room coverage.</p>
+    <button class="wide" data-action="reconstruction-audit">Export pose timeline + frame ledger (CSV / JSON)</button>
+    <p class="micro">Unavailable per-frame blur, match counts, source timestamps and rejection causes remain blank in the export. Metric scale is not inferred.</p></div>`:'';
   return `<section class="capture-recovery" aria-label="Reconstruction completeness review">
     <h4>${esc(result.label)}</h4>
     <p>${esc(result.summary)}</p>
+    ${track}
     <ol>${result.actions.map(action=>`<li>${esc(action)}</li>`).join('')}</ol>
     <p class="micro">${esc(result.note)}</p>
     <button class="wide" data-action="files">Add another photo or walkthrough</button>
@@ -553,7 +561,14 @@ async function action(name,value){try{
   if(name==='detect'&&activeSource?.kind==='image')$('detect-consent').showModal();
   if(name==='cancel-detect')detectAbort?.abort();
   if(name==='cancel-depth')depthAbort?.abort();
-  if(name==='visual-export'&&activeSource?.visual)deliver(['brainsnn-visible-points.ply',toPLY(activeSource.visual.points),'application/octet-stream'],['brainsnn-preview-provenance.json',{schema:'brainsnn.visual-provenance.v1',source:activeSource.name,...activeSource.derivation,metricVerified:false,collisionGeometry:null}]);
+  if(name==='reconstruction-audit'){
+     const evidence=activeSource?.reconstruction,audit=reconstructionFrameAudit(evidence);
+     if(!audit)throw Error('Open a reconstruction with a complete camera-frame ledger before exporting diagnostics.');
+     await deliver(['brainsnn-frame-audit.csv',reconstructionFrameCSV(evidence),'text/csv'],['brainsnn-frame-audit.json',audit,'application/json']);
+     event('reconstruction_frame_audit_exported',{total:audit.total_frames,registered:audit.registered_frames,largestGap:audit.longest_gap});
+     status('Camera frame ledger exported. Blank diagnostics were not measured, and the source has no verified scale.');
+   }
+   if(name==='visual-export'&&activeSource?.visual)deliver(['brainsnn-visible-points.ply',toPLY(activeSource.visual.points),'application/octet-stream'],['brainsnn-preview-provenance.json',{schema:'brainsnn.visual-provenance.v1',source:activeSource.name,...activeSource.derivation,metricVerified:false,collisionGeometry:null}]);
   if(name==='arena-cloud'&&activeSource?.visual){const scale=measuredScale(activeSource.visual);download('brainsnn-point-cloud.json',toArenaCloud(activeSource.visual.points,{source:activeSource.name,coordinateFrame:arenaFrame(activeSource),metresPerUnit:scale?.metresPerUnit,measurement:scale}));status(`Point cloud saved${scale?` at your measured scale (${scale.metresPerUnit.toPrecision(4)} m per unit)`:' in arbitrary units'}. In Robot Arena: Capture → Add 3D visual → choose brainsnn-point-cloud.json. It is a visual reference only; ${scale?'confirm the scale and ':'measure and '}mark obstacles before planning.`);}
   if(name==='install')await installApp();
   if(name==='phone')$('phone-camera').click();
