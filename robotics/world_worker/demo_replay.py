@@ -7,6 +7,14 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+
+
+def _sha256_stream(stream, chunk=1 << 20):
+    """SHA-256 of an open binary stream, in chunks. hashlib.file_digest is 3.11+; the GPU workers run 3.10."""
+    digest = hashlib.sha256()
+    for block in iter(lambda: stream.read(chunk), b''):
+        digest.update(block)
+    return digest.hexdigest()
 import io
 import json
 import math
@@ -37,7 +45,7 @@ FORMATS = {'landscape': (1280, 720, 35), 'social': (1080, 1350, 35), 'short': (1
 
 def sha(path):
     with Path(path).open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        return _sha256_stream(stream)
 
 
 def canonical(value):

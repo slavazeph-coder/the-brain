@@ -84,3 +84,28 @@
 .capture-recovery .pose-strip .pose-missing{background:#bb5968}
 .capture-recovery .pose-audit .micro{line-height:1.6;margin:9px 0}
 @media (prefers-reduced-motion:reduce){.capture-recovery .pose-strip *{transition:none!important}}
+.capture-path{margin:8px 0 0;padding:8px 10px;border:1px solid var(--line,#1f2a3a);border-radius:10px}
+.capture-path .field-row{display:flex;gap:8px;align-items:center;margin:6px 0}
+.capture-path input[type=range]{flex:1;min-width:120px}
+.capture-path button{padding:4px 10px}
+
+/* route receipt: why the route went where it went, and which envelopes can make the trip */
+.route-receipt{margin-top:.75rem;padding:.75rem .9rem;border:1px solid var(--line,#2a3140);border-radius:10px;background:rgba(255,255,255,.03)}
+.route-receipt h4{margin:0 0 .35rem}
+.route-receipt p{margin:.25rem 0}
+.fleet-fit{list-style:none;margin:.5rem 0 .25rem;padding:0;display:grid;gap:.2rem}
+.fleet-fit li{display:flex;justify-content:space-between;gap:.5rem;font-size:.9rem;padding:.2rem .45rem;border-radius:6px;background:rgba(255,255,255,.04)}
+.fleet-fit li.no-fit{color:#ffb4a8}
+.fleet-fit li.fits span:last-child{color:#8de0b8}
+.fleet-fit li.gated{color:#c9c9d6;opacity:.85}
+.fleet-edit{margin-top:.6rem}
+.fleet-row{align-items:center;justify-content:space-between;font-size:.9rem}
+.fleet-row button{padding:.2rem .6rem}
+/* Capture report: a timeline of the video, registered or not. Describes the capture, never the room. */
+.capture-report{margin:17px 0;padding:18px;border:1px solid #22d3ee55;border-radius:14px;background:#0b1220}
+.capture-report h4{font-size:16px;font-weight:650;color:#e6fbff;margin:0 0 8px}
+.capture-report p{font-size:12px;line-height:1.7;color:#cfd8e3;margin:6px 0}
+.capture-report .timeline{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#1f2937}
+.capture-report .timeline i{display:block;height:100%}
+.capture-report .timeline i.registered{background:#34d399}.capture-report .timeline i.dropped{background:#4b5563}.capture-report .timeline i.blurred{background:#f59e0b}
+.capture-report ol{padding-left:20px;margin:10px 0}.capture-report li{font-size:12px;line-height:1.6;color:#d5dde7;margin:4px 0}.capture-report li em{color:#9fe3ff;font-style:normal}

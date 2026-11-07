@@ -1,0 +1,51 @@
+{
+  "schema": "brainsnn.stand-in-catalog.v1",
+  "note": "Real-size CC0 models used as stand-ins for named objects. Sizes are the models' own extents in metres (measured in Blender on import). Add a model: drop a .glb here and list it with its licence and source.",
+  "assets": [
+    {
+      "label": "golf cart",
+      "aliases": [
+        "golf buggy",
+        "cart"
+      ],
+      "file": "golf-cart.glb",
+      "license": "CC0 1.0",
+      "source": "https://grab3d.com/models/vehicles/golf-cart/",
+      "fetched": "2026-11-03",
+      "length_m": 2.6,
+      "width_m": 1.29,
+      "height_m": 1.91,
+      "length_axis": "y"
+    },
+    {
+      "label": "tire stack",
+      "aliases": [
+        "stack of tires",
+        "tyre stack"
+      ],
+      "file": "tire-stack.glb",
+      "license": "CC0 1.0",
+      "source": "https://grab3d.com/models/vehicles/tire-stack/",
+      "fetched": "2026-11-03",
+      "length_m": 0.75,
+      "width_m": 0.74,
+      "height_m": 1.05,
+      "length_axis": "y"
+    },
+    {
+      "label": "tire",
+      "aliases": [
+        "tyre",
+        "car tire"
+      ],
+      "file": "car-tire.glb",
+      "license": "CC0 1.0",
+      "source": "https://grab3d.com/models/vehicles/car-tire/",
+      "fetched": "2026-11-03",
+      "length_m": 0.65,
+      "width_m": 0.22,
+      "height_m": 0.65,
+      "length_axis": "x"
+    }
+  ]
+}

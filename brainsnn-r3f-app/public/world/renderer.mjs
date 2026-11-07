@@ -3,7 +3,7 @@
 export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas is unavailable. Map editing and exports still work.');
-  let world = null, result = null, marks = null, cursor = 0, selected = '', yaw = -0.55, zoom = 1, mode = 'iso', drag = null, raf = 0;
+  let world = null, result = null, ghost = null, marks = null, cursor = 0, selected = '', yaw = -0.55, zoom = 1, mode = 'iso', drag = null, raf = 0;
   let width = 600, height = 400;
   let ro = { disconnect() {} };
   if (fixed) { width = fixed.width; height = fixed.height; canvas.width = width; canvas.height = height; }
@@ -35,6 +35,10 @@ export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
     for(let x = 0; x <= W; x += Math.max(1, Math.ceil(W / 40))) line([x,0,0],[x,0,D], '#00f5ff16');
     for(let z = 0; z <= D; z += Math.max(1, Math.ceil(D / 40))) line([0,0,z],[W,0,z], '#00f5ff16');
     ctx.restore();
+    if (ghost?.length) {
+      // The route before an edit, kept for comparison: dimmed and dashed under the current one.
+      ctx.save(); ctx.setLineDash([6, 5]); ctx.beginPath(); ghost.forEach((p,i) => { const v = project(p.x,.02,p.z); i ? ctx.lineTo(v[0],v[1]) : ctx.moveTo(v[0],v[1]); }); ctx.lineWidth=1.4; ctx.strokeStyle='#ff9a3c99'; ctx.stroke(); ctx.restore();
+    }
     if (result?.route.length) {
       // A route to a chosen goal is a single path, drawn bolder than the dense coverage sweep.
       ctx.beginPath(); result.route.forEach((p,i) => { const v = project(p.x,.025,p.z); i ? ctx.lineTo(...v.slice(0,2)) : ctx.moveTo(...v.slice(0,2)); }); const toGoal=!!result.goal; ctx.lineWidth=toGoal?1.6:.65; ctx.strokeStyle=toGoal?'#00f5ff55':'#00f5ff2b'; ctx.stroke();
@@ -71,5 +75,5 @@ export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
   function wheel(e){if(e.ctrlKey)return;e.preventDefault();zoom=Math.max(.5,Math.min(2.3,zoom*Math.exp(-e.deltaY*.001)));draw();}
   function key(e){if(!['ArrowLeft','ArrowRight','+','-','=','0'].includes(e.key))return;e.preventDefault();if(e.key==='ArrowLeft')yaw-=.12;if(e.key==='ArrowRight')yaw+=.12;if(['+','='].includes(e.key))zoom=Math.min(2.3,zoom*1.1);if(e.key==='-')zoom=Math.max(.5,zoom/1.1);if(e.key==='0'){zoom=1;yaw=-.55;}draw();}
   canvas.addEventListener('pointerdown',down);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',up);if(wheelZoom)canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('keydown',key);
-  return {setWorld(w){world=w;draw();},setResult(r){result=r;cursor=0;draw();},setMarks(m){marks=m||null;draw();},setCursor(c){cursor=Math.max(0,Math.min(1,c));draw();},setSelected(id){selected=id;draw();},setMode(m){mode=m;draw();},setView(v){if(Number.isFinite(v?.yaw))yaw=v.yaw;if(Number.isFinite(v?.zoom))zoom=Math.max(.5,Math.min(2.3,v.zoom));draw();},reset(){zoom=1;yaw=-.55;draw();},destroy(){ro.disconnect();cancelAnimationFrame(raf);for(const [event,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['wheel',wheel],['keydown',key]])canvas.removeEventListener(event,fn);}};
+  return {setWorld(w){world=w;draw();},setResult(r){result=r;cursor=0;draw();},setGhost(g){ghost=Array.isArray(g)&&g.length>1?g:null;draw();},setMarks(m){marks=m||null;draw();},setCursor(c){cursor=Math.max(0,Math.min(1,c));draw();},setSelected(id){selected=id;draw();},setMode(m){mode=m;draw();},setView(v){if(Number.isFinite(v?.yaw))yaw=v.yaw;if(Number.isFinite(v?.zoom))zoom=Math.max(.5,Math.min(2.3,v.zoom));draw();},reset(){zoom=1;yaw=-.55;draw();},destroy(){ro.disconnect();cancelAnimationFrame(raf);for(const [event,fn] of [['pointerdown',down],['pointermove',move],['pointerup',up],['pointercancel',up],['wheel',wheel],['keydown',key]])canvas.removeEventListener(event,fn);}};
 }

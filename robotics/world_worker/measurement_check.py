@@ -10,6 +10,14 @@ import argparse
 import copy
 import datetime
 import hashlib
+
+
+def _sha256_stream(stream, chunk=1 << 20):
+    """SHA-256 of an open binary stream, in chunks. hashlib.file_digest is 3.11+; the GPU workers run 3.10."""
+    digest = hashlib.sha256()
+    for block in iter(lambda: stream.read(chunk), b''):
+        digest.update(block)
+    return digest.hexdigest()
 import json
 import math
 from pathlib import Path
@@ -219,7 +227,7 @@ def _read_json(path, limit):
 
 def _file_sha256(path):
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        return _sha256_stream(stream)
 
 
 def main(argv=None):

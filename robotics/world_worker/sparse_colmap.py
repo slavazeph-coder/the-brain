@@ -556,12 +556,24 @@ def run(request: dict, densify_model: Path | None = None, scale_model: Path | No
         evidence['camera_frame_evidence']['timestamps'] = 'Original native timestamps are bound to image hashes in native-capture.json; image sources have no video PTS.'
         native_artifacts = [{'name': 'native-capture.json', 'kind': 'evidence'}]
     (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
+    # Where the walk registered and where it did not, in seconds of video, with what the frames support as the cause.
+    try:
+        from . import capture_report
+    except ImportError:
+        import capture_report
+    report_artifacts = []
+    try:
+        capture_report.write(out, evidence, images)
+        report_artifacts = [{'name': 'capture-report.json', 'kind': 'evidence'}]
+    except Exception as error:  # a report problem never fails a reconstruction
+        evidence['warnings'].append(f'No capture report: {type(error).__name__}: {str(error)[:120]}')
+        (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     ledger = {'schema': 'brainsnn.camera-frames.v1', 'sources': sources,
               'reconstruction': camera_frames.file_record(out.parent, out / 'reconstruction.json'),
               'clouds': clouds, 'frames': frame_records, 'metric_verified': False}
     camera_frames.write(out.parent, ledger, output_path=out / 'camera-frames.json')
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [*artifacts, {'name': 'reconstruction.json', 'kind': 'evidence'},
-                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}, *native_artifacts]}, allow_nan=False))
+                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}, *native_artifacts, *report_artifacts]}, allow_nan=False))
     return evidence
 
 
