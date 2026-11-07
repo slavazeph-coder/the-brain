@@ -27,6 +27,10 @@ def check(playwright, name):
     page.wait_for_function("document.querySelector('#status').textContent.startsWith('Route to the spot:')")
     before = float(page.locator('#status').text_content().split(':')[1].split('m')[0])
     assert before > 7.8, before  # the cart stands across the straight line (7.5 m); the route goes around it
+    # The receipt says why: the cart on the straight line, the tightest point, and which envelopes can make the trip.
+    receipt = page.locator('.route-receipt'); assert receipt.count() == 1, 'route receipt card'
+    text = receipt.text_content(); assert 'straight line' in text and 'cart' in text.lower() and 'Compact forklift' in text, text[:300]
+    assert page.locator('.fleet-fit li').count() >= 5, 'one row per envelope'
     # Edit: remove the cart. The map goes back to review and the card asks for it.
     page.locator('[data-tab=world]').click()
     page.select_option('#objects', 'cart')
