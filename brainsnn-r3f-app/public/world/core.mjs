@@ -10,6 +10,7 @@ export const ROBOTS = Object.freeze({
   vacuum: { name: 'Robot vacuum', width: 0.35, depth: 0.35, speed: 0.3 },
   amr: { name: 'Mobile robot', width: 0.85, depth: 1.0, speed: 0.5 },
   humanoid: { name: 'Humanoid envelope', width: 0.7, depth: 0.6, speed: 0.4 },
+  forklift: { name: 'Compact forklift', width: 1.1, depth: 2.4, speed: 1.2 },
 });
 export const clone = value => JSON.parse(JSON.stringify(value));
 export function numeric(value, min, max, name = 'Value') {
@@ -95,6 +96,15 @@ function planningGrid(world, robot) {
   const sx = Math.floor(world.start.x / cell), sz = Math.floor(world.start.z / cell), start = sz * nx + sx;
   if (sx >= nx || sz >= nz || !free[start] || blocked(world.start, radius)) throw startBlocked(world, robot, { cell, n, point, blocked, free });
   return { cell, nx, nz, n, radius, padding, blocked, point, free, freeCount, start };
+}
+/** What stops a point from being clear at radius r: the wall, unknown floor, or named objects. Empty when clear.
+ *  The same tests planningGrid uses, itemised, so a route can say why it went where it went. */
+export function blockers(input, p, r) {
+  const world = normalizeWorld(input), out = [];
+  if (p.x < r || p.z < r || p.x > world.width - r || p.z > world.depth - r) out.push({ kind: 'wall' });
+  if (world.floor && !siteCore.pointClear([p.x, p.z], { floor: world.floor, obstacles: [] }, r)) out.push({ kind: 'unknown' });
+  for (const o of world.objects) if (p.x >= o.x - r && p.x <= o.x + o.w + r && p.z >= o.z - r && p.z <= o.z + o.d + r) out.push({ kind: 'object', id: o.id, name: o.name });
+  return out;
 }
 export function planWorld(input, robotInput) {
   const world = normalizeWorld(input), error = planningGate(world);
