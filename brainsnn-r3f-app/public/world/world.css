@@ -72,6 +72,18 @@
 .locator{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}.locator h4{margin:0 0 6px;font-size:15px}.locator .micro{font-size:12px;line-height:1.6}.located-photo{position:relative;margin:12px 0 8px;border:1px solid #f4c76a55;border-radius:8px;overflow:hidden;cursor:crosshair;touch-action:manipulation}.located-photo img{display:block;width:100%;height:auto}.located-goal{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #f4c76a;border-radius:50%;box-shadow:0 0 0 3px #0008;pointer-events:none}.located-goal:after{content:"";position:absolute;inset:4px;border-radius:50%;background:#f4c76a}
 .check-first{margin:12px 0;padding:12px 14px;border:1px solid rgba(250,179,64,.4);border-left:3px solid #fab340;border-radius:10px;background:rgba(250,179,64,.06)}.check-first h4{margin:0 0 8px;font-size:13px;color:#fab340;letter-spacing:.02em}.check-first ol{margin:0;padding-left:18px;display:grid;gap:8px}.check-first li{font-size:13px;line-height:1.45;color:var(--text)}.check-first .link-button{display:block;width:auto;text-align:left;margin-top:4px;padding:0;border:0;background:none;color:var(--cyan);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 
+
+/* Actual camera-registration evidence; red is a missing camera pose, not unobserved floor area. */
+.capture-recovery .pose-audit{margin:16px 0;padding:14px;border-radius:10px;border:1px solid rgba(0,245,255,.17);background:rgba(0,245,255,.025)}
+.capture-recovery .pose-audit-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin:0 0 9px;font:11px var(--mono)}
+.capture-recovery .pose-audit-heading strong{color:var(--cyan);font-weight:600}
+.capture-recovery .pose-audit-heading span{color:var(--muted)}
+.capture-recovery .pose-strip{height:17px;display:flex;gap:1px;width:100%;overflow:hidden;border-radius:4px;background:#20202c}
+.capture-recovery .pose-strip span{height:100%;min-width:1px;flex:1 1 1px}
+.capture-recovery .pose-strip .pose-ok{background:#00d9e7}
+.capture-recovery .pose-strip .pose-missing{background:#bb5968}
+.capture-recovery .pose-audit .micro{line-height:1.6;margin:9px 0}
+@media (prefers-reduced-motion:reduce){.capture-recovery .pose-strip *{transition:none!important}}
 .capture-path{margin:8px 0 0;padding:8px 10px;border:1px solid var(--line,#1f2a3a);border-radius:10px}
 .capture-path .field-row{display:flex;gap:8px;align-items:center;margin:6px 0}
 .capture-path input[type=range]{flex:1;min-width:120px}
