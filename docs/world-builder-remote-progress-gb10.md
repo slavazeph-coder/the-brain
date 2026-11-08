@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-|||Last updated: 2026-11-08T18:00Z
+||||Last updated: 2026-11-08T18:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -26,7 +26,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 |- **No force-push, no merge/deploy, no paid fallback.** Working tree clean on GB10.
 |- **Next bounded action:** commit the 4090 dirty files on the 4090 branch, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 |
-|### Run 205 — 2026-11-08 (GB10: non-root UID enforcement + check_execution_storage exposure committed + pushed)
+||### Run 209 — 2026-11-08 (GB10: 4090 branch untracked files committed + PLY zflip parity verified on 4090; suites green)
+||
+||- **4090 state:** port confirmed alive (ssh2.vast.ai:23990), hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, 9.8/24.6 GiB used, 51°C.
+||- **4090 commit:** committed 44 untracked files (PLY fixtures, world_worker modules, experiments, deploy configs) → `2d47aa7` on `hermes/world-builder-4090`; `git push` → `daabda7..2d47aa7`.
+||- **4090 PLY zflip parity (exact, on 4090):** `node --test tests/world/verify_ply_zflip_parity.test.mjs` → **3 pass / 0 fail** (165 ms) — big-endian fixture parses, ascii/LE/BE receipts geometry-identical, BE zflip sign inversion + y_up verdict.
+||- **Fresh test results (this run, exact):**
+||  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (120 ms)
+||  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 16.43 s**
+||- **GB10 branch:** `hermes/world-builder-g10` at `8b24742`, clean working tree (no uncommitted changes).
+||- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+||- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+||
+||### Run 205 — 2026-11-08 (GB10: non-root UID enforcement + check_execution_storage exposure committed + pushed)
 
 - Bounded improvement: committed the dirty `robotics/world_worker/app.py` — added `WORLD_ADAPTER_NONROOT` env var enforcement (when set to "1", raises `RuntimeError` if UID is 0) and exposed `check_execution_storage` on `app.state` for test introspection. Also committed `robotics/world_worker/.env.example` with the new env var documentation.
 - New tests in `tests/world/test_worker.py`: `test_nonroot_uid_enforcement_when_set` (root UID + WORLD_ADAPTER_NONROOT=1 → raises), `test_nonroot_uid_warns_when_unset` (root UID + env unset → no raise).
