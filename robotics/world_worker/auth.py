@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 from pathlib import Path
+import os
 import re
 
 OPERATOR_OWNER = 'operator'
@@ -113,3 +114,44 @@ class Identities:
         if principal and isinstance(credential_hash, str) and hmac.compare_digest(principal.credential_hash, credential_hash):
             return principal
         return None
+
+    def write_registry(self, tenants: dict, schema: str = REGISTRY_SCHEMA):
+        """Atomically write the tenant registry. Called by public signup."""
+        if self.registry is None:
+            raise RuntimeError('No registry path configured.')
+        if len(tenants) > 100:
+            raise ValueError('Tenant registry exceeds 100 entries.')
+        entries = []
+        for oid, p in tenants.items():
+            entries.append({
+                'id': oid,
+                'token_sha256': p.credential_hash,
+                'enabled': True,
+                'engines': sorted(p.engines),
+                'limits': dict(p.limits),
+            })
+        payload = {'schema': schema, 'tenants': entries}
+        tmp = self.registry.with_suffix('.tmp')
+        with tmp.open('wb') as f:
+            f.write(json.dumps(payload).encode())
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(str(tmp), str(self.registry))
+        return payload
+
+    def register_tenant(self, owner_id: str, credential: str, engines: list[str] | None = None) -> dict:
+        """Register a new tenant with default limits and return the issued API key."""
+        if not OWNER.fullmatch(owner_id):
+            raise ValueError('Invalid owner_id format.')
+        if owner_id == OPERATOR_OWNER:
+            raise ValueError('Cannot register operator as a tenant.')
+        if len(self.read_registry()) >= 100:
+            raise ValueError('Tenant registry is full.')
+        digest = hashlib.sha256(credential.encode()).hexdigest()
+        if DIGEST.fullmatch(digest) is None:
+            raise ValueError('Invalid credential digest.')
+        principal = Principal(owner_id, digest, frozenset(engines or ['inspect']), self.defaults)
+        tenants = self.read_registry()
+        tenants[owner_id] = principal
+        self.write_registry(tenants)
+        return {'owner_id': owner_id, 'api_key': credential, 'limits': principal.limits, 'engines': sorted(principal.engines)}
