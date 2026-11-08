@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-11-01T22:45Z
+Last updated: 2026-11-08T12:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 204 — 2026-11-08 (GB10: Python 3.14 audit hook fix committed + pushed; suites green)
+
+- Bounded improvement: committed the dirty `robotics/world_worker/mapanything_apache.py` — the Python 3.14 compatibility fix for `sys.addaudithook()` removal. Old code used `sys.removeaudithook(deny_network)` which fails in 3.14 if `removeaudithook` doesn't exist. New code stores the hook function by identity and removes it via `sys._audit_hooks` list filtering.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (86.57 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.09 s**
+- **Commit + push verified:** `3454333` on `hermes/world-builder-gb10`; `git push` → `f84d1ba..3454333`. One file (`mapanything_apache.py` +16/-2). `git status` clean.
+- 4090: not re-probed (run-200 connection-refused; repeat-blocker rule).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** all handoff "open" items closed; pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
 
 ### Run 200 — 2026-11-01 (GB10: PLY zflip endian-parity validation added + committed + pushed; 4090 port dead)
 
@@ -683,8 +694,9 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Current status
 
-- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `4d7e93b`
-- Run 203 confirmed both handoff "open" items are closed: cancellation regression test (`test_cancel_completed_job_interrupts_inflight_receipt_verification`) in `4d7e93b`; signed-receipt API/env docs in `world-studio-implementation.md` + `.env.example`.
+- Repo: `/workspace/hermes-gb10/repos/the-brain`, branch `hermes/world-builder-gb10` @ `3454333`
+- Run 204 committed the Python 3.14 audit hook fix in `mapanything_apache.py` (identity-based removal via `sys._audit_hooks`).
+- Run 203 confirmed both handoff "open" items are closed: cancellation regression test; signed-receipt API/env docs.
 - Receipt suites re-verified green: node 12/12, pytest 34/34.
 - Live-HTTP report-UI gate closed in run 185; live-HTTP retention (ttl) in 194/195; world node suite green in 202 (107/107).
 
