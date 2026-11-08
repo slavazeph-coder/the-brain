@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-||Last updated: 2026-11-08T16:15Z
+|||Last updated: 2026-11-08T18:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -16,7 +16,17 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
 |- **Next bounded action:** all handoff "open" items closed; pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
 
-### Run 205 — 2026-11-08 (GB10: non-root UID enforcement + check_execution_storage exposure committed + pushed)
+|### Run 208 — 2026-11-08 (GB10: 4090 port recovered + CUDA smoke verified; suites green)
+|
+|- **4090 port recovery:** probed `root@ssh2.vast.ai:23990` → connection alive (was dead since run 200). Hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, 21.2/24.6 GiB used. CUDA smoke passed: `torch.randn` → matrix multiply on `cuda:0` (23.6 GB total).
+|- **4090 state:** branch `hermes/world-builder-4090` at `96e7ff9` (PLY zflip verification), 5 dirty files (`adapters.example.json`, `app.py`, `auth.py`, `geometry.py`, `mapanything_apache.py`, `sparse_colmap.py`), 39 untracked files in `robotics/experiments/` and `robotics/world_worker/`.
+|- **Fresh test results (this run, exact):**
+|  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (166 ms)
+|  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.15 s**
+|- **No force-push, no merge/deploy, no paid fallback.** Working tree clean on GB10.
+|- **Next bounded action:** commit the 4090 dirty files on the 4090 branch, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+|
+|### Run 205 — 2026-11-08 (GB10: non-root UID enforcement + check_execution_storage exposure committed + pushed)
 
 - Bounded improvement: committed the dirty `robotics/world_worker/app.py` — added `WORLD_ADAPTER_NONROOT` env var enforcement (when set to "1", raises `RuntimeError` if UID is 0) and exposed `check_execution_storage` on `app.state` for test introspection. Also committed `robotics/world_worker/.env.example` with the new env var documentation.
 - New tests in `tests/world/test_worker.py`: `test_nonroot_uid_enforcement_when_set` (root UID + WORLD_ADAPTER_NONROOT=1 → raises), `test_nonroot_uid_warns_when_unset` (root UID + env unset → no raise).
