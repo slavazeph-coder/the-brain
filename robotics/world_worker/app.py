@@ -355,10 +355,12 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
 
         # 1. Non-root UID check (warn, not fail — worker itself may be root)
         uid = os.getuid()
-        if uid == 0:
+        if uid == 0 and os.environ.get('WORLD_ADAPTER_NONROOT') != '1':
             # Root is acceptable for the worker process; adapters inherit this
             # environment. Log a warning but do not raise.
             pass
+        elif uid == 0:
+            raise RuntimeError('Adapter execution requires non-root UID (WORLD_ADAPTER_NONROOT=1 not set).')
 
         # 2. Resource limits check
         soft_open_files, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -551,6 +553,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     app.state.store = store
     app.state.queue = queue  # Exposed for test introspection (requeue_pending idempotency); production uses the closure variable.
     app.state.queue_admission_hook = None  # Tests set an async gate here; production keeps the no-op.
+    app.state.check_execution_storage = check_execution_storage  # Exposed for test introspection.
 
     @app.middleware('http')
     async def security(request: Request, call_next):

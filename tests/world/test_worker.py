@@ -899,3 +899,27 @@ def test_cancelled_stopping_job_keeps_disk_and_source_reservations(tmp_path):
         assert store.upload_path(uid).exists()
         store.prune(1)
         assert c.get('/v1/jobs/'+jid,headers=HEADERS).status_code==404
+
+
+def test_nonroot_uid_enforcement_when_set(monkeypatch, tmp_path):
+    """WORLD_ADAPTER_NONROOT=1 raises when UID is 0 (root)."""
+    import os
+    monkeypatch.setattr(os, 'getuid', lambda: 0)  # simulate root
+    monkeypatch.setenv('WORLD_ADAPTER_NONROOT', '1')
+    from robotics.world_worker.app import create_app
+    app = create_app(root=tmp_path, token=TOKEN)
+    # check_execution_storage should raise for root when nonroot enforced
+    with pytest.raises(RuntimeError, match='non-root UID'):
+        app.state.check_execution_storage(tmp_path)
+
+
+def test_nonroot_uid_warns_when_unset(monkeypatch, tmp_path):
+    """WORLD_ADAPTER_NONROOT unset allows root (warn-only)."""
+    import os
+    monkeypatch.setattr(os, 'getuid', lambda: 0)  # simulate root
+    if 'WORLD_ADAPTER_NONROOT' in os.environ:
+        monkeypatch.delenv('WORLD_ADAPTER_NONROOT', raising=False)
+    from robotics.world_worker.app import create_app
+    app = create_app(root=tmp_path, token=TOKEN)
+    # check_execution_storage should pass for root when nonroot not enforced
+    app.state.check_execution_storage(tmp_path)  # no raise
