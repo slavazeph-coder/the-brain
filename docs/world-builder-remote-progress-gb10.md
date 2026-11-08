@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-Last updated: 2026-11-08T12:00Z
+|Last updated: 2026-11-08T15:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -14,7 +14,20 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - **Commit + push verified:** `3454333` on `hermes/world-builder-gb10`; `git push` → `f84d1ba..3454333`. One file (`mapanything_apache.py` +16/-2). `git status` clean.
 - 4090: not re-probed (run-200 connection-refused; repeat-blocker rule).
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
-- **Next bounded action:** all handoff "open" items closed; pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
+|- **Next bounded action:** all handoff "open" items closed; pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
+
+### Run 205 — 2026-11-08 (GB10: non-root UID enforcement + check_execution_storage exposure committed + pushed)
+
+- Bounded improvement: committed the dirty `robotics/world_worker/app.py` — added `WORLD_ADAPTER_NONROOT` env var enforcement (when set to "1", raises `RuntimeError` if UID is 0) and exposed `check_execution_storage` on `app.state` for test introspection. Also committed `robotics/world_worker/.env.example` with the new env var documentation.
+- New tests in `tests/world/test_worker.py`: `test_nonroot_uid_enforcement_when_set` (root UID + WORLD_ADAPTER_NONROOT=1 → raises), `test_nonroot_uid_warns_when_unset` (root UID + env unset → no raise).
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (170.60 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 14.52 s**
+  - `pytest tests/world/test_worker.py -q` → **54 passed, 3 skipped in 6.86 s**
+- **Commit + push verified:** `6b6145e` on `hermes/world-builder-gb10`; `git push` → `6be5306..6b6145e`. Three files (`app.py` +5/-1, `.env.example` +3, `test_worker.py` +24). `git status` clean.
+- 4090: not probed (repeat-blocker rule; next run alternates).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH (confirm hostname + GPU per `world-builder-4090.json` first).
 
 ### Run 200 — 2026-11-01 (GB10: PLY zflip endian-parity validation added + committed + pushed; 4090 port dead)
 
