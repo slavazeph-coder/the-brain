@@ -19,51 +19,45 @@ import secrets
 import shutil
 import signal
 import sqlite3
+import stat
 import time
-import threading
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from .geometry import MAX_PREVIEW_COORDINATE
+from .geometry import ARENA_CLOUD_MAX_BYTES, MAX_PREVIEW_COORDINATE, load_arena_cloud
 from .auth import Identities, OPERATOR_OWNER
-from .report_receipts import ReportSigner, file_digest, make_payload, validate_evidence, MAX_ARTIFACT_BYTES
 
 MIB = 1024 ** 2
+FILE_BYTES = 200 * MIB  # a photo or a point-cloud hand-off
+VIDEO_BYTES = 2 * 1024 ** 3  # five minutes of 4K30 HEVC is about 1 GB; H.264 or 1080p60 can approach 2
+UPLOADS_BYTES = 6 * 1024 ** 3  # all owners' unfinished and kept uploads together
 ID = re.compile(r"^[a-f0-9]{32}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$")
+# An adapter secret is an environment variable name; the worker's own token and tenants never pass to adapters.
+SECRET_NAME = re.compile(r"^(?!WORLD_WORKER_|WORLD_TENANTS)[A-Z][A-Z0-9_]{0,63}$")
 ACTIVE = ('prepared', 'queued', 'running')
-REPORT_HASH_SECONDS = 15
-REPORT_WAIT_SECONDS = 20
 
 class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=160)
-    kind: Literal['image', 'video']
-    size: int = Field(gt=0, le=200 * MIB, strict=True)
+    kind: Literal['image', 'video', 'cloud', 'capture', 'replay']
+    size: int = Field(gt=0, le=VIDEO_BYTES, strict=True)
 
 class JobBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     engine: str = Field(min_length=1, max_length=64)
     upload_ids: list[str] = Field(min_length=1, max_length=12)
     consent: bool = Field(strict=True)
+    # A finished job of the same owner whose files this one may read (the scene compiler's naming step reads the
+    # reconstruction's frames and camera poses). Only engines configured with "source_job": true accept one.
+    source_job: str | None = Field(default=None, min_length=32, max_length=32)
 
 class TicketBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     artifact: int = Field(ge=0, le=31, strict=True)
-
-class ReportArtifact(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    name: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$', strict=True)
-    sha256: str = Field(pattern=r'^[a-f0-9]{64}$', strict=True)
-
-class ReportBody(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    scenarioSha256: str = Field(pattern=r'^[a-f0-9]{64}$', strict=True)
-    geometrySha256: str | None = Field(pattern=r'^[a-f0-9]{64}$', strict=True)
-    artifactRefs: list[ReportArtifact] = Field(min_length=1, max_length=32)
 
 class Store:
     def __init__(self, root: Path):
@@ -83,14 +77,8 @@ class Store:
             if 'owner_id' not in {row['name'] for row in self.db.execute(f'PRAGMA table_info({table})')}:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN owner_id TEXT NOT NULL DEFAULT '{OPERATOR_OWNER}'")
             self.db.execute(f'CREATE INDEX IF NOT EXISTS {table}_owner ON {table}(owner_id, created)')
-        columns = {row['name'] for row in self.db.execute('PRAGMA table_info(jobs)')}
-        for column in ['source_hashes', 'completed_evidence']:
-            if column not in columns:
-                self.db.execute(f'ALTER TABLE jobs ADD COLUMN {column} TEXT')
-            self.db.execute(f'''CREATE TRIGGER IF NOT EXISTS {column}_immutable
-                BEFORE UPDATE OF {column} ON jobs
-                WHEN OLD.{column} IS NOT NULL AND NEW.{column} IS NOT OLD.{column}
-                BEGIN SELECT RAISE(ABORT, 'Completed/source evidence is immutable'); END''')
+        if 'source_job' not in {row['name'] for row in self.db.execute('PRAGMA table_info(jobs)')}:
+            self.db.execute('ALTER TABLE jobs ADD COLUMN source_job TEXT')
         self.db.execute("UPDATE jobs SET status='failed', error='Worker restarted; execution was interrupted.' WHERE status IN ('queued','running')")
         self.db.commit()
 
@@ -113,30 +101,7 @@ class Store:
         value = dict(row)
         value['upload_ids'] = json.loads(value.pop('uploads'))
         value['artifacts'] = json.loads(value['artifacts'] or '[]')
-        value.pop('source_hashes', None)
-        value.pop('completed_evidence', None)
         return value
-
-    def record_sources(self, jid, sources):
-        changed = self.db.execute("UPDATE jobs SET source_hashes=? WHERE id=? AND status='running' AND source_hashes IS NULL",
-                                  (json.dumps(sources, sort_keys=True, separators=(',', ':')), jid)).rowcount
-        self.db.commit()
-        return changed == 1
-
-    def complete(self, jid, sources, artifacts):
-        evidence = validate_evidence({'authority': 'worker-verified-bytes', 'sources': sources,
-            'artifacts': [{key: item[key] for key in ['name', 'kind', 'size', 'sha256']} for item in artifacts]})
-        original = json.dumps(sources, sort_keys=True, separators=(',', ':'))
-        self.db.execute("UPDATE jobs SET status='complete',error=NULL,artifacts=?,completed_evidence=? WHERE id=? AND status='running' AND source_hashes=? AND completed_evidence IS NULL",
-                        (json.dumps(artifacts), json.dumps(evidence, sort_keys=True, separators=(',', ':')), jid, original))
-        self.db.commit()
-
-    def evidence(self, jid, owner_id):
-        job = self.job(jid, owner_id)
-        row = self.db.execute('SELECT completed_evidence FROM jobs WHERE id=? AND owner_id=?', (jid, owner_id)).fetchone()
-        if job['status'] != 'complete' or not row['completed_evidence']:
-            raise HTTPException(409, 'This job has no immutable completed source evidence. Run a new job before requesting a receipt.')
-        return validate_evidence(json.loads(row['completed_evidence']))
 
     def state(self, jid, state, error=None, artifacts=None):
         self.db.execute('UPDATE jobs SET status=?, error=?, artifacts=? WHERE id=?',
@@ -209,6 +174,27 @@ def sha256_file(path: Path) -> str:
 
 
 def validate_media(path: Path, kind: str):
+    if kind == 'replay':
+        from .demo_replay import read_json, validate_options
+        try:
+            validate_options(read_json(path, 8192))
+        except (OSError, ValueError, TypeError) as error:
+            raise HTTPException(422, str(error)[:300])
+        return
+    if kind == 'capture':
+        from .native_capture import read_metadata
+        try:
+            read_metadata(path)
+        except (OSError, ValueError) as error:
+            raise HTTPException(422, str(error)[:300])
+        return
+    if kind == 'cloud':
+        # A browser point-cloud hand-off is data, not media: parse it strictly and refuse anything outside the schema.
+        try:
+            load_arena_cloud(path)
+        except (OSError, ValueError) as error:
+            raise HTTPException(422, str(error)[:300])
+        return
     with path.open('rb') as stream:
         header = stream.read(32)
     if kind == 'image':
@@ -234,12 +220,44 @@ def configured_engines(config):
         if not Path(command[0]).is_absolute() or not Path(command[0]).is_file():
             raise ValueError('Adapter executable must be an existing absolute path.')
         kinds = entry.get('input_kinds', [])
-        if not kinds or any(k not in ['image', 'video'] for k in kinds):
+        if not kinds or any(k not in ['image', 'video', 'cloud', 'capture', 'replay'] for k in kinds):
             raise ValueError('Invalid adapter input kinds.')
+        # Secrets this adapter alone receives from the worker's environment, by name (for example ANTHROPIC_API_KEY).
+        secrets_ = entry.get('secrets', [])
+        if not isinstance(secrets_, list) or len(secrets_) > 4 or not all(isinstance(x, str) and SECRET_NAME.fullmatch(x) for x in secrets_):
+            raise ValueError('Adapter secrets must be up to four environment variable names.')
+        naming = entry.get('object_naming')
+        if naming is not None and not (isinstance(naming, dict) and set(naming) <= {'provider', 'model'}
+                                       and all(isinstance(v, str) and 0 < len(v) <= 80 for v in naming.values())):
+            raise ValueError('object_naming must name a provider and a model.')
+        detection = entry.get('object_detection')
+        if detection is not None and not (isinstance(detection, dict) and set(detection) <= {'provider', 'model'}
+                                          and all(isinstance(v, str) and 0 < len(v) <= 80 for v in detection.values())):
+            raise ValueError('object_detection must name a provider and a model.')
+        if entry.get('source_job') not in (None, True, False):
+            raise ValueError('source_job must be true or false.')
+        for feature in ('dimension_checks', 'bim_review'):
+            if feature in entry and type(entry[feature]) is not bool:
+                raise ValueError(f'{feature} must be true or false.')
         engines[eid] = {**entry, 'available': entry.get('enabled') is True and entry.get('license_reviewed') is True,
                         'max_inputs': min(12, max(1, int(entry.get('max_inputs', 1)))),
                         'timeout_seconds': min(3600, max(1, int(entry.get('timeout_seconds', 1800))))}
     return engines
+
+
+def directory_bytes(directory):
+    """Bytes in regular files under directory. The adapter keeps writing and deleting while this runs, so a file or
+    folder that vanishes between listing and stat simply no longer counts."""
+    total = 0
+    for root, _, files in os.walk(directory):  # os.walk skips folders that disappear mid-walk
+        for name in files:
+            try:
+                info = os.lstat(os.path.join(root, name))
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(info.st_mode):
+                total += info.st_size
+    return total
 
 
 def visual_metadata(entry):
@@ -248,7 +266,9 @@ def visual_metadata(entry):
         return {}
     if entry['representation'] not in ['point-cloud', 'gaussian-splat', 'triangle-mesh']:
         raise ValueError('Unknown visual representation.')
-    result = {'representation': entry['representation'], 'units': 'arbitrary'}
+    # An adapter may say its output is in metres (a scene compiled from a user-measured cloud); that stays a hint, and
+    # metric_verified is always false. Anything else reads as arbitrary.
+    result = {'representation': entry['representation'], 'units': 'm' if entry.get('units') == 'm' else 'arbitrary'}
     if 'coordinate_frame' in entry:
         if entry['coordinate_frame'] not in ['right-handed-y-up', 'colmap', 'unknown']:
             raise ValueError('Unknown visual coordinate frame.')
@@ -272,37 +292,35 @@ def visual_metadata(entry):
     return result
 
 
-def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, report_key: str | None = None, ttl: int = 86400,
-               storage_limit: int = 20 * 1024 ** 3, job_limit: int = 4 * 1024 ** 3):
+def create_app(*, root: Path | None = None, token: str | None = None, adapters: str | None = None, tenants: str | None = None, ttl: int = 86400,
+               storage_limit: int | None = None, job_limit: int = 4 * 1024 ** 3):
     token = token or os.environ.get('WORLD_WORKER_TOKEN', '')
+    if storage_limit is None:  # WORLD_STORAGE_BYTES: below the disk's size, e.g. 9 GiB on a 10 GB Railway volume
+        value = os.environ.get('WORLD_STORAGE_BYTES', '')
+        storage_limit = int(value) if value.isdigit() else 20 * 1024 ** 3
     if len(token) < 32:
         raise RuntimeError('Set WORLD_WORKER_TOKEN to a random secret of at least 32 characters.')
     if type(storage_limit) is not int or type(job_limit) is not int or not 0 < job_limit < storage_limit - MIB:
         raise ValueError('Storage capacity must exceed the positive job budget plus metadata reserve.')
     engines = configured_engines(adapters or os.environ.get('WORLD_ADAPTERS_FILE'))
-    identities = Identities(token, tenants or os.environ.get('WORLD_TENANTS_FILE'), engines, storage_limit)
-    directory = (root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data'))).resolve()
-    key_path = report_key or os.environ.get('WORLD_REPORT_SIGNING_KEY')
-    signer = None
-    if key_path:
-        if Path(key_path).resolve().is_relative_to(directory):
-            raise RuntimeError('Keep the report signing key outside worker source/artifact storage.')
+    # Pinned operator-installed packages only; no downloads from user jobs.
+    simready_assets, simready_error = [], None
+    if engines.get('omniverse-pack', {}).get('available'):
         try:
-            signer = ReportSigner(key_path)
-        except ImportError as error:
-            raise RuntimeError('Configured report signing requires requirements-report-receipts.txt.') from error
-        except (OSError, ValueError) as error:
-            raise RuntimeError('Configured report signing key is unavailable or invalid.') from error
+            from .omniverse_pack import installed_assets
+            simready_assets = installed_assets(Path('/opt/brainsnn-simready'))
+        except Exception as error:
+            logging.getLogger(__name__).warning('SimReady catalog unavailable (%s)', type(error).__name__)
+            simready_error = 'Installed library failed verification; library additions unavailable.'
+    identities = Identities(token, tenants or os.environ.get('WORLD_TENANTS_FILE'), engines, storage_limit)
     # Never sign capabilities with a credential handed to any browser, including
     # the legacy operator credential. Restart intentionally expires old tickets.
     ticket_key = secrets.token_bytes(32)
-    store = Store(directory)
+    store = Store(root or Path(os.environ.get('WORLD_WORKER_DIR', './world-worker-data')))
     queue: asyncio.Queue = asyncio.Queue(maxsize=8)
     processes = {}
-    hash_cancellations = {}
     running = set()
     io_lock = asyncio.Lock()
-    report_task = None
 
     def check_storage(extra=0, principal=None):
         if store.storage_commitment(job_limit, running) + extra > storage_limit:
@@ -321,7 +339,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             raise HTTPException(429,'Owner job quota reached. Finish or cancel active work and delete old jobs.')
 
     def check_execution_storage(directory):
-        total = sum(path.stat().st_size for path in directory.rglob('*') if path.is_file() and not path.is_symlink())
+        total = directory_bytes(directory)
         if total > job_limit:
             raise ValueError('Adapter exceeded its disk budget.')
         if store.storage_commitment(job_limit, running) > storage_limit:
@@ -354,7 +372,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if not isinstance(entry, dict):
                 raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.png','.jpg','.mp4','.csv']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt']:
                 raise ValueError('Unsafe artifact name or type.')
             seen.add(name)
             path = out / name
@@ -368,7 +386,6 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def execute(jid):
         directory = store.root / 'jobs' / jid
         out = directory / 'output'
-        hash_cancelled = threading.Event()
         try:
             async with io_lock:
                 try:
@@ -389,40 +406,58 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                     return
                 store.state(jid, 'running')
                 running.add(jid)
-                hash_cancellations[jid] = hash_cancelled
             directory.mkdir(exist_ok=True)
             out.mkdir(exist_ok=True)
             items = [store.upload(i, job['owner_id']) for i in job['upload_ids']]
             inputs = []
-            source_hashes = []
             for item in items:
                 path = store.upload_path(item['id'], job['owner_id'])
                 validate_media(path, item['kind'])
                 inputs.append({'path': str(path), 'name': item['name'], 'kind': item['kind'], 'size': item['size']})
-                source_hashes.append({'id': item['id'], 'kind': item['kind'], 'size': item['size'],
-                                      'sha256': await asyncio.to_thread(file_digest, path, item['size'], cancelled=hash_cancelled)})
-            async with io_lock:
-                principal = identities.owner(job['owner_id'])
-                if principal is None or job['engine'] not in principal.engines:
-                    store.state(jid, 'failed', 'Owner access or engine authorization was revoked before execution.')
-                    return
-                check_owner_jobs(principal)
-                check_storage(principal=principal)
-                if not store.record_sources(jid, source_hashes): return
+            request = {'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(out)}
+            if job.get('source_job'):
+                # Read-only access to the same owner's earlier job, checked again here: if it was deleted since, the
+                # adapter runs without it and says so.
+                try:
+                    source = store.job(job['source_job'], job['owner_id'])
+                    request['source'] = {'job': source['id'], 'engine': source['engine'], 'path': str(store.root / 'jobs' / source['id'])}
+                    if job['engine'] == 'demo-replay':
+                        # Follow only server-stored same-owner job relationships.
+                        # Browser options never select a filesystem path or a
+                        # second owner's reconstruction, even after BIM rebuilds.
+                        ancestor, seen = source, set()
+                        for _ in range(8):
+                            if ancestor['id'] in seen or ancestor['status'] != 'complete':
+                                break
+                            seen.add(ancestor['id'])
+                            parent = store.root / 'jobs' / ancestor['id']
+                            if (parent / 'output/camera-frames.json').is_file():
+                                request['source']['reconstruction'] = {'job': ancestor['id'], 'engine': ancestor['engine'], 'path': str(parent)}
+                                break
+                            if not ancestor.get('source_job'):
+                                break
+                            ancestor = store.job(ancestor['source_job'], job['owner_id'])
+                        else:
+                            ancestor = None
+                        if 'reconstruction' not in request['source']:
+                            request['source']['reconstruction'] = {'missing': True}
+                except HTTPException:
+                    request['source'] = {'job': job['source_job'], 'missing': True}
             request_file = directory / 'input.json'
-            request_file.write_text(json.dumps({'schema': 'brainsnn.adapter.v1', 'inputs': inputs, 'output_dir': str(out)}))
+            request_file.write_text(json.dumps(request))
             if job['engine'] == 'inspect':
                 rows = []
-                for item, original in zip(inputs, source_hashes):
-                    rows.append({k: v for k, v in item.items() if k != 'path'} | {'sha256': original['sha256']})
+                for item in inputs:
+                    rows.append({k: v for k, v in item.items() if k != 'path'} | {'sha256': await asyncio.to_thread(sha256_file, Path(item['path']))})
                 (out / 'capture-integrity.json').write_text(json.dumps({'schema': 'brainsnn.capture.v1', 'sources': rows, 'model_executed': False, 'claim': 'File integrity only; no geometry or semantic inference.'}, indent=2))
                 (out / 'manifest.json').write_text(json.dumps({'artifacts': [{'name': 'capture-integrity.json', 'kind': 'integrity'}]}))
             else:
                 entry = engines[job['engine']]
                 command = [arg.replace('{input_manifest}', str(request_file)).replace('{output_dir}', str(out)) for arg in entry['command']]
                 # The worker secret is deliberately excluded from adapter environments.
-                env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR','WORLD_VLM_ENABLED','WORLD_VLM_BASE_URL','WORLD_VLM_MODEL','WORLD_VLM_REVISION','WORLD_VLM_API_KEY']}
+                env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR','WORLD_LINGBOT_SOURCE_DIR','WORLD_LINGBOT_MODEL_PATH','WORLD_LINGBOT_BACKEND','WORLD_VLM_ENABLED','WORLD_VLM_BASE_URL','WORLD_VLM_MODEL','WORLD_VLM_REVISION','WORLD_VLM_API_KEY']}
                 env.update({'PYTHONUNBUFFERED':'1','HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'})
+                env.update({k: os.environ[k] for k in entry.get('secrets', []) if os.environ.get(k)})
                 with (directory / 'operator.log').open('wb') as log:
                     proc = await asyncio.create_subprocess_exec(*command, cwd=str(directory), env=env, stdout=log, stderr=log, start_new_session=os.name=='posix')
                     processes[jid] = proc
@@ -438,9 +473,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             async with io_lock:
                 check_execution_storage(directory)
             artifacts = await asyncio.to_thread(artifact_manifest, out)
-            for item in source_hashes:
-                await asyncio.to_thread(file_digest, store.upload_path(item['id'], job['owner_id']), item['size'], expected_sha256=item['sha256'], cancelled=hash_cancelled)
-            if store.job(jid)['status'] != 'cancelled': store.complete(jid, source_hashes, artifacts)
+            if store.job(jid)['status'] != 'cancelled': store.state(jid, 'complete', artifacts=artifacts)
         except asyncio.CancelledError:
             await stop_process(jid)
             if store.job(jid)['status'] != 'cancelled': store.state(jid,'failed','Worker stopped during execution.')
@@ -449,8 +482,6 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             await stop_process(jid)
             if store.job(jid)['status'] != 'cancelled': store.state(jid, 'failed', str(error)[:300])
         finally:
-            hash_cancelled.set()
-            hash_cancellations.pop(jid, None)
             processes.pop(jid, None)
             running.discard(jid)
 
@@ -485,8 +516,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.middleware('http')
     async def security(request: Request, call_next):
         is_download = request.url.path.startswith('/v1/download/') and request.method in ['GET','HEAD']
-        public_key_read = request.url.path == '/v1/report-key' and request.method in ['GET', 'HEAD']
-        needs_auth = request.method != 'OPTIONS' and request.url.path != '/healthz' and not is_download and not public_key_read
+        needs_auth = request.method != 'OPTIONS' and request.url.path != '/healthz' and not is_download
         def authorize():
             try:
                 principal = identities.authenticate(request.headers.get('authorization', '')) if len(request.headers.getlist('authorization')) == 1 else None
@@ -527,30 +557,36 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.get('/healthz')
     async def health(): return {'status':'ok','public_processing':False}
 
-    @app.api_route('/v1/report-key', methods=['GET', 'HEAD'])
-    async def report_public_key():
-        if signer is None: raise HTTPException(503, 'Report signing is not configured.')
-        return signer.public_key()
-
     @app.get('/v1/capabilities')
     async def capabilities(request:Request):
         principal = request.state.principal
         return {'api_version':'brainsnn.worker.v1','operator_only':True,
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
-                'reportSigning':{'available':signer is not None,'algorithm':'Ed25519','keyId':signer.public_key()['keyId'] if signer else None},
-                'engines':[{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']} for e in engines.values() if e['id'] in principal.engines],
-                'limits':{'file_bytes':200*MIB,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
+                **({'simready_assets':simready_assets,'simready_error':simready_error}
+                   if 'omniverse-pack' in principal.engines and engines.get('omniverse-pack',{}).get('available') else {}),
+                'engines':[{**{k:e.get(k) for k in ['id','label','available','input_kinds','max_inputs']},
+                            # Naming is offered only when the adapter's secrets are actually set on this worker.
+                            **({'object_naming':e['object_naming']} if e.get('object_naming') and all(os.environ.get(x) for x in e.get('secrets', [])) else {}),
+                            # A detector on the worker needs no secret, and no frame leaves the worker.
+                            **({'object_detection':e['object_detection']} if e.get('object_detection') else {})}
+                            | {feature: True for feature in ('dimension_checks', 'bim_review') if e.get(feature) is True}
+                           for e in engines.values() if e['id'] in principal.engines],
+                'limits':{'file_bytes':FILE_BYTES,'video_bytes':VIDEO_BYTES,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
     @app.post('/v1/uploads',status_code=201)
     async def create_upload(body: UploadBody, request:Request):
         principal = request.state.principal
         suffix=Path(body.name).suffix.lower()
-        if suffix not in (['.jpg','.jpeg','.png','.webp'] if body.kind=='image' else ['.mp4','.mov','.webm']): raise HTTPException(422,'Unsupported file type.')
+        if suffix not in {'image':['.jpg','.jpeg','.png','.webp'],'video':['.mp4','.mov','.webm'],'cloud':['.json'],'capture':['.json'],'replay':['.json']}[body.kind]: raise HTTPException(422,'Unsupported file type.')
+        if body.kind=='replay' and body.size>8192: raise HTTPException(422,'Replay requests are limited to 8 KiB.')
+        if body.kind=='capture' and body.size>MIB: raise HTTPException(422,'Native capture metadata is limited to 1 MiB.')
+        if body.kind=='cloud' and body.size>ARENA_CLOUD_MAX_BYTES: raise HTTPException(422,'Point-cloud hand-offs are limited to 16 MiB.')
+        if body.kind!='video' and body.size>FILE_BYTES: raise HTTPException(422,'Photos are limited to 200 MiB; videos to 2 GiB.')
         async with io_lock:
             store.prune(ttl, running)
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads').fetchone()
-            if count>=50 or reserved+body.size>2*1024**3:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
+            if count>=50 or reserved+body.size>UPLOADS_BYTES:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads WHERE owner_id=?',(principal.owner_id,)).fetchone()
             if count >= principal.limits['upload_count'] or reserved + body.size > principal.limits['upload_bytes']:
                 raise HTTPException(429,'Owner upload quota reached. Delete old sources or wait for expiry.')
@@ -604,9 +640,12 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 item=store.upload(uid, principal.owner_id)
                 if item['offset']!=item['size'] or item['kind'] not in engine['input_kinds']:raise HTTPException(422,'Incomplete or unsupported source.')
                 validate_media(store.upload_path(uid, principal.owner_id),item['kind'])
+            if body.source_job is not None:
+                if engine.get('source_job') is not True:raise HTTPException(422,'This engine does not read an earlier job.')
+                if store.job(body.source_job, principal.owner_id)['status']!='complete':raise HTTPException(409,'The earlier job has not completed.')
             check_storage(job_limit, principal)
             jid=secrets.token_hex(16)
-            store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id) VALUES (?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id));store.db.commit()
+            store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id,source_job) VALUES (?,?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id,body.source_job));store.db.commit()
             return store.job(jid, principal.owner_id)
 
     @app.post('/v1/jobs/{jid}/start')
@@ -636,9 +675,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         async with io_lock:
             job=store.job(jid, owner)
             active=job['status'] in ACTIVE
-            if active:
-                store.state(jid,'cancelled')
-                if jid in hash_cancellations: hash_cancellations[jid].set()
+            if active:store.state(jid,'cancelled')
         if active:await stop_process(jid)
         return store.job(jid, owner)
 
@@ -660,62 +697,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         raw=json.dumps({'owner':principal.owner_id,'credential':principal.credential_hash,'job':jid,'artifact':body.artifact,'expires':int(time.time())+60},separators=(',',':')).encode()
         payload=base64.urlsafe_b64encode(raw).decode().rstrip('=')
         sig=hmac.new(ticket_key,payload.encode(),hashlib.sha256).hexdigest()
-        return {'url':f'/v1/download/{payload}.{sig}','expires_in':60}
-
-    @app.post('/v1/jobs/{jid}/report-receipt')
-    async def report_receipt(jid:str, body:ReportBody, request:Request):
-        nonlocal report_task
-        principal = request.state.principal
-        async with io_lock:
-            job = store.job(jid, principal.owner_id)
-            if signer is None: raise HTTPException(503, 'Report signing is not configured.')
-            evidence = store.evidence(jid, principal.owner_id)
-            available = {item['name']: item for item in evidence['artifacts']}
-            if len({item.name for item in body.artifactRefs}) != len(body.artifactRefs):
-                raise HTTPException(422, 'Artifact references must be unique.')
-            selected = []
-            for ref in body.artifactRefs:
-                entry = available.get(ref.name)
-                if entry is None or ref.sha256 != entry['sha256']:
-                    raise HTTPException(409, 'Artifact references do not match the completed job.')
-                selected.append(entry)
-            if sum(item['size'] for item in selected) > MAX_ARTIFACT_BYTES:
-                raise HTTPException(413, 'Signed receipt verification is limited to 256 MiB of selected artifacts.')
-            if report_task is not None and not report_task.done():
-                raise HTTPException(429, 'Another report verification is running. Try again after it finishes.')
-            cancelled = threading.Event()
-            def check_artifacts():
-                deadline = time.monotonic() + REPORT_HASH_SECONDS
-                for item in selected:
-                    path = store.root / 'jobs' / jid / 'output' / item['name']
-                    file_digest(path, item['size'], expected_sha256=item['sha256'], deadline=deadline, cancelled=cancelled)
-            task = report_task = asyncio.create_task(asyncio.to_thread(check_artifacts))
-            # A disconnected request must not release the slot while its thread
-            # is still doing IO. This task stays busy until the thread returns.
-            task.add_done_callback(lambda done: done.exception() if not done.cancelled() else None)
-        try:
-            await asyncio.wait_for(asyncio.shield(task), REPORT_WAIT_SECONDS)
-        except (TimeoutError, asyncio.TimeoutError):
-            raise HTTPException(504, 'Report evidence verification exceeded its time budget.') from None
-        except (OSError, ValueError):
-            raise HTTPException(409, 'A selected artifact is missing or changed. No receipt was signed.') from None
-        finally:
-            cancelled.set()
-        # Verification awaited IO: a revoked identity or deleted job must not
-        # receive a fresh signature based on the earlier authorization snapshot.
-        async with io_lock:
-            try:
-                current = identities.authenticate(request.headers.get('authorization', ''))
-            except (OSError, ValueError):
-                raise HTTPException(503, 'Tenant access configuration is unavailable.') from None
-            if current is None or current.owner_id != principal.owner_id or current.credential_hash != principal.credential_hash:
-                raise HTTPException(401, 'Unauthorized.')
-            if store.evidence(jid, principal.owner_id) != evidence:
-                raise HTTPException(409, 'Job evidence changed during verification.')
-            payload = make_payload(signer.public_key()['keyId'], principal.owner_id, job,
-                {'authority':'worker-verified-bytes','sources':evidence['sources'],'artifacts':selected},
-                body.scenarioSha256, body.geometrySha256)
-            return signer.sign(payload)
+        # Behind a reverse-proxy prefix (ASGI root_path) the ticket must stay under that prefix, as clients check.
+        prefix=str(request.scope.get('root_path') or '').rstrip('/')
+        return {'url':f'{prefix}/v1/download/{payload}.{sig}','expires_in':60}
 
     @app.api_route('/v1/download/{ticket}',methods=['GET','HEAD'])
     async def download(ticket:str):

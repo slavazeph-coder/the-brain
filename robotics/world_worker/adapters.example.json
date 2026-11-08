@@ -26,12 +26,34 @@
       "video"
     ],
     "max_inputs": 12,
-    "timeout_seconds": 1800,
+    "timeout_seconds": 3600,
     "command": [
       "/absolute/path/to/colmap-venv/bin/python",
       "/absolute/path/to/the-brain/robotics/world_worker/sparse_colmap.py",
       "--input-manifest",
       "{input_manifest}"
+    ]
+  },
+  {
+    "id": "colmap-dense-cpu",
+    "label": "Multi-view reconstruction with dense points (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image",
+      "video"
+    ],
+    "max_inputs": 12,
+    "timeout_seconds": 3600,
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/sparse_colmap.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--densify-model",
+      "/absolute/path/to/depth-anything-v2-small/onnx/model.onnx",
+      "--scale-model",
+      "/absolute/path/to/moge-2-vitb-normal-onnx/model.onnx"
     ]
   },
   {
@@ -53,6 +75,24 @@
     ]
   },
   {
+    "id": "lingbot-map-stream",
+    "label": "Streaming video reconstruction, every frame posed (GPU qualification required)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image",
+      "video"
+    ],
+    "max_inputs": 12,
+    "timeout_seconds": 1800,
+    "command": [
+      "/absolute/path/to/lingbot-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/lingbot_map_stream.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
+  },
+  {
     "id": "world-observations",
     "label": "Source-frame object observations (local VLM)",
     "enabled": false,
@@ -66,6 +106,118 @@
     "command": [
       "/absolute/path/to/observations-venv/bin/python",
       "/absolute/path/to/the-brain/robotics/world_worker/observations.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
+  },
+  {
+    "id": "scene-usd",
+    "label": "Simulation scene (GLB/USD/IFC) from a walkthrough",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "video",
+      "cloud"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 3600,
+    "source_job": true,
+    "secrets": [
+      "ANTHROPIC_API_KEY"
+    ],
+    "object_naming": {
+      "provider": "Anthropic",
+      "model": "claude-opus-5-5"
+    },
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/scene_usd.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--blender",
+      "/usr/bin/blender",
+      "--detector-model",
+      "/absolute/path/to/mediapipe-models/efficientdet_lite2.tflite"
+    ],
+    "object_detection": {
+      "provider": "on-worker detector",
+      "model": "EfficientDet-Lite2 (COCO)"
+    },
+    "dimension_checks": true,
+    "bim_review": true
+  },
+  {
+    "id": "reference-scale",
+    "label": "Scale from standard-size references (sends frames to Anthropic)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "cloud"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 600,
+    "source_job": true,
+    "secrets": [
+      "ANTHROPIC_API_KEY"
+    ],
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/reference_scale.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
+  },
+  {
+    "id": "locate-photo",
+    "label": "Find where a photo was taken in a reconstruction (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 300,
+    "source_job": true,
+    "command": [
+      "/absolute/path/to/colmap-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/locate_photo.py",
+      "--input-manifest",
+      "{input_manifest}"
+    ]
+  },
+  {
+    "id": "photo-metric",
+    "label": "One photo to a 3D preview in estimated metres (CPU)",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "image"
+    ],
+    "max_inputs": 1,
+    "timeout_seconds": 300,
+    "command": [
+      "/absolute/path/to/colmap-dense-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/photo_metric.py",
+      "--input-manifest",
+      "{input_manifest}",
+      "--model",
+      "/absolute/path/to/moge-2-vitb-normal-onnx/model.onnx"
+    ]
+  },
+  {
+    "id": "demo-replay",
+    "label": "Demo videos from saved reconstruction outputs",
+    "enabled": false,
+    "license_reviewed": false,
+    "input_kinds": [
+      "replay"
+    ],
+    "max_inputs": 1,
+    "source_job": true,
+    "timeout_seconds": 900,
+    "command": [
+      "/absolute/path/to/demo-venv/bin/python",
+      "/absolute/path/to/the-brain/robotics/world_worker/demo_replay.py",
       "--input-manifest",
       "{input_manifest}"
     ]
