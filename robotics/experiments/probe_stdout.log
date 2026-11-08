@@ -1,0 +1,3 @@
+loading model...
+FAIL
+{"status": "failed", "steps": {}, "error": "TypeError: MapAnything.__init__() got an unexpected keyword argument 'low_cpu_mem_usage'"}

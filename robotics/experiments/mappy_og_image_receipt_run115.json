@@ -1,0 +1,29 @@
+{
+  "run": 115,
+  "host": "4090-vast",
+  "hostname": "d130b6c7f3f4",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "python": "3.10.13",
+  "torch": "2.5.1+cu121",
+  "cuda_available": true,
+  "device": "cuda:0",
+  "source": {
+    "mapanything": "/workspace/slava/map-anything",
+    "mapanything_rev": "4b371c4e",
+    "dinov2_rev": "7764ea0f",
+    "weights": "/workspace/slava/models/map-anything-apache/00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a"
+  },
+  "image": "/workspace/slava/the-brain/brainsnn-r3f-app/public/og-image.png",
+  "steps": {
+    "build_s": 130.52,
+    "load_s": 0.78
+  },
+  "outputs": {
+    "weights_file": "/workspace/slava/models/map-anything-apache/00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a/model.safetensors",
+    "missing_keys": 140,
+    "unexpected_keys": 64
+  },
+  "status": "failed",
+  "error": "TypeError: MapAnything.infer() got an unexpected keyword argument 'data_norm_type'",
+  "tb": "Traceback (most recent call last):\n  File \"/workspace/slava/the-brain/robotics/experiments/mappy_og_image_probe_run115.py\", line 137, in <module>\n    pred = m.infer(views=x, data_norm_type=\"imagenet\")\n  File \"/workspace/slava/build-runtime/recon-venv/lib/python3.10/site-packages/torch/utils/_contextlib.py\", line 116, in decorate_context\n    return func(*args, **kwargs)\nTypeError: MapAnything.infer() got an unexpected keyword argument 'data_norm_type'\n"
+}

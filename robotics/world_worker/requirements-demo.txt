@@ -1,0 +1,4 @@
+# CPU-only saved-output rendering. FFmpeg/libx264 and fonts are system dependencies.
+numpy==2.5.4
+Pillow==12.1.0
+trimesh==4.9.0

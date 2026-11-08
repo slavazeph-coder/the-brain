@@ -1,0 +1,22 @@
+{
+  "run": 71,
+  "host": "4090-vast",
+  "hostname": "d130b6c7f3f4",
+  "gpu": "NVIDIA GeForce RTX 4090",
+  "python": "3.10.13",
+  "torch": "2.5.1+cu121",
+  "cuda_available": true,
+  "device": "cuda:0",
+  "source": {
+    "mapanything": "/workspace/slava/map-anything",
+    "mapanything_rev": "4b371c4e",
+    "dinov2_rev": "7764ea0f",
+    "weights": "/workspace/slava/models/map-anything-apache/00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a"
+  },
+  "image": "/workspace/slava/the-brain/brainsnn-r3f-app/public/og-image.png",
+  "steps": {},
+  "outputs": {},
+  "status": "failed",
+  "error": "TypeError: MapAnything.__init__() got an unexpected keyword argument 'low_cpu_mem_usage'",
+  "tb": "Traceback (most recent call last):\n  File \"/workspace/slava/the-brain/robotics/experiments/mappy_og_image_probe.py\", line 44, in <module>\n    m = MapAnything.from_pretrained(RECEIPT[\"source\"][\"weights\"], low_cpu_mem_usage=True, torch_dtype=torch.float16)\n  File \"/workspace/slava/build-runtime/recon-venv/lib/python3.10/site-packages/huggingface_hub/utils/_validators.py\", line 89, in _inner_fn\n    return fn(*args, **kwargs)\n  File \"/workspace/slava/build-runtime/recon-venv/lib/python3.10/site-packages/huggingface_hub/hub_mixin.py\", line 550, in from_pretrained\n    instance = cls._from_pretrained(\n  File \"/workspace/slava/map-anything/mapanything/models/mapanything/model.py\", line 104, in _from_pretrained\n    return super()._from_pretrained(**kwargs)\n  File \"/workspace/slava/build-runtime/recon-venv/lib/python3.10/site-packages/huggingface_hub/hub_mixin.py\", line 766, in _from_pretrained\n    model = cls(**model_kwargs)\nTypeError: MapAnything.__init__() got an unexpected keyword argument 'low_cpu_mem_usage'\n"
+}

@@ -1,0 +1,17 @@
+# The lingbot-map-stream engine (lingbot_map_stream.py), in its own GPU environment, Python 3.11 (numpy 2.4 also runs on 3.10 and 3.12).
+# PyTorch 2.8.0 is the upstream recommendation; install the CUDA 12.8 wheels first:
+#   pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+# LingBot-Map itself is not installed from here: clone github.com/robbyant/lingbot-map at the pinned revision
+# (lingbot_map_stream.SOURCE_REVISION) and point WORLD_LINGBOT_SOURCE_DIR at it; the adapter imports only that checkout.
+# The checkpoint is provisioned by the operator and pinned by hash (docs/hermes-gpu-tasks.md section 6).
+# Checked on CPU with these versions: the real architecture with random weights, through the adapter's own code.
+torch==2.8.0
+torchvision==0.23.0
+numpy==2.4.6
+Pillow==12.1.0
+opencv-python-headless==4.14.0.94
+einops==0.8.2
+safetensors==0.8.0
+scipy==1.17.1
+tqdm==4.70.1
+huggingface_hub==2.3.0

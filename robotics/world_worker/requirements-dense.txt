@@ -1,0 +1,5 @@
+# The colmap-dense-cpu engine: the CPU reconstruction environment plus ONNX Runtime for the pinned depth model.
+# The model file itself is provisioned by the operator (onnx-community/depth-anything-v2-small @ 4472b736, onnx/model.onnx,
+# sha256 afb6a5c2...df10c, Apache-2.0); the adapter refuses any other file. Nothing is downloaded at run time.
+-r requirements-colmap.txt
+onnxruntime==1.22.1

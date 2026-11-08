@@ -1,0 +1,5 @@
+# Object naming in the scene-usd engine: the CPU reconstruction environment plus the Anthropic SDK.
+# The adapter calls Claude only when the person approves it for a job, with ANTHROPIC_API_KEY passed to this adapter alone
+# (adapters.json "secrets"); without the key the site does not offer naming.
+-r requirements-colmap.txt
+anthropic==2.3.0
