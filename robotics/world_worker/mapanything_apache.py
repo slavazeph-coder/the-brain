@@ -155,8 +155,22 @@ def run(request):
         raise ValueError('Use 1–12 photos or one walkthrough video.')
     source, dino, snapshot = local_installation()
     os.environ.update({'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'HF_HUB_DISABLE_TELEMETRY': '1'})
-    sys.addaudithook(deny_network)
-    sys.path.insert(0, str(source))
+    # addaudithook returns None in Python 3.14; removeaudithook may not exist.
+    # Store the hook function and remove by identity via sys._audit_hooks.
+    hook_fn = deny_network
+    sys.addaudithook(hook_fn)
+    try:
+        sys.path.insert(0, str(source))
+        return _run_body(request, source, dino, snapshot, items, photos, video)
+    finally:
+        # Remove by identity: find and delete the hook function from the list.
+        hooks = getattr(sys, '_audit_hooks', None)
+        if hooks is not None:
+            hooks[:] = [h for h in hooks if h is not hook_fn]
+
+
+def _run_body(request, source, dino, snapshot, items, photos, video):
+    """Body of run() with the audit hook already installed."""
     if importlib.metadata.version('uniception') != '0.1.7':
         raise RuntimeError('Install the reviewed uniception==0.1.7 dependency.')
     import torch
