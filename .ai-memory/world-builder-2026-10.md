@@ -298,14 +298,19 @@ The owner chose this as the interim for the photo leg while Lyra is blocked.
 Idea from Chaitanya Bharech's "2D to 4D using AI" LinkedIn post: PDF bridge drawings to a Blender model, IFC and a
 drone-style flythrough whose captions name each component. In that post the AI also asked questions about drawing
 inconsistencies before modelling.
-- **Export tab:** "Make a share video ↗" records about 25 s in the browser with `share-video.mjs` (MediaRecorder on a canvas
+- **Export tab:** "Make a share video ↗" records under 30 s in the browser with `share-video.mjs` (MediaRecorder on a canvas
   stream; no worker or GPU).
   - Scenes: a title card, then an orbit with the size, obstacle count and unknown area, then the 3 largest obstacles
     called out with name and size, then the route replay with the run's numbers, then a closing card.
   - Every scene carries `scaleLabel(world)` (authored / estimated / measured / assumed, plus "checked by you").
   - Format: MP4 (H.264) where the browser offers it, else WebM. The container's Chromium build records VP9 in MP4; real
     Chrome and Safari give H.264.
-- **Renderer:** `createRenderer(canvas, {fixed: {width, height}})` for an off-screen canvas, and `setView({yaw, zoom})`.
+- **Renderer:** `createRenderer(canvas, {fixed: {width, height}})` for an off-screen canvas, and `setView({yaw, zoom, focus})`.
+- **Take-apart callouts (2026-11-09, after Nyxera0x/cutaway's exploded views, MIT; ideas only, no code copied):** each
+  callout lifts its object out of the map (`setLift(id, metres)`), leaves its footprint dashed with guide lines, labels
+  it with its measured size and centres the view on it (`focus`), then settles it back (`liftProfile`). Presentation only;
+  the map never changes. Callouts are 3.2 s, so the video is about 29 s. Not adopted from cutaway: its frame-by-frame
+  capture and procedural sound (the in-browser recorder is real time; LinkedIn autoplays muted).
 - **Tests:** `share-video.test.mjs` (storyboard, labels, format choice). `browser_smoke.check_share_video` covers Chromium only,
   cancel then a full record; headless WebKit has no canvas MediaRecorder.
 - **Next idea from the same post:** turn the map's warnings into 1–3 plain "check before you plan" questions.
