@@ -14,7 +14,22 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.70 s**
 - **GB10 branch:** `hermes/world-builder-gb10` at `c6539c5`, clean working tree.
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
-- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+|- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+
+
+### Run 212 — 2026-11-09 (GB10: live-HTTP report UI gate confirmed; suites green)
+
+- **Bounded improvement:** verified the live-HTTP report UI validation gate — `report_receipt_ui_smoke_live.py` ran against a real uvicorn server over live HTTP:
+  - chromium: PASS (real Ed25519 signing, real CORS fetch, job `faebcd9dffd0ef6eeb7844efdb9eadba`, `keyId=4c692b98…`)
+  - webkit: PASS (same live server, same keys, same receipt flow)
+  - Receipts committed in `output/playwright/world/report-receipt/` (`chromium-live-ui-receipt.json`, `webkit-live-ui-receipt.json`).
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (131.98 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.00 s**
+- **GB10 branch:** `hermes/world-builder-gb10` at `e3a218d`, clean working tree.
+- **Gate status:** live-HTTP report UI validation gate is now **confirmed** (not just committed — verified fresh in this run). The signed-receipt API/env documentation was already marked done in run 185. All handoff "open" items are now closed.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit), or alternate to a bounded 4090 reconstruction/GPU task.
 
 
 ### Run 204 — 2026-11-08 (GB10: Python 3.14 audit hook fix committed + pushed; suites green)
