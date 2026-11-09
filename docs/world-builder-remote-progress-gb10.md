@@ -1,9 +1,21 @@
 # World Builder — remote build progress (GB10)
 
-||||Last updated: 2026-11-08T18:15Z
+|||||Last updated: 2026-11-09T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 210 — 2026-11-09 (GB10: 4090 PLY zflip receipt committed + pushed; suites green)
+
+- **4090 state:** port confirmed alive (ssh2.vast.ai:23990), hostname `d130b6c7f3f4`, GPU `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, 5051/24564 MiB, 43°C. Branch `hermes/world-builder-4090` at `d1d59de` (dirty receipt committed).
+- **4090 commit:** `verify_ply_zflip_receipt.json` updated from MapAnything dense-preview PLY (vcount=98796) to fixture_ascii.ply test (vcount=4, z-flip applied, `z_up_likely: false`). Committed → `d1d59de`; `git push` → `2d47aa7..d1d59de`.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (140.70 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.70 s**
+- **GB10 branch:** `hermes/world-builder-gb10` at `c6539c5`, clean working tree.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+
 
 ### Run 204 — 2026-11-08 (GB10: Python 3.14 audit hook fix committed + pushed; suites green)
 
