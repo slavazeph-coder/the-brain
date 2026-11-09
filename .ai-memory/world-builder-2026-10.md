@@ -334,3 +334,14 @@ up to 3 questions for reconstruction proposals only, shown in the Edit tab until
 - Actions: `data-workflow="scale"` (measure a distance) and `data-action="add-object"`.
 - Tests: `review-questions.test.mjs`. `realtosim_browser_smoke` checks the card, the scale button and that it hides after
   both reviews are ticked.
+
+## Visitors live — 2026-11-09
+
+- `/api/world/processing` reported `visitorsOff: "switched-off"`: the Railway site service (`the-brain` in project
+  `wonderful-charisma`, which serves brainsnn.com) had `WORLD_SITE_VISITORS=0`.
+- With the owner's approval it was set to `1` through the Railway connector. The status now reads `visitors: true,
+  visitorJobsPerDay: 2`.
+- Live check as a visitor (no passcode), with the Mip-NeRF room photo: Process on BrainSNN preselected `photo-metric`,
+  and the preview came back in 9 s ("1.3–4.3 m"). This also confirms the hosted worker image has the MoGe-2 model.
+- Still owner-only: Lyra (GB10), the GPU worker SSH variable and host key, a physical iPhone test, and rotating the
+  Anthropic key.
