@@ -8,6 +8,11 @@ Original prompt: Need to build this level of simulation on brainsnn.com and test
 - Physics module and tests delegated separately from the UI/renderer. Root owns worker, packaging, route integration, release validation and documentation.
 - MuJoCo 3.16.0 single-thread WASM loaded and ran a real gravity smoke. Its precompiled npm build does not include the elasticity plugin, so the native rod implementation applies explicit elastic bending/twisting torques to the simulated chain rather than claiming the missing plugin ran.
 
+## 2026-11-09 — MuJoCo 4.0.0
+
+- Runtime bumped from 3.16.0 to 4.0.0 (exact pin). Five fixed episodes give identical outcomes; about 10% faster. Worker, UI and route tests updated to assert 4.0.0.
+- Native 1D flex rope evaluated (discrete integrator only); documented as a candidate, not adopted.
+
 ## Verification to complete
 
 - Physics validity/reproducibility and timestep refinement; actual browser gameplay and mobile visual checks.

@@ -32,7 +32,7 @@ function verifyEpisode(episode) {
   assert.equal(episode.schema, 'brainsnn.deformable.episode.v1');
   assert.equal(episode.provenance.physicsExecuted, true);
   assert.equal(episode.provenance.policyExecuted, false);
-  assert.equal(episode.provenance.engineVersion, '3.16.0');
+  assert.equal(episode.provenance.engineVersion, '4.0.0');
   assert.equal(episode.summary.completed, true);
   assert(Number.isFinite(episode.computeSeconds) && episode.computeSeconds > 0);
   assert(episode.frames.length > 2, 'a retained trajectory contains actual physics samples');
@@ -44,7 +44,7 @@ function verifyEpisode(episode) {
   assert.equal(episode.manifest.framesSha256, digest(JSON.stringify(episode.frames)));
   assert.equal(episode.manifest.configSha256, digest(JSON.stringify(episode.config)));
   assert.match(episode.manifest.identityNote, /not remote execution attestation/);
-  assert.equal(episode.runtime.engine.version, '3.16.0');
+  assert.equal(episode.runtime.engine.version, '4.0.0');
   for (const asset of episode.runtime.assets) {
     const bytes = assetSnapshot.get(asset.path);
     assert(bytes, asset.path + ' is part of the served build');
@@ -116,7 +116,7 @@ function verifyEpisode(episode) {
 
     await spawn('main');
     const ready = await operation('main', { type: 'initialize' }, 'ready');
-    assert.equal(ready.provenance.version, '3.16.0');
+    assert.equal(ready.provenance.version, '4.0.0');
     assert.equal(ready.provenance.policyExecuted, false);
     assert.equal(ready.frame.time, 0);
     assert.equal(ready.frame.physicsExecuted, false);
@@ -260,7 +260,7 @@ function verifyEpisode(episode) {
     assert.deepEqual(errors, []);
     assert.deepEqual(requests.filter(request => request.method !== 'GET' || (!request.url.startsWith(origin + '/') && !request.url.startsWith('blob:'))), [], 'local physics never calls an external provider, worker or purchase endpoint');
     await page.evaluate(() => { for (const entry of Object.values(window.contractWorkers)) { entry.worker.terminate(); if (entry.objectURL) URL.revokeObjectURL(entry.objectURL); } });
-    console.log('DEFORMABLE_WORKER_BROWSER_OK: actual MuJoCo3.16 WASM module worker, moving trajectory, complete10-case pack, retained/hash-verified archives, cancellation100-case prefix, persisted journal identity, seed/count/config rejection, denied storage single-run fallback/batch refusal, quota failure stops at one exportable episode, unavailable runtime/recovery, no external or paid calls.');
+    console.log('DEFORMABLE_WORKER_BROWSER_OK: actual MuJoCo 4.0 WASM module worker, moving trajectory, complete10-case pack, retained/hash-verified archives, cancellation100-case prefix, persisted journal identity, seed/count/config rejection, denied storage single-run fallback/batch refusal, quota failure stops at one exportable episode, unavailable runtime/recovery, no external or paid calls.');
   } finally {
     await browser?.close();
     server.closeAllConnections();
