@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Autonomy trial](world-autonomy-trial-2026-11-11.md) — sensors → 4 cm map → A* → MPPI on reviewed maps, crate-drop replanning and a sealed paired break-it-on-purpose trial at /world/autonomy.html; no legged MPC.
+
 → [Demo replay export](world-demo-replay-2026-11-02.md) — private saved-frame/camera replay videos, real partial capture evidence, source-bound exports and release limits.
 
 → [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — sandbox integration, calibrated underlay, source/revision-bound downloads and required deployed acceptance.
