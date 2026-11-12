@@ -10,7 +10,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = resolve(root, 'public/arena/deformable');
 const engine = dirname(fileURLToPath(import.meta.resolve('@mujoco/mujoco')));
 const info = JSON.parse(await readFile(resolve(engine, 'package.json'), 'utf8'));
-if (info.version !== '4.0.0') throw new Error('Qualify the changed MuJoCo runtime before publishing it.');
+if (info.version !== '4.0.1') throw new Error('Qualify the changed MuJoCo runtime before publishing it.');
 await mkdir(resolve(output, 'vendor'), { recursive: true });
 for (const filename of ['mujoco.js', 'mujoco.wasm']) {
   await copyFile(resolve(engine, filename), resolve(output, 'vendor', filename));
@@ -38,7 +38,7 @@ if (!process.argv.includes('--engine-only')) {
   await writeFile(resolve(output, 'runtime-manifest.json'), JSON.stringify({
     schema: 'brainsnn.deformable.runtime.v1',
     build: 'deformable-physics-2026-10-17-v1',
-    engine: { name: 'MuJoCo', version: info.version, execution: 'single-threaded WebAssembly', license: 'Apache-2.0', source: 'https://github.com/google-deepmind/mujoco/tree/4.0.0' },
+    engine: { name: 'MuJoCo', version: info.version, execution: 'single-threaded WebAssembly', license: 'Apache-2.0', source: 'https://github.com/google-deepmind/mujoco/tree/4.0.1' },
     assets,
   }, null, 2) + '\n');
 }

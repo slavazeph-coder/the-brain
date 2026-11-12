@@ -11,6 +11,7 @@ Original prompt: Need to build this level of simulation on brainsnn.com and test
 ## 2026-11-09 — MuJoCo 4.0.0
 
 - Runtime bumped from 3.16.0 to 4.0.0 (exact pin). Five fixed episodes give identical outcomes; about 10% faster. Worker, UI and route tests updated to assert 4.0.0.
+- 2026-11-12: 4.0.0 → 4.0.1 (exact pin). Same five episodes: identical status, closest approach and peak tip speed to six decimals; about 4% faster. Build guard, route test and browser contract assert 4.0.1.
 - Native 1D flex rope evaluated (discrete integrator only); documented as a candidate, not adopted.
 
 ## Verification to complete
