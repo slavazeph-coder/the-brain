@@ -72,23 +72,40 @@ export function fleetSchedule(world, goal, margin = 0.1, robots = ROBOTS, { step
     const f = d[i] === d[i - 1] ? 1 : (s - d[i - 1]) / (d[i] - d[i - 1]); return { x: a.route[i - 1].x + (a.route[i].x - a.route[i - 1].x) * f, z: a.route[i - 1].z + (a.route[i].z - a.route[i - 1].z) * f };
   };
   for (const a of agents) a.cum = cum(a.route);
-  const placed = [];
-  for (const a of agents) {
-    let delay = 0;
-    for (; delay <= maxDelay; delay += 1) {
-      const horizon = delay + a.distance / a.speed + dwell; let clear = true;  // including its own dwell at the goal
-      for (let t = delay; t <= horizon + step && clear; t += step) {
-        const p = at(a, t - delay);
-        for (const b of placed) { if (b.departsAt === null) continue; const q = at(b, t - b.departsAt); if (p && q && Math.hypot(p.x - q.x, p.z - q.z) < a.radius + b.radius - 1e-9) { clear = false; break; } }
+  const waits = !!w.fleet?.length;
+  function schedule(order) {
+    const placed = [];
+    for (const a of order) {
+      let delay = 0;
+      for (; delay <= maxDelay; delay += 1) {
+        const horizon = delay + a.distance / a.speed + dwell; let clear = true, whileWaiting = false;  // including its own dwell at the goal
+        // A fleet robot stands on its own start until it leaves, so the others must clear it from time zero. Without a
+        // fleet every envelope shares the one start and is taken to queue off the floor, so it is checked from its departure.
+        for (let t = waits ? 0 : delay; t <= horizon + step && clear; t += step) {
+          const p = at(a, t - delay);
+          for (const b of placed) { if (b.departsAt === null) continue; const q = at(b, t - b.departsAt); if (p && q && Math.hypot(p.x - q.x, p.z - q.z) < a.radius + b.radius - 1e-9) { clear = false; whileWaiting = t < delay; break; } }
+        }
+        if (clear) break;
+        if (whileWaiting) { delay = maxDelay + 1; break; }  // hit while still standing on its start: leaving later cannot help
       }
-      if (clear) break;
+      placed.push({ ...a, departsAt: delay > maxDelay ? null : delay, arrivesAt: delay > maxDelay ? null : Math.round(delay + a.distance / a.speed) });
     }
-    placed.push({ ...a, departsAt: delay > maxDelay ? null : delay, arrivesAt: delay > maxDelay ? null : Math.round(delay + a.distance / a.speed) });
+    return placed;
   }
+  // Robots are placed in the fleet's order. One that cannot leave is usually standing where an earlier robot drives, so it
+  // is moved to the front and the schedule is tried again; the attempt that leaves the fewest robots waiting is kept.
+  let order = agents, best = null;
+  for (let attempt = 0; attempt <= agents.length; attempt++) {
+    const tried = schedule(order), stuck = tried.filter(p => p.departsAt === null);
+    if (!best || stuck.length < best.stuck) best = { placed: tried, stuck: stuck.length };
+    if (!stuck.length || order[0].id === stuck[0].id) break;
+    order = [order.find(a => a.id === stuck[0].id), ...order.filter(a => a.id !== stuck[0].id)];
+  }
+  const placed = agents.map(a => best.placed.find(p => p.id === a.id));
   const last = placed.reduce((m, p) => p.arrivesAt === null ? m : Math.max(m, p.arrivesAt), 0);
   return { schema: 'brainsnn.fleet-schedule.v1', goal: { x: r2(goal.x), z: r2(goal.z) }, separation: 'sum of the two planning radii at every sampled moment', stepSeconds: step,
     agents: placed.map(p => ({ id: p.id, name: p.name, start: { x: r2(p.start.x), z: r2(p.start.z) }, radius: r2(p.radius), distance: r1(p.distance), departsAt: p.departsAt, arrivesAt: p.arrivesAt })), skipped, allArrivedAt: last, perRobotStarts: !!w.fleet?.length,
-    limitations: [w.fleet?.length ? 'Each fleet robot leaves from its own start on the map.' : 'No fleet on the map: every envelope leaves from the map\'s single start.', `Constant speed along the grid route; an arrival holds the goal for ${dwell} s and is then off the floor (handed over).`, 'A schedule on the map, not a traffic controller; no robot was moved.'] };
+    limitations: [w.fleet?.length ? 'Each fleet robot leaves from its own start on the map, and stands there until it leaves.' : 'No fleet on the map: every envelope leaves from the map\'s single start.', `Constant speed along the grid route; an arrival holds the goal for ${dwell} s and is then off the floor (handed over).`, 'A schedule on the map, not a traffic controller; no robot was moved.'] };
 }
 
 /** The receipt for a routed goal. */

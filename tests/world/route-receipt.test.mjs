@@ -66,3 +66,30 @@ test('a fleet on the map: validated, each robot leaves from its own start, far-a
   const card = receiptCard(routeReceipt(w, {...ROBOTS.vacuum, margin: .1}, {x: 9, z: 11.5}, routeWorld(w, {...ROBOTS.vacuum, margin: .1}, {x: 9, z: 11.5})));
   assert.match(card, /Your fleet/); assert.match(card, /from \(16.5, 1.5\)/);
 });
+
+test('a robot waiting on its own start is never driven through, and it goes first when that is the only way', () => {
+  // An empty 20 x 6 m floor: the forklift's straight run to the goal passes over the spot where the vacuum stands.
+  const base = sampleWorld(), goal = {x: 18, z: 3}, margin = .1;
+  const w = normalizeWorld({...base, width: 20, depth: 6, floor: [[0, 0], [20, 0], [20, 6], [0, 6]], objects: [], start: {x: 1, z: 1},
+    fleet: [{id: 'forklift', robot: 'forklift', start: {x: 2, z: 3}}, {id: 'vacuum', robot: 'vacuum', start: {x: 8, z: 3}}]});
+  const s = fleetSchedule(w, goal, margin);
+  const [forklift, vacuum] = s.agents;
+  assert.deepEqual(s.agents.map(a => a.id), ['forklift', 'vacuum'], 'reported in the fleet\'s own order');
+  assert.equal(vacuum.departsAt, 0, 'the robot in the way leaves first');
+  assert.ok(forklift.departsAt > 0 && forklift.arrivesAt > vacuum.arrivesAt, 'the forklift follows once the floor ahead is clear');
+  // Replay both robots from time zero, standing on their starts until they leave, and measure the gap at every step.
+  const moving = s.agents.map(a => { const robot = {...ROBOTS[a.id], margin}, route = routeWorld({...w, start: a.start}, robot, goal).route;
+    const cum = [0]; for (let i = 1; i < route.length; i++) cum.push(cum[i - 1] + Math.hypot(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z));
+    return {...a, route, cum, speed: robot.speed}; });
+  const at = (a, t) => { const gone = t - a.departsAt; if (gone > a.cum.at(-1) / a.speed + 5) return null;
+    const d = Math.min(a.cum.at(-1), Math.max(0, gone) * a.speed); let i = 1; while (i < a.cum.length - 1 && a.cum[i] < d) i++;
+    const f = a.cum[i] === a.cum[i - 1] ? 1 : (d - a.cum[i - 1]) / (a.cum[i] - a.cum[i - 1]);
+    return {x: a.route[i - 1].x + (a.route[i].x - a.route[i - 1].x) * f, z: a.route[i - 1].z + (a.route[i].z - a.route[i - 1].z) * f}; };
+  let closest = Infinity;
+  for (let t = 0; t <= s.allArrivedAt + 6; t += s.stepSeconds) { const [p, q] = moving.map(a => at(a, t)); if (p && q) closest = Math.min(closest, Math.hypot(p.x - q.x, p.z - q.z)); }
+  assert.ok(closest >= forklift.radius + vacuum.radius - 1e-6, `closest approach ${closest.toFixed(2)} m, needs ${(forklift.radius + vacuum.radius).toFixed(2)} m`);
+  assert.match(s.limitations[0], /stands there until it leaves/);
+  // Without a fleet every envelope shares the single start and queues off the floor, as before: all of them are scheduled.
+  const shared = fleetSchedule(normalizeWorld({...base, fleet: []}), {x: 16.5, z: 11.5}, margin);
+  assert.ok(shared.agents.length > 1 && shared.agents.every(a => a.departsAt !== null));
+});
