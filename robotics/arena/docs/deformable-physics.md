@@ -46,7 +46,7 @@ npm run build
 node scripts/test-arena-route.mjs --dist
 ```
 
-The build copies the official MuJoCo 4.0.0 loader/WASM and Apache license from the pinned dependency, bundles the isolated Three renderer and generates a runtime manifest. Generated runtime files are ignored by git and rebuilt from the lockfile. No network downloads occur in that assembly step. The actual browser contract uses the real worker/WASM, not fixtures standing in for physics.
+The build copies the official MuJoCo 4.0.1 loader/WASM and Apache license from the pinned dependency, bundles the isolated Three renderer and generates a runtime manifest. Generated runtime files are ignored by git and rebuilt from the lockfile. No network downloads occur in that assembly step. The actual browser contract uses the real worker/WASM, not fixtures standing in for physics.
 
 The meaningful numerical checks include finite supported cases, gravity response, reproducible reset, material sensitivity, a reachable target and an unreachable miss, independence of the target judge from physical motion, and timestep refinement. A controlled planar case compares custom elastic torques with native MuJoCo joint stiffness. These checks do not establish sim-to-real accuracy.
 
@@ -54,7 +54,7 @@ The requested timestep is capped deterministically at 0.00025 s, or 0.000125 s w
 
 ## MuJoCo 4.0
 
-The Arena runs MuJoCo 4.0.0 (6 November 2026). 4.0 removed the `cable` plugin and `composite`, which this task never used: the npm WASM never shipped the plugin, so the rod's elastic torques are a JavaScript port of `cable.cc`, applied to ordinary capsule bodies and ball joints. Five fixed episodes (default, soft, stiff-long, seeds 11 and 42) give the same outcome, closest approach and peak tip speed on 3.16.0 and 4.0.0, and run about 10% faster on 4.0.0. The bump is pinned exactly; the build script refuses any other version until it has been qualified the same way.
+The Arena runs MuJoCo 4.0.1 (the 4.0 patch release; bumped from 4.0.0 on 12 November 2026 with the same five fixed episodes giving identical status, closest approach and peak tip speed to six decimals, about 4% faster). 4.0.0 arrived 6 November 2026. 4.0 removed the `cable` plugin and `composite`, which this task never used: the npm WASM never shipped the plugin, so the rod's elastic torques are a JavaScript port of `cable.cc`, applied to ordinary capsule bodies and ball joints. Five fixed episodes (default, soft, stiff-long, seeds 11 and 42) give the same outcome, closest approach and peak tip speed on 3.16.0 and 4.0.0, and run about 10% faster on 4.0.0. The bump is pinned exactly; the build script refuses any other version until it has been qualified the same way.
 
 4.0's replacement for the cable is a native 1D `flexcomp` with `<elasticity>` (twist-free discrete elastic rod bending since 3.17). Checked in the same WASM, a 1 m, 6.35 mm, 2 GPa, 89 g cantilever of 21 vertices, two pinned:
 
