@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Autonomy Trial | BrainSNN</title>
+<meta name="description" content="Give a robot simulated lidar and depth cameras on a reviewed map of a real space. It maps at 4 cm, plans with A*, drives with MPPI and replans when a crate drops in its way. Then a paired trial breaks it on purpose and counts what fails.">
+<meta name="theme-color" content="#070f1d"><link rel="icon" href="/favicon.svg">
+<style>
+:root{font-family:Inter,system-ui,Arial,sans-serif;color-scheme:dark;color:#ebf5ff;background:#070f1d;--panel:#112136;--line:#2d4861;--muted:#a1bbd2;--cyan:#5ad8e8;--violet:#ac8bf4;--amber:#e5b07b;--red:#f3a3a3;--green:#64e6c0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 65% -10%,#18324a,transparent 65%),#070f1d}
+nav{display:flex;justify-content:space-between;align-items:center;padding:19px max(16px,calc((100% - 1200px)/2));border-bottom:1px solid #273f55;gap:12px}nav strong{font-size:20px}nav a{color:var(--muted);text-decoration:none;margin-left:17px;font-size:14px}nav a:hover{text-decoration:underline}nav a[aria-current]{color:#ebf5ff}
+main{max-width:1210px;margin:auto;padding:34px 16px 72px}h1{font-size:clamp(30px,4.4vw,52px);letter-spacing:-.04em;line-height:1.04;margin:8px 0 16px;text-wrap:balance}h2{font-size:20px;margin:0 0 10px}
+.eyebrow{text-transform:uppercase;color:#65e3ee;letter-spacing:.15em;font-size:12px;font-weight:700}.intro{max-width:800px;color:#b0c6dc;line-height:1.55;font-size:17px}
+.honest{display:inline-block;margin-top:4px;border:1px solid #87644c;background:#241f25;color:#f6d5b7;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;letter-spacing:.06em}
+.panel{border:1px solid var(--line);background:var(--panel);border-radius:17px;padding:18px;min-width:0}
+.layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(270px,1fr);gap:15px;margin-top:22px;align-items:start}
+.stage-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:10px}.stage-head strong{font-size:16px}
+.badge{font-size:11px;font-weight:700;letter-spacing:.08em;color:#081725;background:var(--cyan);border-radius:6px;padding:4px 8px}
+.canvas-wrap{position:relative;border-radius:12px;overflow:hidden;background:#070f1d;border:1px solid #23394f}
+canvas{display:block;width:100%;touch-action:manipulation;cursor:crosshair}
+.hud{position:absolute;left:10px;top:10px;font:600 12px/1.3 ui-monospace,Consolas,monospace;color:#cfe9f7;background:rgba(7,15,29,.78);border:1px solid #27425b;border-radius:8px;padding:6px 9px;pointer-events:none;max-width:calc(100% - 20px)}
+.controls{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0 6px}
+.button{background:#24435b;color:#edfaff;border:1px solid #44617a;border-radius:10px;padding:11px 14px;cursor:pointer;font:inherit;font-weight:600;font-size:14px}.button:hover:not(:disabled){border-color:#7ea7c7}.button:disabled{opacity:.45;cursor:not-allowed}
+.primary{background:var(--cyan);color:#081725;border-color:var(--cyan)}.danger{border-color:#8a5a7a;background:#3a2440}
+.button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,canvas:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
+.caption,#status{color:#9bb4c9;font-size:13px;line-height:1.5;margin:8px 0 0}#status.bad{color:#f6d5b7}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 0 0;padding:0;list-style:none;font-size:12px;color:#a9c0d6}.legend li{display:flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:2px;display:inline-block;flex:none}.sw.line{height:3px}.sw.dash{height:0;border-top:2px dashed}
+.log{list-style:none;margin:12px 0 0;padding:10px 12px;max-height:190px;overflow:auto;background:#0b192a;border:1px solid #23394f;border-radius:10px;font-size:13px;line-height:1.45}
+.log:empty::before{content:'Events appear here as the robot senses, plans and drives.';color:#7f9aad}
+.log li{padding:3px 0;color:#c9dcee}.log time{display:inline-block;min-width:54px;color:#7f9aad;font:12px ui-monospace,Consolas,monospace}.log .good{color:var(--green)}.log .warn{color:var(--amber)}.log .bad{color:var(--red)}
+.setup label,.setup legend{display:block;font-size:13px;color:#b8cbdf;margin:0 0 6px}.setup .field{margin:0 0 14px}
+select,input[type=number]{width:100%;background:#0b192a;color:#ebf5ff;border:1px solid #43617d;border-radius:10px;padding:10px;font:inherit;font-size:14px}
+.check{display:flex!important;gap:9px;align-items:flex-start;line-height:1.4;cursor:pointer}.check input{margin-top:3px;accent-color:var(--cyan);flex:none}
+fieldset{border:1px solid #2b465d;border-radius:12px;padding:10px 12px 4px;margin:0 0 14px}
+.review{border:1px solid #87644c;background:#241f25;border-radius:12px;padding:12px;margin:0 0 14px}.review p{margin:0 0 8px;color:#f6d5b7;font-size:13px}
+details.specs{font-size:13px;color:#a9c0d6;line-height:1.5;border-top:1px solid #2b465d;padding-top:10px}details.specs summary{cursor:pointer;color:#cfe3f4;font-weight:600}details.specs p{margin:8px 0}
+a{color:#8fe3ee}
+.trial{margin-top:15px}.trial-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;margin:14px 0}
+.trial-form .breaks{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;border:1px solid #2b465d;border-radius:12px;padding:12px;margin:0}
+.trial-form label{font-size:13px;color:#b8cbdf}progress{width:100%;height:10px;accent-color:var(--cyan)}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0}
+.metric{border:1px solid #304760;background:#172c44;border-radius:12px;padding:14px}.metric small{display:block;font-size:11px;color:#9caec9;text-transform:uppercase;letter-spacing:.08em}.metric strong{display:block;font-size:clamp(22px,2.6vw,32px);margin:7px 0 3px}.metric span{font-size:12px;color:#a4b8cb}
+.metric.warn strong{color:var(--amber)}.metric.bad strong{color:var(--red)}
+#t-interpretation{font-size:15px;color:#dcecfa;line-height:1.5;max-width:900px}
+.table-shell{overflow:auto;margin-top:12px;border:1px solid #314b65;border-radius:12px}table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}th,td{padding:10px 12px;border-bottom:1px solid #2b465d;white-space:nowrap}th{background:#1a304a;color:#b8cbdf}td.ok{color:var(--green)}td.bad{color:var(--red)}td.warn{color:var(--amber)}
+.seal{font:12px ui-monospace,Consolas,monospace;color:#9fc3dc;margin-top:10px;word-break:break-all}
+.file-button{position:relative;overflow:hidden}.file-button input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.limits{margin-top:15px}.limits ul{margin:8px 0 0;padding-left:20px;color:#b0c6dc;line-height:1.6;font-size:14px}.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
+footer{margin-top:28px;color:#7f9aad;font-size:12px;line-height:1.6}
+@media(max-width:900px){.layout,.two{grid-template-columns:1fr}.trial-form{grid-template-columns:repeat(2,minmax(0,1fr))}.trial-form .breaks{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}nav{align-items:flex-start;flex-wrap:wrap}nav a{margin:0 12px 0 0}}
+@media(max-width:700px){.wide-only{display:none}nav span{display:flex;flex-wrap:wrap;gap:6px 14px}nav a{margin:0}.hud{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:5px 8px}}
+@media(max-width:420px){.metrics{grid-template-columns:1fr}}
+</style></head>
+<body><nav><strong>◈ BrainSNN</strong><span><a href="/world/">World Builder</a><a href="/world/autonomy.html" aria-current="page">Autonomy trial</a><a href="/world/fleet-learning.html">Fleet Learning</a><a href="/arena/">Robot Arena</a></span></nav>
+<main>
+<div class="eyebrow">World Builder / Autonomy trial</div>
+<h1>Give it sensors. Drop a crate.<br class="wide-only"> Count what breaks.</h1>
+<p class="intro">A simulated 360° lidar and front and rear depth cameras build the robot's own 4 cm map as it drives. A* plans the route, MPPI follows it, and a crate dropped in its way has to be <em>seen</em> before it can be avoided. Then a paired trial runs the same tasks clean and broken on purpose, and counts contacts, safe stops and replan time, on a reviewed map of a real space.</p>
+<span class="honest">KINEMATIC SIMULATION IN YOUR BROWSER · NO ROBOT MOVES</span>
+
+<section class="layout" aria-label="Live autonomy loop">
+  <div class="panel stage">
+    <div class="stage-head"><strong id="world-name">Studio 01 / training floor</strong><span class="badge" id="world-badge">AUTHORED SAMPLE · REVIEWED</span></div>
+    <div class="canvas-wrap"><canvas id="view" aria-label="Top-down view: the robot's own map, its sensor returns, its planned route and the controller's sampled trajectories. Tap the floor to set a goal."></canvas><div class="hud" id="hud" aria-hidden="true">Loading…</div></div>
+    <div class="controls">
+      <button class="button primary" id="play" type="button">Run</button>
+      <button class="button danger" id="crate" type="button">Drop a crate in its way</button>
+      <button class="button" id="new-goal" type="button">New goal</button>
+      <button class="button" id="reset" type="button">Reset</button>
+      <button class="button" id="speed" type="button">Speed 1×</button>
+    </div>
+    <p id="status" role="status">Starting…</p>
+    <ul class="legend" aria-label="Legend">
+      <li><span class="sw" style="background:#263c58"></span>Reviewed map</li>
+      <li><span class="sw" style="background:#5ad8e8"></span>Obstacles it sensed</li>
+      <li><span class="sw" style="background:rgba(130,190,240,.35)"></span>Floor it saw</li>
+      <li><span class="sw line" style="background:#e9f6ff"></span>A* route</li>
+      <li><span class="sw line" style="background:rgba(236,246,255,.45)"></span>MPPI samples</li>
+      <li><span class="sw line" style="background:#ac8bf4"></span>Chosen rollout</li>
+      <li><span class="sw" style="background:rgba(172,139,244,.3)"></span>Depth camera view</li>
+      <li><span class="sw dash" style="border-color:#ac8bf4"></span>Not in its map</li>
+      <li><span class="sw dash" style="border-color:#e5b07b"></span>Keep-out</li>
+    </ul>
+    <ol class="log" id="log" aria-live="polite" aria-label="What the robot did"></ol>
+  </div>
+  <aside class="panel setup" aria-label="Setup">
+    <h2>Setup</h2>
+    <div class="field"><label for="world-source">Space</label><select id="world-source"><option value="sample">Sample training floor (authored, reviewed)</option><option value="saved">My World Builder map (saved in this browser)</option><option value="file">Import a World JSON map…</option></select>
+      <input type="file" id="world-file" accept=".json,application/json" hidden aria-label="Import a World JSON map"></div>
+    <div class="review" id="review" hidden><p>A map file is reviewed by a person, not by the file. Confirm both before the robot runs on it.</p>
+      <label class="check"><input type="checkbox" id="scale-ok"> I checked the scale against a measured distance</label>
+      <label class="check"><input type="checkbox" id="map-ok"> I reviewed obstacles, unknown areas and the start</label></div>
+    <div class="field"><label for="robot">Robot envelope</label><select id="robot"></select></div>
+    <fieldset><legend>Sensors on the robot</legend>
+      <label class="check"><input type="checkbox" id="s-lidar" checked> 360° lidar on the roof</label>
+      <label class="check"><input type="checkbox" id="s-front" checked> Front depth camera</label>
+      <label class="check"><input type="checkbox" id="s-rear" checked> Rear depth camera</label></fieldset>
+    <div class="field"><label class="check"><input type="checkbox" id="prior" checked> Give the robot the reviewed map as a prior (off: it starts knowing nothing but keep-out rules)</label></div>
+    <div class="field"><label class="check"><input type="checkbox" id="truth" checked> Show what the robot was not told (crates, unmapped objects)</label>
+      <label class="check"><input type="checkbox" id="rollouts" checked> Show the controller's sampled trajectories</label></div>
+    <details class="specs"><summary>Sensor figures used</summary>
+      <p id="spec-lidar"></p><p id="spec-depth"></p>
+      <p>Sources: <a href="https://www.livoxtech.com/mid-360/specs" rel="noopener">Livox MID-360 specifications</a> and <a href="https://realsenseai.com/products/depth-camera-d435i/" rel="noopener">RealSense D435i</a>. The simulation uses these figures; it does not reproduce the devices.</p></details>
+  </aside>
+</section>
+
+<section class="panel trial" aria-labelledby="trial-title">
+  <h2 id="trial-title">Break it on purpose</h2>
+  <p class="caption">Each task runs twice with the same seed: once clean, once with what you choose to break. Starts and goals are sampled on the reviewed map, and every run is scored against ground truth the robot never sees. Same seed, same result.</p>
+  <div class="trial-form">
+    <div><label for="t-episodes">Tasks</label><select id="t-episodes"><option value="5">5 tasks · 10 runs</option><option value="10" selected>10 tasks · 20 runs</option><option value="25">25 tasks · 50 runs</option></select></div>
+    <div><label for="t-seed">Seed</label><input type="number" id="t-seed" min="1" step="1" value="1"></div>
+    <div style="grid-column:span 2"><button class="button primary" id="t-run" type="button" style="width:100%">Run the trial</button></div>
+    <fieldset class="breaks"><legend class="caption" style="margin:0 0 4px">What to break</legend>
+      <label class="check"><input type="checkbox" id="p-crate" checked> Drop a crate on the route (0.5 × 0.5 × 0.45 m), at least 1.5 m and two stopping distances ahead of the bumper</label>
+      <label class="check"><input type="checkbox" id="p-map" checked> Leave an object out of the map (a 0.9 m pallet stack on the route)</label>
+      <label class="check"><input type="checkbox" id="p-blackout"> Black out the front depth camera for 3.5 s as the crate drops</label>
+      <label class="check"><input type="checkbox" id="p-drift"> Odometry drift with no localization correction</label></fieldset>
+  </div>
+  <progress id="t-progress" hidden value="0" max="1"></progress>
+  <p class="caption" id="t-status" role="status">The trial uses the space, robot and sensors chosen above. It runs in a background worker on this device.</p>
+  <div id="trial-results" hidden>
+    <div class="metrics" id="t-metrics"></div>
+    <p id="t-interpretation"></p>
+    <div class="table-shell"><table><thead><tr><th>#</th><th>Route</th><th>Control</th><th>Broken</th><th>What broke</th><th>Crate seen → replan</th><th>Closest (m)</th></tr></thead><tbody id="t-rows"></tbody></table></div>
+    <p class="seal" id="t-seal"></p>
+    <div class="controls"><button class="button" id="t-download" type="button">Download the sealed report</button><label class="button file-button">Verify a report<input type="file" id="t-verify" accept=".json,application/json" aria-label="Verify a sealed trial report"></label></div>
+  </div>
+</section>
+
+<section class="panel limits two" aria-label="Limits and method">
+  <div><h2>What this is, and is not</h2><ul>
+    <li>A kinematic unicycle at 10 Hz on a planar map: no physics engine, wheel slip, legged gait or contact dynamics. Humanoid and quadruped are body envelopes only.</li>
+    <li>Sensors are ray casts against the reviewed boxes, set from published field of view, range and noise. Reflectivity, multipath, motion blur and the lidar's scan pattern are not modelled.</li>
+    <li>Ground truth is the reviewed map plus what the trial adds. Anything the map got wrong is wrong here too, which is why the map is reviewed first.</li>
+    <li>Replan times are wall-clock on this device; other devices differ.</li>
+    <li>No real robot, learned policy or safety certification. A simulated pass is a reason to run a physical trial, not a substitute for one.</li></ul></div>
+  <div><h2>How it works</h2><ul>
+    <li><strong>Sense:</strong> rays from a roof lidar and two depth cameras; returns below 5 cm count as floor, higher ones as obstacles. The robot never reads what it hit.</li>
+    <li><strong>Map:</strong> log-odds evidence on a 4 cm grid, with the reviewed map as a prior, and a clearance field for planning.</li>
+    <li><strong>Plan:</strong> 8-connected A* with an inflation cost, replanned when its route is blocked.</li>
+    <li><strong>Act:</strong> MPPI samples control sequences, rolls each out against the robot's own map and blends them by cost.</li>
+    <li><strong>Score:</strong> the true footprint against ground truth: contact, keep-out, closest approach. The source is one open module, <a href="./autonomy.mjs">autonomy.mjs</a>, with its tests in the repository.</li></ul></div>
+</section>
+<footer>BrainSNN World Builder · Autonomy trial. Runs locally; maps and reports stay in this browser unless you download them. <a href="/world/">Capture and review a space</a> to test on your own floor.</footer>
+</main>
+<script type="module" src="./autonomy-ui.mjs"></script>
+</body></html>

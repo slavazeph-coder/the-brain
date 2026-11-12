@@ -151,6 +151,9 @@ jobs:
           python tests/world/browser_smoke.py
           python tests/world/fleet_learning_browser_smoke.py
           python tests/world/fleet_evaluation_browser_smoke.py
+          # Sense -> map -> A* -> MPPI on the sample floor: crate drop and replan, then a short paired trial whose
+          # downloaded report verifies, and a tampered copy that does not. Kinematic simulation only.
+          python tests/world/autonomy_browser_smoke.py
           # Edit a reviewed map, review it again, route to the same spot: the comparison, with the gate in between.
           python tests/world/what_if_browser_smoke.py
           # Native street workspace uses the actual Express asset transport, shadow DOM, edits and exports.
