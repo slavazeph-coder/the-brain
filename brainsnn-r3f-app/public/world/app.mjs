@@ -16,7 +16,7 @@ import {readVideoMetadata,videoResolutionIssue} from './video-metadata.mjs';
 import {parseHandoffHash, readLocalCapture, clearLocalCapture} from './capture-handoff.mjs';
 import {reconstructionRecovery} from './reconstruction-recovery.mjs';
 import {reconstructionFrameAudit,reconstructionFrameCSV} from './reconstruction-frame-audit.mjs';
-import {captureBefore,compare as compareWhatIf,whatIfCard} from './what-if.mjs';
+import {captureBefore,compare as compareWhatIf,sameRobot,whatIfCard} from './what-if.mjs';
 import {routeReceipt,receiptCard} from './route-receipt.mjs';
 import {capturePath,viewAt,pathLength} from './capture-path.mjs';
 import {captureReportCard} from './capture-report.mjs';
@@ -51,9 +51,12 @@ function event(type,detail){events.push({time:new Date().toISOString(),type,deta
 const observations=createObservationReview({getSources:()=>sources,status,event});
 const measurements=createMeasurementReview({getWorld:()=>world,status,event,download});
 function stopReplay(){cancelAnimationFrame(replayFrame);replayFrame=null;$('replay').textContent='Replay';}
+// A what-if compares one robot's route before and after a map edit. Once the robot's footprint, speed or margin changes,
+// that comparison is no longer like for like, so it is dropped rather than shown as "same robot". Returns true if it was.
+function dropStaleWhatIf(){if(!whatIf||sameRobot(whatIf,robot))return false;whatIf=null;renderer?.setGhost(null);return true;}
 function invalidate(){epoch++;planner?.terminate();planner=null;planning=false;result=null;receipt=null;stopReplay();renderer?.setResult(null);$('scrub').value=0;update();renderMedia();}
 function apply(next,message,{review=false,proposal}={}){const w=normalizeWorld(next);if(!review){whatIf=null;renderer?.setGhost(null);}mapProposal=proposalAfterApply(mapProposal,{review,proposal});if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);if(message)status(message);}
-function mutate(fn,kind='edited'){try{const next=clone(world);fn(next);const before=captureBefore({goal:result?.goal,result,world,selected,kind});apply(next,'Map updated. Review changed geometry before planning.',{review:true});whatIf=before||whatIf;if(whatIf&&!before)whatIf.after=null;renderer?.setGhost(null);renderPanel();event('geometry_edit',selected||'floor');}catch(e){status(e.message,true);renderInspector();renderPanel();}}
+function mutate(fn,kind='edited'){try{const next=clone(world);fn(next);const before=captureBefore({goal:result?.goal,result,world,selected,kind,robot});apply(next,'Map updated. Review changed geometry before planning.',{review:true});whatIf=before||whatIf;if(whatIf&&!before)whatIf.after=null;renderer?.setGhost(null);renderPanel();event('geometry_edit',selected||'floor');}catch(e){status(e.message,true);renderInspector();renderPanel();}}
 // Exports: on touch devices with the Web Share API the files go to the native share sheet (Files, AirDrop, Mail…); anywhere
 // else, or if sharing fails, each file downloads. One share per gesture, so multi-file exports pass every file in one call.
 function asFile(name,data,type){return new File([data instanceof Blob?data:typeof data==='string'||data instanceof ArrayBuffer||ArrayBuffer.isView(data)?data:JSON.stringify(data,null,2)],name,{type});}
@@ -578,7 +581,7 @@ async function action(name,value){try{
   if(name==='cancel-job')await cancelRemote();
   if(name==='new-map'){if(world&&!confirm('Replace the current map with an empty measured-map draft? Captures stay in this session.'))return;apply({schema:SCHEMA,name:'My measured space',width:12,depth:9,start:{x:1,z:1},objects:[],provenance:'observed',scaleReviewed:false,mapReviewed:false},'Measured-map draft created. Enter actual dimensions and obstacles.');setTab('world');}
   if(name==='add-object'&&world){const id=crypto.randomUUID();selected=id;mutate(w=>w.objects.push({id,name:'New obstacle',x:Math.max(0,w.width/2-.5),z:Math.max(0,w.depth/2-.5),w:Math.min(1,w.width/2),d:Math.min(1,w.depth/2),h:1,kind:'unknown'}));}
-  if(name==='what-if-route'&&world&&whatIf){const gate=planningGate(world);if(gate){status(gate,true);return;}let route;try{route=routeWorld(world,robot,whatIf.goal);}catch(error){status(error.message,true);return;}
+  if(name==='what-if-route'&&world&&whatIf){if(dropStaleWhatIf()){renderPanel();status('The robot changed since that route, so there is no like-for-like comparison. Route to the spot again.',true);return;}const gate=planningGate(world);if(gate){status(gate,true);return;}let route;try{route=routeWorld(world,robot,whatIf.goal);}catch(error){status(error.message,true);return;}
     invalidate();result=route;receipt=routeReceipt(world,robot,whatIf.goal,route);renderer?.setResult(result);renderer?.setGhost(whatIf.previous.route);renderer?.setMarks({goal:whatIf.goal});renderer?.setCursor(.015);whatIf.after=compareWhatIf(whatIf,route);
     event('what_if_rerouted',{metres:route.distance,before:whatIf.previous.distance,edit:whatIf.edit.kind,policyExecuted:false});setTab('test');status(whatIf.after.text);replay();return;}
   if(name==='route-spot'&&world){const goal={x:Number($('goal-x').value),z:Number($('goal-z').value)};if(!Number.isFinite(goal.x)||!Number.isFinite(goal.z)){status('Enter the goal as x and z in metres.',true);return;}const gate=planningGate(world);if(gate){status(gate,true);setTab('world');return;}
@@ -675,9 +678,9 @@ const PICKERS=['files','video-file','phone-camera','native-capture-files'],NO_FI
 document.addEventListener('cancel',e=>{if(PICKERS.includes(e.target?.id))status(NO_FILE,true);},true);
 document.addEventListener('input',e=>{if(e.target.id==='path-scrub'&&activeSource?.reconstruction){stopPathPlay();pathView(activeSource,Number(e.target.value));}});
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(id==='locate-file'){const file=e.target.files?.[0];e.target.value='';if(file)void locatePhoto(file);return;}if(PICKERS.includes(id)){if(!e.target.files?.length){status(NO_FILE,true);return;}void addFiles(e.target.files,{nativeCapture:id==='native-capture-files'});return;}if(id==='objects'){selected=v;renderInspector();return;}
-  if(id==='robot'){robotId=v;robot={...ROBOTS[v],margin:robot.margin};invalidate();renderPanel();return;}
+  if(id==='robot'){robotId=v;robot={...ROBOTS[v],margin:robot.margin};invalidate();dropStaleWhatIf();renderPanel();return;}
   if(id==='goal-x'||id==='goal-z'){goalSpot={x:Number($('goal-x').value),z:Number($('goal-z').value)};return;}
-  if(id.startsWith('robot-')){const k=id.slice(6),next=Number(v),range={width:[.1,5],depth:[.1,5],speed:[.01,3],margin:[0,2]}[k];if(!range||!Number.isFinite(next)||next<range[0]||next>range[1]){status('Robot parameter is outside the supported range.',true);renderPanel();return;}robot[k]=next;invalidate();return;}
+  if(id.startsWith('robot-')){const k=id.slice(6),next=Number(v),range={width:[.1,5],depth:[.1,5],speed:[.01,3],margin:[0,2]}[k];if(!range||!Number.isFinite(next)||next<range[0]||next>range[1]){status('Robot parameter is outside the supported range.',true);renderPanel();return;}robot[k]=next;invalidate();if(dropStaleWhatIf())renderPanel();return;}
   if(Object.hasOwn(assumptions,id)){const next={...assumptions,[id]:v===''?null:Number(v)};try{estimate(result||{travelSeconds:0,turns:0},next);assumptions=next;update();renderPanel();}catch(err){status(err.message,true);renderPanel();}return;}
   if(id==='bim-host-wall'){bimWorkflow.selectHost(Number(v));return;}
   if(id==='camera-height'){cameraHeight=Number(v);return;}
