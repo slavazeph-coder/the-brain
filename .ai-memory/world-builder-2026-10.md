@@ -348,5 +348,23 @@ up to 3 questions for reconstruction proposals only, shown in the Edit tab until
   visitorJobsPerDay: 2`.
 - Live check as a visitor (no passcode), with the Mip-NeRF room photo: Process on BrainSNN preselected `photo-metric`,
   and the preview came back in 9 s ("1.3–4.3 m"). This also confirms the hosted worker image has the MoGe-2 model.
-- Still owner-only: Lyra (GB10), the GPU worker SSH variable and host key, a physical iPhone test, and rotating the
-  Anthropic key.
+- Still owner-only: Lyra (GB10), a physical iPhone test, and rotating the Anthropic key.
+  - Correction (2026-11-12): the GPU worker's SSH variable and host key were already done on November 2. They point at
+    the GB10, and GPU Remote Validation run 6 passed phases 3 to 6 (SSH, GPU, CUDA, persistence). Phases 7 to 15 (deploy
+    the runtime) were skipped and still need the owner's go-ahead.
+
+## Backend survey — 2026-11-12
+
+- **The hosted worker deploys from `deploy/world-worker-20261027`, not main** (Railway service `world-worker`, root `/`,
+  its own Dockerfile). A worker change on main is not live until main is merged into that branch (as PR #271 did). On
+  November 12 it lacked the capture report, the camera-height scale check, stand-in models and OWLv2 naming.
+- The site service `the-brain` builds `brainsnn-r3f-app/Dockerfile` (Node 22) from main. The repository-root `Dockerfile`
+  (Node 20, end of life) is used by no service. `brand-brain-preview` is an old preview on branch
+  `brainsnn-brand-brain-v01`, still running.
+- **Pillow:** 12.1.0 had 77 known advisories; bumped to 13.0.0 in the worker's requirements, and `prepare_photo` now opens
+  uploads with `formats=PHOTO_FORMATS` (JPEG, PNG, WebP) so no other decoder parses a visitor's file. `pip-audit` on the
+  other production pins was clean.
+- Claude calls (`object_names.py`, `reference_scale.py`) are current: `claude-opus-5-5`, structured outputs, explicit
+  effort, server-side fallbacks. No Anthropic key is set on the hosted worker, so naming and `reference-scale` are off there.
+- Engines built but not enabled on the hosted worker: `reference-scale`, `colmap-dense-cpu`, `depth-small`,
+  `world-observations`, `mapanything-apache`, `lingbot-map-stream` (the last three need a GPU).
