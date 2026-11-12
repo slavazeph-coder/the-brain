@@ -46,11 +46,25 @@ npm run build
 node scripts/test-arena-route.mjs --dist
 ```
 
-The build copies the official MuJoCo 3.16.0 loader/WASM and Apache license from the pinned dependency, bundles the isolated Three renderer and generates a runtime manifest. Generated runtime files are ignored by git and rebuilt from the lockfile. No network downloads occur in that assembly step. The actual browser contract uses the real worker/WASM, not fixtures standing in for physics.
+The build copies the official MuJoCo 4.0.0 loader/WASM and Apache license from the pinned dependency, bundles the isolated Three renderer and generates a runtime manifest. Generated runtime files are ignored by git and rebuilt from the lockfile. No network downloads occur in that assembly step. The actual browser contract uses the real worker/WASM, not fixtures standing in for physics.
 
 The meaningful numerical checks include finite supported cases, gravity response, reproducible reset, material sensitivity, a reachable target and an unreachable miss, independence of the target judge from physical motion, and timestep refinement. A controlled planar case compares custom elastic torques with native MuJoCo joint stiffness. These checks do not establish sim-to-real accuracy.
 
 The requested timestep is capped deterministically at 0.00025 s, or 0.000125 s when material damping is below 0.0003 N·m·s/rad. The actual model timestep, requested timestep, executed steps and elapsed simulation time are retained. This changes integration resolution rather than adding hidden material damping. Validation covers 32 endpoint combinations of elastic modulus, radius, length, density and supported damping boundaries. It does not establish stability for every possible parameter tuple.
+
+## MuJoCo 4.0
+
+The Arena runs MuJoCo 4.0.0 (6 November 2026). 4.0 removed the `cable` plugin and `composite`, which this task never used: the npm WASM never shipped the plugin, so the rod's elastic torques are a JavaScript port of `cable.cc`, applied to ordinary capsule bodies and ball joints. Five fixed episodes (default, soft, stiff-long, seeds 11 and 42) give the same outcome, closest approach and peak tip speed on 3.16.0 and 4.0.0, and run about 10% faster on 4.0.0. The bump is pinned exactly; the build script refuses any other version until it has been qualified the same way.
+
+4.0's replacement for the cable is a native 1D `flexcomp` with `<elasticity>` (twist-free discrete elastic rod bending since 3.17). Checked in the same WASM, a 1 m, 6.35 mm, 2 GPa, 89 g cantilever of 21 vertices, two pinned:
+
+| Integrator | Timestep | Result |
+| --- | --- | --- |
+| implicit, implicitfast (this task's) | any | Refused: 4.0 no longer integrates flex elasticity implicitly |
+| Euler | 0.0001 s | Unstable at 2 GPa; MuJoCo resets the state |
+| discrete | 0.0005 or 0.002 s | Stable, settles at 39.3 mm; the slender-beam formula wL⁴/8EI gives 42.6 mm for the full length, and pinning two vertices clamps the first segment |
+
+Discrete steps cost about 0.1 ms against about 0.22 ms for this task's rod, and stay stable at a timestep eight times larger, so a native rope could simulate a second roughly an order of magnitude faster. Moving the task to it is a separate change, not part of the version bump: the discrete integrator applies to the whole model (so the handle weld and contacts would need requalifying), it refuses edge stiffness and damping, and the native rod has no twist. It would need the same endpoint sweep, timestep refinement and target judge checks as the current rod before it replaces it.
 
 ## Research provenance and next fidelity gate
 

@@ -1,12 +1,19 @@
 // A short captioned video of the current map and its robot run, made on this device: a slow orbit, the largest obstacles
 // called out with their sizes, the route replay, and a closing card that says what the scale and the run are. It draws
-// the same map the planner used with the same renderer, so it shows nothing the map does not hold.
+// the same map the planner used with the same renderer, so it shows nothing the map does not hold. Each called-out object
+// lifts out of the map with its footprint and size, then settles back (after cutaway's exploded views); that is
+// presentation only, the map is never changed.
 import {createRenderer} from './renderer.mjs';
 
 export const VIDEO = Object.freeze({width: 1280, height: 720, mapWidth: 853, mapHeight: 400, mapScale: 1.5, callouts: 3});
 
 const metres = v => `${(Math.round(v * 10) / 10).toLocaleString('en')} m`;
 const ease = u => u < .5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+
+/** How far a called-out object is lifted at scene progress u (0 to 1): up in the first 30%, held, back down in the last 25%. */
+export function liftProfile(u) {
+  return u <= 0 || u >= 1 ? 0 : u < .3 ? ease(u / .3) : u > .75 ? ease((1 - u) / .25) : 1;
+}
 
 /** What the video says about the map's scale, from the map's own provenance and review state. */
 export function scaleLabel(world) {
@@ -20,7 +27,8 @@ export function scaleLabel(world) {
   return world?.scaleReviewed ? `${base}; checked by you` : base;
 }
 
-/** The video as scenes of {seconds, caption, card?, yaw:[from, to], zoom:[from, to], select?, cursor?:[from, to]}.
+/** The video as scenes of {seconds, caption, card?, yaw:[from, to], zoom:[from, to], select?, lift?, focus?, cursor?:[from, to]};
+ *  `lift` is how many metres the selected object rises, `focus` the point the view centres on while it does.
  *  Pure, so the story can be tested without a browser. */
 export function storyboard(world, result, robot) {
   if (!world) throw new Error('Open or build a map first.');
@@ -34,8 +42,9 @@ export function storyboard(world, result, robot) {
   const scenes = [{seconds: 3, card: {kicker: 'BRAINSNN · WORLD BUILDER', title: world.name, sub: `${metres(world.width)} × ${metres(world.depth)} · ${label}`}}];
   scenes.push({seconds: 5, yaw: turn(.8), zoom: [.92, 1.08],
     caption: `${metres(world.width)} × ${metres(world.depth)} · ${obstacles.length} obstacle${obstacles.length === 1 ? '' : 's'}${unseen > .05 ? ` · ${Math.round(unseen)} m² unknown, kept blocked` : ''}`});
+  const lift = Math.max(.8, Math.min(2.5, .12 * Math.max(world.width, world.depth)));
   for (const o of largest)
-    scenes.push({seconds: 2.4, yaw: turn(.22), zoom: [1.08, 1.08], select: o.id,
+    scenes.push({seconds: 3.2, yaw: turn(.22), zoom: [1.08, 1.08], select: o.id, lift, focus: {x: o.x + o.w / 2, z: o.z + o.d / 2},
       caption: `${o.name} · ${metres(o.w)} × ${metres(o.d)}, ${metres(o.h)} tall`});
   if (result?.route?.length) {
     const what = result.goal
@@ -68,7 +77,7 @@ function wrap(g, text, maxWidth) {
   return lines;
 }
 
-/** Records the storyboard in real time (about 25 s) and returns {blob, type, seconds}. Keep the tab visible: browsers
+/** Records the storyboard in real time (under 30 s) and returns {blob, type, seconds}. Keep the tab visible: browsers
  *  pause animation in hidden tabs. */
 export async function recordShareVideo({world, result, robot, onProgress, signal} = {}) {
   if (typeof MediaRecorder === 'undefined' || !HTMLCanvasElement.prototype.captureStream)
@@ -97,8 +106,11 @@ export async function recordShareVideo({world, result, robot, onProgress, signal
       g.globalAlpha = 1;
       return;
     }
-    map.setView({yaw: scene.yaw[0] + (scene.yaw[1] - scene.yaw[0]) * e, zoom: scene.zoom[0] + (scene.zoom[1] - scene.zoom[0]) * e});
+    const k = scene.lift ? liftProfile(u) : 0;
+    map.setView({yaw: scene.yaw[0] + (scene.yaw[1] - scene.yaw[0]) * e, zoom: scene.zoom[0] + (scene.zoom[1] - scene.zoom[0]) * e + .3 * k,
+      focus: scene.focus ? {...scene.focus, amount: .55 * k} : null});
     map.setSelected(scene.select || '');
+    map.setLift(scene.select || '', (scene.lift || 0) * k);
     map.setCursor(scene.cursor ? scene.cursor[0] + (scene.cursor[1] - scene.cursor[0]) * u : 0);  // the route replays in its own scene
     g.drawImage(inner, 0, 50, VIDEO.mapWidth * VIDEO.mapScale, VIDEO.mapHeight * VIDEO.mapScale);
     g.textAlign = 'left'; g.fillStyle = '#00f5ff'; g.font = `500 16px ${mono}`; g.fillText('BRAINSNN · WORLD BUILDER', 36, 40);
