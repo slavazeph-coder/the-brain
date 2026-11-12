@@ -200,15 +200,24 @@ def photo_pixel_transform(width, height, orientation, prepared_width, prepared_h
             [sy * exif[1][0], sy * exif[1][1], sy * exif[1][2] + (sy - 1) / 2], [0, 0, 1]]
 
 
+PHOTO_FORMATS = ('JPEG', 'PNG', 'WEBP')  # the only image decoders an uploaded photo may reach
+
+
 def prepare_photo(source: Path, target: Path, *, with_evidence=False):
     from PIL import Image, ImageOps, ImageStat
     with warnings.catch_warnings():
         warnings.simplefilter('error', Image.DecompressionBombWarning)
-        with Image.open(source) as original:
-            if original.format not in {'JPEG', 'PNG', 'WEBP'} or original.width * original.height > MAX_PIXELS:
+        # Only these three decoders ever see an upload: without `formats`, Pillow tries every format it knows on the
+        # file's first bytes, so a renamed file reaches parsers this worker never needs.
+        try:
+            checked = Image.open(source, formats=PHOTO_FORMATS)
+        except Image.UnidentifiedImageError:
+            raise ValueError('Photos must be JPEG, PNG or WebP up to 24 megapixels.') from None
+        with checked as original:
+            if original.format not in PHOTO_FORMATS or original.width * original.height > MAX_PIXELS:
                 raise ValueError('Photos must be JPEG, PNG or WebP up to 24 megapixels.')
             original.verify()
-        with Image.open(source) as original:
+        with Image.open(source, formats=PHOTO_FORMATS) as original:
             original_width, original_height = original.size
             orientation = original.getexif().get(274, 1)
             if type(orientation) is not int or not 1 <= orientation <= 8:
