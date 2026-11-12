@@ -1,5 +1,6 @@
 import {mountDemoReplay} from './demo-replay-ui.mjs';
 import {mountOmniverse} from './omniverse-ui.mjs';
+import {mountFragments} from './fragments-ui.mjs';
 import {pointsSHA256,retainedSourceIndices,measurementContract,validateMeasurementReport,reportStatusText} from './dimension-review.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const field=(label,id,{value='',min=0,max=200,step=.01,type='number'}={})=>`<label>${label}<input id="${id}" type="${type}" value="${esc(value)}" ${type==='number'?`min="${min}" max="${max}" step="${step}"`:''}></label>`;
@@ -22,7 +23,7 @@ function wallLocatorHTML(walls,openings){
   return `<figure class="wall-locator"><svg id="bim-wall-locator" viewBox="0 0 640 290" role="img" aria-label="Top view of observed walls with labelled wall IDs. The selected host is cyan; start marks the zero-offset end."><text class="locator-axis" x="16" y="22">X → / Z ↓</text>${segments.map(s=>{const a=project(s.a),b=project(s.b),mid=project([(s.a[0]+s.b[0])/2,(s.a[1]+s.b[1])/2]);return `<g data-host-wall="${s.i}" class="${s.i===0?'selected':''}"><line class="locator-wall" ${line(a,b)}/><circle class="locator-start" cx="${a[0]}" cy="${a[1]}" r="4"/><text class="locator-wall-label" x="${mid[0]}" y="${mid[1]-10}" text-anchor="middle">${esc(s.w.name)}</text><text class="locator-start-label" x="${a[0]+8}" y="${a[1]+16}">start</text></g>`;}).join('')}${openings.map(o=>{const s=segments.find(s=>s.w.name===o.hostWall);if(!s)return '';const a=project([s.a[0]+s.dx*o.offsetMeters,s.a[1]+s.dz*o.offsetMeters]),b=project([s.a[0]+s.dx*(o.offsetMeters+o.widthMeters),s.a[1]+s.dz*(o.offsetMeters+o.widthMeters)]);return `<line class="locator-opening ${o.kind==='door'?'door':''}" ${line(a,b)}/>`;}).join('')}</svg><figcaption>Wall locator from scene geometry. Cyan: selected host. Purple: reviewed opening annotations. Offset starts at the marked end.</figcaption></figure>`;
 }
 export function createBimWorkflow({status,event,onRender,onMarkers,makeCloud,getContext,onRecompile,download}){
-  let session={visual:null,key:null,picks:[],picking:false,readings:[]}, sceneContext=null,sceneEpoch=0,disposeOmniverse=null,disposeDemo=null;
+  let session={visual:null,key:null,picks:[],picking:false,readings:[]}, sceneContext=null,sceneEpoch=0,disposeOmniverse=null,disposeDemo=null,disposeFragments=null;
   function sync(source,scale,calibration){
     const key=scale?JSON.stringify([scale.metresPerUnit,scale.distance,scale.span,calibration?.picks]):null;
     if(session.visual!==source?.visual||session.key!==key){session={visual:source?.visual??null,key,picks:[],picking:false,readings:[]};}
@@ -46,7 +47,7 @@ export function createBimWorkflow({status,event,onRender,onMarkers,makeCloud,get
   async function attach(cloud){const {source,scale,calibration,entry}=getContext(),s=sync(source,scale,calibration);if(s.readings.length){if(!entry?.dimension_checks)throw Error('Reconnect an updated worker to include the saved dimensional checks.');const map=retainedSourceIndices(source.visual.points,cloud);cloud.measurementChecks=await measurementContract(cloud,s.readings.map(r=>toCheck(r,map)));}return cloud;}
   function removeReading(i){if(!Number.isInteger(i)||!session.readings[i])return;session.readings.splice(i,1);onRender();status('Independent check removed. Recompile before relying on a new report.');}
   function reset(){clearScene();session={visual:null,key:null,picks:[],picking:false,readings:[]};sceneContext=null;}
-  function clearScene(){disposeDemo?.();disposeDemo=null;disposeOmniverse?.();disposeOmniverse=null;sceneEpoch++;sceneContext=null;byId('scene-measurement-report')?.replaceChildren();byId('scene-bim-review')?.replaceChildren();byId('scene-bim-files')?.replaceChildren();}
+  function clearScene(){disposeFragments?.();disposeFragments=null;disposeDemo?.();disposeDemo=null;disposeOmniverse?.();disposeOmniverse=null;sceneEpoch++;sceneContext=null;byId('scene-measurement-report')?.replaceChildren();byId('scene-bim-review')?.replaceChildren();byId('scene-bim-files')?.replaceChildren();}
   async function showScene({scene,cloud,report,job,artifacts,sourceClient,signal,sceneSha}){
     clearScene();if(!scene||scene.units!=='m'||!cloud){byId('scene-measurement-report').innerHTML='<h3>Dimensional evidence unavailable</h3><p>This artifact has no matching metric scene and source cloud. Download its original files for inspection.</p>';return;}
     const sceneVersion=sceneEpoch,context={scene,cloud,job,sourceClient,artifacts,openings:cloud.bimReview?.openings?structuredClone(cloud.bimReview.openings):[],dirty:false,originalOpenings:!!cloud.bimReview?.openings?.length,hash:await pointsSHA256(cloud)};
@@ -62,6 +63,7 @@ export function createBimWorkflow({status,event,onRender,onMarkers,makeCloud,get
     if(signal?.aborted||sceneContext!==context)return;
     disposeOmniverse=mountOmniverse({host:files,context,sceneSha,isCurrent:()=>sceneContext===context,status,event});
     disposeDemo=mountDemoReplay({host:files,context,isCurrent:()=>sceneContext===context,status,event});
+    disposeFragments=mountFragments({host:files,context,isCurrent:()=>sceneContext===context,status,event});
   }
   function renderOpenings(){const box=byId('scene-bim-review'),ctx=sceneContext;if(!box||!ctx)return;const {entry}=getContext();
     if(!entry?.bim_review){box.innerHTML='<h3>Review the BIM geometry</h3><p>Inspect wall dimensions and doorway gaps in the exported IFC. Reconnect an updated worker for hosted openings.</p>';return;}
