@@ -68,7 +68,7 @@ try {
     assert.match(wasm.headers.get('content-type'), /application\/wasm/);
     assert.deepEqual(Array.from(new Uint8Array(await wasm.arrayBuffer())), [0, 97, 115, 109, 1, 0, 0, 0]);
     const manifest = await (await get('/arena/deformable/runtime-manifest.json')).json();
-    assert.equal(manifest.engine.version, '3.16.0');
+    assert.equal(manifest.engine.version, '4.0.0');
     assert(manifest.assets.some(asset => asset.path === 'vendor/mujoco.wasm' && /^[a-f0-9]{64}$/.test(asset.sha256)));
     assert.equal((await get('/arena/deformable/', { method: 'POST' })).status, 405);
   });

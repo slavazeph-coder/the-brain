@@ -15,9 +15,9 @@ Status (October 31, 2026): built on `main` and deployed to brainsnn.com. This br
 | Item | What unblocks it |
 |---|---|
 | Lyra generative 3D | GB10 time for Lyra 1 qualification, and a check of the individual checkpoint licences before any commercial use. |
-| GPU worker | Update the repository's GPU Remote Validation SSH port variable and host key to the current machine; the last run recorded no markers. |
+| GPU worker | SSH access is done: on November 2 the port variable and pinned host key were moved to the GB10, and GPU Remote Validation run 6 passed SSH from a GitHub runner, the GB10's GPU, real CUDA execution and workspace persistence (phases 3 to 6). Still open: deploying the worker runtime there (phases 7 to 15 were skipped), which needs the owner's go-ahead on the shared machine. |
 | Physical iPhone Safari | One walkthrough on a real iPhone through `/scan`. CI covers phone-sized WebKit only. |
-| Free visitor processing | On by default since November 1 (the owner could not set the flag): 2 jobs per visitor, 20 a day. `WORLD_SITE_VISITORS=0` on the site service turns it off. |
+| Free visitor processing | Done, live since November 9: 2 jobs per visitor, 20 a day. A visitor processed a photo to its metric preview on brainsnn.com in 9 s. `WORLD_SITE_VISITORS=0` on the site service turns it off. |
 | Anthropic key | Rotate the key that was pasted in chat, and set it only in the worker environment. |
 
 Branch: feature/world-builder-flagship (historical, last commit 80fae28 on October 22). Its specification and fixes reached

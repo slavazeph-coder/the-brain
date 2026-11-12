@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {storyboard,scaleLabel,pickMime,VIDEO} from '../../brainsnn-r3f-app/public/world/share-video.mjs';
+import {storyboard,scaleLabel,pickMime,liftProfile,VIDEO} from '../../brainsnn-r3f-app/public/world/share-video.mjs';
 import {sampleWorld,planWorld,ROBOTS} from '../../brainsnn-r3f-app/public/world/core.mjs';
 
 const reconstructed=(warning,extra={})=>({...sampleWorld(),provenance:'observed',scaleReviewed:false,geometrySource:{kind:'reconstruction-proposal',warnings:[warning]},...extra});
@@ -21,6 +21,8 @@ test('the story calls out the largest obstacles with real sizes and the run as p
   const obstacles=world.objects.filter(o=>o.kind==='obstacle').sort((a,b)=>b.w*b.d-a.w*a.d);
   assert.deepEqual(callouts.map(s=>s.select),obstacles.slice(0,VIDEO.callouts).map(o=>o.id));
   for(const s of callouts){const o=world.objects.find(x=>x.id===s.select);assert.ok(s.caption.startsWith(o.name)&&s.caption.includes(`${Math.round(o.h*10)/10} m tall`),s.caption);}
+  for(const s of callouts){const o=world.objects.find(x=>x.id===s.select);assert.ok(s.lift>=.8&&s.lift<=2.5,'lifted out of the map, not off it');assert.deepEqual(s.focus,{x:o.x+o.w/2,z:o.z+o.d/2});}
+  assert.ok(!scenes.some(s=>!s.select&&(s.lift||s.focus)),'only called-out objects are lifted');
   const run=scenes.find(s=>s.cursor);
   assert.deepEqual(run.cursor,[0,1]);
   assert.match(run.caption,new RegExp(`^Cleaning robot: ${Math.round(plan.reachableArea)} m² reached`));
@@ -37,6 +39,13 @@ test('a route to a goal is told as a route, and no run is never invented',()=>{
   assert.ok(!none.some(s=>s.cursor));
   assert.match(none.at(-1).card.sub,/No route planned\./);
   assert.throws(()=>storyboard(null,null,robot),/Open or build a map/);
+});
+
+test('a lifted object rises, holds and settles back where the map has it',()=>{
+  assert.equal(liftProfile(0),0);assert.equal(liftProfile(1),0);
+  assert.equal(liftProfile(.5),1);assert.equal(liftProfile(.3),1);assert.equal(liftProfile(.75),1);
+  for(let u=0;u<.3;u+=.01)assert.ok(liftProfile(u+.01)>=liftProfile(u),'rises without dipping');
+  for(let u=.75;u<.99;u+=.01)assert.ok(liftProfile(u+.01)<=liftProfile(u),'settles without bouncing');
 });
 
 test('MP4 is chosen where the browser records it, else WebM, else the browser default',()=>{

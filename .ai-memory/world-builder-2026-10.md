@@ -298,14 +298,19 @@ The owner chose this as the interim for the photo leg while Lyra is blocked.
 Idea from Chaitanya Bharech's "2D to 4D using AI" LinkedIn post: PDF bridge drawings to a Blender model, IFC and a
 drone-style flythrough whose captions name each component. In that post the AI also asked questions about drawing
 inconsistencies before modelling.
-- **Export tab:** "Make a share video ↗" records about 25 s in the browser with `share-video.mjs` (MediaRecorder on a canvas
+- **Export tab:** "Make a share video ↗" records under 30 s in the browser with `share-video.mjs` (MediaRecorder on a canvas
   stream; no worker or GPU).
   - Scenes: a title card, then an orbit with the size, obstacle count and unknown area, then the 3 largest obstacles
     called out with name and size, then the route replay with the run's numbers, then a closing card.
   - Every scene carries `scaleLabel(world)` (authored / estimated / measured / assumed, plus "checked by you").
   - Format: MP4 (H.264) where the browser offers it, else WebM. The container's Chromium build records VP9 in MP4; real
     Chrome and Safari give H.264.
-- **Renderer:** `createRenderer(canvas, {fixed: {width, height}})` for an off-screen canvas, and `setView({yaw, zoom})`.
+- **Renderer:** `createRenderer(canvas, {fixed: {width, height}})` for an off-screen canvas, and `setView({yaw, zoom, focus})`.
+- **Take-apart callouts (2026-11-09, after Nyxera0x/cutaway's exploded views, MIT; ideas only, no code copied):** each
+  callout lifts its object out of the map (`setLift(id, metres)`), leaves its footprint dashed with guide lines, labels
+  it with its measured size and centres the view on it (`focus`), then settles it back (`liftProfile`). Presentation only;
+  the map never changes. Callouts are 3.2 s, so the video is about 29 s. Not adopted from cutaway: its frame-by-frame
+  capture and procedural sound (the in-browser recorder is real time; LinkedIn autoplays muted).
 - **Tests:** `share-video.test.mjs` (storyboard, labels, format choice). `browser_smoke.check_share_video` covers Chromium only,
   cancel then a full record; headless WebKit has no canvas MediaRecorder.
 - **Next idea from the same post:** turn the map's warnings into 1–3 plain "check before you plan" questions.
@@ -334,3 +339,32 @@ up to 3 questions for reconstruction proposals only, shown in the Edit tab until
 - Actions: `data-workflow="scale"` (measure a distance) and `data-action="add-object"`.
 - Tests: `review-questions.test.mjs`. `realtosim_browser_smoke` checks the card, the scale button and that it hides after
   both reviews are ticked.
+
+## Visitors live — 2026-11-09
+
+- `/api/world/processing` reported `visitorsOff: "switched-off"`: the Railway site service (`the-brain` in project
+  `wonderful-charisma`, which serves brainsnn.com) had `WORLD_SITE_VISITORS=0`.
+- With the owner's approval it was set to `1` through the Railway connector. The status now reads `visitors: true,
+  visitorJobsPerDay: 2`.
+- Live check as a visitor (no passcode), with the Mip-NeRF room photo: Process on BrainSNN preselected `photo-metric`,
+  and the preview came back in 9 s ("1.3–4.3 m"). This also confirms the hosted worker image has the MoGe-2 model.
+- Still owner-only: Lyra (GB10), a physical iPhone test, and rotating the Anthropic key.
+  - Correction (2026-11-12): the GPU worker's SSH variable and host key were already done on November 2. They point at
+    the GB10, and GPU Remote Validation run 6 passed phases 3 to 6 (SSH, GPU, CUDA, persistence). Phases 7 to 15 (deploy
+    the runtime) were skipped and still need the owner's go-ahead.
+
+## Backend survey — 2026-11-12
+
+- **The hosted worker deploys from `deploy/world-worker-20261027`, not main** (Railway service `world-worker`, root `/`,
+  its own Dockerfile). A worker change on main is not live until main is merged into that branch (as PR #271 did). On
+  November 12 it lacked the capture report, the camera-height scale check, stand-in models and OWLv2 naming.
+- The site service `the-brain` builds `brainsnn-r3f-app/Dockerfile` (Node 22) from main. The repository-root `Dockerfile`
+  (Node 20, end of life) is used by no service. `brand-brain-preview` is an old preview on branch
+  `brainsnn-brand-brain-v01`, still running.
+- **Pillow:** 12.1.0 had 77 known advisories; bumped to 13.0.0 in the worker's requirements, and `prepare_photo` now opens
+  uploads with `formats=PHOTO_FORMATS` (JPEG, PNG, WebP) so no other decoder parses a visitor's file. `pip-audit` on the
+  other production pins was clean.
+- Claude calls (`object_names.py`, `reference_scale.py`) are current: `claude-opus-5-5`, structured outputs, explicit
+  effort, server-side fallbacks. No Anthropic key is set on the hosted worker, so naming and `reference-scale` are off there.
+- Engines built but not enabled on the hosted worker: `reference-scale`, `colmap-dense-cpu`, `depth-small`,
+  `world-observations`, `mapanything-apache`, `lingbot-map-stream` (the last three need a GPU).

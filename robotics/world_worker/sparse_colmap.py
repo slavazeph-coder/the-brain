@@ -200,15 +200,24 @@ def photo_pixel_transform(width, height, orientation, prepared_width, prepared_h
             [sy * exif[1][0], sy * exif[1][1], sy * exif[1][2] + (sy - 1) / 2], [0, 0, 1]]
 
 
+PHOTO_FORMATS = ('JPEG', 'PNG', 'WEBP')  # the only image decoders an uploaded photo may reach
+
+
 def prepare_photo(source: Path, target: Path, *, with_evidence=False):
     from PIL import Image, ImageOps, ImageStat
     with warnings.catch_warnings():
         warnings.simplefilter('error', Image.DecompressionBombWarning)
-        with Image.open(source) as original:
-            if original.format not in {'JPEG', 'PNG', 'WEBP'} or original.width * original.height > MAX_PIXELS:
+        # Only these three decoders ever see an upload: without `formats`, Pillow tries every format it knows on the
+        # file's first bytes, so a renamed file reaches parsers this worker never needs.
+        try:
+            checked = Image.open(source, formats=PHOTO_FORMATS)
+        except Image.UnidentifiedImageError:
+            raise ValueError('Photos must be JPEG, PNG or WebP up to 24 megapixels.') from None
+        with checked as original:
+            if original.format not in PHOTO_FORMATS or original.width * original.height > MAX_PIXELS:
                 raise ValueError('Photos must be JPEG, PNG or WebP up to 24 megapixels.')
             original.verify()
-        with Image.open(source) as original:
+        with Image.open(source, formats=PHOTO_FORMATS) as original:
             original_width, original_height = original.size
             orientation = original.getexif().get(274, 1)
             if type(orientation) is not int or not 1 <= orientation <= 8:
@@ -556,12 +565,24 @@ def run(request: dict, densify_model: Path | None = None, scale_model: Path | No
         evidence['camera_frame_evidence']['timestamps'] = 'Original native timestamps are bound to image hashes in native-capture.json; image sources have no video PTS.'
         native_artifacts = [{'name': 'native-capture.json', 'kind': 'evidence'}]
     (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
+    # Where the walk registered and where it did not, in seconds of video, with what the frames support as the cause.
+    try:
+        from . import capture_report
+    except ImportError:
+        import capture_report
+    report_artifacts = []
+    try:
+        capture_report.write(out, evidence, images)
+        report_artifacts = [{'name': 'capture-report.json', 'kind': 'evidence'}]
+    except Exception as error:  # a report problem never fails a reconstruction
+        evidence['warnings'].append(f'No capture report: {type(error).__name__}: {str(error)[:120]}')
+        (out / 'reconstruction.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     ledger = {'schema': 'brainsnn.camera-frames.v1', 'sources': sources,
               'reconstruction': camera_frames.file_record(out.parent, out / 'reconstruction.json'),
               'clouds': clouds, 'frames': frame_records, 'metric_verified': False}
     camera_frames.write(out.parent, ledger, output_path=out / 'camera-frames.json')
     (out / 'manifest.json').write_text(json.dumps({'artifacts': [*artifacts, {'name': 'reconstruction.json', 'kind': 'evidence'},
-                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}, *native_artifacts]}, allow_nan=False))
+                                                               {'name': 'camera-frames.json', 'kind': 'evidence'}, *native_artifacts, *report_artifacts]}, allow_nan=False))
     return evidence
 
 
