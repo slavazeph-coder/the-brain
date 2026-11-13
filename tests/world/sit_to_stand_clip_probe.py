@@ -40,7 +40,8 @@ def main():
                 status=200, content_type="text/html", body='<input type="file" id="clip">'))
             page.goto(base + "/world/local-clip-probe.html")
             page.route("**/*", lambda route: route.continue_() if (
-                route.request.method == "GET" and route.request.url.startswith(base + "/world/")
+                route.request.method == "GET"
+                and route.request.url.startswith((base + "/world/", "blob:" + base + "/"))
             ) else route.abort())
             page.locator("#clip").set_input_files(args.clip)
             traces = page.evaluate("""async maxSeconds => {
