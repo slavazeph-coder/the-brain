@@ -13,8 +13,8 @@
   <a class="skip" href="#main">Skip to movement review</a>
   <header><nav class="wrap"><a class="brand" href="/" target="_top"><span aria-hidden="true">B</span>BrainSNN</a><a href="/world/index.html">← World Builder</a></nav></header>
   <main class="wrap" id="main">
-    <div class="intro"><div><h1>Movement review</h1><p>Mark a side-view video to review projected knee flexion. Pair it with a vertical force trace on the same timeline.</p></div>
-      <div class="actions"><label class="file-button primary">Open video<input id="video-file" type="file" accept="video/*"></label><button id="demo" type="button">Try synthetic demo</button></div>
+    <div class="intro"><div><h1>Movement review</h1><p>Mark a side-view video to review projected knee flexion. Track a sit-to-stand trial, review the landmarks, or mark individual frames by hand.</p></div>
+      <div class="actions"><label class="file-button primary">Open video<input id="video-file" type="file" accept="video/*"></label><label class="file-button camera-capture">Record on phone<input id="capture-file" type="file" accept="video/*" capture="environment"></label><button id="demo" type="button">Try squat demo</button><button id="trial-demo" type="button">Try sit-to-stand demo</button></div>
     </div>
     <p id="status" role="status">Your video and annotations stay in this browser tab. Export the review to keep it.</p>
     <button id="preview-demo" type="button" aria-label="Open the synthetic squat demo">
@@ -41,10 +41,36 @@
         </section>
         <section class="panel" aria-labelledby="frames-heading"><div class="panel-heading"><h2 id="frames-heading">Saved frames</h2><button type="button" id="export">Export JSON</button></div><p class="help" id="frames-empty">Save a marked frame to begin the angle trace.</p><ul id="frames"></ul></section>
       </div>
+      <section id="sit-to-stand" class="panel trial" aria-labelledby="trial-title">
+        <div class="panel-heading"><h2 id="trial-title">Sit-to-stand trial</h2><button id="trial-export" type="button" disabled>Export trial JSON</button></div>
+        <p class="help">Use a fixed side view with one person and the near hip, knee and ankle visible. Include a seated pause before each rise and a standing pause afterwards.</p>
+        <div class="trial-controls"><label>Visible side<select id="trial-side"><option value="left">Left</option><option value="right">Right</option></select></label>
+          <label>Trial start (s)<input id="trial-start" type="number" min="0" step="any" value="0"></label>
+          <label>Trial end (s)<input id="trial-end" type="number" min="0" step="any"></label></div>
+        <div class="actions"><button type="button" id="trial-run" class="primary">Track selected interval</button><button type="button" id="trial-cancel" hidden>Cancel tracking</button></div>
+        <p class="help" id="trial-status" role="status">Choose the side of the body facing the camera.</p>
+        <div id="trial-results" hidden>
+          <div class="metrics"><div><span>Candidate rises</span><output id="trial-count">0</output></div><div><span>Usable angle samples</span><output id="trial-coverage">0 / 0</output></div></div>
+          <ol id="trial-reps" aria-label="Candidate rise intervals"></ol>
+          <div id="trial-scrubber" hidden><label for="trial-frame">Inspect a trial sample</label><input type="range" id="trial-frame" min="0" max="0" step="1" value="0"><output id="trial-sample" for="trial-frame"></output>
+          <p class="help">Inspect a sample on the video above. Mark and save that side’s hip, knee and ankle to override the automatic reading.</p></div>
+          <details class="trial-method"><summary>How candidates are counted</summary><p class="help" id="trial-method"></p></details>
+        </div>
+        <details class="trial-forces" id="trial-validation"><summary>Compare a model estimate with a force plate</summary>
+          <p class="help">Use the Force trace panel to apply a measured trace and a modelled trace (or estimate support from centre-of-mass acceleration). Both stay attached to this trial. Align clocks with an independently observed sync event.</p>
+          <ul class="trial-traces"><li><span id="trial-measured">Reference trace pending</span><button type="button" id="trial-clear-measured" hidden>Remove reference</button></li>
+          <li><span id="trial-modelled">Model trace pending</span><button type="button" id="trial-clear-modelled" hidden>Remove model</button></li></ul>
+          <div class="trial-controls"><label>Matched contact basis<select id="trial-contact"><option value="">Select the verified setup</option><option value="all-contacts">All contacts included in both traces</option><option value="feet-only">Feet only after verified seat-off, hands unsupported</option></select></label>
+          <label>Compare from (s)<input type="number" id="trial-force-start" min="0" step="any"></label><label>Compare through (s)<input type="number" min="0" id="trial-force-end" step="any"></label></div>
+          <button type="button" id="trial-compare">Compare synchronized traces</button>
+          <p id="trial-force-status" role="status" class="help"></p>
+          <dl class="trial-errors" id="trial-errors" hidden><div><dt>Mean absolute error</dt><dd id="trial-mae">—</dd></div><div><dt>Root mean square error</dt><dd id="trial-rmse">—</dd></div><div><dt>Bias (model − reference)</dt><dd id="trial-bias">—</dd></div></dl>
+        </details>
+      </section>
       <section class="panel timeline" aria-labelledby="timeline-heading"><h2 id="timeline-heading">Movement timeline</h2>
-        <p class="help" id="chart-help">Knee flexion is shown at saved frames. Force values follow the imported trace and its time offset.</p>
+        <p class="help" id="chart-help">The plot shows reviewed knee angles and usable tracker samples for the selected side. Force values follow the active trace and its time offset.</p>
         <div class="plot"><canvas id="chart" aria-label="Saved knee angles and optional force over video time" role="img" aria-describedby="chart-help">Use the saved frame list to review angles.</canvas></div>
-        <div class="legend"><span class="angle-key">Knee flexion (°)</span><span id="force-key" hidden>Vertical force (N)</span></div>
+        <div class="legend"><span class="angle-key">Saved angle (°)</span><span id="tracked-key" hidden>Trial angle (°)</span><span id="force-key" hidden>Vertical force (N)</span></div>
       </section>
       <section class="panel" id="force-panel" aria-labelledby="force-heading"><h2 id="force-heading">Force trace</h2>
         <p class="help">Import a single vertical component in newtons with seconds relative to the trace start. CSV header <code>time_s,vertical_force_n</code>.</p>

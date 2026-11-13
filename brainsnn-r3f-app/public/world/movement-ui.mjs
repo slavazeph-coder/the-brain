@@ -1,5 +1,7 @@
 import { kneeFlexion, readForceCsv, forceAt, buildMovementReview } from './movement-analysis.mjs';
 
+import { mountTrial, trialDemoLandmarks } from './movement-trial-ui.mjs';
+
 const $ = id => document.getElementById(id);
 const video = $('video'), stage = $('stage'), overlay = $('overlay'), slider = $('time');
 const joints = ['hip', 'knee', 'ankle'];
@@ -12,13 +14,38 @@ const clamp = v => Math.max(0, Math.min(1, v));
 const sec = t => t.toFixed(3) + ' s';
 const report = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
 
+const trial = mountTrial({
+  getSource: () => source,
+  getVideoUrl: () => localURL,
+  sideChanged: () => { loadDraft(); },
+  forceRemoved: removed => {
+    if (forceTrace !== removed) return;
+    forceTrace = null;
+    traceRequest++;
+    staticChart = null;
+    render();
+  },
+  seek,
+  redraw: () => { staticChart = null; render(); },
+  openDemo() {
+    clearSource();
+    $('video-file').value = '';
+    $('capture-file').value = '';
+    source = {kind:'synthetic', name:'Sit-to-stand trial', width:720, height:480, durationSeconds:8, trialDemo:true};
+    showSource();
+    report('Synthetic sit-to-stand trial. Scrub the movement or review each detected rise.');
+  },
+});
+
 function demoLandmarks(t) {
   const bend = (1 - Math.cos(Math.PI * t / 2)) / 2;
   return [{x: .47 - .085 * bend, y: .48 + .17 * bend},
     {x: .5 + .085 * bend, y: .65 + .055 * bend}, {x: .48, y: .84}];
 }
 
-function sameFrame(t) { return observations.find(o => Math.abs(o.timeSeconds - t) < .000001); }
+// The original squat has no recorded anatomical side. Keep that review untagged.
+function selectedSide() { return source?.kind === 'synthetic' && !source.trialDemo ? undefined : trial.side(); }
+function sameFrame(t) { return observations.find(o => o.side === selectedSide() && Math.abs(o.timeSeconds - t) < .000001); }
 function loadDraft() {
   draft = (sameFrame(time)?.landmarks || []).map(p => ({...p}));
   draftEdited = false;
@@ -37,6 +64,7 @@ function stop() {
 }
 function clearSource() {
   stop();
+  trial.resetSource(null);
   source = null;
   if (localURL) {
     URL.revokeObjectURL(localURL);
@@ -62,6 +90,7 @@ function clearSource() {
   $('force-file').value = '';
 }
 function showSource() {
+  trial.resetSource(source);
   $('review').hidden = false;
   $('preview-demo').hidden = true;
   stage.style.setProperty('--aspect', String(source.width / source.height));
@@ -79,6 +108,7 @@ function showSource() {
 $('demo').onclick = () => {
   clearSource();
   $('video-file').value = '';
+  $('capture-file').value = '';
   source = {kind:'synthetic', name:'Squat cycle', width:720, height:480, durationSeconds:4};
   observations = [0, 1, 2, 3, 4].map(timeSeconds => ({timeSeconds, landmarks:demoLandmarks(timeSeconds)}));
   forceTrace = readForceCsv('time_s,vertical_force_n\n0,650\n1,510\n2,680\n3,930\n4,650', {kind:'synthetic', label:'Authored example load', offsetSeconds:0});
@@ -86,8 +116,9 @@ $('demo').onclick = () => {
   showSource();
   report('Synthetic motion and force values. Choose a saved frame, scrub the timeline or open your own video.');
 };
-$('video-file').onchange = () => {
-  const file = $('video-file').files[0];
+function openLocalClip(event) {
+  const file = event.currentTarget.files[0];
+  event.currentTarget.value = '';
   if (!file) return;
   clearSource();
   localURL = URL.createObjectURL(file);
@@ -100,7 +131,7 @@ $('video-file').onchange = () => {
       report('This video needs a readable frame size and a finite duration.', true);
       return;
     }
-    source = {kind:'video', name:file.name, width, height, durationSeconds};
+    source = {kind:'video', name:file.name, sizeBytes:file.size, lastModifiedMs:file.lastModified, width, height, durationSeconds};
     showSource();
     report('Video opened locally. Pause at the movement you want to mark.');
   };
@@ -112,7 +143,8 @@ $('video-file').onchange = () => {
   };
   video.src = localURL;
   video.load();
-};
+}
+for (const id of ['video-file', 'capture-file']) $(id).addEventListener('change', openLocalClip);
 video.addEventListener('loadeddata', () => { if (source?.kind === 'video') render(); });
 video.addEventListener('seeked', () => {
   if (source?.kind !== 'video' || video.seeking) return;
@@ -181,6 +213,13 @@ function surface(canvas) {
   return {ctx, w, h};
 }
 
+function displayedPose() {
+  const marked = playing ? sameFrame(time)?.landmarks || [] : draft;
+  if (marked.length || (!playing && draftEdited) || seekPending) return {points:marked, sample:null};
+  const sample = trial.nearestAt(time);
+  return {points:sample?.landmarks || [], sample};
+}
+
 function drawStage() {
   const s = surface(overlay);
   if (!s || !source) return;
@@ -192,24 +231,29 @@ function drawStage() {
     ctx.strokeStyle = color; ctx.lineWidth = thickness; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.stroke();
   };
   if (source.kind === 'synthetic') {
-    const [hip, knee, ankle] = demoLandmarks(time);
+    const [hip, knee, ankle] = source.trialDemo ? trialDemoLandmarks(time) : demoLandmarks(time);
     const shoulder = {x: hip.x + .055 + .55 * (hip.y - .48), y: hip.y - .255};
     const head = {x: shoulder.x + .014, y: shoulder.y - .09};
     ctx.fillStyle = '#101b26'; ctx.fillRect(0, 0, w, h);
     line([{x: .14, y: .87}, {x: .86, y: .87}], '#3b5368', 2);
+    if (source.trialDemo) {
+      line([{x:.11, y:.64}, {x:.38, y:.64}], '#8c7660', h * .017);
+      line([{x:.15, y:.64}, {x:.15, y:.87}], '#8c7660', h * .014);
+    }
     line([hip, {x:knee.x - .035, y:knee.y}, {x:ankle.x - .03, y:ankle.y}], '#35495f', h * .026);
     line([hip, shoulder], '#7c8ea6', h * .058);
     line([hip, knee, ankle, {x:ankle.x + .055, y:.85}], '#91a8bb', h * .033);
     line([shoulder, {x: shoulder.x + .08, y: shoulder.y + .11}, {x: shoulder.x + .17, y: shoulder.y + .09}], '#667f91', h * .024);
     dot(head, h * .053, '#bec9d4');
   }
-  const points = playing ? (sameFrame(time)?.landmarks || []) : draft;
+  const {points, sample} = displayedPose();
+  const color = sample ? '#ffc880' : '#76edee';
   if (points.length) {
     line(points, '#081018', 6);
-    line(points, '#76edee', 2.5);
+    line(points, color, 2.5);
     ctx.font = 'bold 12px system-ui';
     for (const [i, p] of points.entries()) {
-      dot(p, 5, '#101722'); dot(p, 3.5, '#76edee');
+      dot(p, 5, '#101722'); dot(p, 3.5, color);
       const text = joints[i][0].toUpperCase() + joints[i].slice(1);
       const x = Math.max(2, Math.min(w - ctx.measureText(text).width - 6, p.x * w + 8)), y = Math.max(14, Math.min(h - 4, p.y * h - 6));
       ctx.lineWidth = 3; ctx.strokeStyle = '#081018'; ctx.strokeText(text, x, y); ctx.fillStyle = '#f4ffff'; ctx.fillText(text, x, y);
@@ -250,7 +294,7 @@ $('save-frame').onclick = () => {
   if (playing || seekPending || angle(draft) === null) return;
   const previous = sameFrame(time);
   if (!previous && observations.length >= 10000) { report('The review already has 10,000 frames.', true); return; }
-  const observation = {timeSeconds:time, landmarks:draft.map(p => ({...p}))};
+  const observation = {timeSeconds:time, ...(selectedSide() ? {side:selectedSide()} : {}), landmarks:draft.map(p => ({...p}))};
   observations = observations.filter(o => o !== previous).concat(observation).sort((a,b) => a.timeSeconds - b.timeSeconds);
   draftEdited = false;
   refreshSaved();
@@ -258,17 +302,20 @@ $('save-frame').onclick = () => {
   report('Saved the knee landmarks at ' + sec(time) + '.');
 };
 function refreshSaved() {
+  trial.setObservations(observations);
   staticChart = null;
   $('frames-empty').hidden = observations.length > 0;
   $('export').disabled = observations.length === 0;
   const fragment = document.createDocumentFragment();
-  for (const o of observations) {
+  for (const [index,o] of observations.entries()) {
     const li = document.createElement('li'), go = document.createElement('button'), remove = document.createElement('button');
     go.type = remove.type = 'button';
     go.dataset.time = String(o.timeSeconds);
-    go.textContent = sec(o.timeSeconds) + ' · ' + angle(o.landmarks).toFixed(1) + '°';
-    remove.dataset.remove = String(o.timeSeconds);
-    remove.textContent = 'Remove'; remove.setAttribute('aria-label', 'Remove frame at ' + sec(o.timeSeconds));
+    go.dataset.index = String(index);
+    const description = (o.side ? o.side + ' · ' : '') + sec(o.timeSeconds);
+    go.textContent = description + ' · ' + angle(o.landmarks).toFixed(1) + '°';
+    remove.dataset.remove = String(index);
+    remove.textContent = 'Remove'; remove.setAttribute('aria-label', 'Remove annotation ' + description);
     li.append(go, remove); fragment.append(li);
   }
   $('frames').replaceChildren(fragment);
@@ -276,11 +323,21 @@ function refreshSaved() {
 $('frames').onclick = event => {
   const button = event.target.closest('button');
   if (!button) return;
-  if (button.dataset.time !== undefined) { seek(Number(button.dataset.time)); return; }
-  const target = Number(button.dataset.remove);
-  observations = observations.filter(o => o.timeSeconds !== target);
-  if (Math.abs(target - time) < .000001) loadDraft();
-  refreshSaved(); render(); report('Removed the annotation at ' + sec(target) + '.');
+  if (button.dataset.time !== undefined) {
+    const selected = observations[Number(button.dataset.index)];
+    if (!selected) return;
+    if (selected.side && trial.side() !== selected.side) {
+      $('trial-side').value = selected.side;
+      $('trial-side').dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    seek(selected.timeSeconds);
+    return;
+  }
+  const index = Number(button.dataset.remove), removed = observations[index];
+  if (!removed) return;
+  observations = observations.filter((_,i) => i !== index);
+  if (Math.abs(removed.timeSeconds - time) < .000001 && removed.side === selectedSide()) loadDraft();
+  refreshSaved(); render(); report('Removed the annotation at ' + sec(removed.timeSeconds) + '.');
 };
 $('apply-force').onclick = async () => {
   const request = ++traceRequest;
@@ -292,12 +349,13 @@ $('apply-force').onclick = async () => {
     const trace = readForceCsv(await file.text(), {kind, label, offsetSeconds});
     if (request !== traceRequest) return;
     forceTrace = trace;
+    trial.acceptForce(trace);
     staticChart = null;
     render();
     report('Applied ' + label + ' to the video timeline.');
   } catch (error) { if (request === traceRequest) report(error.message, true); }
 };
-$('clear-force').onclick = () => { traceRequest++; forceTrace = null; staticChart = null; render(); report('Removed the force trace.'); };
+$('clear-force').onclick = () => { traceRequest++; trial.removeForce(forceTrace?.kind); forceTrace = null; staticChart = null; render(); report('Removed the force trace.'); };
 $('export').onclick = () => {
   try {
     const review = buildMovementReview({source, observations, forceTrace});
@@ -317,6 +375,7 @@ $('support-model').addEventListener('movement-support-trace', event => {
   if (source?.kind !== 'video' || event.detail?.kind !== 'modelled') return;
   traceRequest++;
   forceTrace = event.detail;
+  trial.acceptForce(forceTrace);
   staticChart = null;
   render();
   report('Applied ' + forceTrace.label + ' to the video timeline.');
@@ -364,8 +423,16 @@ function drawChart() {
         }); pen.stroke();
       }
     }
+    for (const frame of trial.poseFrames()) {
+      if (!frame.landmarks) continue;
+      const bend = angle(frame.landmarks);
+      if (bend === null) continue;
+      pen.fillStyle = '#ffc880';
+      pen.fillRect(x(frame.timeSeconds) - 1.3, bottom - bend / 180 * (bottom - top) - 1.3, 2.6, 2.6);
+    }
     // Discrete marks, so an unlabelled interval never appears to have a measured angle.
     for (const o of observations) {
+      if (o.side !== selectedSide()) continue;
       const deg = angle(o.landmarks);
       if (deg === null) continue;
       pen.beginPath(); pen.arc(x(o.timeSeconds), bottom - deg / 180 * (bottom - top), 3.3, 0, 2 * Math.PI);
@@ -385,7 +452,8 @@ function render() {
   $('clock').textContent = sec(time);
   stage.dataset.seeking = String(seekPending);
   const busy = playing || seekPending || source.kind === 'video' && (video.seeking || video.readyState < 2);
-  const deg = angle(playing ? sameFrame(time)?.landmarks || [] : draft);
+  const {points, sample} = displayedPose();
+  const deg = angle(points);
   const force = forceAt(forceTrace, time);
   $('angle').textContent = deg === null ? '—' : deg.toFixed(1) + '°';
   $('force').textContent = force === null ? '—' : force.toFixed(1) + ' N';
@@ -393,12 +461,15 @@ function render() {
     ? provenance[forceTrace.kind] + ' · ' + forceTrace.label + (forceTrace.model?.sourceLabel ? ' · ' + forceTrace.model.sourceLabel : '') + (force === null ? ' · Outside trace coverage' : '')
     : 'Add a synchronized trace to review vertical force.';
   $('force-key').hidden = !forceTrace;
+  $('tracked-key').hidden = !trial.poseFrames().length;
   $('clear-force').hidden = !forceTrace;
   $('undo').disabled = $('reset').disabled = busy || draft.length === 0;
   $('save-frame').disabled = busy || deg === null || !draftEdited;
   $('play').disabled = seekPending;
+  $('chart').setAttribute('aria-label', trial.poseFrames().length ? 'Projected knee angles from trial samples and saved marks, with optional force on the same timeline' : 'Saved knee angles and optional force over video time');
   const guide = $('point-guide');
-  const text = playing ? 'Pause to mark landmarks.' : busy ? 'Loading frame…' : draft.length < 3
+  const text = sample && !busy ? (sample.origin === 'manual' ? 'Manual observation' : source.kind === 'synthetic' ? 'Synthetic pose' : 'Tracker estimate') + ' at ' + sec(sample.timeSeconds) + '. Mark all three joints to save your own observation.'
+    : playing ? 'Pause to mark landmarks.' : busy ? 'Loading frame…' : draft.length < 3
     ? 'Mark the ' + joints[draft.length] + ' on the same side of the body (' + (draft.length + 1) + ' of 3).'
     : deg === null ? 'Overlapping landmarks. Undo a point and mark a distinct joint.'
     : draftEdited ? 'All three landmarks are marked. Save this frame to keep the measurement.'
@@ -442,3 +513,5 @@ function drawPreview() {
 }
 $('preview-demo').onclick = () => $('demo').click();
 new ResizeObserver(drawPreview).observe($('preview-demo'));
+
+if (new URLSearchParams(location.search).get('demo') === 'sit-to-stand') $('trial-demo').click();

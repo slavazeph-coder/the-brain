@@ -23,6 +23,12 @@ on:
       - ".github/workflows/world-builder-checks.yml"
       - ".github/workflows/brainsnn-app-deploy.yml"
   workflow_dispatch:
+    inputs:
+      check_published_movement:
+        description: Run both sides of the published OpenCap sit-to-stand clip in a browser
+        type: boolean
+        required: false
+        default: false
   workflow_call:
 
 permissions:
@@ -136,6 +142,9 @@ jobs:
           WORLD_URL: http://127.0.0.1:4180/
           WORLD_SITE_URL: http://127.0.0.1:4180
           WORLD_BROWSERS: chromium,webkit
+          CHECK_PUBLISHED_MOVEMENT: >-
+            ${{ (github.event_name == 'workflow_dispatch' && inputs.check_published_movement == true)
+              || (github.event_name == 'pull_request' && contains(github.event.pull_request.body, '[verify-published-movement]')) }}
           # Model inference is an opt-in qualification, not a mocked CI output.
           WORLD_PHOTO: ""
         run: |
@@ -154,6 +163,31 @@ jobs:
           # Edit a reviewed map, review it again, route to the same spot: the comparison, with the gate in between.
           python tests/world/what_if_browser_smoke.py
           python tests/world/movement_browser_smoke.py
+          if [[ "$CHECK_PUBLISHED_MOVEMENT" == "true" ]]; then
+            (
+              clip="$RUNNER_TEMP/opencap-subj11-sts1.mp4"
+              compatible_clip="$RUNNER_TEMP/opencap-subj11-sts1.webm"
+              trap 'rm -f "$clip" "$compatible_clip"' EXIT
+              curl --proto '=https' --fail --show-error --silent --location --max-time 60 --retry 2 --retry-max-time 150 \
+                https://utahmobl.github.io/OpenCap-monocular-project-page/static/videos/subj11_sts1.mp4 --output "$clip"
+              summary=output/playwright/world/published-movement.json
+              source_sha=134fd3b2b08532c559ff981046cb12d57afe340db05f56ac36e3325869a5d74e
+              echo "$source_sha  $clip" | sha256sum --check
+              if ! python tests/world/sit_to_stand_clip_probe.py "$clip" --browser webkit --sha256 "$source_sha" > "$summary"; then
+                echo "::notice::The original MP4 probe failed. Trying the same footage as VP8 in Chromium."
+                ffmpeg -nostdin -v error -i "$clip" -map 0:v:0 -an -c:v libvpx -b:v 0 -crf 8 \
+                  -pix_fmt yuv420p -fps_mode passthrough -deadline realtime -cpu-used 3 "$compatible_clip"
+                python tests/world/sit_to_stand_clip_probe.py "$compatible_clip" --browser chromium > "$summary.tmp"
+                jq --arg original "$source_sha" '. + {originalMp4Sha256:$original, inputFormat:"VP8 transcode", originalWebKitProbe:"failed"}' \
+                  "$summary.tmp" > "$summary"
+                rm "$summary.tmp"
+              fi
+              jq -c '.sides[] | {side, detected, frameCount, validFrames:.analysis.validFrames,
+                candidateCount:(.analysis.repetitions|length),
+                intervals:[.analysis.repetitions[]|[.startSeconds,.standSeconds]]}' "$summary"
+              jq -e 'any(.sides[]; .analysis.repetitions|length > 0)' "$summary" >/dev/null
+            )
+          fi
           # Native street workspace uses the actual Express asset transport, shadow DOM, edits and exports.
           python tests/world/street_browser_smoke.py
           # Same-origin IndexedDB file handoff; no upload or external model calls.

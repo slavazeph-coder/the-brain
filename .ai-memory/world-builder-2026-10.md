@@ -386,3 +386,8 @@ loads That Open `.frag` building models with their BIM data. BrainSNN already wr
   download in `scene_browser_smoke.py`.
 - `tsconfig.json` now excludes `dist` and `public/world/vendor`: with `allowJs`, `tsc` ran out of memory on the bundle.
 
+## Single-camera sit-to-stand review (November 13)
+
+Movement Review accepts a local video or mobile camera capture. The optional MoveNet v4 assets are built by `scripts/build-movement-pose.mjs` and served on BrainSNN’s origin. Trials export selected-side landmarks, detector confidence, manual corrections, angle-threshold event times and optional synchronized vertical-force comparison. The two force inputs must cover the same external contacts. A seated participant also loads the chair.
+
+In the OpenCap Monocular subject 11 sit-to-stand example, a local FFmpeg/WASM run found five right-side candidates and one left-side candidate on the same oblique clip. High landmark confidence alone does not establish repetition accuracy. The force comparison was exercised separately on the WeRoLab AB01 second chair rise with marker-based center-of-mass acceleration.

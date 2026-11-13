@@ -45,20 +45,26 @@ def annotate(page, points):
     button.click()
 
 
-def check(page, clip):
+def check(page, clip, run_inference):
     errors, writes = [], []
     page.set_default_timeout(12000)
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('request', lambda req: writes.append(req.url) if req.method not in {'GET', 'HEAD'} else None)
-    response = page.goto(f'{BASE}/world/movement.html')
+    response = page.goto(f'{BASE}/world/movement.html?demo=sit-to-stand')
     assert response and response.ok
+    expect(page.locator('#trial-count')).to_have_text('2')
+    trial = download_json(page, '#trial-export')
+    assert trial['schema'] == 'brainsnn.sit-to-stand-trial.v1'
+    assert trial['source']['kind'] == 'synthetic' and len(trial['repetitions']['repetitions']) == 2
+    page.locator('#trial-frame').press('End')
+    expect(page.locator('#clock')).to_contain_text('8.000')
     page.locator('#demo').press('Enter')
     demo = download_json(page, '#export')
     assert demo['schema'] == 'brainsnn.movement-review.v1'
     assert demo['source']['kind'] == 'synthetic'
     assert len(demo['observations']) >= 2
 
-    page.locator('#video-file').set_input_files(clip)
+    page.locator('#video-file' if run_inference else '#capture-file').set_input_files(clip)
     page.wait_for_function("""() => {const v=document.querySelector('#video');
       return v.readyState >= 2 && v.videoWidth === 320 && v.paused}""")
     expect(page.locator('#frames [data-remove]')).to_have_count(0)
@@ -72,6 +78,12 @@ def check(page, clip):
     undo.press('Enter')
     expect(undo).to_be_disabled()
     annotate(page, [(0.3, 0.25), (0.3, 0.75), (0.7, 0.75)])
+    page.locator('#trial-side').select_option('right')
+    annotate(page, [(0.45, 0.2), (0.45, 0.5), (0.45, 0.8)])
+    bilateral = download_json(page, '#export')['observations']
+    assert [(o['timeSeconds'], o['side']) for o in bilateral] == [(0, 'left'), (0, 'right')]
+    page.locator('#frames [data-remove]').last.click()
+    page.locator('#trial-side').select_option('left')
     seek = page.locator('#time')
     seek.focus()
     seek.press('ArrowRight')
@@ -122,6 +134,33 @@ def check(page, clip):
     assert modelled['observations'][1]['verticalForceN'] == 0
     assert page.locator('#force').inner_text().split()[0] in {'0', '0.0', '0.00'}
 
+    # Keep both original traces while the active viewer changes from measured to modelled.
+    page.locator('#trial-validation summary').click()
+    page.locator('#trial-contact').select_option('all-contacts')
+    page.locator('#trial-force-start').fill('0.4')
+    page.locator('#trial-force-end').fill('1.6')
+    page.locator('#trial-compare').click()
+    expect(page.locator('#trial-errors')).to_be_visible()
+    trial = download_json(page, '#trial-export')
+    compared = trial['forceComparison']
+    assert compared['status'] == 'compared' and math.isclose(compared['durationSeconds'], 1.2)
+    assert compared['rmseN'] >= compared['maeN'] > 0
+    assert trial['forceInputs']['measured']['label'] == 'Authored force-platform fixture'
+    assert trial['forceInputs']['modelled']['model']['massKg'] == 80
+    page.locator('#trial-clear-measured').click()
+    expect(page.locator('#trial-errors')).to_be_hidden()
+    if run_inference:
+        # Exercise genuine packaged weights and the user's normal blob-video decoder.
+        # The generated clip contains uniform grey frames, without a person.
+        page.locator('#trial-end').fill('0.8')
+        page.locator('#trial-run').click()
+        page.wait_for_function("""() => {
+          const s = document.querySelector('#trial-status').textContent;
+          return s.startsWith('Pose tracking complete') || s.startsWith('Tracking could not finish');
+        }""", timeout=100000)
+        inferred = download_json(page, '#trial-export')
+        assert inferred['tracking'] and len(inferred['tracking']['samples']) >= 3, page.locator('#trial-status').inner_text()
+        assert all(f['landmarks'] is None for f in inferred['tracking']['samples']), 'Unexpected pose on an empty frame'
     page.locator('#mot-panel summary').click()
     page.locator('#mot-file').set_input_files({'name': 'authored.mot', 'mimeType': 'text/plain', 'buffer': MOTION})
     mot_seek = page.locator('#mot-frame')
@@ -142,7 +181,7 @@ def main():
     with TemporaryDirectory() as directory:
         # Avoid depending on H.264 availability in the open Chromium distribution.
         inputs = ['ffmpeg', '-nostdin', '-loglevel', 'error', '-f', 'lavfi', '-i',
-                  'testsrc2=size=320x180:rate=10', '-t', '2', '-pix_fmt', 'yuv420p']
+                  'color=c=gray:size=320x180:rate=10', '-t', '2', '-pix_fmt', 'yuv420p']
         mp4, webm = (Path(directory) / f'authored-movement.{ext}' for ext in ('mp4', 'webm'))
         subprocess.run([*inputs, '-c:v', 'libx264', '-movflags', '+faststart', str(mp4)], check=True)
         subprocess.run([*inputs, '-c:v', 'libvpx', '-b:v', '160k', str(webm)], check=True)
@@ -154,7 +193,7 @@ def main():
                 try:
                     for width, height in [(1240, 820), (390, 844)]:
                         page = browser.new_page(viewport={'width': width, 'height': height}, has_touch=width < 500)
-                        check(page, webm if name == 'chromium' else mp4)
+                        check(page, webm if name == 'chromium' else mp4, run_inference=width > 500)
                         page.close()
                         print(f'{name} {width}x{height}: demo, annotated video, synchronized force, modelled support force, OpenSim and downloads passed', flush=True)
                 finally:
