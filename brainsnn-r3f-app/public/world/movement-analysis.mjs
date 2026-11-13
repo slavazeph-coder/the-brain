@@ -89,14 +89,18 @@ export function buildMovementReview({ source, observations, forceTrace = null })
     validateTrace(forceTrace);
     if ((source.kind === 'synthetic') !== (forceTrace.kind === 'synthetic')) throw new Error('Keep synthetic examples separate from video evidence.');
   }
-  const frames = observations.map(({timeSeconds, landmarks}) => {
+  const seenTimes = new Map();
+  const frames = observations.map(({timeSeconds, landmarks, side}) => {
+    if (side !== undefined && side !== 'left' && side !== 'right') throw new Error('A tagged frame needs a left or right side.');
     if (!Number.isFinite(timeSeconds) || timeSeconds < 0 || timeSeconds > source.durationSeconds) {
       throw new Error('Each annotated time must be inside the source duration.');
     }
+    if (!seenTimes.has(side)) seenTimes.set(side, new Set());
+    if (seenTimes.get(side).has(timeSeconds)) throw new Error('Save only one annotation per side at each time.');
+    seenTimes.get(side).add(timeSeconds);
     const kneeFlexionDegrees = kneeFlexion(landmarks, source.width, source.height);
-    return { timeSeconds, landmarks: landmarks.map(({x,y}) => ({x,y})), kneeFlexionDegrees, verticalForceN: forceAt(forceTrace, timeSeconds) };
+    return { timeSeconds, ...(side ? {side} : {}), landmarks: landmarks.map(({x,y}) => ({x,y})), kneeFlexionDegrees, verticalForceN: forceAt(forceTrace, timeSeconds) };
   }).sort((a,b) => a.timeSeconds - b.timeSeconds);
-  if (frames.some((frame, i) => i > 0 && frame.timeSeconds === frames[i - 1].timeSeconds)) throw new Error('Save only one observation at each time.');
   return {
     schema: 'brainsnn.movement-review.v1', source: { ...source }, observations: frames,
     method: { landmarks: ['hip', 'knee', 'ankle'], coordinates: 'normalized image x right, y down',

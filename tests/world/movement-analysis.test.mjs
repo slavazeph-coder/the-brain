@@ -33,3 +33,12 @@ test('exports the supplied force provenance, exact annotations, and missing evid
   assert.throws(()=>buildMovementReview({source,observations:[{timeSeconds:4,landmarks}]}));
   assert.throws(()=>buildMovementReview({source:{...source,kind:'synthetic'},observations,forceTrace}));
 });
+
+test('side-specific annotations share a timestamp and preserve legacy untagged records', () => {
+  const observation=observations[0], left={...observation,side:'left'}, right={...observation,side:'right'};
+  const review=buildMovementReview({source,observations:[left,observation,right]});
+  assert.deepEqual(review.observations.map(o=>o.side),['left',undefined,'right']);
+  assert.equal(Object.hasOwn(review.observations[1],'side'),false);
+  assert.throws(()=>buildMovementReview({source,observations:[left,right,left]}));
+  assert.throws(()=>buildMovementReview({source,observations:[{...left,side:'unknown'}]}));
+});
