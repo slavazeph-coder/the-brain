@@ -76,6 +76,11 @@ This changes retained resolution and point selection compared with the old adapt
 original capture before comparing wall counts, object IDs, names or fit receipts; do not reuse the old compiled model.
 Both ASCII and binary PLY now normalize each colour channel using its declared type. For example, 16-bit RGB
 `(32768, 16384, 8192)` becomes `(128, 64, 32)` in all three supported PLY layouts.
+LAS/LAZ always uses the format's declared unsigned 16-bit channels, including dark chunks whose values are all
+below 256. Brightness is never used to guess bit depth separately for each reader chunk. Nonstandard LAS files
+storing 8-bit values in 16-bit fields need normalization in the source exporter.
+The follow-up LAS regression passed with both a fake decoder and actual authored LAS/LAZ files read by
+laspy 2.6.1 and lazrs 0.7.0, using one-point and three-point chunks. Those are format checks, not physical captures.
 
 ## Regression checks for PR #294
 
@@ -137,4 +142,5 @@ Model-to-input fit alone does not validate scanner accuracy or the resulting BIM
 - The wall classifier remains a geometry heuristic. The clutter regressions do not prove arbitrary furniture can
   never resemble a wall. Very coarse scans may lack the existing minimum high-band support or independent height
   layers; narrow openings and small objects remain unresolved. No physical robot route has been validated here.
-- LAS/LAZ and E57 reading is written against `laspy` and `pye57` but only PLY has been run on a real file.
+- LAS/LAZ has been checked on authored files; PLY is the only format with the original physical-scan experiment.
+  Physical-capture LAS/LAZ and E57 files still require validation.

@@ -15,6 +15,10 @@ description: PR 294 coarse scan wall regressions, bounded ingestion and validati
   capped at 50,000 points and independent of reader chunk boundaries. This changes the sample relative to
   the old growth-factor thinner, so previous scan counts and object/name receipts need regeneration.
 - ASCII and binary PLY normalize declared 16-bit colour types consistently.
+- A fresh automated review found the same brightness-based ambiguity in LAS/LAZ. Those formats now always
+  normalize their declared unsigned 16-bit channels, with dark/bright chunk-boundary regression coverage.
+  The 22 survey-input tests passed, and actual authored LAS/LAZ round trips using laspy 2.6.1/lazrs 0.7.0
+  preserved identical colours and points with one-point versus three-point chunks. These are not captures.
 - A real Blender 4.3.2 compile of an authored 120,000-point 30 x 24 m room at a retained 64 cm voxel detected
   four walls and wrote GLB/IFC/USD; IfcOpenShell and OpenUSD reopened the IFC/USD outputs.
 - The broad local run of `tests/world` and `tests/scene_compiler` passed 1,233 tests and 148 subtests.

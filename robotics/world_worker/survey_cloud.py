@@ -127,7 +127,9 @@ def las_chunks(path: Path):
             rgb = None
             if all(hasattr(block, k) for k in ('red', 'green', 'blue')):
                 rgb = np.stack([block.red, block.green, block.blue], 1)
-                rgb = (rgb >> 8).astype(np.uint8) if rgb.max(initial=0) > 255 else rgb.astype(np.uint8)
+                # LAS declares unsigned 16-bit colour channels even when every return in a dark chunk is <256.
+                # Inferring bit depth from a chunk's brightest point changes colours with reader chunk boundaries.
+                rgb = (rgb >> 8).astype(np.uint8)
             yield xyz, rgb
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 import shutil
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -74,6 +75,30 @@ def test_declared_16_bit_ply_colours_have_identical_byte_values(tmp_path, layout
     write_ply(path, xyz, rgb, layout=layout, colour_kind='u2')
     _, got = read_all(path)
     assert got.tolist() == [[128, 64, 32], [255, 0, 0]]
+
+
+def test_las_16_bit_colours_do_not_depend_on_chunk_brightness(monkeypatch):
+    """Explicit fake LAS decoder; exercise the real LAS adapter and thinner with dark and bright chunks."""
+    xyz = np.array([[0., 0., 0.], [1., 2., 3.], [2., 4., 6.]])
+    rgb = np.array([[128, 64, 32], [32768, 16384, 8192], [255, 128, 64]], np.uint16)
+
+    class Reader:
+        header = SimpleNamespace(point_count=len(xyz))
+        def __enter__(self): return self
+        def __exit__(self, *_args): pass
+        def chunk_iterator(self, size):
+            for start in range(0, len(xyz), size):
+                p, c = xyz[start:start + size], rgb[start:start + size]
+                yield SimpleNamespace(x=p[:, 0], y=p[:, 1], z=p[:, 2], red=c[:, 0], green=c[:, 1], blue=c[:, 2])
+
+    monkeypatch.setitem(sys.modules, 'laspy', SimpleNamespace(open=lambda _path: Reader()))
+    results = []
+    for chunk_size in (1, 2, 3):
+        monkeypatch.setattr(sv, 'CHUNK', chunk_size)
+        points, colours, facts = sv.read_thinned(Path('authored.las'))
+        assert colours.tolist() == [[0, 0, 0], [128, 64, 32], [0, 0, 0]]
+        results.append((points.tolist(), colours.tolist(), facts))
+    assert results[0] == results[1] == results[2]
 
 
 def test_a_scan_without_colour_is_read_and_says_so(tmp_path):
