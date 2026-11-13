@@ -9,5 +9,5 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/(reconstruction-[^'"]+\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-frame-audit-v19/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-fragments-v20/,'Changes to precache need a new cache version');
 });
