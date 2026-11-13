@@ -218,6 +218,8 @@ def hand_off(path: Path, *, up: str = 'z', budget: int = BUDGET) -> tuple[dict, 
     # Not a reconstruction and not a tape measure: the metres are the scan file's own, taken as declared.
     cloud.update(kind='survey-scan-point-cloud', sourceFrame='survey-scan',
                  scale={'source': 'scan-file', 'metresPerUnit': 1.0, 'distance': None, 'spanUnits': None, 'selfReported': True, 'verified': False})
+    # The compiler sizes its wall-coverage cells from this, so a large scan thinned coarsely keeps its walls.
+    cloud['provenance']['voxelMetres'] = facts['voxel_metres']
     extent = [round(float(upright[:, axis].max() - upright[:, axis].min()), 3) for axis in range(3)]
     evidence = {'schema': 'brainsnn.survey-scan.v1', 'engine': 'survey-cloud',
                 'file': {'name': path.name[:160], 'bytes': path.stat().st_size, 'sha256': file_sha256(path), 'format': path.suffix.lower().lstrip('.')},

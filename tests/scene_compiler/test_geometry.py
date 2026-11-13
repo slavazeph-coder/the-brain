@@ -127,6 +127,25 @@ class Walls(unittest.TestCase):
         _, walls, _, _ = sc.analyse(pts, 0.0, True, dense=True)
         self.assertEqual(len(walls), 2)
 
+    def test_a_large_scan_thinned_coarsely_keeps_its_walls(self):
+        """A building-sized scan is thinned to a coarser voxel to fit the point budget. A wall kept at one point per
+        40 cm fills a quarter of 20 cm cells, so the coverage cell follows the voxel the scan was thinned to."""
+        pts = []
+        for i in range(31):  # a 12 m wall, 3 m tall, sampled every 40 cm along and up
+            for j in range(8):
+                pts.append([-6 + 0.4 * i, 0.2 + 0.4 * j, -2.0, 120, 120, 120])
+        for i in range(31):
+            for k in range(11):
+                pts.append([-6 + 0.4 * i, 0.0, -2.0 + 0.4 * k, 90, 80, 70])
+        cloud = {"sourceFrame": "survey-scan", "units": "m", "provenance": {"voxelMetres": 0.4}}
+        self.assertEqual(sc.wall_face_cell(cloud), 0.8)
+        fixed, _ = sc.find_walls(pts, floor_y=0.0, dense=True)
+        self.assertEqual(len(fixed), 0, "at fixed 20 cm cells the thinned wall is lost")
+        walls, _ = sc.find_walls(pts, floor_y=0.0, dense=True, face_cell=sc.wall_face_cell(cloud))
+        self.assertEqual(len(walls), 1); self.assertAlmostEqual(walls[0]["length"], 12.0, delta=0.6)
+        for unusable in ({}, {"provenance": {}}, {"provenance": {"voxelMetres": True}}, {"provenance": {"voxelMetres": -1}}, {"provenance": {"voxelMetres": 0.03}}):
+            self.assertEqual(sc.wall_face_cell(unusable), sc.WALL_FACE_CELL, unusable)
+
     def test_a_laser_scan_hand_off_is_measured_geometry_only_in_metres(self):
         self.assertTrue(sc.measured_scan({"sourceFrame": "survey-scan", "units": "m"}))
         for cloud in ({"sourceFrame": "survey-scan", "units": "arbitrary"}, {"sourceFrame": "colmap", "units": "m"}, {}):

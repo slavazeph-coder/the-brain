@@ -49,7 +49,8 @@ What separates them is how completely a wall's own points cover its face, in 20 
 | The two false diagonals | 13% and 30% |
 
 For a `survey-scan` cloud a plane must now cover 40% of its face (`WALL_FACE_COVERAGE`), or its points stay free to
-become objects. Walkthrough reconstructions are untouched: their real walls are often blank and sparsely covered, so the
+become objects. The cells are 20 cm, or twice the voxel the scan was thinned to when that is larger, so a
+building-sized scan thinned coarsely to fit the point budget keeps its walls (Codex's finding on #294). Walkthrough reconstructions are untouched: their real walls are often blank and sparsely covered, so the
 test would wrongly reject them.
 
 ## What it does not do yet

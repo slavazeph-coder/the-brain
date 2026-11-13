@@ -123,6 +123,7 @@ def test_the_hand_off_is_upright_in_metres_and_says_where_the_metres_come_from(t
     assert cloud['units'] == 'm' and cloud['sourceFrame'] == 'survey-scan' and cloud['coordinateFrame'] == 'right-handed-y-up'
     assert cloud['scale'] == {'source': 'scan-file', 'metresPerUnit': 1.0, 'distance': None, 'spanUnits': None, 'selfReported': True, 'verified': False}
     assert sc.measured_scan(cloud) and not sc.multi_view(cloud)
+    assert cloud['provenance']['voxelMetres'] == evidence['voxel_metres'] and sc.wall_face_cell(cloud) >= 2 * evidence['voxel_metres']
     assert len(cloud['points']) <= sv.BUDGET
     assert evidence['schema'] == 'brainsnn.survey-scan.v1' and len(evidence['file']['sha256']) == 64 and evidence['file']['format'] == 'ply'
     assert evidence['measured'] is True and evidence['metric_verified'] is False and evidence['collision_ready'] is False

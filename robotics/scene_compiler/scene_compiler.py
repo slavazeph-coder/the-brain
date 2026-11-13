@@ -97,17 +97,26 @@ WALL_GAP, WALL_DOOR_TOP = 0.5, 1.9
 WALL_FACE_CELL, WALL_FACE_COVERAGE = 0.2, 0.4
 
 
-def wall_face_coverage(along, height, a0, a1, top):
-    """The share of a wall face's WALL_FACE_CELL cells holding at least one of the wall's points: over the band above
-    most furniture and over its whole height, whichever is larger (a wall may be hidden low, or cut short above)."""
+def wall_face_cell(cloud):
+    """The coverage cell for a scan. A large scan is thinned to a coarser voxel to fit the point budget, and a fully
+    scanned wall kept at one point per 40 cm fills only a quarter of 20 cm cells. So the cell is at least twice the
+    voxel the hand-off was thinned to (provenance.voxelMetres), which a covered face fills whatever the thinning."""
+    voxel = (cloud.get("provenance") or {}).get("voxelMetres")
+    usable = isinstance(voxel, (int, float)) and not isinstance(voxel, bool) and math.isfinite(voxel) and voxel > 0
+    return max(WALL_FACE_CELL, 2 * voxel) if usable else WALL_FACE_CELL
+
+
+def wall_face_coverage(along, height, a0, a1, top, cell=WALL_FACE_CELL):
+    """The share of a wall face's cells holding at least one of the wall's points: over the band above most furniture
+    and over its whole height, whichever is larger (a wall may be hidden low, or cut short above)."""
     import numpy as np
     def share(lo, hi):
-        if hi - lo < WALL_FACE_CELL: return 0.0
+        if hi <= lo: return 0.0
         inside = (height >= lo) & (height < hi) & (along >= a0) & (along <= a1)
-        cols, rows = max(1, math.ceil((a1 - a0) / WALL_FACE_CELL)), max(1, round((hi - lo) / WALL_FACE_CELL))
+        cols, rows = max(1, math.ceil((a1 - a0) / cell)), max(1, round((hi - lo) / cell))
         seen = np.zeros((rows, cols), bool)
-        seen[np.minimum(((height[inside] - lo) / WALL_FACE_CELL).astype(int), rows - 1),
-             np.minimum(((along[inside] - a0) / WALL_FACE_CELL).astype(int), cols - 1)] = True
+        seen[np.minimum(((height[inside] - lo) / cell).astype(int), rows - 1),
+             np.minimum(((along[inside] - a0) / cell).astype(int), cols - 1)] = True
         return float(seen.mean())
     return max(share(WALL_HIGH, WALL_TOP), share(0.2, top - 0.2))
 
@@ -149,11 +158,12 @@ def wall_surface_evidence(points, centre, normal, along, *, metric=True):
                                     [normal[0], 0, normal[1]], [along[0], 0, along[1]])}
 
 
-def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True, dense=False):
+def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True, dense=False, face_cell=WALL_FACE_CELL):
     """Walls by RANSAC on vertical planes. Returns (walls, rest): walls with centre (x, z), yaw, length, thickness, y0, y1,
     support and member indices; rest, the indices of points above the floor margin that belong to no wall. A plane with a
     doorway in it gives one wall per stretch either side; the points above the opening stay with the wall. `dense` is for
-    a laser scan: a plane must also cover WALL_FACE_COVERAGE of its own face, or its points stay free for objects."""
+    a laser scan: a plane must also cover WALL_FACE_COVERAGE of its own face in `face_cell` cells (wall_face_cell), or its
+    points stay free for objects."""
     import numpy as np
     P = np.asarray([p[:3] for p in pts], float); rng = np.random.default_rng(seed)
     above = np.flatnonzero(P[:, 1] > floor_y + margin)
@@ -184,7 +194,7 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True
         if np.percentile(P[members, 1], 95) - np.percentile(P[members, 1], 5) < WALL_MIN_SPAN: continue
         y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
         if y1 - y0 < WALL_MIN_HEIGHT: continue
-        if dense and wall_face_coverage((P[members][:, [0, 2]] - centre) @ direction, P[members, 1] - floor_y, a0, a1, y1 - floor_y) < WALL_FACE_COVERAGE:
+        if dense and wall_face_coverage((P[members][:, [0, 2]] - centre) @ direction, P[members, 1] - floor_y, a0, a1, y1 - floor_y, face_cell) < WALL_FACE_COVERAGE:
             continue
         taken[members] = True; planes += 1; on = np.isin(above, members)
         low = t[(np.abs(n) < band) & (P[above, 1] < floor_y + WALL_DOOR_TOP)]
@@ -352,9 +362,9 @@ def room_centre(pts):
     return ((percentile(xs, 0.02) + percentile(xs, 0.98)) / 2, (percentile(zs, 0.02) + percentile(zs, 0.98)) / 2)
 
 
-def analyse(pts, floor_y, metric, dense=False):
+def analyse(pts, floor_y, metric, dense=False, face_cell=WALL_FACE_CELL):
     """Walls and separated objects of a cloud, exactly as main() compiles them; the naming step runs this outside Blender."""
-    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin, metric=metric, dense=dense)
+    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin, metric=metric, dense=dense, face_cell=face_cell)
     place_behind_faces(walls, room_centre(pts))
     return margin, walls, rest, (separate_objects(pts, floor_y, rest, floor=floor_coverage(pts, floor_y, margin)) if metric else [])
 
@@ -664,7 +674,7 @@ def main():
     scene["objects"].append(rec)
     # Walls: vertical planes found above furniture height. Whatever stands against them is left for object separation.
     # Objects: in metres, every other cluster above the floor is separated and measured. Sizes need a measured scale.
-    margin, walls, rest, separated = analyse(pts, floor_y, metric, dense=measured_scan(cloud))
+    margin, walls, rest, separated = analyse(pts, floor_y, metric, dense=measured_scan(cloud), face_cell=wall_face_cell(cloud))
     for i, w in enumerate(walls):
         _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1))
         if w.get("face"):  # the surface the camera saw, and the box behind it
