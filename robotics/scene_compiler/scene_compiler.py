@@ -59,6 +59,12 @@ def multi_view(cloud):
     return cloud.get("sourceFrame") == "colmap" or cloud.get("multiView") is True
 
 
+def measured_scan(cloud):
+    """A registered laser scan handed over in metres (world_worker/survey_cloud.py): measured geometry, dense on every
+    surface the scanner saw. It needs no second view, and its walls are held to the stricter face-coverage test."""
+    return cloud.get("sourceFrame") == "survey-scan" and cloud.get("units") == "m"
+
+
 def percentile(v, q):
     s = sorted(v); i = (len(s) - 1) * q; lo = math.floor(i); return s[lo] + (s[min(lo + 1, len(s) - 1)] - s[lo]) * (i - lo)
 
@@ -85,6 +91,51 @@ WALL_HIGH, WALL_TOP, WALL_TOLERANCE, WALL_MIN_LENGTH, WALL_MIN_HEIGHT, WALL_LIMI
 WALL_MIN_SPAN = 0.8  # metres of height the wall's own points must cover (furniture may hide its lower part)
 # A doorway: at least WALL_GAP along a wall with none of its points below WALL_DOOR_TOP (a lintel may sit above it).
 WALL_GAP, WALL_DOOR_TOP = 0.5, 1.9
+# A dense scan puts points on everything, so a vertical plane through desks, monitors and hanging lamps collects enough of
+# them to pass the tests above. What tells a wall apart there is that its own points cover its face: on the ETH3D office
+# laser scan the five real walls covered 54 to 100% of their 20 cm cells and the two false diagonals 13 to 30%.
+WALL_FACE_CELL, WALL_FACE_COVERAGE = 0.2, 0.4
+
+
+def wall_face_cell(cloud):
+    """The coverage cell for a scan. A large scan is thinned to a coarser voxel to fit the point budget, and a fully
+    scanned wall kept at one point per 40 cm fills only a quarter of 20 cm cells. So the cell is at least twice the
+    voxel the hand-off was thinned to (provenance.voxelMetres). Height and support requirements still apply;
+    an arbitrarily coarse cloud cannot establish a wall just by enlarging its coverage cells."""
+    if not measured_scan(cloud):
+        return WALL_FACE_CELL
+    provenance = cloud.get("provenance")
+    voxel = provenance.get("voxelMetres") if isinstance(provenance, dict) else None
+    usable = isinstance(voxel, (int, float)) and not isinstance(voxel, bool) and math.isfinite(voxel) and voxel > 0
+    return max(WALL_FACE_CELL, 2 * voxel) if usable else WALL_FACE_CELL
+
+
+def wall_face_coverage(along, height, a0, a1, top, cell=WALL_FACE_CELL):
+    """The share of a wall face's cells holding at least one of the wall's points: over the band above most furniture
+    and over its whole height, whichever is larger (a wall may be hidden low, or cut short above)."""
+    import numpy as np
+    def share(lo, hi, min_layers, whole_face=False):
+        if hi <= lo: return 0.0
+        inside = (height >= lo) & (height < hi) & (along >= a0) & (along <= a1)
+        if cell > WALL_FACE_CELL:
+            # Coarse cells must not turn two horizontal surfaces (a desk and a lamp) into a covered face.
+            # Count physically separated height samples, not grid bins: jitter either side of a bin edge is
+            # still one layer. An occluded upper band needs two layers; the whole face needs at least three.
+            # The whole-face occupancy excludes the floor/top edges, but coarse samples on those edges
+            # still provide independent height evidence. Do not discard them from the layer check too.
+            layer_mask = ((height > 0) & (height <= top) & (along >= a0) & (along <= a1)) if whole_face else inside
+            levels = np.sort(height[layer_mask]); layers, next_height = 0, -math.inf
+            for value in levels:
+                if value >= next_height:
+                    layers += 1; next_height = value + WALL_FACE_CELL
+                    if layers >= min_layers: break
+            if layers < min_layers: return 0.0
+        cols, rows = max(1, math.ceil((a1 - a0) / cell)), max(1, round((hi - lo) / cell))
+        seen = np.zeros((rows, cols), bool)
+        seen[np.minimum(((height[inside] - lo) / cell).astype(int), rows - 1),
+             np.minimum(((along[inside] - a0) / cell).astype(int), cols - 1)] = True
+        return float(seen.mean())
+    return max(share(WALL_HIGH, WALL_TOP, 2), share(0.2, top - 0.2, 3, whole_face=True))
 
 
 def along_wall(w, XZ):
@@ -94,13 +145,13 @@ def along_wall(w, XZ):
     return float(((np.abs(rel @ n) < w["band"] + 0.05) & (np.abs(rel @ d) < w["length"] / 2 + 0.2)).mean())
 
 
-def wall_spans(t, a0, a1):
-    """[a0, a1] along a wall, split into the stretches its low points t support: an inner gap of at least WALL_GAP
+def wall_spans(t, a0, a1, gap=WALL_GAP):
+    """[a0, a1] along a wall, split into the stretches its low points t support: an inner gap of at least `gap`
     is an opening. The ends stay at a0 and a1 (a wall's lower part may be hidden there); without low points it is one."""
     import numpy as np
     t = np.sort(np.asarray(t, float)); t = t[(t > a0) & (t < a1)]
     if len(t) == 0: return [(float(a0), float(a1))]
-    gaps = np.flatnonzero(np.diff(t) >= WALL_GAP)
+    gaps = np.flatnonzero(np.diff(t) >= gap)
     return [(float(s0), float(s1)) for s0, s1 in zip([a0, *t[gaps + 1]], [*t[gaps], a1])]
 
 
@@ -124,10 +175,12 @@ def wall_surface_evidence(points, centre, normal, along, *, metric=True):
                                     [normal[0], 0, normal[1]], [along[0], 0, along[1]])}
 
 
-def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True):
+def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True, dense=False, face_cell=WALL_FACE_CELL):
     """Walls by RANSAC on vertical planes. Returns (walls, rest): walls with centre (x, z), yaw, length, thickness, y0, y1,
     support and member indices; rest, the indices of points above the floor margin that belong to no wall. A plane with a
-    doorway in it gives one wall per stretch either side; the points above the opening stay with the wall."""
+    doorway in it gives one wall per stretch either side; the points above the opening stay with the wall. `dense` is for
+    a laser scan: a plane must also cover WALL_FACE_COVERAGE of its own face in `face_cell` cells (wall_face_cell), or its
+    points stay free for objects."""
     import numpy as np
     P = np.asarray([p[:3] for p in pts], float); rng = np.random.default_rng(seed)
     above = np.flatnonzero(P[:, 1] > floor_y + margin)
@@ -158,9 +211,13 @@ def find_walls(pts, floor_y, margin=0.05, iterations=400, seed=0, *, metric=True
         if np.percentile(P[members, 1], 95) - np.percentile(P[members, 1], 5) < WALL_MIN_SPAN: continue
         y0, y1 = floor_y, float(np.percentile(P[members, 1], 98))
         if y1 - y0 < WALL_MIN_HEIGHT: continue
+        if dense and wall_face_coverage((P[members][:, [0, 2]] - centre) @ direction, P[members, 1] - floor_y, a0, a1, y1 - floor_y, face_cell) < WALL_FACE_COVERAGE:
+            continue
         taken[members] = True; planes += 1; on = np.isin(above, members)
         low = t[(np.abs(n) < band) & (P[above, 1] < floor_y + WALL_DOOR_TOP)]
-        for s0, s1 in wall_spans(low, a0, a1):
+        # A sampling gap is not a doorway. Coarse scans cannot resolve openings narrower than their coverage cell.
+        gap = max(WALL_GAP, face_cell) if dense else WALL_GAP
+        for s0, s1 in wall_spans(low, a0, a1, gap):
             s0, s1 = min(s0, (s0 + s1) / 2 - 0.05), max(s1, (s0 + s1) / 2 + 0.05)  # a stub between two openings stays a wall
             mine = members[(t[on] >= s0 - 0.1) & (t[on] <= s1 + 0.1)]; mid = centre + direction * (s0 + s1) / 2
             evidence = wall_surface_evidence(P[mine], mid, normal, direction, metric=metric)
@@ -324,9 +381,9 @@ def room_centre(pts):
     return ((percentile(xs, 0.02) + percentile(xs, 0.98)) / 2, (percentile(zs, 0.02) + percentile(zs, 0.98)) / 2)
 
 
-def analyse(pts, floor_y, metric):
+def analyse(pts, floor_y, metric, dense=False, face_cell=WALL_FACE_CELL):
     """Walls and separated objects of a cloud, exactly as main() compiles them; the naming step runs this outside Blender."""
-    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin, metric=metric)
+    margin = floor_margin(pts, floor_y); walls, rest = find_walls(pts, floor_y, margin, metric=metric, dense=dense, face_cell=face_cell)
     place_behind_faces(walls, room_centre(pts))
     return margin, walls, rest, (separate_objects(pts, floor_y, rest, floor=floor_coverage(pts, floor_y, margin)) if metric else [])
 
@@ -599,7 +656,7 @@ def main():
     # Hard gate: a single-photo relative-depth cloud has no consistent geometry (every object is a perspective wedge),
     # so compiling it produces confident nonsense (a 22 m "refrigerator" in the mezzanine test). The hand-off JSON
     # only names its frame today: 'colmap' means multi-view SfM; anything else is treated as unverified geometry.
-    if not multi_view(cloud) and not a.allow_unverified:
+    if not multi_view(cloud) and not measured_scan(cloud) and not a.allow_unverified:
         sys.exit("REFUSED: this cloud is not a multi-view reconstruction (sourceFrame=%r, multiView not set). The scene compiler needs "
                  "COLMAP/MapAnything/VIPE geometry from at least two views; single-photo depth is a visual preview only. Record a "
                  "walkthrough, or pass --allow-unverified for experiments." % cloud.get("sourceFrame"))
@@ -636,7 +693,7 @@ def main():
     scene["objects"].append(rec)
     # Walls: vertical planes found above furniture height. Whatever stands against them is left for object separation.
     # Objects: in metres, every other cluster above the floor is separated and measured. Sizes need a measured scale.
-    margin, walls, rest, separated = analyse(pts, floor_y, metric)
+    margin, walls, rest, separated = analyse(pts, floor_y, metric, dense=measured_scan(cloud), face_cell=wall_face_cell(cloud))
     for i, w in enumerate(walls):
         _, rec = add_oriented_box(f"wall_{i+1}", w, "observed", "wall", (0.75, 0.75, 0.78, 1))
         if w.get("face"):  # the surface the camera saw, and the box behind it
