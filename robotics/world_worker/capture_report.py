@@ -53,13 +53,20 @@ def timeline(reconstruction, images_dir=None):
 
 
 def stretches(rows, fps):
-    """Consecutive runs of registered / dropped frames as [start, end] seconds."""
+    """Consecutive runs of registered / dropped frames as [start, end] seconds on the sampled timeline.
+
+    Frame times come from each frame's sampled index, and frames removed before reconstruction leave gaps in those
+    indices (a near-duplicate of the frame before it, or a frame too dark or flat to use). A run therefore ends where
+    the next one starts, so a removed frame is counted with the stretch it follows and the runs add up to the capture."""
     runs, step = [], (1.0 / fps) if fps else 1.0
     for row in rows:
         if runs and runs[-1]['registered'] == row['registered']:
-            runs[-1]['end'] = row['second'] + step; runs[-1]['frames'] += 1
+            runs[-1]['frames'] += 1
         else:
-            runs.append({'start': row['second'], 'end': row['second'] + step, 'registered': row['registered'], 'frames': 1})
+            if runs:
+                runs[-1]['end'] = row['second']
+            runs.append({'start': row['second'], 'registered': row['registered'], 'frames': 1})
+        runs[-1]['end'] = row['second'] + step
     for r in runs:
         r['seconds'] = round(r['end'] - r['start'], 1); r['start'] = round(r['start'], 1); r['end'] = round(r['end'], 1)
     return runs
@@ -92,8 +99,12 @@ def build(reconstruction, images_dir=None):
     registered = [r for r in rows if r['registered']]
     sharp = sorted(r['sharpness'] for r in registered if r['sharpness'] is not None)
     sharp_median = sharp[len(sharp) // 2] if sharp else None
-    total = round(len(rows) / fps, 1) if fps else float(len(rows))
-    reg_seconds = round(sum(r['seconds'] for r in runs if r['registered']), 1)
+    # The same timeline as the stretches: from the start of the video to one step past the last sampled frame. Counting
+    # retained frames instead would shrink the total whenever frames were removed, and report more seconds registered
+    # than the capture has.
+    step = (1.0 / fps) if fps else 1.0
+    total = round(rows[-1]['second'] + step, 1)
+    reg_seconds = min(total, round(sum(r['seconds'] for r in runs if r['registered']), 1))
     longest = max((r for r in runs if r['registered']), key=lambda r: r['seconds'], default=None)
     dropped = []
     for run in runs:
