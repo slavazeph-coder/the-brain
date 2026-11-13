@@ -105,6 +105,34 @@ class Walls(unittest.TestCase):
                 self.assertAlmostEqual(w["length"], 6.0, delta=0.4); self.assertAlmostEqual(w["y1"] - w["y0"], 3.0, delta=0.3)
                 self.assertGreater(w["support"], 3500); self.assertLess(w["thickness"], 0.3); self.assertLess(len(rest), 300)
 
+    def test_a_dense_scan_keeps_real_walls_and_drops_a_plane_through_clutter(self):
+        """A laser scan puts points on everything. A vertical plane through a hanging lamp and the desks under it collects
+        enough of them to pass the sparse-cloud tests, but those points do not cover the plane's face."""
+        rng = random.Random(5); pts = []
+        for z in (-2.0, 2.0):  # two real walls, 6 m long and 3 m tall, covered all over
+            for _ in range(4000):
+                pts.append([rng.uniform(-3, 3), rng.uniform(0.05, 3.0), z + rng.gauss(0, 0.01), 120, 120, 120])
+        for _ in range(900):  # clutter along a 40 degree line: a lamp strip near 2 m and desk tops near 0.75 m
+            t = rng.uniform(-1.25, 1.25); high = rng.random() < 0.5
+            pts.append([t * math.cos(math.radians(40)) + rng.gauss(0, 0.01), rng.uniform(1.95, 2.05) if high else rng.uniform(0.7, 0.8),
+                        t * math.sin(math.radians(40)) + rng.gauss(0, 0.01), 200, 200, 200])
+        for _ in range(2000):
+            pts.append([rng.uniform(-3, 3), rng.gauss(0, 0.01), rng.uniform(-2, 2), 90, 80, 70])
+        turned = lambda walls: sorted(round(math.degrees(w["yaw"]) % 180) % 180 for w in walls)
+        sparse, _ = sc.find_walls(pts, floor_y=0.0)
+        self.assertEqual(turned(sparse), [0, 0, 40], "without the face test the clutter is a third wall")
+        dense, rest = sc.find_walls(pts, floor_y=0.0, dense=True)
+        self.assertEqual(turned(dense), [0, 0])
+        self.assertGreater(len(rest), 800, "the clutter's points stay free to become objects")
+        _, walls, _, _ = sc.analyse(pts, 0.0, True, dense=True)
+        self.assertEqual(len(walls), 2)
+
+    def test_a_laser_scan_hand_off_is_measured_geometry_only_in_metres(self):
+        self.assertTrue(sc.measured_scan({"sourceFrame": "survey-scan", "units": "m"}))
+        for cloud in ({"sourceFrame": "survey-scan", "units": "arbitrary"}, {"sourceFrame": "colmap", "units": "m"}, {}):
+            self.assertFalse(sc.measured_scan(cloud), cloud)
+        self.assertFalse(sc.multi_view({"sourceFrame": "survey-scan", "units": "m"}))
+
     def test_a_doorway_splits_a_wall_and_a_short_hidden_stretch_does_not(self):
         def with_openings(openings, length=6.0, n=6000, seed=3):
             # A wall along x at z = -2, with no points below 2.0 m inside each opening (a lintel above it).

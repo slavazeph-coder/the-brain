@@ -178,7 +178,9 @@ def read_thinned(path: Path, budget: int = BUDGET):
         if not len(xyz):
             continue
         if origin is None:
-            origin = xyz.min(0) - 2 ** 20 * FINEST_VOXEL  # the first chunk sits mid-range, so later chunks fit either side
+            # Anchored on the file's first point, not on a chunk, so the result is the same however the file is read.
+            # That point sits mid-range of the 2^21 cells per axis, leaving about 20 km either side.
+            origin = np.floor(xyz[0] / FINEST_VOXEL) * FINEST_VOXEL - 2 ** 20 * FINEST_VOXEL
         xyz, rgb = thin(xyz, rgb, origin, FINEST_VOXEL)
         kept_xyz.append(xyz); kept_rgb.append(rgb)
     if not kept_xyz:
