@@ -153,6 +153,7 @@ jobs:
           python tests/world/fleet_evaluation_browser_smoke.py
           # Edit a reviewed map, review it again, route to the same spot: the comparison, with the gate in between.
           python tests/world/what_if_browser_smoke.py
+          python tests/world/movement_browser_smoke.py
           # Native street workspace uses the actual Express asset transport, shadow DOM, edits and exports.
           python tests/world/street_browser_smoke.py
           # Same-origin IndexedDB file handoff; no upload or external model calls.

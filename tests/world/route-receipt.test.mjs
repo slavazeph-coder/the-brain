@@ -88,7 +88,7 @@ test('a robot waiting on its own start is never driven through, and it goes firs
   let closest = Infinity;
   for (let t = 0; t <= s.allArrivedAt + 6; t += s.stepSeconds) { const [p, q] = moving.map(a => at(a, t)); if (p && q) closest = Math.min(closest, Math.hypot(p.x - q.x, p.z - q.z)); }
   assert.ok(closest >= forklift.radius + vacuum.radius - 1e-6, `closest approach ${closest.toFixed(2)} m, needs ${(forklift.radius + vacuum.radius).toFixed(2)} m`);
-  assert.match(s.limitations[0], /stands there until it leaves/);
+  assert.ok(s.limitations.some(line => /occupies its start from time zero until departure/.test(line)));
   // Without a fleet every envelope shares the single start and queues off the floor, as before: all of them are scheduled.
   const shared = fleetSchedule(normalizeWorld({...base, fleet: []}), {x: 16.5, z: 11.5}, margin);
   assert.ok(shared.agents.length > 1 && shared.agents.every(a => a.departsAt !== null));
