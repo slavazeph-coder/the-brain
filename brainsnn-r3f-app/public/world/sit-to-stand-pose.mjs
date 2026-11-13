@@ -72,7 +72,8 @@ function waitVideo(video, event, ready, signal) {
       error ? reject(error) : resolve();
     };
     const check = () => { if (ready()) finish(); };
-    const failed = () => finish(new Error('The local clip could not be decoded for tracking.'));
+    const failed = () => finish(new Error('Video decoding failed at ' + video.currentTime.toFixed(2) +
+      ' s (media error ' + (video.error?.code ?? 'unknown') + '). Try exporting a compatible MP4 or WebM copy.'));
     const aborted = () => finish(signal.reason);
     const timer = setTimeout(() => finish(new Error('Timed out decoding a video frame. Try an MP4 or a shorter clip.')), 20000);
     video.addEventListener(event, check);
