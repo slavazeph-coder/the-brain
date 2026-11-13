@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080c13">
+  <meta name="description" content="Review side-view movement footage locally. Mark knee flexion across frames and align an imported vertical force trace.">
+  <title>Movement review | BrainSNN World Builder</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="./movement.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to movement review</a>
+  <header><nav class="wrap"><a class="brand" href="/" target="_top"><span aria-hidden="true">B</span>BrainSNN</a><a href="/world/index.html">← World Builder</a></nav></header>
+  <main class="wrap" id="main">
+    <div class="intro"><div><h1>Movement review</h1><p>Mark a side-view video to review projected knee flexion. Pair it with a vertical force trace on the same timeline.</p></div>
+      <div class="actions"><label class="file-button primary">Open video<input id="video-file" type="file" accept="video/*"></label><button id="demo" type="button">Try synthetic demo</button></div>
+    </div>
+    <p id="status" role="status">Your video and annotations stay in this browser tab. Export the review to keep it.</p>
+    <button id="preview-demo" type="button" aria-label="Open the synthetic squat demo">
+      <canvas id="demo-strip" aria-hidden="true"></canvas>
+      <span class="preview-caption"><strong>Side-view squat</strong><span>Explore the synthetic example →</span></span>
+    </button>
+    <div class="workspace" id="review" hidden>
+      <section class="panel player" aria-labelledby="source-name">
+        <div class="panel-heading"><h2 id="source-name"></h2><span class="source-tag" id="source-kind"></span></div>
+        <div class="viewport">
+          <div id="stage"><video id="video" muted playsinline preload="auto" disablepictureinpicture aria-label="Local source video"></video>
+            <canvas id="overlay" tabindex="0" aria-label="Place hip, knee and ankle on this image" aria-describedby="point-guide key-guide">Use a canvas-enabled browser to mark a frame.</canvas>
+          </div>
+        </div>
+        <div class="transport"><button id="play" type="button">Play</button><label class="sr-only" for="time">Video time in seconds</label><input id="time" type="range" min="0" max="1" step="any" value="0"><output id="clock" for="time">0.000 s</output></div>
+        <p id="point-guide" class="help" aria-live="polite"></p>
+        <p id="key-guide" class="help">On a paused frame, click or tap each landmark. With the image focused, use arrow keys to move the crosshair and Enter to mark. Hold Shift for larger steps.</p>
+        <div class="actions"><button type="button" id="save-frame" class="primary">Save frame</button><button type="button" id="undo">Undo point</button><button type="button" id="reset">Clear points</button></div>
+      </section>
+      <div class="analysis">
+        <section class="panel" aria-labelledby="frame-heading"><h2 id="frame-heading">Frame measurements</h2>
+          <div class="metrics"><div><span>Projected knee flexion</span><output id="angle">—</output></div><div><span>Vertical force</span><output id="force">—</output></div></div>
+          <p class="help" id="force-provenance"></p><p class="help">A straight knee reads 0°. Perspective, camera motion and landmark placement affect the estimate.</p>
+        </section>
+        <section class="panel" aria-labelledby="frames-heading"><div class="panel-heading"><h2 id="frames-heading">Saved frames</h2><button type="button" id="export">Export JSON</button></div><p class="help" id="frames-empty">Save a marked frame to begin the angle trace.</p><ul id="frames"></ul></section>
+      </div>
+      <section class="panel timeline" aria-labelledby="timeline-heading"><h2 id="timeline-heading">Movement timeline</h2>
+        <p class="help" id="chart-help">Knee flexion is shown at saved frames. Force values follow the imported trace and its time offset.</p>
+        <div class="plot"><canvas id="chart" aria-label="Saved knee angles and optional force over video time" role="img" aria-describedby="chart-help">Use the saved frame list to review angles.</canvas></div>
+        <div class="legend"><span class="angle-key">Knee flexion (°)</span><span id="force-key" hidden>Vertical force (N)</span></div>
+      </section>
+      <section class="panel" id="force-panel" aria-labelledby="force-heading"><h2 id="force-heading">Force trace</h2>
+        <p class="help">Import a single vertical component in newtons with seconds relative to the trace start. CSV header <code>time_s,vertical_force_n</code>.</p>
+        <div class="form"><label>Force source<select id="force-kind"><option value="measured">Measured by instrument</option><option value="modelled">Estimated by model</option></select></label>
+        <label>Instrument or model name<input id="force-label" type="text" maxlength="160" placeholder="e.g. Left force plate"></label>
+        <label>Video time offset (s)<input id="force-offset" type="number" step="any" value="0"></label><label>CSV file<input id="force-file" type="file" accept=".csv,text/csv,text/plain"></label></div>
+        <p class="help">A positive offset shifts the trace later in the video. Match the timestamps using a common event such as foot contact.</p>
+        <div class="actions"><button type="button" id="apply-force">Apply trace</button><button type="button" id="clear-force" hidden>Remove trace</button></div>
+        <div id="support-model"></div>
+      </section>
+    </div>
+    <section id="mot-panel" class="panel" aria-label="OpenSim knee coordinates"></section>
+  </main>
+  <script type="module" src="./movement-ui.mjs"></script>
+  <script type="module" src="./movement-model-ui.mjs"></script>
+</body></html>
