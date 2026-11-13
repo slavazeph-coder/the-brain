@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Registered laser-scan input](world-laser-scan-input-2026-11-13.md) — PR #294 coarse wall/clutter regressions, bounded thinning, colour normalization and real-scan validation limits.
+
 → [Demo replay export](world-demo-replay-2026-11-02.md) — private saved-frame/camera replay videos, real partial capture evidence, source-bound exports and release limits.
 
 → [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — sandbox integration, calibrated underlay, source/revision-bound downloads and required deployed acceptance.

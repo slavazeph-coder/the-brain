@@ -243,7 +243,8 @@ source job/views. Its sampled indices and claims are never used as authority.
     scene = ce.cg.ensure_component_ids(scene)
     points = cloud['points']
     floor_y = ce.sc.floor_plane(points, cloud.get('floorEstimate'))
-    margin, walls, _rest, objects = ce.sc.analyse(points, floor_y, True)
+    margin, walls, _rest, objects = ce.sc.analyse(points, floor_y, True, dense=ce.sc.measured_scan(cloud),
+                                                face_cell=ce.sc.wall_face_cell(cloud))
     fits = {'wall': {f'wall_{i + 1}': fit for i, fit in enumerate(walls)},
             'object': {f'object_{i + 1}': fit for i, fit in enumerate(objects)}}
     floor_members = [i for i, point in enumerate(points) if abs(point[1] - floor_y) <= margin]

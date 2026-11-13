@@ -1,6 +1,8 @@
 """Laser-scan input: reading a scan file, thinning it to the compiler's budget, the Z-up turn and the hand-off record.
 The scans here are authored rooms, not captures; the real-scan check is in docs/world-laser-scan-input.md."""
 from pathlib import Path
+import json
+import shutil
 import sys
 
 import numpy as np
@@ -25,11 +27,11 @@ def room(n=40_000, seed=1):
     return xyz, rgb
 
 
-def write_ply(path, xyz, rgb=None, *, layout='binary_little_endian', intensity=True, camera=True):
+def write_ply(path, xyz, rgb=None, *, layout='binary_little_endian', intensity=True, camera=True, colour_kind='u1'):
     """A PLY as scanner software writes it: an extra per-point field and a trailing camera element."""
     fields = [('x', 'f4'), ('y', 'f4'), ('z', 'f4')] + ([('intensity', 'f4')] if intensity else []) \
-        + ([('red', 'u1'), ('green', 'u1'), ('blue', 'u1')] if rgb is not None else [])
-    names = {'f4': 'float', 'u1': 'uchar'}
+        + ([('red', colour_kind), ('green', colour_kind), ('blue', colour_kind)] if rgb is not None else [])
+    names = {'f4': 'float', 'u1': 'uchar', 'u2': 'ushort'}
     header = ['ply', f'format {layout} 1.0', 'comment authored test scan', f'element vertex {len(xyz)}',
               *[f'property {names[kind]} {name}' for name, kind in fields],
               *(['element camera 1', 'property float view_px'] if camera else []), 'end_header']
@@ -62,6 +64,16 @@ def test_a_scanner_ply_reads_back_point_for_point(tmp_path, layout):
     got_xyz, got_rgb = read_all(tmp_path / 'scan.ply')
     assert got_xyz.shape == xyz.shape and np.allclose(got_xyz, xyz, atol=1e-6)
     assert np.array_equal(got_rgb, rgb)
+
+
+@pytest.mark.parametrize('layout', ['binary_little_endian', 'binary_big_endian', 'ascii'])
+def test_declared_16_bit_ply_colours_have_identical_byte_values(tmp_path, layout):
+    xyz = np.array([[0, 0, 0], [1, 2, 3]], dtype=np.float32)
+    rgb = np.array([[32768, 16384, 8192], [65535, 255, 0]], dtype=np.uint16)
+    path = tmp_path / 'colour.ply'
+    write_ply(path, xyz, rgb, layout=layout, colour_kind='u2')
+    _, got = read_all(path)
+    assert got.tolist() == [[128, 64, 32], [255, 0, 0]]
 
 
 def test_a_scan_without_colour_is_read_and_says_so(tmp_path):
@@ -113,6 +125,53 @@ def test_thinning_fits_the_budget_and_does_not_depend_on_how_the_file_is_read(tm
     assert np.array_equal(again, kept) and np.array_equal(colours_again, colours) and facts_again == facts
 
 
+def test_ingestion_bounds_retained_points_before_the_next_chunk(monkeypatch):
+    """Unique voxels arrive in 40 chunks; retaining every fine sample would grow with file length."""
+    budget, block_size, blocks = 500, 2_000, 40
+    original_thin = sv.thin
+    retained = None
+
+    def tracked_thin(xyz, rgb, origin, size):
+        nonlocal retained
+        # A concatenate may hold one incoming block plus the bounded previous sample, never the whole file.
+        assert len(xyz) <= block_size + budget
+        out = original_thin(xyz, rgb, origin, size)
+        retained = len(out[0])
+        return out
+
+    def reader(_path):
+        for block in range(blocks):
+            if retained is not None:
+                assert retained <= budget, 'the previous block must be coarsened before reading another'
+            ids = np.arange(block * block_size, (block + 1) * block_size)
+            xyz = np.stack([ids % 400, ids // 400, np.zeros(block_size)], 1) * .031
+            yield xyz, np.full((block_size, 3), block, np.uint8)
+
+    monkeypatch.setitem(sv.READERS, '.ply', reader)
+    monkeypatch.setattr(sv, 'thin', tracked_thin)
+    xyz, _, facts = sv.read_thinned(Path('authored.ply'), budget=budget)
+    assert len(xyz) <= budget and facts['points_in_file'] == block_size * blocks
+    assert facts['voxel_metres'] > sv.FINEST_VOXEL
+
+
+@pytest.mark.parametrize('budget', [0, -1, True, 1.5, sv.BUDGET + 1])
+def test_invalid_or_over_limit_point_budgets_are_refused(budget):
+    with pytest.raises(ValueError, match='budget'):
+        sv.read_thinned(Path('unused.ply'), budget=budget)
+
+
+def test_all_readers_obey_the_total_input_limit(monkeypatch):
+    monkeypatch.setattr(sv, 'MAX_POINTS', 10)
+    monkeypatch.setitem(sv.READERS, '.e57', lambda _path: iter([(np.zeros((6, 3)), None)] * 2))
+    with pytest.raises(ValueError, match='more points'):
+        sv.read_thinned(Path('authored.e57'))
+
+
+def test_budget_matches_the_existing_arena_cloud_contract():
+    from geometry import ARENA_CLOUD_MAX_POINTS
+    assert sv.BUDGET == ARENA_CLOUD_MAX_POINTS == 50_000
+
+
 def test_the_hand_off_is_upright_in_metres_and_says_where_the_metres_come_from(tmp_path):
     xyz, rgb = room()
     write_ply(tmp_path / 'room.ply', xyz, rgb)
@@ -143,6 +202,46 @@ def test_the_compiler_finds_the_four_walls_of_a_scanned_room(tmp_path):
     xyz, rgb = room()
     write_ply(tmp_path / 'room.ply', xyz, rgb)
     cloud, _ = sv.hand_off(tmp_path / 'room.ply')
-    _, walls, _, _ = sc.analyse(cloud['points'], cloud['floorEstimate']['y'] if cloud.get('floorEstimate') else 0.0, True, dense=sc.measured_scan(cloud))
+    _, walls, _, _ = sc.analyse(cloud['points'], cloud['floorEstimate']['y'] if cloud.get('floorEstimate') else 0.0,
+                              True, dense=sc.measured_scan(cloud), face_cell=sc.wall_face_cell(cloud))
     lengths = sorted(round(w['length']) for w in walls)
     assert lengths == [4, 4, 5, 5], lengths
+
+
+def test_actual_thinning_resolution_reaches_the_compiler(tmp_path):
+    xyz, rgb = room(n=20_000)
+    xyz[:, :2] *= 6  # Authored 30 x 24 m room: force coarse sampling with a smaller test budget.
+    path = tmp_path / 'large-room.ply'
+    write_ply(path, xyz, rgb)
+    cloud, facts = sv.hand_off(path, budget=8_000)
+    assert facts['voxel_metres'] >= .32
+    assert 0 < len(cloud['points']) <= 8_000 < sv.BUDGET
+    assert cloud['provenance']['voxelMetres'] == facts['voxel_metres']
+    floor = sc.floor_plane(cloud['points'], cloud.get('floorEstimate'))
+    _, walls, _, _ = sc.analyse(cloud['points'], floor, True, dense=sc.measured_scan(cloud), face_cell=sc.wall_face_cell(cloud))
+    assert len(walls) == 4
+    # Detection, not dimensional accuracy: coarse first-point sampling and percentile bounds shorten the fits.
+    assert all(20 < w['length'] < 31 for w in walls)
+
+
+@pytest.mark.skipif(shutil.which('blender') is None, reason='Blender is needed for the real scan-to-IFC/USD integration check')
+def test_blender_exports_all_coarse_room_walls_with_sampling_provenance(tmp_path):
+    """A real headless compile of authored geometry, not a real scan or a physical-accuracy claim."""
+    import scene_usd
+    xyz, rgb = room(n=20_000)
+    xyz[:, :2] *= 6
+    path = tmp_path / 'large-room.ply'
+    write_ply(path, xyz, rgb)
+    cloud, facts = sv.hand_off(path, budget=8_000)
+    assert facts['voxel_metres'] == .64
+    source = tmp_path / 'arena-cloud.json'
+    source.write_text(json.dumps(cloud, allow_nan=False))
+    scene = scene_usd.compile_scene(source, tmp_path / 'compiled', blender=shutil.which('blender'))
+    assert scene['counts']['walls'] == 4
+    assert scene['usd']['written'] and scene['ifc']['written']
+    assert scene['scale']['verified'] is False
+    ifcopenshell = pytest.importorskip('ifcopenshell')
+    model = ifcopenshell.open(str(tmp_path / 'compiled' / 'scene.ifc'))
+    assert len(model.by_type('IfcWall')) == 4
+    Usd = pytest.importorskip('pxr.Usd')
+    assert Usd.Stage.Open(str(tmp_path / 'compiled' / 'scene.usda'))

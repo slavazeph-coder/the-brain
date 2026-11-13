@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import time
 from pathlib import Path
 
@@ -76,12 +75,20 @@ def ply_header(path: Path):
     raise ValueError('The PLY header never ends.')
 
 
+def ply_colours(channels, kinds):
+    """Use the declared per-channel types in both ASCII and binary PLY, including 16-bit scanner colours."""
+    import numpy as np
+    return np.stack([np.clip(values // 256 if np.dtype(kind).kind in 'iu' and np.dtype(kind).itemsize == 2 else values,
+                             0, 255).astype(np.uint8) for values, kind in zip(channels, kinds)], 1)
+
+
 def ply_chunks(path: Path):
     """Yields (xyz float64 [n, 3], rgb uint8 [n, 3] or None) a few million points at a time, without loading the file."""
     import numpy as np
     layout, count, properties, offset = ply_header(path)
     names = [name for name, _ in properties]
     colour = next((triple for triple in COLOURS if set(triple) <= set(names)), None)
+    colour_kinds = [dict(properties)[key] for key in colour] if colour else None
     if layout == 'ascii':
         columns = [names.index(k) for k in ('x', 'y', 'z')] + ([names.index(k) for k in colour] if colour else [])
         with path.open('rb') as stream:
@@ -90,7 +97,7 @@ def ply_chunks(path: Path):
                 block = np.loadtxt(stream, usecols=columns, max_rows=min(CHUNK, count - start), ndmin=2)
                 if len(block) != min(CHUNK, count - start):
                     raise ValueError('The PLY ends before its vertex count.')
-                yield block[:, :3], (np.clip(block[:, 3:6], 0, 255).astype(np.uint8) if colour else None)
+                yield block[:, :3], (ply_colours(block[:, 3:6].T, colour_kinds) if colour else None)
         return
     order = '<' if layout == 'binary_little_endian' else '>'
     record = np.dtype([(name, order + kind) for name, kind in properties])
@@ -102,8 +109,7 @@ def ply_chunks(path: Path):
         xyz = np.stack([block['x'], block['y'], block['z']], 1).astype(np.float64)
         rgb = None
         if colour:
-            rgb = np.stack([block[k] for k in colour], 1)
-            rgb = (rgb >> 8).astype(np.uint8) if rgb.dtype.itemsize == 2 else np.clip(rgb, 0, 255).astype(np.uint8)
+            rgb = ply_colours([block[k] for k in colour], colour_kinds)
         yield xyz, rgb
 
 
@@ -159,15 +165,21 @@ def thin(xyz, rgb, origin, size):
 
 
 def read_thinned(path: Path, budget: int = BUDGET):
-    """The scan at one point per voxel, with the smallest voxel (from FINEST_VOXEL up) that fits the budget.
-    Returns (xyz, rgb, facts). Non-finite points are dropped and counted."""
+    """One point per voxel on nested grids (2 cm, 4 cm, 8 cm, ...), bounded after every reader chunk.
+    Doubling the voxel preserves first-point representatives regardless of chunk boundaries. Returns
+    (xyz, rgb, facts). Non-finite points are dropped and counted; facts records the actual retained resolution."""
     import numpy as np
+    if type(budget) is not int or not 1 <= budget <= BUDGET:
+        raise ValueError(f'The point budget must be an integer from 1 to {BUDGET}.')
     reader = READERS.get(path.suffix.lower())
     if reader is None:
         raise ValueError('Scans must be PLY, LAS, LAZ or E57.')
-    kept_xyz, kept_rgb, total, dropped, coloured, origin = [], [], 0, 0, True, None
+    kept_xyz, kept_rgb = np.empty((0, 3), np.float64), np.empty((0, 3), np.uint8)
+    total, dropped, coloured, origin, size = 0, 0, True, None, FINEST_VOXEL
     for xyz, rgb in reader(path):
         total += len(xyz)
+        if total > MAX_POINTS:
+            raise ValueError('The scan holds more points than this reader accepts.')
         finite = np.isfinite(xyz).all(1)
         dropped += int((~finite).sum())
         xyz = xyz[finite]
@@ -181,17 +193,17 @@ def read_thinned(path: Path, budget: int = BUDGET):
             # Anchored on the file's first point, not on a chunk, so the result is the same however the file is read.
             # That point sits mid-range of the 2^21 cells per axis, leaving about 20 km either side.
             origin = np.floor(xyz[0] / FINEST_VOXEL) * FINEST_VOXEL - 2 ** 20 * FINEST_VOXEL
-        xyz, rgb = thin(xyz, rgb, origin, FINEST_VOXEL)
-        kept_xyz.append(xyz); kept_rgb.append(rgb)
-    if not kept_xyz:
-        raise ValueError('The scan holds no usable points.')
-    xyz, rgb = thin(np.concatenate(kept_xyz), np.concatenate(kept_rgb), origin, FINEST_VOXEL)
-    size = FINEST_VOXEL
-    while len(xyz) > budget:
-        # Surfaces scale with the square of the voxel edge; the 1.05 keeps the loop short without overshooting far.
-        size = round(size * max(1.05, math.sqrt(len(xyz) / budget) * 0.98), 4)
         xyz, rgb = thin(xyz, rgb, origin, size)
-    return xyz, rgb, {'points_in_file': total, 'non_finite_dropped': dropped, 'voxel_metres': size, 'points_kept': len(xyz), 'colour_in_file': coloured}
+        kept_xyz, kept_rgb = thin(np.concatenate((kept_xyz, xyz)), np.concatenate((kept_rgb, rgb)), origin, size)
+        while len(kept_xyz) > budget:
+            # Grids must nest. Arbitrary growth factors can discard a later coarse voxel's first point,
+            # making the output depend on where the input reader happened to split its chunks.
+            size *= 2
+            kept_xyz, kept_rgb = thin(kept_xyz, kept_rgb, origin, size)
+    if not len(kept_xyz):
+        raise ValueError('The scan holds no usable points.')
+    return kept_xyz, kept_rgb, {'points_in_file': total, 'non_finite_dropped': dropped, 'voxel_metres': size,
+                               'points_kept': len(kept_xyz), 'colour_in_file': coloured}
 
 
 def to_y_up(xyz, up: str):

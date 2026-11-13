@@ -19,7 +19,7 @@ python robotics/world_worker/survey_cloud.py --input office.ply --out run/ --com
 The scene compiler accepts that hand-off without a second view (`measured_scan`) and writes the same outputs as for a
 walkthrough: `scene.glb`, `scene.json`, `scene.usda` and `scene.ifc`.
 
-## The check on a real scan
+## The initial check on a real scan (author-reported, before the ingestion changes below)
 
 The ETH3D "office" scene (public, CC BY-NC-SA) holds two FARO scans of 24.1 and 24.5 million points. Registered with the
 dataset's own alignment and exported as one 1 cm cloud (981,119 points):
@@ -34,6 +34,8 @@ dataset's own alignment and exported as one 1 cm cloud (981,119 points):
 | Files | `scene.usda` (metres) and `scene.ifc` written |
 
 Before the wall fix below, the same scan gave 7 walls, 2 of them false.
+These counts and timings describe the original PR experiment. They have not been reproduced for the updated
+streaming thinner and must not be presented as the new run's results.
 
 ## Why dense scans needed a stricter wall test
 
@@ -50,8 +52,76 @@ What separates them is how completely a wall's own points cover its face, in 20 
 
 For a `survey-scan` cloud a plane must now cover 40% of its face (`WALL_FACE_COVERAGE`), or its points stay free to
 become objects. The cells are 20 cm, or twice the voxel the scan was thinned to when that is larger, so a
-building-sized scan thinned coarsely to fit the point budget keeps its walls (Codex's finding on #294). Walkthrough reconstructions are untouched: their real walls are often blank and sparsely covered, so the
+building-sized scan thinned coarsely to fit the point budget can keep its walls (Codex's finding on #294).
+Simply enlarging cells can also turn a desk and a hanging light into one false wall. For cells larger than 20 cm,
+the upper band must have at least two independent height samples separated by 20 cm, or the whole face must have
+at least three. Jitter across a coverage-cell boundary does not count as another height layer. The 40% area
+threshold, RANSAC support, minimum length and minimum height requirements remain in force.
+
+For dense scans, an inferred doorway gap must also span at least the coverage cell, so regular 60 or 80 cm sampling
+does not fragment a complete wall into dozens of short pieces. Smaller openings are unresolved at that resolution.
+The scan options are passed consistently by the compiler, component evidence, component fit and object naming.
+Only metric `survey-scan` clouds use scan sampling metadata. Walkthrough reconstructions are untouched: their real walls are often blank and sparsely covered, so the
 test would wrongly reject them.
+
+## Bounded ingestion and colour consistency
+
+The retained sample is coarsened after each incoming chunk, rather than keeping the whole file's 2 cm samples until
+the end. Grids double from 2 cm to 4 cm, 8 cm, 16 cm and so on. Nested grids preserve the first point and its colour
+in each final voxel regardless of reader chunk boundaries. Between chunks the retained sample has at most the
+requested budget, which must be an integer from 1 to 50,000. Transient allocations still include the current reader
+chunk and NumPy's indexing/sorting arrays. E57's decoder still loads one scan position before yielding chunks.
+
+This changes retained resolution and point selection compared with the old adaptive growth factors. Rerun the
+original capture before comparing wall counts, object IDs, names or fit receipts; do not reuse the old compiled model.
+Both ASCII and binary PLY now normalize each colour channel using its declared type. For example, 16-bit RGB
+`(32768, 16384, 8192)` becomes `(128, 64, 32)` in all three supported PLY layouts.
+
+## Regression checks for PR #294
+
+The deterministic fixtures are authored geometry, not physical captures:
+
+- A 12 m wall sampled every 40 cm fails the old fixed 20 cm coverage test and passes with the actual voxel resolution.
+- Complete 24 m walls remain single walls at 20, 40, 60 and 80 cm spacing, both axis-aligned and rotated 37 degrees.
+- Two thin desk/light bands are rejected at the same spacings, including samples either side of a bin boundary.
+- A real wall remains detected in the same cloud as those bands; clutter points remain available to object separation.
+- A resolved doorway still splits a coarse wall; phone reconstruction results retain their existing behavior.
+- A 120,000-point authored 30 x 24 m room is thinned with an 8,000-point test budget. Its actual 64 cm voxel
+  is recorded in the hand-off and the compiler detects four walls. A real headless Blender integration test exports
+  GLB, IFC and USD; IfcOpenShell and OpenUSD reopen the IFC/USD files. This tests the software path, not survey accuracy.
+- Ingestion is checked across 40 incoming chunks, including the retained bound before the next chunk is read,
+  chunk-independent point/colour selection, invalid budgets, the 50,000-point contract and the total input cap.
+
+Run the CPU and headless export regressions with the repository's test dependencies installed:
+
+```sh
+python -m pytest tests/world/test_survey_cloud.py tests/scene_compiler \
+  tests/world/test_component_evidence.py tests/world/test_component_fit.py \
+  tests/world/test_object_names.py tests/world/test_worker.py -q -ra
+```
+
+The Blender integration check skips explicitly when Blender is absent. Optional IFC/USD reopen checks require
+IfcOpenShell and usd-core. The two real-photo COLMAP checks need `WORLD_COLMAP_TEST_CAPTURE`.
+
+Local results on November 13: the focused suite passed 325 tests plus 53 subtests, with two real-photo checks
+skipped. The broader `tests/world tests/scene_compiler` run passed 1,233 tests plus 148 subtests, with four skips
+(ONNX Runtime, PyTorch and two physical-photo inputs unavailable). Three final doorway/input-limit/budget
+regressions passed separately. Blender 4.3.2, IFC reopen and USD reopen all executed successfully.
+
+Before relying on a real scan, rerun the exact registered ETH3D office input from the original experiment and a larger
+registered scan that actually requires at least 40 cm thinning:
+
+```sh
+python robotics/world_worker/survey_cloud.py --input /data/registered-office-1cm.ply \
+  --out /runs/office-pr294 --up z --compile --blender /usr/bin/blender
+python robotics/world_worker/survey_cloud.py --input /data/registered-large-floor.ply \
+  --out /runs/large-floor-pr294 --up z --compile --blender /usr/bin/blender
+```
+
+Check `survey-scan.json` for input SHA-256, actual `voxel_metres` and retained count. Compare source-to-model wall
+residuals against the original registered points, manually review false/missing walls and openings, reopen IFC/USD,
+and measure worker peak memory. Independently check units, registration and several withheld physical dimensions.
+Model-to-input fit alone does not validate scanner accuracy or the resulting BIM against a survey.
 
 ## What it does not do yet
 
@@ -64,6 +134,7 @@ test would wrongly reject them.
 - **Units and accuracy are not checked.** The file's coordinates are taken as metres. Nothing here measures how far the
   model's walls sit from the scan's points; `fit_check.py` does that for walkthrough scenes and should run here too.
 - **Detail is capped at 50,000 points.** That is about 4 cm for one office and coarser for a whole floor.
-- `component_evidence.py`, `component_fit.py` and `object_names.py` call `analyse()` without the dense flag, so they must
-  pass it before a scan goes through the full scene engine.
+- The wall classifier remains a geometry heuristic. The clutter regressions do not prove arbitrary furniture can
+  never resemble a wall. Very coarse scans may lack the existing minimum high-band support or independent height
+  layers; narrow openings and small objects remain unresolved. No physical robot route has been validated here.
 - LAS/LAZ and E57 reading is written against `laspy` and `pye57` but only PLY has been run on a real file.
