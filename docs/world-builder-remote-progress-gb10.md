@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-||||||Last updated: 2026-11-14T00:00Z
+|||||||Last updated: 2026-11-14T12:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -14,7 +14,17 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - **Commit + push verified:** `3f15ace` on `hermes/world-builder-gb10`; `git push` → `3ffd2b0..3f15ace`. One file (`app.py` +3/-1). `git status` clean.
 - **4090 state:** port confirmed alive (ssh2.vast.ai:23990), hostname `d130b6c7f3f4`.
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
-- **Next bounded action:** pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
+|- **Next bounded action:** pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
+
+### Run 214 — 2026-11-14 (GB10: cancellation regression fix committed + pushed; suites green)
+
+- **Bounded improvement:** fixed `test_owner_cancellation_aborts_job_source_rehash_and_never_completes` — added a 100ms `time.sleep(0.1)` after `release.set()` to let the wrapper thread advance from Phase 1 to Phase 2 before the main thread asserts `real_entered`. The race was: main thread reached the assertion while the wrapper thread was still blocked in `release.wait()`, so `real_entered` was unset and `release_entered` was set, causing `False or not True = False`.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (103.50 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.78 s** (the previously failing test now passes)
+- **Commit + push verified:** `38363b6` on `hermes/world-builder-gb10`; `git push` → `d8c6a85..38363b6`. One file (`test_report_receipts.py` +4). `git status` clean.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 
 ### Run 210 — 2026-11-09 (GB10: 4090 PLY zflip receipt committed + pushed; suites green)
 
