@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Surface inspection and MetricTrail trial](world-surface-metrictrail-2026-11-14.md): source-bound local mesh inspection and an isolated pinned long-video research bridge; license, GPU and physical qualification boundaries.
+
 → [Movement source reset](movement-source-reset-2026-11-14.md): shared source-reset cancellation prevents a previous recording's pending acceleration estimate from entering a new phone clip or its exports.
 
 → [Hosted as-built IFC and capture photos](world-asbuilt-hosted-2026-11-14.md): owner-only real worker execution, preserved IFC/capture bytes and source-bound retained frame projections; separate private worker release required.
