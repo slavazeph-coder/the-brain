@@ -5,7 +5,7 @@ export function createSurfaceReview(stage) {
   stage.after(root);
   const mode=root.querySelector('select'),check=root.querySelector('[data-surface-check]'),save=root.querySelector('[data-surface-download]'),status=root.querySelector('[role=status]');
   let viewer=null,source=null,report=null;
-  mode.onchange=()=>viewer?.surfaceMode(mode.value);
+  mode.onchange=()=>{try{viewer?.surfaceMode(mode.value);}catch(error){mode.value='original';status.textContent=error.message;}};
   check.onclick=()=>{
     report=null;save.disabled=true;
     if(!viewer||!source)return;

@@ -58,7 +58,10 @@ $('asset').onchange = async () => {
 $('frame').onclick = () => (currentKind === 'mesh' ? meshViewer : viewer)?.reset();
 $('flip').onclick = () => (currentKind === 'mesh' ? meshViewer : viewer)?.flip();
 $('point-size').oninput = () => viewer?.setSize(Number($('point-size').value));
-$('surface-mode').onchange=$('stripe-frequency').oninput=()=>meshViewer?.surfaceMode($('surface-mode').value,Number($('stripe-frequency').value));
+$('surface-mode').onchange=$('stripe-frequency').oninput=()=>{
+  try{meshViewer?.surfaceMode($('surface-mode').value,Number($('stripe-frequency').value));}
+  catch(error){$('surface-mode').value='original';$('surface-status').textContent=error.message;}
+};
 $('surface-check').onclick=()=>{
   surfaceReport=null; $('surface-download').disabled=true;
   if(!meshSource)return;

@@ -481,6 +481,9 @@ export function create(container, options = {}) {
     if (!['original','zebra','normals','wireframe'].includes(mode)) throw Error('Unknown surface inspection mode.');
     restoreSurface();
     if (!asset || disposed || mode === 'original') { requestDraw(); return; }
+    let deforming=false;
+    asset.traverse(mesh=>{if(mesh.isMesh && (mesh.isSkinnedMesh || mesh.isInstancedMesh || Object.keys(mesh.geometry.morphAttributes).length))deforming=true;});
+    if(deforming){requestDraw();throw Error('Surface inspection requires a static, uninstanced copy without morph targets. Original materials restored.');}
     if (mode === 'zebra') inspectionMaterial = new THREE.ShaderMaterial({
       uniforms:{frequency:{value:clamp(finite(stripeFrequency,18),4,80)}}, side:THREE.DoubleSide,
       vertexShader:'varying vec3 vN; varying vec3 vP; void main(){ vec4 p=modelViewMatrix*vec4(position,1.0); vN=normalize(normalMatrix*normal); vP=p.xyz; gl_Position=projectionMatrix*p; }',

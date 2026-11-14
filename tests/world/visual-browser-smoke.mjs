@@ -14,7 +14,7 @@ function cloudFixture() {
   for (let y = 0; y < 24; y++) for (let x = 0; x < 32; x++) rows.push(`${(x-16)/16} ${(y-12)/12} ${Math.sin(x*.2)*.2} ${60+x*5} ${70+y*6} 180`);
   return Buffer.from(`ply\nformat ascii 1.0\ncomment authored renderer test fixture\nelement vertex ${rows.length}\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n${rows.join('\n')}\n`);
 }
-function glbFixture(external = false) {
+function glbFixture(external = false, morph = false) {
   const binary = Buffer.alloc(44);
   [-1,-1,0,1,-1,0,0,1,0].forEach((v,i)=>binary.writeFloatLE(v,i*4));
   [0,1,2].forEach((v,i)=>binary.writeUInt16LE(v,36+i*2));
@@ -24,6 +24,7 @@ function glbFixture(external = false) {
     buffers: [{byteLength: binary.length, ...(external ? {uri: 'https://invalid.example/private-scan.bin'} : {})}],
     bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 36}, {buffer: 0, byteOffset: 36, byteLength: 6}],
     accessors: [{bufferView: 0, componentType: 5126, count: 3, type: 'VEC3', min: [-1,-1,0], max: [1,1,0]}, {bufferView: 1, componentType: 5123, count: 3, type: 'SCALAR'}] };
+  if(morph){document.meshes[0].primitives[0].targets=[{POSITION:0}];document.meshes[0].weights=[1];}
   let json = JSON.stringify(document); json += ' '.repeat((4-Buffer.byteLength(json)%4)%4);
   const meta = Buffer.from(json), header = Buffer.alloc(20), chunk = Buffer.alloc(8);
   [0x46546c67,2,28+meta.length+binary.length,meta.length,0x4e4f534a].forEach((v,i)=>header.writeUInt32LE(v,i*4));
@@ -84,6 +85,14 @@ async function check(browser, mobile) {
   await page.locator('#remove').click();await mesh.scrollIntoViewIfNeeded();await drawSettled(page);
   assert.equal((await countPixels(mesh)).count,0,'clearing GLB must leave no authored robot or floor');
   assert.ok(await page.locator('#surface-panel').isHidden());assert.ok(await page.locator('#surface-download').isDisabled());
+  await input.setInputFiles({name:'authored-morph.glb',mimeType:'model/gltf-binary',buffer:glbFixture(false,true)});
+  await page.waitForFunction(()=>document.querySelector('#viewer-status').textContent.includes('GLB visual mesh · 3 vertices'));
+  await page.locator('#surface-mode').selectOption('zebra');
+  assert.match(await page.locator('#surface-status').textContent(),/static, uninstanced copy/);
+  assert.equal(await page.locator('#surface-mode').inputValue(),'original');
+  await page.locator('#surface-check').click();
+  assert.ok(await page.locator('#surface-download').isDisabled());
+  await page.locator('#remove').click();
   await input.setInputFiles({name:'external-resources.glb',mimeType:'model/gltf-binary',buffer:glbFixture(true)});
   await page.waitForFunction(()=>document.querySelector('#viewer-status').textContent.includes('External files are blocked'));
   assert.ok(await page.locator('#frame').isDisabled());
