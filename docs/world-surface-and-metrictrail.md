@@ -77,7 +77,7 @@ python -m robotics.world_worker.metrictrail_trial ingest \
   --out /data/trials/metrictrail-import-001 --evaluation-only
 ```
 
-The importer requires initialized successful tracking with an applied metric prior, ordered original frame IDs, source timing, a proper z-up rotation, enabled multiview filtering, matching cloud counts and numeric camera poses. It rejects reflected/non-rigid poses, partial/static results and pickle arrays. It uses the existing nested-voxel thinning and 50,000-point bound. The actual retained voxel resolution is preserved for downstream inspection.
+The importer requires initialized successful tracking with an applied metric prior, ordered original frame IDs, source timing, a proper z-up rotation, enabled multiview filtering, matching cloud counts and numeric camera poses. It rejects reflected/non-rigid poses, partial/static results and pickle arrays. It uses the existing nested-voxel thinning and 50,000-point bound. Cloud outputs use compact JSON within the existing 16 MiB handoff limit, separately from the general 4 MiB report limit. A full-budget high-precision regression covers this boundary. The actual retained voxel resolution is preserved for downstream inspection.
 
 Outputs preserve input hashes and do not overwrite them:
 

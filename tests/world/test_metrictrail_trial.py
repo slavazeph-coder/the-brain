@@ -96,6 +96,27 @@ def test_unreviewed_code_or_tampered_weights_are_rejected_before_execution(tmp_p
     monkeypatch.setattr(mt.subprocess,'run',lambda *a,**kw:Result('dirty'))
     with pytest.raises(ValueError,match='clean'):mt.preflight(source,weights)
 
+def test_full_budget_high_precision_cloud_uses_the_cloud_byte_budget(tmp_path,monkeypatch):
+    args=fixture(tmp_path);ply=args['run_root']/'pointcloud'/'authored.ply';count=50000
+    rows=[]
+    for i in range(count):
+        x=(i%250)*.041+((i*73)%997)*1e-10+.123456789012345
+        y=(i//250)*.041+((i*131)%991)*1e-10+.234567890123456
+        z=.345678901234567+((i*53)%983)*1e-10
+        rows.append(f'{x!r} {y!r} {z!r} 127 149 193')
+    ply.write_text('ply\nformat ascii 1.0\nelement vertex '+str(count)+'\nproperty double x\nproperty double y\nproperty double z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n'+'\n'.join(rows)+'\n')
+    f=json.loads(args['fusion'].read_text());f['voxels']=count;write(args['fusion'],f)
+    monkeypatch.setattr(mt.scene_usd,'fit_floor_plane',lambda *_:None)
+    result=mt.ingest(**args)
+    assert result['pointsHandedOff']==50000
+    for name in ['arena-cloud.json','estimated-metric-cloud.json']:
+        path=args['out']/name;value=json.loads(path.read_text())
+        assert len(value['points'])==count and path.stat().st_size<=mt.ARENA_CLOUD_MAX_BYTES
+        assert len(json.dumps(value,indent=2).encode())>4*1024**2,'This fixture must expose the old report-writer failure.'
+        with pytest.raises(ValueError,match='JSON size budget'):
+            mt.rc.write_json(tmp_path/'old-report-writer.json',value)
+        assert result['outputs'][name]['sha256']==hashlib.sha256(path.read_bytes()).hexdigest()
+
 def test_failed_tracking_is_retained_as_failure_without_a_handoff(tmp_path,monkeypatch):
     video=tmp_path/'test.mp4';video.write_bytes(b'authored')
     monkeypatch.setattr(mt,'preflight',lambda *a:{'targetGpuQualified':False})

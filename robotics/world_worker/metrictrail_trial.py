@@ -17,6 +17,7 @@ import zipfile
 
 import numpy as np
 from . import reconstruction_comparison as rc, scene_usd, survey_cloud
+from .geometry import ARENA_CLOUD_MAX_BYTES
 from robotics.scene_compiler.nav2_export import _publish_directory
 
 SOURCE_REVISION = 'ead2e008bc055310121736a49ff306bba50d10dc'
@@ -29,6 +30,12 @@ WEIGHTS = {
              'repository':'Ruicheng/moge-2-vitl', 'revision':'39c4d5e957afe587e04eec59dc2bcc3be5ecd968'},
 }
 MAX_FRAMES = 1500
+
+def write_cloud(path,value):
+    """Clouds have the existing 16 MiB handoff budget, not the report writer's 4 MiB."""
+    data=(json.dumps(value,separators=(',',':'),allow_nan=False,ensure_ascii=True)+'\n').encode('ascii')
+    if len(data)>ARENA_CLOUD_MAX_BYTES:raise ValueError('Cloud handoff exceeds its 16 MiB byte budget.')
+    Path(path).write_bytes(data)
 
 def file_record(path, limit=2*1024**3):
     path=rc.regular_source(path,limit)
@@ -112,7 +119,7 @@ def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
         raise ValueError('Point cloud does not match fusion counts or contains invalid coordinates.')
     # Upstream's explicit mean-camera-up rotation is not an independently measured gravity vector.
     upright=survey_cloud.to_y_up(xyz,'z')
-    rows=np.column_stack((upright,rgb)).tolist()
+    rows=[[float(p[0]),float(p[1]),float(p[2]),int(c[0]),int(c[1]),int(c[2])] for p,c in zip(upright,rgb)]
     cloud=scene_usd.to_arena_cloud(rows,source='MetricTrail research output',metres_per_unit=1.0)
     cloud['scale']={'source':'model-estimated','metresPerUnit':1.0,'selfReported':False,'verified':False,
                     'distance':None,'spanUnits':None}
@@ -132,8 +139,8 @@ def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
     out.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.metrictrail-',dir=out.parent) as temp:
         stage=Path(temp)/'bundle';stage.mkdir()
-        rc.write_json(stage/'arena-cloud.json',browser)
-        rc.write_json(stage/'estimated-metric-cloud.json',cloud)
+        write_cloud(stage/'arena-cloud.json',browser)
+        write_cloud(stage/'estimated-metric-cloud.json',cloud)
         rc.write_json(stage/'camera-path.json',{'schema':'brainsnn.metrictrail-cameras.v1','frames':transformed,
             'timeBasis':'Source frame ID / nominal FPS; not decoded video presentation timestamps.',
             'scope':'Predicted poses and original frame IDs. No retained raster ledger or occlusion validation.'})
