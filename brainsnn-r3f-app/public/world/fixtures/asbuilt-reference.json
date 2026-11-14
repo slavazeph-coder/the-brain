@@ -1,0 +1,85 @@
+{
+  "schema": "brainsnn.component-reference.v1",
+  "units": "m",
+  "coordinateFrame": "right-handed-y-up",
+  "sceneSha256": "319e17258497a7bba3ffba471ef822ccc63724c753d6ab84edc750bf9d0985a0",
+  "frameReviewed": true,
+  "origin": "synthetic-fixture",
+  "method": "Authored negative test: one chair is displaced by 1 m relative to the declared reference.",
+  "instrument": "Software fixture; not a tape, laser or TLS survey",
+  "measuredOn": "2026-11-14",
+  "usedForModeling": false,
+  "usedForRegistration": false,
+  "isPriorModel": false,
+  "derivedFromSha256": null,
+  "sourceSha256": "9eded77df2a981934c07a41a515d58aa8b263747dcd008c6c1f22f7e3f2cd54e",
+  "toleranceMeters": 0.2,
+  "components": [
+    {
+      "id": "ref-0",
+      "class": "wall",
+      "centreMeters": [
+        0,
+        1.35,
+        -2.9
+      ],
+      "positionMode": "horizontal",
+      "uncertaintyMeters": 0
+    },
+    {
+      "id": "ref-1",
+      "class": "wall",
+      "centreMeters": [
+        2.5,
+        1.35,
+        0.2
+      ],
+      "positionMode": "horizontal",
+      "uncertaintyMeters": 0
+    },
+    {
+      "id": "ref-2",
+      "class": "floor",
+      "centreMeters": [
+        0,
+        -0.02,
+        0
+      ],
+      "positionMode": "exclude",
+      "uncertaintyMeters": 0
+    },
+    {
+      "id": "ref-3",
+      "class": "chair",
+      "centreMeters": [
+        2,
+        0.45,
+        1
+      ],
+      "positionMode": "horizontal",
+      "uncertaintyMeters": 0
+    },
+    {
+      "id": "ref-4",
+      "class": "cabinet",
+      "centreMeters": [
+        -1.6,
+        0.8,
+        1.5
+      ],
+      "positionMode": "horizontal",
+      "uncertaintyMeters": 0
+    },
+    {
+      "id": "ref-5",
+      "class": "table",
+      "centreMeters": [
+        0.1,
+        0.4,
+        -1.2
+      ],
+      "positionMode": "horizontal",
+      "uncertaintyMeters": 0
+    }
+  ]
+}
