@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [World Builder operational twin](world-operational-twin-2026-11-14.md): source-bound equipment records, manual excerpts, spares/issues and explicitly authored joint previews; local overlays, original geometry and validation status preserved.
+
 → [Registered laser-scan input](world-laser-scan-input-2026-11-13.md) — PR #294 coarse wall/clutter regressions, bounded thinning, colour normalization and real-scan validation limits.
 
 → [Demo replay export](world-demo-replay-2026-11-02.md) — private saved-frame/camera replay videos, real partial capture evidence, source-bound exports and release limits.

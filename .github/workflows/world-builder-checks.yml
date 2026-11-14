@@ -224,6 +224,10 @@ jobs:
           WORLD_BROWSERS: chromium,webkit
           WORLD_PHONE_VIEWPORT: "1"
         run: python tests/world/scene_browser_smoke.py
+      - name: Operational twin records, citations, source binding and authored motion
+        env:
+          WORLD_BROWSERS: chromium,webkit
+        run: python tests/world/operational_twin_browser_smoke.py
       - name: Retain World Builder browser diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
