@@ -1,9 +1,19 @@
 # World Builder — remote build progress (GB10)
 
-|||||||Last updated: 2026-11-14T14:00Z
+||||||||Last updated: 2026-11-14T16:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 216 — 2026-11-14 (GB10: report-receipt suites green; check_execution_storage gap verified)
+
+- **Bounded improvement:** verified the `check_execution_storage` implementation gap between HEAD and origin — HEAD's version (830 lines) retains the full non-root UID enforcement, open-file/memory resource limits, and per-job/global disk budget checks; origin's simplified version (773 lines) drops the UID check and resource limits, keeping only the disk budget. The `hash_cancellations` dict for cancel-on-complete jobs and the `ttl` parameter validation (with `isinstance(ttl, bool)` guard) are present in HEAD but simplified in origin. `app.state.check_execution_storage` is exposed for test introspection in HEAD.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (172 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 17.01 s**
+- **Commit + push verified:** `bcb3b75` on `hermes/world-builder-gb10`; `git push` → `7046eb6..bcb3b75`. One file (progress.md timestamp update). `git status` clean.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH (confirm hostname + GPU), or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 
 ### Run 213 — 2026-11-14 (GB10: healthz public_processing env gate wired; suites green)
 
