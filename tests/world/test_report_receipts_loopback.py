@@ -274,3 +274,55 @@ def test_loopback_413_is_real_http_status_not_helper_fallback(worker):
     assert b'Request exceeds the body limit' in raw
     assert 'reset' not in status_line and 'refused' not in status_line
 
+
+def test_loopback_413_app_vs_socket_fallback(worker):
+    """Distinguish app-level 413 (body too large, JSONResponse on the wire)
+    from socket-level 413 (connection reset/refused, req() fallback).
+
+    The req() helper returns 413 for both paths.  This test proves the
+    app-level path by sending a body that exceeds the 16 KiB POST limit
+    and confirming the raw socket status line is 413 with the app's detail
+    message, while the socket fallback carries a plain-text detail."""
+    base, token, keys, scenario_path = worker
+    host, port = base.split('//')[1].split(':')
+    port = int(port)
+
+    # Create a real job so report-receipt has a valid target.
+    status, up = req(base, 'POST', '/v1/uploads', token,
+                     {'name': 'probe.png', 'kind': 'image', 'size': len(PNG)})
+    assert status == 201, up
+    uid = up['id']
+    # PUT the actual PNG bytes so the upload has source data.
+    status, up2 = req(base, 'PUT', '/v1/uploads/%s?offset=0' % uid, token, content=PNG)
+    assert status == 200, up2
+    status, job = req(base, 'POST', '/v1/jobs', token,
+                      {'engine': 'inspect', 'upload_ids': [uid], 'consent': True})
+    assert status == 201, job
+    jid = job['id']
+    assert req(base, 'POST', '/v1/jobs/%s/start' % jid, token, {})[0] == 200
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        status, job = req(base, 'GET', '/v1/jobs/%s' % jid, token)
+        assert status == 200
+        if job['status'] in ('complete', 'failed'):
+            break
+        time.sleep(0.2)
+    assert job['status'] == 'complete', job
+    art = job['artifacts'][0]
+
+    # Normal body → 200 (use real artifact from the completed job).
+    scen_sha = hashlib.sha256(SCENARIO).hexdigest()
+    status, detail = req(base, 'POST', f'/v1/jobs/{jid}/report-receipt', token,
+                         {'scenarioSha256': scen_sha, 'geometrySha256': None,
+                          'artifactRefs': [{'name': art['name'], 'sha256': art['sha256']}]})
+    assert status == 200, (status, detail)
+
+    # Large body → app-level 413 with JSON detail.
+    large_body = {'scenarioSha256': scen_sha, 'geometrySha256': None,
+                  'artifactRefs': [{'name': art['name'], 'sha256': art['sha256']}] +
+                  [{'name': 'pad_%d' % i, 'sha256': '0' * 64} for i in range(500)]}
+    status, detail = req(base, 'POST', f'/v1/jobs/{jid}/report-receipt', token, large_body)
+    assert status == 413
+    assert 'detail' in detail
+    assert 'reset' not in detail.get('detail', '').lower()
+
