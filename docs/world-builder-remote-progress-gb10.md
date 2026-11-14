@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||Last updated: 2026-11-14T19:15Z
+|||||||||||Last updated: 2026-11-14T20:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 225 — 2026-11-14 (GB10: operator_only test bug fixed; suites green)
+
+- **Bounded improvement:** fixed `test_operator_only_flips_with_public_processing` — the test read `client.app.state._state['root']` but the fixture creates the app with `create_app(root=tmp_path, token=TOKEN)`, which stores the root at `store.root`. Changed line 82 from `Path(client.app.state._state['root'])` to `client.app.state.store.root`.
+- **Fresh test results (this run, exact):**
+  - `pytest tests/world/test_worker.py::test_operator_only_flips_with_public_processing` → **PASSED** (was KeyError: 'root')
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (149 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.35 s**
+- **Commit + push verified:** `2b4190d` on `hermes/world-builder-gb10`; `git push` → `4d9c9e6..2b4190d`. One file (`test_worker.py` -1/+1). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit).
 
 ### Run 220 — 2026-11-14 (GB10: report-receipt suites green; 4090 CUDA verified; MapAnything weights confirmed)
 
