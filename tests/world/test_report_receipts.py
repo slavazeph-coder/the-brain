@@ -419,6 +419,10 @@ def test_owner_cancellation_aborts_job_source_rehash_and_never_completes(signed_
                 break
             time.sleep(0.05)
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'cancelled'
+        # Yield a tick so the wrapper thread can pass Phase 1 and set real_entered
+        # before we assert. Without this the wrapper may still be blocked in
+        # release.wait() when the main thread reaches the assertion.
+        time.sleep(0.1)
         # The real file_digest was reached after release (Phase 2 ran) and the
         # job stayed cancelled — the row gate (app.py:463) prevented complete().
         assert real_entered.is_set() or not release_entered.is_set(), \
