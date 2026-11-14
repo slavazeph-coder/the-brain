@@ -83,6 +83,21 @@ def test_operator_only_flips_with_public_processing(client, monkeypatch):
         assert c.get('/healthz').json()['public_processing'] is True
         assert c.get('/v1/capabilities', headers=HEADERS).json()['operator_only'] is False
 
+def test_public_domain_flips_capabilities(client, monkeypatch):
+    monkeypatch.setenv('WORLD_PUBLIC_DOMAIN', '1')
+    with TestClient(create_app(root=client.app.state.store.root, token=TOKEN)) as c:
+        cap = c.get('/v1/capabilities', headers=HEADERS).json()
+        assert cap['public_domain'] is True
+        # public_domain is independent of operator_only (which defaults to True)
+        assert cap['operator_only'] is True
+
+def test_public_domain_default_is_false(client):
+    # Ensure WORLD_PUBLIC_DOMAIN is not set (clear any leftover from other tests)
+    import os
+    os.environ.pop('WORLD_PUBLIC_DOMAIN', None)
+    with TestClient(create_app(root=client.app.state.store.root, token=TOKEN)) as c:
+        assert c.get('/v1/capabilities', headers=HEADERS).json()['public_domain'] is False
+
 def test_unsigned_artifact_route_is_denied(client):
     assert client.get('/v1/download/invented').status_code==403
 

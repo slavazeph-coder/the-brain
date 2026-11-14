@@ -611,7 +611,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def capabilities(request:Request):
         principal = request.state.principal
         public = os.environ.get('WORLD_PUBLIC_PROCESSING', '0').lower() in ('1', 'true', 'yes')
+        public_domain = os.environ.get('WORLD_PUBLIC_DOMAIN', '0').lower() in ('1', 'true', 'yes')
         return {'api_version':'brainsnn.worker.v1','operator_only':not public,
+                'public_domain':public_domain,
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
                 'reportSigning':{'available':signer is not None,'algorithm':'Ed25519','keyId':signer.public_key()['keyId'] if signer else None},
