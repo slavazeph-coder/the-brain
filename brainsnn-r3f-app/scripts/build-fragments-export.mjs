@@ -32,6 +32,13 @@ await build({
   legalComments: 'eof',
   logLevel: 'warning',
 });
+await build({
+  absWorkingDir: root,
+  entryPoints: ['src/world/ifc-prior.js'],
+  outfile: 'public/world/vendor/ifc-prior.js',
+  bundle: true, format: 'esm', target: ['es2020'], minify: true,
+  legalComments: 'eof', logLevel: 'warning',
+});
 await copyFile(resolve(webIfc, 'web-ifc.wasm'), resolve(output, 'web-ifc.wasm'));
 const licences = [
   ['@thatopen/fragments ' + versions['@thatopen/fragments'] + ' (MIT) https://github.com/ThatOpen/engine_fragment', 'vendor-licenses/thatopen-fragments-LICENSE.txt'],
@@ -41,7 +48,7 @@ let notice = 'fragments-export.js bundles the libraries below; web-ifc.wasm is w
 for (const [heading, file] of licences) notice += `\n==== ${heading} ====\n\n${await readFile(resolve(root, file), 'utf8')}\n`;
 await writeFile(resolve(output, 'LICENSES.txt'), notice);
 const assets = [];
-for (const filename of ['fragments-export.js', 'web-ifc.wasm', 'LICENSES.txt']) {
+for (const filename of ['fragments-export.js', 'ifc-prior.js', 'web-ifc.wasm', 'LICENSES.txt']) {
   const bytes = await readFile(resolve(output, filename));
   assets.push({ path: filename, bytes: bytes.byteLength, sha256: createHash('sha256').update(bytes).digest('hex') });
 }
