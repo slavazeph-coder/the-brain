@@ -144,12 +144,20 @@ def test_asbuilt_deployment_fixture_uses_the_actual_verified_ifc_writer(tmp_path
     assert report['metricVerified'] is report['physicalRobotValidated'] is False
 
 
-def test_asbuilt_acceptance_reuses_same_commit_success_without_another_paid_job(tmp_path,monkeypatch):
+def test_asbuilt_acceptance_reuses_same_deployment_success_without_another_job(tmp_path,monkeypatch):
     from robotics.world_worker.deploy.railway import asbuilt_acceptance as a
-    commit='a'*40;monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA',commit)
-    path=tmp_path/'acceptance.json';previous={'status':'passed','commitSha':commit};path.write_text(json.dumps(previous))
+    commit='a'*40;deployment='12345678-1234-1234-1234-123456789abc';monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA',commit);monkeypatch.setenv('RAILWAY_DEPLOYMENT_ID',deployment)
+    path=tmp_path/'acceptance.json';previous={'status':'passed','commitSha':commit,'deploymentId':deployment};path.write_text(json.dumps(previous))
     monkeypatch.setattr(a,'execute',lambda _client:pytest.fail('A verified commit must not run another job.'))
     assert a.run_acceptance(path)==previous
+
+
+def test_new_deployment_with_the_same_commit_must_recheck_its_environment(tmp_path,monkeypatch):
+    from robotics.world_worker.deploy.railway import asbuilt_acceptance as a
+    commit='a'*40;monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA',commit);monkeypatch.setenv('RAILWAY_DEPLOYMENT_ID','12345678-1234-1234-1234-123456789abc')
+    path=tmp_path/'acceptance.json';path.write_text(json.dumps({'status':'passed','commitSha':commit,'deploymentId':'87654321-1234-1234-1234-123456789abc'}))
+    calls=[];monkeypatch.setattr(a,'execute',lambda _client:calls.append(True) or {'physicalAccuracyVerified':False})
+    assert a.run_acceptance(path)['status']=='passed' and calls==[True]
 
 
 def test_asbuilt_acceptance_failure_replaces_old_success_without_logging_credentials(tmp_path,monkeypatch,capsys):

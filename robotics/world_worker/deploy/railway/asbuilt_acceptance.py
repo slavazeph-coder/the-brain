@@ -109,7 +109,8 @@ def run_acceptance(path=Path('/data/asbuilt-acceptance.json')):
     commit=os.environ.get('RAILWAY_GIT_COMMIT_SHA','');deployment=os.environ.get('RAILWAY_DEPLOYMENT_ID','')
     if path.is_file():
         previous=json.loads(path.read_text())
-        if previous.get('status')=='passed' and previous.get('commitSha')==commit and re.fullmatch('[a-f0-9]{40}',commit):
+        if previous.get('status')=='passed' and previous.get('commitSha')==commit and previous.get('deploymentId')==deployment \
+                and re.fullmatch('[a-f0-9]{40}',commit) and re.fullmatch('[a-fA-F0-9-]{36}',deployment):
             print('ASBUILT_HOSTED_ACCEPTANCE '+json.dumps({**previous,'reused':True}),flush=True);return previous
     report={'schema':'brainsnn.hosted-asbuilt-acceptance.v1','runId':str(uuid.uuid4()),'status':'started','startedAt':datetime.now(timezone.utc).isoformat(),
       'deploymentId':deployment if re.fullmatch('[a-fA-F0-9-]{36}',deployment) else None,'commitSha':commit if re.fullmatch('[a-f0-9]{40}',commit) else None}
