@@ -20,11 +20,12 @@ RUN ldconfig && python3.11 -c 'import ssl, sqlite3, ctypes, lzma, bz2'
 
 WORKDIR /app
 COPY robotics/world_worker/requirements.txt robotics/world_worker/requirements-colmap.txt \
-     robotics/world_worker/requirements-dense.txt robotics/world_worker/requirements-cad.txt robotics/world_worker/
+     robotics/world_worker/requirements-dense.txt robotics/world_worker/requirements-cad.txt \
+     robotics/world_worker/requirements-asbuilt.txt robotics/world_worker/
 # The worker, COLMAP (with ONNX Runtime for the scale model) and the CAD exports on Python 3.12 (their pinned numpy needs it).
 RUN python3.12 -m venv /opt/worker && /opt/worker/bin/pip install --no-cache-dir \
       -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-dense.txt \
-      -r robotics/world_worker/requirements-cad.txt usd-core==25.8
+      -r robotics/world_worker/requirements-cad.txt -r robotics/world_worker/requirements-asbuilt.txt usd-core==25.8
 # MoGe-2 ViT-B (MIT) for the estimated metric scale of each reconstruction (about 420 MB): the revision and hash pinned in
 # metric_scale.py MODEL, checked here and again by the adapter before every use. Nothing is downloaded at run time.
 RUN mkdir -p /opt/brainsnn-models && /opt/worker/bin/python -c "import hashlib, urllib.request; \

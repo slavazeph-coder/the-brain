@@ -117,5 +117,27 @@
       "--input-manifest",
       "{input_manifest}"
     ]
+  },
+  {
+    "id": "asbuilt-update",
+    "label": "Reviewed prior IFC placement copy (CPU)",
+    "enabled": true,
+    "license_reviewed": true,
+    "input_kinds": ["ifc", "asbuilt"],
+    "max_inputs": 2,
+    "source_job": true,
+    "timeout_seconds": 180,
+    "command": ["/opt/worker/bin/python", "/app/robotics/world_worker/asbuilt_jobs.py", "--operation", "update", "--input-manifest", "{input_manifest}"]
+  },
+  {
+    "id": "asbuilt-evidence",
+    "label": "Retained component photo evidence (CPU)",
+    "enabled": true,
+    "license_reviewed": true,
+    "input_kinds": ["asbuilt"],
+    "max_inputs": 1,
+    "source_job": true,
+    "timeout_seconds": 180,
+    "command": ["/opt/worker/bin/python", "/app/robotics/world_worker/asbuilt_jobs.py", "--operation", "evidence", "--input-manifest", "{input_manifest}"]
   }
 ]

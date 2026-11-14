@@ -9,7 +9,8 @@ Research: [original post](https://www.linkedin.com/posts/boyu-wang-baab071aa_sca
 | Prior BIM | Direct local IFC import, declared length units, source-byte hash, GlobalIds and original component IDs | Review slice of 1,024 represented elements, 16 MiB IFC, two million evaluated vertices |
 | Evidence and changes | Four linked views: prior IFC bounds, current compiler envelopes, matching source points, proposed prior placements | Bounds are proxies. No textured panorama/photo reprojection |
 | Modeling brief | Targets, intended use, requested accuracy and observed-component detail | Requested accuracy does not certify achieved accuracy or a BIM LOD |
-| Prior update | Explicit reviewed correspondences and rigid frame, bounded placement-only IFC copy | No inferred additions, deletions, resizing, structural edits or coordinated MEP repair |
+| Prior update | Explicit reviewed correspondences and rigid frame, bounded placement-only IFC copy through the private worker or CLI | No inferred additions, deletions, resizing, structural edits or coordinated MEP repair |
+| Capture photos | Selected component's actual retained rasters, with source-point projections and original image/ledger hashes | At most two resized frames. No panorama synthesis, image segmentation, guaranteed visibility or physical validation |
 | Evaluation | Separate component recognition and position checks, reference uncertainty and leakage declarations | Operator declarations are not authenticated survey evidence; physical flags remain false |
 
 ## Open and review
@@ -22,7 +23,16 @@ Open `/world/asbuilt.html` or **Prior IFC and as-built review** inside a compile
 4. Inspect all four synchronized views. Prior IFC geometry is shown as evaluated bounds; the current view uses compiler component envelopes. Registration rotates the tessellated footprint rather than a loose bounding box.
 5. Match identities explicitly. Matching source-scoped component IDs are suggestions. Unmatched prior elements are not evidence of demolition; unmatched current elements are not automatically authored into IFC.
 6. Approve individual translation candidates. Current objects must have compatible extents and an eligible prior IFC class. Floors, walls, openings and unknown-space proxies are excluded. Changing alignment settings clears approvals and requires applying the frame again.
-7. Download the reviewed request and comparison report. Files stay local. The browser does not modify an IFC or run a worker. Close/reload discards session state unless review files were exported.
+7. Download the reviewed request and comparison report. Files stay local until explicit processing consent. With a connected authorized worker and the original completed scene job, use **Create reviewed IFC copy** to run the real writer. A scene opened only from a local file retains the CLI path. Close/reload discards session state unless review files were exported.
+
+## Browser processing and actual photo evidence
+
+In the original scene dialog, an owner session on a worker offering `asbuilt-update` and `asbuilt-evidence` exposes two actions. The new owner-only engines are in the reviewed Railway profile; the worker deploy branch must also be updated before they are available. These actions do not appear for visitor sessions or an arbitrary scene file with no authorized source job.
+
+- **Show selected component photos:** select a matched component in the table or a current component in the viewer, approve retrieval, then request its photos. The worker recomputes component point membership and source-frame projections from the exact scene and ordered cloud. It follows only retained same-owner reconstruction ancestry and validates the camera ledger, original rasters, source point-cloud artifact and handoff transform. At most two frames are resized for preview. The overlay is a projected member-point box, not image segmentation; occlusion is heuristic. Original image/ledger hashes, camera models, poses and available source timestamps are retained in `asbuilt-photo-evidence.json`. Missing or invalid camera evidence returns an explicit unavailable result, never a generated image or another job's photos.
+- **Create reviewed IFC copy:** apply the reviewed frame and approve eligible placements, then approve uploading the original prior IFC and exact review request. The worker uses the original `scene.json` from that completed same-owner job. It recomputes eligibility and writes/readbacks the separate IFC. Download `updated.ifc`, original `prior.ifc`, `capture-scene.json`, `asbuilt-review.json`, `asbuilt-update-report.json` and `asbuilt-source.json`. The receipt binds the source job and input/output hashes. The original scene, Rhino/BIM exports and robot-route evidence remain unchanged.
+
+Changing identities, prior IFC, alignment or selection clears the current results and cancels an active review job. Closing or changing the scene also cancels; a job-create response is retained so the precise allocated job can be cancelled even if the dialog closes during submission. Downloads use existing short-lived owner-bound tickets and browser hash checks. Requests stay within 16 MiB IFC and 1 MiB JSON limits, existing tenant/storage quotas and 180-second adapter budgets. Standard retention remains 24 hours; export your files to keep them. No hosted benchmark, phone accuracy or physical robot result follows from this software execution.
 
 The default shape compatibility limit is 5 cm; maximum accepted limit is 25 cm. The maximum shift is 2 m, with at most 32 selected objects. These are implementation bounds, not measurement accuracy claims. A 60 cm cabinet size difference in the example is deliberately blocked even though a chair translation can be approved.
 
@@ -45,7 +55,7 @@ The output directory must not already exist. The command recomputes hashes, comp
 
 Only the selected local placements change. The writer preserves GlobalIds, native units, existing geometry and properties, and checks the bounds of every represented element after reopening the output. Hosted, nested, connected and shared-placement objects are rejected; this is not an MEP network editor. Unevaluable prior geometry blocks writing because unchanged geometry cannot then be checked. Each changed object receives `Pset_BrainSNN_AsBuiltReview` with source/review hashes and placement provenance. Metric and physical-robot validation remain false. Existing IFC/Rhino exports and capture provenance are not replaced by these review sidecars.
 
-The new IFC can be opened by BIM tools and Rhino's IFC workflow. No native Rhino placement-edit adapter was added. USD/robot collision scenes must be regenerated from the accepted source using the existing compiler; a translated IFC is not evidence that a robot route is physically safe.
+The new IFC can be opened by BIM tools and Rhino's IFC workflow. No native Rhino placement-edit adapter was added. USD/robot collision scenes must be regenerated from the accepted source using the existing compiler; a translated IFC is not evidence that a robot route is physically safe. The hosted action is available only inside an authorized source scene; standalone `/world/asbuilt.html` remains a local review/file workflow.
 
 ## Component benchmark
 
@@ -70,13 +80,16 @@ npm --prefix brainsnn-r3f-app ci --no-audit --no-fund
 node brainsnn-r3f-app/scripts/build-fragments-export.mjs
 node brainsnn-r3f-app/scripts/build-twin-renderer.mjs
 npm --prefix brainsnn-r3f-app run test:world
-python -m pytest -q tests/world/test_asbuilt_update.py
+python -m pytest -q tests/world/test_asbuilt_update.py tests/world/test_asbuilt_jobs.py
 node --test tests/world/asbuilt.test.mjs
 WORLD_BROWSERS=chromium,webkit python tests/world/asbuilt_browser_smoke.py
+WORLD_BROWSERS=chromium,webkit python tests/world/asbuilt_hosted_browser_smoke.py
 WORLD_BROWSERS=chromium,webkit python tests/world/operational_twin_browser_smoke.py
 ```
 
 Browser tests require Playwright browsers. When using an installed Chromium, set `PLAYWRIGHT_CHROMIUM_PATH=/usr/bin/chromium`. Tests import the actual IFC with the pinned WebIfc WASM, link cameras, approve a placement, export a request, execute the real Python writer, reopen the IFC, reject stale approvals and reference leakage, and verify desktop WebGL and phone software layouts. All assets are authored fixtures. The fixture generator is `tests/world/asbuilt_fixture.py`.
+
+The hosted browser regression additionally starts the actual site proxy and private worker, submits an authored scene through a trusted fixture adapter, retrieves real retained raster files, draws projected bounds, executes the real IFC adapter, downloads/hash-checks the result, refuses visitor IFC access and tests disposal. It does not mock the IFC or photo transport. `tests/world/asbuilt_capture_fixture.py` creates its deterministic compiler fits and labelled authored rasters. Set `NODE_PATH_EXECUTABLE` only when Node is installed outside the test process's PATH.
 
 ## Next physical experiment
 

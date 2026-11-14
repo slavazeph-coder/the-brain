@@ -235,6 +235,9 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     if (call.name === 'create-upload') {
       let counted = null;
       if (current.kind === 'visitor') {
+        let upload;
+        try { upload=JSON.parse(body.toString('utf8')); } catch { return reply(res,400,{detail:'Send JSON.'}); }
+        if (['ifc','asbuilt'].includes(upload?.kind)) return reply(res,403,{detail:'As-built review is available to owner sessions only.'});
         prune();
         const key = `${day(now())}|uploads|${current.address}`;
         const open = [...current.uploads].filter((id) => !current.used.has(id)).length;  // not yet given to a job
