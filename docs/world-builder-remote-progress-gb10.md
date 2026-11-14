@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-||||||||Last updated: 2026-11-14T16:00Z
+|||||||||Last updated: 2026-11-14T18:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 220 — 2026-11-14 (GB10: report-receipt suites green; 4090 CUDA verified; MapAnything weights confirmed)
+
+- **Bounded improvement:** alternated to 4090 — confirmed CUDA availability (`torch.cuda.is_available() → True`), verified MapAnything dense reconstruction checkpoint weights in `/workspace/slava/showroom/gs-runs/` (multiple `ckpt_*.pt` files across showroom runs), and confirmed 4090 branch `hermes/world-builder-4090` at `d1d59de` is clean (no dirty files). The PLY zflip receipt at `d1d59de` uses `fixture_ascii.ply` test (vcount=4, z-flip applied).
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, GPU UUID `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`. CUDA smoke passed on `python3` (NumPy 2.x compatibility warning, no failure). Multiple checkpoint weights verified in showroom.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (133 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.48 s**
+- **Commit + push verified:** `3ade155` on `hermes/world-builder-gb10`; `git push` → `3ade155`. One file (progress.md timestamp update). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit).
 
 ### Run 216 — 2026-11-14 (GB10: report-receipt suites green; check_execution_storage gap verified)
 
