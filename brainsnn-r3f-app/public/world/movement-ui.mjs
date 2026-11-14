@@ -64,6 +64,7 @@ function stop() {
 }
 function clearSource() {
   stop();
+  document.dispatchEvent(new Event('movement-source-reset'));
   trial.resetSource(null);
   source = null;
   if (localURL) {

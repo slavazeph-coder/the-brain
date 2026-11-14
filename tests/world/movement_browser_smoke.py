@@ -172,6 +172,31 @@ def check(page, clip, run_inference):
     assert mot['schema'] == 'brainsnn.model-knee-motion.v1' and mot['source']['name'] == 'authored.mot'
     assert mot['source']['sha256'] == sha256(MOTION).hexdigest()
     assert mot['frames'][-1] == {'time': 1.25, 'left': 30.0, 'right': -20.5}
+    # Keep an old recording's acceleration read pending while a phone-capture
+    # input opens another clip. The old estimate must never reach the new source.
+    page.evaluate('''() => {
+      const original=File.prototype.text;window.staleSupportEvents=0;
+      document.querySelector('#support-model').addEventListener('movement-support-trace',()=>window.staleSupportEvents++);
+      File.prototype.text=function(...args){
+        if(this.name==='delayed-acceleration.csv')return new Promise(resolve=>{
+          window.releaseDelayedSupportRead=async()=>resolve(await original.call(this));
+        });return original.apply(this,args);
+      };
+    }''')
+    page.locator('#support-mass').fill('80');page.locator('#support-label').fill('Previous recording only')
+    page.locator('#support-file').set_input_files({'name':'delayed-acceleration.csv','mimeType':'text/csv','buffer':b'time_s,com_az_m_s2\n0,0\n1,2\n'})
+    page.locator('#support-apply').click()
+    page.wait_for_function("typeof window.releaseDelayedSupportRead==='function'")
+    replacement='replacement'+clip.suffix
+    page.locator('#capture-file').set_input_files({'name':replacement,'mimeType':'video/webm' if clip.suffix=='.webm' else 'video/mp4','buffer':clip.read_bytes()})
+    expect(page.locator('#source-name')).to_have_text(replacement)
+    page.wait_for_function("document.querySelector('#video').readyState>=2")
+    page.evaluate('''async()=>{await window.releaseDelayedSupportRead();await new Promise(resolve=>setTimeout(resolve,0));}''')
+    assert page.evaluate('window.staleSupportEvents')==0,'Old support estimate reached the replacement video'
+    expect(page.locator('#support-mass')).to_have_value('');expect(page.locator('#support-label')).to_have_value('')
+    expect(page.locator('#force-provenance')).to_have_text('Add a synchronized trace to review vertical force.')
+    annotate(page,[(.3,.25),(.3,.75),(.7,.75)])
+    assert download_json(page,'#export')['forceTrace'] is None
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
     assert not errors, errors
     assert not writes, writes

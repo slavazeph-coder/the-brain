@@ -76,8 +76,7 @@ function clearSupportInputs() {
   input('offset').value = '0';
   input('status').textContent = '';
 }
-document.querySelector('#video-file').addEventListener('change', clearSupportInputs);
-document.querySelector('#demo').addEventListener('click', clearSupportInputs);
+document.addEventListener('movement-source-reset', clearSupportInputs);
 input('apply').addEventListener('click', async () => {
   const ticket = ++supportGeneration;
   support.dispatchEvent(new Event('movement-support-start'));
