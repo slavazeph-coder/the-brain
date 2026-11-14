@@ -98,6 +98,15 @@ def test_connected_element_update_is_refused(case):
     raw=model.to_string().encode();r['source']['priorIfcSha256']=hashlib.sha256(raw).hexdigest()
     with pytest.raises(ValueError,match='connected elements'):update_ifc(raw,scene,r)
 
+@pytest.mark.parametrize('relationship',['IfcRelNests','IfcRelAggregates'])
+def test_assembly_child_cannot_move_independently_even_with_its_own_placement(case,relationship):
+    prior,scene,r=case;model=ifcopenshell.file.from_string(prior.decode())
+    chair=model.by_guid(r['selectedTranslations'][0])
+    parent=model.create_entity('IfcElementAssembly',GlobalId=ifcopenshell.guid.new(),Name='Authored assembly')
+    model.create_entity(relationship,GlobalId=ifcopenshell.guid.new(),RelatingObject=parent,RelatedObjects=[chair])
+    raw=model.to_string().encode();r['source']['priorIfcSha256']=hashlib.sha256(raw).hexdigest()
+    with pytest.raises(ValueError,match='nested or connected elements'):update_ifc(raw,scene,r)
+
 def test_cli_writes_fresh_readback_checked_bundle_and_never_overwrites_sources(case,tmp_path):
     prior,scene,r=case
     for name,raw in [('prior.ifc',prior),('scene.json',scene),('review.json',json.dumps(r).encode())]:(tmp_path/name).write_bytes(raw)

@@ -18,7 +18,7 @@ November 14 owner asks to compare https://lnkd.in/p/gBy5r39g and build useful ga
 
 ## Validation and boundaries
 
-Local 353 World Builder Node tests and 19 IFC pytest tests passed. Production build/lint passed. Native Chromium desktop WebGL and phone SVG tests pass the actual browser-to-IFC flow; existing operational-twin motion controls also pass. IFC schema validation on the updated test fixture reports zero issues. CI results belong in the PR and must be checked on its exact final head before merging.
+Local 353 World Builder Node tests and 21 IFC pytest tests passed. Production build/lint passed. Native Chromium desktop WebGL and phone SVG tests pass the actual browser-to-IFC flow; existing operational-twin motion controls also pass. IFC schema validation on the updated test fixture reports zero issues. Automated review identified child-side assembly relationships: both IfcRelNests and IfcRelAggregates were independently reproduced as failing cases, then blocked with Nests/Decomposes checks and dedicated regressions. CI results belong in the PR and must be checked on its exact final head before merging.
 
 Fixtures are authored software data only. Negative case deliberately reports 100% recognition vs 80% within 20 cm position recall. No phone/survey accuracy, physical route validation, Agent2BIM reproduction, hosted worker update or public live-route confirmation follows from these tests. Capture/user-entered scale and existing IFC/Rhino/robot evidence remain separate. Photographic panorama reprojection and coordinated MEP changes remain future work.
 

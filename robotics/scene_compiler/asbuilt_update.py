@@ -244,7 +244,7 @@ def update_ifc(ifc_raw, scene_raw, request):
         element = model.by_guid(guid)
         if not element.ObjectPlacement or not element.ObjectPlacement.is_a('IfcLocalPlacement'):
             raise ValueError('Only local object placements can be updated.')
-        if any(getattr(element, key, ()) for key in ('IsDecomposedBy','IsNestedBy','HasOpenings','FillsVoids','ConnectedTo','ConnectedFrom','HasPorts')):
+        if any(getattr(element, key, ()) for key in ('IsDecomposedBy','Decomposes','IsNestedBy','Nests','HasOpenings','FillsVoids','ConnectedTo','ConnectedFrom','HasPorts')):
             raise ValueError('Hosted, nested or connected elements require a dedicated coordinated edit.')
         if len(model.get_inverse(element.ObjectPlacement)) > 1:
             raise ValueError('Shared placements cannot be changed by this bounded workflow.')
