@@ -46,7 +46,7 @@ def test_real_point_bridge_preserves_inputs_scale_distinctions_and_camera_frame(
     for name,row in receipt['outputs'].items():assert row['sha256']==hashlib.sha256((args['out']/name).read_bytes()).hexdigest()
     with pytest.raises(ValueError,match='fresh'):mt.ingest(**args)
 
-@pytest.mark.parametrize('change', ['static','no-prior','wrong-rotation','no-filter','wrong-count','wrong-ids','reflection','bad-fps','traversal','pickle'])
+@pytest.mark.parametrize('change', ['static','no-prior','wrong-rotation','no-filter','wrong-count','wrong-ids','unsigned-order','reflection','bad-fps','traversal','pickle'])
 def test_failed_or_mismatched_artifacts_never_publish_success(tmp_path,change):
     args=fixture(tmp_path);path=args['run_root']/'vipe'/'authored_metrictrail.json'
     run=json.loads(path.read_text());fused=json.loads(args['fusion'].read_text())
@@ -56,6 +56,10 @@ def test_failed_or_mismatched_artifacts_never_publish_success(tmp_path,change):
     if change=='no-filter':fused['settings']['min_consistent']=0
     if change=='wrong-count':fused['voxels']=99
     if change=='wrong-ids':run['tracking_stride']['source_frame_ids'][1]=99
+    if change=='unsigned-order':
+        ids=np.arange(16,dtype=np.uint64)*2;ids[0],ids[1]=ids[1],ids[0]
+        run['tracking_stride']['source_frame_ids']=ids.tolist()
+        np.savez(args['run_root']/'pose'/'authored.npz',data=np.repeat(np.eye(4)[None],16,axis=0),source_frame_ids=ids)
     if change=='reflection':
         poses=np.repeat(np.eye(4)[None],16,axis=0);poses[:,0,0]=-1
         np.savez(args['run_root']/'pose'/'authored.npz',data=poses,source_frame_ids=np.arange(16)*2)

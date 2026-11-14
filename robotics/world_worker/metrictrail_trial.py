@@ -66,7 +66,7 @@ def poses(path):
         frame_ids=np.asarray(data['source_frame_ids'])
     if (matrices.ndim!=3 or matrices.shape[1:]!=(4,4) or not 16<=len(matrices)<=MAX_FRAMES
             or frame_ids.shape!=(len(matrices),) or not np.issubdtype(frame_ids.dtype,np.integer)
-            or np.any(frame_ids<0) or np.any(np.diff(frame_ids)<=0) or not np.isfinite(matrices).all()
+            or np.any(frame_ids<0) or np.any(frame_ids[1:]<=frame_ids[:-1]) or not np.isfinite(matrices).all()
             or np.abs(matrices[:,:3,3]).max()>100000 or not np.allclose(matrices[:,3],[0,0,0,1],atol=1e-7,rtol=0)
             or not all(rigid(m[:3,:3]) for m in matrices)):
         raise ValueError('Expected bounded proper camera-to-world poses and ordered source frame IDs.')
