@@ -610,7 +610,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.get('/v1/capabilities')
     async def capabilities(request:Request):
         principal = request.state.principal
-        return {'api_version':'brainsnn.worker.v1','operator_only':True,
+        public = os.environ.get('WORLD_PUBLIC_PROCESSING', '0').lower() in ('1', 'true', 'yes')
+        return {'api_version':'brainsnn.worker.v1','operator_only':not public,
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
                 'reportSigning':{'available':signer is not None,'algorithm':'Ed25519','keyId':signer.public_key()['keyId'] if signer else None},

@@ -77,6 +77,12 @@ def test_authentication(client):
     assert client.get('/healthz').json()['public_processing'] is False
     assert client.get('/v1/capabilities',headers=HEADERS).json()['operator_only'] is True
 
+def test_operator_only_flips_with_public_processing(client, monkeypatch):
+    monkeypatch.setenv('WORLD_PUBLIC_PROCESSING', '1')
+    with TestClient(create_app(root=Path(client.app.state._state['root']), token=TOKEN)) as c:
+        assert c.get('/healthz').json()['public_processing'] is True
+        assert c.get('/v1/capabilities', headers=HEADERS).json()['operator_only'] is False
+
 def test_unsigned_artifact_route_is_denied(client):
     assert client.get('/v1/download/invented').status_code==403
 
