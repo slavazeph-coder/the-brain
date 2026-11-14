@@ -1,0 +1,2 @@
+# CPU-only IFC review copies, pinned to the version exercised in CI.
+ifcopenshell==0.9.0

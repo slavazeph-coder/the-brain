@@ -1,0 +1,193 @@
+{
+  "schema": "brainsnn.scene.v1",
+  "source": "Authored as-built comparison fixture. Not a reconstruction.",
+  "units": "m",
+  "scale": {
+    "source": "authored-example",
+    "metresPerUnit": 1,
+    "selfReported": true,
+    "verified": false
+  },
+  "floor_y": 0,
+  "unknown": [],
+  "openings": [],
+  "walls": [
+    {
+      "name": "wall_1",
+      "label": "wall",
+      "centre": [
+        0,
+        1.35,
+        -2.9
+      ],
+      "size": [
+        6,
+        2.7,
+        0.18
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "8f0cc2e2-46a2-5e49-a0b3-477e7f915217"
+    },
+    {
+      "name": "wall_2",
+      "label": "wall",
+      "centre": [
+        2.5,
+        1.35,
+        0.2
+      ],
+      "size": [
+        3,
+        2.7,
+        0.18
+      ],
+      "yaw_degrees": 72,
+      "provenance": "authored-example",
+      "componentId": "4fd62523-3cd6-5771-b007-b8e378ee47de"
+    }
+  ],
+  "objects": [
+    {
+      "name": "floor_observed",
+      "label": "floor",
+      "centre": [
+        0,
+        -0.02,
+        0
+      ],
+      "size": [
+        6,
+        0.04,
+        6
+      ],
+      "min": [
+        -3,
+        -0.04,
+        -3
+      ],
+      "max": [
+        3,
+        0,
+        3
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "373b0f7b-bb23-5853-b9bf-49d0ba21690b"
+    },
+    {
+      "name": "chair_1",
+      "label": "chair",
+      "centre": [
+        1,
+        0.45,
+        1
+      ],
+      "size": [
+        0.5,
+        0.9,
+        0.5
+      ],
+      "yaw_degrees": 25,
+      "kind": "separated",
+      "ifcClass": "IfcFurniture",
+      "provenance": "authored-example",
+      "componentId": "4cb59755-2009-5b3f-8f8e-668ea1321001"
+    },
+    {
+      "name": "cabinet_1",
+      "label": "cabinet",
+      "centre": [
+        -1.6,
+        0.8,
+        1.5
+      ],
+      "size": [
+        1.5,
+        1.6,
+        0.5
+      ],
+      "yaw_degrees": 0,
+      "kind": "separated",
+      "ifcClass": "IfcFurniture",
+      "provenance": "authored-example",
+      "componentId": "b01262c2-cd1b-53f3-a43d-1ccedf624e4c"
+    },
+    {
+      "name": "table_1",
+      "label": "table",
+      "centre": [
+        0.1,
+        0.4,
+        -1.2
+      ],
+      "size": [
+        1.1,
+        0.8,
+        0.7
+      ],
+      "yaw_degrees": 0,
+      "kind": "separated",
+      "ifcClass": "IfcFurniture",
+      "provenance": "authored-example",
+      "componentId": "a386ea40-a2ac-5506-9fba-12591c831cef"
+    }
+  ],
+  "cloudPointsSha256": "b76edc0695cfc7f859c9b02e055280c4746e1278fea7bba9a047cd4f0608e223",
+  "metric_verified": false,
+  "metricVerified": false,
+  "certified": false,
+  "clearanceVerified": false,
+  "physicalRobotValidated": false,
+  "componentGraph": {
+    "schema": "brainsnn.component-graph.v1",
+    "sourceSha256": "b76edc0695cfc7f859c9b02e055280c4746e1278fea7bba9a047cd4f0608e223",
+    "namespaceBasis": "supplied-source-sha256",
+    "sourceSceneSha256": "6b04e2d708f9236049d256144d43a895f5fe413f7cf83b53cec6802b9f331179",
+    "contentSha256": "51f1b8f258762f4a12f8a805b656e23371a3db3832ae1939a32379f12eb457ef",
+    "revision": 0,
+    "components": [
+      {
+        "componentId": "8f0cc2e2-46a2-5e49-a0b3-477e7f915217",
+        "kind": "wall",
+        "index": 0,
+        "sourceName": "wall_1"
+      },
+      {
+        "componentId": "4fd62523-3cd6-5771-b007-b8e378ee47de",
+        "kind": "wall",
+        "index": 1,
+        "sourceName": "wall_2"
+      },
+      {
+        "componentId": "373b0f7b-bb23-5853-b9bf-49d0ba21690b",
+        "kind": "object",
+        "index": 0,
+        "sourceName": "floor_observed"
+      },
+      {
+        "componentId": "4cb59755-2009-5b3f-8f8e-668ea1321001",
+        "kind": "object",
+        "index": 1,
+        "sourceName": "chair_1"
+      },
+      {
+        "componentId": "b01262c2-cd1b-53f3-a43d-1ccedf624e4c",
+        "kind": "object",
+        "index": 2,
+        "sourceName": "cabinet_1"
+      },
+      {
+        "componentId": "a386ea40-a2ac-5506-9fba-12591c831cef",
+        "kind": "object",
+        "index": 3,
+        "sourceName": "table_1"
+      }
+    ],
+    "editHistory": [],
+    "evidenceStatus": "source-scene",
+    "invalidatedEvidence": [],
+    "metricVerified": false,
+    "certified": false
+  }
+}

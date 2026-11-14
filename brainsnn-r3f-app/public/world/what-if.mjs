@@ -7,18 +7,32 @@ const num = (v) => Number.isFinite(v) ? v : null;
 
 /** The record to keep before an edit: the goal and the route that reached it, and what the edit was. Null when
  *  there is no routed goal to compare against. */
-export function captureBefore({goal, result, world, selected, kind}) {
+export function captureBefore({goal, result, world, selected, kind, robot}) {
   if (!goal || !result?.route?.length || !result.goal || !Number.isFinite(result.distance)) return null;
   const object = world?.objects?.find(o => o.id === selected) || null;
   return {
     goal: {x: num(goal.x), z: num(goal.z)},
     previous: {distance: result.distance, travelSeconds: num(result.travelSeconds), route: result.route.map(p => ({x: p.x, z: p.z}))},
     edit: {kind: label(kind, 'edit'), objectId: object ? object.id : null, objectName: object ? label(object.name, 'Obstacle') : null},
+    robot: envelope(robot),  // the robot that drove the previous route: the comparison is only like for like on this one
     after: null,
   };
 }
 
-/** The comparison line once the reviewed map routed to the same goal again. */
+/** The numbers that decide a route for a robot. Null when any is missing, so an unknown robot never passes as the same. */
+function envelope(robot) {
+  const e = robot ? {width: num(robot.width), depth: num(robot.depth), speed: num(robot.speed), margin: num(robot.margin)} : null;
+  return e && Object.values(e).every(v => v !== null) ? e : null;
+}
+
+/** Whether `robot` is the one the previous route was planned for. A changed footprint, speed or margin moves the route
+ *  by itself, so the "same spot, same robot" comparison must not be made across it. */
+export function sameRobot(whatIf, robot) {
+  const before = whatIf?.robot, now = envelope(robot);
+  return !!before && !!now && Object.keys(before).every(k => before[k] === now[k]);
+}
+
+/** The comparison line once the reviewed map routed to the same goal again. Call it only when sameRobot() holds. */
 export function compare(whatIf, route) {
   const before = whatIf.previous.distance, after = route.distance, delta = after - before;
   const what = whatIf.edit.objectName ? `${whatIf.edit.kind} ${whatIf.edit.objectName}` : whatIf.edit.kind;

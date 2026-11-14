@@ -21,7 +21,7 @@ ADAPTERS = ROOT / 'robotics/world_worker/deploy/railway/adapters.json'
 
 def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     engines = enabled_engines(ADAPTERS)
-    assert engines == ['colmap-sparse', 'locate-photo', 'photo-metric', 'scene-usd', 'omniverse-pack', 'demo-replay']
+    assert engines == ['colmap-sparse', 'locate-photo', 'photo-metric', 'scene-usd', 'omniverse-pack', 'demo-replay', 'asbuilt-update', 'asbuilt-evidence']
     value = registry({'WORLD_WORKER_SITE_OWNER_TOKEN': OWNER, 'WORLD_WORKER_SITE_VISITOR_TOKEN': VISITOR}, 9 * 1024 ** 3, engines)
     raw = json.dumps(value)
     assert OWNER not in raw and VISITOR not in raw
@@ -130,3 +130,43 @@ def test_hosted_metric_scale_photo_preview_and_model_pins_match_worker_image():
     assert 'robotics/world_worker/deploy/railway/start.sh' in railway
     assert 'G1_DEPLOYMENT_CHECK' in railway
     assert 'brainsnn-r3f-app/railway.toml' not in railway
+
+
+def test_asbuilt_deployment_fixture_uses_the_actual_verified_ifc_writer(tmp_path):
+    sys.path.insert(0,str(ROOT/'tests/world'))
+    from asbuilt_capture_fixture import make_capture
+    from robotics.world_worker.deploy.railway.asbuilt_acceptance import prior_review
+    from robotics.scene_compiler.asbuilt_update import update_ifc
+    case=make_capture(tmp_path/'capture');raw=(case['sceneRoot']/'output/scene.json').read_bytes()
+    prior,review,_component=prior_review(json.loads(raw),hashlib.sha256(raw).hexdigest())
+    output,report=update_ifc(prior,raw,review)
+    assert output!=prior and report['updatedCount']==1
+    assert report['metricVerified'] is report['physicalRobotValidated'] is False
+
+
+def test_asbuilt_acceptance_reuses_same_deployment_success_without_another_job(tmp_path,monkeypatch):
+    from robotics.world_worker.deploy.railway import asbuilt_acceptance as a
+    commit='a'*40;deployment='12345678-1234-1234-1234-123456789abc';monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA',commit);monkeypatch.setenv('RAILWAY_DEPLOYMENT_ID',deployment)
+    path=tmp_path/'acceptance.json';previous={'status':'passed','commitSha':commit,'deploymentId':deployment};path.write_text(json.dumps(previous))
+    monkeypatch.setattr(a,'execute',lambda _client:pytest.fail('A verified commit must not run another job.'))
+    assert a.run_acceptance(path)==previous
+
+
+def test_new_deployment_with_the_same_commit_must_recheck_its_environment(tmp_path,monkeypatch):
+    from robotics.world_worker.deploy.railway import asbuilt_acceptance as a
+    commit='a'*40;monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA',commit);monkeypatch.setenv('RAILWAY_DEPLOYMENT_ID','12345678-1234-1234-1234-123456789abc')
+    path=tmp_path/'acceptance.json';path.write_text(json.dumps({'status':'passed','commitSha':commit,'deploymentId':'87654321-1234-1234-1234-123456789abc'}))
+    calls=[];monkeypatch.setattr(a,'execute',lambda _client:calls.append(True) or {'physicalAccuracyVerified':False})
+    assert a.run_acceptance(path)['status']=='passed' and calls==[True]
+
+
+def test_asbuilt_acceptance_failure_replaces_old_success_without_logging_credentials(tmp_path,monkeypatch,capsys):
+    from robotics.world_worker.deploy.railway import asbuilt_acceptance as a
+    monkeypatch.setenv('RAILWAY_GIT_COMMIT_SHA','b'*40)
+    path=tmp_path/'acceptance.json';path.write_text(json.dumps({'status':'passed','commitSha':'a'*40}))
+    secret='fixture-credential-and-signed-URL-never-log'
+    def fail(_client):raise RuntimeError(secret)
+    monkeypatch.setattr(a,'execute',fail)
+    report=a.run_acceptance(path)
+    assert report['status']=='failed' and report['errorType']=='RuntimeError'
+    assert secret not in path.read_text()+capsys.readouterr().out
