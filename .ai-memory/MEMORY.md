@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Movement source reset](movement-source-reset-2026-11-14.md): shared source-reset cancellation prevents a previous recording's pending acceleration estimate from entering a new phone clip or its exports.
+
 → [Hosted as-built IFC and capture photos](world-asbuilt-hosted-2026-11-14.md): owner-only real worker execution, preserved IFC/capture bytes and source-bound retained frame projections; separate private worker release required.
 
 → [As-built IFC review](world-asbuilt-review-2026-11-14.md): prior IFC import, four linked evidence/model views, bounded reviewed placement copies and separate component recognition/position checks; authored regression evidence and physical validation limits.
