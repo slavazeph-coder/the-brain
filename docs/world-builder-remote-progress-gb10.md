@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||Last updated: 2026-11-14T18:30Z
+||||||||||Last updated: 2026-11-14T19:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -14,7 +14,18 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.48 s**
 - **Commit + push verified:** `3ade155` on `hermes/world-builder-gb10`; `git push` → `3ade155`. One file (progress.md timestamp update). `git status` clean (untracked `world-worker-data/` preserved).
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
-- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit).
+|- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit).
+
+### Run 222 — 2026-11-14 (GB10: operator_only env gate wired into /v1/capabilities; suites green)
+
+- **Bounded improvement:** committed the dirty `robotics/world_worker/app.py` — the `WORLD_PUBLIC_PROCESSING` env var wiring into the `/v1/capabilities` endpoint. When set to `1`, `true`, or `yes`, the capabilities endpoint flips `operator_only` to `False` (previously hardcoded `True`). The same env gate was already wired into `/healthz` in run 213; this closes the remaining gap so both endpoints agree.
+- **Test added:** `test_operator_only_flips_with_public_processing` in `tests/world/test_worker.py` — sets `WORLD_PUBLIC_PROCESSING='1'`, creates a new app, confirms `public_processing=True` and `operator_only=False`.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (185 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.29 s**
+- **Commit + push verified:** `34ab143` on `hermes/world-builder-gb10`; `git push` → `3ade155..34ab143`. Two files (`app.py` +3/-1, `test_worker.py` +6). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 
 ### Run 216 — 2026-11-14 (GB10: report-receipt suites green; check_execution_storage gap verified)
 
