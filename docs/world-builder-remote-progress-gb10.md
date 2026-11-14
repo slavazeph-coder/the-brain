@@ -1,9 +1,22 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||Last updated: 2026-11-14T20:00Z
+||||||||||||Last updated: 2026-11-14T21:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 226 — 2026-11-14 (GB10: WORLD_PUBLIC_DOMAIN env gate wired into /v1/capabilities; suites green)
+
+- **Bounded improvement:** committed the dirty `robotics/world_worker/app.py` — the `WORLD_PUBLIC_DOMAIN` env var wiring into the `/v1/capabilities` endpoint. When set to `1`, `true`, or `yes`, the capabilities endpoint returns `public_domain: true` (independent of `operator_only`). Also committed `.env.example` documentation for the new env var and two new tests in `test_worker.py`.
+- **Tests added:** `test_public_domain_flips_capabilities` (WORLD_PUBLIC_DOMAIN=1 → public_domain=True, operator_only still True) and `test_public_domain_default_is_false` (unset → public_domain=False).
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (183 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.84 s**
+  - `pytest tests/world/test_worker.py::test_public_domain_flips_capabilities` → **PASSED**
+  - `pytest tests/world/test_worker.py::test_public_domain_default_is_false` → **PASSED**
+- **Commit + push verified:** `62d1de9` on `hermes/world-builder-gb10`; `git push` → `151b323..62d1de9`. Three files (`.env.example` +4, `app.py` +2, `test_worker.py` +15). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit).
 
 ### Run 225 — 2026-11-14 (GB10: operator_only test bug fixed; suites green)
 
