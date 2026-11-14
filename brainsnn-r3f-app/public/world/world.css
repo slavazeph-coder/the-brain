@@ -109,3 +109,4 @@
 .capture-report .timeline i{display:block;height:100%}
 .capture-report .timeline i.registered{background:#34d399}.capture-report .timeline i.dropped{background:#4b5563}.capture-report .timeline i.blurred{background:#f59e0b}
 .capture-report ol{padding-left:20px;margin:10px 0}.capture-report li{font-size:12px;line-height:1.6;color:#d5dde7;margin:4px 0}.capture-report li em{color:#9fe3ff;font-style:normal}
+.fragments-export a[download]{display:block;margin-top:12px;padding:12px 16px;border:1px solid var(--cyan);border-radius:10px;text-align:center;color:var(--cyan);font-weight:600;text-decoration:none}.fragments-export a[download]:hover,.fragments-export a[download]:focus-visible{background:rgba(0,245,255,.08);outline:2px solid var(--cyan);outline-offset:2px}

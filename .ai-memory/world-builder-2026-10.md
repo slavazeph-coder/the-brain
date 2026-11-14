@@ -368,3 +368,26 @@ up to 3 questions for reconstruction proposals only, shown in the Edit tab until
   effort, server-side fallbacks. No Anthropic key is set on the hosted worker, so naming and `reference-scale` are off there.
 - Engines built but not enabled on the hosted worker: `reference-scale`, `colmap-dense-cpu`, `depth-small`,
   `world-observations`, `mapanything-apache`, `lingbot-map-stream` (the last three need a GPU).
+
+## Fragments export for Unreal Engine — 2026-11-12
+
+Prompted by Arkoun Merchant's FragmentsUnreal post (fragever/FragmentsUnreal, Apache 2.0, Unreal Engine 5.4+): the plugin
+loads That Open `.frag` building models with their BIM data. BrainSNN already writes `scene.ifc`, so it now also offers
+`scene.frag`.
+- **Where:** the scene dialog's files card, "Open this model in Unreal Engine" (`fragments-ui.mjs`), shown when the job
+  has `scene.ifc`. Converted in the browser from that file; nothing is uploaded.
+- **How:** `src/world/fragments-export.js` wraps `@thatopen/fragments` 3.6.1 (MIT) and `web-ifc` 0.0.79 (MPL-2.0,
+  unmodified WASM). `scripts/build-fragments-export.mjs` bundles it into `public/world/vendor/` (git-ignored, built from
+  the lockfile, about 4.4 MB, loaded only on the button press) and refuses other versions until re-checked.
+- **Honest scope:** the page reads the file back with the library's own reader before offering it (element counts, and
+  that every element keeps `Pset_BrainSNN`). Unseen-space volumes are counted apart from objects. We have not opened the
+  file in Unreal Engine ourselves; the card says so.
+- **Tests:** `fragments-export.test.mjs` (real conversion of `fixtures/authored-scene.ifc`, the card's lifecycle) and the
+  download in `scene_browser_smoke.py`.
+- `tsconfig.json` now excludes `dist` and `public/world/vendor`: with `allowJs`, `tsc` ran out of memory on the bundle.
+
+## Single-camera sit-to-stand review (November 13)
+
+Movement Review accepts a local video or mobile camera capture. The optional MoveNet v4 assets are built by `scripts/build-movement-pose.mjs` and served on BrainSNN’s origin. Trials export selected-side landmarks, detector confidence, manual corrections, angle-threshold event times and optional synchronized vertical-force comparison. The two force inputs must cover the same external contacts. A seated participant also loads the chair.
+
+In the OpenCap Monocular subject 11 sit-to-stand example, a local FFmpeg/WASM run found five right-side candidates and one left-side candidate on the same oblique clip. High landmark confidence alone does not establish repetition accuracy. The force comparison was exercised separately on the WeRoLab AB01 second chair rise with marker-based center-of-mass acceleration.

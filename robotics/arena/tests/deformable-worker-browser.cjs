@@ -32,7 +32,7 @@ function verifyEpisode(episode) {
   assert.equal(episode.schema, 'brainsnn.deformable.episode.v1');
   assert.equal(episode.provenance.physicsExecuted, true);
   assert.equal(episode.provenance.policyExecuted, false);
-  assert.equal(episode.provenance.engineVersion, '4.0.0');
+  assert.equal(episode.provenance.engineVersion, '4.0.1');
   assert.equal(episode.summary.completed, true);
   assert(Number.isFinite(episode.computeSeconds) && episode.computeSeconds > 0);
   assert(episode.frames.length > 2, 'a retained trajectory contains actual physics samples');
@@ -44,7 +44,7 @@ function verifyEpisode(episode) {
   assert.equal(episode.manifest.framesSha256, digest(JSON.stringify(episode.frames)));
   assert.equal(episode.manifest.configSha256, digest(JSON.stringify(episode.config)));
   assert.match(episode.manifest.identityNote, /not remote execution attestation/);
-  assert.equal(episode.runtime.engine.version, '4.0.0');
+  assert.equal(episode.runtime.engine.version, '4.0.1');
   for (const asset of episode.runtime.assets) {
     const bytes = assetSnapshot.get(asset.path);
     assert(bytes, asset.path + ' is part of the served build');
@@ -116,7 +116,7 @@ function verifyEpisode(episode) {
 
     await spawn('main');
     const ready = await operation('main', { type: 'initialize' }, 'ready');
-    assert.equal(ready.provenance.version, '4.0.0');
+    assert.equal(ready.provenance.version, '4.0.1');
     assert.equal(ready.provenance.policyExecuted, false);
     assert.equal(ready.frame.time, 0);
     assert.equal(ready.frame.physicsExecuted, false);

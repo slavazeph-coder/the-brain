@@ -198,6 +198,21 @@ def download_building_handoff(page, label):
     assert handoff['readiness']['nativeRevitValidated'] is False
     assert handoff['readiness']['xactimateApplicationValidated'] is False
     assert 'Import Underlay Image' in page.locator('#scene-bim-files').inner_text()
+    # The Fragments file for Unreal Engine: converted in this browser from the job's own scene.ifc (the real converter and
+    # its WASM, loaded on demand) and offered only after the page has read it back. Unreal itself is not run here.
+    card = page.locator('[data-fragments-export]')
+    card.get_by_role('button', name='Make scene.frag').click()
+    link = card.get_by_role('link', name='Download scene.frag')
+    link.wait_for(timeout=60000)
+    report = card.locator('[role=status]').inner_text()
+    assert report.startswith('scene.frag holds ') and 'BrainSNN properties' in report and 'check the rest' not in report, report
+    with page.expect_download() as download:
+        link.click()
+    assert download.value.suggested_filename == 'scene.frag'
+    frag = Path(download.value.path()).read_bytes()
+    assert 500 < len(frag) < len(blobs['scene.ifc']), (len(frag), len(blobs['scene.ifc']))
+    (folder / 'scene.frag').write_bytes(frag)
+    handoff['fragmentsReport'] = report
     return handoff
 
 

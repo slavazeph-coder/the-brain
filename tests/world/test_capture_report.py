@@ -28,6 +28,31 @@ def write_frames(folder, n, soft):
         img.save(folder / f'image_{i:04d}.jpg')
 
 
+def gapped(indices, registered, fps=1.0):
+    """A capture whose kept frames skip sampled indices, as duplicate filtering leaves them."""
+    frames = [{'image': f'image_{n:04d}.jpg', 'resampledOutputIndex': index} for n, index in enumerate(indices)]
+    return {'schema': 'brainsnn.reconstruction.v1', 'capture': {'frames': frames, 'sample_fps': fps},
+            'cameras': [{'image': f'image_{n:04d}.jpg'} for n, index in enumerate(indices) if index in registered]}
+
+
+def test_removed_frames_never_make_more_seconds_register_than_the_capture_has():
+    """Six kept frames at sampled seconds 0, 1, 4, 5, 8 and 9 once read "10 of 6 seconds registered", which the site refused."""
+    whole = cr.build(gapped([0, 1, 4, 5, 8, 9], {0, 1, 4, 5, 8, 9}))
+    assert whole['seconds_total'] == 10 and whole['seconds_registered'] == 10 and whole['registered_share'] == 1
+    assert [(s['start'], s['end'], s['registered']) for s in whole['stretches']] == [(0, 10, True)]
+    assert whole['verdict'] == '10 of 10 seconds registered. The whole walk is in the model.'
+    mixed = cr.build(gapped([0, 1, 4, 5, 8, 9], {0, 1, 8, 9}))
+    runs = [(s['start'], s['end'], s['registered']) for s in mixed['stretches']]
+    assert runs == [(0, 4, True), (4, 8, False), (8, 10, True)], runs
+    assert mixed['seconds_total'] == 10 and mixed['seconds_registered'] == 6 and mixed['registered_share'] == 0.6
+    assert sum(s['seconds'] for s in mixed['stretches']) == mixed['seconds_total'], 'the stretches add up to the capture'
+    late = cr.build(gapped([3, 4, 9], {9}, fps=2.0))  # the first usable frame is 1.5 s in
+    assert late['seconds_total'] == 5 and late['seconds_registered'] == 0.5
+    for report in (whole, mixed, late):
+        assert 0 <= report['seconds_registered'] <= report['seconds_total']
+        assert all(0 <= s['start'] <= s['end'] <= report['seconds_total'] for s in report['stretches'])
+
+
 def test_stretches_are_in_seconds_and_the_longest_registered_one_is_named(tmp_path):
     report = cr.build(reconstruction(list(range(0, 8)) + list(range(14, 20))))
     assert report['status'] == 'ok' and report['seconds_total'] == 20 and report['seconds_registered'] == 14
