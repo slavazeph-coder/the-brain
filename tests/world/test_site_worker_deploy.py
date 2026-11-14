@@ -127,8 +127,10 @@ def test_hosted_metric_scale_photo_preview_and_model_pins_match_worker_image():
     # Deployment-only branch, do not replace with website main's root railway.toml.
     railway = (ROOT / 'railway.toml').read_text()
     assert 'robotics/world_worker/deploy/railway/Dockerfile' in railway
-    assert 'robotics/world_worker/deploy/railway/start.sh' in railway
-    assert 'G1_DEPLOYMENT_CHECK' in railway
+    assert 'startCommand = "/bin/sh /app/robotics/world_worker/deploy/railway/launch.sh"' in railway
+    launcher = (ROOT / 'robotics/world_worker/deploy/railway/launch.sh').read_text()
+    assert 'robotics/world_worker/deploy/railway/start.sh' in launcher
+    assert 'G1_DEPLOYMENT_CHECK' in launcher
     assert 'brainsnn-r3f-app/railway.toml' not in railway
 
 
@@ -142,6 +144,45 @@ def test_asbuilt_deployment_fixture_uses_the_actual_verified_ifc_writer(tmp_path
     output,report=update_ifc(prior,raw,review)
     assert output!=prior and report['updatedCount']==1
     assert report['metricVerified'] is report['physicalRobotValidated'] is False
+
+
+@pytest.mark.parametrize('preflight_failure',[False,True])
+def test_versioned_launcher_runs_the_primary_check_and_preserves_foreground_exec(tmp_path,preflight_failure):
+    import os,subprocess
+    root=tmp_path/'app';scripts=root/'robotics/world_worker/deploy/railway';scripts.mkdir(parents=True)
+    events=tmp_path/'events';python=tmp_path/'python'
+    python.write_text('''#!/bin/sh
+if [ "$1" = "-B" ]; then
+  cat >/dev/null
+  printf '%s\\n' preflight >> "$EVENTS"
+  if [ "${FAIL_PREFLIGHT:-0}" = "1" ]; then exit 93; fi
+else
+  case "$1" in
+    *asbuilt_acceptance.py) printf '%s\\n' asbuilt >> "$EVENTS" ;;
+    *acceptance.py) printf '%s\\n' legacy >> "$EVENTS"; touch "$DONE" ;;
+    *) exit 94 ;;
+  esac
+fi
+''');python.chmod(0o700)
+    start=scripts/'start.sh';start.write_text('''#!/bin/sh
+printf '%s\\n' foreground-worker >> "$EVENTS"
+i=0
+while [ ! -f "$DONE" ] && [ "$i" -lt 100 ]; do i=$((i+1)); sleep .01; done
+test -f "$DONE"
+''');start.chmod(0o700)
+    source=(ROOT/'robotics/world_worker/deploy/railway/launch.sh').read_text()
+    # Only filesystem roots differ; execute the reviewed shell/control flow.
+    source=source.replace('/app',str(root)).replace('/opt/worker/bin/python',str(python))
+    launcher=tmp_path/'launch.sh';launcher.write_text(source)
+    env={**os.environ,'EVENTS':str(events),'DONE':str(tmp_path/'done'),'WORLD_DEPLOY_SMOKE':'1','FAIL_PREFLIGHT':str(int(preflight_failure))}
+    completed=subprocess.run(['/bin/sh',str(launcher)],env=env,capture_output=True,text=True,timeout=5)
+    rows=events.read_text().splitlines()
+    if preflight_failure:
+        assert completed.returncode==93 and rows==['preflight']
+    else:
+        assert completed.returncode==0 and rows[0]=='preflight' and 'foreground-worker' in rows
+        assert rows.index('asbuilt')<rows.index('legacy')
+        assert 'ASBUILT_HOSTED_ACCEPTANCE_STARTING' in completed.stdout
 
 
 def test_asbuilt_acceptance_reuses_same_deployment_success_without_another_job(tmp_path,monkeypatch):
