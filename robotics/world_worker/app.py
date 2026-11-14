@@ -598,7 +598,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET','HEAD','POST','PUT','DELETE'], allow_headers=['Authorization','Content-Type'], allow_credentials=False)
 
     @app.get('/healthz')
-    async def health(): return {'status':'ok','public_processing':False}
+    async def health():
+        public = os.environ.get('WORLD_PUBLIC_PROCESSING', '0').lower() in ('1', 'true', 'yes')
+        return {'status': 'ok', 'public_processing': public}
 
     @app.api_route('/v1/report-key', methods=['GET', 'HEAD'])
     async def report_public_key():
