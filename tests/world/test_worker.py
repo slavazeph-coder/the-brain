@@ -79,7 +79,7 @@ def test_authentication(client):
 
 def test_operator_only_flips_with_public_processing(client, monkeypatch):
     monkeypatch.setenv('WORLD_PUBLIC_PROCESSING', '1')
-    with TestClient(create_app(root=Path(client.app.state._state['root']), token=TOKEN)) as c:
+    with TestClient(create_app(root=client.app.state.store.root, token=TOKEN)) as c:
         assert c.get('/healthz').json()['public_processing'] is True
         assert c.get('/v1/capabilities', headers=HEADERS).json()['operator_only'] is False
 
