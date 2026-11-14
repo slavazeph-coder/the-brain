@@ -7,7 +7,7 @@ dockerfilePath = "robotics/world_worker/deploy/railway/Dockerfile"
 watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "robotics/g1_trial/**", "railway.toml"]
 
 [deploy]
-startCommand = "/bin/sh -c 'cd /app && /opt/worker/bin/python -B -c \"import hashlib,json,os,pathlib; from robotics.g1_trial.runtime import preflight; root=pathlib.Path(\\\"robotics/g1_trial\\\"); print(\\\"G1_DEPLOYMENT_CHECK \\\"+json.dumps({\\\"schema\\\":\\\"brainsnn.g1-deployment.v1\\\",\\\"commit_sha\\\":os.environ.get(\\\"RAILWAY_GIT_COMMIT_SHA\\\"),\\\"modules\\\":{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.glob(\\\"*.py\\\"))},\\\"runtime\\\":preflight(),\\\"simulation_started\\\":False},sort_keys=True),flush=True)\" && { ( if [ \"${WORLD_DEPLOY_SMOKE:-0}\" = \"1\" ]; then /opt/worker/bin/python /app/robotics/world_worker/deploy/railway/acceptance.py --confirm-synthetic-deployment-test; fi; /opt/worker/bin/python /app/robotics/world_worker/deploy/railway/asbuilt_acceptance.py --confirm-synthetic-deployment-test; ) & exec /app/robotics/world_worker/deploy/railway/start.sh; }'"
+startCommand = "/bin/sh /app/robotics/world_worker/deploy/railway/launch.sh"
 healthcheckPath = "/healthz"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
