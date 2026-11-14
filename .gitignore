@@ -26,3 +26,4 @@ brainsnn-r3f-app/public/arena/deformable/renderer.js
 brainsnn-r3f-app/public/arena/deformable/runtime-manifest.json
 # The IFC-to-Fragments converter is assembled from the lockfile by build-fragments-export.mjs.
 brainsnn-r3f-app/public/world/vendor/
+brainsnn-r3f-app/public/world/twin-renderer.js
