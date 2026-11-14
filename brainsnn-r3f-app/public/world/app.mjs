@@ -23,6 +23,7 @@ import {captureReportCard} from './capture-report.mjs';
 import {readNativeCapture,prepareNativeCapture,NATIVE_CAPTURE} from './native-capture.mjs';
 import {createMeasurementReview} from './measurement-ui.mjs';
 import {createBimWorkflow} from './bim-workflow-ui.mjs';
+import {createSurfaceReview} from './surface-review-ui.mjs';
 import {proposeWorld,readScaleEstimate,PROPOSAL} from './reconstruction-map.mjs';
 import {readLocalization,photoOnMap,floorFromTap,proposalAfterApply} from './photo-locator.mjs';
 import {recordShareVideo} from './share-video.mjs';
@@ -515,12 +516,13 @@ async function openObservationArtifact(index){
 // A worker's simulation scene opens in a dialog with the Arena's mesh viewer, loaded only when first needed.
 // sceneMap holds the open scene's metric scene.json, the only input to a planning map built from a scene.
 let sceneAbort=null,sceneViewer=null,scenePromise=null,sceneMap=null;
+const surfaceReview=createSurfaceReview($('scene-stage'));
 function sceneStatus(message,error=false){$('scene-status').textContent=message;$('scene-status').classList.toggle('error',error);}
 async function openSceneArtifact(index){
   if(!job||!client)return;sceneAbort?.abort();const controller=new AbortController();sceneAbort=controller;
   const sourceJob=job,sourceClient=client,item=sourceJob.artifacts[index],dialog=$('scene-dialog');
   // Open at once and drop the previous scene's status and facts, so nothing stale shows while modules and bytes load.
-  $('scene-facts').replaceChildren();bimWorkflow.clearScene();sceneMap=null;$('scene-plan').hidden=true;sceneStatus(`Downloading and checking ${item?.name??'the scene'}…`);sceneViewer?.clear();
+  surfaceReview.clear();$('scene-facts').replaceChildren();bimWorkflow.clearScene();sceneMap=null;$('scene-plan').hidden=true;sceneStatus(`Downloading and checking ${item?.name??'the scene'}…`);sceneViewer?.clear();
   if(!dialog.open)dialog.showModal();
   try{
     const {SCENE_PREVIEW_BYTES,sceneFacts}=await import('./scene-preview.mjs');
@@ -536,6 +538,7 @@ async function openSceneArtifact(index){
     if(controller.signal.aborted)return;
     const parsed=await sceneViewer.setFile(new File([buffer],item.name,{type:'model/gltf-binary'}));
     if(controller.signal.aborted)return;
+    surfaceReview.set(sceneViewer,{job:sourceJob.id,engine:sourceJob.engine,name:item.name,bytes:item.size,sha256:item.sha256});
     $('scene-facts').replaceChildren(...sceneFacts(scene).map(text=>Object.assign(document.createElement('li'),{textContent:text})));
     sceneStatus(`${item.name} from ${sourceJob.engine} · ${parsed.meshes.toLocaleString('en')} meshes · ${parsed.vertices.toLocaleString('en')} vertices · SHA-256 checked`);
     event('scene_opened',{job:sourceJob.id,engine:sourceJob.engine,sha256:item.sha256,sceneJsonSha256:sceneIndex>=0?sourceJob.artifacts[sceneIndex].sha256:null});
@@ -711,7 +714,7 @@ const navMore=document.querySelector('.nav-more');document.addEventListener('poi
 document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const ids=['capture','world','test','understand','evidence'];const i=ids.indexOf(document.querySelector('[data-tab][aria-selected=true]')?.dataset.tab||tab),n=e.key==='Home'?0:e.key==='End'?4:(i+(['ArrowRight','ArrowDown'].includes(e.key)?1:4))%5;if(sandbox){void sandbox.handleTab(ids[n]);$('tab-'+ids[n]).focus();}else setTab(ids[n],true);});
 $('workspace').addEventListener('dragover',e=>{e.preventDefault();});$('workspace').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files.length){void sandbox?.select('capture');void addFiles(e.dataTransfer.files);}});
 $('connection').addEventListener('close',cancelConnection);
-$('scene-dialog').addEventListener('close',()=>sceneAbort?.abort());$('scene-reset').onclick=()=>sceneViewer?.reset();
+$('scene-dialog').addEventListener('close',()=>{sceneAbort?.abort();surfaceReview.clear();});$('scene-reset').onclick=()=>sceneViewer?.reset();
 // A metric scene's walls, separated objects and unobserved floor become an unreviewed planning map; the robot waits for review.
 $('scene-plan').onclick=async()=>{try{if(!sceneMap)return;const {worldFromScene}=await import('./scene-preview.mjs');
   const {world:proposed,counts,summary}=worldFromScene(sceneMap.scene,`Scene map / ${sceneMap.source}`);

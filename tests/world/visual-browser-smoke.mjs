@@ -1,7 +1,8 @@
 /** Real WebGL browser regression checks. Authored test assets exercise rendering, not reconstruction. */
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 const require = createRequire(new URL('../../brainsnn-r3f-app/package.json', import.meta.url));
 const { chromium, webkit, devices } = require('playwright');
 const base = (process.env.WORLD_URL || 'http://127.0.0.1:8765/world/index.html').replace(/[^/]*$/, '');
@@ -67,14 +68,28 @@ async function check(browser, mobile) {
   assert.ok(await page.locator('#point-size').isDisabled());
   const meshImage=await mesh.evaluate(el=>el.toDataURL('image/png'));
   await writeFile(new URL(label+'-mesh-viewer.png',output),Buffer.from(meshImage.split(',')[1],'base64'));
+  await page.locator('#surface-mode').selectOption('zebra');await drawSettled(page);
+  assert.notEqual(await mesh.evaluate(el=>el.toDataURL()),meshImage,'zebra must change actual rendered pixels');
+  assert.equal((await countPixels(mesh)).error,0);
+  await page.locator('#surface-mode').selectOption('normals');await drawSettled(page);
+  assert.notEqual(await mesh.evaluate(el=>el.toDataURL()),meshImage);
+  await page.locator('#surface-mode').selectOption('original');await drawSettled(page);
+  assert.equal(await mesh.evaluate(el=>el.toDataURL()),meshImage,'original materials and geometry must restore exactly');
+  await page.locator('#surface-check').click();
+  assert.match(await page.locator('#surface-status').textContent(),/1 triangles · 3 boundary edges/);
+  const downloadPromise=page.waitForEvent('download');await page.locator('#surface-download').click();
+  const report=JSON.parse(await readFile(await (await downloadPromise).path(),'utf8'));
+  assert.equal(report.source.sha256,createHash('sha256').update(glbFixture()).digest('hex'));
+  assert.equal(report.sourceGeometryChanged,false);assert.equal(report.metricVerified,false);
   await page.locator('#remove').click();await mesh.scrollIntoViewIfNeeded();await drawSettled(page);
   assert.equal((await countPixels(mesh)).count,0,'clearing GLB must leave no authored robot or floor');
+  assert.ok(await page.locator('#surface-panel').isHidden());assert.ok(await page.locator('#surface-download').isDisabled());
   await input.setInputFiles({name:'external-resources.glb',mimeType:'model/gltf-binary',buffer:glbFixture(true)});
   await page.waitForFunction(()=>document.querySelector('#viewer-status').textContent.includes('External files are blocked'));
   assert.ok(await page.locator('#frame').isDisabled());
   assert.deepEqual(errors,[]);
   assert.ok(requests.every(r=>r.method==='GET'&&new URL(r.url).origin===new URL(base).origin),JSON.stringify(requests));
-  console.log(`${label}: PLY pixels ${drawn.count}, GLB pixels ${meshPixels.count}, keyboard, clear, malformed assets and external-resource rejection passed`);
+  console.log(`${label}: PLY pixels ${drawn.count}, GLB pixels ${meshPixels.count}, zebra/normals pixels, exact material restoration, source-hashed topology download, keyboard, clear, malformed assets and external-resource rejection passed`);
   await context.close();
 }
 for (const name of (process.env.WORLD_BROWSERS || 'chromium,webkit').split(',')) {

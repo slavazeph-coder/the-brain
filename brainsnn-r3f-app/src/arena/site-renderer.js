@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { USDAParser } from 'three/addons/loaders/usd/USDAParser.js';
 import { unzipSync, strFromU8 } from 'three/addons/libs/fflate.module.js';
+import { auditSurfaces, MAX_AUDIT_TRIANGLES } from '../../public/world/surface-audit.mjs';
 
 const MAX_FILE = 50 * 1024 * 1024;
 const MAX_EXPANDED = 150 * 1024 * 1024;
@@ -280,6 +281,8 @@ export function create(container, options = {}) {
   const accent = new THREE.PointLight(VIOLET, 35, 30, 2); accent.position.set(-2, 5, -2); world.add(accent);
   const fill = new THREE.PointLight(CYAN, 20, 25, 2); fill.position.set(10, 4, 8); world.add(fill);
   let disposed = false, raf = 0, inView = true, floor, walls, asset = null, assetUrls = [], importGeneration = 0;
+  const inspectionOriginals = new Map();
+  let inspectionMaterial = null;
   let scene = { width: 12, depth: 8, start: [1, 1], goal: [10, 6], obstacles: [] };
   let currentRobot = { id: 'g1' }, cameraMode = 'orbit', viewMode = 'geometry';
   let trace = [], traceSource = null, traveledLine = null, cursor = 0, heading = 0, pickStart = null;
@@ -470,8 +473,41 @@ export function create(container, options = {}) {
     if (traveledLine) traveledLine.geometry.setDrawRange(0, cursor + 1);
     positionRobot(); requestDraw();
   }
+  function restoreSurface() {
+    inspectionOriginals.forEach((original, mesh) => { mesh.material = original; });
+    inspectionOriginals.clear(); inspectionMaterial?.dispose(); inspectionMaterial = null;
+  }
+  function setSurfaceMode(mode = 'original', stripeFrequency = 18) {
+    if (!['original','zebra','normals','wireframe'].includes(mode)) throw Error('Unknown surface inspection mode.');
+    restoreSurface();
+    if (!asset || disposed || mode === 'original') { requestDraw(); return; }
+    if (mode === 'zebra') inspectionMaterial = new THREE.ShaderMaterial({
+      uniforms:{frequency:{value:clamp(finite(stripeFrequency,18),4,80)}}, side:THREE.DoubleSide,
+      vertexShader:'varying vec3 vN; varying vec3 vP; void main(){ vec4 p=modelViewMatrix*vec4(position,1.0); vN=normalize(normalMatrix*normal); vP=p.xyz; gl_Position=projectionMatrix*p; }',
+      fragmentShader:'uniform float frequency; varying vec3 vN; varying vec3 vP; void main(){ vec3 r=reflect(normalize(vP),normalize(vN)); float s=sin(frequency*(r.x+r.y*0.35)); float aa=max(fwidth(s),0.001); float stripe=smoothstep(-aa,aa,s); gl_FragColor=vec4(mix(vec3(0.035,0.05,0.075),vec3(0.87,0.97,1.0),stripe),1.0); }',
+    });
+    else if (mode === 'normals') inspectionMaterial = new THREE.MeshNormalMaterial({side:THREE.DoubleSide, flatShading:true});
+    else inspectionMaterial = new THREE.MeshBasicMaterial({color:CYAN, wireframe:true});
+    asset.traverse(mesh=>{ if(mesh.isMesh){inspectionOriginals.set(mesh,mesh.material);mesh.material=inspectionMaterial;} });
+    requestDraw();
+  }
+  function surfaceAudit() {
+    if (!asset || disposed) throw Error('Open a mesh before inspecting surfaces.');
+    const meshes=[]; let triangles=0;
+    asset.updateMatrixWorld(true);
+    asset.traverse(mesh=>{if(mesh.isMesh){meshes.push(mesh);triangles+=(mesh.geometry.index?.count ?? mesh.geometry.attributes.position.count)/3;}});
+    if(triangles>MAX_AUDIT_TRIANGLES) throw Error('Surface audit exceeds 200,000 triangles. Export a smaller inspection copy. No partial audit was reported.');
+    const vector=new THREE.Vector3();
+    return auditSurfaces(meshes.map(mesh=>{
+      if(mesh.isSkinnedMesh || Object.keys(mesh.geometry.morphAttributes).length || mesh.isInstancedMesh) throw Error('Audit requires static, uninstanced meshes without morph targets.');
+      const position=mesh.geometry.attributes.position, positions=[];
+      for(let i=0;i<position.count;i++){vector.fromBufferAttribute(position,i).applyMatrix4(mesh.matrixWorld);positions.push(...vector.toArray());}
+      return {name:mesh.name, positions, indices:mesh.geometry.index?.array};
+    }));
+  }
   function clearAsset() {
     importGeneration++;
+    restoreSurface();
     release(groups.reference); asset = null; assetUrls.forEach(url => URL.revokeObjectURL(url)); assetUrls = [];
     if (!disposed) applyMode();
   }
@@ -543,7 +579,7 @@ export function create(container, options = {}) {
       // Preserve source orientation and units; only place its lower corner at the map origin.
       imported.position.sub(inspected.bounds.min);
       const wrapper = new THREE.Group(); wrapper.add(imported);
-      release(groups.reference); assetUrls.forEach(url => URL.revokeObjectURL(url));
+      restoreSurface(); release(groups.reference); assetUrls.forEach(url => URL.revokeObjectURL(url));
       assetUrls = urls; asset = wrapper; groups.reference.add(wrapper);
       viewMode = 'reality'; applyMode(); frameAsset(); requestDraw();
       return { name: file.name, format: extension, sizeBytes: file.size, meshes: inspected.meshes,
@@ -602,12 +638,12 @@ export function create(container, options = {}) {
     renderer.domElement.removeEventListener('pointerup', pointerUp);
     renderer.domElement.removeEventListener('webglcontextlost', contextLost);
     controls.removeEventListener('change', requestDraw); controls.dispose();
-    Object.values(groups).forEach(release); assetUrls.forEach(url => URL.revokeObjectURL(url));
+    restoreSurface(); Object.values(groups).forEach(release); assetUrls.forEach(url => URL.revokeObjectURL(url));
     sun.shadow.map?.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
   }
   setScene(scene); setRobot(currentRobot); resize();
   return { setScene, setRobot, setTrace, setMode, setCamera: mode => { setCamera(mode); applyMode(); }, importAsset,
-    clearAsset, setAssetTransform, setPointCloud, setCoverage, frameAsset, resize, dispose, available: true,
+    clearAsset, setAssetTransform, setPointCloud, setCoverage, frameAsset, resize, dispose, available: true, setSurfaceMode, surfaceAudit,
     capture: () => { if (disposed) return null; renderer.render(world, camera); return renderer.domElement.toDataURL('image/png'); } };
 }
 
