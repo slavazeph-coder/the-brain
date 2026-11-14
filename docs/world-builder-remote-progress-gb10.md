@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-|||||Last updated: 2026-11-09T00:00Z
+||||||Last updated: 2026-11-14T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 213 — 2026-11-14 (GB10: healthz public_processing env gate wired; suites green)
+
+- **Bounded improvement:** committed the dirty `robotics/world_worker/app.py` — the `WORLD_PUBLIC_PROCESSING` env var wiring into the `/healthz` endpoint. When set to `1`, `true`, or `yes`, the health endpoint reports `public_processing: true` instead of the hardcoded `false`.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (96.23 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.39 s**
+- **Commit + push verified:** `3f15ace` on `hermes/world-builder-gb10`; `git push` → `3ffd2b0..3f15ace`. One file (`app.py` +3/-1). `git status` clean.
+- **4090 state:** port confirmed alive (ssh2.vast.ai:23990), hostname `d130b6c7f3f4`.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** pick a bounded verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`, or alternate to a bounded 4090 reconstruction/GPU task.
 
 ### Run 210 — 2026-11-09 (GB10: 4090 PLY zflip receipt committed + pushed; suites green)
 
