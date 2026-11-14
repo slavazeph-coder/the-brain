@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {componentRestMatrix} from '../../public/world/operational-twin.mjs';
 
 /** Bounded component proxies. No scan inference, collision detection or dynamics. */
 export function create(container,{parts,onSelect=()=>{}}){
@@ -11,7 +12,7 @@ export function create(container,{parts,onSelect=()=>{}}){
   scene.add(new THREE.HemisphereLight(0xdcefff,0x25334e,2.6));const light=new THREE.DirectionalLight(0xffffff,3.2);light.position.set(5,12,8);scene.add(light);
   const meshes=new Map(),rest=new Map(),palette=[0x7688aa,0x8c82c4,0x72b4b2,0xb7a982,0x687dab,0xa38cab];
   parts.forEach((p,i)=>{if(!p.centre||!p.size)return;const material=new THREE.MeshStandardMaterial({color:p.floor?0x263645:palette[i%palette.length],roughness:.6,metalness:.18});
-    const mesh=new THREE.Mesh(new THREE.BoxGeometry(...p.size),material);mesh.position.set(...p.centre);mesh.rotation.y=p.yaw*Math.PI/180;mesh.updateMatrix();mesh.matrixAutoUpdate=false;
+    const mesh=new THREE.Mesh(new THREE.BoxGeometry(...p.size),material);mesh.matrix.fromArray(componentRestMatrix(p));mesh.matrixAutoUpdate=false;mesh.matrixWorldNeedsUpdate=true;
     mesh.userData={componentId:p.componentId,floor:p.floor};rest.set(p.componentId,mesh.matrix.clone());meshes.set(p.componentId,mesh);group.add(mesh);
     const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),new THREE.LineBasicMaterial({color:0xd3e8ff,transparent:true,opacity:.17}));mesh.add(edges);
   });

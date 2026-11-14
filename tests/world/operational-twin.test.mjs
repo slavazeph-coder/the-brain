@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {createTwin,validateTwin,sceneBinding,sceneInventory,sha256,makeDocument,answerQuestion,dependencyTrace,componentPoses,jointMatrix,identity,assetRegisterCSV,safeSourceUrl} from '../../brainsnn-r3f-app/public/world/operational-twin.mjs';
+import {createTwin,validateTwin,serializeTwin,TWIN_BYTES,sceneBinding,sceneInventory,componentRestMatrix,sha256,makeDocument,answerQuestion,dependencyTrace,componentPoses,jointMatrix,identity,assetRegisterCSV,safeSourceUrl} from '../../brainsnn-r3f-app/public/world/operational-twin.mjs';
 import {trainingCraneTwin} from '../../brainsnn-r3f-app/public/world/operational-twin-example.mjs';
 const raw=await readFile(new URL('../../brainsnn-r3f-app/public/world/fixtures/operational-crane.scene.json',import.meta.url));
 const scene=JSON.parse(raw),digest=await sha256(raw),base=await trainingCraneTwin(scene,digest),ids=Object.fromEntries(scene.objects.map(p=>[p.name,p.componentId]));
@@ -91,4 +91,23 @@ test('hostile record IDs, ambiguous Unicode and clipped source line ranges are h
   await assert.rejects(makeDocument({id:'unicode',title:'Title',revision:'r',body:'broken\ud800'}),/bounded plain text/);
   const t=fresh(),doc=await makeDocument({id:'long-line',title:'Long source',revision:'r',body:'bearing '+('a'.repeat(1800))+'\nsecond line'});t.documents=[doc];asset(t,'slew').documentIds=[doc.id];asset(t,'slew').spares=[];
   const a=answerQuestion(t,ids.slew,'bearing');assert.equal(a.citations[0].lineStart,1);assert.equal(a.citations[0].lineEnd,1);assert.equal(a.citations[0].excerpt.length,1400);
+});
+test('oblique compiler footprints keep their positive X-Z yaw in both proxy renderers',()=>{
+  for(const yaw of [-135,-45,0,30,45,90,170]){
+    const changed=structuredClone(scene),source=changed.objects[1];source.yaw_degrees=yaw;source.centre=[2,1,3];source.size=[4,1,.6];
+    const part=sceneInventory(changed).find(p=>p.componentId===source.componentId),matrix=componentRestMatrix(part),angle=yaw*Math.PI/180;
+    // Independently expected centre-line endpoints from the compiler/CAD footprint convention.
+    close(transform(matrix,[2,0,0]),[2+2*Math.cos(angle),1,3+2*Math.sin(angle)]);
+    close(transform(matrix,[-2,0,0]),[2-2*Math.cos(angle),1,3-2*Math.sin(angle)]);
+    assert.equal(source.yaw_degrees,yaw,'Source orientation must remain unchanged.');
+  }
+});
+test('a valid overlay near 2 MiB exports bytes it can import again',async()=>{
+  const t=fresh();t.documents=[];t.assets.forEach(a=>{a.documentIds=[];a.spares=[];});t.issues=[];
+  for(let i=0;i<64;i++)t.documents.push(await makeDocument({id:'sized-'+i,title:'Size regression',revision:'1',body:'x'.repeat(30000)}));
+  let remaining=TWIN_BYTES-100-new TextEncoder().encode(JSON.stringify(t)).length;
+  for(const d of t.documents){const add=Math.min(remaining,60000-d.body.length);d.body+='x'.repeat(add);remaining-=add;d.sha256=await sha256(d.body);if(!remaining)break;}
+  assert.equal(remaining,0);const checked=await check(t),raw=serializeTwin(checked);
+  assert.equal(new TextEncoder().encode(raw).length,TWIN_BYTES-100);assert.ok(new TextEncoder().encode(JSON.stringify(checked,null,2)).length>TWIN_BYTES,'Regression fixture must exceed the input limit when indented.');
+  assert.deepEqual(await check(JSON.parse(raw)),checked);
 });

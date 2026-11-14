@@ -1,11 +1,12 @@
 /** Software proxy view. Painter-sorted boxes, using the same source poses. */
+import {componentRestMatrix} from './operational-twin.mjs';
 const NS='http://www.w3.org/2000/svg',palette=['#536d8c','#7f78a8','#639391','#9b906d','#627799','#927a9c'];
 const point=(m,p)=>m?[0,1,2].map(i=>m[i]*p[0]+m[4+i]*p[1]+m[8+i]*p[2]+m[12+i]):p;
 const shade=(hex,k)=>'#'+[1,3,5].map(i=>Math.round(Math.min(255,parseInt(hex.slice(i,i+2),16)*k)).toString(16).padStart(2,'0')).join('');
 export function createSoftwareTwinView(container,{parts,onSelect=()=>{}}){
   const svg=document.createElementNS(NS,'svg');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');svg.setAttribute('aria-label','Software component proxy view. Drag or use arrow keys to orbit, scroll to zoom, 0 to reset. Select parts using the component list or view.');container.replaceChildren(svg);
-  const geometries=parts.filter(p=>p.centre&&p.size).map((p,index)=>{const a=p.yaw*Math.PI/180,c=Math.cos(a),s=Math.sin(a),corners=[];
-    for(const [x,y,z] of [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]]){const dx=x*p.size[0]/2,dz=z*p.size[2]/2;corners.push([p.centre[0]+c*dx+s*dz,p.centre[1]+y*p.size[1]/2,p.centre[2]-s*dx+c*dz]);}
+  const geometries=parts.filter(p=>p.centre&&p.size).map((p,index)=>{const rest=componentRestMatrix(p),corners=[];
+    for(const [x,y,z] of [[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]])corners.push(point(rest,[x*p.size[0]/2,y*p.size[1]/2,z*p.size[2]/2]));
     return {p,corners,color:p.floor?'#182c3c':palette[index%palette.length]};
   });
   const focus=geometries.filter(g=>!g.p.floor).flatMap(g=>g.corners),all=focus.length?focus:geometries.flatMap(g=>g.corners),lo=[0,1,2].map(i=>Math.min(...all.map(p=>p[i]))),hi=[0,1,2].map(i=>Math.max(...all.map(p=>p[i]))),centre=lo.map((v,i)=>(v+hi[i])/2),span=Math.max(...hi.map((v,i)=>v-lo[i]),1);

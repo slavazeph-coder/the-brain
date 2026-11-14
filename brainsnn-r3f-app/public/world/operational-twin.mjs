@@ -39,7 +39,8 @@ export function sceneInventory(scene){
       if(!object(p)||!UUID.test(p.componentId))fail('Missing or invalid stable component ID. Recompile with an updated worker.');
       const sourceName=text(kind==='opening'?p.id:p.name),label=text(p.label||sourceName);
       let centre=null,size=null,yaw=0;
-      if(p.centre!==undefined||p.size!==undefined){centre=vec(p.centre,-1e7,1e7);size=vec(p.size,.001,1e5);yaw=num(p.yaw_degrees??0,-360,360);}
+      // Compiler footprint yaw points along +Z; right-handed render Y rotation points along -Z.
+      if(p.centre!==undefined||p.size!==undefined){centre=vec(p.centre,-1e7,1e7);size=vec(p.size,.001,1e5);yaw=-num(p.yaw_degrees??0,-360,360);}
       else if(p.min&&p.max){const lo=vec(p.min,-1e7,1e7),hi=vec(p.max,-1e7,1e7);if(hi.some((v,i)=>v<=lo[i]))fail('Invalid component bounds.');centre=lo.map((v,i)=>(v+hi[i])/2);size=hi.map((v,i)=>v-lo[i]);}
       inventory.push({componentId:p.componentId,sourceName,label,kind,index,centre,size,yaw,floor:sourceName==='floor_observed'||p.label==='floor'});
     });
@@ -52,6 +53,12 @@ export function createTwin(scene,sceneSha256){
   return {schema:TWIN_SCHEMA,source:sceneBinding(scene,sceneSha256),authorship:'operator-authored',
     assets:sceneInventory(scene).map(p=>({componentId:p.componentId,assetCode:'',label:p.label,parentComponentId:null,manufacturer:'',model:'',serial:'',location:'',notes:'',documentIds:[],spares:[],dependsOn:[]})),
     documents:[],joints:[],issues:[],validation:{...TWIN_VALIDATION}};
+}
+/** Compact bytes are the persistence contract, including through the app's download helper. */
+export function serializeTwin(twin){bounded(twin);return JSON.stringify(twin);}
+export function componentRestMatrix(part){
+  const [x,y,z]=vec(part.centre,-1e7,1e7),angle=num(part.yaw,-360,360)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
+  return [c,0,-s,0,0,1,0,0,s,0,c,0,x,y,z,1];
 }
 export async function makeDocument({id,title,revision,body,sourceUrl=''}){
   recordId(id);text(title);text(revision,80);text(body,60000);safeSourceUrl(sourceUrl);
