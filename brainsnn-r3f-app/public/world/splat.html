@@ -5,6 +5,7 @@
   <title>BrainSNN | 3D asset viewer</title>
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="./world.css">
+  <link rel="stylesheet" href="./objectify.css">
 </head>
 <body>
   <a class="skip" href="#asset">Skip to asset controls</a>
@@ -12,7 +13,7 @@
   <main><section style="padding:40px 0">
     <p class="eyebrow">APPEARANCE LAYER / NO COLLISION GEOMETRY</p>
     <h2>Explore your<br><em>visual world.</em></h2>
-    <p class="intro">Open your point cloud, Gaussian asset or GLB scan. Inspect it, save camera views and record a labelled flythrough locally.</p>
+    <p class="intro">Open your point cloud, Gaussian asset or GLB scan. Inspect it, separate reviewed visual objects, try new layouts and record a labelled flythrough locally.</p>
     <div class="viewer-controls">
       <label>Local .ply / .splat · 64 MiB, .glb · 50 MiB<input id="asset" type="file" accept=".ply,.splat,.glb"></label>
       <button id="frame" disabled>Reset view</button><button id="flip" disabled>Flip vertical axis</button><button id="remove">Clear asset</button>
@@ -31,6 +32,8 @@
       <p id="surface-status" role="status">Inspect the original mesh locally. No geometry is smoothed or repaired.</p>
       <p class="micro">Stripes use the supplied shading normals; the topology check uses triangle face normals and exact coincident positions within each mesh. Boundaries and sharp corners may be intentional. No self-intersection or gap check between separate meshes. A mesh cannot certify NURBS G0/G1/G2/G3 continuity. Inspect analytic surfaces in Rhino with Zebra and EdgeContinuity.</p>
     </section>
+    <section id="objectify-panel" hidden aria-label="Appearance object workshop"></section>
+    <p id="object-camera-binding" class="micro" hidden></p>
     <section id="camera-tour" aria-labelledby="tour-title">
       <p class="eyebrow">LOCAL CAMERA STUDIO</p><h3 id="tour-title">Make a clear walkthrough.</h3>
       <p>Frame a view, save it, then move and save the next. Preview the move before recording. Your original asset stays unchanged.</p>

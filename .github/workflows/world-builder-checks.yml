@@ -213,6 +213,7 @@ jobs:
                          PLAYWRIGHT_CHROMIUM_PATH=playwright.chromium.executable_path,
                          PLAYWRIGHT_WEBKIT_PATH=playwright.webkit.executable_path)
               subprocess.run(['node', 'tests/world/visual-browser-smoke.mjs'], env=env, check=True)
+              subprocess.run(['node', 'tests/world/objectify-browser-smoke.mjs'], env=env, check=True)
           PY
       - name: Observations HTTP worker and review flows with explicit fixture VLM
         env:

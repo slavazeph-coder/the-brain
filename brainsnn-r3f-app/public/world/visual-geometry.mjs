@@ -2,6 +2,7 @@
 export const MAX_POINTS = 100000;
 export const MAX_FILE_BYTES = 64 * 1024 * 1024;
 export const STRIDE = 14; // xyz, display scale xyz, rgba, quaternion xyzw
+export const VISUAL_PARSER_VERSION = 'visual-geometry-v2';
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const scalar = {
   float: [4, 'getFloat32'], float32: [4, 'getFloat32'], double: [8, 'getFloat64'], float64: [8, 'getFloat64'],
@@ -15,9 +16,14 @@ function bytesOf(buffer) {
   if (buffer.byteLength > MAX_FILE_BYTES) throw Error('Use an asset no larger than 64 MiB.');
   return new Uint8Array(buffer);
 }
-function result(points, total, step, kind, skipped = 0) {
+function result(points, sourceIndices, total, step, kind, format, skipped = 0) {
   if (!points.length) throw Error('The asset contains no usable finite points.');
-  return { points: new Float32Array(points), total, sampled: step > 1, kind, skipped, units: 'unverified', metricVerified: false, collisionGeometry: null };
+  const retained = points.length / STRIDE;
+  if (sourceIndices.length !== retained) throw Error('Source vertex membership does not match the retained preview.');
+  return { points: new Float32Array(points), sourceIndices: new Uint32Array(sourceIndices), total, sampled: step > 1, kind, skipped,
+    parserMetadata: { version: VISUAL_PARSER_VERSION, format, kind, total, retained, sampleStep: step, sampled: step > 1, skipped,
+      retainedIndexSpace: 'source-vertex-index', representation: kind === 'gaussian-splat' ? 'gaussian-dc-preview' : 'point-cloud' },
+    units: 'unverified', metricVerified: false, collisionGeometry: null };
 }
 export function bounds(points) {
   if (!(points instanceof Float32Array) || !points.length || points.length % STRIDE || points.length / STRIDE > MAX_POINTS) throw Error('Invalid or oversized visual point buffer.');
@@ -96,7 +102,7 @@ export function parsePLY(buffer) {
   if (ascii && bytes.length > 16 * 1024 * 1024) throw Error('Convert ASCII PLY larger than 16 MiB to binary PLY.');
   if (!ascii && start + total * stride > bytes.length) throw Error('Truncated PLY vertex data.');
   const source = ascii ? new TextDecoder().decode(bytes.subarray(start)) : '', view = new DataView(buffer);
-  const step = Math.max(1, Math.ceil(total / MAX_POINTS)), points = [], colorProps = ['red', 'green', 'blue'].map(n => props.find(p => p.name === n));
+  const step = Math.max(1, Math.ceil(total / MAX_POINTS)), points = [], sourceIndices = [], colorProps = ['red', 'green', 'blue'].map(n => props.find(p => p.name === n));
   let cursor = 0, skipped = 0;
   for (let i = 0; i < total; i++) {
     let values;
@@ -120,8 +126,9 @@ export function parsePLY(buffer) {
     const opacity = isGaussian ? 1 / (1 + Math.exp(-clamp(row.opacity, -20, 20))) : 1;
     const q = isGaussian ? [row.rot_1, row.rot_2, row.rot_3, row.rot_0] : [0, 0, 0, 1], norm = Math.hypot(...q);
     points.push(row.x, row.y, row.z, ...scales, ...rgb, opacity, ...(norm > 1e-8 ? q.map(v => v / norm) : [0, 0, 0, 1]));
+    sourceIndices.push(i);
   }
-  const parsed = result(points, total, step, isGaussian ? 'gaussian-splat' : 'point-cloud', skipped);
+  const parsed = result(points, sourceIndices, total, step, isGaussian ? 'gaussian-splat' : 'point-cloud', `ply-${format}`, skipped);
   if (!isGaussian) {
     // This is a display footprint, never a Gaussian fitted to source imagery.
     // Sparse reconstructions (trimmed framing) get a smaller footprint so gaps read as gaps, not bubbles.
@@ -134,15 +141,16 @@ export function parsePLY(buffer) {
 export function parseSplat(buffer) {
   const bytes = bytesOf(buffer);
   if (bytes.length % 32) throw Error('Invalid .splat: expected complete 32-byte records.');
-  const total = bytes.length / 32, step = Math.max(1, Math.ceil(total / MAX_POINTS)), view = new DataView(buffer), points = [];
+  const total = bytes.length / 32, step = Math.max(1, Math.ceil(total / MAX_POINTS)), view = new DataView(buffer), points = [], sourceIndices = [];
   let skipped = 0;
   for (let i = 0; i < total; i += step) {
     const b = i * 32, values = Array.from({length: 6}, (_, j) => view.getFloat32(b + j * 4, true));
     if (!values.every(Number.isFinite) || values.slice(0, 3).some(v => Math.abs(v) > 1e7) || values.slice(3).some(v => v <= 0 || v > 1e5)) { skipped++; continue; }
     const q = [1, 2, 3, 0].map(j => (view.getUint8(b + 28 + j) - 128) / 128), norm = Math.hypot(...q);
     points.push(...values, ...[0, 1, 2, 3].map(j => view.getUint8(b + 24 + j) / 255), ...(norm > 1e-8 ? q.map(v => v / norm) : [0, 0, 0, 1]));
+    sourceIndices.push(i);
   }
-  return result(points, total, step, 'gaussian-splat', skipped);
+  return result(points, sourceIndices, total, step, 'gaussian-splat', 'splat-32', skipped);
 }
 export function parseVisualAsset(buffer, name) {
   const ext = String(name).toLowerCase().split('.').pop();

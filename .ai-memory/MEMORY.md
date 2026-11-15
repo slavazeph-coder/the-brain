@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Reviewed appearance objects](world-object-workshop-2026-11-15.md): manual retained point/Gaussian grouping, rigid edits, seeded variants and source-bound authored camera output; full extraction and physical qualification remain open.
+
 → [Local camera studio](world-camera-studio-2026-11-15.md): source-bound appearance paths, labelled local videos and explicit generated/metric/robot evidence limits.
 
 → [Meshlets Lab](meshlets-lab-2026-11-02.md): isolated experimental r187 renderer, source-bound browser receipts and explicit failed strict WebGPU qualification.
