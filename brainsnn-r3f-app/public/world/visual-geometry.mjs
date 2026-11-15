@@ -155,3 +155,58 @@ export function toPLY(points) {
   }
   return buffer;
 }
+
+/** Derive a floor plane from the Z-distribution of visual points.
+ *  Uses robust Z-clustering: histogram the Z values, find the dominant mode,
+ *  fit a plane through points near that mode. Returns { plane, metricVerified, floorZ }. */
+export function computeFloorPlane(points, minPoints = 50) {
+  if (!(points instanceof Float32Array) || !points.length || points.length % STRIDE) {
+    return { plane: [0, 1, 0, 0], metricVerified: false, floorZ: 0, pointCount: 0 };
+  }
+  const n = points.length / STRIDE;
+  if (n < minPoints) return { plane: [0, 1, 0, 0], metricVerified: false, floorZ: 0, pointCount: n };
+
+  // Extract Z values (index 2 in each STRIDE-sized record)
+  const zs = [];
+  for (let i = 0; i < points.length; i += STRIDE) {
+    const z = points[i + 2];
+    if (Number.isFinite(z)) zs.push(z);
+  }
+  if (zs.length < minPoints) return { plane: [0, 1, 0, 0], metricVerified: false, floorZ: 0, pointCount: n };
+
+  // Sort Z for robust clustering
+  zs.sort((a, b) => a - b);
+  const lo = zs[Math.floor(zs.length * 0.1)];
+  const hi = zs[Math.floor(zs.length * 0.9)];
+  const range = hi - lo;
+  if (range < 1e-6) return { plane: [0, 1, 0, zs[0]], metricVerified: true, floorZ: zs[0], pointCount: zs.length };
+
+  // Histogram with 32 bins over [lo, hi]
+  const bins = 32;
+  const binWidth = range / bins;
+  const counts = new Int32Array(bins);
+  for (let i = 0; i < zs.length; i++) {
+    const b = Math.min(bins - 1, Math.floor((zs[i] - lo) / binWidth));
+    counts[b]++;
+  }
+
+  // Find dominant bin
+  let maxBin = 0, maxCount = 0;
+  for (let b = 0; b < bins; b++) { if (counts[b] > maxCount) { maxCount = counts[b]; maxBin = b; } }
+
+  // Points in the dominant bin define the floor
+  const floorZ = lo + (maxBin + 0.5) * binWidth;
+  const threshold = binWidth * 2;
+  const floorPoints = [];
+  for (let i = 0; i < zs.length; i++) {
+    if (Math.abs(zs[i] - floorZ) < threshold) floorPoints.push(zs[i]);
+  }
+
+  // Need at least 10% of total points in the dominant bin
+  const supportRatio = maxCount / zs.length;
+  const metricVerified = supportRatio >= 0.10 && maxCount >= 10;
+
+  // Return a horizontal plane: normal [0,1,0], distance = floorZ
+  // plane equation: 0*x + 1*y + 0*z = floorZ  →  d = floorZ
+  return { plane: [0, 1, 0, floorZ], metricVerified, floorZ, pointCount: zs.length, supportRatio };
+}

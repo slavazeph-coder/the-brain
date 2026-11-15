@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, parseVisualAsset } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, parsePLY, parseSplat, fromDepth, toPLY, bounds, parseVisualAsset, computeFloorPlane } from '../../brainsnn-r3f-app/public/world/visual-geometry.mjs';
 
 const ascii = (rows = ['0 0 0 255 0 0', '1 2 3 0 128 255'], props = 'property float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue', count = rows.length) => new TextEncoder().encode(`ply\nformat ascii 1.0\nelement vertex ${count}\n${props}\nend_header\n${rows.join('\n')}\n`).buffer;
 
@@ -71,4 +71,44 @@ test('transparent images and invalid point arrays cannot produce a successful em
   assert.throws(()=>bounds(new Float32Array(STRIDE-1)),/Invalid/);
   const p=parsePLY(ascii()).points;p[0]=NaN;assert.throws(()=>bounds(p),/finite/);
   const q=parsePLY(ascii()).points;q.fill(0,10,14);assert.throws(()=>bounds(q),/rotation/);
+});
+
+test('computeFloorPlane returns unverified for too few points', () => {
+  const pts = new Float32Array(STRIDE); // 1 point
+  const r = computeFloorPlane(pts);
+  assert.equal(r.metricVerified, false);
+  assert.equal(r.pointCount, 1);
+  assert.deepEqual(r.plane, [0, 1, 0, 0]);
+});
+
+test('computeFloorPlane returns unverified for non-finite Z', () => {
+  const pts = new Float32Array(STRIDE * 100);
+  for (let i = 0; i < pts.length; i += STRIDE) pts[i + 2] = NaN;
+  const r = computeFloorPlane(pts, 50);
+  assert.equal(r.metricVerified, false);
+  assert.ok(r.pointCount >= 50);
+});
+
+test('computeFloorPlane derives a floor plane from a uniform Z distribution', () => {
+  const pts = new Float32Array(STRIDE * 200);
+  const floorZ = 1.5;
+  for (let i = 0; i < pts.length; i += STRIDE) {
+    pts[i] = Math.random() * 10 - 5;     // x
+    pts[i + 1] = Math.random() * 10 - 5;  // y
+    pts[i + 2] = floorZ + (Math.random() - 0.5) * 0.1; // z near floor
+    pts[i + 3] = pts[i + 6] = pts[i + 9] = 1; // display scale
+    pts[i + 4] = pts[i + 5] = 1;
+    pts[i + 7] = pts[i + 8] = pts[i + 10] = pts[i + 11] = pts[i + 12] = pts[i + 13] = 1;
+  }
+  const r = computeFloorPlane(pts, 50);
+  assert.equal(r.metricVerified, true);
+  assert.ok(Math.abs(r.floorZ - floorZ) < 0.5, `floorZ=${r.floorZ} expected ~${floorZ}`);
+  assert.ok(r.supportRatio >= 0.10);
+  assert.ok(r.pointCount >= 50);
+});
+
+test('computeFloorPlane rejects non-Float32Array and empty input', () => {
+  assert.deepEqual(computeFloorPlane(null), { plane: [0, 1, 0, 0], metricVerified: false, floorZ: 0, pointCount: 0 });
+  assert.deepEqual(computeFloorPlane(new Float32Array(0)), { plane: [0, 1, 0, 0], metricVerified: false, floorZ: 0, pointCount: 0 });
+  assert.deepEqual(computeFloorPlane(new Float32Array(STRIDE - 1)), { plane: [0, 1, 0, 0], metricVerified: false, floorZ: 0, pointCount: 0 });
 });
