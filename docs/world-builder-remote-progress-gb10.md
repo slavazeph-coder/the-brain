@@ -1,9 +1,21 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||Last updated: 2026-11-14T21:30Z
+|||||||||||||Last updated: 2026-11-15T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 227 — 2026-11-15 (GB10: WORLD_PUBLIC_DOMAIN extended to /v1/jobs consent gate; all suites green)
+
+- **Bounded improvement:** extended `WORLD_PUBLIC_DOMAIN` env var to the `/v1/jobs` consent gate in `app.py`. When set to `1`, `true`, or `yes`, non-operator tenants can create jobs without explicit consent (matching the existing `/v1/capabilities` behavior). Operator still requires consent in public domain mode.
+- **Tests verified:** `test_public_domain_flips_capabilities` → PASSED, `test_public_domain_default_is_false` → PASSED, `test_public_domain_makes_consent_optional_for_tenant` → PASSED, `test_public_domain_does_not_relax_consent_for_operator` → PASSED.
+- **Fresh test results (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail**
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 19.00 s**
+  - `pytest tests/world/test_worker.py::test_public_domain_*` → **4 passed in 0.53 s**
+- **Commit + push verified:** `1eabd55` on `hermes/world-builder-gb10`; `git commit` → `1eabd55`. One file (`app.py` +3/-1). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 8: public domain release verification, or app/API journey deep audit).
 
 ### Run 226 — 2026-11-14 (GB10: WORLD_PUBLIC_DOMAIN env gate wired into /v1/capabilities; suites green)
 

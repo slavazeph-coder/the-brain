@@ -135,6 +135,36 @@ def test_public_domain_does_not_relax_consent_for_operator(client, monkeypatch):
         r = c.post('/v1/jobs', json={'engine': 'inspect', 'upload_ids': [uid], 'consent': False}, headers=HEADERS)
         assert r.status_code == 422, f'Expected 422, got {r.status_code}: {r.text}'
 
+
+def test_public_domain_env_is_documented_in_env_example(client):
+    """WORLD_PUBLIC_DOMAIN must be present in the root .env.example so operators can enable it."""
+    env_example = ROOT / '.env.example'
+    assert env_example.exists(), '.env.example not found at root'
+    content = env_example.read_text()
+    assert 'WORLD_PUBLIC_DOMAIN' in content, 'WORLD_PUBLIC_DOMAIN missing from .env.example'
+
+
+def test_public_domain_consent_gate_independent_of_public_processing(client, monkeypatch):
+    """WORLD_PUBLIC_DOMAIN controls the /v1/jobs consent gate independently of WORLD_PUBLIC_PROCESSING.
+
+    When WORLD_PUBLIC_DOMAIN=1 and WORLD_PUBLIC_PROCESSING is unset, the operator
+    still requires consent (public_domain gate is separate from operator_only gate).
+    """
+    # Clear both to start fresh
+    monkeypatch.setenv('WORLD_PUBLIC_DOMAIN', '1')
+    monkeypatch.delenv('WORLD_PUBLIC_PROCESSING', raising=False)
+    with TestClient(create_app(root=client.app.state.store.root, token=TOKEN)) as c:
+        cap = c.get('/v1/capabilities', headers=HEADERS).json()
+        assert cap['public_domain'] is True
+        uid = upload(c)
+        # Operator with consent=False → 422 (consent gate active)
+        r = c.post('/v1/jobs', json={'engine': 'inspect', 'upload_ids': [uid], 'consent': False}, headers=HEADERS)
+        assert r.status_code == 422, f'Expected 422, got {r.status_code}: {r.text}'
+        # Operator with consent=True → 201 (consent gate satisfied)
+        r = c.post('/v1/jobs', json={'engine': 'inspect', 'upload_ids': [uid], 'consent': True}, headers=HEADERS)
+        assert r.status_code == 201, f'Expected 201, got {r.status_code}: {r.text}'
+
+
 def test_unsigned_artifact_route_is_denied(client):
     assert client.get('/v1/download/invented').status_code==403
 
