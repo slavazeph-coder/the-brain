@@ -1,9 +1,22 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||||||||||||||Last updated: 2026-11-15T21:30Z
+|||||||||||||||||||||||||||||Last updated: 2026-11-15T22:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 237 — 2026-11-15 (GB10: check_execution_storage verified; 4090 CUDA confirmed; all suites green)
+
+- **Bounded improvement:** completed the `check_execution_storage` verification — all 61 worker tests pass (3 skipped), including `test_nonroot_uid_enforcement_when_set` and `test_nonroot_uid_warns_when_unset` (UID enforcement confirmed) and `test_queued_and_prepared_jobs_reserve_global_disk_capacity` + `test_reclaim_disk_budget_on_queued_cancel` (disk budget checks confirmed). The `check_execution_storage` function in HEAD retains full non-root UID enforcement, open-file/memory resource limits, and per-job/global disk budget checks. Confirmed 4090 host alive: hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.4/24.0 GiB used, 58°C.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (123 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 20.06 s**
+  - `pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.72 s**
+  - `pytest tests/world/test_worker.py -k storage -v` → **exit 0** (storage tests verified)
+  - `pytest tests/world/test_report_receipts.py -k cancel -v` → **exit 0** (cancellation regression confirmed)
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.4/24.0 GiB used, 58°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue app/API journey deep audit from remaining gates in `WORLD_BUILDER_CURRENT.md`.
 
 ### Run 235 — 2026-11-15 (GB10: loopback 413 re-verified; 4090 CUDA confirmed; all suites green)
 
