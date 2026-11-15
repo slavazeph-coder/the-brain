@@ -308,9 +308,11 @@ export function create(container, options = {}) {
   controls.addEventListener('start', resumeControls);
   /** A local Y-up camera in the displayed asset's unverified units. No geometry is changed. */
   function getView() { return disposed ? null : { eye: camera.position.toArray(), target: controls.target.toArray(), fov: camera.fov }; }
+  let contextUnavailable = false;
   function setView(value) {
     const vector = v => Array.isArray(v) && v.length === 3 && v.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
     if (disposed) throw new Error('The mesh viewer is closed.');
+    if (contextUnavailable) throw new Error('The graphics context was lost. Reload the viewer before replaying or recording.');
     if (!vector(value?.eye) || !vector(value?.target) || !Number.isFinite(value?.fov) || value.fov < 15 || value.fov > 100 || Math.hypot(...value.eye.map((v, i) => v - value.target[i])) <= 1e-6) throw new Error('Use a finite camera position and distinct target, with a field of view from 15° to 100°.');
     // Drain old orbit damping before applying an exact authored view. Skip further
     // OrbitControls updates until the next user gesture, so replay does not drift.
@@ -650,7 +652,7 @@ export function create(container, options = {}) {
     const ground = raycaster.intersectObject(floor, false)[0];
     if (ground) options.onPick?.([Math.round(ground.point.x * 100) / 100, Math.round(ground.point.z * 100) / 100]);
   }
-  function contextLost(event) { event.preventDefault(); options.onError?.('3D preview paused because the graphics context was lost. Reopen Test your space to restore it.'); }
+  function contextLost(event) { contextUnavailable = true; event.preventDefault(); options.onError?.('3D preview paused because the graphics context was lost. Reopen Test your space to restore it.'); }
   renderer.domElement.addEventListener('pointerdown', pointerDown);
   renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('webglcontextlost', contextLost);
