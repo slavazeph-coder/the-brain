@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {sampleWorld, normalizeWorld} from '../../brainsnn-r3f-app/public/world/core.mjs';
-import {castRay, lastHit, buildTruth, createMap, integrateReturn, updateClearance, clearanceAt, cellOf, planPath, footprintCircles, footprint, PLATFORMS, SENSOR_SPECS, sensorRig,
-  createEpisode, stepEpisode, runEpisode, episodeResult, requestCrate, runTrial, verifyTrialReport, sampleTasks, wilson, rng, TRIAL_SCHEMA, OBSTACLE_RANGE} from '../../brainsnn-r3f-app/public/world/autonomy.mjs';
+import {castRay, lastHit, buildTruth, createMap, integrateReturn, updateClearance, clearanceAt, cellOf, planPath, footprintCircles, footprint, scoreFootprint, PLATFORMS, SENSOR_SPECS, sensorRig,
+  createEpisode, stepEpisode, runEpisode, episodeResult, requestCrate, runTrial, verifyTrialReport, sha256, sampleTasks, wilson, rng, TRIAL_SCHEMA, LOOP_VERSION, OBSTACLE_RANGE} from '../../brainsnn-r3f-app/public/world/autonomy.mjs';
 
 const hall = (extra = {}) => normalizeWorld({schema: 'brainsnn.world.v1', name: 'Test hall', width: 30, depth: 6, provenance: 'observed', scaleReviewed: true, mapReviewed: true, start: {x: 2, z: 3}, objects: [], ...extra});
 
@@ -53,6 +53,29 @@ test('footprint circles cover the whole rectangle and sit along the heading', ()
       const a = rect[i], b = rect[(i + 1) % 4], x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
       assert.ok(c.f.some((f, j) => Math.hypot(x - f, z - c.s[j]) <= c.r + 1e-9), `${key}: boundary point covered`);
     }
+  }
+});
+
+test('true clearance includes boxes beyond two metres and remains exact with reordered clutter and contacts', () => {
+  const target = {id: 'target', name: 'Target', x: 13, z: 14, w: 1, d: 2, h: 1};
+  const clutter = Array.from({length: 30}, (_, i) => ({id: `clutter-${i}`, name: 'Clutter', x: 1 + i % 10 * 2, z: 1 + Math.floor(i / 10) * 2, w: 0.4, d: 0.4, h: 1}));
+  const room = objects => hall({depth: 30, start: {x: 10, z: 15}, objects});
+  for (const objects of [[target], [target, ...clutter], [...clutter, target], [target, ...clutter].reverse()]) {
+    const truth = buildTruth(room(objects));
+    for (const th of [0, Math.PI / 4]) {
+      const result = scoreFootprint(truth, PLATFORMS.vacuum, {x: 10, z: 15, th});
+      const extent = 0.175 * (Math.abs(Math.cos(th)) + Math.abs(Math.sin(th)));
+      assert.ok(Math.abs(result.clearance - (3 - extent)) < 1e-9, 'nearest box, not the distant room wall');
+      assert.equal(result.contact, null);
+    }
+  }
+  const contact = {id: 'contact', name: 'Contact box', x: 9.9, z: 14.9, w: 0.4, d: 0.4, h: 1};
+  for (const mapped of [true, false]) {
+    const truth = buildTruth(room(mapped ? [...clutter, target, contact] : [...clutter, target]), mapped ? [] : [{id: contact.id, name: contact.name, x0: contact.x, z0: contact.z, x1: contact.x + contact.w, z1: contact.z + contact.d, h: contact.h}]);
+    const result = scoreFootprint(truth, PLATFORMS.vacuum, {x: 10, z: 15, th: Math.PI / 4});
+    assert.equal(result.clearance, 0);
+    assert.equal(result.contact.id, 'contact');
+    assert.equal(result.contact.kind, mapped ? 'mapped-object' : 'unmapped-object');
   }
 });
 
@@ -117,6 +140,7 @@ test('failures are scored against ground truth: a forklift whose roof lidar cann
 test('a paired trial runs the same tasks clean and broken, summarises honestly and seals the report', async () => {
   const report = await runTrial(sampleWorld(), {robot: 'quadruped', episodes: 3, seed: 5, perturbations: {crate: true}});
   assert.equal(report.schema, TRIAL_SCHEMA); assert.deepEqual(report.conditions.map(c => c.id), ['control', 'broken']);
+  assert.equal(report.loop, 'autonomy-loop-v2'); assert.equal(report.loop, LOOP_VERSION);
   assert.deepEqual(report.conditions[1].perturbations, {crate: true});
   for (const t of report.tasks) {
     const pair = report.episodes.filter(e => e.task === t.index); assert.equal(pair.length, 2);
@@ -133,6 +157,46 @@ test('a paired trial runs the same tasks clean and broken, summarises honestly a
   const tampered = structuredClone(report); tampered.summary.broken.reached = tampered.summary.broken.episodes;
   if (tampered.summary.broken.reached === report.summary.broken.reached) tampered.summary.control.contacts += 1;
   assert.equal((await verifyTrialReport(tampered)).ok, false);
+  // The report schema still accepts earlier sealed bodies without changing their method label or measurements.
+  const legacy = structuredClone(report); legacy.loop = 'autonomy-loop-v1'; legacy.episodes[0].minClearance = 9.825;
+  const {integrity, ...legacyBody} = legacy; legacy.integrity = {...integrity, value: await sha256(JSON.stringify(legacyBody))};
+  const originalBytes = JSON.stringify(legacy);
+  assert.equal((await verifyTrialReport(legacy)).ok, true);
+  assert.equal(JSON.stringify(legacy), originalBytes, 'verification preserves earlier reports instead of relabelling them');
+});
+
+test('a camera blackout requires an enabled front sensor before any episode or report is produced', async () => {
+  const options = {episodes: 1, sensors: {front: false}, perturbations: {blackout: true}};
+  let started = 0;
+  await assert.rejects(runTrial(sampleWorld(), options, {progress: () => { started++; }}), /Enable the front depth camera or remove the camera-blackout perturbation/);
+  assert.equal(started, 0);
+  assert.throws(() => createEpisode(sampleWorld(), {...options, goal: {x: 16.5, z: 11.5}}), /Enable the front depth camera/);
+});
+
+test('blackout reports and events describe an intervention only when the front camera exists', async () => {
+  for (const front of [false, true]) {
+    const report = await runTrial(hall(), {episodes: 1, robot: 'vacuum', seed: 8, sensors: {front}, perturbations: {blackout: front}});
+    assert.equal(report.config.sensors.some(s => s.id === 'depth-front'), front);
+    assert.equal(report.config.perturbations.blackout === true, front);
+    for (const episode of report.episodes) {
+      const applied = front && episode.condition === 'broken';
+      assert.equal(episode.blackout !== null, applied);
+      const events = episode.events.filter(e => e.type.startsWith('blackout-'));
+      assert.deepEqual(events.map(e => e.type), applied ? ['blackout-start', 'blackout-end'] : []);
+      if (applied) {
+        assert.ok(events.every(e => e.sensor === 'depth-front'));
+        assert.equal(episode.blackout.started, true); assert.equal(episode.blackout.ended, true);
+      }
+    }
+    assert.equal(/a front-camera blackout/.test(report.interpretation), front);
+    assert.ok(report.interpretation.includes('Configured perturbations can be skipped or scheduled after a run ends'));
+    if (front) assert.ok(report.interpretation.includes('configured with a front-camera blackout'));
+    assert.equal((await verifyTrialReport(report)).ok, true);
+  }
+  const short = runEpisode(hall(), {robot: 'vacuum', start: {x: 2, z: 3}, goal: {x: 2.2, z: 3}, density: 'trial', sensors: {front: true}, perturbations: {blackout: true}});
+  assert.equal(short.outcome, 'reached'); assert.ok(short.seconds < short.blackout.from);
+  assert.equal(short.blackout.started, false); assert.equal(short.blackout.ended, false);
+  assert.ok(!short.events.some(e => e.type.startsWith('blackout-')), 'a scheduled but unstarted blackout is not an applied intervention');
 });
 
 test('tasks are reachable on the reviewed map and reproducible from the seed', () => {

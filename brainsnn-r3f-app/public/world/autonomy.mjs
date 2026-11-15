@@ -9,7 +9,9 @@
 import {normalizeWorld, planningGate, ROBOTS, clone} from './core.mjs';
 
 export const TRIAL_SCHEMA = 'brainsnn.autonomy-trial.v1';
-export const LOOP_VERSION = 'autonomy-loop-v1';
+// v2 scores clearance against every truth box and rejects a blackout of an absent front sensor. Old reports keep
+// their original loop identifier and seal; their clearance numbers must not be presented as v2 measurements.
+export const LOOP_VERSION = 'autonomy-loop-v2';
 const DEG = Math.PI / 180, BIG = 1e20, TICK = 0.1;
 /** Lidar returns farther than this are not written into the map, as navigation costmaps do: at range a small heading
  *  error moves a return a long way, and nearby obstacles are what the controller needs. */
@@ -434,11 +436,12 @@ function rectDistanceToBox(rect, b) {
 }
 /** Contact, keep-out intrusion and the true clearance of the footprint. The robot's software never sees this. */
 export function scoreFootprint(truth, platform, pose) {
-  const rect = footprint(platform, pose), reach = Math.hypot(platform.width, platform.depth) / 2 + 2;
+  const rect = footprint(platform, pose);
   let clearance = Infinity, contact = null, keepOut = null;
   if (!inPolygon([pose.x, pose.z], truth.floor)) return {contact: {kind: 'wall', id: 'floor-edge'}, keepOut: null, clearance: 0};
   for (const b of truth.boxes) {
-    if (pose.x < b.x0 - reach || pose.x > b.x1 + reach || pose.z < b.z0 - reach || pose.z > b.z1 + reach) continue;
+    // Scoring runs once per simulation tick, outside the controller's rollout loop. A box farther than an arbitrary
+    // local radius can still be nearer than a room wall, so every bounded truth box contributes to true clearance.
     const d = rectDistanceToBox(rect, b); if (d < clearance) clearance = d;
     if (d <= 0 && !contact) contact = {kind: b.mapped ? 'mapped-object' : 'unmapped-object', id: b.id, name: b.name};
   }
@@ -464,6 +467,9 @@ function boxFree(truth, box, pad) {
 // Episodes.
 const PERTURBATION_DEFAULTS = Object.freeze({crate: false, crateAt: null, mapError: false, blackout: false, drift: false});
 const CRATE = {size: 0.5, h: 0.45}, PALLET = {w: 0.9, d: 0.7, h: 0.9};
+function validatePerturbations(perturbations, sensors) {
+  if (perturbations?.blackout && sensors?.front === false) throw new Error('Enable the front depth camera or remove the camera-blackout perturbation.');
+}
 export function prepareWorld(worldInput) {
   const world = normalizeWorld(worldInput), gate = planningGate(world);
   if (gate) throw new Error(gate);
@@ -482,6 +488,7 @@ export function placeOnRoute(truth, path, fromArc, toArc, size, rand, avoid = []
 }
 
 export function createEpisode(worldInput, options = {}) {
+  validatePerturbations(options.perturbations, options.sensors);
   const world = options.preparedWorld || prepareWorld(worldInput);
   const robotKey = PLATFORMS[options.robot] ? options.robot : 'cleaner', platform = PLATFORMS[robotKey];
   const margin = options.margin ?? 0.1, rc = Math.hypot(platform.width, platform.depth) / 2, radius = rc + margin;
@@ -695,7 +702,7 @@ export function episodeResult(ep) {
   return {outcome: ep.outcome, seconds: ep.t, distance: round(ep.distance, 2), referenceDistance: round(ep.referenceDistance, 2), start: {x: round(ep.start.x, 2), z: round(ep.start.z, 2)}, goal: {x: round(ep.goal.x, 2), z: round(ep.goal.z, 2)},
     minClearance: Number.isFinite(ep.minClearance) ? round(Math.max(0, ep.minClearance), 3) : null, replans: ep.replans.length, recoveries: ep.recoveries, replanMs: {max: ms.length ? round(Math.max(...ms), 2) : 0},
     crate: ep.crate ? (({box, ...c}) => c)(ep.crate) : null,
-    mapError: ep.mapError ? {...ep.mapError} : null, blackout: ep.blackout ? {sensor: ep.blackout.sensor, from: ep.blackout.from, to: ep.blackout.to} : null, drift: ep.drift ? {finalErrorMetres: round(Math.hypot(ep.bias.x, ep.bias.z), 3)} : null,
+    mapError: ep.mapError ? {...ep.mapError} : null, blackout: ep.blackout ? {sensor: ep.blackout.sensor, from: ep.blackout.from, to: ep.blackout.to, started: ep.blackout.started, ended: ep.blackout.ended} : null, drift: ep.drift ? {finalErrorMetres: round(Math.hypot(ep.bias.x, ep.bias.z), 3)} : null,
     events: ep.events.slice(0, 80), replanLog: ep.replans.slice(0, 60)};
 }
 
@@ -764,6 +771,7 @@ const LIMITATIONS = [
  * `hooks.cancelled()` stops an inline trial between episodes when its map or settings selection changes. */
 export async function runTrial(worldInput, options = {}, hooks = {}) {
   const world = prepareWorld(worldInput), o = {...DEFAULT_TRIAL, ...options, perturbations: options.perturbations ? {crate: false, mapError: false, blackout: false, drift: false, ...options.perturbations} : {...DEFAULT_TRIAL.perturbations}, sensors: {...DEFAULT_TRIAL.sensors, ...(options.sensors || {})}};
+  validatePerturbations(o.perturbations, o.sensors);
   const episodes = Math.max(1, Math.min(50, Math.floor(o.episodes))), seed = (o.seed >>> 0) || 1, robot = PLATFORMS[o.robot] ? o.robot : 'cleaner';
   const reference = createMap(world, {resolution: 0.04, prior: true});
   const tasks = sampleTasks(world, robot, episodes, seed, {referenceMap: reference});
@@ -796,7 +804,7 @@ function interpret(summary, perturbations) {
   const c = summary.control, b = summary.broken, names = {crate: 'a dropped crate', mapError: 'an object missing from the map', blackout: 'a front-camera blackout', drift: 'odometry drift'};
   const what = Object.keys(perturbations).map(k => names[k]).filter(Boolean);
   const failures = [b.contacts && `${b.contacts} contact${b.contacts === 1 ? '' : 's'}`, b.noRoute && `${b.noRoute} safe stop${b.noRoute === 1 ? '' : 's'} with no route`, b.keepOut && `${b.keepOut} keep-out intrusion${b.keepOut === 1 ? '' : 's'}`, b.stuck && `${b.stuck} stuck`, b.timeouts && `${b.timeouts} timeout${b.timeouts === 1 ? '' : 's'}`].filter(Boolean);
-  return `${c.reached}/${c.episodes} runs reached the goal in control and ${b.reached}/${b.episodes} when broken on purpose${what.length ? ` with ${what.join(', ')}` : ''}.` + (failures.length ? ` Failures when broken: ${failures.join(', ')}.` : ' No failures when broken.') + ' Simulation on the reviewed map; no robot moved.';
+  return `${c.reached}/${c.episodes} runs reached the goal in control and ${b.reached}/${b.episodes} when broken on purpose${what.length ? ` (configured with ${what.join(', ')})` : ''}.` + (failures.length ? ` Failures when broken: ${failures.join(', ')}.` : ' No failures when broken.') + ' Configured perturbations can be skipped or scheduled after a run ends; episode events record what actually occurred. Simulation on the reviewed map; no robot moved.';
 }
 export async function verifyTrialReport(report) {
   if (!report || report.schema !== TRIAL_SCHEMA || !report.integrity?.value) return {ok: false, reason: 'Not a BrainSNN autonomy trial report.'};
