@@ -56,6 +56,8 @@ The browser test uses explicitly authored point-cloud/Gaussian fixtures. It chec
 
 Use one corrected real phone capture with retained frames, calibrated camera poses/intrinsics and an independently reviewed chair mask. Freeze original source hashes. Extract a manual baseline in this workshop, move the chair by an authored local offset, and retain the exact export/receipt. Project original membership into two manually labelled held-out frames with visibility/depth checks. Target IoU at least 0.85 and floor contamination below 1%, with unchanged source hash. These are proposed acceptance criteria, not obtained results.
 
+The [offline membership evaluation](world-object-evaluation.md) runs this comparison against frozen camera frames and independently labelled PNG masks. It includes a two-view software fixture with known pixel counts.
+
 Then compare [SAM 2/2.1](https://github.com/facebookresearch/sam2) mask proposals against that same baseline. Its Apache 2.0 code/checkpoints require Python >=3.10, Torch >=2.5.1 and compatible TorchVision. Image masks alone do not establish 3D membership: actual poses, intrinsics, depth visibility and multi-view agreement are required. Do not wholesale import noncommercial Gaussian Grouping dependencies or assume SAM 3 shares SAM 2's license.
 
 Estimated effort: 2–3 engineering days for the retained-frame projection experiment, longer if capture/pose evidence is missing. Estimated additional provider cost: $0 using an accessible existing GPU; local energy/hardware time is not measured. Main blocker: an accessible corrected real capture with frame/pose evidence and independent object annotations. Physical collision, measured scale and BIM classification remain separate acceptance work.
