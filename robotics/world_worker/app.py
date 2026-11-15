@@ -670,7 +670,9 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.post('/v1/jobs',status_code=201)
     async def create_job(body:JobBody,request:Request):
         principal = request.state.principal
-        if body.consent is not True:raise HTTPException(422,'Explicit processing consent is required.')
+        public_domain = os.environ.get('WORLD_PUBLIC_DOMAIN', '0').lower() in ('1', 'true', 'yes')
+        if body.consent is not True and not (public_domain and principal.owner_id != OPERATOR_OWNER):
+            raise HTTPException(422, 'Explicit processing consent is required.')
         engine=engines.get(body.engine)
         if not engine or not engine['available']:raise HTTPException(409,'This engine is not configured and license-approved.')
         require_engine(principal, body.engine)
