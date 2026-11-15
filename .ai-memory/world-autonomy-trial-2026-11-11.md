@@ -37,3 +37,6 @@ to build the layers BrainSNN was missing. Lukas's critique: no shown agent loop/
   build passed. Browser regression includes a forced late worker reply after source reset and compiles locally.
 - Local browser execution remains blocked by Chromium's Unix socket creation (EPERM); Playwright Chromium and
   WebKit bundles are absent. Current-head CI must execute the browser smoke before merge. No physical robot ran.
+- After PR #279 merged, integrated main `e59f16108438f0cdae04c4dac082712b5cf04ded` while preserving the
+  experimental Meshlets navigation entry, isolated build dependency, failed strict GPU qualification and all existing
+  World Builder links. The autonomy module and its source-reset regressions are unchanged by that integration.
