@@ -1,11 +1,24 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||Last updated: 2026-11-15T00:00Z
+||||||||||||||Last updated: 2026-11-15T06:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
 
-### Run 227 — 2026-11-15 (GB10: WORLD_PUBLIC_DOMAIN extended to /v1/jobs consent gate; all suites green)
+### Run 228 — 2026-11-15 (GB10: public_domain release verification complete; loopback 413 proven; all suites green)
+
+- **Bounded improvement:** verified the public_domain release gate — all 6 `test_public_domain_*` tests pass (capabilities flip, default false, consent optional for tenant, operator consent preserved, env documented, independent of public_processing). Also verified the loopback 413 distinction: `test_loopback_413_is_real_http_status_not_helper_fallback` confirms the oversized-body 413 is a true HTTP 413 on the wire (not a URLError fallback mapping).
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (108 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 20.49 s**
+  - `pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.25 s**
+  - `pytest tests/world/test_worker.py::test_public_domain_*` → **6 passed in 0.68 s**
+  - `pytest tests/world/test_report_receipts_loopback.py -k 413` → **3 passed in 1.02 s**
+- **Commit + push verified:** `f55ced2` on `hermes/world-builder-gb10`; `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+
+|
 
 - **Bounded improvement:** extended `WORLD_PUBLIC_DOMAIN` env var to the `/v1/jobs` consent gate in `app.py`. When set to `1`, `true`, or `yes`, non-operator tenants can create jobs without explicit consent (matching the existing `/v1/capabilities` behavior). Operator still requires consent in public domain mode.
 - **Tests verified:** `test_public_domain_flips_capabilities` → PASSED, `test_public_domain_default_is_false` → PASSED, `test_public_domain_makes_consent_optional_for_tenant` → PASSED, `test_public_domain_does_not_relax_consent_for_operator` → PASSED.
