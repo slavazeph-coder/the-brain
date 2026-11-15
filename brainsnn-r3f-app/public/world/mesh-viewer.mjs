@@ -16,6 +16,9 @@ export async function createMeshViewer(container, onInfo = () => {}) {
   return {
     async setFile(file) { pitch = 0; return renderer.importAsset(file); },
     reset() { renderer.frameAsset(); },
+    getView() { return renderer.getView(); },
+    setView(view) { renderer.setView(view); },
+    getCanvas() { return renderer.getCanvas(); },
     flip() { pitch += Math.PI; renderer.setAssetTransform({ pitch }); renderer.frameAsset(); },
     surfaceMode(mode, frequency) { renderer.setSurfaceMode(mode, frequency); },
     surfaceAudit() { return renderer.surfaceAudit(); },
