@@ -229,3 +229,29 @@ test('Wilson intervals and the seeded generator behave', () => {
   const n = rng(7); let sum = 0, sq = 0; for (let i = 0; i < 4000; i++) { const v = n.normal(); sum += v; sq += v * v; }
   assert.ok(Math.abs(sum / 4000) < 0.06 && Math.abs(sq / 4000 - 1) < 0.08);
 });
+
+test('a robot that does not fit at the start is refused, never scored as a contact before it moves', () => {
+  const w = sampleWorld(), goal = {x: 16.5, z: 11.5};
+  // The compact forklift (1.1 × 2.4 m) cannot stand 1 m from two walls at the sample's corner start.
+  assert.throws(() => createEpisode(w, {robot: 'forklift', goal, density: 'trial'}), /does not fit at that start/);
+  // A footprint over a keep-out area is refused the same way.
+  const k = hall({objects: [{id: 'nogo', name: 'Keep out', x: 1.5, z: 2.5, w: 1, d: 1, h: 0.01, kind: 'no-go'}]});
+  assert.throws(() => createEpisode(k, {robot: 'cleaner', start: {x: 2, z: 3}, goal: {x: 20, z: 3}, density: 'trial'}), /does not fit at that start|start is blocked/);
+  // Robots that do fit start as before.
+  for (const robot of ['cleaner', 'amr', 'vacuum', 'humanoid', 'quadruped']) assert.doesNotThrow(() => createEpisode(w, {robot, goal, density: 'trial'}), robot);
+});
+
+test('every robot gets a start where it fits, and none is in contact on its first tick', async () => {
+  const {fitsAt} = await import('../../brainsnn-r3f-app/public/world/autonomy.mjs');
+  const w = sampleWorld(), map = createMap(w, {prior: true});
+  assert.equal(fitsAt(map, 'forklift', w.start), false);
+  assert.equal(fitsAt(map, 'cleaner', w.start), true);
+  for (const robot of Object.keys(PLATFORMS)) {
+    // What the live page does: the map's start when the robot fits there, otherwise its first sampled task.
+    const task = fitsAt(map, robot, w.start) ? {start: w.start, goal: {x: 16.5, z: 11.5}} : sampleTasks(w, robot, 1, 1)[0];
+    assert.ok(task && fitsAt(map, robot, task.start), robot);
+    const ep = createEpisode(w, {robot, start: task.start, goal: task.goal, seed: 1, density: 'trial'});
+    for (let i = 0; i < 5 && !ep.outcome; i++) stepEpisode(ep);
+    assert.notEqual(ep.outcome, 'contact', `${robot} touched something before it could react`);
+  }
+});

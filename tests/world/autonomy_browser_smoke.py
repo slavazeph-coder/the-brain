@@ -110,6 +110,14 @@ def check(playwright, name, viewport, label):
             assert page.locator('#world-name').inner_text() == 'Studio 01 / training floor'
             assert page.locator('#review').is_hidden()
             assert 'old read failed' not in page.locator('#status').inner_text()
+        # A robot too large for the sample's corner start begins on open floor instead of reporting a contact before
+        # it has moved.
+        page.select_option('#robot', 'forklift')
+        assert page.locator('#status').inner_text().startswith('Compact forklift:'), page.locator('#status').inner_text()
+        if page.locator('#play').inner_text() != 'Pause':
+            page.locator('#play').click()
+        page.wait_for_function("parseFloat(document.querySelector('#hud').textContent) >= 1.5", timeout=30000)
+        assert 'Contact with' not in page.locator('#log').inner_text(), page.locator('#log').inner_text()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'no horizontal page scroll'
         assert not errors, errors
         print(f'{name} {label} autonomy smoke PASS')
