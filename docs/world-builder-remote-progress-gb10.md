@@ -1,10 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||Last updated: 2026-11-15T21:15Z
+||||||||||||||||||||||||||Last updated: 2026-11-15T21:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
 
+### Run 235 — 2026-11-15 (GB10: loopback 413 re-verified; 4090 CUDA confirmed; all suites green)
+
+- **Bounded improvement:** re-verified the loopback 413 distinction — all 3 `test_loopback_413_*` tests pass, confirming the oversized-body 413 is a true HTTP 413 on the wire (not a URLError fallback mapping). Confirmed 4090 host alive: hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 16.2/24.6 GiB used, 49°C. Branch `hermes/world-builder-4090` at `d1d59de` clean.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (129 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 16.92 s**
+  - `pytest tests/world/test_report_receipts_loopback.py -k 413 -v` → **3 passed in 0.95 s**
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, GPU NVIDIA GeForce RTX 4090, 16.2/24.6 GiB used, 49°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 5: loopback 413 distinction review, or app/API journey deep audit).
+
+|
+|
 ### Run 234 — 2026-11-15 (GB10: worker suite + public_domain tests verified; 4090 CUDA confirmed)
 
 - **Bounded improvement:** re-verified the full worker test suite (61 passed, 3 skipped) and all 6 `test_public_domain_*` tests pass. Confirmed 4090 host alive: hostname `d130b6c7f3f4`, GPU UUID `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, CUDA True, RTX 4090, 16.1/24.6 GiB used, 49°C. Branch `hermes/world-builder-4090` at `d1d59de` clean.
