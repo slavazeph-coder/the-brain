@@ -250,7 +250,7 @@ export function create(container, options = {}) {
     return { setScene: noop, setRobot: noop, setTrace: noop, setMode: noop, setCamera: noop,
       importAsset: () => Promise.reject(new Error('3D preview is unavailable on this device.')),
       clearAsset: noop, setAssetTransform: noop, setPointCloud: () => { throw new Error('3D preview is unavailable on this device.'); },
-      setCoverage: noop, frameAsset: noop, resize: noop, dispose: noop, capture: () => null, available: false };
+      setCoverage: noop, frameAsset: noop, resize: noop, dispose: noop, capture: () => null, getView: () => null, setView: () => { throw new Error('3D preview is unavailable on this device.'); }, getCanvas: () => null, available: false };
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
   renderer.setClearColor(0x080d16, 1);
@@ -280,7 +280,7 @@ export function create(container, options = {}) {
   world.add(sun); world.add(sun.target);
   const accent = new THREE.PointLight(VIOLET, 35, 30, 2); accent.position.set(-2, 5, -2); world.add(accent);
   const fill = new THREE.PointLight(CYAN, 20, 25, 2); fill.position.set(10, 4, 8); world.add(fill);
-  let disposed = false, raf = 0, inView = true, floor, walls, asset = null, assetUrls = [], importGeneration = 0;
+  let disposed = false, raf = 0, inView = true, floor, walls, asset = null, assetUrls = [], importGeneration = 0, programmaticView = false;
   const inspectionOriginals = new Map();
   let inspectionMaterial = null;
   let scene = { width: 12, depth: 8, start: [1, 1], goal: [10, 6], obstacles: [] };
@@ -300,10 +300,33 @@ export function create(container, options = {}) {
   function draw() {
     raf = 0;
     if (!visible()) return;
-    controls.update(); renderer.render(world, camera);
+    if (!programmaticView) controls.update(); renderer.render(world, camera);
   }
   function requestDraw() { if (!disposed && !raf && visible()) raf = requestAnimationFrame(draw); }
   controls.addEventListener('change', requestDraw);
+  function resumeControls() { programmaticView = false; camera.up.set(0, 1, 0); }
+  controls.addEventListener('start', resumeControls);
+  /** A local Y-up camera in the displayed asset's unverified units. No geometry is changed. */
+  function getView() { return disposed ? null : { eye: camera.position.toArray(), target: controls.target.toArray(), fov: camera.fov }; }
+  let contextUnavailable = false;
+  function setView(value) {
+    const vector = v => Array.isArray(v) && v.length === 3 && v.every(n => Number.isFinite(n) && Math.abs(n) <= 1e6);
+    if (disposed) throw new Error('The mesh viewer is closed.');
+    if (contextUnavailable) throw new Error('The graphics context was lost. Reload the viewer before replaying or recording.');
+    if (!vector(value?.eye) || !vector(value?.target) || !Number.isFinite(value?.fov) || value.fov < 15 || value.fov > 100 || Math.hypot(...value.eye.map((v, i) => v - value.target[i])) <= 1e-6) throw new Error('Use a finite camera position and distinct target, with a field of view from 15° to 100°.');
+    // Drain old orbit damping before applying an exact authored view. Skip further
+    // OrbitControls updates until the next user gesture, so replay does not drift.
+    const damping = controls.enableDamping;
+    controls.enableDamping = false; controls.update(); controls.enableDamping = damping;
+    programmaticView = true; cameraMode = 'orbit'; controls.enabled = true;
+    controls.target.fromArray(value.target); camera.position.fromArray(value.eye);
+    const delta = camera.position.clone().sub(controls.target), distance = delta.length();
+    camera.up.set(0, Math.abs(delta.y / distance) > .999999 ? 0 : 1, Math.abs(delta.y / distance) > .999999 ? 1 : 0);
+    camera.fov = value.fov; camera.near = Math.max(1e-7, distance / 10000); camera.far = Math.max(1500, distance * 100);
+    camera.updateProjectionMatrix(); camera.lookAt(controls.target);
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    renderer.render(world, camera);
+  }
   function resize() {
     if (disposed) return;
     const width = Math.max(1, container.clientWidth), height = Math.max(1, container.clientHeight || 440);
@@ -320,6 +343,7 @@ export function create(container, options = {}) {
 
   function setCamera(mode) {
     if (disposed) return;
+    programmaticView = false;
     cameraMode = ['orbit', 'top', 'robot'].includes(mode) ? mode : 'orbit';
     const w = scene.width, d = scene.depth, span = Math.max(w, d);
     camera.far = 1500; camera.updateProjectionMatrix(); controls.maxDistance = Math.max(180, span * 5);
@@ -586,7 +610,7 @@ export function create(container, options = {}) {
       assetUrls = urls; asset = wrapper; groups.reference.add(wrapper);
       viewMode = 'reality'; applyMode(); frameAsset(); requestDraw();
       return { name: file.name, format: extension, sizeBytes: file.size, meshes: inspected.meshes,
-        vertices: inspected.vertices, dimensions: { width: inspected.size.x, height: inspected.size.y, depth: inspected.size.z },
+        vertices: inspected.vertices, sourceTranslation: inspected.bounds.min.toArray().map(value => -value), dimensions: { width: inspected.size.x, height: inspected.size.y, depth: inspected.size.z },
         alignedBy: 'bounding-box-origin', visualOnly: true, transform: { scale: 1, x: 0, y: 0, z: 0, rotation: 0 } };
     } catch (error) {
       if (imported && !groups.reference.getObjectById(imported.id)) release(imported);
@@ -603,6 +627,7 @@ export function create(container, options = {}) {
   }
   function frameAsset() {
     if (!asset || disposed) return;
+    programmaticView = false; camera.fov = 42; camera.near = .03; camera.up.set(0, 1, 0);
     const bounds = new THREE.Box3().setFromObject(asset);
     const center = bounds.getCenter(new THREE.Vector3()), size = bounds.getSize(new THREE.Vector3());
     const span = Math.max(size.x, size.y, size.z, 0.1);
@@ -627,7 +652,7 @@ export function create(container, options = {}) {
     const ground = raycaster.intersectObject(floor, false)[0];
     if (ground) options.onPick?.([Math.round(ground.point.x * 100) / 100, Math.round(ground.point.z * 100) / 100]);
   }
-  function contextLost(event) { event.preventDefault(); options.onError?.('3D preview paused because the graphics context was lost. Reopen Test your space to restore it.'); }
+  function contextLost(event) { contextUnavailable = true; event.preventDefault(); options.onError?.('3D preview paused because the graphics context was lost. Reopen Test your space to restore it.'); }
   renderer.domElement.addEventListener('pointerdown', pointerDown);
   renderer.domElement.addEventListener('pointerup', pointerUp);
   renderer.domElement.addEventListener('webglcontextlost', contextLost);
@@ -640,13 +665,13 @@ export function create(container, options = {}) {
     renderer.domElement.removeEventListener('pointerdown', pointerDown);
     renderer.domElement.removeEventListener('pointerup', pointerUp);
     renderer.domElement.removeEventListener('webglcontextlost', contextLost);
-    controls.removeEventListener('change', requestDraw); controls.dispose();
+    controls.removeEventListener('change', requestDraw); controls.removeEventListener('start', resumeControls); controls.dispose();
     restoreSurface(); Object.values(groups).forEach(release); assetUrls.forEach(url => URL.revokeObjectURL(url));
     sun.shadow.map?.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove();
   }
   setScene(scene); setRobot(currentRobot); resize();
   return { setScene, setRobot, setTrace, setMode, setCamera: mode => { setCamera(mode); applyMode(); }, importAsset,
-    clearAsset, setAssetTransform, setPointCloud, setCoverage, frameAsset, resize, dispose, available: true, setSurfaceMode, surfaceAudit,
+    clearAsset, setAssetTransform, setPointCloud, setCoverage, frameAsset, resize, dispose, available: true, setSurfaceMode, surfaceAudit, getView, setView, getCanvas: () => disposed ? null : renderer.domElement,
     capture: () => { if (disposed) return null; renderer.render(world, camera); return renderer.domElement.toDataURL('image/png'); } };
 }
 

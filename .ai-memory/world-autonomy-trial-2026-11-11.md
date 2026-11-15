@@ -40,3 +40,8 @@ to build the layers BrainSNN was missing. Lukas's critique: no shown agent loop/
 - After PR #279 merged, integrated main `e59f16108438f0cdae04c4dac082712b5cf04ded` while preserving the
   experimental Meshlets navigation entry, isolated build dependency, failed strict GPU qualification and all existing
   World Builder links. The autonomy module and its source-reset regressions are unchanged by that integration.
+
+- November 15 review correction: v2 scores all truth boxes for minimum clearance (authored 30×30 room: prior
+  9.825 m versus corrected 2.825 m), rejects blackout with a disabled front camera, distinguishes configuration
+  from applied events, and preserves old sealed report bytes/version. UI derives blackout duration from events and
+  shows the scoring version. 19 targeted and 407 combined Node tests passed; physical accuracy remains unverified.

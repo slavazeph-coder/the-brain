@@ -1,7 +1,7 @@
 // Autonomy trial page: a live top-down view of the sense -> map -> plan -> act loop on a reviewed World map, and a
 // paired trial that runs the same tasks clean and broken on purpose. Everything runs in this browser; nothing uploads.
 import {sampleWorld, normalizeWorld, planningGate} from './core.mjs';
-import {PLATFORMS, SENSOR_SPECS, OBSTACLE_RANGE, createEpisode, stepEpisode, requestCrate, sampleTasks, runTrial, verifyTrialReport, footprint, createMap, planPath} from './autonomy.mjs';
+import {PLATFORMS, SENSOR_SPECS, OBSTACLE_RANGE, LOOP_VERSION, createEpisode, stepEpisode, requestCrate, sampleTasks, runTrial, verifyTrialReport, footprint, createMap, planPath} from './autonomy.mjs';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -301,16 +301,18 @@ function renderTrial(r) {
     card('Contacts', String(b.contacts + c.contacts), `${b.contacts} broken · ${c.contacts} control`, b.contacts + c.contacts ? 'bad' : '') +
     card('Safe stops', String(b.noRoute + c.noRoute), 'no route fit, robot stopped') +
     card('Crate → new route', crate, b.crates.dropped ? `median compute on this device · ${b.crates.inMap}/${b.crates.dropped} crates mapped` : 'no crates dropped') +
-    card('Closest approach', b.minClearance === null ? '–' : `${b.minClearance.toFixed(2)} m`, 'true footprint to anything, broken runs');
+    card('Closest approach', b.minClearance === null ? '–' : `${b.minClearance.toFixed(2)} m`, 'simulated footprint clearance, broken runs');
   $('t-interpretation').textContent = r.interpretation;
   const rows = r.tasks.map(t => {
     const ctl = r.episodes.find(e => e.task === t.index && e.condition === 'control'), brk = r.episodes.find(e => e.task === t.index && e.condition === 'broken');
-    const what = [brk.crate?.dropped ? `crate ${brk.crate.aheadMetres} m ahead` : brk.crate?.skipped ? 'crate skipped' : '', brk.mapError?.placed ? `unmapped object${brk.mapError.detectedAt !== null ? ' found' : ' missed'}` : '', brk.blackout ? 'camera off 3.5 s' : '', brk.drift ? `drift ${brk.drift.finalErrorMetres} m` : ''].filter(Boolean).join(' · ');
+    const off = brk.events.find(e => e.type === 'blackout-start'), on = brk.events.find(e => e.type === 'blackout-end');
+    const blackout = brk.blackout ? off ? `camera off ${Math.max(0, Math.min(brk.seconds, on?.t ?? brk.seconds) - off.t).toFixed(1)} s` : 'camera blackout not reached' : '';
+    const what = [brk.crate?.dropped ? `crate ${brk.crate.aheadMetres} m ahead` : brk.crate?.skipped ? 'crate skipped' : '', brk.mapError?.placed ? `unmapped object${brk.mapError.detectedAt !== null ? ' found' : ' missed'}` : '', blackout, brk.drift ? `drift ${brk.drift.finalErrorMetres} m` : ''].filter(Boolean).join(' · ');
     const seen = brk.crate?.dropped ? (brk.crate.inMapAt === null ? 'never seen' : `${(brk.crate.inMapAt - brk.crate.droppedAt).toFixed(1)} s${brk.crate.replanMs !== null ? ` · ${brk.crate.replanMs} ms` : ''}`) : '–';
     return `<tr><td>${t.index + 1}</td><td>${t.referenceDistance.toFixed(1)} m</td>${cell(ctl)}${cell(brk)}<td>${esc(what || '–')}</td><td>${esc(seen)}</td><td>${brk.minClearance === null ? '–' : brk.minClearance.toFixed(2)}</td></tr>`;
   }).join('');
   $('t-rows').innerHTML = rows;
-  $('t-seal').textContent = `SHA-256 ${r.integrity.value.slice(0, 16)}… · ${r.config.episodes} tasks · seed ${r.config.seed} · ${PLATFORMS[r.config.robot].name}`;
+  $('t-seal').textContent = `SHA-256 ${r.integrity.value.slice(0, 16)}… · ${r.loop || 'unversioned method'} · ${r.config.episodes} tasks · seed ${r.config.seed} · ${PLATFORMS[r.config.robot].name}`;
   $('t-status').textContent = 'Trial complete. The report is sealed with a SHA-256 of its contents; it records the map, settings, every run and its limits.';
   $('trial-results').hidden = false;
 }
@@ -369,7 +371,7 @@ function init() {
   $('t-download').addEventListener('click', () => state.report && download(`brainsnn-autonomy-trial-seed${state.report.config.seed}.json`, state.report));
   $('t-verify').addEventListener('change', async e => {
     const file = e.target.files[0]; e.target.value = ''; if (!file) return;
-    try { const v = await verifyTrialReport(JSON.parse(await file.text())); $('t-status').textContent = v.ok ? `Verified: the report's SHA-256 matches its contents (${v.value.slice(0, 16)}…). The seal shows it was not edited; it does not identify who ran it.` : v.reason; }
+    try { const report = JSON.parse(await file.text()), v = await verifyTrialReport(report); $('t-status').textContent = v.ok ? `Verified: the report's SHA-256 matches its contents (${v.value.slice(0, 16)}…). Method: ${report.loop || 'unversioned'}.${report.loop !== LOOP_VERSION ? ' Earlier scoring; original measurements retained. Run a new trial for current clearance.' : ''} The seal shows it was not edited; it does not identify who ran it.` : v.reason; }
     catch (error) { $('t-status').textContent = `Could not read that report: ${error.message}`; }
   });
   addEventListener('resize', resize);

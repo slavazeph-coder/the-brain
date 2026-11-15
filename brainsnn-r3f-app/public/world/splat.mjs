@@ -1,11 +1,18 @@
 import { MAX_FILE_BYTES, STRIDE, parseVisualAsset } from './visual-geometry.mjs';
 import { createVisualViewer } from './visual-viewer.mjs';
 import { createMeshViewer } from './mesh-viewer.mjs';
+import { mountCameraTour } from './camera-tour-ui.mjs';
 
 const $ = id => document.getElementById(id);
 const status = message => { $('viewer-status').textContent = message; };
 let viewer = null, meshViewer = null, meshPromise = null, epoch = 0, currentKind = 'points', disposed = false;
 let surfaceReport = null, meshSource = null;
+let displayFlipped = false;
+const tour = mountCameraTour({ root: $('camera-tour'), getViewer: () => currentKind === 'mesh' ? meshViewer : viewer });
+async function sourceFor(file, buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer || await file.arrayBuffer());
+  return { name: file.name, bytes: file.size, sha256: Array.from(new Uint8Array(digest), v => v.toString(16).padStart(2, '0')).join('') };
+}
 function clearInspection() {
   surfaceReport=null; meshSource=null; $('surface-mode').value='original'; $('stripe-frequency').value='18';
   $('surface-panel').hidden=true; $('surface-download').disabled=true;
@@ -18,6 +25,7 @@ function loaded(value) { for (const id of ['frame', 'flip']) $(id).disabled = !v
 function show(kind) { currentKind = kind; $('asset-canvas').parentElement.hidden = kind === 'mesh'; $('mesh-stage').hidden = kind !== 'mesh'; }
 $('asset').onchange = async () => {
   const file = $('asset').files[0], token = ++epoch;
+  tour.setSource(null); displayFlipped = false;
   clearInspection();
   loaded(false); viewer?.clear(); meshViewer?.clear();
   if (!file) { status('Choose a local visual asset.'); return; }
@@ -35,9 +43,10 @@ $('asset').onchange = async () => {
       if (token !== epoch) return;
       const parsed = await meshViewer.setFile(file);
       if (token !== epoch) return;
-      const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+      const source=await sourceFor(file);
       if (token !== epoch) return;
-      meshSource={name:file.name,bytes:file.size,sha256:Array.from(new Uint8Array(digest),v=>v.toString(16).padStart(2,'0')).join('')};
+      meshSource=source;
+      tour.setSource(source, 'identity', 'bbox-min-origin', parsed.sourceTranslation);
       $('surface-panel').hidden=false;
       loaded(true);
       $('viewer-help').textContent = 'Drag to orbit · pinch or scroll to zoom · two-finger drag or right-drag to pan · Reset view or 0 to frame the asset.';
@@ -48,17 +57,21 @@ $('asset').onchange = async () => {
     const buffer = await file.arrayBuffer();
     if (token !== epoch) return;
     const parsed = parseVisualAsset(buffer, file.name);
+    const source = await sourceFor(file, buffer);
+    if (token !== epoch) return;
     viewer.setPoints(parsed.points, { kind: parsed.kind });
+    tour.setSource(source);
     loaded(true);
     $('viewer-help').textContent = 'Drag to orbit · pinch or scroll to zoom · two-finger drag or Shift-drag to pan · WASD / arrow keys to move, + / − to zoom, 0 to reset.';
     const representation = parsed.kind === 'point-cloud' ? 'Point cloud · not a trained Gaussian splat' : 'Gaussian parameters · DC colour preview';
     status(`${file.name} · ${representation} · ${Math.round(parsed.points.length / STRIDE).toLocaleString()} visible points${parsed.sampled ? ` sampled from ${parsed.total.toLocaleString()}` : ''}${parsed.skipped ? ` · ${parsed.skipped} invalid samples omitted` : ''}. Scale unverified; no collision geometry.`);
   } catch (error) { if (token === epoch) status(`Asset could not be opened: ${error.message}`); }
 };
-$('frame').onclick = () => (currentKind === 'mesh' ? meshViewer : viewer)?.reset();
-$('flip').onclick = () => (currentKind === 'mesh' ? meshViewer : viewer)?.flip();
-$('point-size').oninput = () => viewer?.setSize(Number($('point-size').value));
+$('frame').onclick = () => { tour.cancel(); (currentKind === 'mesh' ? meshViewer : viewer)?.reset(); };
+$('flip').onclick = () => { displayFlipped = !displayFlipped; tour.invalidate(displayFlipped ? 'flip-y-z' : 'identity'); (currentKind === 'mesh' ? meshViewer : viewer)?.flip(); };
+$('point-size').oninput = () => { tour.cancel(); viewer?.setSize(Number($('point-size').value)); };
 $('surface-mode').onchange=$('stripe-frequency').oninput=()=>{
+  tour.cancel();
   try{meshViewer?.surfaceMode($('surface-mode').value,Number($('stripe-frequency').value));}
   catch(error){$('surface-mode').value='original';$('surface-status').textContent=error.message;}
 };
@@ -77,6 +90,6 @@ $('surface-download').onclick=()=>{
   const url=URL.createObjectURL(new Blob([JSON.stringify(surfaceReport,null,2)+'\n'],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='surface-inspection.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
-$('remove').onclick = () => { epoch++; viewer?.clear(); meshViewer?.clear(); clearInspection(); $('asset').value = ''; loaded(false); status('Asset cleared from this viewer.'); };
-window.addEventListener('pagehide', () => { disposed = true; epoch++; viewer?.destroy(); meshViewer?.destroy(); });
+$('remove').onclick = () => { epoch++; tour.setSource(null); viewer?.clear(); meshViewer?.clear(); clearInspection(); $('asset').value = ''; loaded(false); status('Asset cleared from this viewer.'); };
+window.addEventListener('pagehide', () => { disposed = true; epoch++; tour.destroy(); viewer?.destroy(); meshViewer?.destroy(); });
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });

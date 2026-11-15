@@ -33,19 +33,37 @@ def check(playwright, name, viewport, label):
         page.locator('#crate').click()
         page.wait_for_function(f"document.querySelectorAll('#log li').length > {before}", timeout=15000)
         # A short paired trial in the worker: five tasks, ten runs, sealed and verifiable.
+        page.locator('#s-front').uncheck()
+        page.locator('#p-blackout').check()
+        page.locator('#t-run').click()
+        page.wait_for_function("document.querySelector('#t-status').textContent.includes('Enable the front depth camera')")
+        assert page.locator('#trial-results').is_hidden() and page.locator('#t-run').is_enabled()
+        page.locator('#s-front').check()
+        page.locator('#p-blackout').uncheck()
         page.select_option('#t-episodes', '5')
         page.locator('#t-run').click()
         page.wait_for_selector('#trial-results:not([hidden])', timeout=180000)
         assert page.locator('#t-rows tr').count() == 5
         assert 'when broken on purpose' in page.locator('#t-interpretation').inner_text()
         assert page.locator('#t-seal').inner_text().startswith('SHA-256 ')
+        assert 'autonomy-loop-v2' in page.locator('#t-seal').inner_text()
         with page.expect_download() as info:
             page.locator('#t-download').click()
         path = info.value.path()
         report = json.loads(Path(path).read_text())
         assert report['schema'] == 'brainsnn.autonomy-trial.v1' and report['claims']['physicalRobotExecuted'] is False
+        assert report['loop'] == 'autonomy-loop-v2'
         page.locator('#t-verify').set_input_files(path)
         page.wait_for_function("document.querySelector('#t-status').textContent.startsWith('Verified')", timeout=15000)
+        legacy = page.evaluate('''async report => {
+          const {integrity, ...body} = report;
+          body.loop = 'autonomy-loop-v1';
+          const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
+          return JSON.stringify({...body, integrity: {...integrity, value: Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2, '0')).join('')}});
+        }''', report)
+        page.locator('#t-verify').set_input_files({'name': 'authored-legacy-report.json', 'mimeType': 'application/json', 'buffer': legacy.encode()})
+        page.wait_for_function("document.querySelector('#t-status').textContent.includes('Earlier scoring; original measurements retained')", timeout=15000)
+        assert 'autonomy-loop-v2' in page.locator('#t-seal').inner_text(), 'checking an old seal does not replace the current trial'
         report['summary']['broken']['reached'] = -1
         page.locator('#t-verify').set_input_files({'name': 'tampered.json', 'mimeType': 'application/json', 'buffer': json.dumps(report).encode()})
         page.wait_for_function("document.querySelector('#t-status').textContent.includes('changed after it was sealed')", timeout=15000)

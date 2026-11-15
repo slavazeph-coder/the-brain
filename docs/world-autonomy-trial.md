@@ -71,3 +71,10 @@ under **Space**; like World Builder, a loaded map must be reviewed by the person
 - Replan milliseconds are wall-clock on the device that ran the trial.
 - No real robot, learned policy or safety certification. A simulated pass is a reason to run a physical trial on the
   same route, not a substitute for one.
+## Scoring revision, November 15, 2026
+
+New sealed reports identify `autonomy-loop-v2`. Clearance scoring now considers every truth box, including distant obstacles that are closer than the room walls. An authored 30 by 30 metre map regression reproduces the earlier 9.825 metre result and verifies the corrected 2.825 metre footprint clearance. This checks simulated geometry arithmetic, not real-world metric accuracy.
+
+A blackout requires an enabled front depth camera. Invalid configurations fail before the trial starts. Reports distinguish configured perturbations from applied events, export blackout started/ended flags, and the table derives camera-off duration from actual events and episode length. A scheduled blackout that was never reached is labelled accordingly. Earlier sealed reports retain their original version and bytes; checking their hash does not upgrade their scoring or validate physical accuracy.
+
+The revision passes 19 targeted autonomy contracts and 407 combined World Builder contracts locally. Current-head browser and deployment results are recorded in the pull request. Physical robot, real sensor and independent survey validation remain unexecuted.
