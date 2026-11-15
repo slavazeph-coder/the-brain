@@ -98,6 +98,43 @@ def test_public_domain_default_is_false(client):
     with TestClient(create_app(root=client.app.state.store.root, token=TOKEN)) as c:
         assert c.get('/v1/capabilities', headers=HEADERS).json()['public_domain'] is False
 
+def test_public_domain_makes_consent_optional_for_tenant(client, monkeypatch):
+    """In public domain mode, tenant users (non-operator) can create jobs without consent."""
+    monkeypatch.setenv('WORLD_PUBLIC_DOMAIN', '1')
+    # Create a tenant client (different token → different owner_id)
+    tenant_token = 'test-tenant-token-not-operator-' + 'y' * 32
+    tenant_headers = {'Authorization': 'Bearer ' + tenant_token}
+    # Write a tenant registry so the tenant token is recognized by the auth layer.
+    registry = client.app.state.store.root / 'tenants.json'
+    tenant_hash = hashlib.sha256(tenant_token.encode()).hexdigest()
+    registry.write_text(json.dumps({
+        'schema': 'brainsnn.world.tenants.v1',
+        'tenants': [{'id': 'tenant-1', 'token_sha256': tenant_hash, 'enabled': True, 'engines': ['inspect'], 'limits': {'active_jobs': 50}}],
+    }))
+    with TestClient(create_app(root=client.app.state.store.root, token=TOKEN, tenants=str(registry))) as c:
+        # Upload with tenant headers so the upload is owned by the tenant.
+        photo_data = photo()
+        r = c.post('/v1/uploads', json={'name': 'room.png', 'kind': 'image', 'size': len(photo_data)}, headers=tenant_headers)
+        assert r.status_code == 201
+        uid = r.json()['id']
+        r = c.put(f'/v1/uploads/{uid}?offset=0', content=photo_data, headers=tenant_headers | {'Content-Type': 'application/octet-stream'})
+        assert r.status_code == 200
+        # consent=False should now succeed for tenant in public domain
+        r = c.post('/v1/jobs', json={'engine': 'inspect', 'upload_ids': [uid], 'consent': False}, headers=tenant_headers)
+        assert r.status_code == 201, f'Expected 201, got {r.status_code}: {r.text}'
+        # consent=True should still work
+        r = c.post('/v1/jobs', json={'engine': 'inspect', 'upload_ids': [uid], 'consent': True}, headers=tenant_headers)
+        assert r.status_code == 201, f'Expected 201, got {r.status_code}: {r.text}'
+
+def test_public_domain_does_not_relax_consent_for_operator(client, monkeypatch):
+    """In public domain mode, the operator still requires consent."""
+    monkeypatch.setenv('WORLD_PUBLIC_DOMAIN', '1')
+    with TestClient(create_app(root=client.app.state.store.root, token=TOKEN)) as c:
+        uid = upload(c)
+        # consent=False should still fail for operator in public domain
+        r = c.post('/v1/jobs', json={'engine': 'inspect', 'upload_ids': [uid], 'consent': False}, headers=HEADERS)
+        assert r.status_code == 422, f'Expected 422, got {r.status_code}: {r.text}'
+
 def test_unsigned_artifact_route_is_denied(client):
     assert client.get('/v1/download/invented').status_code==403
 

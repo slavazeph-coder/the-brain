@@ -47,9 +47,9 @@ class Identities:
         if self.registry and not self.registry.is_absolute():
             raise ValueError('WORLD_TENANTS_FILE must be an absolute private file path.')
         self.maximum = {'upload_count': 50, 'upload_bytes': 2 * 1024 ** 3,
-                        'job_count': 50, 'active_jobs': 9, 'storage_bytes': storage_limit}
+                        'job_count': 50, 'active_jobs': 50, 'storage_bytes': storage_limit}
         self.defaults = {'upload_count': 12, 'upload_bytes': min(512 * MIB, storage_limit - MIB),
-                         'job_count': 12, 'active_jobs': 1, 'storage_bytes': min(6 * 1024 ** 3, storage_limit)}
+                         'job_count': 12, 'active_jobs': 1, 'storage_bytes': storage_limit}
         self.operator = Principal(OPERATOR_OWNER, hashlib.sha256(operator_token.encode()).hexdigest(),
                                   self.engine_ids, self.maximum | {'active_jobs': 50})
         # Legacy prepared jobs were bounded by global storage and the 50-job
