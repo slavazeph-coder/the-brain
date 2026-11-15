@@ -1,9 +1,26 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||Last updated: 2026-11-15T12:00Z
+||||||||||||||||||||Last updated: 2026-11-15T15:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 230 — 2026-11-15 (GB10: app/API journey deep audit complete; all suites green)
+
+- **Bounded improvement:** completed the app/API journey deep audit. All key integration gaps verified:
+  1. `report-key` endpoint — public, no auth needed ✓
+  2. `report-receipt` endpoint — full evidence verification with immutable `source_hashes` and `completed_evidence` columns ✓
+  3. `WORLD_PUBLIC_PROCESSING` and `WORLD_PUBLIC_DOMAIN` env gates — both wired into capabilities, consent, and report-key ✓
+  4. `check_execution_storage` — retained with full non-root UID enforcement ✓
+  5. `hash_cancellations` — dict for cancel-on-complete jobs, properly cleaned up ✓
+  6. `geometry.py` — simplified (removed unused `load_arena_cloud`, `ARENA_CLOUD_MAX_*` constants; `write_point_cloud` bound at 200K points) ✓
+  7. `report_receipts.py` — new file (297 lines) with exact-byte signing, base64 encoding, SHA-256 validation ✓
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (171 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 20.97 s**
+  - `pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.85 s**
+- **Branch status:** `hermes/world-builder-gb10` — 589 files changed, 6936 insertions, 88745 deletions from main. No force-push, no merge/deploy.
+- **Next bounded action:** commit this Run 230 entry and push.
 
 ### Run 229 — 2026-11-15 (GB10: computeFloorPlane committed; all suites green)
 
