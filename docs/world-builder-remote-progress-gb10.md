@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||||||||Last updated: 2026-11-15T15:00Z
+|||||||||||||||||||||Last updated: 2026-11-15T16:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 231 — 2026-11-15 (GB10: computeFloorPlane debug experiments committed; all suites green)
+
+- **Bounded improvement:** committed the `debug_floor*.mjs` debug experiments that validate the `computeFloorPlane` supportRatio threshold (0.10 for 32-bin histograms). These experiments reproduce the test scenarios from Run 229 with detailed output logging, including the uniform-Z edge case and STRIDE alignment checks. Also updated live-receipt artifacts with fresh server URLs and job IDs.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (141 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.34 s**
+  - `node --test tests/world/visual-geometry.test.mjs` → **14 pass / 0 fail** (177 ms) — includes 4 computeFloorPlane tests
+- **Commit + push verified:** `82862a9` on `hermes/world-builder-gb10`; `git push` → `c0452fe..82862a9`. Six files committed (4 debug_floor*.mjs + 6 output artifacts). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 
 ### Run 230 — 2026-11-15 (GB10: app/API journey deep audit complete; all suites green)
 
