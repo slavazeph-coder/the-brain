@@ -67,6 +67,10 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [Local camera studio](world-camera-studio-2026-11-15.md): source-bound appearance paths, labelled local videos and explicit generated/metric/robot evidence limits.
 
+→ [Meshlets Lab](meshlets-lab-2026-11-02.md): isolated experimental r187 renderer, source-bound browser receipts and explicit failed strict WebGPU qualification.
+
+→ [Autonomy trial](world-autonomy-trial-2026-11-11.md) — sensors → 4 cm map → A* → MPPI on reviewed maps, crate-drop replanning and a sealed paired break-it-on-purpose trial at /world/autonomy.html; no legged MPC.
+
 → [Surface inspection and MetricTrail trial](world-surface-metrictrail-2026-11-14.md): source-bound local mesh inspection and an isolated pinned long-video research bridge; license, GPU and physical qualification boundaries.
 
 → [Movement source reset](movement-source-reset-2026-11-14.md): shared source-reset cancellation prevents a previous recording's pending acceleration estimate from entering a new phone clip or its exports.
