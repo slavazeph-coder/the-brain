@@ -5,12 +5,16 @@ import math
 from pathlib import Path
 
 MAX_PREVIEW_COORDINATE = 10_000_000  # Same bound as the browser PLY parser.
+MAX_PREVIEW_POINTS = 200_000  # the browser preview budget
+MAX_CLOUD_POINTS = 1_000_000  # a dense cloud bound for the scene compiler (mapanything_apache.MAX_POINTS); ASCII PLY, about 40 MB
 
 
-def write_point_cloud(path: Path, points, colours, *, coordinate_frame: str):
+def write_point_cloud(path: Path, points, colours, *, coordinate_frame: str, max_points: int = MAX_PREVIEW_POINTS):
     import numpy as np
+    if type(max_points) is not int or not 1 <= max_points <= MAX_CLOUD_POINTS:
+        raise ValueError('Invalid point-cloud budget.')
     points, colours = np.asarray(points), np.asarray(colours)
-    if (points.ndim != 2 or points.shape[1:] != (3,) or not 1 <= len(points) <= 200_000
+    if (points.ndim != 2 or points.shape[1:] != (3,) or not 1 <= len(points) <= max_points
             or colours.shape != points.shape or not np.isfinite(points).all()
             or not np.isfinite(colours).all() or np.abs(points).max() > MAX_PREVIEW_COORDINATE
             or np.any(colours < 0) or np.any(colours > 255)):

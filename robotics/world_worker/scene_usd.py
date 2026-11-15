@@ -22,7 +22,7 @@ import sys
 import time
 
 try:
-    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, sparse_colmap
+    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, open_vocab_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import building_handoff
@@ -33,6 +33,7 @@ except ImportError:
     import fit_check
     import measurement_check
     import object_names
+    import open_vocab_names
     import sparse_colmap
     from geometry import load_arena_cloud
 
@@ -354,7 +355,8 @@ def to_arena_cloud(rows, *, coordinate_frame: str = 'right-handed-y-up', source:
 
 
 # ---------- Blender ----------
-def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None, detector_model: Path | None = None, detect=None):
+def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None, detector_model: Path | None = None, detect=None,
+              open_vocab_model: Path | None = None):
     """Suggested names for the separated objects. The vision model names them when the person asked for it with this
     hand-off; an on-worker detector (detector_model, or detect for tests) names them when it is configured and the model
     did not. Returns the names file for the compiler (or None) and what happened. Provider failures keep an unnamed
@@ -381,7 +383,7 @@ def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None
             return path, {'status': 'reused', 'source_job': source.get('job'), 'model_executed': False,
                           'model': payload.get('model'), 'prompt_version': payload.get('prompt_version'),
                           'source_sha256': hashlib.sha256(old_names.read_bytes()).hexdigest()}
-    providers = (['model'] if cloud.get('nameObjects') else []) + (['detector'] if detector_model or detect else [])
+    providers = (['model'] if cloud.get('nameObjects') else []) + (['detector'] if detector_model or detect or open_vocab_model else [])
     attempts = []
     for provider in providers:
         try:
@@ -395,7 +397,11 @@ def name_step(cloud: dict, request: dict, work: Path, *, client=None, views=None
             if provider == 'model' and client is None and not os.environ.get('ANTHROPIC_API_KEY'):
                 raise object_names.NamingSkipped('This worker has no Anthropic API key configured.')
             if provider == 'detector' and detect is None:
-                detect = detector_names.load(detector_model)
+                if open_vocab_model:
+                    # The request may name what to look for (a list of phrases); otherwise the default vocabulary.
+                    detect = open_vocab_names.load(open_vocab_model, cloud.get('vocabulary') or request.get('vocabulary'))
+                else:
+                    detect = detector_names.load(detector_model)
             names, evidence = object_names.name_objects(cloud, Path(source['path']), client=client, views=views,
                                                         detect=detect if provider == 'detector' else None)
             work.mkdir(parents=True, exist_ok=True)
@@ -428,9 +434,92 @@ def compile_scene(cloud: Path, out: Path, *, blender: str, names: Path | None = 
     return scene
 
 
+STAND_INS = Path(__file__).resolve().parent / 'stand_ins.py'
+STAND_IN_CATALOG = Path(__file__).resolve().parent / 'catalog'
+
+
+def place_stand_ins(work: Path, catalog: Path, *, blender: str):
+    """Run stand_ins.py inside Blender on the compiled scene.blend; returns its stand-ins.json report."""
+    command = [blender, '-b', str(work / 'scene.blend'), '--python-exit-code', '1', '--python', str(STAND_INS), '--',
+               '--scene', str(work / 'scene.json'), '--catalog', str(catalog), '--out', str(work)]
+    subprocess.run(command, check=True, stdin=subprocess.DEVNULL, timeout=BLENDER_TIMEOUT)
+    report = json.loads((work / 'stand-ins.json').read_text())
+    if report.get('schema') != 'brainsnn.stand-ins.v1':
+        raise RuntimeError('stand_ins.py did not write a brainsnn.stand-ins.v1 report.')
+    return report
+
+
 def blender_version(blender: str):
     probe = subprocess.run([blender, '--version'], capture_output=True, text=True, timeout=60)
     return probe.stdout.strip().splitlines()[0] if probe.stdout.strip() else None
+
+
+METRIC_PIPELINES = {'mapanything-apache', 'lingbot-map-stream'}
+PHONE_HEIGHT_RANGE_M = (0.9, 1.9)  # a phone held between waist and eye level; outside it the predicted scale deserves doubt
+
+
+def reconstruction_input(request: dict):
+    """The one validated reconstruction hand-off of a request (a GPU adapter's reconstruction.json with its dense
+    point cloud beside it), or None. The GPU host reconstructs; this host compiles. Scale is the model's own estimate."""
+    inputs = request.get('inputs', [])
+    if not any(item.get('kind') == 'reconstruction' for item in inputs):
+        return None
+    if request.get('schema') != 'brainsnn.adapter.v1' or len(inputs) != 1:
+        raise ValueError('Send one reconstruction hand-off on its own.')
+    path = Path(inputs[0]['path'])
+    if not path.is_absolute() or path.is_symlink() or not path.is_file() or path.name != 'reconstruction.json' or path.stat().st_size > 4_000_000:
+        raise ValueError('A reconstruction hand-off is the adapter\'s reconstruction.json, as a regular local file.')
+    evidence = json.loads(path.read_text())
+    cameras = evidence.get('cameras')
+    if (evidence.get('schema') != 'brainsnn.reconstruction.v1' or evidence.get('pipeline') not in METRIC_PIPELINES
+            or evidence.get('coordinate_frame') != 'right-handed-y-up' or evidence.get('metric_verified') is not False
+            or not isinstance(cameras, list) or len(cameras) < 2):
+        raise ValueError('The scene compiler needs a metric multi-view reconstruction from a reviewed GPU adapter.')
+    ply = path.with_name('dense-preview.ply')
+    if ply.is_symlink() or not ply.is_file():
+        raise ValueError('The reconstruction hand-off needs its dense-preview.ply beside reconstruction.json.')
+    rows = read_ply(ply)
+    views = len(cameras)
+    cloud = to_arena_cloud(rows, coordinate_frame='right-handed-y-up', source=f"{evidence['pipeline']} · {views} views · model-metric scale",
+                           metres_per_unit=1.0, measurement={'distance': None, 'span': None, 'method': 'model-predicted metric scale; no measured reference'})
+    cloud['multiView'] = True
+    cloud['scale'] = {'source': 'model-metric-estimate', 'metresPerUnit': 1.0, 'selfReported': False, 'verified': False,
+                      'model': str(evidence.get('model', ''))[:120], 'modelSha256': str(evidence.get('model_sha256', ''))[:64],
+                      'cameraHeightCheck': camera_height_check(cloud, cameras)}
+    return cloud, {'kind': 'reconstruction-handoff', 'pipeline': evidence['pipeline'], 'views': views,
+                   'name': str(inputs[0].get('name', ''))[:160], 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def camera_height_check(cloud: dict, cameras: list):
+    """How high the cameras sit above the estimated floor, in the hand-off frame: the one scale sanity check a walkthrough
+    carries with it. A phone held at chest height is about 1.2–1.6 m up; a predicted scale that puts it at 0.4 m or 3 m is
+    wrong before any tape measure is involved. A check, not a verification."""
+    floor = cloud.get('floorEstimate')
+    M = cloud.get('fromSource')
+    if not floor or not M or 'y' not in floor:
+        return {'status': 'no-floor', 'note': 'No confident floor; the camera height cannot be read.'}
+    heights = []
+    for camera in cameras:
+        pose = camera.get('camera_to_world_y_up')
+        if not isinstance(pose, list) or len(pose) != 4 or any(len(row) != 4 for row in pose):
+            continue
+        x, y, z = (float(pose[i][3]) for i in range(3))
+        if not all(math.isfinite(v) for v in (x, y, z)):
+            continue
+        hx = M[0][0] * x + M[0][1] * y + M[0][2] * z + M[0][3]
+        hy = M[1][0] * x + M[1][1] * y + M[1][2] * z + M[1][3]
+        hz = M[2][0] * x + M[2][1] * y + M[2][2] * z + M[2][3]
+        heights.append(hy - float(floor['y']))
+    if len(heights) < 2:
+        return {'status': 'no-cameras', 'note': 'Too few camera poses to read a height.'}
+    heights.sort()
+    median = heights[len(heights) // 2]
+    lo, hi = PHONE_HEIGHT_RANGE_M
+    plausible = lo <= median <= hi
+    return {'status': 'plausible' if plausible else 'implausible', 'medianM': round(median, 3), 'minM': round(heights[0], 3),
+            'maxM': round(heights[-1], 3), 'cameras': len(heights), 'expectedRangeM': [lo, hi],
+            'note': ('The cameras sit where a hand-held phone would. The predicted scale passes its one free sanity check; it is still unverified against a measurement.'
+                     if plausible else 'The cameras do not sit where a hand-held phone would. Treat every dimension as suspect until one distance is measured.')}
 
 
 def handoff_input(request: dict):
@@ -451,14 +540,15 @@ def handoff_input(request: dict):
                    'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def run(request: dict, *, blender: str, naming_client=None, naming_views=None, detector_model: Path | None = None, naming_detect=None):
+def run(request: dict, *, blender: str, naming_client=None, naming_views=None, detector_model: Path | None = None, naming_detect=None,
+        open_vocab_model: Path | None = None):
     if not SCENE_COMPILER.is_file():
         raise RuntimeError(f'Scene compiler not found at {SCENE_COMPILER}.')
     if not Path(blender).is_absolute() or not Path(blender).is_file():
         raise RuntimeError('Blender must be an existing absolute path.')
     started = time.monotonic()
     out = Path(request['output_dir']).resolve()
-    handoff = handoff_input(request)
+    handoff = reconstruction_input(request) or handoff_input(request)
     if handoff:
         cloud, source = handoff
         out.mkdir(parents=True, exist_ok=True)
@@ -474,7 +564,8 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     (out / 'arena-cloud.json').write_text(json.dumps(cloud, allow_nan=False))
     # Blender's own files (scene.blend) stay outside the published output, like colmap-work.
     work = out.parent / 'scene-work'
-    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect)
+    names, naming = name_step(cloud, request, work, client=naming_client, views=naming_views, detector_model=detector_model, detect=naming_detect,
+                              open_vocab_model=open_vocab_model)
     scene = compile_scene(out / 'arena-cloud.json', work, blender=blender, names=names)
     if cloud.get('bimReview') and not scene.get('bimReview'):
         raise RuntimeError('The scene compiler did not apply the supplied BIM review. Update the complete worker checkout.')
@@ -490,6 +581,18 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  if (cad.get(key) or {}).get('written')]
     for name in cad_files:
         shutil.copyfile(work / name, out / name)
+    # Stand-ins: real-size licensed models where named objects stand (metric scenes with a catalog only). Never fatal.
+    stand_in_files, stand_ins = [], {'skipped': 'No named object, or no catalog.'}
+    catalog = STAND_IN_CATALOG if STAND_IN_CATALOG.is_dir() and (STAND_IN_CATALOG / 'catalog.json').is_file() else None
+    if names and cloud['units'] == 'm' and catalog:
+        try:
+            stand_ins = place_stand_ins(work, catalog, blender=blender)
+            if stand_ins.get('written'):
+                for name in ['scene-stand-ins.glb', 'scene-stand-ins.usda']:
+                    if (work / name).is_file() and (work / name).stat().st_size: shutil.copyfile(work / name, out / name); stand_in_files.append(name)
+            shutil.copyfile(work / 'stand-ins.json', out / 'stand-ins.json'); stand_in_files.append('stand-ins.json')
+        except Exception as error:
+            stand_ins = {'failed': f'{type(error).__name__}: {str(error)[:200]}'}
     # The fit check: how closely the model follows the points, as numbers and as a heatmap of every point.
     try:
         fit = fit_check.export(scene, cloud['points'], work)
@@ -606,11 +709,13 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 + (['Review the suggested object names before relying on them'] if names else []),
                 'warnings': (reconstruction['warnings'] if reconstruction else [])
                 + ['Unseen floor cells are exported as a tagged unknown volume, not free space.'] + measured + named}
+    evidence['stand_ins'] = {k: v for k, v in stand_ins.items() if k != 'placed'} | ({'placed': len(stand_ins['placed'])} if 'placed' in stand_ins else {})
     (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     artifacts = [{'name': 'scene.glb', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': cloud['units']},
                  *([{'name': 'scene.usda', 'kind': 'visual', 'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm'}] if usd else []),
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
+                 *({'name': name, 'kind': 'evidence' if name.endswith('.json') else 'visual', **({'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm', 'provenance': 'stand-in models, not scanned geometry'} if not name.endswith('.json') else {})} for name in stand_in_files),
                  *building_files,
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
@@ -629,11 +734,12 @@ def main():
     parser.add_argument('--input-manifest', required=True)
     parser.add_argument('--blender', default=shutil.which('blender') or '/usr/bin/blender')
     parser.add_argument('--detector-model', type=Path, help='pinned EfficientDet-Lite2 .tflite; names objects on the worker when the vision model does not')
+    parser.add_argument('--open-vocab-model', type=Path, help='local OWLv2 snapshot directory; names objects from a per-site vocabulary (takes precedence over --detector-model)')
     args = parser.parse_args()
     request = Path(args.input_manifest)
     if request.stat().st_size > 65536:
         raise ValueError('Input manifest is too large.')
-    evidence = run(json.loads(request.read_text()), blender=args.blender, detector_model=args.detector_model)
+    evidence = run(json.loads(request.read_text()), blender=args.blender, detector_model=args.detector_model, open_vocab_model=args.open_vocab_model)
     reconstruction = evidence['reconstruction'] or {}
     print('SCENE_USD_OK', json.dumps({'input': evidence['input']['kind'], 'points': reconstruction.get('reconstructed_points', evidence['handoff']['points']),
                                       'registered': (reconstruction.get('capture') or {}).get('registered_images'),

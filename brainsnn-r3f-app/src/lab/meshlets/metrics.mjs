@@ -36,6 +36,8 @@ export function receipt({mode, source, counts, samples, viewport, compileMs, set
   return { schema:'brainsnn.meshlets-benchmark.v1', three:'0.187.0', mode, source, counts, runtime,
     viewport, compileMs, settings, interrupted, cadence:frameSummary(samples),frameIntervalsMs:[...samples],
     timingScope:'requestAnimationFrame intervals during a fixed-camera foreground run; not GPU execution timestamps',
+    qualification:{denseWebGpuRelease:'unqualified',historicalStrictGpuResult:'failed',
+      releasePhysicalGpuQualification:'not-executed',note:'This browser receipt does not establish GB10, RTX 4090 or physical-phone qualification.'},
     physicalAccuracyValidated:false, simulationValidated:false,
     caveats:['Repeated procedural geometry is not a unique scanned scene.',
       'Meshlet counters include padded triangles and exclude regular-pipeline draws.',

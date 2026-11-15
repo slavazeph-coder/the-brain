@@ -8,7 +8,7 @@
 torch==2.8.0
 torchvision==0.23.0
 numpy==2.4.6
-Pillow==12.1.0
+Pillow==13.0.0
 opencv-python-headless==4.14.0.94
 einops==0.8.2
 safetensors==0.8.0

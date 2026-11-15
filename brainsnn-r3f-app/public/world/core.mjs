@@ -4,12 +4,13 @@ const siteCore=globalThis.BrainSNNSiteCore;
 export const SCHEMA = 'brainsnn.world.v1';
 // A five-minute walkthrough is about 0.3 GB at 1080p and 1 GB in 4K, so videos get their own limit. Files stay on the
 // device until uploaded in chunks; none is read into memory whole.
-export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12 });
+export const LIMITS = Object.freeze({ file: 200 * 1024 ** 2, video: 2 * 1024 ** 3, videoSeconds: 300, session: 4 * 1024 ** 3, json: 2 * 1024 ** 2, objects: 128, cells: 6000, sources: 12, fleet: 16 });
 export const ROBOTS = Object.freeze({
   cleaner: { name: 'Cleaning robot', width: 0.58, depth: 0.68, speed: 0.3 },
   vacuum: { name: 'Robot vacuum', width: 0.35, depth: 0.35, speed: 0.3 },
   amr: { name: 'Mobile robot', width: 0.85, depth: 1.0, speed: 0.5 },
   humanoid: { name: 'Humanoid envelope', width: 0.7, depth: 0.6, speed: 0.4 },
+  forklift: { name: 'Compact forklift', width: 1.1, depth: 2.4, speed: 1.2 },
 });
 export const clone = value => JSON.parse(JSON.stringify(value));
 export function numeric(value, min, max, name = 'Value') {
@@ -33,7 +34,18 @@ export function normalizeWorld(input) {
   const provenance = ['authored', 'observed', 'generated'].includes(input.provenance) ? input.provenance : 'observed';
   const floor=input.floor===undefined?undefined:siteCore.normalizeScene({width,depth,floor:input.floor,obstacles:[]}).floor;
   const source=input.geometrySource;
-  return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance,
+  // Optional fleet: named robots with their own start on this floor. A map fact, so it edits under the same review gate.
+  let fleet;
+  if (input.fleet !== undefined) {
+    if (!Array.isArray(input.fleet) || input.fleet.length > LIMITS.fleet) throw new Error(`Use a fleet array with at most ${LIMITS.fleet} entries.`);
+    const seen = new Set();
+    fleet = input.fleet.map((f, i) => {
+      if (!f || typeof f !== 'object' || !ROBOTS[f.robot]) throw new Error(`Fleet entry ${i + 1}: robot must be one of ${Object.keys(ROBOTS).join(', ')}.`);
+      const id = label(f.id, `fleet-${i}`); if (!id || seen.has(id)) throw new Error('Fleet identifiers must be unique.'); seen.add(id);
+      return { id, robot: f.robot, name: label(f.name, ROBOTS[f.robot].name), start: { x: numeric(f.start?.x, 0, width, 'Fleet start X'), z: numeric(f.start?.z, 0, depth, 'Fleet start Z') } };
+    });
+  }
+  return { schema: SCHEMA, name: label(input.name, 'Untitled world'), width, depth, objects, provenance, ...(fleet && fleet.length ? { fleet } : {}),
     ...(floor?{floor}:{}),
     ...(source&&typeof source==='object'?{geometrySource:{kind:label(source.kind),name:label(source.name),warnings:Array.isArray(source.warnings)?source.warnings.slice(0,16).map(v=>label(v)):[]}}:{}),
     scaleReviewed: input.scaleReviewed === true && provenance !== 'generated', mapReviewed: input.mapReviewed === true && provenance !== 'generated',
@@ -95,6 +107,15 @@ function planningGrid(world, robot) {
   const sx = Math.floor(world.start.x / cell), sz = Math.floor(world.start.z / cell), start = sz * nx + sx;
   if (sx >= nx || sz >= nz || !free[start] || blocked(world.start, radius)) throw startBlocked(world, robot, { cell, n, point, blocked, free });
   return { cell, nx, nz, n, radius, padding, blocked, point, free, freeCount, start };
+}
+/** What stops a point from being clear at radius r: the wall, unknown floor, or named objects. Empty when clear.
+ *  The same tests planningGrid uses, itemised, so a route can say why it went where it went. */
+export function blockers(input, p, r) {
+  const world = normalizeWorld(input), out = [];
+  if (p.x < r || p.z < r || p.x > world.width - r || p.z > world.depth - r) out.push({ kind: 'wall' });
+  if (world.floor && !siteCore.pointClear([p.x, p.z], { floor: world.floor, obstacles: [] }, r)) out.push({ kind: 'unknown' });
+  for (const o of world.objects) if (p.x >= o.x - r && p.x <= o.x + o.w + r && p.z >= o.z - r && p.z <= o.z + o.d + r) out.push({ kind: 'object', id: o.id, name: o.name });
+  return out;
 }
 export function planWorld(input, robotInput) {
   const world = normalizeWorld(input), error = planningGate(world);
@@ -206,10 +227,11 @@ export function usdScene(input) {
   const cube = (id, x, y, z, sx, sy, sz) => `    def Cube "${id}" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {\n        double size = 1\n        double3 xformOp:translate = (${x}, ${y}, ${z})\n        double3 xformOp:scale = (${sx}, ${sy}, ${sz})\n        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]\n    }`;
   return `#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n# Reviewed static proxy geometry, not a qualified robotics simulation.\ndef Xform "World" {\n${cube('Floor', w.width / 2, -0.05, w.depth / 2, w.width, 0.1, w.depth)}\n${w.objects.map((o, i) => cube(`Obstacle_${i}`, o.x + o.w / 2, Math.max(.02, o.h) / 2, o.z + o.d / 2, o.w, Math.max(.02, o.h), o.d)).join('\n')}\n}\n`;
 }
-export async function proofPack(world, result, assumptions, sources = [], events = [], observations = [], geometryEvidence = null) {
+export async function proofPack(world, result, assumptions, sources = [], events = [], observations = [], geometryEvidence = null, extras = {}) {
   const normalizedWorld = world ? normalizeWorld(world) : null;
   const body = { schema: 'brainsnn.proof.v1', createdAt: new Date().toISOString(), world: normalizedWorld, result: result ? clone(result) : null, estimate: result ? estimate(result, assumptions) : null, sources: sources.map(s => ({ name: label(s.name), size: s.size, kind: s.kind, ...(s.derivation ? {derivation: clone(s.derivation)} : {}) })), events: clone(events.slice(-200)), ...(observations.length?{observations:clone(observations)}:{}), claim: 'Planning preview; no real robot or learned policy executed.', signature: null };
   if(geometryEvidence)body.geometryEvidence=await (await import('./measurement-evidence.mjs')).exportGeometryEvidence(geometryEvidence,normalizedWorld);
+  if (extras && extras.routeReceipt && typeof extras.routeReceipt === 'object') body.routeReceipt = clone(extras.routeReceipt);  // why the routed goal went where it went, and who else fits; hashed with the rest
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
   return { ...body, integrity: { algorithm: 'SHA-256', scope: 'JSON.stringify(body) before integrity property', value: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join(''), authenticatesAuthor: false } };
 }

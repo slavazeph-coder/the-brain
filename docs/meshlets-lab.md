@@ -84,8 +84,10 @@ control using shared approximately 24k-triangle spheres lost their WebGPU device
 on SwiftShader, with `Device was destroyed` and cancelled `popErrorScope` work.
 The native controls run independently of our app. This does not identify the
 ultimate driver/library cause and does not prove the app would pass on hardware.
-The strict GPU qualification remains failed; do not release or market this lab as
-a validated dense-mesh renderer from the WebGL passes or tiny control alone.
+The strict GPU qualification remains failed. This release is a gated experiment,
+with a permanent visible unqualified notice and capped WebGL as its default.
+Do not market it as a validated dense-mesh renderer from WebGL passes or the tiny
+control alone. Every downloaded receipt retains the release qualification limits.
 
 Renderer cleanup now awaits r187's asynchronous disposal. The default CI uses
 software Vulkan; `MESHLETS_GPU_BACKEND=native` requests the native adapter instead.
@@ -99,9 +101,9 @@ The conservative no-multisampling/no-occlusion control at `ce6cf54` still lost i
 device after six frames, before the required eight-frame control checkpoint:
 [strict run 41558875856](https://github.com/slavazeph-coder/the-brain/actions/runs/41558875856).
 Its transient 310 clusters / 19,840 padded triangles are not a stable benchmark.
-The draft remains blocked on GPU qualification, including sustained real-scene
-rendering and the matched standard comparison. WebGL passes establish fallback
-behavior only. Defaults keep optional multisampling and occlusion off in WebGPU.
+Promotion to a qualified dense renderer remains blocked on GPU qualification,
+including sustained real-scene rendering and the matched standard comparison.
+WebGL passes establish fallback behavior only. Defaults keep optional multisampling and occlusion off in WebGPU.
 
 ## Next hardware experiment
 
@@ -122,3 +124,24 @@ Primary sources checked November 2, 2026:
 - [Pipeline and restrictions](https://github.com/mrdoob/three.js/blob/r187/examples/jsm/pipelines/MeshletDrawingPipeline.js)
 - [64-triangle meshlet utility and LOD generation](https://github.com/mrdoob/three.js/blob/r187/examples/jsm/utils/MeshletGeometryUtils.js)
 - [Chrome headless WebGPU testing](https://developer.chrome.com/blog/supercharge-web-ai-testing)
+
+## Gated experiment release, November 15
+
+The website can host this isolated lab without replacing World Builder's renderer.
+It starts in capped WebGL with 25 authored objects, and its persistent notice and
+JSON receipts explicitly retain the failed historical strict GPU result and the
+absence of a released physical-GPU qualification. Selecting a WebGPU mode does not
+promote that result. Main r182 and the lab's pinned r187 alias remain separate.
+
+Pull-request CI exercises the **WebGL fallback only**, local GLB bytes and receipts.
+Its success is not a GPU pass. The separate manual `strict_gpu` workflow input
+runs the original strict control and matched-load WebGPU checks; it does not ignore
+failures. To reproduce the fallback-only check locally:
+
+```sh
+MESHLETS_TEST_SCOPE=webgl node scripts/test-meshlets-browser.mjs
+```
+
+Without that variable the runner still requires the strict WebGPU checks. A native
+control whose renderer selects WebGL now reports that exact failure before touching
+an absent GPUDevice. Hardware testing remains unexecuted in this integration.

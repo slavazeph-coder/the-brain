@@ -11,6 +11,11 @@ the product export panel, source binding and diagnostic versus measured-demo lim
 requirements, corrected-job archive and fresh rendering commands. `regenerate_reference.py` fails closed when source
 hashes, scale or corrected floor evidence are missing. Existing film filenames in this README are examples.
 
+**Before choosing a reconstruction engine for new demo claims:** use the
+[repeated measured qualification runner](../../docs/world-measured-qualification.md)
+to freeze tape/laser readings, compare identical frames and retain failed trials.
+Its camera-landmark checks do not qualify the final BIM or robot geometry.
+
 | Script | What it records |
 |---|---|
 | `record_scan2model.py` | Scan to model, about 2 minutes at 1920 × 1080: test walkthrough → CPU reconstruction → illustrative entered distance → observed clusters as scaled boxes (with suggested names, if offered) → planar robot route → `scene.ifc` opened in a web-ifc viewer. Touching objects can remain grouped; the fixture has no independent physical readings. |
@@ -140,6 +145,10 @@ TITLE='One photo → 3D in metres' SUBTITLE='Estimated by a depth model · local
 ```
 
 ## Honesty rules the recordings follow
+
+Before choosing a new reconstruction engine, use the [same-frame COLMAP/VGGT comparison](../../docs/world-reconstruction-comparison.md).
+It includes a local pixel annotation worksheet, a frozen calibration/withheld split, bounded engine runs and
+source-bound JSON/Markdown reports. Its camera-landmark comparisons do not validate the resulting BIM or robot routes.
 
 Component-authoring software qualification is separate from footage. `component_fixture.py` generates an explicitly
 authored room for native compiler/edit tests; `verify_component_bundle.py` checks a rebuilt bundle against its saved

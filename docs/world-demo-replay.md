@@ -131,3 +131,30 @@ and partial runs remain separate historical evidence.
 The remaining input for the polished measured BIM demo is a sufficiently complete
 capture with an entered measured calibration span and withheld physical readings,
 followed by reviewed scene exports. Rendering cannot repair absent geometry.
+
+## Source-frame audit in World Builder (November 2 follow-up)
+
+Opening a completed reconstruction with a full saved camera ledger now shows a
+sample-order registration timeline (cyan = registered pose, red = not registered).
+The three longest missing intervals are displayed and the owner can download
+`brainsnn-frame-audit.csv` and `brainsnn-frame-audit.json` from Capture.
+The export is tied to the reconstruction's own frame and camera lists and refuses
+duplicate, missing, inconsistent or contradictory image names or counts.
+
+The CSV deliberately leaves blur, feature-match counts, per-frame reprojection
+errors, rejection explanations and original frame timestamps blank unless the
+original evidence actually recorded them. The timeline depicts sampled-frame
+order, not the physical footage timeline or spatial coverage. No new 3D surface,
+scale calibration, pose estimate or robot claim is created by this UI.
+
+For the recovered `IMG_9824.mp4` November 2 diagnostic, the saved frame ledger
+contains 50 registered images of 140 sampled, with unregistered runs 27–46,
+50–77 and 101–139 (zero-indexed). These are processing recovery targets,
+not evidence of missing geometry's exact dimensions. A separate image-health
+audit may identify retry candidates, but its ORB and blur signals must not be
+mislabelled as COLMAP's actual rejection causes.
+
+Suggested next engine work: preserve per-frame extraction PTS when possible,
+save frame-health and match statistics at processing time, retry disconnected
+camera components with verified correspondences, and regenerate geometry only
+from validated poses. Do not auto-enable calibrated BIM or robot navigation.

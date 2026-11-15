@@ -14,6 +14,9 @@ it('meshlets cadence measures intervals and does not invent a GPU benchmark',()=
   const r=receipt({mode:'webgl',source:{kind:'fixture'},counts:{},samples:[20,30],viewport:{},settings:{}});
   assert.equal(r.cadence.fps,40);assert.deepEqual(r.frameIntervalsMs,[20,30]);
   assert.equal(r.physicalAccuracyValidated,false);assert.match(r.timingScope,/not GPU execution/);
+  assert.equal(r.qualification.denseWebGpuRelease,'unqualified');
+  assert.equal(r.qualification.historicalStrictGpuResult,'failed');
+  assert.equal(r.qualification.releasePhysicalGpuQualification,'not-executed');
 });
 it('local GLB preflight blocks remote resources before the loader can fetch',()=>{
   assert.equal(inspectGlb(glb({asset:{version:'2.0'}})).asset.version,'2.0');

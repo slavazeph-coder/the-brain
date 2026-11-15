@@ -105,6 +105,9 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     orbit(on=!auto){auto=!!on;sway=null;schedule();return auto;},
     sway(degrees=25,ms=4000){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return false;sway={start:performance.now(),base:yaw,amp:degrees*Math.PI/180,ms};auto=true;schedule();return true;},
     walk(){walking=!walking;if(walking){pitch=0;distance=Math.min(distance,radius*.5);sortDirty=true;schedule();}else fit();return walking;},
+    /** Look from a point along a direction (a capture camera): the eye lands exactly there, orbit controls keep working around a target just ahead. */
+    lookFrom(eye,forward,{ahead=null}={}){if(!points.length||!Array.isArray(eye)||!Array.isArray(forward))return false;const n=Math.hypot(...forward);if(!(n>1e-6)||eye.some(v=>!Number.isFinite(v)))return false;const f=forward.map(v=>v/n),d=Number.isFinite(ahead)&&ahead>0?ahead:Math.max(radius*.02,.05);
+      walking=true;sway=null;auto=false;distance=d;target=[eye[0]+f[0]*d,eye[1]+f[1]*d,eye[2]+f[2]*d];yaw=Math.atan2(-f[0],-f[2]);pitch=Math.asin(Math.max(-1,Math.min(1,-f[1])));sortDirty=true;schedule();return true;},
     snapshot(){return canvas.toDataURL('image/png');},
     /** Index (in setPoints order) of the point under a client position, or -1 if none is within `tolerance` CSS pixels.
      * Of the points within 4 px of the nearest one, the closest to the camera wins: the surface you see, not one behind it. */

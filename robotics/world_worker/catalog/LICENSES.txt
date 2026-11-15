@@ -1,0 +1,4 @@
+golf-cart.glb, tire-stack.glb, car-tire.glb
+Source: https://grab3d.com/models/vehicles/<name>/
+License: CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/) per each model page JSON-LD
+Fetched: 2026-11-03

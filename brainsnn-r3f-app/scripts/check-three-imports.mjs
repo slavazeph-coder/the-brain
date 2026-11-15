@@ -33,7 +33,9 @@ const THREE_IMPORTERS = new Set([
   'src/arena/site-renderer.js',
   // Separate page bundle; the homepage/Arcade only links to this task.
   'src/arena/deformable-renderer.js',
-  // Optional standalone lab, bundled with its own pinned r187 alias only.
+  // Separate public bundle, imported only when the operational-twin inspector opens.
+  'src/world/twin-renderer.js',
+  // Optional standalone lab with its own pinned r187 alias.
   'src/lab/meshlets/renderer.js',
 ]);
 

@@ -180,7 +180,8 @@ source artifact/transform before loading the shared camera-frame ledger.
     if any(not isinstance(name, str) or not name or Path(name).name != name or len(name) > 160 for name in (scene_name, cloud_name)):
         raise ValueError('Source JSON names must be bounded basenames.')
     points = cloud['points']; floor_y = sc.floor_plane(points, cloud.get('floorEstimate'))
-    margin, walls, _rest, objects = sc.analyse(points, floor_y, True)
+    margin, walls, _rest, objects = sc.analyse(points, floor_y, True, dense=sc.measured_scan(cloud),
+                                             face_cell=sc.wall_face_cell(cloud))
     wall_fits = {f'wall_{index + 1}': fit for index, fit in enumerate(walls)}
     object_fits = {f'object_{index + 1}': fit for index, fit in enumerate(objects)}
     floor_members = [index for index, point in enumerate(points) if abs(point[1] - floor_y) <= margin]

@@ -8,6 +8,8 @@ import { chromium } from '@playwright/test';
 import { build } from 'esbuild';
 import { inspectGlb } from '../src/lab/meshlets/metrics.mjs';
 const port=Number(process.env.MESHLETS_TEST_PORT||4197),base=`http://127.0.0.1:${port}`;
+const scope=process.env.MESHLETS_TEST_SCOPE||'all';
+assert(['all','webgl'].includes(scope),'MESHLETS_TEST_SCOPE must be all or webgl');
 const nativeGpu=process.env.MESHLETS_GPU_BACKEND==='native';
 const gpuRun=nativeGpu?'native-adapter':'software-vulkan';
 const browserExecutable=process.env.MESHLETS_CHROMIUM_PATH;
@@ -26,7 +28,9 @@ await build({stdin:{contents:`
   const geometry=new T.SphereGeometry(1,128,96),material=new T.MeshStandardNodeMaterial({color:0x68eaff});
   for(let i=0;i<25;i++){const mesh=new T.Mesh(geometry,material);mesh.position.set((i%5-2)*3,0,(Math.floor(i/5)-2)*3);group.add(mesh);}
   s.add(group);s.add(new T.HemisphereLight(0xffffff,0x222244,2));
-  window.control={pipeline:p,renderer:r,error:null,frames:0};r.backend.device.lost.then(i=>window.control.error=i.reason+': '+i.message);
+  window.control={pipeline:p,renderer:r,error:null,frames:0};
+  if(!r.backend.isWebGPUBackend||!r.backend.device){window.control.error='Native WebGPU unavailable: renderer selected WebGL fallback';throw new Error(window.control.error);}
+  r.backend.device.lost.then(i=>window.control.error=i.reason+': '+i.message);
   r.backend.device.addEventListener('uncapturederror',e=>window.control.error=e.error.message);
   await r.compileAsync(s,c);r.setAnimationLoop(()=>{r.render(s,c);window.control.frames++;});
 `,resolveDir:process.cwd(),sourcefile:'authored-meshlet-control.js'},alias:{three:'three-meshlets'},
@@ -73,7 +77,10 @@ try {
     const page=await browser.newPage({viewport:{width,height},acceptDownloads:true});const errors=[],external=[];
     activePage=page;
     page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base)&&!r.url().startsWith('blob:')&&!r.url().startsWith('data:'))external.push(r.url());});
-    await page.goto(base+'/lab/meshlets/');await page.selectOption('#mode','webgl');await page.selectOption('#count','25');
+    await page.goto(base+'/lab/meshlets/');
+    assert.equal(await page.locator('#mode').inputValue(),'webgl');
+    assert.match(await page.locator('#qualification').innerText(),/Dense WebGPU qualification has not passed/);
+    await page.selectOption('#mode','webgl');await page.selectOption('#count','25');
     await page.click('#start');await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGL · CAPPED FALLBACK'&&!document.getElementById('benchmark').disabled,null,{timeout:60000});
     assert.equal(await page.locator('canvas').count(),1);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -86,6 +93,7 @@ try {
       assert.equal(r.settings.multisampling,true);assert.equal(r.settings.lodPixels,null);
       assert.equal(r.settings.occlusion,false);assert.equal(r.settings.debugClusters,false);
       assert.deepEqual(r.runtime,manifest,'Receipt retains the exact runtime asset hashes.');
+      assert.equal(r.qualification.denseWebGpuRelease,'unqualified');
       const bytes=glb();inspectGlb(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));
       await page.setInputFiles('#file',{name:'authored-wall.glb',mimeType:'model/gltf-binary',buffer:bytes});
       await page.waitForFunction(()=>document.getElementById('source-label').textContent.startsWith('YOUR GLB')&&!document.getElementById('benchmark').disabled,null,{timeout:60000});
@@ -96,9 +104,13 @@ try {
     console.log(`WebGL ${width}: actual canvas, responsive controls, no external requests passed`);
   }
   const fallback=await browser.newPage();await fallback.addInitScript(()=>Object.defineProperty(navigator,'gpu',{value:undefined}));
-  await fallback.goto(base+'/lab/meshlets/');await fallback.selectOption('#count','25');await fallback.click('#start');
+  await fallback.goto(base+'/lab/meshlets/');await fallback.selectOption('#mode','meshlets');await fallback.selectOption('#count','25');await fallback.click('#start');
   await fallback.waitForFunction(()=>document.getElementById('mode-label').textContent==='WEBGL · CAPPED FALLBACK',null,{timeout:60000});
   await fallback.close();await browser.close();
+  if(scope==='webgl'){
+    await writeFile(new URL('qualification.json',out),JSON.stringify({scope:'webgl-fallback-only',webglPassed:true,strictGpuExecuted:false,denseWebGpuQualified:false},null,2));
+    console.log('WebGL fallback checks passed. Strict GPU checks were not executed; dense WebGPU remains unqualified.');
+  } else {
   const gpu=await chromium.launch({channel:browserExecutable?undefined:'chromium',executablePath:browserExecutable,dumpio:true,args:[
     '--enable-unsafe-webgpu','--enable-unsafe-swiftshader','--enable-features=Vulkan','--use-angle=vulkan',
     nativeGpu?'--use-vulkan=native':'--use-vulkan=swiftshader',
@@ -109,6 +121,7 @@ try {
   control.on('pageerror',error=>console.log('GPU_CONTROL_ERROR '+error.message));
   await control.goto(base+'/lab/meshlets/runtime/control.html');
   const adapterInfo=await control.evaluate(async()=>{
+    if(!navigator.gpu)return null;
     const adapter=await navigator.gpu.requestAdapter({featureLevel:'compatibility'});
     if(!adapter)return null;
     return {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,
@@ -129,7 +142,7 @@ try {
     GPUDevice.prototype.destroy=function(...args){console.log('DEVICE_DESTROY_CALL '+new Error().stack);return destroy.apply(this,args);};
   });
   activePage=page;
-  await page.goto(base+'/lab/meshlets/');await page.selectOption('#count','25');await page.click('#start');
+  await page.goto(base+'/lab/meshlets/');await page.selectOption('#mode','meshlets');await page.selectOption('#count','25');await page.click('#start');
   await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='NOT RUNNING'||(document.getElementById('mode-label').textContent==='WEBGPU · MESHLETS'&&!document.getElementById('benchmark').disabled),null,{timeout:120000});
   assert.equal(await page.locator('#mode-label').textContent(),'WEBGPU · MESHLETS',await page.locator('#status').textContent());
   await page.waitForFunction(()=>document.getElementById('mode-label').textContent==='NOT RUNNING'||Number(document.getElementById('clusters').textContent.replaceAll(',',''))>0,null,{timeout:120000});
@@ -143,6 +156,7 @@ try {
   assert.deepEqual(standard.source,meshlets.source);assert.deepEqual(standard.settings.camera,meshlets.settings.camera);
   assert.deepEqual(errors,[]);await page.close();await gpu.close();
   console.log('Actual WebGPU meshlets, cluster debug and matched-load standard run passed on '+gpuRun+'; adapter-specific qualification only.');
+  }
 } catch(error) {
   if(activePage&&!activePage.isClosed()) {
     await activePage.screenshot({path:new URL('failure.png',out).pathname,fullPage:true}).catch(()=>{});

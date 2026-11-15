@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet Learning Lab | BrainSNN</title>
+<meta name="description" content="Transfer reviewed robot movement intent to a different robot with map clearance checks. This is a synthetic simulation, not trained policy or robot deployment.">
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Arial,sans-serif;background:#080e1b;color:#e9f2ff}*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at 50% -22%,#203c5e 0%,transparent 65%),#080e1b}a{color:#5be1ef}
+header{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:20px max(24px,calc((100vw - 1180px)/2));border-bottom:1px solid #223850}header a{text-decoration:none}header strong{font-size:21px;letter-spacing:-1px}header nav{display:flex;gap:18px;flex-wrap:wrap}header nav a{font-size:14px;color:#b2c6d8}
+main{max-width:1220px;margin:0 auto;padding:38px 24px 80px}.eyebrow{color:#56e7ea;text-transform:uppercase;font-size:12px;letter-spacing:.16em;font-weight:700}h1{font-size:clamp(31px,4vw,51px);line-height:1.07;letter-spacing:-.045em;margin:10px 0 15px}p{color:#b0c2d6;line-height:1.55}main>p{max-width:720px}
+.columns{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(310px,1fr);gap:18px;margin-top:27px}.card{background:#101d30;border:1px solid #304a63;border-radius:18px;padding:20px;min-width:0}.card h2{font-size:20px;margin:0 0 7px}.card small{color:#91a9c3}
+#map{display:block;width:100%;max-width:800px;height:auto;border-radius:10px;background:#0c1526;margin:14px auto}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#b0c2d6}.legend span:before{content:"";display:inline-block;width:10px;height:10px;margin-right:5px;border-radius:50%;background:var(--c)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}button{border:1px solid #426177;border-radius:12px;color:#eefaff;background:#1c314c;padding:12px 15px;font:inherit;font-weight:600;cursor:pointer}button.primary{background:#55d9eb;border-color:#55d9eb;color:#081525}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible{outline:3px solid #f4be73;outline-offset:3px}
+dl{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}dl div{padding:13px;background:#16263c;border-radius:12px}dt{font-size:12px;color:#96acc4}dd{font-size:21px;color:#f0f6ff;margin:5px 0 0;font-weight:700}
+.step{display:flex;gap:14px;align-items:baseline;padding:15px 0;border-top:1px solid #293f54}.step strong{min-width:2em;color:#55d9eb}.step b{display:block;font-size:15px}.step p{margin:4px 0;font-size:13px}.footnote{border:1px solid #80633f;background:#251f20;color:#f1d09b;border-radius:12px;padding:12px 14px;font-size:13px}#status{min-height:56px;color:#a6e4e9}footer{border-top:1px solid #263d50;padding:26px 24px;text-align:center;color:#7c92ae;font-size:12px}@media(max-width:850px){.columns{grid-template-columns:1fr}header{padding:18px 20px}header nav{gap:9px}main{padding:22px 16px 50px}.card{padding:14px}dl{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header><a href="/" aria-label="BrainSNN home"><strong>◈ BrainSNN</strong></a><nav aria-label="Navigation"><a href="/world/">World Builder</a><a href="/arena/">Robot Arena</a><a href="/world/fleet-learning.html" aria-current="page">Fleet Learning Lab</a><a href="/world/fleet-evaluation.html">Evaluate 24 tasks</a></nav></header>
+<main>
+<div class="eyebrow">World Builder / Shared experience</div>
+<h1>One robot learns the route.<br>Another learns from the attempt.</h1>
+<p>Record a reviewed movement episode, retrieve its task intent and replan for a robot with a different footprint. Test the limits in an authored virtual site before considering real-world trials.</p>
+<section class="columns">
+<div class="card"><h2>Motion transfer sandbox</h2><small>26 × 18 authored cells · 0.4 m per cell · not a measured or surveyed site</small>
+<canvas id="map" width="800" height="560" role="img" aria-label="Synthetic robot map showing reviewed teacher path and follower detour. Occupied cells are grey and unknown cells are purple."></canvas>
+<div class="legend"><span style="--c:#5ce6e9">Teacher A</span><span style="--c:#b78cff">Follower B</span><span style="--c:#77879a">Obstacle</span><span style="--c:#aa7ab4">Unknown</span></div>
+<div class="controls"><button id="record" class="primary">1. Record teacher</button><button id="transfer" disabled>2. Transfer to follower</button><button id="blocked" disabled>Test copied path</button><button id="export" disabled>Export evidence JSON</button><button id="reset">Reset</button></div>
+<p id="status" aria-live="polite">Start by recording an authored simulation of Robot A.</p>
+</div>
+<div class="card"><h2>Experience and safety gates</h2>
+<dl><div><dt>Teacher footprint radius</dt><dd>0.20 m</dd></div><div><dt>Follower footprint radius</dt><dd>0.54 m</dd></div><div><dt>Teacher route</dt><dd id="teacher-distance">Not recorded</dd></div><div><dt>Follower route</dt><dd id="follower-distance">Not planned</dd></div></dl>
+<div class="step"><strong>01</strong><div><b>Capture</b><p>Log path, robot profile, scene fingerprint and task outcome.</p></div></div>
+<div class="step"><strong>02</strong><div><b>Approve</b><p>Only successful episodes with reviewed outcomes enter shared memory.</p></div></div>
+<div class="step"><strong>03</strong><div><b>Adapt</b><p>Use the source corridor as a planning preference. Never copy joint or motor commands.</p></div></div>
+<div class="step"><strong>04</strong><div><b>Validate</b><p>Reject collisions and unknown map areas in a static simulated footprint check.</p></div></div>
+<p class="footnote">Simulation prototype only. No VLA training, fleet policy update, physical robot execution, dynamic avoidance or independently measured spatial accuracy.</p>
+</div>
+</section>
+</main><footer>BrainSNN · Authored prototype · Physical validation requires measured geometry, a robot-specific controller and supervised trials.</footer>
+<script type="module">
+const W=26,H=18,S=0.4;
+const grid=Array.from({length:H},()=>Array(W).fill('.'));
+for(let x=0;x<W;x++){grid[0][x]='#';grid[H-1][x]='#'}
+for(let y=0;y<H;y++){grid[y][0]='#';grid[y][W-1]='#'}
+for(let y=5;y<15;y++)if(y!==9&&y!==10)for(let x of [12,13])grid[y][x]='#';
+for(let y=13;y<16;y++)for(let x=18;x<21;x++)grid[y][x]='#';
+for(let y of [15,16])for(let x of [22,23])grid[y][x]='?';
+const rows=grid.map(row=>row.join(''));
+const canvas=document.querySelector('#map'),ctx=canvas.getContext('2d');
+const teacherRadius=.2,followerRadius=.54,start=[3,10],goal=[22,10];
+let teacher=null,follower=null,shownTeacher=0,shownFollower=0,timer=null;
+const pos=([x,y])=>[47+(x+.5)*27,33+(y+.5)*27];
+const key=p=>p.join(',');
+function clear(x,y,r){if(x<0||y<0||x>=W||y>=H)return false;
+ const cx=(x+.5)*S,cy=(y+.5)*S;
+ if(Math.min(cx,cy,W*S-cx,H*S-cy)<r)return false;
+ for(let yy=Math.max(0,y-Math.ceil(r/S)-2);yy<=Math.min(H-1,y+Math.ceil(r/S)+2);yy++)
+  for(let xx=Math.max(0,x-Math.ceil(r/S)-2);xx<=Math.min(W-1,x+Math.ceil(r/S)+2);xx++){
+   if(grid[yy][xx]==='.')continue;
+   const dx=Math.max(xx*S-cx,0,cx-(xx+1)*S),dy=Math.max(yy*S-cy,0,cy-(yy+1)*S);
+   if(Math.hypot(dx,dy)<=r)return false;
+  }return true}
+function path(radius,prior=[]){
+ const dist=p=>prior.length?Math.min(...prior.map(q=>Math.abs(q[0]-p[0])+Math.abs(q[1]-p[1]))):0;
+ const heuristic=p=>Math.abs(p[0]-goal[0])+Math.abs(p[1]-goal[1]);
+ const open=[{p:start,g:0,f:heuristic(start)}],g=new Map([[key(start),0]]),parent=new Map();
+ if(!clear(...start,radius)||!clear(...goal,radius))throw new Error('Start or goal lacks clearance');
+ while(open.length){
+  open.sort((a,b)=>a.f-b.f);const n=open.shift();
+  if(n.g>g.get(key(n.p))+1e-8)continue;
+  if(key(n.p)===key(goal)){let out=[goal];while(key(out[0])!==key(start)){out.unshift(parent.get(key(out[0])))}return out}
+  for(let [dx,dy] of [[1,0],[0,-1],[0,1],[-1,0]]){
+   let q=[n.p[0]+dx,n.p[1]+dy];if(!clear(...q,radius))continue;
+   let next=n.g+1+(prior.length?.04*Math.min(dist(q),10):0);
+   if(next>= (g.get(key(q))??Infinity))continue;
+   g.set(key(q),next);parent.set(key(q),n.p);open.push({p:q,g:next,f:next+heuristic(q)});
+  }
+ }throw new Error('No clearance-safe route exists for this robot') }
+function move(stage,p){
+ if(timer)cancelAnimationFrame(timer);
+ let t0=null;const dur=Math.max(1800,(p.length-1)*160);
+ function step(now){if(t0===null)t0=now;let v=Math.min(1,(now-t0)/dur);
+  if(stage==='teacher')shownTeacher=v;else shownFollower=v;
+  draw();if(v<1){timer=requestAnimationFrame(step)}else{
+   timer=null;if(stage==='teacher'){document.querySelector('#transfer').disabled=false;document.querySelector('#blocked').disabled=false;document.querySelector('#export').disabled=false;setStatus('Robot A completed a reviewed synthetic success. Episode available to Robot B.')}
+   else setStatus('Robot B has a longer, clearance-checked simulated route. A physical robot has not been tested.')
+  }}timer=requestAnimationFrame(step)}
+function stroke(points,color,limit=1,dash=[]){
+ if(points.length<2)return;let at=Math.max(1,Math.floor((points.length-1)*limit)+1);
+ ctx.setLineDash(dash);ctx.beginPath();points.slice(0,at).forEach((p,i)=>{let [x,y]=pos(p);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+ ctx.lineWidth=5;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=color;ctx.stroke();ctx.setLineDash([])
+}
+function dot(node,color,r){const [x,y]=pos(node);ctx.beginPath();ctx.arc(x,y,r,0,2*Math.PI);ctx.fillStyle='#10243d';ctx.fill();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.arc(x,y,3,0,2*Math.PI);ctx.fillStyle=color;ctx.fill()}
+function draw(){ctx.fillStyle='#0b1626';ctx.fillRect(0,0,800,560);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){let c=grid[y][x];ctx.fillStyle=c==='#'?'#57667a':c==='?'?'#534362':'#192a40';ctx.fillRect(47+x*27,33+y*27,26,26)}
+ stroke(teacher||[],teacher&&shownTeacher>=1?'#62dfe6':'#4fb4ba',shownTeacher,teacher?[]:[5,8]);
+ if(follower)stroke(follower,'#b78cff',shownFollower);
+ dot(start,'#54ddb0',7);dot(goal,'#72f4bc',9);
+ if(teacher&&shownTeacher>0){let i=Math.min(teacher.length-1,Math.floor((teacher.length-1)*shownTeacher));dot(teacher[i],'#62dfe6',10)}
+ if(follower&&shownFollower>0){let i=Math.min(follower.length-1,Math.floor((follower.length-1)*shownFollower));dot(follower[i],'#b78cff',15)}
+}
+function setStatus(s){document.querySelector('#status').textContent=s}
+document.querySelector('#record').onclick=()=>{teacher=path(teacherRadius);follower=null;shownTeacher=0;shownFollower=0;document.querySelector('#teacher-distance').textContent=((teacher.length-1)*S).toFixed(1)+' m';document.querySelector('#follower-distance').textContent='Not planned';document.querySelector('#transfer').disabled=true;document.querySelector('#blocked').disabled=true;setStatus('Recording synthetic episode: Robot A is crossing the narrow opening.');move('teacher',teacher)};
+document.querySelector('#transfer').onclick=()=>{if(!teacher||shownTeacher<1)return;try{follower=path(followerRadius,teacher);shownFollower=0;document.querySelector('#follower-distance').textContent=((follower.length-1)*S).toFixed(1)+' m';setStatus('Transferred task intent. Replanning around the narrow opening for the wider robot.');move('follower',follower)}catch(e){setStatus('Rejected: '+e.message)}};
+document.querySelector('#blocked').onclick=()=>{if(!teacher)return;let failed=teacher.find(p=>!clear(...p,followerRadius));setStatus(failed?'Unsafe direct replay rejected at cell '+failed.join(',')+'. Different robot footprints require retargeting.':'Source corridor clears follower footprint, but further checks are still required.')};
+document.querySelector('#reset').onclick=()=>{if(timer)cancelAnimationFrame(timer);timer=null;teacher=follower=null;shownTeacher=shownFollower=0;for(let id of ['transfer','blocked','export'])document.querySelector('#'+id).disabled=true;document.querySelector('#teacher-distance').textContent='Not recorded';document.querySelector('#follower-distance').textContent='Not planned';setStatus('Start by recording an authored simulation of Robot A.');draw()};
+document.querySelector('#export').onclick=()=>{
+ const evidence={schema:'brainsnn.fleet-motion-transfer.demo.v1',task:'deliver to bay',scene:{rows,cell_size_m:S,evidence:'authored-synthetic'},source:{robot:'Teacher A',radius_m:teacherRadius,outcome:'success',review_status:'authored-reviewed-simulation',path_cells:teacher},follower:follower?{robot:'Follower B',radius_m:followerRadius,path_cells:follower,clearance_checked: true}:null,limitations:['No physical robot','No policy learning','No survey accuracy','No dynamic obstacle model']};
+ const url=URL.createObjectURL(new Blob([JSON.stringify(evidence,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='brainsnn-fleet-learning-synthetic-evidence.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)
+};
+draw();
+</script></body></html>

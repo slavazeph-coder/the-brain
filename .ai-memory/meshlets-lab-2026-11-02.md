@@ -41,3 +41,19 @@ and occlusion off (run41558875856). Preserve failure, not a transient counter as
 success. Applied-setting snapshots, dirty-control measurement lock and runtime
 manifest hashes now bind receipts; WebGL AA is true and meshlet-only settings are
 null/false outside that pipeline. GPU hardware access is still unavailable here.
+
+
+## November 15 integration
+
+Rebased through a merge with current main, preserving r182 and every newer BIM,
+twin, movement and surface build. Lab is explicitly unqualified, defaults to capped
+WebGL/25 authored meshes, and exports release-qualification limits in receipts.
+PR CI names and executes WebGL fallback only. Strict software-WebGPU is a separate
+manual workflow input and keeps actual failure semantics; no physical GPU run was
+executed. Independent control now records renderer fallback before GPUDevice access.
+
+Local integration checks: npm ci, TypeScript lint, production build, Three import
+guard, 1,097 app tests +73 analysis tests, and362 World Builder Node tests passed.
+Browser fallback execution in the exec sandbox could not start Chromium because
+its AF_UNIX singleton socket is prohibited. This is not a rendered browser pass;
+run the named browser CI/native desktop check before merging the integration.

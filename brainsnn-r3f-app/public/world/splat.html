@@ -21,6 +21,16 @@
     <p class="micro" id="viewer-help">Drag to orbit · pinch or scroll to zoom · two-finger drag or Shift-drag to pan · focus the view and use WASD / arrow keys to move, + / − to zoom, 0 to reset.</p>
     <div class="viewer-stage"><canvas id="asset-canvas" style="width:100%;height:100%" tabindex="0" aria-label="Interactive 3D visual asset" aria-describedby="viewer-help"></canvas></div>
     <div id="mesh-stage" class="viewer-stage" hidden></div>
+    <section id="surface-panel" hidden aria-labelledby="surface-title">
+      <h3 id="surface-title">Inspect the surface</h3>
+      <div class="viewer-controls">
+        <label>Mesh view<select id="surface-mode"><option value="original">Original materials</option><option value="zebra">Zebra reflection stripes</option><option value="normals">Face normals</option><option value="wireframe">Triangle wireframe</option></select></label>
+        <label>Stripe density<input id="stripe-frequency" type="range" min="4" max="80" value="18"></label>
+        <button id="surface-check">Check mesh topology</button><button id="surface-download" disabled>Download inspection JSON</button>
+      </div>
+      <p id="surface-status" role="status">Inspect the original mesh locally. No geometry is smoothed or repaired.</p>
+      <p class="micro">Stripes use the supplied shading normals; the topology check uses triangle face normals and exact coincident positions within each mesh. Boundaries and sharp corners may be intentional. No self-intersection or gap check between separate meshes. A mesh cannot certify NURBS G0/G1/G2/G3 continuity. Inspect analytic surfaces in Rhino with Zebra and EdgeContinuity.</p>
+    </section>
     <p id="viewer-status" role="status" class="statusbar">Choose a local asset. No model has run here.</p>
     <p class="micro">The viewer and parser run on your device; no third-party renderer is loaded. Up to 100,000 points are displayed, with uniform sampling for larger files. Requires WebGL2. Gaussian assets use base colour only; view-dependent shading is not rendered. GLB must be self-contained, without Draco, Meshopt or KTX compression. Export SPZ / KSPLAT assets as uncompressed PLY or SPLAT first.</p>
     <p class="note">A point cloud is not a trained Gaussian splat. Neither establishes metric scale, collision geometry or robot safety. Unobserved surfaces remain unknown.</p>

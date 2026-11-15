@@ -124,9 +124,9 @@ const ROUTES = [
   {
     path: '/lab/meshlets',
     title: 'Meshlets Lab | BrainSNN',
-    description: 'Compare an isolated Three.js r187 meshlet pipeline with standard rendering. Local GLB previews and measured browser receipts.',
-    heading: 'More detail. Measured here.',
-    body: ['Optional rendering experiment with procedural geometry, a WebGL fallback and local GLB preview. Performance counters describe this browser, not physical accuracy or robotics validation.'],
+    description: 'Unqualified Three.js r187 experiment with a capped WebGL preview, local GLB files and measured browser receipts.',
+    heading: 'Experimental rendering lab.',
+    body: ['Dense WebGPU qualification has not passed. Optional rendering experiment with procedural geometry, a capped WebGL default and local GLB preview. Browser cadence does not establish hardware, physical accuracy or robotics validation.'],
   },
   {
     path: '/lab/powder',

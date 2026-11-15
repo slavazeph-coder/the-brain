@@ -61,9 +61,24 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [TViz and Arena inspection research](brainsnn-inspection-layer-2026-10.md). October16 source audit and historical proposal; native implementation now tracked above, ROS/SSH viewer remains optional.
 
+→ [Fleet Learning Phase 2](world-fleet-learning-phase2-2026-11-02.md) — Nav2/ROS map-frame source bindings, 24 held-out offline tasks and an adverse synthetic result; physical validation pending.
+
 ## Active Work
 
-→ [Meshlets Lab](meshlets-lab-2026-11-02.md) — isolated r187 rendering experiment, local GLB source hashes and measured browser receipts; existing R3F unchanged.
+→ [Meshlets Lab](meshlets-lab-2026-11-02.md): isolated experimental r187 renderer, source-bound browser receipts and explicit failed strict WebGPU qualification.
+
+→ [Surface inspection and MetricTrail trial](world-surface-metrictrail-2026-11-14.md): source-bound local mesh inspection and an isolated pinned long-video research bridge; license, GPU and physical qualification boundaries.
+
+→ [Movement source reset](movement-source-reset-2026-11-14.md): shared source-reset cancellation prevents a previous recording's pending acceleration estimate from entering a new phone clip or its exports.
+
+→ [Hosted as-built IFC and capture photos](world-asbuilt-hosted-2026-11-14.md): owner-only real worker execution, preserved IFC/capture bytes and source-bound retained frame projections; separate private worker release required.
+
+→ [As-built IFC review](world-asbuilt-review-2026-11-14.md): prior IFC import, four linked evidence/model views, bounded reviewed placement copies and separate component recognition/position checks; authored regression evidence and physical validation limits.
+
+→ [World Builder operational twin](world-operational-twin-2026-11-14.md): source-bound equipment records, manual excerpts, spares/issues and explicitly authored joint previews; local overlays, original geometry and validation status preserved.
+
+→ [Registered laser-scan input](world-laser-scan-input-2026-11-13.md) — PR #294 coarse wall/clutter regressions, bounded thinning, colour normalization and real-scan validation limits.
+
 → [Demo replay export](world-demo-replay-2026-11-02.md) — private saved-frame/camera replay videos, real partial capture evidence, source-bound exports and release limits.
 
 → [Revit and Xactimate building exports](world-building-exports-2026-10-27.md) — sandbox integration, calibrated underlay, source/revision-bound downloads and required deployed acceptance.
