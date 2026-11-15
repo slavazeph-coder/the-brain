@@ -122,6 +122,13 @@ const ROUTES = [
     ],
   },
   {
+    path: '/lab/meshlets',
+    title: 'Meshlets Lab | BrainSNN',
+    description: 'Unqualified Three.js r187 experiment with a capped WebGL preview, local GLB files and measured browser receipts.',
+    heading: 'Experimental rendering lab.',
+    body: ['Dense WebGPU qualification has not passed. Optional rendering experiment with procedural geometry, a capped WebGL default and local GLB preview. Browser cadence does not establish hardware, physical accuracy or robotics validation.'],
+  },
+  {
     path: '/lab/powder',
     title: 'Neuro Powder Lab | BrainSNN',
     description:
@@ -144,6 +151,7 @@ const ROUTES = [
       'These are simulations and local experiments. Use Arena for a task with a judge, Review for your own material and Evidence to inspect the detector’s known misses.',
     ],
     links: [
+      { path: '/lab/meshlets/', label: 'Meshlets Lab' },
       { path: '/play', label: 'Sapient Playground' },
       { path: '/lab/powder', label: 'Neuro Powder Lab' },
       { path: '/arcade', label: 'Arcade' },

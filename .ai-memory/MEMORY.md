@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Meshlets Lab](meshlets-lab-2026-11-02.md): isolated experimental r187 renderer, source-bound browser receipts and explicit failed strict WebGPU qualification.
+
 → [Surface inspection and MetricTrail trial](world-surface-metrictrail-2026-11-14.md): source-bound local mesh inspection and an isolated pinned long-video research bridge; license, GPU and physical qualification boundaries.
 
 → [Movement source reset](movement-source-reset-2026-11-14.md): shared source-reset cancellation prevents a previous recording's pending acceleration estimate from entering a new phone clip or its exports.
