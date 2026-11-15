@@ -4,13 +4,14 @@ import { recordCameraTour } from './camera-tour-video.mjs';
 /** Local appearance only. No path or imported file enters the scene compiler or planner. */
 export function mountCameraTour({ root, getViewer }) {
   const $ = id => root.querySelector(`[data-tour-${id}]`);
-  let source = null, transform = 'identity', placement = 'identity', translation = [0, 0, 0], frames = [], generation = 0, task = null, clip = null;
+  let source = null, transform = 'identity', placement = 'identity', translation = [0, 0, 0], frames = [], generation = 0, task = null, clip = null, lockedOrigin = null;
   const status = message => { $('status').textContent = message; };
-  const provenance = () => $('provenance').value;
+  const provenance = () => lockedOrigin || $('provenance').value;
   const path = () => createCameraPath({ source, displayTransform: transform, sourcePlacement: placement, sourceTranslation: translation, provenance: provenance(), keyframes: frames });
   function controls() {
     const busy = !!task, ready = !!source;
     for (const id of ['add', 'undo', 'clear', 'import', 'provenance', 'interval']) $(id).disabled = !ready || busy;
+    $('provenance').disabled ||= !!lockedOrigin;
     $('add').disabled ||= frames.length >= 32;
     $('undo').disabled ||= !frames.length;
     $('clear').disabled ||= !frames.length;
@@ -68,6 +69,7 @@ export function mountCameraTour({ root, getViewer }) {
       const text = await file.text();
       if (token !== generation || !source) return;
       const checked = parseCameraPath(text, { source, displayTransform: transform, sourcePlacement: placement, sourceTranslation: translation });
+      if (lockedOrigin && checked.provenance !== lockedOrigin) throw Error('This derived object variant must retain its authored origin.');
       frames = checked.keyframes; clip = null; $('provenance').value = checked.provenance;
       controls(); status('Matching source and display transform verified. Declared origin is not independently verified.');
     } catch (error) { if (token === generation) status(`Path rejected: ${error.message}`); }
@@ -115,9 +117,10 @@ export function mountCameraTour({ root, getViewer }) {
   document.addEventListener('visibilitychange', hidden);
   controls();
   return {
-    setSource(value, displayTransform = 'identity', sourcePlacement = 'identity', sourceTranslation = [0, 0, 0]) {
+    setSource(value, displayTransform = 'identity', sourcePlacement = 'identity', sourceTranslation = [0, 0, 0], declaredOrigin = 'unknown') {
       stop(); source = value ? { ...value } : null; transform = displayTransform; placement = sourcePlacement; translation = sourceTranslation.slice();
-      $('provenance').value = 'unknown'; clearViews(source ? 'Choose the asset origin, then save two or more views.' : 'Open a local asset to author a camera path.');
+      lockedOrigin = source && declaredOrigin === 'authored' ? 'authored' : null;
+      $('provenance').value = ['unknown', 'camera-reconstruction', 'generated', 'authored'].includes(declaredOrigin) ? declaredOrigin : 'unknown'; clearViews(source ? lockedOrigin ? 'Authored object variant. Save two or more views; its origin stays authored.' : 'Choose the asset origin, then save two or more views.' : 'Open a local asset to author a camera path.');
     },
     invalidate(displayTransform) { stop(); transform = displayTransform; clearViews('Display axis changed. Save new camera views for this orientation.'); },
     cancel() { const hadClip = !!clip; stop(); clip = null; controls(); if (hadClip) status('View settings changed. Record a new video for this presentation.'); },

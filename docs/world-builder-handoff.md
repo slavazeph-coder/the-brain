@@ -607,3 +607,7 @@ refinement and a newer compilation. Regeneration and asset inventory: [demo repl
 These are reported test-dataset measurements, not a physical phone capture or independent proof of room accuracy.
 Model-to-points fit measures agreement with the reconstruction; typed scale, missing surfaces and inferred bases carry
 their own uncertainty. No corrected route length or replacement video is established by this table.
+
+## Reviewed appearance-object layer
+
+The [local object workshop](world-object-workshop.md) adds reviewed manual selection and rearrangement of retained point/Gaussian samples, deterministic variants, separate derived PLY/receipts and authored camera output. It preserves original reconstruction bytes and evidence. It does not update IFC, Rhino, occupancy or robot routes, and it does not establish physical accuracy or complete automatic object extraction.

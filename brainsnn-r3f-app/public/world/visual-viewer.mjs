@@ -1,4 +1,4 @@
-import { STRIDE, bounds, frameBounds } from './visual-geometry.mjs';
+import { MAX_POINTS, STRIDE, bounds, frameBounds } from './visual-geometry.mjs';
 // First-party appearance viewer. Gaussian files use DC colour only (no higher-order SH).
 // Plain point clouds retain their identity: display footprints are not trained Gaussians.
 const VERT = `#version 300 es
@@ -7,6 +7,7 @@ layout(location=0) in vec3 pos;
 layout(location=1) in vec3 scale;
 layout(location=2) in vec4 color;
 layout(location=3) in vec4 quat;
+layout(location=4) in float selected;
 uniform mat4 view; uniform mat4 projection; uniform vec2 viewport; uniform float focal; uniform float size; uniform int mode; uniform bool cloud;
 out vec2 local; out vec4 tint;
 void main(){
@@ -29,6 +30,7 @@ void main(){
  tint=color;
  if(mode==1){float t=clamp((-p.z-1.)/14.,0.,1.);tint.rgb=mix(vec3(.408,.918,1.),vec3(.58,.486,1.),t);}
  if(mode==2){tint.rgb=mix(tint.rgb,vec3(.408,.918,1.),.5);}
+ if(selected>.5){tint.rgb=mix(tint.rgb,vec3(1.,.78,.15),.8);}
 }`;
 const FRAG = `#version 300 es
 precision highp float;
@@ -44,9 +46,30 @@ function checkedView(value) {
   if(!vector(value?.eye)||!vector(value?.target)||!Number.isFinite(value?.fov)||value.fov<15||value.fov>100||Math.hypot(...value.eye.map((n,i)=>n-value.target[i]))<=1e-6)throw Error('Use a finite camera position and distinct target, with a field of view from 15° to 100°.');
   return {eye:value.eye.slice(),target:value.target.slice(),fov:value.fov};
 }
+/** Screen rectangle selection of retained sample centres, through all depths. This is not object segmentation. */
+export function selectVisualRectangle(points, view, projection, rectangle, viewport, {minY=-Infinity,maxY=Infinity}={}) {
+  if(!(points instanceof Float32Array)||points.length%STRIDE||points.length/STRIDE>MAX_POINTS)throw Error('Invalid visual point buffer.');
+  if(!points.length)return [];
+  if(!view||!projection||view.length!==16||projection.length!==16||![...view,...projection].every(Number.isFinite))throw Error('Invalid selection camera.');
+  if(!rectangle||!['left','top','right','bottom'].every(k=>Number.isFinite(rectangle[k]))||!viewport||!['left','top','width','height'].every(k=>Number.isFinite(viewport[k]))||viewport.width<=0||viewport.height<=0)throw Error('Use a finite selection rectangle and viewport.');
+  if(!(Number.isFinite(minY)||minY===-Infinity)||!(Number.isFinite(maxY)||maxY===Infinity)||minY>maxY)throw Error('Use an ordered vertical selection range.');
+  const left=Math.max(viewport.left,Math.min(rectangle.left,rectangle.right)),right=Math.min(viewport.left+viewport.width,Math.max(rectangle.left,rectangle.right));
+  const top=Math.max(viewport.top,Math.min(rectangle.top,rectangle.bottom)),bottom=Math.min(viewport.top+viewport.height,Math.max(rectangle.top,rectangle.bottom));
+  if(left>right||top>bottom)return [];
+  const m=new Float64Array(16),selection=[];
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){let v=0;for(let k=0;k<4;k++)v+=projection[k*4+i]*view[j*4+k];m[j*4+i]=v;}
+  for(let at=0,index=0;at<points.length;at+=STRIDE,index++){
+    const x=points[at],y=points[at+1],z=points[at+2];if(y<minY||y>maxY)continue;
+    const w=m[3]*x+m[7]*y+m[11]*z+m[15],cx=m[0]*x+m[4]*y+m[8]*z+m[12],cy=m[1]*x+m[5]*y+m[9]*z+m[13],cz=m[2]*x+m[6]*y+m[10]*z+m[14];
+    if(!(w>0)||![w,cx,cy,cz].every(Number.isFinite)||cx < -w||cx>w||cy < -w||cy>w||cz < -w||cz>w)continue;
+    const px=viewport.left+(cx/w+1)*viewport.width/2,py=viewport.top+(1-cy/w)*viewport.height/2;
+    if(px>=left&&px<=right&&py>=top&&py<=bottom)selection.push(index);
+  }
+  return selection;
+}
 export function createVisualViewer(canvas, onInfo = () => {}) {
   const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,preserveDrawingBuffer:true,powerPreference:'low-power'});
-  if(!gl) throw Error('3D preview needs WebGL2. File preview and exports remain available.');
+  if(!gl) throw Error('3D preview requires WebGL2. Use a device/browser with WebGL2 enabled.');
   function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
   const program=gl.createProgram(), vs=shader(gl.VERTEX_SHADER,VERT), fs=shader(gl.FRAGMENT_SHADER,FRAG);
   gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
@@ -54,9 +77,11 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   gl.deleteShader(vs);gl.deleteShader(fs);
   const buffer=gl.createBuffer(), vao=gl.createVertexArray();gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
+  const selectionBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,selectionBuffer);gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,1,gl.FLOAT,false,4,0);gl.vertexAttribDivisor(4,1);
   const uniforms=Object.fromEntries(['view','projection','viewport','focal','size','mode','cloud'].map(n=>[n,gl.getUniformLocation(program,n)]));
   let points=new Float32Array(), sorted=new Float32Array(), order=[], yaw=.65, pitch=.5, distance=13, target=[0,1,0], fov=60, mode=0, pointSize=1, disposed=false, frame=0, auto=false, last=0, sway=null;
   let walking=false, sortDirty=true, visible=true, gesture=null, cloud=true, radius=1, sourcePhoto=false, lost=false, markers=[], markerCount=0, uploaded=false, lastSort=0, settle=0;
+  let selectionMask=new Uint8Array(),selectionSorted=new Float32Array(),selectionDirty=true;
   // Picked reference points for scale calibration: drawn larger, in cyan, after the scene.
   const markerBuffer=gl.createBuffer(), markerVao=gl.createVertexArray();gl.bindVertexArray(markerVao);gl.bindBuffer(gl.ARRAY_BUFFER,markerBuffer);
   [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
@@ -79,7 +104,8 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     // at most every 200 ms while the view moves, and once more when it settles.
     const at=performance.now(),large=points.length/STRIDE>20000;
     if(sortDirty&&points.length&&uploaded&&large&&at-lastSort<200){clearTimeout(settle);settle=setTimeout(schedule,200-(at-lastSort));}
-    else if(sortDirty&&points.length){lastSort=at;uploaded=true;order.sort((a,b)=>{const ai=a*STRIDE,bi=b*STRIDE;return (points[ai]-points[bi])*view[2]+(points[ai+1]-points[bi+1])*view[6]+(points[ai+2]-points[bi+2])*view[10];});for(let i=0;i<order.length;i++)sorted.set(points.subarray(order[i]*STRIDE,order[i]*STRIDE+STRIDE),i*STRIDE);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,sorted,gl.DYNAMIC_DRAW);sortDirty=false;}
+    else if(sortDirty&&points.length){lastSort=at;uploaded=true;order.sort((a,b)=>{const ai=a*STRIDE,bi=b*STRIDE;return (points[ai]-points[bi])*view[2]+(points[ai+1]-points[bi+1])*view[6]+(points[ai+2]-points[bi+2])*view[10];});for(let i=0;i<order.length;i++)sorted.set(points.subarray(order[i]*STRIDE,order[i]*STRIDE+STRIDE),i*STRIDE);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,sorted,gl.DYNAMIC_DRAW);sortDirty=false;selectionDirty=true;}
+    if(selectionDirty){for(let i=0;i<order.length;i++)selectionSorted[i]=selectionMask[order[i]];gl.bindBuffer(gl.ARRAY_BUFFER,selectionBuffer);gl.bufferData(gl.ARRAY_BUFFER,selectionSorted,gl.DYNAMIC_DRAW);selectionDirty=false;}
     gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.02,.029,.047,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(program);gl.bindVertexArray(vao);
     gl.uniformMatrix4fv(uniforms.view,false,view);gl.uniformMatrix4fv(uniforms.projection,false,projection);gl.uniform2f(uniforms.viewport,canvas.width,canvas.height);gl.uniform1f(uniforms.focal,canvas.height/(2*Math.tan(fov*Math.PI/360)));gl.uniform1f(uniforms.size,mode===2?pointSize*.5:pointSize);gl.uniform1i(uniforms.mode,mode);gl.uniform1i(uniforms.cloud,cloud?1:0);gl.drawArraysInstanced(gl.TRIANGLES,0,6,points.length/STRIDE);
     if(markerCount){gl.bindVertexArray(markerVao);gl.uniform1f(uniforms.size,pointSize*3);gl.uniform1i(uniforms.mode,0);gl.uniform1i(uniforms.cloud,1);gl.drawArraysInstanced(gl.TRIANGLES,0,6,markerCount);}
@@ -101,8 +127,8 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   const observer=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting??true;if(visible)schedule();});observer.observe(canvas);resize();
   function fit(photo=false){if(!points.length)return;fov=60;const b=frameBounds(points);radius=b.radius;target=b.center;const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*(b.trimmed?.9:1.15);yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
   return {
-    setPoints(p,{photo=false,kind='point-cloud',orbit=false}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);uploaded=false;markers=[];updateMarkers();fit(photo);sway=null;auto=orbit&&!matchMedia('(prefers-reduced-motion: reduce)').matches;schedule();},
-    clear(){points=new Float32Array();sorted=new Float32Array();order=[];markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
+    setPoints(p,{photo=false,kind='point-cloud',orbit=false}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);selectionMask=new Uint8Array(order.length);selectionSorted=new Float32Array(order.length);selectionDirty=true;uploaded=false;markers=[];updateMarkers();fit(photo);sway=null;auto=orbit&&!matchMedia('(prefers-reduced-motion: reduce)').matches;schedule();},
+    clear(){points=new Float32Array();sorted=new Float32Array();order=[];selectionMask=new Uint8Array();selectionSorted=new Float32Array();selectionDirty=true;markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
     setMode(m){mode=Number.isInteger(m)?Math.max(0,Math.min(2,m)):0;schedule();},
     setSize(n){if(Number.isFinite(n))pointSize=Math.max(.25,Math.min(3,n));schedule();},
     reset(){fit(sourcePhoto);},photoCamera(){fit(true);},
@@ -110,6 +136,9 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     getView(){return {eye:eyePosition(),target:target.slice(),fov};},
     setView(value){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');const view=checkedView(value),offset=view.eye.map((v,i)=>v-view.target[i]);distance=Math.hypot(...offset);target=view.target;fov=view.fov;yaw=Math.atan2(offset[0],offset[2]);pitch=Math.asin(Math.max(-1,Math.min(1,offset[1]/distance)));auto=false;sway=null;walking=false;pointers.clear();gesture=null;sortDirty=true;lastSort=-Infinity;clearTimeout(settle);cancelAnimationFrame(frame);frame=0;render(performance.now(),true);},
     getCanvas(){return disposed?null:canvas;},
+    getBounds(){return points.length?bounds(points):null;},
+    selectRectangle(rectangle,options){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');const {view,projection}=camera(),r=canvas.getBoundingClientRect();return selectVisualRectangle(points,view,projection,rectangle,{left:r.left,top:r.top,width:r.width,height:r.height},options);},
+    setSelection(indices=[]){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');if(!(Array.isArray(indices)||indices instanceof Uint32Array)||indices.length>order.length)throw Error('Use at most one selection index per retained sample.');const mask=new Uint8Array(order.length);for(const index of indices){if(!Number.isInteger(index)||index<0||index>=order.length)throw Error('Selection index is outside the retained preview.');mask[index]=1;}selectionMask=mask;selectionDirty=true;schedule();},
     flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
     orbit(on=!auto){auto=!!on;sway=null;schedule();return auto;},
     sway(degrees=25,ms=4000){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return false;sway={start:performance.now(),base:yaw,amp:degrees*Math.PI/180,ms};auto=true;schedule();return true;},
@@ -130,6 +159,6 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
       return best;},
     /** Highlight points by index (e.g. picked scale references); they follow flips and clear with new points. */
     setMarkers(indices=[]){markers=indices.slice(0,16);updateMarkers();},
-    destroy(){disposed=true;cancelAnimationFrame(frame);clearTimeout(settle);listeners.forEach(fn=>fn());resizeObserver.disconnect();observer.disconnect();canvas.style.touchAction=originalTouchAction;gl.deleteBuffer(buffer);gl.deleteBuffer(markerBuffer);gl.deleteVertexArray(vao);gl.deleteVertexArray(markerVao);gl.deleteProgram(program);}
+    destroy(){disposed=true;cancelAnimationFrame(frame);clearTimeout(settle);listeners.forEach(fn=>fn());resizeObserver.disconnect();observer.disconnect();canvas.style.touchAction=originalTouchAction;gl.deleteBuffer(buffer);gl.deleteBuffer(selectionBuffer);gl.deleteBuffer(markerBuffer);gl.deleteVertexArray(vao);gl.deleteVertexArray(markerVao);gl.deleteProgram(program);}
   };
 }
