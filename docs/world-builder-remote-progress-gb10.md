@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||Last updated: 2026-11-15T06:00Z
+|||||||||||||||Last updated: 2026-11-15T12:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 229 — 2026-11-15 (GB10: computeFloorPlane committed; all suites green)
+
+- **Bounded improvement:** committed the `computeFloorPlane` function to `visual-geometry.mjs` with the supportRatio threshold fix (0.15→0.10 for 32-bin histograms). Added 4 new tests: too-few-points, non-finite Z, uniform Z distribution, and non-Float32Array/empty input rejection.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (141 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.51 s**
+  - `node --test tests/world/visual-geometry.test.mjs` → **14 pass / 0 fail** (169 ms) — includes 4 new computeFloorPlane tests
+- **Commit + push verified:** `b8dd2a0` on `hermes/world-builder-gb10`; `git push` → `4ebfb47..b8dd2a0`. Two files (`visual-geometry.mjs` +55, `visual-geometry.test.mjs` +41). `git status` clean (untracked `world-worker-data/` preserved).
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 5: loopback 413 distinction review, or app/API journey deep audit).
 
 ### Run 228 — 2026-11-15 (GB10: public_domain release verification complete; loopback 413 proven; all suites green)
 
