@@ -25,8 +25,20 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `node --test tests/world/visual-geometry.test.mjs` → **14 pass / 0 fail** (176 ms) — includes 4 computeFloorPlane tests
 - **4090 state:** port 23990 alive, CUDA verified, branch clean.
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
-- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+|- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 
+### Run 233 — 2026-11-15 (GB10: report-receipt suites re-verified; 4090 CUDA confirmed; progress file updated)
+
+|- **Bounded improvement:** re-verified both report-receipt test suites (Node 12 pass, Python 34 passed) and confirmed 4090 host is alive with CUDA True, RTX 4090, hostname d130b6c7f3f4. Progress file updated with Run 233 entry. Branch `hermes/world-builder-gb10` at `ec53185` with untracked `tests/world/debug_ui_smoke.py` and `world-worker-data/` preserved.
+|- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (151 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **34 passed in 16.96 s**
+|- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, GPU NVIDIA GeForce RTX 4090, 0.0 MiB allocated (idle).
+|- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+|- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md` (item 5: loopback 413 distinction review, or app/API journey deep audit).
+
+|
+|
 ### Run 230
 
 - **Bounded improvement:** completed the app/API journey deep audit. All key integration gaps verified:
