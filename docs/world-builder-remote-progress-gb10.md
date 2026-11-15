@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||Last updated: 2026-11-15T16:30Z
+||||||||||||||||||||||Last updated: 2026-11-15T17:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -14,9 +14,20 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `node --test tests/world/visual-geometry.test.mjs` → **14 pass / 0 fail** (177 ms) — includes 4 computeFloorPlane tests
 - **Commit + push verified:** `82862a9` on `hermes/world-builder-gb10`; `git push` → `c0452fe..82862a9`. Six files committed (4 debug_floor*.mjs + 6 output artifacts). `git status` clean (untracked `world-worker-data/` preserved).
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
-- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+|- **Next bounded action:** alternate to a bounded 4090 reconstruction/GPU task via short authenticated SSH, or continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
 
-### Run 230 — 2026-11-15 (GB10: app/API journey deep audit complete; all suites green)
+### Run 232 — 2026-11-15 (GB10: all suites green; 4090 CUDA confirmed; bounded visual-geometry verification)
+
+- **Bounded improvement:** verified all three test suites pass consistently. Node report-receipts (12 pass), Python report-receipts (34 passed), and visual-geometry (14 pass, incl. 4 computeFloorPlane tests) all green. Confirmed 4090 host alive: hostname `d130b6c7f3f4`, GPU UUID `GPU-3390c2ec-628e-16e5-defd-e8bb95d5bb09`, CUDA True, RTX 4090, 18.3/24.6 GiB used, 67°C. Branch `hermes/world-builder-4090` at `d1d59de` clean.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (144 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 15.07 s**
+  - `node --test tests/world/visual-geometry.test.mjs` → **14 pass / 0 fail** (176 ms) — includes 4 computeFloorPlane tests
+- **4090 state:** port 23990 alive, CUDA verified, branch clean.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue GB10 integration-gap verification from remaining implementation gates in `WORLD_BUILDER_CURRENT.md`.
+
+### Run 230
 
 - **Bounded improvement:** completed the app/API journey deep audit. All key integration gaps verified:
   1. `report-key` endpoint — public, no auth needed ✓
