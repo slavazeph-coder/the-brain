@@ -50,6 +50,30 @@ def check(playwright, name, viewport, label):
         page.locator('#t-verify').set_input_files({'name': 'tampered.json', 'mimeType': 'application/json', 'buffer': json.dumps(report).encode()})
         page.wait_for_function("document.querySelector('#t-status').textContent.includes('changed after it was sealed')", timeout=15000)
         page.screenshot(path=str(OUT / f'autonomy-{name}-{label}-trial.png'), full_page=True)
+        # A completed result must stop being available when its settings change.
+        page.locator('#t-seed').fill('2')
+        page.locator('#t-seed').dispatch_event('change')
+        assert page.locator('#trial-results').is_hidden()
+        # Explicit transport fixture: force an old worker to reply even after termination. A source reset must
+        # ignore that late report, clear its download, and keep the newly imported map behind the review gate.
+        page.evaluate('''report => {
+          globalThis.Worker = class {
+            postMessage() { globalThis.replyToCancelledTrial = () => { this.onmessage?.({data: {type: 'done', report}}); globalThis.lateTrialReply = true; }; }
+            terminate() { globalThis.trialWorkerTerminated = true; }
+          };
+        }''', report)
+        page.locator('#t-run').click()
+        fresh = dict(report['worldSnapshot'], name='Fresh source requiring review')
+        page.locator('#world-file').set_input_files({'name': 'fresh-world.json', 'mimeType': 'application/json', 'buffer': json.dumps(fresh).encode()})
+        page.wait_for_function("document.querySelector('#world-name').textContent === 'Fresh source requiring review'")
+        page.evaluate('globalThis.replyToCancelledTrial()')
+        page.wait_for_function('globalThis.lateTrialReply === true')
+        assert page.evaluate('globalThis.trialWorkerTerminated === true')
+        assert page.locator('#world-name').inner_text() == fresh['name']
+        assert page.locator('#trial-results').is_hidden() and page.locator('#t-progress').is_hidden()
+        assert page.locator('#t-run').is_enabled()
+        assert page.locator('#review').is_visible() and not page.locator('#scale-ok').is_checked()
+        assert page.locator('#t-status').inner_text() == 'Run a trial for the current map and settings.'
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'no horizontal page scroll'
         assert not errors, errors
         print(f'{name} {label} autonomy smoke PASS')

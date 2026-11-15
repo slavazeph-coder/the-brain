@@ -105,6 +105,105 @@ class Walls(unittest.TestCase):
                 self.assertAlmostEqual(w["length"], 6.0, delta=0.4); self.assertAlmostEqual(w["y1"] - w["y0"], 3.0, delta=0.3)
                 self.assertGreater(w["support"], 3500); self.assertLess(w["thickness"], 0.3); self.assertLess(len(rest), 300)
 
+    def test_a_dense_scan_keeps_real_walls_and_drops_a_plane_through_clutter(self):
+        """A laser scan puts points on everything. A vertical plane through a hanging lamp and the desks under it collects
+        enough of them to pass the sparse-cloud tests, but those points do not cover the plane's face."""
+        rng = random.Random(5); pts = []
+        for z in (-2.0, 2.0):  # two real walls, 6 m long and 3 m tall, covered all over
+            for _ in range(4000):
+                pts.append([rng.uniform(-3, 3), rng.uniform(0.05, 3.0), z + rng.gauss(0, 0.01), 120, 120, 120])
+        for _ in range(900):  # clutter along a 40 degree line: a lamp strip near 2 m and desk tops near 0.75 m
+            t = rng.uniform(-1.25, 1.25); high = rng.random() < 0.5
+            pts.append([t * math.cos(math.radians(40)) + rng.gauss(0, 0.01), rng.uniform(1.95, 2.05) if high else rng.uniform(0.7, 0.8),
+                        t * math.sin(math.radians(40)) + rng.gauss(0, 0.01), 200, 200, 200])
+        for _ in range(2000):
+            pts.append([rng.uniform(-3, 3), rng.gauss(0, 0.01), rng.uniform(-2, 2), 90, 80, 70])
+        turned = lambda walls: sorted(round(math.degrees(w["yaw"]) % 180) % 180 for w in walls)
+        sparse, _ = sc.find_walls(pts, floor_y=0.0)
+        self.assertEqual(turned(sparse), [0, 0, 40], "without the face test the clutter is a third wall")
+        dense, rest = sc.find_walls(pts, floor_y=0.0, dense=True)
+        self.assertEqual(turned(dense), [0, 0])
+        self.assertGreater(len(rest), 800, "the clutter's points stay free to become objects")
+        _, walls, _, _ = sc.analyse(pts, 0.0, True, dense=True)
+        self.assertEqual(len(walls), 2)
+
+    def test_a_large_scan_thinned_coarsely_keeps_its_walls(self):
+        """A building-sized scan is thinned to a coarser voxel to fit the point budget. A wall kept at one point per
+        40 cm fills a quarter of 20 cm cells, so the coverage cell follows the voxel the scan was thinned to."""
+        pts = []
+        for i in range(31):  # a 12 m wall, 3 m tall, sampled every 40 cm along and up
+            for j in range(8):
+                pts.append([-6 + 0.4 * i, 0.2 + 0.4 * j, -2.0, 120, 120, 120])
+        for i in range(31):
+            for k in range(11):
+                pts.append([-6 + 0.4 * i, 0.0, -2.0 + 0.4 * k, 90, 80, 70])
+        cloud = {"sourceFrame": "survey-scan", "units": "m", "provenance": {"voxelMetres": 0.4}}
+        self.assertEqual(sc.wall_face_cell(cloud), 0.8)
+        fixed, _ = sc.find_walls(pts, floor_y=0.0, dense=True)
+        self.assertEqual(len(fixed), 0, "at fixed 20 cm cells the thinned wall is lost")
+        walls, _ = sc.find_walls(pts, floor_y=0.0, dense=True, face_cell=sc.wall_face_cell(cloud))
+        self.assertEqual(len(walls), 1); self.assertAlmostEqual(walls[0]["length"], 12.0, delta=0.6)
+        for unusable in ({}, {"provenance": {}}, {"provenance": {"voxelMetres": True}}, {"provenance": {"voxelMetres": -1}}, {"provenance": {"voxelMetres": 0.03}}):
+            self.assertEqual(sc.wall_face_cell(unusable), sc.WALL_FACE_CELL, unusable)
+
+    def test_coarse_walls_remain_whole_at_different_yaws_and_sampling_phases(self):
+        """Authored surfaces, not accuracy measurements. Sampling gaps must not become invented doorways."""
+        for voxel in (.2, .4, .6, .8):
+            for yaw in (0, 37):
+                with self.subTest(voxel=voxel, yaw=yaw):
+                    ca, sa = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+                    pts = [[t * ca, y, t * sa - 3, 120, 120, 120]
+                           for t in (i * voxel - 12 for i in range(round(24 / voxel) + 1))
+                           for y in (.17 + j * voxel for j in range(math.floor(3 / voxel) + 1))]
+                    cell = sc.wall_face_cell({'sourceFrame': 'survey-scan', 'units': 'm',
+                                              'provenance': {'voxelMetres': voxel}})
+                    walls, _ = sc.find_walls(pts, 0, dense=True, face_cell=cell)
+                    self.assertEqual(len(walls), 1)
+                    self.assertAlmostEqual(walls[0]['length'], 24, delta=1)
+
+    def test_coarse_coverage_does_not_turn_desk_and_lamp_bands_into_a_wall(self):
+        for voxel in (.2, .4, .6, .8):
+            with self.subTest(voxel=voxel):
+                ca, sa = math.cos(math.radians(40)), math.sin(math.radians(40))
+                # Two thin horizontal surfaces, including jitter around a coverage-cell boundary.
+                clutter = [[t * ca, y, t * sa, 200, 200, 200]
+                           for t in (i * voxel - 12 for i in range(round(24 / voxel) + 1))
+                           for y in (.74, .76, 1.99, 2.01)]
+                walls, rest = sc.find_walls(clutter, 0, dense=True, face_cell=max(.2, 2 * voxel))
+                self.assertEqual(walls, [])
+                self.assertEqual(rest, list(range(len(clutter))), 'clutter must remain available to object separation')
+
+    def test_coarse_clutter_does_not_hide_a_real_wall_in_the_same_cloud(self):
+        voxel = .4
+        wall = [[i * voxel - 6, .17 + j * voxel, -4, 120, 120, 120] for i in range(31) for j in range(8)]
+        clutter = [[i * voxel - 6, y, 0, 200, 200, 200] for i in range(31) for y in (.74, .76, 1.99, 2.01)]
+        walls, rest = sc.find_walls(wall + clutter, 0, dense=True, face_cell=.8)
+        self.assertEqual(len(walls), 1)
+        self.assertAlmostEqual(walls[0]['centre'][1], -4)
+        self.assertTrue(set(range(len(wall), len(wall) + len(clutter))) <= set(rest))
+
+    def test_a_resolved_doorway_survives_coarse_sampling(self):
+        pts = [[t, y, -2, 120, 120, 120]
+               for t in (i * .4 - 12 for i in range(61))
+               for y in (.17 + j * .4 for j in range(8))
+               if not (-.8 < t < .8 and y < 1.9)]
+        walls, _ = sc.find_walls(pts, 0, dense=True, face_cell=.8)
+        self.assertEqual(len(walls), 2)
+        self.assertTrue(all(w['length'] > 10 for w in walls))
+
+    def test_phone_clouds_ignore_scan_sampling_metadata(self):
+        pts = wall_cloud(17)
+        legacy = sc.analyse(pts, 0, True)
+        cloud = {'sourceFrame': 'colmap', 'units': 'm', 'provenance': {'voxelMetres': .8}}
+        self.assertEqual(sc.wall_face_cell(cloud), sc.WALL_FACE_CELL)
+        self.assertEqual(sc.analyse(pts, 0, True, dense=sc.measured_scan(cloud), face_cell=sc.wall_face_cell(cloud)), legacy)
+
+    def test_a_laser_scan_hand_off_is_measured_geometry_only_in_metres(self):
+        self.assertTrue(sc.measured_scan({"sourceFrame": "survey-scan", "units": "m"}))
+        for cloud in ({"sourceFrame": "survey-scan", "units": "arbitrary"}, {"sourceFrame": "colmap", "units": "m"}, {}):
+            self.assertFalse(sc.measured_scan(cloud), cloud)
+        self.assertFalse(sc.multi_view({"sourceFrame": "survey-scan", "units": "m"}))
+
     def test_a_doorway_splits_a_wall_and_a_short_hidden_stretch_does_not(self):
         def with_openings(openings, length=6.0, n=6000, seed=3):
             # A wall along x at z = -2, with no points below 2.0 m inside each opening (a lintel above it).

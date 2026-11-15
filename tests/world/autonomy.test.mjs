@@ -147,6 +147,18 @@ test('the trial refuses an unreviewed map, as the planner does', async () => {
   assert.throws(() => createEpisode(w, {goal: {x: 16.5, z: 11.5}}), /Review obstacles/);
 });
 
+test('an inline trial stops between runs or before sealing when its source selection is cancelled', async () => {
+  for (const cancelAfter of [1, 2]) {
+    let completed = 0, cancelled = false;
+    await assert.rejects(runTrial(sampleWorld(), {episodes: 1, robot: 'cleaner'}, {
+      progress: done => { completed = done; },
+      yield: async () => { if (completed === cancelAfter) cancelled = true; },
+      cancelled: () => cancelled,
+    }), /Trial cancelled/);
+    assert.equal(completed, cancelAfter, 'no subsequent runs or report after cancellation');
+  }
+});
+
 test('Wilson intervals and the seeded generator behave', () => {
   assert.deepEqual(wilson(10, 10), [0.722, 1]); assert.deepEqual(wilson(0, 10), [0, 0.278]);
   const a = rng(42), b = rng(42); for (let i = 0; i < 5; i++) assert.equal(a(), b());

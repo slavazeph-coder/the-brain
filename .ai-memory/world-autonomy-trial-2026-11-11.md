@@ -22,3 +22,16 @@ to build the layers BrainSNN was missing. Lukas's critique: no shown agent loop/
   typecheck, build, Chrome desktop+phone smoke (tests/world/autonomy_browser_smoke.py, added to CI).
 - Finding worth repeating: forklift envelope with roof lidar at 2.06 m hits a 0.45 m crate 7/10 times when the
   front camera blacks out — sensor placement, not planning, decides it. Guide: docs/world-autonomy-trial.md.
+
+## Current-main integration — 2026-11-15
+
+- Integrated main `0faecec8264ec69875409104321bd1a2044e9bdc`, preserving the as-built, operational twin and
+  movement menu links. PR #287 had no inline review threads; its old CI did not establish current-main readiness.
+- A source, review or settings change now terminates the trial worker, cancels the inline fallback between
+  episodes and clears the old report/download. Late worker callbacks cannot publish a previous selection's report.
+- Copy labels the default map as authored, describes user imports separately and distinguishes repeatable seeded
+  outcomes from device-dependent measured latency. Physical and GPU qualification remain unchanged.
+- Current integrated run: 16 autonomy Node contracts and all 378 World Node contracts passed; lint and production
+  build passed. Browser regression includes a forced late worker reply after source reset and compiles locally.
+- Local browser execution remains blocked by Chromium's Unix socket creation (EPERM); Playwright Chromium and
+  WebKit bundles are absent. Current-head CI must execute the browser smoke before merge. No physical robot ran.

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Autonomy Trial | BrainSNN</title>
-<meta name="description" content="Give a robot simulated lidar and depth cameras on a reviewed map of a real space. It maps at 4 cm, plans with A*, drives with MPPI and replans when a crate drops in its way. Then a paired trial breaks it on purpose and counts what fails.">
+<meta name="description" content="Test simulated lidar, depth cameras, A* and MPPI on an authored sample or your reviewed map. A paired kinematic trial counts contacts, stops and replanning. No physical robot runs.">
 <meta name="theme-color" content="#070f1d"><link rel="icon" href="/favicon.svg">
 <style>
 :root{font-family:Inter,system-ui,Arial,sans-serif;color-scheme:dark;color:#ebf5ff;background:#070f1d;--panel:#112136;--line:#2d4861;--muted:#a1bbd2;--cyan:#5ad8e8;--violet:#ac8bf4;--amber:#e5b07b;--red:#f3a3a3;--green:#64e6c0}
@@ -54,7 +54,7 @@ footer{margin-top:28px;color:#7f9aad;font-size:12px;line-height:1.6}
 <main>
 <div class="eyebrow">World Builder / Autonomy trial</div>
 <h1>Give it sensors. Drop a crate.<br class="wide-only"> Count what breaks.</h1>
-<p class="intro">A simulated 360° lidar and front and rear depth cameras build the robot's own 4 cm map as it drives. A* plans the route, MPPI follows it, and a crate dropped in its way has to be <em>seen</em> before it can be avoided. Then a paired trial runs the same tasks clean and broken on purpose, and counts contacts, safe stops and replan time, on a reviewed map of a real space.</p>
+<p class="intro">A simulated 360° lidar and front and rear depth cameras build the robot's own map as it drives. A* plans the route, MPPI follows it, and a crate dropped in its way has to be <em>seen</em> before it can be avoided. A paired trial counts contacts, stops and replan time on the authored sample or your reviewed map. The grid is 4 cm where the map size permits. No physical robot runs.</p>
 <span class="honest">KINEMATIC SIMULATION IN YOUR BROWSER · NO ROBOT MOVES</span>
 
 <section class="layout" aria-label="Live autonomy loop">
@@ -105,7 +105,7 @@ footer{margin-top:28px;color:#7f9aad;font-size:12px;line-height:1.6}
 
 <section class="panel trial" aria-labelledby="trial-title">
   <h2 id="trial-title">Break it on purpose</h2>
-  <p class="caption">Each task runs twice with the same seed: once clean, once with what you choose to break. Starts and goals are sampled on the reviewed map, and every run is scored against ground truth the robot never sees. Same seed, same result.</p>
+  <p class="caption">Each task runs twice with the same seed: once clean, once with what you choose to break. Starts and goals are sampled on the reviewed map, and every run is scored against authored map geometry the robot never sees. Seeded trajectories and outcomes repeat; measured compute time varies.</p>
   <div class="trial-form">
     <div><label for="t-episodes">Tasks</label><select id="t-episodes"><option value="5">5 tasks · 10 runs</option><option value="10" selected>10 tasks · 20 runs</option><option value="25">25 tasks · 50 runs</option></select></div>
     <div><label for="t-seed">Seed</label><input type="number" id="t-seed" min="1" step="1" value="1"></div>

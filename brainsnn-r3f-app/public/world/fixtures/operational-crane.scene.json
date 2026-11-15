@@ -1,0 +1,227 @@
+{
+  "schema": "brainsnn.scene.v1",
+  "source": "Authored training crane. Not a phone reconstruction or real machine.",
+  "units": "m",
+  "scale": {
+    "source": "authored-example",
+    "verified": false
+  },
+  "floor_y": 0,
+  "walls": [],
+  "objects": [
+    {
+      "name": "floor_observed",
+      "label": "floor",
+      "kind": "floor",
+      "centre": [
+        0,
+        -0.05,
+        0
+      ],
+      "size": [
+        14,
+        0.1,
+        10
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "c88b8117-9649-5932-80b9-2ead34e42ad3"
+    },
+    {
+      "name": "gantry",
+      "label": "Gantry frame",
+      "kind": "separated",
+      "centre": [
+        0,
+        1.6,
+        0
+      ],
+      "size": [
+        2.3,
+        3.2,
+        1.8
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "b9ee2926-0f3c-5b64-aff9-7c897377bbee"
+    },
+    {
+      "name": "slew",
+      "label": "Slew bearing",
+      "kind": "separated",
+      "centre": [
+        0,
+        3.35,
+        0
+      ],
+      "size": [
+        1.8,
+        0.3,
+        1.5
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "d9340086-18dc-5c35-a3b5-eae07c6fe24c"
+    },
+    {
+      "name": "boom",
+      "label": "Horizontal boom",
+      "kind": "separated",
+      "centre": [
+        2.2,
+        3.8,
+        0
+      ],
+      "size": [
+        8,
+        0.38,
+        0.55
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "6a6ba360-a2e1-53b5-85db-0f7f84c54543"
+    },
+    {
+      "name": "counterweight",
+      "label": "Counterweight",
+      "kind": "separated",
+      "centre": [
+        -2,
+        3.4,
+        0
+      ],
+      "size": [
+        1,
+        1,
+        0.9
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "21666b5b-1c0c-5da1-a026-ad0705ac0a22"
+    },
+    {
+      "name": "trolley",
+      "label": "Trolley",
+      "kind": "separated",
+      "centre": [
+        3.3,
+        3.45,
+        0
+      ],
+      "size": [
+        0.7,
+        0.35,
+        0.8
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "729750a4-5e21-5b07-86e3-6fc7321b4898"
+    },
+    {
+      "name": "hoist",
+      "label": "Hoist block",
+      "kind": "separated",
+      "centre": [
+        3.3,
+        2.5,
+        0
+      ],
+      "size": [
+        0.25,
+        0.8,
+        0.25
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "6f57aa32-cf3b-5a1f-82ab-845be172ede8"
+    },
+    {
+      "name": "load",
+      "label": "Training load",
+      "kind": "separated",
+      "centre": [
+        3.3,
+        1.65,
+        0
+      ],
+      "size": [
+        1,
+        0.7,
+        0.9
+      ],
+      "yaw_degrees": 0,
+      "provenance": "authored-example",
+      "componentId": "55b3140d-ce6e-599a-9ffc-968af670edb7"
+    }
+  ],
+  "openings": [],
+  "unknown": [],
+  "metric_verified": false,
+  "physicalRobotValidated": false,
+  "metricVerified": false,
+  "certified": false,
+  "clearanceVerified": false,
+  "componentGraph": {
+    "schema": "brainsnn.component-graph.v1",
+    "sourceSha256": "2bf653d0d3e5265ab849cd0d2a2594899e70ae303f19ff6a3c2fbcc8896041e7",
+    "namespaceBasis": "legacy-scene-geometry-sha256",
+    "sourceSceneSha256": "b9c2a7631be3dfefe8b08862e8f4f84586d9d226f0a53378d24ede3d78c6cee4",
+    "contentSha256": "71cfae350b9fb03dc0f54385f34c589b866bdcd613e1d3f3b76b3865113f13ed",
+    "revision": 0,
+    "components": [
+      {
+        "componentId": "c88b8117-9649-5932-80b9-2ead34e42ad3",
+        "kind": "object",
+        "index": 0,
+        "sourceName": "floor_observed"
+      },
+      {
+        "componentId": "b9ee2926-0f3c-5b64-aff9-7c897377bbee",
+        "kind": "object",
+        "index": 1,
+        "sourceName": "gantry"
+      },
+      {
+        "componentId": "d9340086-18dc-5c35-a3b5-eae07c6fe24c",
+        "kind": "object",
+        "index": 2,
+        "sourceName": "slew"
+      },
+      {
+        "componentId": "6a6ba360-a2e1-53b5-85db-0f7f84c54543",
+        "kind": "object",
+        "index": 3,
+        "sourceName": "boom"
+      },
+      {
+        "componentId": "21666b5b-1c0c-5da1-a026-ad0705ac0a22",
+        "kind": "object",
+        "index": 4,
+        "sourceName": "counterweight"
+      },
+      {
+        "componentId": "729750a4-5e21-5b07-86e3-6fc7321b4898",
+        "kind": "object",
+        "index": 5,
+        "sourceName": "trolley"
+      },
+      {
+        "componentId": "6f57aa32-cf3b-5a1f-82ab-845be172ede8",
+        "kind": "object",
+        "index": 6,
+        "sourceName": "hoist"
+      },
+      {
+        "componentId": "55b3140d-ce6e-599a-9ffc-968af670edb7",
+        "kind": "object",
+        "index": 7,
+        "sourceName": "load"
+      }
+    ],
+    "editHistory": [],
+    "evidenceStatus": "source-scene",
+    "invalidatedEvidence": [],
+    "metricVerified": false,
+    "certified": false
+  }
+}

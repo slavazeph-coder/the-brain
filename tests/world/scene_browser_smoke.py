@@ -125,6 +125,15 @@ def check_browser(pw, name, origin, worker_url, token, photo, phone=False):
         assert page.locator('[data-tab=evidence]').get_attribute('aria-selected') == 'true', page.locator('#status').inner_text()
         assert page.locator('[data-scene-artifact]').all_inner_texts() == ['Explore scene.glb in 3D']
         assert page.locator('#scene-status').inner_text() == 'scene.glb from scene-usd · 3 meshes · 72 vertices · SHA-256 checked', page.locator('#scene-status').inner_text()
+        page.get_by_label('Scene surface mode').select_option('zebra')
+        page.locator('#scene-surface-review [data-surface-check]').click()
+        assert '36 triangles' in page.locator('#scene-surface-review [role=status]').inner_text()
+        with page.expect_download() as surface_download:
+            page.locator('#scene-surface-review [data-surface-download]').click()
+        surface_report = json.loads(Path(surface_download.value.path()).read_text())
+        assert surface_report['source']['name'] == 'scene.glb' and len(surface_report['source']['sha256']) == 64
+        assert surface_report['sourceGeometryChanged'] is False and surface_report['metricVerified'] is False
+        page.get_by_label('Scene surface mode').select_option('original')
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[:4] == FACTS and 'Export static OpenUSD' in facts[4], facts
         assert page.locator('#scene-plan').is_hidden(), 'a scene without metres offers no planning map'
@@ -136,6 +145,7 @@ def check_browser(pw, name, origin, worker_url, token, photo, phone=False):
         page.screenshot(path=str(OUTPUT / f'scene-{view_name}.png'))
         page.keyboard.press('Escape')
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
+        assert page.locator('#scene-surface-review').is_hidden()
         # Reopening reuses the viewer, and clearing the session removes it with the job.
         page.locator('[data-scene-artifact]').click()
         # The click opens the dialog at once with a fresh status, so this waits for the reloaded scene, not the old one.
@@ -198,6 +208,21 @@ def download_building_handoff(page, label):
     assert handoff['readiness']['nativeRevitValidated'] is False
     assert handoff['readiness']['xactimateApplicationValidated'] is False
     assert 'Import Underlay Image' in page.locator('#scene-bim-files').inner_text()
+    # The Fragments file for Unreal Engine: converted in this browser from the job's own scene.ifc (the real converter and
+    # its WASM, loaded on demand) and offered only after the page has read it back. Unreal itself is not run here.
+    card = page.locator('[data-fragments-export]')
+    card.get_by_role('button', name='Make scene.frag').click()
+    link = card.get_by_role('link', name='Download scene.frag')
+    link.wait_for(timeout=60000)
+    report = card.locator('[role=status]').inner_text()
+    assert report.startswith('scene.frag holds ') and 'BrainSNN properties' in report and 'check the rest' not in report, report
+    with page.expect_download() as download:
+        link.click()
+    assert download.value.suggested_filename == 'scene.frag'
+    frag = Path(download.value.path()).read_bytes()
+    assert 500 < len(frag) < len(blobs['scene.ifc']), (len(frag), len(blobs['scene.ifc']))
+    (folder / 'scene.frag').write_bytes(frag)
+    handoff['fragmentsReport'] = report
     return handoff
 
 

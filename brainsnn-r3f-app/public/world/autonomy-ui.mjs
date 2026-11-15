@@ -22,8 +22,18 @@ function sensors() { return {lidar: $('s-lidar').checked, front: $('s-front').ch
 function status(text, bad = false) { $('status').textContent = text; $('status').classList.toggle('bad', bad); }
 function savedWorld() { try { const raw = localStorage.getItem('brainsnn.world.v1'); return raw ? JSON.parse(raw) : null; } catch { return null; } }
 
+// A trial belongs to one map and settings selection. Invalidate both pending work and the previous download when
+// that selection changes, including the inline fallback, whose promises can settle after a worker was terminated.
+function cancelTrial() {
+  if (state.trial) { state.trial.cancelled = true; state.trial.worker?.terminate(); state.trial = null; }
+  state.report = null;
+  $('t-run').disabled = false; $('t-progress').hidden = true; $('trial-results').hidden = true;
+  $('t-status').textContent = 'Run a trial for the current map and settings.';
+}
+
 function setWorld(input, source) {
   const world = normalizeWorld(input);
+  cancelTrial();
   // A file or a saved map is reviewed by the person here, never by the file: World Builder's rule.
   if (source !== 'sample') { world.scaleReviewed = false; world.mapReviewed = false; }
   state.world = world; state.source = source;
@@ -255,23 +265,29 @@ function startTrial() {
   const g = gate(); if (g) { status(g, true); return; }
   const options = trialOptions();
   if (!Object.values(options.perturbations).some(Boolean)) { $('t-status').textContent = 'Choose at least one thing to break.'; return; }
+  cancelTrial();
+  const trial = {cancelled: false, worker: null}, world = state.world;
+  state.trial = trial;
+  const current = () => state.trial === trial && !trial.cancelled;
   pause(); $('t-run').disabled = true; $('trial-results').hidden = true; $('t-progress').hidden = false; $('t-progress').value = 0;
   $('t-status').textContent = `Planning ${options.episodes} tasks for ${PLATFORMS[options.robot].name}…`;
-  const progress = (done, total, condition, outcome) => { $('t-progress').max = total; $('t-progress').value = done; $('t-status').textContent = `Run ${done} of ${total} · ${condition === 'control' ? 'control' : 'broken on purpose'} · ${outcome}`; };
-  const finish = report => { $('t-run').disabled = false; $('t-progress').hidden = true; state.report = report; renderTrial(report); };
-  const failed = message => { $('t-run').disabled = false; $('t-progress').hidden = true; $('t-status').textContent = message; };
+  const progress = (done, total, condition, outcome) => { if (!current()) return; $('t-progress').max = total; $('t-progress').value = done; $('t-status').textContent = `Run ${done} of ${total} · ${condition === 'control' ? 'control' : 'broken on purpose'} · ${outcome}`; };
+  const finish = report => { if (!current()) return; state.trial = null; $('t-run').disabled = false; $('t-progress').hidden = true; state.report = report; renderTrial(report); };
+  const failed = message => { if (!current()) return; state.trial = null; $('t-run').disabled = false; $('t-progress').hidden = true; $('t-status').textContent = message; };
   let worker = null;
   try { worker = new Worker(new URL('./autonomy-worker.mjs', import.meta.url), {type: 'module'}); } catch { worker = null; }
   if (worker) {
+    trial.worker = worker;
     worker.onmessage = ({data}) => {
+      if (!current()) return;
       if (data.type === 'progress') progress(data.done, data.total, data.condition, data.outcome);
       else { worker.terminate(); if (data.type === 'done') finish(data.report); else failed(data.message); }
     };
-    worker.onerror = () => { worker.terminate(); inline(); };
-    worker.postMessage({world: state.world, options});
+    worker.onerror = () => { worker.terminate(); if (current()) inline(); };
+    worker.postMessage({world, options});
   } else inline();
   function inline() {
-    runTrial(state.world, options, {progress: (d, t, last) => progress(d, t, last.condition, last.outcome), yield: () => new Promise(r => setTimeout(r, 0))}).then(finish, e => failed(e.message));
+    runTrial(world, options, {cancelled: () => !current(), progress: (d, t, last) => progress(d, t, last.condition, last.outcome), yield: () => new Promise(r => setTimeout(r, 0))}).then(finish, e => failed(e.message));
   }
 }
 const OUTCOME = {reached: ['reached', 'ok'], contact: ['contact', 'bad'], 'keep-out': ['keep-out', 'bad'], 'no-route': ['safe stop', 'warn'], stuck: ['stuck', 'bad'], timeout: ['timeout', 'bad']};
@@ -323,8 +339,9 @@ function init() {
     catch (error) { status(`That file is not a BrainSNN World v1 map: ${error.message}`, true); $('world-source').value = state.source; return; }
     $('world-source').value = 'file'; resize(); pause(); state.ep = null; draw(); status(gate(), true); syncButtons();
   });
-  for (const id of ['scale-ok', 'map-ok']) $(id).addEventListener('change', () => { if (!gate()) { startEpisode(); } else { pause(); state.ep = null; draw(); status(gate(), true); } syncButtons(); });
-  for (const id of ['robot', 's-lidar', 's-front', 's-rear', 'prior']) $(id).addEventListener('change', () => { const was = state.running; pause(); if (startEpisode()) { if (was) play(); } });
+  for (const id of ['scale-ok', 'map-ok']) $(id).addEventListener('change', () => { cancelTrial(); if (!gate()) { startEpisode(); } else { pause(); state.ep = null; draw(); status(gate(), true); } syncButtons(); });
+  for (const id of ['robot', 's-lidar', 's-front', 's-rear', 'prior']) $(id).addEventListener('change', () => { cancelTrial(); const was = state.running; pause(); if (startEpisode()) { if (was) play(); } });
+  for (const id of ['t-episodes', 't-seed', 'p-crate', 'p-map', 'p-blackout', 'p-drift']) $(id).addEventListener('change', cancelTrial);
   for (const id of ['truth', 'rollouts']) $(id).addEventListener('change', draw);
   $('play').addEventListener('click', () => state.running ? pause() : play());
   $('reset').addEventListener('click', () => { pause(); startEpisode(); });

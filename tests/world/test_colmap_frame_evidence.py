@@ -26,6 +26,28 @@ def textured(path, size=(400, 300), orientation=1, seed=2):
     return marks
 
 
+def test_an_upload_only_ever_reaches_the_jpeg_png_and_webp_decoders(tmp_path, monkeypatch):
+    """A file in any other format is refused by name, and no other Pillow decoder is asked to read it."""
+    from PIL import GifImagePlugin
+    for name in ('real.jpg', 'real.png', 'real.webp'):
+        textured(tmp_path / name)
+    disguised = tmp_path / 'photo.jpg'
+    Image.new('RGB', (640, 480), (90, 120, 150)).save(disguised, format='GIF')
+    asked, real_open = [], Image.open
+    monkeypatch.setattr(Image, 'open', lambda fp, *args, **kwargs: (asked.append((Path(fp).name, kwargs.get('formats'))), real_open(fp, *args, **kwargs))[1])
+
+    def gif_decoder_ran(self):
+        raise AssertionError('the GIF decoder read an upload')
+    monkeypatch.setattr(GifImagePlugin.GifImageFile, '_open', gif_decoder_ran)
+    with pytest.raises(ValueError, match='Photos must be JPEG, PNG or WebP'):
+        sc.prepare_photo(disguised, tmp_path / 'refused.jpg')
+    assert not (tmp_path / 'refused.jpg').exists()
+    for name in ('real.jpg', 'real.png', 'real.webp'):
+        assert sc.prepare_photo(tmp_path / name, tmp_path / f'out-{name}.jpg') == {'width': 400, 'height': 300}
+    uploads = [formats for name, formats in asked if name in ('photo.jpg', 'real.jpg', 'real.png', 'real.webp')]
+    assert len(uploads) == 7 and all(formats == sc.PHOTO_FORMATS for formats in uploads)
+
+
 @pytest.mark.parametrize('orientation', range(1, 9))
 def test_photo_evidence_maps_all_exif_orientations_to_actual_prepared_pixels(tmp_path, orientation):
     source, prepared = tmp_path / 'original.png', tmp_path / 'prepared.jpg'

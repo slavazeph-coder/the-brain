@@ -3,7 +3,8 @@
 `/world/autonomy.html` puts a simulated sensor rig on a robot envelope, drives it on a reviewed World v1 map, and
 runs a paired trial that breaks it on purpose. It answers the question raised about agent-built robot-dog sim stacks
 (Airsup, October 2026): the sim stack looked real, but there was no measured trial and the world was not a real place.
-Here the world is a reviewed capture of a real space, and every run is counted and sealed.
+The default world is an authored sample. A user can instead import a reviewed map derived from a capture; the trial
+does not validate that capture against the physical space. Every simulated run is counted and sealed.
 
 Everything runs in the browser. No worker, GPU, model or network call is involved, and no robot moves.
 
@@ -40,6 +41,9 @@ Outcomes are `reached`, `contact`, `keep-out`, `no-route` (a safe stop), `stuck`
 paired summary with Wilson 95 % intervals, replan latency percentiles, crate detection timing, claims, limitations and
 an integrity SHA-256 over the whole body. `verifyTrialReport` recomputes it; a seal shows the report was not edited,
 not who ran it.
+
+Changing the source map, review state or trial settings cancels a pending trial and clears its previous download.
+An inline fallback stops between episodes. Seeded trajectories and outcomes repeat; measured wall-clock latency varies.
 
 Representative local results on the authored sample floor (seed 7, ten tasks): cleaner, humanoid and vacuum envelopes
 reach every goal in both conditions; a compact forklift whose roof lidar sits at 2.06 m reaches 3/10 with a camera

@@ -412,7 +412,7 @@ def name_objects(cloud, source_dir, *, client=None, views=None, log=print, detec
     pts = cloud['points']
     P, metres_per_unit = source_points(pts, cloud.get('fromSource'))
     floor_y = sc.floor_plane(pts, cloud.get('floorEstimate'))
-    _, _, _, separated = sc.analyse(pts, floor_y, True)
+    _, _, _, separated = sc.analyse(pts, floor_y, True, dense=sc.measured_scan(cloud), face_cell=sc.wall_face_cell(cloud))
     if not separated:
         raise NamingSkipped('The scene has no separated objects to name.')
     order = sorted(range(len(separated)), key=lambda i: -(separated[i]['length'] * separated[i]['thickness']

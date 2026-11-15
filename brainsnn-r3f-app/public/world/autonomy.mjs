@@ -760,7 +760,8 @@ const LIMITATIONS = [
   'Replan milliseconds are wall-clock times on the device that ran the trial; other devices will differ.',
   'No real robot, learned policy or safety certification. A simulated pass is a reason to run a physical trial, not a substitute for one.',
 ];
-/** Run the trial. `hooks.progress(done, total)` reports progress; `hooks.yield()` lets a page breathe between episodes. */
+/** Run the trial. `hooks.progress(done, total)` reports progress; `hooks.yield()` lets a page breathe between episodes.
+ * `hooks.cancelled()` stops an inline trial between episodes when its map or settings selection changes. */
 export async function runTrial(worldInput, options = {}, hooks = {}) {
   const world = prepareWorld(worldInput), o = {...DEFAULT_TRIAL, ...options, perturbations: options.perturbations ? {crate: false, mapError: false, blackout: false, drift: false, ...options.perturbations} : {...DEFAULT_TRIAL.perturbations}, sensors: {...DEFAULT_TRIAL.sensors, ...(options.sensors || {})}};
   const episodes = Math.max(1, Math.min(50, Math.floor(o.episodes))), seed = (o.seed >>> 0) || 1, robot = PLATFORMS[o.robot] ? o.robot : 'cleaner';
@@ -771,11 +772,13 @@ export async function runTrial(worldInput, options = {}, hooks = {}) {
   const conditions = [{id: 'control', label: 'Control', perturbations: {}}, {id: 'broken', label: 'Broken on purpose', perturbations: broken}];
   const results = [], total = tasks.length * conditions.length; let done = 0;
   for (const condition of conditions) for (const task of tasks) {
+    if (hooks.cancelled?.()) throw new Error('Trial cancelled because its map or settings changed.');
     const r = runEpisode(world, {preparedWorld: world, referenceMap: reference, robot, seed: task.seed, start: task.start, goal: task.goal, prior: o.prior !== false, sensors: o.sensors, density: 'trial', perturbations: condition.perturbations});
     results.push({condition: condition.id, task: task.index, seed: task.seed, ...r});
     done++; hooks.progress?.(done, total, results[results.length - 1]);
     if (hooks.yield) await hooks.yield();
   }
+  if (hooks.cancelled?.()) throw new Error('Trial cancelled because its map or settings changed.');
   const summary = Object.fromEntries(conditions.map(c => [c.id, summarize(results.filter(r => r.condition === c.id))]));
   const body = {schema: TRIAL_SCHEMA, loop: LOOP_VERSION, createdAt: new Date().toISOString(),
     world: {name: world.name, provenance: world.provenance, width: world.width, depth: world.depth, objects: world.objects.length, sha256: await sha256(JSON.stringify(world))}, worldSnapshot: clone(world),
