@@ -9,7 +9,7 @@ const ROBOT_ORDER = ['amr', 'cleaner', 'vacuum', 'humanoid', 'quadruped', 'forkl
 const C = {bg: '#070f1d', floor: '#0e1b2d', edge: '#3a5876', cyan: '#5ad8e8', violet: '#ac8bf4', amber: '#e5b07b', red: '#f38a8a', text: '#d9ebfb', muted: '#8fa9c2'};
 const SENSOR_NAMES = {lidar: 'Roof lidar', 'depth-front': 'Front depth camera', 'depth-rear': 'Rear depth camera'};
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const state = {world: sampleWorld(), source: 'sample', ep: null, running: false, speed: 1, seed: 1, view: {w: 0, h: 0, s: 1, ox: 0, oz: 0, dpr: 1}, mapPainted: -1, logged: {events: 0}, trial: null, report: null,
+const state = {world: sampleWorld(), source: 'sample', sourceRequest: 0, ep: null, running: false, speed: 1, seed: 1, view: {w: 0, h: 0, s: 1, ox: 0, oz: 0, dpr: 1}, mapPainted: -1, logged: {events: 0}, trial: null, report: null,
   lastPath: null, ghost: null, pulses: [], flash: null};
 const canvas = $('view'), ctx = canvas.getContext('2d');
 const off = document.createElement('canvas'), offCtx = off.getContext('2d');
@@ -328,15 +328,21 @@ function init() {
   const saved = savedWorld(); $('world-source').querySelector('[value=saved]').disabled = !saved;
   if (!saved) $('world-source').querySelector('[value=saved]').textContent = 'My World Builder map (none saved in this browser)';
   $('world-source').addEventListener('change', e => {
+    state.sourceRequest++;
     const v = e.target.value;
     if (v === 'file') { e.target.value = state.source; $('world-file').click(); return; }
     try { setWorld(v === 'saved' ? savedWorld() : sampleWorld(), v); } catch (error) { status(error.message, true); return; }
     resize(); if (v === 'sample') startEpisode({demoCrate: true}); else { pause(); state.ep = null; draw(); status(gate(), true); syncButtons(); }
   });
   $('world-file').addEventListener('change', async e => {
+    const request = ++state.sourceRequest;
     const file = e.target.files[0]; e.target.value = ''; if (!file) return;
-    try { if (file.size > 2 * 1024 ** 2) throw new Error('Map JSON must be at most 2 MiB.'); setWorld(JSON.parse(await file.text()), 'file'); }
-    catch (error) { status(`That file is not a BrainSNN World v1 map: ${error.message}`, true); $('world-source').value = state.source; return; }
+    try {
+      if (file.size > 2 * 1024 ** 2) throw new Error('Map JSON must be at most 2 MiB.');
+      const text = await file.text(); if (request !== state.sourceRequest) return;
+      setWorld(JSON.parse(text), 'file');
+    }
+    catch (error) { if (request !== state.sourceRequest) return; status(`That file is not a BrainSNN World v1 map: ${error.message}`, true); $('world-source').value = state.source; return; }
     $('world-source').value = 'file'; resize(); pause(); state.ep = null; draw(); status(gate(), true); syncButtons();
   });
   for (const id of ['scale-ok', 'map-ok']) $(id).addEventListener('change', () => { cancelTrial(); if (!gate()) { startEpisode(); } else { pause(); state.ep = null; draw(); status(gate(), true); } syncButtons(); });

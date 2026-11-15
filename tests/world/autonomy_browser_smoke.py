@@ -74,6 +74,24 @@ def check(playwright, name, viewport, label):
         assert page.locator('#t-run').is_enabled()
         assert page.locator('#review').is_visible() and not page.locator('#scale-ok').is_checked()
         assert page.locator('#t-status').inner_text() == 'Run a trial for the current map and settings.'
+        # A slow map file read must also lose to a newer source selection, on both success and failure.
+        page.evaluate('''() => {
+          const read = File.prototype.text;
+          File.prototype.text = function() {
+            return this.name === 'deferred-world.json' ? new Promise((resolve, reject) => {
+              globalThis.settleOldMapRead = (text, fail) => fail ? reject(new Error('old read failed')) : resolve(text);
+            }) : read.call(this);
+          };
+        }''')
+        for fail in (False, True):
+            page.locator('#world-file').set_input_files({'name': 'deferred-world.json', 'mimeType': 'application/json', 'buffer': b'{}'})
+            page.select_option('#world-source', 'sample')
+            await_read = {'text': json.dumps(fresh), 'fail': fail}
+            page.evaluate('async ({text, fail}) => { globalThis.settleOldMapRead(text, fail); await Promise.resolve(); }', await_read)
+            assert page.locator('#world-source').input_value() == 'sample'
+            assert page.locator('#world-name').inner_text() == 'Studio 01 / training floor'
+            assert page.locator('#review').is_hidden()
+            assert 'old read failed' not in page.locator('#status').inner_text()
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), 'no horizontal page scroll'
         assert not errors, errors
         print(f'{name} {label} autonomy smoke PASS')

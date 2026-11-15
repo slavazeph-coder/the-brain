@@ -29,6 +29,8 @@ to build the layers BrainSNN was missing. Lukas's critique: no shown agent loop/
   movement menu links. PR #287 had no inline review threads; its old CI did not establish current-main readiness.
 - A source, review or settings change now terminates the trial worker, cancels the inline fallback between
   episodes and clears the old report/download. Late worker callbacks cannot publish a previous selection's report.
+- Source selection also supersedes pending map-file reads; late success and failure callbacks cannot replace a
+  newer selection. The browser regression forces both delayed-read outcomes without timing assumptions.
 - Copy labels the default map as authored, describes user imports separately and distinguishes repeatable seeded
   outcomes from device-dependent measured latency. Physical and GPU qualification remain unchanged.
 - Current integrated run: 16 autonomy Node contracts and all 378 World Node contracts passed; lint and production
