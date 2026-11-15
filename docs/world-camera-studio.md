@@ -1,6 +1,6 @@
 # Local appearance camera studio
 
-Open https://www.brainsnn.com/world/splat.html. Load an owned local PLY, SPLAT or self-contained GLB, choose its declared origin, save two or more views, preview the move, then record. The original asset is never rewritten or sent to a provider. This is an appearance presentation tool, separate from the compiler, BIM measurements, floor fitting, occupancy and robot planner.
+Open https://www.brainsnn.com/world/splat.html. Load an owned local PLY, SPLAT or self-contained GLB, choose its declared origin, save two or more views, preview the move, then record. When ready, use the separate Download video and Download receipt buttons. The original asset is never rewritten or sent to a provider. This is an appearance presentation tool, separate from the compiler, BIM measurements, floor fitting, occupancy and robot planner.
 
 ## What ships
 
@@ -10,7 +10,7 @@ Open https://www.brainsnn.com/world/splat.html. Load an owned local PLY, SPLAT o
 - Local MP4 or WebM recording, selected from the browser's actual encoder support. The 1280 by 720 output letterboxes the real preview and permanently labels declared origin, scale and source hash. A separate receipt includes the video hash, dimensions, requested path duration, elapsed recording time and rendered frame count.
 - Cancellation on asset reset, hidden tab, graphics context loss, resize and Stop. No partial recording is downloaded. The recorder caps output at 64 MiB and releases stream tracks and listeners on failure.
 
-Recording uses real time. Encoder frame rate and container duration are not certified by the product receipt. Browser regression tests separately probe the emitted container with FFprobe. A source hash establishes file identity, not the truth of its declared origin or scale. Origin defaults to unknown; choosing “camera reconstruction” is a user declaration.
+Recording uses real time and requires a supported browser encoder. If none is available, the viewer reports that limitation and offers no video; path JSON and replay remain available. Encoder frame rate and container duration are not certified by the product receipt. Browser regression tests separately probe emitted containers with FFprobe whenever the browser advertises encoding support, and check the explicit unavailable state otherwise. A source hash establishes file identity, not the truth of its declared origin or scale. Origin defaults to unknown; choosing “camera reconstruction” is a user declaration.
 
 ## Coordinate contract
 

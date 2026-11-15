@@ -41,9 +41,58 @@ async function countPixels(canvas) {
   });
 }
 async function drawSettled(page) { await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))); }
+async function checkTourRecording(page,label,cameraPath) {
+  const capability=await page.evaluate(async()=>{
+    const {pickMime}=await import('./share-video.mjs');
+    const recorder=globalThis.MediaRecorder;
+    const formats=['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+    const support=formats.map(type=>({type,supported:!!recorder?.isTypeSupported?.(type)}));
+    return {mediaRecorder:typeof recorder==='function',captureStream:typeof document.createElement('canvas').captureStream==='function',
+      mime:pickMime(type=>support.find(row=>row.type===type)?.supported||false),support};
+  });
+  const advertised=capability.mediaRecorder&&capability.captureStream&&!!capability.mime;
+  const downloads=[],onDownload=download=>downloads.push(download.suggestedFilename());
+  page.on('download',onDownload);
+  try {
+    await page.locator('[data-tour-video]').click();
+    await page.waitForFunction(()=>/Recording ready|Recording stopped/.test(document.querySelector('[data-tour-status]').textContent));
+    const recordingStatus=await page.locator('[data-tour-status]').textContent();
+    console.log(`${label}: camera tour recorder ${JSON.stringify({capability,status:recordingStatus})}`);
+    await writeFile(new URL(label+'-camera-recorder.json',output),JSON.stringify({capability,status:recordingStatus},null,2));
+    assert.deepEqual(downloads,[],'Recording must wait for an explicit download click.');
+    if(!advertised) {
+      assert.match(recordingStatus,/Recording stopped:.*(?:recording is unavailable|No supported MP4 or WebM recorder|Canvas video capture is unavailable)/i,JSON.stringify(capability));
+      assert.ok(await page.locator('[data-tour-save-video]').isDisabled());
+      assert.ok(await page.locator('[data-tour-save-receipt]').isDisabled());
+      assert.equal(downloads.length,0,'Unsupported recording must not export a video or receipt.');
+      return;
+    }
+    assert.match(recordingStatus,/Recording ready/,`An advertised encoder must finish a real recording: ${JSON.stringify({capability,status:recordingStatus})}`);
+    assert.ok(await page.locator('[data-tour-save-video]').isEnabled());
+    assert.ok(await page.locator('[data-tour-save-receipt]').isEnabled());
+    const [videoDownload]=await Promise.all([page.waitForEvent('download'),page.locator('[data-tour-save-video]').click()]);
+    assert.match(videoDownload.suggestedFilename(),/^appearance-tour\.(mp4|webm)$/);
+    const [receiptDownload]=await Promise.all([page.waitForEvent('download'),page.locator('[data-tour-save-receipt]').click()]);
+    assert.equal(receiptDownload.suggestedFilename(),'appearance-tour-receipt.json');
+    const videoPath=await videoDownload.path(),videoBytes=await readFile(videoPath),receipt=JSON.parse(await readFile(await receiptDownload.path()));
+    assert.equal(receipt.video.sha256,createHash('sha256').update(videoBytes).digest('hex'));
+    assert.equal(receipt.source.sha256,cameraPath.source.sha256);
+    assert.equal(receipt.physicalRobotValidated,false);
+    const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-of','json',videoPath],{encoding:'utf8'}));
+    assert.equal(probe.streams[0].width,1280);assert.equal(probe.streams[0].height,720);assert.ok(videoBytes.length>2000);
+    assert.equal(downloads.length,2,'Each explicit save exports exactly one file.');
+  } catch(error) {
+    const recordingStatus=await page.locator('[data-tour-status]').textContent();
+    const diagnostic={capability,status:recordingStatus,downloads,error:String(error)};
+    await writeFile(new URL(label+'-camera-recorder-failure.json',output),JSON.stringify(diagnostic,null,2));
+    await page.screenshot({path:new URL(label+'-camera-recorder-failure.png',output).pathname,fullPage:true});
+    throw Error(`Camera tour recording failed: ${JSON.stringify(diagnostic)}`,{cause:error});
+  } finally { page.off('download',onDownload); }
+}
 async function check(browser, mobile) {
   const context=await browser.newContext(mobile ? {...devices['iPhone 15'],deviceScaleFactor:1} : {viewport:{width:1280,height:1000},deviceScaleFactor:1});
   const page=await context.newPage(), errors=[], requests=[];
+  const label=browser.browserType().name()+(mobile?'-mobile':'-desktop');
   page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>requests.push({url:request.url(),method:request.method()}));
   await page.goto(base+'splat.html');
   const input=page.locator('#asset'), status=page.locator('#viewer-status'), cloud=page.locator('#asset-canvas');
@@ -67,17 +116,9 @@ async function check(browser, mobile) {
   assert.equal(cameraPath.provenance,'generated');assert.equal(cameraPath.keyframes.length,2);
   await page.locator('[data-tour-play]').click();
   await page.waitForFunction(()=>document.querySelector('[data-tour-status]').textContent.includes('Preview complete'));
-  const tourVideo=page.waitForEvent('download',d=>/^appearance-tour\.(mp4|webm)$/.test(d.suggestedFilename()));
-  const tourReceipt=page.waitForEvent('download',d=>d.suggestedFilename()==='appearance-tour-receipt.json');
-  await page.locator('[data-tour-video]').click();
-  const videoDownload=await tourVideo,receiptDownload=await tourReceipt;
-  const videoPath=await videoDownload.path(),videoBytes=await readFile(videoPath),receipt=JSON.parse(await readFile(await receiptDownload.path()));
-  assert.equal(receipt.video.sha256,createHash('sha256').update(videoBytes).digest('hex'));
-  assert.equal(receipt.source.sha256,cameraPath.source.sha256);
-  assert.equal(receipt.physicalRobotValidated,false);
-  const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-of','json',videoPath],{encoding:'utf8'}));
-  assert.equal(probe.streams[0].width,1280);assert.equal(probe.streams[0].height,720);assert.ok(videoBytes.length>2000);
+  await checkTourRecording(page,label,cameraPath);
   await page.locator('#flip').click();assert.ok(await page.locator('[data-tour-play]').isDisabled());
+  assert.ok(await page.locator('[data-tour-save-video]').isDisabled());assert.ok(await page.locator('[data-tour-save-receipt]').isDisabled());
   await page.locator('[data-tour-import]').setInputFiles({name:'wrong-axis.json',mimeType:'application/json',buffer:pathBytes});
   await page.waitForFunction(()=>document.querySelector('[data-tour-status]').textContent.includes('Path rejected'));
   await page.locator('#flip').click();
@@ -100,7 +141,6 @@ async function check(browser, mobile) {
   await page.locator('[data-tour-import]').setInputFiles({name:'wrong-source.json',mimeType:'application/json',buffer:pathBytes});
   await page.waitForFunction(()=>document.querySelector('[data-tour-status]').textContent.includes('Path rejected'));
   const image=await cloud.evaluate(el=>el.toDataURL('image/png'));
-  const label=browser.browserType().name()+(mobile?'-mobile':'-desktop');
   await writeFile(new URL(label+'-point-viewer.png',output),Buffer.from(image.split(',')[1],'base64'));
   await page.locator('#remove').click();await cloud.scrollIntoViewIfNeeded();await drawSettled(page);assert.equal((await countPixels(cloud)).count,0);
   await input.setInputFiles({name:'invalid.ply',mimeType:'application/octet-stream',buffer:Buffer.from('ply\nformat ascii 1.0\nelement vertex 10000001\nproperty float x\nend_header\n')});

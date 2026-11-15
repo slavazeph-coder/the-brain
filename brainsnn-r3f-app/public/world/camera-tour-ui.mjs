@@ -4,7 +4,7 @@ import { recordCameraTour } from './camera-tour-video.mjs';
 /** Local appearance only. No path or imported file enters the scene compiler or planner. */
 export function mountCameraTour({ root, getViewer }) {
   const $ = id => root.querySelector(`[data-tour-${id}]`);
-  let source = null, transform = 'identity', placement = 'identity', translation = [0, 0, 0], frames = [], generation = 0, task = null;
+  let source = null, transform = 'identity', placement = 'identity', translation = [0, 0, 0], frames = [], generation = 0, task = null, clip = null;
   const status = message => { $('status').textContent = message; };
   const provenance = () => $('provenance').value;
   const path = () => createCameraPath({ source, displayTransform: transform, sourcePlacement: placement, sourceTranslation: translation, provenance: provenance(), keyframes: frames });
@@ -15,6 +15,7 @@ export function mountCameraTour({ root, getViewer }) {
     $('undo').disabled ||= !frames.length;
     $('clear').disabled ||= !frames.length;
     for (const id of ['play', 'export', 'video']) $(id).disabled = !ready || frames.length < 2 || busy;
+    for (const id of ['save-video', 'save-receipt']) $(id).disabled = !clip || busy;
     $('stop').disabled = !busy;
     $('frames').textContent = frames.length ? frames.map((f, i) => `${i + 1}: ${f.time.toFixed(1)} s`).join(' · ') : 'No camera views saved.';
   }
@@ -29,6 +30,7 @@ export function mountCameraTour({ root, getViewer }) {
   }
   function begin() {
     stop();
+    clip = null;
     task = new AbortController();
     const canvas = getViewer()?.getCanvas();
     if (canvas) { canvas.style.pointerEvents = 'none'; canvas.setAttribute('aria-busy', 'true'); canvas.blur(); }
@@ -39,18 +41,18 @@ export function mountCameraTour({ root, getViewer }) {
     const url = URL.createObjectURL(blob), link = document.createElement('a');
     link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function clearViews(message) { generation++; frames = []; controls(); status(message); }
+  function clearViews(message) { generation++; frames = []; clip = null; controls(); status(message); }
   $('add').onclick = () => {
     try {
       const interval = Number($('interval').value);
       if (!Number.isFinite(interval) || interval < 0.5 || interval > 15) throw Error('Choose 0.5 to 15 seconds between views.');
       const next = [...frames, { time: frames.length ? frames.at(-1).time + interval : 0, ...getViewer().getView() }];
       const checked = createCameraPath({ source, displayTransform: transform, sourcePlacement: placement, sourceTranslation: translation, provenance: provenance(), keyframes: next });
-      generation++; frames = checked.keyframes;
+      generation++; frames = checked.keyframes; clip = null;
       controls(); status('View saved. Preview the full move for clipping and unknown areas.');
     } catch (error) { status(error.message); }
   };
-  $('undo').onclick = () => { generation++; frames.pop(); controls(); status('Last view removed.'); };
+  $('undo').onclick = () => { generation++; frames.pop(); clip = null; controls(); status('Last view removed.'); };
   $('clear').onclick = () => clearViews('Camera views cleared.');
   $('provenance').onchange = () => clearViews('Origin changed. Save new views with this declared origin.');
   $('export').onclick = () => {
@@ -66,7 +68,7 @@ export function mountCameraTour({ root, getViewer }) {
       const text = await file.text();
       if (token !== generation || !source) return;
       const checked = parseCameraPath(text, { source, displayTransform: transform, sourcePlacement: placement, sourceTranslation: translation });
-      frames = checked.keyframes; $('provenance').value = checked.provenance;
+      frames = checked.keyframes; clip = null; $('provenance').value = checked.provenance;
       controls(); status('Matching source and display transform verified. Declared origin is not independently verified.');
     } catch (error) { if (token === generation) status(`Path rejected: ${error.message}`); }
   };
@@ -101,12 +103,13 @@ export function mountCameraTour({ root, getViewer }) {
       const receipt = { ...result.receipt, displaySettings: { pointSize: document.getElementById('point-size')?.value,
         surfaceMode: document.getElementById('surface-mode')?.value, stripeFrequency: document.getElementById('stripe-frequency')?.value }, video: { bytes: result.blob.size, type: result.type,
         sha256: Array.from(new Uint8Array(hash), v => v.toString(16).padStart(2, '0')).join('') } };
-      download(result.blob, `appearance-tour.${result.type.includes('mp4') ? 'mp4' : 'webm'}`);
-      download(new Blob([JSON.stringify(receipt, null, 2) + '\n'], { type: 'application/json' }), 'appearance-tour-receipt.json');
-      status('Video and source-bound receipt downloaded. Local rendering only; no new views were generated.');
+      clip = { blob: result.blob, type: result.type, receipt };
+      status('Recording ready. Use Download video and Download receipt. Local rendering only; no new views were generated.');
     } catch (error) { if (token === generation) status(`Recording stopped: ${error.message}`); }
     finally { if (token === generation) { task = null; unlock(); controls(); } }
   };
+  $('save-video').onclick = () => { if (clip) download(clip.blob, `appearance-tour.${clip.type.includes('mp4') ? 'mp4' : 'webm'}`); };
+  $('save-receipt').onclick = () => { if (clip) download(new Blob([JSON.stringify(clip.receipt, null, 2) + '\n'], { type: 'application/json' }), 'appearance-tour-receipt.json'); };
   $('stop').onclick = () => { stop(); status('Preview or recording cancelled. No partial video exported.'); };
   function hidden() { if (document.hidden && task) { stop(); status('Paused by leaving the tab. Preview or record again.'); } }
   document.addEventListener('visibilitychange', hidden);
@@ -117,7 +120,7 @@ export function mountCameraTour({ root, getViewer }) {
       $('provenance').value = 'unknown'; clearViews(source ? 'Choose the asset origin, then save two or more views.' : 'Open a local asset to author a camera path.');
     },
     invalidate(displayTransform) { stop(); transform = displayTransform; clearViews('Display axis changed. Save new camera views for this orientation.'); },
-    cancel() { stop(); },
-    destroy() { stop(); document.removeEventListener('visibilitychange', hidden); },
+    cancel() { const hadClip = !!clip; stop(); clip = null; controls(); if (hadClip) status('View settings changed. Record a new video for this presentation.'); },
+    destroy() { stop(); clip = null; document.removeEventListener('visibilitychange', hidden); },
   };
 }
