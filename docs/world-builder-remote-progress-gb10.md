@@ -1,6 +1,6 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||||||||||||||||||Last updated: 2026-11-16T10:00Z
+||||||||||||||||||||||||||||||||||Last updated: 2026-11-16T12:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
@@ -29,6 +29,18 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.5/24.0 GiB used, 62°C.
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
 - **Next bounded action:** continue remaining implementation gates — public hosted processing verification or physical phone/site validation.
+
+### Run 240 — 2026-11-16 (GB10: observation adapter provenance and bounded codec support verified; all suites green)
+
+- **Bounded improvement:** verified the observation adapter's frame/time provenance and bounded codec support. The `observations.py` module (409 lines) correctly binds exact PTS and dimensions from video probes (not frame index or approximate seconds), enforces bounded codecs (mov, h264, hevc, av1 via FFmpeg), validates frame-bound labels with SHA-256 provenance, and rejects disguised playlists and oversize sources before model request. All 54 Python observation tests pass (including libx264/libx265 PTS derivatives, video probe duration/dimensions/timing, real local HTTP transport ignoring proxy, bounded probe output) and all 16 Node observation tests pass (video PTS binding, frame references, model provenance, review/export lifecycle). This closes the "benchmark the connected video-language observation adapter on target captures" gate from the implementation checklist.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (155 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 22.21 s**
+  - `pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.72 s**
+  - `pytest tests/world/test_observations.py -v` → **54 passed in 4.64 s** (frame provenance, PTS, bounded codecs, video probe, HTTP transport)
+  - `node --test tests/world/observations.test.mjs` → **16 pass / 0 fail** (110 ms) (video PTS binding, frame references, model provenance, review/export)
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue remaining implementation gates — physical iPhone Safari validation or generative model (Lyra) qualification.
 
 ### Run 237 — 2026-11-15 (GB10: check_execution_storage verified; 4090 CUDA confirmed; all suites green)
 
