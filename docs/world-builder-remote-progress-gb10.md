@@ -15,6 +15,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
   - `pytest tests/world/test_worker.py -k "evidence or source or complete" -v` → **2 passed** (evidence immutability confirmed)
 - **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.0/24.0 GiB used, 57°C.
 - **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+|- **Next bounded action:** continue remaining implementation gates — public hosted processing verification or physical phone/site validation.
+
+### Run 239 — 2026-11-16 (GB10: public hosted processing gate verified; tenant isolation confirmed; all suites green)
+
+- **Bounded improvement:** verified the public hosted processing gate — `WORLD_PUBLIC_PROCESSING` and `WORLD_PUBLIC_DOMAIN` env vars are correctly wired into `/v1/capabilities`, `/v1/jobs` consent, and `/healthz`. All 7 public_domain/public_processing tests pass. Tenant isolation suite fully verified: 30/30 tests pass (registry bounded, per-owner upload, ticket binding, legacy migration, engine allowlist). Branch `hermes/world-builder-gb10` at `d29afa5` with untracked `tests/world/debug_ui_smoke.py` and `world-worker-data/` preserved.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (163 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 14.94 s**
+  - `pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.60 s**
+  - `pytest tests/world/test_worker.py -k "public_processing or public_domain" -v` → **7 passed** (public hosted processing gate verified)
+  - `pytest tests/world/test_tenant_isolation.py -v` → **30 passed in 2.52 s** (tenant isolation confirmed)
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.5/24.0 GiB used, 62°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
 - **Next bounded action:** continue remaining implementation gates — public hosted processing verification or physical phone/site validation.
 
 ### Run 237 — 2026-11-15 (GB10: check_execution_storage verified; 4090 CUDA confirmed; all suites green)
