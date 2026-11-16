@@ -1,9 +1,21 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||||||Last updated: 2026-11-15T22:30Z
+||||||||||||||||||||||||||||||Last updated: 2026-11-16T10:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 238 — 2026-11-16 (GB10: integration-gap verification — source_hashes/completed_evidence immutability confirmed; all suites green)
+
+- **Bounded improvement:** verified the integration gap between `hermes/world-builder-gb10` and `origin/main`: the GB10 branch's `source_hashes` and `completed_evidence` columns with their immutability triggers are correctly wired into `Store.record_sources()`, `Store.complete()`, and `Store.evidence()` in `app.py`. The `evidence()` endpoint returns 409 when `completed_evidence` is missing or job status is not `complete`. All 2 evidence/source tests pass. Branch diff: 741 insertions, 670 deletions across `app.py` and `test_worker.py`. Confirmed 4090 host alive: hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.0/24.0 GiB used, 57°C.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (173 ms)
+  - `pytest tests/world/test_report_receipts.py -q` → **34 passed in 19.12 s**
+  - `pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.74 s**
+  - `pytest tests/world/test_worker.py -k "evidence or source or complete" -v` → **2 passed** (evidence immutability confirmed)
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.0/24.0 GiB used, 57°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue remaining implementation gates — public hosted processing verification or physical phone/site validation.
 
 ### Run 237 — 2026-11-15 (GB10: check_execution_storage verified; 4090 CUDA confirmed; all suites green)
 
