@@ -3,7 +3,7 @@
 export function createCaptureClient({
   mediaDevices = globalThis.navigator?.mediaDevices,
   Recorder = globalThis.MediaRecorder,
-  onStream = async () => {}, onFile = () => {}, onState = () => {}, onError = () => {},
+  onStream = () => {}, onFile = () => {}, onState = () => {}, onError = () => {},
   maxBytes = 200 * 1024 ** 2, durationMs = 90000,
   setTimer = setTimeout, clearTimer = clearTimeout,
 } = {}) {
@@ -73,7 +73,8 @@ export function createCaptureClient({
       recorder.start(1000);
       session.state = 'recording'; onState('recording');
       session.timer = setTimer(() => { if (active === session) stop(); }, durationMs);
-      await onStream(stream);
+      const result = onStream(stream);
+      if (result && typeof result.then === 'function') await result.catch(() => {});
       return active === session;
     } catch (error) {
       discard(session, error);

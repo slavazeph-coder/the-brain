@@ -120,7 +120,4 @@ test('iPhone Safari bounded codec list validates correctly',async()=>{
   assert.equal(hdr.recorders[0].mimeType,'video/mp4;codecs=avc1.42E01E');
   hdr.client.stop();await tick();
   assert.equal(hdr.files.length,1);
-  // Wait for all pending microtasks to settle
-  await new Promise(r=>setTimeout(r,50));
-  await new Promise(r=>setImmediate(r));
 });
