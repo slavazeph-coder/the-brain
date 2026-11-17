@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||||||||||||||||||||||Last updated: 2026-11-16T12:00Z
+|||||||||||||||||||||||||||||||||||Last updated: 2026-11-17T00:00Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 241 — 2026-11-17 (GB10: capture-client onStream fix committed; all suites green)
+
+- **Bounded improvement:** committed the capture-client Test 8 fix — `onStream` changed from `async () => {}` to `() => {}` (synchronous return), and the `await` in `start()` now handles both promise and non-promise returns. Removed redundant microtask waits from `capture-client.test.mjs`. Branch `hermes/world-builder-gb10` at `da3ed5a`.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (147 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **34 passed in 21.48 s**
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.42 s**
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.2/24.0 GiB used, 58°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue remaining implementation gates — physical iPhone Safari validation or generative model (Lyra) qualification.
 
 ### Run 238 — 2026-11-16 (GB10: integration-gap verification — source_hashes/completed_evidence immutability confirmed; all suites green)
 
