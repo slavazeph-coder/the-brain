@@ -1,7 +1,7 @@
 // Autonomy trial page: a live top-down view of the sense -> map -> plan -> act loop on a reviewed World map, and a
 // paired trial that runs the same tasks clean and broken on purpose. Everything runs in this browser; nothing uploads.
 import {sampleWorld, normalizeWorld, planningGate} from './core.mjs';
-import {PLATFORMS, SENSOR_SPECS, OBSTACLE_RANGE, LOOP_VERSION, createEpisode, stepEpisode, requestCrate, sampleTasks, runTrial, verifyTrialReport, footprint, createMap, planPath} from './autonomy.mjs';
+import {PLATFORMS, SENSOR_SPECS, OBSTACLE_RANGE, LOOP_VERSION, createEpisode, stepEpisode, requestCrate, sampleTasks, runTrial, verifyTrialReport, footprint, createMap, planPath, fitsAt} from './autonomy.mjs';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -52,12 +52,20 @@ function gate() {
 
 function defaultTask(world, key, seed) {
   if (state.source === 'sample') {
-    // The long diagonal across the sample floor when this robot fits it, so a first visit sees the whole loop.
+    // The long diagonal across the sample floor when this robot fits at the sample's start, so a first visit sees the
+    // whole loop. A robot too large for that corner (the compact forklift) starts on open floor instead, below.
     const p = PLATFORMS[key], radius = Math.hypot(p.width, p.depth) / 2 + 0.1, map = createMap(world, {prior: true});
-    for (const goal of [{x: 16.5, z: 11.5}, {x: 16.6, z: 5.2}, {x: 9.5, z: 11}]) if (planPath(map, null, world.start, goal, {radius}).ok) return {start: world.start, goal};
+    if (fitsAt(map, key, world.start))
+      for (const goal of [{x: 16.5, z: 11.5}, {x: 16.6, z: 5.2}, {x: 9.5, z: 11}]) if (planPath(map, null, world.start, goal, {radius}).ok) return {start: world.start, goal};
   }
   const t = sampleTasks(world, key, 1, seed)[0];
   return t ? {start: t.start, goal: t.goal} : null;
+}
+/** Where a fresh episode with a chosen goal starts: the map's start when this robot fits there, otherwise the start
+ *  of its default task, so a large robot is never placed over a wall. */
+function freshStart(world, key, seed) {
+  if (fitsAt(createMap(world, {prior: true}), key, world.start)) return world.start;
+  return defaultTask(world, key, seed)?.start || world.start;
 }
 
 /** Start a live episode. `keep` continues from where the robot stands with what it has already mapped. */
@@ -65,7 +73,7 @@ function startEpisode({goal = null, keep = false, demoCrate = false} = {}) {
   const g = gate();
   if (g) { pause(); state.ep = null; draw(); status(g, true); return false; }
   const key = robot(), prev = keep && state.ep && state.ep.robotKey === key ? state.ep : null;
-  const task = goal ? {start: prev ? prev.truePose : state.world.start, goal} : defaultTask(state.world, key, state.seed);
+  const task = goal ? {start: prev ? prev.truePose : freshStart(state.world, key, state.seed), goal} : defaultTask(state.world, key, state.seed);
   if (!task) { status('No start and goal on this map fits this robot. Choose a smaller robot or review the map.', true); state.ep = null; draw(); return false; }
   try {
     state.ep = createEpisode(state.world, {robot: key, start: task.start, goal: task.goal, seed: state.seed, sensors: sensors(), prior: $('prior').checked, density: 'demo', record: true,

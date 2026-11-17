@@ -63,6 +63,12 @@ Open `http://127.0.0.1:4180/world/autonomy.html`. Tap the floor to send the robo
 way** places one on the route ahead. A map saved in World Builder (Save map) or an exported World JSON can be loaded
 under **Space**; like World Builder, a loaded map must be reviewed by the person before the robot runs on it.
 
+A robot always starts where it fits whatever its heading: the map's start when its circumscribed radius plus the
+planning margin clears every wall and object there (`fitsAt`), otherwise the start of its first sampled task. On the
+sample floor this moves the compact forklift (1.1 × 2.4 m) off the corner start. `createEpisode` also refuses any
+start whose true footprint already overlaps a wall, an object or a keep-out area, so a setup error can never be
+scored as a contact.
+
 ## Boundaries
 
 - Kinematic unicycle at 10 Hz; no physics engine, wheel slip, legged gait or contact dynamics. Humanoid and

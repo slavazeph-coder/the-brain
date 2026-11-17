@@ -524,6 +524,10 @@ export function createEpisode(worldInput, options = {}) {
   const h0 = pointAt(refPath, Math.min(0.6, refPath.length));
   const th = Number.isFinite(options.heading) ? options.heading : Math.atan2(h0.z - start.z, h0.x - start.x) || 0;
   ep.truePose = {x: start.x, z: start.z, th}; ep.bias = {x: 0, z: 0, th: 0}; ep.estPose = {...ep.truePose};
+  // A footprint that already overlaps a wall, an object or a keep-out area would be scored as a contact on the first
+  // tick, before the robot has moved. That is a setup error, not a finding, so refuse the start instead of scoring it.
+  const atStart = scoreFootprint(ep.truth, platform, ep.truePose);
+  if (atStart.contact || atStart.keepOut) throw new Error('This robot does not fit at that start: its footprint overlaps a wall, an object or a keep-out area. Choose another start or a smaller robot.');
   ep.maxSeconds = options.maxSeconds ?? Math.ceil(refPath.length / platform.speed * 3 + 25);
   events.push({t: 0, type: 'start', start, goal, referenceDistance: round(refPath.length, 2)});
   sense(ep); updateClearance(map); replan(ep, 'start');
@@ -709,12 +713,18 @@ export function episodeResult(ep) {
 // ---------------------------------------------------------------------------------------------------------------
 // Trials: the same tasks and seeds run twice, as a control and broken on purpose, so differences come from the
 // perturbations rather than from easier or harder tasks.
+/** Whether a robot fits at a point whatever its heading: its circumscribed radius plus the planning margin and a 5 cm
+ *  allowance, on a map's clearance field. Task sampling and the page's default start use this same test. */
+export function fitsAt(map, robotKey, p, margin = 0.1) {
+  const platform = PLATFORMS[robotKey] || PLATFORMS.cleaner;
+  return clearanceAt(map, p.x, p.z) >= Math.hypot(platform.width, platform.depth) / 2 + margin + 0.05;
+}
 export const DEFAULT_TRIAL = Object.freeze({episodes: 10, seed: 1, robot: 'cleaner', prior: true, sensors: {lidar: true, front: true, rear: true}, perturbations: {crate: true, mapError: true, blackout: false, drift: false}});
 export function sampleTasks(world, robotKey, count, seed, {margin = 0.1, resolution = 0.04, referenceMap = null} = {}) {
   const platform = PLATFORMS[robotKey] || PLATFORMS.cleaner, radius = Math.hypot(platform.width, platform.depth) / 2 + margin;
   const map = referenceMap || createMap(world, {resolution, prior: true}), planner = makePlanner(map), tasks = [];
   const diag = Math.hypot(world.width, world.depth), minLeg = Math.min(5, 0.35 * diag);
-  const free = (p) => clearanceAt(map, p.x, p.z) >= radius + 0.05;
+  const free = (p) => fitsAt(map, robotKey, p, margin);
   for (let i = 0; tasks.length < count && i < count * 40; i++) {
     const r = rng(mix(seed, 7, i));
     const start = i === 0 && free(world.start) ? {x: world.start.x, z: world.start.z} : {x: r() * world.width, z: r() * world.depth};
