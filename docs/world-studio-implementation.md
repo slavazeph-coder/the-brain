@@ -161,7 +161,8 @@ The [generative qualification review](world-generative-qualification.md) records
 
 These are release requirements, not optional polish:
 
-1. Extend the successful bounded reference-photo and photograph-sequence GPU trials to actual indoor phone walkthroughs, establish reconstruction quality and qualify service scheduling. Qualify the chosen generative world model and checkpoint licenses separately. Lyra has not run here.
+1. Extend the successful bounded reference-photo and photograph-sequence GPU trials to actual indoor phone walkthroughs, establish reconstruction quality and qualify service scheduling. Qualify the chosen generative world model and checkpoint licenses separately.
+   - **Lyra 1 static scene qualification (Run 243):** nvshmem root cause confirmed — `nvshmem_selected_device_transport` is UNDEFINED in `libtorch_nvshmem.so` and MISSING in `libnvshmem_host.so.3` on ARM64. Workaround `TORCH_NVSHMEM_DISABLE=1` is in the app.py worker env whitelist (commit `5689a08`). Placeholder `lyra_static.pt` files exist (29 B each, not real weights). GB10 CUDA and memory are ready. Real weights download and static scene run are the next bounded step.
 2. Build public signup/session verification and API-key issuance, qualified process/storage isolation, metered compute limits, durable object storage/queueing and billing authorization. Private API ownership checks and per-owner admission limits are implemented; public hosted processing remains disabled. On-device photo processing needs no account.
 3. Test physical iPhone Safari camera permissions, recording/codecs, interruptions and upload fallback on real device captures. Phone-sized WebKit is not that evidence.
 4. Complete the geometry handoff from reconstructed camera/point evidence to proposed floor/obstacles, independent scale confirmation and robot-specific motion constraints. Sparse visual points are not a substitute for collision surfaces.
