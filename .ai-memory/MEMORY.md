@@ -65,6 +65,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Active Work
 
+→ [Shared matches for DeepBA](world-deepba-experiment-2026-11-16.md): fresh source-bound correspondence packs, graph screening and CPU replay; upstream DeepBA inference and physical qualification remain unavailable.
+
 → [Reviewed appearance objects](world-object-workshop-2026-11-15.md): manual retained point/Gaussian grouping, rigid edits, seeded variants and source-bound authored camera output; full extraction and physical qualification remain open.
 
 → [Local camera studio](world-camera-studio-2026-11-15.md): source-bound appearance paths, labelled local videos and explicit generated/metric/robot evidence limits.
