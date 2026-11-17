@@ -1,9 +1,31 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||||||||||||Last updated: 2026-11-17T00:00Z
+|||||||||||||||||||||||||||||||||||||Last updated: 2026-11-17T19:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 243 — 2026-11-17 (GB10: first-run baseline — all three suites green; 4090 confirmed alive)
+
+- **Bounded improvement:** first-run baseline verification. Node report-receipts (12 pass), Python report-receipts (34 passed), and Python worker suite (61 passed, 3 skipped) all green. 4090 host confirmed: hostname `d130b6c7f3f4`, RTX 4090, 16.5/24 GiB, 64°C, correct GPU UUID. Branch `hermes/world-builder-gb10` at `b82c87f` with untracked `lyra1-port/`, `capture-client-test8.mjs`, `debug_ui_smoke.py`, and `world-worker-data/` preserved.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (109 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **34 passed in 14.90 s**
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.84 s**
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 16.5/24.0 GiB used, 64°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** continue remaining implementation gates — physical iPhone Safari validation or generative model (Lyra) qualification.
+
+### Run 242 — 2026-11-17 (GB10: Lyra nvshmem fix verified — symbol confirmed UNDEFINED in libtorch_nvshmem.so, MISSING in libnvshmem_host.so.3; TORCH_NVSHMEM_DISABLE=1 workaround confirmed; all suites green)
+
+- **Bounded improvement:** verified the Lyra 1 nvshmem root cause on GB10. The symbol `nvshmem_selected_device_transport` is UNDEFINED in `libtorch_nvshmem.so` and MISSING in `libnvshmem_host.so.3` on ARM64. The `TORCH_NVSHMEM_DISABLE=1` environment variable workaround is confirmed working. The fix is propagated to `app.py` worker env whitelist (commit `5689a08`). Branch `hermes/world-builder-gb10` at `5689a08`.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (179 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **34 passed in 22.05 s**
+  - `/workspace/hermes-gb10/repos/the-brain/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.69 s**
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 18.1/24.0 GiB used, 53°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** physical iPhone Safari validation or generative model (Lyra) qualification.
 
 ### Run 241 — 2026-11-17 (GB10: capture-client onStream fix committed; all suites green)
 
