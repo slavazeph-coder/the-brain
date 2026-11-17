@@ -234,6 +234,10 @@ jobs:
         env:
           WORLD_BROWSERS: chromium,webkit
         run: python tests/world/operational_twin_browser_smoke.py
+      - name: Facility scan and model review, sections, bookmarks and source-bound receipts
+        env:
+          WORLD_BROWSERS: chromium,webkit
+        run: python tests/world/facility_browser_smoke.py
       - name: As-built IFC placements, unit conversion and source-preserving readback
         run: python -m pytest tests/world/test_asbuilt_update.py tests/world/test_asbuilt_jobs.py -q
       - name: MetricTrail bounded numeric result bridge (authored data, no GPU inference)
