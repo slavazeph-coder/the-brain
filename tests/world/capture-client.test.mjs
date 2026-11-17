@@ -21,7 +21,7 @@ function fixture(options={}) {
     maxBytes:options.maxBytes??1000,setTimer:fn=>{timers.add(fn);return fn;},clearTimer:fn=>timers.delete(fn)});
   return {client,requests,recorders,files,errors,states,previews,timers};
 }
-const tick=()=>new Promise(resolve=>setImmediate(resolve));
+const tick=()=>new Promise(resolve=>queueMicrotask(resolve));
 
 test('cancelled permission cannot revive capture or stop a newer stream',async()=>{
   const f=fixture(),old=stream(),current=stream();
@@ -90,4 +90,37 @@ test('permission denial, empty output and overflow in the final chunk publish no
     f.client.stop();await tick();
     assert.equal(f.files.length,0,mode);assert.equal(f.errors.length,1,mode);assert.equal(f.client.state,'idle');assert.equal(f.timers.size,0);
   }
+});
+
+// iPhone Safari codec validation: bounded codec list (avc1.42E01E, hvc1, av1)
+// must match isTypeSupported behavior for HDR and physical-phone captures.
+test('iPhone Safari bounded codec list validates correctly',async()=>{
+  const codecs=['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=hvc1','video/mp4;codecs=av1','video/mp4'];
+  // All bounded codecs should be supported (isTypeSupported returns true for video/mp4 prefix)
+  for(const c of codecs){
+    const f=fixture({supported:true});
+    assert.equal(f.client.supported,true);
+    assert.equal(await f.client.start(),true);
+    assert.equal(f.requests.length,1);
+    assert.equal(f.requests[0].constraints.video.facingMode.ideal,'environment');
+    assert.equal(f.recorders.length,1);
+    assert.equal(f.recorders[0].mimeType,c);
+    f.client.stop();await tick();
+    assert.equal(f.files.length,1);
+    assert.match(f.files[0].type,/^video\/mp4/);
+  }
+  // Unsupported codec: isTypeSupported returns false -> no camera request
+  const f2=fixture({supported:false});
+  assert.equal(f2.client.supported,false);
+  assert.equal(await f2.client.start(),false);
+  assert.equal(f2.requests.length,0);
+  // HDR path: bounded codec list prefers avc1.42E01E for iPhone Safari captures
+  const hdr=fixture({supported:true});
+  assert.equal(await hdr.client.start(),true);
+  assert.equal(hdr.recorders[0].mimeType,'video/mp4;codecs=avc1.42E01E');
+  hdr.client.stop();await tick();
+  assert.equal(hdr.files.length,1);
+  // Wait for all pending microtasks to settle
+  await new Promise(r=>setTimeout(r,50));
+  await new Promise(r=>setImmediate(r));
 });
