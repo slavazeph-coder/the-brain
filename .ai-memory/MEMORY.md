@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [World Builder playground usability](world-playground-usability-2026-11-17.md) — simpler entry and controls, preserved features, optional larger text/read-aloud and narrow-screen browser checks. Owner scope is World Builder.
+
 → [Unified world sandbox](world-sandbox-integration-2026-10-28.md) — native street objects, capture handoff, navigation and current scene exports inside the production World Builder.
 
 → [World launch integration](world-simready-launch-2026-10-27.md) — native-capture import, source-bound acceptance, real NVIDIA composition and Omniverse export integration; current deployment/access limits.
