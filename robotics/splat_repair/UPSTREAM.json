@@ -1,0 +1,52 @@
+{
+  "repository": "https://github.com/NicolasDrum/splat-repair",
+  "revision": "8487b80bdb512650a7cbc1a8165af62c34b9567d",
+  "license": "Apache-2.0",
+  "files": [
+    {
+      "upstream": "core/splatcore/io.py",
+      "local": "_vendor/io.py",
+      "sha256": "db0aa8a486f961dfb9ad4883dedb9a5dd1c68d68c97a30d4a01df5623a2a4c66"
+    },
+    {
+      "upstream": "core/splatcore/repair.py",
+      "local": "_vendor/repair.py",
+      "sha256": "2222b71c634e63058391eaa6e616dca7699c045323b08ae4d7facb946136f48b"
+    },
+    {
+      "upstream": "core/splatcore/surfacefit.py",
+      "local": "_vendor/surfacefit.py",
+      "sha256": "6cfffb0402b336d400a9ee3809ea013139adbf98e964d18cac7b79114d3e16f7"
+    },
+    {
+      "upstream": "core/splatcore/unfold.py",
+      "local": "_vendor/unfold.py",
+      "sha256": "9f14792364354e0a6904ac1f68573654bff85970f0e5082bd9b1ea520b0c0a88"
+    },
+    {
+      "upstream": "core/splatcore/shtools.py",
+      "local": "_vendor/shtools.py",
+      "sha256": "63ef34df7e9b117e04f373c2a8fdf303f42c6ce306c1e86905fe593bc4409637"
+    },
+    {
+      "upstream": "core/splatcore/volume.py",
+      "local": "_vendor/volume.py",
+      "sha256": "a9dbca486f3adbf543d453908680e5e49668e628c1d13875a009528f5e4a6340"
+    },
+    {
+      "upstream": "core/splatcore/__init__.py",
+      "local": "_vendor/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "upstream": "LICENSE",
+      "local": "LICENSE",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "upstream": "NOTICE",
+      "local": "NOTICE",
+      "sha256": "c9c430dd04d8208cd14286a38c3f78f6b3b45e69ed2cbd4aa44463b39661c324"
+    }
+  ]
+}

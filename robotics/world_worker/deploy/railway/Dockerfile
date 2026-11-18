@@ -1,4 +1,5 @@
-# brainsnn.com's own World Builder worker on Railway: CPU reconstruction (COLMAP) and the scene engine (Blender as a
+# brainsnn.com's own World Builder worker on Railway: CPU reconstruction (COLMAP), appearance repair, measured map
+# packaging, SOMA motion references and the scene engine (Blender as a
 # Python module), reached only by the site's server over Railway's private network. Build context: the repository root.
 # Setup: robotics/world_worker/deploy/railway/README.md.
 # Blender 4.2's bpy module is built for Python 3.11 only; Ubuntu 24.04 ships 3.12, so 3.11 comes from the official image.
@@ -9,7 +10,7 @@ FROM ubuntu:24.04
 # needs it); bpy needs these X/GL libraries even headless.
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates ffmpeg fonts-dejavu-core python3.12 python3.12-venv \
+      ca-certificates git ffmpeg fonts-dejavu-core python3.12 python3.12-venv \
       libgl1 libegl1 libx11-6 libxrender1 libxxf86vm1 libxfixes3 libxi6 libxkbcommon0 libsm6 libice6 libgomp1 \
       libssl3t64 libffi8 libsqlite3-0 libexpat1 libbz2-1.0 liblzma5 zlib1g \
     && rm -rf /var/lib/apt/lists/*
@@ -22,10 +23,13 @@ WORKDIR /app
 COPY robotics/world_worker/requirements.txt robotics/world_worker/requirements-colmap.txt \
      robotics/world_worker/requirements-dense.txt robotics/world_worker/requirements-cad.txt \
      robotics/world_worker/requirements-asbuilt.txt robotics/world_worker/
+COPY robotics/splat_repair/requirements.txt robotics/splat_repair/requirements.txt
 # The worker, COLMAP (with ONNX Runtime for the scale model) and the CAD exports on Python 3.12 (their pinned numpy needs it).
 RUN python3.12 -m venv /opt/worker && /opt/worker/bin/pip install --no-cache-dir \
       -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-dense.txt \
-      -r robotics/world_worker/requirements-cad.txt -r robotics/world_worker/requirements-asbuilt.txt usd-core==25.8
+      -r robotics/world_worker/requirements-cad.txt -r robotics/world_worker/requirements-asbuilt.txt \
+      -r robotics/splat_repair/requirements.txt usd-core==25.8 \
+    && /opt/worker/bin/pip check
 # MoGe-2 ViT-B (MIT) for the estimated metric scale of each reconstruction (about 420 MB): the revision and hash pinned in
 # metric_scale.py MODEL, checked here and again by the adapter before every use. Nothing is downloaded at run time.
 RUN mkdir -p /opt/brainsnn-models && /opt/worker/bin/python -c "import hashlib, urllib.request; \
@@ -36,10 +40,43 @@ assert digest == 'bbf14e07a30f11e69d36ab861590123f5598ababcbc8946a063eb4a966f35a
 # Blender 4.2 as a Python module, which the scene engine runs as its `blender` (about 400 MB).
 RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==4.2.23
 
+# SOMA has a separate numerical runtime (NumPy 2.4.3/USD 26.3) so the existing
+# reconstruction/CAD environment keeps its qualified NumPy 2.5.4/USD 25.8.
+# Fetch and verify the exact upstream source and G1 assets at BUILD time only;
+# no restricted example motion corpus is retained in the image. Qualification executes real
+# CPU IK on an authored arm sweep and warms Warp's cache. A failed solve fails
+# the image build. These stages are independent of other worker source edits.
+ENV WORLD_SOMA_RUNTIME_DIR=/opt/soma/upstream WORLD_SOMA_DEVICE=cpu \
+    WARP_CACHE_PATH=/opt/soma/warp-cache \
+    OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 MKL_NUM_THREADS=2
+COPY robotics/motion_retarget /app/robotics/motion_retarget
+COPY robotics/world_worker/motion_retarget.py /app/robotics/world_worker/motion_retarget.py
+RUN python3.12 -m venv /opt/soma/venv \
+    && /opt/soma/venv/bin/pip install --no-cache-dir -r robotics/motion_retarget/requirements-headless.txt \
+    && /opt/soma/venv/bin/pip check \
+    && /opt/soma/venv/bin/python -m robotics.motion_retarget.setup_runtime --destination /opt/soma/upstream \
+    && /opt/soma/venv/bin/python -m robotics.motion_retarget.qualify \
+         --runtime-dir /opt/soma/upstream --out /opt/soma/qualification \
+    && chmod -R a-w /opt/soma/upstream
+
+# OpenSim uses its own pinned native CPU environment. XML admission stays in
+# the main worker; each actual analysis verifies this runtime's wheel receipt.
+# The build gate compares an authored pendulum's dynamics with analytic torque.
+COPY robotics/biomechanics /app/robotics/biomechanics
+COPY robotics/world_worker/biomechanics.py /app/robotics/world_worker/biomechanics.py
+RUN python3.12 -m venv /opt/biomechanics/venv \
+    && /opt/biomechanics/venv/bin/python -m robotics.biomechanics.setup_runtime \
+    && /opt/biomechanics/venv/bin/pip check \
+    && /opt/biomechanics/venv/bin/python -m robotics.biomechanics.qualify --out /opt/biomechanics/qualification
+
 # The bounded NVIDIA package is pinned, hash-checked, and outside the /data volume.
 COPY robotics/world_worker/nvidia_pack.py /tmp/nvidia_pack.py
 RUN /opt/worker/bin/python /tmp/nvidia_pack.py --workspace /opt/brainsnn-simready
 COPY robotics /app/robotics
+# Map packaging is pure Python; the actual ROS 2 localizer has its own edge
+# image (robotics/localization/Dockerfile), never an implicit hosted simulation.
+# Verify that the enabled runtime imports and vendor hashes are present here.
+RUN /opt/worker/bin/python -c "from robotics.world_worker import splat_repair, localization_job; from robotics.splat_repair.runtime import verify_vendor; verify_vendor()"
 # Saved-output replay uses CPU rendering only. The reviewed Railway profile is
 # owner-only; include the same planner used by the website and qualify in CI.
 RUN /opt/worker/bin/pip install --no-cache-dir -r robotics/world_worker/requirements-demo.txt

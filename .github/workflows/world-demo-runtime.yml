@@ -4,6 +4,10 @@ on:
     paths:
       - robotics/world_worker/**
       - robotics/scene_compiler/**
+      - robotics/splat_repair/**
+      - robotics/motion_retarget/**
+      - robotics/localization/**
+      - robotics/biomechanics/**
       - scripts/world-demo/qualify_demo_runtime.py
       - scripts/world-demo/film/plan_route.mjs
       - brainsnn-r3f-app/public/world/core.mjs

@@ -138,6 +138,13 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     getCanvas(){return disposed?null:canvas;},
     getBounds(){return points.length?bounds(points):null;},
     selectRectangle(rectangle,options){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');const {view,projection}=camera(),r=canvas.getBoundingClientRect();return selectVisualRectangle(points,view,projection,rectangle,{left:r.left,top:r.top,width:r.width,height:r.height},options);},
+    selectPointsRectangle(source,rectangle,options){
+      if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');
+      if(!(source instanceof Float32Array)||source.length%STRIDE||source.length/STRIDE>200000)throw Error('Source selection exceeds its point budget.');
+      const {view,projection}=camera(),r=canvas.getBoundingClientRect(),viewport={left:r.left,top:r.top,width:r.width,height:r.height},selected=[];
+      for(let at=0;at<source.length;at+=MAX_POINTS*STRIDE)for(const index of selectVisualRectangle(source.subarray(at,at+MAX_POINTS*STRIDE),view,projection,rectangle,viewport,options))selected.push(at/STRIDE+index);
+      return selected;
+    },
     setSelection(indices=[]){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');if(!(Array.isArray(indices)||indices instanceof Uint32Array)||indices.length>order.length)throw Error('Use at most one selection index per retained sample.');const mask=new Uint8Array(order.length);for(const index of indices){if(!Number.isInteger(index)||index<0||index>=order.length)throw Error('Selection index is outside the retained preview.');mask[index]=1;}selectionMask=mask;selectionDirty=true;schedule();},
     flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
     orbit(on=!auto){auto=!!on;sway=null;schedule();return auto;},

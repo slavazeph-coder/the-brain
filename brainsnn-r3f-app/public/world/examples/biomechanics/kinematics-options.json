@@ -1,0 +1,9 @@
+{
+  "schema": "brainsnn.biomechanics-options.v1",
+  "analysis": "kinematics",
+  "model_up_axis": "Y",
+  "length_units": "m",
+  "moment_arm_coordinates": [
+    "knee_angle_r"
+  ]
+}
