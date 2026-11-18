@@ -43,8 +43,7 @@ RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==
 # SOMA has a separate numerical runtime (NumPy 2.4.3/USD 26.3) so the existing
 # reconstruction/CAD environment keeps its qualified NumPy 2.5.4/USD 25.8.
 # Fetch and verify the exact upstream source and G1 assets at BUILD time only;
-# only allowlisted runtime files enter the final image; no sample corpus is retained.
-# Qualification executes real
+# no restricted example motion corpus is retained in the image. Qualification executes real
 # CPU IK on an authored arm sweep and warms Warp's cache. A failed solve fails
 # the image build. These stages are independent of other worker source edits.
 ENV WORLD_SOMA_RUNTIME_DIR=/opt/soma/upstream WORLD_SOMA_DEVICE=cpu \
@@ -59,6 +58,16 @@ RUN python3.12 -m venv /opt/soma/venv \
     && /opt/soma/venv/bin/python -m robotics.motion_retarget.qualify \
          --runtime-dir /opt/soma/upstream --out /opt/soma/qualification \
     && chmod -R a-w /opt/soma/upstream
+
+# OpenSim uses its own pinned native CPU environment. XML admission stays in
+# the main worker; each actual analysis verifies this runtime's wheel receipt.
+# The build gate compares an authored pendulum's dynamics with analytic torque.
+COPY robotics/biomechanics /app/robotics/biomechanics
+COPY robotics/world_worker/biomechanics.py /app/robotics/world_worker/biomechanics.py
+RUN python3.12 -m venv /opt/biomechanics/venv \
+    && /opt/biomechanics/venv/bin/python -m robotics.biomechanics.setup_runtime \
+    && /opt/biomechanics/venv/bin/pip check \
+    && /opt/biomechanics/venv/bin/python -m robotics.biomechanics.qualify --out /opt/biomechanics/qualification
 
 # The bounded NVIDIA package is pinned, hash-checked, and outside the /data volume.
 COPY robotics/world_worker/nvidia_pack.py /tmp/nvidia_pack.py

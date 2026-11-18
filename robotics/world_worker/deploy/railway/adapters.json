@@ -170,5 +170,15 @@
     "max_inputs": 2,
     "timeout_seconds": 900,
     "command": ["/opt/soma/venv/bin/python", "/app/robotics/world_worker/motion_retarget.py", "--input-manifest", "{input_manifest}"]
+  },
+  {
+    "id": "biomechanics",
+    "label": "Understand movement with an OpenSim body model (CPU)",
+    "enabled": true,
+    "license_reviewed": true,
+    "input_kinds": ["biomech-model", "biomech-motion", "biomech-options", "biomech-loads"],
+    "max_inputs": 4,
+    "timeout_seconds": 900,
+    "command": ["/opt/biomechanics/venv/bin/python", "/app/robotics/world_worker/biomechanics.py", "--input-manifest", "{input_manifest}"]
   }
 ]

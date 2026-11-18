@@ -4,7 +4,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "robotics/world_worker/deploy/railway/Dockerfile"
-watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "robotics/g1_trial/**", "robotics/splat_repair/**", "robotics/motion_retarget/**", "robotics/localization/**", "railway.toml"]
+watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "robotics/g1_trial/**", "robotics/splat_repair/**", "robotics/motion_retarget/**", "robotics/localization/**", "robotics/biomechanics/**", "railway.toml"]
 
 [deploy]
 startCommand = "/bin/sh /app/robotics/world_worker/deploy/railway/launch.sh"
