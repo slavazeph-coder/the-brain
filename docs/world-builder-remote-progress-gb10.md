@@ -1,9 +1,22 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T15:45Z
+||||||||||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T16:15Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 254 — 2026-11-18 (GB10: PLY z-flip re-verified; all suites green; 4090 DNS transient)
+
+- **Bounded improvement:** re-verified PLY z-flip implementation on GB10 — `verify_ply_zflip.test.mjs` (4 pass) confirmed ascii/binary fixture z-flip sign inversion and y_up verdict; `verify_ply_zflip_parity.test.mjs` (3 pass) confirmed big-endian binary fixture parity and identical receipts across ascii/little/big-endian for same geometry. All three core suites green. 4090 DNS transient failure (port 23990 reachable but name resolution intermittent).
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (160 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed** (19.68 s)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped** (7.43 s)
+  - `node --test tests/world/verify_ply_zflip.test.mjs` → **4 pass / 0 fail** (83.24 ms)
+  - `node --test tests/world/verify_ply_zflip_parity.test.mjs` → **3 pass / 0 fail** (96.70 ms)
+- **4090 state:** port 23990 reachable (DNS transient), hostname `d130b6c7f3f4`, RTX 4090.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** physical iPhone Safari validation or continue remaining implementation gates.
 
 ### Run 253 — 2026-11-18 (GB10: PLY z-flip verification confirmed on 4090; all suites green)
 
