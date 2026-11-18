@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T16:15Z
+|||||||||||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T17:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 256 — 2026-11-18 (GB10: all suites green; branch clean; implementation gates reviewed)
+
+- **Bounded improvement:** reviewed remaining implementation gates in `docs/world-studio-implementation.md`. Key open items: (1) physical iPhone Safari camera validation — not yet done; (2) geometry handoff from reconstructed camera/point evidence to floor/obstacles — partially complete (PR #307 merged for held-out camera frames); (3) production privacy/retention/access checks — retention implemented (TTL, `WORLD_RETENTION_SECONDS`), access via operator token + optional tenant credentials, public hosted processing still disabled. All three core suites green. Branch `hermes/world-builder-gb10` at `8399dea`, clean working tree.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (118 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed** (19.07 s)
+  - `/workspace/hermes-gb10/repos/the-brain/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped** (8.27 s)
+- **Branch state:** `hermes/world-builder-gb10` at `8399dea`, 2 commits ahead of origin/main, clean working tree (untracked files preserved).
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** physical iPhone Safari camera validation or geometry handoff completion.
 
 ### Run 255 — 2026-11-18 (GB10: Playwright static smoke.html committed; all suites green; 4090 DNS transient)
 
