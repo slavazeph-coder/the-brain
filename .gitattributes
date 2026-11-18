@@ -1,0 +1,3 @@
+# Exact vendored upstream bytes are covered by the Splat Repair runtime hash lock.
+# Keep its original LF/CRLF choices on every checkout.
+robotics/splat_repair/_vendor/* -text whitespace=cr-at-eol

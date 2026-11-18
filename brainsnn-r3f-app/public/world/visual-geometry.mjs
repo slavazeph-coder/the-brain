@@ -62,7 +62,10 @@ export function frameBounds(points) {
   // A core that is barely smaller than the full extent means no outliers: keep the exact extent.
   return radius < full.radius * .9 ? { min, max, center, radius, trimmed: true } : full;
 }
-export function parsePLY(buffer) {
+export function parsePLY(buffer, {maxPoints=MAX_POINTS}={}) {
+  // Full source selection for the repair tool is bounded separately from its
+  // rendered preview. Existing callers retain the original 100k display budget.
+  if(!Number.isInteger(maxPoints)||maxPoints<1||maxPoints>200000)throw Error('Invalid PLY sampling budget.');
   const bytes = bytesOf(buffer);
   // PLY headers are ASCII: byte offsets must not depend on UTF-8 decoding/re-encoding.
   const headerText = new TextDecoder('ascii').decode(bytes.subarray(0, Math.min(bytes.length, 65536)));
@@ -102,7 +105,7 @@ export function parsePLY(buffer) {
   if (ascii && bytes.length > 16 * 1024 * 1024) throw Error('Convert ASCII PLY larger than 16 MiB to binary PLY.');
   if (!ascii && start + total * stride > bytes.length) throw Error('Truncated PLY vertex data.');
   const source = ascii ? new TextDecoder().decode(bytes.subarray(start)) : '', view = new DataView(buffer);
-  const step = Math.max(1, Math.ceil(total / MAX_POINTS)), points = [], sourceIndices = [], colorProps = ['red', 'green', 'blue'].map(n => props.find(p => p.name === n));
+  const step = Math.max(1, Math.ceil(total / maxPoints)), points = [], sourceIndices = [], colorProps = ['red', 'green', 'blue'].map(n => props.find(p => p.name === n));
   let cursor = 0, skipped = 0;
   for (let i = 0; i < total; i++) {
     let values;
@@ -132,7 +135,7 @@ export function parsePLY(buffer) {
   if (!isGaussian) {
     // This is a display footprint, never a Gaussian fitted to source imagery.
     // Sparse reconstructions (trimmed framing) get a smaller footprint so gaps read as gaps, not bubbles.
-    const frame = frameBounds(parsed.points);
+    const frame = frameBounds(parsed.points.subarray(0, MAX_POINTS * STRIDE));
     const size = clamp(frame.radius / Math.sqrt(parsed.points.length / STRIDE) * (frame.trimmed ? .55 : .8), .00001, 1e4);
     for (let i = 0; i < parsed.points.length; i += STRIDE) parsed.points.fill(size, i + 3, i + 6);
   }
