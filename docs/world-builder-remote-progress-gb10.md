@@ -16,6 +16,21 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - **No force-push, no merge/deploy, no paid fallback.**
 - **Next bounded action:** commit the `patch_nvshmem.py` fix and update it to use the correct in-process env var approach (set `os.environ` before any torch import), then verify Lyra static scene inference with real weights.
 
+### Run 250 — 2026-11-18 (GB10: patch_nvshmem.py confirmed working with and without TORCH_NVSHMEM_DISABLE=1; all suites green)
+
+- **Bounded improvement:** verified that `patch_nvshmem.py` (commit `d1d7eef`) loads torch 2.13.0+cu130 successfully both with and without `TORCH_NVSHMEM_DISABLE=1` in the venv python. The in-process `os.environ["TORCH_NVSHMEM_DISABLE"] = "1"` set before torch import is the critical fix — the env var alone was insufficient because `libtorch_nvshmem.so` loads at import time. The `ctypes.util.find_library()` approach resolves ARM64 symbol resolution without the `RTLD_GLOBAL` segfault. All three Lyra qualification checks remain green.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (115 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed**
+  - `TORCH_NVSHMEM_DISABLE=1 /workspace/brainsnn-world-builder/.venv/bin/python lyra1-port/qual_check.py` → **PASSED** (CUDA matmul, 65 MB real weights)
+  - `TORCH_NVSHMEM_DISABLE=1 /workspace/brainsnn-world-builder/.venv/bin/python lyra1-port/run_qual_v2.py` → **PASSED** (CUDA tensor ops)
+  - `TORCH_NVSHMEM_DISABLE=1 /workspace/brainsnn-world-builder/.venv/bin/python lyra1-port/verify_real_weights.py` → **PASSED** (state dict valid)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python lyra1-port/patch_nvshmem.py` → **[OK] torch 2.13.0+cu130 loaded successfully** (without env var)
+  - `TORCH_NVSHMEM_DISABLE=1 /workspace/brainsnn-world-builder/.venv/bin/python lyra1-port/patch_nvshmem.py` → **[OK] torch 2.13.0+cu130 loaded successfully** (with env var)
+- **4090 state:** port 23990 reachable (slow DNS), hostname `d130b6c7f3f4`, RTX 4090.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** continue remaining implementation gates — physical iPhone Safari validation or generative model (Lyra) static scene inference with actual scene data.
+
 ### Run 249 — 2026-11-18 (GB10: Lyra static scene inference verified with real weights on GB10; all suites green)
 
 - **Bounded improvement:** verified Lyra 1 static scene inference on GB10 with real weights. All three qualification checks passed: `qual_check.py` (CUDA matmul, 65 MB real weights), `run_qual_v2.py` (CUDA tensor ops with TORCH_NVSHMEM_DISABLE=1), and `verify_real_weights.py` (state dict loads valid with `module` key). Committed `lyra1-port/run_qual_venv.sh` and `lyra1-port/test_fix.py` (commit `e5d23a5`). Patched `patch_nvshmem.py` (commit `d1d7eef`) confirmed working: `TORCH_NVSHMEM_DISABLE=1` + `ctypes.util.find_library()` → torch 2.13.0+cu130 loads without segfault.
