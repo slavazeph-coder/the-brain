@@ -68,6 +68,13 @@ def test_rebuild_retains_originals_and_rebinds_all_reports(tmp_path):
     assert handoff['sourceFiles']['scene']['sha256'] == current_hash
     assert handoff['componentRevision'] == 1
     assert receipt['buildingHandoff']['written'] is True
+    drawings = receipt['drawingSet']   # redrawn from the edited revision, and listed with the other artifacts
+    assert drawings['written'] is True and drawings['revision'] == 1 and 'artifacts' not in drawings
+    assert receipt['artifacts']['drawing-set.pdf']['sha256'] == drawings['sha256'] == hashlib.sha256((out / 'drawing-set.pdf').read_bytes()).hexdigest()
+    preview = json.loads((out / 'drawing-preview.json').read_text())
+    assert preview['source']['sceneFileSha256'] == current_hash and preview['source']['revision'] == 1
+    assert preview['source']['cloudPointsSha256'] == json.loads((out / 'scene.json').read_text())['componentGraph']['sourceSha256']
+    assert preview['pdf']['sha256'] == drawings['sha256']
     assert receipt['artifacts']['xactimate-underlay.png']['sha256'] == hashlib.sha256((out / 'xactimate-underlay.png').read_bytes()).hexdigest()
     assert handoff['walls'][0]['componentId'] == json.loads((out / 'scene.json').read_text())['walls'][0]['componentId']
     nav = json.loads((out / 'nav2-map.json').read_text())

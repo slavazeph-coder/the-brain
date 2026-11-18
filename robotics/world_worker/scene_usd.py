@@ -22,7 +22,7 @@ import sys
 import time
 
 try:
-    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, fit_check, measurement_check, object_names, open_vocab_names, sparse_colmap
+    from . import building_handoff, cad_export, component_evidence, component_fit, detector_names, drawing_set, fit_check, measurement_check, object_names, open_vocab_names, sparse_colmap
     from .geometry import load_arena_cloud
 except ImportError:
     import building_handoff
@@ -30,6 +30,7 @@ except ImportError:
     import component_evidence
     import component_fit
     import detector_names
+    import drawing_set
     import fit_check
     import measurement_check
     import object_names
@@ -41,6 +42,7 @@ SCENE_COMPILER = Path(__file__).resolve().parents[1] / 'scene_compiler' / 'scene
 sys.path.insert(0, str(SCENE_COMPILER.parent))
 import nav2_export  # noqa: E402  pure Python, no ROS dependency
 ARENA_MAX_POINTS = 50_000
+ARTIFACT_LIMIT = 40  # the worker's MAX_ARTIFACTS (app.py): it refuses a longer manifest
 BLENDER_TIMEOUT = 900
 
 
@@ -611,6 +613,12 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
     except Exception as error:
         building = {'written': False, 'reason': f'{type(error).__name__}: {str(error)[:200]}'}
     building_files = building.get('artifacts', []) if building.get('written') else []
+    # The drawing set: plan, elevations, sections and schedules of this same scene as one PDF. Never fails the scene.
+    try:
+        drawings = drawing_set.write_drawing_set(scene, out, scene_path=out / 'scene.json')
+    except Exception as error:
+        drawings = {'written': False, 'reason': f'{type(error).__name__}: {str(error)[:200]}', 'artifacts': []}
+    drawing_files = drawings.pop('artifacts', [])
     if names:
         shutil.copyfile(names, out / 'object-names.json')
         naming['applied'] = (scene.get('naming') or {}).get('named', 0)
@@ -694,6 +702,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                 'component_evidence': source_support,
                 'component_fit': component_fitting,
                 'building_handoff': building,
+                'drawing_set': drawings,
                 'navigation': navigation,
                 'reconstruction': {key: reconstruction[key] for key in ['pipeline', 'pycolmap_version', 'capture', 'reconstructed_points',
                                                                       'preview_points', 'mean_reprojection_error_pixels']} if reconstruction else None,
@@ -716,7 +725,7 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *([{'name': 'scene.ifc', 'kind': 'bim'}] if ifc else []),
                  *({'name': name, 'kind': 'quantities' if name.endswith('.csv') else 'cad'} for name in cad_files),
                  *({'name': name, 'kind': 'evidence' if name.endswith('.json') else 'visual', **({'representation': 'triangle-mesh', 'coordinate_frame': 'right-handed-y-up', 'units': 'm', 'provenance': 'stand-in models, not scanned geometry'} if not name.endswith('.json') else {})} for name in stand_in_files),
-                 *building_files,
+                 *building_files, *drawing_files,
                  {'name': 'scene.json', 'kind': 'evidence'}, {'name': 'scene-usd.json', 'kind': 'evidence'},
                  *({'name': name, 'kind': 'evidence'} for name in fit_files),
                  *({'name': name, 'kind': 'evidence'} for name in measurement_files),
@@ -725,6 +734,17 @@ def run(request: dict, *, blender: str, naming_client=None, naming_views=None, d
                  *({'name': name, 'kind': 'evidence'} for name in component_fit_files),
                  *({'name': name, 'kind': 'nav-map'} for name in nav_files),
                  {'name': 'arena-cloud.json', 'kind': 'evidence'}, *([{'name': 'object-names.json', 'kind': 'evidence'}] if names else []), *previous]
+    if len(artifacts) > ARTIFACT_LIMIT and any(a['name'] == drawing_set.PREVIEW_NAME for a in artifacts):
+        artifacts = [a for a in artifacts if a['name'] != drawing_set.PREVIEW_NAME]
+        (out / drawing_set.PREVIEW_NAME).unlink(missing_ok=True)
+        evidence['drawing_set']['preview'] = {'written': False, 'reason': 'Left out to keep the artifact manifest bounded; download the PDF.'}
+        (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
+    if len(artifacts) > ARTIFACT_LIMIT and drawing_files:
+        # The worker refuses a longer manifest, and an optional export must not cost the job its scene.
+        artifacts = [a for a in artifacts if a['name'] != drawing_set.PDF_NAME]
+        (out / drawing_set.PDF_NAME).unlink(missing_ok=True)
+        evidence['drawing_set'] = {'written': False, 'reason': f'Left out: the job already publishes {ARTIFACT_LIMIT} files.'}
+        (out / 'scene-usd.json').write_text(json.dumps(evidence, indent=2, allow_nan=False))
     (out / 'manifest.json').write_text(json.dumps({'artifacts': artifacts}, allow_nan=False))
     return evidence
 
