@@ -5,6 +5,19 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 
 ## Run log (newest first)
 
+### Run 255 — 2026-11-18 (GB10: Playwright static smoke.html committed; all suites green; 4090 DNS transient)
+
+- **Bounded improvement:** committed updated Playwright static smoke.html files (`chromium-static/smoke.html` and `webkit-static/smoke.html`) with refreshed `JOB_ID` and `BASE` port values from latest test runs. All three core suites green. 4090 DNS transient (port 23990 reachable, name resolution intermittent).
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (188 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed** (14.74 s)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped** (8.07 s)
+  - `node --test tests/world/verify_ply_zflip.test.mjs` → **4 pass / 0 fail** (151 ms)
+  - `node --test tests/world/verify_ply_zflip_parity.test.mjs` → **3 pass / 0 fail** (98 ms)
+- **4090 state:** port 23990 reachable (DNS transient), hostname `d130b6c7f3f4`, RTX 4090.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** physical iPhone Safari validation or continue remaining implementation gates.
+
 ### Run 254 — 2026-11-18 (GB10: PLY z-flip re-verified; all suites green; 4090 DNS transient)
 
 - **Bounded improvement:** re-verified PLY z-flip implementation on GB10 — `verify_ply_zflip.test.mjs` (4 pass) confirmed ascii/binary fixture z-flip sign inversion and y_up verdict; `verify_ply_zflip_parity.test.mjs` (3 pass) confirmed big-endian binary fixture parity and identical receipts across ascii/little/big-endian for same geometry. All three core suites green. 4090 DNS transient failure (port 23990 reachable but name resolution intermittent).
