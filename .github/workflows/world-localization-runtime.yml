@@ -1,0 +1,92 @@
+name: World localization runtime
+
+on:
+  pull_request:
+    paths:
+      - 'robotics/localization/**'
+      - 'robotics/world_worker/localization_job.py'
+      - 'robotics/world_worker/measurement_check.py'
+      - 'robotics/scene_compiler/component_graph.py'
+      - 'tests/localization/**'
+      - 'tests/world/test_localization.py'
+      - 'docs/world-localization.md'
+      - '.github/workflows/world-localization-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'robotics/localization/**'
+      - 'robotics/world_worker/localization_job.py'
+      - 'robotics/world_worker/measurement_check.py'
+      - 'robotics/scene_compiler/component_graph.py'
+      - 'tests/localization/**'
+      - 'tests/world/test_localization.py'
+      - 'docs/world-localization.md'
+      - '.github/workflows/world-localization-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: localization-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  localization-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==9.1.1
+      - name: Exact map, transform, recording and authenticated HTTP contracts
+        run: python -m pytest tests/world/test_localization.py -q
+
+  actual-ros2-localizer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Build actual pinned ROS2 and NDT runtime without publishing
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p output/localization
+          git rev-parse HEAD > output/localization/brainsnn-source-sha.txt
+          docker build -f robotics/localization/Dockerfile -t brainsnn-localization . 2>&1 | tee output/localization/build.log
+          docker image inspect brainsnn-localization --format '{{.Id}}' > output/localization/container-image-id.txt
+      - name: Real scan registration and motion tracking on authored geometry
+        shell: bash
+        run: |
+          set -o pipefail
+          docker run --rm --network none --cpus 2 --memory 4g \
+            -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+            --mount "type=bind,src=$PWD/output/localization,dst=/qualification" \
+            brainsnn-localization python3 tests/localization/smoke_upstream.py \
+            --output /qualification/run 2>&1 | tee output/localization/execution.log
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result = json.loads(Path('output/localization/run/smoke-result.json').read_text())
+          assert result['passed'] is True
+          assert result['upstreamCommit'] == '6e21b7ed9e2e5c5ba1452eb63db5c9402862625b'
+          assert result['origin'] == 'authored-ros2-test'
+          assert result['physicalRobotValidated'] is False
+          assert result['globalInitializationTested'] is False
+          PY
+      - name: Preserve actual runtime receipts and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: localization-runtime-qualification
+          path: output/localization/
+          retention-days: 14
+          if-no-files-found: warn

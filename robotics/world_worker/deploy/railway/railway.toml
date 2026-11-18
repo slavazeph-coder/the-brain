@@ -6,7 +6,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "robotics/world_worker/deploy/railway/Dockerfile"
-watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**"]
+watchPatterns = ["robotics/world_worker/**", "robotics/scene_compiler/**", "robotics/splat_repair/**", "robotics/motion_retarget/**", "robotics/localization/**"]
 
 [deploy]
 healthcheckPath = "/healthz"
