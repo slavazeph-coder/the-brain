@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { serveProjectReviewFixture, REVIEW_FIXTURE_PASSCODE } from './project-review-browser-server.mjs';
 import { demoSceneText } from '../../brainsnn-r3f-app/public/world/project-review.mjs';
 
@@ -29,6 +29,7 @@ async function download(page, selector, label, extension) {
   const item = await event;
   const path = fileURLToPath(new URL(`project-review-${label}.${extension}`, output));
   await item.saveAs(path);
+  console.log(`SAVED ${label}.${extension}`);
   return { path, text: await readFile(path, 'utf8') };
 }
 
@@ -194,13 +195,26 @@ async function check(browser, phone) {
     assert.ok(html.text.includes('brainsnn.project-review-package.v1'));
     assert.ok(html.text.includes('&lt;img src=x onerror='));
     assert.ok(!html.text.includes('<img src=x onerror='));
+    mark('open downloaded proposal file');
     const preview = await context.newPage();
-    await preview.setContent(html.text);
+    // Open the real downloaded document. document.write/setContent is not a
+    // faithful navigation for an HTML file with a restrictive meta CSP.
+    await preview.goto(pathToFileURL(html.path).href, { waitUntil: 'domcontentloaded' });
+    mark('inspect downloaded proposal file');
     await expect(preview.locator('h1')).toHaveText('Revised room refresh');
     assert.equal(await preview.evaluate(() => window.__reviewXss), undefined);
     await preview.close();
+    mark('capture review layout');
 
-    await page.locator('.pr-results-heading').scrollIntoViewIfNeeded();
+    // Closing a separate tab may focus the page's keyboard skip link. Return
+    // focus to the reviewed content before taking its normal pointer-use view.
+    await page.locator('.pr-results-heading h2').click();
+    await expect(page.locator('.skip')).not.toBeInViewport();
+    if (phone) {
+      const table = await page.locator('.pr-quantity-wrap').evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth, tabIndex: element.tabIndex }));
+      assert.ok(table.scroll >= 620 && table.scroll > table.width, 'Phone quantity details must scroll at a readable column width.');
+      assert.equal(table.tabIndex, 0, 'Quantity details must be keyboard scrollable.');
+    }
     await page.screenshot({ path: fileURLToPath(new URL(`project-review-${label}.png`, output)), fullPage: true });
     const width = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
     assert.ok(width.document <= width.viewport + 1, `Page overflows at ${label}: ${JSON.stringify(width)}`);
