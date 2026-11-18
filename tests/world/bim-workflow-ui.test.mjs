@@ -167,3 +167,46 @@ test('scene replacement and clearing dispose the local terrain inspector',async 
   assert.equal(host.children.length,0);
   assert.equal(h.workflow.hasScene,false);
 });
+
+function addDraftOpening(h){
+  for(const [id,value] of Object.entries({'bim-host-wall':'0','bim-offset':'.5','bim-width':'.8','bim-height':'2','bim-sill':'0','bim-kind':'door'}))h.field(id).value=value;
+  h.field('bim-reviewed').checked=true;h.workflow.addOpening();
+}
+const hasDraft=h=>h.field('scene-bim-review').innerHTML.includes('bim-draft-note');
+test('closing and source navigation preserve reviewed opening drafts only for the exact result',async t=>{
+  const h=harness(t),sourceClient={},binding={sourceClient,job:'a'.repeat(32),sceneSha:'b'.repeat(64)};
+  await h.show(binding);addDraftOpening(h);h.workflow.clearScene();
+  assert.equal(h.field('scene-bim-files').children.length,0,'renderers are still disposed');
+  h.workflow.reset();await h.show(binding);assert(hasDraft(h));
+  assert.match(h.field('scene-bim-review').innerHTML,/0\.80 × 2\.00 m/);
+  h.field('bim-recompile-consent').checked=true;await h.workflow.recompile();
+  assert.equal(h.calls.recompile[0][0].bimReview.openings.length,1);
+  assert.equal(h.calls.recompile[0][0].bimReview.openings[0].reviewed,true);
+  assert.equal(h.calls.recompile[0][3],binding.job);
+  assert.equal(h.data.cloud.bimReview,undefined,'draft never mutates original source evidence');
+  for(const changed of [{sourceClient:{}},{job:'c'.repeat(32)},{sceneSha:'d'.repeat(64)},
+    {cloud:{...h.data.cloud,points:h.data.cloud.points.map((row,i)=>i===0?[.1,...row.slice(1)]:row)}}]){
+    await h.show({...binding,...changed});assert(!hasDraft(h),'another client, job, scene revision or cloud must not borrow a draft');
+    await h.show(binding);assert(hasDraft(h),'the original draft remains available');
+  }
+  h.workflow.reset({clearDrafts:true});await h.show(binding);assert(!hasDraft(h));
+  assert(!h.field('scene-bim-review').innerHTML.includes('data-bim-remove="0"'));
+});
+
+test('removed original openings stay removed after closing the same scene',async t=>{
+  const h=harness(t),binding={sourceClient:{},job:'a'.repeat(32)};
+  h.data.cloud.bimReview={openings:[{id:'original',hostWall:'Wall_A',offsetMeters:.5,widthMeters:.8,heightMeters:2,sillMeters:0,kind:'door',reviewed:true,host:{centre:[2,1.5,0],size:[4,3,.2],yaw_degrees:0}}]};
+  await h.show(binding);h.workflow.removeOpening(0);h.workflow.clearScene();await h.show(binding);
+  assert(hasDraft(h));assert(!h.field('scene-bim-review').innerHTML.includes('data-bim-remove="0"'));
+  h.field('bim-recompile-consent').checked=true;await h.workflow.recompile();
+  assert.equal(h.calls.recompile[0][0].bimReview,undefined,'empty reviewed draft is not replaced by original cloud openings');
+  assert.equal(h.data.cloud.bimReview.openings.length,1);
+});
+
+test('opening draft history retains at most twelve exact scenes',async t=>{
+  const h=harness(t),sourceClient={},binding=n=>({sourceClient,job:n.toString(16).padStart(32,'0')});
+  for(let n=1;n<=13;n++){await h.show(binding(n));addDraftOpening(h);h.workflow.clearScene();}
+  await h.show(binding(1));assert(!hasDraft(h),'oldest draft is evicted');
+  await h.show(binding(2));assert(hasDraft(h),'twelve most recent drafts remain');
+  h.workflow.reset({clearDrafts:true});await h.show(binding(13));assert(!hasDraft(h));
+});

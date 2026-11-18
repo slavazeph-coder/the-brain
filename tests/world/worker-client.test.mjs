@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {createServer} from 'node:http';
-import {WorkerClient} from '../../brainsnn-r3f-app/public/world/worker-client.mjs';
+import {WorkerClient,MAX_ARTIFACTS} from '../../brainsnn-r3f-app/public/world/worker-client.mjs';
 
 const id='a'.repeat(32);
 const makeClient=()=>new WorkerClient('https://worker.example/prefix','s'.repeat(40));
@@ -166,4 +166,16 @@ test('a video without its usual extension is uploaded under a name the worker ac
   client.request=async(path,options={})=>{if(options.method==='POST'){posted.push(options.body);return{id,offset:0,size:video.size};}return{offset:video.size};};
   await client.upload(video,'video');
   assert.deepEqual(posted,[{name:'IMG_2222.mov',size:video.size,kind:'video'}]);
+});
+
+test('artifact indices are bounded by the worker manifest limit before any request',async()=>{
+  assert.equal(MAX_ARTIFACTS,40);
+  for(const index of [-1,MAX_ARTIFACTS,1.5,'3']){
+    const client=makeClient();let calls=0;client.request=async()=>{calls++;return{};};
+    await assert.rejects(client.download(id,index),/Invalid artifact identifier/);assert.equal(calls,0);
+  }
+  const client=makeClient(),bodies=[];
+  client.request=async(path,options)=>{bodies.push(options.body);throw new Error('stop after the ticket request');};
+  await assert.rejects(client.download(id,MAX_ARTIFACTS-1),/stop after the ticket request/);
+  assert.deepEqual(bodies,[{artifact:MAX_ARTIFACTS-1}]);
 });

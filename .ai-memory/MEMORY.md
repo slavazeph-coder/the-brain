@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [One World Builder experience](world-unified-experience-2026-11-17.md) — owner’s v23 demo flow in one workspace; retained source/job results, native drawings, safe view switching and separate website/worker rollout.
+
 → [World Builder playground usability](world-playground-usability-2026-11-17.md) — simpler entry and controls, preserved features, optional larger text/read-aloud and narrow-screen browser checks. Owner scope is World Builder.
 
 → [Unified world sandbox](world-sandbox-integration-2026-10-28.md) — native street objects, capture handoff, navigation and current scene exports inside the production World Builder.

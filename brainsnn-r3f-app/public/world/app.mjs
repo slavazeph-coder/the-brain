@@ -31,7 +31,14 @@ import {recordShareVideo} from './share-video.mjs';
 import {mountDemoReplay} from './demo-replay-ui.mjs';
 import {reviewQuestions} from './review-questions.mjs';
 import {createSandboxUI} from './sandbox-ui.mjs';
+import {createWorkspaceResults,sourceJobOptions,shouldOpenCompletedResult} from './workspace-results.mjs';
+import {mountUnifiedWorkspace} from './unified-workspace-ui.mjs';
+import {createSceneWorkspace} from './scene-workspace.mjs';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const workspaceResults=createWorkspaceResults(),sourceIds=new WeakMap();
+let sourceBindings=new WeakMap(),sourceSequence=0,viewRevision=0,jobExecution=null,unifiedWorkspace=null,sceneContext=null;
+const sourceId=source=>{if(!source)return null;if(!sourceIds.has(source))sourceIds.set(source,`source-${++sourceSequence}`);return sourceIds.get(source);};
+const sceneWorkspace=createSceneWorkspace();
 let world=sampleWorld(), tab='world', selected='storage', result=null, baseline=null, epoch=0, planner=null, planning=false, sandbox=null;
 let robot={...ROBOTS.cleaner,margin:.1}, robotId='cleaner', assumptions={setupMinutes:5,turnSeconds:0,assistanceMinutes:0,robotRate:null,labourRate:null};
 let nativeCheckAbort=null;
@@ -48,7 +55,7 @@ let detectAbort=null;
 let visualViewer=null,visibleVisual=null,display='visual',depthAbort=null,depthStatus='',artifactAbort=null,connectionAbort=null;
 function getVisualViewer(){if(!visualViewer)visualViewer=createVisualViewer($('visual-canvas'));return visualViewer;}
 try{renderer=createRenderer($('world-canvas'));}catch(e){status(e.message,true);}
-function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
+function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();}
 function event(type,detail){events.push({time:new Date().toISOString(),type,detail});events=events.slice(-200);}
 const observations=createObservationReview({getSources:()=>sources,status,event});
 const measurements=createMeasurementReview({getWorld:()=>world,status,event,download});
@@ -57,7 +64,7 @@ function stopReplay(){cancelAnimationFrame(replayFrame);replayFrame=null;$('repl
 // that comparison is no longer like for like, so it is dropped rather than shown as "same robot". Returns true if it was.
 function dropStaleWhatIf(){if(!whatIf||sameRobot(whatIf,robot))return false;whatIf=null;renderer?.setGhost(null);return true;}
 function invalidate(){epoch++;planner?.terminate();planner=null;planning=false;result=null;receipt=null;stopReplay();renderer?.setResult(null);$('scrub').value=0;update();renderMedia();}
-function apply(next,message,{review=false,proposal}={}){const w=normalizeWorld(next);if(!review){whatIf=null;renderer?.setGhost(null);}mapProposal=proposalAfterApply(mapProposal,{review,proposal});if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);if(message)status(message);}
+function apply(next,message,{review=false,proposal}={}){const w=normalizeWorld(next);viewRevision++;if(!review){whatIf=null;renderer?.setGhost(null);}mapProposal=proposalAfterApply(mapProposal,{review,proposal});if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);if(message)status(message);}
 function mutate(fn,kind='edited'){try{const next=clone(world);fn(next);const before=captureBefore({goal:result?.goal,result,world,selected,kind,robot});apply(next,'Map updated. Review changed geometry before planning.',{review:true});whatIf=before||whatIf;if(whatIf&&!before)whatIf.after=null;renderer?.setGhost(null);renderPanel();event('geometry_edit',selected||'floor');}catch(e){status(e.message,true);renderInspector();renderPanel();}}
 // Exports: on touch devices with the Web Share API the files go to the native share sheet (Files, AirDrop, Mail…); anywhere
 // else, or if sharing fails, each file downloads. One share per gesture, so multi-file exports pass every file in one call.
@@ -120,11 +127,11 @@ const multiView=source=>source?.visual?.origin!=='depth'&&(source?.reconstructio
 function metricCloud(){const source=activeSource,scale=source?.visual&&measuredScale(source.visual);if(!source?.visual||!scale)throw Error('Open the matching reconstruction and set its measured scale first.');return JSON.parse(JSON.stringify({...toArenaCloud(source.visual.points,{source:source.name,coordinateFrame:arenaFrame(source),metresPerUnit:scale.metresPerUnit,measurement:scale}),multiView:true}));}
 const bimWorkflow=createBimWorkflow({status,event,onRender:()=>{renderPanel();update();},onMarkers:picks=>visualViewer?.setMarkers(picks),makeCloud:metricCloud,
   getContext:()=>({source:activeSource,scale:activeSource?.visual?measuredScale(activeSource.visual):null,calibration,entry:sceneEngine()}),download,
-  onRecompile:async(cloud,source,entry,previousSceneJob)=>{if(!client||isRemoteActive())throw Error('Wait for the current worker job or reconnect your worker.');delete cloud.nameObjects;const file=new File([JSON.stringify(cloud)],'brainsnn-point-cloud.json',{type:'application/json'});$('scene-dialog').close();event('bim_recompile_requested',{source:source.name,openings:cloud.bimReview?.openings.length??0,points:cloud.points.length,sourceJob:previousSceneJob});await runJob(entry.id,[{file,kind:'cloud',name:file.name}],{source_job:previousSceneJob});}});
+  onRecompile:async(cloud,source,entry,previousSceneJob)=>{if(!client||isRemoteActive())throw Error('Wait for the current worker job or reconnect your worker.');const previous=workspaceResults.get(sceneContext?.jobKey);if(!previous||previous.sourceClient!==client||previous.job.id!==previousSceneJob)throw Error('This scene belongs to an earlier worker session. Open its source and compile it in the connected session before rebuilding.');delete cloud.nameObjects;const file=new File([JSON.stringify(cloud)],'brainsnn-point-cloud.json',{type:'application/json'});$('scene-dialog').close();event('bim_recompile_requested',{source:source.name,openings:cloud.bimReview?.openings.length??0,points:cloud.points.length,sourceJob:previousSceneJob});await runJob(entry.id,[{file,kind:'cloud',name:file.name}],{source_job:previousSceneJob},[source]);}});
 function metricSceneCard(source){if(!multiView(source))return '';const entry=sceneEngine();
   if(entry&&(!entry.dimension_checks||!entry.bim_review))return '<p class="note">Update this worker with dimensional checks and BIM review, then reconnect before compiling your demo. See the <a href="./api.html" target="_blank" rel="noopener">worker guide ↗</a>.</p>';
   // Naming reads this worker's own reconstruction job (its frames and camera poses), so it is offered only for those.
-  const naming=entry?.object_naming&&source?.derivation?.job?`<label class="check"><input id="scene-naming" type="checkbox">Also send crops of each separated object from your walkthrough frames to ${esc(entry.object_naming.provider||'the naming model')} (${esc(entry.object_naming.model||'')}) to suggest its name. Names are suggestions for you to review.</label>`:'';
+  const naming=entry?.object_naming&&sourceJobOptions(sourceBindings.get(source),client).source_job?`<label class="check"><input id="scene-naming" type="checkbox">Also send crops of each separated object from your walkthrough frames to ${esc(entry.object_naming.provider||'the naming model')} (${esc(entry.object_naming.model||'')}) to suggest its name. Names are suggestions for you to review.</label>`:'';
   return entry?`<label class="check"><input id="scene-consent" type="checkbox">Upload this measured point cloud to your worker to compile a simulation scene.</label>${naming}<button class="wide" data-action="metric-scene" ${isRemoteActive()?'disabled':''}>Build metric simulation scene (GLB, USD, IFC) →</button><p class="micro">${esc(entry.label)}. The scene uses your measured distance, so it is in metres but self-reported, not verified.</p>`
     :`<p class="micro">Connect a worker with a simulation scene engine to compile this measured cloud into a metric scene (GLB, USD, IFC).</p>`;}
 function calibrationCard(visual){const c=calibrationFor(visual),done=c.picks.length===2&&!c.picking;
@@ -149,7 +156,7 @@ function recoveryCard(evidence) {
   </section>`;
 }
 function numericField(title,id,value,min,max,step=.1,disabled=false){return `<label>${title}<input ${disabled?'disabled':''} id="${id}" type="number" value="${value??''}" min="${min}" max="${max}" step="${step}"></label>`;}
-function setTab(next,focus=false){tab=next;$('workspace').dataset.activeTab=next;document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});$('panel').setAttribute('aria-labelledby','tab-'+tab);renderPanel();renderMedia();update();sandbox?.observeMapTab(next);if(focus)$('tab-'+tab).focus();}
+function setTab(next,focus=false){if(tab!==next){viewRevision++;sceneWorkspace.close();}tab=next;$('workspace').dataset.activeTab=next;document.querySelectorAll('[data-tab]').forEach(b=>{const active=b.dataset.tab===tab;b.setAttribute('aria-selected',String(active));b.tabIndex=active?0:-1;});$('panel').setAttribute('aria-labelledby','tab-'+tab);renderPanel();renderMedia();update();sandbox?.observeMapTab(next);if(focus)$('tab-'+tab).focus();}
 function renderCapturePath(source){
   let strip=$('capture-path');if(!strip){strip=document.createElement('div');strip.id='capture-path';strip.className='capture-path';$('visual-canvas').insertAdjacentElement('afterend',strip);}
   const path=source?.reconstruction?capturePath(source.reconstruction):[];strip.hidden=!path.length;if(!path.length){stopPathPlay();return;}
@@ -224,6 +231,7 @@ function renderPanel(){
     const sourceJob=job,sourceClient=client;
     demoVideoDispose=mountDemoReplay({host:p,context:{job:sourceJob.id,artifacts:sourceJob.artifacts,sourceClient},isCurrent:()=>job===sourceJob&&client===sourceClient&&tab==='evidence',status,event});
   }
+  unifiedWorkspace?.refresh();
 }
 function renderInspector(){const options=$('objects');options.replaceChildren();for(const o of world?.objects||[]){const op=document.createElement('option');op.value=o.id;op.textContent=o.name;options.append(op);}if(!world?.objects.some(o=>o.id===selected))selected=world?.objects[0]?.id||'';options.value=selected;const o=world?.objects.find(o=>o.id===selected);$('object-fields').innerHTML=o?`<label>Object name<input id="object-name" maxlength="160" value="${esc(o.name)}"></label><div class="field-row">${numericField('X · m','object-x',o.x,0,world.width-o.w)}${numericField('Z · m','object-z',o.z,0,world.depth-o.d)}${numericField('Width · m','object-w',o.w,.05,world.width-o.x)}${numericField('Depth · m','object-d',o.d,.05,world.depth-o.z)}</div><label>Object type<select id="object-kind">${['obstacle','unknown','no-go'].map(k=>`<option ${o.kind===k?'selected':''}>${k}</option>`).join('')}</select></label><button class="small" data-action="remove-object">Remove object</button>`:'<p class="micro">Import or create geometry to edit objects.</p>';renderer?.setSelected(selected);}
 function update(){
@@ -234,6 +242,7 @@ function update(){
   for(const id of ['area','distance','time','cost'])$('metric-'+id).textContent='—';
   if(result){const est=estimate(result,assumptions);$('metric-area').textContent=result.reachableArea.toFixed(1)+' m²';$('metric-distance').textContent=result.distance.toFixed(1)+' m';$('metric-time').textContent=(result.travelSeconds/60).toFixed(1)+' min';$('metric-cost').textContent=est.cost===null?'Enter rates':'C$'+est.cost.toFixed(2);}
   sandbox?.sync();
+  unifiedWorkspace?.refresh();
 }
 function updateWorkflow(){
   const hasCapture=sources.some(s=>s.file),hasGeometry=!!activeSource?.visual,scaled=!!(hasGeometry&&measuredScale(activeSource.visual)),hasScene=bimWorkflow.hasScene;
@@ -302,7 +311,7 @@ async function connect(){
   }catch(e){if(!controller.signal.aborted&&connectionAbort===controller)$('connection-status').textContent=e.message;}
   finally{if(connectionAbort===controller){connectionAbort=null;button.disabled=false;}}
 }
-function adoptWorker(next,nextCaps,summary){bimWorkflow.clearScene();client=next;caps=nextCaps;job=null;$('worker-summary').textContent=summary;$('worker-note').textContent='No inference verified until a job succeeds.';event('worker_connected',new URL(client.base).origin);renderPanel();}
+function adoptWorker(next,nextCaps,summary){artifactAbort?.abort();sceneAbort?.abort();sceneWorkspace.close();sceneContext=null;bimWorkflow.clearScene();client=next;caps=nextCaps;job=null;jobExecution=null;jobStatus='';$('worker-summary').textContent=summary;$('worker-note').textContent='No inference verified until a job succeeds.';event('worker_connected',new URL(client.base).origin);renderPanel();}
 /** brainsnn.com's own processing: the site holds the worker credentials and gives this page a session in memory only. */
 async function loadSiteProcessing(){
   try{const r=await fetch('/api/world/processing',{cache:'no-store',credentials:'same-origin'});const s=r.ok?await r.json():null;siteProcessing=s&&s.available===true?s:null;}catch{siteProcessing=null;}
@@ -331,7 +340,7 @@ async function processSources(){
   if(!client||isRemoteActive())return;
   const engine=$('engine')?.value,consent=$('consent')?.checked;
   if(!engine||!consent){status('Select an available engine and explicitly approve the upload.',true);return;}
-  const entry=caps.engines.find(e=>e.id===engine&&e.available);let items=sources.filter(s=>['image','video','capture'].includes(s.kind));
+  const entry=caps.engines.find(e=>e.id===engine&&e.available);let items=sources.filter(s=>['image','video','capture'].includes(s.kind));const inputSources=[...items];
   if(!entry||!items.length){status('Add photos, a video or a calibrated capture before processing.',true);return;}
   if(items.some(s=>s.kind==='capture')){
     const controller=new AbortController(),connection=client;nativeCheckAbort=controller;
@@ -354,16 +363,16 @@ async function processSources(){
   if(resolutionIssue){jobStatus=resolutionIssue;status(jobStatus,true);renderPanel();return;}
   // Older workers advertise no large-video support.
   if(!Number.isSafeInteger(caps.limits?.video_bytes)&&items.some(s=>s.kind==='video'&&(s.size>200*1024**2||s.seconds>121))){status('This worker runs an older version that takes videos up to 2 minutes and 200 MiB. Update the worker to the current release and restart it, or trim the video.',true);return;}
-  await runJob(engine,items);
+  await runJob(engine,items,{},inputSources);
 }
 // Uploads approved items ({file,kind,name}) to the connected worker, then starts and follows one job.
 function locatorCard(){
-  const offered=caps?.engines?.some(e=>e.id==='locate-photo'&&e.available),ready=!!(client&&offered&&mapProposal.job),photo=located?.photo;
-  const why=!mapProposal.job?'This map was not proposed from a worker reconstruction, so there is nothing to find a photo in.':!client?'Connect the worker that reconstructed this place to locate photos.':'Your worker does not offer photo localisation (locate-photo).';
+  const offered=caps?.engines?.some(e=>e.id==='locate-photo'&&e.available),ready=!!(client&&offered&&mapProposal.job&&mapProposal.sourceClient===client),photo=located?.photo;
+  const why=!mapProposal.job?'This map was not proposed from a worker reconstruction, so there is nothing to find a photo in.':!client||mapProposal.sourceClient!==client?'Use the worker session that reconstructed this place to locate photos.':'Your worker does not offer photo localisation (locate-photo).';
   return `<div class="locator"><h4>Send the robot to a photo</h4><p class="micro">Take a photo anywhere in this place. Your worker finds where it was taken in the scan; tap the floor in it to send the robot there. The photo goes only to your connected worker.</p><button class="wide" data-action="locate-photo" ${ready&&!isRemoteActive()?'':'disabled'}>${located?.url?'Locate another photo':'Locate a photo in this scan'}</button>${ready?'':`<p class="micro">${esc(why)}</p>`}${located?.url&&photo?.located?`<div class="located-photo" id="located-photo"><img src="${located.url}" alt="Your photo, placed in the scan. Tap the floor in it to send the robot there."><i class="located-goal" ${located.tap?`style="left:${located.tap.left}%;top:${located.tap.top}%"`:'hidden'}></i></div>`:''}${located?.note?`<p class="micro" id="locate-status" role="status">${esc(located.note)}</p>`:''}</div>`;
 }
 async function locatePhoto(file){
-  if(!client||!mapProposal?.job){status('Connect the worker that reconstructed this place first.',true);return;}
+  if(!client||!mapProposal?.job||mapProposal.sourceClient!==client){status('Use the worker session that reconstructed this place to locate a photo.',true);return;}
   if(isRemoteActive()){status('Wait for the current worker job to finish.',true);return;}
   if(located?.url)URL.revokeObjectURL(located.url);
   located={url:URL.createObjectURL(file),photo:null,note:''};renderer?.setMarks(null);
@@ -400,16 +409,34 @@ function tapPhoto(e,box){
   event('photo_goal_routed',{metres:route.distance,goal,policyExecuted:false});
   setTab('test');status(located.note);replay();
 }
-async function runJob(engine,items,extra={}){
-  bimWorkflow.clearScene();update();remoteAbort=new AbortController();const signal=remoteAbort.signal;job=null;jobStatus='Uploading approved sources…';status(jobStatus);renderPanel();try{const uploads=[];for(let i=0;i<items.length;i++){uploads.push(await client.upload(items[i].file,items[i].kind,signal,p=>{jobStatus=`Uploading ${i+1}/${items.length}: ${Math.round(p*100)}%`;if($('job-status'))$('job-status').textContent=jobStatus;}));}
-    job=await client.request('/v1/jobs',{method:'POST',body:{engine,upload_ids:uploads,consent:true,...extra},signal});if(!/^[a-f0-9]{32}$/.test(job.id))throw new Error('Invalid job identifier.');event('job_submitted',{engine,files:items.map(s=>s.name)});if(signal.aborted){await client.request(`/v1/jobs/${job.id}`,{method:'DELETE'});throw new DOMException('Aborted','AbortError');}job=await client.request(`/v1/jobs/${job.id}/start`,{method:'POST',body:{},signal});await checkJob(signal);
-  }catch(e){jobStatus=signal.aborted?'Upload cancelled. The same selected file can resume in this session.':e.message;status(jobStatus,true);remoteAbort=null;renderPanel();}}
+async function runJob(engine,items,extra={},inputSources=items.filter(item=>sources.includes(item))){
+  if(!client)throw new Error('Connect a worker before processing.');
+  const sourceClient=client,parent=extra.source_job?workspaceResults.find({id:extra.source_job},sourceClient):null;
+  const ancestors=inputSources.map(source=>sourceBindings.get(source)).filter(Boolean);
+  const execution={sourceClient,sourceIds:[...new Set([...inputSources.map(sourceId),...ancestors.flatMap(binding=>binding.sourceIds||[]),...(parent?.sourceIds||[])])],sourceNames:[...new Set([...(parent?.sourceNames||[]),...ancestors.flatMap(binding=>binding.sourceNames||[]),...(inputSources.length?inputSources:items).map(source=>source.name)])],sourceId:sourceId(activeSource),viewRevision};
+  jobExecution=execution;sceneWorkspace.close();sceneContext=null;bimWorkflow.clearScene();update();remoteAbort=new AbortController();const signal=remoteAbort.signal;job=null;jobStatus='Uploading approved sources…';status(jobStatus);renderPanel();
+  try{
+    const uploads=[];
+    for(let i=0;i<items.length;i++)uploads.push(await sourceClient.upload(items[i].file,items[i].kind,signal,p=>{if(jobExecution!==execution||signal.aborted)return;jobStatus=`Uploading ${i+1}/${items.length}: ${Math.round(p*100)}%`;if($('job-status'))$('job-status').textContent=jobStatus;unifiedWorkspace?.refresh();}));
+    const prepared=await sourceClient.request('/v1/jobs',{method:'POST',body:{engine,upload_ids:uploads,consent:true,...extra},signal});
+    if(!/^[a-f0-9]{32}$/.test(prepared.id))throw new Error('Invalid job identifier.');
+    if(signal.aborted||jobExecution!==execution){await sourceClient.request(`/v1/jobs/${prepared.id}`,{method:'DELETE'});return;}
+    job=prepared;event('job_submitted',{engine,files:items.map(s=>s.name)});
+    const started=await sourceClient.request(`/v1/jobs/${job.id}/start`,{method:'POST',body:{},signal});
+    if(signal.aborted||jobExecution!==execution)return;
+    job=started;await checkJob(signal);
+  }catch(e){if(jobExecution!==execution)return;jobStatus=signal.aborted?'Upload cancelled. The same selected file can resume in this session.':e.message;status(jobStatus,true);remoteAbort=null;renderPanel();}
+}
 async function checkJob(signal){
   if(signal.aborted||!job)return;
-  job=await client.request(`/v1/jobs/${job.id}`,{signal});
+  const execution=jobExecution,sourceClient=execution?.sourceClient||client,currentJob=job;
+  const next=await sourceClient.request(`/v1/jobs/${currentJob.id}`,{signal});
+  if(signal.aborted||jobExecution!==execution||job!==currentJob)return;
+  job=next;
   jobStatus=`${job.engine}: ${job.status}${job.error?' · '+job.error:''}`;
   if($('job-status'))$('job-status').textContent=jobStatus;
   if(['complete','failed','cancelled'].includes(job.status)){
+    const context=job.status==='complete'?workspaceResults.remember(job,sourceClient,{sourceIds:execution?.sourceIds||[],sourceNames:execution?.sourceNames||[]}):null;
     remoteAbort=null;event('worker_'+job.status,{engine:job.engine,job:job.id});
     $('worker-note').textContent=job.status==='complete'?job.engine==='inspect'?'Capture integrity receipt produced. No AI model executed.':`${job.engine} produced artifacts. Outputs remain unverified until reviewed.`:'No successful model output for this job.';
     renderPanel();status(jobStatus,job.status!=='complete');
@@ -417,18 +444,19 @@ async function checkJob(signal){
       // A capture may finish while the person is editing a different scene.
       // Keep its artifacts available through the existing checked review path,
       // without replacing the street tools or opening a modal over that scene.
-      if(sandbox?.isStreet()){
-        status('Capture job complete. Open Capture → Export to review its artifacts. Street edits are kept.');
+      if(!shouldOpenCompletedResult(execution,{sourceId:sourceId(activeSource),viewRevision,street:!!sandbox?.isStreet()})){
+        status('Processing finished. Your results are ready in this workspace; the view you are using is kept.');
         return;
       }
       setTab('evidence');const review=automaticReviewArtifact(job);
-      if(review?.type==='visual')void openArtifact(review.index);
-      else if(review?.type==='observations')void openObservationArtifact(review.index);
-      else if(review?.type==='scene')void openSceneArtifact(review.index);
+      if(review?.type==='visual')void openArtifact(review.index,context);
+      else if(review?.type==='observations')void openObservationArtifact(review.index,context);
+      else if(review?.type==='scene')void openSceneArtifact(review.index,context);
       else if(review?.type==='localization')void openLocalization(review.index);
     }
     return;
   }
+  unifiedWorkspace?.refresh();
   schedulePoll(signal);
 }
 // A long reconstruction outlives network blips: retry status checks with backoff (cancel stays available), and only
@@ -436,7 +464,7 @@ async function checkJob(signal){
 function schedulePoll(signal,failures=0){poll=setTimeout(()=>checkJob(signal).catch(e=>{if(signal.aborted)return;
   if(failures>=7){remoteAbort=null;jobStatus=`${e.message} Status checks stopped after repeated failures; cancel the job or reconnect to the worker.`;renderPanel();status(jobStatus,true);return;}
   jobStatus=`Status check failed (${e.message}). Retrying…`;if($('job-status'))$('job-status').textContent=jobStatus;schedulePoll(signal,failures+1);}),failures?Math.min(30000,1500*2**failures):1500);}
-async function cancelRemote(){nativeCheckAbort?.abort();nativeCheckAbort=null;clearTimeout(poll);remoteAbort?.abort();remoteAbort=null;if(job&&client&&!['complete','failed','cancelled'].includes(job.status)){try{job=await client.request(`/v1/jobs/${job.id}`,{method:'DELETE'});}catch(e){status('Local polling stopped; server cancellation was not confirmed: '+e.message,true);return;}}jobStatus='Cancelled. Retained uploads expire under the worker retention policy.';renderPanel();status(jobStatus);}
+async function cancelRemote(){nativeCheckAbort?.abort();nativeCheckAbort=null;clearTimeout(poll);remoteAbort?.abort();remoteAbort=null;const execution=jobExecution,currentJob=job,sourceClient=execution?.sourceClient||client;if(currentJob&&sourceClient&&!['complete','failed','cancelled'].includes(currentJob.status)){try{const cancelled=await sourceClient.request(`/v1/jobs/${currentJob.id}`,{method:'DELETE'});if(jobExecution!==execution||job!==currentJob)return;job=cancelled;}catch(e){if(jobExecution===execution)status('Local polling stopped; server cancellation was not confirmed: '+e.message,true);return;}}jobStatus='Cancelled. Retained uploads expire under the worker retention policy.';renderPanel();status(jobStatus);}
 // On-device object labels for a photo: suggestions that go to review, never into scale or collision geometry.
 async function identifyObjects(){
   if(detectAbort||activeSource?.kind!=='image')return;
@@ -478,15 +506,66 @@ async function buildDepth(){
   }catch(e){if(!signal.aborted){depthStatus='Could not create a depth preview: '+e.message;status(depthStatus,true);}else{depthStatus='3D preview cancelled. Your photo remains local.';status(depthStatus);}}
   finally{if(depthAbort===controller)depthAbort=null;renderPanel();}
 }
-async function openArtifact(index){
-  if(!job||!client)return;artifactAbort?.abort();const controller=new AbortController();artifactAbort=controller;
-  const sourceJob=job,sourceClient=client,item=sourceJob.artifacts[index];
+function currentResultContext(){return job?workspaceResults.find(job,jobExecution?.sourceClient||client):null;}
+function requireResultContext(key){const context=workspaceResults.get(key);if(!context)throw new Error('This result is no longer kept in this tab. Reopen its original files or process the source again.');return context;}
+// A preview is a deliberate view choice, including when it keeps the same tab.
+// Retire both old requests before assigning the new controller so an older
+// cloud/observation cannot replace a model or steal focus when a job finishes.
+function beginWorkspacePreview(kind){
+  viewRevision++;artifactAbort?.abort();artifactAbort=null;sceneAbort?.abort();sceneAbort=null;
+  if(kind!=='scene'){sceneWorkspace.close();sceneContext=null;bimWorkflow.clearScene();}
+  const controller=new AbortController();
+  if(kind==='scene')sceneAbort=controller;else artifactAbort=controller;
+  return controller;
+}
+function workspaceSnapshot(){
+  const jobs=workspaceResults.list(),sandboxState=sandbox?.getState();
+  return {
+    workspace:{kind:sandboxState?.workspace||'map',tool:sandboxState?.tool||'edit',name:sandboxState?.workspace==='street'?'Green Gardens / Toronto block':null},
+    sources:sources.map(source=>{const id=sourceId(source),binding=sourceBindings.get(source);return {id,name:source.name,kind:source.kind,hasVisual:!!source.visual,hasReconstruction:!!source.reconstruction,sourceIds:[...(binding?.sourceIds||[])],jobKey:binding?.jobKey||jobs.findLast(result=>result.sourceIds.includes(id))?.key||null};}),
+    activeSourceId:sourceId(activeSource),view:activeSource&&(tab==='capture'||!world)?activeSource.visual&&display==='visual'?'points':'source':'map',tab,
+    world:world?{name:world.name,provenance:world.provenance,scaleReviewed:world.scaleReviewed,mapReviewed:world.mapReviewed,objects:world.objects.map(({id,name,kind})=>({id,name,kind})),fleetCount:world.fleet?.length||0}:null,
+    robot:{id:robotId,name:robot.label||robot.name||robotId},result:result?{distance:result.distance,travelSeconds:result.travelSeconds}:null,
+    processing:{active:!!isRemoteActive(),status:jobStatus,connected:!!client,available:!!siteProcessing},jobs,
+    scene:sceneContext?{...sceneContext,ready:sceneContext.ready&&sceneWorkspace.isOpen()}:null,
+  };
+}
+async function selectWorkspaceSource(id,view='source'){
+  const source=sources.find(item=>sourceId(item)===id);if(!source)throw new Error('That source has been removed from this tab.');
+  viewRevision++;sceneWorkspace.close();artifactAbort?.abort();depthAbort?.abort();bimWorkflow.reset();activeSource=source;display=view==='points'||source.kind==='visual'?'visual':'source';
+  if(sandbox)await sandbox.select('capture');else setTab('capture');renderPanel();renderMedia();update();
+}
+async function showWorkspaceTab(next){
+  if(!['capture','world','test','understand','evidence'].includes(next))return;
+  sceneWorkspace.close();artifactAbort?.abort();viewRevision++;
+  const tools={world:'edit',test:'simulate',understand:'evidence',evidence:'export'};
+  if(sandbox)await sandbox.select(['capture','understand','evidence'].includes(next)?'capture':'map',tools[next]);else setTab(next);
+  update();
+}
+async function downloadResultArtifact(context,index){
+  if(!workspaceResults.isCurrent(context)||!Number.isInteger(index)||!context.job.artifacts[index])throw new Error('Choose an available result file.');
+  const url=await context.sourceClient.download(context.job.id,index);
+  if(!workspaceResults.isCurrent(context))return;
+  const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer';a.click();status('Download started using a short-lived ticket from this result’s original worker.');
+}
+async function openResultArtifact(key,index){
+  const context=requireResultContext(key),item=context.job.artifacts[index];
+  if(!Number.isInteger(index)||!item)throw new Error('Choose an available result file.');
+  if(item.kind==='visual'&&/\.glb$/i.test(item.name))return openSceneArtifact(index,context);
+  if(item.kind==='visual'&&/\.(ply|splat)$/i.test(item.name))return openArtifact(index,context,{autoPropose:false});
+  if(item.kind==='observations'&&item.name==='observations.json')return openObservationArtifact(index,context);
+  return downloadResultArtifact(context,index);
+}
+async function openArtifact(index,context=currentResultContext(),{autoPropose=true}={}){
+  if(!workspaceResults.isCurrent(context))return;const controller=beginWorkspacePreview('points');
+  const {job:sourceJob,sourceClient}=context,item=sourceJob.artifacts[index],openingRevision=viewRevision;
+  const valid=()=>!controller.signal.aborted&&workspaceResults.isCurrent(context)&&viewRevision===openingRevision;
   try{
     status('Loading and checking the 3D artifact…');
     const buffer=await sourceClient.previewArtifact(sourceJob,index,controller.signal);
-    if(controller.signal.aborted)return;
+    if(!valid())return;
     const parsed=parseVisualAsset(buffer,item.name);
-    const existing=sources.find(s=>s.derivation?.job===sourceJob.id&&s.derivation?.sha256===item.sha256);if(existing){bimWorkflow.reset();activeSource=existing;display='visual';setTab('capture');status('Reconstruction loaded. Scale remains unverified.');return;}
+    const existing=sources.find(s=>s.derivation?.job===sourceJob.id&&s.derivation?.sha256===item.sha256&&sourceBindings.get(s)?.sourceClient===sourceClient);if(existing){bimWorkflow.reset();activeSource=existing;display='visual';if(sandbox)await sandbox.select('capture');else setTab('capture');status('Reconstruction loaded. Scale remains unverified.');return;}
     if(sources.filter(s=>s.derivation?.job).length>=4)throw new Error('Remove an earlier worker artifact before opening another.');
     const source={name:item.name,size:item.size,kind:'visual',url:null,visual:{...parsed,origin:'worker',photo:false},derivation:{job:sourceJob.id,engine:sourceJob.engine,sha256:item.sha256,coordinateFrame:item.coordinate_frame,metricVerified:false}};
     const metricIndex=sourceJob.engine==='photo-metric'?sourceJob.artifacts.findIndex(a=>a.name==='photo-metric.json'):-1;
@@ -495,7 +574,9 @@ async function openArtifact(index){
     const reportIndex=sourceJob.artifacts.findIndex(a=>a.name==='capture-report.json');
     if(reportIndex>=0){try{const report=JSON.parse(new TextDecoder().decode(await sourceClient.previewArtifact(sourceJob,reportIndex,controller.signal)));if(report?.schema==='brainsnn.capture-report.v1')source.captureReport=report;}catch(e){if(controller.signal.aborted)return;event('capture_report_unavailable',e.message);}}
     if(evidenceIndex>=0){try{const evidence=JSON.parse(new TextDecoder().decode(await sourceClient.previewArtifact(sourceJob,evidenceIndex,controller.signal)));if(evidence?.schema==='brainsnn.reconstruction.v1'){source.reconstruction=evidence;source.derivation.evidenceSha256=sourceJob.artifacts[evidenceIndex].sha256;}}catch(e){if(controller.signal.aborted)return;event('reconstruction_evidence_unavailable',e.message);}}
-    sources.push(source);bimWorkflow.reset();activeSource=source;display='visual';event('artifact_opened',source.derivation);setTab('capture');update();
+    if(!valid())return;
+    sourceBindings.set(source,{job:sourceJob.id,jobKey:context.key,sourceClient,sourceIds:context.sourceIds,sourceNames:context.sourceNames});sourceId(source);
+    sources.push(source);bimWorkflow.reset();activeSource=source;display='visual';event('artifact_opened',source.derivation);if(sandbox)await sandbox.select('capture');else setTab('capture');update();
     // The worker checks a video's model against its own consecutive frames; a model that contradicts them is folded.
     const folded=source.reconstruction?.capture?.consistency?.status==='folded';
     const est=readScaleEstimate(source.reconstruction),depth=source.photoMetric?.depth_metres;
@@ -504,13 +585,13 @@ async function openArtifact(index){
     // Real to sim straight away: with an estimated scale nothing more is needed to propose the robot map, so it is proposed
     // now, unless that would replace a map the person made, edited or imported: only an empty map or the untouched sample
     // (adding a capture clears it) is replaced. It stays unreviewed and blocked until they check it.
-    if(est&&!folded&&(!world||untouchedSample(world))&&activeSource===source)await action('propose-map');
+    if(autoPropose&&est&&!folded&&(!world||untouchedSample(world))&&activeSource===source)await action('propose-map');
   }catch(e){if(!controller.signal.aborted)status('Artifact preview failed: '+e.message,true);}
   finally{if(artifactAbort===controller)artifactAbort=null;}
 }
-async function openObservationArtifact(index){
-  if(!job||!client)return;artifactAbort?.abort();const controller=new AbortController();artifactAbort=controller;
-  try{status('Checking the original source, frame receipts and model observations…');await observations.load(job,client,index,controller.signal);if(controller.signal.aborted)return;setTab('understand');status('Model suggestions are ready for review. No planning geometry was changed.');}
+async function openObservationArtifact(index,context=currentResultContext()){
+  if(!workspaceResults.isCurrent(context))return;const controller=beginWorkspacePreview('observations'),openingRevision=viewRevision;
+  try{status('Checking the original source, frame receipts and model observations…');await observations.load(context.job,context.sourceClient,index,controller.signal);if(controller.signal.aborted||!workspaceResults.isCurrent(context)||viewRevision!==openingRevision)return;if(sandbox)await sandbox.select('capture','evidence');else setTab('understand');status('Model suggestions are ready for review. No planning geometry was changed.');}
   catch(error){if(!controller.signal.aborted)status('Observation review could not open: '+error.message,true);}
   finally{if(artifactAbort===controller)artifactAbort=null;}
 }
@@ -519,15 +600,16 @@ async function openObservationArtifact(index){
 let sceneAbort=null,sceneViewer=null,scenePromise=null,sceneMap=null;
 const surfaceReview=createSurfaceReview($('scene-stage'));
 function sceneStatus(message,error=false){$('scene-status').textContent=message;$('scene-status').classList.toggle('error',error);}
-async function openSceneArtifact(index){
-  if(!job||!client)return;sceneAbort?.abort();const controller=new AbortController();sceneAbort=controller;
-  const sourceJob=job,sourceClient=client,item=sourceJob.artifacts[index],dialog=$('scene-dialog');
+async function openSceneArtifact(index,context=currentResultContext()){
+  if(!workspaceResults.isCurrent(context))return;const controller=beginWorkspacePreview('scene');
+  const {job:sourceJob,sourceClient}=context,item=sourceJob.artifacts[index];
+  sceneContext={jobKey:context.key,name:item?.name||'Scene',ready:false};
   // Open at once and drop the previous scene's status and facts, so nothing stale shows while modules and bytes load.
   surfaceReview.clear();$('scene-facts').replaceChildren();bimWorkflow.clearScene();sceneMap=null;$('scene-plan').hidden=true;sceneStatus(`Downloading and checking ${item?.name??'the scene'}…`);sceneViewer?.clear();
-  if(!dialog.open)dialog.showModal();
+  sceneWorkspace.open({title:item?.name});unifiedWorkspace?.refresh();
   try{
     const {SCENE_PREVIEW_BYTES,sceneFacts}=await import('./scene-preview.mjs');
-    if(controller.signal.aborted)return;
+    if(controller.signal.aborted||!workspaceResults.isCurrent(context))return;
     if(!(item?.size<=SCENE_PREVIEW_BYTES))throw new Error('In-browser scene previews are limited to 50 MiB. Download the GLB for a desktop viewer.');
     const buffer=await sourceClient.previewArtifact(sourceJob,index,controller.signal);
     // scene.json describes the compiler's scene.glb only; any other GLB is shown without borrowed facts.
@@ -552,6 +634,8 @@ async function openSceneArtifact(index){
     if(reportIndex>=0){try{report=JSON.parse(new TextDecoder().decode(await sourceClient.previewArtifact(sourceJob,reportIndex,controller.signal)));}catch(error){if(controller.signal.aborted)return;event('dimension_report_unavailable',error.message);}}
     if(controller.signal.aborted)return;
     await bimWorkflow.showScene({scene,cloud,report,job:sourceJob.id,artifacts:sourceJob.artifacts,sourceClient,signal:controller.signal,sceneSha:sceneIndex>=0?sourceJob.artifacts[sceneIndex].sha256:null});
+    if(controller.signal.aborted||!workspaceResults.isCurrent(context))return;
+    sceneContext={jobKey:context.key,name:item.name,ready:true};
     update();status('Simulation scene opened. Review dimensions and openings before using its BIM exports. Routes remain planning previews.');
   }catch(e){if(!controller.signal.aborted){sceneStatus('Scene preview failed: '+e.message,true);status('Scene preview failed: '+e.message,true);}}
   finally{if(sceneAbort===controller)sceneAbort=null;}
@@ -619,12 +703,15 @@ async function action(name,value){try{
     if(!scale)throw new Error(`Enter the distance you measured between the two points (${PROPOSAL.minMeasuredDistance}–${PROPOSAL.maxMeasuredDistance} m).`);
     if(!$('scene-consent')?.checked)throw new Error('Approve uploading the measured point cloud to your worker first.');
     // Naming is a second, separate approval: crops of the person's frames go to a third-party model.
-    const naming=!!(entry.object_naming&&source.derivation?.job&&$('scene-naming')?.checked);
+    const ancestry=sourceJobOptions(sourceBindings.get(source),client),sourceClient=client;
+    const naming=!!(entry.object_naming&&ancestry.source_job&&$('scene-naming')?.checked);
     // A detector on the worker names objects from the same job's frames without sending them anywhere, so it needs no second approval.
-    const cloud=await bimWorkflow.attach(metricCloud());if(naming)cloud.nameObjects=true;
+    const cloud=await bimWorkflow.attach(metricCloud());if(client!==sourceClient||activeSource!==source)throw new Error('The source or worker changed. Review and approve the measured cloud again.');if(naming)cloud.nameObjects=true;
     const file=new File([JSON.stringify(cloud)],'brainsnn-point-cloud.json',{type:'application/json'});
     event('metric_scene_requested',{source:source.name,...(source.derivation||{}),points:cloud.points.length,metresPerUnit:scale.metresPerUnit,distance:scale.distance,selfReported:true,nameObjects:naming,...(naming?{namingModel:entry.object_naming.model}:{})});
-    await runJob(entry.id,[{file,kind:'cloud',name:file.name}],naming||(entry.object_detection&&source.derivation?.job)?{source_job:source.derivation.job}:{});return;}
+    // Carry the same-worker reconstruction's evidence even when optional naming
+    // is off. source_job is read-only ancestry; nameObjects remains consented above.
+    await runJob(entry.id,[{file,kind:'cloud',name:file.name}],ancestry,[source]);return;}
   if((name==='propose-map'||name==='propose-measured')&&activeSource?.visual&&activeSource.reconstruction){
     const visual=activeSource.visual,c=calibrationFor(visual);let measurement=null;
     if(name==='propose-measured'){c.distance=$('measured-distance')?.value??'';if(c.picks.length!==2)throw new Error('Pick two points first.');
@@ -632,7 +719,7 @@ async function action(name,value){try{
     else if($('camera-height'))cameraHeight=Number($('camera-height').value);
     const {world:proposed,report}=proposeWorld({points:visual.points,reconstruction:activeSource.reconstruction,name:`Proposed map / ${activeSource.name}`,cameraHeight,measurement});
     if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with a map proposed from this reconstruction?'))return;
-    const derived=activeSource.derivation||{},binding={transform:report.transform,job:/^colmap-/.test(derived.engine||'')?derived.job:null,source:activeSource.name};
+    const derived=activeSource.derivation||{},origin=sourceBindings.get(activeSource),binding={transform:report.transform,job:/^colmap-/.test(derived.engine||'')&&origin?derived.job:null,source:activeSource.name,sourceClient:origin?.sourceClient};
     apply(proposed,`Map proposed from ${report.cameras} camera poses and ${report.points.toLocaleString()} points${measurement?` at your measured ${measurement.distance} m scale (phone ${report.impliedCameraHeight} m above the floor)`:report.scaleEstimate?` at the estimated scale, 1 unit ≈ ${report.metresPerUnit.toFixed(3)} m (not measured)`:''}: ${report.area.free} m² seen free, ${report.area.obstacle} m² obstacles, ${report.area.unknown} m² unknown. Review scale and obstacles, then plan.`,{proposal:binding});
     event('map_proposed',{source:activeSource.name,...(activeSource.derivation||{}),method:report.method,cameras:report.cameras,points:report.points,scaleSource:report.scaleSource,assumedCameraHeight:report.assumedCameraHeight,impliedCameraHeight:report.impliedCameraHeight,...(report.scaleEstimate?{scaleEstimate:report.scaleEstimate}:{}),
       ...(report.measurement?{measurement:{a:report.measurement.a,b:report.measurement.b,distance:report.measurement.distance,spanUnits:report.measurement.span,selfReported:true}}:{}),metresPerUnit:report.metresPerUnit,area:report.area,scaleVerified:false});
@@ -656,11 +743,11 @@ async function action(name,value){try{
   if(name==='usd-export')download('brainsnn-world.usda',usdScene(world),'text/plain');
   if(name==='scenario-export'&&baseline)download('brainsnn-scenarios.json',{schema:'brainsnn.comparison.v1',baseline,current:{world,result,assumptions},claim:'Scenario estimates, not measured outcomes.'});
   if(name==='add-note'){const text=$('note-text').value.trim(),s=$('note-source').value,t=Number($('note-time').value);if(!text||!Number.isFinite(t)||t<0||t>86400)throw new Error('Enter an observation and valid timestamp.');event('human_observation',{source:s===''?'reviewed map':sources[Number(s)]?.name,seconds:t,text:text.slice(0,400)});$('note-text').value='';status('Human-authored observation saved in this session.');}
-  if(name==='clear'){if(!confirm('Clear the local map, captures and observations? Remote uploads expire separately on the worker.'))return;cancelConnection();capture.stop({discard:true});await cancelRemote();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();$('scene-dialog').close();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;depthStatus='';observations.clear();measurements.clear();bimWorkflow.reset();visibleVisual=null;calibration={visual:null,picks:[],picking:false,distance:''};visualViewer?.destroy();visualViewer=null;sources.forEach(s=>URL.revokeObjectURL(s.url));sources=[];activeSource=null;events=[];baseline=null;client=null;caps=null;job=null;localStorage.removeItem('brainsnn.world.v1');apply(sampleWorld(),'Local session cleared. Authored sample restored.');setTab('world');$('worker-summary').textContent='Local planning available';$('worker-note').textContent='No model is connected.';}
+  if(name==='clear'){if(!confirm('Clear the local map, captures and observations? Remote uploads expire separately on the worker.'))return;workspaceResults.clear();sourceBindings=new WeakMap();sceneContext=null;artifactAbort?.abort();sceneAbort?.abort();cancelConnection();capture.stop({discard:true});await cancelRemote();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();$('scene-dialog').close();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;depthStatus='';observations.clear();measurements.clear();bimWorkflow.reset({clearDrafts:true});visibleVisual=null;calibration={visual:null,picks:[],picking:false,distance:''};visualViewer?.destroy();visualViewer=null;sources.forEach(s=>URL.revokeObjectURL(s.url));sources=[];activeSource=null;events=[];baseline=null;client=null;caps=null;job=null;jobExecution=null;localStorage.removeItem('brainsnn.world.v1');apply(sampleWorld(),'Local session cleared. Authored sample restored.');setTab('world');$('worker-summary').textContent='Local planning available';$('worker-note').textContent='No model is connected.';}
 }catch(e){status(e.message,true);}}
 $('panel').addEventListener('click',e=>{const box=e.target.closest?.('#located-photo');if(box)tapPhoto(e,box);});
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
-  if(b.dataset.workflow){const step=b.dataset.workflow;if(step==='review'&&bimWorkflow.hasScene&&job?.status==='complete'){const index=job.artifacts?.findIndex(a=>a.name==='scene.glb')??-1;if(index>=0){void openSceneArtifact(index);return;}}setTab(step==='export'?'evidence':'capture');$('workspace').scrollIntoView({block:'start',behavior:'smooth'});if(step==='scale')($('measured-distance')||document.querySelector('[data-action=pick-scale]'))?.focus({preventScroll:true});if(step==='review')$('dimension-review')?.scrollIntoView({block:'center',behavior:'smooth'});return;}
+  if(b.dataset.workflow){const step=b.dataset.workflow;if(step==='review'&&bimWorkflow.hasScene){const context=workspaceResults.get(sceneContext?.jobKey)||currentResultContext(),index=context?.job.artifacts.findIndex(a=>a.name==='scene.glb')??-1;if(index>=0){void openSceneArtifact(index,context);return;}}setTab(step==='export'?'evidence':'capture');$('workspace').scrollIntoView({block:'start',behavior:'smooth'});if(step==='scale')($('measured-distance')||document.querySelector('[data-action=pick-scale]'))?.focus({preventScroll:true});if(step==='review')$('dimension-review')?.scrollIntoView({block:'center',behavior:'smooth'});return;}
   if(b.dataset.dimensionRemove!==undefined){bimWorkflow.removeReading(Number(b.dataset.dimensionRemove));return;}
   if(b.dataset.bimRemove!==undefined){bimWorkflow.removeOpening(Number(b.dataset.bimRemove));return;}
   if(b.dataset.bimAction){try{if(b.dataset.bimAction==='add')bimWorkflow.addOpening();else if(b.dataset.bimAction==='recompile')void bimWorkflow.recompile().catch(error=>sceneStatus(error.message,true));}catch(error){sceneStatus(error.message,true);}return;}
@@ -673,9 +760,9 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.locateArtifact!==undefined){if(sandbox?.isStreet())void sandbox.select('map','simulate');void openLocalization(Number(b.dataset.locateArtifact));return;}
   if(b.dataset.previewArtifact!==undefined){void openArtifact(Number(b.dataset.previewArtifact));return;}
   if(b.dataset.sceneArtifact!==undefined){void openSceneArtifact(Number(b.dataset.sceneArtifact));return;}
-  if(b.dataset.source!==undefined){bimWorkflow.reset();depthAbort?.abort();activeSource=sources[Number(b.dataset.source)];display=activeSource.visual?'visual':'source';renderPanel();renderMedia();update();return;}
+  if(b.dataset.source!==undefined){const source=sources[Number(b.dataset.source)];if(source)void selectWorkspaceSource(sourceId(source),source.visual?'points':'source');return;}
   if(b.dataset.remove!==undefined){if(nativeCheckAbort){nativeCheckAbort.abort();nativeCheckAbort=null;jobStatus='';}bimWorkflow.reset();const i=Number(b.dataset.remove),s=sources[i];observations.removeSource(s);URL.revokeObjectURL(s.url);sources.splice(i,1);if(activeSource===s){depthAbort?.abort();activeSource=sources[0]||null;}renderPanel();renderMedia();update();return;}
-  if(b.dataset.artifact!==undefined&&client&&job){client.download(job.id,Number(b.dataset.artifact)).then(url=>{const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer';a.click();status('Download started using a short-lived ticket; the file is not buffered by the page.');}).catch(e=>status(e.message,true));}
+  if(b.dataset.artifact!==undefined){void downloadResultArtifact(currentResultContext(),Number(b.dataset.artifact)).catch(e=>status(e.message,true));}
 });
 // A picker that returns no file (closed, or on iPhone a video whose conversion failed) says so instead of doing nothing.
 const PICKERS=['files','video-file','phone-camera','native-capture-files'],NO_FILE='No file came back from your phone\'s picker. On iPhone, a video picked from Photo Library is converted first and that can fail for a long video: in Photos, tap Share → Save to Files, then pick it here with Choose File.';
@@ -699,7 +786,7 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(
 $('hero-capture').onclick=()=>{if(sandbox)void sandbox.select('capture');else setTab('capture');$('workspace').scrollIntoView();};$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
 // The hero demo opens the same training floor as the hero link; its reviewed state lands on Simulate, where the route runs.
 createHeroDemo($('hero-demo'),{onOpen:state=>{$('hero-sample').click();if(state==='reviewed'&&world?.provenance==='authored'){if(sandbox)void sandbox.select('map','simulate');else setTab('test');}}});
-$('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopReplay();renderer?.setCursor(Number($('scrub').value)/1000);};$('reset-view').onclick=()=>{if(!$('visual-canvas').hidden)visualViewer?.reset();else renderer?.reset();};$('show-source').onclick=()=>{display='source';renderMedia();};$('show-visual').onclick=()=>{display='visual';renderMedia();};$('depth-start').onclick=()=>void buildDepth();$('detect-start').onclick=()=>void identifyObjects();$('flip-visual').onclick=()=>visualViewer?.flip();$('export').onclick=()=>sandbox?.isStreet()?sandbox.openExport():action('proof');$('fork').onclick=()=>{if(!result){status('Run a planning preview before saving a comparison baseline.',true);return;}baseline={world:clone(world),result:clone(result),assumptions:clone(assumptions)};event('scenario_forked',{distance:result.distance,minutes:estimate(result,assumptions).minutes});status('Baseline saved. Edit an obstacle or robot parameter and run again to compare.');setTab('test');};$('connect').onclick=connect;$('site-connect').onclick=connectSite;$('system-search').oninput=renderSystems;$('systems-more').onclick=()=>{systemsOpen=!systemsOpen;renderSystems();if(!systemsOpen)$('systems').scrollIntoView({block:'start'});};
+$('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopReplay();renderer?.setCursor(Number($('scrub').value)/1000);};$('reset-view').onclick=()=>{if(!$('visual-canvas').hidden)visualViewer?.reset();else renderer?.reset();};$('show-source').onclick=()=>{viewRevision++;display='source';renderMedia();unifiedWorkspace?.refresh();};$('show-visual').onclick=()=>{viewRevision++;display='visual';renderMedia();unifiedWorkspace?.refresh();};$('depth-start').onclick=()=>void buildDepth();$('detect-start').onclick=()=>void identifyObjects();$('flip-visual').onclick=()=>visualViewer?.flip();$('export').onclick=()=>sandbox?.isStreet()?sandbox.openExport():action('proof');$('fork').onclick=()=>{if(!result){status('Run a planning preview before saving a comparison baseline.',true);return;}baseline={world:clone(world),result:clone(result),assumptions:clone(assumptions)};event('scenario_forked',{distance:result.distance,minutes:estimate(result,assumptions).minutes});status('Baseline saved. Edit an obstacle or robot parameter and run again to compare.');setTab('test');};$('connect').onclick=connect;$('site-connect').onclick=connectSite;$('system-search').oninput=renderSystems;$('systems-more').onclick=()=>{systemsOpen=!systemsOpen;renderSystems();if(!systemsOpen)$('systems').scrollIntoView({block:'start'});};
 // A tap (not a drag) on the 3D view picks a calibration point while picking is on; the viewer keeps handling orbit and zoom.
 {let down=null;const canvas=$('visual-canvas');
   canvas.addEventListener('pointerdown',e=>{down=e.isPrimary&&e.button===0?[e.clientX,e.clientY]:null;});
@@ -712,19 +799,19 @@ $('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopRepl
     if(c.picks.length===2)revealMeasurement('measured-distance');});}
 // The header's More menu closes like a menu: on a tap elsewhere, or on Escape.
 const navMore=document.querySelector('.nav-more');document.addEventListener('pointerdown',e=>{if(navMore?.open&&!navMore.contains(e.target))navMore.open=false;});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&navMore?.open){navMore.open=false;navMore.querySelector('summary').focus();}});
-document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const ids=['capture','world','test','understand','evidence'];const i=ids.indexOf(document.querySelector('[data-tab][aria-selected=true]')?.dataset.tab||tab),n=e.key==='Home'?0:e.key==='End'?4:(i+(['ArrowRight','ArrowDown'].includes(e.key)?1:4))%5;if(sandbox){void sandbox.handleTab(ids[n]);$('tab-'+ids[n]).focus();}else setTab(ids[n],true);});
+document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const buttons=Array.from(e.currentTarget.querySelectorAll('[role=tab]')),current=e.target.closest('[role=tab]')||e.currentTarget.querySelector('[aria-selected=true]'),i=Math.max(0,buttons.indexOf(current)),n=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(['ArrowRight','ArrowDown'].includes(e.key)?1:buttons.length-1))%buttons.length;buttons[n].focus();buttons[n].click();});
 $('workspace').addEventListener('dragover',e=>{e.preventDefault();});$('workspace').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files.length){void sandbox?.select('capture');void addFiles(e.dataTransfer.files);}});
 $('connection').addEventListener('close',cancelConnection);
-$('scene-dialog').addEventListener('close',()=>{sceneAbort?.abort();surfaceReview.clear();});$('scene-reset').onclick=()=>sceneViewer?.reset();
+$('scene-dialog').addEventListener('close',()=>{if($('scene-dialog').open)return;sceneAbort?.abort();sceneAbort=null;surfaceReview.clear();bimWorkflow.clearScene();sceneContext=null;sceneMap=null;update();});$('scene-reset').onclick=()=>sceneViewer?.reset();
 // A metric scene's walls, separated objects and unobserved floor become an unreviewed planning map; the robot waits for review.
-$('scene-plan').onclick=async()=>{try{if(!sceneMap)return;const {worldFromScene}=await import('./scene-preview.mjs');
-  const {world:proposed,counts,summary}=worldFromScene(sceneMap.scene,`Scene map / ${sceneMap.source}`);
+$('scene-plan').onclick=async()=>{try{const sourceMap=sceneMap;if(!sourceMap)return;const {worldFromScene}=await import('./scene-preview.mjs');if(sceneMap!==sourceMap)return;
+  const {world:proposed,counts,summary}=worldFromScene(sourceMap.scene,`Scene map / ${sourceMap.source}`);
   if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with a map built from this simulation scene?'))return;
   $('scene-dialog').close();
   apply(proposed,summary);
-  event('scene_map_proposed',{job:sceneMap.job,engine:sceneMap.engine,...counts,boxes:proposed.objects.length,scaleVerified:false});setTab('world');
+  event('scene_map_proposed',{job:sourceMap.job,engine:sourceMap.engine,...counts,boxes:proposed.objects.length,scaleVerified:false});setTab('world');
 }catch(e){sceneStatus('A planning map could not be built from this scene: '+e.message,true);}};
-window.addEventListener('pagehide',e=>{if(e.persisted)sandbox?.suspend();else sandbox?.dispose();nativeCheckAbort?.abort();nativeCheckAbort=null;cancelConnection();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();capture.stop({discard:true});stopReplay();planner?.terminate();planner=null;planning=false;remoteAbort?.abort();remoteAbort=null;clearTimeout(poll);if(e.persisted)return;observations.clear();visualViewer?.destroy();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;sources.forEach(s=>URL.revokeObjectURL(s.url));renderer?.destroy();});
+window.addEventListener('pagehide',e=>{if(e.persisted)sandbox?.suspend();else sandbox?.dispose();nativeCheckAbort?.abort();nativeCheckAbort=null;cancelConnection();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();capture.stop({discard:true});stopReplay();planner?.terminate();planner=null;planning=false;remoteAbort?.abort();remoteAbort=null;clearTimeout(poll);if(e.persisted)return;workspaceResults.clear();sourceBindings=new WeakMap();unifiedWorkspace?.dispose();observations.clear();bimWorkflow.reset({clearDrafts:true});visualViewer?.destroy();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;sources.forEach(s=>URL.revokeObjectURL(s.url));renderer?.destroy();});
 window.addEventListener('pageshow',e=>{if(!e.persisted)return;sandbox?.resume();renderPanel();renderMedia();update();if(job&&client&&!['complete','failed','cancelled'].includes(job.status)){remoteAbort=new AbortController();void checkJob(remoteAbort.signal).catch(error=>{remoteAbort=null;status('Could not resume job status: '+error.message,true);});}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopReplay();capture.stop();}});
 // One-time same-origin handoff from /scan. The fragment does not enter HTTP requests.
@@ -758,7 +845,12 @@ async function receiveCaptureHandoff(id) {
 renderer?.setWorld(world);renderInspector();setTab('world');renderSystems();update();void loadSiteProcessing();
 // Capture the private transfer token before sandbox navigation canonicalizes the URL.
 const handoffId=parseHandoffHash(location.hash);
-sandbox=createSandboxUI({setMapTab:setTab,getMap:()=>world,getSourceCount:()=>sources.length,status,event,pauseMap:stopReplay});
+sandbox=createSandboxUI({setMapTab:setTab,getMap:()=>world,getSourceCount:()=>sources.length,status,event,pauseMap:stopReplay,onWorkspaceChange:()=>unifiedWorkspace?.refresh()});
+unifiedWorkspace=mountUnifiedWorkspace({getSnapshot:workspaceSnapshot,actions:{
+  selectSource:selectWorkspaceSource,showMap:showWorkspaceTab,showTab:showWorkspaceTab,openArtifact:openResultArtifact,
+  downloadArtifact:(key,index)=>downloadResultArtifact(requireResultContext(key),index),
+  showProcessing:async()=>{await showWorkspaceTab('capture');const options=document.querySelector('.processing-options');if(options){options.open=true;options.scrollIntoView({block:'center'});}},
+}});
 // A local handoff opens Capture even when a shared Street route is also present.
 // Do not start a competing lazy Street activation before the file is received.
 if(handoffId)void receiveCaptureHandoff(handoffId);else void sandbox.start();

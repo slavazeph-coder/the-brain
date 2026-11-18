@@ -15,7 +15,7 @@ from PIL import Image
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
-from robotics.world_worker.app import create_app, directory_bytes, visual_metadata
+from robotics.world_worker.app import create_app, directory_bytes, visual_metadata, MAX_ARTIFACTS
 from robotics.world_worker.depth_small import lift_depth
 from robotics.world_worker.geometry import write_point_cloud
 from robotics.world_worker.sparse_colmap import prepare_photo, extract_video, run as reconstruct
@@ -290,8 +290,33 @@ def test_building_import_instructions_are_a_private_download_not_an_upload(tmp_p
                           headers=HEADERS).status_code == 422
 
 
-@pytest.mark.parametrize('count', [32, 33])
-def test_adapter_artifact_count_stays_bounded_at_32(tmp_path, count):
+def test_the_drawing_set_is_a_private_download_not_an_upload(tmp_path):
+    payload = b'%PDF-1.4\nan adapter\'s drawing set stand-in\n%%EOF\n'
+    config = adapter_config(tmp_path,
+        "import json,sys\nfrom pathlib import Path\n"
+        "out=Path(json.loads(Path(sys.argv[1]).read_text())['output_dir'])\n"
+        f"(out/'drawing-set.pdf').write_bytes({payload!r})\n"
+        "(out/'manifest.json').write_text(json.dumps({'artifacts':[{'name':'drawing-set.pdf','kind':'cad'}]}))\n")
+    with TestClient(create_app(root=tmp_path/'data', token=TOKEN, adapters=str(config))) as c:
+        jid, _ = make_job(c, 'test-adapter')
+        c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS)
+        job = wait(c, jid)
+        assert job['status'] == 'complete', job
+        assert job['artifacts'][0]['name'] == 'drawing-set.pdf' and job['artifacts'][0]['sha256'] == hashlib.sha256(payload).hexdigest()
+        assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}).status_code == 401
+        response = c.get(c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}, headers=HEADERS).json()['url'])
+        assert response.content == payload
+        # A PDF can carry scripts: it leaves as a download in a sandbox, never as a page of the worker's origin.
+        assert response.headers['content-disposition'].startswith('attachment')
+        assert response.headers['content-type'] == 'application/octet-stream'
+        assert response.headers['content-security-policy'] == 'sandbox'
+        for kind in ('image', 'video', 'cloud'):
+            assert c.post('/v1/uploads', json={'name': 'drawing-set.pdf', 'kind': kind, 'size': 10},
+                          headers=HEADERS).status_code == 422
+
+
+@pytest.mark.parametrize('count', [MAX_ARTIFACTS, MAX_ARTIFACTS + 1])
+def test_adapter_artifact_count_stays_bounded(tmp_path, count):
     config = adapter_config(tmp_path,
         "import json,sys\nfrom pathlib import Path\n"
         "out=Path(json.loads(Path(sys.argv[1]).read_text())['output_dir'])\n"
@@ -302,14 +327,14 @@ def test_adapter_artifact_count_stays_bounded_at_32(tmp_path, count):
         jid, _ = make_job(c, 'test-adapter')
         c.post(f'/v1/jobs/{jid}/start', json={}, headers=HEADERS)
         job = wait(c, jid)
-        if count == 32:
-            assert job['status'] == 'complete' and len(job['artifacts']) == 32, job
-            url = c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 31}, headers=HEADERS).json()['url']
+        if count == MAX_ARTIFACTS:
+            assert job['status'] == 'complete' and len(job['artifacts']) == MAX_ARTIFACTS, job
+            url = c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': MAX_ARTIFACTS - 1}, headers=HEADERS).json()['url']
             assert c.get(url).content == b'{}\n'
         else:
             assert job['status'] == 'failed' and job['artifacts'] == [], job
             assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 0}, headers=HEADERS).status_code == 404
-        assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': 32}, headers=HEADERS).status_code == 422
+        assert c.post(f'/v1/jobs/{jid}/ticket', json={'artifact': MAX_ARTIFACTS}, headers=HEADERS).status_code == 422
 
 
 @pytest.mark.parametrize('name,mode', [
