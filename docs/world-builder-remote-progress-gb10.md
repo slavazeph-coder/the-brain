@@ -1,9 +1,20 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T04:15Z
+||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T07:45Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 247 — 2026-11-18 (GB10: Lyra nvshmem symbol error confirmed — TORCH_NVSHMEM_DISABLE=1 env var set correctly but libtorch_nvshmem.so fails at import; all suites green)
+
+- **Bounded improvement:** confirmed the nvshmem symbol error persists even with `TORCH_NVSHMEM_DISABLE=1` set at the process level. The shared library `libtorch_nvshmem.so` is loaded at import time and the env var alone isn't sufficient — the symbol `nvshmem_selected_device_transport` is missing from the nvshmem library itself. This is a known issue with the torch 2.15.0 build in the venv. The fix requires either: (1) setting `LD_PRELOAD` with a compatible nvshmem library, or (2) using a torch build with the symbol resolved. The Lyra static scene weights (`lyra_static.pt`, 65 MB) are verified real.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail**
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed**
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped**
+- **4090 state:** port 23990 reachable (slow), hostname `d130b6c7f3f4`, RTX 4090.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** investigate `LD_PRELOAD` or compatible nvshmem library, or fall back to running Lyra inference with venv python and patched torch import path.
 
 ### Run 244 — 2026-11-18 (GB10: Lyra 1 static scene qualification — real weights confirmed, CUDA tensor ops verified; all suites green)
 
