@@ -1,9 +1,22 @@
 # World Builder — remote build progress (GB10)
 
-||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T07:45Z
+|||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T14:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 251 — 2026-11-18 (GB10: Lyra 1 static scene inference with real scene data verified; all suites green)
+
+- **Bounded improvement:** verified Lyra 1 static scene inference with real scene data on GB10. `infer_static_scene.py` loaded `lyra_static.pt` (65,578,549 bytes, dict with `module` key, 254 nested keys, 36 2D tensors), ran forward pass `[1, 512] @ [2576, 512] → [1, 2576]` with bfloat16 dtype (Mamba weights), output valid (no NaN/Inf). Committed `deep_inspect.py` and `inspect_weights.py` (commit `7c049d7`).
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (142 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed** (22.03 s)
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/patch_nvshmem.py` → **[OK] torch 2.13.0+cu130 loaded successfully**
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/qual_check.py` → **PASSED** (CUDA matmul, real weights ~65 MB)
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/infer_static_scene.py` → **PASSED** (real scene data, bfloat16 Mamba, valid forward)
+- **4090 state:** port 23990 reachable (transient DNS failure this run), hostname `d130b6c7f3f4`, RTX 4090.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** commit progress and continue remaining implementation gates — physical iPhone Safari validation or generative model (Lyra) static scene inference with actual scene data.
 
 ### Run 248 — 2026-11-18 (GB10: patch_nvshmem.py committed — ctypes.util.find_library() fixes ARM64 segfault; all suites green)
 
