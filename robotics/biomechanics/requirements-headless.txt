@@ -2,4 +2,3 @@
 numpy==2.4.3
 scipy==1.17.1
 defusedxml==0.7.1
-
