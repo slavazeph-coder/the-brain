@@ -34,6 +34,7 @@ import {createSandboxUI} from './sandbox-ui.mjs';
 import {createWorkspaceResults,sourceJobOptions,shouldOpenCompletedResult} from './workspace-results.mjs';
 import {mountUnifiedWorkspace} from './unified-workspace-ui.mjs';
 import {createSceneWorkspace} from './scene-workspace.mjs';
+import {mountProjectReview} from './project-review-ui.mjs';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const workspaceResults=createWorkspaceResults(),sourceIds=new WeakMap();
 let sourceBindings=new WeakMap(),sourceSequence=0,viewRevision=0,jobExecution=null,unifiedWorkspace=null,sceneContext=null;
@@ -53,6 +54,33 @@ let mapProposal=null,located=null,whatIf=null,goalSpot=null,pathPlay=null,receip
 const isRemoteActive=()=>nativeCheckAbort||remoteAbort||job&&!['complete','failed','cancelled'].includes(job.status);
 let detectAbort=null;
 let visualViewer=null,visibleVisual=null,display='visual',depthAbort=null,depthStatus='',artifactAbort=null,connectionAbort=null;
+let projectReviewContextKey='',projectReviewLoadAbort=null;
+function cancelProjectReviewLoad(){projectReviewLoadAbort?.abort();projectReviewLoadAbort=null;projectReviewContextKey='';}
+const projectReview=mountProjectReview({host:$('project-review-host'),getToken:()=>client?.site?client.token:null,onSourceIntent:cancelProjectReviewLoad});
+function resetProjectReview(){cancelProjectReviewLoad();projectReview.clear();}
+async function openProjectReview(key=''){
+  const dialog=$('project-review-dialog'),context=workspaceResults.get(key);
+  if(!dialog.open)dialog.showModal();
+  const index=context?.job.artifacts.findIndex(a=>a.name==='scene.json')??-1;
+  if(!context||index<0){if(projectReviewContextKey)resetProjectReview();$('project-review-host').querySelector('#pr-open-source')?.focus();return;}
+  const item=context.job.artifacts[index];
+  if(projectReviewContextKey===context.key&&projectReview.sourceSha256===item.sha256)return;
+  resetProjectReview();const controller=new AbortController();projectReviewLoadAbort=controller;
+  try{
+    if(item.size>256*1024)throw Error('Project Review supports scene.json up to 256 KiB. Open a bounded room model.');
+    const bytes=await context.sourceClient.previewArtifact(context.job,index,controller.signal);
+    if(projectReviewLoadAbort!==controller||controller.signal.aborted||!workspaceResults.isCurrent(context))return;
+    const sceneText=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes);
+    await projectReview.setSource({sceneText,sceneSha256:item.sha256,sourceLabel:(context.sourceNames?.join(', ')||'Compiled building model').slice(0,160)});
+    // An older request must never clear a source chosen while it was hashing.
+    if(projectReviewLoadAbort!==controller||controller.signal.aborted||!workspaceResults.isCurrent(context))return;
+    projectReviewContextKey=context.key;
+  }catch(error){if(projectReviewLoadAbort===controller&&!controller.signal.aborted){const note=$('project-review-host').querySelector('#pr-status');note.textContent=error.message;note.dataset.error='true';}}
+  finally{if(projectReviewLoadAbort===controller)projectReviewLoadAbort=null;}
+}
+$('project-review-close').addEventListener('click',()=>$('project-review-dialog').close());
+$('project-review-dialog').addEventListener('close',()=>{projectReviewLoadAbort?.abort();projectReviewLoadAbort=null;projectReview.cancel();});
+$('scene-project-review').addEventListener('click',()=>void openProjectReview(sceneContext?.jobKey));
 function getVisualViewer(){if(!visualViewer)visualViewer=createVisualViewer($('visual-canvas'));return visualViewer;}
 try{renderer=createRenderer($('world-canvas'));}catch(e){status(e.message,true);}
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();}
@@ -271,7 +299,7 @@ async function addFiles(list,{nativeCapture=false}={}){
       if(sources.filter(s=>s.file).length>=LIMITS.sources||sources.reduce((s,x)=>s+x.size,0)+file.size>LIMITS.session)throw new Error('This local session is limited to 12 sources and 4 GiB total.');
       const metadata=kind==='video'?await readVideoMetadata(file):null,seconds=metadata?.seconds??null;if(seconds!==null&&seconds>LIMITS.videoSeconds+1)throw new Error(`This video is ${(seconds/60).toFixed(1)} minutes long. Walkthroughs can be up to five minutes; trim it, then add it again.`);
       if(/\.(spz|ksplat)$/i.test(file.name))throw new Error('Convert SPZ or KSPLAT to PLY / SPLAT before opening it in this viewer.');
-      const source={file,name:file.name,size:file.size,kind,url:null,seconds,width:metadata?.width??null,height:metadata?.height??null,...(nativeMetadata?{capture:nativeMetadata}:{})};let nextDisplay='source';if(kind==='visual'&&/\.(ply|splat)$/i.test(file.name)){if(file.size>64*1024**2)throw new Error('Preview limit is 64 MiB. Open larger files in a desktop viewer.');const parsed=parseVisualAsset(await file.arrayBuffer(),file.name);source.visual={...parsed,origin:'import',photo:false};nextDisplay='visual';}if(world?.provenance==='authored'&&untouchedSample(world)){world=null;renderer?.setWorld(null);}display=nextDisplay;source.url=URL.createObjectURL(file);sources.push(source);bimWorkflow.reset();activeSource=source;invalidate();event('source_added',`${file.name} (${kind}), local only`);setTab('capture');renderInspector();update();status(videoResolutionIssue(source)??(kind==='capture'?`Capture metadata ready for ${nativeMetadata.frames.length} photos. Add the unchanged originals, connect a compatible worker and approve processing.`:kind==='image'?'Photo ready. Create a 3D preview on this device.':kind==='visual'?'Visual asset loaded. Scale and collision geometry remain unverified.':'Walkthrough ready. Connect a reconstruction worker to process overlapping views.'));
+      const source={file,name:file.name,size:file.size,kind,url:null,seconds,width:metadata?.width??null,height:metadata?.height??null,...(nativeMetadata?{capture:nativeMetadata}:{})};let nextDisplay='source';if(kind==='visual'&&/\.(ply|splat)$/i.test(file.name)){if(file.size>64*1024**2)throw new Error('Preview limit is 64 MiB. Open larger files in a desktop viewer.');const parsed=parseVisualAsset(await file.arrayBuffer(),file.name);source.visual={...parsed,origin:'import',photo:false};nextDisplay='visual';}if(world?.provenance==='authored'&&untouchedSample(world)){world=null;renderer?.setWorld(null);}display=nextDisplay;source.url=URL.createObjectURL(file);sources.push(source);bimWorkflow.reset();resetProjectReview();activeSource=source;invalidate();event('source_added',`${file.name} (${kind}), local only`);setTab('capture');renderInspector();update();status(videoResolutionIssue(source)??(kind==='capture'?`Capture metadata ready for ${nativeMetadata.frames.length} photos. Add the unchanged originals, connect a compatible worker and approve processing.`:kind==='image'?'Photo ready. Create a 3D preview on this device.':kind==='visual'?'Visual asset loaded. Scale and collision geometry remain unverified.':'Walkthrough ready. Connect a reconstruction worker to process overlapping views.'));
     }catch(e){status(e.message,true);}
   }
   $('files').value='';$('video-file').value='';$('phone-camera').value='';$('native-capture-files').value='';
@@ -532,6 +560,7 @@ function workspaceSnapshot(){
 }
 async function selectWorkspaceSource(id,view='source'){
   const source=sources.find(item=>sourceId(item)===id);if(!source)throw new Error('That source has been removed from this tab.');
+  if(activeSource!==source)resetProjectReview();
   viewRevision++;sceneWorkspace.close();artifactAbort?.abort();depthAbort?.abort();bimWorkflow.reset();activeSource=source;display=view==='points'||source.kind==='visual'?'visual':'source';
   if(sandbox)await sandbox.select('capture');else setTab('capture');renderPanel();renderMedia();update();
 }
@@ -602,6 +631,7 @@ const surfaceReview=createSurfaceReview($('scene-stage'));
 function sceneStatus(message,error=false){$('scene-status').textContent=message;$('scene-status').classList.toggle('error',error);}
 async function openSceneArtifact(index,context=currentResultContext()){
   if(!workspaceResults.isCurrent(context))return;const controller=beginWorkspacePreview('scene');
+  if(projectReviewContextKey&&projectReviewContextKey!==context.key)resetProjectReview();
   const {job:sourceJob,sourceClient}=context,item=sourceJob.artifacts[index];
   sceneContext={jobKey:context.key,name:item?.name||'Scene',ready:false};
   // Open at once and drop the previous scene's status and facts, so nothing stale shows while modules and bytes load.
@@ -743,7 +773,7 @@ async function action(name,value){try{
   if(name==='usd-export')download('brainsnn-world.usda',usdScene(world),'text/plain');
   if(name==='scenario-export'&&baseline)download('brainsnn-scenarios.json',{schema:'brainsnn.comparison.v1',baseline,current:{world,result,assumptions},claim:'Scenario estimates, not measured outcomes.'});
   if(name==='add-note'){const text=$('note-text').value.trim(),s=$('note-source').value,t=Number($('note-time').value);if(!text||!Number.isFinite(t)||t<0||t>86400)throw new Error('Enter an observation and valid timestamp.');event('human_observation',{source:s===''?'reviewed map':sources[Number(s)]?.name,seconds:t,text:text.slice(0,400)});$('note-text').value='';status('Human-authored observation saved in this session.');}
-  if(name==='clear'){if(!confirm('Clear the local map, captures and observations? Remote uploads expire separately on the worker.'))return;workspaceResults.clear();sourceBindings=new WeakMap();sceneContext=null;artifactAbort?.abort();sceneAbort?.abort();cancelConnection();capture.stop({discard:true});await cancelRemote();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();$('scene-dialog').close();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;depthStatus='';observations.clear();measurements.clear();bimWorkflow.reset({clearDrafts:true});visibleVisual=null;calibration={visual:null,picks:[],picking:false,distance:''};visualViewer?.destroy();visualViewer=null;sources.forEach(s=>URL.revokeObjectURL(s.url));sources=[];activeSource=null;events=[];baseline=null;client=null;caps=null;job=null;jobExecution=null;localStorage.removeItem('brainsnn.world.v1');apply(sampleWorld(),'Local session cleared. Authored sample restored.');setTab('world');$('worker-summary').textContent='Local planning available';$('worker-note').textContent='No model is connected.';}
+  if(name==='clear'){if(!confirm('Clear the local map, captures and observations? Remote uploads expire separately on the worker.'))return;resetProjectReview();workspaceResults.clear();sourceBindings=new WeakMap();sceneContext=null;artifactAbort?.abort();sceneAbort?.abort();cancelConnection();capture.stop({discard:true});await cancelRemote();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();$('scene-dialog').close();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;depthStatus='';observations.clear();measurements.clear();bimWorkflow.reset({clearDrafts:true});visibleVisual=null;calibration={visual:null,picks:[],picking:false,distance:''};visualViewer?.destroy();visualViewer=null;sources.forEach(s=>URL.revokeObjectURL(s.url));sources=[];activeSource=null;events=[];baseline=null;client=null;caps=null;job=null;jobExecution=null;localStorage.removeItem('brainsnn.world.v1');apply(sampleWorld(),'Local session cleared. Authored sample restored.');setTab('world');$('worker-summary').textContent='Local planning available';$('worker-note').textContent='No model is connected.';}
 }catch(e){status(e.message,true);}}
 $('panel').addEventListener('click',e=>{const box=e.target.closest?.('#located-photo');if(box)tapPhoto(e,box);});
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
@@ -761,7 +791,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.previewArtifact!==undefined){void openArtifact(Number(b.dataset.previewArtifact));return;}
   if(b.dataset.sceneArtifact!==undefined){void openSceneArtifact(Number(b.dataset.sceneArtifact));return;}
   if(b.dataset.source!==undefined){const source=sources[Number(b.dataset.source)];if(source)void selectWorkspaceSource(sourceId(source),source.visual?'points':'source');return;}
-  if(b.dataset.remove!==undefined){if(nativeCheckAbort){nativeCheckAbort.abort();nativeCheckAbort=null;jobStatus='';}bimWorkflow.reset();const i=Number(b.dataset.remove),s=sources[i];observations.removeSource(s);URL.revokeObjectURL(s.url);sources.splice(i,1);if(activeSource===s){depthAbort?.abort();activeSource=sources[0]||null;}renderPanel();renderMedia();update();return;}
+  if(b.dataset.remove!==undefined){if(nativeCheckAbort){nativeCheckAbort.abort();nativeCheckAbort=null;jobStatus='';}bimWorkflow.reset();const i=Number(b.dataset.remove),s=sources[i];resetProjectReview();observations.removeSource(s);URL.revokeObjectURL(s.url);sources.splice(i,1);if(activeSource===s){depthAbort?.abort();activeSource=sources[0]||null;}renderPanel();renderMedia();update();return;}
   if(b.dataset.artifact!==undefined){void downloadResultArtifact(currentResultContext(),Number(b.dataset.artifact)).catch(e=>status(e.message,true));}
 });
 // A picker that returns no file (closed, or on iPhone a video whose conversion failed) says so instead of doing nothing.
@@ -811,7 +841,7 @@ $('scene-plan').onclick=async()=>{try{const sourceMap=sceneMap;if(!sourceMap)ret
   apply(proposed,summary);
   event('scene_map_proposed',{job:sourceMap.job,engine:sourceMap.engine,...counts,boxes:proposed.objects.length,scaleVerified:false});setTab('world');
 }catch(e){sceneStatus('A planning map could not be built from this scene: '+e.message,true);}};
-window.addEventListener('pagehide',e=>{if(e.persisted)sandbox?.suspend();else sandbox?.dispose();nativeCheckAbort?.abort();nativeCheckAbort=null;cancelConnection();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();capture.stop({discard:true});stopReplay();planner?.terminate();planner=null;planning=false;remoteAbort?.abort();remoteAbort=null;clearTimeout(poll);if(e.persisted)return;workspaceResults.clear();sourceBindings=new WeakMap();unifiedWorkspace?.dispose();observations.clear();bimWorkflow.reset({clearDrafts:true});visualViewer?.destroy();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;sources.forEach(s=>URL.revokeObjectURL(s.url));renderer?.destroy();});
+window.addEventListener('pagehide',e=>{projectReviewLoadAbort?.abort();projectReviewLoadAbort=null;if(e.persisted)projectReview.cancel();else projectReview.dispose();if(e.persisted)sandbox?.suspend();else sandbox?.dispose();nativeCheckAbort?.abort();nativeCheckAbort=null;cancelConnection();depthAbort?.abort();detectAbort?.abort();artifactAbort?.abort();sceneAbort?.abort();capture.stop({discard:true});stopReplay();planner?.terminate();planner=null;planning=false;remoteAbort?.abort();remoteAbort=null;clearTimeout(poll);if(e.persisted)return;workspaceResults.clear();sourceBindings=new WeakMap();unifiedWorkspace?.dispose();observations.clear();bimWorkflow.reset({clearDrafts:true});visualViewer?.destroy();sceneViewer?.destroy();sceneViewer=null;scenePromise=null;sources.forEach(s=>URL.revokeObjectURL(s.url));renderer?.destroy();});
 window.addEventListener('pageshow',e=>{if(!e.persisted)return;sandbox?.resume();renderPanel();renderMedia();update();if(job&&client&&!['complete','failed','cancelled'].includes(job.status)){remoteAbort=new AbortController();void checkJob(remoteAbort.signal).catch(error=>{remoteAbort=null;status('Could not resume job status: '+error.message,true);});}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){stopReplay();capture.stop();}});
 // One-time same-origin handoff from /scan. The fragment does not enter HTTP requests.
@@ -848,6 +878,7 @@ const handoffId=parseHandoffHash(location.hash);
 sandbox=createSandboxUI({setMapTab:setTab,getMap:()=>world,getSourceCount:()=>sources.length,status,event,pauseMap:stopReplay,onWorkspaceChange:()=>unifiedWorkspace?.refresh()});
 unifiedWorkspace=mountUnifiedWorkspace({getSnapshot:workspaceSnapshot,actions:{
   selectSource:selectWorkspaceSource,showMap:showWorkspaceTab,showTab:showWorkspaceTab,openArtifact:openResultArtifact,
+  reviewProject:openProjectReview,
   downloadArtifact:(key,index)=>downloadResultArtifact(requireResultContext(key),index),
   showProcessing:async()=>{await showWorkspaceTab('capture');const options=document.querySelector('.processing-options');if(options){options.open=true;options.scrollIntoView({block:'center'});}},
 }});

@@ -860,3 +860,9 @@ canon: /HACKATHON.md.
   `https://github.com/XioAISolutions/Reconstruct`.
 - Verified locally with `npm run lint`, `npm test`, `npm run build`,
   `npm run test:e2e`, and Playwright screenshots on desktop/mobile.
+
+### Project Review studio — 2026-11-18
+
+- See [world-project-review.md](world-project-review.md) for the source-bound
+  finish-scope review workflow, owner-only bounded AI team, deterministic rates
+  and quantities, preliminary approval receipts, and qualification boundaries.

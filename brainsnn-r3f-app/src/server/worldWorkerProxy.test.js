@@ -60,6 +60,25 @@ async function site(env, options) {
 const env = (worker, extra = {}) => ({ WORLD_WORKER_INTERNAL_URL: worker.url + '/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER,
   WORLD_SITE_PASSCODE: PASSCODE, WORLD_SITE_VISITORS: '0', ...extra });
 
+it('server-local project review authorization accepts only a current owner session', async () => {
+  let clock = 1000;
+  const worker = await fakeWorker(), web = await site(env(worker, { WORLD_SITE_VISITORS: '1', WORLD_WORKER_SITE_VISITOR_TOKEN: VISITOR }), { now: () => clock });
+  try {
+    const owner = await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } });
+    const visitor = await web.call('/api/world/session', { method: 'POST', body: {} });
+    const request = token => ({ headers: { authorization: `Bearer ${token}` } });
+    const authorized = web.proxy.ownerSession(request(owner.data.token));
+    assert.equal(authorized.kind, 'owner');
+    assert.equal(web.proxy.ownerSession(request(owner.data.token)), authorized, 'quotas use a stable server-local identity');
+    assert.equal(web.proxy.ownerSession(request(visitor.data.token)), null);
+    assert.equal(web.proxy.ownerSession(request(OWNER)), null, 'worker tenant tokens are not browser sessions');
+    assert.equal(web.proxy.ownerSession(request('x'.repeat(43))), null);
+    assert.equal(web.proxy.ownerSession({ headers: {} }), null);
+    clock += 12 * 3600_000;
+    assert.equal(web.proxy.ownerSession(request(owner.data.token)), null);
+  } finally { await web.close(); await worker.close(); }
+});
+
 it('world processing stays off until the worker, its owner credential and a passcode are all set', async () => {
   assert.deepEqual(createWorldWorkerProxy({}).status(), { available: false, passcode: false, visitors: false, visitorJobsPerDay: null, visitorsOff: 'no-worker' });
   assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER, WORLD_SITE_PASSCODE: 'short' }).status().available, false);
