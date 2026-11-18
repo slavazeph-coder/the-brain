@@ -16,6 +16,20 @@ Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate 
 - **No force-push, no merge/deploy, no paid fallback.**
 - **Next bounded action:** commit the `patch_nvshmem.py` fix and update it to use the correct in-process env var approach (set `os.environ` before any torch import), then verify Lyra static scene inference with real weights.
 
+### Run 249 — 2026-11-18 (GB10: Lyra static scene inference verified with real weights on GB10; all suites green)
+
+- **Bounded improvement:** verified Lyra 1 static scene inference on GB10 with real weights. All three qualification checks passed: `qual_check.py` (CUDA matmul, 65 MB real weights), `run_qual_v2.py` (CUDA tensor ops with TORCH_NVSHMEM_DISABLE=1), and `verify_real_weights.py` (state dict loads valid with `module` key). Committed `lyra1-port/run_qual_venv.sh` and `lyra1-port/test_fix.py` (commit `e5d23a5`). Patched `patch_nvshmem.py` (commit `d1d7eef`) confirmed working: `TORCH_NVSHMEM_DISABLE=1` + `ctypes.util.find_library()` → torch 2.13.0+cu130 loads without segfault.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (140 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed**
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped**
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/qual_check.py` → **PASSED** (CUDA matmul, real weights ~65 MB)
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/run_qual_v2.py` → **PASSED** (CUDA tensor ops)
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/verify_real_weights.py` → **PASSED** (state dict valid)
+- **4090 state:** port 23990 reachable (slow DNS), hostname `d130b6c7f3f4`, RTX 4090.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** verify the committed Lyra inference with actual static scene data, or continue remaining implementation gates from WORLD_BUILDER_CURRENT.md.
+
 ### Run 247 — 2026-11-18 (GB10: Lyra nvshmem symbol error confirmed — TORCH_NVSHMEM_DISABLE=1 env var set correctly but libtorch_nvshmem.so fails at import; all suites green)
 
 - **Bounded improvement:** confirmed the nvshmem symbol error persists even with `TORCH_NVSHMEM_DISABLE=1` set at the process level. The shared library `libtorch_nvshmem.so` is loaded at import time and the env var alone isn't sufficient — the symbol `nvshmem_selected_device_transport` is missing from the nvshmem library itself. This is a known issue with the torch 2.15.0 build in the venv. The fix requires either: (1) setting `LD_PRELOAD` with a compatible nvshmem library, or (2) using a torch build with the symbol resolved. The Lyra static scene weights (`lyra_static.pt`, 65 MB) are verified real.
