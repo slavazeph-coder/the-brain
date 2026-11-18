@@ -1,0 +1,78 @@
+name: World SOMA runtime
+
+on:
+  pull_request:
+    paths:
+      - 'robotics/motion_retarget/**'
+      - 'robotics/world_worker/motion_retarget.py'
+      - 'tests/world/test_motion_retarget.py'
+      - 'docs/world-motion-retarget.md'
+      - '.github/workflows/world-soma-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'robotics/motion_retarget/**'
+      - 'robotics/world_worker/motion_retarget.py'
+      - 'tests/world/test_motion_retarget.py'
+      - 'docs/world-motion-retarget.md'
+      - '.github/workflows/world-soma-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soma-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-soma-cpu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install exact headless CPU dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p output/soma
+          git rev-parse HEAD > output/soma/brainsnn-source-sha.txt
+          python -m pip install -r robotics/motion_retarget/requirements-headless.txt pytest==9.1.1 2>&1 | tee output/soma/dependencies.log
+          python -m pip freeze > output/soma/dependencies.txt
+      - name: Install pinned source and hash-checked runtime assets only
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m robotics.motion_retarget.setup_runtime --destination "$RUNNER_TEMP/soma-upstream" 2>&1 | tee output/soma/install.log
+          cp "$RUNNER_TEMP/soma-upstream/brainsnn-runtime.json" output/soma/
+          cp "$RUNNER_TEMP/soma-upstream/LICENSE" output/soma/UPSTREAM-LICENSE.txt
+          cp "$RUNNER_TEMP/soma-upstream/licenses/unitree-LICENSE.txt" output/soma/UNITREE-LICENSE.txt
+      - name: Execute actual upstream CPU IK on procedural motion
+        shell: bash
+        run: |
+          set -o pipefail
+          WARP_CACHE_PATH="$RUNNER_TEMP/soma-warp-cache" python -m robotics.motion_retarget.qualify \
+            --runtime-dir "$RUNNER_TEMP/soma-upstream" --out output/soma/qualification 2>&1 | tee output/soma/execution.log
+      - name: Exercise core adapter contracts with the qualified runtime
+        shell: bash
+        run: |
+          WORLD_SOMA_RUNTIME_DIR="$RUNNER_TEMP/soma-upstream" WORLD_SOMA_TEST_PYTHON="$(command -v python)" \
+            WARP_CACHE_PATH="$RUNNER_TEMP/soma-warp-cache" python -m pytest tests/world/test_motion_retarget.py -q
+      - name: Preserve genuine solver receipts and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: soma-cpu-qualification
+          path: output/soma/
+          retention-days: 14
+          if-no-files-found: warn
