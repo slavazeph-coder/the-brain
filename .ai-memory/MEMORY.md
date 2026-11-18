@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Camera setup review](world-camera-calibration-2026-11-18.md) — local HumanCalib/Pose2Sim exports and verified CPU calibration feasibility.
+
 → [One World Builder experience](world-unified-experience-2026-11-17.md) — owner’s v23 demo flow in one workspace; retained source/job results, native drawings, safe view switching and separate website/worker rollout.
 
 → [World Builder playground usability](world-playground-usability-2026-11-17.md) — simpler entry and controls, preserved features, optional larger text/read-aloud and narrow-screen browser checks. Owner scope is World Builder.
