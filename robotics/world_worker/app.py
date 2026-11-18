@@ -43,12 +43,15 @@ ACTIVE = ('prepared', 'queued', 'running')
 UPLOAD_SUFFIXES = {'image': ['.jpg', '.jpeg', '.png', '.webp'], 'video': ['.mp4', '.mov', '.webm'],
                    'cloud': ['.json'], 'capture': ['.json'], 'replay': ['.json'], 'ifc': ['.ifc'], 'asbuilt': ['.json'],
                    'splat': ['.ply'], 'repair': ['.json'], 'survey': ['.ply'], 'localization': ['.json'],
-                   'motion': ['.bvh'], 'retarget': ['.json']}
+                   'motion': ['.bvh'], 'retarget': ['.json'], 'biomech-model': ['.osim'],
+                   'biomech-motion': ['.mot', '.sto'], 'biomech-options': ['.json'], 'biomech-loads': ['.json']}
 # These layers are private engine grants, never an implicit expansion of a
 # visitor's existing image/video or inspect access. Limits match each parser.
 LAYER_UPLOADS = {'splat': ('splat-repair', 64 * MIB), 'repair': ('splat-repair', 256 * 1024),
                  'survey': ('localization-map', 64 * MIB), 'localization': ('localization-map', 16 * MIB),
-                 'motion': ('motion-retarget', 8 * MIB), 'retarget': ('motion-retarget', 16 * 1024)}
+                 'motion': ('motion-retarget', 8 * MIB), 'retarget': ('motion-retarget', 16 * 1024),
+                 'biomech-model': ('biomechanics', 8 * MIB), 'biomech-motion': ('biomechanics', 8 * MIB),
+                 'biomech-options': ('biomechanics', 32 * 1024), 'biomech-loads': ('biomechanics', 8 * MIB)}
 NUMERICAL_ENV = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS')
 SOMA_ENV = ('WORLD_SOMA_RUNTIME_DIR', 'WORLD_SOMA_DEVICE', 'WARP_CACHE_PATH')
 
@@ -56,7 +59,8 @@ class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=160)
     kind: Literal['image', 'video', 'cloud', 'capture', 'replay', 'ifc', 'asbuilt',
-                  'splat', 'repair', 'survey', 'localization', 'motion', 'retarget']
+                  'splat', 'repair', 'survey', 'localization', 'motion', 'retarget',
+                  'biomech-model', 'biomech-motion', 'biomech-options', 'biomech-loads']
     size: int = Field(gt=0, le=VIDEO_BYTES, strict=True)
 
 class JobBody(BaseModel):
@@ -192,8 +196,10 @@ def validate_media(path: Path, kind: str):
             from .splat_repair import validate_upload
         elif kind in ('survey', 'localization'):
             from .localization_job import validate_upload
-        else:
+        elif kind in ('motion', 'retarget'):
             from .motion_retarget import validate_upload
+        else:
+            from .biomechanics import validate_upload
         try:
             return validate_upload(path, kind)
         except (OSError, ValueError, TypeError, OverflowError, RecursionError) as error:
@@ -256,6 +262,15 @@ def validate_layer_inputs(engine, checked, source_job):
         fps = data['retarget'].get('fps')
         if fps is not None and not math.isclose(fps, data['motion']['fps'], rel_tol=1e-5, abs_tol=1e-5):
             raise HTTPException(422, 'Requested FPS disagrees with the uploaded motion timing.')
+    elif engine == 'biomechanics':
+        required = ['biomech-model', 'biomech-motion', 'biomech-options']
+        if kinds not in (sorted(required), sorted(required + ['biomech-loads'])) or source_job is not None:
+            raise HTTPException(422, 'Movement analysis requires one body model, motion and options, with optional force inputs.')
+        from .biomechanics import validate_inputs
+        try:
+            validate_inputs(data)
+        except (ValueError, TypeError, OverflowError, RecursionError) as error:
+            raise HTTPException(422, str(error)[:300])
     elif engine == 'localization-map':
         if 'localization' not in data:
             raise HTTPException(422, 'Localization requires its reviewed request or recording.')
@@ -438,7 +453,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if not isinstance(entry, dict):
                 raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt','.pdf','.pcd','.bvh']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt','.pdf','.pcd','.bvh','.osim','.mot','.sto']:
                 raise ValueError('Unsafe artifact name or type.')
             seen.add(name)
             path = out / name
@@ -522,7 +537,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 command = [arg.replace('{input_manifest}', str(request_file)).replace('{output_dir}', str(out)) for arg in entry['command']]
                 # The worker secret is deliberately excluded from adapter environments.
                 env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR','WORLD_LINGBOT_SOURCE_DIR','WORLD_LINGBOT_MODEL_PATH','WORLD_LINGBOT_BACKEND','WORLD_VLM_ENABLED','WORLD_VLM_BASE_URL','WORLD_VLM_MODEL','WORLD_VLM_REVISION','WORLD_VLM_API_KEY']}
-                if job['engine'] in ('splat-repair', 'motion-retarget'):
+                if job['engine'] in ('splat-repair', 'motion-retarget', 'biomechanics'):
                     env.update({k: os.environ[k] for k in NUMERICAL_ENV if k in os.environ})
                 if job['engine'] == 'motion-retarget':
                     env.update({k: os.environ[k] for k in SOMA_ENV if k in os.environ})

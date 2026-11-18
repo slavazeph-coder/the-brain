@@ -553,7 +553,7 @@ async function downloadResultArtifact(context,index){
 async function openResultArtifact(key,index){
   const context=requireResultContext(key),item=context.job.artifacts[index];
   if(!Number.isInteger(index)||!item)throw new Error('Choose an available result file.');
-  if(['splat-repair','localization-map','motion-retarget'].includes(context.job.engine)){
+  if(['splat-repair','localization-map','motion-retarget','biomechanics'].includes(context.job.engine)){
     const requested=++viewRevision;artifactAbort?.abort();sceneWorkspace.close();
     await layerTools.openResult(context);if(requested===viewRevision&&workspaceResults.isCurrent(context))$('world-layer-tools').scrollIntoView({block:'start'});return;
   }

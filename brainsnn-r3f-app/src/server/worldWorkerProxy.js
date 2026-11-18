@@ -237,7 +237,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
       if (current.kind === 'visitor') {
         let upload;
         try { upload=JSON.parse(body.toString('utf8')); } catch { return reply(res,400,{detail:'Send JSON.'}); }
-        if (['ifc','asbuilt','splat','repair','survey','localization','motion','retarget'].includes(upload?.kind)) return reply(res,403,{detail:'This processing tool is available to owner sessions only.'});
+        if (['ifc','asbuilt','splat','repair','survey','localization','motion','retarget','biomech-model','biomech-motion','biomech-options','biomech-loads'].includes(upload?.kind)) return reply(res,403,{detail:'This processing tool is available to owner sessions only.'});
         prune();
         const key = `${day(now())}|uploads|${current.address}`;
         const open = [...current.uploads].filter((id) => !current.used.has(id)).length;  // not yet given to a job
