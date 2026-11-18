@@ -1,5 +1,7 @@
 # The Brain — AI Memory
 
+- 2026-11-18: [Four World Builder tools live](world-four-layers-2026-11-18.md) — exact website/worker releases,6 hosted API checks, retained artifacts, remaining service requirements and SAM3D/ENABLE limits.
+
 > Shared by Claude Code and Codex. Keep under 200 lines.
 > Last updated: 2026-10-24
 
