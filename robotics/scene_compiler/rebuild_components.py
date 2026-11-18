@@ -16,7 +16,7 @@ import tempfile
 
 from .component_graph import apply_edits, ensure_component_ids
 from . import nav2_export
-from ..world_worker import building_handoff, cad_export, component_evidence, component_fit, fit_check, measurement_check
+from ..world_worker import building_handoff, cad_export, component_evidence, component_fit, drawing_set, fit_check, measurement_check
 from ..world_worker.geometry import load_arena_cloud
 
 COMPILER = Path(__file__).with_name('scene_compiler.py')
@@ -82,6 +82,11 @@ def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, al
             rebuilt['fit'] = {k: fit[k] for k in ('within_5cm', 'modelled_median_cm', 'by_kind', 'misfits')}
         (result / 'scene.json').write_text(json.dumps(rebuilt, indent=1, allow_nan=False))
         building = building_handoff.write_building_handoff(rebuilt, result, scene_path=result / 'scene.json')
+        try:  # the drawing set follows the edited revision; a problem drawing it never fails the rebuild
+            drawings = drawing_set.write_drawing_set(rebuilt, result, scene_path=result / 'scene.json')
+        except Exception as error:
+            drawings = {'written': False, 'reason': f'{type(error).__name__}: {str(error)[:200]}'}
+        drawings.pop('artifacts', None)
         (result / 'arena-cloud.json').write_bytes(cloud_raw)
         (result / 'source-scene.json').write_bytes(scene_raw)
         (result / 'component-edits.json').write_bytes(edits_raw)
@@ -106,7 +111,7 @@ def rebuild(scene_path, cloud_path, edits_path, out, *, blender, timeout=900, al
                    'sourceSceneSha256': hashlib.sha256(scene_raw).hexdigest(),
                    'editFileSha256': hashlib.sha256(edits_raw).hexdigest(), 'sourceFiles': source_files,
                    'blenderProcessSucceeded': True, 'cad': cad, 'fit': fit, 'navigation': nav,
-                   'buildingHandoff': building,
+                   'buildingHandoff': building, 'drawingSet': drawings,
                    'unverifiedGeometryExperiment': allow_unverified,
                    'componentEvidence': {'written': True, 'projection': support['projection'],
                                          'scope': 'Edited geometry remains unsupported by original point memberships.'},

@@ -138,9 +138,10 @@ def quantities(scene, items):
               'objects': len(objects), 'named_objects': sum(1 for o in objects if o['label']),
               'unknown_area_m2': round(sum(u['length'] * u['width'] for u in unknown), 2)}
     head = ['section', 'element', 'ifc_class', 'name', 'length_m', 'width_m', 'height_m', 'area_m2', 'notes']
+    extent = [f'{v:.3f}' for v in totals['floor_extent_m']] if floor else ['', '']   # a scene can have no floor object
     rows = [head,
-            ['summary', 'point_covered_footprint', '', 'Point-covered footprint estimate', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['point_covered_footprint_area_m2'], 'extent less unknown grid cells; support may be above the floor; not a measured room or floor area'],
-            ['summary', 'floor_extent', 'IfcSlab', 'Floor bounding extent', *(f'{v:.3f}' for v in totals['floor_extent_m'] or ['', '']), '', totals['floor_extent_area_m2'], 'point-cloud bounding rectangle; not a room outline or measured floor assembly'],
+            ['summary', 'point_covered_footprint', '', 'Point-covered footprint estimate', *extent, '', totals['point_covered_footprint_area_m2'], 'extent less unknown grid cells; support may be above the floor; not a measured room or floor area'],
+            ['summary', 'floor_extent', 'IfcSlab', 'Floor bounding extent', *extent, '', totals['floor_extent_area_m2'], 'point-cloud bounding rectangle; not a room outline or measured floor assembly'],
             ['summary', 'walls', 'IfcWall', f"{totals['walls']} walls", f"{totals['wall_length_m']:.2f}", '', '', totals['wall_face_area_m2'], 'total length; net one-face area after reviewed voids'],
             ['summary', 'objects', '', f"{totals['objects']} objects", '', '', '', '', f"{totals['named_objects']} named, unreviewed"],
             ['summary', 'unknown_space', 'IfcBuildingElementProxy', 'unknown space', '', '', '', totals['unknown_area_m2'], 'footprint cells no reconstructed point reached; not free space'],

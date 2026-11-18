@@ -13,6 +13,7 @@ edit, so the plan, schedule and evidence refer to the new component revision.
 | `building-schedule.csv` | Wall and opening dimensions in metres and feet, geometric areas in square metres and square feet, component IDs and revision references. |
 | `building-handoff.json` | Exact final scene-byte hash, component identity/revision, image transform, calibration endpoints, companion hashes and readiness limits. |
 | `BUILDING-IMPORT.txt` | Destination instructions and the limits of the generated files. |
+| `drawing-set.pdf` | One A3 PDF: plan, four elevations, two sections and the wall, opening, object and quantity schedules, drawn from the same scene. See [the drawing set](world-drawing-set.md). |
 
 The worker lists these as authenticated job artifacts. The browser shows their
 actual manifest indices and destination instructions. Plain-text output support
