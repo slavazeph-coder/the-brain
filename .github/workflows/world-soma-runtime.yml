@@ -77,13 +77,18 @@ jobs:
       # to branches that contain the new workspace and browser regression.
       - name: Install isolated browser and HTTP-worker dependencies
         if: ${{ hashFiles('brainsnn-r3f-app/public/world/world-layer-tools.mjs') != '' && hashFiles('tests/world/three_layers_browser_smoke.py') != '' }}
+        timeout-minutes: 7
         shell: bash
         run: |
           python -m venv "$RUNNER_TEMP/three-layer-browser"
           "$RUNNER_TEMP/three-layer-browser/bin/python" -m pip install \
             -r robotics/world_worker/requirements.txt -r robotics/splat_repair/requirements.txt \
             numpy==2.5.4 Pillow==13.0.0 playwright==1.64.0 pytest==9.1.1
-          "$RUNNER_TEMP/three-layer-browser/bin/python" -m playwright install --with-deps chromium webkit
+          # The runner's Azure mirror stalled these browser packages for over
+          # fifteen minutes. Use the official archive and bound the download.
+          echo 'http://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt
+          "$RUNNER_TEMP/three-layer-browser/bin/python" -m playwright install-deps chromium webkit
+          timeout --kill-after=10 180 "$RUNNER_TEMP/three-layer-browser/bin/python" -m playwright install chromium webkit
       - name: Exercise three real CPU jobs in Chromium and WebKit
         if: ${{ hashFiles('brainsnn-r3f-app/public/world/world-layer-tools.mjs') != '' && hashFiles('tests/world/three_layers_browser_smoke.py') != '' }}
         shell: bash

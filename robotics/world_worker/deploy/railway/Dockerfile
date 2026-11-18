@@ -43,7 +43,7 @@ RUN python3.11 -m venv /opt/bpy && /opt/bpy/bin/pip install --no-cache-dir bpy==
 # SOMA has a separate numerical runtime (NumPy 2.4.3/USD 26.3) so the existing
 # reconstruction/CAD environment keeps its qualified NumPy 2.5.4/USD 25.8.
 # Fetch and verify the exact upstream source and G1 assets at BUILD time only;
-# no restricted example motion corpus is downloaded. Qualification executes real
+# no restricted example motion corpus is retained in the image. Qualification executes real
 # CPU IK on an authored arm sweep and warms Warp's cache. A failed solve fails
 # the image build. These stages are independent of other worker source edits.
 ENV WORLD_SOMA_RUNTIME_DIR=/opt/soma/upstream WORLD_SOMA_DEVICE=cpu \
