@@ -858,4 +858,4 @@ if(handoffId)void receiveCaptureHandoff(handoffId);else void sandbox.start();
 if(new URLSearchParams(location.search).has('install')&&!standalone())void installApp();
 
 // Optional reading help uses the same tools, so existing scenes and edits stay in place.
-mountPlaygroundHelp({onTool:tool=>{$('tab-'+tool).click();$('workspace').scrollIntoView({block:'start'});requestAnimationFrame(()=>$('tab-'+tool).focus({preventScroll:true}));}});
+mountPlaygroundHelp({onTool:tool=>{$('tab-'+tool).click();$('workspace').scrollIntoView({block:'start'});$('tab-'+tool).focus({preventScroll:true});}});

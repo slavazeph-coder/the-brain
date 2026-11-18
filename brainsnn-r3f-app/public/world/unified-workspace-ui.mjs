@@ -131,7 +131,14 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   host.addEventListener('click', event => {
     const button=event.target.closest('button'); if(!button)return;
     const run=async()=>{
-      if(button.dataset.step) await step(button.dataset.step);
+      if(button.dataset.tab) {
+        const tool = button.dataset.tab;
+        requestAnimationFrame(()=>{
+          if (innerWidth > 600 || document.querySelector('dialog:modal') || document.getElementById('scene-dialog').open || snapshot().tab !== tool) return;
+          const target = ['world','test'].includes(tool) ? $('viewport') : $('panel');
+          target.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+        });
+      } else if(button.dataset.step) await step(button.dataset.step);
       else if(button.hasAttribute('data-next')) await step(button.dataset.next);
       else if(button.dataset.spaceView) await view(button.dataset.spaceView);
       else if(button.dataset.librarySource) { closeModel(); await actions.selectSource(button.dataset.librarySource,'source'); message(''); }

@@ -439,7 +439,7 @@ def main():
             'WORLD_ADAPTERS_FILE':str(config),'WORLD_ALLOWED_ORIGINS':origin}
         try:
             for label, command, env in [
-                ('frontend',[server_python,'-m','http.server',str(frontend),'--bind','127.0.0.1',
+                ('frontend',[server_python, '-c', 'import socketserver, runpy; socketserver.TCPServer.request_queue_size=128; runpy.run_module("http.server", run_name="__main__")',str(frontend),'--bind','127.0.0.1',
                     '--directory',str(ROOT/'brainsnn-r3f-app/public')],os.environ),
                 ('worker',[server_python,'-m','uvicorn','robotics.world_worker.app:create_app','--factory',
                     '--host','127.0.0.1','--port',str(backend),'--no-access-log'],environment)]:
