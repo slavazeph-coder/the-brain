@@ -290,3 +290,153 @@ html[data-reading-size="large"] .hero-demo-stage:has(.hero-demo-generated:not([h
   .scene-inline[open]{padding:16px 12px}.scene-inline .dialog-head{align-items:flex-start;flex-direction:column}.scene-inline .dialog-head button{align-self:stretch}.scene-inline .viewer-stage{height:360px;min-height:280px}
 }
 @media(max-width:380px){html[data-reading-size=large] #unified-workspace .workspace-journey{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ---------- Robot-first playground: choose a robot, build its world, let it try (readable from 6 to 90) ---------- */
+/* Larger reading sizes for the playground only; the linked review pages keep their own tested layouts. */
+body.playground{--reading-ui:16px;--reading-copy:18px;--reading-small:15px;font-size:16px}
+html[data-reading-size="large"] body.playground{--reading-ui:19px;--reading-copy:22px;--reading-small:18px}
+.line-icon{fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.fill-icon{fill:currentColor}
+.robot-setup{padding:26px 22px 24px;border-bottom:1px solid var(--border);background:radial-gradient(ellipse at 10% 0%,#00f5ff10,transparent 55%),linear-gradient(180deg,#0b0f19,#08090f)}
+.robot-setup-head{margin-bottom:18px}
+.robot-setup-head .eyebrow{margin:0 0 8px;font-size:max(13px,calc(var(--reading-small) - 2px))}
+.robot-setup-head h2{font-size:clamp(26px,2.6vw,36px);line-height:1.15;margin:0;letter-spacing:-.03em}
+.setup-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,300px);grid-template-areas:"robots robots" "worlds try";gap:24px 26px}
+.setup-robots{grid-area:robots}.setup-worlds{grid-area:worlds}.setup-try{grid-area:try}
+.setup-label{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:650;letter-spacing:-.01em;line-height:1.3;margin:0 0 12px;color:var(--text)}
+.setup-num{display:inline-grid;place-items:center;min-width:46px;height:32px;padding:0 8px;border:1.5px solid #00f5ffaa;border-radius:999px;font:600 15px var(--mono);color:var(--cyan);letter-spacing:.04em;flex:none}
+.robot-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.robot-card,.world-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;color:var(--text);border:1.5px solid #323a50;border-radius:14px;background:#0c111c;white-space:normal}
+.robot-card{padding:12px 14px 14px;min-height:200px}
+.robot-card:hover,.world-card:hover{border-color:#00f5ffaa;background:#0f1826}
+.robot-art-wrap{display:block;width:100%;color:var(--cyan);margin-bottom:4px}
+.robot-art{display:block;width:100%;max-width:150px;height:auto;aspect-ratio:4/3;margin:0 auto}
+.robot-card strong{font-size:18px;font-weight:650;line-height:1.25}
+.robot-plain{font-size:var(--reading-ui);color:#d0d5e2;line-height:1.35}
+.robot-facts{display:flex;flex-wrap:wrap;gap:2px 12px;font:500 var(--reading-small)/1.4 var(--font);color:#b8c0d2;margin-top:2px}
+.robot-chosen,.world-chosen{position:absolute;top:9px;right:9px;display:none;padding:3px 10px;border-radius:999px;background:var(--cyan);color:#041014;font:700 14px/1.4 var(--font)}
+.robot-card[aria-pressed=true],.world-card[aria-pressed=true]{border-color:var(--cyan);background:linear-gradient(180deg,#073542,#0a1a24);box-shadow:inset 0 0 0 1.5px var(--cyan)}
+.robot-card[aria-pressed=true] .robot-chosen,.world-card[aria-pressed=true] .world-chosen{display:block}
+.robot-art .ri-shadow{fill:#00f5ff17}
+.robot-art .ri-body{fill:#00f5ff1c;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+.robot-art .ri-screen{fill:#06161d;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.robot-art .ri-eye{fill:#ccffff}
+.robot-art .ri-accent{fill:#c4a1ff4d;stroke:#c4a1ff;stroke-width:2;stroke-linejoin:round}
+.robot-art .ri-accent-line{fill:none;stroke:#c4a1ff;stroke-width:2.4;stroke-linecap:round}
+.robot-art .ri-line{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.robot-art .ri-thin{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;opacity:.8}
+.robot-art .ri-limb{fill:none;stroke:currentColor;stroke-width:5;stroke-linecap:round}
+.robot-art .ri-wheel{fill:#0b1018;stroke:currentColor;stroke-width:2.4}
+.robot-art .ri-crate{fill:#c4a1ff29;stroke:#c4a1ff;stroke-width:1.8;stroke-linejoin:round}
+.robot-art .ri-crate-line{fill:none;stroke:#c4a1ff;stroke-width:1.4;opacity:.85}
+.robot-art .ri-bubble{fill:none;stroke:#9ffcff;stroke-width:1.5;opacity:.85}
+.world-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.world-card{gap:8px;padding:12px;min-height:138px}
+.world-art-wrap{display:block;width:48px;height:48px;color:var(--cyan);flex:none}
+.world-art{display:block;width:48px;height:48px}
+.world-words{display:flex;flex-direction:column;gap:2px;min-width:0}
+.world-words strong{font-size:17px;font-weight:650;line-height:1.25}
+.world-words span{font-size:var(--reading-small);color:#c9cfdc;line-height:1.35}
+.world-art .wi-floor{fill:#00f5ff14;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.world-art .wi-box{fill:#c4a1ff26;stroke:#c4a1ff;stroke-width:1.8;stroke-linejoin:round}
+.world-art .wi-box2{fill:#00f5ff1f;stroke:currentColor;stroke-width:1.8;stroke-linejoin:round}
+.world-art .wi-edge{fill:none;stroke:currentColor;stroke-width:1.2;opacity:.8}
+.world-art .wi-line{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.world-art .wi-thin{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;opacity:.85}
+.world-art .wi-dashed{fill:#00f5ff10;stroke:currentColor;stroke-width:1.8;stroke-dasharray:4 3;stroke-linejoin:round}
+.world-art .wi-lens{fill:#06161d;stroke:currentColor;stroke-width:2}
+.world-art .wi-dot{fill:#c4a1ff}
+.setup-try{display:flex;flex-direction:column}
+.setup-run{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:76px;font-size:22px;font-weight:700;border-radius:14px;padding:14px 18px}
+.setup-run svg{width:26px;height:26px;flex:none}
+.setup-run:disabled{opacity:.55}
+.setup-run-note{margin:12px 0 0;font-size:var(--reading-ui);line-height:1.55;color:#d0d5e2}
+.setup-fix{margin-top:12px;min-height:52px;width:100%;font-size:var(--reading-ui);font-weight:650;border:1.5px solid var(--cyan);color:#ecfeff;background:#073542;border-radius:12px;white-space:normal}
+.setup-fix[hidden]{display:none}
+.setup-note{margin:12px 0 0;font-size:var(--reading-small);color:#bcc3d2;line-height:1.5}
+.robot-setup[data-origin=capture] :is(.setup-robots,.setup-try){display:none}
+.robot-setup[data-origin=capture] .setup-grid{grid-template-areas:"worlds worlds"}
+/* Tool strip: a picture and a word for each place; the numbered path is the setup above. */
+#unified-workspace .workspace-journey button{grid-template-columns:38px 1fr}
+#unified-workspace .workspace-journey button>span.step-icon{border:0;border-radius:10px;width:38px;height:38px;background:#111b2a;color:#c2ecf5}
+#unified-workspace .workspace-journey button>span.step-icon svg{width:23px;height:23px}
+#unified-workspace .workspace-journey [aria-current=step]>span.step-icon{background:var(--cyan);color:#041014}
+/* Camera buttons: every view change works with a tap, not only a drag, a wheel or a key. */
+.stage-tools{flex-wrap:wrap;gap:10px}
+.camera-dock{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.camera-dock button{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:8px 12px;font-size:var(--reading-ui);border-color:#38405a;background:#0d1220;white-space:nowrap}
+.camera-dock svg{width:20px;height:20px;flex:none}
+.camera-dock [aria-pressed=true]{border-color:var(--cyan);background:#073542;color:#ecfeff}
+.edit-step{display:inline-flex;align-items:center;gap:6px}
+.edit-step svg{width:18px;height:18px;flex:none}
+.world-axis{font-size:12px;opacity:.8}
+.scene-stamp span,.scene-stamp small{display:inline-block;max-width:100%;background:rgba(6,6,10,.84);padding:4px 9px;border-radius:7px;color:#e2e6ef}
+.scene-stamp small{margin-top:4px}
+/* Things in this world: a large-target way to choose an object, in step with the list and with taps on the map. */
+.object-chooser{margin:0 0 4px}
+.object-chips-label{font-size:var(--reading-ui);font-weight:600;color:var(--text);margin:0 0 8px}
+.object-chips{display:flex;flex-wrap:wrap;gap:6px;max-height:320px;overflow:auto;padding:2px}
+.object-chip{min-height:44px;padding:8px 12px;border-radius:999px;font-size:var(--reading-small);line-height:1.25;border-color:#3a4259;background:#0e121d;text-align:left;white-space:normal}
+.object-chip[aria-pressed=true]{border-color:var(--cyan);background:#073542;color:#ecfeff;font-weight:650}
+.object-chip[aria-pressed=true]::before{content:"✓ "}
+.inspector-note strong{font-size:var(--reading-ui)}
+.sandbox-scene-label{white-space:nowrap}
+@media (min-width:1201px){.workspace-body{grid-template-columns:290px minmax(0,1fr) 280px}}
+@media (max-width:1100px){.robot-cards,.world-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.setup-grid{grid-template-columns:1fr;grid-template-areas:"robots" "worlds" "try"}.setup-try{max-width:520px}}
+@media (max-width:760px){
+  .robot-setup{padding:20px 14px}
+  .robot-setup-head h2{font-size:26px}
+  .robot-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .robot-card{min-height:0;padding:10px 12px 12px}
+  .robot-art{max-width:118px}
+  .world-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .world-card{min-height:0;flex-direction:row;align-items:center;gap:10px;padding:10px 12px}
+  .robot-cards>:last-child:nth-child(odd),.world-cards>:last-child:nth-child(odd){grid-column:1/-1}
+  .setup-try{max-width:none}
+  .setup-run{min-height:66px;font-size:20px}
+  .camera-dock{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;margin-left:0}
+  .camera-dock button{flex-direction:column;justify-content:center;gap:3px;padding:7px 4px;font-size:var(--reading-small);white-space:normal;text-align:center;line-height:1.2}
+  .reading-tools{order:1;width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-left:0}
+  .reading-tools button{white-space:normal;line-height:1.2}
+}
+@media (max-width:360px){.robot-card strong{font-size:16px}.world-cards{grid-template-columns:1fr}}
+html[data-reading-size=large] .robot-cards{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+html[data-reading-size=large] .world-cards{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+html[data-reading-size=large] :is(.robot-card strong,.world-words strong){font-size:21px}
+html[data-reading-size=large] .setup-label{font-size:23px}
+@media (max-width:760px){html[data-reading-size=large] .robot-cards{grid-template-columns:repeat(2,minmax(0,1fr))}html[data-reading-size=large] .world-cards{grid-template-columns:1fr}}
+@media (max-width:420px){html[data-reading-size=large] .robot-cards{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+/* More contrast: brighter words and lines, solid panels and a thick focus ring. */
+html[data-contrast=more]{--muted:#e3e6ee;--border:rgba(241,241,246,.55);--text:#fff}
+html[data-contrast=more] body{background:#000}
+html[data-contrast=more] :is(button,input,select,textarea){border-color:rgba(255,255,255,.7)}
+html[data-contrast=more] :is(button,a,input,select,textarea,canvas,summary):focus-visible{outline:3px solid #ffe14d;outline-offset:3px}
+html[data-contrast=more] :is(.robot-setup,.workspace,.panel,.inspector,.stage,.sandbox-toolbar,.statusbar,.metrics,#unified-workspace,.robot-card,.world-card,.object-chip,.camera-dock button,#unified-workspace .workspace-journey button){background:#000}
+html[data-contrast=more] :is(.robot-card,.world-card){border-color:#c3c8d6}
+html[data-contrast=more] :is(.robot-card,.world-card,.object-chip,.camera-dock button,#unified-workspace .workspace-journey button)[aria-pressed=true],html[data-contrast=more] #unified-workspace .workspace-journey [aria-current=step]{border:3px solid var(--cyan);background:#00262c}
+html[data-contrast=more] :is(.robot-plain,.robot-facts,.world-words span,.setup-note,.setup-run-note,.panel p,.inspector p,.legend,.statusbar,.metrics small,.unified-heading p,label,small,.micro,.hero .intro,.hero-more,.hero-reassurance,.goal-entry p,.system-card p){color:#f1f3f8}
+html[data-contrast=more] .scene-stamp :is(span,small){background:#000;color:#fff;border:1px solid #fff}
+html[data-contrast=more] .primary{background:var(--cyan);color:#000;border:2px solid #fff}
+
+/* Camera buttons sit in one full-width row under the view switch, a picture above each word. */
+.camera-dock{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%;margin-left:0}
+.camera-dock button{flex-direction:column;justify-content:center;gap:4px;padding:7px 6px;white-space:normal;text-align:center;line-height:1.2}
+.camera-dock button[hidden],.edit-step[hidden]{display:none}
+@media (max-width:760px){
+  .camera-dock{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .world-cards{grid-template-columns:1fr}
+  .world-card{flex-direction:row;align-items:center}
+  .world-card[aria-pressed=true] .world-words{padding-right:104px}
+  .robot-art{max-width:104px}
+  .scene-stamp{top:10px;bottom:auto;left:10px;right:10px}
+  .scene-stamp small{display:none}
+  .world-axis{display:none}
+}
+/* The last small print on the playground, raised one by one (measured across every tab at desktop and phone widths). */
+body.playground .world-axis{font-size:13px}
+body.playground #worker-summary{font-size:var(--reading-ui)}
+body.playground :is(.goal-entry-index,.system-top span,.closing .eyebrow,.workflow-number){font-size:13px}
+body.playground .integrity-strip b{font-size:var(--reading-ui)}
+body.playground .closing a.ghost{font-size:var(--reading-ui)}
+body.playground :is(.panel .event,.panel .event b){font-size:var(--reading-small)}
