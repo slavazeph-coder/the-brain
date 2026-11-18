@@ -1,9 +1,36 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T15:00Z
+|||||||||||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T15:45Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 253 — 2026-11-18 (GB10: PLY z-flip verification confirmed on 4090; all suites green)
+
+- **Bounded improvement:** verified PLY z-flip on 4090 via SSH — `verify_ply_zflip.py` ran with recon-venv python on `fixture_ascii.ply` (vcount=4, z-flip applied: z=[0,1,1] → [-1,-0,1], y_up_likely=true, z_up_likely=false), exit 0. GB10 node PLY tests also verified: `verify_ply_zflip.test.mjs` → **4 pass**, `verify_ply_zflip_parity.test.mjs` → **3 pass** (big-endian fixture parity confirmed).
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (101 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed** (19.72 s)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped** (7.55 s)
+  - `node --test tests/world/verify_ply_zflip.test.mjs` → **4 pass / 0 fail** (84.58 ms)
+  - `node --test tests/world/verify_ply_zflip_parity.test.mjs` → **3 pass / 0 fail** (129.13 ms)
+  - 4090 SSH: `verify_ply_zflip.py fixture_ascii.ply` → **exit 0** (z-flip receipt valid)
+- **4090 state:** port 23990 reachable, hostname `d130b6c7f3f4`, RTX 4090, 18.3/24 GiB, 49°C.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** physical iPhone Safari validation or continue remaining implementation gates.
+
+### Run 252 — 2026-11-18 (GB10: Lyra real weights confirmed — 32.7M params, 36 2D tensors, Mamba structure; all suites green; 4090 confirmed)
+
+- **Bounded improvement:** verified Lyra 1 real weights via `deep_inspect.py` — `lyra_static.pt` loads as valid state dict with 32,753,996 total params, 36 2D tensors (enc_blocks.0–4.mamba.in_proj/out_proj.weight, each [2576, 512] and [512, 1024]), 33 3D+ tensors (conv1d.weight [1536, 1, 4]), proper Mamba scan structure (dt_bias, A_log, D, conv1d.bias). All 4 cancellation tests pass (`test_actual_adapter_process_cancellation`, `test_reclaim_disk_budget_on_queued_cancel`, `test_requeue_after_restart_skips_cancelled_queued_rows`, `test_cancelled_stopping_job_keeps_disk_and_source_reservations`).
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (154 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **35 passed** (21.43 s)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped** (8.02 s)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -k "cancel" -v` → **4 passed** (0.77 s)
+  - `deep_inspect.py` → **32,753,996 params, 36 2D, 33 3D+ tensors, Mamba structure confirmed**
+- **4090 state:** port 23990 reachable, hostname `d130b6c7f3f4`, RTX 4090, 18.3/24 GiB, 55°C.
+- **No force-push, no merge/deploy, no paid fallback.**
+- **Next bounded action:** physical iPhone Safari validation or continue remaining implementation gates.
 
 ### Run 251 — 2026-11-18 (GB10: Lyra 1 static scene inference with real scene data verified; all suites green)
 
