@@ -34,6 +34,18 @@ async function download(page, selector, label, extension) {
   return { path, text: await readFile(path, 'utf8') };
 }
 
+async function assertNoOverflow(page, label) {
+  const width = await page.evaluate(() => ({
+    layout: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+    window: innerWidth,
+  }));
+  // Mobile browsers can enlarge innerWidth to accommodate overflowing content.
+  // Compare against the actual configured viewport, not that expanded width.
+  width.viewport = page.viewportSize().width;
+  assert.ok(width.document <= width.viewport + 1, `Page overflows at ${label}: ${JSON.stringify(width)}`);
+}
+
 async function fillRates(page) {
   await page.locator('#pr-rate-details').evaluate(element => { element.open = true; });
   for (const [id, low, high] of [
@@ -96,6 +108,7 @@ async function check(browser, phone) {
     await expect(page.locator('.pr-option')).toHaveCount(2);
     await expect(page.locator('#pr-mode')).toHaveText('LOCAL COMPARISON');
     await expect(page.locator('.pr-option').first()).toContainText('Rates needed');
+    await assertNoOverflow(page, `${label} unpriced comparison`);
     assert.equal(fixture.calls.length, beforeLocal, 'Local comparison must never call a model.');
     const unpriced = JSON.parse((await download(page, '#pr-export-json', `${label}-unpriced`, 'json')).text);
     assert.equal(unpriced.approval, null);
@@ -223,8 +236,7 @@ async function check(browser, phone) {
       assert.equal(table.tabIndex, 0, 'Quantity details must be keyboard scrollable.');
     }
     await page.screenshot({ path: fileURLToPath(new URL(`project-review-${label}.png`, output)), fullPage: true });
-    const width = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
-    assert.ok(width.document <= width.viewport + 1, `Page overflows at ${label}: ${JSON.stringify(width)}`);
+    await assertNoOverflow(page, `${label} reviewed comparison`);
 
     mark('cancel review on changed brief');
     // Source/brief changes abort the active request; a late result cannot return.
