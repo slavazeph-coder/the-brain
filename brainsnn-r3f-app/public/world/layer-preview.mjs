@@ -29,10 +29,12 @@ function rigid(m) {
 }
 export function validateLocalizationMap(value) {
   if(value?.schema!=='brainsnn.localization-map.v1'||value.units!=='m'||!SHA.test(value.mapSha256)||!SHA.test(value.revisionSha256)||!SHA.test(value.source?.scanSha256))throw Error('Choose a localization map bundle.');
+  if(value.measurement?.units!=='m'||value.measurement.independentlyVerified!==false||!['operator-declared-registered-lidar','authored-test-geometry'].includes(value.measurement.basis))throw Error('The map must retain its declared metre provenance.');
+  if(value.upstream?.repository!=='https://github.com/rsasaki0109/lidar_localization_ros2'||value.upstream.commit!=='6e21b7ed9e2e5c5ba1452eb63db5c9402862625b'||value.upstream.ndtCommit!=='17ce1e19831447a1f5bc5a68a4522fa8087f8933')throw Error('The map targets an unsupported localization runtime.');
   const source=value.source;
   if(source.mode==='scan-local') {if(['sceneSha256','cloudPointsSha256','componentRevision'].some(k=>source[k]!==null))throw Error('A scan-local map cannot borrow a building model.');}
-  else if(source.mode!=='scene-bound'||!SHA.test(source.sceneSha256)||!SHA.test(source.cloudPointsSha256)||!Number.isInteger(source.componentRevision)||source.componentRevision<0)throw Error('The localization map source is invalid.');
-  if(JSON.stringify(value.frames?.sceneToMap)!==JSON.stringify(SCENE_TO_MAP)||value.frames?.mapFrame!=='map'||value.frames?.sceneFrame!=='right-handed-y-up'||!/^[-\w/]{1,120}$/.test(value.frames?.baseFrame||'')||!['right-handed-y-up','right-handed-z-up'].includes(value.frames.sourceFrame))throw Error('Unsupported map coordinate frame.');
+  else if(source.mode!=='scene-bound'||!SHA.test(source.sceneSha256)||!SHA.test(source.cloudPointsSha256)||!Number.isInteger(source.componentRevision)||source.componentRevision<0||source.componentRevision>1000000)throw Error('The localization map source is invalid.');
+  if(JSON.stringify(value.frames?.sceneToMap)!==JSON.stringify(SCENE_TO_MAP)||value.frames?.mapFrame!=='map'||value.frames?.sceneFrame!=='right-handed-y-up'||!/^[A-Za-z][A-Za-z0-9_/-]{0,79}$/.test(value.frames?.baseFrame||'')||!['right-handed-y-up','right-handed-z-up'].includes(value.frames.sourceFrame))throw Error('Unsupported map coordinate frame.');
   for(const key of ['sourceToScene','sourceToMap'])if(!rigid(value.frames[key]))throw Error('Invalid rigid map transform.');
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)if(!close(value.frames.sourceToMap[i][j],SCENE_TO_MAP[i].reduce((s,v,k)=>s+v*value.frames.sourceToScene[k][j],0)))throw Error('The map transform chain is inconsistent.');
   if(source.mode==='scan-local'){

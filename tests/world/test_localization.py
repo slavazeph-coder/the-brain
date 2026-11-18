@@ -72,6 +72,47 @@ def test_standalone_scan_retains_ros_axes_and_deterministic_exact_map_hash(tmp_p
     assert all(flag is False for flag in m['validation'].values())
 
 
+def test_live_status_invalidates_last_pose_without_waiting_for_another_pose(tmp_path):
+    _, manifest, files = bundle(tmp_path)
+    collector = collector_record(c.binding(manifest, files['localization-map.json']))
+    assert collector.snapshot()['state'] == 'tracking'
+
+
+    stamp = 1_300_000_000
+    collector.status(stamp, 2, 'bad_match', now_ns=stamp)
+    lost = collector.snapshot()
+    assert lost['state'] == 'lost' and lost['sample'] is None
+    # Historic accepted poses retain their own diagnostics; recovery requires a
+    # newly accepted pose, not just a later healthy diagnostic message.
+    assert collector.document()['samples'][-1]['state'] == 'tracking'
+    collector.status(stamp+1, 0, 'healthy', now_ns=stamp+1)
+    assert collector.snapshot()['state'] == 'lost'
+    collector.status(stamp, 0, 'healthy', now_ns=stamp, reinitialization_requested=True)
+    assert collector.snapshot()['state'] == 'lost'
+    collector.reinit(True)
+    assert collector.snapshot()['sample'] is None
+    collector.reinit(False)
+    recovered_stamp = stamp+100_000_000
+    collector.pose(recovered_stamp, 'map', [1.,2.,3.], [0.,0.,0.,1.], [0.]*36, now_ns=recovered_stamp)
+    collector.status(recovered_stamp, 0, 'healthy', now_ns=recovered_stamp)
+    collector.flush(now_ns=recovered_stamp, force=True)
+    assert collector.snapshot()['state'] == 'tracking'
+
+
+def test_rehashed_map_cannot_change_units_runtime_or_provenance(tmp_path):
+    _, manifest, _ = bundle(tmp_path)
+    for path, value in [(('units',), 'cm'), (('measurement', 'units'), 'cm'),
+                        (('measurement', 'independentlyVerified'), True),
+                        (('measurement', 'basis'), 'generated-appearance'),
+                        (('upstream', 'commit'), 'a'*40), (('upstream', 'ndtCommit'), 'b'*40)]:
+        changed = copy.deepcopy(manifest)
+        target = changed if len(path) == 1 else changed[path[0]]
+        target[path[-1]] = value
+        changed['revisionSha256'] = c.manifest_revision(changed)
+        with pytest.raises(ValueError):
+            c.validate_map(changed)
+
+
 def test_scene_composed_transform_and_source_job_are_exact(tmp_path):
     raw,points=scan(); opt=options(raw)
     cloud={'units':'m','coordinateFrame':'right-handed-y-up','points':[[*p,10,20,30] for p in points]}
@@ -151,6 +192,8 @@ def test_collector_waits_for_exact_status_rejects_stale_and_separates_odometry(t
     collector.pose(stamp,'map',[0,0,0],[0,0,0,1],cov,now_ns=stamp,source='odom_bridge_pose')
     collector.flush(now_ns=stamp,force=True)
     assert collector.document()['samples'][0]['state']=='odometry-only'
+    collector.reinit(True)
+    assert collector.snapshot()['state']=='odometry-only'
     collector.stop('map changed'); assert collector.snapshot()['sample'] is None
 
 
@@ -205,3 +248,14 @@ def test_real_http_transport_token_origin_and_stale_snapshot(tmp_path):
         status,_,body=request(headers);assert status==409 and c.decode(body)['sample'] is None
     finally:
         server.shutdown();server.server_close()
+
+
+def test_ros_jazzy_byte_diagnostic_levels_and_integer_compatibility():
+    from robotics.localization.ros2_bridge import diagnostic_level
+    for level in range(4):
+        assert diagnostic_level(bytes([level])) == level
+        assert diagnostic_level(bytearray([level])) == level
+        assert diagnostic_level(level) == level
+    for bad in (True, -1, 4, b'', b'00', '0', 1.0):
+        with pytest.raises(ValueError, match='diagnostic level'):
+            diagnostic_level(bad)

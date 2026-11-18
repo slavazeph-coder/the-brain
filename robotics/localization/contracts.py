@@ -135,6 +135,14 @@ def manifest_revision(manifest):
 def validate_map(manifest):
     if not isinstance(manifest, dict) or manifest.get('schema') != MAP_SCHEMA:
         raise ValueError('Expected a localization map bundle')
+    measurement = manifest.get('measurement')
+    if (manifest.get('units') != 'm' or not isinstance(measurement, dict)
+            or measurement.get('units') != 'm' or measurement.get('independentlyVerified') is not False
+            or measurement.get('basis') not in ('operator-declared-registered-lidar', 'authored-test-geometry')):
+        raise ValueError('Map coordinates must retain explicitly unqualified metre provenance')
+    if manifest.get('upstream') != {'repository': 'https://github.com/rsasaki0109/lidar_localization_ros2',
+                                  'commit': UPSTREAM_COMMIT, 'ndtCommit': NDT_COMMIT}:
+        raise ValueError('Map bundle targets an unsupported localization runtime')
     source = manifest.get('source', {})
     if not isinstance(source, dict):
         raise ValueError('Invalid map source binding')

@@ -16,9 +16,19 @@ import pytest
 
 from robotics.motion_retarget.validation import BVH, options_from_bytes, parse_bvh, sha256, validate_source
 from robotics.world_worker.motion_retarget import run_request, validate_upload
+from robotics.motion_retarget.setup_runtime import G1, ZERO, runtime_file_allowed
 
 OPTIONS = {'schema': 'brainsnn.motion-retarget-options.v1', 'target': 'unitree_g1',
            'source_units': 'cm', 'source_up_axis': 'Y', 'source_facing': 'Mujoco', 'fps': 30.}
+
+
+def test_runtime_allowlist_excludes_restricted_non_lfs_csv_and_git_objects():
+    assert runtime_file_allowed(ZERO)
+    assert runtime_file_allowed(G1 + '/desc/mjcf/g1_29dof_rev_1_0.xml')
+    assert runtime_file_allowed('soma_retargeter/pipelines/ik_solver.py')
+    for path in ('assets/motions/csv/unitree_g1/walk.csv', 'assets/motions/bvh/walk.bvh',
+                 'assets/motions/optimizer/walk.bvh', '.git/objects/pack/data.pack', 'README.md'):
+        assert not runtime_file_allowed(path)
 
 
 def small_bvh():
@@ -120,6 +130,11 @@ def test_real_cpu_retarget_and_absolute_cli_from_private_cwd(tmp_path):
     python = os.environ.get('WORLD_SOMA_TEST_PYTHON')
     if not runtime or not python:
         pytest.skip('Real SOMA runtime not installed; run documented CPU qualification to enable.')
+    runtime_path = Path(runtime)
+    assert not (runtime_path / '.git').exists() and not (runtime_path / 'assets').exists()
+    runtime_receipt = json.loads((runtime_path / 'brainsnn-runtime.json').read_text())
+    assert runtime_receipt['sample_dataset_included'] is False
+    assert runtime_receipt['source_checkout_retained'] is False
     root = Path(__file__).resolve().parents[2]
     fixture = tmp_path / 'source'
     subprocess.run([python, '-m', 'robotics.motion_retarget.authored_fixture', '--runtime-dir', runtime,

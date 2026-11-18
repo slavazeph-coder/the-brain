@@ -554,8 +554,8 @@ async function openResultArtifact(key,index){
   const context=requireResultContext(key),item=context.job.artifacts[index];
   if(!Number.isInteger(index)||!item)throw new Error('Choose an available result file.');
   if(['splat-repair','localization-map','motion-retarget'].includes(context.job.engine)){
-    viewRevision++;artifactAbort?.abort();sceneWorkspace.close();
-    await layerTools.openResult(context);$('world-layer-tools').scrollIntoView({block:'start'});return;
+    const requested=++viewRevision;artifactAbort?.abort();sceneWorkspace.close();
+    await layerTools.openResult(context);if(requested===viewRevision&&workspaceResults.isCurrent(context))$('world-layer-tools').scrollIntoView({block:'start'});return;
   }
   if(item.kind==='visual'&&/\.glb$/i.test(item.name))return openSceneArtifact(index,context);
   if(item.kind==='visual'&&/\.(ply|splat)$/i.test(item.name))return openArtifact(index,context,{autoPropose:false});

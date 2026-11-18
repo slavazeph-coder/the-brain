@@ -111,14 +111,19 @@ WARP_CACHE_PATH=/opt/soma/warp-cache OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 \
   --runtime-dir /opt/soma/upstream --out /opt/soma/qualification
 ```
 
-The installer needs Git and outbound HTTPS **at build time only**. It checks out
-the exact commit, verifies source bytes against the Git tree and resolves only
+The installer needs Git and outbound HTTPS **at build time only**. It fetches
+the exact commit into disposable storage without a full checkout, materializes
+only the explicit runtime allowlist, and resolves only
 G1/reference-rig Git LFS objects using their committed SHA-256/size. It does not
 download the separately licensed example motion corpus. It writes
 `brainsnn-runtime.json`, listing all executable package files, relevant robot
 assets and installed dependency versions. Jobs verify this manifest and the
-fixed dependency versions, import the verified source checkout, and never
-download models or assets. Keep the source/runtime directory read-only to jobs.
+fixed dependency versions, import the verified runtime tree, and never
+download models or assets. No `.git` object store, root README or restricted
+`assets/motions` files are retained in that tree. Existing full source checkouts
+are refused; use a new empty destination. Keep the runtime directory read-only
+to jobs. The receipt asserts `sample_dataset_included: false`, not that a Git
+server could never transmit an unnecessary object during installation.
 
 The qualifier authors a 31-frame arm sweep using the package's Apache-licensed
 neutral rig, executes actual upstream CPU IK, checks changing G1 articulation,

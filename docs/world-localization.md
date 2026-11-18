@@ -126,6 +126,10 @@ and checks its pose against the bound map-to-base TF. It refuses multiple pose o
 diagnostic publishers, stops on `/map_switch`, and rechecks map bytes/revision
 each second. It never replays a latched `/path` as new observations. Odometry bridge
 estimates remain `odometry-only`. Missing status/TF cannot authorize a tracking pose.
+A newer failed alignment or reinitialization request immediately hides a previous
+healthy live position. Recovery requires a newly accepted pose; a healthy status
+message alone cannot revive an old position. Historical recording samples retain
+the diagnostics that accompanied them.
 
 The recording schema is `brainsnn.localization-recording.v1`. `binding` contains
 the exact bundle-byte hash, PCD hash, scan hash, source mode, nullable scene/cloud/
@@ -152,7 +156,8 @@ exact allowlist of one origin, never wildcard. No cookie session is used.
 `GET /v1/localization` requires `Authorization: Bearer TOKEN`. It returns
 `brainsnn.localization-telemetry.v1` with `binding`, `runtime`, `state`, `reason`
 and one latest `sample`. HTTP 200 means a fresh sample; 409 has no usable sample
-when stale/stopped/empty. Invalid tokens receive 401; another browser origin 403.
+when stale/stopped/empty or recovery has invalidated the previous pose. Invalid
+tokens receive 401; another browser origin 403.
 Only GET and the exact Authorization CORS preflight exist. There are no control
 or upload endpoints. Responses are no-store. A browser must check the exact
 binding on every update, retain its token only in memory, and clear the displayed

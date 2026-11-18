@@ -14,16 +14,16 @@ export function createLayerJobRunner({getConnection,onComplete,onStatus=()=>{},o
   }
   async function cancel() {
     const current=execution;if(!current)return;
-    current.controller.abort();await current.settled;
+    current.controller.abort();onStatus('Cancelling processing and confirming the service’s reply…');await current.settled;
   }
   return {
     isActive:()=>!!execution,
     async run({engine,inputs,sourceJob=null,expectedClient=null,sourceNames=[]}) {
       if(disposed||execution)throw Error('Wait for the current tool or cancel it first.');
       let settle;
-      const current={client:null,controller:new AbortController(),job:null,settled:new Promise(resolve=>{settle=resolve;})};
+      const current={client:null,controller:new AbortController(),job:null,creationPending:false,settled:new Promise(resolve=>{settle=resolve;})};
       execution=current;onBusy(true);
-      const signal=current.controller.signal;
+      const signal=current.controller.signal;let succeeded=false;
       const checkJob=value=>{
         if(!/^[a-f0-9]{32}$/.test(value?.id||'')||value.engine!==engine||current.job&&current.job.id!==value.id||!['prepared','queued','running','complete','failed','cancelled'].includes(value.status))throw Error('The service returned an inconsistent job.');
         return value;
@@ -42,7 +42,11 @@ export function createLayerJobRunner({getConnection,onComplete,onStatus=()=>{},o
           uploads.push(await client.upload(file,item.kind,signal,p=>onStatus(`Uploading ${i+1} of ${inputs.length} · ${Math.round(p*100)}%`)));
         }
         signal.throwIfAborted();
-        current.job=checkJob(await client.request('/v1/jobs',{method:'POST',body:{engine,upload_ids:uploads,consent:true,...(sourceJob?{source_job:sourceJob}:{})},signal}));
+        // Keep the bounded creation reply alive even after Cancel: its ID is
+        // needed to remove a prepared server job that has already been created.
+        current.creationPending=true;
+        current.job=checkJob(await client.request('/v1/jobs',{method:'POST',body:{engine,upload_ids:uploads,consent:true,...(sourceJob?{source_job:sourceJob}:{})}}));
+        current.creationPending=false;
         signal.throwIfAborted();
         current.job=checkJob(await client.request(`/v1/jobs/${current.job.id}/start`,{method:'POST',body:{},signal}));
         let failures=0;
@@ -51,7 +55,7 @@ export function createLayerJobRunner({getConnection,onComplete,onStatus=()=>{},o
           if(current.job.status==='complete') {
             if(!Array.isArray(current.job.artifacts)||current.job.artifacts.length>40)throw Error('The result manifest is invalid.');
             const result=onComplete(current.job,client,{sourceNames});
-            onStatus('Ready. Your result and its files are saved in this workspace session.');return result;
+            succeeded=true;onStatus('Ready. Your result and its files are saved in this workspace session.');return result;
           }
           if(['failed','cancelled'].includes(current.job.status))throw Error(current.job.error||`Processing ${current.job.status}.`);
           onStatus(current.job.status==='queued'?'Waiting for the processing service…':'Processing your files…');
@@ -61,8 +65,11 @@ export function createLayerJobRunner({getConnection,onComplete,onStatus=()=>{},o
           catch(error) {if(signal.aborted||++failures>7)throw error;onStatus('Connection interrupted. Checking the same job again…');continue;}
           current.job=checkJob(next);
         }
+      } catch(error) {
+        if(current.creationPending)throw Error('The service did not confirm the new job identifier. Check your processing session before retrying; a prepared job may still exist.');
+        throw error;
       } finally {
-        if(signal.aborted)await cancelRemote(current);
+        if(!succeeded)await cancelRemote(current);
         if(execution===current){execution=null;onBusy(false);}settle();
       }
     },

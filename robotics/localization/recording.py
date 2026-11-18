@@ -19,6 +19,7 @@ class Collector:
         self.stopped_reason = None
         self.rejected = 0
         self.last_received = None
+        self.latest_failure = None
         self.lock = threading.RLock()
 
     def stop(self, reason):
@@ -29,15 +30,24 @@ class Collector:
     def fresh(self, timestamp_ns, now_ns):
         return timestamp_ns > 0 and -50_000_000 <= now_ns-timestamp_ns <= self.max_age_ns
 
-    def status(self, timestamp_ns, level, category, *, now_ns):
+    def status(self, timestamp_ns, level, category, *, now_ns, reinitialization_requested=False):
         with self.lock:
             if self.stopped_reason or not self.fresh(timestamp_ns, now_ns) or level not in (0, 1, 2, 3):
                 self.rejected += 1; return False
             self.statuses[timestamp_ns] = {'level': level, 'failureCategory': str(category)[:80],
-                'reinitializationRequested': self.reinitialization, 'statusTimestampNs': str(timestamp_ns)}
+                'reinitializationRequested': self.reinitialization or reinitialization_requested, 'statusTimestampNs': str(timestamp_ns)}
+            status = self.statuses[timestamp_ns]
+            if (status['level'] != 0 or status['reinitializationRequested'] or status['failureCategory'] not in ('', 'healthy', 'none')) and (self.latest_failure is None or timestamp_ns >= int(self.latest_failure['statusTimestampNs'])):
+                self.latest_failure = status
             for old in sorted(self.statuses)[:-64]:
                 del self.statuses[old]
             return True
+
+    def reinit(self, requested):
+        with self.lock:
+            self.reinitialization = bool(requested)
+            if requested and self.samples:
+                self.latest_failure = {**self.samples[-1]['diagnostics'], 'reinitializationRequested': True}
 
     def pose(self, timestamp_ns, frame_id, position, quaternion, covariance, *, now_ns, source='pcl_pose'):
         with self.lock:
@@ -101,6 +111,20 @@ class Collector:
     def snapshot(self):
         with self.lock:
             stale = self.last_received is None or time.monotonic()-self.last_received > self.max_age_ns/1e9
+            state = 'stopped' if self.stopped_reason else 'stale' if stale else self.samples[-1]['state']
+            reason = self.stopped_reason
+            status = self.latest_failure
+            # A rejected scan often publishes diagnostics without a new pose.
+            # Stop presenting the previous green pose immediately, rather than
+            # waiting for its age deadline after tracking has already failed.
+            prediction_only = bool(self.samples and self.samples[-1]['state'] == 'odometry-only')
+            if not self.stopped_reason and not prediction_only and self.samples and status and int(status['statusTimestampNs']) >= int(self.samples[-1]['timestampNs']):
+                if self.reinitialization or status['reinitializationRequested'] or status['level'] >= 2:
+                    state, reason = 'lost', 'latest alignment requires recovery'
+                elif int(status['statusTimestampNs']) > int(self.samples[-1]['timestampNs']) and (status['level'] != 0 or status['failureCategory'] not in ('', 'healthy', 'none')):
+                    state, reason = 'stale', 'latest alignment has no accepted pose'
+            if not self.stopped_reason and not prediction_only and self.reinitialization:
+                state, reason = 'lost', 'reinitialization requested'
+            unavailable = state in ('stopped', 'stale') or state == 'lost' and (stale or reason is not None)
             return {'schema': 'brainsnn.localization-telemetry.v1', 'binding': self.binding, 'runtime': self.runtime,
-                    'state': 'stopped' if self.stopped_reason else 'stale' if stale else self.samples[-1]['state'],
-                    'reason': self.stopped_reason, 'sample': None if stale or self.stopped_reason else copy.deepcopy(self.samples[-1])}
+                    'state': state, 'reason': reason, 'sample': None if unavailable else copy.deepcopy(self.samples[-1])}

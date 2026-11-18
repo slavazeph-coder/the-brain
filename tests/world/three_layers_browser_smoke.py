@@ -38,6 +38,7 @@ def check(pw,name,origin,worker,token,tmp):
     errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
     stream=None;publisher=None;stop_publisher=threading.Event()
     try:
+        print(f'{name}: opening workspace and connecting real worker',flush=True)
         page.goto(origin+'/world/index.html?nosw=1',wait_until='domcontentloaded')
         page.locator('#tab-world').click()
         page.locator('#object-name').fill('Keep my edited map');page.locator('#object-name').press('Tab')
@@ -50,10 +51,13 @@ def check(pw,name,origin,worker,token,tmp):
         expect(page.locator('[data-repair-info]')).to_contain_text('6,400 original points')
         # Numeric rectangle exercises keyboard-accessible full-source selection.
         page.locator('summary').filter(has_text='Select with numbers').click()
+        for edge,value in [('left','45'),('top','45'),('right','55'),('bottom','55')]:
+            page.locator(f'[data-repair-{edge}]').fill(value)
         page.locator('[data-repair-rectangle]').click()
         selected=page.locator('[data-repair-info]').inner_text()
         assert '0 selected' not in selected,selected
         page.locator('[data-repair-consent]').check();page.locator('[data-repair-run]').click()
+        print(f'{name}: submitted real repair job; selection={selected}',flush=True)
         expect(page.locator('[data-layer-status]')).to_contain_text('Repaired copy ready',timeout=90000)
         expect(page.locator('[data-repair-after]')).to_be_enabled()
         page.locator('[data-repair-before]').click();page.locator('[data-repair-after]').click()
@@ -64,6 +68,7 @@ def check(pw,name,origin,worker,token,tmp):
         page.locator('[data-layer-tab=localization]').click()
         page.locator('[data-localization-file]').set_input_files(str(tmp/'measured.ply'))
         page.locator('[data-localization-consent]').check();page.locator('[data-localization-run]').click()
+        print(f'{name}: submitted real map packaging job',flush=True)
         expect(page.locator('[data-layer-status]')).to_contain_text('Map files checked',timeout=60000)
         # Read exact actual worker artifacts for an authored transport recording.
         maps=list((tmp/'data/jobs').glob('*/output/localization-map.json'))
@@ -87,6 +92,9 @@ def check(pw,name,origin,worker,token,tmp):
         wrong=tmp/'wrong-recording.json';wrong.write_bytes(c.encode(bad))
         page.locator('[data-localization-recording]').set_input_files(str(wrong))
         expect(page.locator('[data-layer-status]')).to_contain_text('another map')
+        expect(page.locator('[data-localization-seek]')).to_have_attribute('max','5')
+        page.locator('[data-localization-seek]').fill('2')
+        expect(page.locator('[data-localization-info]')).to_contain_text('0.20 seconds')
         live_token=secrets.token_urlsafe(40);secret=tmp/'telemetry-token';secret.write_text(live_token)
         # Fresh authored transport messages arrive while the browser connects,
         # then stop deliberately to exercise the real endpoint's stale response.
@@ -113,6 +121,7 @@ def check(pw,name,origin,worker,token,tmp):
         page.locator('[data-layer-tab=motion]').click()
         page.locator('[data-motion-file]').set_input_files(str(tmp/'authored-sweep.bvh'))
         page.locator('[data-motion-consent]').check();page.locator('[data-motion-run]').click()
+        print(f'{name}: submitted real SOMA CPU job',flush=True)
         expect(page.locator('[data-layer-status]')).to_contain_text('ready to compare',timeout=120000)
         page.locator('[data-motion-play]').click()
         expect(page.locator('[data-motion-seek]')).to_have_value('30',timeout=5000)
@@ -143,6 +152,11 @@ def check(pw,name,origin,worker,token,tmp):
         expect(page.locator('[data-layer-tab=localization]')).to_have_attribute('aria-selected','true')
         assert not errors,errors
         (OUTPUT/f'three-layers-{name}.json').write_text(json.dumps({'passed':True,'realCPURepair':True,'realSOMARetarget':True,'localization':'real map packaging; authored transport positions; ROS separately qualified','layouts':layouts,'browserErrors':errors},indent=2))
+        print(f'{name}: PASS real CPU jobs, source preservation, playback and mobile layouts',flush=True)
+    except Exception:
+        page.screenshot(path=str(OUTPUT/f'three-layers-{name}-failure.png'),full_page=True)
+        print(f'{name}: browser errors={errors}; visible status='+page.locator('[data-layer-status]').inner_text(),file=sys.stderr,flush=True)
+        raise
     finally:
         stop_publisher.set()
         if publisher:publisher.join(timeout=2)

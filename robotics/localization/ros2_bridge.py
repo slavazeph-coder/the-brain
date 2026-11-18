@@ -7,6 +7,15 @@ from . import contracts as c
 from .recording import Collector
 
 
+def diagnostic_level(value):
+    """ROS byte fields are one-byte bytes on Jazzy and integers on some releases."""
+    if isinstance(value, (bytes, bytearray)) and len(value) == 1:
+        value = value[0]
+    if type(value) is not int or value not in (0, 1, 2, 3):
+        raise ValueError('Invalid ROS diagnostic level')
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bundle', type=Path, required=True)
@@ -29,6 +38,7 @@ def main():
     from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
     from rclpy.parameter import Parameter
     from rclpy.time import Time
+    from rclpy.executors import ExternalShutdownException
     from geometry_msgs.msg import PoseWithCovarianceStamped
     from nav_msgs.msg import Path as PosePath
     from diagnostic_msgs.msg import DiagnosticArray
@@ -62,10 +72,17 @@ def main():
                 collector.stop('ambiguous localization diagnostics'); return
             status = msg.status[0]
             values = {item.key: item.value for item in status.values}
-            collector.status(ns(msg.header.stamp), int(status.level), values.get('failure_category', ''), now_ns=self.get_clock().now().nanoseconds)
+            try:
+                level = diagnostic_level(status.level)
+            except ValueError:
+                collector.stop('invalid ROS diagnostic level'); return
+            collector.status(ns(msg.header.stamp), level, values.get('failure_category', ''),
+                             now_ns=self.get_clock().now().nanoseconds,
+                             reinitialization_requested=any(values.get(key) == 'true' for key in
+                                 ('reinitialization_requested', 'reinitialization_request_latched')))
 
         def reinit(self, msg):
-            collector.reinitialization = bool(msg.data)
+            collector.reinit(msg.data)
 
         def path(self, msg):
             if msg.header.frame_id != manifest['frames']['mapFrame'] or len(msg.poses) > 2000:
@@ -109,10 +126,15 @@ def main():
     try:
         while rclpy.ok() and time.monotonic() < deadline and not collector.stopped_reason:
             rclpy.spin_once(node, timeout_sec=.1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.tick(); node.destroy_node(); rclpy.shutdown()
+        # ROS may already have shut its context down in its SIGINT handler.
+        # Preserve completed samples even then; querying a destroyed graph or
+        # calling shutdown twice would otherwise discard the entire recording.
+        if rclpy.ok():
+            node.tick()
+        node.destroy_node(); rclpy.try_shutdown()
         if server:
             server.shutdown(); server.server_close()
     document = collector.document()

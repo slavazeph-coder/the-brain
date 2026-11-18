@@ -39,3 +39,14 @@ test('a service cannot switch job identifiers or engines during execution',async
 test('unavailable engines and wrong input kinds fail before upload',async()=>{
   const f=fixture();await assert.rejects(f.runner.run({engine:'absent',inputs}),/not enabled/);await assert.rejects(f.runner.run({engine,inputs:[{file,kind:'video'}]}),/required files/);assert.equal(f.calls.length,0);
 });
+test('cancellation waits for an already-sent create reply and cancels that prepared job',async()=>{
+  const f=fixture();let release,creating;
+  const waiting=new Promise(resolve=>{release=resolve;});
+  const request=f.client.request;
+  f.client.request=async(path,options)=>{if(path==='/v1/jobs'){creating=true;assert.equal(options.signal,undefined);await waiting;}return request(path,options);};
+  const run=f.runner.run({engine,inputs});const observed=assert.rejects(run,{name:'AbortError'});
+  while(!creating)await new Promise(r=>setImmediate(r));
+  const cancel=f.runner.cancel();release();await cancel;await observed;
+  assert.ok(f.calls.some(c=>c[0]===`/v1/jobs/${id}`&&c[1].method==='DELETE'));
+  assert.ok(!f.calls.some(c=>c[0].endsWith?.('/start')));assert.equal(f.saved(),null);
+});

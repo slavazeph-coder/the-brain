@@ -14,6 +14,7 @@ function mapFixture(){return {
   source:{mode:'scan-local',scanSha256:digest,sceneSha256:null,cloudPointsSha256:null,componentRevision:null},
   frames:{sourceFrame:'right-handed-y-up',sceneFrame:'right-handed-y-up',mapFrame:'map',baseFrame:'base_link',sourceToScene:copy(identity),sceneToMap:copy(sceneToMap),sourceToMap:copy(sceneToMap)},
   measurement:{basis:'authored-test-geometry',units:'m',independentlyVerified:false},
+  upstream:{repository:'https://github.com/rsasaki0109/lidar_localization_ros2',commit:runtime.upstreamCommit,ndtCommit:'17ce1e19831447a1f5bc5a68a4522fa8087f8933'},
   validation:{metricVerified:false,physicalRobotValidated:false,localizationValidated:false},
   artifacts:{'localization-map.pcd':{sha256:digest,bytes:1200},'localization-map.ply':{sha256:other,bytes:900}},
 };}
@@ -55,7 +56,7 @@ test('map transforms reject scale, reflection, bad composition and hidden scan-l
   for(const mutate of mutations){const map=mapFixture();mutate(map);assert.throws(()=>validateLocalizationMap(map));}
 });
 test('map imports reject borrowed scenes, artifact hash mismatches and physical certification claims',()=>{
-  const mutations=[m=>{m.source.sceneSha256=other;},m=>{m.artifacts['localization-map.pcd'].sha256=other;},m=>{m.artifacts['localization-map.ply'].bytes=33*1024*1024;},...['metricVerified','physicalRobotValidated','localizationValidated'].map(k=>m=>{m.validation[k]=true;})];
+  const mutations=[m=>{m.source.sceneSha256=other;},m=>{m.artifacts['localization-map.pcd'].sha256=other;},m=>{m.artifacts['localization-map.ply'].bytes=33*1024*1024;},m=>{m.measurement.independentlyVerified=true;},m=>{m.measurement.basis='generated-appearance';},m=>{m.measurement.units='cm';},m=>{m.upstream.commit='0'.repeat(40);},m=>{m.upstream.ndtCommit='0'.repeat(40);},...['metricVerified','physicalRobotValidated','localizationValidated'].map(k=>m=>{m.validation[k]=true;})];
   for(const mutate of mutations){const map=mapFixture();mutate(map);assert.throws(()=>validateLocalizationMap(map));}
 });
 test('recording timing preserves nanosecond strings and rejects stale or inconsistent timestamps',()=>{

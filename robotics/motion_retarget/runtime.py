@@ -9,7 +9,7 @@ import sys
 import time
 
 from . import TARGET, UPSTREAM_COMMIT, UPSTREAM_VERSION
-from .setup_runtime import G1, ZERO, REQUIRED_DISTRIBUTIONS
+from .setup_runtime import G1, ZERO, runtime_file_allowed
 from .validation import MAX_BVH_BYTES, parse_bvh, read_regular, sha256, strict_json, validate_source
 
 
@@ -17,12 +17,14 @@ def verify_runtime(root: Path) -> dict:
     receipt = strict_json(read_regular(root / 'brainsnn-runtime.json', 256 * 1024))
     if receipt.get('schema') != 'brainsnn.soma-runtime.v1' or receipt.get('commit') != UPSTREAM_COMMIT or receipt.get('target') != TARGET:
         raise RuntimeError('Install the pinned SOMA runtime with robotics.motion_retarget.setup_runtime.')
+    if (root / '.git').exists() or (root / 'assets').exists() or receipt.get('sample_dataset_included') is not False or receipt.get('source_checkout_retained') is not False:
+        raise RuntimeError('Reinstall a minimal SOMA runtime; source checkouts/sample data cannot be served.')
     files = receipt.get('files')
     if not isinstance(files, dict) or not 20 <= len(files) <= 1000 or ZERO not in files:
         raise RuntimeError('Incomplete SOMA runtime manifest.')
     for name, digest in files.items():
         path = root / name
-        if (not isinstance(name, str) or Path(name).is_absolute() or '..' in Path(name).parts
+        if (not isinstance(name, str) or not runtime_file_allowed(name) or Path(name).is_absolute() or '..' in Path(name).parts
                 or path.is_symlink() or not path.resolve().is_relative_to(root.resolve())):
             raise RuntimeError('Unsafe path in SOMA runtime manifest.')
         # Empty __init__.py files are valid pinned package assets.
