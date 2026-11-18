@@ -14,11 +14,17 @@ const { chromium, webkit, devices, expect } = require('@playwright/test');
 const output = new URL('../../output/playwright/world/', import.meta.url);
 await mkdir(output, { recursive: true });
 const fixture = await serveProjectReviewFixture();
+const overallDeadline = setTimeout(() => {
+  console.error('TIMEOUT project review browser acceptance or transport cleanup');
+  process.exit(1);
+}, 360000);
+overallDeadline.unref();
 const sha = value => createHash('sha256').update(value).digest('hex');
 const results = [];
 
 async function download(page, selector, label, extension) {
-  const event = page.waitForEvent('download');
+  console.log(`DOWNLOAD ${label}.${extension}`);
+  const event = page.waitForEvent('download', { timeout: 15000 });
   await page.locator(selector).click();
   const item = await event;
   const path = fileURLToPath(new URL(`project-review-${label}.${extension}`, output));
@@ -56,8 +62,21 @@ async function check(browser, phone) {
     ? { ...devices['iPhone 15'], deviceScaleFactor: 1, acceptDownloads: true }
     : { viewport: { width: 1440, height: 1050 }, deviceScaleFactor: 1, acceptDownloads: true });
   const page = await context.newPage(), errors = [];
+  context.setDefaultTimeout(15000);
+  context.setDefaultNavigationTimeout(30000);
+  let stage = 'open studio';
+  const mark = value => { stage = value; console.log(`STAGE ${label}: ${stage}`); };
+  const deadline = setTimeout(() => {
+    console.error(`TIMEOUT project review ${label} at ${stage}`);
+    const stop = setTimeout(() => process.exit(1), 6000);
+    void page.screenshot({ path: fileURLToPath(new URL(`project-review-${label}-timeout.png`, output)), fullPage: true, timeout: 5000 })
+      .catch(error => console.error(`Timeout screenshot: ${error.message}`))
+      .finally(() => { clearTimeout(stop); process.exit(1); });
+  }, 120000);
+  deadline.unref();
   page.on('pageerror', error => errors.push(error.message));
   try {
+    mark('open studio');
     await page.goto(`${fixture.origin}/world/review.html`);
     await expect(page.locator('#project-review-host')).toHaveAttribute('data-build-marker', 'world-project-review-v1');
     await expect(page.locator('#pr-run-local')).toBeDisabled();
@@ -66,6 +85,7 @@ async function check(browser, phone) {
     await expect(page.locator('#pr-source-name')).toContainText('authored');
 
     const beforeLocal = fixture.calls.length;
+    mark('unpriced local comparison');
     await page.locator('#pr-run-local').click();
     await expect(page.locator('.pr-option')).toHaveCount(2);
     await expect(page.locator('#pr-mode')).toHaveText('LOCAL COMPARISON');
@@ -77,12 +97,14 @@ async function check(browser, phone) {
     assert.equal(unpriced.report.options[0].subtotal, null);
     assert.deepEqual(unpriced.report.options[0].knownSubtotal, { low: 0, high: 0 });
 
+    mark('enter reviewed rates');
     await fillRates(page);
     await page.locator('#pr-budget').fill('1000');
     await page.locator('#pr-run-local').click();
     await expect(page.locator('#pr-mode')).toHaveText('LOCAL COMPARISON');
     await expect(page.locator('.pr-option').first()).toContainText('564.30');
 
+    mark('pending decision change');
     // Defer a real digest to exercise a human choice changing during approval.
     // No digest value is faked; the original Web Crypto operation still runs.
     await page.locator('#pr-reviewer').fill('Pending reviewer');
@@ -108,6 +130,7 @@ async function check(browser, phone) {
     const raced = JSON.parse((await download(page, '#pr-export-json', `${label}-decision-race`, 'json')).text);
     assert.equal(raced.approval, null, 'A stale asynchronous decision must not install an approval.');
     await page.locator('[data-pr-select="option-a"]').click();
+    mark('record and export preliminary approval');
     await approve(page);
     const approved = JSON.parse((await download(page, '#pr-export-json', `${label}-approved`, 'json')).text);
     assert.equal(approved.input.source.sceneSha256, sha(demoSceneText()));
@@ -121,6 +144,7 @@ async function check(browser, phone) {
     assert.equal(approved.approval.validation.metricVerified, false);
     assert.equal(approved.approval.selfReported, true);
 
+    mark('invalidate changed decision and brief');
     // Changing a decision clears its visible approval and exported approval.
     await page.locator('#pr-reviewer').fill('Changed reviewer');
     await expect(page.locator('.pr-approval')).toHaveAttribute('data-approved', 'false');
@@ -135,6 +159,7 @@ async function check(browser, phone) {
     await page.locator('[data-pr-select="option-b"]').click();
     await expect(page.locator('[data-pr-select="option-b"]')).toHaveAttribute('aria-pressed', 'true');
 
+    mark('consent and owner session');
     // Review gates make no provider calls until consent and an owner session.
     await expect(page.locator('#pr-run-ai')).toBeEnabled();
     await page.locator('#pr-run-ai').click();
@@ -148,6 +173,7 @@ async function check(browser, phone) {
     await page.locator('#pr-connect').click();
     await expect(page.locator('#pr-login-status')).toContainText('Owner connected');
 
+    mark('run authenticated AI transport');
     // Real authenticated HTTP uses all three specialists; HTML remains inert.
     const beforeAI = fixture.calls.length;
     await page.locator('#pr-run-ai').click();
@@ -162,6 +188,7 @@ async function check(browser, phone) {
     assert.equal(ai.report.transcript.length, 3);
     assert.deepEqual(ai.report.options[0].subtotal, { low: 564.3, high: 677.16 });
     assert.deepEqual(ai.report.options[1].subtotal, { low: 1992.6, high: 2418.75 });
+    mark('export and inspect proposal');
     const html = await download(page, '#pr-export-html', `${label}-proposal`, 'html');
     assert.ok(html.text.includes('Approved for preliminary review'));
     assert.ok(html.text.includes('brainsnn.project-review-package.v1'));
@@ -178,6 +205,7 @@ async function check(browser, phone) {
     const width = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
     assert.ok(width.document <= width.viewport + 1, `Page overflows at ${label}: ${JSON.stringify(width)}`);
 
+    mark('cancel review on changed brief');
     // Source/brief changes abort the active request; a late result cannot return.
     fixture.hold();
     const beforePending = fixture.calls.length;
@@ -194,6 +222,7 @@ async function check(browser, phone) {
     await expect(page.locator('#pr-export-json')).toHaveCount(0);
     assert.equal(fixture.calls.length, beforePending + 1, 'Cancellation must stop later specialists.');
 
+    mark('replace source with exact original bytes');
     // A replacement file is bound to its exact bytes, not JSON reserialization.
     const replacement = `${demoSceneText()}\n`;
     await page.locator('#pr-source-file').setInputFiles({ name: 'original-scene.json', mimeType: 'application/json', buffer: Buffer.from(replacement) });
@@ -207,7 +236,12 @@ async function check(browser, phone) {
     assert.deepEqual(errors, [], `Browser errors in ${label}`);
     results.push({ browser: label, checks: 'local pricing, consent/auth, AI transport, approval invalidation, safe exports, cancellation, exact source bytes', provider: 'authored fixture only' });
     console.log(`PASS project review ${label}`);
-  } finally { await context.close(); }
+  } catch (error) {
+    console.error(`FAIL project review ${label} at ${stage}: ${error.message}`);
+    await page.screenshot({ path: fileURLToPath(new URL(`project-review-${label}-failure.png`, output)), fullPage: true, timeout: 5000 }).catch(() => {});
+    await writeFile(new URL(`project-review-${label}-failure.json`, output), JSON.stringify({ stage, error: error.message, pageErrors: errors }, null, 2));
+    throw error;
+  } finally { await context.close(); clearTimeout(deadline); }
 }
 
 try {
@@ -220,4 +254,4 @@ try {
     finally { await browser.close(); }
   }
   await writeFile(new URL('project-review-summary.json', output), `${JSON.stringify({ kind: 'authored-transport-acceptance', results }, null, 2)}\n`);
-} finally { await fixture.close(); }
+} finally { await fixture.close(); clearTimeout(overallDeadline); }

@@ -139,6 +139,7 @@ jobs:
       - name: Held-out appearance membership on authored frames
         run: python -m pytest tests/world/test_appearance_holdout.py -q
       - name: Project Review desktop and phone flows with an authored model transport
+        timeout-minutes: 8
         env:
           WORLD_BROWSERS: chromium,webkit
         run: |
