@@ -1,9 +1,23 @@
 # World Builder — remote build progress (GB10)
 
-|||||||||||||||||||||||||||||||||||||Last updated: 2026-11-17T19:15Z
+||||||||||||||||||||||||||||||||||||||Last updated: 2026-11-18T00:30Z
 Mode: GB10 local (build/verification only; 4090 GPU tasks alternate on separate branch)
 
 ## Run log (newest first)
+
+### Run 244 — 2026-11-18 (GB10: Lyra 1 static scene qualification — real weights confirmed, CUDA tensor ops verified; all suites green)
+
+- **Bounded improvement:** verified Lyra 1 static scene qualification on GB10. `lyra_static.pt` is real weights (65,578,549 bytes, ~62.5 MB), loads as valid state dict with `module` key. CUDA tensor operations confirmed (torch 2.13.0+cu130, GB10 121.7 GiB, compute capability 12.1). `TORCH_NVSHMEM_DISABLE=1` correctly prevents the nvshmem symbol error. 4090 host confirmed via SSH: hostname `d130b6c7f3f4`, RTX 4090, 16.5/24 GiB, 63°C, correct GPU UUID. Branch `hermes/world-builder-gb10` at `fbae8aa` with untracked `lyra1-port/`, `capture-client-test8.mjs`, `debug_ui_smoke.py`, `lyra_static.pt`, `lyra_static.pt.real`, and `world-worker-data/` preserved.
+- **Tests verified (this run, exact):**
+  - `node --test tests/world/report-receipts.test.mjs` → **12 pass / 0 fail** (154 ms)
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_report_receipts.py -q` → **34 passed in 19.57 s**
+  - `/workspace/brainsnn-world-builder/.venv/bin/python -m pytest tests/world/test_worker.py -q` → **61 passed, 3 skipped in 7.52 s**
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/qual_check.py` → **PASSED** (CUDA matmul, real weights ~65 MB)
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/run_qual_v2.py` → **PASSED** (CUDA tensor ops with TORCH_NVSHMEM_DISABLE=1)
+  - `TORCH_NVSHMEM_DISABLE=1 python lyra1-port/verify_real_weights.py` → **PASSED** (state dict loads valid)
+- **4090 state:** port 23990 alive, hostname `d130b6c7f3f4`, CUDA True, RTX 4090, 16.5/24.0 GiB used, 63°C.
+- **No force-push, no merge/deploy, no paid fallback.** Serving Qwen/backup and licensed model/guardrail gates untouched.
+- **Next bounded action:** physical iPhone Safari validation or Lyra static scene inference with real weights.
 
 ### Run 243 — 2026-11-17 (GB10: first-run baseline — all three suites green; 4090 confirmed alive)
 
