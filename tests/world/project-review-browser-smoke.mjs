@@ -24,9 +24,10 @@ const results = [];
 
 async function download(page, selector, label, extension) {
   console.log(`DOWNLOAD ${label}.${extension}`);
-  const event = page.waitForEvent('download', { timeout: 15000 });
-  await page.locator(selector).click();
-  const item = await event;
+  const [item] = await Promise.all([
+    page.waitForEvent('download', { timeout: 15000 }),
+    page.locator(selector).click(),
+  ]);
   const path = fileURLToPath(new URL(`project-review-${label}.${extension}`, output));
   await item.saveAs(path);
   console.log(`SAVED ${label}.${extension}`);
@@ -59,9 +60,10 @@ async function approve(page, name = 'Browser fixture reviewer') {
 
 async function check(browser, phone) {
   const label = `${browser.browserType().name()}-${phone ? 'phone' : 'desktop'}`;
-  const context = await browser.newContext(phone
-    ? { ...devices['iPhone 15'], deviceScaleFactor: 1, acceptDownloads: true }
-    : { viewport: { width: 1440, height: 1050 }, deviceScaleFactor: 1, acceptDownloads: true });
+  const context = await browser.newContext({
+    ...(phone ? devices['iPhone 15'] : { viewport: { width: 1440, height: 1050 } }),
+    deviceScaleFactor: 1, acceptDownloads: true, reducedMotion: 'reduce',
+  });
   const page = await context.newPage(), errors = [];
   context.setDefaultTimeout(15000);
   context.setDefaultNavigationTimeout(30000);
@@ -80,6 +82,9 @@ async function check(browser, phone) {
     mark('open studio');
     await page.goto(`${fixture.origin}/world/review.html`);
     await expect(page.locator('#project-review-host')).toHaveAttribute('data-build-marker', 'world-project-review-v1');
+    // Honor the user's reduced-motion setting so long-page clicks and visual
+    // assertions do not race the site's optional smooth scrolling.
+    assert.equal(await page.locator('html').evaluate(element => getComputedStyle(element).scrollBehavior), 'auto');
     await expect(page.locator('#pr-run-local')).toBeDisabled();
     await page.locator('#pr-example').click();
     await expect(page.locator('#pr-run-local')).toBeEnabled();
@@ -209,6 +214,8 @@ async function check(browser, phone) {
     // Closing a separate tab may focus the page's keyboard skip link. Return
     // focus to the reviewed content before taking its normal pointer-use view.
     await page.locator('.pr-results-heading h2').click();
+    await expect(page.locator('.skip')).not.toBeFocused();
+    await page.evaluate(() => window.scrollTo(0, 0));
     await expect(page.locator('.skip')).not.toBeInViewport();
     if (phone) {
       const table = await page.locator('.pr-quantity-wrap').evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth, tabIndex: element.tabIndex }));
