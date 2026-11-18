@@ -1,3 +1,4 @@
+import {biomechanicsPanel,mountBiomechanicsTool} from './biomechanics-tool.mjs';
 import {parsePLY,STRIDE,MAX_POINTS} from './visual-geometry.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
 import {createLayerJobRunner} from './layer-job-client.mjs';
@@ -7,7 +8,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const jsonFile=(value,name)=>new File([JSON.stringify(value)],name,{type:'application/json'});
 const IDENTITY=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
 const Z_TO_Y=[[1,0,0,0],[0,0,1,0],[0,-1,0,0],[0,0,0,1]];
-const titles={repair:'Repair appearance',localization:'Find my robot',motion:'Try a movement'};
+const titles={repair:'Repair appearance',localization:'Find my robot',motion:'Try a movement',biomechanics:'Understand movement'};
 
 /** Native tools inside the shared workspace. Remote files use their original private client. */
 export function mountWorldLayerTools({root,getConnection,getResults,getResult,rememberResult,connect,onChange=()=>{}}) {
@@ -16,7 +17,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   let map=null,mapRaw=null,mapBinding=null,mapPoints=null,recording=null,motion=null,motionViewer=null,mapViewer=null,live=null,lastResults='';
   root.className='world-layer-tools';
   root.innerHTML=`<div class="layer-tools-heading"><div><p class="eyebrow">MORE WAYS TO USE YOUR WORLD</p><h3>Make it yours.</h3></div><button type="button" data-layer-connect>Connect processing</button></div>
-    <div class="layer-tool-choices" role="tablist" aria-label="World tools">${Object.entries(titles).map(([id,label],i)=>`<button type="button" id="layer-tab-${id}" role="tab" aria-selected="false" aria-controls="layer-panel-${id}" tabindex="${i?'-1':'0'}" data-layer-tab="${id}"><strong>${label}</strong><span>${id==='repair'?'Repair a selected area':id==='localization'?'See position and tracking':'Compare human and robot motion'}</span></button>`).join('')}</div>
+    <div class="layer-tool-choices" role="tablist" aria-label="World tools">${Object.entries(titles).map(([id,label],i)=>`<button type="button" id="layer-tab-${id}" role="tab" aria-selected="false" aria-controls="layer-panel-${id}" tabindex="${i?'-1':'0'}" data-layer-tab="${id}"><strong>${label}</strong><span>${id==='repair'?'Repair a selected area':id==='localization'?'See position and tracking':id==='motion'?'Compare human and robot motion':'Explore body and muscle geometry'}</span></button>`).join('')}</div>
     <section id="layer-panel-repair" role="tabpanel" aria-labelledby="layer-tab-repair" hidden>
       <p>Open a Gaussian capture, select the area to repair, then compare the result. Your original stays unchanged.</p>
       <div class="layer-input-row"><label>Open Gaussian PLY<input data-repair-file type="file" accept=".ply"></label><label>Or use a result from this workspace<select data-layer-result="repair"><option value="">Choose a result</option></select></label><button type="button" data-layer-use="repair">Open selected result</button></div>
@@ -51,14 +52,15 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
       <div class="layer-toolbar"><button type="button" data-motion-play>Play movement</button><button type="button" data-motion-pause>Pause</button><label>Movement frame<input data-motion-seek type="range" min="0" max="0" value="0"></label></div><p data-motion-info role="status">Create or open a motion reference to begin.</p>
       <p class="layer-note">Skeletons are shown side by side for comparison. Source motion is retained. This is a movement reference; physics testing and a tracking controller are separate steps.</p>
     </section>
+    ${biomechanicsPanel}
     <div class="layer-result-footer" hidden><p data-layer-status role="status"></p><button type="button" data-layer-cancel hidden>Cancel processing</button><div data-layer-downloads class="layer-toolbar"></div></div>`;
   const $=s=>root.querySelector(s),on=(selector,event,fn)=>$(selector).addEventListener(event,fn,{signal});
   const status=(message,error=false)=>{$('.layer-result-footer').hidden=false;$('[data-layer-status]').textContent=message;$('[data-layer-status]').classList.toggle('error',error);};
   const attempt=fn=>Promise.resolve().then(fn).catch(error=>{if(!disposed&&error.name!=='AbortError')status(error.message,true);});
-  const runner=createLayerJobRunner({getConnection,onComplete:rememberResult,onStatus:status,onBusy(value){busy=value;$('[data-layer-cancel]').hidden=!value;for(const button of root.querySelectorAll('[data-repair-run],[data-localization-run],[data-motion-run]'))button.disabled=value;onChange();}});
+  const runner=createLayerJobRunner({getConnection,onComplete:rememberResult,onStatus:status,onBusy(value){busy=value;$('[data-layer-cancel]').hidden=!value;for(const button of root.querySelectorAll('[data-repair-run],[data-localization-run],[data-motion-run],[data-biomech-run]'))button.disabled=value;onChange();}});
   function open(name) {
     if(!Object.hasOwn(titles,name))return;
-    active=name;motionViewer?.pause();mapViewer?.pause();if(name!=='localization')stopLive();
+    active=name;motionViewer?.pause();mapViewer?.pause();biomechanics?.pause();if(name!=='localization')stopLive();
     for(const button of root.querySelectorAll('[data-layer-tab]')){const selected=button.dataset.layerTab===name;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}
     for(const id of Object.keys(titles))$(`#layer-panel-${id}`).hidden=id!==name;
     if(name==='repair'&&!repairViewer)repairViewer=createVisualViewer($('[data-repair-canvas]'),message=>status(message));
@@ -69,14 +71,14 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     const results=getResults(),signature=JSON.stringify(results.map(r=>[r.key,r.artifacts.length]));if(signature===lastResults)return;lastResults=signature;
     for(const kind of Object.keys(titles)) {
       const select=$(`[data-layer-result="${kind}"]`),chosen=select.value;
-      const rows=results.filter(r=>kind==='repair'?r.artifacts.some(a=>a.name.endsWith('.ply')):r.engine===(kind==='motion'?'motion-retarget':'localization-map'));
+      const rows=results.filter(r=>kind==='repair'?r.artifacts.some(a=>a.name.endsWith('.ply')):r.engine===(kind==='motion'?'motion-retarget':kind==='biomechanics'?'biomechanics':'localization-map'));
       select.innerHTML='<option value="">Choose a result</option>'+rows.map(r=>`<option value="${esc(r.key)}">${esc(r.sourceNames.join(', ')||r.engine)} · ${esc(r.id.slice(0,8))}</option>`).join('');select.value=chosen;
     }
     const select=$('[data-layer-scene]'),chosen=select.value;select.innerHTML='<option value="">Use the scan’s own coordinates</option>'+results.filter(r=>r.artifacts.some(a=>a.name==='scene.json')).map(r=>`<option value="${esc(r.key)}">${esc(r.sourceNames.join(', ')||'Building model')} · ${esc(r.id.slice(0,8))}</option>`).join('');select.value=chosen;
   }
   async function read(context,name) {const index=context.job.artifacts.findIndex(a=>a.name===name);if(index<0)throw Error(`This result has no ${name}.`);return context.sourceClient.previewArtifact(context.job,index);}
   function downloads(context) {
-    const labels={'original.ply':'original 3D','repaired.ply':'repaired 3D','repair-request.json':'repair settings','repair-mapping.json':'point mapping','repair-receipt.json':'repair receipt','localization-map.pcd':'robot map · PCD','localization-map.ply':'map points · PLY','localization-map.json':'map bundle','localization-edge.zip':'robot setup package','original-motion.bvh':'original motion','normalized-soma.bvh':'normalized motion','retarget-options.json':'motion settings','robot-reference.csv':'G1 motion · CSV','motion-preview.json':'motion preview','motion-reference.json':'motion receipt'};
+    const labels={'original.ply':'original 3D','repaired.ply':'repaired 3D','repair-request.json':'repair settings','repair-mapping.json':'point mapping','repair-receipt.json':'repair receipt','localization-map.pcd':'robot map · PCD','localization-map.ply':'map points · PLY','localization-map.json':'map bundle','localization-edge.zip':'robot setup package','original-motion.bvh':'original motion','normalized-soma.bvh':'normalized motion','retarget-options.json':'motion settings','robot-reference.csv':'G1 motion · CSV','motion-preview.json':'motion preview','motion-reference.json':'motion receipt','original-model.osim':'Original body model','original-motion.mot':'Original motion','analysis-model.osim':'Analysis model','biomechanics-coordinates.csv':'Coordinates CSV','biomechanics-muscles.csv':'Muscle lengths CSV','biomechanics-inverse-dynamics.csv':'Net joint forces CSV','biomechanics-preview.json':'Analysis preview','biomechanics-report.json':'Analysis receipt','biomechanics-options.json':'Analysis options','external-loads.json':'External loads'};
     const container=$('[data-layer-downloads]');container.replaceChildren();
     for(let i=0;i<context.job.artifacts.length;i++){const a=context.job.artifacts[i],button=document.createElement('button');button.type='button';button.textContent=`Save ${labels[a.name]||a.name}`;button.title=a.name;button.addEventListener('click',()=>void attempt(async()=>{const href=await context.sourceClient.download(context.job.id,i);if(disposed)return;const link=document.createElement('a');link.href=href;link.target='_blank';link.rel='noopener noreferrer';link.referrerPolicy='no-referrer';link.click();}),{signal});container.append(button);}
     $('.layer-result-footer').hidden=false;
@@ -123,13 +125,16 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
       const raw=await read(context,'motion-preview.json');if(token!==epoch||disposed)return;motion=validateMotionPreview(jsonBytes(raw));open('motion');motionViewer.set(motion);$('[data-motion-seek]').max=motion.frame_count-1;status('Human and G1 reference motion are ready to compare.');
     } else if(context.job.engine==='localization-map') {
       const [raw,ply]=await Promise.all([read(context,'localization-map.json'),read(context,'localization-map.ply')]);if(token!==epoch||disposed)return;await loadMap(raw,ply,token);
-    } else throw Error('This result is not a repair, localization map or motion reference.');
+    } else if(context.job.engine==='biomechanics'){
+      await biomechanics.openResult(context,token);
+    } else throw Error('This result is not supported by these workspace tools.');
     if(token===epoch&&!disposed)downloads(context);
   }
   async function run(engine,inputs,sourceJob=null,expectedClient=null) {
-    const token=epoch,context=await runner.run({engine,inputs,sourceJob,expectedClient,sourceNames:inputs.filter(i=>['splat','survey','motion'].includes(i.kind)).map(i=>i.file.name)});
+    const token=epoch,context=await runner.run({engine,inputs,sourceJob,expectedClient,sourceNames:inputs.filter(i=>['splat','survey','motion','biomech-model','biomech-motion'].includes(i.kind)).map(i=>i.file.name)});
     refresh();if(token!==epoch||disposed){status('Result saved in your files. Your newer view was kept.');return;}await openResult(context);
   }
+  const biomechanics=mountBiomechanicsTool({root,signal,run,status,intent:()=>{epoch++;},version:()=>epoch,isCurrent:token=>token===epoch&&!disposed,show:()=>open('biomechanics'),read});
   function stopLive(){if(live){clearTimeout(live.timer);clearInterval(live.watchdog);live.controller.abort();live=null;mapViewer?.markStale();$('[data-localization-info]').textContent='Position stream disconnected.';} $('[data-live-token]').value='';}
   async function connectLive() {
     if(!mapBinding)throw Error('Open the exact map bundle before connecting a robot.');
@@ -157,7 +162,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     if(button.dataset.layerTab){epoch++;open(button.dataset.layerTab);return;}
     if(button.dataset.layerUse)void attempt(async()=>{const kind=button.dataset.layerUse,key=$(`[data-layer-result="${kind}"]`).value;if(!key)throw Error('Choose a workspace result first.');const context=getResult(key);if(kind==='repair'&&context.job.engine!=='splat-repair'){const token=++epoch,artifact=context.job.artifacts.find(a=>a.name.endsWith('.ply')),raw=await read(context,artifact.name);if(token!==epoch||disposed)return;await loadRepair(new File([raw],artifact.name),token);}else await openResult(context);});
   },{signal});
-  root.querySelector('[role="tablist"]').addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const buttons=[...root.querySelectorAll('[data-layer-tab]')],at=buttons.indexOf(document.activeElement);if(at<0)return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?2:(at+(event.key==='ArrowRight'?1:2))%3;buttons[next].click();buttons[next].focus();},{signal});
+  root.querySelector('[role="tablist"]').addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const buttons=[...root.querySelectorAll('[data-layer-tab]')],at=buttons.indexOf(document.activeElement);if(at<0)return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(at+(event.key==='ArrowRight'?1:buttons.length-1))%buttons.length;buttons[next].click();buttons[next].focus();},{signal});
   on('[data-layer-connect]','click',connect);on('[data-layer-cancel]','click',()=>void attempt(()=>runner.cancel()));
   on('[data-repair-file]','change',event=>void attempt(()=>{const file=event.target.files[0];if(file)return loadRepair(file);}));
   on('[data-repair-select]','click',()=>{if(!repair)return status('Open a Gaussian PLY first.',true);setSelecting(!selecting);if(selecting)showRepair("original");});
@@ -187,5 +192,5 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   on('[data-motion-play]','click',()=>motionViewer?.play());on('[data-motion-pause]','click',()=>motionViewer?.pause());on('[data-motion-seek]','input',event=>motionViewer?.seek(Number(event.target.value)));
   root.addEventListener('change',event=>{if(event.target.matches('[data-repair-mode],[data-repair-density],[data-repair-seed],[data-localization-file],[data-localization-axis],[data-localization-voxel],[data-layer-scene],[data-localization-transform],[data-motion-file],[data-motion-units],[data-motion-facing]')){epoch++;for(const input of root.querySelectorAll('[data-repair-consent],[data-localization-consent],[data-motion-consent]'))input.checked=false;}},{signal});
   refresh();
-  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;stopLive();mapViewer?.pause();motionViewer?.pause();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;stopLive();runner.dispose();abort.abort();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
+  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
 }

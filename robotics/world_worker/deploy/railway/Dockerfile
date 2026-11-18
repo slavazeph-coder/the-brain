@@ -59,6 +59,16 @@ RUN python3.12 -m venv /opt/soma/venv \
          --runtime-dir /opt/soma/upstream --out /opt/soma/qualification \
     && chmod -R a-w /opt/soma/upstream
 
+# OpenSim uses its own pinned native CPU environment. XML admission stays in
+# the main worker; each actual analysis verifies this runtime's wheel receipt.
+# The build gate compares an authored pendulum's dynamics with analytic torque.
+COPY robotics/biomechanics /app/robotics/biomechanics
+COPY robotics/world_worker/biomechanics.py /app/robotics/world_worker/biomechanics.py
+RUN python3.12 -m venv /opt/biomechanics/venv \
+    && /opt/biomechanics/venv/bin/python -m robotics.biomechanics.setup_runtime \
+    && /opt/biomechanics/venv/bin/pip check \
+    && /opt/biomechanics/venv/bin/python -m robotics.biomechanics.qualify --out /opt/biomechanics/qualification
+
 # The bounded NVIDIA package is pinned, hash-checked, and outside the /data volume.
 COPY robotics/world_worker/nvidia_pack.py /tmp/nvidia_pack.py
 RUN /opt/worker/bin/python /tmp/nvidia_pack.py --workspace /opt/brainsnn-simready

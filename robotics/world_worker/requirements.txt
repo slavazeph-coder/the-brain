@@ -2,3 +2,6 @@
 fastapi==0.128.2
 pydantic==2.13.5
 uvicorn==0.48.0
+
+# Reject XML entities and external resources before native OpenSim execution.
+defusedxml==0.7.1

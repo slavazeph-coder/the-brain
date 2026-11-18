@@ -22,7 +22,7 @@ ADAPTERS = ROOT / 'robotics/world_worker/deploy/railway/adapters.json'
 def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     engines = enabled_engines(ADAPTERS)
     assert engines == ['colmap-sparse', 'locate-photo', 'photo-metric', 'scene-usd', 'omniverse-pack', 'demo-replay', 'asbuilt-update', 'asbuilt-evidence',
-                       'splat-repair', 'localization-map', 'motion-retarget']
+                       'splat-repair', 'localization-map', 'motion-retarget', 'biomechanics']
     value = registry({'WORLD_WORKER_SITE_OWNER_TOKEN': OWNER, 'WORLD_WORKER_SITE_VISITOR_TOKEN': VISITOR}, 9 * 1024 ** 3, engines)
     raw = json.dumps(value)
     assert OWNER not in raw and VISITOR not in raw
@@ -35,21 +35,23 @@ def test_the_registry_holds_hashes_only_and_the_worker_accepts_it(tmp_path):
     owner = identities.authenticate('Bearer ' + OWNER)
     assert owner.owner_id == 'site-owner' and owner.limits['upload_bytes'] == 4 * 1024 ** 3 and owner.limits['active_jobs'] == 1
     assert identities.authenticate('Bearer ' + VISITOR).owner_id == 'site-visitors'
-    assert {'splat-repair', 'localization-map', 'motion-retarget'} <= set(owner.engines)
-    assert not {'splat-repair', 'localization-map', 'motion-retarget'} & set(identities.authenticate('Bearer ' + VISITOR).engines)
+    assert {'splat-repair', 'localization-map', 'motion-retarget', 'biomechanics'} <= set(owner.engines)
+    assert not {'splat-repair', 'localization-map', 'motion-retarget', 'biomechanics'} & set(identities.authenticate('Bearer ' + VISITOR).engines)
 
 
-def test_three_layers_keep_their_actual_bounded_runtimes_and_input_contracts():
+def test_processing_layers_keep_their_actual_bounded_runtimes_and_input_contracts():
     profile = {row['id']: row for row in json.loads(ADAPTERS.read_text())}
     expected = {
         'splat-repair': (['splat', 'repair'], '/opt/worker/bin/python', 'splat_repair.py', 180),
         'localization-map': (['survey', 'localization'], '/opt/worker/bin/python', 'localization_job.py', 180),
         'motion-retarget': (['motion', 'retarget'], '/opt/soma/venv/bin/python', 'motion_retarget.py', 900),
+        'biomechanics': (['biomech-model', 'biomech-motion', 'biomech-options', 'biomech-loads'],
+                         '/opt/biomechanics/venv/bin/python', 'biomechanics.py', 900),
     }
     for name, (kinds, interpreter, script, timeout) in expected.items():
         entry = profile[name]
         assert entry['enabled'] is True and entry['license_reviewed'] is True
-        assert entry['input_kinds'] == kinds and entry['max_inputs'] == 2
+        assert entry['input_kinds'] == kinds and entry['max_inputs'] == len(kinds)
         assert entry['timeout_seconds'] == timeout
         assert entry['command'] == [interpreter, '/app/robotics/world_worker/' + script,
                                     '--input-manifest', '{input_manifest}']
