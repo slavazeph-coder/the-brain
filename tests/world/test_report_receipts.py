@@ -922,6 +922,24 @@ def test_delete_receipt_target_job_during_inflight_receipt_is_cancelled(signed_o
         assert client.get('/v1/jobs/' + jid, headers=headers(A)).json()['status'] == 'complete'
 
 
+def test_report_key_returns_503_when_no_key_path(configured, tmp_path):
+    """report-key returns 503 when report_key is None (no key path at all),
+    not just when the key file is missing. This is the most common disabled state.
+    See docs/world-studio-implementation.md §Report receipts."""
+    options, config = configured
+    # Remove the key path entirely — create_app should use None, not the env var.
+    options.pop('report_key', None)
+    with TestClient(create_app(**options)) as client:
+        resp = client.get('/v1/report-key')
+        assert resp.status_code == 503, f"expected 503, got {resp.status_code}: {resp.text}"
+        # capabilities should report reportSigning.available=False
+        cap = client.get('/v1/capabilities', headers=headers(A)).json()
+        assert cap['reportSigning']['available'] is False
+        # A completed job should also be ineligible (503)
+        jid, _, _ = complete(client, A)
+        assert receipt(client, jid).status_code == 503
+
+
 def test_report_signing_key_environment_variable_wiring(configured, tmp_path, monkeypatch):
     # create_app line: key_path = report_key or os.environ.get('WORLD_REPORT_SIGNING_KEY')
     # No existing test exercises the env-var path — every other test passes
