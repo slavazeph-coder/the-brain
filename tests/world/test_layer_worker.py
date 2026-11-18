@@ -21,11 +21,14 @@ from tests.world.test_motion_retarget import small_bvh, OPTIONS as MOTION_OPTION
 ROOT = Path(__file__).resolve().parents[2]
 OPERATOR = 'http-layer-operator-' + 'o' * 43
 A, B, VISITOR = 'a' * 43, 'b' * 43, 'v' * 43
-ENGINES = ['splat-repair', 'localization-map', 'motion-retarget']
+ENGINES = ['splat-repair', 'localization-map', 'motion-retarget', 'biomechanics']
 KINDS = {'splat-repair': ['splat', 'repair'], 'localization-map': ['survey', 'localization'],
-         'motion-retarget': ['motion', 'retarget']}
+         'motion-retarget': ['motion', 'retarget'],
+         'biomechanics': ['biomech-model', 'biomech-motion', 'biomech-options', 'biomech-loads']}
 FILENAMES = {'splat': 'source.ply', 'repair': 'repair.json', 'survey': 'scan.ply',
-             'localization': 'localization.json', 'motion': 'source.bvh', 'retarget': 'retarget.json'}
+             'localization': 'localization.json', 'motion': 'source.bvh', 'retarget': 'retarget.json',
+             'biomech-model': 'body.osim', 'biomech-motion': 'movement.mot',
+             'biomech-options': 'options.json', 'biomech-loads': 'forces.json'}
 
 
 def headers(credential=A):
@@ -34,10 +37,10 @@ def headers(credential=A):
 
 def configure(tmp_path, *, command_overrides=None, disabled=()):
     modules = {'splat-repair': 'splat_repair.py', 'localization-map': 'localization_job.py',
-               'motion-retarget': 'motion_retarget.py'}
+               'motion-retarget': 'motion_retarget.py', 'biomechanics': 'biomechanics.py'}
     entries = [{'id': engine, 'label': 'HTTP contract fixture ' + engine,
                 'enabled': engine not in disabled, 'license_reviewed': True,
-                'input_kinds': KINDS[engine], 'max_inputs': 2, 'timeout_seconds': 60,
+                'input_kinds': KINDS[engine], 'max_inputs': len(KINDS[engine]), 'timeout_seconds': 60,
                 'source_job': engine == 'localization-map',
                 'command': (command_overrides or {}).get(engine, [sys.executable,
                     str(ROOT / 'robotics/world_worker' / module), '--input-manifest', '{input_manifest}'])}
