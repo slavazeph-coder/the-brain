@@ -1,0 +1,14 @@
+Splat Repair
+Copyright 2026 Nicolas Drum
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It bundles the fonts Prompt (Cadson Demak, SIL Open Font License 1.1) and
+Ubuntu (Canonical Ltd., Ubuntu Font Licence 1.0). The licence texts are in
+app/public/fonts.
+
+Third-party software that is installed alongside Splat Repair, and the models
+it can download, are listed in THIRD_PARTY_LICENSES.md.
+
+Adobe and Photoshop are trademarks of Adobe Inc. Splat Repair is not
+affiliated with or endorsed by Adobe.

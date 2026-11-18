@@ -11,3 +11,4 @@ ifcopenshell==0.9.0
 pypdf==7.1.0  # reopens drawing-set.pdf with a reader the worker does not use
 
 -r ../../robotics/world_worker/requirements-demo.txt
+-r ../../robotics/splat_repair/requirements.txt
