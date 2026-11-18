@@ -36,6 +36,7 @@ VIDEO_BYTES = 2 * 1024 ** 3  # five minutes of 4K30 HEVC is about 1 GB; H.264 or
 UPLOADS_BYTES = 6 * 1024 ** 3  # all owners' unfinished and kept uploads together
 ID = re.compile(r"^[a-f0-9]{32}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$")
+MAX_ARTIFACTS = 40  # one job's published files; worker-client.mjs and scene_usd.ARTIFACT_LIMIT carry the same bound
 # An adapter secret is an environment variable name; the worker's own token and tenants never pass to adapters.
 SECRET_NAME = re.compile(r"^(?!WORLD_WORKER_|WORLD_TENANTS)[A-Z][A-Z0-9_]{0,63}$")
 ACTIVE = ('prepared', 'queued', 'running')
@@ -57,7 +58,7 @@ class JobBody(BaseModel):
 
 class TicketBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    artifact: int = Field(ge=0, le=31, strict=True)
+    artifact: int = Field(ge=0, le=MAX_ARTIFACTS - 1, strict=True)
 
 class Store:
     def __init__(self, root: Path):
@@ -371,15 +372,15 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             raise ValueError('Adapter did not write a bounded manifest.json.')
         value = json.loads(manifest.read_text())
         entries = value.get('artifacts') if isinstance(value, dict) else None
-        if not isinstance(entries, list) or not 1 <= len(entries) <= 32:
-            raise ValueError('Adapter manifest requires 1 to 32 artifacts.')
+        if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_ARTIFACTS:
+            raise ValueError(f'Adapter manifest requires 1 to {MAX_ARTIFACTS} artifacts.')
         result = []
         seen = set()
         for entry in entries:
             if not isinstance(entry, dict):
                 raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt','.pdf']:
                 raise ValueError('Unsafe artifact name or type.')
             seen.add(name)
             path = out / name

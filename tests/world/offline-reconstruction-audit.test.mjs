@@ -9,6 +9,6 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-friendly-playground-v28/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-unified-journey-v29/,'Changes to precache need a new cache version');
   for(const name of ['facility-review.mjs','facility-review-ui.mjs','facility-review.css','playground-help.mjs'])assert.ok(sw.includes(`'./${name}'`),`${name} is part of the linked review shell`);
 });

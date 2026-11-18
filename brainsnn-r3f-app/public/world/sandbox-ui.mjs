@@ -2,7 +2,7 @@ import {createSandboxSession, routeSelection, sandboxURL} from './sandbox-sessio
 
 // One document owns capture, processing and the active scene. Each scene keeps
 // its own geometry contract; switching tools never converts or registers it.
-export function createSandboxUI({setMapTab, getMap, getSourceCount, status, event, pauseMap}) {
+export function createSandboxUI({setMapTab, getMap, getSourceCount, status, event, pauseMap, onWorkspaceChange = () => {}}) {
   const $ = id => document.getElementById(id);
   const session = createSandboxSession();
   const initial = routeSelection(location.href);
@@ -48,6 +48,7 @@ export function createSandboxUI({setMapTab, getMap, getSourceCount, status, even
       $('sandbox-context').textContent = 'Your map: change objects, check distances, try a robot route, then save your results.';
     }
     $('sandbox-share').disabled = loading;
+    onWorkspaceChange();
   }
   function mapTab(next) {
     syncing = true;
