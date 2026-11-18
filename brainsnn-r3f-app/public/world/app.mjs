@@ -752,7 +752,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.bimRemove!==undefined){bimWorkflow.removeOpening(Number(b.dataset.bimRemove));return;}
   if(b.dataset.bimAction){try{if(b.dataset.bimAction==='add')bimWorkflow.addOpening();else if(b.dataset.bimAction==='recompile')void bimWorkflow.recompile().catch(error=>sceneStatus(error.message,true));}catch(error){sceneStatus(error.message,true);}return;}
   if(b.dataset.sceneDownload!==undefined){void bimWorkflow.downloadScene(Number(b.dataset.sceneDownload)).catch(error=>sceneStatus(error.message,true));return;}
-  if(b.dataset.tab){if(sandbox)void sandbox.handleTab(b.dataset.tab);else setTab(b.dataset.tab);return;}if(b.dataset.action){void action(b.dataset.action,b.dataset.value);return;}
+  if(b.dataset.tab){viewRevision++;artifactAbort?.abort();sceneWorkspace.close();if(sandbox)void sandbox.handleTab(b.dataset.tab);else setTab(b.dataset.tab);return;}if(b.dataset.action){void action(b.dataset.action,b.dataset.value);return;}
   if(b.dataset.view){renderer?.setMode(b.dataset.view);document.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));setTab('world');return;}
   if(b.dataset.filter){filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderSystems();return;}
   if(b.dataset.reviewArtifact!==undefined){void openObservationArtifact(Number(b.dataset.reviewArtifact));return;}

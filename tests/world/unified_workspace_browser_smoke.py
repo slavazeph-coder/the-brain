@@ -155,6 +155,12 @@ def preview_race(page, worker_url, first_source):
 def opening_draft_retention(page, first_job, second_job):
     """Explicit authored review drafts survive navigation, never another job."""
     page.set_viewport_size({'width':1360,'height':1000})
+    page.locator('#tab-world').click()
+    edited = 'Map edit retained through same-tab model navigation'
+    page.locator('#object-name').fill(edited)
+    page.locator('#object-name').press('Tab')
+    selected_object = page.locator('#objects').input_value()
+    expect(page.locator('#map-reviewed')).not_to_be_checked()
     page.locator('#workspace-job-select').select_option(first_job)
     page.locator('#workspace-model-view').click()
     expect(page.locator('#drawing-review')).to_have_attribute('data-state','ready', timeout=60000)
@@ -183,6 +189,31 @@ def opening_draft_retention(page, first_job, second_job):
     page.locator('#workspace-model-view').click()
     expect(page.locator('.bim-opening-list li')).to_have_count(1, timeout=60000)
     expect(page.locator('#drawing-review')).to_have_attribute('data-state','stale')
+
+    # The original toolbar handlers must leave an inline model even when the
+    # requested tab is the already-active panel underneath it. Merely closing
+    # the model when setTab changes would miss both of these real user paths.
+    for tool in ('capture','evidence'):
+        page.locator('#tab-'+tool).click()
+        expect(page.locator('#tab-'+tool)).to_have_attribute('aria-selected','true')
+        page.locator('#workspace-model-view').click()
+        expect(page.locator('.bim-opening-list li')).to_have_count(1, timeout=60000)
+        expect(page.locator('#panel')).to_have_attribute('aria-labelledby','tab-'+tool)
+        expect(page.locator('#scene-dialog')).to_be_visible()
+        page.locator('#tab-'+tool).click()
+        expect(page.locator('#scene-dialog')).not_to_be_visible()
+        expect(page.locator('#scene-bim-files')).to_be_empty()
+        expect(page.locator('#tab-'+tool)).to_have_attribute('aria-selected','true')
+        expect(page.locator('#object-name')).to_have_value(edited)
+        expect(page.locator('#objects')).to_have_value(selected_object)
+        page.locator('#workspace-model-view').click()
+        expect(page.locator('.bim-opening-list li')).to_have_count(1, timeout=60000)
+        expect(page.locator('.bim-opening-list')).to_contain_text('0.80 × 2.00 m')
+        expect(page.locator('#drawing-review')).to_have_attribute('data-state','stale')
+        expect(page.locator('#drawing-download-pdf')).to_be_disabled()
+    page.locator('#workspace-map-view').click()
+    expect(page.locator('#object-name')).to_have_value(edited)
+    expect(page.locator('#map-reviewed')).not_to_be_checked()
 
     page.locator('#workspace-step-save').click()
     page.locator('[data-action=clear]').click()
@@ -397,6 +428,8 @@ def check_browser(pw, name, origin, worker_url, token, photos, release):
             'selectedResultControlsSource':True, 'derivedPointsReturnToOriginal':True,
             'explicitEstimatedPreviewPreservesUntouchedMap':True,
             'openingDraftRetainedForExactJob':True, 'otherJobDoesNotBorrowOpeningDraft':True,
+            'sameCaptureTabClosesModel':True, 'sameEvidenceTabClosesModel':True,
+            'sameTabNavigationPreservesEditAndOpeningDraft':True,
             'localSessionCleared':True,
             'originalPdfSha256':hashlib.sha256(original_pdf).hexdigest(),
             'secondPdfSha256':hashlib.sha256(new_pdf).hexdigest(),
