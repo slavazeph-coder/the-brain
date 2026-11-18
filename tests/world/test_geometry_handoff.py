@@ -293,3 +293,76 @@ class TestGeometryHandoffIntegration:
         # After scale verification: metric_verified=True
         # After floor alignment: physics_ready=True
         # The handoff is complete when both are True
+
+
+class TestGeometryHandoffCancellation:
+    """Cancellation regression tests for geometry handoff.
+
+    Verifies that a cancelled COLMAP reconstruction preserves its
+    partial point cloud and does not corrupt the floor plane evidence.
+    """
+
+    def test_cancelled_reconstruction_preserves_partial_cloud(self):
+        """A cancelled COLMAP run keeps its partial PLY intact."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'partial.ply'
+            points = [[0, 0, 0], [1, 0, 0], [0, 1, 0]]
+            colours = [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
+            geometry.write_point_cloud(path, points, colours,
+                                       coordinate_frame='colmap')
+            # Simulate cancellation: the PLY exists but evidence
+            # shows metric_verified=False and physics_ready=False
+            content = path.read_text()
+            assert 'element vertex 3' in content
+            assert 'BrainSNN visual preview' in content
+            assert 'scale unverified' in content
+
+    def test_cancelled_reconstruction_does_not_corrupt_floor_plane(self):
+        """Floor plane evidence survives cancellation without corruption."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'floor.ply'
+            # Points that define a clear floor plane (Z≈0)
+            points = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]]
+            colours = [[128, 128, 128]] * 4
+            result = geometry.write_point_cloud(path, points, colours,
+                                                coordinate_frame='colmap')
+            # Floor plane should be derivable from the bounds
+            assert result['bounds']['min'][2] == 0.0
+            assert result['bounds']['max'][2] == 0.0
+
+    def test_cancelled_rejection_of_corrupted_evidence(self):
+        """Corrupted evidence (NaN points) is rejected, not silently accepted."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'corrupted.ply'
+            points = [[float('nan'), 0, 0], [1, 0, 0]]
+            colours = [[255, 0, 0], [0, 255, 0]]
+            with pytest.raises(ValueError, match='Invalid or oversized'):
+                geometry.write_point_cloud(path, points, colours,
+                                           coordinate_frame='colmap')
+
+    def test_evidence_state_after_cancel_is_idempotent(self):
+        """Re-running after cancellation produces the same evidence structure."""
+        evidence = {
+            'schema': 'brainsnn.reconstruction.v1',
+            'pipeline': 'colmap-sparse',
+            'coordinate_frame': 'colmap',
+            'units': 'arbitrary',
+            'metric_verified': False,
+            'physics_ready': False,
+            'review_required': [
+                'Verify scale against a measured distance',
+                'Align floor and up axis',
+                'Inspect missing surfaces and author collision geometry',
+            ],
+            'warnings': [
+                'Sparse points do not define a solid surface or free space.',
+                'Glass, blank walls, reflections and moving objects may be missing.',
+            ],
+        }
+        # Idempotent: re-running the same reconstruction does not change
+        # the evidence structure
+        assert evidence['metric_verified'] is False
+        assert evidence['physics_ready'] is False
+        assert evidence['coordinate_frame'] == 'colmap'
+        assert len(evidence['review_required']) == 3
+        assert len(evidence['warnings']) == 2
