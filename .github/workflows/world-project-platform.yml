@@ -157,10 +157,13 @@ jobs:
             -v "$WORLD_STORAGE_FIXTURE/certs:/certs" \
             brainsnn-project-test-storage:fixture \
             server /data --config-dir /data/.minio --certs-dir /certs
-          curl --fail --silent --show-error --cacert "$WORLD_STORAGE_FIXTURE/certs/public.crt" \
+          if ! curl --fail --silent --show-error --cacert "$WORLD_STORAGE_FIXTURE/certs/public.crt" \
             --connect-timeout 3 --max-time 10 \
-            --retry 20 --retry-connrefused --retry-delay 1 --retry-max-time 60 \
-            https://127.0.0.1:19000/minio/health/ready
+            --retry 20 --retry-all-errors --retry-connrefused --retry-delay 1 --retry-max-time 60 \
+            https://127.0.0.1:19000/minio/health/ready; then
+            docker logs --tail 80 brainsnn-project-test-storage
+            exit 1
+          fi
       - name: Production S3 adapter, durable resume and SDK streaming against real storage
         env:
           WORLD_PROJECT_TEST_S3_E2E: "1"
