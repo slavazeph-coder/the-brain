@@ -1,0 +1,16 @@
+.open4d-camera-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 1rem;
+  margin-block: 1rem;
+}
+.open4d-camera {
+  display: grid;
+  align-content: start;
+  gap: .55rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.open4d-camera video { width: 100%; max-height: 250px; background: #080b12; }
+.open4d-capture [data-open4dc-options], .open4d-capture [data-open4dc-review] { display: grid; gap: .6rem; margin-block: .8rem; }
+.open4d-capture button { min-height: 44px; }

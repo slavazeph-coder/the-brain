@@ -25,6 +25,7 @@ on:
       - "tests/world/**"
       - "tests/scene_compiler/**"
       - "scripts/world-demo/**"
+      - "scripts/world-open4dgs/**"
       - ".github/workflows/world-builder-checks.yml"
       - ".github/workflows/brainsnn-app-deploy.yml"
   workflow_dispatch:
@@ -166,6 +167,10 @@ jobs:
           WORLD_BROWSERS: chromium,webkit
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/review-browsers
         run: node tests/world/project-review-browser-smoke.mjs
+      - name: Open4DGS playback and two-camera capture extraction
+        run: |
+          python -m pytest tests/world/test_make_playground_preview.py tests/world/test_open4dgs_runner.py -q
+          python tests/world/open4dgs_browser_smoke.py
       # This flow starts its own frontend/worker and uses no earlier browser outputs.
       # Check retained-source review before the longer reconstruction regressions.
       - name: Unified source, model, drawings and retained job browser flow

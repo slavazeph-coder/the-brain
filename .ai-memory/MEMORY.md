@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Open4DGS moving scenes](world-open4dgs-2026-11-19.md) — native export playback, local camera timing and the operator-run reconstruction workflow.
+
 → [One World Builder experience](world-unified-experience-2026-11-17.md) — owner’s v23 demo flow in one workspace; retained source/job results, native drawings, safe view switching and separate website/worker rollout.
 
 → [Robot-first World Builder playground](world-robot-first-playground-2026-11-18.md) — Arena-style choose a robot / build its world / let it try above the map, robot body on the map, camera buttons, tap-to-choose, undo/redo, More contrast; larger type on the playground only.

@@ -9,7 +9,10 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-review-playground-v35/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-open4dgs-v36/,'Changes to precache need a new cache version');
+  for (const name of ['open4dgs-tool.mjs', 'open4dgs-data.mjs', 'open4dgs-player.mjs', 'open4dgs-trigs.mjs', 'open4d-capture.mjs', 'open4d-capture.css', 'examples/open4dgs/export_meta.json']) {
+    assert.ok(sw.includes(`'./${name}'`), `${name} is part of the moving scene shell`);
+  }
   for(const name of ['project-review.mjs','project-review-ui.mjs','project-review.css','review-page.mjs','review.html'])assert.ok(sw.includes(`'./${name}'`),`${name} is part of the project review shell`);
   for(const name of ['facility-review.mjs','facility-review-ui.mjs','facility-review.css','playground-help.mjs','playground-icons.mjs','playground-controls.mjs','robot-setup.mjs','world-layer-tools.mjs','world-layer-tools.css','layer-preview.mjs','layer-job-client.mjs','biomechanics-preview.mjs','biomechanics-tool.mjs', 'camera-calibration-tool.mjs', 'camera-calibration-data.mjs', 'examples/camera-calibration/camera-setup.toml', 'examples/camera-calibration/example-walk.trc','examples/biomechanics/authored-pendulum.osim','examples/biomechanics/authored-motion.mot','examples/biomechanics/kinematics-options.json'])assert.ok(sw.includes(`'./${name}'`),`${name} is part of the linked review shell`);
 });
