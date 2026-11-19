@@ -77,6 +77,8 @@ if (!apiKey || !baseUrl) {
       project_id: project.id, version: project.version,
       source_sha256: source.sha256, retained_source_bytes: retainedBytes.byteLength,
       readiness: project.readiness, export_schema: exported.schema,
+      export_includes_all_source_bytes: exported.includes_all_source_bytes,
+      export_external_source_count: exported.external_source_count,
       physical_validated: exported.physical_validated,
     }, null, 2));
     console.log('Example complete. The records remain in this workspace as an explicitly labelled software fixture.');

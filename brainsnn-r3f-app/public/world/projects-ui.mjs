@@ -3,8 +3,10 @@ import {createProjectsClient, createIdempotencyKey} from './projects-client.mjs'
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const MAX_SOURCE_BYTES = 512 * 1024;
+const MAX_BUFFERED_DOWNLOAD_BYTES = 16 * 1024 * 1024;
 const sections = ['overview','sources','revisions','evidence','changes','trials','activity'];
-const state = {client:null,me:null,service:null,projects:[],project:null,section:'overview',busy:false,generation:0,requests:new Set(),retry:null,handoff:null};
+const state = {client:null,me:null,service:null,projects:[],project:null,section:'overview',busy:false,generation:0,requests:new Set(),retry:null,handoff:null,uploads:[],uploadsStatus:'idle',uploadsError:'',transfer:null,download:null};
+let transferFrame=null;
 const actor = () => state.me?.actor || {};
 const hasScope = scope => Array.isArray(state.me?.scopes) && state.me.scopes.includes(scope);
 const canWrite = () => ['editor','reviewer','admin'].includes(actor().role) && hasScope('project:write');
@@ -21,6 +23,15 @@ const revisionName = id => list(state.project?.revisions).find(item => item.id =
 const sourceName = id => list(state.project?.sources).find(item => item.id === id)?.name || id || 'Not recorded';
 const refNames = (ids,fn) => list(ids).map(fn).join(', ') || 'None';
 const rawDetails = (name,value) => `<details><summary>${esc(name)}</summary><pre>${esc(JSON.stringify(value,null,2))}</pre></details>`;
+const objectStorageAvailable = () => state.service?.object_storage?.configured === true;
+const objectSourceLimit = () => Number(state.service?.limits?.objectSourceBytes) || 2 * 1024 ** 3;
+const bytesLabel = value => {
+  const bytes=Number(value);if(!Number.isFinite(bytes)||bytes<0)return 'Unknown size';
+  for(const [size,unit] of [[1024**3,'GiB'],[1024**2,'MiB'],[1024,'KiB']])if(bytes>=size)return `${(bytes/size).toLocaleString(undefined,{maximumFractionDigits:2})} ${unit}`;
+  return `${bytes.toLocaleString()} byte${bytes===1?'':'s'}`;
+};
+const uploadLabel = upload => ({uploading:'Upload in progress',verifying:'Verifying stored bytes',ready:'Ready to retain',retained:'Retained',aborted:'Cancelled',expired:'Expired',failed:'Upload needs attention'}[upload.status] || label(upload.status));
+const connectionCurrent = context => context.generation === state.generation && context.client === state.client;
 
 function notify(message,tone='') {
   $('projects-notice').textContent = message;
@@ -40,6 +51,8 @@ function setBusy(value) {
   document.querySelectorAll('[data-review-fields]').forEach(node => {node.disabled=value || !canReview();});
   document.querySelectorAll('[data-decision-fields]').forEach(node => {node.disabled=value;});
   document.querySelectorAll('[data-project-id],[data-download-source]').forEach(node => {node.disabled=value;});
+  document.querySelectorAll('[data-upload-action]').forEach(node => {node.disabled=value || !canWrite();});
+  document.querySelectorAll('[data-refresh-uploads]').forEach(node => {node.disabled=value;});
   $('retry-request').disabled=value;
 }
 function startRequest() {
@@ -98,11 +111,12 @@ function renderList() {
 }
 function acceptProject(project) {
   if(!project?.id) throw Error('The service returned an incomplete project record. Reload before continuing.');
+  if(state.project?.id!==project.id){state.uploads=[];state.uploadsStatus='idle';state.uploadsError='';state.transfer=null;renderTransfer();}
   state.project=project;
   const index=state.projects.findIndex(item => item.id === project.id);
   if(index>=0) state.projects[index]=project; else state.projects.unshift(project);
   history.replaceState(null,'',`#project=${encodeURIComponent(project.id)}`);
-  renderList();renderProject();
+  renderList();renderProject();renderTransfer();
 }
 function renderProject() {
   const p=state.project;
@@ -126,13 +140,44 @@ function checkboxes(name,items,display,selected=[]) {
   return items.length ? `<div class="projects-choice-list">${items.map(item=>`<label><input type="checkbox" name="${esc(name)}" value="${esc(item.id)}"${selected.includes(item.id)?' checked':''}><span>${esc(display(item))}</span></label>`).join('')}</div>` : '<p class="projects-muted">No matching records yet.</p>';
 }
 function renderOverview() {
-  return title('From capture to a decision','Start with source evidence, bind it to a site revision, and review each proposed change before recording what happened in the field.')+`<div class="projects-overview-steps"><button data-section="sources"><span>01</span><span><strong>Retain the source</strong><small>Save exact files up to 512 KiB each, including a bounded map, photo or measurement record.</small></span></button><button data-section="revisions"><span>02</span><span><strong>Describe the site and task</strong><small>Keep as-is and proposed states separate. Bind the robot, task and source files to an immutable revision.</small></span></button><button data-section="evidence"><span>03</span><span><strong>Review the evidence</strong><small>Distinguish measured values, observations and inferences, with a precise location in their source.</small></span></button><button data-section="changes"><span>04</span><span><strong>Decide and compare</strong><small>A separate reviewer decides on changes. Record simulations and physical trials as different kinds of evidence.</small></span></button></div>`;
+  return title('From capture to a decision','Start with source evidence, bind it to a site revision, and review each proposed change before recording what happened in the field.')+`<div class="projects-overview-steps"><button data-section="sources"><span>01</span><span><strong>Retain the source</strong><small>Save exact source files, from small measurement records to resumable captures when workspace object storage is available.</small></span></button><button data-section="revisions"><span>02</span><span><strong>Describe the site and task</strong><small>Keep as-is and proposed states separate. Bind the robot, task and source files to an immutable revision.</small></span></button><button data-section="evidence"><span>03</span><span><strong>Review the evidence</strong><small>Distinguish measured values, observations and inferences, with a precise location in their source.</small></span></button><button data-section="changes"><span>04</span><span><strong>Decide and compare</strong><small>A separate reviewer decides on changes. Record simulations and physical trials as different kinds of evidence.</small></span></button></div>`;
+}
+function renderUploadRows() {
+  if(state.uploadsStatus==='loading')return '<p class="projects-muted" role="status">Loading recoverable uploads…</p>';
+  if(state.uploadsStatus==='error')return `<p class="projects-upload-warning" role="status">${esc(state.uploadsError || 'Upload records could not be loaded.')} Refresh uploads to check the server before starting a replacement.</p>`;
+  if(!state.uploads.length)return '<p class="projects-muted">No unfinished uploads for this project.</p>';
+  return state.uploads.map(upload=>{
+    const full=upload.uploaded_bytes===upload.bytes,canFinish=['uploading','ready'].includes(upload.status)&&full;
+    return `<article class="projects-record projects-upload-record" data-upload-id="${esc(upload.id)}"><div class="projects-record-header"><h4>${esc(upload.name)}</h4>${badge(uploadLabel(upload),upload.status==='failed'?'bad':'warning')}</div><label class="projects-progress-label">${esc(bytesLabel(upload.uploaded_bytes))} of ${esc(bytesLabel(upload.bytes))} accepted<progress max="${esc(upload.bytes)}" value="${esc(upload.uploaded_bytes)}"></progress></label><dl><dt>Expires</dt><dd>${esc(date(upload.expires_at))}</dd><dt>Expected SHA-256</dt><dd><code>${esc(upload.sha256)}</code></dd></dl><p>Upload parts are temporary until the complete file is verified and retained. An unfinished upload cannot be used as evidence.</p>${canFinish?`<button type="button" class="primary" data-upload-action data-complete-upload="${esc(upload.id)}">Retain completed file</button>`:upload.status==='uploading'?`<form data-resume-upload="${esc(upload.id)}">${writeFieldset('<label>Reselect the original file<input name="resume_file" type="file" required></label><p>Its full SHA-256 must match before any missing parts are sent.</p><button type="submit">Resume with this file</button>')}</form>`:upload.status==='verifying'?'<p>Server verification is in progress. Refresh uploads to check its result.</p>':'<p>Review the upload status before trying again. Cancel this upload to discard its temporary parts.</p>'}<div class="projects-actions">${upload.status!=='verifying'?`<button type="button" class="small" data-upload-action data-cancel-upload="${esc(upload.id)}">Cancel upload</button>`:''}</div></article>`;
+  }).join('');
+}
+function renderUploads() {
+  const target=$('source-upload-list');if(target)target.innerHTML=renderUploadRows();setBusy(state.busy);
+}
+function renderTransfer() {
+  const item=state.download || state.transfer,target=$('projects-transfer');
+  target.hidden=!item;if(!item){target.replaceChildren();return;}
+  const downloading=item===state.download;
+  const names={hashing:'Checking the complete file',uploading:'Uploading source parts',verifying:'Verifying and retaining the source',paused:'Upload paused',error:'Upload interrupted',conflict:'Upload needs the latest project version',downloading:'Downloading retained bytes'};
+  const heading=names[item.phase] || 'Source transfer';
+  const completed=Math.max(0,Math.min(Number(item.completedBytes)||0,item.totalBytes || 0));
+  const progress=['hashing','uploading','downloading'].includes(item.phase);
+  const copy=item.phase==='hashing'?'Reading the file in bounded chunks to verify its full SHA-256.':item.phase==='uploading'?'Progress counts parts acknowledged by the server.':item.phase==='verifying'?'The server is checking the complete file before adding it to retained sources.':downloading?'Saving authenticated bytes and checking their SHA-256.':item.phase==='conflict'?(item.uploadId?'Reload the project, review its latest version, then retain the completed upload below.':'Reload the project, review its latest version, then resume the selected file to create a fresh upload request.'):'Reconnect and reselect this exact file after a reload. Upload records and accepted parts are held by the server until expiry.';
+  const failedUpload=state.uploads.find(upload=>upload.id===item.uploadId)?.status==='failed';
+  const controls=item.running?`<button type="button" data-transfer-action="pause">${downloading?'Cancel download':item.phase==='hashing'?'Stop file check':'Pause upload'}</button>${!downloading&&item.uploadId&&item.phase!=='verifying'?'<button type="button" data-transfer-action="cancel">Cancel upload</button>':''}`:!downloading?`${item.file&&!failedUpload&&(!item.uploadId||item.phase!=='conflict')?'<button type="button" data-transfer-action="resume">Resume selected file</button>':''}${item.uploadId?`<button type="button" data-upload-action data-cancel-upload="${esc(item.uploadId)}">Cancel upload</button>`:''}<button type="button" data-transfer-action="dismiss">Hide transfer</button>`:'';
+  target.innerHTML=`<div class="projects-record-header"><div><h2 id="transfer-heading">${esc(heading)}</h2><p>${esc(item.name)}</p></div>${badge(downloading?'Authenticated download':'Resumable source upload')}</div><p class="projects-transfer-phase" role="status" aria-live="polite">${esc(copy)}</p>${progress?`<label class="projects-progress-label">${esc(bytesLabel(completed))} of ${esc(bytesLabel(item.totalBytes))}${item.phase==='uploading'?' accepted':''}<progress max="${esc(item.totalBytes||1)}" value="${esc(completed)}"></progress></label>`:item.running?'<progress aria-label="Server verification in progress"></progress>':''}<div class="projects-actions">${controls}</div>`;
+  setBusy(state.busy);
+}
+function scheduleTransferRender() {
+  if(transferFrame!==null)return;
+  transferFrame=requestAnimationFrame(()=>{transferFrame=null;renderTransfer();});
 }
 function renderSources() {
   const p=state.project;
   return title('Retained sources','Each upload retains the exact bytes and a server-generated SHA-256. Retention identifies the file; it does not verify measurements or claims inside it.')+
-    `<form id="source-form" class="projects-form">${writeFieldset('<h3>Add a source file</h3><label>Choose a file · maximum 512 KiB<input name="source_file" type="file" required></label><p>Use a small image, map, scene manifest, measurement record or trial excerpt. Large videos and full point clouds must be kept in your existing capture workflow.</p><button class="primary" type="submit">Upload and retain exact bytes</button>')}</form>`+
-    (list(p.sources).length ? `<div class="projects-records">${p.sources.map(source=>`<article class="projects-record"><div class="projects-record-header"><h4>${esc(source.name)}</h4>${badge('Uploaded bytes retained')}</div><dl><dt>File</dt><dd>${esc(source.media_type)} · ${esc(source.bytes)} bytes</dd><dt>SHA-256</dt><dd><code>${esc(source.sha256)}</code></dd><dt>Retained</dt><dd>${esc(date(source.created_at))}</dd></dl><button type="button" class="small" data-download-source="${esc(source.id)}">Download original bytes</button></article>`).join('')}</div>` : empty('No retained source files','Upload your first source, or send a map snapshot from World Builder.'));
+    `<form id="source-form" class="projects-form">${writeFieldset(`<h3>Add a source file</h3><label>Choose a source file<input name="source_file" type="file" required aria-describedby="source-storage-note"></label><p id="source-storage-note">Files up to ${esc(bytesLabel(MAX_SOURCE_BYTES))} are retained inline in the project database. ${objectStorageAvailable()?`Larger captures up to ${esc(bytesLabel(objectSourceLimit()))} use resumable ${esc(bytesLabel(state.service.object_storage.part_bytes))} parts in workspace object storage. Workspace quotas also apply. The complete file is checked before it becomes a retained source.`:'Large-file object storage is not configured on this deployment. Choose a file within the inline limit.'}</p><p id="source-file-detail" class="projects-muted" role="status"></p><button class="primary" type="submit">Upload and retain exact bytes</button>`)}</form>`+
+    (objectStorageAvailable()?`<section class="projects-upload-queue" aria-labelledby="source-uploads-heading"><div class="projects-section-heading"><h3 id="source-uploads-heading">Recoverable uploads</h3><button type="button" class="small" data-refresh-uploads>Refresh uploads</button></div><p class="projects-muted">After a reload, reconnect and reselect the unchanged file to continue. Credentials and file contents are not saved in browser storage.</p><div id="source-upload-list" class="projects-records">${renderUploadRows()}</div></section>`:'')+
+    (list(p.sources).length ? `<div class="projects-records">${p.sources.map(source=>`<article class="projects-record" data-source-id="${esc(source.id)}"><div class="projects-record-header"><h4>${esc(source.name)}</h4>${badge('Exact bytes retained')}</div><dl><dt>File</dt><dd>${esc(source.media_type)} · ${esc(bytesLabel(source.bytes))} (${esc(source.bytes)} bytes)</dd><dt>Storage</dt><dd>${source.storage_kind==='object'?'Workspace object storage · retained source':'Inline project database · retained source'}</dd><dt>SHA-256</dt><dd><code>${esc(source.sha256)}</code></dd><dt>Retained</dt><dd>${esc(date(source.created_at))}</dd></dl><button type="button" class="small" data-download-source="${esc(source.id)}">Download original bytes</button></article>`).join('')}</div>` : empty('No retained source files','Upload your first source, or send a map snapshot from World Builder.'));
 }
 function renderRevisions() {
   const p=state.project;
@@ -193,6 +238,113 @@ function renderPanel() {
   setBusy(state.busy);
 }
 
+async function loadSourceUploads(context,projectId) {
+  if(!objectStorageAvailable()){state.uploads=[];state.uploadsStatus='idle';return true;}
+  if(!connectionCurrent(context)||state.project?.id!==projectId)return false;
+  state.uploadsStatus='loading';state.uploadsError='';renderUploads();
+  try {
+    const result=await context.client.listSourceUploads(projectId,{signal:context.controller.signal});
+    if(!isCurrent(context)||state.project?.id!==projectId)return false;
+    state.uploads=list(result.uploads);state.uploadsStatus='ready';renderUploads();return true;
+  } catch(error) {
+    if(isCurrent(context)&&state.project?.id===projectId){state.uploadsStatus='error';state.uploadsError=error?.message || 'Upload records could not be reached.';renderUploads();}
+    return false;
+  }
+}
+async function refreshUploads(announce=true) {
+  if(!state.client||!state.project||state.busy)return;
+  const context=startRequest();setBusy(true);
+  try{if(await loadSourceUploads(context,state.project.id)&&announce&&isCurrent(context))notify('Upload records refreshed from the server.');}
+  finally{endRequest(context);if(connectionCurrent(context))setBusy(false);}
+}
+function updateUpload(upload) {
+  if(!upload?.id)return;
+  const index=state.uploads.findIndex(item=>item.id===upload.id);
+  if(['retained','aborted','expired'].includes(upload.status)){if(index>=0)state.uploads.splice(index,1);}
+  else if(index>=0)state.uploads[index]=upload;else state.uploads.unshift(upload);
+  state.uploadsStatus='ready';renderUploads();
+}
+function newTransfer(file,uploadId=null) {
+  return {projectId:state.project.id,generation:state.generation,file,name:file?.name || sourceName(uploadId),uploadId,createKey:createIdempotencyKey(),expectedVersion:state.project.version,completion:null,phase:'hashing',completedBytes:0,totalBytes:file?.size || 0,running:false,context:null,cancelAfterPause:false};
+}
+async function startSourceUpload(file,uploadId=null) {
+  if(!file?.size)throw Error('Choose a nonempty source file.');
+  if(!objectStorageAvailable())throw Error(`Large-file storage is not configured. Choose a source within ${bytesLabel(MAX_SOURCE_BYTES)}.`);
+  if(file.size>objectSourceLimit())throw Error(`This file exceeds the advertised ${bytesLabel(objectSourceLimit())} source limit.`);
+  if(file.name.length>160)throw Error('Use a source filename of at most 160 characters.');
+  state.transfer=newTransfer(file,uploadId);await runSourceTransfer(state.transfer);
+}
+async function retainSourceUpload(uploadId) {
+  if(!state.client||!state.project||state.busy||!canWrite())return;
+  const upload=state.uploads.find(item=>item.id===uploadId);
+  if(!upload)throw Error('Refresh uploads before retaining this file.');
+  const current=state.transfer?.uploadId===uploadId?state.transfer:null;
+  const transfer=current || {...newTransfer(null,uploadId),name:upload.name,totalBytes:upload.bytes,completedBytes:upload.uploaded_bytes};
+  state.transfer=transfer;await runSourceTransfer(transfer,true);
+}
+async function runSourceTransfer(transfer,finishOnly=false) {
+  if(state.busy||!state.client||transfer.generation!==state.generation||transfer.projectId!==state.project?.id||!canWrite())return;
+  if(transfer.phase==='conflict'&&transfer.conflictVersion===state.project.version){notify('Reload the project and review the latest record before retrying this upload.','warning');return;}
+  if(transfer.restartCreation){transfer.expectedVersion=state.project.version;transfer.createKey=createIdempotencyKey();transfer.restartCreation=false;}
+  const context=startRequest();transfer.context=context;transfer.running=true;transfer.cancelAfterPause=false;
+  transfer.phase=finishOnly||transfer.completion?'verifying':'hashing';transfer.completedBytes=0;
+  clearRetry();setBusy(true);renderTransfer();notify('Source transfer started. Keep this page open, or pause and resume the exact file later.');
+  try {
+    if(!finishOnly&&!transfer.completion){
+      const result=await context.client.uploadSourceFile(transfer.projectId,transfer.file,{
+        uploadId:transfer.uploadId || undefined,expectedVersion:transfer.expectedVersion,createIdempotencyKey:transfer.createKey,
+        signal:context.controller.signal,
+        onProgress:progress=>{if(!isCurrent(context))return;transfer.phase=progress.phase;transfer.completedBytes=progress.completedBytes;transfer.totalBytes=progress.totalBytes;scheduleTransferRender();},
+        onUpload:upload=>{if(!isCurrent(context))return;transfer.uploadId=upload.id;updateUpload(upload);},
+      });
+      if(!isCurrent(context))return;
+      transfer.uploadId=result.upload.id;updateUpload(result.upload);
+    }
+    if(!transfer.uploadId)throw Error('No server upload ID was returned. Refresh uploads before retrying.');
+    transfer.phase='verifying';transfer.completedBytes=transfer.totalBytes;renderTransfer();
+    // Keep the exact completion request after an ambiguous response. A version
+    // conflict clears it so a reviewed reload can prepare a new explicit request.
+    transfer.completion ||= {expectedVersion:state.project.version,idempotencyKey:createIdempotencyKey()};
+    const result=await context.client.completeSourceUpload(transfer.projectId,transfer.uploadId,{expected_version:transfer.completion.expectedVersion},{idempotencyKey:transfer.completion.idempotencyKey,signal:context.controller.signal});
+    if(!isCurrent(context))return;
+    acceptProject(result.project);state.transfer=null;renderTransfer();
+    await loadSourceUploads(context,transfer.projectId);
+    if(isCurrent(context))notify('Exact source bytes retained in workspace object storage. The complete SHA-256 was verified.');
+  } catch(error) {
+    if(!connectionCurrent(context)||state.project?.id!==transfer.projectId)return;
+    transfer.uploadId ||= error?.uploadId || null;
+    if(context.controller.signal.aborted){transfer.phase='paused';notify('Upload paused. Accepted parts remain on the server until expiry. Refresh uploads before resuming; the last request may have completed.','warning');}
+    else if(error?.code==='stale-version'){transfer.conflictVersion=transfer.completion?.expectedVersion ?? transfer.expectedVersion;transfer.completion=null;transfer.phase='conflict';transfer.restartCreation=!transfer.uploadId;showError(error);}
+    else {transfer.phase='error';showError(error);}
+  } finally {
+    endRequest(context);
+    if(connectionCurrent(context)){
+      transfer.running=false;transfer.context=null;setBusy(false);renderTransfer();
+      if(transfer.cancelAfterPause&&transfer.uploadId)await cancelSourceUpload(transfer.uploadId);
+      else if(state.project?.id===transfer.projectId&&state.transfer)await refreshUploads(false);
+    }
+  }
+}
+async function cancelSourceUpload(uploadId) {
+  if(!state.client||!state.project||!canWrite())return;
+  if(state.busy){
+    if(state.transfer?.uploadId===uploadId&&state.transfer.running){state.transfer.cancelAfterPause=true;state.transfer.context?.controller.abort();}
+    return;
+  }
+  const context=startRequest(),projectId=state.project.id;
+  const upload=state.uploads.find(item=>item.id===uploadId);
+  const idempotencyKey=upload?.cancelKey || createIdempotencyKey();if(upload)upload.cancelKey=idempotencyKey;
+  setBusy(true);notify('Cancelling unfinished upload…');
+  try{
+    await context.client.abortSourceUpload(projectId,uploadId,{}, {idempotencyKey,signal:context.controller.signal});
+    if(!isCurrent(context))return;
+    if(state.transfer?.uploadId===uploadId){state.transfer=null;renderTransfer();}
+    await loadSourceUploads(context,projectId);
+    if(isCurrent(context))notify('Upload cancelled. Its temporary parts are no longer a pending source.');
+  } catch(error){if(isCurrent(context))showError(error);}
+  finally{endRequest(context);if(connectionCurrent(context))setBusy(false);}
+}
+
 async function connect(event) {
   event.preventDefault();if(state.busy)return;
   const apiKey=$('project-api-key').value.trim();$('project-api-key').value='';
@@ -206,7 +358,7 @@ async function connect(event) {
     if(!isCurrent(context))return;
     state.me=me;state.projects=list(response.projects);renderConnection();renderList();
     const id=requestedProject();
-    if(id){const result=await context.client.getProject(id,{signal:context.controller.signal});if(!isCurrent(context))return;acceptProject(result.project);}
+    if(id){const result=await context.client.getProject(id,{signal:context.controller.signal});if(!isCurrent(context))return;acceptProject(result.project);await loadSourceUploads(context,id);if(!isCurrent(context))return;}
     notify(`Connected as ${actor().name || actor().role}. ${state.projects.length} saved project${state.projects.length===1?'':'s'} available.`);
   } catch(error) {
     if(!isCurrent(context))return;
@@ -217,7 +369,8 @@ async function connect(event) {
 function disconnect(announce=true) {
   state.generation++;for(const controller of state.requests)controller.abort();state.requests.clear();
   state.client?.clearApiKey();state.client=null;state.me=null;state.projects=[];state.project=null;state.busy=false;clearRetry();$('project-api-key').value='';
-  renderConnection();renderList();renderProject();
+  state.uploads=[];state.uploadsStatus='idle';state.uploadsError='';state.transfer=null;state.download=null;
+  renderConnection();renderList();renderProject();renderTransfer();
   if(announce)notify('Disconnected. The API key and loaded project data have been cleared from this page. Saved records remain in your workspace.');
 }
 async function refreshProjects() {
@@ -229,7 +382,7 @@ async function refreshProjects() {
 async function openProject(id) {
   if(!state.client||state.busy)return;
   const context=startRequest();setBusy(true);notify('Loading saved project…');
-  try{const result=await context.client.getProject(id,{signal:context.controller.signal});if(isCurrent(context)){acceptProject(result.project);clearRetry();notify('Latest project record loaded.');}}
+  try{const result=await context.client.getProject(id,{signal:context.controller.signal});if(isCurrent(context)){acceptProject(result.project);clearRetry();await loadSourceUploads(context,id);if(isCurrent(context))notify('Latest project record loaded.');}}
   catch(error){if(isCurrent(context))showError(error);}finally{endRequest(context);if(isCurrent(context))setBusy(false);}
 }
 
@@ -259,7 +412,7 @@ function toBase64(bytes) {let binary='';for(let offset=0;offset<bytes.length;off
 async function handleSubmit(event) {
   const form=event.target;
   if(form.id==='connect-form')return;
-  const handled=['create-project-form','source-form','revision-form','evidence-form','change-form','trial-form'].includes(form.id)||form.dataset.evidenceReview||form.dataset.changeDecision;
+  const handled=['create-project-form','source-form','revision-form','evidence-form','change-form','trial-form'].includes(form.id)||form.dataset.evidenceReview||form.dataset.changeDecision||form.dataset.resumeUpload;
   if(!handled)return;event.preventDefault();if(state.busy)return;
   const submitGeneration=state.generation;
   const data=new FormData(form);
@@ -267,10 +420,11 @@ async function handleSubmit(event) {
     const permitted=form.dataset.evidenceReview?canReview():form.dataset.changeDecision?(str(data,'decision')==='implemented'?canWrite():canReview()):canWrite();
     if(!state.client||!permitted)throw Error('This credential does not have the scope required for this action.');
     if(form.id==='create-project-form') {await mutate('createProject',[{title:str(data,'title'),description:str(data,'description')}],'Project created.',()=>{form.reset();$('create-project-details').open=false;});return;}
+    if(form.dataset.resumeUpload){await startSourceUpload(data.get('resume_file'),form.dataset.resumeUpload);return;}
     const projectId=state.project?.id,body=baseBody();
     if(form.id==='source-form') {
       const file=data.get('source_file');if(!file?.size)throw Error('Choose a nonempty source file.');
-      if(file.size>MAX_SOURCE_BYTES)throw Error('This source exceeds 512 KiB. Retain a smaller exact file or excerpt; full videos stay in your capture workflow.');
+      if(file.size>MAX_SOURCE_BYTES){await startSourceUpload(file);return;}
       const generation=state.generation;setBusy(true);const bytes=new Uint8Array(await file.arrayBuffer());
       if(generation!==state.generation)return;setBusy(false);
       await mutate('addSource',[projectId,{...body,name:file.name,media_type:file.type||'application/octet-stream',data_base64:toBase64(bytes)}],'Exact source bytes retained.');
@@ -308,11 +462,36 @@ function download(name,bytes,type='application/json') {
 }
 async function downloadSource(sourceId) {
   if(!state.client||!state.project||state.busy)return;
-  const context=startRequest();setBusy(true);
-  try {const response=await context.client.getSource(state.project.id,sourceId,{signal:context.controller.signal});if(!isCurrent(context))return;
-    if(typeof response.data_base64!=='string')throw Error('Source bytes were not included in the response.');
-    const decoded=atob(response.data_base64),bytes=Uint8Array.from(decoded,char=>char.charCodeAt(0));download(response.source?.name || 'source.bin',bytes,response.source?.media_type||'application/octet-stream');notify('Retained source bytes downloaded.');
-  } catch(error){if(isCurrent(context))showError(error);}finally{endRequest(context);if(isCurrent(context))setBusy(false);}
+  const source=list(state.project.sources).find(item=>item.id===sourceId);
+  if(!source){notify('Reload this project before downloading an unknown source.','warning');return;}
+  const streaming=typeof window.showSaveFilePicker==='function';
+  if(!streaming&&source.bytes>MAX_BUFFERED_DOWNLOAD_BYTES){notify(`This browser cannot stream downloads directly to a file. Use a browser with a save-file picker or the developer SDK for this ${bytesLabel(source.bytes)} source. The in-memory download limit is ${bytesLabel(MAX_BUFFERED_DOWNLOAD_BYTES)}.`,'warning');return;}
+  // Open the picker in the original click activation, before any network await.
+  let handlePromise;
+  try{handlePromise=streaming?window.showSaveFilePicker({suggestedName:source.name}):null;}
+  catch(error){showError(error);return;}
+  const context=startRequest();let sink;
+  state.download={name:source.name,totalBytes:source.bytes,completedBytes:0,phase:'downloading',running:true,context};
+  setBusy(true);renderTransfer();
+  try {
+    if(handlePromise){const handle=await handlePromise;if(!isCurrent(context))return;sink=await handle.createWritable();}
+    else {
+      let chunks=[],received=0;
+      sink={
+        async write(bytes){received+=bytes.byteLength;if(received>MAX_BUFFERED_DOWNLOAD_BYTES)throw Error('Download exceeded the browser buffer limit.');chunks.push(bytes);},
+        async close(){if(!isCurrent(context)){chunks=[];return;}download(source.name,new Blob(chunks,{type:source.media_type||'application/octet-stream'}),source.media_type);chunks=[];},
+        async abort(){chunks=[];},
+      };
+    }
+    if(!isCurrent(context)){await sink.abort();return;}
+    await context.client.downloadSourceToSink(state.project.id,sourceId,{sink,signal:context.controller.signal,maxBytes:streaming?source.bytes:MAX_BUFFERED_DOWNLOAD_BYTES,onProgress:progress=>{
+      if(!isCurrent(context)||!state.download)return;state.download.completedBytes=progress.completedBytes;state.download.totalBytes=progress.totalBytes;scheduleTransferRender();
+    }});
+    if(isCurrent(context))notify('Retained source bytes downloaded. Their full size and SHA-256 were verified.');
+  } catch(error){
+    await sink?.abort?.().catch(()=>{});
+    if(connectionCurrent(context)){if(error?.name==='AbortError'||context.controller.signal.aborted)notify('Download cancelled. The transfer did not report a completed save.');else showError(error);}
+  } finally{endRequest(context);if(connectionCurrent(context)){state.download=null;setBusy(false);renderTransfer();}}
 }
 async function exportProject() {
   if(!state.client||!state.project||state.busy)return;
@@ -361,10 +540,21 @@ document.addEventListener('click',event=>{
   if(button.dataset.projectId)void openProject(button.dataset.projectId);
   if(button.dataset.section&&state.project){state.section=button.dataset.section;renderProject();$('project-tabs').querySelector(`[data-section="${state.section}"]`)?.focus({preventScroll:true});}
   if(button.dataset.downloadSource)void downloadSource(button.dataset.downloadSource);
+  if(button.hasAttribute('data-refresh-uploads'))void refreshUploads();
+  if(button.dataset.cancelUpload)void cancelSourceUpload(button.dataset.cancelUpload);
+  if(button.dataset.completeUpload)void retainSourceUpload(button.dataset.completeUpload).catch(showError);
+  if(button.dataset.transferAction==='pause')(state.download || state.transfer)?.context?.controller.abort();
+  if(button.dataset.transferAction==='cancel'&&state.transfer?.uploadId)void cancelSourceUpload(state.transfer.uploadId);
+  if(button.dataset.transferAction==='resume'&&state.transfer)void runSourceTransfer(state.transfer);
+  if(button.dataset.transferAction==='dismiss'&&!state.busy){state.transfer=null;renderTransfer();}
   if(button.id==='load-usage')void loadUsage();
   if(button.hasAttribute('data-trial-time-now')){const now=new Date();button.form.elements.occurred_at.value=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,-1);}
 });
 document.addEventListener('change',event=>{
+  if(event.target.form?.id==='source-form'&&event.target.name==='source_file'){
+    const file=event.target.files?.[0],target=$('source-file-detail');
+    if(target)target.textContent=file?`${file.name} · ${bytesLabel(file.size)} · ${file.size<=MAX_SOURCE_BYTES?'inline database retention':objectStorageAvailable()?'resumable object storage':'exceeds the available inline storage limit'}`:'';
+  }
   if(event.target.form?.id==='revision-form'&&event.target.name==='kind'){
     const parent=event.target.form.elements.parent_revision_id,proposed=event.target.value==='proposed';
     parent.innerHTML=revisionOptions(proposed?{kind:'as_is'}:{});parent.required=proposed;

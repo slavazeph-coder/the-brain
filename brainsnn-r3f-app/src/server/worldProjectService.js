@@ -1,6 +1,8 @@
 import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { createWorldProjectStore, PROJECT_LIMITS, ROLE_SCOPES, ProjectError, bad, digest, newId, canonical, json, iso } from './worldProjectStore.js';
+import { createWorldProjectObjectStore, WorldProjectObjectStoreError } from './worldProjectObjectStore.js';
+import { createWorldProjectMedia, sourceDownloadPath, validateSourceManifest } from './worldProjectMedia.js';
 
 const ID = /^[a-z][a-z0-9_-]{7,63}$/;
 const KEY = /^bsk_[A-Za-z0-9_-]{43}$/;
@@ -34,8 +36,10 @@ function timestamp(value, now) {
   return new Date(value).toISOString();
 }
 const publicSource = row => ({ id: row.id, name: row.name, media_type: row.media_type, sha256: row.sha256,
-  bytes: Number(row.bytes), created_by: row.created_by, created_at: iso(row.created_at) });
+  bytes: Number(row.bytes), created_by: row.created_by, created_at: iso(row.created_at),
+  storage_kind: row.storage_kind || 'inline', download_path: sourceDownloadPath(row.project_id, row.id) });
 function retainedSource(row) {
+  if (row.storage_kind === 'object') { validateSourceManifest(row); return { ...publicSource(row), data_base64: null }; }
   const bytes=Buffer.from(row.data_base64,'base64');
   if(bytes.length!==Number(row.bytes)||bytes.toString('base64')!==row.data_base64||digest(bytes)!==row.sha256)throw new ProjectError(503,'source-integrity-failed','Retained source bytes failed their integrity check. The source was not exported.');
   return {...publicSource(row),data_base64:row.data_base64};
@@ -67,13 +71,18 @@ async function readBody(req) {
 }
 
 /** Durable project/evidence records. No browser identity, filesystem or memory fallback grants authority. */
-export function createWorldProjectService({ pool: suppliedPool, env = process.env, now = Date.now } = {}) {
+export function createWorldProjectService({ pool: suppliedPool, objectStore: suppliedObjectStore, env = process.env, now = Date.now } = {}) {
   const enabled = env.WORLD_PROJECTS_ENABLED !== '0';
   const databaseUrl = env.WORLD_PROJECT_DATABASE_URL || env.DATABASE_URL;
   const ownPool = !suppliedPool && !!databaseUrl;
   const pool = suppliedPool || (ownPool ? new Pool({ connectionString: databaseUrl, max: 8, connectionTimeoutMillis: 5000, statement_timeout: 15000 }) : null);
   if (ownPool) pool.on('error', () => { console.warn('World project database connection became unavailable.'); });
   const store = pool ? createWorldProjectStore({ pool, now }) : null;
+  let objectStore = suppliedObjectStore, objectConfigurationInvalid = false;
+  if (suppliedObjectStore === undefined) {
+    try { objectStore = createWorldProjectObjectStore({ env }); }
+    catch { objectStore = null; objectConfigurationInvalid = true; console.warn('World project large-source storage configuration is invalid.'); }
+  }
   let ready = null;
   let activeRequests = 0, activeAuthentications = 0;
   async function initialize() {
@@ -117,7 +126,7 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
   }
   async function aggregate(client, principal, projectId) {
     const p = await store.project(client,principal,projectId);
-    const sources = (await client.query('SELECT id,name,media_type,sha256,bytes,created_by,created_at FROM brainsnn_world_sources WHERE tenant_id=$1 AND project_id=$2 ORDER BY created_at,id', [principal.tenant_id,projectId])).rows.map(publicSource);
+    const sources = (await client.query('SELECT id,project_id,name,media_type,sha256,bytes,created_by,created_at,storage_kind FROM brainsnn_world_sources WHERE tenant_id=$1 AND project_id=$2 ORDER BY created_at,id', [principal.tenant_id,projectId])).rows.map(publicSource);
     const records = (await client.query('SELECT kind,payload FROM brainsnn_world_records WHERE tenant_id=$1 AND project_id=$2 ORDER BY created_at,id', [principal.tenant_id,projectId])).rows;
     const events = (await client.query("SELECT payload FROM brainsnn_world_events WHERE tenant_id=$1 AND project_id=$2 ORDER BY (payload->>'project_version')::integer,id", [principal.tenant_id,projectId])).rows.map(row => json(row.payload));
     const result = { ...publicProject(p), sources, revisions: [], evidence: [], changes: [], trials: [], events };
@@ -150,10 +159,10 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
   }
   async function usage(client, principal) {
     const projects = Number((await client.query('SELECT count(*) AS n FROM brainsnn_world_projects WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
-    const source_bytes = Number((await client.query('SELECT COALESCE(sum(bytes),0) AS n FROM brainsnn_world_sources WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
+    const source_bytes = Number((await client.query("SELECT COALESCE(sum(bytes),0) AS n FROM brainsnn_world_sources WHERE tenant_id=$1 AND storage_kind='inline'", [principal.tenant_id])).rows[0].n);
     const records = Number((await client.query('SELECT count(*) AS n FROM brainsnn_world_records WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
     const keys = Number((await client.query('SELECT count(*) AS n FROM brainsnn_world_keys WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
-    return { usage: { projects, source_bytes, records, keys }, limits: principal.limits };
+    return { usage: { projects, source_bytes, records, keys, ...await media.usage(client, principal) }, limits: principal.limits };
   }
   async function runIdempotent(principal, requestKey, path, body, fn) {
     if (typeof requestKey !== 'string' || !/^[A-Za-z0-9:_-]{16,128}$/.test(requestKey)) throw new ProjectError(400,'idempotency-key-required','Send an Idempotency-Key of 16–128 letters, numbers, colons, underscores or hyphens.');
@@ -167,7 +176,8 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
         if (prior.fingerprint !== fingerprint) throw new ProjectError(409,'idempotency-conflict','This Idempotency-Key was already used for another request.');
         const receipt=json(prior.response);
         const replay=receipt.kind==='project-mutation' ? {project:await aggregate(client,principal,receipt.project_id),
-          ...(receipt.resource?{resource:receipt.resource}:{}),applied_version:receipt.applied_version} : receipt;
+          ...(receipt.resource?{resource:receipt.resource}:{}),applied_version:receipt.applied_version}
+          : receipt.kind==='source-upload' ? {upload:await media.getUpload(client,principal,receipt.project_id,receipt.upload_id)} : receipt;
         return { status: prior.status, body: replay, replay: true };
       }
       const ledger = (await client.query('SELECT count(*) AS n,COALESCE(sum(octet_length(response::text)),0) AS bytes FROM brainsnn_world_idempotency WHERE tenant_id=$1', [principal.tenant_id])).rows[0];
@@ -176,6 +186,7 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
       if(result.body.project)result.body.applied_version=result.body.project.version;
       const persisted = result.body.project ? {kind:'project-mutation',project_id:result.body.project.id,
         applied_version:result.body.project.version,...(result.body.resource?{resource:result.body.resource}:{})}
+        : result.body.upload ? {kind:'source-upload',project_id:result.body.upload.project_id,upload_id:result.body.upload.id}
         : result.body.token ? { ...result.body, token: undefined, token_available: false } : result.body;
       if(Number(ledger.bytes)+Buffer.byteLength(JSON.stringify(persisted))>principal.limits.idempotencyBytes)throw new ProjectError(429,'ledger-storage-limit','This workspace reached its retained request receipt storage limit.');
       await client.query('INSERT INTO brainsnn_world_idempotency(tenant_id,actor_id,request_key,fingerprint,status,response,created_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)', [principal.tenant_id,principal.actor_id,requestKey,fingerprint,result.status,JSON.stringify(persisted),store.time()]);
@@ -214,10 +225,12 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
       if (!bytes.length || bytes.length > principal.limits.sourceBytes) throw new ProjectError(413,'source-too-large','Each retained source must contain 1–524288 bytes.');
       const sha256 = digest(bytes);
       if (body.sha256 !== undefined && (typeof body.sha256 !== 'string' || !HASH.test(body.sha256) || body.sha256 !== sha256)) bad('Source bytes do not match the declared SHA-256.','source-hash-mismatch');
-      const current = (await client.query('SELECT count(*) AS count,COALESCE(sum(bytes),0) AS bytes FROM brainsnn_world_sources WHERE tenant_id=$1 AND project_id=$2', [principal.tenant_id,projectId])).rows[0];
-      const total = Number((await client.query('SELECT COALESCE(sum(bytes),0) AS n FROM brainsnn_world_sources WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
-      if (Number(current.count) >= principal.limits.sourcesPerProject || Number(current.bytes)+bytes.length > principal.limits.projectSourceBytes || total+bytes.length > principal.limits.tenantSourceBytes) throw new ProjectError(429,'source-storage-limit','This project or workspace reached its retained source limit.');
-      resource = { id: newId('src'), name, media_type: body.media_type.toLowerCase(), sha256, bytes: bytes.length, ...by };
+      const current = (await client.query("SELECT count(*) AS count,COALESCE(sum(CASE WHEN storage_kind='inline' THEN bytes ELSE 0 END),0) AS bytes FROM brainsnn_world_sources WHERE tenant_id=$1 AND project_id=$2", [principal.tenant_id,projectId])).rows[0];
+      const reserved = Number((await client.query("SELECT count(*) AS n FROM brainsnn_world_source_uploads WHERE tenant_id=$1 AND project_id=$2 AND status IN ('uploading','verifying','ready','failed') AND expires_at>$3", [principal.tenant_id,projectId,store.time()])).rows[0].n);
+      const total = Number((await client.query("SELECT COALESCE(sum(bytes),0) AS n FROM brainsnn_world_sources WHERE tenant_id=$1 AND storage_kind='inline'", [principal.tenant_id])).rows[0].n);
+      if (Number(current.count)+reserved >= principal.limits.sourcesPerProject || Number(current.bytes)+bytes.length > principal.limits.projectSourceBytes || total+bytes.length > principal.limits.tenantSourceBytes) throw new ProjectError(429,'source-storage-limit','This project or workspace reached its retained source limit.');
+      resource = { id: newId('src'), name, media_type: body.media_type.toLowerCase(), sha256, bytes: bytes.length, storage_kind:'inline', ...by };
+      resource.download_path=sourceDownloadPath(projectId,resource.id);
       await client.query('INSERT INTO brainsnn_world_sources(tenant_id,project_id,id,name,media_type,data_base64,sha256,bytes,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [principal.tenant_id,projectId,resource.id,name,resource.media_type,bytes.toString('base64'),sha256,bytes.length,principal.actor_id,resource.created_at]);
       eventType = 'source.retained';
     } else if (action === 'revisions') {
@@ -379,14 +392,15 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
       if(action==='sources'&&resourceId&&!suffix){
         await store.project(pool,principal,projectId);const source=(await pool.query('SELECT * FROM brainsnn_world_sources WHERE tenant_id=$1 AND project_id=$2 AND id=$3',[principal.tenant_id,projectId,resourceId])).rows[0];
         if(!source)throw new ProjectError(404,'not-found','The source was not found.');
-        const checked=retainedSource(source);return {status:200,body:{source:publicSource(source),data_base64:checked.data_base64}};
+        const checked=retainedSource(source);return {status:200,body:{source:publicSource(source),data_base64:checked.data_base64,...(source.storage_kind==='object'?{download_path:checked.download_path}:{})}};
       }
       if(action==='export'&&!resourceId){
         return store.transaction(async client=>{
           await store.project(client,principal,projectId,true);
           const project=await aggregate(client,principal,projectId);
           const sources=(await client.query('SELECT * FROM brainsnn_world_sources WHERE tenant_id=$1 AND project_id=$2 ORDER BY created_at,id',[principal.tenant_id,projectId])).rows.map(retainedSource);
-          const value={schema:'brainsnn.project-export.v1',project,sources,exported_at:store.time(),physical_validated:false};
+          const externalCount=sources.filter(s=>s.storage_kind==='object').length;
+          const value={schema:'brainsnn.project-export.v2',project,sources,includes_all_source_bytes:externalCount===0,external_source_count:externalCount,exported_at:store.time(),physical_validated:false};
           return {status:200,body:{...value,integrity:{algorithm:'sha256',canonicalization:'sorted-object-keys-v1',sha256:digest(canonical(value)),authenticated_signature:false}}};
         });
       }
@@ -400,6 +414,8 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
     }
     throw new ProjectError(404,'not-found','This project endpoint was not found.');
   }
+  const media=createWorldProjectMedia({store,objectStore,now,authenticate,runIdempotent,aggregate,checkCapacity,bump,
+    publicSource,expected,shape,text,identifier,scope});
   async function handle(req,res,next=()=>{}) {
     let path;
     try{const url=new URL(req.url,'http://project.local');path=url.pathname;if(path.startsWith('/api/world/v1'))path=path.slice('/api/world/v1'.length)||'/';if(url.search)throw new ProjectError(400,'unsupported-query','This API does not accept query parameters.');}
@@ -410,24 +426,33 @@ export function createWorldProjectService({ pool: suppliedPool, env = process.en
     try {
     if(path==='/status'&&req.method==='GET'){
       let available=false;try{await initialize();await pool.query('SELECT 1');available=true;}catch{/* unavailable storage never degrades into a memory store */}
-      return send(res,200,{available,service:'world-projects',version:'v1',storage:'postgres',limits:PROJECT_LIMITS,identity:'operator-provisioned-key',physical_validated:false});
+      return send(res,200,{available,service:'world-projects',version:'v1',storage:'postgres',limits:PROJECT_LIMITS,
+        object_storage:{configured:!!objectStore,backend:'s3-chunks',part_bytes:PROJECT_LIMITS.uploadPartBytes,upload_expiry_hours:24,...(objectConfigurationInvalid?{configuration_invalid:true}:{})},identity:'operator-provisioned-key',physical_validated:false});
     }
-      if(!['GET','POST'].includes(req.method))throw new ProjectError(405,'method-not-allowed','Use GET or POST for this API.');
+      if(!['GET','POST','PUT'].includes(req.method))throw new ProjectError(405,'method-not-allowed','Use a documented GET, POST or upload-part PUT endpoint.');
       const principal=await authenticate(req);const body=req.method==='POST'?await readBody(req):undefined;
-      const result=await dispatch(req,path,principal,body);if(result.replay)res.setHeader('Idempotency-Replayed','true');
+      const result=await media.route(req,res,path,principal,body)||await dispatch(req,path,principal,body);
+      if(result.streamed)return;
+      if(result.replay)res.setHeader('Idempotency-Replayed','true');
       return send(res,result.status,result.body);
     }catch(error){return sendError(res,error,requestId);}finally{activeRequests--;}
   }
   function send(res,status,value){if(res.headersSent||res.destroyed)return;res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.end(JSON.stringify(value));}
   function sendError(res,error,requestId){
+    if(res.headersSent){res.destroy();return;}
+    if(res.destroyed)return;
+    for(const header of ['Content-Length','Content-Disposition','ETag','X-Content-SHA256'])res.removeHeader(header);
+    if(error instanceof WorldProjectObjectStoreError)error=new ProjectError(error.status===404?503:error.status,error.code,'Large source storage could not complete this operation. Read the upload status before retrying.');
     const known=error instanceof ProjectError;const status=known?error.status:503;
     res.setHeader('X-Request-Id',requestId);res.setHeader('Cache-Control','no-store');
     if(status===429)res.setHeader('Retry-After','3600');
     if(error?.code==='service-busy')res.setHeader('Retry-After','1');
+    if(error?.code==='transfer-busy')res.setHeader('Retry-After','2');
     send(res,status,{error:{code:known?error.code:'storage-unavailable',message:known?error.message:'Project storage is unavailable. The outcome may be unknown; reload the project or retry with the same Idempotency-Key.',request_id:requestId}});
   }
   return {handle,initialize,authenticate,runIdempotent,
     provisionTenant:async input=>{await initialize();return store.provisionTenant(input);},
     provisionKey:async input=>{await initialize();return store.provisionKey(input);},
-    close:async()=>{if(ownPool&&pool)await pool.end();}, store};
+    cleanupSourceUploads:async options=>{await initialize();return media.cleanup(options);},
+    close:async()=>{if(suppliedObjectStore===undefined)objectStore?.close?.();if(ownPool&&pool)await pool.end();}, store};
 }

@@ -26,8 +26,9 @@ the robot playground and preliminary Project Review from PRs315/318.
   as-is baseline or rejecting relevant evidence makes dependent decisions stale.
 - `/world/projects.html` uses keys only in page memory. World Builder can hand
   over a bounded map snapshot; original capture media is not included. Exact
-  source bytes are limited to512KiB each and16MiB/project in this first release.
-  The full export includes retained bytes; a worker job ID alone is not retention.
+  inline source bytes are limited to512KiB each and16MiB/project. PR321's
+  follow-up adds separately configured private S3 chunk storage for larger files.
+  A worker job ID alone is not retention.
 - `projectProcessingBridge.js` mounts `/api/world/v1/processing` before the
   project router. It maps project tenant IDs to dedicated worker credentials
   configured in `WORLD_PROJECT_WORKER_TOKENS_JSON`, verifies worker owner identity
@@ -54,5 +55,53 @@ the robot playground and preliminary Project Review from PRs315/318.
 Before enabling customer access, provision production database backups and named
 credentials, deploy the worker changes separately, assign dedicated worker
 tenants, and qualify the intended robot/task at real sites. This release does
-not add public signup, billing, large-object retention, webhooks, SSO, or a
+not add public signup, billing, webhooks, SSO, or a
 certified autonomous robot deployment service.
+
+## Large-source extension in PR321
+
+- The owner requested that the next build go into the existing PR321.
+- `worldProjectObjectStore.js` uses pinned AWS SDK v3 and a private configurable
+  S3-compatible bucket. There is no production memory/disk fallback. The only
+  in-memory adapter is in the test helpers.
+- `worldProjectMedia.js` persists transfer reservations and parts in PostgreSQL,
+  then stores immutable4MiB chunks under tenant/upload/part/hash keys. Lost
+  acknowledgements and service restarts can resume by reading stored progress.
+  Full client SHA256 is required before creation. Server verification reads every
+  chunk and the entire-file SHA256 before atomically publishing one source,
+  project version, event and idempotency receipt.
+- Defaults:2GiB/source,8GiB/project,32GiB/tenant,4 active uploads,24h transfer
+  lifetime and512 parts maximum. Smaller per-tenant limits are allowed. Hourly
+  source-read reservations default to8GiB/tenant and include full verification,
+  downloads and failed attempts; this is admission accounting, not billing.
+- Upload creation reserves capacity but does not change project version. Final
+  retention uses expected_version. A concurrent edit after verification leaves a
+  ready upload for an explicit fresh-version retry. Incomplete/cancelled uploads
+  cannot be used as project evidence.
+- Authenticated content downloads stream through the application, verify every
+  chunk, and hold the final chunk until the complete hash passes. Download
+  ceiling is1hour with30s stalled backpressure; verification is bounded to5min.
+  SDK sink downloads verify before close and abort a failed partial destination.
+- Export schema is now `brainsnn.project-export.v2`: inline source bytes are
+  embedded; large-source bytes are referenced by authenticated download paths.
+  `includes_all_source_bytes` and `external_source_count` make completeness
+  explicit. Neither bucket names nor internal object keys appear in the export.
+- Configure `WORLD_PROJECT_S3_BUCKET`, `_REGION`, `_ACCESS_KEY_ID`,
+  `_SECRET_ACCESS_KEY`, optional `_ENDPOINT`, `_FORCE_PATH_STYLE`, `_SESSION_TOKEN`.
+  An HTTPS endpoint and private access are required. Existing Railway preference
+  is preserved; no production bucket, credentials or billing was changed.
+- `npm run world:projects:storage` reports abandoned uploads; `-- --apply` cleans
+  only expired/cancelled unretained chunks after10min grace. Schedule it hourly
+  with the same private configuration. Exact key binding is checked before
+  deletion. Coordinate PostgreSQL and object backups; provider durability,
+  lifecycle/versioning and live restore behavior are not inferred from tests.
+- SDK/browser hash support is a bundled local pinned `@noble/hashes` module;
+  no external CDN and no full-file browser buffer. The workspace supports
+  progress, Pause/Cancel, reselect-and-resume, and a bounded download fallback
+  when the browser cannot stream to a chosen local file.
+- Example: `examples/world-project-large-source.mjs`; guide:
+  `docs/world-project-platform.md`. New media integration tests cover actual
+  HTTP, PostgreSQL semantics, exact5MiB bytes, restart/transaction uncertainty,
+  stale-version and cancellation races, isolation, corruption, quota and cleanup.
+  Provider protocol qualification is a separate CI test; actual customer bucket
+  provisioning and operational restore still precede launch.

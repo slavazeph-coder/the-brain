@@ -5,13 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { createWorldProjectService } from '../../brainsnn-r3f-app/src/server/worldProjectService.js';
 import { createProjectTestPool } from './helpers/project-test-pool.mjs';
+import { createMemoryProjectObjectStore } from './helpers/project-object-store.mjs';
 
 const require = createRequire(new URL('../../brainsnn-r3f-app/package.json', import.meta.url));
 const express = require('express');
 
-export async function startProjectPlatformFixture({ directory, port = 0 } = {}) {
+export async function startProjectPlatformFixture({ directory, port = 0, objectStore = createMemoryProjectObjectStore() } = {}) {
   const pool = await createProjectTestPool({ directory });
-  const service = createWorldProjectService({ pool, env: {} });
+  const service = createWorldProjectService({ pool, env: {}, objectStore });
   await service.initialize();
   const tenant = await service.provisionTenant({ name: 'Browser test workspace', id: 'tenant_browser_fixture' });
   const credentials = {};
@@ -24,7 +25,7 @@ export async function startProjectPlatformFixture({ directory, port = 0 } = {}) 
   const server = app.listen(port, '127.0.0.1');
   await once(server, 'listening');
   return {
-    url: `http://127.0.0.1:${server.address().port}`, credentials, tenant, service, pool,
+    url: `http://127.0.0.1:${server.address().port}`, credentials, tenant, service, pool, objectStore,
     async close() {
       await new Promise(resolve => { server.closeAllConnections(); server.close(resolve); });
       await service.close(); await pool.end();

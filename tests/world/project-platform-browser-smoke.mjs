@@ -2,8 +2,9 @@
 // the product workflow; these tests do not qualify physical robot performance.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
 import {existsSync} from 'node:fs';
-import {mkdir} from 'node:fs/promises';
+import {mkdir,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {startProjectPlatformFixture} from './project-platform-server.mjs';
@@ -36,14 +37,16 @@ async function noStoredKeys(target=page) {
   for(const role of ['admin','editor','reviewer','reader'])assert.ok(!stored.includes(key(role)));
   assert.ok(!target.url().includes(key('editor')));
 }
-async function fillRevision(name,kind,parent='') {
+async function fillRevision(name,kind,parent='',extraSourceId='') {
   const form=page.locator('#revision-form');
   await form.locator('[name=label]').fill(name);await form.locator('[name=kind]').selectOption(kind);
   if(parent)await form.locator('[name=parent_revision_id]').selectOption(parent);
   await form.locator('[name=robot_model]').fill('Fixture mobile cleaner');
   await form.locator('[name=width_m]').fill('0.6');await form.locator('[name=margin_m]').fill('0.1');
   await form.locator('[name=task_kind]').fill('navigation');await form.locator('[name=task_goal]').fill('Dock to service corridor');
-  await form.locator('[name=source_ids]').first().check();await form.getByRole('button',{name:'Save immutable revision'}).click();
+  await form.locator('[name=source_ids]').first().check();
+  if(extraSourceId)await form.locator(`[name=source_ids][value="${extraSourceId}"]`).check();
+  await form.getByRole('button',{name:'Save immutable revision'}).click();
   await notice('Immutable revision saved.');
 }
 async function recordTrial(kind,outcome,revisionId) {
@@ -55,6 +58,92 @@ async function recordTrial(kind,outcome,revisionId) {
   await form.locator('[name=source_ids]').first().check();
   if(kind==='physical')await form.locator('[name=measurement_evidence_ids]').first().check();
   await form.getByRole('button',{name:'Save reported trial'}).click();await notice('Trial saved');
+}
+
+async function resumableSources(projectId) {
+  const headers={Authorization:`Bearer ${key('editor')}`};
+  const endpoint=`${fixture.url}/api/world/v1/projects/${projectId}`;
+  const read=async suffix=>{const response=await fetch(endpoint+suffix,{headers});assert.ok(response.ok,await response.clone().text());return response.json();};
+  const capture=Buffer.alloc(4*1024*1024+128*1024);for(let i=0;i<capture.length;i++)capture[i]=i%251;
+  const file={name:'authored-capture.bin',mimeType:'application/octet-stream',buffer:capture};
+  const sha256=createHash('sha256').update(capture).digest('hex');
+  const parts=[];page.on('request',request=>{if(request.method()==='PUT'&&request.url().includes('/source-uploads/'))parts.push(request.url());});
+  const part2=`**/projects/${projectId}/source-uploads/*/parts/2`;
+  await page.route(part2,route=>route.abort('failed'));
+  await page.locator('#source-form [name=source_file]').setInputFiles(file);
+  await page.locator('#source-form button[type=submit]').click();
+  await page.waitForFunction(()=>document.querySelector('#transfer-heading')?.textContent==='Upload interrupted');
+  await page.locator('[data-refresh-uploads]').click();await notice('Upload records refreshed');
+  await page.unroute(part2);
+  const initial=(await read('/source-uploads')).uploads;assert.equal(initial.length,1);
+  const upload=initial[0];assert.equal(upload.uploaded_bytes,4*1024*1024);assert.equal(upload.sha256,sha256);
+  assert.equal(upload.parts.filter(part=>part.status==='stored').length,1);
+  assert.equal((await read('')).project.sources.length,1,'An interrupted upload must not appear as retained evidence.');
+  await noStoredKeys();await noOverflow();
+  await page.setViewportSize({width:390,height:844});await noOverflow();
+  await page.screenshot({path:join(output,'projects-upload-recovery-phone.png'),fullPage:true});
+  await page.setViewportSize({width:1280,height:960});
+
+  await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('#project-api-key').inputValue(),'');
+  await connect('editor');await section('sources');
+  const row=()=>page.locator(`[data-upload-id="${upload.id}"]`);
+  assert.ok(await row().isVisible());
+  const changed=Buffer.from(capture);changed[changed.length-1]^=1;
+  await row().locator('[name=resume_file]').setInputFiles({...file,buffer:changed});
+  await row().getByRole('button',{name:'Resume with this file'}).click();await notice('Reselect the exact original file');
+  assert.equal(parts.length,2,'A same-name, same-size file with a different full digest cannot upload any parts.');
+  await row().locator('[name=resume_file]').setInputFiles(file);
+
+  // A different editor changes the project after transfer but before retention.
+  // This must preserve completed parts and require an explicit reviewed retry.
+  const originalGet=fixture.objectStore.get;let changedDuringVerification=false;
+  fixture.objectStore.get=async (...args)=>{
+    if(!changedDuringVerification){
+      changedDuringVerification=true;
+      const current=(await read('')).project;
+      const result=await fetch(endpoint+'/sources',{method:'POST',headers:{...headers,'Content-Type':'application/json','Idempotency-Key':'browser_upload_concurrent_0001'},body:JSON.stringify({expected_version:current.version,name:'upload-concurrent.txt',media_type:'text/plain',content_text:'A concurrent editor changed this project during capture verification.'})});
+      assert.ok(result.ok,await result.text());
+    }
+    return originalGet(...args);
+  };
+  await row().getByRole('button',{name:'Resume with this file'}).click();await notice('Reload the project');
+  fixture.objectStore.get=originalGet;assert.equal(changedDuringVerification,true);
+  const ready=(await read(`/source-uploads/${upload.id}`)).upload;assert.equal(ready.status,'ready');
+  assert.equal((await read('')).project.sources.some(source=>source.sha256===sha256),false);
+  await page.locator('#refresh-project').click();await notice('Latest project record loaded.');
+  await row().getByRole('button',{name:'Retain completed file'}).click();await notice('Exact source bytes retained in workspace object storage.');
+  const retained=(await read('')).project.sources.find(source=>source.sha256===sha256);assert.ok(retained);
+  assert.equal(retained.storage_kind,'object');assert.equal(retained.bytes,capture.length);
+  assert.equal(parts.filter(url=>url.includes(`/${upload.id}/parts/1`)).length,1,'A stored first part must not be resent after reload.');
+  assert.equal((await read('/source-uploads')).uploads.length,0);
+  const sourceRow=page.locator(`[data-source-id="${retained.id}"]`);
+  assert.ok((await sourceRow.innerText()).includes('Workspace object storage'));
+  assert.ok((await page.locator('#project-panel').innerText()).includes('Inline project database'));
+
+  // Exercise the explicit bounded fallback, rather than invoking an OS picker in CI.
+  await page.evaluate(()=>Object.defineProperty(window,'showSaveFilePicker',{configurable:true,value:undefined}));
+  const downloaded=page.waitForEvent('download');
+  await sourceRow.getByRole('button',{name:'Download original bytes'}).click();
+  const artifact=await downloaded;await notice('Their full size and SHA-256 were verified.');
+  const downloadedBytes=await readFile(await artifact.path());
+  assert.equal(downloadedBytes.length,capture.length);assert.equal(createHash('sha256').update(downloadedBytes).digest('hex'),sha256);
+
+  // Pause from the visible control, then explicitly cancel temporary parts.
+  let releasePart;const held=new Promise(resolve=>{releasePart=resolve;});
+  await page.route(part2,async route=>{await held;await route.abort('failed').catch(()=>{});});
+  const waitingPart=page.waitForRequest(request=>request.method()==='PUT'&&request.url().endsWith('/parts/2'));
+  await page.locator('#source-form [name=source_file]').setInputFiles({...file,name:'cancelled-capture.bin'});
+  await page.locator('#source-form button[type=submit]').click();await waitingPart;
+  await page.locator('[data-transfer-action=pause]').click();await notice('Upload paused.');releasePart();
+  await page.locator('[data-refresh-uploads]').click();await notice('Upload records refreshed');await page.unroute(part2);
+  const pending=(await read('/source-uploads')).uploads;assert.equal(pending.length,1);
+  await page.locator(`[data-upload-id="${pending[0].id}"]`).getByRole('button',{name:'Cancel upload',exact:true}).click();await notice('Upload cancelled.');
+  assert.equal((await read(`/source-uploads/${pending[0].id}`)).upload.status,'aborted');
+  assert.equal((await read('/source-uploads')).uploads.length,0);
+  assert.equal((await read('')).project.sources.some(source=>source.name==='cancelled-capture.bin'),false);
+  await noStoredKeys();await noOverflow();
+  await page.screenshot({path:join(output,'projects-storage-desktop.png'),fullPage:true});
+  return retained.id;
 }
 
 try {
@@ -76,15 +165,17 @@ try {
   await page.locator('#source-form [name=source_file]').setInputFiles({name:'door-measurement.json',mimeType:'application/json',buffer:Buffer.from('{"measurement_m":1.2,"basis":"synthetic-browser-test"}\n')});
   await page.locator('#source-form button[type=submit]').click();await notice('Exact source bytes retained.');
   assert.ok((await page.locator('#project-panel').innerText()).includes('SHA-256'));
+  const captureSourceId=await resumableSources(projectId);
 
-  await section('revisions');await fillRevision('Current service corridor','as_is');
+  await section('revisions');await fillRevision('Current service corridor','as_is','',captureSourceId);
   const baseId=await page.locator('#revision-form [name=parent_revision_id] option').nth(1).getAttribute('value');
-  await fillRevision('Clearance proposal','proposed',baseId);
+  await fillRevision('Clearance proposal','proposed',baseId,captureSourceId);
   const proposedId=await page.locator('#revision-form [name=parent_revision_id] option').last().getAttribute('value');
   assert.notEqual(baseId,proposedId);
 
   await section('evidence');
   const evidence=page.locator('#evidence-form');await evidence.locator('[name=revision_id]').selectOption(proposedId);
+  assert.equal(await evidence.locator(`[name=source_id] option[value="${captureSourceId}"]`).count(),1,'Retained object sources remain available to evidence.');
   await evidence.locator('[name=source_id]').selectOption({label:'door-measurement.json'});await evidence.locator('[name=kind]').selectOption('measured');
   await evidence.locator('[name=component_id]').fill('service-door');await evidence.locator('[name=claim]').fill(hostile);
   await evidence.locator('[name=value]').fill('1.2');await evidence.locator('[name=unit]').fill('m');
@@ -159,7 +250,7 @@ try {
   await page.locator('#disconnect-button').click();await notice('Disconnected.');
   assert.equal(await page.locator('#project-content').isVisible(),false);await noStoredKeys();
   assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({ok:true,checks:['connect','create','source-bytes','immutable-revisions','literal-untrusted-text','independent-review','simulation-versus-physical','reload-restore','trial-verification','stale-version-rejection','390px-no-overflow','credential-memory-only'],screenshots:output}));
+  console.log(JSON.stringify({ok:true,checks:['connect','create','source-bytes','resumable-source-reload','same-name-full-hash-mismatch','stored-part-skipping','retention-version-conflict','verified-authenticated-download','upload-pause-cancel','inline-and-object-storage-labels','immutable-revisions','literal-untrusted-text','independent-review','simulation-versus-physical','reload-restore','trial-verification','stale-version-rejection','390px-no-overflow','credential-memory-only'],screenshots:output}));
 } catch(error) {
   if(page&&!page.isClosed())await page.screenshot({path:join(output,'projects-failure.png'),fullPage:true}).catch(()=>{});
   throw error;

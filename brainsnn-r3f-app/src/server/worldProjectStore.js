@@ -3,7 +3,9 @@ import { createHash, randomBytes } from 'node:crypto';
 export const PROJECT_LIMITS = Object.freeze({ projects: 100, sourcesPerProject: 128, sourceBytes: 524288,
   projectSourceBytes: 16777216, tenantSourceBytes: 134217728, recordsPerProject: 1000,
   eventsPerProject: 2000, keys: 100, requestsPerHour: 1200, requestBytes: 1048576, idempotencyKeys: 20000,
-  idempotencyBytes: 67108864 });
+  idempotencyBytes: 67108864, objectSourceBytes: 2147483648, projectObjectBytes: 8589934592,
+  tenantObjectBytes: 34359738368, uploadPartBytes: 4194304, activeSourceUploads: 4, sourceUploadSessions: 2000,
+  sourceReadBytesPerHour: 8589934592 });
 export const ROLE_SCOPES = Object.freeze({
   reader: ['project:read', 'processing:read'],
   editor: ['project:read', 'project:write', 'processing:read', 'processing:write'],
@@ -47,6 +49,29 @@ const MIGRATIONS = [
     media_type TEXT NOT NULL, data_base64 TEXT NOT NULL, sha256 TEXT NOT NULL,
     bytes INTEGER NOT NULL CHECK (bytes > 0), created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (tenant_id,project_id,id), FOREIGN KEY (tenant_id,project_id) REFERENCES brainsnn_world_projects(tenant_id,id))`,
+  // Additive, repeatable upgrades preserve the earlier inline source contract.
+  `ALTER TABLE brainsnn_world_sources ALTER COLUMN data_base64 DROP NOT NULL`,
+  `ALTER TABLE brainsnn_world_sources ALTER COLUMN bytes TYPE BIGINT`,
+  `ALTER TABLE brainsnn_world_sources ADD COLUMN IF NOT EXISTS storage_kind TEXT NOT NULL DEFAULT 'inline'`,
+  `ALTER TABLE brainsnn_world_sources ADD COLUMN IF NOT EXISTS object_manifest JSONB`,
+  `CREATE TABLE IF NOT EXISTS brainsnn_world_source_uploads (
+    tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+    media_type TEXT NOT NULL, bytes BIGINT NOT NULL CHECK (bytes > 0), sha256 TEXT NOT NULL,
+    part_bytes INTEGER NOT NULL, status TEXT NOT NULL, source_id TEXT,
+    lease_id TEXT, lease_until TIMESTAMPTZ, created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, cleaned_at TIMESTAMPTZ,
+    PRIMARY KEY (tenant_id,project_id,id),
+    FOREIGN KEY (tenant_id,project_id) REFERENCES brainsnn_world_projects(tenant_id,id))`,
+  `CREATE TABLE IF NOT EXISTS brainsnn_world_source_parts (
+    tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, upload_id TEXT NOT NULL, part_number INTEGER NOT NULL,
+    bytes INTEGER NOT NULL CHECK (bytes > 0), sha256 TEXT NOT NULL, object_key TEXT NOT NULL,
+    status TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (tenant_id,project_id,upload_id,part_number),
+    FOREIGN KEY (tenant_id,project_id,upload_id) REFERENCES brainsnn_world_source_uploads(tenant_id,project_id,id))`,
+  `CREATE INDEX IF NOT EXISTS brainsnn_world_source_upload_cleanup ON brainsnn_world_source_uploads(status,expires_at)`,
+  `CREATE TABLE IF NOT EXISTS brainsnn_world_source_reads (
+    tenant_id TEXT NOT NULL REFERENCES brainsnn_world_tenants(id), bucket BIGINT NOT NULL,
+    bytes BIGINT NOT NULL CHECK (bytes > 0), PRIMARY KEY (tenant_id,bucket))`,
   `CREATE TABLE IF NOT EXISTS brainsnn_world_records (
     tenant_id TEXT NOT NULL, project_id TEXT NOT NULL, id TEXT NOT NULL,
     kind TEXT NOT NULL CHECK (kind IN ('revision','evidence','change','trial')), payload JSONB NOT NULL,

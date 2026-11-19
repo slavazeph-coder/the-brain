@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/build-meshlets.mjs && tsx server.ts",
-    "build": "node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-twin-renderer.mjs && node scripts/build-street-renderer.mjs && node scripts/build-deformable.mjs && node scripts/build-fragments-export.mjs && node scripts/build-movement-pose.mjs && node scripts/build-meshlets.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "node scripts/build-project-hash.mjs && node scripts/build-arena-pricing.mjs && node scripts/build-site-renderer.mjs && node scripts/build-twin-renderer.mjs && node scripts/build-street-renderer.mjs && node scripts/build-deformable.mjs && node scripts/build-fragments-export.mjs && node scripts/build-movement-pose.mjs && node scripts/build-meshlets.mjs && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node mission-market-schema-bootstrap.cjs && node --require ./sponsorship/gt3/server.cjs --require ./brand-brain-preload.cjs --require ./mission-market-preload.cjs --require ./sponsorship/server.cjs dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -22,14 +22,17 @@
     "analysis:admin": "node arena-analysis/admin.cjs",
     "test:world": "node --test ../tests/world/*.test.mjs src/world/street/tests/*.test.mjs",
     "world:propose": "node scripts/world-propose-map.mjs",
-    "predev": "node scripts/build-twin-renderer.mjs && node scripts/build-movement-pose.mjs",
+    "predev": "node scripts/build-project-hash.mjs && node scripts/build-twin-renderer.mjs && node scripts/build-movement-pose.mjs",
     "test:world-projects": "node --test ../tests/world/*project*.test.mjs",
     "world:projects:admin": "node scripts/world-project-admin.mjs",
-    "world:projects:worker": "node scripts/world-project-worker-tenant.mjs"
+    "world:projects:worker": "node scripts/world-project-worker-tenant.mjs",
+    "world:projects:storage": "node scripts/world-project-storage.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1172.0",
     "@google/genai": "^2.4.0",
     "@mujoco/mujoco": "4.0.1",
+    "@noble/hashes": "2.4.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@tailwindcss/vite": "^4.1.14",

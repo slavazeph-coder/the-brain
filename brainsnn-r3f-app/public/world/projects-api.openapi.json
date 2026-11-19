@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BrainSNN World Projects API",
-    "version": "1.0.0",
-    "description": "Private operator-provisioned API for durable tenant projects, source evidence, revisions, review decisions, trial outcomes, and an optional owner-scoped processing bridge. PostgreSQL and explicit worker configuration are required. This contract does not assert field validation or provide public signup/billing. Processing success payloads preserve native extensible worker objects; discover engines through capabilities."
+    "version": "1.1.0",
+    "description": "Private operator-provisioned API for durable tenant projects, source evidence, revisions, review decisions, trial outcomes, and an optional owner-scoped processing bridge. PostgreSQL and explicit worker configuration are required. This contract does not assert field validation or provide public signup/billing. Processing success payloads preserve native extensible worker objects; discover engines through capabilities. Optional private S3-compatible chunk storage retains large original sources through resumable uploads. Project export schema v2 includes inline bytes and authenticated external-source references; it is not a self-contained media archive."
   },
   "servers": [
     {
@@ -21,7 +21,7 @@
       "get": {
         "operationId": "getStatus",
         "summary": "Check durable service configuration",
-        "description": "Returns 200 with available:false when PostgreSQL is unconfigured or unavailable. Does not prove processing worker availability, physical accuracy, or a completed field pilot.",
+        "description": "Returns 200 with available:false when PostgreSQL is unconfigured or unavailable. Does not prove processing worker availability, physical accuracy, or a completed field pilot. object_storage.configured indicates configuration only and does not probe provider availability.",
         "parameters": [],
         "responses": {
           "200": {
@@ -716,8 +716,8 @@
     "/projects/{project_id}/export": {
       "get": {
         "operationId": "exportProject",
-        "summary": "Export versioned records and exact retained sources",
-        "description": "Integrity is an unsigned content hash over the canonical export without integrity. It detects content changes, not authentic authorship or physical accuracy. Credentials are never exported.",
+        "summary": "Export a project manifest and bounded inline sources",
+        "description": "Version 2 project manifest with inline source bytes and authenticated references for object sources. The unsigned canonical hash covers this JSON manifest, including external hashes and paths; it does not package or establish availability of external media.",
         "parameters": [
           {
             "$ref": "#/components/parameters/project_id"
@@ -1011,8 +1011,8 @@
     "/projects/{project_id}/sources/{source_id}": {
       "get": {
         "operationId": "getSource",
-        "summary": "Retrieve one retained source as base64",
-        "description": "",
+        "summary": "Retrieve source metadata and bounded inline bytes",
+        "description": "Inline sources include base64 bytes. Object sources return data_base64:null and an authenticated download_path; use the streaming content route.",
         "parameters": [
           {
             "$ref": "#/components/parameters/project_id"
@@ -4936,6 +4936,1138 @@
           }
         }
       }
+    },
+    "/projects/{project_id}/source-uploads": {
+      "get": {
+        "operationId": "listSourceUploads",
+        "summary": "List resumable source transfers",
+        "description": "Returns only unexpired active or failed transfers. GET a known ID to inspect retained/cancelled/expired state. Requires project:read.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceUploadList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:read"
+        ]
+      },
+      "post": {
+        "operationId": "createSourceUpload",
+        "summary": "Reserve a resumable original-source upload",
+        "description": "Requires private object storage. Checks current project version without changing it. Declared size/hash reserve capacity. Reuse the same request/key after an ambiguous response and GET the returned upload for its current state.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSourceUpload"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}/source-uploads/{upload_id}": {
+      "get": {
+        "operationId": "getSourceUpload",
+        "summary": "Read a source transfer and its part ledger",
+        "description": "Use the server part ledger when resuming after reconnect or a lost PUT acknowledgement. Reselect and hash the complete original file; filename/size alone do not establish identity.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/source_upload_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:read"
+        ]
+      }
+    },
+    "/projects/{project_id}/source-uploads/{upload_id}/parts/{part_number}": {
+      "put": {
+        "operationId": "putSourcePart",
+        "summary": "Store one immutable source part",
+        "description": "Send exact, uncompressed bytes. PUT is content-idempotent: matching stored bytes replay; conflicting bytes return 409. No Idempotency-Key is required. A reservation is persisted before object IO so explicit recovery can reuse the same part. A transfer is not retained evidence until completion succeeds.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/source_upload_id"
+          },
+          {
+            "$ref": "#/components/parameters/source_part_number"
+          },
+          {
+            "$ref": "#/components/parameters/SourcePartSha256"
+          },
+          {
+            "$ref": "#/components/parameters/SourcePartLength"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "minLength": 1,
+                "maxLength": 4194304
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}/source-uploads/{upload_id}/complete": {
+      "post": {
+        "operationId": "completeSourceUpload",
+        "summary": "Verify and retain the completed original",
+        "description": "Streams all stored parts and checks the complete SHA-256 before adding a source and incrementing project version. A late stale-version 409 leaves the transfer ready: reload the project and explicitly complete with a new key/version, without uploading parts again. Verification uses a five-minute recovery lease. After an ambiguous timeout, inspect transfer/project state and reuse the original request/key; do not create another source automatically. Full verification has a server deadline just under five minutes; the SDK permits a five-minute deadline for this operation only.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/source_upload_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Already retained upload, with its existing source and current project aggregate",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful response",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteSourceUpload"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}/source-uploads/{upload_id}/abort": {
+      "post": {
+        "operationId": "abortSourceUpload",
+        "summary": "Cancel an unfinished source upload",
+        "description": "Does not change project version. A retained source cannot be cancelled as an unfinished upload. Private chunks are removed later by operator-scheduled cleanup after a grace period.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/source_upload_id"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:write"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/projects/{project_id}/sources/{source_id}/content": {
+      "get": {
+        "operationId": "downloadSourceContent",
+        "summary": "Stream authenticated exact retained source bytes",
+        "description": "Works for inline and object sources. Requires a project key in Authorization; never redirects to an object-store URL. No Range support. Checks each chunk and the whole-file digest, withholding the last chunk until verification passes. A mid-stream error terminates the body; consumers must verify exact length/hash and commit their destination only after success. Downloads have a one-hour overall server deadline and a 30-second stalled-client-write timeout. Each fresh download reserves its declared full length against the tenant hourly source-read allowance.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/project_id"
+          },
+          {
+            "$ref": "#/components/parameters/source_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact raw bytes; verify against saved source metadata before committing a destination.",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Server-assigned diagnostic request ID."
+              },
+              "Content-Length": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2147483648
+                }
+              },
+              "X-Content-SHA256": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "maxLength": 2147483648
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or missing/invalid idempotency key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, or revoked key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Scope or independent-review requirement not met",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found in this tenant/project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict, or invalid transition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Transfer expired or was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request or decoded source exceeds a bound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content type or encoding unsupported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Input or referenced evidence invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Workspace, key, rate, or ledger limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage/processing unavailable; no memory fallback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "project:read"
+        ]
+      }
     }
   },
   "components": {
@@ -5059,6 +6191,45 @@
           "maximum": 2147483648
         },
         "description": "Exact accepted byte offset from GET upload status. Read status after a lost PUT response before explicitly resuming."
+      },
+      "source_upload_id": {
+        "name": "upload_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Id"
+        }
+      },
+      "source_part_number": {
+        "name": "part_number",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        }
+      },
+      "SourcePartSha256": {
+        "name": "X-Content-SHA256",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "description": "SHA-256 of these exact part bytes. The server independently recomputes the digest."
+      },
+      "SourcePartLength": {
+        "name": "Content-Length",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "description": "Exact part byte count: upload.part_bytes except the final remainder. Fetch supplies this header for a Uint8Array or Blob body; browser callers must not set it manually."
       }
     },
     "schemas": {
@@ -5147,6 +6318,35 @@
           "idempotencyBytes": {
             "type": "integer",
             "minimum": 1
+          },
+          "objectSourceBytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "projectObjectBytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tenantObjectBytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "uploadPartBytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "activeSourceUploads": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sourceUploadSessions": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sourceReadBytesPerHour": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Declared source bytes reserved for downloads and fresh full verification per tenant per hour; default 8 GiB. Failed/aborted transfers also consume their reservation."
           }
         },
         "additionalProperties": false
@@ -5174,6 +6374,37 @@
           },
           "physical_validated": {
             "const": false
+          },
+          "object_storage": {
+            "type": "object",
+            "properties": {
+              "configured": {
+                "type": "boolean",
+                "description": "Configuration present, not an active provider health check. A successful transfer establishes availability."
+              },
+              "backend": {
+                "const": "s3-chunks"
+              },
+              "part_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4194304
+              },
+              "upload_expiry_hours": {
+                "const": 24
+              },
+              "configuration_invalid": {
+                "type": "boolean",
+                "description": "Present when supplied object-storage configuration is invalid; no provider health claim."
+              }
+            },
+            "required": [
+              "configured",
+              "backend",
+              "part_bytes",
+              "upload_expiry_hours"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -5181,7 +6412,8 @@
           "service",
           "version",
           "storage",
-          "limits"
+          "limits",
+          "object_storage"
         ],
         "additionalProperties": false
       },
@@ -5320,7 +6552,7 @@
           "bytes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 524288
+            "maximum": 2147483648
           },
           "created_by": {
             "$ref": "#/components/schemas/Id"
@@ -5332,6 +6564,17 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "storage_kind": {
+            "enum": [
+              "inline",
+              "object"
+            ]
+          },
+          "download_path": {
+            "type": "string",
+            "pattern": "^/api/world/v1/projects/[a-z0-9_-]+/sources/[a-z0-9_-]+/content$",
+            "description": "Same-origin authenticated API path. Never a public or signed object-store URL."
           }
         },
         "required": [
@@ -5341,9 +6584,32 @@
           "sha256",
           "bytes",
           "created_by",
-          "created_at"
+          "created_at",
+          "storage_kind",
+          "download_path"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "storage_kind": {
+                  "const": "inline"
+                }
+              },
+              "required": [
+                "storage_kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "bytes": {
+                  "maximum": 524288
+                }
+              }
+            }
+          }
+        ]
       },
       "CreateSource": {
         "type": "object",
@@ -5414,15 +6680,59 @@
             "$ref": "#/components/schemas/SourceMetadata"
           },
           "data_base64": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "contentEncoding": "base64",
+            "description": "Exact bytes for inline sources; null for object sources. Stream object bytes from the authenticated content route."
+          },
+          "download_path": {
             "type": "string",
-            "contentEncoding": "base64"
+            "pattern": "^/api/world/v1/projects/[a-z0-9_-]+/sources/[a-z0-9_-]+/content$",
+            "description": "Same-origin authenticated API path. Never a public or signed object-store URL."
           }
         },
         "required": [
           "source",
           "data_base64"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "source": {
+                  "properties": {
+                    "storage_kind": {
+                      "const": "object"
+                    }
+                  },
+                  "required": [
+                    "storage_kind"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "data_base64": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "download_path"
+              ]
+            },
+            "else": {
+              "properties": {
+                "data_base64": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
       },
       "RobotProfile": {
         "type": "object",
@@ -5615,8 +6925,8 @@
               },
               {
                 "type": "number",
-                "minimum": -1000000000000.0,
-                "maximum": 1000000000000.0
+                "minimum": -1000000000000,
+                "maximum": 1000000000000
               },
               {
                 "type": "null"
@@ -5640,8 +6950,8 @@
               },
               {
                 "type": "number",
-                "minimum": -1000000000000.0,
-                "maximum": 1000000000000.0
+                "minimum": -1000000000000,
+                "maximum": 1000000000000
               },
               {
                 "type": "null"
@@ -5682,8 +6992,8 @@
               "properties": {
                 "value": {
                   "type": "number",
-                  "minimum": -1000000000000.0,
-                  "maximum": 1000000000000.0
+                  "minimum": -1000000000000,
+                  "maximum": 1000000000000
                 },
                 "unit": {
                   "type": "string",
@@ -5893,7 +7203,8 @@
               },
               "source_bytes": {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Retained inline source bytes. Object source and reservation bytes are separate counters."
               },
               "records": {
                 "type": "integer",
@@ -5902,13 +7213,34 @@
               "keys": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "object_source_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reserved_object_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "active_source_uploads": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "source_read_bytes_this_hour": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Conservative declared-byte reservations, not measured network egress or billing."
               }
             },
             "required": [
               "projects",
               "source_bytes",
               "records",
-              "keys"
+              "keys",
+              "object_source_bytes",
+              "reserved_object_bytes",
+              "active_source_uploads",
+              "source_read_bytes_this_hour"
             ],
             "additionalProperties": false
           },
@@ -6290,8 +7622,8 @@
               },
               {
                 "type": "number",
-                "minimum": -1000000000000.0,
-                "maximum": 1000000000000.0
+                "minimum": -1000000000000,
+                "maximum": 1000000000000
               },
               {
                 "type": "null"
@@ -6315,8 +7647,8 @@
               },
               {
                 "type": "number",
-                "minimum": -1000000000000.0,
-                "maximum": 1000000000000.0
+                "minimum": -1000000000000,
+                "maximum": 1000000000000
               },
               {
                 "type": "null"
@@ -6385,8 +7717,8 @@
               "properties": {
                 "value": {
                   "type": "number",
-                  "minimum": -1000000000000.0,
-                  "maximum": 1000000000000.0
+                  "minimum": -1000000000000,
+                  "maximum": 1000000000000
                 },
                 "unit": {
                   "type": "string",
@@ -6834,7 +8166,7 @@
         "type": "object",
         "properties": {
           "schema": {
-            "const": "brainsnn.project-export.v1"
+            "const": "brainsnn.project-export.v2"
           },
           "project": {
             "$ref": "#/components/schemas/Project"
@@ -6842,51 +8174,7 @@
           "sources": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "$ref": "#/components/schemas/Id"
-                },
-                "name": {
-                  "type": "string",
-                  "maxLength": 160
-                },
-                "media_type": {
-                  "type": "string",
-                  "maxLength": 100
-                },
-                "sha256": {
-                  "type": "string",
-                  "pattern": "^[a-f0-9]{64}$"
-                },
-                "bytes": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 524288
-                },
-                "created_by": {
-                  "$ref": "#/components/schemas/Id"
-                },
-                "created_by_name": {
-                  "type": "string",
-                  "maxLength": 120
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "data_base64": {
-                  "type": "string",
-                  "contentEncoding": "base64"
-                }
-              },
-              "required": [
-                "id",
-                "data_base64",
-                "sha256",
-                "bytes"
-              ],
-              "additionalProperties": false
+              "$ref": "#/components/schemas/ExportSource"
             }
           },
           "exported_at": {
@@ -6920,6 +8208,14 @@
               "authenticated_signature"
             ],
             "additionalProperties": false
+          },
+          "includes_all_source_bytes": {
+            "type": "boolean",
+            "description": "False whenever an object source is referenced. Download and verify each external source separately for a complete media archive."
+          },
+          "external_source_count": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": [
@@ -6928,9 +8224,37 @@
           "sources",
           "exported_at",
           "physical_validated",
-          "integrity"
+          "integrity",
+          "includes_all_source_bytes",
+          "external_source_count"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Version 2 project manifest with inline source bytes and authenticated references for object sources. The unsigned canonical hash covers this JSON manifest, including external hashes and paths; it does not package or establish availability of external media.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "external_source_count": {
+                  "const": 0
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "includes_all_source_bytes": {
+                  "const": true
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "includes_all_source_bytes": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
       },
       "CreateProjectResponse": {
         "type": "object",
@@ -7147,6 +8471,352 @@
           "authorization_required"
         ],
         "additionalProperties": false
+      },
+      "SourceUploadPart": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 512
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4194304
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "status": {
+            "enum": [
+              "reserved",
+              "stored"
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "bytes",
+          "sha256",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "SourceUpload": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "project_id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "media_type": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483648
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "part_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4194304
+          },
+          "part_count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 512
+          },
+          "uploaded_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483648
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceUploadPart"
+            },
+            "maxItems": 512
+          },
+          "status": {
+            "enum": [
+              "uploading",
+              "verifying",
+              "ready",
+              "retained",
+              "aborted",
+              "expired",
+              "failed"
+            ]
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Id"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "name",
+          "media_type",
+          "bytes",
+          "sha256",
+          "part_bytes",
+          "part_count",
+          "uploaded_bytes",
+          "parts",
+          "status",
+          "source_id",
+          "created_by",
+          "created_at",
+          "expires_at"
+        ],
+        "additionalProperties": false,
+        "description": "A private transfer session. Only retained status has a project source ID usable by revisions/evidence. Sessions expire after 24 hours; verified ready state survives a late project-version conflict until expiry."
+      },
+      "CreateSourceUpload": {
+        "type": "object",
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "media_type": {
+            "type": "string",
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483648
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 of the complete original file, computed before creating or resuming the transfer."
+          }
+        },
+        "required": [
+          "expected_version",
+          "name",
+          "media_type",
+          "bytes",
+          "sha256"
+        ],
+        "additionalProperties": false,
+        "description": "Checks expected_version and reserves bounded object capacity without incrementing the project version. Default part size is 4 MiB; maximum 512 parts. Actual tenant limits can be lower."
+      },
+      "CompleteSourceUpload": {
+        "type": "object",
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "expected_version"
+        ],
+        "additionalProperties": false
+      },
+      "SourceUploadResponse": {
+        "type": "object",
+        "properties": {
+          "upload": {
+            "$ref": "#/components/schemas/SourceUpload"
+          }
+        },
+        "required": [
+          "upload"
+        ],
+        "additionalProperties": false
+      },
+      "SourceUploadList": {
+        "type": "object",
+        "properties": {
+          "uploads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SourceUpload"
+            },
+            "maxItems": 4,
+            "description": "Unexpired uploading, verifying, ready and failed sessions only. Retained sources are in the project aggregate."
+          }
+        },
+        "required": [
+          "uploads"
+        ],
+        "additionalProperties": false
+      },
+      "SourcePartResponse": {
+        "type": "object",
+        "properties": {
+          "upload": {
+            "$ref": "#/components/schemas/SourceUpload"
+          },
+          "part": {
+            "$ref": "#/components/schemas/SourceUploadPart"
+          }
+        },
+        "required": [
+          "upload",
+          "part"
+        ],
+        "additionalProperties": false
+      },
+      "ExportSource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "media_type": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483648
+          },
+          "created_by": {
+            "$ref": "#/components/schemas/Id"
+          },
+          "created_by_name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "storage_kind": {
+            "enum": [
+              "inline",
+              "object"
+            ]
+          },
+          "download_path": {
+            "type": "string",
+            "pattern": "^/api/world/v1/projects/[a-z0-9_-]+/sources/[a-z0-9_-]+/content$",
+            "description": "Same-origin authenticated API path. Never a public or signed object-store URL."
+          },
+          "data_base64": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "contentEncoding": "base64",
+            "description": "Exact bytes for inline sources; null for object sources. Stream object bytes from the authenticated content route."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "media_type",
+          "sha256",
+          "bytes",
+          "created_by",
+          "created_at",
+          "storage_kind",
+          "download_path",
+          "data_base64"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "storage_kind": {
+                  "const": "inline"
+                }
+              },
+              "required": [
+                "storage_kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "bytes": {
+                  "maximum": 524288
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "storage_kind": {
+                  "const": "object"
+                }
+              },
+              "required": [
+                "storage_kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "data_base64": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "data_base64": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
       }
     }
   }

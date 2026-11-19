@@ -7,11 +7,12 @@ on:
       - "brainsnn-r3f-app/src/server/projectProcessingBridge*"
       - "brainsnn-r3f-app/public/world/**"
       - "brainsnn-r3f-app/scripts/world-project*"
+      - "brainsnn-r3f-app/scripts/build-project-hash.mjs"
       - "brainsnn-r3f-app/server.ts"
       - "brainsnn-r3f-app/package*.json"
       - "robotics/world_worker/**"
       - "tests/world/**"
-      - "examples/world-project-api.mjs"
+      - "examples/world-project-*.mjs"
       - ".github/workflows/world-project-platform.yml"
   workflow_dispatch:
   workflow_call:
@@ -53,6 +54,47 @@ jobs:
         env:
           WORLD_PROJECT_TEST_DATABASE_URL: postgres://world_test:disposable-ci-only@localhost:5432/world_projects_test
         run: npm run test:world-projects
+      - name: Start disposable private S3 storage over loopback TLS
+        env:
+          WORLD_STORAGE_FIXTURE: ${{ runner.temp }}/world-project-storage
+        run: |
+          mkdir -p "$WORLD_STORAGE_FIXTURE/certs/CAs" "$WORLD_STORAGE_FIXTURE/data"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$WORLD_STORAGE_FIXTURE/certs/private.key" \
+            -out "$WORLD_STORAGE_FIXTURE/certs/public.crt" \
+            -subj '/CN=127.0.0.1' \
+            -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+            -addext 'basicConstraints=critical,CA:TRUE'
+          cp "$WORLD_STORAGE_FIXTURE/certs/public.crt" "$WORLD_STORAGE_FIXTURE/certs/CAs/fixture.crt"
+          docker run -d --name brainsnn-project-test-storage \
+            --user "$(id -u):$(id -g)" \
+            -p 127.0.0.1:19000:9000 \
+            -e MINIO_ROOT_USER=brainsnn-ci-storage \
+            -e MINIO_ROOT_PASSWORD=disposable-ci-only-storage-password \
+            -e MINIO_BROWSER=off \
+            -v "$WORLD_STORAGE_FIXTURE/data:/data" \
+            -v "$WORLD_STORAGE_FIXTURE/certs:/certs" \
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            server /data --certs-dir /certs
+          curl --fail --silent --show-error --cacert "$WORLD_STORAGE_FIXTURE/certs/public.crt" \
+            --connect-timeout 3 --max-time 10 \
+            --retry 20 --retry-connrefused --retry-delay 1 --retry-max-time 60 \
+            https://127.0.0.1:19000/minio/health/ready
+      - name: Production S3 adapter, durable resume and SDK streaming against real storage
+        env:
+          WORLD_PROJECT_TEST_S3_E2E: "1"
+          WORLD_PROJECT_TEST_RESTART_MINIO: "1"
+          WORLD_PROJECT_TEST_DATABASE_URL: postgres://world_test:disposable-ci-only@localhost:5432/world_projects_test
+          WORLD_PROJECT_S3_ENDPOINT: https://127.0.0.1:19000
+          WORLD_PROJECT_S3_REGION: us-east-1
+          WORLD_PROJECT_S3_FORCE_PATH_STYLE: "1"
+          WORLD_PROJECT_S3_ACCESS_KEY_ID: brainsnn-ci-storage
+          WORLD_PROJECT_S3_SECRET_ACCESS_KEY: disposable-ci-only-storage-password
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/world-project-storage/certs/public.crt
+        run: node tests/world/project-storage-s3-e2e.mjs
+      - name: Remove disposable storage container
+        if: always()
+        run: docker rm -f brainsnn-project-test-storage >/dev/null 2>&1 || true
       - name: Install browser
         working-directory: brainsnn-r3f-app
         run: npx playwright install --with-deps chromium
