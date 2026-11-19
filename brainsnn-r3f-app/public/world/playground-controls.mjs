@@ -1,13 +1,18 @@
 import {ICONS} from './playground-icons.mjs';
 
 /**
- * On-screen camera buttons for people who cannot drag, use a keyboard or pinch. Each button sends the canvas
- * the same keys it already understands (arrows turn, + and − zoom), a few steps at a time, so no camera code is duplicated.
+ * On-screen camera buttons for people who cannot drag, use a keyboard or pinch. The map's arrows turn it;
+ * preview arrows move through the scene, so its Turn buttons use the viewer's explicit rotation action.
  */
-export function mountCameraDock({getCanvas, setNames}) {
+export function mountCameraDock({getCanvas, getPreviewViewer = () => null, setNames}) {
   const press = (key, times) => {
     const canvas = getCanvas();
     if (!canvas) return;
+    const preview = getPreviewViewer();
+    if (preview && (key === 'ArrowLeft' || key === 'ArrowRight')) {
+      preview.rotateYaw((key === 'ArrowLeft' ? -1 : 1) * .12 * times);
+      return;
+    }
     for (let i = 0; i < times; i++) canvas.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true}));
   };
   const moves = {'cam-left': ['turnLeft', 'ArrowLeft', 3], 'cam-right': ['turnRight', 'ArrowRight', 3], 'cam-in': ['zoomIn', '+', 2], 'cam-out': ['zoomOut', '-', 2]};

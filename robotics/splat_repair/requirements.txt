@@ -1,0 +1,2 @@
+# CPU Fast Fill; NumPy is pinned by the existing worker requirements-colmap.txt.
+scipy==1.17.1

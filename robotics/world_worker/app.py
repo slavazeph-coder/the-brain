@@ -40,11 +40,27 @@ MAX_ARTIFACTS = 40  # one job's published files; worker-client.mjs and scene_usd
 # An adapter secret is an environment variable name; the worker's own token and tenants never pass to adapters.
 SECRET_NAME = re.compile(r"^(?!WORLD_WORKER_|WORLD_TENANTS)[A-Z][A-Z0-9_]{0,63}$")
 ACTIVE = ('prepared', 'queued', 'running')
+UPLOAD_SUFFIXES = {'image': ['.jpg', '.jpeg', '.png', '.webp'], 'video': ['.mp4', '.mov', '.webm'],
+                   'cloud': ['.json'], 'capture': ['.json'], 'replay': ['.json'], 'ifc': ['.ifc'], 'asbuilt': ['.json'],
+                   'splat': ['.ply'], 'repair': ['.json'], 'survey': ['.ply'], 'localization': ['.json'],
+                   'motion': ['.bvh'], 'retarget': ['.json'], 'biomech-model': ['.osim'],
+                   'biomech-motion': ['.mot', '.sto'], 'biomech-options': ['.json'], 'biomech-loads': ['.json']}
+# These layers are private engine grants, never an implicit expansion of a
+# visitor's existing image/video or inspect access. Limits match each parser.
+LAYER_UPLOADS = {'splat': ('splat-repair', 64 * MIB), 'repair': ('splat-repair', 256 * 1024),
+                 'survey': ('localization-map', 64 * MIB), 'localization': ('localization-map', 16 * MIB),
+                 'motion': ('motion-retarget', 8 * MIB), 'retarget': ('motion-retarget', 16 * 1024),
+                 'biomech-model': ('biomechanics', 8 * MIB), 'biomech-motion': ('biomechanics', 8 * MIB),
+                 'biomech-options': ('biomechanics', 32 * 1024), 'biomech-loads': ('biomechanics', 8 * MIB)}
+NUMERICAL_ENV = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS')
+SOMA_ENV = ('WORLD_SOMA_RUNTIME_DIR', 'WORLD_SOMA_DEVICE', 'WARP_CACHE_PATH')
 
 class UploadBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=160)
-    kind: Literal['image', 'video', 'cloud', 'capture', 'replay', 'ifc', 'asbuilt']
+    kind: Literal['image', 'video', 'cloud', 'capture', 'replay', 'ifc', 'asbuilt',
+                  'splat', 'repair', 'survey', 'localization', 'motion', 'retarget',
+                  'biomech-model', 'biomech-motion', 'biomech-options', 'biomech-loads']
     size: int = Field(gt=0, le=VIDEO_BYTES, strict=True)
 
 class JobBody(BaseModel):
@@ -175,6 +191,19 @@ def sha256_file(path: Path) -> str:
 
 
 def validate_media(path: Path, kind: str):
+    if kind in LAYER_UPLOADS:
+        if kind in ('splat', 'repair'):
+            from .splat_repair import validate_upload
+        elif kind in ('survey', 'localization'):
+            from .localization_job import validate_upload
+        elif kind in ('motion', 'retarget'):
+            from .motion_retarget import validate_upload
+        else:
+            from .biomechanics import validate_upload
+        try:
+            return validate_upload(path, kind)
+        except (OSError, ValueError, TypeError, OverflowError, RecursionError) as error:
+            raise HTTPException(422, str(error)[:300])
     if kind in ('ifc', 'asbuilt'):
         from .asbuilt_jobs import validate_upload
         try:
@@ -213,6 +242,50 @@ def validate_media(path: Path, kind: str):
         raise HTTPException(422, 'File signature does not match a supported image or video. Convert the source first.')
 
 
+def validate_layer_inputs(engine, checked, source_job):
+    """Reject incomplete layer combinations before reserving any compute job."""
+    kinds = sorted(kind for kind, _ in checked)
+    data = dict(checked)
+    if engine == 'splat-repair':
+        if kinds != ['repair', 'splat']:
+            raise HTTPException(422, 'Splat repair requires one splat and one repair request.')
+        from .splat_repair import validate_options
+        try:
+            options = validate_options(data['repair'], data['splat']['vertices'])
+            if options['sourceSha256'] != data['splat']['sha256']:
+                raise ValueError('Repair request must bind the exact original Gaussian PLY.')
+        except (ValueError, TypeError) as error:
+            raise HTTPException(422, str(error)[:300])
+    elif engine == 'motion-retarget':
+        if kinds != ['motion', 'retarget']:
+            raise HTTPException(422, 'Motion retargeting requires one motion and one retarget request.')
+        fps = data['retarget'].get('fps')
+        if fps is not None and not math.isclose(fps, data['motion']['fps'], rel_tol=1e-5, abs_tol=1e-5):
+            raise HTTPException(422, 'Requested FPS disagrees with the uploaded motion timing.')
+    elif engine == 'biomechanics':
+        required = ['biomech-model', 'biomech-motion', 'biomech-options']
+        if kinds not in (sorted(required), sorted(required + ['biomech-loads'])) or source_job is not None:
+            raise HTTPException(422, 'Movement analysis requires one body model, motion and options, with optional force inputs.')
+        from .biomechanics import validate_inputs
+        try:
+            validate_inputs(data)
+        except (ValueError, TypeError, OverflowError, RecursionError) as error:
+            raise HTTPException(422, str(error)[:300])
+    elif engine == 'localization-map':
+        if 'localization' not in data:
+            raise HTTPException(422, 'Localization requires its reviewed request or recording.')
+        from robotics.localization.contracts import RECORDING_SCHEMA
+        options = data['localization']
+        recording = options.get('schema') == RECORDING_SCHEMA
+        if kinds != (['localization'] if recording else ['localization', 'survey']):
+            raise HTTPException(422, 'Localization needs one survey and request, or one source-bound recording.')
+        if not recording and options['scanSha256'] != data['survey']['sha256']:
+            raise HTTPException(422, 'Localization request must bind the exact original registered survey.')
+        needs_source = recording or options.get('sceneSha256') is not None
+        if needs_source != (source_job is not None):
+            raise HTTPException(422, 'Bind the exact completed source job for a recording or scene-bound map; scan-local maps take no source job.')
+
+
 def configured_engines(config):
     engines = {'inspect': {'id': 'inspect', 'label': 'Capture integrity (no AI)', 'available': True, 'input_kinds': ['image', 'video'], 'max_inputs': 12}}
     if not config:
@@ -228,7 +301,7 @@ def configured_engines(config):
         if not Path(command[0]).is_absolute() or not Path(command[0]).is_file():
             raise ValueError('Adapter executable must be an existing absolute path.')
         kinds = entry.get('input_kinds', [])
-        if not kinds or any(k not in ['image', 'video', 'cloud', 'capture', 'replay', 'ifc', 'asbuilt'] for k in kinds):
+        if not isinstance(kinds, list) or not kinds or any(not isinstance(k, str) or k not in UPLOAD_SUFFIXES for k in kinds):
             raise ValueError('Invalid adapter input kinds.')
         # Secrets this adapter alone receives from the worker's environment, by name (for example ANTHROPIC_API_KEY).
         secrets_ = entry.get('secrets', [])
@@ -278,7 +351,7 @@ def visual_metadata(entry):
     # metric_verified is always false. Anything else reads as arbitrary.
     result = {'representation': entry['representation'], 'units': 'm' if entry.get('units') == 'm' else 'arbitrary'}
     if 'coordinate_frame' in entry:
-        if entry['coordinate_frame'] not in ['right-handed-y-up', 'colmap', 'unknown']:
+        if entry['coordinate_frame'] not in ['right-handed-y-up', 'right-handed-z-up', 'colmap', 'unknown']:
             raise ValueError('Unknown visual coordinate frame.')
         result['coordinate_frame'] = entry['coordinate_frame']
     if 'point_count' in entry:
@@ -380,7 +453,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             if not isinstance(entry, dict):
                 raise ValueError('Invalid artifact entry.')
             name = entry.get('name', '')
-            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt','.pdf']:
+            if not isinstance(name, str) or not SAFE_NAME.fullmatch(name) or name in seen or Path(name).suffix.lower() not in ['.json','.ply','.spz','.splat','.ksplat','.glb','.usda','.ifc','.3dm','.dxf','.png','.jpg','.mp4','.csv','.pgm','.yaml','.zip','.txt','.pdf','.pcd','.bvh','.osim','.mot','.sto']:
                 raise ValueError('Unsafe artifact name or type.')
             seen.add(name)
             path = out / name
@@ -464,6 +537,10 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                 command = [arg.replace('{input_manifest}', str(request_file)).replace('{output_dir}', str(out)) for arg in entry['command']]
                 # The worker secret is deliberately excluded from adapter environments.
                 env = {k: v for k, v in os.environ.items() if k in ['PATH','HOME','SYSTEMROOT','CUDA_VISIBLE_DEVICES','LD_LIBRARY_PATH','HF_HOME','WORLD_DEPTH_MODEL_DIR','WORLD_MAPANYTHING_SOURCE_DIR','WORLD_MAPANYTHING_MODEL_DIR','WORLD_DINOV2_SOURCE_DIR','WORLD_LINGBOT_SOURCE_DIR','WORLD_LINGBOT_MODEL_PATH','WORLD_LINGBOT_BACKEND','WORLD_VLM_ENABLED','WORLD_VLM_BASE_URL','WORLD_VLM_MODEL','WORLD_VLM_REVISION','WORLD_VLM_API_KEY']}
+                if job['engine'] in ('splat-repair', 'motion-retarget', 'biomechanics'):
+                    env.update({k: os.environ[k] for k in NUMERICAL_ENV if k in os.environ})
+                if job['engine'] == 'motion-retarget':
+                    env.update({k: os.environ[k] for k in SOMA_ENV if k in os.environ})
                 env.update({'PYTHONUNBUFFERED':'1','HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1'})
                 env.update({k: os.environ[k] for k in entry.get('secrets', []) if os.environ.get(k)})
                 with (directory / 'operator.log').open('wb') as log:
@@ -580,13 +657,22 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
                             **({'object_detection':e['object_detection']} if e.get('object_detection') else {})}
                             | {feature: True for feature in ('dimension_checks', 'bim_review') if e.get(feature) is True}
                            for e in engines.values() if e['id'] in principal.engines],
-                'limits':{'file_bytes':FILE_BYTES,'video_bytes':VIDEO_BYTES,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
+                'limits':{'file_bytes':FILE_BYTES,'video_bytes':VIDEO_BYTES,'chunk_bytes':4*MIB,'retention_seconds':ttl,'concurrent_jobs':1,'storage_bytes':storage_limit,'job_bytes':job_limit,
+                          'upload_kind_bytes': {kind: limit for kind, (engine, limit) in LAYER_UPLOADS.items()
+                                                if engine in principal.engines and engines.get(engine, {}).get('available')}}, 'model_validation':'Adapter configuration is not a quality or hardware benchmark.'}
 
     @app.post('/v1/uploads',status_code=201)
     async def create_upload(body: UploadBody, request:Request):
         principal = request.state.principal
         suffix=Path(body.name).suffix.lower()
-        if suffix not in {'image':['.jpg','.jpeg','.png','.webp'],'video':['.mp4','.mov','.webm'],'cloud':['.json'],'capture':['.json'],'replay':['.json'],'ifc':['.ifc'],'asbuilt':['.json']}[body.kind]: raise HTTPException(422,'Unsupported file type.')
+        if suffix not in UPLOAD_SUFFIXES[body.kind]: raise HTTPException(422,'Unsupported file type.')
+        if body.kind in LAYER_UPLOADS:
+            layer, maximum = LAYER_UPLOADS[body.kind]
+            configured = engines.get(layer, {})
+            if layer not in principal.engines or not configured.get('available') or body.kind not in configured.get('input_kinds', []):
+                raise HTTPException(403,'This upload requires its configured and authorized processing engine.')
+            if body.size > maximum:
+                raise HTTPException(422, f'{body.kind} input exceeds its {maximum}-byte limit.')
         if body.kind in ('ifc', 'asbuilt'):
             if not {'asbuilt-update','asbuilt-evidence'} & set(principal.engines):
                 raise HTTPException(403,'As-built uploads require an authorized review engine.')
@@ -649,13 +735,15 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         async with io_lock:
             if store.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0]>=50:raise HTTPException(429,'Job quota reached. Delete finished jobs or wait for expiry.')
             check_owner_jobs(principal, adding=True)
+            checked = []
             for uid in body.upload_ids:
                 item=store.upload(uid, principal.owner_id)
                 if item['offset']!=item['size'] or item['kind'] not in engine['input_kinds']:raise HTTPException(422,'Incomplete or unsupported source.')
-                validate_media(store.upload_path(uid, principal.owner_id),item['kind'])
+                checked.append((item['kind'], validate_media(store.upload_path(uid, principal.owner_id),item['kind'])))
             if body.source_job is not None:
                 if engine.get('source_job') is not True:raise HTTPException(422,'This engine does not read an earlier job.')
                 if store.job(body.source_job, principal.owner_id)['status']!='complete':raise HTTPException(409,'The earlier job has not completed.')
+            validate_layer_inputs(body.engine, checked, body.source_job)
             check_storage(job_limit, principal)
             jid=secrets.token_hex(16)
             store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id,source_job) VALUES (?,?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id,body.source_job));store.db.commit()

@@ -223,6 +223,8 @@ test('PLY handles CRLF and ignores face data after vertex records', () => {
 test('large binary clouds are uniformly sampled under the fixed display budget', () => {
   const n=MAX_POINTS+1, h=new TextEncoder().encode(`ply\nformat binary_little_endian 1.0\nelement vertex ${n}\nproperty float x\nproperty float y\nproperty float z\nend_header\n`), b=new ArrayBuffer(h.length+n*12);new Uint8Array(b).set(h);
   const p=parsePLY(b); assert.equal(p.sampled,true);assert.ok(p.points.length/STRIDE<=MAX_POINTS);assert.equal(p.total,n);
+  const source=parsePLY(b,{maxPoints:200000});assert.equal(source.sampled,false);assert.equal(source.points.length/STRIDE,n);assert.equal(source.sourceIndices.at(-1),n-1);
+  assert.throws(()=>parsePLY(b,{maxPoints:200001}),/sampling budget/);
 });
 test('splat records reject malformed positions and normalize quaternion', () => {
   const b=new ArrayBuffer(32),v=new DataView(b);[1,2,3,.1,.2,.3].forEach((n,i)=>v.setFloat32(i*4,n,true));

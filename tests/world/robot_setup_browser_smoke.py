@@ -6,6 +6,7 @@ large-target/readable-text layouts at phone widths. The planner is the real brow
 the authored sample; no model output is substituted. WORLD_URL, WORLD_BROWSERS and WORLD_SMOKE_OUT
 follow the other World browser smoke scripts.
 """
+import json
 import os
 from pathlib import Path
 
@@ -75,6 +76,51 @@ def check_camera(page):
     assert pressed(page, '#cam-names')
     page.locator('#cam-names').click()
     page.locator('#reset-view').click()
+
+
+def check_preview_camera(page):
+    # Observe the actual rendered camera matrix. A panning regression also changes pixels,
+    # but cannot pass the rotation-basis assertion below. No camera implementation is mocked.
+    page.evaluate("""() => {
+      const gl = WebGL2RenderingContext.prototype, names = new WeakMap();
+      const locate = gl.getUniformLocation, upload = gl.uniformMatrix4fv;
+      window.__robotPreviewView = null;
+      gl.getUniformLocation = function(program, name) {
+        const location = locate.call(this, program, name);
+        if (location) names.set(location, name);
+        return location;
+      };
+      gl.uniformMatrix4fv = function(location, transpose, value) {
+        if (this.canvas.id === 'visual-canvas' && names.get(location) === 'view')
+          window.__robotPreviewView = Array.from(value);
+        return upload.call(this, location, transpose, value);
+      };
+    }""")
+    rows = [f'{x / 4} {y / 4} {(x * x + y) / 20} 70 200 230'
+            for x in range(-4, 5) for y in range(-3, 4)]
+    ply = ('ply\nformat ascii 1.0\ncomment authored camera-control fixture\n'
+           f'element vertex {len(rows)}\nproperty float x\nproperty float y\nproperty float z\n'
+           'property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n'
+           + '\n'.join(rows) + '\n')
+    page.locator('#files').set_input_files({'name': 'authored-camera-controls.ply',
+                                          'mimeType': 'application/octet-stream', 'buffer': ply.encode()})
+    canvas = page.locator('#visual-canvas')
+    expect(canvas).to_be_visible()
+    canvas.scroll_into_view_if_needed()
+    page.wait_for_function('window.__robotPreviewView?.length === 16')
+    page.locator('#reset-view').click()
+    page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    before = page.evaluate('window.__robotPreviewView')
+    page.locator('#cam-left').click()
+    page.wait_for_function('before => [0,1,2,4,5,6,8,9,10].some(i => Math.abs(window.__robotPreviewView[i] - before[i]) > .01)', arg=before)
+    page.locator('#cam-right').click()
+    page.wait_for_function('before => window.__robotPreviewView.every((value, i) => Math.abs(value - before[i]) < .00001)', arg=before)
+    canvas.press('ArrowRight')
+    page.wait_for_function('before => [12,13,14].some(i => Math.abs(window.__robotPreviewView[i] - before[i]) > .001)', arg=before)
+    panned = page.evaluate('window.__robotPreviewView')
+    assert all(abs(panned[i] - before[i]) < .00001 for i in (0, 1, 2, 4, 5, 6, 8, 9, 10)), 'Preview arrows still pan without rotating'
+    page.locator('#reset-view').click()
+    page.wait_for_function('before => window.__robotPreviewView.every((value, i) => Math.abs(value - before[i]) < .00001)', arg=before)
 
 
 def check_tap_to_choose(page):
@@ -172,6 +218,31 @@ def check_big_robot(page):
     page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')", timeout=30000)
 
 
+def check_no_fitting_start(page):
+    room = {'schema': 'brainsnn.world.v1', 'name': 'Authored two-metre room',
+            'width': 2, 'depth': 2, 'objects': [], 'provenance': 'authored', 'start': {'x': 1, 'z': 1}}
+    page.locator('#files').set_input_files({'name': 'authored-small-room.json',
+                                          'mimeType': 'application/json', 'buffer': json.dumps(room).encode()})
+    expect(page.locator('#world-title')).to_have_text(room['name'])
+    page.locator('#scale-reviewed').check()
+    page.locator('#map-reviewed').check()
+    page.locator('[data-robot=forklift]').click()
+    page.locator('#robot-setup-run').click()
+    expect(page.locator('#robot-setup-note')).to_contain_text('No starting spot fits', timeout=30000)
+    fix = page.locator('#robot-setup-fix')
+    expect(fix).to_have_text('Change robot size or clearance')
+    fix.click()
+    expect(page.locator('#robot-width')).to_be_focused()
+    expect(page.locator('#robot-width')).to_have_value('1.1')
+    expect(page.locator('#robot-depth')).to_have_value('2.4')
+    expect(page.locator('#robot-margin')).to_have_value('0.1')
+    page.locator('#tab-world').click()
+    expect(page.locator('#start-x')).to_have_value('1')
+    expect(page.locator('#start-z')).to_have_value('1')
+    expect(page.locator('#map-reviewed')).to_be_checked()
+    page.locator('#hero-sample').click()
+
+
 def check_readable(page, label):
     size = page.evaluate("""() => ({viewport: innerWidth,
       page: document.documentElement.scrollWidth, body: document.body.scrollWidth})""")
@@ -188,7 +259,7 @@ def check_readable(page, label):
 def run_browser(playwright, name):
     browser = getattr(playwright, name).launch()
     try:
-        context = browser.new_context(viewport={'width': 1280, 'height': 900})
+        context = browser.new_context(viewport={'width': 1280, 'height': 900}, reduced_motion='reduce')
         page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
@@ -200,13 +271,15 @@ def run_browser(playwright, name):
         check_chips(page)
         check_undo(page)
         check_worlds(page)
+        check_no_fitting_start(page)
+        check_preview_camera(page)
         check_contrast(page)
         check_big_robot(page)
         page.screenshot(path=str(OUTPUT / f'robot-setup-{name}-desktop.png'))
         context.close()
         for width in (320, 390):
             for large in (False, True):
-                context = browser.new_context(viewport={'width': width, 'height': 844}, has_touch=True)
+                context = browser.new_context(viewport={'width': width, 'height': 844}, has_touch=True, reduced_motion='reduce')
                 page = context.new_page()
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 if large:

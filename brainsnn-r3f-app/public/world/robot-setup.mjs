@@ -89,19 +89,23 @@ export function mountRobotSetup({host, robots, getState, actions}) {
     if (icon !== (stopping ? 'stop' : 'play')) { icon = stopping ? 'stop' : 'play'; run.querySelector('.run-icon').innerHTML = ICONS[icon]; }
     put(run.querySelector('.run-label'), stopping ? 'Stop' : s.origin === 'street' ? 'Open street routes' : 'Let it try');
     run.disabled = s.origin !== 'street' && !!s.runDisabled;
-    const spot = s.issue?.advice?.start, robotName = (s.robotName || 'robot').toLowerCase();
+    // When size is supplied, the advised start fits that smaller envelope only.
+    const needsSmallerEnvelope = s.issue?.advice?.size !== undefined;
+    const spot = needsSmallerEnvelope ? null : s.issue?.advice?.start, robotName = (s.robotName || 'robot').toLowerCase();
     put(note, s.origin === 'street'
       ? 'The street has its own robot route tools. Your robot choice is used in rooms and maps.'
       : s.origin === 'capture' ? 'Add your photo or video first. A robot needs a checked map to try a route.'
+      : needsSmallerEnvelope ? `No starting spot fits the ${robotName} at its current size and clearance. Review the robot size or clearance settings. ${s.issue.message}`
       : spot ? `The ${robotName} is too big for its starting spot. ${s.issue.message}`
       : s.issue ? `It could not finish: ${s.issue.message}`
       : s.gate ? `Before it can try: ${s.gate}`
       : stopping ? 'Planning the route…'
       : 'It finds a path around things. This is a simulation, not a real robot.');
-    // One next step when the robot cannot go: move its start to where it fits, or open the check a person must make.
+    // Moving the current robot is only useful when the planner found room for its current envelope.
     const inMap = s.origin !== 'street' && s.origin !== 'capture';
-    fixAction = inMap && spot ? () => actions.moveStart(spot) : inMap && s.gate ? () => actions.showCheck() : null;
-    put(fix, inMap && spot ? 'Move the start to where it fits' : inMap && s.gate ? 'Show me what to check' : '');
+    const canChangeEnvelope = inMap && needsSmallerEnvelope && typeof actions.showRobotSettings === 'function';
+    fixAction = canChangeEnvelope ? () => actions.showRobotSettings() : inMap && spot ? () => actions.moveStart(spot) : inMap && s.gate ? () => actions.showCheck() : null;
+    put(fix, canChangeEnvelope ? 'Change robot size or clearance' : inMap && spot ? 'Move the start to where it fits' : inMap && s.gate ? 'Show me what to check' : '');
     fix.hidden = !fixAction;
   }
   refresh();

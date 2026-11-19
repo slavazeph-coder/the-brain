@@ -1,0 +1,4 @@
+# OpenSim itself is installed from a hash-pinned platform wheel by setup_runtime.
+numpy==2.4.3
+scipy==1.17.1
+defusedxml==0.7.1

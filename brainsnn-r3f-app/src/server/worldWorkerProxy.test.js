@@ -214,12 +214,12 @@ it('world processing: the passcode alone gives both sides the same tenant creden
   assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_SITE_PASSCODE: 'too-short' }).status().available, false);
 });
 
-it('world processing: IFC and as-built request uploads stay with owner sessions', async () => {
+it('world processing: private processing uploads stay with owner sessions', async () => {
   const worker=await fakeWorker(),web=await site(env(worker,{WORLD_SITE_VISITORS:'1',WORLD_WORKER_SITE_VISITOR_TOKEN:VISITOR}));
   try {
     const visitor=(await web.call('/api/world/session',{method:'POST',body:{}})).data.token;
     const owner=(await web.call('/api/world/session',{method:'POST',body:{passcode:PASSCODE}})).data.token;
-    for(const [kind,name] of [['ifc','prior.ifc'],['asbuilt','review.json']]) {
+    for(const [kind,name] of [['ifc','prior.ifc'],['asbuilt','review.json'],['splat','source.ply'],['repair','repair.json'],['survey','scan.ply'],['localization','map.json'],['motion','human.bvh'],['retarget','motion.json'],['biomech-model','body.osim'],['biomech-motion','movement.mot'],['biomech-options','options.json'],['biomech-loads','forces.json']]) {
       const body={kind,name,size:5},before=worker.seen.length;
       assert.equal((await web.call('/api/world/worker/v1/uploads',{method:'POST',token:visitor,body})).status,403);
       assert.equal(worker.seen.length,before,'Private upload never reaches the upstream.');
