@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Arrange a room](world-scan-workshop-2026-11-19.md) — reviewed scan selections, reusable objects, a preview lamp and a source-bound handoff to repair.
+
 → [Stereo depth prototype](world-stereo-depth-2026-11-19.md) — estimated depth from rectified pairs and an independent viewer for StereoSplat exports.
 
 → [Open4DGS moving scenes](world-open4dgs-2026-11-19.md) — native export playback, local camera timing and the operator-run reconstruction workflow.
