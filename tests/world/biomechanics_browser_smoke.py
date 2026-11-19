@@ -182,6 +182,8 @@ def check(pw, name, origin, worker, token, tmp):
         page.keyboard.press('ArrowRight')
         expect(page.locator('[data-layer-tab=biomechanics]')).to_be_focused()
         page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=open4dgs]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
         expect(page.locator('[data-layer-tab=repair]')).to_be_focused()
         assert not errors, errors
         receipt = {'passed': True, 'nativeOpenSimExecuted': True, 'analyses': ['kinematics', 'inverse-dynamics-none-declared', 'inverse-dynamics-supplied'],
