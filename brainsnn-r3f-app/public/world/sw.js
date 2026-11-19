@@ -10,7 +10,14 @@ const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', '
 // The module graph imports one file outside /world/ (RoomPlan/Arena import); without it the shell cannot start offline.
 const SHARED = ['/arena/site-core.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    const oldShells = keys.filter(key => key.startsWith('world-shell-') && key !== CACHE);
+    await Promise.all(oldShells.map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
+});
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   // In production /world/ is the outer site shell, whose bundles live outside this cache: never store it, and open the
