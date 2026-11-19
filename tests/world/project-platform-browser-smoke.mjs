@@ -122,8 +122,11 @@ try {
   await page.locator('[data-change-decision] [name=decision]').selectOption('implemented');
   await page.locator('[data-change-decision] [name=reason]').fill('Implementation is reported for this synthetic test.');
   await page.locator('[data-change-decision] button[type=submit]').click();await notice('Change decision recorded.');
-  await section('trials');await recordTrial('physical','fail',proposedId);await recordTrial('physical','pass',proposedId);
-  assert.ok((await page.locator('#project-panel').innerText()).includes('Operator-reported physical trial'));
+  await section('trials');await recordTrial('physical','pass',proposedId);await recordTrial('physical','fail',proposedId);
+  await section('changes');
+  assert.equal(await page.locator('[data-change-decision] [name=trial_id] option').count(),1,'A later failure must remove an older pass from verification choices.');
+  await section('trials');await recordTrial('physical','pass',proposedId);
+  assert.ok((await page.locator('#project-panel').innerText()).includes('Operator reported physical trial'));
   await section('changes');
   await page.locator('[data-change-decision] [name=decision]').selectOption('verified');
   await page.locator('[data-change-decision] [name=trial_id]').selectOption({index:1});
@@ -150,11 +153,14 @@ try {
   const final=await (await fetch(`${fixture.url}/api/world/v1/projects/${projectId}`,{headers})).json();
   assert.equal(final.project.readiness.physical_validated,false);
   assert.equal(final.project.readiness.certified,false);
-  assert.equal(final.project.trials.length,3);
+  assert.equal(final.project.trials.length,4);
   assert.ok(final.project.trials.every(trial=>trial.physical_validated===false));
 
   await page.locator('#disconnect-button').click();await notice('Disconnected.');
   assert.equal(await page.locator('#project-content').isVisible(),false);await noStoredKeys();
   assert.deepEqual(errors,[]);
   console.log(JSON.stringify({ok:true,checks:['connect','create','source-bytes','immutable-revisions','literal-untrusted-text','independent-review','simulation-versus-physical','reload-restore','trial-verification','stale-version-rejection','390px-no-overflow','credential-memory-only'],screenshots:output}));
+} catch(error) {
+  if(page&&!page.isClosed())await page.screenshot({path:join(output,'projects-failure.png'),fullPage:true}).catch(()=>{});
+  throw error;
 } finally {await Promise.allSettled([context?.close(),browser?.close(),fixture.close()]);}

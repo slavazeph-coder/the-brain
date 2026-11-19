@@ -65,6 +65,8 @@ jobs:
         run: python -m pip install -r robotics/world_worker/requirements.txt pytest==9.1.1 httpx==0.28.1 Pillow
       - name: Persistent worker retries and tenant boundaries
         run: python -m pytest -q tests/world/test_worker_idempotency.py tests/world/test_tenant_isolation.py tests/world/test_site_worker_deploy.py
+      - name: Complete customer-key processing and retention through service restarts
+        run: node tests/world/project-processing-e2e.mjs
       - name: Keep browser evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -211,6 +211,12 @@ The OpenAPI contract includes these processing routes and the bounded native upl
 
 Upload chunks use the native offset contract. A lost PUT response should be resolved by reading the upload offset before explicitly sending remaining bytes. The SDK does not automatically resend chunks. Processing rate/concurrency bounds and owner quotas are operating controls, not durable subscription billing.
 
+The bridge allows at most 16 active processing requests across the site process,
+four per tenant, and 120 requests per minute per tenant. These process-local
+admission limits supplement the durable API-key hourly quota and worker storage,
+engine and active-job limits. Each downloaded artifact must declare its exact
+length; incomplete streams are terminated. The SDK also verifies its manifest hash.
+
 ```javascript
 const capabilities = await client.processingRequest('/capabilities');
 // Select only an engine marked available and explicitly permitted to this owner.

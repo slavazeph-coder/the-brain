@@ -45,6 +45,9 @@ the robot playground and preliminary Project Review from PRs315/318.
   universal JS client `public/world/projects-client.mjs`; runnable Node example.
 - Tests use production HTTP handlers and PostgreSQL SQL with PGlite locally,
   plus PostgreSQL17 and the full browser flow in `world-project-platform.yml`.
+  `tests/world/project-processing-e2e.mjs` also exercises one named key through
+  the real Python inspect worker, exact artifact retention, and both service
+  restarts; a retry preserves one job. Its source data is an authored PNG.
   Local Chromium startup is blocked by this execution environment's UNIX socket
   policy; do not mistake that for an application result or disable the policy.
 
