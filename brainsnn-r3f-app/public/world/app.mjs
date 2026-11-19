@@ -90,6 +90,31 @@ async function openProjectReview(key=''){
 $('project-review-close').addEventListener('click',()=>$('project-review-dialog').close());
 $('project-review-dialog').addEventListener('close',()=>{projectReviewLoadAbort?.abort();projectReviewLoadAbort=null;projectReview.cancel();});
 $('scene-project-review').addEventListener('click',()=>void openProjectReview(sceneContext?.jobKey));
+// A deliberate same-origin handoff copies one bounded map snapshot, never the
+// worker credential or original capture media. The Projects page asks the user
+// to select a workspace and explicitly retain these bytes before any upload.
+let projectSnapshotHandoff=null;
+function saveMapToProject(){
+  if(sandbox?.isStreet()){status('Use the street scene export, then upload its bounded source file in Saved projects.',true);return;}
+  if(!world){status('Open a map before saving a project snapshot.',true);return;}
+  const content_text=JSON.stringify({schema:'brainsnn.workspace-snapshot.v1',captured_at:new Date().toISOString(),source_type:'workspace-snapshot',world:clone(world),robot:clone(robot),assumptions:clone(assumptions),planning_result:result?clone(result):null,planning_result_is_simulation:true,source_files_retained:false,source_names:sources.map(source=>source.name)},null,2);
+  if(new TextEncoder().encode(content_text).length>512*1024){status('This map snapshot exceeds 512 KiB. Download your results and retain a smaller exact excerpt in Saved projects.',true);return;}
+  projectSnapshotHandoff?.();
+  const target=window.open('/world/projects.html','_blank');
+  if(!target){status('Allow this page to open Saved projects, or download your map and upload it there.',true);return;}
+  const source={name:'brainsnn-workspace-snapshot.json',content_text};
+  let timeout;
+  function cleanup(){window.removeEventListener('message',receive);clearTimeout(timeout);if(projectSnapshotHandoff===cleanup)projectSnapshotHandoff=null;}
+  function receive(message){
+    if(message.origin!==location.origin||message.source!==target)return;
+    if(message.data?.type==='brainsnn-project-ready')target.postMessage({type:'brainsnn-project-source',source},location.origin);
+    if(message.data?.type==='brainsnn-project-source-received'){cleanup();status('Map snapshot copied to Saved projects. Select a project there and choose Save snapshot to retain it.');}
+  }
+  window.addEventListener('message',receive);timeout=setTimeout(cleanup,60000);projectSnapshotHandoff=cleanup;
+  status('Opening Saved projects. The snapshot stays in page memory until you choose to save it there.');
+}
+$('save-map-to-project')?.addEventListener('click',saveMapToProject);
+window.addEventListener('pagehide',()=>projectSnapshotHandoff?.());
 function getVisualViewer(){if(!visualViewer)visualViewer=createVisualViewer($('visual-canvas'));return visualViewer;}
 try{renderer=createRenderer($('world-canvas'));renderer.setRobot(robot);}catch(e){status(e.message,true);}
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();robotSetup?.refresh();}

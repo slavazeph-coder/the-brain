@@ -9,12 +9,13 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-feature-showcase-v39/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-showcase-projects-v40/,'Changes to precache need a new cache version');
   for (const name of ['stereo-export.mjs', 'stereo-export-data.mjs', 'stereo-depth-data.mjs', 'stereo-depth-tool.mjs',
     'stereo-photo.mjs', 'examples/stereo/left.png', 'examples/stereo/right.png', 'examples/stereo/calibration.json']) {
     assert.ok(sw.includes(`'./${name}'`), `${name} is part of the stereo depth shell`);
     assert.ok(readFileSync(new URL(name,root)).length > 0);
   }
+  for(const name of ['projects.html','projects.css','projects-ui.mjs','projects-client.mjs','projects-sha256.mjs','projects-api.openapi.json'])assert.ok(sw.includes(`'./${name}'`),`${name} is part of the saved projects shell`);
   for (const name of ['open4dgs-tool.mjs', 'open4dgs-data.mjs', 'open4dgs-player.mjs', 'open4dgs-trigs.mjs', 'open4d-capture.mjs', 'open4d-capture.css', 'examples/open4dgs/export_meta.json']) {
     assert.ok(sw.includes(`'./${name}'`), `${name} is part of the moving scene shell`);
   }
