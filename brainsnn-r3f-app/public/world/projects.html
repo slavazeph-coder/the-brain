@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#06060a">
+  <meta name="description" content="Keep site sources, revisions, reviewed evidence and deployment trials together in a saved BrainSNN project.">
+  <title>Saved Projects | BrainSNN</title>
+  <link rel="icon" href="/favicon.svg">
+  <link rel="stylesheet" href="./world.css">
+  <link rel="stylesheet" href="./projects.css">
+</head>
+<body class="projects-page">
+  <a class="skip" href="#projects-main">Skip to projects</a>
+  <header class="nav projects-nav">
+    <a class="brand" href="/" aria-label="BrainSNN home"><span class="brand-mark" aria-hidden="true">B</span><strong>BrainSNN</strong></a>
+    <nav aria-label="Main"><a href="/world/">World Builder</a><a class="active" href="./projects.html" aria-current="page">Saved projects</a><a href="./api.html">Developer guide</a></nav>
+  </header>
+  <main id="projects-main">
+    <section class="projects-heading">
+      <div><p class="eyebrow"><span class="dot"></span> WORLD BUILDER / PROJECTS</p><h1>Keep the evidence.<br><em>Make the next decision.</em></h1><p>One saved record for your sources, site revisions, proposed changes and field results.</p></div>
+      <div class="projects-service"><span class="projects-state" id="service-state">Checking service</span><p id="service-note">Checking whether saved projects are available.</p><button type="button" class="small" id="service-retry" hidden>Check again</button></div>
+    </section>
+
+    <section class="projects-connection" aria-labelledby="connection-heading">
+      <div><h2 id="connection-heading">Connect to your workspace</h2><p id="connection-copy">Use your operator-issued project API key. It stays in this page’s memory; enter it again after a reload.</p></div>
+      <form id="connect-form" class="projects-connect-form" autocomplete="off">
+        <label for="project-api-key">Project API key<input id="project-api-key" type="password" autocomplete="off" spellcheck="false" required placeholder="bsk_…" aria-describedby="connection-copy"></label>
+        <button class="primary" type="submit" id="connect-button">Connect</button>
+      </form>
+      <div id="connected-identity" hidden><strong id="actor-name"></strong><p id="actor-detail"></p><button type="button" id="disconnect-button">Disconnect</button></div>
+    </section>
+
+    <div id="projects-notice" class="projects-notice" role="status" aria-live="polite" hidden></div>
+    <div class="projects-retry-actions" id="request-retry" hidden><button type="button" id="retry-request">Retry the same request</button><button type="button" id="discard-retry">Dismiss retry</button></div>
+    <section id="handoff-banner" class="projects-handoff" aria-labelledby="handoff-heading" hidden><div><h2 id="handoff-heading">Your World Builder snapshot is ready</h2><p id="handoff-note"></p><p class="projects-muted">This copies the current map and planning assumptions. Original capture files are not included.</p></div><div class="projects-actions"><button class="primary" type="button" id="save-handoff" disabled>Save snapshot to this project</button><button type="button" id="dismiss-handoff">Dismiss</button></div></section>
+
+    <div class="projects-layout">
+      <aside class="projects-sidebar" aria-labelledby="projects-list-heading">
+        <div class="projects-section-heading"><h2 id="projects-list-heading">Your projects</h2><button type="button" id="refresh-projects" class="small" disabled aria-label="Refresh project list">Refresh</button></div>
+        <div id="project-list" class="projects-list"><p class="projects-empty">Connect to load your saved projects.</p></div>
+        <details id="create-project-details"><summary>Create a project</summary><form id="create-project-form"><fieldset id="create-project-fields" disabled><label>Project name<input name="title" maxlength="160" required placeholder="Hotel · ground-floor route"></label><label>What are you assessing?<textarea name="description" maxlength="2000" rows="3" placeholder="Site, robot and the decision you need to make"></textarea></label><button type="submit" class="primary">Create project</button></fieldset></form></details>
+      </aside>
+      <section class="projects-workspace" id="project-workspace" aria-labelledby="project-title" aria-busy="false">
+        <div id="project-empty" class="projects-welcome"><span class="projects-welcome-mark" aria-hidden="true">B</span><p class="eyebrow">EVIDENCE &amp; DEPLOYMENT REVIEW</p><h2>A project that you can<br>pick up tomorrow.</h2><p>Connect, then create or open a project. Start with an exact source file, create a site revision, and attach the evidence behind each decision.</p><ol><li><strong>Retain</strong><span>Source files and immutable revisions</span></li><li><strong>Review</strong><span>Measurements and proposed changes</span></li><li><strong>Compare</strong><span>Predictions with recorded field results</span></li></ol></div>
+        <div id="project-content" hidden>
+          <header class="projects-project-header"><div><p id="project-meta" class="projects-muted"></p><h2 id="project-title"></h2><p id="project-description"></p></div><div class="projects-actions"><button type="button" id="refresh-project">Reload project</button><button type="button" id="export-project">Download record</button></div></header>
+          <div id="project-readiness"></div>
+          <nav id="project-tabs" class="projects-tabs" aria-label="Project sections"></nav>
+          <div id="project-panel" class="projects-panel"></div>
+        </div>
+      </section>
+    </div>
+    <details class="projects-api-reference"><summary>API and access details</summary><div id="api-details"><p>Project requests use <code>/api/world/v1</code>. Connect to see your credential identity and usage.</p></div><p>Every write includes an idempotency key and the project version. If someone changes a project, reload it before making a fresh decision. The downloaded record contains project data, not your API key.</p><p><a href="./api.html">Open developer guide →</a></p></details>
+    <footer class="projects-footer"><span>Uploaded evidence and field results remain attributed records. Review does not establish survey accuracy or certify robot safety.</span><a href="/world/">Back to World Builder →</a></footer>
+  </main>
+  <noscript><p class="projects-notice">JavaScript is needed to connect to your saved projects.</p></noscript>
+  <script type="module" src="./projects-ui.mjs"></script>
+</body>
+</html>

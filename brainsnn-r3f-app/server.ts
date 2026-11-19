@@ -40,6 +40,8 @@ import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createWorldWorkerProxy } from "./src/server/worldWorkerProxy.js";
 import { createProjectReviewService } from "./src/server/projectReview.js";
+import { createWorldProjectService } from "./src/server/worldProjectService.js";
+import { createProjectProcessingBridge } from "./src/server/projectProcessingBridge.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 
 
@@ -74,6 +76,13 @@ app.use('/arena', (req, res, next) => {
 app.use('/api/gpu-worker', gpuBridge.handle);
 // World Builder processing on this site: streamed 4 MiB upload chunks, so also ahead of the parser and limiter.
 const worldProcessing = createWorldWorkerProxy(process.env);
+// Named customer credentials and retained evidence have a separate, durable
+// boundary from the existing anonymous/owner browser processing sessions.
+// Both authenticate before reading bodies; uploads retain their 4 MiB cap.
+const worldProjects = createWorldProjectService({ env: process.env });
+const projectProcessing = createProjectProcessingBridge({ env: process.env, projects: worldProjects });
+app.use('/api/world/v1/processing', projectProcessing.handle);
+app.use('/api/world/v1', worldProjects.handle);
 // Authenticate and bound review bodies before the general parser. The service
 // is initialized below with the existing server-only model and spend ceiling.
 app.use('/api/world/project-review', (req, res, next) => projectReview.handle(req, res, next));
