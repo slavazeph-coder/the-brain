@@ -8,7 +8,6 @@ import sys
 import numpy as np
 from PIL import Image
 import pycolmap
-import torch
 
 
 def check(condition, message):
@@ -41,6 +40,8 @@ def check_cameras(reference_path, model_path, first, last):
         camera = reconstruction.cameras[image.camera_id]
         pose = image.cam_from_world()
         expected_size = (row["width"], row["height"])
+        check(camera.model.name in {"SIMPLE_PINHOLE", "PINHOLE", "OPENCV"},
+              f"Camera {folder} needs a supported pinhole or OPENCV model shared by prep and training.")
         pairs = ((pose.rotation.matrix(), row["R"]), (pose.translation, row["t"]), (camera.params, row["params"]))
         check(image.name == row["name"] and camera.model.name == row["camera_model_name"] and
               (camera.width, camera.height) == expected_size and all(
@@ -56,6 +57,8 @@ def check_cameras(reference_path, model_path, first, last):
 
 
 def main():
+    import torch
+
     ref, model, first, last, roma_commit, memfof_commit = sys.argv[1:]
     check(sys.version_info[:2] == (3, 11) and torch.version.cuda == "12.8" and
           torch.__version__ == "2.10.0+cu128" and torch.cuda.is_available(),

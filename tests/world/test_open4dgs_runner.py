@@ -60,6 +60,16 @@ def test_changed_or_missing_capture_files_cannot_reuse_a_completed_run(tmp_path)
         runner.load_capture(tmp_path, 1, None, None)
 
 
+def test_images_and_masks_cannot_be_swapped_by_camera_order(tmp_path):
+    prepared_files(tmp_path)
+    (tmp_path / "images/0003").mkdir()
+    with pytest.raises(ValueError, match="exactly the calibrated camera folders"):
+        runner.load_capture(tmp_path, 1, None, None)
+    runner.write_json(tmp_path / "reference_export.json", {"cameras": [{"folder": "01"}, {"folder": "0002"}]})
+    with pytest.raises(ValueError, match="same number of digits"):
+        runner.load_capture(tmp_path, 1, None, None)
+
+
 def test_untrusted_or_incomplete_visual_timing_is_never_accepted(tmp_path):
     prepared_files(tmp_path)
     capture = runner.load_capture(tmp_path, 1, None, None)
@@ -127,3 +137,18 @@ def test_ply_metadata_cannot_hide_a_truncated_frame(tmp_path):
     (tmp_path / "frame_000001.ply").write_bytes(frame[:-1])
     with pytest.raises(ValueError, match="frame_000001"):
         runner.read_ply_exports(tmp_path, capture)
+
+
+def test_evaluation_requires_the_final_configured_snapshot_and_real_samples(tmp_path):
+    report = tmp_path / "eval.json"
+    run = tmp_path / "trained"
+    entry = {"snapshot_step": 24, "eval_full": 22.1, "eval_pairs": 16, "shutter": "captured"}
+    value = {"step": 24, "runs": {str(run): entry}}
+    runner.write_json(report, value)
+    runner.check_evaluation(report, run, 24)
+    with pytest.raises(ValueError, match="final captured-shutter snapshot"):
+        runner.check_evaluation(report, run, 25)
+    entry["eval_pairs"] = 0
+    runner.write_json(report, value)
+    with pytest.raises(ValueError, match="finite whole-photo"):
+        runner.check_evaluation(report, run, 24)

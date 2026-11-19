@@ -23,6 +23,7 @@ ROMA_REV = "95c9968145c8906b7b59383258e9f73b02853d89"
 MEMFOF_REV = "a51de9fc59c6fe20ba08e079372c7b583d58a712"
 IMAGE_PATTERN = "{frame:06d}.jpg"
 MASK_PATTERN = "{frame:06d}.png"
+TEMPORAL_THRESHOLD = 0.01  # Pinned trainer's active-row threshold; also pass to the timeline packager.
 STATE_SCHEMA = "brainsnn.open4dgs.run.v1"
 HEADER = struct.Struct("<8sIIQQQQQQ")
 
@@ -95,6 +96,11 @@ def load_capture(path, frame_start, frame_end, fps):
     require(all(isinstance(name, str) and re.fullmatch(r"[0-9]{2}|[0-9]{4}", name)
                 and 1 <= int(name) <= 99 for name in cameras), "Camera folders must be numbered 01–99 or 0001–0099.")
     require(len({int(name) for name in cameras}) == len(cameras), "Camera IDs must be unique.")
+    # The upstream image parser sorts lexically, while mask/timing lookup sorts
+    # numerically. Mixed widths can silently map images to the wrong masks.
+    require(len({len(name) for name in cameras}) == 1, "Use the same number of digits in every camera folder.")
+    require({folder.name for folder in (path / "images").iterdir() if folder.is_dir()} == set(cameras),
+            "The image directory must contain exactly the calibrated camera folders.")
     sources = [reference]
     setup_path = path / "camera-setup.json"
     if setup_path.is_file():
@@ -294,6 +300,16 @@ def final_snapshot(directory):
     return snapshots[0], int(snapshots[0].stem.removeprefix("snap_s"))
 
 
+def check_evaluation(path, trained, step):
+    report = json_object(path)
+    entry = report.get("runs", {}).get(str(trained), {})
+    score = entry.get("eval_full")
+    count = entry.get("eval_pairs")
+    require(report.get("step") == step and entry.get("snapshot_step") == step and
+            entry.get("shutter") == "captured" and type(score) in (int, float) and math.isfinite(score) and
+            type(count) is int and count > 0, "Expected finite whole-photo evaluation for the final captured-shutter snapshot.")
+
+
 def run_pipeline(args, capture, core, trigs, root, python, env, runtime, lock):
     identity = {
         "upstream": {"core": CORE_REV, "trigs": TRIGS_REV}, "runtime": runtime,
@@ -303,6 +319,7 @@ def run_pipeline(args, capture, core, trigs, root, python, env, runtime, lock):
         "frame_step": args.frame_step, "steps": args.steps, "chunk_seconds": args.chunk_seconds,
         "readout_ms": args.sync_readout_ms, "global_shutter_sync": args.visual_sync_global_shutter,
         "source_alignment": capture.alignment, "python": str(python),
+        "runner_sha256": file_digest(Path(__file__)),
     }
     run = Run(root, identity, args.resume, lock, env)
     # Give the trainer the exact required inputs without picking up a stale
@@ -380,6 +397,7 @@ def run_pipeline(args, capture, core, trigs, root, python, env, runtime, lock):
             "--start-frame", capture.first, "--end-frame", capture.last, "--keyframe-step", args.frame_step,
             "--masks-root", data / "masks", "--mask-pattern", MASK_PATTERN, "--device", "cuda",
             "--config.fps", capture.fps, "--config.n-steps", args.steps,
+            "--config.temporal-active-threshold", TEMPORAL_THRESHOLD,
             # Force the final config-bearing snapshot without intermediate GPU-to-host copies.
             "--config.viewer-snapshot-every", 1_000_000_000, "--config.viewer-snapshot-keep-last", 1,
             *chunks, *train_timing), root)
@@ -395,7 +413,7 @@ def run_pipeline(args, capture, core, trigs, root, python, env, runtime, lock):
 
     def evaluation_files(stage):
         report = stage / "eval.json"
-        require(str(trained) in json_object(report).get("runs", {}), "Evaluation did not report the completed run.")
+        check_evaluation(report, trained, step)
         return [report]
 
     evaluated = run.stage("evaluate", evaluate, evaluation_files)
@@ -409,7 +427,7 @@ def run_pipeline(args, capture, core, trigs, root, python, env, runtime, lock):
             "--checkpoint", local_checkpoint, "--output", "capture.trigsbin", "--frame-rate", capture.fps,
             "--total-frames", capture.count, "--chunk-duration-seconds", (capture.count + 1) / capture.fps,
             "--chunk-overlap-seconds", 0, "--tensor-dtype", "motion32", "--tensor-hashes",
-            "--fade-frames", 0, "--name", "Prepared capture"), stage)
+            "--temporal-threshold", TEMPORAL_THRESHOLD, "--fade-frames", 0, "--name", "Prepared capture"), stage)
 
     def export_files(stage):
         timeline = stage / "capture.trigsbin"
