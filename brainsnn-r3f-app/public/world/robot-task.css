@@ -1,0 +1,182 @@
+.robot-task {
+  max-width: 68rem;
+  min-width: 0;
+  color: #e6eff8;
+  font-size: var(--reading-ui, 16px);
+  line-height: 1.55;
+}
+
+.robot-task [hidden] { display: none; }
+
+.robot-task h3,
+.robot-task h4 {
+  margin: 0 0 8px;
+  color: #f2faff;
+  line-height: 1.2;
+}
+
+.robot-task h4 { font-size: 1.25em; }
+.robot-task p { max-width: 70ch; overflow-wrap: anywhere; }
+.robot-task label { color: #e5f0f8; font-size: inherit; margin: 0; min-width: 0; }
+.robot-task label :is(input, select, textarea) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 6px 0;
+  font-size: inherit;
+}
+.robot-task textarea { resize: vertical; }
+.robot-task :is(input[type=range], input[type=file]) { accent-color: #6ae4eb; }
+.robot-task input::file-selector-button { margin-inline-end: 8px; }
+.robot-task :is(input, textarea)::placeholder { color: #aebfd2; }
+
+.robot-task-settings {
+  display: grid;
+  max-width: 34rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+
+.robot-task-unit { color: #bccee0; }
+.robot-task details {
+  margin: 12px 0;
+  padding: 0 12px 4px;
+  background: #0f1925;
+  border: 1px solid #425671;
+  border-radius: 10px;
+}
+
+.robot-task details summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  color: #dcf8f8;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.robot-task details[open] summary { margin-bottom: 8px; }
+.robot-task-brief > label:nth-of-type(2) { margin-top: 16px; }
+.robot-task :is([role=status], [data-robot-task-frame]) { color: #c7dbed; margin-block: 8px; }
+.robot-task [role=status]:empty { margin: 0; }
+.robot-task .robot-task-error { color: #ffd0be; }
+
+.robot-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 8px;
+  min-width: 0;
+}
+
+.robot-task-actions button,
+.robot-task-reference button {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  font-size: inherit;
+}
+
+.robot-task :is(a, button, canvas, input, textarea, select, summary):focus-visible {
+  outline: 3px solid #7de9f0;
+  outline-offset: 2px;
+}
+
+.robot-task-reference {
+  margin: 8px 0;
+  padding: 10px;
+  background: #0b1420;
+  border-radius: 8px;
+}
+
+.robot-task-reference :is(img, video) {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 280px;
+  margin-block-end: 8px;
+}
+
+.robot-task-reference :is(img, video)[hidden] { display: none; }
+.robot-task-reference p { margin: 0 0 6px; }
+
+.robot-task-result {
+  margin: 16px 0 0;
+  padding: clamp(12px, 3vw, 20px);
+  background: #0e1825;
+  border: 1px solid #425671;
+  border-radius: 12px;
+}
+
+.robot-task-result-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+}
+
+.robot-task-result-heading h4 { margin: 0; }
+.robot-task-result-heading strong[data-outcome=success] { color: #a3f6d5; }
+.robot-task-result-heading strong[data-outcome=miss] { color: #ffd08a; }
+.robot-task-view button[aria-pressed=true] {
+  background: #b5f1f4;
+  border-color: #b5f1f4;
+  color: #103239;
+}
+.robot-task-result figure { margin: 0 0 10px; }
+.robot-task-result canvas {
+  display: block;
+  width: 100%;
+  height: clamp(205px, 34vw, 340px);
+  background: #0b1420;
+  border: 1px solid #3c536b;
+  border-radius: 8px;
+}
+
+.robot-task-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  color: #d5e5f3;
+}
+
+.robot-task-key span:not([hidden]) { display: inline-flex; align-items: center; gap: 6px; }
+.robot-task-key span::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--robot-task-key);
+}
+.robot-task-key-pusher { --robot-task-key: #80cfff; }
+.robot-task-key-puck { --robot-task-key: #ffc46d; }
+.robot-task-key-goal { --robot-task-key: #9cf4db; }
+
+.robot-task-download {
+  border-top: 1px solid #425671;
+  margin: 14px 0 0;
+  padding-top: 6px;
+}
+.robot-task-note { color: #c2d0df; }
+
+html[data-contrast=more] .robot-task :is(details, canvas, button, .robot-task-result) { border-color: #bfd4e6; }
+html[data-contrast=more] .robot-task :is(p, label) { color: #fff; }
+
+@media (max-width: 540px) {
+  .robot-task-settings { grid-template-columns: minmax(0, 1fr); }
+  .robot-task-actions > button { flex: 1 0 auto; }
+}
+
+.robot-task [data-robot-task-film] {
+  display: block;
+  width: min(100%, 28rem);
+  height: auto;
+  aspect-ratio: 720 / 774;
+  margin-block: 10px;
+  background: #0b1420;
+  border-radius: 8px;
+}

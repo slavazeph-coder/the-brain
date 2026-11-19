@@ -31,6 +31,8 @@ const THREE_IMPORTERS = new Set([
   'src/features/toys/poke/PokeBrainScene.jsx',
   // Bundled separately for /arena/ and loaded only when Test your space opens.
   'src/arena/site-renderer.js',
+  // The robot task panel imports its standalone replay bundle when someone chooses 3D.
+  'src/world/robot-task-3d.js',
   // Separate page bundle; the homepage/Arcade only links to this task.
   'src/arena/deformable-renderer.js',
   // Separate public bundle, imported only when the operational-twin inspector opens.

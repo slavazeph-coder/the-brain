@@ -40,6 +40,7 @@ import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createWorldWorkerProxy } from "./src/server/worldWorkerProxy.js";
 import { createProjectReviewService } from "./src/server/projectReview.js";
+import { createRobotTaskDraftService } from "./src/server/robotTaskDraft.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 
 
@@ -77,6 +78,7 @@ const worldProcessing = createWorldWorkerProxy(process.env);
 // Authenticate and bound review bodies before the general parser. The service
 // is initialized below with the existing server-only model and spend ceiling.
 app.use('/api/world/project-review', (req, res, next) => projectReview.handle(req, res, next));
+app.post('/api/world/robot-task-draft', (req, res) => robotTaskDraft.handle(req, res));
 app.use('/api/world', worldProcessing.handle);
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
@@ -275,6 +277,11 @@ const limiters = {
 /** Bounds what the process can spend on Gemini however many callers ask.
  *  Tune with GEMINI_HOURLY_CEILING; 0 stops paid calls without removing the key. */
 const geminiCeiling = new SpendCeiling(resolveGeminiCeiling(process.env));
+const robotTaskDraft = createRobotTaskDraftService({
+  authorize: req => worldProcessing.ownerSession(req),
+  tryConsume: () => geminiCeiling.tryConsume(),
+  apiKey,
+});
 
 /** Marks the one error the analyze handler must answer with the local engine. */
 class GeminiCeilingReached extends Error {}
