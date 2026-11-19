@@ -1,5 +1,6 @@
 import {jsonBytes} from './layer-preview.mjs';
 import {validateBiomechanicsPreview,validateBiomechanicsReport,BIOMECHANICS_PREVIEW_LIMIT,createBiomechanicsViewer} from './biomechanics-preview.mjs';
+import {cameraCalibrationPanel, mountCameraCalibrationTool} from './camera-calibration-tool.mjs';
 
 export const biomechanicsPanel=`<section id="layer-panel-biomechanics" role="tabpanel" aria-labelledby="layer-tab-biomechanics" hidden>
   <p>See how a body model moves, where its centre of mass goes, and how its muscles change length. Start with our authored hinge and muscle example, or use your own OpenSim model and matching motion.</p>
@@ -29,6 +30,7 @@ export const biomechanicsPanel=`<section id="layer-panel-biomechanics" role="tab
   </div>
   <p data-biomech-info role="status">Choose the example or your own model and motion to begin.</p>
   <p class="layer-note">These are model-based calculations. They are not measured muscle activation, a clinical finding, or a validation of a real person or robot.</p>
+  ${cameraCalibrationPanel}
 </section>`;
 
 export function biomechanicsOptions({analysis='kinematics',coordinates='',loadMode='supplied',reason='',noLoadsConfirmed=false}={}) {
@@ -50,6 +52,7 @@ export function biomechanicsOptions({analysis='kinematics',coordinates='',loadMo
 /** This panel shares the parent runner; it never creates a client or uploads on file selection. */
 export function mountBiomechanicsTool({root,signal,run,status,intent,version,isCurrent,show,read}) {
   const $=s=>root.querySelector(s),on=(s,event,fn)=>$(s).addEventListener(event,fn,{signal});
+  const cameraReview=mountCameraCalibrationTool({root,signal});
   let model=null,movement=null,viewer=null,displayed=null,disposed=false;
   const attempt=fn=>Promise.resolve().then(fn).catch(e=>{if(!disposed&&e.name!=='AbortError')status(e.message,true);});
   const valid=token=>!disposed&&isCurrent(token);
@@ -84,6 +87,6 @@ export function mountBiomechanicsTool({root,signal,run,status,intent,version,isC
   on('[data-biomech-play]','click',()=>viewer?.play());on('[data-biomech-pause]','click',()=>viewer?.pause());on('[data-biomech-seek]','input',e=>viewer?.seek(Number(e.target.value)));
   return {
     async openResult(context,token){const [raw,reportRaw]=await Promise.all([read(context,'biomechanics-preview.json'),read(context,'biomechanics-report.json')]);if(!valid(token))return;const value=validateBiomechanicsPreview(jsonBytes(raw,BIOMECHANICS_PREVIEW_LIMIT),context.job.artifacts),digest=context.job.artifacts.find(a=>a.name==='biomechanics-preview.json')?.sha256,report=validateBiomechanicsReport(jsonBytes(reportRaw,1024*1024),value,digest);if(!valid(token))return;set(value,report);status('Movement analysis ready. Explore the model and its model-derived channels.');},
-    pause(){viewer?.pause();},clear(){model=null;movement=null;displayed=null;viewer?.clear();$('[data-biomech-analysis]').value='kinematics';$('[data-biomech-load-mode]').value='supplied';$('[data-biomech-coordinates]').value='';$('[data-biomech-reason]').value='';$('[data-biomech-no-loads-confirm]').checked=false;settings();$('[data-biomech-results]').hidden=true;note();$('[data-biomech-info]').textContent='Choose the example or your own model and motion to begin.';},dispose(){disposed=true;viewer?.dispose();},
+    pause(){viewer?.pause();},clear(){cameraReview.clear();model=null;movement=null;displayed=null;viewer?.clear();$('[data-biomech-analysis]').value='kinematics';$('[data-biomech-load-mode]').value='supplied';$('[data-biomech-coordinates]').value='';$('[data-biomech-reason]').value='';$('[data-biomech-no-loads-confirm]').checked=false;settings();$('[data-biomech-results]').hidden=true;note();$('[data-biomech-info]').textContent='Choose the example or your own model and motion to begin.';},dispose(){disposed=true;viewer?.dispose();},
   };
 }

@@ -6,3 +6,15 @@ html[data-reading-size=large] .world-layer-tools label,html[data-reading-size=la
 @media(max-width:650px){.world-layer-tools{padding:14px}.layer-tools-heading{align-items:flex-start;flex-direction:column;margin-bottom:14px}.layer-tool-choices{grid-template-columns:1fr}.layer-tool-choices button{min-height:68px}.layer-input-row{align-items:stretch}.layer-input-row>label,.layer-input-row>button{flex-basis:100%;width:100%}.layer-stage{height:290px}.layer-toolbar{align-items:stretch}.layer-toolbar label{flex-basis:100%}.layer-toolbar button{flex:1 1 120px}}
 
 .biomech-chart-stage{height:210px;width:100%;min-width:0;border:1px solid #334156;border-radius:10px;overflow:hidden;background:#070b12}.biomech-chart-stage canvas{display:block;width:100%;height:100%}.biomech-value{font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:#a9f6ed;padding:10px 0}.biomech-results{min-width:0}.biomech-results [data-biomech-provenance]{overflow-wrap:anywhere}@media(min-width:651px) and (max-width:1000px){.layer-tool-choices{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.camera-review-stage {
+  height: clamp(210px, 34vw, 320px);
+}
+
+.camera-review-stage canvas {
+  touch-action: auto;
+}
+
+.camera-review-break {
+  overflow-wrap: anywhere;
+}
