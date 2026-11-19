@@ -182,9 +182,13 @@ def verify_suspended_tour(page, frame, scan_tab, output, engine):
       return typeof MediaRecorder === 'function' && typeof document.createElement('canvas').captureStream === 'function'
         && Boolean(pickMime(type => MediaRecorder.isTypeSupported(type)));
     }""")
+    advertised = controls.evaluate("""() => typeof MediaRecorder !== 'function' ? [] :
+      ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        .filter(type => MediaRecorder.isTypeSupported(type))""")
+    print(f'{engine}: recorder types advertised {advertised}', flush=True)
     if supported:
         record.tap()
-        expect(status).to_contain_text('Recording ready.', timeout=15_000)
+        expect(status).to_contain_text('Recording ready.', timeout=25_000)
         expect(video).to_be_enabled()
         expect(receipt).to_be_enabled()
 
@@ -203,6 +207,7 @@ def verify_suspended_tour(page, frame, scan_tab, output, engine):
     receipt_before = download_bytes(page, receipt, output / f'{engine}-receipt-before.json')
     path_before = download_bytes(page, path, output / f'{engine}-tour-before.json')
     clip = json.loads(receipt_before)
+    print(f'{engine}: recorded {clip["recording"]["mimeType"]}, {clip["recording"]["bytes"]} bytes', flush=True)
     assert clip['video']['sha256'] == sha256(video_before).hexdigest()
     assert clip['video']['bytes'] == len(video_before) > 2000
     assert clip['source']['sha256'] == json.loads(path_before)['source']['sha256']
