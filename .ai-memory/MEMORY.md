@@ -26,6 +26,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 → [One World Builder experience](world-unified-experience-2026-11-17.md) — owner’s v23 demo flow in one workspace; retained source/job results, native drawings, safe view switching and separate website/worker rollout.
 
+→ [Robot-first World Builder playground](world-robot-first-playground-2026-11-18.md) — Arena-style choose a robot / build its world / let it try above the map, robot body on the map, camera buttons, tap-to-choose, undo/redo, More contrast; larger type on the playground only.
+
 → [World Builder playground usability](world-playground-usability-2026-11-17.md) — simpler entry and controls, preserved features, optional larger text/read-aloud and narrow-screen browser checks. Owner scope is World Builder.
 
 → [Unified world sandbox](world-sandbox-integration-2026-10-28.md) — native street objects, capture handoff, navigation and current scene exports inside the production World Builder.

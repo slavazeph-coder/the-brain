@@ -108,6 +108,27 @@ function mockViewer(t) {
   return { viewer, canvas, uploads, flush: () => { const pending = [...callbacks.values()]; callbacks.clear(); for (const callback of pending) callback(performance.now()); } };
 }
 
+test('preview turning rotates around the unchanged target while arrow navigation still pans', t => {
+  const {viewer, canvas, flush} = mockViewer(t);
+  viewer.setPoints(visualPoints([[0, 0, 0], [2, 1, 3], [-1, 2, -2]]));
+  viewer.setView({eye:[5, 4, 8], target:[1, 2, 3], fov:55});
+  const before = viewer.getView(), radius = view => Math.hypot(...view.eye.map((value, i) => value - view.target[i]));
+  viewer.rotateYaw(-.36); flush();
+  const turned = viewer.getView();
+  assert.deepEqual(turned.target, before.target, 'Turn must not pan the scene target.');
+  assert.equal(turned.fov, before.fov);
+  assert.ok(Math.abs(radius(turned) - radius(before)) < 1e-10, 'Turn preserves camera distance.');
+  assert.ok(Math.hypot(...turned.eye.map((value, i) => value - before.eye[i])) > 1, 'The camera actually moves around its target.');
+  viewer.rotateYaw(.36); flush();
+  assert.ok(viewer.getView().eye.every((value, i) => Math.abs(value - before.eye[i]) < 1e-10), 'Opposite turns return to the initial view.');
+  assert.throws(() => viewer.rotateYaw(NaN), /finite camera rotation/);
+  const key = new Event('keydown', {cancelable:true}); Object.defineProperty(key, 'key', {value:'ArrowRight'});
+  canvas.dispatchEvent(key); flush();
+  const moved = viewer.getView();
+  assert.notDeepEqual(moved.target, before.target, 'Existing arrow navigation still moves through the scene.');
+  assert.ok(moved.eye.every((value, i) => Math.abs((value - moved.target[i]) - (before.eye[i] - before.target[i])) < 1e-10), 'Panning preserves the camera direction.');
+});
+
 test('renderer selection follows original row IDs through depth sorting and clears on replacement', t => {
   const { viewer, uploads, flush } = mockViewer(t), points = visualPoints([[0, 0, 1], [0, 0, -1], [.5, 0, 0]]), before = points.slice();
   viewer.setPoints(points);

@@ -134,6 +134,8 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     reset(){fit(sourcePhoto);},photoCamera(){fit(true);},
     /** Local Y-up, no-roll camera. View coordinates use the displayed asset's unverified units. */
     getView(){return {eye:eyePosition(),target:target.slice(),fov};},
+    /** Turn around the current target without moving it or changing the camera distance. */
+    rotateYaw(radians){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');if(!Number.isFinite(radians))throw Error('Use a finite camera rotation.');auto=false;sway=null;yaw=(yaw+radians%(2*Math.PI))%(2*Math.PI);sortDirty=true;schedule();},
     setView(value){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');const view=checkedView(value),offset=view.eye.map((v,i)=>v-view.target[i]);distance=Math.hypot(...offset);target=view.target;fov=view.fov;yaw=Math.atan2(offset[0],offset[2]);pitch=Math.asin(Math.max(-1,Math.min(1,offset[1]/distance)));auto=false;sway=null;walking=false;pointers.clear();gesture=null;sortDirty=true;lastSort=-Infinity;clearTimeout(settle);cancelAnimationFrame(frame);frame=0;render(performance.now(),true);},
     getCanvas(){return disposed?null:canvas;},
     getBounds(){return points.length?bounds(points):null;},

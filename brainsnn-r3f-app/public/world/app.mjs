@@ -36,9 +36,15 @@ import {mountUnifiedWorkspace} from './unified-workspace-ui.mjs';
 import {createSceneWorkspace} from './scene-workspace.mjs';
 import {mountProjectReview} from './project-review-ui.mjs';
 import {mountWorldLayerTools} from './world-layer-tools.mjs';
+import {mountRobotSetup} from './robot-setup.mjs';
+import {mountCameraDock} from './playground-controls.mjs';
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const workspaceResults=createWorkspaceResults(),sourceIds=new WeakMap();
 let sourceBindings=new WeakMap(),sourceSequence=0,viewRevision=0,jobExecution=null,unifiedWorkspace=null,sceneContext=null,layerTools=null;
+// Robot-first setup and camera buttons. worldOrigin says which world choice made the current map; edits keep it.
+let robotSetup=null,cameraDock=null,worldOrigin='sample',nextOrigin=null,runIssue=null;
+// Undo/redo for map edits only (mutate). Replacing the map clears it; an undone map always needs review again.
+const editHistory={undo:[],redo:[]};
 const sourceId=source=>{if(!source)return null;if(!sourceIds.has(source))sourceIds.set(source,`source-${++sourceSequence}`);return sourceIds.get(source);};
 const sceneWorkspace=createSceneWorkspace();
 let world=sampleWorld(), tab='world', selected='storage', result=null, baseline=null, epoch=0, planner=null, planning=false, sandbox=null;
@@ -84,8 +90,8 @@ $('project-review-close').addEventListener('click',()=>$('project-review-dialog'
 $('project-review-dialog').addEventListener('close',()=>{projectReviewLoadAbort?.abort();projectReviewLoadAbort=null;projectReview.cancel();});
 $('scene-project-review').addEventListener('click',()=>void openProjectReview(sceneContext?.jobKey));
 function getVisualViewer(){if(!visualViewer)visualViewer=createVisualViewer($('visual-canvas'));return visualViewer;}
-try{renderer=createRenderer($('world-canvas'));}catch(e){status(e.message,true);}
-function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();}
+try{renderer=createRenderer($('world-canvas'));renderer.setRobot(robot);}catch(e){status(e.message,true);}
+function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();robotSetup?.refresh();}
 function event(type,detail){events.push({time:new Date().toISOString(),type,detail});events=events.slice(-200);}
 const observations=createObservationReview({getSources:()=>sources,status,event});
 const measurements=createMeasurementReview({getWorld:()=>world,status,event,download});
@@ -93,9 +99,13 @@ function stopReplay(){cancelAnimationFrame(replayFrame);replayFrame=null;$('repl
 // A what-if compares one robot's route before and after a map edit. Once the robot's footprint, speed or margin changes,
 // that comparison is no longer like for like, so it is dropped rather than shown as "same robot". Returns true if it was.
 function dropStaleWhatIf(){if(!whatIf||sameRobot(whatIf,robot))return false;whatIf=null;renderer?.setGhost(null);return true;}
-function invalidate(){epoch++;planner?.terminate();planner=null;planning=false;result=null;receipt=null;stopReplay();renderer?.setResult(null);$('scrub').value=0;update();renderMedia();}
-function apply(next,message,{review=false,proposal}={}){const w=normalizeWorld(next);viewRevision++;if(!review){whatIf=null;renderer?.setGhost(null);}mapProposal=proposalAfterApply(mapProposal,{review,proposal});if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);if(message)status(message);}
-function mutate(fn,kind='edited'){try{const next=clone(world);fn(next);const before=captureBefore({goal:result?.goal,result,world,selected,kind,robot});apply(next,'Map updated. Review changed geometry before planning.',{review:true});whatIf=before||whatIf;if(whatIf&&!before)whatIf.after=null;renderer?.setGhost(null);renderPanel();event('geometry_edit',selected||'floor');}catch(e){status(e.message,true);renderInspector();renderPanel();}}
+function invalidate(){runIssue=null;epoch++;planner?.terminate();planner=null;planning=false;result=null;receipt=null;stopReplay();renderer?.setResult(null);$('scrub').value=0;update();renderMedia();}
+function apply(next,message,{review=false,proposal}={}){const w=normalizeWorld(next);viewRevision++;if(!review){whatIf=null;renderer?.setGhost(null);worldOrigin=w.provenance==='authored'?'sample':(nextOrigin||'own');editHistory.undo=[];editHistory.redo=[];}nextOrigin=null;mapProposal=proposalAfterApply(mapProposal,{review,proposal});if(located?.url)URL.revokeObjectURL(located.url);located=null;renderer?.setMarks(null);if(review){w.mapReviewed=false;}measurements.mapChanged(w,{replaced:!review});world=w;invalidate();renderInspector();renderPanel();renderer?.setWorld(world);updateUndo();if(message)status(message);}
+function mutate(fn,kind='edited'){try{const next=clone(world);fn(next);const prior={world:clone(world),selected};const before=captureBefore({goal:result?.goal,result,world,selected,kind,robot});apply(next,'Map updated. Review changed geometry before planning.',{review:true});editHistory.undo.push(prior);if(editHistory.undo.length>60)editHistory.undo.shift();editHistory.redo=[];updateUndo();whatIf=before||whatIf;if(whatIf&&!before)whatIf.after=null;renderer?.setGhost(null);renderPanel();event('geometry_edit',selected||'floor');}catch(e){status(e.message,true);renderInspector();renderPanel();}}
+function updateUndo(){const street=!!sandbox?.isStreet();for(const [id,list] of [['undo-edit',editHistory.undo],['redo-edit',editHistory.redo]]){const b=$(id);if(!b)continue;b.hidden=street;b.disabled=street||!world||!list.length;}}
+// Undo and redo restore the map geometry. The restored map is never marked reviewed: a person checks it again before planning.
+function stepEdit(back){const from=back?editHistory.undo:editHistory.redo,to=back?editHistory.redo:editHistory.undo;if(!from.length||!world||sandbox?.isStreet()){updateUndo();return;}const snap=from.pop();to.push({world:clone(world),selected});selected=snap.selected;whatIf=null;renderer?.setGhost(null);try{apply(snap.world,back?'Change undone. Check the map again before the robot tries a route.':'Change redone. Check the map again before the robot tries a route.',{review:true});}catch(e){status(e.message,true);}renderPanel();updateUndo();event('geometry_edit',back?'undo':'redo');}
+function chooseRobot(id){if(!ROBOTS[id])return;robotId=id;robot={...ROBOTS[id],margin:robot.margin};invalidate();dropStaleWhatIf();renderPanel();renderer?.setRobot(robot);robotSetup?.refresh();}
 // Exports: on touch devices with the Web Share API the files go to the native share sheet (Files, AirDrop, Mail…); anywhere
 // else, or if sharing fails, each file downloads. One share per gesture, so multi-file exports pass every file in one call.
 function asFile(name,data,type){return new File([data instanceof Blob?data:typeof data==='string'||data instanceof ArrayBuffer||ArrayBuffer.isView(data)?data:JSON.stringify(data,null,2)],name,{type});}
@@ -227,7 +237,7 @@ function renderMedia(){
   }
   if(!capture){
     $('scene-basis').textContent=world?.provenance==='authored'?'AUTHORED SAMPLE / NOT A RECONSTRUCTION':world?.provenance==='generated'?'GENERATED / UNVERIFIED':world?.scaleReviewed&&world?.mapReviewed?'USER-REVIEWED GEOMETRY / PLANNING ONLY':'GEOMETRY REVIEW REQUIRED / NOT VERIFIED';
-    $('scene-help').textContent='Drag to turn · Arrow keys also turn the view · Choose an object to change it';
+    $('scene-help').textContent='Turn and zoom with the buttons, or drag · Tap a box to choose it';
     return;
   }
   if(source.kind==='image'||source.kind==='video'){
@@ -263,9 +273,9 @@ function renderPanel(){
   }
   unifiedWorkspace?.refresh();layerTools?.refresh();
 }
-function renderInspector(){const options=$('objects');options.replaceChildren();for(const o of world?.objects||[]){const op=document.createElement('option');op.value=o.id;op.textContent=o.name;options.append(op);}if(!world?.objects.some(o=>o.id===selected))selected=world?.objects[0]?.id||'';options.value=selected;const o=world?.objects.find(o=>o.id===selected);$('object-fields').innerHTML=o?`<label>Object name<input id="object-name" maxlength="160" value="${esc(o.name)}"></label><div class="field-row">${numericField('X · m','object-x',o.x,0,world.width-o.w)}${numericField('Z · m','object-z',o.z,0,world.depth-o.d)}${numericField('Width · m','object-w',o.w,.05,world.width-o.x)}${numericField('Depth · m','object-d',o.d,.05,world.depth-o.z)}</div><label>Object type<select id="object-kind">${['obstacle','unknown','no-go'].map(k=>`<option ${o.kind===k?'selected':''}>${k}</option>`).join('')}</select></label><button class="small" data-action="remove-object">Remove object</button>`:'<p class="micro">Import or create geometry to edit objects.</p>';renderer?.setSelected(selected);}
+function renderInspector(){const options=$('objects');options.replaceChildren();for(const o of world?.objects||[]){const op=document.createElement('option');op.value=o.id;op.textContent=o.name;options.append(op);}if(!world?.objects.some(o=>o.id===selected))selected=world?.objects[0]?.id||'';options.value=selected;{const chips=$('object-chips'),list=world?.objects||[];if(chips){chips.innerHTML=list.slice(0,40).map(o=>`<button type="button" class="object-chip" data-object-chip="${esc(o.id)}" aria-pressed="${o.id===selected}">${esc(o.name)}</button>`).join('')+(list.length>40?`<p class="micro">${list.length-40} more in the list below.</p>`:'');}const chooser=$('object-chooser');if(chooser)chooser.hidden=!list.length;}const o=world?.objects.find(o=>o.id===selected);$('object-fields').innerHTML=o?`<label>Object name<input id="object-name" maxlength="160" value="${esc(o.name)}"></label><div class="field-row">${numericField('X · m','object-x',o.x,0,world.width-o.w)}${numericField('Z · m','object-z',o.z,0,world.depth-o.d)}${numericField('Width · m','object-w',o.w,.05,world.width-o.x)}${numericField('Depth · m','object-d',o.d,.05,world.depth-o.z)}</div><label>Object type<select id="object-kind">${['obstacle','unknown','no-go'].map(k=>`<option ${o.kind===k?'selected':''}>${k}</option>`).join('')}</select></label><button class="small" data-action="remove-object">Remove object</button>`:'<p class="micro">Import or create geometry to edit objects.</p>';renderer?.setSelected(selected);}
 function update(){
-  updateWorkflow();
+  updateWorkflow();robotSetup?.refresh();cameraDock?.sync();updateUndo();
   const capture=activeSource&&(tab==='capture'||!world);$('world-title').textContent=capture?activeSource.name:world?.name||'Your capture';$('provenance').textContent=capture&&activeSource.visual?'VISUAL / SCALE UNVERIFIED':!world?'LOCAL SOURCE':world.provenance==='authored'?'AUTHORED SAMPLE':world.provenance==='generated'?'GENERATED / UNVERIFIED':world.mapReviewed&&world.scaleReviewed?'USER-REVIEWED MAP':'REVIEW REQUIRED';
   const gate=planningGate(world);$('run').textContent=planning?'Stop planning':'Try this robot route →';$('run').title=gate||'Calculate a simulated route on this map';$('run').disabled=!world||!!capture;
   $('replay').disabled=!result;$('scrub').disabled=!result;
@@ -309,7 +319,7 @@ async function addFiles(list,{nativeCapture=false}={}){
 async function run(){if(planning){invalidate();status('Planning cancelled.');return;}const gate=planningGate(world);if(gate){status(gate,true);setTab('world');return;}
   invalidate();planning=true;update();const id=epoch;try{planner=new Worker('./planner-worker.mjs',{type:'module'});}catch(e){planning=false;update();status('A browser planning worker could not start. Check your browser settings.',true);return;}
   const timeout=setTimeout(()=>{if(id===epoch){invalidate();status('Planning timed out. Try a smaller map.',true);}},15000);
-  planner.onmessage=({data})=>{clearTimeout(timeout);if(data.id!==epoch)return;planner?.terminate();planner=null;planning=false;if(data.error){status(data.error,true);update();return;}result=data.result;renderer?.setResult(result);renderer?.setCursor(.015);event('plan_completed',{algorithm:result.algorithm,metres:result.distance,policyExecuted:false});setTab('test');update();status('Planning preview complete. No learned policy or physical robot executed.');};
+  planner.onmessage=({data})=>{clearTimeout(timeout);if(data.id!==epoch)return;planner?.terminate();planner=null;planning=false;if(data.error){runIssue={message:data.error,advice:data.advice||null};status(data.error,true);update();return;}result=data.result;renderer?.setResult(result);renderer?.setCursor(.015);event('plan_completed',{algorithm:result.algorithm,metres:result.distance,policyExecuted:false});setTab('test');update();status('Planning preview complete. No learned policy or physical robot executed.');};
   planner.onerror=()=>{clearTimeout(timeout);if(id===epoch){invalidate();status('Planning worker failed.',true);}};planner.postMessage({id,world:clone(world),robot:clone(robot)});
 }
 function replay(){if(!result)return;if(replayFrame){stopReplay();return;}replayStart=performance.now()-Number($('scrub').value)/1000*12000;$('replay').textContent='Pause';function tick(t){const c=Math.min(1,(t-replayStart)/12000);$('scrub').value=Math.round(c*1000);renderer?.setCursor(c);if(c<1)replayFrame=requestAnimationFrame(tick);else stopReplay();}replayFrame=requestAnimationFrame(tick);}
@@ -703,7 +713,7 @@ async function action(name,value){try{
   if(name==='connection')$('connection').showModal();
   if(name==='process')await processSources();
   if(name==='cancel-job')await cancelRemote();
-  if(name==='new-map'){if(world&&!confirm('Replace the current map with an empty measured-map draft? Captures stay in this session.'))return;apply({schema:SCHEMA,name:'My measured space',width:12,depth:9,start:{x:1,z:1},objects:[],provenance:'observed',scaleReviewed:false,mapReviewed:false},'Measured-map draft created. Enter actual dimensions and obstacles.');setTab('world');}
+  if(name==='new-map'){if(world&&!confirm('Replace the current map with an empty measured-map draft? Captures stay in this session.'))return;nextOrigin='empty';apply({schema:SCHEMA,name:'My measured space',width:12,depth:9,start:{x:1,z:1},objects:[],provenance:'observed',scaleReviewed:false,mapReviewed:false},'Measured-map draft created. Enter actual dimensions and obstacles.');setTab('world');}
   if(name==='add-object'&&world){const id=crypto.randomUUID();selected=id;mutate(w=>w.objects.push({id,name:'New obstacle',x:Math.max(0,w.width/2-.5),z:Math.max(0,w.depth/2-.5),w:Math.min(1,w.width/2),d:Math.min(1,w.depth/2),h:1,kind:'unknown'}));}
   if(name==='what-if-route'&&world&&whatIf){if(dropStaleWhatIf()){renderPanel();status('The robot changed since that route, so there is no like-for-like comparison. Route to the spot again.',true);return;}const gate=planningGate(world);if(gate){status(gate,true);return;}let route;try{route=routeWorld(world,robot,whatIf.goal);}catch(error){status(error.message,true);return;}
     invalidate();result=route;receipt=routeReceipt(world,robot,whatIf.goal,route);renderer?.setResult(result);renderer?.setGhost(whatIf.previous.route);renderer?.setMarks({goal:whatIf.goal});renderer?.setCursor(.015);whatIf.after=compareWhatIf(whatIf,route);
@@ -783,6 +793,7 @@ async function action(name,value){try{
 }catch(e){status(e.message,true);}}
 $('panel').addEventListener('click',e=>{const box=e.target.closest?.('#located-photo');if(box)tapPhoto(e,box);});
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.objectChip!==undefined){selected=b.dataset.objectChip;renderInspector();return;}
   if(b.dataset.workflow){const step=b.dataset.workflow;if(step==='review'&&bimWorkflow.hasScene){const context=workspaceResults.get(sceneContext?.jobKey)||currentResultContext(),index=context?.job.artifacts.findIndex(a=>a.name==='scene.glb')??-1;if(index>=0){void openSceneArtifact(index,context);return;}}setTab(step==='export'?'evidence':'capture');$('workspace').scrollIntoView({block:'start',behavior:'smooth'});if(step==='scale')($('measured-distance')||document.querySelector('[data-action=pick-scale]'))?.focus({preventScroll:true});if(step==='review')$('dimension-review')?.scrollIntoView({block:'center',behavior:'smooth'});return;}
   if(b.dataset.dimensionRemove!==undefined){bimWorkflow.removeReading(Number(b.dataset.dimensionRemove));return;}
   if(b.dataset.bimRemove!==undefined){bimWorkflow.removeOpening(Number(b.dataset.bimRemove));return;}
@@ -805,9 +816,9 @@ const PICKERS=['files','video-file','phone-camera','native-capture-files'],NO_FI
 document.addEventListener('cancel',e=>{if(PICKERS.includes(e.target?.id))status(NO_FILE,true);},true);
 document.addEventListener('input',e=>{if(e.target.id==='path-scrub'&&activeSource?.reconstruction){stopPathPlay();pathView(activeSource,Number(e.target.value));}});
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(id==='locate-file'){const file=e.target.files?.[0];e.target.value='';if(file)void locatePhoto(file);return;}if(PICKERS.includes(id)){if(!e.target.files?.length){status(NO_FILE,true);return;}void addFiles(e.target.files,{nativeCapture:id==='native-capture-files'});return;}if(id==='objects'){selected=v;renderInspector();return;}
-  if(id==='robot'){robotId=v;robot={...ROBOTS[v],margin:robot.margin};invalidate();dropStaleWhatIf();renderPanel();return;}
+  if(id==='robot'){chooseRobot(v);return;}
   if(id==='goal-x'||id==='goal-z'){goalSpot={x:Number($('goal-x').value),z:Number($('goal-z').value)};return;}
-  if(id.startsWith('robot-')){const k=id.slice(6),next=Number(v),range={width:[.1,5],depth:[.1,5],speed:[.01,3],margin:[0,2]}[k];if(!range||!Number.isFinite(next)||next<range[0]||next>range[1]){status('Robot parameter is outside the supported range.',true);renderPanel();return;}robot[k]=next;invalidate();if(dropStaleWhatIf())renderPanel();return;}
+  if(id.startsWith('robot-')){const k=id.slice(6),next=Number(v),range={width:[.1,5],depth:[.1,5],speed:[.01,3],margin:[0,2]}[k];if(!range||!Number.isFinite(next)||next<range[0]||next>range[1]){status('Robot parameter is outside the supported range.',true);renderPanel();return;}robot[k]=next;invalidate();renderer?.setRobot(robot);if(dropStaleWhatIf())renderPanel();return;}
   if(Object.hasOwn(assumptions,id)){const next={...assumptions,[id]:v===''?null:Number(v)};try{estimate(result||{travelSeconds:0,turns:0},next);assumptions=next;update();renderPanel();}catch(err){status(err.message,true);renderPanel();}return;}
   if(id==='bim-host-wall'){bimWorkflow.selectHost(Number(v));return;}
   if(id==='camera-height'){cameraHeight=Number(v);return;}
@@ -822,7 +833,14 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(
 $('hero-capture').onclick=()=>{if(sandbox)void sandbox.select('capture');else setTab('capture');$('workspace').scrollIntoView();};$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
 // The hero demo opens the same training floor as the hero link; its reviewed state lands on Simulate, where the route runs.
 createHeroDemo($('hero-demo'),{onOpen:state=>{$('hero-sample').click();if(state==='reviewed'&&world?.provenance==='authored'){if(sandbox)void sandbox.select('map','simulate');else setTab('test');}}});
+$('undo-edit').onclick=()=>stepEdit(true);$('redo-edit').onclick=()=>stepEdit(false);
+// Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z (or Ctrl+Y) undo map edits, but never take over typing in a field or an open dialog.
+document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey)return;const k=e.key.toLowerCase();if(k!=='z'&&k!=='y')return;if(e.target?.closest?.('input,textarea,select,[contenteditable]')||document.querySelector('dialog[open]')||sandbox?.isStreet())return;const back=k==='z'&&!e.shiftKey;if(!(back?editHistory.undo:editHistory.redo).length)return;e.preventDefault();stepEdit(back);});
 $('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopReplay();renderer?.setCursor(Number($('scrub').value)/1000);};$('reset-view').onclick=()=>{if(!$('visual-canvas').hidden)visualViewer?.reset();else renderer?.reset();};$('show-source').onclick=()=>{viewRevision++;display='source';renderMedia();unifiedWorkspace?.refresh();};$('show-visual').onclick=()=>{viewRevision++;display='visual';renderMedia();unifiedWorkspace?.refresh();};$('depth-start').onclick=()=>void buildDepth();$('detect-start').onclick=()=>void identifyObjects();$('flip-visual').onclick=()=>visualViewer?.flip();$('export').onclick=()=>sandbox?.isStreet()?sandbox.openExport():action('proof');$('fork').onclick=()=>{if(!result){status('Run a planning preview before saving a comparison baseline.',true);return;}baseline={world:clone(world),result:clone(result),assumptions:clone(assumptions)};event('scenario_forked',{distance:result.distance,minutes:estimate(result,assumptions).minutes});status('Baseline saved. Edit an obstacle or robot parameter and run again to compare.');setTab('test');};$('connect').onclick=connect;$('site-connect').onclick=connectSite;$('system-search').oninput=renderSystems;$('systems-more').onclick=()=>{systemsOpen=!systemsOpen;renderSystems();if(!systemsOpen)$('systems').scrollIntoView({block:'start'});};
+// A tap (not a drag) on the map chooses the object under it, the same as choosing it in the list.
+{let down=null;const canvas=$('world-canvas');
+  canvas.addEventListener('pointerdown',e=>{down=e.isPrimary&&(e.button===0||e.pointerType!=='mouse')?[e.clientX,e.clientY]:null;});
+  canvas.addEventListener('pointerup',e=>{const at=down;down=null;if(!at||!world||!renderer||Math.hypot(e.clientX-at[0],e.clientY-at[1])>6)return;const id=renderer.pick(e.clientX,e.clientY);if(!id||id===selected)return;selected=id;renderInspector();const o=world.objects.find(o=>o.id===id);if(o)status(`${o.name} chosen. Change it with the object controls.`);});}
 // A tap (not a drag) on the 3D view picks a calibration point while picking is on; the viewer keeps handling orbit and zoom.
 {let down=null;const canvas=$('visual-canvas');
   canvas.addEventListener('pointerdown',e=>{down=e.isPrimary&&e.button===0?[e.clientX,e.clientY]:null;});
@@ -881,13 +899,33 @@ async function receiveCaptureHandoff(id) {
 renderer?.setWorld(world);renderInspector();setTab('world');renderSystems();update();void loadSiteProcessing();
 // Capture the private transfer token before sandbox navigation canonicalizes the URL.
 const handoffId=parseHandoffHash(location.hash);
-sandbox=createSandboxUI({setMapTab:setTab,getMap:()=>world,getSourceCount:()=>sources.length,status,event,pauseMap:stopReplay,onWorkspaceChange:()=>unifiedWorkspace?.refresh()});
+sandbox=createSandboxUI({setMapTab:setTab,getMap:()=>world,getSourceCount:()=>sources.length,status,event,pauseMap:stopReplay,onWorkspaceChange:()=>{unifiedWorkspace?.refresh();robotSetup?.refresh();updateUndo();cameraDock?.sync();}});
 unifiedWorkspace=mountUnifiedWorkspace({getSnapshot:workspaceSnapshot,actions:{
   selectSource:selectWorkspaceSource,showMap:showWorkspaceTab,showTab:showWorkspaceTab,openArtifact:openResultArtifact,
   reviewProject:openProjectReview,
   downloadArtifact:(key,index)=>downloadResultArtifact(requireResultContext(key),index),
   showProcessing:async()=>{await showWorkspaceTab('capture');const options=document.querySelector('.processing-options');if(options){options.open=true;options.scrollIntoView({block:'center'});}},
 }});
+// Robot-first setup (choose a robot, build its world, let it try) drives the controls the playground already has.
+function activeCanvas(){if(!$('visual-canvas').hidden)return $('visual-canvas');if(!$('map-workspace').hidden&&!$('world-canvas').hidden)return $('world-canvas');return null;}
+function robotSetupState(){const capture=sandbox?.getState?.().workspace==='capture'||!!(activeSource&&(tab==='capture'||!world));return {robotId,robotName:ROBOTS[robotId]?.name||'robot',origin:sandbox?.isStreet()?'street':capture?'capture':world?worldOrigin:'',worldName:world?.name||'',planning,runDisabled:!world||capture,gate:world&&!capture?planningGate(world):'',issue:runIssue};}
+// A robot too big for its start: move the start to the nearest spot the planner found. That is a map edit, so the map needs review again.
+function moveStart(spot){if(!world||!Number.isFinite(spot?.x)||!Number.isFinite(spot?.z))return;mutate(w=>{w.start={x:+spot.x.toFixed(2),z:+spot.z.toFixed(2)};},'moved');status(`Start moved to where the ${(ROBOTS[robotId]?.name||'robot').toLowerCase()} fits. Check the map, then let it try.`);}
+async function showCheck(){$('tab-world').click();for(let i=0;i<20&&!$('map-reviewed');i++)await new Promise(r=>setTimeout(r,50));const box=['scale-reviewed','map-reviewed'].map($).find(b=>b&&!b.checked&&!b.disabled);box?.scrollIntoView({block:'center'});box?.focus({preventScroll:true});}
+async function showRobotSettings(){$('tab-test').click();for(let i=0;i<20&&!$('robot-width');i++)await new Promise(r=>setTimeout(r,50));const field=$('robot-width');field?.scrollIntoView({block:'center'});field?.focus({preventScroll:true});}
+function revealWorld(kind){const narrow=matchMedia('(max-width: 760px)').matches,street=sandbox?.isStreet();(narrow?(street?$('street-workspace'):kind==='capture'?$('workspace'):$('viewport')):document.querySelector('#robot-setup .setup-worlds'))?.scrollIntoView({block:narrow&&!street&&kind!=='capture'?'center':'start'});}
+async function chooseWorld(kind){const street=!!sandbox?.isStreet(),inCapture=sandbox?.getState?.().workspace==='capture';
+  if(kind==='street'){if(!street)$('hero-street').click();}
+  else if(kind==='capture')$('hero-capture').click();
+  else{if(street||inCapture)await sandbox?.select('map','edit');
+    if(kind==='sample'){if(worldOrigin!=='sample'||!world)$('hero-sample').click();else if(editHistory.undo.length&&confirm('Start the example room again? Your changes to it will be lost.'))$('hero-sample').click();}
+    else if(kind==='empty'){if(worldOrigin!=='empty'||editHistory.undo.length)await action('new-map');}
+    else if(kind==='saved')await action('restore');}
+  robotSetup?.refresh();revealWorld(kind);}
+async function letItTry(){if(sandbox?.isStreet()){$('tab-test').click();$('street-workspace').scrollIntoView({block:'start'});return;}if(!world)return;$('viewport').scrollIntoView({block:'center'});await run();robotSetup?.refresh();}
+robotSetup=mountRobotSetup({host:$('robot-setup'),robots:ROBOTS,getState:robotSetupState,actions:{chooseRobot,chooseWorld,run:letItTry,moveStart,showCheck,showRobotSettings}});
+cameraDock=mountCameraDock({getCanvas:activeCanvas,getPreviewViewer:()=>activeCanvas()===$('visual-canvas')?visualViewer:null,setNames:on=>renderer?.setLabels(on)});
+updateUndo();
 layerTools=mountWorldLayerTools({root:$('world-layer-tools'),
   getConnection:()=>{if(isMainRemoteActive())throw Error('Wait for the current capture job or cancel it first.');if(!client){$('connection').showModal();throw Error('Connect processing, then start this tool.');}return {client,caps};},
   getResults:()=>workspaceResults.list(),getResult:requireResultContext,

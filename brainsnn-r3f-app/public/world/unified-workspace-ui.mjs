@@ -1,3 +1,5 @@
+import {ICONS} from './playground-icons.mjs';
+
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bytes = n => n >= 1048576 ? `${(n/1048576).toFixed(1)} MB` : `${Math.ceil(n/1024)} KB`;
 const label = engine => ({'scene-usd':'Building model','colmap-sparse':'Room reconstruction','colmap-dense-cpu':'Detailed reconstruction','photo-metric':'Photo preview','observations':'Object observations','locate-photo':'Photo location','splat-repair':'Appearance repair','localization-map':'Measured robot map','motion-retarget':'G1 motion reference','biomechanics':'Movement analysis'}[engine] || engine || 'Processed result');
@@ -9,7 +11,7 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   let selectedJob = '', lastSourceId = null, lastSceneKey = null, lastLibrary = '', disposed = false;
   const abort = new AbortController();
   host.innerHTML = `<div class="unified-heading"><div><p class="eyebrow">ONE SPACE · EVERY STEP</p><h2 id="workspace-project-name"></h2><p id="workspace-project-summary"></p></div><span class="badge" id="workspace-project-basis"></span></div>
-    <nav class="workspace-journey" aria-label="Build your world"><div id="workspace-tool-tabs"></div><button type="button" id="workspace-step-drawings" data-step="drawings"><span>3</span><strong>Make drawings</strong><small>Model and checks</small></button></nav>
+    <nav class="workspace-journey" aria-label="Build your world"><div id="workspace-tool-tabs"></div><button type="button" id="workspace-step-drawings" data-step="drawings"><span class="step-icon" aria-hidden="true">${ICONS.drawings}</span><strong>Make drawings</strong><small>Model and checks</small></button></nav>
     <div class="workspace-next"><p id="workspace-next-step" role="status"></p><button type="button" id="workspace-next-action" class="small" data-next></button><button type="button" id="workspace-project-review" class="small workspace-review-action" data-project-review>Review this project</button></div>
     
     <div class="workspace-view-switch" role="group" aria-label="Views of your space"><button id="workspace-source-view" data-space-view="source">Photo / video</button><button id="workspace-points-view" data-space-view="points">3D points</button><button id="workspace-model-view" data-space-view="model">Building model</button><button id="workspace-drawings-view" data-space-view="drawings">Drawings</button><button id="workspace-map-view" data-space-view="map">Robot map</button></div>
@@ -21,7 +23,8 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   const labels = {capture:['1','Add your space','Photo or video','capture'],world:['2','Look around','Explore and change','explore'],test:['4','Try robots','Routes and changes','robots'],evidence:['5','Save your work','Files and results','save'],understand:['+','Check details','Notes and evidence','checks']};
   for (const button of tabs.querySelectorAll('[data-tab]')) {
     const [number,title,subtitle,alias] = labels[button.dataset.tab];
-    button.innerHTML = `<span>${number}</span><strong id="workspace-step-${alias}">${title}</strong><small>${subtitle}</small>`;
+    // A picture and a word for each tool. The numbered path is the robot setup above; these are places to go, in any order.
+    button.innerHTML = `<span class="step-icon" aria-hidden="true">${ICONS[alias] || number}</span><strong id="workspace-step-${alias}">${title}</strong><small>${subtitle}</small>`;
   }
   $('workspace-tool-tabs').append(tabs);
   const drawingButton = $('workspace-step-drawings');
