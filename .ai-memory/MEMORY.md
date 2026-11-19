@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Make a robot task](world-robot-task-builder-2026-11-19.md) — local MuJoCo task authoring, 3D replay and a Google Antigravity handoff with native audit evidence.
+
 → [World Builder in action](world-feature-showcase-2026-11-19.md) — a shareable walkthrough and a six-chapter showcase with direct access to 45 playground activities.
 
 → [Arrange a room](world-scan-workshop-2026-11-19.md) — reviewed scan selections, reusable objects, a preview lamp and a source-bound handoff to repair.
