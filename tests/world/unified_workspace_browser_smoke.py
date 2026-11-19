@@ -3,7 +3,9 @@
 The worker adapter below deliberately authors a tiny scene and cloud. It does not
 reconstruct the two test photos or execute a model. Real HTTP uploads, private
 artifact downloads, SHA checks, component binding, drawing export and browser
-navigation are exercised. No production service or original demo footage is used.
+navigation are exercised. Project Review uses its local calculations only; no
+AI provider is configured or called. No production service or original demo
+footage is used.
 
 Run with tests/world/requirements-ci.txt and Playwright Chromium/WebKit installed:
   python tests/world/unified_workspace_browser_smoke.py
@@ -223,6 +225,127 @@ def opening_draft_retention(page, first_job, second_job):
     expect(page.locator('#scene-bim-files')).to_be_empty()
 
 
+def project_review_flow(page, worker_url, first_job, second_job,
+                        first_source, second_source, name, layouts):
+    """The integrated studio reads the chosen job's exact original scene bytes."""
+    page.set_viewport_size({'width':1360,'height':1000})
+    page.locator('#workspace-step-save').click()
+    scene_bytes = {}
+    for key in (first_job, second_job):
+        with page.expect_download() as original:
+            page.locator(f'[data-result-download="{key}"][aria-label="Download scene.json"]').click()
+        scene_bytes[key] = Path(original.value.path()).read_bytes()
+    scene_hashes = {key:hashlib.sha256(value).hexdigest() for key,value in scene_bytes.items()}
+    assert scene_hashes[first_job] != scene_hashes[second_job]
+    assert scene_bytes[first_job] != json.dumps(json.loads(scene_bytes[first_job]),separators=(',',':')).encode(), 'Fixture must exercise original bytes, not compact reserialization'
+
+    # The chosen result controls this review even when another photo is active.
+    page.locator('#workspace-source-select').select_option(second_source)
+    page.locator('#workspace-job-select').select_option(first_job)
+    page.locator('#workspace-project-review').click()
+    expect(page.locator('#project-review-dialog')).to_be_visible()
+    expect(page.locator('#pr-origin')).to_contain_text(scene_hashes[first_job])
+    expect(page.locator('#pr-run-local')).to_be_enabled()
+    expect(page.locator('#workspace-source-select')).to_have_value(second_source)
+    page.locator('#pr-run-local').click()
+    expect(page.locator('#pr-mode')).to_have_text('LOCAL COMPARISON')
+    expect(page.locator('.pr-option')).to_have_count(2)
+    expect(page.locator('.pr-quantity-table tbody tr')).to_have_count(1)
+    expect(page.locator('.pr-quantity-table')).to_contain_text('9.6 m²')
+    with page.expect_download() as draft_file:
+        page.locator('#pr-export-json').click()
+    draft = json.loads(Path(draft_file.value.path()).read_text())
+    assert draft['input']['source']['sceneSha256'] == scene_hashes[first_job]
+    assert draft['report']['inputSha256'] == draft['input']['inputSha256']
+    assert draft['approval'] is None
+    assert 'execution' not in draft['report'], 'Local workspace comparison must not claim model execution'
+    assert draft['report']['options'][0]['subtotal'] is None
+    assert draft['report']['options'][0]['items'][0]['quantity'] == 9.6
+    assert all(flag is False for flag in draft['report']['validation'].values())
+
+    page.locator('#pr-reviewer').fill('Authored integration fixture reviewer')
+    page.locator('#pr-decision-note').fill('Preliminary local scope only; rates and physical dimensions remain unverified.')
+    page.locator('#pr-approval-check').check()
+    page.locator('#pr-approve').click()
+    expect(page.locator('#pr-mode')).to_have_text('PRELIMINARY APPROVAL')
+    page.set_viewport_size({'width':390,'height':900})
+    page.locator('.pr-results-heading').scroll_into_view_if_needed()
+    layouts.append({'width':390,'view':'project-review',**no_overflow(page,f'{name} project review')})
+    bounds = page.locator('#project-review-dialog').evaluate('(el)=>({width:el.clientWidth,scroll:el.scrollWidth})')
+    assert bounds['scroll'] <= bounds['width'] + 1, bounds
+    page.screenshot(path=str(OUTPUT/f'unified-project-review-{name}-390.png'))
+    page.locator('#project-review-close').click()
+    expect(page.locator('#project-review-dialog')).not_to_be_visible()
+    expect(page.locator('#workspace-source-select')).to_have_value(second_source)
+    expect(page.locator('#workspace-job-select')).to_have_value(first_job)
+
+    # Closing and reopening the same context keeps its explicit human decision.
+    page.set_viewport_size({'width':1360,'height':1000})
+    page.locator('#workspace-project-review').click()
+    expect(page.locator('#pr-mode')).to_have_text('PRELIMINARY APPROVAL')
+    page.locator('#project-review-close').click()
+
+    # A source change clears output and approval before another review opens.
+    page.locator('#workspace-source-select').select_option(first_source)
+    expect(page.locator('#pr-mode')).to_have_text('DRAFT WORKSPACE')
+    expect(page.locator('#pr-export-json')).to_have_count(0)
+    page.locator('#workspace-source-select').select_option(second_source)
+    page.locator('#workspace-job-select').select_option(second_job)
+    page.locator('#workspace-project-review').click()
+    expect(page.locator('#pr-origin')).to_contain_text(scene_hashes[second_job])
+    expect(page.locator('#pr-export-json')).to_have_count(0)
+    page.locator('#pr-run-local').click()
+    expect(page.locator('#pr-mode')).to_have_text('LOCAL COMPARISON')
+    with page.expect_download() as replacement_file:
+        page.locator('#pr-export-json').click()
+    replacement = json.loads(Path(replacement_file.value.path()).read_text())
+    assert replacement['input']['source']['sceneSha256'] == scene_hashes[second_job]
+    assert replacement['input']['inputSha256'] != draft['input']['inputSha256']
+    assert replacement['approval'] is None
+
+    # Delay real original bytes while the user explicitly chooses the example.
+    # The older workspace fetch must not overwrite that new source.
+    page.locator('#pr-clear-source').click()
+    page.locator('#project-review-close').click()
+    held = []
+
+    def delay_scene(route):
+        response = route.fetch()
+        if not held and 'scene.json' in response.headers.get('content-disposition',''):
+            held.append((route,response))
+        else:
+            route.fulfill(response=response)
+
+    pattern = worker_url+'/v1/download/**'
+    page.route(pattern,delay_scene)
+    try:
+        page.locator('#workspace-project-review').click()
+        for _ in range(200):
+            if held:
+                break
+            page.wait_for_timeout(25)
+        assert held, 'Expected an original scene download to be held'
+        page.locator('#pr-example').click()
+        expect(page.locator('#pr-mode')).to_have_text('AUTHORED EXAMPLE')
+        route,response = held[0]
+        try:
+            route.fulfill(response=response)
+        except PlaywrightError:
+            assert route.request.failure, 'Scene request failed without browser cancellation'
+        page.wait_for_timeout(300)
+        expect(page.locator('#pr-mode')).to_have_text('AUTHORED EXAMPLE')
+        expect(page.locator('#pr-source-name')).to_contain_text('authored practice model')
+    finally:
+        page.unroute(pattern,delay_scene)
+    page.locator('#project-review-close').click()
+    page.locator('#workspace-source-select').select_option(first_source)
+    page.locator('#workspace-job-select').select_option(first_job)
+    return {'sourceSha256':scene_hashes[first_job], 'replacementSha256':scene_hashes[second_job],
+        'selectedResultUsesExactSceneBytes':True,'localComparisonOnly':True,
+        'closePreservesWorkspaceAndDecision':True,'sourceChangeClearsApproval':True,
+        'manualSourceCancelsPendingArtifact':True}
+
+
 def check_browser(pw, name, origin, worker_url, token, photos, release):
     executable = os.environ.get('PLAYWRIGHT_' + name.upper() + '_PATH')
     browser = getattr(pw, name).launch(headless=True,
@@ -375,6 +498,9 @@ def check_browser(pw, name, origin, worker_url, token, photos, release):
         page.locator('#workspace-source-view').click()
         expect(page.locator('#workspace-source-select')).to_have_value(first_source)
 
+        project_review = project_review_flow(page,worker_url,first_job,second_job,
+            first_source,second_source,name,layouts)
+
         # Native inline close, readable drawings and all workflow controls at
         # both narrow widths; no checkbox or route qualification is invented.
         page.locator('#workspace-model-view').click()
@@ -434,7 +560,7 @@ def check_browser(pw, name, origin, worker_url, token, photos, release):
             'originalPdfSha256':hashlib.sha256(original_pdf).hexdigest(),
             'secondPdfSha256':hashlib.sha256(new_pdf).hexdigest(),
             'drawingSheets':12, 'sourceGroups':2, 'mapEditPreserved':True,
-            'reviewNotGranted':True, 'layouts':layouts}
+            'reviewNotGranted':True, 'projectReview':project_review, 'layouts':layouts}
         (OUTPUT/f'unified-workspace-{name}.json').write_text(json.dumps(receipt,indent=2)+'\n')
         print(name+': unified workspace source retention, bound drawings, original downloads and mobile layouts PASS',flush=True)
     except Exception:

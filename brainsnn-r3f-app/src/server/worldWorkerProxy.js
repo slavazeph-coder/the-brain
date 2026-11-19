@@ -295,5 +295,13 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     return next();
   }
 
-  return { handle, status, sessions, leases };
+  // Server-local tools can reuse the existing owner session without accepting a
+  // worker credential or creating another passcode/session store. This opaque
+  // reference is only for authorization/quota accounting; never serialize it.
+  function ownerSession(req) {
+    const current = session(req);
+    return current?.kind === 'owner' ? current : null;
+  }
+
+  return { handle, status, ownerSession, sessions, leases };
 }

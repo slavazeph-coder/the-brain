@@ -12,7 +12,7 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   const abort = new AbortController();
   host.innerHTML = `<div class="unified-heading"><div><p class="eyebrow">ONE SPACE · EVERY STEP</p><h2 id="workspace-project-name"></h2><p id="workspace-project-summary"></p></div><span class="badge" id="workspace-project-basis"></span></div>
     <nav class="workspace-journey" aria-label="Build your world"><div id="workspace-tool-tabs"></div><button type="button" id="workspace-step-drawings" data-step="drawings"><span class="step-icon" aria-hidden="true">${ICONS.drawings}</span><strong>Make drawings</strong><small>Model and checks</small></button></nav>
-    <div class="workspace-next"><p id="workspace-next-step" role="status"></p><button type="button" id="workspace-next-action" class="small" data-next></button></div>
+    <div class="workspace-next"><p id="workspace-next-step" role="status"></p><button type="button" id="workspace-next-action" class="small" data-next></button><button type="button" id="workspace-project-review" class="small workspace-review-action" data-project-review>Review this project</button></div>
     
     <div class="workspace-view-switch" role="group" aria-label="Views of your space"><button id="workspace-source-view" data-space-view="source">Photo / video</button><button id="workspace-points-view" data-space-view="points">3D points</button><button id="workspace-model-view" data-space-view="model">Building model</button><button id="workspace-drawings-view" data-space-view="drawings">Drawings</button><button id="workspace-map-view" data-space-view="map">Robot map</button></div>
     <p id="workspace-view-message" class="workspace-view-message" role="status"></p>
@@ -141,7 +141,8 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
           const target = ['world','test'].includes(tool) ? $('viewport') : $('panel');
           target.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
         });
-      } else if(button.dataset.step) await step(button.dataset.step);
+      } else if(button.hasAttribute('data-project-review')) await actions.reviewProject?.(selectedJob);
+      else if(button.dataset.step) await step(button.dataset.step);
       else if(button.hasAttribute('data-next')) await step(button.dataset.next);
       else if(button.dataset.spaceView) await view(button.dataset.spaceView);
       else if(button.dataset.librarySource) { closeModel(); await actions.selectSource(button.dataset.librarySource,'source'); message(''); }

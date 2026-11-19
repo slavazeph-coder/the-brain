@@ -26,7 +26,7 @@ is never marked reviewed.
 The type scale is larger on the playground only (body.playground: 16/18/15 px; Larger text 19/22/18 px).
 Linked pages that share world.css keep their tested sizes. No visible playground text is under 13 px.
 More contrast is optional and remembered, and it follows prefers-contrast until the person chooses.
-Tool-strip numbers became icons, so the setup is the one numbered path. The integrated robot/camera offline shell is world-shell-robot-camera-v33; only obsolete World shell caches are removed, preserving model caches.
+Tool-strip numbers became icons, so the setup is the one numbered path. The integrated robot/camera/project-review offline shell is world-shell-review-playground-v34; only obsolete World shell caches are removed, preserving model caches.
 
 Checks:
 - robot_setup_browser_smoke.py (Chromium/WebKit; 320/390 px in standard and large text) is in CI.
