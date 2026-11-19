@@ -24,6 +24,8 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [v23 showroom feature audit](world-v23-parity-audit-2026-11-19.md) — recovered original inputs and the gap between the filmed showroom and a visitor-replayable project.
+
 → [Make a robot task](world-robot-task-builder-2026-11-19.md) — local MuJoCo task authoring, 3D replay and a Google Antigravity handoff with native audit evidence.
 
 → [World Builder in action](world-feature-showcase-2026-11-19.md) — a shareable walkthrough and a six-chapter showcase with direct access to 45 playground activities.
