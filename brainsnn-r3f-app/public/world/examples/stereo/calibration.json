@@ -1,0 +1,11 @@
+{
+  "schema": "brainsnn.stereo.rectified.v1",
+  "width": 320,
+  "height": 192,
+  "fx": 240,
+  "fy": 240,
+  "cxLeft": 159.5,
+  "cxRight": 159.5,
+  "cy": 95.5,
+  "baselineMeters": 0.1
+}

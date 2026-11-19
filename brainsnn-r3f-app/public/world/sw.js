@@ -1,8 +1,10 @@
 // World Builder shell worker. Network first, cache as an offline fallback for the app shell only.
 // Remote models, worker-API calls, uploads and cross-origin requests are never cached: fresh code and
 // fresh evidence always win; the cache only stores the app shell and its bundled authored example.
-const CACHE = 'world-shell-open4dgs-v36';
+const CACHE = 'world-shell-stereo-depth-v37';
 const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', './sandbox-session.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './hero-demo.mjs', './playground-help.mjs', './playground-icons.mjs', './playground-controls.mjs', './robot-setup.mjs', './unified-workspace-ui.mjs', './scene-workspace.mjs', './workspace-results.mjs', './drawing-review-ui.mjs', './drawing-review.css', './world-layer-tools.mjs', './world-layer-tools.css', './layer-preview.mjs', './layer-job-client.mjs', './biomechanics-tool.mjs', './biomechanics-preview.mjs', './camera-calibration-tool.mjs', './camera-calibration-data.mjs', './examples/camera-calibration/camera-setup.toml', './examples/camera-calibration/example-walk.trc', './examples/biomechanics/authored-pendulum.osim', './examples/biomechanics/authored-motion.mot', './examples/biomechanics/kinematics-options.json', './photo-locator.mjs', './share-video.mjs', './demo-replay-ui.mjs', './review-questions.mjs', './visual-viewer.mjs',
+  './stereo-export.mjs', './stereo-export-data.mjs', './stereo-depth-data.mjs', './stereo-depth-tool.mjs', './stereo-photo.mjs',
+  './examples/stereo/left.png', './examples/stereo/right.png', './examples/stereo/calibration.json',
   './open4dgs-tool.mjs', './open4dgs-data.mjs', './open4dgs-player.mjs', './open4dgs-trigs.mjs', './open4d-capture.mjs', './open4d-capture.css',
   './examples/open4dgs/export_meta.json', ...Array.from({length: 16}, (_, i) => './examples/open4dgs/frame_' + String(i).padStart(6, '0') + '.ply'),
   './visual-geometry.mjs', './worker-client.mjs', './artifact-review.mjs', './depth-client.mjs', './depth-worker.mjs', './import-world.mjs', './observation-ui.mjs', './observations.mjs',

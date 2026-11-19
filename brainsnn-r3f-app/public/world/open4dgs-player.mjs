@@ -72,7 +72,7 @@ function createProjectedViewer(canvas) {
   dispose() { resize.disconnect(); canvas.removeEventListener('keydown', key); points = framing = null; }};
 }
 
-function createPreview(canvas, fallbackCanvas, onStatus) {
+export function createGaussianPreview(canvas, fallbackCanvas, onStatus) {
   const originalHidden = canvas.hidden;
   const suppliedFallback = fallbackCanvas !== undefined;
   let visual;
@@ -109,7 +109,7 @@ function createPreview(canvas, fallbackCanvas, onStatus) {
 /** Local playback anchored to source time. Slow decoding skips display frames. */
 export function createOpen4DGSPlayer(canvas, {fallbackCanvas, onFrame = () => {}, onStatus = () => {},
   onPlaybackChange = () => {}} = {}) {
-  const preview = createPreview(canvas, fallbackCanvas, onStatus);
+  const preview = createGaussianPreview(canvas, fallbackCanvas, onStatus);
   const cache = new Map();
   let sequence = null, current = null, revision = 0, playing = false, disposed = false;
   let raf = 0, anchor = 0, playIndex = 0, fitted = false;

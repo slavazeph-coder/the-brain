@@ -171,6 +171,10 @@ jobs:
         run: |
           python -m pytest tests/world/test_make_playground_preview.py tests/world/test_open4dgs_runner.py -q
           python tests/world/open4dgs_browser_smoke.py
+      - name: Rectified stereo depth and Gaussian export review
+        run: |
+          python tests/world/stereo_depth_browser_smoke.py
+          python tests/world/stereo_export_browser_smoke.py
       # This flow starts its own frontend/worker and uses no earlier browser outputs.
       # Check retained-source review before the longer reconstruction regressions.
       - name: Unified source, model, drawings and retained job browser flow

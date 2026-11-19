@@ -1,4 +1,5 @@
 import {mountOpen4DGSTool,open4dgsPanel} from './open4dgs-tool.mjs';
+import {mountStereoDepth,stereoDepthPanel} from './stereo-depth-tool.mjs';
 import {biomechanicsPanel,mountBiomechanicsTool} from './biomechanics-tool.mjs';
 import {parsePLY,STRIDE,MAX_POINTS} from './visual-geometry.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
@@ -15,6 +16,7 @@ const titles = {
   motion: ['Try a movement', 'Compare human and robot motion'],
   biomechanics: ['Understand movement', 'Explore body and muscle geometry'],
   open4dgs: ['Watch a moving scene', 'Play and look around in 3D'],
+  stereo: ['See depth with two photos', 'Compare two camera views'],
 };
 
 /** Native tools inside the shared workspace. Remote files use their original private client. */
@@ -61,6 +63,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     </section>
     ${biomechanicsPanel}
     ${open4dgsPanel}
+    ${stereoDepthPanel}
     <div class="layer-result-footer" hidden><p data-layer-status role="status"></p><button type="button" data-layer-cancel hidden>Cancel processing</button><div data-layer-downloads class="layer-toolbar"></div></div>`;
   const $=s=>root.querySelector(s),on=(selector,event,fn)=>$(selector).addEventListener(event,fn,{signal});
   const status=(message,error=false)=>{$('.layer-result-footer').hidden=false;$('[data-layer-status]').textContent=message;$('[data-layer-status]').classList.toggle('error',error);};
@@ -70,6 +73,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     if(!Object.hasOwn(titles,name))return;
     active=name;motionViewer?.pause();mapViewer?.pause();biomechanics?.pause();if(name!=='localization')stopLive();
     if(name!=='open4dgs')movingScene.pause();
+    if(name!=='stereo')stereo.suspend();
     for(const button of root.querySelectorAll('[data-layer-tab]')){const selected=button.dataset.layerTab===name;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}
     for(const id of Object.keys(titles))$(`#layer-panel-${id}`).hidden=id!==name;
     if(name==='repair'&&!repairViewer)repairViewer=createVisualViewer($('[data-repair-canvas]'),message=>status(message));
@@ -146,6 +150,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     refresh();if(token!==epoch||disposed){status('Result saved in your files. Your newer view was kept.');return;}await openResult(context);
   }
   const movingScene=mountOpen4DGSTool({root,signal});
+  const stereo=mountStereoDepth({root,signal});
   const biomechanics=mountBiomechanicsTool({root,signal,run,status,intent:()=>{epoch++;},version:()=>epoch,isCurrent:token=>token===epoch&&!disposed,show:()=>open('biomechanics'),read});
   function stopLive(){if(live){clearTimeout(live.timer);clearInterval(live.watchdog);live.controller.abort();live=null;mapViewer?.markStale();$('[data-localization-info]').textContent='Position stream disconnected.';} $('[data-live-token]').value='';}
   async function connectLive() {
@@ -203,20 +208,21 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   on('[data-motion-preview]','change',event=>void attempt(async()=>{const file=event.target.files[0];if(!file)return;if(file.size>32*1024*1024)throw Error('Motion previews are limited to 32 MiB.');const token=++epoch,parsed=validateMotionPreview(jsonBytes(await file.arrayBuffer()));if(token!==epoch||disposed)return;motion=parsed;open('motion');motionViewer.set(motion);$('[data-motion-seek]').max=motion.frame_count-1;status('Motion reference opened locally.');}));
   on('[data-motion-play]','click',()=>motionViewer?.play());on('[data-motion-pause]','click',()=>motionViewer?.pause());on('[data-motion-seek]','input',event=>motionViewer?.seek(Number(event.target.value)));
   root.addEventListener('change',event=>{if(event.target.matches('[data-repair-mode],[data-repair-density],[data-repair-seed],[data-localization-file],[data-localization-axis],[data-localization-voxel],[data-layer-scene],[data-localization-transform],[data-motion-file],[data-motion-units],[data-motion-facing]')){epoch++;for(const input of root.querySelectorAll('[data-repair-consent],[data-localization-consent],[data-motion-consent]'))input.checked=false;}},{signal});
-  function followMovingSceneLink() {
-    const target = '#layer-tab-open4dgs';
-    if (location.hash !== target) return;
+  function followPreviewLink() {
+    const target = location.hash;
+    const linked = {'#layer-tab-open4dgs':'open4dgs','#layer-tab-stereo':'stereo'}[target];
+    if (!linked) return;
     epoch++;
-    open('open4dgs');
+    open(linked);
     // The tab is built here, so scroll after the anchor has been mounted.
     requestAnimationFrame(() => {
-      if (!signal.aborted && active === 'open4dgs' && location.hash === target) {
+      if (!signal.aborted && active === linked && location.hash === target) {
         $(target).scrollIntoView({block:'start',behavior:'instant'});
       }
     });
   }
-  window.addEventListener('hashchange',followMovingSceneLink,{signal});
-  followMovingSceneLink();
+  window.addEventListener('hashchange',followPreviewLink,{signal});
+  followPreviewLink();
   refresh();
-  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();movingScene.pause();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();movingScene.clearSession();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
+  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();movingScene.pause();stereo.suspend();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();movingScene.clearSession();stereo.clear();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
 }
