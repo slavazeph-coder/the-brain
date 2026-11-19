@@ -1,3 +1,4 @@
+import {mountOpen4DGSTool,open4dgsPanel} from './open4dgs-tool.mjs';
 import {biomechanicsPanel,mountBiomechanicsTool} from './biomechanics-tool.mjs';
 import {parsePLY,STRIDE,MAX_POINTS} from './visual-geometry.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
@@ -8,7 +9,13 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const jsonFile=(value,name)=>new File([JSON.stringify(value)],name,{type:'application/json'});
 const IDENTITY=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
 const Z_TO_Y=[[1,0,0,0],[0,0,1,0],[0,-1,0,0],[0,0,0,1]];
-const titles={repair:'Repair appearance',localization:'Find my robot',motion:'Try a movement',biomechanics:'Understand movement'};
+const titles = {
+  repair: ['Repair appearance', 'Repair a selected area'],
+  localization: ['Find my robot', 'See position and tracking'],
+  motion: ['Try a movement', 'Compare human and robot motion'],
+  biomechanics: ['Understand movement', 'Explore body and muscle geometry'],
+  open4dgs: ['Watch a moving scene', 'Play and look around in 3D'],
+};
 
 /** Native tools inside the shared workspace. Remote files use their original private client. */
 export function mountWorldLayerTools({root,getConnection,getResults,getResult,rememberResult,connect,onChange=()=>{}}) {
@@ -17,7 +24,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   let map=null,mapRaw=null,mapBinding=null,mapPoints=null,recording=null,motion=null,motionViewer=null,mapViewer=null,live=null,lastResults='';
   root.className='world-layer-tools';
   root.innerHTML=`<div class="layer-tools-heading"><div><p class="eyebrow">MORE WAYS TO USE YOUR WORLD</p><h3>Make it yours.</h3></div><button type="button" data-layer-connect>Connect processing</button></div>
-    <div class="layer-tool-choices" role="tablist" aria-label="World tools">${Object.entries(titles).map(([id,label],i)=>`<button type="button" id="layer-tab-${id}" role="tab" aria-selected="false" aria-controls="layer-panel-${id}" tabindex="${i?'-1':'0'}" data-layer-tab="${id}"><strong>${label}</strong><span>${id==='repair'?'Repair a selected area':id==='localization'?'See position and tracking':id==='motion'?'Compare human and robot motion':'Explore body and muscle geometry'}</span></button>`).join('')}</div>
+    <div class="layer-tool-choices" role="tablist" aria-label="World tools">${Object.entries(titles).map(([id,[label,description]],i)=>`<button type="button" id="layer-tab-${id}" role="tab" aria-selected="false" aria-controls="layer-panel-${id}" tabindex="${i?'-1':'0'}" data-layer-tab="${id}"><strong>${label}</strong><span>${description}</span></button>`).join('')}</div>
     <section id="layer-panel-repair" role="tabpanel" aria-labelledby="layer-tab-repair" hidden>
       <p>Open a Gaussian capture, select the area to repair, then compare the result. Your original stays unchanged.</p>
       <div class="layer-input-row"><label>Open Gaussian PLY<input data-repair-file type="file" accept=".ply"></label><label>Or use a result from this workspace<select data-layer-result="repair"><option value="">Choose a result</option></select></label><button type="button" data-layer-use="repair">Open selected result</button></div>
@@ -53,6 +60,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
       <p class="layer-note">Skeletons are shown side by side for comparison. Source motion is retained. This is a movement reference; physics testing and a tracking controller are separate steps.</p>
     </section>
     ${biomechanicsPanel}
+    ${open4dgsPanel}
     <div class="layer-result-footer" hidden><p data-layer-status role="status"></p><button type="button" data-layer-cancel hidden>Cancel processing</button><div data-layer-downloads class="layer-toolbar"></div></div>`;
   const $=s=>root.querySelector(s),on=(selector,event,fn)=>$(selector).addEventListener(event,fn,{signal});
   const status=(message,error=false)=>{$('.layer-result-footer').hidden=false;$('[data-layer-status]').textContent=message;$('[data-layer-status]').classList.toggle('error',error);};
@@ -61,6 +69,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   function open(name) {
     if(!Object.hasOwn(titles,name))return;
     active=name;motionViewer?.pause();mapViewer?.pause();biomechanics?.pause();if(name!=='localization')stopLive();
+    if(name!=='open4dgs')movingScene.pause();
     for(const button of root.querySelectorAll('[data-layer-tab]')){const selected=button.dataset.layerTab===name;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}
     for(const id of Object.keys(titles))$(`#layer-panel-${id}`).hidden=id!==name;
     if(name==='repair'&&!repairViewer)repairViewer=createVisualViewer($('[data-repair-canvas]'),message=>status(message));
@@ -70,7 +79,9 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   function refresh() {
     const results=getResults(),signature=JSON.stringify(results.map(r=>[r.key,r.artifacts.length]));if(signature===lastResults)return;lastResults=signature;
     for(const kind of Object.keys(titles)) {
-      const select=$(`[data-layer-result="${kind}"]`),chosen=select.value;
+      const select=$(`[data-layer-result="${kind}"]`);
+      if(!select)continue; // local-only tools have no worker result selector
+      const chosen=select.value;
       const rows=results.filter(r=>kind==='repair'?r.artifacts.some(a=>a.name.endsWith('.ply')):r.engine===(kind==='motion'?'motion-retarget':kind==='biomechanics'?'biomechanics':'localization-map'));
       select.innerHTML='<option value="">Choose a result</option>'+rows.map(r=>`<option value="${esc(r.key)}">${esc(r.sourceNames.join(', ')||r.engine)} · ${esc(r.id.slice(0,8))}</option>`).join('');select.value=chosen;
     }
@@ -134,6 +145,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     const token=epoch,context=await runner.run({engine,inputs,sourceJob,expectedClient,sourceNames:inputs.filter(i=>['splat','survey','motion','biomech-model','biomech-motion'].includes(i.kind)).map(i=>i.file.name)});
     refresh();if(token!==epoch||disposed){status('Result saved in your files. Your newer view was kept.');return;}await openResult(context);
   }
+  const movingScene=mountOpen4DGSTool({root,signal});
   const biomechanics=mountBiomechanicsTool({root,signal,run,status,intent:()=>{epoch++;},version:()=>epoch,isCurrent:token=>token===epoch&&!disposed,show:()=>open('biomechanics'),read});
   function stopLive(){if(live){clearTimeout(live.timer);clearInterval(live.watchdog);live.controller.abort();live=null;mapViewer?.markStale();$('[data-localization-info]').textContent='Position stream disconnected.';} $('[data-live-token]').value='';}
   async function connectLive() {
@@ -191,6 +203,20 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   on('[data-motion-preview]','change',event=>void attempt(async()=>{const file=event.target.files[0];if(!file)return;if(file.size>32*1024*1024)throw Error('Motion previews are limited to 32 MiB.');const token=++epoch,parsed=validateMotionPreview(jsonBytes(await file.arrayBuffer()));if(token!==epoch||disposed)return;motion=parsed;open('motion');motionViewer.set(motion);$('[data-motion-seek]').max=motion.frame_count-1;status('Motion reference opened locally.');}));
   on('[data-motion-play]','click',()=>motionViewer?.play());on('[data-motion-pause]','click',()=>motionViewer?.pause());on('[data-motion-seek]','input',event=>motionViewer?.seek(Number(event.target.value)));
   root.addEventListener('change',event=>{if(event.target.matches('[data-repair-mode],[data-repair-density],[data-repair-seed],[data-localization-file],[data-localization-axis],[data-localization-voxel],[data-layer-scene],[data-localization-transform],[data-motion-file],[data-motion-units],[data-motion-facing]')){epoch++;for(const input of root.querySelectorAll('[data-repair-consent],[data-localization-consent],[data-motion-consent]'))input.checked=false;}},{signal});
+  function followMovingSceneLink() {
+    const target = '#layer-tab-open4dgs';
+    if (location.hash !== target) return;
+    epoch++;
+    open('open4dgs');
+    // The tab is built here, so scroll after the anchor has been mounted.
+    requestAnimationFrame(() => {
+      if (!signal.aborted && active === 'open4dgs' && location.hash === target) {
+        $(target).scrollIntoView({block:'start',behavior:'instant'});
+      }
+    });
+  }
+  window.addEventListener('hashchange',followMovingSceneLink,{signal});
+  followMovingSceneLink();
   refresh();
-  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
+  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();movingScene.pause();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();movingScene.clearSession();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
 }
