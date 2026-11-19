@@ -10,6 +10,8 @@ on:
       - "brainsnn-r3f-app/src/world/**"
       - "brainsnn-r3f-app/src/server/worldWorkerProxy*"
       - "brainsnn-r3f-app/src/server/projectReview*"
+      - "brainsnn-r3f-app/src/server/worldProject*"
+      - "brainsnn-r3f-app/src/server/projectProcessingBridge*"
       - "brainsnn-r3f-app/src/App.tsx"
       - "brainsnn-r3f-app/src/lib/routeMeta*"
       - "brainsnn-r3f-app/index.html"

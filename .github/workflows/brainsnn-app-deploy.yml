@@ -19,6 +19,7 @@ on:
       - "railway.toml"
       - ".github/workflows/brainsnn-app-deploy.yml"
       - ".github/workflows/world-builder-checks.yml"
+      - ".github/workflows/world-project-platform.yml"
   workflow_dispatch:
 
 permissions:
@@ -31,6 +32,9 @@ concurrency:
 jobs:
   world-checks:
     uses: ./.github/workflows/world-builder-checks.yml
+
+  project-platform-checks:
+    uses: ./.github/workflows/world-project-platform.yml
 
   build:
     runs-on: ubuntu-latest
