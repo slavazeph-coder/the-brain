@@ -5,6 +5,7 @@
   <title>BrainSNN | 3D asset viewer</title>
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="./world.css">
+  <link rel="stylesheet" href="./objectify.css">
 </head>
 <body>
   <a class="skip" href="#asset">Skip to asset controls</a>
@@ -12,7 +13,7 @@
   <main><section style="padding:40px 0">
     <p class="eyebrow">APPEARANCE LAYER / NO COLLISION GEOMETRY</p>
     <h2>Explore your<br><em>visual world.</em></h2>
-    <p class="intro">Open your point cloud, Gaussian asset or GLB scan. Orbit, inspect and explore it locally.</p>
+    <p class="intro">Open your point cloud, Gaussian asset or GLB scan. Inspect it, separate reviewed visual objects, try new layouts and record a labelled flythrough locally.</p>
     <div class="viewer-controls">
       <label>Local .ply / .splat · 64 MiB, .glb · 50 MiB<input id="asset" type="file" accept=".ply,.splat,.glb"></label>
       <button id="frame" disabled>Reset view</button><button id="flip" disabled>Flip vertical axis</button><button id="remove">Clear asset</button>
@@ -21,6 +22,36 @@
     <p class="micro" id="viewer-help">Drag to orbit · pinch or scroll to zoom · two-finger drag or Shift-drag to pan · focus the view and use WASD / arrow keys to move, + / − to zoom, 0 to reset.</p>
     <div class="viewer-stage"><canvas id="asset-canvas" style="width:100%;height:100%" tabindex="0" aria-label="Interactive 3D visual asset" aria-describedby="viewer-help"></canvas></div>
     <div id="mesh-stage" class="viewer-stage" hidden></div>
+    <section id="surface-panel" hidden aria-labelledby="surface-title">
+      <h3 id="surface-title">Inspect the surface</h3>
+      <div class="viewer-controls">
+        <label>Mesh view<select id="surface-mode"><option value="original">Original materials</option><option value="zebra">Zebra reflection stripes</option><option value="normals">Face normals</option><option value="wireframe">Triangle wireframe</option></select></label>
+        <label>Stripe density<input id="stripe-frequency" type="range" min="4" max="80" value="18"></label>
+        <button id="surface-check">Check mesh topology</button><button id="surface-download" disabled>Download inspection JSON</button>
+      </div>
+      <p id="surface-status" role="status">Inspect the original mesh locally. No geometry is smoothed or repaired.</p>
+      <p class="micro">Stripes use the supplied shading normals; the topology check uses triangle face normals and exact coincident positions within each mesh. Boundaries and sharp corners may be intentional. No self-intersection or gap check between separate meshes. A mesh cannot certify NURBS G0/G1/G2/G3 continuity. Inspect analytic surfaces in Rhino with Zebra and EdgeContinuity.</p>
+    </section>
+    <section id="objectify-panel" hidden aria-label="Appearance object workshop"></section>
+    <p id="object-camera-binding" class="micro" hidden></p>
+    <section id="camera-tour" aria-labelledby="tour-title">
+      <p class="eyebrow">LOCAL CAMERA STUDIO</p><h3 id="tour-title">Make a clear walkthrough.</h3>
+      <p>Frame a view, save it, then move and save the next. Preview the move before recording. Your original asset stays unchanged.</p>
+      <div class="viewer-controls">
+        <label>Asset origin, declared by you<select data-tour-provenance disabled><option value="unknown">Unknown or unverified</option><option value="camera-reconstruction">Camera reconstruction</option><option value="generated">Generated or completed</option><option value="authored">Authored model</option></select></label>
+        <label>Seconds to next view<input data-tour-interval type="number" min="0.5" max="15" step="0.5" value="3" disabled></label>
+        <button data-tour-add disabled>Save current view</button><button data-tour-undo disabled>Remove last view</button><button data-tour-clear disabled>Clear views</button>
+      </div>
+      <p data-tour-frames class="micro">No camera views saved.</p>
+      <div class="viewer-controls">
+        <button data-tour-play disabled>Preview path</button><button data-tour-stop disabled>Stop</button>
+        <button data-tour-video disabled>Record labelled video</button><button data-tour-export disabled>Download camera path</button>
+        <label>Reopen matching path JSON<input data-tour-import type="file" accept=".json,application/json" disabled></label>
+      </div>
+      <div class="viewer-controls"><button data-tour-save-video disabled>Download video</button><button data-tour-save-receipt disabled>Download receipt</button></div>
+      <p data-tour-status role="status">Open a local asset to author a camera path.</p>
+      <p class="micro">Up to 32 views and 60 seconds. Paths bind to the exact asset hash and display orientation. Coordinates use local asset units, not verified metres. Moves can cross surfaces or unseen areas; no collision test is performed. Video uses the actual local renderer and carries origin and scale labels. Generated or completed appearance is excluded from BIM measurements, occupancy and robot routes.</p>
+    </section>
     <p id="viewer-status" role="status" class="statusbar">Choose a local asset. No model has run here.</p>
     <p class="micro">The viewer and parser run on your device; no third-party renderer is loaded. Up to 100,000 points are displayed, with uniform sampling for larger files. Requires WebGL2. Gaussian assets use base colour only; view-dependent shading is not rendered. GLB must be self-contained, without Draco, Meshopt or KTX compression. Export SPZ / KSPLAT assets as uncompressed PLY or SPLAT first.</p>
     <p class="note">A point cloud is not a trained Gaussian splat. Neither establishes metric scale, collision geometry or robot safety. Unobserved surfaces remain unknown.</p>

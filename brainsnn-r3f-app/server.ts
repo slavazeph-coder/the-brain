@@ -39,6 +39,9 @@ import { createGpuBridge } from "./src/server/gpuBridge.js";
 import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createWorldWorkerProxy } from "./src/server/worldWorkerProxy.js";
+import { createProjectReviewService } from "./src/server/projectReview.js";
+import { createWorldProjectService } from "./src/server/worldProjectService.js";
+import { createProjectProcessingBridge } from "./src/server/projectProcessingBridge.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 
 
@@ -59,6 +62,11 @@ app.use((req, res, next) => {
 const arenaRouter = createArenaRouter({
   directory: path.join(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/arena' : 'public/arena'),
 });
+// Isolated lab document and assets must never fall through to the React shell.
+app.use('/lab/meshlets', createArenaRouter({
+  label: 'Meshlets lab',
+  directory: path.join(process.cwd(), process.env.NODE_ENV === 'production' ? 'dist/lab/meshlets' : 'public/lab/meshlets'),
+}));
 app.use('/arena', (req, res, next) => {
   // Curated synthetic tasks use the shared React shell; the robot arena stays standalone.
   if (req.path === '/tasks' || req.path.startsWith('/tasks/')) return next();
@@ -68,6 +76,16 @@ app.use('/arena', (req, res, next) => {
 app.use('/api/gpu-worker', gpuBridge.handle);
 // World Builder processing on this site: streamed 4 MiB upload chunks, so also ahead of the parser and limiter.
 const worldProcessing = createWorldWorkerProxy(process.env);
+// Named customer credentials and retained evidence have a separate, durable
+// boundary from the existing anonymous/owner browser processing sessions.
+// Both authenticate before reading bodies; uploads retain their 4 MiB cap.
+const worldProjects = createWorldProjectService({ env: process.env });
+const projectProcessing = createProjectProcessingBridge({ env: process.env, projects: worldProjects });
+app.use('/api/world/v1/processing', projectProcessing.handle);
+app.use('/api/world/v1', worldProjects.handle);
+// Authenticate and bound review bodies before the general parser. The service
+// is initialized below with the existing server-only model and spend ceiling.
+app.use('/api/world/project-review', (req, res, next) => projectReview.handle(req, res, next));
 app.use('/api/world', worldProcessing.handle);
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
@@ -269,6 +287,37 @@ const geminiCeiling = new SpendCeiling(resolveGeminiCeiling(process.env));
 
 /** Marks the one error the analyze handler must answer with the local engine. */
 class GeminiCeilingReached extends Error {}
+
+// A finite design-review team. Geometry and money are computed by the shared
+// deterministic tools; the provider can propose references and commentary only.
+const projectReviewModel = process.env.WORLD_REVIEW_MODEL || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
+const projectReview = createProjectReviewService({
+  authorize: (req: express.Request) => worldProcessing.ownerSession(req),
+  enabled: process.env.WORLD_REVIEW_ENABLED !== '0' && !!ai && worldProcessing.status().passcode,
+  model: projectReviewModel,
+  provider: 'google-gemini',
+  generate: async ({system, prompt, signal, maxOutputTokens}: {
+    role: string; system: string; prompt: string; signal: AbortSignal; maxOutputTokens: number;
+  }) => {
+    if (!ai) throw new Error('The project review provider is unavailable.');
+    signal.throwIfAborted();
+    // No hidden retries: each team stage uses one counted, bounded model call.
+    const response = await callGeminiWithRetry(ai, {
+      model: projectReviewModel,
+      contents: prompt,
+      config: {
+        systemInstruction: system,
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+        maxOutputTokens,
+        abortSignal: signal,
+        httpOptions: {timeout: 30000},
+      },
+    }, 0);
+    signal.throwIfAborted();
+    return {text: response.text || '', model: response.modelVersion || projectReviewModel};
+  },
+});
 
 // Keys are attacker-supplied, so the maps are swept rather than left to grow.
 // unref() so this timer never holds the process open by itself.
@@ -1169,6 +1218,13 @@ export async function startServer() {
     // index.html happen to be the homepage's own. Anything the server computes
     // per route, including the content a crawler reads, was silently skipped
     // there. Letting "/" fall through to the catch-all fixes that.
+    // public/lab now contains a standalone sub-lab. Preserve the existing /lab
+    // SPA URL instead of express.static redirecting it just because a directory exists.
+    app.get(['/lab', '/lab/'], (req, res) => {
+      const [pathname, search = ''] = req.originalUrl.split('?');
+      const html = readFileSync(path.join(distPath, 'index.html'), 'utf8');
+      res.type('html').send(applyRouteMeta(html, pathname, search, APP_URL.replace(/\/$/, '')));
+    });
     app.use(express.static(distPath, { index: false }));
 
     // Every route used to be served the identical index.html, so a shared

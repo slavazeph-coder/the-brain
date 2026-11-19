@@ -7,9 +7,9 @@ export function createHeroDemo(root,{onOpen}={}){
   const $=id=>root.querySelector('#'+id),canvas=$('hero-demo-canvas'),renderer=createRenderer(canvas,{wheelZoom:false});
   const world=sampleWorld(),plan=planWorld(world,{...ROBOTS.cleaner,margin:.1}),minutes=Math.max(1,Math.round(plan.travelSeconds/60));
   const STATES={
-    sample:{badge:'AUTHORED SAMPLE · NOT A RECONSTRUCTION',text:'A training floor drawn by hand, so you can try every tool before capturing anything. Drag it to turn.',action:'Open it in the workspace →'},
-    generated:{badge:'GENERATED · VISUAL ONLY',text:'One photo becomes a 3D point preview on your device. It is not measured, so it never becomes a collision map. Walk the space with your phone for geometry you can review.',action:'Make one from a photo ↗',link:true},
-    reviewed:{badge:'REVIEWED · PLANNING PREVIEW',text:`Once scale and obstacles are confirmed, the planner runs. This is its actual pass for a cleaning robot on the sample floor: ${Math.round(plan.reachableArea)} m² reached, ${Math.round(plan.distance).toLocaleString('en')} m of travel, about ${minutes} min, with unknown space kept blocked. A simulation, not a safety certificate.`,action:'Run it in the workspace →'},
+    sample:{badge:'AUTHORED SAMPLE · NOT A RECONSTRUCTION',text:'This room was made for practice. Drag it to look around. You can change it in the playground without adding any files.',action:'Try this room →'},
+    generated:{badge:'GENERATED · VISUAL ONLY',text:'Turn a photo into a 3D preview on your device. It is a visual idea, not a measured room or a safe map for a robot.',action:'Make one from a photo ↗',link:true},
+    reviewed:{badge:'REVIEWED · PLANNING PREVIEW',text:`This cleaning robot takes a simulated route around the example: ${Math.round(plan.reachableArea)} m² reached, ${Math.round(plan.distance).toLocaleString('en')} m of travel, about ${minutes} min, with unknown space kept blocked. Check real spaces before using a real robot.`,action:'Try a robot in this room →'},
   };
   let state='',frame=0;
   renderer.setWorld(world);

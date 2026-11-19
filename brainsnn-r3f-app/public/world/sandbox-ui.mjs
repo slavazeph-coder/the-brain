@@ -2,7 +2,7 @@ import {createSandboxSession, routeSelection, sandboxURL} from './sandbox-sessio
 
 // One document owns capture, processing and the active scene. Each scene keeps
 // its own geometry contract; switching tools never converts or registers it.
-export function createSandboxUI({setMapTab, getMap, getSourceCount, status, event, pauseMap}) {
+export function createSandboxUI({setMapTab, getMap, getSourceCount, status, event, pauseMap, onWorkspaceChange = () => {}}) {
   const $ = id => document.getElementById(id);
   const session = createSandboxSession();
   const initial = routeSelection(location.href);
@@ -26,7 +26,7 @@ export function createSandboxUI({setMapTab, getMap, getSourceCount, status, even
     mapBody.hidden = active;
     progress.hidden = active;
     $('fork').hidden = state.workspace !== 'map';
-    $('export').textContent = active ? 'Export scene ↗' : 'Export proof ↗';
+    $('export').textContent = active ? 'Save scene ↗' : 'Save results ↗';
     $('sandbox-scene').value = state.workspace === 'capture' ? session.snapshot().returnWorkspace : state.workspace;
     $('sandbox-return').hidden = state.workspace !== 'capture';
     $('sandbox-source-count').textContent = `${getSourceCount()} local source${getSourceCount() === 1 ? '' : 's'}`;
@@ -41,13 +41,14 @@ export function createSandboxUI({setMapTab, getMap, getSourceCount, status, even
     if (active) {
       $('world-title').textContent = 'Green Gardens / Toronto block';
       $('provenance').textContent = 'GEOGRAPHIC REFERENCE + AUTHORED DETAIL';
-      $('sandbox-context').textContent = 'Edit objects, walk the block and test routes in this scene. Captures stay in this session; they are not automatically aligned to the block.';
+      $('sandbox-context').textContent = 'Explore the street, change objects and try routes. Your photos stay in this session; they are not automatically placed in the street.';
     } else if (state.workspace === 'capture') {
-      $('sandbox-context').textContent = `Capture and reconstruction · ${session.snapshot().returnWorkspace === 'street' ? 'Your street edits are kept. Return to the scene when ready.' : 'Your map is kept while you add or process sources.'}`;
+      $('sandbox-context').textContent = `Your files · ${session.snapshot().returnWorkspace === 'street' ? 'Your street edits are kept. Return to the scene when ready.' : 'Your map is kept while you add or process sources.'}`;
     } else {
-      $('sandbox-context').textContent = 'Planning map · review geometry and scale, edit obstacles, test a route and keep its evidence.';
+      $('sandbox-context').textContent = 'Your map: change objects, check distances, try a robot route, then save your results.';
     }
     $('sandbox-share').disabled = loading;
+    onWorkspaceChange();
   }
   function mapTab(next) {
     syncing = true;

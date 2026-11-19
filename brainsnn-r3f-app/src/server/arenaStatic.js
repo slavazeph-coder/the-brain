@@ -4,7 +4,7 @@ import path from 'node:path';
 /** Keep the standalone arena out of the React/Vite SPA fallback.
  * Its relative scripts and worker URLs resolve under the canonical /arena/.
  * Mount this router before Vite or the production catch-all. */
-export function createArenaRouter({ directory }) {
+export function createArenaRouter({ directory, label = 'Arena' }) {
   const router = express.Router();
   router.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -36,7 +36,7 @@ export function createArenaRouter({ directory }) {
   }));
   router.use((error, _req, res, _next) => {
     const status = [400, 403, 404, 405].includes(error.status) ? error.status : 500;
-    res.status(status).type('text').send(status === 404 ? 'Arena asset not found.' : status === 500 ? 'Arena could not be loaded.' : 'Invalid arena request.');
+    res.status(status).type('text').send(status === 404 ? `${label} asset not found.` : status === 500 ? `${label} could not be loaded.` : `Invalid ${label.toLowerCase()} request.`);
   });
   return router;
 }

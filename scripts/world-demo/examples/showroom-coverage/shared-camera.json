@@ -1,0 +1,34 @@
+{
+  "cameraLedgerSha256": "89097146b54e0a4899188b25b16811137d8927d0e7d1891c1375a84d515349b4",
+  "cameraCloudSha256": "b06f536e4ce2d730fb33322fda8796c015eabaa7021748c84952de0fd25b3723",
+  "regions": {
+    "f0711dbe450138a49027a0d04c6236596cfc2f9e1dc4dfe3e0dff023acfe47f0": {
+      "interior": [
+        837,
+        620,
+        862,
+        642
+      ],
+      "envelope": [
+        796,
+        590,
+        912,
+        711
+      ]
+    },
+    "adaf484202bc933defbdaefbe7bc7b4297693aafbf4e14defe5215e55211f9e6": {
+      "interior": [
+        940,
+        483,
+        973,
+        505
+      ],
+      "envelope": [
+        892,
+        455,
+        1010,
+        582
+      ]
+    }
+  }
+}

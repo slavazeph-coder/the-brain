@@ -54,6 +54,40 @@ def registry(env, storage_bytes, engines):
         tenants.append({'id': 'site-visitors', 'token_sha256': hashlib.sha256(visitor.encode()).hexdigest(), 'engines': visitor_engines,
                         'limits': {**limits, 'upload_count': 20, 'upload_bytes': 2 * GIB, 'job_count': 20,
                                    'storage_bytes': min(storage_bytes, max(int(ONE_JOB), storage_bytes // 2))}})
+    # API organizations have dedicated worker identities. Keep their explicit
+    # engine grants and limits through a Railway restart instead of silently
+    # replacing the registry with only the two legacy website tenants.
+    extra_raw = env.get('WORLD_PROJECT_WORKER_TENANTS_JSON', '')
+    if extra_raw:
+        if len(extra_raw.encode()) > 32768:
+            raise ValueError('Project worker tenant configuration exceeds 32 KiB.')
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result: raise ValueError('Duplicate project worker tenant field.')
+                result[key] = value
+            return result
+        entries = json.loads(extra_raw, object_pairs_hook=unique)
+        if not isinstance(entries, list) or len(entries) > 98:
+            raise ValueError('Project worker tenants must be an array of at most 98 entries.')
+        owners = {entry['id'] for entry in tenants} | {'operator'}
+        hashes = {entry['token_sha256'] for entry in tenants}
+        maximum = {'upload_count': 50, 'upload_bytes': 4 * GIB, 'job_count': 50, 'active_jobs': 9, 'storage_bytes': storage_bytes}
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {'id', 'token_sha256', 'engines', 'limits'}:
+                raise ValueError('Project worker tenants need id, token_sha256, engines and limits.')
+            owner_id, digest = entry['id'], entry['token_sha256']
+            if (not isinstance(owner_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', owner_id)
+                    or owner_id in owners or not isinstance(digest, str) or not re.fullmatch(r'[a-f0-9]{64}', digest) or digest in hashes):
+                raise ValueError('Project worker tenant IDs and credentials must be unique.')
+            grants, bounds = entry['engines'], entry['limits']
+            if (not isinstance(grants, list) or not grants or len(grants) > 17
+                    or any(not isinstance(grant, str) or grant not in engines for grant in grants) or len(set(grants)) != len(grants)):
+                raise ValueError('Project worker engines must be explicit enabled engine grants.')
+            if (not isinstance(bounds, dict) or set(bounds) != set(maximum)
+                    or any(type(value) is not int or not 1 <= value <= maximum[key] for key, value in bounds.items())):
+                raise ValueError('Project worker tenants require explicit limits within worker capacity.')
+            owners.add(owner_id); hashes.add(digest); tenants.append(entry)
     return {'schema': 'brainsnn.world.tenants.v1', 'tenants': tenants}
 
 

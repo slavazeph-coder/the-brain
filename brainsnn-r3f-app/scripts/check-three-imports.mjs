@@ -35,6 +35,8 @@ const THREE_IMPORTERS = new Set([
   'src/arena/deformable-renderer.js',
   // Separate public bundle, imported only when the operational-twin inspector opens.
   'src/world/twin-renderer.js',
+  // Optional standalone lab with its own pinned r187 alias.
+  'src/lab/meshlets/renderer.js',
 ]);
 
 const THREE_IMPORT = /from\s+['"](three|@react-three\/[a-z-]+)['"]|import\s*\(\s*['"](three|@react-three\/[a-z-]+)['"]/;

@@ -60,6 +60,25 @@ async function site(env, options) {
 const env = (worker, extra = {}) => ({ WORLD_WORKER_INTERNAL_URL: worker.url + '/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER,
   WORLD_SITE_PASSCODE: PASSCODE, WORLD_SITE_VISITORS: '0', ...extra });
 
+it('server-local project review authorization accepts only a current owner session', async () => {
+  let clock = 1000;
+  const worker = await fakeWorker(), web = await site(env(worker, { WORLD_SITE_VISITORS: '1', WORLD_WORKER_SITE_VISITOR_TOKEN: VISITOR }), { now: () => clock });
+  try {
+    const owner = await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } });
+    const visitor = await web.call('/api/world/session', { method: 'POST', body: {} });
+    const request = token => ({ headers: { authorization: `Bearer ${token}` } });
+    const authorized = web.proxy.ownerSession(request(owner.data.token));
+    assert.equal(authorized.kind, 'owner');
+    assert.equal(web.proxy.ownerSession(request(owner.data.token)), authorized, 'quotas use a stable server-local identity');
+    assert.equal(web.proxy.ownerSession(request(visitor.data.token)), null);
+    assert.equal(web.proxy.ownerSession(request(OWNER)), null, 'worker tenant tokens are not browser sessions');
+    assert.equal(web.proxy.ownerSession(request('x'.repeat(43))), null);
+    assert.equal(web.proxy.ownerSession({ headers: {} }), null);
+    clock += 12 * 3600_000;
+    assert.equal(web.proxy.ownerSession(request(owner.data.token)), null);
+  } finally { await web.close(); await worker.close(); }
+});
+
 it('world processing stays off until the worker, its owner credential and a passcode are all set', async () => {
   assert.deepEqual(createWorldWorkerProxy({}).status(), { available: false, passcode: false, visitors: false, visitorJobsPerDay: null, visitorsOff: 'no-worker' });
   assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_WORKER_SITE_OWNER_TOKEN: OWNER, WORLD_SITE_PASSCODE: 'short' }).status().available, false);
@@ -214,12 +233,12 @@ it('world processing: the passcode alone gives both sides the same tenant creden
   assert.equal(createWorldWorkerProxy({ WORLD_WORKER_INTERNAL_URL: 'http://w:1/', WORLD_SITE_PASSCODE: 'too-short' }).status().available, false);
 });
 
-it('world processing: IFC and as-built request uploads stay with owner sessions', async () => {
+it('world processing: private processing uploads stay with owner sessions', async () => {
   const worker=await fakeWorker(),web=await site(env(worker,{WORLD_SITE_VISITORS:'1',WORLD_WORKER_SITE_VISITOR_TOKEN:VISITOR}));
   try {
     const visitor=(await web.call('/api/world/session',{method:'POST',body:{}})).data.token;
     const owner=(await web.call('/api/world/session',{method:'POST',body:{passcode:PASSCODE}})).data.token;
-    for(const [kind,name] of [['ifc','prior.ifc'],['asbuilt','review.json']]) {
+    for(const [kind,name] of [['ifc','prior.ifc'],['asbuilt','review.json'],['splat','source.ply'],['repair','repair.json'],['survey','scan.ply'],['localization','map.json'],['motion','human.bvh'],['retarget','motion.json'],['biomech-model','body.osim'],['biomech-motion','movement.mot'],['biomech-options','options.json'],['biomech-loads','forces.json']]) {
       const body={kind,name,size:5},before=worker.seen.length;
       assert.equal((await web.call('/api/world/worker/v1/uploads',{method:'POST',token:visitor,body})).status,403);
       assert.equal(worker.seen.length,before,'Private upload never reaches the upstream.');
