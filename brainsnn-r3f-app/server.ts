@@ -40,6 +40,7 @@ import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createWorldWorkerProxy } from "./src/server/worldWorkerProxy.js";
 import { createProjectReviewService } from "./src/server/projectReview.js";
+import { createApiWaitlist } from "./src/server/apiWaitlist.js";
 import { createWorldProjectService } from "./src/server/worldProjectService.js";
 import { createProjectProcessingBridge } from "./src/server/projectProcessingBridge.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
@@ -119,6 +120,8 @@ app.use("/api/engine/compare", (_req, res, next) => {
 }, express.json({ limit: '64kb' }));
 
 app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
+// A waitlist sign-up is a handful of short fields.
+app.use("/api/world/waitlist", express.json({ limit: '8kb' }));
 app.use(express.json({ limit: BODY_LIMITS.general }));
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -279,6 +282,7 @@ const limiters = {
   magicLink: new RateLimiter(LIMITS.magicLink),
   general: new RateLimiter(LIMITS.general),
   events: new RateLimiter(LIMITS.events),
+  waitlist: new RateLimiter(LIMITS.waitlist),
 };
 
 /** Bounds what the process can spend on Gemini however many callers ask.
@@ -378,6 +382,12 @@ app.use("/api", (req, res, next) => {
   if (routeTier(req.originalUrl.split("?")[0]) !== "general") return next();
   return generalLimit(req, res, next);
 });
+
+// API access waitlist. Shares the World Projects database; the owner reads it
+// with the existing World passcode session, never with a public route.
+const apiWaitlist = createApiWaitlist({ env: process.env });
+app.post("/api/world/waitlist", limit("waitlist"), apiWaitlist.submit);
+app.get("/api/world/waitlist/entries", apiWaitlist.exporter((req: express.Request) => worldProcessing.ownerSession(req)));
 
 app.get("/api/layers", (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
