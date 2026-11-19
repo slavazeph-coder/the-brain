@@ -38,3 +38,8 @@ Review fixes before merge:
 - A planner advice.start accompanied by advice.size fits only the smaller envelope. Open robot size/clearance settings instead of moving the unchanged robot into another failure.
 - Regression coverage uses actual planner errors plus camera orientation checks in Chromium and WebKit; UI actions preserve the original start and envelope until the user changes them.
 - Integration preserves the existing repair, localization, motion, biomechanics and camera-layout tools.
+
+Compact layout follow-up:
+- At 320 px with Larger text, intrinsic grid widths could push robot cards behind the workspace's clipping edge. Single-column setup/card tracks now use minmax(0,1fr), with shrinkable cards and wrapping facts.
+- At 360 px and below, the selected world's "Here now" badge has its own row instead of reserving 104 px beside the title. The desktop and 390 px badge arrangement stays the same.
+- The existing Chromium/WebKit phone checks now compare cards with the setup content bounds and actual text fragments with card/badge bounds; document scrollWidth alone could not detect this clipped content.

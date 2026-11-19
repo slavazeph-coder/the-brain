@@ -254,6 +254,42 @@ def check_readable(page, label):
       .filter(e => e.offsetParent && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()))
       .filter(e => parseFloat(getComputedStyle(e).fontSize) < 13).map(e => e.textContent.trim().slice(0, 30))""")
     assert not tiny, f'{label}: text under 13 px: {tiny}'
+    # The workspace clips overflow, so document width alone misses cards that
+    # expand beyond the setup panel. Inspect actual text fragments as well:
+    # a title's glyphs can overlap the badge beyond the title element's box.
+    clipped = page.locator('#robot-setup').evaluate("""setup => {
+      const box = setup.getBoundingClientRect(), style = getComputedStyle(setup);
+      const left = box.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth);
+      const right = box.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+      const issues = [];
+      const fragments = element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return [...range.getClientRects()];
+      };
+      for (const card of setup.querySelectorAll('.robot-card, .world-card')) {
+        const rect = card.getBoundingClientRect();
+        const name = card.dataset.robot || card.dataset.world;
+        if (rect.left < left - 1 || rect.right > right + 1) issues.push(`${name}: card outside setup`);
+        for (const text of card.querySelectorAll('strong, .robot-plain, .robot-facts > span, .world-words > span')) {
+          if (fragments(text).some(r => r.left < rect.left - 1 || r.right > rect.right + 1)) {
+            issues.push(`${name}: text outside card: ${text.textContent}`);
+          }
+        }
+        const badge = card.querySelector('.world-chosen');
+        if (badge && getComputedStyle(badge).display !== 'none') {
+          const badgeRect = badge.getBoundingClientRect();
+          for (const text of card.querySelectorAll('.world-words > *')) {
+            if (fragments(text).some(r => Math.min(r.right, badgeRect.right) - Math.max(r.left, badgeRect.left) > 1
+              && Math.min(r.bottom, badgeRect.bottom) - Math.max(r.top, badgeRect.top) > 1)) {
+              issues.push(`${name}: badge overlaps ${text.textContent}`);
+            }
+          }
+        }
+      }
+      return issues;
+    }""")
+    assert not clipped, f'{label}: clipped or overlapping setup content: {clipped}'
 
 
 def run_browser(playwright, name):

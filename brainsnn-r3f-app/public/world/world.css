@@ -302,18 +302,19 @@ html[data-reading-size="large"] body.playground{--reading-ui:19px;--reading-copy
 .robot-setup-head .eyebrow{margin:0 0 8px;font-size:max(13px,calc(var(--reading-small) - 2px))}
 .robot-setup-head h2{font-size:clamp(26px,2.6vw,36px);line-height:1.15;margin:0;letter-spacing:-.03em}
 .setup-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,300px);grid-template-areas:"robots robots" "worlds try";gap:24px 26px}
+.setup-step{min-width:0}
 .setup-robots{grid-area:robots}.setup-worlds{grid-area:worlds}.setup-try{grid-area:try}
 .setup-label{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:650;letter-spacing:-.01em;line-height:1.3;margin:0 0 12px;color:var(--text)}
 .setup-num{display:inline-grid;place-items:center;min-width:46px;height:32px;padding:0 8px;border:1.5px solid #00f5ffaa;border-radius:999px;font:600 15px var(--mono);color:var(--cyan);letter-spacing:.04em;flex:none}
 .robot-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
-.robot-card,.world-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;color:var(--text);border:1.5px solid #323a50;border-radius:14px;background:#0c111c;white-space:normal}
+.robot-card,.world-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;text-align:left;color:var(--text);border:1.5px solid #323a50;border-radius:14px;background:#0c111c;white-space:normal}
 .robot-card{padding:12px 14px 14px;min-height:200px}
 .robot-card:hover,.world-card:hover{border-color:#00f5ffaa;background:#0f1826}
 .robot-art-wrap{display:block;width:100%;color:var(--cyan);margin-bottom:4px}
 .robot-art{display:block;width:100%;max-width:150px;height:auto;aspect-ratio:4/3;margin:0 auto}
 .robot-card strong{font-size:18px;font-weight:650;line-height:1.25}
 .robot-plain{font-size:var(--reading-ui);color:#d0d5e2;line-height:1.35}
-.robot-facts{display:flex;flex-wrap:wrap;gap:2px 12px;font:500 var(--reading-small)/1.4 var(--font);color:#b8c0d2;margin-top:2px}
+.robot-facts{display:flex;flex-wrap:wrap;gap:2px 12px;max-width:100%;font:500 var(--reading-small)/1.4 var(--font);color:#b8c0d2;margin-top:2px}
 .robot-chosen,.world-chosen{position:absolute;top:9px;right:9px;display:none;padding:3px 10px;border-radius:999px;background:var(--cyan);color:#041014;font:700 14px/1.4 var(--font)}
 .robot-card[aria-pressed=true],.world-card[aria-pressed=true]{border-color:var(--cyan);background:linear-gradient(180deg,#073542,#0a1a24);box-shadow:inset 0 0 0 1.5px var(--cyan)}
 .robot-card[aria-pressed=true] .robot-chosen,.world-card[aria-pressed=true] .world-chosen{display:block}
@@ -382,7 +383,7 @@ html[data-reading-size="large"] body.playground{--reading-ui:19px;--reading-copy
 .inspector-note strong{font-size:var(--reading-ui)}
 .sandbox-scene-label{white-space:nowrap}
 @media (min-width:1201px){.workspace-body{grid-template-columns:290px minmax(0,1fr) 280px}}
-@media (max-width:1100px){.robot-cards,.world-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.setup-grid{grid-template-columns:1fr;grid-template-areas:"robots" "worlds" "try"}.setup-try{max-width:520px}}
+@media (max-width:1100px){.robot-cards,.world-cards{grid-template-columns:repeat(3,minmax(0,1fr))}.setup-grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"robots" "worlds" "try"}.setup-try{max-width:520px}}
 @media (max-width:760px){
   .robot-setup{padding:20px 14px}
   .robot-setup-head h2{font-size:26px}
@@ -399,13 +400,13 @@ html[data-reading-size="large"] body.playground{--reading-ui:19px;--reading-copy
   .reading-tools{order:1;width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-left:0}
   .reading-tools button{white-space:normal;line-height:1.2}
 }
-@media (max-width:360px){.robot-card strong{font-size:16px}.world-cards{grid-template-columns:1fr}}
+@media (max-width:360px){.robot-card strong{font-size:16px}.world-cards{grid-template-columns:minmax(0,1fr)}}
 html[data-reading-size=large] .robot-cards{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 html[data-reading-size=large] .world-cards{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
 html[data-reading-size=large] :is(.robot-card strong,.world-words strong){font-size:21px}
 html[data-reading-size=large] .setup-label{font-size:23px}
-@media (max-width:760px){html[data-reading-size=large] .robot-cards{grid-template-columns:repeat(2,minmax(0,1fr))}html[data-reading-size=large] .world-cards{grid-template-columns:1fr}}
-@media (max-width:420px){html[data-reading-size=large] .robot-cards{grid-template-columns:1fr}}
+@media (max-width:760px){html[data-reading-size=large] .robot-cards{grid-template-columns:repeat(2,minmax(0,1fr))}html[data-reading-size=large] .world-cards{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:420px){html[data-reading-size=large] .robot-cards{grid-template-columns:minmax(0,1fr)}}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 /* More contrast: brighter words and lines, solid panels and a thick focus ring. */
 html[data-contrast=more]{--muted:#e3e6ee;--border:rgba(241,241,246,.55);--text:#fff}
@@ -425,13 +426,19 @@ html[data-contrast=more] .primary{background:var(--cyan);color:#000;border:2px s
 .camera-dock button[hidden],.edit-step[hidden]{display:none}
 @media (max-width:760px){
   .camera-dock{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .world-cards{grid-template-columns:1fr}
+  .world-cards{grid-template-columns:minmax(0,1fr)}
   .world-card{flex-direction:row;align-items:center}
   .world-card[aria-pressed=true] .world-words{padding-right:104px}
   .robot-art{max-width:104px}
   .scene-stamp{top:10px;bottom:auto;left:10px;right:10px}
   .scene-stamp small{display:none}
   .world-axis{display:none}
+}
+/* At the narrowest widths the selected badge gets its own row, leaving the title readable. */
+@media (max-width:360px){
+  .world-card[aria-pressed=true]{display:grid;grid-template-columns:48px minmax(0,1fr)}
+  .world-card[aria-pressed=true] .world-words{padding-right:0}
+  .world-card[aria-pressed=true] .world-chosen{position:static;grid-column:2;justify-self:start}
 }
 /* The last small print on the playground, raised one by one (measured across every tab at desktop and phone widths). */
 body.playground .world-axis{font-size:13px}
