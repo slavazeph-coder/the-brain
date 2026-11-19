@@ -3,11 +3,14 @@ import { createVisualViewer } from './visual-viewer.mjs';
 import { createMeshViewer } from './mesh-viewer.mjs';
 import { mountCameraTour } from './camera-tour-ui.mjs';
 import { mountObjectify } from './objectify-ui.mjs';
+import {mountPortableObject} from './portable-object-ui.mjs';
+import {mountScanExamples, practiceRoomView, sendScanSelection} from './scan-examples.mjs';
+import {mountSplatLamp} from './splat-lamp.mjs';
 
 const $ = id => document.getElementById(id);
 const status = message => { $('viewer-status').textContent = message; };
 let viewer = null, meshViewer = null, meshPromise = null, epoch = 0, currentKind = 'points', disposed = false;
-let surfaceReport = null, meshSource = null;
+let surfaceReport = null, meshSource = null, lamp = null;
 let displayFlipped = false;
 let baseAppearance = null, objectCount = 0, objectInteraction = false, variantEpoch = 0, stagedVariant = null, tourKey = null;
 const tour = mountCameraTour({ root: $('camera-tour'), getViewer: () => currentKind === 'mesh' ? meshViewer : viewer });
@@ -19,43 +22,101 @@ function bindTour(source, transform = 'identity', placement = 'identity', transl
 function cameraHint() {
   const el = $('object-camera-binding'); el.hidden = !baseAppearance;
   if (!baseAppearance) return;
-  el.textContent = stagedVariant ? `Camera studio is bound to the authored variant ${stagedVariant.name}, SHA-256 ${stagedVariant.sha256.slice(0, 16)}…. Original capture bytes remain unchanged.`
+  el.textContent = stagedVariant ? `Camera studio is bound to ${stagedVariant.composite ? 'the authored composite' : 'the authored variant'} ${stagedVariant.name}, SHA-256 ${stagedVariant.sha256.slice(0, 16)}….`
     : objectCount || objectInteraction ? 'Object selection or editing clears camera paths and recordings. Prepare an authored variant to record the exact edited appearance.'
       : 'Camera studio uses the original asset. Object edits create separate, explicitly authored variants.';
 }
-function rawTour() { if (baseAppearance && !objectCount && !objectInteraction) bindTour(baseAppearance.source, displayFlipped ? 'flip-y-z' : 'identity'); cameraHint(); }
+function rawTour() {
+  if (baseAppearance && !objectCount && !objectInteraction) {
+    bindTour(baseAppearance.source, displayFlipped ? 'flip-y-z' : 'identity', 'identity', [0,0,0], baseAppearance.origin);
+  }
+  cameraHint();
+}
+function displayAppearance(points, kind, view) {
+  viewer.setPoints(points, {kind});
+  lamp?.setAsset(kind);
+  if (view) viewer.setView(view);
+}
+function showOriginalAppearance() {
+  if (!baseAppearance) return;
+  displayAppearance(displayedPoints(baseAppearance.parsed), baseAppearance.parsed.kind, viewer.getView());
+}
+function portableDestination() {
+  if (!baseAppearance) return null;
+  return {...baseAppearance, points:displayedPoints(baseAppearance.parsed), displayTransform:displayFlipped ? 'flip-y-z' : 'identity'};
+}
+async function stageAppearance({buffer, name, artifact}, composite = false, isCurrent = () => true) {
+  if (!baseAppearance || disposed) throw Error('Open an appearance asset first.');
+  const token = ++variantEpoch, sourceEpoch = epoch;
+  const parsed = parseVisualAsset(buffer, name);
+  const source = await sourceFor(new File([buffer], name), buffer);
+  if (token !== variantEpoch || sourceEpoch !== epoch || disposed || !isCurrent()) {
+    throw Error('The source or edits changed during preparation.');
+  }
+  if (source.sha256 !== artifact.sha256 || source.bytes !== artifact.bytes) throw Error('The PLY does not match its receipt.');
+  displayAppearance(parsed.points, parsed.kind, viewer.getView());
+  stagedVariant = {...source, composite};
+  objectInteraction = false;
+  bindTour(source, 'identity', 'identity', [0,0,0], 'authored');
+  cameraHint();
+  return {source};
+}
+const portable = mountPortableObject({
+  root:$('portable-object-panel'),
+  getDestination() {
+    if (objectCount || objectInteraction) throw Error('Reset the destination’s object edits and selection before placing a portable object.');
+    return portableDestination();
+  },
+  onStage(next, isCurrent) {
+    if (objectCount || objectInteraction) throw Error('The destination scan is being edited.');
+    return stageAppearance({...next, artifact:next.receipt.artifact}, true, isCurrent);
+  },
+  onRestore() {
+    if (!stagedVariant?.composite) return;
+    variantEpoch++;
+    showOriginalAppearance();
+    stagedVariant = null;
+    rawTour();
+  },
+});
 const objectify = mountObjectify({ root: $('objectify-panel'), getViewer: () => viewer,
+  onSelectionStart: () => lamp?.cancelPlacement(),
+  onRepair: window.frameElement?.id === 'scan-workshop-frame'
+    ? (selection, isCurrent) => baseAppearance && sendScanSelection(baseAppearance.file, selection, isCurrent)
+    : undefined,
+  onPortable(value) {
+    const sourceEpoch = epoch, editEpoch = variantEpoch;
+    return portable.capture(value, () => sourceEpoch === epoch && editEpoch === variantEpoch && !disposed);
+  },
   onInteraction({active = true} = {}) {
     if (!baseAppearance) return;
     if (stagedVariant && !objectCount) {
-      const view = viewer.getView();
-      viewer.setPoints(displayedPoints(baseAppearance.parsed), {kind:baseAppearance.parsed.kind}); viewer.setView(view);
+      showOriginalAppearance();
     }
+    portable.cancel();
     variantEpoch++; stagedVariant = null; objectInteraction = active; bindTour(null); rawTour();
   },
   onDisplayChange({points, kind, changed, revision, objectCount: count = 0}) {
     if (!baseAppearance || disposed) return;
+    portable.cancel();
     variantEpoch++; stagedVariant = null; objectCount = count; bindTour(null);
     const view = viewer.getView();
-    if (points.length) { viewer.setPoints(points, {kind}); viewer.setView(view); } else viewer.clear();
+    if (points.length) displayAppearance(points, kind, view);
+    else { lamp?.clear(); viewer.clear(); }
     $('flip').disabled = objectCount > 0;
+    $('room-switch-help').hidden = objectCount === 0;
     rawTour();
   },
-  async onStage({buffer, name, receipt}) {
-    if (!baseAppearance || disposed) throw Error('Open the original appearance asset first.');
-    const token = ++variantEpoch, sourceEpoch = epoch;
-    const parsed = parseVisualAsset(buffer, name), file = new File([buffer], name, {type:'application/octet-stream'});
-    const source = await sourceFor(file, buffer);
-    if (token !== variantEpoch || sourceEpoch !== epoch || disposed) throw Error('Variant staging cancelled because its source or edits changed.');
-    if (source.sha256 !== receipt.variantArtifact.sha256 || source.bytes !== receipt.variantArtifact.bytes) throw Error('Variant bytes do not match their receipt.');
-    const view = viewer.getView(); viewer.setPoints(parsed.points, {kind:parsed.kind}); viewer.setView(view);
-    stagedVariant = source; objectInteraction = false;
-    bindTour(source, 'identity', 'identity', [0,0,0], 'authored'); cameraHint();
-    return {source};
+  onStage({buffer, name, receipt}) {
+    return stageAppearance({buffer, name, artifact:receipt.variantArtifact});
   },
 });
 function clearAppearance() {
   variantEpoch++; baseAppearance = null; objectCount = 0; objectInteraction = false; stagedVariant = null;
+  $('portable-object-panel').hidden = true;
+  $('room-switch-help').hidden = true;
+  portable.setDestination(null);
+  lamp?.clear();
   objectify.clear(); cameraHint();
 }
 function displayedPoints(parsed) {
@@ -84,13 +145,17 @@ function clearInspection() {
   $('surface-panel').hidden=true; $('surface-download').disabled=true;
   $('surface-status').textContent='Inspect the original mesh locally. No geometry is smoothed or repaired.';
 }
-try { viewer = createVisualViewer($('asset-canvas'), status); }
+try {
+  viewer = createVisualViewer($('asset-canvas'), status);
+  lamp = mountSplatLamp({root:$('splat-appearance-lamp'), viewer, onActiveChange:active => tour.setPreviewBlocked(active),
+    onPlacementStart: () => objectify.cancelSelectionTool()});
+}
 catch (error) { status(error.message); $('asset').disabled = true; }
 
 function loaded(value) { for (const id of ['frame', 'flip']) $(id).disabled = !value; $('point-size').disabled = !value || currentKind === 'mesh'; }
 function show(kind) { currentKind = kind; $('asset-canvas').parentElement.hidden = kind === 'mesh'; $('mesh-stage').hidden = kind !== 'mesh'; }
-$('asset').onchange = async () => {
-  const file = $('asset').files[0], token = ++epoch;
+async function openAsset(file, origin = 'unknown') {
+  const token = ++epoch;
   bindTour(null); clearAppearance(); displayFlipped = false;
   clearInspection();
   loaded(false); viewer?.clear(); meshViewer?.clear();
@@ -125,16 +190,27 @@ $('asset').onchange = async () => {
     const parsed = parseVisualAsset(buffer, file.name);
     const source = await sourceFor(file, buffer);
     if (token !== epoch) return;
-    viewer.setPoints(parsed.points, { kind: parsed.kind });
-    baseAppearance = {source, parsed};
+    displayAppearance(parsed.points, parsed.kind, origin === 'authored' ? practiceRoomView(viewer.getCanvas()) : null);
+    baseAppearance = {source, parsed, origin, file};
     await openObjectify(token);
     if (token !== epoch) return;
+    portable.setDestination(portableDestination());
+    $('portable-object-panel').hidden = false;
     loaded(true);
     $('viewer-help').textContent = 'Drag to orbit · pinch or scroll to zoom · two-finger drag or Shift-drag to pan · WASD / arrow keys to move, + / − to zoom, 0 to reset.';
+    if (origin === 'authored') {
+      status(file.name === 'authored-reading-room.ply'
+        ? 'Reading room ready. Choose Tap an object, then tap the coral chair.'
+        : 'Empty studio ready. Open Place an object from another scan to bring something in.');
+      return;
+    }
     const representation = parsed.kind === 'point-cloud' ? 'Point cloud · not a trained Gaussian splat' : 'Gaussian parameters · DC colour preview';
     status(`${file.name} · ${representation} · ${Math.round(parsed.points.length / STRIDE).toLocaleString()} visible points${parsed.sampled ? ` sampled from ${parsed.total.toLocaleString()}` : ''}${parsed.skipped ? ` · ${parsed.skipped} invalid samples omitted` : ''}. Scale unverified; no collision geometry.`);
   } catch (error) { if (token === epoch) status(`Asset could not be opened: ${error.message}`); }
-};
+}
+$('asset').onchange = () => openAsset($('asset').files[0]);
+if (viewer) mountScanExamples({openAsset, input:$('asset')});
+else document.querySelectorAll('[data-scan-example]').forEach(button => { button.disabled = true; });
 $('frame').onclick = () => { tour.cancel(); (currentKind === 'mesh' ? meshViewer : viewer)?.reset(); };
 $('flip').onclick = async () => {
   if (objectCount) { status('Reset object edits before changing the display axis.'); return; }
@@ -142,7 +218,8 @@ $('flip').onclick = async () => {
   if (currentKind === 'mesh') { tour.invalidate(displayFlipped ? 'flip-y-z' : 'identity'); meshViewer?.flip(); return; }
   if (!baseAppearance) return;
   const token = ++epoch; variantEpoch++; stagedVariant = null; objectInteraction = false; bindTour(null); loaded(false);
-  viewer.setPoints(displayedPoints(baseAppearance.parsed), {kind:baseAppearance.parsed.kind});
+  displayAppearance(displayedPoints(baseAppearance.parsed), baseAppearance.parsed.kind);
+  portable.setDestination(portableDestination());
   try { await openObjectify(token); if (token === epoch) loaded(true); }
   catch (error) { if (token === epoch) status(`Object workshop could not open this orientation: ${error.message}`); }
 };
@@ -167,6 +244,7 @@ $('surface-download').onclick=()=>{
   const url=URL.createObjectURL(new Blob([JSON.stringify(surfaceReport,null,2)+'\n'],{type:'application/json'}));
   const link=document.createElement('a');link.href=url;link.download='surface-inspection.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
-$('remove').onclick = () => { epoch++; bindTour(null); clearAppearance(); viewer?.clear(); meshViewer?.clear(); clearInspection(); $('asset').value = ''; loaded(false); status('Asset cleared from this viewer.'); };
-window.addEventListener('pagehide', () => { disposed = true; epoch++; variantEpoch++; objectify.destroy(); tour.destroy(); viewer?.destroy(); meshViewer?.destroy(); });
+$('remove').onclick = () => { epoch++; portable.clear(); bindTour(null); clearAppearance(); viewer?.clear(); meshViewer?.clear(); clearInspection(); $('asset').value = ''; loaded(false); status('Asset cleared from this viewer.'); };
+window.addEventListener('brainsnn-workshop-suspend', () => { tour.suspend(); lamp?.cancelPlacement?.(); });
+window.addEventListener('pagehide', () => { disposed = true; epoch++; variantEpoch++; portable.destroy(); objectify.destroy(); lamp?.dispose(); tour.destroy(); viewer?.destroy(); meshViewer?.destroy(); });
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });

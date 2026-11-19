@@ -40,7 +40,8 @@ export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
   if(document.hidden) throw Error('Keep this tab visible while recording the camera tour.');
   const type=pickMime(value=>MediaRecorder.isTypeSupported(value));
   if(!type) throw Error('No supported MP4 or WebM recorder was found on this device.');
-  const source=viewer.getCanvas();
+  const captureCanvas = () => viewer.getCaptureCanvas ? viewer.getCaptureCanvas() : viewer.getCanvas();
+  const source = captureCanvas();
   if(!source?.width||!source?.height) throw Error('The appearance canvas has no drawable pixels.');
   const sourceWidth=source.width,sourceHeight=source.height;
   const initialView=viewer.getView();
@@ -66,7 +67,7 @@ export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
 
   function paint(t) {
     viewer.setView(sampleCameraPath(recordedPath,t));
-    if(viewer.getCanvas()!==source)throw Error('The appearance source changed during recording.');
+    if(captureCanvas()!==source)throw Error('The appearance source changed during recording.');
     if(source.width!==sourceWidth||source.height!==sourceHeight)throw Error('The appearance canvas was resized during recording. Keep the view size fixed and try again.');
     const box=cameraTourLayout(source.width,source.height);
     g.fillStyle='#05070b';g.fillRect(0,0,1280,720);

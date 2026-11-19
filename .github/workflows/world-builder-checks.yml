@@ -175,6 +175,10 @@ jobs:
         run: |
           python tests/world/stereo_depth_browser_smoke.py
           python tests/world/stereo_export_browser_smoke.py
+      - name: Arrange a room, transfer reviewed objects and preview the lamp
+        run: |
+          python tests/world/scan_workshop_browser_smoke.py
+          python tests/world/splat_lamp_browser_smoke.py
       # This flow starts its own frontend/worker and uses no earlier browser outputs.
       # Check retained-source review before the longer reconstruction regressions.
       - name: Unified source, model, drawings and retained job browser flow

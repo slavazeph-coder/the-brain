@@ -90,6 +90,7 @@ for(const [name,options,pattern] of [
   ['hidden tab',{beforeFrame:({doc,tick})=>{if(tick===1){doc.hidden=true;doc.dispatchEvent(new Event('visibilitychange'));}}},/became hidden/],
   ['context loss',{beforeFrame:({source,tick})=>{if(tick===1)source.dispatchEvent(new Event('webglcontextlost'));}},/context was lost/],
   ['source replacement',{beforeFrame:({viewer,tick})=>{if(tick===1)viewer.getCanvas=()=>({width:640,height:480});}},/source changed/],
+  ['preview lamp starts',{beforeFrame:({viewer,tick})=>{if(tick===1)viewer.getCaptureCanvas=()=>null;}},/source changed/],
   ['encoder error',{encoderError:true},/fake encoder failure/],
   ['empty output',{empty:true},/empty video/],
   ['bounded output',{oversize:true},/64 MiB/],
@@ -115,6 +116,16 @@ test('rejects a one-keyframe draft before opening a media stream',async()=>{
     const draft=createCameraPath({source:path().source,keyframes:[path().keyframes[0]]});
     await assert.rejects(recordCameraTour({path:draft,viewer:env.viewer}),/at least two views/);
     assert.equal(env.stoppedTracks,0);assert.equal(env.drawn.length,0);
+  });
+});
+
+test('does not fall back to a lit viewer canvas when its capture gate rejects it',async()=>{
+  await withRecorder({},async env=>{
+    env.viewer.getCaptureCanvas = () => null;
+    await assert.rejects(recordCameraTour({path:path(),viewer:env.viewer}),/no drawable pixels/);
+    assert.equal(env.viewer.getCanvas(),env.source);
+    assert.equal(env.stoppedTracks,0);
+    assert.equal(env.drawn.length,0);
   });
 });
 
