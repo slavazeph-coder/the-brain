@@ -15,7 +15,7 @@ export const open4dgsPanel = `<section id="layer-panel-open4dgs" role="tabpanel"
       <input type="file" multiple accept=".trigsbin,.json,.ply" data-open4dgs-files aria-describedby="open4dgs-import-help">
     </label>
   </div>
-  <p id="open4dgs-import-help" class="layer-note">Choose one .trigsbin file, or select export_meta.json and all its numbered PLY frames together. Your files stay on this device.</p>
+  <p id="open4dgs-import-help" class="layer-note">Choose a single-clip .trigsbin file, or select export_meta.json and its numbered PLY frames together. Your files stay on this device. <a href="https://github.com/slavazeph-coder/the-brain/tree/main/scripts/world-open4dgs#open-a-large-scene" target="_blank" rel="noopener">Help with large scenes</a></p>
   <div class="layer-toolbar">
     <button type="button" data-open4dgs-import disabled>Open my scene</button>
     <button type="button" class="primary" data-open4dgs-example>Try a moving example</button>

@@ -66,7 +66,9 @@ Stages write logs to `/jobs/take01/attempts`. After fixing a failed installation
 
 Use the final `exports.json` to find `capture.trigsbin`, `ply/export_meta.json`, all numbered PLY files and the upstream `eval.json`. Play starts at local frame 0, and the receipt records which source frame that represents. The job records the submitted rational FPS and the runtime clock, which uses float32 because upstream's initialization file stores FPS that way. The timeline holds a single clip to match the current browser preview. The trainer's final viewer snapshot carries the original deformation configuration used for both exports. The upstream evaluator reports whole-photo PSNR including the background, even when the training used masks. It compares with the supplied recordings. Check with independent captures and references if your use needs accuracy evidence.
 
-If the full exports exceed browser limits, use `make_playground_preview.py` on the PLY folder for a bounded local preview:
+## Open a large scene
+
+The native viewer accepts supported single-clip, hard-cut TRIGSBIN v1 exports up to 128 MiB. The numbered PLY route accepts up to 1,800 frames, 64 MiB per frame and 512 MiB total, and shows up to 20,000 Gaussians per frame. For a longer production or multi-clip package, export PLY frames with ASU's trainer. If the full exports exceed browser limits, use `make_playground_preview.py` on the PLY folder for a bounded local preview:
 
 ```sh
 python3 scripts/world-open4dgs/make_playground_preview.py \
