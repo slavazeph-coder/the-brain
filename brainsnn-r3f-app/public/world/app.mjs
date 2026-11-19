@@ -5,6 +5,7 @@ import {mountPlaygroundHelp} from './playground-help.mjs';
 import {WorkerClient} from './worker-client.mjs';
 import {automaticReviewArtifact} from './artifact-review.mjs';
 import {SYSTEMS} from './catalog.mjs';
+import {mountShowcase} from './showcase.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
 import {fromDepth,parseVisualAsset,toPLY,toArenaCloud,STRIDE} from './visual-geometry.mjs';
 import {decodePhoto,inferDepth} from './depth-client.mjs';
@@ -583,6 +584,12 @@ async function showWorkspaceTab(next){
   if(sandbox)await sandbox.select(['capture','understand','evidence'].includes(next)?'capture':'map',tools[next]);else setTab(next);
   update();
 }
+async function showProcessingOptions() {
+  await showWorkspaceTab('capture');
+  const options = document.querySelector('.processing-options');
+  if (options) { options.open = true; options.scrollIntoView({block:'center'}); }
+  return options;
+}
 async function downloadResultArtifact(context,index){
   if(!workspaceResults.isCurrent(context)||!Number.isInteger(index)||!context.job.artifacts[index])throw new Error('Choose an available result file.');
   const url=await context.sourceClient.download(context.job.id,index);
@@ -904,7 +911,7 @@ unifiedWorkspace=mountUnifiedWorkspace({getSnapshot:workspaceSnapshot,actions:{
   selectSource:selectWorkspaceSource,showMap:showWorkspaceTab,showTab:showWorkspaceTab,openArtifact:openResultArtifact,
   reviewProject:openProjectReview,
   downloadArtifact:(key,index)=>downloadResultArtifact(requireResultContext(key),index),
-  showProcessing:async()=>{await showWorkspaceTab('capture');const options=document.querySelector('.processing-options');if(options){options.open=true;options.scrollIntoView({block:'center'});}},
+  showProcessing:showProcessingOptions,
 }});
 // Robot-first setup (choose a robot, build its world, let it try) drives the controls the playground already has.
 function activeCanvas(){if(!$('visual-canvas').hidden)return $('visual-canvas');if(!$('map-workspace').hidden&&!$('world-canvas').hidden)return $('world-canvas');return null;}
@@ -931,6 +938,18 @@ layerTools=mountWorldLayerTools({root:$('world-layer-tools'),
   getResults:()=>workspaceResults.list(),getResult:requireResultContext,
   rememberResult:(result,originalClient,metadata)=>{const context=workspaceResults.remember(result,originalClient,{...metadata,sourceIds:[]});unifiedWorkspace.refresh();layerTools?.refresh();return context;},
   connect:()=>$('connection').showModal(),onChange:()=>{renderPanel();update();},
+});
+mountShowcase({
+  root:$('showcase'), showTab:showWorkspaceTab, showProcessing:showProcessingOptions,
+  leaveLayer:() => layerTools.suspend(),
+  showProject:() => {
+    if (projectReview.hasSource) {
+      const dialog = $('project-review-dialog');
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    return openProjectReview(sceneContext?.jobKey);
+  },
 });
 // A local handoff opens Capture even when a shared Street route is also present.
 // Do not start a competing lazy Street activation before the file is received.
