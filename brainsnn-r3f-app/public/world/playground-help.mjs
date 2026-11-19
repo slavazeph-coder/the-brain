@@ -1,4 +1,5 @@
 const READING_SIZE_KEY = 'brainsnn-world-reading-size';
+const CONTRAST_KEY = 'brainsnn-world-contrast';
 const HELP_TOOLS = new Set(['world', 'test', 'capture']);
 
 /** Add optional reading aids without changing the playground or its scene. */
@@ -9,6 +10,7 @@ export function mountPlaygroundHelp({ onTool } = {}) {
   const textSizeButton = document.getElementById('playground-text-size');
   const speakButton = document.getElementById('playground-help-speak');
   const helpCopy = document.getElementById('playground-help-copy');
+  const contrastButton = document.getElementById('playground-contrast');
 
   function setReadingSize(large) {
     if (large) document.documentElement.dataset.readingSize = 'large';
@@ -33,6 +35,35 @@ export function mountPlaygroundHelp({ onTool } = {}) {
     try {
       if (large) localStorage.setItem(READING_SIZE_KEY, 'large');
       else localStorage.removeItem(READING_SIZE_KEY);
+    } catch {
+      // A temporary preference is useful even without persistence.
+    }
+  }
+
+  // More contrast: brighter text and lines, solid panels and a thicker focus ring. It follows the device's
+  // "increase contrast" setting until the person chooses here; only that reading preference is stored.
+  function setContrast(more) {
+    if (more) document.documentElement.dataset.contrast = 'more';
+    else delete document.documentElement.dataset.contrast;
+    if (contrastButton) {
+      contrastButton.textContent = more ? 'Standard contrast' : 'More contrast';
+      contrastButton.setAttribute('aria-pressed', String(more));
+    }
+  }
+
+  let savedContrast = null;
+  try {
+    savedContrast = localStorage.getItem(CONTRAST_KEY);
+  } catch {
+    // Without storage the device setting still applies.
+  }
+  setContrast(savedContrast ? savedContrast === 'more' : Boolean(window.matchMedia?.('(prefers-contrast: more)').matches));
+
+  function toggleContrast() {
+    const more = document.documentElement.dataset.contrast !== 'more';
+    setContrast(more);
+    try {
+      localStorage.setItem(CONTRAST_KEY, more ? 'more' : 'standard');
     } catch {
       // A temporary preference is useful even without persistence.
     }
@@ -111,6 +142,7 @@ export function mountPlaygroundHelp({ onTool } = {}) {
   openButton?.addEventListener('click', openHelp);
   closeButton?.addEventListener('click', closeHelp);
   textSizeButton?.addEventListener('click', toggleReadingSize);
+  contrastButton?.addEventListener('click', toggleContrast);
   speakButton?.addEventListener('click', toggleSpeech);
   dialog?.addEventListener('click', chooseTool);
   dialog?.addEventListener('close', stopReading);
@@ -121,6 +153,7 @@ export function mountPlaygroundHelp({ onTool } = {}) {
     openButton?.removeEventListener('click', openHelp);
     closeButton?.removeEventListener('click', closeHelp);
     textSizeButton?.removeEventListener('click', toggleReadingSize);
+    contrastButton?.removeEventListener('click', toggleContrast);
     speakButton?.removeEventListener('click', toggleSpeech);
     dialog?.removeEventListener('click', chooseTool);
     dialog?.removeEventListener('close', stopReading);
