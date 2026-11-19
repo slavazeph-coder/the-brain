@@ -58,7 +58,7 @@ implementation environment; the memory update travels with the normal git change
 ## Merge integration
 
 The final integration includes the robot-first playground and current camera-layout review.
-World shell cache world-shell-review-playground-v34 contains all three feature asset sets;
+World shell cache world-shell-review-playground-v35 contains all three feature asset sets;
 activation preserves existing model and other application caches. The robot recovery UI
 distinguishes a current-size start from advice that requires a smaller envelope, and
 visual-preview Turn buttons use explicit rotation while arrow keys continue to pan.

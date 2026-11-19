@@ -26,7 +26,7 @@ is never marked reviewed.
 The type scale is larger on the playground only (body.playground: 16/18/15 px; Larger text 19/22/18 px).
 Linked pages that share world.css keep their tested sizes. No visible playground text is under 13 px.
 More contrast is optional and remembered, and it follows prefers-contrast until the person chooses.
-Tool-strip numbers became icons, so the setup is the one numbered path. The integrated robot/camera/project-review offline shell is world-shell-review-playground-v34; only obsolete World shell caches are removed, preserving model caches.
+Tool-strip numbers became icons, so the setup is the one numbered path. The integrated robot/camera/project-review offline shell is world-shell-review-playground-v35; only obsolete World shell caches are removed, preserving model caches.
 
 Checks:
 - robot_setup_browser_smoke.py (Chromium/WebKit; 320/390 px in standard and large text) is in CI.
@@ -43,3 +43,4 @@ Compact layout follow-up:
 - At 320 px with Larger text, intrinsic grid widths could push robot cards behind the workspace's clipping edge. Single-column setup/card tracks now use minmax(0,1fr), with shrinkable cards and wrapping facts.
 - At 360 px and below, the selected world's "Here now" badge has its own row instead of reserving 104 px beside the title. The desktop and 390 px badge arrangement stays the same.
 - The existing Chromium/WebKit phone checks now compare cards with the setup content bounds and actual text fragments with card/badge bounds; document scrollWidth alone could not detect this clipped content.
+- Advance the shell cache when changing cached styles so already-open playgrounds receive the compact layout fix after activation.
