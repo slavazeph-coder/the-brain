@@ -1,0 +1,20 @@
+.waitlist{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:36px;align-items:start}
+.waitlist ul{margin:14px 0 0;padding-left:18px}
+.waitlist li{margin:6px 0}
+.waitlist-form{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:22px;border:1px solid #00f5ff33;border-radius:14px;background:linear-gradient(160deg,#0b1118,#0b0b12)}
+.waitlist-form label{display:grid;gap:6px;font-size:13px;color:var(--text)}
+.waitlist-form .wide{grid-column:1/-1}
+.waitlist-form .hint{font-size:12px;color:var(--muted)}
+.waitlist-form textarea{min-height:88px;resize:vertical;font:inherit}
+.waitlist-form input,.waitlist-form select,.waitlist-form textarea{min-height:44px;font-size:15px}
+.waitlist-form input:focus-visible,.waitlist-form select:focus-visible,.waitlist-form textarea:focus-visible,.waitlist-form button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.waitlist-form .consent{grid-template-columns:auto 1fr;align-items:start;gap:10px;color:var(--muted);font-size:13px}
+.waitlist-form .consent input{width:20px;height:20px;min-height:0;margin-top:2px;accent-color:var(--cyan)}
+.waitlist-form .wl-submit{justify-self:start;min-height:44px;font-size:14px}
+.waitlist-form .wl-submit:disabled{opacity:.6;cursor:default}
+.waitlist-hp{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+.waitlist-status{margin:0;font-size:14px;min-height:1.4em}
+.waitlist-status[data-kind=error]{color:#ffb4a8}
+.waitlist-status[data-kind=done]{color:#9ff5c8;font-weight:600}
+.waitlist-form.is-done{border-color:#9ff5c855}
+@media(max-width:760px){.waitlist{grid-template-columns:1fr;gap:20px}.waitlist-form{grid-template-columns:1fr;padding:16px}.waitlist-form .wl-submit{justify-self:stretch}}

@@ -254,4 +254,10 @@ try {
 } catch(error) {
   if(page&&!page.isClosed())await page.screenshot({path:join(output,'projects-failure.png'),fullPage:true}).catch(()=>{});
   throw error;
-} finally {await Promise.allSettled([context?.close(),browser?.close(),fixture.close()]);}
+} finally {
+  // Close in order. Closing the browser while its context is still closing can leave
+  // context.close() pending forever, and Node then exits 13 on the unsettled await.
+  await context?.close().catch(()=>{});
+  await browser?.close().catch(()=>{});
+  await fixture.close();
+}

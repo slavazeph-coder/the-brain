@@ -876,3 +876,9 @@ canon: /HACKATHON.md.
 - See [world-project-review.md](world-project-review.md) for the source-bound
   finish-scope review workflow, owner-only bounded AI team, deterministic rates
   and quantities, preliminary approval receipts, and qualification boundaries.
+
+### API access waitlist — 2026-11-19
+
+- See [api-waitlist-2026-11-19.md](api-waitlist-2026-11-19.md) for the
+  `/world/api.html` waitlist form, its PostgreSQL storage, rate limits,
+  owner-only export and what it promises visitors.

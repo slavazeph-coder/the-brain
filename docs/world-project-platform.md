@@ -373,6 +373,17 @@ The export now uses `brainsnn.project-export.v2`. Inline sources include exact b
 
 The export's unsigned canonical hash covers the JSON manifest, including declared external hashes, but it does not package or establish the availability of external media. It can reveal a changed manifest. It does not prove the original actor's identity, the truth of a claim, or survey accuracy. Consumers of the previous v1 export must explicitly support the v2 storage distinction.
 
+## API access waitlist
+
+Public self-service signup does not exist yet. `/world/api.html#waitlist` collects requests for access instead, using the same PostgreSQL database (`WORLD_PROJECT_DATABASE_URL` or `DATABASE_URL`). Its table, `brainsnn_api_waitlist`, is created on first use. With no database, or with `API_WAITLIST_ENABLED=0`, the form reports that the waitlist is unavailable and never keeps sign-ups in memory.
+
+- `POST /api/world/waitlist` takes `email`, `use_case` and `consent:true`, plus optional `name`, `company`, `monthly_volume`, `details` and `source`. It answers `202` with the same message whether or not the address was already listed. Submitting again updates that row and counts the repeat.
+- Each address may submit 5 times an hour, and the process accepts at most 300 sign-ups an hour and 50,000 rows in total. A full list still lets people who are already listed correct their details. A filled hidden `website` field is accepted and discarded.
+- `GET /api/world/waitlist/entries` returns the list to the site owner's World passcode session only.
+- `node scripts/api-waitlist-admin.mjs count|csv|remove --email ADDRESS` reads, exports or deletes entries. Run it with the site database URL, for example through `railway run` on the site service. The CSV holds personal contact details. It neutralizes spreadsheet formulas, but keep it out of the repository and shared drives.
+
+The form promises one thing only: an email about API access. Use the list for that, and delete an entry when its owner asks.
+
 ## Next product milestones
 
 The release needs a paid field pilot using a real capture, independently checked dimensions, a specific robot, and observed deployment outcomes. Track analyst minutes, failed captures, prediction errors, repeated customer use, and per-assessment operating cost. A complete record is useful evidence for that pilot; it is not its result.

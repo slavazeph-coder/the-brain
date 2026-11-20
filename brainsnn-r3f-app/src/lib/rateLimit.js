@@ -151,6 +151,8 @@ export const LIMITS = Object.freeze({
   general: { limit: 120, windowMs: 60_000 },
   // Easiest thing on the site to flood, and the cheapest to serve.
   events: { limit: 240, windowMs: 60_000 },
+  // Stores an address the caller chooses. A person signs up once or twice.
+  waitlist: { limit: 5, windowMs: 60 * 60_000 },
 });
 
 /**
@@ -175,6 +177,7 @@ export const DEDICATED_ROUTES = Object.freeze({
   '/api/neural/decode': 'neural',
   '/api/auth/magic-link': 'magicLink',
   '/api/events': 'events',
+  '/api/world/waitlist': 'waitlist',
 });
 
 /**
