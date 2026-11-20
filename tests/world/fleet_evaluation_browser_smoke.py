@@ -53,6 +53,13 @@ def main():
                 assert page.locator('#field-rows tr').count() == 3
                 assert '<b>Operator stopped</b>' in page.locator('#field-rows').inner_text()
                 assert page.locator('#field-rows b').count() == 0
+                assert page.locator('#field-lineage').is_hidden()
+                report['plan']['map']['comparisonEvidence'] = {
+                    'sourceVideoSha256':'a'*64, 'captureReceiptSha256':'b'*64, 'fusionPlySha256':'c'*64}
+                upload(report)
+                page.locator('#field-lineage').wait_for()
+                page.locator('#field-lineage summary').click()
+                assert page.locator('#field-video').inner_text() == 'a'*64
                 page.locator('#sample').click()
                 assert page.locator('#field').is_hidden() and page.locator('#results').is_visible()
                 report['summary']['consistentReaches'] = 3

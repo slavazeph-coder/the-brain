@@ -202,10 +202,14 @@ def write_ifc(path, scene: dict, name: str = 'BrainSNN scene') -> dict:
                     if item.get('parameterProvenance') else None}
 
     scale = scene.get('scale') if isinstance(scene.get('scale'), dict) else {}
+    comparison = scene.get('comparisonEvidence') or {}
     properties(project, hierarchy['project'], {'SceneSchema': scene.get('schema'), 'Units': 'm', 'ScaleSource': scale.get('source', 'unknown'),
                                     'MetresPerUnit': scale.get('metresPerUnit'), 'MeasuredDistanceMetres': scale.get('distance'),
                                     'SelfReported': scale.get('selfReported', True), 'MetricVerified': False,
-                                    'ComponentId': hierarchy['project'], 'SourceSha256': source_sha256})
+                                    'ComponentId': hierarchy['project'], 'SourceSha256': source_sha256,
+                                    'CaptureReceiptSha256': comparison.get('captureReceiptSha256'),
+                                    'SourceVideoSha256': comparison.get('sourceVideoSha256'),
+                                    'FusionPlySha256': comparison.get('fusionPlySha256')})
     elements, counts = [], {'walls': 0, 'slabs': 0, 'objects': 0, 'separated': 0, 'unknownRuns': 0}
     for obj in scene.get('objects', []):
         if 'centre' not in obj or 'size' not in obj:

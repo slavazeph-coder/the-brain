@@ -18,6 +18,7 @@
 <section id="field" class="panel hide"><h2>Route trial</h2><p class="caption" id="field-basis"></p>
 <div class="hero-numbers"><div class="metric"><small>Reported unassisted reaches</small><strong id="field-reaches"></strong></div><div class="metric"><small>Reaches supported by pose logs and map</small><strong id="field-consistent"></strong></div><div class="metric"><small>Pending attempts</small><strong id="field-pending"></strong></div></div>
 <p id="field-plan"></p><p class="caption" id="field-map"></p>
+<details id="field-lineage" hidden><summary>Reconstruction inputs</summary><dl class="facts"><div><dt>Original video SHA-256</dt><dd id="field-video"></dd></div><div><dt>Prepared capture receipt SHA-256</dt><dd id="field-capture"></dd></div><div><dt>Fused point cloud SHA-256</dt><dd id="field-cloud"></dd></div></dl></details>
 <div class="table-shell"><table><thead><tr><th>Attempt</th><th>Reported outcome</th><th>Pose evidence</th><th>Operator note</th></tr></thead><tbody id="field-rows"></tbody></table></div>
 <p class="caption">Pose checks cover the logged start, goal and clearance on a static 2D map. Hardware provenance, physical contact and survey accuracy require independent evidence.</p></section>
 <footer>Offline evaluation. Files are read locally in this browser.</footer>
@@ -72,6 +73,14 @@ function renderField(data, source) {
  $('field-consistent').textContent=s.consistentReaches+'/'+s.scheduled; $('field-pending').textContent=s.pending;
  $('field-plan').textContent=plan.staticPlan.status==='planned'?'Static map plan available':'Static map plan unavailable';
  $('field-map').textContent='Map scale basis: '+plan.map.scaleBasis+' · Map revision: '+plan.map.revisionSha256;
+ const lineage=plan.map.comparisonEvidence;
+ $('field-lineage').hidden=lineage===undefined;
+ if (lineage!==undefined) {
+  for (const [key,id] of [['sourceVideoSha256','field-video'],['captureReceiptSha256','field-capture'],['fusionPlySha256','field-cloud']]) {
+   if (typeof lineage?.[key]!=='string' || !/^[a-f0-9]{64}$/.test(lineage[key])) throw Error('Invalid reconstruction input digest');
+   $(id).textContent=lineage[key];
+  }
+ }
  const tbody=$('field-rows'); tbody.replaceChildren();
  for (const r of rows) {
   const tr=document.createElement('tr'), trace=r.trace;

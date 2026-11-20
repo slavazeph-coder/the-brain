@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 
 from .fleet_learning import Episode, GridScene, Robot, validate_episode
+from .measurement_check import comparison_evidence
 
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 CSV_COLUMNS = ('timestamp_ns','x_m','y_m','yaw_rad','linear_m_s','angular_rad_s','position_std_m','frame_id')
@@ -63,6 +64,7 @@ class MapBundle:
     source_cloud_sha256: str | None
     basis: str
     frame_id: str = 'map'
+    comparison_evidence: dict | None = None
 
     def cell_from_pose(self, x_m:float, y_m:float) -> tuple[int,int]:
         s = self.scene.cell_size_m
@@ -201,7 +203,8 @@ def load_nav2_map(folder: Path) -> MapBundle:
         raise ValueError('Cloud hash malformed')
     return MapBundle(GridScene(rows,s,'BrainSNN-nav2-scan-derived'),(x0,y0+nrow*s),
                      digest(raw_manifest),digest(pgm),source['sceneSha256'],cloud,
-                     str(manifest.get('scale',{}).get('source','unknown')))
+                     str(manifest.get('scale',{}).get('source','unknown')),
+                     comparison_evidence=comparison_evidence(source.get('comparisonEvidence')))
 
 
 def csv_pose_samples(raw:bytes):

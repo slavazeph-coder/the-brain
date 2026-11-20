@@ -1,6 +1,8 @@
 """Numerical camera, timing and eligibility fixtures. These tests do not run a model."""
 import copy
 import json
+import shutil
+import subprocess
 import sys
 
 import numpy as np
@@ -11,7 +13,7 @@ from robotics.world_worker import reconstruction_comparison as rc
 
 
 def capture():
-    return {'captureSha256': 'a' * 64, 'sources': [{'kind': 'video'}],
+    return {'captureSha256': 'a' * 64, 'sources': [{'kind': 'video', 'sha256': 'b' * 64}],
             'frames': [{'image': f'frame_{i:04d}.jpg', 'sha256': f'{i:064x}', 'width': 480, 'height': 640,
                         'sourceFrameIndex': i * 3, 'timeBase': [1, 30], 'pts': i * 3} for i in range(20)]}
 
@@ -133,7 +135,8 @@ def test_screen_uses_better_baseline_and_keeps_failed_or_unavailable_evidence():
         assert arm.comparison_screen(changed, True)['status'] == expected
 
 
-def test_offline_adapter_invokes_tracking_and_strict_export_on_identical_directory(tmp_path, monkeypatch):
+@pytest.fixture
+def authored_adapter(tmp_path, monkeypatch):
     # Stub scripts copy authored artifacts. This exercises the actual two-process adapter contract.
     case = capture()
     case_dir = tmp_path / 'case'
@@ -145,14 +148,17 @@ def test_offline_adapter_invokes_tracking_and_strict_export_on_identical_directo
     numeric = checkout / 'authored'
     tracked(numeric, case)
     ply = numeric / 'pointcloud/frames.ply'
-    ply.write_text('ply\nformat ascii 1.0\nelement vertex 100\nproperty float x\nproperty float y\nproperty float z\nend_header\n'
-                   + ''.join(f'{i/10} {j/10} 0\n' for i in range(10) for j in range(10)))
+    # Authored floor, ceiling and walls in the exporter's Z-up coordinate frame.
+    xyz = {(x, y, z) for x in range(51) for y in range(41) for z in range(31)
+           if x in (0, 50) or y in (0, 40) or z in (0, 30)}
+    ply.write_text(f'ply\nformat ascii 1.0\nelement vertex {len(xyz)}\nproperty float x\nproperty float y\nproperty float z\nend_header\n'
+                   + ''.join(f'{x/10} {y/10} {z/10}\n' for x, y, z in sorted(xyz)))
     (checkout / 'run.py').write_text(
         "from pathlib import Path\nimport sys,shutil\nargs=dict(a.split('=',1) for a in sys.argv[1:])\n"
         "assert args['streams']=='frame_dir_stream' and args['pipeline.init.input_raster.height']=='504'\n"
         "root=Path(__file__).parent\nshutil.copytree(root/'authored',args['pipeline.output.path'])\n"
         "Path('input.txt').write_text(args['streams.base_path'])\n")
-    fused = {'name': 'frames', 'filter': 'strict', 'input_hw': [504, 378], 'frames': 19, 'voxels': 100,
+    fused = {'name': 'frames', 'filter': 'strict', 'input_hw': [504, 378], 'frames': 19, 'voxels': len(xyz),
              'frame': 'z_up', 'world_to_output_rotation': np.eye(3).tolist(), 'settings': {'min_consistent': 4}}
     (checkout / 'vipe/metrictrail/pointcloud.py').write_text(
         "from pathlib import Path\nimport sys\nassert sys.argv[2:4]==['--name','frames']\n"
@@ -164,10 +170,66 @@ def test_offline_adapter_invokes_tracking_and_strict_export_on_identical_directo
     with pytest.raises(ValueError, match='evaluation-only'):
         arm.run(case_dir, out, case, install, False)
     result = arm.run(case_dir, out, case, install, True)
+    return case, case_dir, out, ply, result
+
+
+def test_offline_adapter_invokes_tracking_and_strict_export_on_identical_directory(authored_adapter):
+    case, case_dir, out, ply, result = authored_adapter
     assert (out / 'input.txt').read_text() == str(case_dir / 'frames')
     assert result['registeredFrames'] == 19 and result['evaluationOnly']
     cloud = rc.read_json(out / 'estimated-metric-cloud.json')
     assert 0 < len(cloud['points']) <= 50_000 and cloud['scale']['source'] == 'model-estimated'
-    assert cloud['provenance']['comparisonCaptureSha256'] == case['captureSha256']
-    assert cloud['provenance']['fusionPlySha256'] == rc.sha(ply)
+    assert cloud['provenance']['comparisonEvidence'] == {'captureReceiptSha256': case['captureSha256'],
+        'sourceVideoSha256': case['sources'][0]['sha256'], 'fusionPlySha256': rc.sha(ply)}
     assert all(rc.sha(out / name) == digest for name, digest in result['artifactSha256'].items())
+
+
+@pytest.mark.skipif(shutil.which('blender') is None, reason='Headless Blender is needed for exchange readback.')
+def test_authored_handoff_preserves_source_and_scale_through_bim_usd_nav2_and_field_report(authored_adapter, tmp_path):
+    from robotics.scene_compiler import nav2_export
+    from robotics.world_worker import fleet_field_trial as field
+    from robotics.world_worker.fleet_nav2 import load_nav2_map
+    ifc = pytest.importorskip('ifcopenshell')
+    from ifcopenshell.util.element import get_psets
+
+    _, _, out, _, _ = authored_adapter
+    cloud_path = out / 'estimated-metric-cloud.json'
+    cloud = rc.read_json(cloud_path)
+    evidence = cloud['provenance']['comparisonEvidence']
+    compiled = tmp_path / 'compiled'
+    subprocess.run([shutil.which('blender'), '-b', '-t', '1', '--python-exit-code', '1', '--python',
+        str(rc.ROOT / 'robotics/scene_compiler/scene_compiler.py'), '--', '--cloud', str(cloud_path),
+        '--out', str(compiled), '--allow-unverified'], check=True, timeout=120, capture_output=True)
+    scene_file = compiled / 'scene.json'
+    scene = rc.read_json(scene_file)
+    assert scene['comparisonEvidence'] == evidence and scene['scale'] == cloud['scale']
+    model = ifc.open(str(compiled / 'scene.ifc'))
+    assert len(model.by_type('IfcWall')) == len(scene['walls']) > 0
+    props = get_psets(model.by_type('IfcProject')[0])['Pset_BrainSNN']
+    assert props['ScaleSource'] == 'model-estimated' and props['MetricVerified'] is False
+    usd = (compiled / 'scene.usda').read_text()
+    for key, digest in evidence.items():
+        assert props[key[0].upper() + key[1:]] == digest
+        assert f'custom string {key} = "{digest}"' in usd
+    folder = tmp_path / 'nav2'
+    nav2_export.export(scene, folder, cloud=cloud, resolution=.2,
+                       scene_bytes=scene_file.read_bytes(), cloud_bytes=cloud_path.read_bytes())
+    bundle = load_nav2_map(folder)
+    assert bundle.comparison_evidence == evidence and bundle.basis == 'model-estimated'
+    trial = tmp_path / 'trial'
+    field.prepare(folder, trial, start=(1, 1), goal=(bundle.scene.width - 2, bundle.scene.height - 2),
+                  robot_id='authored', radius=.1, speed=.4, tolerance=.1, attempts=1, basis='authored-synthetic')
+    ledger = field.report(trial, folder)
+    assert ledger['plan']['map']['comparisonEvidence'] == evidence and ledger['summary']['pending'] == 1
+    assert ledger['physicalRobotValidated'] is False
+    cloud['provenance']['comparisonEvidence']['sourceVideoSha256'] = 'c' * 64
+    with pytest.raises(ValueError, match='comparison evidence must match'):
+        nav2_export.export(scene, tmp_path / 'wrong-source', cloud=cloud)
+
+
+@pytest.mark.parametrize('value', [{}, {'captureReceiptSha256': 'a' * 64},
+    dict(captureReceiptSha256='a' * 64, sourceVideoSha256='wrong', fusionPlySha256='c' * 64)])
+def test_incomplete_or_invalid_capture_lineage_is_rejected(value):
+    assert arm.comparison_evidence(None) is None
+    with pytest.raises(ValueError, match='SHA-256'):
+        arm.comparison_evidence(value)

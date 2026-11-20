@@ -35,6 +35,17 @@ _ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$')
 _HASH_PREFIX = b'brainsnn.dimension-points.v1\0right-handed-y-up\0m\0'
 
 
+def comparison_evidence(value):
+    """Optional frozen-video lineage carried by the comparison handoff and its exports."""
+    if value is None:
+        return None
+    keys = ('captureReceiptSha256', 'sourceVideoSha256', 'fusionPlySha256')
+    if (not isinstance(value, dict) or set(value) != set(keys)
+            or any(not isinstance(value[k], str) or not _SHA.fullmatch(value[k]) for k in keys)):
+        raise ValueError('Comparison evidence requires the capture receipt, original video and fused PLY SHA-256.')
+    return {k: value[k] for k in keys}
+
+
 def _fail(message):
     raise ValueError(message)
 

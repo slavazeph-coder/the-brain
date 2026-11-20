@@ -36,9 +36,12 @@ def publish(folder, files):
 
 
 def map_identity(bundle):
-    return {'revisionSha256': bundle.revision_sha256, 'pgmSha256': bundle.pgm_sha256,
+    identity = {'revisionSha256': bundle.revision_sha256, 'pgmSha256': bundle.pgm_sha256,
             'sceneSha256': bundle.source_scene_sha256, 'cloudSha256': bundle.source_cloud_sha256,
             'scaleBasis': bundle.basis, 'frameId': bundle.frame_id}
+    if bundle.comparison_evidence is not None:
+        identity['comparisonEvidence'] = bundle.comparison_evidence
+    return identity
 
 
 def prepare(map_dir, out, *, start, goal, robot_id, radius, speed, tolerance, attempts, basis):

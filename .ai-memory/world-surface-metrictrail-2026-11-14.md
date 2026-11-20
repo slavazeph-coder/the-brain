@@ -14,3 +14,5 @@ The bounded runner records failures/logs, uses local weights, invokes upstream t
 See docs/world-surface-and-metrictrail.md for exact run/import commands, tests, dependencies and independent physical experiment.
 
 November 20: the optional same-frame comparison uses the frozen JPEG directory, validates the ViPE raster and pose IDs, and scores native learned scale separately from one-anchor held-out errors. Two CPU COLMAP runs on the NVIDIA example registered 10/32 and 9/32 and both reported a fold. A measured real phone capture and GPU runs are still needed. See docs/world-reconstruction-comparison.md.
+
+Comparison capture receipt, original video and fused PLY hashes follow the native cloud into the IFC project, USD World prim, Nav2 map and field report. This is file lineage. Physical dimensions, gravity and robot traversal still require independent measurements.

@@ -308,16 +308,20 @@ The three arms read the same hashed JPEGs. MetricTrail uses the pinned frame-dir
 
 - `comparison.md` and `comparison.json` give the raw learned-scale error separately from the one-anchor calibrated error. COLMAP and VGGT retain arbitrary native units. Missing spans, failed engines and unavailable timings stay visible.
 - The MetricTrail geometry screen requires a completed VGGT baseline, a COLMAP baseline with a consistent film-order check, and complete held-out distances for every arm. To pass, MetricTrail must register at least 95% of selected frames with a maximum pose gap of one second, keep each held-out error within the larger of 5 cm or 2% of that span, and reduce calibrated median error by at least 25% versus the better baseline. The screen measures selected landmarks. The learned arms have no independent film-order check, and pose coverage alone cannot establish a connected, drift-free trajectory.
-- The native handoff, `metrictrail/estimated-metric-cloud.json`, binds the input capture and fused PLY by SHA-256. It has at most 50,000 points and retains its learned scale. `metrictrail/engine-result.json` records fitted floor tilt and inlier fraction as internal fit diagnostics. For optional downstream readback, retain this cloud with the scene and IFC exports:
+- The native handoff, `metrictrail/estimated-metric-cloud.json`, binds the original video, prepared capture receipt and fused PLY by SHA-256. It has at most 50,000 points and retains its learned scale. `metrictrail/engine-result.json` records fitted floor tilt and inlier fraction as internal fit diagnostics. Compile the handoff and its offline Nav2 map in fresh directories:
 
 ```sh
 blender --background --python-exit-code 1 \
   --python robotics/scene_compiler/scene_compiler.py -- \
   --cloud /data/room/run-001/metrictrail/estimated-metric-cloud.json \
   --out /data/room/run-001/metrictrail/experimental-scene --allow-unverified
+python -m robotics.scene_compiler.nav2_export \
+  --scene /data/room/run-001/metrictrail/experimental-scene/scene.json \
+  --cloud /data/room/run-001/metrictrail/estimated-metric-cloud.json \
+  --out /data/room/run-001/metrictrail/experimental-nav2
 ```
 
-The calibrated landmark calculation does not rescale the native cloud or its IFC. Measure the corresponding exported IFC element separately before quoting a BIM dimension. Operator-entered tape or laser readings do not establish independent survey accuracy.
+The three hashes travel into `scene.json`, the IFC project's `Pset_BrainSNN`, USD's `/World` attributes, and the Nav2 map and field trial reports. The IFC and USD also identify the learned scale as unverified. The calibrated landmark calculation does not rescale the native cloud or its IFC. Measure the corresponding exported IFC element separately before quoting a BIM dimension. Operator-entered tape or laser readings do not establish independent survey accuracy.
 
 On November 20 two CPU COLMAP runs on the same 32 frames from the pinned NVIDIA 27.3-second example registered 10 and 9 frames. Both triggered the existing fold detector. The second run's longest missing interval was 20.23 seconds. No independent spans accompanied the example. GPU inference and a physical route were unexecuted. [Original sample](https://github.com/nv-tlabs/vipe/blob/ead2e008bc055310121736a49ff306bba50d10dc/assets/examples/metrictrail_demo.mp4).
 

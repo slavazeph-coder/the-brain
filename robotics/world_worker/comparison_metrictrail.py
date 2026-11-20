@@ -9,6 +9,7 @@ import numpy as np
 
 from . import metrictrail_trial as mt
 from . import reconstruction_comparison as rc
+from .measurement_check import comparison_evidence
 
 
 def video_frames(capture):
@@ -103,8 +104,9 @@ def run(case, out, capture, install, evaluation_only):
         raise ValueError('Strict export does not match the tracked camera inventory.')
     ply = raw / 'pointcloud/frames.ply'
     cloud, sampling = mt.estimated_cloud(ply, fused)
-    cloud['provenance']['comparisonCaptureSha256'] = capture['captureSha256']
-    cloud['provenance']['fusionPlySha256'] = rc.sha(ply)
+    cloud['provenance']['comparisonEvidence'] = comparison_evidence({
+        'captureReceiptSha256': capture['captureSha256'], 'sourceVideoSha256': capture['sources'][0]['sha256'],
+        'fusionPlySha256': rc.sha(ply)})
     mt.preflight(source, weights)
     cloud_path = out / 'estimated-metric-cloud.json'
     mt.write_cloud(cloud_path, cloud)

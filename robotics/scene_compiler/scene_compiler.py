@@ -531,6 +531,13 @@ def write_usda(path, scene, pts):
     head = ('#usda 1.0\n(\n    defaultPrim = "World"\n    metersPerUnit = 1\n    upAxis = "Y"\n'
             '    customLayerData = {\n        string schema = %s\n        string units = %s\n    }\n)\n\ndef Xform "World"\n{\n') % (
                 json.dumps(scene["schema"], ensure_ascii=False), json.dumps(scene["units"], ensure_ascii=False))
+    evidence = scene.get('comparisonEvidence')
+    if evidence:
+        for key in ('captureReceiptSha256', 'sourceVideoSha256', 'fusionPlySha256'):
+            head += f'    custom string {key} = {json.dumps(evidence[key])}\n'
+        scale = scene.get('scale') or {}
+        head += f'    custom string scaleSource = {json.dumps(scale.get("source", "unknown"))}\n'
+        head += '    custom bool metricVerified = false\n'
     openings = scene.get('openings', [])
     body = [head] + [cube(o) for o in scene["objects"] if "centre" in o] \
         + [cube(part) for w in scene["walls"] for part in wall_parts(w, openings)] \
@@ -650,8 +657,10 @@ def main():
         sys.exit('REFUSED: saved-scene edits require a fresh --out directory.')
     cloud = json.loads(Path(a.cloud).read_text()); pts = cloud["points"]
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'world_worker'))
-    from measurement_check import points_sha256
+    from measurement_check import comparison_evidence, points_sha256
     point_hash = points_sha256(cloud) if cloud.get('units') == 'm' else None
+    provenance = cloud.get('provenance')
+    evidence = comparison_evidence(provenance.get('comparisonEvidence')) if isinstance(provenance, dict) else None
     metric = cloud.get("units") == "m"; k = 1.0
     # Hard gate: a single-photo relative-depth cloud has no consistent geometry (every object is a perspective wedge),
     # so compiling it produces confident nonsense (a 22 m "refrigerator" in the mezzanine test). The hand-off JSON
@@ -671,7 +680,11 @@ def main():
             sys.exit('REFUSED: saved scene does not belong to this exact ordered cloud.')
         if saved.get('scale') != cloud.get('scale') or saved.get('units') != cloud.get('units'):
             sys.exit('REFUSED: saved scene scale does not match the source cloud.')
+        if saved.get('comparisonEvidence') is not None and saved['comparisonEvidence'] != evidence:
+            sys.exit('REFUSED: saved scene comparison evidence differs from its source cloud.')
         scene = apply_edits(saved, json.loads(edit_path.read_text()))
+        if evidence is not None:
+            scene['comparisonEvidence'] = evidence
         out.mkdir(parents=True); render_components(scene, pts); write_scene(out, scene, pts)
         print('SCENE_EDIT_OK', scene['componentGraph']['revision'])
         return
@@ -687,6 +700,8 @@ def main():
 
     reset(); scene = {"schema": "brainsnn.scene.v1", "units": "m" if metric else "arbitrary", "scale": cloud.get("scale"),
                       "source": cloud.get("source"), "floor_y": floor_y, "objects": [], "walls": [], "unknown": []}
+    if evidence is not None:
+        scene['comparisonEvidence'] = evidence
     add_points(pts)
     # Floor: the observed footprint (2–98% core), a thin slab at floor_y.
     _, rec = add_box("floor_observed", [ex[0], floor_y - 0.02, ez[0]], [ex[1], floor_y, ez[1]], "observed", "floor", (0.55, 0.45, 0.30, 1))
