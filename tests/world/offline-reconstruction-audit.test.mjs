@@ -9,8 +9,10 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-showroom-v41/,'Changes to precache need a new cache version');
-  for (const name of ['showroom-entry.mjs', 'showroom-page.mjs', 'showroom-model.mjs', 'showroom-view.mjs',
+  assert.match(sw,/world-shell-senses-v42/,'Changes to precache need a new cache version');
+  for (const name of ['recorded-views.mjs', 'recorded-views-ui.mjs', 'sense-trial.html', 'sense-trial-ui.mjs', 'sense-trial-worker.mjs',
+    ...['amber','teal','purple','white'].map(color => `assets/sense-cart-${color}.jpg`),
+    'sense-room.mjs', 'sense-policy.mjs', 'sense-trial.css', 'showroom-entry.mjs', 'showroom-page.mjs', 'showroom-model.mjs', 'showroom-view.mjs',
     'showroom-host.css', 'showroom-view.css', 'assets/showroom-views.mjs', ...[1,2,3].map(i => `assets/showroom-camera-${i}.jpg`)]) {
     assert.ok(sw.includes(`'./${name}'`), `${name} is part of the showroom shell`);
     assert.ok(readFileSync(new URL(name,root)).length > 0);

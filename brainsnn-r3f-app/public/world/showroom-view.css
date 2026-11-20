@@ -122,3 +122,14 @@
   .showroom-goal, .showroom-camera, .showroom-robot { fill: Highlight; }
   .showroom-view .showroom-hit[data-marked="true"] { border-color: ButtonText; }
 }
+
+.recorded-views { padding: .5rem 1rem; border: 1px solid var(--sr-line); border-radius: 10px; background: var(--sr-bg); }
+.recorded-views summary { padding: .55rem 0; cursor: pointer; font-weight: 650; }
+.recorded-views p { margin: .4rem 0 .7rem; }
+.recorded-views svg { display: block; width: min(100%, 360px); border: 1px solid var(--sr-line); border-radius: 8px; background: #101e29; cursor: crosshair; }
+.recorded-views svg:focus-visible { outline: 3px solid #f3c775; }
+.recorded-views-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1.15rem; padding: .5rem 0; }
+.recorded-views-controls label { display: flex; align-items: center; gap: .4rem; }
+.recorded-trail-line { fill: none; stroke: #8bb3c3; stroke-width: 1.7; }
+.recorded-stop { fill: #b5e7e5; }
+.recorded-query { fill: #c65a20; stroke: #fff2c5; stroke-width: 2.5; }
