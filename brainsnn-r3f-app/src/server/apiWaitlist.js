@@ -110,9 +110,10 @@ export function createApiWaitlist({ pool: suppliedPool, env = process.env, now =
     if (accepted >= hourlyCeiling) throw new WaitlistError(503, 'waitlist-busy', 'The waitlist is busy. Please try again in an hour.');
     accepted++;
     const window = windowStart;
-    let stored = false;
-    const client = await pool.connect();
+    let stored = false, client = null;
     try {
+      // Checkout sits inside the cleanup scope: a refused connection must give its reservation back.
+      client = await pool.connect();
       await client.query('BEGIN');
       // Serialize count-and-insert across connections and processes for the length of this transaction.
       await client.query('SELECT pg_advisory_xact_lock($1)', [WAITLIST_LOCK]);
@@ -131,10 +132,10 @@ export function createApiWaitlist({ pool: suppliedPool, env = process.env, now =
       if (result.rowCount === 0) throw new WaitlistError(503, 'waitlist-full', 'The waitlist is full. Please email hello@brainsnn.com instead.');
       stored = true;
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
+      if (client) await client.query('ROLLBACK').catch(() => {});
       throw error;
     } finally {
-      client.release();
+      client?.release();
       // A refused or failed sign-up gives its reservation back, unless the hour has already rolled over.
       if (!stored && windowStart === window && accepted > 0) accepted--;
     }

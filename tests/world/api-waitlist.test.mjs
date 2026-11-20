@@ -114,6 +114,21 @@ test('waitlist storage: concurrent sign-ups cannot exceed the hourly ceiling or 
   } finally { await capped.close(); }
 });
 
+test('waitlist storage: a failed connection checkout gives its hourly reservation back', async () => {
+  const real = await createProjectTestPool();
+  await real.query('DROP TABLE IF EXISTS brainsnn_api_waitlist');
+  let failures = 2;
+  const pool = { query: (...args) => real.query(...args), end: () => real.end(),
+    connect: async () => { if (failures-- > 0) throw new Error('authored connection refusal'); return real.connect(); } };
+  try {
+    const waitlist = createApiWaitlist({ pool, env: {}, hourlyCeiling: 2 });
+    await assert.rejects(waitlist.join(entry({ email: 'first@example.com' })), /authored connection refusal/);
+    await assert.rejects(waitlist.join(entry({ email: 'second@example.com' })), /authored connection refusal/);
+    await waitlist.join(entry({ email: 'recovered@example.com' }));
+    assert.deepEqual((await waitlist.list()).map(row => row.email), ['recovered@example.com']);
+  } finally { await real.end(); }
+});
+
 test('waitlist storage: no database or a disabled switch is reported, never kept in memory', async () => {
   const none = createApiWaitlist({ env: {} });
   await rejects(none.join(entry()), 'waitlist-unavailable');
