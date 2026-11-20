@@ -1,21 +1,33 @@
 # Reviewed appearance objects
 
-The local asset viewer at `/world/splat.html` can separate selected retained PLY/SPLAT samples into named, operator-reviewed visual objects. It moves, rotates, hides and copies those actual samples, generates seeded pose variations and exports a separate binary PLY with an edit document and receipt. The original input is immutable. This adds an appearance editing layer alongside the existing component, IFC/Rhino and operational-twin records.
+Open **Make it yours → Arrange a room** in World Builder, or go directly to `/world/splat.html`. The same editor groups selected PLY/SPLAT samples into named objects. It moves, rotates, hides and copies those actual samples, generates seeded pose variations and exports a separate binary PLY with an edit document and receipt. The original input is immutable. This adds an appearance editing layer alongside the existing component, IFC/Rhino and operational-twin records.
+
+## Try it in the playground
+
+1. The reading room opens with a coral chair. Choose **Tap an object**, then tap the chair. With a keyboard, aim at an object and press Enter in the view. Turn the room to check the highlighted points. Give the chair a name, check the review box, and choose **Keep object selection**.
+2. Move or turn the chair with the pose controls. To see the rug underneath, choose **Hide this instance** and **Apply pose**. Both practice rooms are authored examples.
+3. Choose **Keep for another room**, then **Try the empty studio**. Under **Place an object from another scan**, choose **Place object**. The shelf lives in the open editor. **Download this object** saves a portable `.brainobject` file that you can reopen in a later session.
+4. Choose **Try a preview lamp** and turn it on. Pick a spot on the scan or use the keyboard sliders to change the light. Turning the lamp off restores the original colours. This effect stays in the viewer. Recording is available with the lamp off.
+5. Download the combined PLY and its placement receipt. The receipt binds the new file to the destination scan and portable object. The camera studio can record a walkthrough of the saved composite.
+
+For an area that needs appearance repair, choose **Use selection in scan repair** on a reviewed Gaussian PLY group. The playground opens the original file and checks the selection against its hash and vertex IDs. You can inspect it again before choosing whether to send it to the existing processing service. When a captured or authored floor is already visible under a hidden object, no fill is needed.
 
 ## Reference and scope
 
-[Niantic Spatial's November 10, 2026 Object Interaction announcement](https://www.nianticspatial.com/blog/introducing-object-interaction) describes automatic candidate identification, extracted appearance/collision information, review and scene rearrangement. It explicitly calls its physical properties simplified estimates. The announcement links no public object-extraction implementation or comparative benchmark. BrainSNN has not reproduced or beaten that system.
+[Niantic Spatial's November 10, 2026 Object Interaction announcement](https://www.nianticspatial.com/blog/introducing-object-interaction) describes automatic candidate identification, extracted appearance/collision information, review and scene rearrangement. It explicitly calls its physical properties simplified estimates. The announcement links no public object-extraction implementation or comparative benchmark. BrainSNN has not reproduced or benchmarked that system.
+
+Eros Carrasco’s SplatLab demonstration showed object reuse and relighting of a scanned room. The BrainSNN workflow uses independently written code and original practice scenes. The local suggestion follows connected samples of similar colour. A single click can miss a thin part or include a nearby surface. The lamp adds a spatial colour effect over captured light. Automatic semantic segmentation, material recovery, shadow simulation and unseen-surface reconstruction remain open. [SplatLab author demonstration](https://www.linkedin.com/posts/eros-carrasco_asusproart-adobemax-gaussiansplatting-ugcPost-7528984969289863168-CoR6)
 
 | Capability | Current BrainSNN implementation | Remaining work |
 |---|---|---|
-| Object selection | Manual rectangles through all depths, replace/add/subtract and Y slab, operator boundary review | Automatic mask proposals and independent whole-object completeness checks |
+| Object selection | Tap a visible sample for a geometric suggestion, or refine through-depth rectangles and Y limits, then review | Semantic mask proposals and independent whole-object completeness checks |
 | Rearrangement | Actual retained point/Gaussian positions, rigid Y rotation of Gaussian covariance axes, hide/copy, exact original reset | Full-resolution extraction and missing-background treatment |
 | Variations | Seeded bounded pose changes and replayable edit JSON | Collision feasibility, task coverage and physics evaluation |
-| Portable evidence | Original vertex IDs, file/preview hashes, parser/orientation binding, separate derived PLY/hash and proposed AABBs | Signed provenance and robust cross-capture identity |
+| Portable evidence | Original vertex IDs, file/preview hashes, parser/orientation binding, reviewed object shelf and package, two-source composite PLY/receipt and proposed AABBs | Signed provenance and robust cross-capture identity |
 | BIM/Rhino/robotics | Existing reviewed component tools remain separate | Explicit registration and human acceptance before transferring an appearance proposal into IFC or collision maps |
 | Demo recording | Camera studio binds exact prepared artifact bytes and locks its origin to authored | Real-capture object extraction qualification and physical tests |
 
-## Use it
+## Use your own scan
 
 1. Open the local asset viewer and choose an uncompressed `.ply` or `.splat`. GLB keeps the existing surface inspector and camera tools; this workshop does not edit its triangles.
 2. Set lowest/highest Y in local asset units to exclude floor and ceiling. Choose **Select in the view** and drag a rectangle. Selection includes sample centres behind visible surfaces, so orbit and refine using add/subtract. Finish selection to resume normal camera controls.
@@ -33,6 +45,7 @@ The vertical-axis control is disabled while object groups exist. Restore the ori
 - IDs are stable within an edit document and bound to one source. They are not IFC GlobalIds or identities across captures. Edit masks index retained preview samples; `source_index` in derived PLY maps each row to its original input vertex. `object_instance=0` denotes background; other tags map to receipt instance order.
 - Binary point-cloud PLY writes XYZ and byte RGB. It remains a point cloud. Gaussian PLY writes XYZ, DC colour, opacity, three scales and WXYZ quaternion plus source/instance tags. Rotations transform Gaussian axes as well as centres. Higher-order spherical harmonics are omitted by the existing preview parser, so this is a DC preview export, not full-source appearance preservation. Float encodings can introduce rounding.
 - SPLAT scales outside the current PLY parser's `exp(-12)..exp(8)` range cannot be exported as a derived Gaussian PLY. The UI gives an explicit error; the original and edit document remain available. No silent covariance clamp is applied during export.
+- Cross-scan placement accepts a second source of the same representation. An object from a Gaussian scene goes into another Gaussian scene. A point-cloud object goes into another point cloud. Set position, uniform scale and turn in destination-local units. The composite retains every imported object sample and uniformly thins destination samples only when required by the 100,000-sample cap. The receipt reports both counts.
 - AABB proposals cover sample centres, not Gaussian tails or complete physical surfaces. Hidden bounds are conservative transformed base boxes. Mass, friction, inertia and BIM class remain null; metric, collision and physical robot validation remain false.
 - Original scale is unverified. Translations and bounds use arbitrary local units. These are neither user-measured scale nor independently surveyed dimensions. Appearance edits never promote new measurements, IFC, occupancy or robot routes.
 - No paid API, model download or GPU worker is needed for this local layer. GB10/RTX 4090 execution is not established by browser tests.
@@ -43,6 +56,8 @@ Hashes detect inconsistent retained data and bind exported files. They are not s
 
 ```bash
 node --test tests/world/*.test.mjs
+python tests/world/scan_workshop_browser_smoke.py
+python tests/world/splat_lamp_browser_smoke.py
 # In one terminal, serve the existing static app:
 python3 -m http.server 8765 --bind 127.0.0.1 --directory brainsnn-r3f-app/public
 # In another, with the app's Playwright dependencies and browser binaries installed:

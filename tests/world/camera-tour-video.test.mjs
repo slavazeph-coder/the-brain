@@ -22,14 +22,14 @@ async function withRecorder(options,run) {
   const initial={eye:[9,8,7],target:[0,0,0],fov:42};
   const viewer={getCanvas:()=>source,getView:()=>structuredClone(initial),setView(view){views.push(structuredClone(view));if(options.firstPaintError)throw Error('authored first paint failure');}};
   class FakeRecorder {
-    static isTypeSupported(type){return type==='video/webm';}
+    static isTypeSupported(type){return (options.supported||['video/webm']).includes(type);}
     constructor(_stream,config){recorder=this;this.state='inactive';this.mimeType=config.mimeType;}
     start(){this.state='recording';}
     stop(){
       this.state='inactive';
       queueMicrotask(()=>{
         if(options.encoderError)this.onerror?.({error:Error('authored fake encoder failure')});
-        this.ondataavailable?.({data:options.oversize?{size:CAMERA_TOUR_VIDEO.maxBytes+1}:new Blob([options.empty?'':'authored fake encoded bytes'])});
+        this.ondataavailable?.({data:options.oversize?{size:CAMERA_TOUR_VIDEO.maxBytes+1}:new Blob([options.empty||options.emptyTypes?.includes(this.mimeType)?'':'authored fake encoded bytes'])});
         this.onstop?.();
       });
     }
@@ -90,6 +90,7 @@ for(const [name,options,pattern] of [
   ['hidden tab',{beforeFrame:({doc,tick})=>{if(tick===1){doc.hidden=true;doc.dispatchEvent(new Event('visibilitychange'));}}},/became hidden/],
   ['context loss',{beforeFrame:({source,tick})=>{if(tick===1)source.dispatchEvent(new Event('webglcontextlost'));}},/context was lost/],
   ['source replacement',{beforeFrame:({viewer,tick})=>{if(tick===1)viewer.getCanvas=()=>({width:640,height:480});}},/source changed/],
+  ['preview lamp starts',{beforeFrame:({viewer,tick})=>{if(tick===1)viewer.getCaptureCanvas=()=>null;}},/source changed/],
   ['encoder error',{encoderError:true},/fake encoder failure/],
   ['empty output',{empty:true},/empty video/],
   ['bounded output',{oversize:true},/64 MiB/],
@@ -118,9 +119,40 @@ test('rejects a one-keyframe draft before opening a media stream',async()=>{
   });
 });
 
+test('does not fall back to a lit viewer canvas when its capture gate rejects it',async()=>{
+  await withRecorder({},async env=>{
+    env.viewer.getCaptureCanvas = () => null;
+    await assert.rejects(recordCameraTour({path:path(),viewer:env.viewer}),/no drawable pixels/);
+    assert.equal(env.viewer.getCanvas(),env.source);
+    assert.equal(env.stoppedTracks,0);
+    assert.equal(env.drawn.length,0);
+  });
+});
+
 test('first paint failure preserves the rendering error and releases the unstarted stream immediately',async()=>{
   await withRecorder({firstPaintError:true},async env=>{
     await assert.rejects(recordCameraTour({path:path(),viewer:env.viewer}),/authored first paint failure/);
     assert.equal(env.stoppedTracks,1);assert.equal(env.pendingFrames,0);assert.equal(env.drawn.length,0);
+  });
+});
+
+test('an advertised MP4 recorder that emits no bytes is retried once as WebM from the starting view',async()=>{
+  await withRecorder({supported:['video/mp4','video/webm;codecs=vp9'],emptyTypes:['video/mp4']},async env=>{
+    const result=await recordCameraTour({path:path(),viewer:env.viewer});
+    assert.equal(result.type,'video/webm;codecs=vp9');
+    assert.equal(result.receipt.recording.mimeType,'video/webm;codecs=vp9');
+    assert.ok(result.blob.size>0);
+    assert.deepEqual(env.views.at(-1),env.initial,'the view returns to where the visitor started');
+    const firstFrames=env.views.filter(view=>view.fov===60).length;
+    assert.ok(firstFrames>=2,'both attempts start from the first keyframe');
+  });
+});
+
+test('an empty recording with no other container to try still fails honestly',async()=>{
+  await withRecorder({supported:['video/mp4;codecs=avc1.42E01E','video/mp4'],emptyTypes:['video/mp4;codecs=avc1.42E01E','video/mp4']},async env=>{
+    await assert.rejects(recordCameraTour({path:path(),viewer:env.viewer}),/empty video/);
+  });
+  await withRecorder({supported:['video/webm'],empty:true},async env=>{
+    await assert.rejects(recordCameraTour({path:path(),viewer:env.viewer}),/empty video/);
   });
 });

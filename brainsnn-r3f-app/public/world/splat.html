@@ -6,22 +6,53 @@
   <link rel="icon" href="/favicon.svg">
   <link rel="stylesheet" href="./world.css">
   <link rel="stylesheet" href="./objectify.css">
+  <link rel="stylesheet" href="./splat-lamp.css">
+  <link rel="stylesheet" href="./scan-workshop.css">
+  <script>if (window.frameElement?.id === "scan-workshop-frame") document.documentElement.classList.add("in-workspace");</script>
 </head>
 <body>
   <a class="skip" href="#asset">Skip to asset controls</a>
   <header class="nav"><a class="brand" href="./index.html"><strong>Brain<span>SNN</span></strong><small>ASSET VIEWER</small></a><a href="./index.html">← World Builder</a></header>
-  <main><section style="padding:40px 0">
-    <p class="eyebrow">APPEARANCE LAYER / NO COLLISION GEOMETRY</p>
-    <h2>Explore your<br><em>visual world.</em></h2>
-    <p class="intro">Open your point cloud, Gaussian asset or GLB scan. Inspect it, separate reviewed visual objects, try new layouts and record a labelled flythrough locally.</p>
+  <main><section class="scan-workshop">
+    <h1>Arrange a room</h1>
+    <p class="scan-intro">Try moving the coral chair in the practice room. You can also open a scan from your device.</p>
+    <div class="scan-start">
+      <button type="button" data-scan-example="reading">Try the reading room</button>
+      <button type="button" data-scan-example="studio">Try the empty studio</button>
+      <label>Open your own file<input id="asset" type="file" accept=".ply,.splat,.glb" aria-describedby="scan-formats"></label>
+    </div>
+    <p id="room-switch-help" hidden>Save your layout before switching rooms. To take one object with you, choose <strong>Keep for another room</strong>.</p>
+    <p class="micro" id="scan-formats">Practice rooms are made-up examples. Choose a PLY or SPLAT up to 64 MiB, or a GLB up to 50 MiB.</p>
     <div class="viewer-controls">
-      <label>Local .ply / .splat · 64 MiB, .glb · 50 MiB<input id="asset" type="file" accept=".ply,.splat,.glb"></label>
       <button id="frame" disabled>Reset view</button><button id="flip" disabled>Flip vertical axis</button><button id="remove">Clear asset</button>
       <label>Point display size<input id="point-size" type="range" min="0.25" max="3" step="0.05" value="1" disabled></label>
     </div>
     <p class="micro" id="viewer-help">Drag to orbit · pinch or scroll to zoom · two-finger drag or Shift-drag to pan · focus the view and use WASD / arrow keys to move, + / − to zoom, 0 to reset.</p>
     <div class="viewer-stage"><canvas id="asset-canvas" style="width:100%;height:100%" tabindex="0" aria-label="Interactive 3D visual asset" aria-describedby="viewer-help"></canvas></div>
+    <p id="viewer-status" role="status" class="statusbar">Choose a practice room or open your own file.</p>
     <div id="mesh-stage" class="viewer-stage" hidden></div>
+    <details id="splat-appearance-lamp" hidden>
+      <summary>Try a preview lamp <span data-lamp-summary></span></summary>
+      <p id="lamp-explain">Brighten a patch of the scan as you move the lamp. The capture keeps its original light; this preview adds a soft colour effect without simulating shadows or reflections.</p>
+      <label class="lamp-check"><input type="checkbox" data-lamp-enabled aria-describedby="lamp-explain"> Turn on preview lamp</label>
+      <fieldset data-lamp-controls disabled>
+        <legend>Lamp settings</legend>
+        <div class="lamp-grid">
+          <label>Across the scene <output data-lamp-value="x"></output><input type="range" min="-150" max="150" step="1" value="0" data-lamp-slider="x"></label>
+          <label>Up or down <output data-lamp-value="y"></output><input type="range" min="-150" max="150" step="1" value="12" data-lamp-slider="y"></label>
+          <label>Forward or back <output data-lamp-value="z"></output><input type="range" min="-150" max="150" step="1" value="0" data-lamp-slider="z"></label>
+          <label>Spread <output data-lamp-value="radius"></output><input type="range" min="10" max="200" step="1" value="68" data-lamp-slider="radius"></label>
+          <label>Brightness <output data-lamp-value="strength"></output><input type="range" min="5" max="100" step="1" value="80" data-lamp-slider="strength"></label>
+          <label>Lamp colour <select data-lamp-tint><option value="neutral">White</option><option value="warm">Warm amber</option><option value="cool">Cool blue</option></select></label>
+        </div>
+        <div class="lamp-actions">
+          <button type="button" data-lamp-place aria-pressed="false">Pick a spot on the scan</button>
+          <button type="button" data-lamp-reset>Reset lamp settings</button>
+        </div>
+      </fieldset>
+      <p class="lamp-note" data-lamp-status role="status">The preview lamp is off.</p>
+      <p class="lamp-note">Positions and spread use the size of the displayed scene. Turn the lamp off before recording a labelled camera tour.</p>
+    </details>
     <section id="surface-panel" hidden aria-labelledby="surface-title">
       <h3 id="surface-title">Inspect the surface</h3>
       <div class="viewer-controls">
@@ -32,6 +63,31 @@
       <p id="surface-status" role="status">Inspect the original mesh locally. No geometry is smoothed or repaired.</p>
       <p class="micro">Stripes use the supplied shading normals; the topology check uses triangle face normals and exact coincident positions within each mesh. Boundaries and sharp corners may be intentional. No self-intersection or gap check between separate meshes. A mesh cannot certify NURBS G0/G1/G2/G3 continuity. Inspect analytic surfaces in Rhino with Zebra and EdgeContinuity.</p>
     </section>
+    <details id="portable-object-panel" hidden>
+      <summary>Place an object from another scan</summary>
+      <p class="micro">Keep a reviewed object in the workshop below or open a saved object file. Open a second scan of the same type above and check its upright direction. X and Z move across the room. Y is height.</p>
+      <div class="viewer-controls">
+        <label>Portable object file<input type="file" accept=".brainobject" data-portable-file></label>
+        <button type="button" data-portable-clear disabled>Clear object</button>
+      </div>
+      <div data-portable-pose hidden>
+        <div class="viewer-controls">
+          <label>X<input type="number" step="any" inputmode="decimal" data-portable-x></label>
+          <label>Y<input type="number" step="any" inputmode="decimal" data-portable-y></label>
+          <label>Z<input type="number" step="any" inputmode="decimal" data-portable-z></label>
+          <label>Scale<input type="number" min="0.001" max="1000" step="any" inputmode="decimal" value="1" data-portable-scale></label>
+          <label>Turn · degrees<input type="number" min="-360" max="360" step="any" inputmode="decimal" value="0" data-portable-yaw></label>
+          <button type="button" class="primary" data-portable-place disabled>Place object</button>
+        </div>
+        <p class="micro">Placement uses the destination’s local units. Check the size and position in the view.</p>
+      </div>
+      <div class="viewer-controls">
+        <button type="button" data-portable-ply disabled>Download combined PLY</button>
+        <button type="button" data-portable-receipt disabled>Download placement receipt</button>
+        <button type="button" data-portable-restore disabled>Show original scan</button>
+      </div>
+      <p class="micro" data-portable-status role="status">Keep a reviewed object below or choose a saved object file.</p>
+    </details>
     <section id="objectify-panel" hidden aria-label="Appearance object workshop"></section>
     <p id="object-camera-binding" class="micro" hidden></p>
     <section id="camera-tour" aria-labelledby="tour-title">
@@ -52,7 +108,7 @@
       <p data-tour-status role="status">Open a local asset to author a camera path.</p>
       <p class="micro">Up to 32 views and 60 seconds. Paths bind to the exact asset hash and display orientation. Coordinates use local asset units, not verified metres. Moves can cross surfaces or unseen areas; no collision test is performed. Video uses the actual local renderer and carries origin and scale labels. Generated or completed appearance is excluded from BIM measurements, occupancy and robot routes.</p>
     </section>
-    <p id="viewer-status" role="status" class="statusbar">Choose a local asset. No model has run here.</p>
+
     <p class="micro">The viewer and parser run on your device; no third-party renderer is loaded. Up to 100,000 points are displayed, with uniform sampling for larger files. Requires WebGL2. Gaussian assets use base colour only; view-dependent shading is not rendered. GLB must be self-contained, without Draco, Meshopt or KTX compression. Export SPZ / KSPLAT assets as uncompressed PLY or SPLAT first.</p>
     <p class="note">A point cloud is not a trained Gaussian splat. Neither establishes metric scale, collision geometry or robot safety. Unobserved surfaces remain unknown.</p>
   </section></main>

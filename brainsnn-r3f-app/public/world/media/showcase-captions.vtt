@@ -1,0 +1,67 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:04.000
+Build a space. Let a robot try it.
+One playground for spaces, scans, and robot practice.
+Playground Overview
+
+2
+00:00:04.000 --> 00:00:09.500
+Make the room yours.
+Pick a space and change its layout.
+Editable Practice Room
+
+3
+00:00:09.500 --> 00:00:16.000
+See where the robot can go.
+Run a simulated route around the room’s obstacles.
+Simulation
+
+4
+00:00:16.000 --> 00:00:22.000
+See depth with two photos.
+A calibrated pair estimates how far away details are.
+Feature Preview · Authored Stereo Pair
+
+5
+00:00:22.000 --> 00:00:29.000
+Pick, move, or hide an object.
+Review the highlighted chair before changing its position.
+Feature Preview · Authored Scan
+
+6
+00:00:29.000 --> 00:00:34.000
+Take the chair to another room.
+Place the same visual object and try a different light.
+Feature Preview · Authored Appearance
+
+7
+00:00:34.000 --> 00:00:39.000
+Look around a moving scene.
+Play, pause, and step through a 4D scene.
+Authored 4D Example
+
+8
+00:00:39.000 --> 00:00:44.000
+Review the camera setup.
+Open camera positions and scrub a calibration walk.
+Authored Calibration Files
+
+9
+00:00:44.000 --> 00:00:49.000
+Compare how bodies move.
+Review a human-to-G1 reference and an OpenSim analysis.
+Authored Motion Inputs
+
+10
+00:00:49.000 --> 00:00:55.000
+Open the drawing set.
+Review plans, elevations and sections from one model.
+Authored 12-Sheet Drawing Set
+
+11
+00:00:55.000 --> 00:00:59.000
+Bring the pieces together.
+Explore the public playground at brainsnn.com/world.
+Feature Previews Are Labelled
