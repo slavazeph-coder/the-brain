@@ -74,6 +74,9 @@ const SCHEMA = `CREATE TABLE IF NOT EXISTS brainsnn_api_waitlist (
   updated_at timestamptz NOT NULL
 )`;
 
+// Any fixed 64-bit key; it names this table's count-and-insert critical section.
+const WAITLIST_LOCK = 7316402;
+
 export const WAITLIST_MESSAGE = 'Thanks. You are on the API access waitlist. We will email you when access opens; nothing else is sent to this address.';
 
 /**
@@ -103,20 +106,38 @@ export function createApiWaitlist({ pool: suppliedPool, env = process.env, now =
     await initialize();
     const at = now();
     if (at - windowStart >= 3600000) { windowStart = at; accepted = 0; }
+    // Reserve hourly capacity before any await, so concurrent requests cannot all see the same headroom.
     if (accepted >= hourlyCeiling) throw new WaitlistError(503, 'waitlist-busy', 'The waitlist is busy. Please try again in an hour.');
-    const total = Number((await pool.query('SELECT count(*) AS n FROM brainsnn_api_waitlist')).rows[0].n);
-    const stamp = new Date(at).toISOString();
-    // Latest details win so a person can correct a typo by submitting again.
-    const result = await pool.query(`INSERT INTO brainsnn_api_waitlist
-        (id,email,name,company,use_case,monthly_volume,details,source,created_at,updated_at)
-      SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$9 WHERE $10::integer < $11::integer
-        OR EXISTS (SELECT 1 FROM brainsnn_api_waitlist WHERE email=$2)
-      ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name, company=EXCLUDED.company, use_case=EXCLUDED.use_case,
-        monthly_volume=EXCLUDED.monthly_volume, details=EXCLUDED.details, source=EXCLUDED.source,
-        submissions=brainsnn_api_waitlist.submissions+1, updated_at=EXCLUDED.updated_at`,
-      [`wl_${randomUUID()}`, entry.email, entry.name, entry.company, entry.use_case, entry.monthly_volume, entry.details, entry.source, stamp, total, maxEntries]);
-    if (result.rowCount === 0) throw new WaitlistError(503, 'waitlist-full', 'The waitlist is full. Please email hello@brainsnn.com instead.');
     accepted++;
+    const window = windowStart;
+    let stored = false;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Serialize count-and-insert across connections and processes for the length of this transaction.
+      await client.query('SELECT pg_advisory_xact_lock($1)', [WAITLIST_LOCK]);
+      const total = Number((await client.query('SELECT count(*) AS n FROM brainsnn_api_waitlist')).rows[0].n);
+      const stamp = new Date(at).toISOString();
+      // Latest details win so a person can correct a typo by submitting again.
+      const result = await client.query(`INSERT INTO brainsnn_api_waitlist
+          (id,email,name,company,use_case,monthly_volume,details,source,created_at,updated_at)
+        SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$9 WHERE $10::integer < $11::integer
+          OR EXISTS (SELECT 1 FROM brainsnn_api_waitlist WHERE email=$2)
+        ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name, company=EXCLUDED.company, use_case=EXCLUDED.use_case,
+          monthly_volume=EXCLUDED.monthly_volume, details=EXCLUDED.details, source=EXCLUDED.source,
+          submissions=brainsnn_api_waitlist.submissions+1, updated_at=EXCLUDED.updated_at`,
+        [`wl_${randomUUID()}`, entry.email, entry.name, entry.company, entry.use_case, entry.monthly_volume, entry.details, entry.source, stamp, total, maxEntries]);
+      await client.query('COMMIT');
+      if (result.rowCount === 0) throw new WaitlistError(503, 'waitlist-full', 'The waitlist is full. Please email hello@brainsnn.com instead.');
+      stored = true;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+      // A refused or failed sign-up gives its reservation back, unless the hour has already rolled over.
+      if (!stored && windowStart === window && accepted > 0) accepted--;
+    }
     return { ok: true, message: WAITLIST_MESSAGE };
   }
 

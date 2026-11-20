@@ -95,6 +95,25 @@ test('waitlist storage: a process-wide hourly ceiling bounds a distributed flood
   } finally { await f.close(); }
 });
 
+test('waitlist storage: concurrent sign-ups cannot exceed the hourly ceiling or the row cap', async () => {
+  const hourly = await fixture({ hourlyCeiling: 1 });
+  try {
+    const results = await Promise.allSettled([1, 2, 3, 4, 5].map(n => hourly.waitlist.join(entry({ email: `burst${n}@example.com` }))));
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+    assert.ok(results.filter(r => r.status === 'rejected').every(r => r.reason.code === 'waitlist-busy'));
+    assert.equal((await hourly.waitlist.list()).length, 1);
+  } finally { await hourly.close(); }
+  const capped = await fixture({ maxEntries: 2 });
+  try {
+    const results = await Promise.allSettled([1, 2, 3, 4, 5, 6].map(n => capped.waitlist.join(entry({ email: `row${n}@example.com` }))));
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, 2);
+    assert.ok(results.filter(r => r.status === 'rejected').every(r => r.reason.code === 'waitlist-full'));
+    assert.equal((await capped.waitlist.list()).length, 2);
+    // A refused sign-up does not use up hourly capacity.
+    await capped.waitlist.join(entry({ email: 'row1@example.com', details: 'Still allowed to correct.' }));
+  } finally { await capped.close(); }
+});
+
 test('waitlist storage: no database or a disabled switch is reported, never kept in memory', async () => {
   const none = createApiWaitlist({ env: {} });
   await rejects(none.join(entry()), 'waitlist-unavailable');
