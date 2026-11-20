@@ -14,3 +14,4 @@ Draft PR #278: https://github.com/slavazeph-coder/the-brain/pull/278
 - Local 33 Python unit tests and Chromium smoke passed on Nov 2; hosted CI rerun for latest branch head not confirmed.
 - Exact real robot logs, measured independent map, runtime tests and hardware safety gate remain unavailable. No production robot controller added.
 - Full command and safety contract: docs/world-fleet-learning-phase2.md.
+- November 20: fleet_field_trial keeps every scheduled attempt, including interventions and missing logs. The viewer reads the same portable report. Checked endpoints and static map clearance do not authenticate physical robot execution. See the field trial example in docs/world-fleet-learning-phase2.md.

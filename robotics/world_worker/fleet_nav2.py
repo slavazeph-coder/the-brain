@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 
 from .fleet_learning import Episode, GridScene, Robot, validate_episode
+from .measurement_check import comparison_evidence
 
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 CSV_COLUMNS = ('timestamp_ns','x_m','y_m','yaw_rad','linear_m_s','angular_rad_s','position_std_m','frame_id')
@@ -63,6 +64,7 @@ class MapBundle:
     source_cloud_sha256: str | None
     basis: str
     frame_id: str = 'map'
+    comparison_evidence: dict | None = None
 
     def cell_from_pose(self, x_m:float, y_m:float) -> tuple[int,int]:
         s = self.scene.cell_size_m
@@ -201,7 +203,8 @@ def load_nav2_map(folder: Path) -> MapBundle:
         raise ValueError('Cloud hash malformed')
     return MapBundle(GridScene(rows,s,'BrainSNN-nav2-scan-derived'),(x0,y0+nrow*s),
                      digest(raw_manifest),digest(pgm),source['sceneSha256'],cloud,
-                     str(manifest.get('scale',{}).get('source','unknown')))
+                     str(manifest.get('scale',{}).get('source','unknown')),
+                     comparison_evidence=comparison_evidence(source.get('comparisonEvidence')))
 
 
 def csv_pose_samples(raw:bytes):
@@ -220,7 +223,10 @@ def csv_pose_samples(raw:bytes):
             ts=int(row['timestamp_ns'])
             if str(ts)!=row['timestamp_ns'] or ts<0:raise ValueError()
         except (ValueError,TypeError):raise ValueError('Invalid timestamp_ns')
-        vals={k:float(row[k]) for k in CSV_COLUMNS[1:7]}
+        try:
+            vals={k:float(row[k]) for k in CSV_COLUMNS[1:7]}
+        except (ValueError,TypeError) as error:
+            raise ValueError('Invalid numeric pose sample') from error
         if any(not math.isfinite(v) for v in vals.values()):raise ValueError('Nonfinite pose sample')
         if not -math.pi-1e-8<=vals['yaw_rad']<=math.pi+1e-8:raise ValueError('Yaw must be in radians [-pi, pi]')
         if vals['position_std_m']<0 or vals['position_std_m']>.25:raise ValueError('Excessive or invalid localization uncertainty')
@@ -228,6 +234,22 @@ def csv_pose_samples(raw:bytes):
         result.append({'timestamp_ns':ts,'frame_id':row['frame_id'],**vals})
     if len(result)<2:raise ValueError('At least two pose samples are required')
     return result
+
+
+def checked_map_samples(raw_csv: bytes, robot: Robot):
+    samples = csv_pose_samples(raw_csv)
+    if any(p['frame_id'] != 'map' for p in samples):
+        raise ValueError('Telemetry frame changed or was not transformed to map')
+    if samples[0]['timestamp_ns'] >= samples[-1]['timestamp_ns']:
+        raise ValueError('Non-increasing telemetry timestamps')
+    for previous, current in zip(samples, samples[1:]):
+        elapsed = current['timestamp_ns'] - previous['timestamp_ns']
+        if not 0 < elapsed <= 2_000_000_000:
+            raise ValueError('Telemetry reversed or has a >2-second gap')
+        distance = math.hypot(current['x_m'] - previous['x_m'], current['y_m'] - previous['y_m'])
+        if distance / (elapsed / 1e9) > robot.max_speed_m_s * 1.30 + .01:
+            raise ValueError('Unphysical pose jump for configured robot speed')
+    return samples
 
 
 def import_reviewed_episode(map_bundle:MapBundle, manifest:dict, raw_csv:bytes):
@@ -247,19 +269,10 @@ def import_reviewed_episode(map_bundle:MapBundle, manifest:dict, raw_csv:bytes):
     profile=manifest.get('robot',{})
     robot=Robot(profile['id'],number(profile['radius_m'],'robot radius',.01,5.),
                 number(profile['max_speed_m_s'],'maximum speed',.01,15.))
-    samples=csv_pose_samples(raw_csv)
-    if any(p['frame_id']!='map' for p in samples):raise ValueError('Telemetry frame changed or was not transformed to map')
-    if samples[0]['timestamp_ns']>=samples[-1]['timestamp_ns']:
-        raise ValueError('Non-increasing telemetry timestamps')
+    samples=checked_map_samples(raw_csv,robot)
     points=[]; previous=None; previous_sample=None; inferred=0
-    s=map_bundle.scene.cell_size_m
     for cur in samples:
         if previous_sample is not None:
-            delta_ns=cur['timestamp_ns']-previous_sample['timestamp_ns']
-            if not 0<delta_ns<=2_000_000_000:raise ValueError('Telemetry reversed or has a >2-second gap')
-            dist=math.hypot(cur['x_m']-previous_sample['x_m'],cur['y_m']-previous_sample['y_m'])
-            if dist/(delta_ns/1e9)>robot.max_speed_m_s*1.30+0.01:
-                raise ValueError('Unphysical pose jump for configured robot speed')
             # Exact continuous swept disc against static occupied/unknown cells.
             if not swept_disc_clear(map_bundle,
                                     (previous_sample['x_m'],previous_sample['y_m']),

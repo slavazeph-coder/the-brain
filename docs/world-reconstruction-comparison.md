@@ -1,9 +1,11 @@
-# COLMAP and VGGT reconstruction comparison
+# World Builder reconstruction comparison
 
 This local benchmark compares the same prepared phone frames through three arms:
 `colmap`, `vggt`, and `vggt-ba`. It preserves source/frame hashes, records failed
 arms, and keeps the one calibration distance separate from withheld readings.
 It does not change the production World Builder reconstruction default.
+
+For the optional MetricTrail research arm, follow [the same-frame phone trial](#same-frame-phone-trial-with-metrictrail).
 
 For fresh shared SIFT correspondences, view-graph screening and a CPU replay from
 one frozen database, see the [DeepBA preparation experiment](world-deepba-experiment.md).
@@ -266,6 +268,62 @@ python -m pytest tests/world/test_reconstruction_comparison.py \
   tests/world/test_comparison_measurements.py \
   tests/world/test_comparison_vggt.py -q
 ```
+
+## Same-frame phone trial with MetricTrail
+
+Use a genuine 25 to 30 second phone walk with visible parallax, a doorway and two walls. Measure one scale span and at least three different withheld distances, including the doorway width and a cross-room span. Seven withheld spans also cover the existing VGGT qualification protocol. Record instrument, uncertainty, and date. The October 10,925-point room example used a video assembled from dataset photographs and a user-entered 5.79 m span. Its fit residuals serve a different purpose. [Original capture provenance](../scripts/world-demo/REGENERATE.md).
+
+Prepare 32 frames and open the existing worksheet as in section 3. Export the completed worksheet as `case-room/annotations.json` before running an engine.
+
+```sh
+python -m robotics.world_worker.reconstruction_comparison prepare \
+  --video /data/room/phone.mp4 --frames 32 --out /data/room/case-room
+python -m http.server 8000 --bind 127.0.0.1 --directory /data/room/case-room
+```
+
+Use the pinned VGGT source and checkpoint from section 1 and a separate ViPE environment with its reviewed source and three weight files. MetricTrail's DPVO weights are restricted to research and evaluation. Start on the RTX 4090. GB10 needs its own working ARM64 CUDA/PyTorch extension build. [Weight pins and ViPE setup](world-surface-and-metrictrail.md).
+
+Save these local paths as `/data/room/metrictrail-install.json`, adapting each to your machine.
+
+```json
+{
+  "source": "/data/vipe",
+  "python": "/data/vipe/.venv/bin/python",
+  "dpvo": "/data/models/dino_dpvo.pth",
+  "dino": "/data/models/dinov3_vits16_pretrain_lvd1689m-08c60483.pth",
+  "moge": "/data/models/moge-2-vitl.pt"
+}
+```
+
+```sh
+python -m robotics.world_worker.reconstruction_comparison run \
+  --case /data/room/case-room --out /data/room/run-001 \
+  --annotations /data/room/case-room/annotations.json \
+  --engines colmap vggt metrictrail --evaluation-only \
+  --vggt-source /data/vggt --vggt-checkpoint /data/vggt-commercial/model.safetensors \
+  --metrictrail-install /data/room/metrictrail-install.json --timeout 1800
+```
+
+The three arms read the same hashed JPEGs. MetricTrail uses the pinned frame-directory stream, a full-image resize and strict multi-view fusion. It records each camera's pixel transform, source frame digest and OpenCV pose. The report computes pose gaps from original video presentation timestamps. A 32-frame run only tests this sampling regime. Full-rate tracking is a separate experiment.
+
+- `comparison.md` and `comparison.json` give the raw learned-scale error separately from the one-anchor calibrated error. COLMAP and VGGT retain arbitrary native units. Missing spans, failed engines and unavailable timings stay visible.
+- The MetricTrail geometry screen requires a completed VGGT baseline, a COLMAP baseline with a consistent film-order check, and complete held-out distances for every arm. To pass, MetricTrail must register at least 95% of selected frames with a maximum pose gap of one second, keep each held-out error within the larger of 5 cm or 2% of that span, and reduce calibrated median error by at least 25% versus the better baseline. The screen measures selected landmarks. The learned arms have no independent film-order check, and pose coverage alone cannot establish a connected, drift-free trajectory.
+- The native handoff, `metrictrail/estimated-metric-cloud.json`, binds the original video, prepared capture receipt and fused PLY by SHA-256. It has at most 50,000 points and retains its learned scale. `metrictrail/engine-result.json` records fitted floor tilt and inlier fraction as internal fit diagnostics. Compile the handoff and its offline Nav2 map in fresh directories:
+
+```sh
+blender --background --python-exit-code 1 \
+  --python robotics/scene_compiler/scene_compiler.py -- \
+  --cloud /data/room/run-001/metrictrail/estimated-metric-cloud.json \
+  --out /data/room/run-001/metrictrail/experimental-scene --allow-unverified
+python -m robotics.scene_compiler.nav2_export \
+  --scene /data/room/run-001/metrictrail/experimental-scene/scene.json \
+  --cloud /data/room/run-001/metrictrail/estimated-metric-cloud.json \
+  --out /data/room/run-001/metrictrail/experimental-nav2
+```
+
+The three hashes travel into `scene.json`, the IFC project's `Pset_BrainSNN`, USD's `/World` attributes, and the Nav2 map and field trial reports. The IFC and USD also identify the learned scale as unverified. The calibrated landmark calculation does not rescale the native cloud or its IFC. Measure the corresponding exported IFC element separately before quoting a BIM dimension. Operator-entered tape or laser readings do not establish independent survey accuracy.
+
+On November 20 two CPU COLMAP runs on the same 32 frames from the pinned NVIDIA 27.3-second example registered 10 and 9 frames. Both triggered the existing fold detector. The second run's longest missing interval was 20.23 seconds. No independent spans accompanied the example. GPU inference and a physical route were unexecuted. [Original sample](https://github.com/nv-tlabs/vipe/blob/ead2e008bc055310121736a49ff306bba50d10dc/assets/examples/metrictrail_demo.mp4).
 
 ## Primary sources and scope
 
