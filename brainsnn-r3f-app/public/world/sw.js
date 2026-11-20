@@ -1,8 +1,10 @@
 // World Builder shell worker. Network first, cache as an offline fallback for the app shell only.
 // Remote models, worker-API calls, uploads and cross-origin requests are never cached: fresh code and
 // fresh evidence always win; the cache only stores the app shell and its bundled authored example.
-const CACHE = 'world-shell-showcase-projects-v40';
+const CACHE = 'world-shell-showroom-v41';
 const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', './sandbox-session.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './hero-demo.mjs', './playground-help.mjs', './playground-icons.mjs', './playground-controls.mjs', './robot-setup.mjs', './unified-workspace-ui.mjs', './scene-workspace.mjs', './workspace-results.mjs', './drawing-review-ui.mjs', './drawing-review.css', './world-layer-tools.mjs', './world-layer-tools.css', './layer-preview.mjs', './layer-job-client.mjs', './biomechanics-tool.mjs', './biomechanics-preview.mjs', './camera-calibration-tool.mjs', './camera-calibration-data.mjs', './examples/camera-calibration/camera-setup.toml', './examples/camera-calibration/example-walk.trc', './examples/biomechanics/authored-pendulum.osim', './examples/biomechanics/authored-motion.mot', './examples/biomechanics/kinematics-options.json', './photo-locator.mjs', './share-video.mjs', './demo-replay-ui.mjs', './review-questions.mjs', './visual-viewer.mjs',
+  './showroom-entry.mjs', './showroom-page.mjs', './showroom-view.mjs', './showroom-model.mjs', './showroom-view.css', './showroom-host.css',
+  './assets/showroom-views.mjs', './assets/showroom-camera-1.jpg', './assets/showroom-camera-2.jpg', './assets/showroom-camera-3.jpg',
   './showcase.mjs', './showcase.css', './showcase-features.mjs', './media/showcase-poster.jpg', './media/showcase-captions.vtt',
   './splat.html', './splat.mjs', './mesh-viewer.mjs', './scan-workspace.mjs', './scan-workshop.css', './scan-examples.mjs',
   './objectify-region.mjs', './portable-object.mjs', './portable-object-ui.mjs', './splat-lamp.mjs', './splat-lamp.css',
