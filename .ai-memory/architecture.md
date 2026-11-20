@@ -33,6 +33,10 @@ the-brain/
 
 The current `brainsnn-r3f-app` backend is the bundled Express `server.ts`; older references to a committed `brainsnn-r3f-app/server/` FastAPI TRIBE service are stale and should not be treated as current main-branch structure.
 
+The durable World Projects API and dedicated processing bridge are documented in
+[world-project-platform.md](world-project-platform.md). They extend the existing
+PostgreSQL deployment and preserve the separate legacy browser sessions.
+
 ## Deployment
 
 - `www.brainsnn.com` is served from Railway.

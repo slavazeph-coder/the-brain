@@ -5,6 +5,10 @@ This local benchmark compares the same prepared phone frames through three arms:
 arms, and keeps the one calibration distance separate from withheld readings.
 It does not change the production World Builder reconstruction default.
 
+For fresh shared SIFT correspondences, view-graph screening and a CPU replay from
+one frozen database, see the [DeepBA preparation experiment](world-deepba-experiment.md).
+DeepBA inference remains unavailable; this does not add another engine to the three-arm test.
+
 For frozen multi-capture plans, three rotated repetitions, retained failures and
 an aggregate decision, use [repeated measured qualification](world-measured-qualification.md).
 This harness is carried forward from closed, unmerged PR #239 onto current main.

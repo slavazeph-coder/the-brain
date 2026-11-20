@@ -120,11 +120,22 @@ def check_browser(pw, name, origin, worker_url, token, photo, phone=False):
         page.locator('#engine').select_option('scene-usd')
         page.locator('#consent').check()
         page.locator('[data-action=process]').click()
-        # A job whose only visual output is a scene opens it directly, over Evidence where its artifacts are listed.
+        # A scene opens in the shared model view; its original Evidence panel retains the artifact actions.
         page.wait_for_function("/SHA-256 checked|failed/.test(document.querySelector('#scene-status').textContent) || /scene-usd: (failed|cancelled)/.test(document.querySelector('#status').textContent)", timeout=60000)
-        assert page.locator('[data-tab=evidence]').get_attribute('aria-selected') == 'true', page.locator('#status').inner_text()
+        assert page.locator('#workspace').get_attribute('data-primary-view') == 'model', page.locator('#status').inner_text()
+        assert page.locator('#workspace-step-drawings').get_attribute('aria-selected') == 'true'
+        assert page.locator('#panel').get_attribute('aria-labelledby') == 'tab-evidence'
         assert page.locator('[data-scene-artifact]').all_inner_texts() == ['Explore scene.glb in 3D']
         assert page.locator('#scene-status').inner_text() == 'scene.glb from scene-usd · 3 meshes · 72 vertices · SHA-256 checked', page.locator('#scene-status').inner_text()
+        page.get_by_label('Scene surface mode').select_option('zebra')
+        page.locator('#scene-surface-review [data-surface-check]').click()
+        assert '36 triangles' in page.locator('#scene-surface-review [role=status]').inner_text()
+        with page.expect_download() as surface_download:
+            page.locator('#scene-surface-review [data-surface-download]').click()
+        surface_report = json.loads(Path(surface_download.value.path()).read_text())
+        assert surface_report['source']['name'] == 'scene.glb' and len(surface_report['source']['sha256']) == 64
+        assert surface_report['sourceGeometryChanged'] is False and surface_report['metricVerified'] is False
+        page.get_by_label('Scene surface mode').select_option('original')
         facts = page.locator('#scene-facts li').all_inner_texts()
         assert facts[:4] == FACTS and 'Export static OpenUSD' in facts[4], facts
         assert page.locator('#scene-plan').is_hidden(), 'a scene without metres offers no planning map'
@@ -136,6 +147,7 @@ def check_browser(pw, name, origin, worker_url, token, photo, phone=False):
         page.screenshot(path=str(OUTPUT / f'scene-{view_name}.png'))
         page.keyboard.press('Escape')
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
+        assert page.locator('#scene-surface-review').is_hidden()
         # Reopening reuses the viewer, and clearing the session removes it with the job.
         page.locator('[data-scene-artifact]').click()
         # The click opens the dialog at once with a fresh status, so this waits for the reloaded scene, not the old one.
@@ -446,7 +458,7 @@ def main():
                        'WORLD_ADAPTERS_FILE': str(config), 'WORLD_ALLOWED_ORIGINS': origin}
         try:
             for label, command, env in [
-                ('frontend', [server_python, '-m', 'http.server', str(frontend), '--bind', '127.0.0.1',
+                ('frontend', [server_python, '-c', 'import socketserver, runpy; socketserver.TCPServer.request_queue_size=128; runpy.run_module("http.server", run_name="__main__")', str(frontend), '--bind', '127.0.0.1',
                               '--directory', str(ROOT / 'brainsnn-r3f-app/public')], os.environ),
                 ('worker', [server_python, '-m', 'uvicorn', 'robotics.world_worker.app:create_app', '--factory',
                             '--host', '127.0.0.1', '--port', str(backend), '--no-access-log'], environment),

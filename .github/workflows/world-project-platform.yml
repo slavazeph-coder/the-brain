@@ -1,0 +1,181 @@
+name: World Projects API
+
+on:
+  pull_request:
+    paths:
+      - "brainsnn-r3f-app/src/server/worldProject*"
+      - "brainsnn-r3f-app/src/server/projectProcessingBridge*"
+      - "brainsnn-r3f-app/public/world/**"
+      - "brainsnn-r3f-app/scripts/world-project*"
+      - "brainsnn-r3f-app/scripts/build-project-hash.mjs"
+      - "brainsnn-r3f-app/server.ts"
+      - "brainsnn-r3f-app/package*.json"
+      - "robotics/world_worker/**"
+      - "tests/world/**"
+      - "examples/world-project-*.mjs"
+      - ".github/workflows/world-project-platform.yml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  platform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: world_test
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: world_projects_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U world_test -d world_projects_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        working-directory: brainsnn-r3f-app
+        run: npm ci --no-audit --no-fund
+      - name: PostgreSQL authorization, concurrency, recovery and SDK contracts
+        working-directory: brainsnn-r3f-app
+        env:
+          WORLD_PROJECT_TEST_DATABASE_URL: postgres://world_test:disposable-ci-only@localhost:5432/world_projects_test
+        run: npm run test:world-projects
+      - name: Install browser
+        working-directory: brainsnn-r3f-app
+        run: npx playwright install --with-deps chromium
+      - name: Saved project and review browser workflow
+        env:
+          WORLD_PROJECT_TEST_DATABASE_URL: postgres://world_test:disposable-ci-only@localhost:5432/world_projects_test
+          WORLD_PROJECTS_SMOKE_OUT: ${{ runner.temp }}/world-project-browser
+        run: node tests/world/project-platform-browser-smoke.mjs
+      - name: Install worker test dependencies
+        run: python -m pip install -r robotics/world_worker/requirements.txt -r robotics/world_worker/requirements-asbuilt.txt pytest==9.1.1 httpx==0.28.1 Pillow
+      - name: Persistent worker retries and tenant boundaries
+        run: python -m pytest -q tests/world/test_worker_idempotency.py tests/world/test_tenant_isolation.py tests/world/test_site_worker_deploy.py
+      - name: Complete customer-key processing and retention through service restarts
+        run: node tests/world/project-processing-e2e.mjs
+      - name: Keep browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-project-browser
+          path: ${{ runner.temp }}/world-project-browser
+          if-no-files-found: ignore
+          retention-days: 7
+
+  storage:
+    name: Private S3 protocol and restart
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: world_test
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: world_projects_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U world_test -d world_projects_test"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: brainsnn-r3f-app/package-lock.json
+      - name: Install application dependencies
+        working-directory: brainsnn-r3f-app
+        run: npm ci --no-audit --no-fund
+      # Historical MinIO images are no longer anonymously available. Build the
+      # official signed release's exact source commit for this disposable test.
+      - name: Check out pinned upstream MinIO fixture source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: minio/minio
+          ref: 07c3a429bfed433e49018cb0f78a52145d4bedeb
+          path: .ci-minio-source
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.24.7"
+          cache: true
+          cache-dependency-path: .ci-minio-source/go.sum
+      - name: Build isolated storage fixture from official source
+        working-directory: .ci-minio-source
+        env:
+          WORLD_STORAGE_FIXTURE: ${{ runner.temp }}/world-project-storage
+          CGO_ENABLED: "0"
+        run: |
+          test "$(git rev-parse HEAD)" = 07c3a429bfed433e49018cb0f78a52145d4bedeb
+          mkdir -p "$WORLD_STORAGE_FIXTURE/build"
+          go build -trimpath -tags kqueue -ldflags '-s -w' -o "$WORLD_STORAGE_FIXTURE/build/minio" .
+          cp LICENSE "$WORLD_STORAGE_FIXTURE/build/LICENSE.minio"
+          cat > "$WORLD_STORAGE_FIXTURE/build/Dockerfile" <<'DOCKERFILE'
+          FROM scratch
+          COPY minio /minio
+          COPY LICENSE.minio /LICENSE.minio
+          ENTRYPOINT ["/minio"]
+          DOCKERFILE
+          docker build --tag brainsnn-project-test-storage:fixture "$WORLD_STORAGE_FIXTURE/build"
+      - name: Start disposable private S3 storage over loopback TLS
+        env:
+          WORLD_STORAGE_FIXTURE: ${{ runner.temp }}/world-project-storage
+        run: |
+          mkdir -p "$WORLD_STORAGE_FIXTURE/certs/CAs" "$WORLD_STORAGE_FIXTURE/data"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$WORLD_STORAGE_FIXTURE/certs/private.key" \
+            -out "$WORLD_STORAGE_FIXTURE/certs/public.crt" \
+            -subj '/CN=127.0.0.1' \
+            -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' \
+            -addext 'basicConstraints=critical,CA:TRUE'
+          cp "$WORLD_STORAGE_FIXTURE/certs/public.crt" "$WORLD_STORAGE_FIXTURE/certs/CAs/fixture.crt"
+          docker run -d --name brainsnn-project-test-storage \
+            --user "$(id -u):$(id -g)" \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
+            -p 127.0.0.1:19000:9000 \
+            -e MINIO_ROOT_USER=brainsnn-ci-storage \
+            -e MINIO_ROOT_PASSWORD=disposable-ci-only-storage-password \
+            -e MINIO_BROWSER=off \
+            -v "$WORLD_STORAGE_FIXTURE/data:/data" \
+            -v "$WORLD_STORAGE_FIXTURE/certs:/certs" \
+            brainsnn-project-test-storage:fixture \
+            server /data --config-dir /data/.minio --certs-dir /certs
+          if ! curl --fail --silent --show-error --cacert "$WORLD_STORAGE_FIXTURE/certs/public.crt" \
+            --connect-timeout 3 --max-time 10 \
+            --retry 20 --retry-all-errors --retry-connrefused --retry-delay 1 --retry-max-time 60 \
+            https://127.0.0.1:19000/minio/health/ready; then
+            docker logs --tail 80 brainsnn-project-test-storage
+            exit 1
+          fi
+      - name: Production S3 adapter, durable resume and SDK streaming against real storage
+        env:
+          WORLD_PROJECT_TEST_S3_E2E: "1"
+          WORLD_PROJECT_TEST_RESTART_MINIO: "1"
+          WORLD_PROJECT_TEST_DATABASE_URL: postgres://world_test:disposable-ci-only@localhost:5432/world_projects_test
+          WORLD_PROJECT_S3_ENDPOINT: https://127.0.0.1:19000
+          WORLD_PROJECT_S3_REGION: us-east-1
+          WORLD_PROJECT_S3_FORCE_PATH_STYLE: "1"
+          WORLD_PROJECT_S3_ACCESS_KEY_ID: brainsnn-ci-storage
+          WORLD_PROJECT_S3_SECRET_ACCESS_KEY: disposable-ci-only-storage-password
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/world-project-storage/certs/public.crt
+        run: node tests/world/project-storage-s3-e2e.mjs
+      - name: Remove disposable storage container
+        if: always()
+        run: docker rm -f brainsnn-project-test-storage >/dev/null 2>&1 || true

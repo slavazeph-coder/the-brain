@@ -15,6 +15,22 @@ from robotics.world_worker.app import create_app  # noqa: E402
 from robotics.world_worker.auth import Identities  # noqa: E402
 from tenants import derived_credential, enabled_engines, registry  # noqa: E402
 
+
+def test_project_api_tenants_survive_generated_registry_and_cannot_alias_website():
+    import hashlib
+    extra = {'id': 'tenant_fixture', 'token_sha256': hashlib.sha256(b'fixture-project-token').hexdigest(),
+             'engines': ['colmap-sparse'], 'limits': {'upload_count': 12, 'upload_bytes': 536870912,
+                 'job_count': 12, 'active_jobs': 1, 'storage_bytes': 7_000_000_000}}
+    env = {'WORLD_SITE_PASSCODE': 'fixture-private-passcode', 'WORLD_PROJECT_WORKER_TENANTS_JSON': json.dumps([extra])}
+    generated = registry(env, 9 * 1024 ** 3, ['colmap-sparse'])
+    assert generated['tenants'][-1] == extra
+    for invalid in [extra | {'id': 'operator'}, extra | {'id': 'site-owner'},
+                    extra | {'engines': ['not-enabled']}, extra | {'limits': {}}]:
+        with pytest.raises(ValueError):
+            registry(env | {'WORLD_PROJECT_WORKER_TENANTS_JSON': json.dumps([invalid])}, 9 * 1024 ** 3, ['colmap-sparse'])
+    with pytest.raises(ValueError):
+        registry(env | {'WORLD_PROJECT_WORKER_TENANTS_JSON': json.dumps([extra, extra])}, 9 * 1024 ** 3, ['colmap-sparse'])
+
 OWNER, VISITOR = 'o' * 43, 'v' * 43
 ADAPTERS = ROOT / 'robotics/world_worker/deploy/railway/adapters.json'
 

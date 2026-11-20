@@ -1,0 +1,28 @@
+# Authored camera positions for the World Builder review example.
+
+[cam01]
+name = "Front left"
+size = [1280, 720]
+matrix = [[980, 0, 640], [0, 980, 360], [0, 0, 1]]
+distortions = [0, 0, 0, 0]
+rotation = [1.591013481436, -0.712356328086, 0.623760129484]
+translation = [-0.000000000000, 0.991244797342, 3.918856179007]
+fisheye = false
+
+[cam02]
+name = "Front right"
+size = [1280, 720]
+matrix = [[980, 0, 640], [0, 980, 360], [0, 0, 1]]
+distortions = [0, 0, 0, 0]
+rotation = [1.591013481436, 0.712356328086, -0.623760129484]
+translation = [0.000000000000, 0.991244797342, 3.918856179007]
+fisheye = false
+
+[cam03]
+name = "Far side"
+size = [1280, 720]
+matrix = [[980, 0, 640], [0, 980, 360], [0, 0, 1]]
+distortions = [0, 0, 0, 0]
+rotation = [0.035169395531, 2.392035981308, -2.007023428286]
+translation = [0.000000000000, 0.984796412045, 3.627695691045]
+fisheye = false

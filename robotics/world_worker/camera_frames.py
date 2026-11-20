@@ -366,12 +366,24 @@ def _projector(camera):
     return project
 
 
-def load_views(source_job_root, expected_cloud_sha256=None, *, ledger_path=None):
+def load_views(source_job_root, expected_cloud_sha256=None, *, ledger_path=None, frame_ids=None):
     """Load validated private rasters and projections in their cloud's source-world frame."""
     import numpy as np
     root = _root(source_job_root)
     path = _path(root, _ledger_name(root, ledger_path))
-    record = validate(_read_json(path), root, expected_cloud_sha256)
+    record = _read_json(path)
+    if frame_ids is not None:
+        # A private evaluation may retain only its held-out rasters. Validate the
+        # entire ledger structure/identities, then verify bytes for the requested views.
+        record = validate(record, expected_cloud_sha256=expected_cloud_sha256)
+        requested = set(frame_ids)
+        frames = [frame for frame in record['frames'] if frame['frame_id'] in requested]
+        if not frames or len(frames) != len(requested):
+            _fail('Requested camera frame IDs are missing from the ledger.')
+        record['frames'] = frames
+        if expected_cloud_sha256 is not None:
+            record['clouds'] = [row for row in record['clouds'] if row['sha256'] == expected_cloud_sha256]
+    record = validate(record, root, expected_cloud_sha256)
     cloud = next((row for row in record['clouds'] if row['sha256'] == expected_cloud_sha256), record['clouds'][0])
     ledger_hash = _digest(path)
     result = []

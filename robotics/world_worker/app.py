@@ -36,6 +36,8 @@ VIDEO_BYTES = 2 * 1024 ** 3  # five minutes of 4K30 HEVC is about 1 GB; H.264 or
 UPLOADS_BYTES = 6 * 1024 ** 3  # all owners' unfinished and kept uploads together
 ID = re.compile(r"^[a-f0-9]{32}$")
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$")
+IDEMPOTENCY_KEY = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.:-]{15,127}$')
+IDEMPOTENCY_SECONDS = 7 * 86400
 MAX_ARTIFACTS = 40  # one job's published files; worker-client.mjs and scene_usd.ARTIFACT_LIMIT carry the same bound
 # An adapter secret is an environment variable name; the worker's own token and tenants never pass to adapters.
 SECRET_NAME = re.compile(r"^(?!WORLD_WORKER_|WORLD_TENANTS)[A-Z][A-Z0-9_]{0,63}$")
@@ -76,6 +78,17 @@ class TicketBody(BaseModel):
     model_config = ConfigDict(extra='forbid')
     artifact: int = Field(ge=0, le=MAX_ARTIFACTS - 1, strict=True)
 
+
+def idempotency_request(request, body):
+    keys = request.headers.getlist('idempotency-key')
+    if not keys:
+        return None, ''
+    if len(keys) != 1 or not IDEMPOTENCY_KEY.fullmatch(keys[0]):
+        raise HTTPException(422, 'Use one Idempotency-Key containing 16–128 safe ASCII characters.')
+    encoded = json.dumps(body, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+    return keys[0], hashlib.sha256(encoded).hexdigest()
+
+
 class Store:
     def __init__(self, root: Path):
         self.root = root.resolve()
@@ -87,6 +100,10 @@ class Store:
         self.db.executescript('''PRAGMA journal_mode=WAL;
         CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, name TEXT, kind TEXT, size INTEGER, offset INTEGER, created REAL);
         CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, engine TEXT, status TEXT, uploads TEXT, created REAL, error TEXT, artifacts TEXT);
+        CREATE TABLE IF NOT EXISTS idempotency (
+          owner_id TEXT NOT NULL, request_key TEXT NOT NULL, path TEXT NOT NULL,
+          body_hash TEXT NOT NULL, resource_kind TEXT NOT NULL, resource_id TEXT NOT NULL,
+          created REAL NOT NULL, PRIMARY KEY (owner_id, request_key));
         ''')
         # Existing private data belongs only to the reserved operator identity.
         # Never infer its owner from whichever tenant happens to connect first.
@@ -135,6 +152,7 @@ class Store:
 
     def prune(self, ttl, running_ids=()):
         cutoff = time.time() - ttl
+        self.db.execute('DELETE FROM idempotency WHERE created<?', (time.time() - IDEMPOTENCY_SECONDS,))
         for row in list(self.db.execute("SELECT id FROM jobs WHERE created<? AND status NOT IN ('queued','running')", (cutoff,))):
             if row['id'] in running_ids: continue
             shutil.rmtree(self.root / 'jobs' / row['id'], ignore_errors=True)
@@ -145,6 +163,34 @@ class Store:
                 self.db.execute('DELETE FROM uploads WHERE id=?', (row['id'],))
         self.db.commit()
 
+    def replay(self, owner, key, path, body_hash):
+        """Run under io_lock, after authentication and current engine admission.
+
+        Store identifiers, not response snapshots: retries report the current
+        resource state and never resurrect cancelled, deleted or expired work.
+        """
+        if key is None:
+            return None
+        row = self.db.execute('SELECT * FROM idempotency WHERE owner_id=? AND request_key=?', (owner, key)).fetchone()
+        if row:
+            if row['path'] != path or row['body_hash'] != body_hash:
+                raise HTTPException(409, 'Idempotency-Key was already used for a different request.')
+            try:
+                resource = self.upload(row['resource_id'], owner) if row['resource_kind'] == 'upload' else self.job(row['resource_id'], owner)
+            except HTTPException:
+                raise HTTPException(410, 'The original resource expired or was deleted; this key cannot recreate it.') from None
+            return JSONResponse(resource, status_code=201 if path in ('/v1/uploads', '/v1/jobs') else 200,
+                                headers={'Idempotency-Replayed': 'true'})
+        if (self.db.execute('SELECT COUNT(*) FROM idempotency').fetchone()[0] >= 10000 or
+                self.db.execute('SELECT COUNT(*) FROM idempotency WHERE owner_id=?', (owner,)).fetchone()[0] >= 2000):
+            raise HTTPException(429, 'Idempotency record budget reached. Wait for the seven-day retry window to expire.')
+        return None
+
+    def remember(self, owner, key, path, body_hash, kind, resource_id):
+        # Called in the SAME SQLite transaction as the resource mutation.
+        if key is not None:
+            self.db.execute('INSERT INTO idempotency VALUES (?,?,?,?,?,?,?)',
+                            (owner, key, path, body_hash, kind, resource_id, time.time()))
     def storage_commitment(self, job_limit, running_ids=(), owner_id=None):
         """Charge existing bytes plus unwritten upload/job reservations once.
 
@@ -637,7 +683,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
 
     origins=[v.strip() for v in os.environ.get('WORLD_ALLOWED_ORIGINS','https://www.brainsnn.com,https://brainsnn.com,http://127.0.0.1:8765,http://localhost:8765').split(',') if v.strip()]
     if '*' in origins:raise RuntimeError('Wildcard origins are not supported.')
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET','HEAD','POST','PUT','DELETE'], allow_headers=['Authorization','Content-Type'], allow_credentials=False)
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET','HEAD','POST','PUT','DELETE'], allow_headers=['Authorization','Content-Type','Idempotency-Key'], allow_credentials=False)
 
     @app.get('/healthz')
     async def health(): return {'status':'ok','public_processing':False}
@@ -646,6 +692,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     async def capabilities(request:Request):
         principal = request.state.principal
         return {'api_version':'brainsnn.worker.v1','operator_only':True,
+                'idempotency': {'supported': True, 'retention_seconds': IDEMPOTENCY_SECONDS,
+                                'operations': ['create-upload', 'create-job', 'start-job']},
                 'access_mode':'operator' if principal.owner_id == OPERATOR_OWNER else 'tenant',
                 'owner_id':principal.owner_id, 'owner_limits':principal.limits,
                 **({'simready_assets':simready_assets,'simready_error':simready_error}
@@ -664,6 +712,7 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.post('/v1/uploads',status_code=201)
     async def create_upload(body: UploadBody, request:Request):
         principal = request.state.principal
+        request_key, body_hash = idempotency_request(request, body.model_dump())
         suffix=Path(body.name).suffix.lower()
         if suffix not in UPLOAD_SUFFIXES[body.kind]: raise HTTPException(422,'Unsupported file type.')
         if body.kind in LAYER_UPLOADS:
@@ -684,6 +733,8 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
         if body.kind!='video' and body.size>FILE_BYTES: raise HTTPException(422,'Photos are limited to 200 MiB; videos to 2 GiB.')
         async with io_lock:
             store.prune(ttl, running)
+            replay = store.replay(principal.owner_id, request_key, '/v1/uploads', body_hash)
+            if replay is not None: return replay
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads').fetchone()
             if count>=50 or reserved+body.size>UPLOADS_BYTES:raise HTTPException(429,'Upload quota reached. Delete old sources or wait for expiry.')
             count,reserved=store.db.execute('SELECT COUNT(*),COALESCE(SUM(size),0) FROM uploads WHERE owner_id=?',(principal.owner_id,)).fetchone()
@@ -692,7 +743,13 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             check_storage(body.size, principal)
             uid=secrets.token_hex(16)
             (store.root/'uploads'/uid).touch(mode=0o600)
-            store.db.execute('INSERT INTO uploads (id,name,kind,size,offset,created,owner_id) VALUES (?,?,?,?,?,?,?)',(uid,body.name,body.kind,body.size,0,time.time(),principal.owner_id));store.db.commit()
+            try:
+                with store.db:
+                    store.db.execute('INSERT INTO uploads (id,name,kind,size,offset,created,owner_id) VALUES (?,?,?,?,?,?,?)',(uid,body.name,body.kind,body.size,0,time.time(),principal.owner_id))
+                    store.remember(principal.owner_id, request_key, '/v1/uploads', body_hash, 'upload', uid)
+            except Exception:
+                (store.root/'uploads'/uid).unlink(missing_ok=True)
+                raise
             return store.upload(uid, principal.owner_id)
 
     @app.get('/v1/uploads/{uid}')
@@ -727,12 +784,15 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
     @app.post('/v1/jobs',status_code=201)
     async def create_job(body:JobBody,request:Request):
         principal = request.state.principal
+        request_key, body_hash = idempotency_request(request, body.model_dump())
         if body.consent is not True:raise HTTPException(422,'Explicit processing consent is required.')
         engine=engines.get(body.engine)
         if not engine or not engine['available']:raise HTTPException(409,'This engine is not configured and license-approved.')
         require_engine(principal, body.engine)
         if len(set(body.upload_ids))!=len(body.upload_ids) or len(body.upload_ids)>engine['max_inputs']:raise HTTPException(422,'Invalid number of inputs.')
         async with io_lock:
+            replay = store.replay(principal.owner_id, request_key, '/v1/jobs', body_hash)
+            if replay is not None: return replay
             if store.db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0]>=50:raise HTTPException(429,'Job quota reached. Delete finished jobs or wait for expiry.')
             check_owner_jobs(principal, adding=True)
             checked = []
@@ -746,20 +806,36 @@ def create_app(*, root: Path | None = None, token: str | None = None, adapters: 
             validate_layer_inputs(body.engine, checked, body.source_job)
             check_storage(job_limit, principal)
             jid=secrets.token_hex(16)
-            store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id,source_job) VALUES (?,?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id,body.source_job));store.db.commit()
+            with store.db:
+                store.db.execute('INSERT INTO jobs (id,engine,status,uploads,created,error,artifacts,owner_id,source_job) VALUES (?,?,?,?,?,?,?,?,?)',(jid,body.engine,'prepared',json.dumps(body.upload_ids),time.time(),None,'[]',principal.owner_id,body.source_job))
+                store.remember(principal.owner_id, request_key, '/v1/jobs', body_hash, 'job', jid)
             return store.job(jid, principal.owner_id)
 
     @app.post('/v1/jobs/{jid}/start')
     async def start_job(jid:str,request:Request):
         principal = request.state.principal
+        # Starting work has no parameters. A keyed retry cannot smuggle a
+        # different payload into what appears to be the same operation.
+        data = await request.body()
+        try:
+            body = json.loads(data) if data else {}
+        except ValueError:
+            raise HTTPException(422, 'Send an empty JSON object to start a job.') from None
+        if body != {}: raise HTTPException(422, 'Send an empty JSON object to start a job.')
+        request_key, body_hash = idempotency_request(request, body)
         async with io_lock:
             job=store.job(jid, principal.owner_id)
             require_engine(principal, job['engine'])
+            replay = store.replay(principal.owner_id, request_key, f'/v1/jobs/{jid}/start', body_hash)
+            if replay is not None: return replay
             if job['status']!='prepared':raise HTTPException(409,'Only a prepared job can start; cancelled jobs never restart.')
             if queue.full():raise HTTPException(429,'Processing queue is full.')
             check_owner_jobs(principal)
             check_storage(principal=principal)
-            store.state(jid,'queued');queue.put_nowait(jid)
+            with store.db:
+                store.db.execute("UPDATE jobs SET status='queued', error=NULL, artifacts='[]' WHERE id=?", (jid,))
+                store.remember(principal.owner_id, request_key, f'/v1/jobs/{jid}/start', body_hash, 'job', jid)
+            queue.put_nowait(jid)
             return store.job(jid, principal.owner_id)
 
     @app.get('/v1/jobs/{jid}')

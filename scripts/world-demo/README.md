@@ -270,3 +270,7 @@ browser journey, see the opt-in `tests/world/worker_video_browser_smoke.py`.
 Ordinary CI runs `test_video_qualification.py` and `test_qualify_video_cli.py`: synthetic evidence, integrity and
 binding failures, malformed GLB, cancellation cleanup and a real HTTP upload-only run from a generated clip.
 Private walkthrough reconstruction remains an explicit operator-run test.
+
+## Authored object-layout demonstrations
+
+The local asset viewer now supports reviewed manual object selections, actual retained point/Gaussian transforms, seeded layouts and exact-byte camera staging. Follow [the object workshop runbook](../../docs/world-object-workshop.md). Download the original source-bound edit JSON, derived PLY, variant receipt, camera path and recording receipt separately. Label the result **authored layout from retained appearance samples**. It is not a new reconstruction, automatic complete object extraction, metric validation, corrected route evidence or approved BIM/collision geometry. Do not replace original measured evidence with an edited layout. Full-resolution membership and higher-order Gaussian shading are not preserved by this preview workflow.

@@ -24,6 +24,14 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Open4DGS moving scenes](world-open4dgs-2026-11-19.md) — native export playback, local camera timing and the operator-run reconstruction workflow.
+
+→ [One World Builder experience](world-unified-experience-2026-11-17.md) — owner’s v23 demo flow in one workspace; retained source/job results, native drawings, safe view switching and separate website/worker rollout.
+
+→ [Robot-first World Builder playground](world-robot-first-playground-2026-11-18.md) — Arena-style choose a robot / build its world / let it try above the map, robot body on the map, camera buttons, tap-to-choose, undo/redo, More contrast; larger type on the playground only.
+
+→ [World Builder playground usability](world-playground-usability-2026-11-17.md) — simpler entry and controls, preserved features, optional larger text/read-aloud and narrow-screen browser checks. Owner scope is World Builder.
+
 → [Unified world sandbox](world-sandbox-integration-2026-10-28.md) — native street objects, capture handoff, navigation and current scene exports inside the production World Builder.
 
 → [World launch integration](world-simready-launch-2026-10-27.md) — native-capture import, source-bound acceptance, real NVIDIA composition and Omniverse export integration; current deployment/access limits.
@@ -64,6 +72,18 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 → [Fleet Learning Phase 2](world-fleet-learning-phase2-2026-11-02.md) — Nav2/ROS map-frame source bindings, 24 held-out offline tasks and an adverse synthetic result; physical validation pending.
 
 ## Active Work
+
+→ [Shared matches for DeepBA](world-deepba-experiment-2026-11-16.md): fresh source-bound correspondence packs, graph screening and CPU replay; upstream DeepBA inference and physical qualification remain unavailable.
+
+→ [Reviewed appearance objects](world-object-workshop-2026-11-15.md): manual retained point/Gaussian grouping, rigid edits, seeded variants and source-bound authored camera output; full extraction and physical qualification remain open.
+
+→ [Local camera studio](world-camera-studio-2026-11-15.md): source-bound appearance paths, labelled local videos and explicit generated/metric/robot evidence limits.
+
+→ [Meshlets Lab](meshlets-lab-2026-11-02.md): isolated experimental r187 renderer, source-bound browser receipts and explicit failed strict WebGPU qualification.
+
+→ [Autonomy trial](world-autonomy-trial-2026-11-11.md) — sensors → 4 cm map → A* → MPPI on reviewed maps, crate-drop replanning and a sealed paired break-it-on-purpose trial at /world/autonomy.html; no legged MPC.
+
+→ [Surface inspection and MetricTrail trial](world-surface-metrictrail-2026-11-14.md): source-bound local mesh inspection and an isolated pinned long-video research bridge; license, GPU and physical qualification boundaries.
 
 → [Movement source reset](movement-source-reset-2026-11-14.md): shared source-reset cancellation prevents a previous recording's pending acceleration estimate from entering a new phone clip or its exports.
 
@@ -846,3 +866,9 @@ canon: /HACKATHON.md.
   `https://github.com/XioAISolutions/Reconstruct`.
 - Verified locally with `npm run lint`, `npm test`, `npm run build`,
   `npm run test:e2e`, and Playwright screenshots on desktop/mobile.
+
+### Project Review studio — 2026-11-18
+
+- See [world-project-review.md](world-project-review.md) for the source-bound
+  finish-scope review workflow, owner-only bounded AI team, deterministic rates
+  and quantities, preliminary approval receipts, and qualification boundaries.
