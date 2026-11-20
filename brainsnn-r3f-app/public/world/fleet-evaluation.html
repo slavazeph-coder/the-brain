@@ -7,14 +7,20 @@
 </style></head>
 <body><nav><strong>◈ BrainSNN</strong><span><a href="/world/">World Builder</a><a href="/world/fleet-learning.html">Motion Transfer</a><a href="/arena/">Robot Arena</a></span></nav>
 <main><div class="eyebrow">World Builder / Fleet Learning / Evaluate</div>
-<h1>Did the second robot actually do better?</h1><p class="intro">Compare learned-experience retrieval against a goal-only route planner using the same candidate map and a separate reference map. Upload an offline report locally or review the explicitly authored 24-task example. No robot commands are generated.</p>
-<div class="controls"><button class="button primary" id="sample">View synthetic 24-task result</button><label><span class="caption">Import a saved campaign report</span><input id="file" type="file" accept=".json,application/json" aria-label="Import campaign JSON"></label><button class="button" id="clear">Clear result</button></div>
+<h1>How did the route perform?</h1><p class="intro">Compare two planners on a reference map, or inspect the recorded outcomes of a route trial. Open a saved report to see the evidence for each attempt.</p>
+<div class="controls"><button class="button primary" id="sample">View synthetic 24-task result</button><label><span class="caption">Open a campaign or field trial report</span><input id="file" type="file" accept=".json,application/json" aria-label="Open evaluation report"></label><button class="button" id="clear">Clear result</button></div>
 <p id="status" role="status" class="caption">Select the synthetic example or an offline JSON report to begin.</p>
 <div id="results" class="hide">
 <div class="hero-numbers"><div class="metric"><small>Goal-only reference-clear</small><strong id="base-val"></strong><span>Static reference-map check</span></div><div class="metric"><small>Experience-guided reference-clear</small><strong id="transfer-val"></strong><span>Static reference-map check</span></div><div class="metric"><small>Mean route difference</small><strong id="delta-val"></strong><span>Transfer minus baseline</span></div></div>
 <section class="layout"><div class="panel"><h2>Performance on held-out starts</h2><p class="caption" id="scope"></p><div class="bar-row"><small>Goal-only planner</small><div class="track"><div id="baseline-bar" class="fill" style="width:0"></div></div></div><div class="bar-row"><small>Experience-guided planner</small><div class="track"><div id="transfer-bar" class="fill transfer" style="width:0"></div></div></div><p class="warning" id="interpretation"></p><h2>Per-task evidence</h2><div class="table-shell"><table><thead><tr><th>Held-out task</th><th>Baseline</th><th>Transfer</th><th>Baseline route</th><th>Transfer route</th></tr></thead><tbody id="rows"></tbody></table></div></div>
 <div class="panel"><h2>Evidence and release boundary</h2><dl class="facts"><div><dt>Candidate map revision hash</dt><dd><code id="candidate-sha"></code></dd></div><div><dt>Reference map revision hash</dt><dd><code id="reference-sha"></code></dd></div><div><dt>Reference basis</dt><dd id="ref-basis"></dd></div><div><dt>Reported false-free map cells</dt><dd id="false-free"></dd></div><div><dt>Task and evaluation scope</dt><dd id="task-scope"></dd></div></dl><p class="warning">Not a simulation of robot dynamics or localization. Neither static clearance nor user-supplied reference status proves survey accuracy or hardware safety. Deployment remains disabled.</p></div></section>
-</div><footer>Offline-only software evaluation. Uploaded JSON is processed in this browser and is not transmitted by this page.</footer>
+</div>
+<section id="field" class="panel hide"><h2>Route trial</h2><p class="caption" id="field-basis"></p>
+<div class="hero-numbers"><div class="metric"><small>Reported unassisted reaches</small><strong id="field-reaches"></strong></div><div class="metric"><small>Reaches supported by pose logs and map</small><strong id="field-consistent"></strong></div><div class="metric"><small>Pending attempts</small><strong id="field-pending"></strong></div></div>
+<p id="field-plan"></p><p class="caption" id="field-map"></p>
+<div class="table-shell"><table><thead><tr><th>Attempt</th><th>Reported outcome</th><th>Pose evidence</th><th>Operator note</th></tr></thead><tbody id="field-rows"></tbody></table></div>
+<p class="caption">Pose checks cover the logged start, goal and clearance on a static 2D map. Hardware provenance, physical contact and survey accuracy require independent evidence.</p></section>
+<footer>Offline evaluation. Files are read locally in this browser.</footer>
 </main>
 <script>
 'use strict';
@@ -33,7 +39,7 @@ synthetic.cases=distances.map((m,i)=>({id:'heldout-'+String(i+1).padStart(2,'0')
 function render(data,source){if(!data||data.schema!=='brainsnn.fleet-campaign.v1'||!data.summary||!Array.isArray(data.cases)||data.cases.length>50)throw Error('Invalid or unsupported campaign report schema');
  const s=data.summary,b=s.baseline,t=s.transfer,n=s.heldout_case_count;
  if(!Number.isInteger(n)||n<1||n!==data.cases.length||![b,t].every(x=>x&&Number.isInteger(x.reference_clear)&&x.reference_clear>=0&&x.reference_clear<=n))throw Error('Inconsistent evaluation counts');
- $('results').classList.remove('hide');$('status').textContent=source;
+ $('field').classList.add('hide');$('results').classList.remove('hide');$('status').textContent=source;
  $('base-val').textContent=b.reference_clear+'/'+n;$('transfer-val').textContent=t.reference_clear+'/'+n;
  const d=s.mean_transfer_minus_baseline_m;$('delta-val').textContent=Number.isFinite(d)?((d>0?'+':'')+d.toFixed(2)+' m'):'N/A';
  $('baseline-bar').style.width=(b.reference_clear/n*100)+'%';$('transfer-bar').style.width=(t.reference_clear/n*100)+'%';$('scope').textContent=data.scope||'No evaluation scope specified';
@@ -43,7 +49,58 @@ function render(data,source){if(!data||data.schema!=='brainsnn.fleet-campaign.v1
  const tbody=$('rows');tbody.replaceChildren();for(const c of data.cases){const tr=document.createElement('tr');
   const values=[c.id,c.baseline?.reference_clear?'Clear':'Blocked',c.transfer?.reference_clear?'Clear':'Blocked',c.baseline?.route_m===null?'N/A':String(c.baseline?.route_m??'N/A')+' m',c.transfer?.route_m===null?'N/A':String(c.transfer?.route_m??'N/A')+' m'];
   for(let i=0;i<values.length;i++){const td=document.createElement('td');td.textContent=values[i];if(i===1||i===2)td.className=values[i]==='Clear'?'ok':'bad';tr.append(td)}tbody.append(tr)} }
-$('sample').onclick=()=>{try{render(synthetic,'Authored synthetic example. 24 held-out starts, one withheld obstacle.')}catch(error){$('status').textContent=error.message}};
-$('clear').onclick=()=>{$('results').classList.add('hide');$('status').textContent='No report selected.';$('file').value=''};
-$('file').addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>5_000_000)throw Error('File exceeds 5 MB limit');const text=await file.text();render(JSON.parse(text),'Local file: '+file.name)}catch(error){$('status').textContent='Rejected: '+error.message;$('results').classList.add('hide')}});
+$('sample').onclick=()=>{++loadId;try{render(synthetic,'Authored synthetic example. 24 held-out starts, one withheld obstacle.')}catch(error){$('status').textContent=error.message}};
+function renderField(data, source) {
+ const plan=data.plan, rows=data.attempts, s=data.summary, labels={
+  'reached-unassisted':'Reached unassisted',intervention:'Intervention',contact:'Contact',timeout:'Timeout',
+  'localization-lost':'Localization lost',stopped:'Stopped',pending:'Pending'
+ };
+ if (!plan || !Array.isArray(rows) || !s || rows.length<1 || rows.length>100 ||
+     plan.attempts!==rows.length || s.scheduled!==rows.length || !['authored-synthetic','operator-reported-recording'].includes(plan.basis) ||
+     !['planned','unavailable'].includes(plan.staticPlan?.status) || !/^[a-f0-9]{64}$/.test(plan.map?.revisionSha256) ||
+     data.physicalRobotValidated!==false || data.recordingAuthenticityVerified!==false || data.surveyAccuracyValidated!==false ||
+     rows.some((r,i)=>r.attempt!==i+1 || !Object.hasOwn(labels,r.outcome) || typeof r.consistentReach!=='boolean' ||
+       (r.consistentReach && (r.outcome!=='reached-unassisted' || r.duplicateTrace!==false || r.trace?.status!=='checked' ||
+         r.trace?.endpointsMatch!==true || r.trace?.staticMapConflict!==false ||
+         !(r.trace.recordingBinding==='matched' || (r.trace.recordingBinding==='authored-fixture' && plan.basis==='authored-synthetic'))))) ||
+     rows.filter(r=>r.outcome==='pending').length!==s.pending || s.reported!==rows.length-s.pending ||
+     rows.filter(r=>r.outcome==='reached-unassisted').length!==s.reportedUnassistedReaches ||
+     rows.filter(r=>r.consistentReach).length!==s.consistentReaches) throw Error('Inconsistent route trial evidence');
+ $('results').classList.add('hide'); $('field').classList.remove('hide'); $('status').textContent=source;
+ $('field-basis').textContent=plan.basis==='authored-synthetic'?'Authored synthetic trial':'Operator-reported recording';
+ $('field-reaches').textContent=s.reportedUnassistedReaches+'/'+s.scheduled;
+ $('field-consistent').textContent=s.consistentReaches+'/'+s.scheduled; $('field-pending').textContent=s.pending;
+ $('field-plan').textContent=plan.staticPlan.status==='planned'?'Static map plan available':'Static map plan unavailable';
+ $('field-map').textContent='Map scale basis: '+plan.map.scaleBasis+' · Map revision: '+plan.map.revisionSha256;
+ const tbody=$('field-rows'); tbody.replaceChildren();
+ for (const r of rows) {
+  const tr=document.createElement('tr'), trace=r.trace;
+  let evidence='Awaiting outcome';
+  if (trace) {
+   if (r.duplicateTrace) evidence='Repeated pose log';
+   else if (trace.status==='missing') evidence='Log missing';
+   else if (trace.status==='unusable') evidence='Unusable log: '+trace.reason;
+   else if (trace.recordingBinding==='missing') evidence='Recording manifest missing';
+   else if (trace.recordingBinding==='mismatch') evidence='Recording manifest mismatch';
+   else if (trace.status==='checked') evidence=[trace.endpointsMatch?'Endpoints match':'Endpoint mismatch',
+     trace.staticMapConflict?'map conflict':'clear on static map'].join(', ');
+   else throw Error('Unknown pose evidence');
+  }
+  for (const value of [r.attempt,labels[r.outcome],evidence,r.reason||'']) {
+   const td=document.createElement('td'); td.textContent=String(value); tr.append(td);
+  }
+  tbody.append(tr);
+ }
+}
+function hideReports() { $('results').classList.add('hide'); $('field').classList.add('hide'); }
+$('clear').onclick=()=>{++loadId;hideReports();$('status').textContent='No report selected.';$('file').value=''};
+let loadId=0;
+$('file').addEventListener('change',async e=>{
+ const id=++loadId, file=e.target.files?.[0]; if(!file)return;
+ try {
+  if(file.size>5_000_000)throw Error('File exceeds 5 MB limit');
+  const data=JSON.parse(await file.text()); if(id!==loadId)return;
+  (data.schema==='brainsnn.fleet-field-report.v1'?renderField:render)(data,'Local file: '+file.name);
+ } catch(error) {if(id===loadId){$('status').textContent='Rejected: '+error.message;hideReports()}}
+});
 </script></body></html>

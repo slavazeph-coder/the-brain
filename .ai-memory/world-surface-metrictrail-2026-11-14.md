@@ -12,3 +12,5 @@ MetricTrail source pinned to nv-tlabs/vipe ead2e008bc055310121736a49ff306bba50d1
 The bounded runner records failures/logs, uses local weights, invokes upstream tracking/strict point export, and imports finite rigid poses and matching filtered PLY. Conservative browser handoff remains arbitrary/unscaled and multiView=false. Separate estimated-metric-cloud uses model-estimated, selfReported=false, verified=false; explicit offline compiler experiment only. No invented camera raster ledger, survey scale or robot validation.
 
 See docs/world-surface-and-metrictrail.md for exact run/import commands, tests, dependencies and independent physical experiment.
+
+November 20: the optional same-frame comparison uses the frozen JPEG directory, validates the ViPE raster and pose IDs, and scores native learned scale separately from one-anchor held-out errors. Two CPU COLMAP runs on the NVIDIA example registered 10/32 and 9/32 and both reported a fold. A measured real phone capture and GPU runs are still needed. See docs/world-reconstruction-comparison.md.

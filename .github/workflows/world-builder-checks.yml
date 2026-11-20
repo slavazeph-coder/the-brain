@@ -300,8 +300,8 @@ jobs:
         run: python tests/world/facility_browser_smoke.py
       - name: As-built IFC placements, unit conversion and source-preserving readback
         run: python -m pytest tests/world/test_asbuilt_update.py tests/world/test_asbuilt_jobs.py -q
-      - name: MetricTrail bounded numeric result bridge (authored data, no GPU inference)
-        run: python -m pytest tests/world/test_metrictrail_trial.py -q
+      - name: MetricTrail camera comparison and offline route evidence
+        run: python -m pytest tests/world/test_metrictrail_trial.py tests/world/test_comparison_metrictrail.py tests/world/test_fleet_field_trial.py -q
       - name: As-built linked views, reviewed IFC updates and held-out reference scoring
         env:
           WORLD_BROWSERS: chromium,webkit

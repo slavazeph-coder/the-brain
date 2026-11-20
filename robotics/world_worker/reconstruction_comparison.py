@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+from fractions import Fraction
 import hashlib
 import json
 import math
@@ -26,6 +27,7 @@ FRAME_SCHEMA = 'brainsnn.comparison-frames.v1'
 RUN_SCHEMA = 'brainsnn.comparison-run.v1'
 CAMERA_SCHEMA = 'brainsnn.comparison-cameras.v1'
 ENGINES = ('colmap', 'vggt', 'vggt-ba')
+SUPPORTED_ENGINES = (*ENGINES, 'metrictrail')
 MAX_FRAMES = 60
 MAX_FRAME_BYTES = 8 * 1024 ** 2
 MAX_JSON_BYTES = 4 * 1024 ** 2
@@ -350,6 +352,42 @@ def hardware_record():
             'gpuMemoryMeasurement': 'Per-engine CUDA allocator peaks are in the actual engine result; nvidia-smi lists host devices only.'}
 
 
+def pose_coverage(receipt, cameras):
+    frames = receipt['frames']
+    registered = {row['image'] for row in cameras['frames']}
+    missing = [row['image'] for row in frames if row['image'] not in registered]
+    coverage = {'selected': len(frames), 'withPose': len(registered), 'fraction': len(registered) / len(frames),
+                'missing': missing, 'longestMissingIntervalSeconds': None, 'longestPoseGapSeconds': None}
+    # Directory-stream FPS is nominal. Measure gaps only on the original video's decoded PTS.
+    if len(receipt['sources']) != 1 or receipt['sources'][0]['kind'] != 'video':
+        return coverage
+    times = []
+    for row in frames:
+        pts, base = row.get('pts'), row.get('timeBase')
+        if (type(pts) is not int or abs(pts) >= 2**63 or not isinstance(base, list) or len(base) != 2
+                or any(type(v) is not int or not 0 < v < 2**31 for v in base)):
+            return coverage
+        stamp = pts * Fraction(*base)
+        if times and stamp <= times[-1]:
+            return coverage
+        times.append(stamp)
+    # Bracket a run of missing selected frames by the nearest available poses,
+    # clipping to the first/last selected timestamp at either end of the clip.
+    longest, left = 0, 0
+    for i, row in enumerate(frames):
+        if row['image'] in registered:
+            if i and frames[i - 1]['image'] not in registered:
+                longest = max(longest, times[i] - times[left])
+            left = i
+    if frames[-1]['image'] not in registered:
+        longest = max(longest, times[-1] - times[left])
+    coverage['longestMissingIntervalSeconds'] = float(longest)
+    # Sparse selection itself can leave a long gap, even if every selected frame has a pose.
+    boundaries = [times[0], *(t for t, row in zip(times, frames) if row['image'] in registered), times[-1]]
+    coverage['longestPoseGapSeconds'] = float(max(b - a for a, b in zip(boundaries, boundaries[1:])))
+    return coverage
+
+
 def engine_main(args):
     receipt = validate_capture(args.case)
     out = Path(args.out).resolve()
@@ -357,13 +395,18 @@ def engine_main(args):
     started = time.monotonic()
     if args.engine == 'colmap':
         detail = run_colmap(Path(args.case).resolve() / 'frames', out)
+    elif args.engine == 'metrictrail':
+        from . import comparison_metrictrail
+        detail = comparison_metrictrail.run(Path(args.case).resolve(), out, receipt,
+                                            args.metrictrail_install, args.evaluation_only)
     else:
         from . import comparison_vggt
         if args.vggt_source is None or args.vggt_checkpoint is None:
             raise RuntimeError('VGGT needs --vggt-source and --vggt-checkpoint; no downloads are performed.')
         detail = comparison_vggt.run(Path(args.case).resolve() / 'frames', out,
             Path(args.vggt_source).resolve(), Path(args.vggt_checkpoint).resolve(), use_ba=args.engine == 'vggt-ba')
-    validate_capture(args.case)  # Detect mutation during actual inference.
+    if validate_capture(args.case)['captureSha256'] != receipt['captureSha256']:
+        raise ValueError('Shared capture changed during inference.')
     cameras = read_json(out / 'cameras.json')
     if cameras.get('schema') != CAMERA_SCHEMA:
         raise ValueError('Engine did not produce comparison camera evidence.')
@@ -371,6 +414,7 @@ def engine_main(args):
     rows = cameras.get('frames', [])
     if not rows or len(rows) != len({r['image'] for r in rows}) or any(r['image'] not in valid_names for r in rows):
         raise ValueError('Engine camera identities do not match shared frames.')
+    detail['poseCoverage'] = pose_coverage(receipt, cameras)
     try:
         import resource
         peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
@@ -419,13 +463,13 @@ def bounded_process(command, log_path, *, timeout, env=None):
 
 
 def execute(*, case, out, engines=ENGINES, vggt_source=None, vggt_checkpoint=None, timeout=1800,
-            python=sys.executable, annotations=None):
+            python=sys.executable, annotations=None, metrictrail_install=None, evaluation_only=False):
     from . import comparison_measurements as measurements
     case = Path(case).resolve(); out = Path(out)
     receipt = validate_capture(case)
     engines = list(engines)
-    if not engines or len(set(engines)) != len(engines) or any(e not in ENGINES for e in engines):
-        raise ValueError('Choose unique engine names from colmap, vggt, vggt-ba.')
+    if not engines or len(set(engines)) != len(engines) or any(e not in SUPPORTED_ENGINES for e in engines):
+        raise ValueError('Choose unique engine names from ' + ', '.join(SUPPORTED_ENGINES) + '.')
     if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 1 <= timeout <= 7200:
         raise ValueError('Engine timeout must be 1 to 7200 seconds.')
     frozen = None
@@ -458,6 +502,10 @@ def execute(*, case, out, engines=ENGINES, vggt_source=None, vggt_checkpoint=Non
             command += ['--vggt-source', str(Path(vggt_source).resolve())]
         if vggt_checkpoint is not None:
             command += ['--vggt-checkpoint', str(Path(vggt_checkpoint).resolve())]
+        if engine == 'metrictrail' and metrictrail_install is not None:
+            command += ['--metrictrail-install', str(Path(metrictrail_install).resolve())]
+        if engine == 'metrictrail' and evaluation_only:
+            command.append('--evaluation-only')
         print(f'Running {engine} on {len(receipt["frames"])} identical prepared frames...', flush=True)
         try:
             row = {'engine': engine, **bounded_process(command, log_path, timeout=timeout, env=env)}
@@ -483,14 +531,17 @@ def execute(*, case, out, engines=ENGINES, vggt_source=None, vggt_checkpoint=Non
         report['runs'].append(row)
         write_json(out / 'run.json', report)
         print(f'{engine}: {row["status"]} ({row["coldWallSeconds"]:.2f}s)', flush=True)
-    validate_capture(case)
+    if validate_capture(case)['captureSha256'] != receipt['captureSha256']:
+        raise ValueError('Shared capture changed during the comparison.')
     if frozen is not None:
         score_run(case=case, run=out, annotations=out / 'annotations.json')
     else:
         comparison = {'schema': 'brainsnn.reconstruction-comparison.v1', 'captureSha256': receipt['captureSha256'],
             'runReceiptSha256': sha(out / 'run.json'), 'referenceBasis': 'not-provided',
             'annotationsPredeclared': False, 'scope': 'Execution and timing only; no reference measurements provided.',
-            'runs': [{'engine': row['engine'], 'status': row['status'], 'endToEndSeconds': row['endToEndSeconds']}
+            'runs': [{'engine': row['engine'], 'status': row['status'], 'endToEndSeconds': row['endToEndSeconds'],
+                      'poseCoverage': row.get('result', {}).get('detail', {}).get('poseCoverage'),
+                      'captureConsistency': row.get('result', {}).get('detail', {}).get('captureConsistency')}
                      for row in report['runs']],
             'promotion': {'eligible': False, 'reason': 'No predeclared independent reference measurements.'},
             'metricVerified': False, 'surveyAccuracyValidated': False, 'physicalRobotValidated': False}
@@ -512,7 +563,7 @@ def score_run(*, case, run, annotations):
     rows = []
     for row in runs['runs']:
         engine = row.get('engine')
-        if engine not in ENGINES:
+        if engine not in SUPPORTED_ENGINES:
             raise ValueError('Unknown engine in run receipt.')
         scored = {'engine': engine, 'status': row['status'], 'endToEndSeconds': row.get('endToEndSeconds')}
         if row['status'] == 'completed':
@@ -522,11 +573,18 @@ def score_run(*, case, run, annotations):
             result = read_json(target / 'engine-result.json')
             if sha(target / 'cameras.json') != result['cameras']['sha256']:
                 raise ValueError('Camera output changed after completion.')
-            scored['measurementReport'] = measurements.score(read_json(target / 'cameras.json'), marked, receipt)
+            cameras = read_json(target / 'cameras.json')
+            scored['measurementReport'] = measurements.score(cameras, marked, receipt, model_estimated_metres=engine == 'metrictrail')
+            scored['poseCoverage'] = pose_coverage(receipt, cameras)
             scored['captureConsistency'] = result.get('detail', {}).get('captureConsistency', {'status': 'not-checked'})
         rows.append(scored)
     dimension_timing_gate(rows, predeclared=runs.get('annotationsPredeclared') is True,
                           physical=marked['referenceBasis'] == 'physical-readings')
+    if any(row['engine'] == 'metrictrail' for row in rows):
+        from .comparison_metrictrail import comparison_screen
+        rows_by_engine = {row['engine']: row for row in rows}
+        rows_by_engine['metrictrail']['metrictrailScreen'] = comparison_screen(
+            rows_by_engine, runs.get('annotationsPredeclared') is True and marked['referenceBasis'] == 'physical-readings')
     comparison = {'schema': 'brainsnn.reconstruction-comparison.v1', 'captureSha256': receipt['captureSha256'],
         'runReceiptSha256': sha(run / 'run.json'), 'annotationSha256': marked_hash,
         'referenceBasis': marked['referenceBasis'], 'annotationsPredeclared': runs.get('annotationsPredeclared') is True,
@@ -534,6 +592,8 @@ def score_run(*, case, run, annotations):
         'runs': rows, 'promotion': {'eligible': False,
             'reason': 'Camera checks alone cannot approve engine promotion; independent opening/BIM coverage review and multi-capture repeated timing are required.'},
         'metricVerified': False, 'surveyAccuracyValidated': False, 'physicalRobotValidated': False}
+    if runs.get('syntheticFixture') is True and runs.get('inferenceExecuted') is False:
+        comparison.update(syntheticFixture=True, inferenceExecuted=False)
     write_json(run / 'comparison.json', comparison)
     write_markdown(run / 'comparison.md', comparison)
     return comparison
@@ -549,6 +609,8 @@ def dimension_timing_gate(rows, *, predeclared, physical):
         row['dimensionAndTimingGate'] = gate
         if row['engine'] == 'colmap':
             gate['reason'] = 'Baseline, not a promotion candidate.'; continue
+        if row['engine'] == 'metrictrail':
+            gate['reason'] = 'Evaluation-only arm. See its separate held-out geometry screen.'; continue
         a = (baseline or {}).get('measurementReport', {}).get('summary', {})
         b = row.get('measurementReport', {}).get('summary', {})
         times = [(baseline or {}).get('endToEndSeconds'), row.get('endToEndSeconds')]
@@ -580,8 +642,10 @@ def write_markdown(path, report):
              f'Capture SHA-256: `{report["captureSha256"]}`', '',
              '| Engine | Execution | Cold total seconds | Withheld spans available | Median error (cm) | Max error (cm) | Dimension/timing screen |',
              '|---|---|---:|---:|---:|---:|---|']
-    if report.get('referenceBasis') == 'synthetic-fixture':
-        lines[2:2] = ['**Synthetic harness fixture. No model inference or physical measurements.**', '']
+    if report.get('syntheticFixture') and report.get('inferenceExecuted') is False:
+        lines[2:2] = ['**Synthetic cameras and references. No model inference or physical measurements.**', '']
+    elif report.get('referenceBasis') == 'synthetic-fixture':
+        lines[2:2] = ['**Synthetic reference measurements.**', '']
     def number(value, multiplier=1.):
         return 'unavailable' if value is None else f'{value*multiplier:.3f}'
     for row in report['runs']:
@@ -591,11 +655,26 @@ def write_markdown(path, report):
             f'{number(summary.get("heldOutMedianAbsoluteErrorMeters"), 100)} | '
             f'{number(summary.get("heldOutMaxAbsoluteErrorMeters"), 100)} | '
             f'{row.get("dimensionAndTimingGate", {}).get("status", "unavailable")} |')
+    for row in report['runs']:
+        coverage = row.get('poseCoverage')
+        if coverage:
+            gap = number(coverage['longestMissingIntervalSeconds'])
+            pose_gap = number(coverage.get('longestPoseGapSeconds'))
+            consistency = (row.get('captureConsistency') or {}).get('status', 'not-checked')
+            lines.append(f'\n{row["engine"]} poses: {coverage["withPose"]}/{coverage["selected"]} selected frames. '
+                         f'Longest missing interval (s): {gap}. Maximum pose gap (s): {pose_gap}. Film-order check: {consistency}.')
+        native = row.get('measurementReport', {}).get('nativeScale', {})
+        if native.get('basis') == 'model-estimated':
+            lines.append(f'\nRaw MetricTrail scale: median held-out error (cm) {number(native["heldOutMedianAbsoluteErrorMeters"], 100)} '
+                         f'on {native["validHeldOutCount"]}/{native["requestedHeldOutCount"]} spans. '
+                         'The table above uses one calibration span.')
+        if row.get('metrictrailScreen'):
+            lines.append(f'\nMetricTrail geometry screen: {row["metrictrailScreen"]["status"]}. {row["metrictrailScreen"]["reason"]}')
     lines += ['', 'Engine promotion: **not approved**. '+report['promotion']['reason'], '',
         'Physical readings and their instrument metadata are self-reported. One calibration span sets scale; '
         'withheld spans never fit cameras or scale. Missing spans stay in the denominator.', '',
         'Cold total includes shared frame preparation plus each fresh engine process, checkpoint verification/loading '
-        'and export. COLMAP uses CPU; VGGT uses CUDA. One run does not establish repeatable device speed.', '',
+        'and export. COLMAP uses CPU. VGGT and MetricTrail require CUDA. Repeat runs to assess timing variation.', '',
         'Pixel-landmark distances do not validate dense surfaces, compiled BIM, opening completeness, survey accuracy '
         'or physical robot execution. Inspect each arm\'s local engine.log and JSON evidence for details.', '']
     Path(path).write_text('\n'.join(lines), encoding='utf-8')
@@ -667,7 +746,7 @@ def main(argv=None):
     prep.add_argument('--out', type=Path, required=True); prep.add_argument('--frames', type=int, default=32)
     run = sub.add_parser('run', help='Run fresh sequential engine processes; failures remain in run.json')
     run.add_argument('--case', type=Path, required=True); run.add_argument('--out', type=Path, required=True)
-    run.add_argument('--engines', choices=ENGINES, nargs='+', default=list(ENGINES))
+    run.add_argument('--engines', choices=SUPPORTED_ENGINES, nargs='+', default=list(ENGINES))
     run.add_argument('--vggt-source', type=Path); run.add_argument('--vggt-checkpoint', type=Path)
     run.add_argument('--timeout', type=int, default=1800); run.add_argument('--python', default=sys.executable)
     run.add_argument('--annotations', type=Path, help='Freeze predeclared independent references and score after running')
@@ -681,15 +760,19 @@ def main(argv=None):
     preflight.add_argument('--vggt-checkpoint', required=True, type=Path)
     worker = sub.add_parser('_engine', help=argparse.SUPPRESS)
     worker.add_argument('--case', required=True, type=Path); worker.add_argument('--out', required=True, type=Path)
-    worker.add_argument('--engine', required=True, choices=ENGINES)
+    worker.add_argument('--engine', required=True, choices=SUPPORTED_ENGINES)
     worker.add_argument('--vggt-source', type=Path); worker.add_argument('--vggt-checkpoint', type=Path)
+    for command in (run, worker):
+        command.add_argument('--metrictrail-install', type=Path, help='Local JSON with pinned ViPE interpreter, source and weights')
+        command.add_argument('--evaluation-only', action='store_true', help='Enable the research-only MetricTrail arm')
     args = parser.parse_args(argv)
     try:
         if args.command == 'prepare':
             result = prepare(out=args.out, frames=args.frames, video=args.video, photos=args.photos)
         elif args.command == 'run':
             result = execute(case=args.case, out=args.out, engines=args.engines, vggt_source=args.vggt_source,
-                vggt_checkpoint=args.vggt_checkpoint, timeout=args.timeout, python=args.python, annotations=args.annotations)
+                vggt_checkpoint=args.vggt_checkpoint, timeout=args.timeout, python=args.python, annotations=args.annotations,
+                metrictrail_install=args.metrictrail_install, evaluation_only=args.evaluation_only)
         elif args.command == 'score':
             result = score_run(case=args.case, run=args.run, annotations=args.annotations)
         elif args.command == 'self-test':
