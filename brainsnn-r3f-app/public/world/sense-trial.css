@@ -11,4 +11,5 @@ main{width:min(1160px,calc(100% - 2rem));margin:auto;padding-bottom:3rem}.intro{
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 .swatch{display:inline-block;height:.72em;width:.72em;border:1px solid #ffffff80;border-radius:50%;margin-right:.38em}.comparison-wrap:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
 #reference-picture{display:block;width:100%;height:auto;max-height:10rem;object-fit:cover;border-radius:.45rem;margin:.15rem 0 .6rem}#download{justify-self:start}.benchmark details .comparison-wrap{margin:.5rem 0}
+#keep-checking{margin:0 0 1rem}
 @media(max-width:650px){#reference-picture{float:right;max-width:41%;max-height:6.75rem;margin:0 0 .35rem .65rem}.reference-card .sample-note{clear:both}}

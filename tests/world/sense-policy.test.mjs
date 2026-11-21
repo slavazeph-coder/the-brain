@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSenseRoom, senseActionCost, SENSES} from '../../brainsnn-r3f-app/public/world/sense-room.mjs';
-import {decideSenseAction, runSenseBenchmark, runSenseTrial, senseDecisionInput, SENSE_STRATEGIES, trainSenseMemory} from '../../brainsnn-r3f-app/public/world/sense-policy.mjs';
+import {continueSenseTrial, decideSenseAction, runSenseBenchmark, runSenseTrial, senseDecisionInput, SENSE_STRATEGIES, trainSenseMemory, SENSE_EXTRA_POINTS} from '../../brainsnn-r3f-app/public/world/sense-policy.mjs';
 
 test('a policy can only see allowed observations and goal attributes', () => {
   const initial = createSenseRoom({seed: 17}).start;
@@ -125,4 +125,48 @@ test('two fully verified equal signatures are reported as ambiguous without a gu
   assert.equal(decision.action.type,'abstain');
   assert.equal(decision.action.reason,'uncertain');
   assert.match(decision.reason,/Two carts match every clue/);
+});
+
+test('the optional second pass proves duplicates with new paid observations and never reads the first score', () => {
+  const run = runSenseTrial({seed:101, mode:'ambiguous'});
+  assert.equal(run.canContinue,true);
+  assert.equal(run.outcome.confirmedAmbiguous,false);
+  const originalSteps = [...run.steps];
+  Object.defineProperty(run, 'outcome', {get() { throw new Error('The judge is hidden from the second pass.'); }});
+  const followup = continueSenseTrial(run);
+  assert.equal(followup.initial,run.initial);
+  assert.deepEqual(followup.steps.slice(0,originalSteps.length),originalSteps);
+  const grant = followup.steps[originalSteps.length];
+  assert.deepEqual(grant.action, {type:'extend',points:SENSE_EXTRA_POINTS});
+  assert.deepEqual(grant.before.observations, grant.after.observations);
+  assert.equal(grant.after.remaining, grant.before.remaining + SENSE_EXTRA_POINTS);
+  assert.equal(followup.canContinue,false);
+  assert.throws(() => continueSenseTrial(run), /no further/);
+  assert.throws(() => continueSenseTrial(followup), /no further/);
+  const end = followup.steps.at(-1);
+  assert.equal(end.action.type,'abstain');
+  const reads = end.before.observations;
+  assert.equal(reads.reduce((cost, read) => cost + read.cost, 0), followup.outcome.cost);
+  assert.ok(followup.outcome.cost > run.initial.budget);
+  const verified = end.before.candidates.filter(cart => SENSES.every(sense =>
+    reads.some(o => o.candidateId === cart.id && o.sense === sense && o.value === end.before.reference[sense])));
+  assert.equal(verified.length,2);
+  assert.equal(followup.outcome.confirmedAmbiguous,true);
+  assert.equal(followup.outcome.chosenId,null);
+});
+
+test('extra points only offer newly affordable checks allowed by the original strategy and sensors', () => {
+  for (const strategy of SENSE_STRATEGIES) {
+    const run = runSenseTrial({strategy,seed:101,mode:'ambiguous',budget:1,enabledSenses:['sight']});
+    assert.equal(run.canContinue,true);
+    const second = continueSenseTrial(run);
+    assert.ok(second.steps.slice(run.steps.length + 1).some(s => s.action.type === 'inspect'));
+    assert.ok(second.steps.every(s => !s.action.sense || s.action.sense === 'sight'));
+    assert.equal(second.outcome.confirmedAmbiguous,false);
+    const noSensors = runSenseTrial({strategy, enabledSenses:[]});
+    assert.equal(noSensors.canContinue,false);
+    assert.throws(() => continueSenseTrial(noSensors), /no further/);
+  }
+  const stillUnclear = runSenseTrial({seed:103,mode:'ambiguous'});
+  assert.equal(continueSenseTrial(stillUnclear).outcome.confirmedAmbiguous,false);
 });

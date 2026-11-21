@@ -1,5 +1,5 @@
 import {SENSES} from './sense-room.mjs';
-import {runSenseTrial} from './sense-policy.mjs';
+import {continueSenseTrial, runSenseTrial, SENSE_EXTRA_POINTS} from './sense-policy.mjs';
 
 const el = id => document.getElementById(id);
 const NAMES = {sight:'Sight', hearing:'Hearing', touch:'Touch', smell:'Smell', taste:'Taste'};
@@ -60,7 +60,8 @@ function actionText(action, snapshot) {
       if (action.sense === 'taste') return 'Check the taste sample for ' + name + '.';
       return 'Check ' + name + ' with ' + NAMES[action.sense].toLowerCase() + '.';
     case 'ask': return 'Ask about ' + name + '’s ' + NAMES[action.sense].toLowerCase() + ' clue.';
-    case 'abstain': return 'Stop without choosing a cart.';
+    case 'extend': return 'Add ' + action.points + ' clue points and keep the clues already found.';
+    case 'abstain': return snapshot.task === 'delivery' ? 'Stop without choosing a bay.' : 'Stop without choosing a cart.';
     case 'choose': return 'Try to reach ' + name + '.';
     default: return 'Review the clues.';
   }
@@ -173,6 +174,7 @@ function render() {
   el('step').disabled=done;
   el('play').disabled=done;
   el('restart').disabled=stepIndex===0;
+  el('keep-checking').hidden=!(done && run.canContinue);
   el('new-room').disabled=false;
   el('compare').disabled=!!benchmarkWorker;
   el('budget').textContent = snapshot.remaining + ' of ' + snapshot.budget + ' clue points left.';
@@ -181,15 +183,19 @@ function render() {
   const outcome=run.outcome;
   if(done) {
     let result=VERDICTS[outcome.outcome] || capitalize(String(outcome.outcome).replaceAll('_',' '));
-    if (outcome.outcome==='correct_abstention') {
-      result = outcome.confirmedAbsent ? 'The robot correctly identified an absent target.'
-        : outcome.confirmedAmbiguous ? 'The robot correctly identified an ambiguous target.'
-        : 'The robot stopped with uncertainty. This earns no decision credit.';
+    if (run.canContinue) {
+      result = 'The robot needs more clues to decide.';
+    } else if (outcome.outcome==='correct_abstention') {
+      result = outcome.confirmedAbsent ? 'The robot checked every cart. None fit the request.'
+        : outcome.confirmedAmbiguous ? 'Two carts match every clue. The robot cannot pick just one.'
+        : 'The robot still needs more clues to tell which cart fits.';
     }
     if(el('task').value==='delivery') result=result.replaceAll('cart','bay');
     const distance=Number.isFinite(outcome.routeMeters)&&outcome.route?.length ? ' Route length ' + outcome.routeMeters.toFixed(2) + ' m.' : '';
     el('score').textContent = result+distance;
-    el('trial-status').textContent = result;
+    el('trial-status').textContent = result + (run.canContinue ? ' Choose Keep checking to stay in this room.' : '');
+  } else if (current?.action.type === 'extend') {
+    el('trial-status').textContent = 'You added ' + current.action.points + ' clue points. Choose Next step to see what the robot checks.';
   } else el('trial-status').textContent = current ? 'Step ' + stepIndex + ' · ' + actionText(current.action,snapshot) + ' ' + resultText(current) : 'Choose Next step to follow one decision, or Play trial to watch the whole search.';
   el('journal').replaceChildren(...run.steps.slice(0,stepIndex).map(step=>{
     const li=node('li');
@@ -299,6 +305,17 @@ function setup() {
     label.append(input,document.createTextNode(NAMES[sense]));el('sense-choices').append(label);
   }
   el('step').onclick=()=>{stop();advance();};
+  const followUp = el('keep-checking');
+  followUp.textContent = 'Keep checking (+' + SENSE_EXTRA_POINTS + ' points)';
+  followUp.onclick=()=>{
+    if(stepIndex!==run.steps.length || !run.canContinue) return;
+    stop();
+    const previousEnd = stepIndex;
+    run = continueSenseTrial(run);
+    stepIndex = previousEnd + 1;
+    render();
+    el('step').focus();
+  };
   el('play').onclick=()=>{
     if(timer){stop();return;}
     el('play').textContent='Pause';

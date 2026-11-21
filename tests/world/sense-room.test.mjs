@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createSenseRoom, auditSenseRoute, classifyTasteSample, SENSES, SENSE_ROOM_FAMILIES} from '../../brainsnn-r3f-app/public/world/sense-room.mjs';
+import {createSenseRoom, auditSenseRoute, classifyTasteSample, SENSES, SENSE_ROOM_FAMILIES, SENSE_EXTRA_POINTS} from '../../brainsnn-r3f-app/public/world/sense-room.mjs';
 
 test('observers receive an immutable partial state and never a target key before committing', () => {
   const trial = createSenseRoom({seed: 83});
-  assert.deepEqual(Object.keys(trial).sort(), ['score', 'start', 'step']);
+  assert.deepEqual(Object.keys(trial).sort(), ['score', 'start', 'step', 'withExtraPoints']);
   assert.equal(trial.score(), null);
   assert.equal(trial.start.observations.length, 3);
   for (const key of ['seed', 'caseType', 'targetStatus', 'expectedId', 'cards', 'score']) {
@@ -193,4 +193,31 @@ test('separate sight control distinguishes present and absent goals with the sam
     assert.ok(testRoom.score().success || testRoom.score().correctAbstention);
   }
   assert.throws(() => createSenseRoom({visualControl:true,task:'delivery'}),/cart searches/);
+});
+
+test('a reserved second pass carries the same readings, unused points and visitor answer', () => {
+  const env = createSenseRoom({seed:101, budget:14});
+  const asked = env.step({type:'ask', sense:'hearing', candidateId:'cart-1'});
+  const extra = env.withExtraPoints();
+  assert.deepEqual(extra.start.observations, asked.observations);
+  assert.equal(extra.start.question, asked.question);
+  assert.equal(extra.start.observations.at(-1), asked.observations.at(-1));
+  assert.equal(extra.start.room, asked.room);
+  assert.equal(extra.start.remaining, asked.remaining + SENSE_EXTRA_POINTS);
+  assert.equal(extra.start.budget, asked.budget + SENSE_EXTRA_POINTS);
+  assert.equal(extra.score(), null);
+  assert.throws(() => env.withExtraPoints(), /unavailable/);
+  assert.throws(() => extra.withExtraPoints(), /unavailable/);
+  assert.throws(() => extra.step({type:'ask', sense:'taste',candidateId:'cart-2'}), /once/);
+  const firstStop = env.step({type:'abstain',reason:'uncertain'});
+  const extended = extra.step({type:'inspect', sense:'taste',candidateId:'cart-2'});
+  assert.equal(firstStop.observations.length + 1, extended.observations.length);
+  extra.step({type:'abstain',reason:'uncertain'});
+  assert.equal(env.score().cost, 2);
+  assert.equal(extra.score().cost, 4);
+  assert.equal(extra.score().queries, 1);
+  const closed = createSenseRoom();
+  closed.step({type:'abstain',reason:'uncertain'});
+  assert.throws(() => closed.withExtraPoints(), /unavailable/);
+  assert.throws(() => createSenseRoom({budget:100}).withExtraPoints(), /unavailable/);
 });

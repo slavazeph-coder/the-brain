@@ -1,5 +1,7 @@
-import {createSenseRoom, senseActionCost, SENSES} from './sense-room.mjs';
+import {createSenseRoom, senseActionCost, SENSES, SENSE_EXTRA_POINTS} from './sense-room.mjs';
 
+export {SENSE_EXTRA_POINTS};
+const continuations = new WeakMap();
 export const SENSE_STRATEGIES = Object.freeze(['baseline', 'active', 'memory']);
 const TRAINING_SEEDS = Object.freeze(Array.from({length: 12}, (_, i) => i + 1));
 const TEST_SEEDS = Object.freeze(Array.from({length: 18}, (_, i) => i + 101));
@@ -178,26 +180,53 @@ export function runSenseTrial({
   const enabled = channels(enabledSenses);
   const learned = strategy === 'memory' ? memory ?? trainSenseMemory() : undefined;
   const env = createSenseRoom({seed, split, mode, budget, robot, family, task, visualControl, enabledSenses: enabled});
-  const initial = env.start, steps = [];
-  let state = initial;
-  // Every inspection spends at least one unit. A final choice or abstention consumes one turn.
+  const policy = {strategy, enabledSenses:enabled, memory:learned && {utility:learned.utility}};
+  return finishSenseTrial(env, policy);
+}
+
+function finishSenseTrial(env, policy, previous = null) {
+  const initial = previous?.initial ?? env.start;
+  const steps = previous ? [...previous.steps, {
+    before:previous.steps.at(-1).after, after:env.start, action:{type:'extend', points:SENSE_EXTRA_POINTS},
+    reason:'Keep the clues already checked and add ' + SENSE_EXTRA_POINTS + ' more clue points.',
+  }] : [];
+  let state = env.start, nextSession = null;
+  const maxSteps = steps.length + state.remaining + 1;
   while (!state.done) {
-    if (steps.length > initial.budget) throw new Error('Trial did not terminate within its observation budget.');
-    const {action, reason, confidence} = decideSenseAction(senseDecisionInput(state), {strategy, enabledSenses: enabled, memory: learned && {utility: learned.utility}});
+    if (steps.length >= maxSteps) throw new Error('Trial did not terminate within its observation budget.');
+    const percept = senseDecisionInput(state);
+    const {action, reason, confidence} = decideSenseAction(percept, policy);
+    // Reserve extra checks only when the observation record supports another paid read.
+    // Do this before the judge receives a terminal action or reveals the room's answer.
+    if (!previous && action.type === 'abstain' && action.reason === 'uncertain' && state.budget + SENSE_EXTRA_POINTS <= 100) {
+      const extra = {...percept, remaining:percept.remaining + SENSE_EXTRA_POINTS, budget:percept.budget + SENSE_EXTRA_POINTS};
+      const next = decideSenseAction(extra, policy).action;
+      if (next.type === 'inspect' || next.type === 'ask') nextSession = env.withExtraPoints();
+    }
     const before = state;
     state = env.step(action);
-    steps.push({before, after: state, action, reason, ...(confidence && {confidence})});
+    steps.push({before, after:state, action, reason, ...(confidence && {confidence})});
   }
   const terminal = steps.at(-1);
   const report = env.score();
   const lastPercept = senseDecisionInput(terminal.before);
   const allGoalSenses = SENSES.filter(sense => lastPercept.reference[sense] != null);
-  const possible = evidence(lastPercept, enabled).filter(candidate => !candidate.conflicts.size);
+  const possible = evidence(lastPercept, policy.enabledSenses).filter(candidate => !candidate.conflicts.size);
   const verified = possible.filter(candidate => allGoalSenses.length && allGoalSenses.every(sense => candidate.matches.has(sense)));
   const confirmedAbsent = report.caseType === 'absent' && terminal.action.reason === 'absent' && possible.length === 0;
   const confirmedAmbiguous = report.caseType === 'ambiguous' && terminal.action.type === 'abstain' && verified.length >= 2;
-  return {initial, steps, outcome: {...report, confidence: terminal.confidence ?? null, confirmedAbsent, confirmedAmbiguous,
-    correctDecision: report.success || confirmedAbsent || confirmedAmbiguous}, strategy};
+  const run = {initial, steps, outcome: {...report, confidence: terminal.confidence ?? null, confirmedAbsent, confirmedAmbiguous,
+    correctDecision: report.success || confirmedAbsent || confirmedAmbiguous}, strategy:policy.strategy, canContinue:Boolean(nextSession)};
+  if (nextSession) continuations.set(run, {env:nextSession, policy});
+  return run;
+}
+
+/** Spend one optional allowance on fresh checks in the same room, carrying forward every observation. */
+export function continueSenseTrial(run) {
+  const continuation = continuations.get(run);
+  if (!continuation) throw new Error('This search has no further clue allowance.');
+  continuations.delete(run);
+  return finishSenseTrial(continuation.env, continuation.policy, run);
 }
 
 export function summarizeSenseRuns(strategy, outcomes) {

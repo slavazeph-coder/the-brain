@@ -1,6 +1,7 @@
 import { ROBOTS, SCHEMA, routeWorld } from './core.mjs';
 
 export const SENSES = Object.freeze(['sight', 'hearing', 'touch', 'smell', 'taste']);
+export const SENSE_EXTRA_POINTS = 14;
 const clues = {
   sight: ['amber', 'teal', 'purple', 'white'],
   hearing: ['bell', 'click', 'hum', 'rattle'],
@@ -72,7 +73,7 @@ function obstacle(id, name, x, z, w, d, kind = 'obstacle') {
 }
 
 export function senseActionCost(action) {
-  if (action.type === 'choose' || action.type === 'abstain') return 0;
+  if (['choose', 'abstain', 'extend'].includes(action.type)) return 0;
   if (action.type === 'ask') return 2;
   if (action.type !== 'inspect' || !SENSES.includes(action.sense)) throw new Error('Choose an available sense.');
   if ((action.sense === 'sight' && action.view !== 'side') || action.sense === 'hearing') return 1;
@@ -223,8 +224,6 @@ export function createSenseRoom({seed = 1, split = 'test', family, mode = 'mixed
   });
   const dim = candidateList.map(() => random() < .4);
   const offline = candidateList.map(() => random() < .3 ? pick(SENSES.filter(s => s !== 'sight')) : null);
-  let remaining = budget, done = false, question = null, result = null;
-  const observed = [];
   function read(index, sense, view, source, cost) {
     const missing = source !== 'visitor' && (offline[index] === sense || sense === 'sight' && view === 'front' && dim[index]);
     const channels = !missing && sense === 'taste' && source === 'simulated' ? tasteReadings[index] : null;
@@ -235,66 +234,78 @@ export function createSenseRoom({seed = 1, split = 'test', family, mode = 'mixed
       : sense === 'sight' ? 'Color reported by the simulated ' + view + ' camera.' : captions[sense];
     return freeze({candidateId: candidateList[index].id, sense, view, value, cost, note, source, ...(channels && {channels})});
   }
-  if (enabled.includes('sight')) {
-    for (let i = 0; i < cards.length; i++) observed.push(read(i, 'sight', 'front', 'simulated', 0));
-  }
+  const frontReadings = enabled.includes('sight')
+    ? cards.map((_, index) => read(index, 'sight', 'front', 'simulated', 0)) : [];
 
-  function snapshot() {
-    return freeze({reference, goal, task, enabledSenses:enabled, candidates: candidateList, observations: [...observed], remaining, budget, done, room, robot, question});
-  }
-  function finish(chosen, reason = null) {
-    const matches = cards.map((card, i) => {
-      const acceptable = requiredSenses.every(s => card[s] === reference[s]) &&
-        (!delivery || openings[i] >= minWidth);
-      return acceptable ? i : -1;
-    }).filter(i => i >= 0);
-    const unique = matches.length === 1;
-    const solvable = delivery ? matches.length > 0 : unique;
-    const c = candidateList[chosen];
-    const tooNarrow = c && delivery && c.dockWidth < minWidth;
-    const travel = c && !tooNarrow ? verifyTrip(world, body, c.approach)
-      : {route:[], routeMeters:0, reached:false, collisions:0, keepOutCrossings:0, routeNote:tooNarrow ? 'The bay opening is narrower than the job requires.' : 'No navigation requested.'};
-    let outcome;
-    if (!c) {
-      if (reason === 'absent' && !delivery && matches.length > 1) outcome = 'false_absence';
-      else outcome = solvable ? 'missed_target' : 'correct_abstention';
+  // Both allowances use the exact same room and instruments. A continuation receives
+  // the paid observation record and the visitor's existing answer before any scoring.
+  function session(allowance, remaining, observed, question, extended) {
+    let done = false, result = null, reserved = false;
+    function snapshot() {
+      return freeze({reference, goal, task, enabledSenses:enabled, candidates: candidateList, observations: [...observed], remaining, budget:allowance, done, room, robot, question});
     }
-    else if (tooNarrow) outcome = 'incompatible_bay';
-    else if (!delivery && matches.length > 1 && matches.includes(chosen)) outcome = 'ambiguous_choice';
-    else if (!matches.includes(chosen)) outcome = delivery ? 'incompatible_bay' : 'wrong_cart';
-    else outcome = travel.reached ? 'reached' : 'blocked';
-    result = freeze({...travel, outcome, success:outcome === 'reached', correctAbstention:outcome === 'correct_abstention',
-      wrongChoice:outcome === 'wrong_cart' || outcome === 'ambiguous_choice' || outcome === 'incompatible_bay', cost:budget - remaining,
-      observations:observed.filter(o => o.cost > 0 && o.source === 'simulated').length, queries:question ? 1 : 0,
-      chosenId:c?.id ?? null, expectedId:unique ? candidateList[matches[0]].id : null, expectedIds:matches.map(i => candidateList[i].id), targetStatus:actualMode, caseType:delivery ? (solvable ? 'present' : 'absent') : actualMode, task, abstainReason:reason, family:familyId, ...(visualControl && {control:'visual'})});
-    done = true;
-  }
-  return Object.freeze({
-    start:snapshot(),
-    step(action) {
-      if (done) throw new Error('This trial has already finished.');
-      if (!action || typeof action !== 'object') throw new Error('Select a trial action.');
-      if (action.type === 'abstain') {
-        const reason = action.reason ?? 'uncertain';
-        if (!['uncertain','absent'].includes(reason)) throw new Error('Choose absent or uncertain.');
-        finish(-1, reason); return snapshot();
+    function finish(chosen, reason = null) {
+      const matches = cards.map((card, i) => {
+        const acceptable = requiredSenses.every(s => card[s] === reference[s]) &&
+          (!delivery || openings[i] >= minWidth);
+        return acceptable ? i : -1;
+      }).filter(i => i >= 0);
+      const unique = matches.length === 1;
+      const solvable = delivery ? matches.length > 0 : unique;
+      const c = candidateList[chosen];
+      const tooNarrow = c && delivery && c.dockWidth < minWidth;
+      const travel = c && !tooNarrow ? verifyTrip(world, body, c.approach)
+        : {route:[], routeMeters:0, reached:false, collisions:0, keepOutCrossings:0, routeNote:tooNarrow ? 'The bay opening is narrower than the job requires.' : 'No navigation requested.'};
+      let outcome;
+      if (!c) {
+        if (reason === 'absent' && !delivery && matches.length > 1) outcome = 'false_absence';
+        else outcome = solvable ? 'missed_target' : 'correct_abstention';
       }
-      const index = candidateList.findIndex(c => c.id === action.candidateId);
-      if (index < 0) throw new Error('Choose a cart in this room.');
-      if (action.type === 'choose') { finish(index); return snapshot(); }
-      if (action.type !== 'inspect' && action.type !== 'ask' || !SENSES.includes(action.sense)) throw new Error('Choose one of the five senses.');
-      if (!enabled.includes(action.sense)) throw new Error('This sense is switched off for this trial.');
-      const view = action.view ?? 'front';
-      if (!['front', 'side'].includes(view) || view === 'side' && (action.type !== 'inspect' || action.sense !== 'sight')) throw new Error('Only sight has a second view.');
-      if (action.type === 'ask' && question) throw new Error('The visitor can answer once per room.');
-      const cost = senseActionCost(action);
-      if (remaining < cost) throw new Error('No budget for this observation. Choose a cart or finish without a choice.');
-      const observation = read(index, action.sense, view, action.type === 'ask' ? 'visitor' : 'simulated', cost);
-      remaining -= cost;
-      observed.push(observation);
-      if (action.type === 'ask') question = observation;
-      return snapshot();
-    },
-    score: () => result,
-  });
+      else if (tooNarrow) outcome = 'incompatible_bay';
+      else if (!delivery && matches.length > 1 && matches.includes(chosen)) outcome = 'ambiguous_choice';
+      else if (!matches.includes(chosen)) outcome = delivery ? 'incompatible_bay' : 'wrong_cart';
+      else outcome = travel.reached ? 'reached' : 'blocked';
+      result = freeze({...travel, outcome, success:outcome === 'reached', correctAbstention:outcome === 'correct_abstention',
+        wrongChoice:outcome === 'wrong_cart' || outcome === 'ambiguous_choice' || outcome === 'incompatible_bay', cost:allowance - remaining,
+        observations:observed.filter(o => o.cost > 0 && o.source === 'simulated').length, queries:question ? 1 : 0,
+        chosenId:c?.id ?? null, expectedId:unique ? candidateList[matches[0]].id : null, expectedIds:matches.map(i => candidateList[i].id), targetStatus:actualMode, caseType:delivery ? (solvable ? 'present' : 'absent') : actualMode, task, abstainReason:reason, family:familyId, ...(visualControl && {control:'visual'})});
+      done = true;
+    }
+    return Object.freeze({
+      start:snapshot(),
+      step(action) {
+        if (done) throw new Error('This trial has already finished.');
+        if (!action || typeof action !== 'object') throw new Error('Select a trial action.');
+        if (action.type === 'abstain') {
+          const reason = action.reason ?? 'uncertain';
+          if (!['uncertain','absent'].includes(reason)) throw new Error('Choose absent or uncertain.');
+          finish(-1, reason); return snapshot();
+        }
+        const index = candidateList.findIndex(c => c.id === action.candidateId);
+        if (index < 0) throw new Error('Choose a cart in this room.');
+        if (action.type === 'choose') { finish(index); return snapshot(); }
+        if (action.type !== 'inspect' && action.type !== 'ask' || !SENSES.includes(action.sense)) throw new Error('Choose one of the five senses.');
+        if (!enabled.includes(action.sense)) throw new Error('This sense is switched off for this trial.');
+        const view = action.view ?? 'front';
+        if (!['front', 'side'].includes(view) || view === 'side' && (action.type !== 'inspect' || action.sense !== 'sight')) throw new Error('Only sight has a second view.');
+        if (action.type === 'ask' && question) throw new Error('The visitor can answer once per room.');
+        const cost = senseActionCost(action);
+        if (remaining < cost) throw new Error('No budget for this observation. Choose a cart or finish without a choice.');
+        const observation = read(index, action.sense, view, action.type === 'ask' ? 'visitor' : 'simulated', cost);
+        remaining -= cost;
+        observed.push(observation);
+        if (action.type === 'ask') question = observation;
+        return snapshot();
+      },
+      withExtraPoints() {
+        if (done || extended || reserved || allowance + SENSE_EXTRA_POINTS > 100) {
+          throw new Error('Extra clue points are unavailable for this trial.');
+        }
+        reserved = true;
+        return session(allowance + SENSE_EXTRA_POINTS, remaining + SENSE_EXTRA_POINTS, [...observed], question, true);
+      },
+      score: () => result,
+    });
+  }
+  return session(budget, budget, frontReadings, null, false);
 }
