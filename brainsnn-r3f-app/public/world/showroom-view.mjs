@@ -1,3 +1,4 @@
+import {mountShowroomRun} from './showroom-run-ui.mjs';
 import {mountShowroomWalk} from './showroom-walk-ui.mjs';
 import {mountRecordedViews} from './recorded-views-ui.mjs';
 
@@ -72,7 +73,7 @@ function routePlayback(points) {
   };
 }
 
-export function mountShowroom(root, bundle) {
+export function mountShowroom(root, bundle, {createRunWorker} = {}) {
   mounted.get(root)?.();
   const { objects, frames, points, bounds, unknown } = bundle;
   const byId = new Map(objects.map(object => [object.id, object]));
@@ -102,6 +103,7 @@ export function mountShowroom(root, bundle) {
     </div>
     <details class="recorded-views" data-el="memory"></details>
     <details class="showroom-walk" data-el="walk"></details>
+    <details class="showroom-run" data-el="run"></details>
     <div class="showroom-tabs" role="group" aria-label="Choose a view">
       <button type="button" data-tab="source">Source</button><button type="button" data-tab="boxes">Objects</button>
       <button type="button" data-tab="cloud">Points</button><button type="button" data-tab="floor">Map</button>
@@ -448,6 +450,7 @@ export function mountShowroom(root, bundle) {
   el.left.onclick = () => { rotation--; buildCloud(); };
   el.right.onclick = () => { rotation++; buildCloud(); };
   const walk = mountShowroomWalk(el.walk, bundle, {frameImage});
+  const run = mountShowroomRun(el.run, bundle, {project:floorProject, initialObject:routes?.objectId, createRunWorker});
   const updateMemory = mountRecordedViews(el.memory, {
     frames, objects, current: () => frameIndex, selected: () => selected,
     open: index => {
@@ -462,11 +465,11 @@ export function mountShowroom(root, bundle) {
   renderFloor();
   renderScenario();
   function dispose() {
-    stopViews(); stopRoute(); walk.dispose();
+    stopViews(); stopRoute(); walk.dispose(); run.dispose();
     section.remove();
     if (mounted.get(root) === dispose) mounted.delete(root);
   }
-  dispose.pause = () => { stopViews(); stopRoute(); walk.pause(); };
+  dispose.pause = () => { stopViews(); stopRoute(); walk.pause(); run.pause(); };
   dispose.getFrame = () => frameIndex;
   dispose.setFrame = index => { stopViews(); setFrame(index); };
   mounted.set(root, dispose);

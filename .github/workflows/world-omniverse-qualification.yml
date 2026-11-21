@@ -28,7 +28,7 @@ jobs:
           python -c 'from pxr import Sdf, Usd, UsdGeom, UsdPhysics'
       - name: Source, instance, package and real HTTP contracts
         run: |
-          python -m pytest tests/world/test_launch_extensions.py tests/world/test_simready_instances.py tests/world/test_nvidia_qualification.py tests/world/test_omniverse*.py -q
+          python -m pytest tests/world/test_showroom_episode_usd.py tests/world/test_launch_extensions.py tests/world/test_simready_instances.py tests/world/test_nvidia_qualification.py tests/world/test_omniverse*.py -q
           node --test tests/world/omniverse-ui.test.mjs
       - name: Chromium review/export UI with explicit mock transport
         run: |

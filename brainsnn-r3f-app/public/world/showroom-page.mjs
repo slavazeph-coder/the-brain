@@ -19,7 +19,7 @@ export function closestTimedFrame(frames, seconds) {
 }
 
 /** The optional clip is provided by the local presentation, never by an imported room file. */
-export function mountShowroomPage(root, {initialBundle, clip, example = createShowroomExample} = {}) {
+export function mountShowroomPage(root, {initialBundle, clip, example = createShowroomExample, createRunWorker} = {}) {
   const find = selector => root.querySelector(selector);
   const roomInput = find('[data-room-file]');
   const videoInput = find('[data-original-file]');
@@ -57,7 +57,7 @@ export function mountShowroomPage(root, {initialBundle, clip, example = createSh
     view?.();
     clearVideo();
     room = next;
-    view = mountShowroom(viewRoot, room);
+    view = mountShowroom(viewRoot, room, {createRunWorker});
     cameraStill = viewRoot.querySelector('[data-el="source"]');
     cameraStill.after(sourceSection);
     const times = room.frames.map(frame => frame.timeSeconds).filter(Number.isFinite);
