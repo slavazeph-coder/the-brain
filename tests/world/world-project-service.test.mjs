@@ -251,3 +251,40 @@ test('project ledger: unconfigured storage is unavailable, explicit limits rejec
     assert.equal((await f.call('/projects')).data.projects.length,1);
   }finally{await f.close();}
 });
+
+test('project ledger: monthly usage meter counts each workspace separately and exports one row per workspace',async()=>{
+  const pool=await createProjectTestPool();
+  const a=await fixture({pool}),b=await fixture({pool});
+  try {
+    for(let i=0;i<3;i++)assert.equal((await a.call('/projects',{token:a.reader.token})).status,200);
+    assert.equal((await b.call('/projects',{token:b.reader.token})).status,200);
+    // Bridge-reported processing usage.
+    await a.service.meterUsage(a.tenant.id,'processing_jobs_started',1);
+    await a.service.meterUsage(a.tenant.id,'processing_upload_bytes',4096);
+    await a.service.meterUsage(a.tenant.id,'processing_upload_bytes',1024);
+    await a.service.meterUsage(a.tenant.id,'processing_artifact_bytes',0);  // nothing to count
+    await assert.rejects(()=>a.service.meterUsage(a.tenant.id,'free_lunches',1),/Unknown usage metric/);
+    const own=await a.call('/usage',{token:a.reader.token});
+    assert.equal(own.status,200);
+    assert.equal(own.data.billing.month,'2026-11');
+    assert.equal(own.data.billing.period,'calendar month, UTC');
+    assert.equal(own.data.billing.api_requests,4,'three list calls and this usage call');
+    assert.equal(own.data.billing.processing_jobs_started,1);
+    assert.equal(own.data.billing.processing_upload_bytes,5120);
+    assert.equal(own.data.billing.processing_artifact_bytes,0);
+    const other=await b.call('/usage',{token:b.reader.token});
+    assert.equal(other.data.billing.api_requests,2,'workspaces never see each other\'s usage');
+    assert.equal(other.data.billing.processing_jobs_started,0);
+    const report=await a.service.usageReport('2026-11');
+    const row=report.find(r=>r.tenant_id===a.tenant.id);
+    assert.deepEqual({...row,tenant_name:undefined},{tenant_id:a.tenant.id,tenant_name:undefined,month:'2026-11',api_requests:4,
+      processing_jobs_started:1,processing_upload_bytes:5120,processing_artifact_bytes:0});
+    assert.equal(report.find(r=>r.tenant_id===b.tenant.id).api_requests,2);
+    assert.deepEqual(await a.service.usageReport('2026-10'),[],'months are kept apart');
+    // A new month starts again; the previous month stays exportable.
+    a.setTime(Date.parse('2026-12-01T00:00:01Z'));
+    assert.equal((await a.call('/usage',{token:a.reader.token})).data.billing.api_requests,1);
+    assert.equal((await a.service.usageReport('2026-11')).find(r=>r.tenant_id===a.tenant.id).api_requests,4);
+    await assert.rejects(()=>a.service.usageReport('2026-13'),/YYYY-MM/);
+  } finally { await a.close(); await b.close(); await pool.end(); }
+});

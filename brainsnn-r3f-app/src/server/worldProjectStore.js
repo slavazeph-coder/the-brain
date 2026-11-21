@@ -12,6 +12,10 @@ export const ROLE_SCOPES = Object.freeze({
   reviewer: ['project:read', 'project:write', 'review:decide', 'processing:read', 'processing:write'],
   admin: ['project:read', 'project:write', 'review:decide', 'processing:read', 'processing:write', 'keys:manage'],
 });
+// What a workspace used each calendar month (UTC), for invoicing. Rate-limit buckets expire after a day;
+// these rows are kept. Only these metrics are counted.
+export const USAGE_METRICS = Object.freeze(['api_requests', 'processing_jobs_started', 'processing_upload_bytes', 'processing_artifact_bytes']);
+export const usageMonth = time => new Date(time).toISOString().slice(0, 7);
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export const newId = prefix => `${prefix}_${randomBytes(12).toString('hex')}`;
 export class ProjectError extends Error {
@@ -92,6 +96,9 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS brainsnn_world_security_events (
     tenant_id TEXT NOT NULL REFERENCES brainsnn_world_tenants(id), id TEXT NOT NULL, payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (tenant_id,id))`,
+  `CREATE TABLE IF NOT EXISTS brainsnn_world_usage_monthly (
+    tenant_id TEXT NOT NULL REFERENCES brainsnn_world_tenants(id), month TEXT NOT NULL, metric TEXT NOT NULL,
+    quantity BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (tenant_id,month,metric))`,
 ];
 
 export function createWorldProjectStore({ pool, now = Date.now }) {
@@ -172,5 +179,30 @@ export function createWorldProjectStore({ pool, now = Date.now }) {
     await client.query('INSERT INTO brainsnn_world_events(tenant_id,project_id,id,payload,created_at) VALUES($1,$2,$3,$4::jsonb,$5)', [principal.tenant_id,projectId,event.id,JSON.stringify(event),event.at]);
     return event;
   }
-  return { pool, time, transaction, initialize, tenant, provisionTenant, provisionKey, securityEvent, project, record, addRecord, updateRecord, addEvent };
+  async function addUsage(client, tenantId, metric, quantity = 1) {
+    if (!USAGE_METRICS.includes(metric)) throw new Error('Unknown usage metric.');
+    const amount = Math.floor(Number(quantity));
+    if (!Number.isSafeInteger(amount) || amount <= 0) return;
+    await client.query(`INSERT INTO brainsnn_world_usage_monthly(tenant_id,month,metric,quantity) VALUES($1,$2,$3,$4)
+      ON CONFLICT(tenant_id,month,metric) DO UPDATE SET quantity=brainsnn_world_usage_monthly.quantity+EXCLUDED.quantity`,
+      [tenantId, usageMonth(now()), metric, amount]);
+  }
+  async function monthUsage(client, tenantId, month = usageMonth(now())) {
+    const rows = (await client.query('SELECT metric,quantity FROM brainsnn_world_usage_monthly WHERE tenant_id=$1 AND month=$2', [tenantId, month])).rows;
+    return Object.fromEntries(USAGE_METRICS.map(metric => [metric, Number(rows.find(row => row.metric === metric)?.quantity || 0)]));
+  }
+  /** Every workspace's usage for one month, for the operator's invoice export. */
+  async function usageReport(month = usageMonth(now())) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) bad('Use a month as YYYY-MM.');
+    const rows = (await pool.query(`SELECT t.id AS tenant_id,t.name AS tenant_name,u.metric,u.quantity FROM brainsnn_world_tenants t
+      JOIN brainsnn_world_usage_monthly u ON u.tenant_id=t.id AND u.month=$1 ORDER BY t.id`, [month])).rows;
+    const byTenant = new Map();
+    for (const row of rows) {
+      const entry = byTenant.get(row.tenant_id) || { tenant_id: row.tenant_id, tenant_name: row.tenant_name, month, ...Object.fromEntries(USAGE_METRICS.map(metric => [metric, 0])) };
+      if (USAGE_METRICS.includes(row.metric)) entry[row.metric] = Number(row.quantity);
+      byTenant.set(row.tenant_id, entry);
+    }
+    return [...byTenant.values()];
+  }
+  return { pool, time, transaction, initialize, tenant, provisionTenant, provisionKey, securityEvent, project, record, addRecord, updateRecord, addEvent, addUsage, monthUsage, usageReport };
 }

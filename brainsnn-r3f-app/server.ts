@@ -1,4 +1,5 @@
 import express from "express";
+import { createCompression, setStaticCacheHeaders } from "./src/server/staticDelivery.js";
 import path from "path";
 import { readFileSync } from "node:fs";
 import crypto from "crypto";
@@ -52,6 +53,8 @@ const gpuBridge = createGpuBridge(process.env);
 const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
 
 export const app = express();
+// Compressed text and long-lived hashed assets: see src/server/staticDelivery.js.
+app.use(createCompression());
 // The arena is a standalone application with relative assets. Keep both its
 // documents and its missing-file responses ahead of Vite/the SPA catch-all.
 app.use((req, res, next) => {
@@ -1242,7 +1245,7 @@ export async function startServer() {
       const html = readFileSync(path.join(distPath, 'index.html'), 'utf8');
       res.type('html').send(applyRouteMeta(html, pathname, search, APP_URL.replace(/\/$/, '')));
     });
-    app.use(express.static(distPath, { index: false }));
+    app.use(express.static(distPath, { index: false, setHeaders: setStaticCacheHeaders }));
 
     // Every route used to be served the identical index.html, so a shared
     // /lab?grid=... link, a challenge link and the homepage all previewed as

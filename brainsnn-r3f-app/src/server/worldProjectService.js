@@ -115,6 +115,7 @@ export function createWorldProjectService({ pool: suppliedPool, objectStore: sup
       WHERE brainsnn_world_requests.count<$4 RETURNING count`, [principal.tenant_id,principal.key_id,bucket,principal.limits.requestsPerHour]);
     if (!rate.rows.length) throw new ProjectError(429,'request-limit','This credential reached its hourly request limit.');
     await pool.query('DELETE FROM brainsnn_world_requests WHERE tenant_id=$1 AND key_id=$2 AND bucket<$3', [principal.tenant_id,principal.key_id,bucket-24]);
+    await store.addUsage(pool, principal.tenant_id, 'api_requests', 1);
     return principal;
     } finally { activeAuthentications--; }
   }
@@ -162,7 +163,9 @@ export function createWorldProjectService({ pool: suppliedPool, objectStore: sup
     const source_bytes = Number((await client.query("SELECT COALESCE(sum(bytes),0) AS n FROM brainsnn_world_sources WHERE tenant_id=$1 AND storage_kind='inline'", [principal.tenant_id])).rows[0].n);
     const records = Number((await client.query('SELECT count(*) AS n FROM brainsnn_world_records WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
     const keys = Number((await client.query('SELECT count(*) AS n FROM brainsnn_world_keys WHERE tenant_id=$1', [principal.tenant_id])).rows[0].n);
-    return { usage: { projects, source_bytes, records, keys, ...await media.usage(client, principal) }, limits: principal.limits };
+    const month = new Date(now()).toISOString().slice(0, 7);
+    return { usage: { projects, source_bytes, records, keys, ...await media.usage(client, principal) }, limits: principal.limits,
+      billing: { month, period: 'calendar month, UTC', ...await store.monthUsage(client, principal.tenant_id, month) } };
   }
   async function runIdempotent(principal, requestKey, path, body, fn) {
     if (typeof requestKey !== 'string' || !/^[A-Za-z0-9:_-]{16,128}$/.test(requestKey)) throw new ProjectError(400,'idempotency-key-required','Send an Idempotency-Key of 16–128 letters, numbers, colons, underscores or hyphens.');
@@ -454,5 +457,8 @@ export function createWorldProjectService({ pool: suppliedPool, objectStore: sup
     provisionTenant:async input=>{await initialize();return store.provisionTenant(input);},
     provisionKey:async input=>{await initialize();return store.provisionKey(input);},
     cleanupSourceUploads:async options=>{await initialize();return media.cleanup(options);},
+    // Processing usage reported by the dedicated bridge, after the worker accepted the work.
+    meterUsage:async (tenantId,metric,quantity)=>{await initialize();return store.addUsage(pool,tenantId,metric,quantity);},
+    usageReport:async month=>{await initialize();return store.usageReport(month);},
     close:async()=>{if(suppliedObjectStore===undefined)objectStore?.close?.();if(ownPool&&pool)await pool.end();}, store};
 }

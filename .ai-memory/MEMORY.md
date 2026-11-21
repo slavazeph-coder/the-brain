@@ -25,7 +25,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 ## Current BrainSNN direction
 
 → [World Builder studio](world-studio-2026-11-21.md) — Nov 21: one sticky bar reaches all 49 tools; separate tool pages open in an in-place workbench; workspace flows header → robot setup → tools → map; Missions game layer (11 stars from real simulated runs).
-→ [API sell-readiness audit](api-sell-readiness-2026-11-21.md) — Nov 21: World API works end to end with operator keys; processing tenants, S3 and billing still block paid customers; processing timeout and VITE env-leak fixes.
+→ [API sell-readiness audit](api-sell-readiness-2026-11-21.md) — Nov 21: World API works end to end with operator keys; monthly usage meter + CSV export added; compression/caching cut first load 65%; processing tenants, S3 and backups remain ops steps.
 → [Five-sense cart trial and recorded views](brainsnn-five-senses-2026-11-20.md) — PR328, the continuation on the same evidence, two paired evaluations and simulated sensing.
 → [Linked showroom](world-linked-showroom-2026-11-20.md) — object selection, recovered video times, route comparisons, the camera walkthrough and recorded cart and gripper simulations.
 

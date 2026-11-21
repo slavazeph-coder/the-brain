@@ -58,3 +58,23 @@ bridge (`/api/world/v1/processing`). The text-analysis endpoints are not it.
 heuristics. "Act NOW before it is too late. Everyone is already switching and
 you will regret missing out." scored pressure 0.28 and dominant affect
 "clarity". Do not sell these as an accuracy-backed API without a benchmark.
+
+## Second pass (same day): audit and fixes
+
+- Error sweep: all 50 studio tools and 14 standalone pages open with zero page
+  errors, console errors or missing files (Chromium). Accessibility: zero axe
+  WCAG 2.1 A/AA violations on the playground, chapter panel, missions board and
+  workbench at 1440 and 390 px.
+- Production sent no compression and revalidated hashed assets every visit.
+  `src/server/staticDelivery.js` adds `compression` (Brotli/gzip) for GET/HEAD
+  outside `/api/` and a one-year immutable cache for Vite `name-HASH.ext`
+  assets. Showcase poster re-encoded 229 → 67 KB. First load: 1,568 → 550 KB
+  transferred.
+- Billing meter: `brainsnn_world_usage_monthly` counts api_requests,
+  processing_jobs_started (not idempotent replays), processing_upload_bytes and
+  processing_artifact_bytes per workspace per UTC month. `/usage` returns
+  `billing` (OpenAPI 1.2.0); `npm run world:projects:usage -- --month YYYY-MM`
+  exports CSV for invoicing. Meter failures never fail the customer request.
+- Still owner/ops: worker tenant tokens, S3 bucket, DB backups, deleting unused
+  `VITE_GEMINI_API_KEY`, and the build's kaggle.com MoveNet download (vendor the
+  checksummed weights or add a verified mirror; not reachable from the sandbox).

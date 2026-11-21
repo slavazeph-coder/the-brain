@@ -11,14 +11,14 @@ const caps = { api_version: 'brainsnn.worker.v1', access_mode: 'tenant', owner_i
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json', ...headers } });
 
 async function fixture(t, { capabilities = caps, env = {}, respond = () => json({ id }), authenticate, timeouts, fetchOverride } = {}) {
-  const upstreamCalls = [], authCalls = [];
+  const upstreamCalls = [], authCalls = [], metered = [];
   const service = createProjectProcessingBridge({
     env: { WORLD_WORKER_INTERNAL_URL: 'http://worker.internal/', WORLD_PROJECT_WORKER_TOKENS_JSON: JSON.stringify({ [tenant]: token }), ...env },
     projects: { authenticate: authenticate || (async (req, options) => {
       authCalls.push(options);
       if (req.headers.authorization !== 'Bearer fixture-site-key') throw Object.assign(new Error('Unauthorized.'), { status: 401, code: 'unauthorized' });
       return { tenant_id: tenant, actor_id: 'actor_fixture' };
-    }) },
+    }), meterUsage: async (owner, metric, quantity) => { metered.push([owner, metric, quantity]); } },
     timeouts,
     fetchImpl: async (url, options) => {
       upstreamCalls.push({ url: String(url), options });
@@ -34,7 +34,7 @@ async function fixture(t, { capabilities = caps, env = {}, respond = () => json(
     method, headers: { Authorization: 'Bearer fixture-site-key', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return { call, upstreamCalls, authCalls };
+  return { call, base, upstreamCalls, authCalls, metered };
 }
 
 test('dedicated bridge requires project identity and refuses tenant mismatches before resource access', async t => {
@@ -204,4 +204,40 @@ test('downloads are bounded by stalls between chunks, not total wall time', asyn
   const started = Date.now();
   await assert.rejects(async () => { const value = await stalled.call('/download/' + ticket); await value.arrayBuffer(); });
   assert.ok(Date.now() - started < 3000);
+});
+
+test('billing meter counts accepted work once: started jobs, uploaded chunks and downloaded artifacts', async t => {
+  const ticket = Buffer.from(JSON.stringify({ owner: tenant, job: id })).toString('base64url') + '.' + 'b'.repeat(64);
+  let replay = false;
+  const { call, base, metered } = await fixture(t, { respond: (url, options) => {
+    if (String(url).includes('/download/')) return new Response(Buffer.from('artifact!'), { headers: { 'Content-Length': '9' } });
+    if (options.method === 'PUT') return json({ offset: 5 });
+    return json({ id, status: 'queued' }, 200, replay ? { 'Idempotency-Replayed': 'true' } : {});
+  } });
+  assert.equal((await call('/jobs/' + id + '/start', { method: 'POST', body: {}, headers: { 'Idempotency-Key': 'fixture-start-000001' } })).status, 200);
+  replay = true;  // the same start retried: the worker replays it, so it is not counted again
+  assert.equal((await call('/jobs/' + id + '/start', { method: 'POST', body: {}, headers: { 'Idempotency-Key': 'fixture-start-000001' } })).status, 200);
+  const chunk = await fetch(base + '/uploads/' + id + '?offset=0', {
+    method: 'PUT', headers: { Authorization: 'Bearer fixture-site-key', 'Content-Type': 'application/octet-stream' }, body: Buffer.from('bytes') });
+  assert.equal(chunk.status, 200);
+  const download = await call('/download/' + ticket);
+  assert.equal(await download.text(), 'artifact!');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(metered, [[tenant, 'processing_jobs_started', 1], [tenant, 'processing_upload_bytes', 5], [tenant, 'processing_artifact_bytes', 9]]);
+});
+
+test('a failing meter never fails the customer request', async t => {
+  // A meter that throws, as if the project database went away mid-request.
+  const broken = createProjectProcessingBridge({
+    env: { WORLD_WORKER_INTERNAL_URL: 'http://worker.internal/', WORLD_PROJECT_WORKER_TOKENS_JSON: JSON.stringify({ [tenant]: token }) },
+    projects: { authenticate: async () => ({ tenant_id: tenant }), meterUsage: async () => { throw new Error('database away'); } },
+    fetchImpl: async url => String(url).endsWith('/v1/capabilities') ? json(caps) : json({ id, status: 'queued' }),
+  });
+  const server = http.createServer(broken.handle);
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/jobs/${id}/start`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'fixture-start-000002' }, body: '{}' });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, 'queued');
 });

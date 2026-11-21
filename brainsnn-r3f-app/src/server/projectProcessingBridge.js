@@ -145,6 +145,9 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
       if (keyed) headers['Idempotency-Key'] = key;
       arm(req.method === 'PUT' || call.name === 'download' ? limits.transferMs : limits.requestMs);
       const response = await fetchImpl(new URL(path + parsed.search, upstream), { ...options, headers, method: req.method, body });
+      const replayed = response.headers.get('idempotency-replayed') === 'true';
+      // Billing meter: count work the worker accepted, once. A failed meter write never fails the customer's request.
+      const meter = (metric, quantity) => Promise.resolve(projects.meterUsage?.(principal.tenant_id, metric, quantity)).catch(() => {});
       if (call.name === 'download' && response.ok) {
         const declared = response.headers.get('content-length');
         if (declared === null || !/^\d+$/.test(declared))
@@ -165,6 +168,7 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
         res.writeHead(200, pass);
         if (req.method === 'HEAD') return res.end();
         await pipeline(Readable.fromWeb(response.body), limiter, res);
+        if (req.method === 'GET') await meter('processing_artifact_bytes', length);
         return;
       }
       const data = await readJSON(response);
@@ -178,7 +182,9 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
         data.url = '/api/world/v1/processing' + data.url.slice(3);
         data.authorization_required = true;
       }
-      if (response.headers.get('idempotency-replayed') === 'true') res.setHeader('Idempotency-Replayed', 'true');
+      if (replayed) res.setHeader('Idempotency-Replayed', 'true');
+      if (!replayed && req.method === 'PUT' && call.name === 'upload') await meter('processing_upload_bytes', body.length);
+      if (!replayed && req.method === 'POST' && path.endsWith('/start')) await meter('processing_jobs_started', 1);
       send(response.status, data);
     } catch (error) {
       if (res.headersSent) { if (!res.writableEnded) res.destroy(); }

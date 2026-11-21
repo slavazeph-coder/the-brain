@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "BrainSNN World Projects API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Private operator-provisioned API for durable tenant projects, source evidence, revisions, review decisions, trial outcomes, and an optional owner-scoped processing bridge. PostgreSQL and explicit worker configuration are required. This contract does not assert field validation or provide public signup/billing. Processing success payloads preserve native extensible worker objects; discover engines through capabilities. Optional private S3-compatible chunk storage retains large original sources through resumable uploads. Project export schema v2 includes inline bytes and authenticated external-source references; it is not a self-contained media archive."
   },
   "servers": [
@@ -2082,8 +2082,8 @@
     "/usage": {
       "get": {
         "operationId": "getUsage",
-        "summary": "Read bounded storage and record usage",
-        "description": "Storage/record counts and configured caps. Not metered billing or a payment entitlement.",
+        "summary": "Read usage, limits and this month's metered usage",
+        "description": "Storage/record counts, configured caps and this calendar month's metered API and processing usage. Metered counts support invoicing; they are not a payment entitlement.",
         "parameters": [],
         "responses": {
           "200": {
@@ -6630,13 +6630,13 @@
           },
           "content_text": {
             "type": "string",
-            "description": "Exact UTF-8 bytes are retained. Decoded payload must be 1\u2013524288 bytes; character count is not byte count."
+            "description": "Exact UTF-8 bytes are retained. Decoded payload must be 1–524288 bytes; character count is not byte count."
           },
           "data_base64": {
             "type": "string",
             "contentEncoding": "base64",
             "maxLength": 699052,
-            "description": "Canonical standard base64 for 1\u2013524288 decoded bytes."
+            "description": "Canonical standard base64 for 1–524288 decoded bytes."
           },
           "sha256": {
             "type": "string",
@@ -7246,11 +7246,57 @@
           },
           "limits": {
             "$ref": "#/components/schemas/Limits"
+          },
+          "billing": {
+            "type": "object",
+            "description": "This workspace's metered usage for the current calendar month (UTC). Counts start when the meter was deployed. Used for invoicing; not a payment entitlement.",
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+              },
+              "period": {
+                "type": "string",
+                "enum": [
+                  "calendar month, UTC"
+                ]
+              },
+              "api_requests": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Authenticated, rate-counted API requests."
+              },
+              "processing_jobs_started": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Processing jobs the dedicated worker accepted to start; idempotent replays are not counted again."
+              },
+              "processing_upload_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Bytes of upload chunks the worker accepted."
+              },
+              "processing_artifact_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Bytes of processing artifacts fully downloaded."
+              }
+            },
+            "required": [
+              "month",
+              "period",
+              "api_requests",
+              "processing_jobs_started",
+              "processing_upload_bytes",
+              "processing_artifact_bytes"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
           "usage",
-          "limits"
+          "limits",
+          "billing"
         ],
         "additionalProperties": false
       },
