@@ -96,11 +96,14 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
 
   function featureControl(feature, index) {
     const externalPage = feature.target.startsWith('/');
-    const control = document.createElement(externalPage ? 'a' : 'button');
-    if (externalPage) {
+    const isLink = externalPage || feature.target.startsWith('#');
+    const control = document.createElement(isLink ? 'a' : 'button');
+    if (isLink) {
       control.href = feature.target;
-      control.target = '_blank';
-      control.rel = 'noopener';
+      if (externalPage) {
+        control.target = '_blank';
+        control.rel = 'noopener';
+      }
     } else {
       control.type = 'button';
     }
