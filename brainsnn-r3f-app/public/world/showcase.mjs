@@ -44,7 +44,7 @@ async function scanControl(frame, selector) {
   });
 }
 
-export function mountShowcase({root, showTab, showProject, showProcessing, leaveLayer}) {
+export function mountShowcase({root, showTab, showProject, showProcessing, leaveLayer, openPage = null}) {
   if (!root) return;
   const tabs = root.querySelector('[role=tablist]');
   const panel = root.querySelector('#showcase-panel');
@@ -115,7 +115,8 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
     description.className = 'showcase-detail';
     description.textContent = feature.detail;
     const access = document.createElement('small');
-    access.textContent = externalPage ? feature.access + ' · New tab' : feature.access;
+    // With the studio workbench, separate tool pages open beside the world; the link still opens a tab on request.
+    access.textContent = externalPage ? feature.access + (openPage ? ' · Opens here' : ' · New tab') : feature.access;
     control.append(name, description, access);
     return control;
   }
@@ -197,8 +198,16 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
   panel.addEventListener('click', event => {
     const button = event.target.closest('[data-showcase-target]');
     if (!button) return;
-    if (button.tagName === 'A') video.pause();
-    else void visit(current.features[Number(button.dataset.featureIndex)], button);
+    const feature = current.features[Number(button.dataset.featureIndex)];
+    if (button.tagName === 'A') {
+      video.pause();
+      // A plain click opens the page in the studio workbench; modified clicks keep the browser's own behaviour.
+      const plain = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+      if (plain && openPage && feature.target.startsWith('/')) {
+        event.preventDefault();
+        openPage(feature, current, button);
+      }
+    } else void visit(feature, button);
   });
 
   const related = document.getElementById('showcase-related');
@@ -264,6 +273,19 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
       root.scrollIntoView({block:'start', behavior:'instant'});
     }
   }
+  /** Open a tool from elsewhere (the studio bar): same destinations, no showcase return link. */
+  async function openInPlace(feature) {
+    video.pause();
+    const token = ++navigation;
+    back.hidden = true;
+    const {control} = await openTool(feature);
+    if (token !== navigation || !control) return;
+    if (!control.hasAttribute('tabindex') && !control.matches('button, a, summary, input, select')) control.tabIndex = -1;
+    control.focus({preventScroll:true});
+    // A field is centred so its label stays visible below the studio bar.
+    control.scrollIntoView({block: control.matches('input, select, textarea') ? 'center' : 'start', behavior:'instant'});
+  }
+
   select(chapters[0]);
   followAddress();
   window.addEventListener('hashchange', followAddress);
@@ -277,4 +299,5 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
   for (const event of ['loadedmetadata','canplay','playing']) {
     video.addEventListener(event, () => { filmStatus.hidden = true; });
   }
+  return {openInPlace};
 }

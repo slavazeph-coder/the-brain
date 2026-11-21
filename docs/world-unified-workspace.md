@@ -3,7 +3,36 @@
 The primary playground follows the owner's v23 demonstration: bring a capture,
 explore the results, inspect the model and drawings, try robot routes, and save
 the work. The existing controls form that journey; the model review opens inside
-the same workspace. Advanced destinations remain in All tools.
+the same workspace. Every tool is one step away in the studio bar; separate tool
+pages open beside the world in the workbench. All tools remains as the catalogue.
+
+## The studio bar and workbench
+
+Under the hero, one sticky studio bar reaches every tool: **Your world**, six
+chapters (Robots, Captures, 3D scenes, Buildings, Movement, Save & share) and
+**Find a tool**. The list is `showcase-features.mjs`, the same registry the
+showcase uses, so a tool added there appears in both. A chapter opens a panel of
+its tools with plain access notes (example, preview, needs setup, ready) and
+where each one opens.
+
+- In-page tools (tabs, layer tools, sections, Project Review, processing
+  settings) open through the showcase's own navigator. Fields are centred so
+  their labels stay visible below the bar.
+- Separate tool pages (`/world/*.html` and the Arena) open in the **workbench**,
+  a same-origin frame above the workspace. The map, its edits, running jobs and
+  retained results stay in place. World pages hide their duplicate site header
+  (marked `data-studio-hidden="site-header"`); the Arena keeps its own section
+  navigation. Links back to the playground close the workbench; links that leave
+  World Builder open a new tab. "Open in its own tab" is always offered, and a
+  modified click on a showcase card still opens a tab.
+- Closing the workbench unloads the page (`about:blank`) so its media, workers
+  and animation loops stop, then returns focus to the control that opened it.
+
+`studio.mjs` and `studio.css` are part of the offline shell. Checks:
+`tests/world/studio.test.mjs` (registry coverage, safe workbench targets,
+search, markup order, 13 px floor) and `tests/world/studio_browser_smoke.py`
+(every chapter, search, in-page tools, workbench pages, retained map edit,
+390/320 px and larger text).
 
 ## Sources and results
 
