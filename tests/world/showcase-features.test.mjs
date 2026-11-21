@@ -17,7 +17,7 @@ test('the showcase has six ordered chapters and unique, readable feature entries
   for (const { label, detail, access, target, focus } of features) {
     assert.ok(label && detail && access && target);
     assert.ok(access.length <= 28, access);
-    if (['layer:scanedit', 'layer:stereo'].includes(target)) assert.match(access, /^Preview · /u);
+    if (['layer:scanedit', 'layer:stereo', 'layer:robottask'].includes(target)) assert.match(access, /^Preview · /u);
     if (focus !== undefined) {
       assert.equal(typeof focus, 'string', label);
       assert.ok(focus.trim() && !target.startsWith('/'), label);
@@ -36,6 +36,10 @@ test('every showcase destination connects to an existing control or an implement
   for (const target of destinations) {
     if (target === '/arena/index.html') {
       assert.match(await read('../arena/index.html'), /aria-label="Interactive 3D robot arm/u);
+      continue;
+    }
+    if (target.startsWith('#')) {
+      assert.ok(page.includes('id="' + target.slice(1) + '"'), target);
       continue;
     }
     const local = /^\/world\/([a-z-]+\.html)(?:#([a-z0-9-]+))?$/u.exec(target);
@@ -58,6 +62,19 @@ test('every showcase destination connects to an existing control or an implement
       assert.match(app, /\bshowProcessing\s*:/u);
     }
     else assert.fail('Unknown showcase destination ' + target);
+  }
+});
+
+test('the tour offers the showroom, simulated senses, robot task and saved projects once in their chapters', () => {
+  const places = new Map([
+    ['#showroom', 'capture'],
+    ['/world/sense-trial.html', 'robot'],
+    ['layer:robottask', 'robot'],
+    ['/world/projects.html', 'share'],
+  ]);
+  for (const [target, expected] of places) {
+    const entries = chapters.flatMap(chapter => chapter.features.filter(f => f.target === target).map(() => chapter.id));
+    assert.deepEqual(entries, [expected], target);
   }
 });
 

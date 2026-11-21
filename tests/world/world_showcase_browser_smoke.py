@@ -16,11 +16,11 @@ from playwright.sync_api import expect, sync_playwright
 from stereo_depth_browser_smoke import PUBLIC, QuietHandler, StaticServer
 
 CHAPTERS = ('robot', 'capture', 'scan', 'building', 'motion', 'share')
-MINIMUM_FEATURES = dict(zip(CHAPTERS, (10, 8, 6, 5, 6, 10)))
+MINIMUM_FEATURES = dict(zip(CHAPTERS, (11, 8, 6, 5, 6, 10)))
 REQUIRED_TOOLS = {
     'tab:capture', 'tab:world', 'tab:test', 'tab:understand', 'tab:evidence',
     'layer:repair', 'layer:localization', 'layer:motion', 'layer:biomechanics',
-    'layer:open4dgs', 'layer:stereo', 'layer:scanedit',
+    'layer:open4dgs', 'layer:stereo', 'layer:scanedit', 'layer:robottask',
     'section:robot-setup', 'section:unified-workspace', 'section:systems',
     'project:review', 'studio:processing',
 }
@@ -32,6 +32,7 @@ REQUIRED_STANDALONE = {
 }
 FOCUS_CHECKS = {
     'Build 3D from overlapping views': '.processing-options [data-action="connection"]',
+    'Make a robot task': '[data-robot-task-run]',
     'See depth with two photos': '[data-stereo-example]',
     'Open a StereoSplat export': '[data-stereosplat-import] details > summary',
     'Watch a moving 3D scene': '[data-open4dgs-example]',

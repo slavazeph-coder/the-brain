@@ -62,6 +62,19 @@ export const chapters = [
         target: '/world/fleet-learning.html#record',
       },
       {
+        label: 'Find a cart with five senses',
+        detail: 'Watch the robot check colors, sounds, textures, smells and tastes to find a matching cart.',
+        access: 'Simulated example',
+        target: '/world/sense-trial.html',
+      },
+      {
+        label: 'Make a robot task',
+        detail: 'Tell the robot to reach a spot or push a puck. Watch the test from above or in 3D, then save your task.',
+        access: 'Preview · on this device',
+        target: 'layer:robottask',
+        focus: '[data-robot-task-run]',
+      },
+      {
         label: 'Move blocks with a robot arm',
         detail: 'Try the tabletop task in Robot Arena. Watch the simulated arm reach, grasp and place a block.',
         access: 'Has an example',
@@ -81,6 +94,12 @@ export const chapters = [
     title: 'Bring a place into the playground',
     description: 'Start with a picture, a slow walkthrough or a file you already have.',
     features: [
+      {
+        label: 'Explore the showroom',
+        detail: 'Choose a cart in the example room. See it in the camera pictures and move it to try a new robot route.',
+        access: 'Has an example',
+        target: '#showroom',
+      },
       {
         label: 'Add photos or a walkthrough',
         detail: 'Use your camera or choose saved files. Review the originals before choosing any processing.',
@@ -303,6 +322,12 @@ export const chapters = [
         access: 'On this device',
         target: 'tab:understand',
         focus: '#note-text',
+      },
+      {
+        label: 'Open saved projects',
+        detail: 'With a workspace key, save your files, review changes and come back to your test results.',
+        access: 'Needs a workspace key',
+        target: '/world/projects.html',
       },
       {
         label: 'Save a map and its route evidence',
