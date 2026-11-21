@@ -133,3 +133,33 @@
 .recorded-trail-line { fill: none; stroke: #8bb3c3; stroke-width: 1.7; }
 .recorded-stop { fill: #b5e7e5; }
 .recorded-query { fill: #c65a20; stroke: #fff2c5; stroke-width: 2.5; }
+
+.showroom-walk {
+  padding: .5rem 1rem; margin: .6rem 0;
+  border: 1px solid var(--sr-line); border-radius: 10px; background: var(--sr-bg);
+}
+.showroom-walk > summary { font-weight: 650; padding: .55rem 0; min-height: 44px; cursor: pointer; }
+.showroom-walk .walk-controls, .showroom-walk .walk-options, .showroom-walk .walk-playback { display: flex; align-items: end; gap: .6rem 1rem; flex-wrap: wrap; }
+.showroom-walk .walk-controls label, .showroom-walk .walk-options label { display: grid; gap: .2rem; min-width: 0; font-weight: 600; }
+.showroom-walk select { max-width: 100%; }
+.showroom-walk .walk-help { margin: .75rem 0; }
+.showroom-walk .walk-views { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,15rem),1fr)); gap: .75rem; }
+.showroom-walk figure { display: flex; flex-direction: column; min-width: 0; margin: 0; border: 1px solid var(--sr-line); border-radius: 8px; overflow: hidden; background: var(--sr-card); }
+.showroom-walk figcaption { padding: .45rem .65rem; font-weight: 650; }
+.showroom-walk .walk-picture { display: grid; place-items: center; width: 100%; aspect-ratio: 16/9; overflow: hidden; background: #091219; color: var(--sr-muted); }
+.showroom-walk .walk-picture img, .showroom-walk canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+.showroom-walk .walk-caption { padding: .35rem .65rem .5rem; color: var(--sr-muted); font-size: .94rem; }
+.showroom-walk .walk-playback { margin-top: .7rem; align-items: center; }
+.showroom-walk .walk-playback label { flex: 1 1 13rem; display: flex; align-items: center; gap: .6rem; font-weight: 600; }
+.showroom-walk [data-walk-percent] { min-width: 3ch; color: var(--sr-muted); font-variant-numeric: tabular-nums; }
+.showroom-walk .walk-options { align-items: center; margin: .75rem 0 .3rem; }
+.showroom-walk .walk-options p { padding: 0; }
+.showroom-walk .walk-options .walk-fill { display: inline-flex; align-items: center; gap: .45rem; min-height: 44px; cursor: pointer; }
+.showroom-walk .walk-fill input { inline-size: 1.15rem; block-size: 1.15rem; accent-color: var(--sr-mint); }
+@container showroom (max-width: 32rem) {
+  .showroom-walk { padding-inline: .7rem; }
+  .showroom-walk .walk-views { grid-template-columns: minmax(0,1fr); }
+  .showroom-walk .walk-controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .showroom-walk .walk-controls > label:first-child { grid-column: 1/-1; }
+  .showroom-walk .walk-playback label { flex-basis: 8rem; flex-wrap: wrap; }
+}

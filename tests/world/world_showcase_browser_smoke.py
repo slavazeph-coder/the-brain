@@ -231,6 +231,99 @@ def verify_media(page):
     }
 
 
+def verify_showroom_walk(page, showroom):
+    walk = showroom.locator('[data-el="walk"]')
+    def field(name):
+        return walk.locator(f'[data-walk-{name}]')
+    def picture():
+        return field('canvas').evaluate('canvas => canvas.toDataURL()')
+    def snapshot():
+        return [showroom.locator(f'[data-el="{key}"]').input_value() for key in ('timeline', 'picker', 'scrub')]
+
+    original = snapshot()
+    walk.locator('summary').press('Enter')
+    expect(field('method-note')).to_contain_text('projected color')
+    expect(field('progress')).to_have_value('0')
+    field('progress').press('ArrowRight')
+    expect(field('progress')).to_have_value('1')
+    field('play').click()
+    expect(field('play')).to_have_text('Pause walk')
+    page.wait_for_function("Number(document.querySelector('[data-walk-progress]').value) > 30")
+    field('play').click()
+    expect(field('play')).to_have_text('Play walk')
+    field('from').select_option('2')
+    expect(field('play')).to_be_disabled()
+    field('to').select_option('0')
+    expect(field('play')).to_be_enabled()
+    field('progress').press('End')
+    expect(field('reference')).to_have_attribute('data-index', '0')
+    field('mode').select_option('compare')
+    expect(field('target')).to_have_value('1')
+    expect(field('reference')).to_have_attribute('data-index', '1')
+    assert field('alternative').get_attribute('data-index') in ('0', '2')
+    expect(field('play')).to_be_hidden()
+    expect(field('method-note')).to_contain_text('projected color')
+    expect(field('fill')).not_to_be_checked()
+    sparse = picture()
+    method_note = field('method-note').inner_text()
+    field('fill').check()
+    expect(field('camera-note')).to_contain_text('Gaps use the picture from view')
+    assert picture() != sparse and field('method-note').inner_text() == method_note
+    field('fill').uncheck()
+    assert picture() == sparse
+    field('method').select_option('points')
+    expect(field('method-note')).to_contain_text('Room points')
+    expect(field('fill')).to_be_hidden()
+    assert picture() != sparse
+    field('method').select_option('appearance')
+    expect(field('fill')).to_be_visible()
+    assert snapshot() == original
+
+    viewport = page.viewport_size
+    for width in (390, 320):
+        page.set_viewport_size({'width': width, 'height': 850})
+        no_overflow(walk)
+        expect(field('reference').locator('img')).to_be_visible()
+        expect(field('alternative').locator('img')).to_be_visible()
+    page.set_viewport_size(viewport)
+
+    # Replace the room while the next endpoint pair's real decoded images are pending.
+    # Releasing the previous decoder must never draw into the replacement.
+    legacy = page.evaluate("""async () => {
+      const {createShowroomExample} = await import('./showroom-model.mjs');
+      const room = createShowroomExample();
+      room.title = 'Room with older camera records';
+      for (const f of room.frames) { delete f.pose; delete f.depth; }
+      return JSON.stringify(room);
+    }""")
+    page.evaluate("""() => {
+      const decode = HTMLImageElement.prototype.decode;
+      let release;
+      const gate = new Promise(resolve => {release = resolve;});
+      window.walkDecodeCount = 0;
+      window.releaseWalkDecode = () => {HTMLImageElement.prototype.decode = decode; release();};
+      HTMLImageElement.prototype.decode = function() {
+        window.walkDecodeCount++;
+        return Promise.all([gate, decode.call(this)]);
+      };
+    }""")
+    try:
+        field('mode').select_option('walk')
+        page.wait_for_function('window.walkDecodeCount > 0')
+        showroom.locator('[data-room-file]').set_input_files({
+            'name':'legacy.json', 'mimeType':'application/json', 'buffer':legacy.encode(),
+        })
+        expect(showroom.locator('[data-el="title"]')).to_have_text('Room with older camera records')
+        walk.locator('summary').click()
+        expect(field('camera-note')).to_contain_text('estimated')
+        expect(field('method-note')).to_contain_text('Room points')
+    finally:
+        page.evaluate('window.releaseWalkDecode()')
+    expect(field('fill')).to_be_hidden()
+    showroom.locator('[data-demo-room]').click()
+    expect(showroom.locator('[data-el="title"]')).to_have_text('Practice showroom')
+
+
 def verify_in_page_destination(page, target):
     kind, key = target.split(':', 1)
     if kind == 'tab':
@@ -313,6 +406,7 @@ def verify_tool_actions(page):
                 expect(page).to_have_url(re.compile(r'#showroom$'))
                 showroom = page.locator('#showroom')
                 expect(showroom).to_be_focused()
+                verify_showroom_walk(page, showroom)
                 change = showroom.locator('[data-el="change"]')
                 expect(change).to_be_visible()
                 if change.inner_text().startswith('Find '):
@@ -376,8 +470,17 @@ def verify_browser(engine, url, output, axe_script):
 
         context.route('**/*', safe_route)
         base_url = urldefrag(url)[0]
-        response = page.goto(base_url + '#showcase-motion', wait_until='domcontentloaded')
+        response = page.goto(base_url + '#showroom-walk', wait_until='domcontentloaded')
         assert response and response.ok, url
+        walk = page.locator('#showroom [data-el="walk"]')
+        expect(walk).to_have_attribute('open', '')
+        expect(walk.locator('summary')).to_be_focused()
+        expect(walk.locator('summary')).to_be_in_viewport()
+        expect(walk.locator('[data-walk-method-note]')).to_contain_text('projected color')
+        page.locator('[data-close-showroom]').click()
+        expect(page.locator('#showroom')).to_be_hidden()
+        response = page.goto(base_url + '#showcase-motion', wait_until='domcontentloaded')
+        assert response is None or response.ok, url
         assert_chapter(page, 'motion')
         expect(page.locator('#showcase-motion')).to_be_in_viewport()
         response = page.goto(base_url, wait_until='domcontentloaded')

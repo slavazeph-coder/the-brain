@@ -181,6 +181,8 @@ jobs:
         run: |
           python tests/world/scan_workshop_browser_smoke.py
           python tests/world/splat_lamp_browser_smoke.py
+      - name: Showroom photo matching, camera depth and walk evaluation
+        run: python -m pytest -q tests/world/test_showroom_frame_matching.py tests/world/test_showroom_depth.py tests/world/test_showroom_walk_evaluation.py
       - name: Feature showcase navigation and video playback
         run: python tests/world/world_showcase_browser_smoke.py
       # This flow starts its own frontend/worker and uses no earlier browser outputs.
