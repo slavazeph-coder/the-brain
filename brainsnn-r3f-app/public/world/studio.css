@@ -119,6 +119,38 @@ html:not([data-contrast=more]) .studio-main .showcase-list a[data-showcase-targe
 /* A slightly smaller hero preview so the bar reaches the first screen on laptops. */
 @media(min-width:1101px){body.playground .hero-demo-stage{height:214px}}
 
+/* One flowing workspace (unified-workspace-ui.mjs): heading, the map's commands, the next step, the robot
+   setup, then the tool tabs directly above the editor, with "more ways" after it. One card, one rhythm. */
+body.playground{--flow-pad:22px}
+#unified-workspace[data-flow]{padding:22px var(--flow-pad) 0}
+#unified-workspace[data-flow] .unified-heading{margin-bottom:0}
+.workspace-command-bar{margin:16px 0 0;border:1px solid var(--studio-line);border-radius:14px;background:rgba(7,9,16,.72);overflow:hidden}
+.workspace-command-bar .workspace-header{min-height:0;padding:10px 12px 10px 16px;border-bottom:1px solid var(--studio-line)}
+.workspace-command-bar .sandbox-toolbar{padding:10px 12px 10px 16px;background:none;border-bottom:1px solid var(--studio-line)}
+.workspace-command-bar .sandbox-context{padding:9px 16px;border:0;background:#ffffff04}
+#unified-workspace[data-flow] .workspace-next{margin-top:14px}
+#unified-workspace[data-flow] .robot-setup{margin:18px calc(-1 * var(--flow-pad)) 0;padding:20px var(--flow-pad) 22px;border-top:1px solid var(--studio-line);border-bottom:0;background:radial-gradient(ellipse at 8% 0%,#00f5ff0e,transparent 50%),linear-gradient(180deg,#0a0e18,#090a12)}
+#unified-workspace[data-flow] .workspace-journey{margin:0 calc(-1 * var(--flow-pad));padding:16px var(--flow-pad);border-top:1px solid var(--studio-line);background:linear-gradient(180deg,#0c101b,#0a0b14)}
+#unified-workspace[data-flow] .workspace-journey::before{content:"Your tools";display:block;grid-column:1/-1;flex:1 0 100%;width:100%;margin:0 0 2px;font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#9cb4c8}
+.workspace-command-bar .workspace-header>div:first-child::before{content:"Map";font:600 13px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#9cb4c8;margin-right:2px}
+#unified-workspace[data-flow] :is(.workspace-view-switch,.workspace-view-message,.workspace-library){margin-left:0;margin-right:0}
+#unified-workspace[data-flow] .workspace-library{margin-bottom:16px}
+.studio-main #workspace>#world-layer-tools{margin:0;border:0;border-top:1px solid var(--studio-line);border-radius:0}
+
+/* Desktop: a shorter robot setup, so the map is reached in one short scroll. */
+@media(min-width:1101px){
+  #unified-workspace[data-flow] .robot-setup-head{margin-bottom:12px}
+  #unified-workspace[data-flow] .robot-setup-head h2{font-size:clamp(22px,1.9vw,28px)}
+  #unified-workspace[data-flow] .setup-grid{gap:16px 24px}
+  #unified-workspace[data-flow] .setup-label{margin-bottom:10px}
+  #unified-workspace[data-flow] .robot-card{min-height:0;padding:10px 12px 12px}
+  #unified-workspace[data-flow] .robot-art{max-width:104px}
+}
+@media(max-width:760px){
+  body.playground{--flow-pad:14px}
+  #unified-workspace[data-flow]{padding-top:18px}
+}
+
 /* Large text and more contrast. */
 html[data-reading-size=large] body.playground{--studio-bar-height:78px}
 html[data-reading-size=large] :is(.studio-chapter,.studio-search-button){font-size:18px}
@@ -131,6 +163,9 @@ html[data-contrast=more] .studio-tool{background:#000;border-color:#c3c8d6}
 html[data-contrast=more] .studio-chapter.active{background:#00262c;border:2px solid var(--cyan)}
 html[data-contrast=more] .studio-where{color:#e3e6ee}
 html[data-contrast=more] .studio-workbench{border-color:#c3c8d6}
+html[data-contrast=more] .workspace-command-bar{background:#000;border-color:#c3c8d6}
+html[data-contrast=more] #unified-workspace[data-flow] :is(.robot-setup,.workspace-journey){background:#000}
+html[data-contrast=more] #unified-workspace[data-flow] .workspace-journey::before{color:#e3e6ee}
 
 /* Tablet: the bar keeps one row; the chapter strip scrolls. */
 @media(max-width:1600px){.studio-chapter-count{display:none}}

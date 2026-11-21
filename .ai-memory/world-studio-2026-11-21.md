@@ -27,7 +27,7 @@ opened in new tabs. The fix is structural first, visual second.
   showcase cards and the workspace frame. Contrast-mode rules stay authoritative
   (`html:not([data-contrast=more])` guards). No studio text under 13 px; all bar
   targets ≥ 44 px.
-- Offline shell `world-shell-studio-showroom-v46`.
+- Offline shell `world-shell-studio-flow-v47`.
 - Checks: `studio.test.mjs`, `studio_browser_smoke.py` (CI step after the
   showcase), updated `world_showcase_browser_smoke.py` (standalone cards open the
   workbench). Local Chromium: studio, showcase, browser, playground help, robot
@@ -35,3 +35,17 @@ opened in new tabs. The fix is structural first, visual second.
   `splat_lamp_browser_smoke.py` fails identically on a clean checkout here
   (software-renderer pixel equality); WebKit is not installed in the Claude
   container, so GitHub CI decides WebKit.
+
+## Workspace flow (same day, second pass)
+
+Owner asked for a deeper pass that pulls all layers together. Measured: the map
+started 1,526 px below the workspace top behind six stacked layers, and the tool
+tabs (moved into the journey at mount) were ~1,300 px above the editor they
+switch. `unified-workspace-ui.mjs` now orders the workspace: heading, a single
+`#workspace-command-bar` (map title, provenance, undo/redo, save, world choice,
+context), next step, robot setup, "Your tools" tabs directly above the editor,
+editor, status, then `#world-layer-tools` (renamed "More ways to use your world"
+to stop duplicating the inspector's "Make it yours"). Map now starts 1,164 px
+below the workspace top on desktop. `studio_browser_smoke.py::verify_flow`
+pins the order and the zero gap between tabs and editor. Phone command bar
+keeps its tested 44 px buttons (not collapsed: phone smokes press Undo/Save).

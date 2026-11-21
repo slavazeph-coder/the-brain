@@ -9,7 +9,7 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-studio-showroom-v46/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-studio-flow-v47/,'Changes to precache need a new cache version');
   for (const name of ['recorded-views.mjs', 'recorded-views-ui.mjs', 'sense-trial.html', 'sense-trial-ui.mjs', 'sense-trial-worker.mjs',
     ...['amber','teal','purple','white'].map(color => `assets/sense-cart-${color}.jpg`),
     'sense-room.mjs', 'sense-policy.mjs', 'sense-trial.css', 'showroom-walk.mjs', 'showroom-walk-ui.mjs', 'showroom-walk-appearance.mjs', 'assets/showroom-depth.mjs', 'showroom-entry.mjs', 'showroom-page.mjs', 'showroom-model.mjs', 'showroom-view.mjs',

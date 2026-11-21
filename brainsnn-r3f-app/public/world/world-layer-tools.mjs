@@ -30,7 +30,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   let disposed=false,epoch=0,active=null,busy=false,repair=null,selection=new Set(),selecting=false,drag=null,repairViewer=null;
   let map=null,mapRaw=null,mapBinding=null,mapPoints=null,recording=null,motion=null,motionViewer=null,mapViewer=null,live=null,lastResults='';
   root.className='world-layer-tools';
-  root.innerHTML=`<div class="layer-tools-heading"><div><p class="eyebrow">MORE WAYS TO USE YOUR WORLD</p><h3>Make it yours.</h3></div><button type="button" data-layer-connect>Connect processing</button></div>
+  root.innerHTML=`<div class="layer-tools-heading"><div><p class="eyebrow">AFTER YOUR MAP</p><h3>More ways to use your world.</h3></div><button type="button" data-layer-connect>Connect processing</button></div>
     <div class="layer-tool-choices" role="tablist" aria-label="World tools">${Object.entries(titles).map(([id,[label,description]],i)=>`<button type="button" id="layer-tab-${id}" role="tab" aria-selected="false" aria-controls="layer-panel-${id}" tabindex="${i?'-1':'0'}" data-layer-tab="${id}"><strong>${label}</strong><span>${description}</span></button>`).join('')}</div>
     <section id="layer-panel-repair" role="tabpanel" aria-labelledby="layer-tab-repair" hidden>
       <p>Open a Gaussian capture, select the area to repair, then compare the result. Your original stays unchanged.</p>

@@ -145,6 +145,39 @@ def verify_home(page):
     expect(page.locator('#studio-world-name')).to_have_text(page.locator('#workspace-project-name').inner_text().strip())
 
 
+def verify_flow(page):
+    """The workspace reads in one order: heading, map commands, next step, robot setup, tool tabs, editor, more tools."""
+    flow = page.evaluate("""() => {
+      const host = document.getElementById('unified-workspace');
+      const parts = ['.unified-heading', '#workspace-command-bar', '.workspace-next', '#robot-setup', '.workspace-journey']
+        .map(selector => host.querySelector(selector));
+      const top = el => el.getBoundingClientRect().top + scrollY;
+      const journey = parts[4].getBoundingClientRect(), editor = document.getElementById('map-workspace').getBoundingClientRect();
+      const command = parts[1];
+      return {
+        present: parts.map(Boolean),
+        ordered: parts.every((el, i) => i === 0 || (parts[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)),
+        increasing: parts.map(top).every((y, i, all) => i === 0 || y > all[i - 1]),
+        tabsInJourney: !!parts[4].querySelector('#tab-world') && !!parts[4].querySelector('#workspace-step-drawings'),
+        gapToEditor: Math.round(editor.top - journey.bottom),
+        command: ['world-title', 'provenance', 'undo-edit', 'redo-edit', 'fork', 'save-map-to-project', 'export', 'sandbox-scene', 'sandbox-share', 'sandbox-context']
+          .every(id => command.contains(document.getElementById(id))),
+        moreAfterStatus: !!(document.getElementById('status').compareDocumentPosition(document.getElementById('world-layer-tools')) & Node.DOCUMENT_POSITION_FOLLOWING),
+        flow: host.dataset.flow,
+      };
+    }""")
+    assert all(flow['present']) and flow['ordered'] and flow['increasing'], flow
+    assert flow['tabsInJourney'] and flow['command'] and flow['moreAfterStatus'], flow
+    assert 0 <= flow['gapToEditor'] <= 2, flow
+    assert flow['flow'] == 'header-setup-tools', flow
+    # A tool tab switches the editor directly below it.
+    page.locator('#tab-test').click()
+    expect(page.locator('#tab-test')).to_have_attribute('aria-selected', 'true')
+    expect(page.locator('#panel')).to_have_attribute('aria-labelledby', 'tab-test')
+    page.locator('#tab-world').click()
+    return flow
+
+
 def verify_layout(page, width):
     page.set_viewport_size({'width': width, 'height': 850})
     size = page.evaluate("""() => {
@@ -193,6 +226,7 @@ def verify_browser(engine, url, output, axe_script):
         expect(page.locator('#objects option').first).to_be_attached()
         expect(page.locator('#studio-chapters [data-studio-chapter]')).to_have_count(len(CHAPTERS))
         sizes = chapter_sizes(page)
+        flow = verify_flow(page)
         draft = make_map_edit(page)
         verify_chapters(page, sizes)
         hits = verify_search(page)
@@ -220,7 +254,7 @@ def verify_browser(engine, url, output, axe_script):
             }""")
             assert not violations, violations
         assert not errors and not writes, (errors, writes)
-        report = {'engine': engine.name, 'chapters': sizes, 'searchHits': hits, 'workbench': list(WORKBENCH_SAMPLES),
+        report = {'engine': engine.name, 'flow': flow, 'chapters': sizes, 'searchHits': hits, 'workbench': list(WORKBENCH_SAMPLES),
                   'layouts': layouts, 'axeViolations': violations, 'pageErrors': errors, 'writes': writes}
         (output/f'{engine.name}-studio.json').write_text(json.dumps(report, indent=2) + '\n')
         print(f'{engine.name}: {sum(sizes.values())} tools in {len(sizes)} chapters, search, in-page tools, '
