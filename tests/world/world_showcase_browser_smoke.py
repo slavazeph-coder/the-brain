@@ -285,6 +285,20 @@ def verify_showroom_walk(page, showroom):
         no_overflow(walk)
         expect(field('reference').locator('img')).to_be_visible()
         expect(field('alternative').locator('img')).to_be_visible()
+    reading_controls = [showroom.locator('[data-close-showroom]'), showroom.locator('[data-el="picker"]'),
+                        walk.locator('summary'), field('target'), field('reference-note')]
+    def font_sizes():
+        return [control.evaluate('el => parseFloat(getComputedStyle(el).fontSize)') for control in reading_controls]
+    standard = font_sizes()
+    toggle_text = page.locator('#playground-text-size')
+    toggle_text.tap()
+    expect(toggle_text).to_have_attribute('aria-pressed', 'true')
+    assert all(large > small for large, small in zip(font_sizes(), standard))
+    no_overflow(showroom)
+    no_overflow(walk)
+    toggle_text.tap()
+    expect(toggle_text).to_have_attribute('aria-pressed', 'false')
+    assert font_sizes() == standard
     page.set_viewport_size(viewport)
 
     # Replace the room while the next endpoint pair's real decoded images are pending.
