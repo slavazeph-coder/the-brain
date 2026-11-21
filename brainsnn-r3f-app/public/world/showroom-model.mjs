@@ -138,6 +138,10 @@ export function parseShowroomBundle(value) {
       return { objectId: objectId(obs.objectId), box };
     });
     const result = { id, timeSeconds, image, width, height, observations };
+    if (frame.heading != null) {
+      check(frame.camera != null, 'A camera heading needs a recorded position.');
+      result.heading = number(frame.heading, -180, 180, 'camera heading');
+    }
     if (frame.camera != null) result.camera = list(frame.camera, 2, 2, 'camera position').map(v => number(v, -1e6, 1e6, 'camera coordinate'));
     return result;
   });
