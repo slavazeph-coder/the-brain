@@ -440,6 +440,18 @@ def verify_tool_actions(page):
             if selector:
                 area = page.frame_locator('#scan-workshop-frame') if target == 'layer:scanedit' else page
                 expect(area.locator(selector).first).to_be_focused()
+            if label == 'Cook a pancake':
+                station = page.locator('[data-pancake-station]')
+                recipe = ['stir'] * 3 + ['heat'] * 2 + ['flip'] + ['heat'] * 2 + ['serve']
+                for action in recipe:
+                    suggested = station.locator('[data-move][data-suggested]')
+                    expect(suggested).to_have_attribute('data-move', action)
+                    suggested.click()
+                expect(station.locator('[data-hint]')).to_contain_text('Both sides are cooked')
+                with page.expect_download() as saved:
+                    station.locator('[data-save]').click()
+                episode = json.loads(saved.value.path().read_text())
+                assert episode['actions'] == recipe and episode['result']['outcome'] == 'cooked'
             if target == 'layer:scanedit' and not room_draft_open:
                 editor = page.frame_locator('#scan-workshop-frame')
                 expect(editor.locator('[data-objectify-source]')).to_contain_text('authored-reading-room.ply')
