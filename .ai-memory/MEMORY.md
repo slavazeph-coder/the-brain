@@ -25,7 +25,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 ## Current BrainSNN direction
 
 → [Five-sense cart trial and recorded views](brainsnn-five-senses-2026-11-20.md) — PR328, the continuation on the same evidence, two paired evaluations and simulated sensing.
-→ [Linked showroom](world-linked-showroom-2026-11-20.md) — shared object selection, recovered video times and editable route comparisons.
+→ [Linked showroom](world-linked-showroom-2026-11-20.md) — object selection, recovered video times, route comparisons and the depth-based camera walkthrough.
 
 → [World Builder in action](world-feature-showcase-2026-11-19.md) — a shareable walkthrough and a six-chapter showcase with direct access to 45 playground activities.
 

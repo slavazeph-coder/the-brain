@@ -1,6 +1,10 @@
 import { ROBOTS, SCHEMA, routeWorld } from './core.mjs';
 import { frames as exampleFrames, surfacePoints } from './assets/showroom-views.mjs';
 
+import { practiceDepth } from './assets/showroom-depth.mjs';
+import { validateWalkPose } from './showroom-walk.mjs';
+import { validateWalkDepth } from './showroom-walk-appearance.mjs';
+
 export const MAX_SHOWROOM_BYTES = 32 * 1024 * 1024;
 const MAX_IMAGE_CHARS = 1024 * 1024;
 const MAX_TOTAL_IMAGE_CHARS = 25 * 1024 * 1024;
@@ -143,6 +147,17 @@ export function parseShowroomBundle(value) {
       result.heading = number(frame.heading, -180, 180, 'camera heading');
     }
     if (frame.camera != null) result.camera = list(frame.camera, 2, 2, 'camera position').map(v => number(v, -1e6, 1e6, 'camera coordinate'));
+    if (frame.pose != null) {
+      result.pose = validateWalkPose(frame.pose, width, height);
+      const floor = [result.pose.eye[0], result.pose.eye[2]];
+      check(!result.camera || Math.hypot(floor[0]-result.camera[0], floor[1]-result.camera[1]) <= .01,
+        'Camera pose disagrees with its floor position.');
+      result.camera ??= floor;
+    }
+    if (frame.depth != null) {
+      check(result.pose, 'A depth map needs camera calibration.');
+      result.depth = validateWalkDepth(frame.depth, width, height);
+    }
     return result;
   });
   const points = list(value.points, 0, 40_000, 'cloud points').map(p => {
@@ -217,7 +232,7 @@ export function createShowroomExample() {
     provenance: 'This practice room was drawn in 3D. All three camera views and the object points come from that scene. The World Builder planner calculated both simulated routes using the same robot, start and destination.',
     units: 'm', bounds: [0, 0, world.width, world.depth], unknown: [rectangle(unknown)],
     objects: [cart, tires, shelf].map(o => ({ id: o.id, label: o.name, polygon: rectangle(o) })),
-    frames: exampleFrames, points: [...floor, ...surfacePoints],
+    frames: exampleFrames.map((frame, i) => ({...frame, depth:practiceDepth[i]})), points: [...floor, ...surfacePoints],
     routes: { objectId: cart.id, before: plan(world), after: plan({ ...world, objects: world.objects.filter(o => o.id !== cart.id) }) },
   });
 }

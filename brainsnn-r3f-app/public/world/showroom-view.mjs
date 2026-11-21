@@ -1,3 +1,4 @@
+import {mountShowroomWalk} from './showroom-walk-ui.mjs';
 import {mountRecordedViews} from './recorded-views-ui.mjs';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -100,6 +101,7 @@ export function mountShowroom(root, bundle) {
       <output data-el="viewNumber"></output>
     </div>
     <details class="recorded-views" data-el="memory"></details>
+    <details class="showroom-walk" data-el="walk"></details>
     <div class="showroom-tabs" role="group" aria-label="Choose a view">
       <button type="button" data-tab="source">Source</button><button type="button" data-tab="boxes">Objects</button>
       <button type="button" data-tab="cloud">Points</button><button type="button" data-tab="floor">Map</button>
@@ -445,6 +447,7 @@ export function mountShowroom(root, bundle) {
   el.pair.onchange = () => choose(el.pair.value);
   el.left.onclick = () => { rotation--; buildCloud(); };
   el.right.onclick = () => { rotation++; buildCloud(); };
+  const walk = mountShowroomWalk(el.walk, bundle, {frameImage});
   const updateMemory = mountRecordedViews(el.memory, {
     frames, objects, current: () => frameIndex, selected: () => selected,
     open: index => {
@@ -459,11 +462,11 @@ export function mountShowroom(root, bundle) {
   renderFloor();
   renderScenario();
   function dispose() {
-    stopViews(); stopRoute();
+    stopViews(); stopRoute(); walk.dispose();
     section.remove();
     if (mounted.get(root) === dispose) mounted.delete(root);
   }
-  dispose.pause = () => { stopViews(); stopRoute(); };
+  dispose.pause = () => { stopViews(); stopRoute(); walk.pause(); };
   dispose.getFrame = () => frameIndex;
   dispose.setFrame = index => { stopViews(); setFrame(index); };
   mounted.set(root, dispose);
