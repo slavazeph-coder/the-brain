@@ -477,6 +477,7 @@ def verify_browser(engine, url, output, axe_script):
         expect(walk.locator('summary')).to_be_focused()
         expect(walk.locator('summary')).to_be_in_viewport()
         expect(walk.locator('[data-walk-method-note]')).to_contain_text('projected color')
+        walk.locator('summary').click()
         page.locator('[data-close-showroom]').click()
         expect(page.locator('#showroom')).to_be_hidden()
         response = page.goto(base_url + '#showcase-motion', wait_until='domcontentloaded')
