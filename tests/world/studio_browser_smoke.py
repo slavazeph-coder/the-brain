@@ -178,6 +178,71 @@ def verify_flow(page):
     return flow
 
 
+WHAT_IF_WORLD = {'schema': 'brainsnn.world.v1', 'name': 'Mission fixture', 'width': 10, 'depth': 6, 'provenance': 'observed',
+                 'scaleReviewed': True, 'mapReviewed': True, 'start': {'x': 1.0, 'z': 3.0},
+                 'objects': [{'id': 'cart', 'name': 'golf cart', 'kind': 'obstacle', 'x': 4.0, 'z': 2.0, 'w': 1.2, 'd': 2.0, 'h': 1.8}]}
+
+
+def stars(page):
+    return page.locator('[data-mission-stars]').inner_text()
+
+
+def verify_missions(page):
+    """Play the mission loop on real planner output: cover the floor, route to a spot, then a reviewed shortcut."""
+    expect(page.locator('[data-mission-stars]')).to_have_text('0/11')
+    page.locator('#files').set_input_files({'name': 'mission.json', 'mimeType': 'application/json',
+                                            'buffer': json.dumps(WHAT_IF_WORLD).encode()})
+    page.wait_for_function("document.querySelector('#world-title').textContent==='Mission fixture'")
+    page.locator('#scale-reviewed').check()
+    page.locator('#map-reviewed').check()
+    # 1. Let it try: a coverage run earns First run, and the map card reports floor covered, not a fake score.
+    page.locator('#robot-setup-run').click()
+    expect(page.locator('[data-mission-stars]')).to_have_text('1/11', timeout=15_000)
+    toast = page.locator('.mission-toast')
+    expect(toast).to_contain_text('First run')
+    card = page.locator('#viewport .mission-run-card')
+    expect(card).to_contain_text('Floor covered!')
+    expect(card).to_contain_text('Simulated route')
+    for layer in ('.mission-toast', '.mission-run-card'):
+        assert page.locator(layer).first.evaluate("el => getComputedStyle(el).pointerEvents") == 'none', layer
+    # 2. Route to a spot: Pick the spot.
+    page.locator('[data-tab=test]').click()
+    page.locator('.goal-spot summary').click()
+    page.locator('#goal-x').fill('8.5'); page.locator('#goal-x').dispatch_event('change')
+    page.locator('#goal-z').fill('3'); page.locator('#goal-z').dispatch_event('change')
+    page.locator('[data-action=route-spot]').click()
+    expect(page.locator('[data-mission-stars]')).to_have_text('2/11')
+    expect(card).to_contain_text('Route found!')
+    # 3. Remove the cart, review again and route again: the what-if comparison scores the shortcut and levels up.
+    page.locator('[data-tab=world]').click()
+    page.select_option('#objects', 'cart')
+    page.locator('[data-action=remove-object]').click()
+    page.locator('#map-reviewed').check()
+    page.locator('[data-tab=test]').click()
+    page.locator('[data-action=what-if-route]').click()
+    # The fixture's detour around the cart is about 3 m, so the cut earns two Shortcut stars (2 m tier).
+    expect(page.locator('[data-mission-stars]')).to_have_text('4/11')
+    expect(toast).to_contain_text('Shortcut')
+    expect(toast).to_contain_text('Level 2: Explorer')
+    expect(card).to_contain_text('m shorter!')
+    expect(page.locator('[data-mission-level]')).to_have_text('Level 2')
+    # 4. The board shows each mission, its stars and a working Show me.
+    page.locator('#studio-missions-open').click()
+    expect(page.locator('#studio-missions-open')).to_have_attribute('aria-expanded', 'true')
+    expect(page.locator('.mission-card')).to_have_count(7)
+    expect(page.locator('.mission-card[data-mission="shortcut"] .mission-stars')).to_have_attribute('aria-label', '2 of 3 stars')
+    expect(page.locator('.mission-card[data-mission="spot"]')).to_have_attribute('data-done', 'true')
+    page.keyboard.press('Escape')
+    expect(page.locator('#studio-missions-open')).to_be_focused()
+    page.locator('#studio-missions-open').click()
+    page.locator('.mission-card[data-mission="street"] .mission-go').click()
+    expect(page.locator('#robot-setup [data-world="street"]')).to_be_focused()
+    # 5. Stars stay in this browser.
+    page.reload(wait_until='domcontentloaded')
+    expect(page.locator('[data-mission-stars]')).to_have_text('4/11')
+    return {'stars': stars(page)}
+
+
 def verify_layout(page, width):
     page.set_viewport_size({'width': width, 'height': 850})
     size = page.evaluate("""() => {
@@ -235,6 +300,7 @@ def verify_browser(engine, url, output, axe_script):
             verify_workbench(page, target)
         verify_home(page)
         verify_map_edit(page, draft)
+        missions = verify_missions(page)
         page.locator('#studio-sticky').screenshot(path=output/f'{engine.name}-bar.png')
         layouts = {}
         for width in (390, 320):
@@ -254,10 +320,10 @@ def verify_browser(engine, url, output, axe_script):
             }""")
             assert not violations, violations
         assert not errors and not writes, (errors, writes)
-        report = {'engine': engine.name, 'flow': flow, 'chapters': sizes, 'searchHits': hits, 'workbench': list(WORKBENCH_SAMPLES),
+        report = {'engine': engine.name, 'flow': flow, 'missions': missions, 'chapters': sizes, 'searchHits': hits, 'workbench': list(WORKBENCH_SAMPLES),
                   'layouts': layouts, 'axeViolations': violations, 'pageErrors': errors, 'writes': writes}
         (output/f'{engine.name}-studio.json').write_text(json.dumps(report, indent=2) + '\n')
-        print(f'{engine.name}: {sum(sizes.values())} tools in {len(sizes)} chapters, search, in-page tools, '
+        print(f'{engine.name}: {sum(sizes.values())} tools in {len(sizes)} chapters, missions {missions["stars"]}, search, in-page tools, '
               f'{len(WORKBENCH_SAMPLES)} workbench pages, retained map edit, 390/320 px and larger text.', flush=True)
     finally:
         browser.close()

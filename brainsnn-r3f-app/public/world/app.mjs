@@ -8,6 +8,7 @@ import {SYSTEMS} from './catalog.mjs';
 import {mountShowcase} from './showcase.mjs';
 import {chapters as studioChapters} from './showcase-features.mjs';
 import {createWorkbench,isWorkbenchPage,mountStudioBar} from './studio.mjs';
+import {mountMissions} from './missions.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
 import {fromDepth,parseVisualAsset,toPLY,toArenaCloud,STRIDE} from './visual-geometry.mjs';
 import {decodePhoto,inferDepth} from './depth-client.mjs';
@@ -120,7 +121,9 @@ window.addEventListener('pagehide',()=>projectSnapshotHandoff?.());
 function getVisualViewer(){if(!visualViewer)visualViewer=createVisualViewer($('visual-canvas'));return visualViewer;}
 try{renderer=createRenderer($('world-canvas'));renderer.setRobot(robot);}catch(e){status(e.message,true);}
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);unifiedWorkspace?.refresh();robotSetup?.refresh();}
-function event(type,detail){events.push({time:new Date().toISOString(),type,detail});events=events.slice(-200);}
+function event(type,detail){events.push({time:new Date().toISOString(),type,detail});events=events.slice(-200);
+  // Missions and other page features listen to the same log; the log itself (and proof exports) is unchanged.
+  try{document.dispatchEvent(new CustomEvent('world:event',{detail:{type,detail,robotId,map:world?.name||null,origin:worldOrigin,area:type==='plan_completed'&&Number.isFinite(result?.reachableArea)?result.reachableArea:null}}));}catch{/* the log still records */}}
 const observations=createObservationReview({getSources:()=>sources,status,event});
 const measurements=createMeasurementReview({getWorld:()=>world,status,event,download});
 function stopReplay(){cancelAnimationFrame(replayFrame);replayFrame=null;$('replay').textContent='Replay';}
@@ -993,7 +996,7 @@ const showcaseNavigator=mountShowcase({
   },
 });
 function studioStatus(message){const node=$('studio-status');node.textContent=message;node.hidden=!message;}
-mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
+const studioBar=mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
   onHome:()=>{studioStatus('');workbench.hide({restoreFocus:false});$('workspace').scrollIntoView({block:'start'});$('workspace').focus?.({preventScroll:true});},
   openFeature:async(feature,chapter,origin)=>{
     studioStatus('');
@@ -1002,6 +1005,18 @@ mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
     if(feature.target==='#showroom'){if(location.hash==='#showroom')window.dispatchEvent(new HashChangeEvent('hashchange'));else location.hash='showroom';return;}
     try{await showcaseNavigator.openInPlace(feature);}catch(error){studioStatus(error?.message||'That tool could not open. Try it again.');}
   }});
+// Missions: stars for real simulated runs and actions. "Show me" uses controls the playground already has.
+function missionFocus(control,block='center'){if(!control)return;control.scrollIntoView({block,behavior:'instant'});control.focus({preventScroll:true});}
+mountMissions({button:$('studio-missions-open'),studio:studioBar,viewport:$('viewport'),show:async place=>{
+  workbench.hide({restoreFocus:false});
+  if(place==='run')return missionFocus($('robot-setup-run'));
+  if(place==='robots')return missionFocus(document.querySelector('#robot-setup .robot-card[aria-pressed="false"]')||document.querySelector('#robot-setup .robot-card'));
+  if(place==='street')return missionFocus(document.querySelector('#robot-setup [data-world="street"]'));
+  if(place==='own')return missionFocus(document.querySelector('#robot-setup [data-world="capture"]'));
+  if(place==='before')return missionFocus($('fork'));
+  if(place==='edit'){$('tab-world').click();await new Promise(r=>requestAnimationFrame(r));return missionFocus($('objects'));}
+  if(place==='spot'){$('tab-test').click();for(let i=0;i<20&&!$('goal-x');i++)await new Promise(r=>setTimeout(r,50));const field=$('goal-x');const box=field?.closest('details');if(box)box.open=true;return missionFocus(field);}
+}});
 // A local handoff opens Capture even when a shared Street route is also present.
 // Do not start a competing lazy Street activation before the file is received.
 if(handoffId)void receiveCaptureHandoff(handoffId);else void sandbox.start();

@@ -214,7 +214,7 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
   const home = root.querySelector('#studio-home');
   const worldName = root.querySelector('#studio-world-name');
   const buttons = new Map();
-  let openId = null, query = '';
+  let openId = null, query = '', custom = null;
 
   searchButton.insertAdjacentHTML('afterbegin', SEARCH_ICON);
   home.insertAdjacentHTML('afterbegin', `<span class="studio-home-icon">${HOME_ICON}</span>`);
@@ -315,6 +315,7 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
   }
 
   function openPanel(id, { focus = true } = {}) {
+    if (custom && openId === custom.id) closePanel();
     stickBar();
     openId = id;
     for (const [key, button] of buttons) {
@@ -331,15 +332,31 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
 
   function closePanel({ restore = false } = {}) {
     if (!openId) return;
-    const button = openId === 'search' ? searchButton : buttons.get(openId);
+    const button = custom?.id === openId ? custom.button : openId === 'search' ? searchButton : buttons.get(openId);
     openId = null;
     panel.hidden = true;
     delete root.dataset.panel;
-    for (const entry of [...buttons.values(), searchButton]) {
+    for (const entry of [...buttons.values(), searchButton, ...(custom ? [custom.button] : [])]) {
       entry.setAttribute('aria-expanded', 'false');
       entry.classList.remove('active');
     }
     if (restore) button?.focus({ preventScroll: true });
+  }
+
+  /** A panel owned by another module (Missions): same place, keyboard and closing rules as the chapters. */
+  function openCustom(id, button, renderInto, label) {
+    if (openId) closePanel();
+    stickBar();
+    custom = { id, button };
+    openId = id;
+    button.setAttribute('aria-controls', panel.id);
+    button.setAttribute('aria-expanded', 'true');
+    button.classList.add('active');
+    renderInto();
+    panel.hidden = false;
+    panel.setAttribute('aria-label', label);
+    root.dataset.panel = id;
+    panel.querySelector('button, [tabindex="0"]')?.focus({ preventScroll: true });
   }
 
   searchButton.addEventListener('click', () => (openId === 'search' ? closePanel() : openPanel('search')));
@@ -381,5 +398,5 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
   if (source) new MutationObserver(syncName).observe(source, { childList: true, characterData: true, subtree: true });
   syncName();
 
-  return { openPanel, closePanel, get open() { return openId; } };
+  return { openPanel, closePanel, openCustom, panel, get open() { return openId; } };
 }

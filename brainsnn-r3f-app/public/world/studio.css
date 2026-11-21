@@ -151,6 +151,75 @@ body.playground{--flow-pad:22px}
   #unified-workspace[data-flow]{padding-top:18px}
 }
 
+/* Missions: a game layer on the robot loop. Gold is reserved for stars. */
+body.playground{--gold:#ffd166}
+body.playground .studio-missions-button{display:inline-flex;align-items:center;gap:10px;min-height:50px;padding:0 14px 0 8px;margin-left:0;border-radius:13px;border:1px solid #5a4a1f;background:linear-gradient(180deg,#1a1608,#100e07);color:var(--text);font:600 15px var(--font);flex:none}
+body.playground .studio-missions-button:hover,body.playground .studio-missions-button[aria-expanded=true]{border-color:var(--gold);background:#231c08}
+.mission-hud-ring{--p:var(--mission-progress,0);display:grid;place-items:center;width:36px;height:36px;border-radius:50%;color:var(--gold);font-size:17px;background:radial-gradient(circle,#120f06 56%,transparent 58%),conic-gradient(var(--gold) calc(var(--p) * 360deg),#ffd16626 0)}
+.studio-missions-button .mission-hud-ring{--p:var(--mission-progress,0)}
+.mission-hud-words{display:grid;line-height:1.15;text-align:left}
+.mission-hud-words small{font:600 13px var(--font);color:#e9d6a0}
+.mission-hud-words strong{font:700 16px var(--mono);color:var(--gold);letter-spacing:.02em}
+
+.mission-board .mission-trophy{color:var(--gold);border-color:#ffd16659;background:linear-gradient(145deg,#ffd1661f,#a855f71a);font-size:26px}
+.mission-progress{height:12px;margin:0 0 18px;border-radius:999px;background:#ffffff0d;border:1px solid #ffffff14;overflow:hidden}
+.mission-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--cyan),var(--gold));box-shadow:0 0 18px #ffd16655;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.mission-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.mission-card{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--studio-line);border-radius:15px;background:var(--studio-card)}
+.mission-card[data-done=true]{border-color:#ffd16659;background:linear-gradient(180deg,#1a1709,#11101a)}
+.mission-card-head{display:flex;align-items:center;gap:10px}
+.mission-card-head strong{font-size:18px;line-height:1.25;flex:1}
+.mission-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#ffffff0a;border:1px solid #ffffff14;font-size:19px;flex:none}
+.mission-stars{color:var(--gold);font-size:20px;letter-spacing:2px;white-space:nowrap}
+.mission-goal{margin:0;font-size:16px;color:var(--text)}
+.mission-how{margin:0;font-size:var(--reading-small,15px);color:var(--muted);flex:1}
+body.playground .mission-go{align-self:flex-start;min-height:44px;padding:0 16px;border-radius:11px;border:1px solid #00f5ff80;background:#00f5ff14;color:#c8fdff;font:600 15px var(--font)}
+body.playground .mission-go:hover{background:#00f5ff26}
+.mission-card[data-done=true] .mission-go{border-color:#ffd16680;background:#ffd16614;color:#ffe6a6}
+.mission-foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:16px}
+.mission-foot p{margin:0;flex:1 1 260px;color:#a4a9bd;font-size:14px}
+body.playground :is(.mission-sound,.mission-reset){min-height:44px;padding:0 14px;border-radius:11px;border:1px solid var(--studio-line);background:#0a0a12;color:var(--text);font:500 15px var(--font)}
+
+.mission-toast{position:fixed;left:50%;bottom:24px;z-index:95;min-width:min(420px,calc(100vw - 32px));max-width:calc(100vw - 32px);padding:14px 20px;border:1px solid #ffd16680;border-radius:16px;background:linear-gradient(180deg,#1d1808f2,#110f08f2);box-shadow:0 24px 70px #000b,0 0 0 1px #ffd16626,0 0 40px #ffd16622;pointer-events:none;text-align:center;transform:translate(-50%,20px);opacity:0}
+.mission-toast.show{animation:mission-pop .5s cubic-bezier(.2,1.4,.4,1) forwards}
+.mission-toast p{margin:0}
+.mission-toast-title{font:700 18px var(--font);color:#fff3cf}
+.mission-toast-title+.mission-toast-title{margin-top:4px}
+.mission-toast-sub,.mission-toast-level{margin-top:4px!important;font-size:15px;color:#e9d6a0}
+.mission-toast-level{font-weight:700;color:var(--gold)}
+@keyframes mission-pop{0%{opacity:0;transform:translate(-50%,24px) scale(.92)}100%{opacity:1;transform:translate(-50%,0) scale(1)}}
+.mission-confetti{position:fixed;inset:0;width:100vw;height:100vh;z-index:94;pointer-events:none}
+
+.mission-run-card{position:absolute;top:14px;left:14px;z-index:6;min-width:190px;padding:12px 16px;border:1px solid #00f5ff59;border-radius:14px;background:rgba(6,10,18,.86);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:none;opacity:0;transform:translateY(-8px);transition:opacity .25s,transform .25s}
+.mission-run-card.show{opacity:1;transform:none}
+.mission-run-card[data-tone=win]{border-color:#ffd166;box-shadow:0 0 30px #ffd16633}
+.mission-run-card p{margin:0}
+.mission-run-head{font:700 14px var(--font);color:#bffcff;letter-spacing:.02em}
+.mission-run-card[data-tone=win] .mission-run-head{color:var(--gold)}
+.mission-run-metres{font:700 34px/1.1 var(--mono);color:#fff;letter-spacing:-.02em;margin:2px 0!important}
+.mission-run-best{font-size:14px;color:#c9cfdf}
+.mission-run-note{margin-top:4px!important;font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#9cb4c8}
+
+/* Game feel on the robot loop: a ready Let it try button breathes; cards lift. */
+@media(prefers-reduced-motion:no-preference){
+  #robot-setup-run:not(:disabled){animation:mission-ready 2.4s ease-in-out infinite}
+  #unified-workspace[data-flow] :is(.robot-card,.world-card){transition:transform .15s ease,border-color .15s,background .15s}
+  #unified-workspace[data-flow] :is(.robot-card,.world-card):hover{transform:translateY(-3px)}
+  #unified-workspace[data-flow] :is(.robot-card,.world-card)[aria-pressed=true]{animation:mission-chosen .35s cubic-bezier(.2,1.4,.4,1)}
+}
+@keyframes mission-ready{0%,100%{box-shadow:0 0 0 0 #00f5ff00}50%{box-shadow:0 0 0 6px #00f5ff26,0 0 34px #00f5ff40}}
+@keyframes mission-chosen{0%{transform:scale(.96)}100%{transform:scale(1)}}
+html[data-contrast=more] body.playground .studio-missions-button{background:#000;border-color:var(--gold)}
+html[data-contrast=more] .mission-card,html[data-contrast=more] .mission-run-card,html[data-contrast=more] .mission-toast{background:#000;border-color:#e3e6ee;backdrop-filter:none}
+@media(max-width:760px){
+  body.playground .studio-missions-button{min-height:48px;padding:0 10px 0 6px}
+  .mission-hud-words small{display:none}
+  .mission-hud-ring{width:32px;height:32px}
+  .mission-run-card{top:8px;left:8px;min-width:0;padding:8px 12px}
+  .mission-run-metres{font-size:24px}
+  .mission-toast{bottom:14px}
+}
+
 /* Large text and more contrast. */
 html[data-reading-size=large] body.playground{--studio-bar-height:78px}
 html[data-reading-size=large] :is(.studio-chapter,.studio-search-button){font-size:18px}
@@ -169,6 +238,7 @@ html[data-contrast=more] #unified-workspace[data-flow] .workspace-journey::befor
 
 /* Tablet: the bar keeps one row; the chapter strip scrolls. */
 @media(max-width:1600px){.studio-chapter-count{display:none}}
+@media(min-width:761px) and (max-width:1600px){.studio-home{max-width:210px}body.playground .studio-chapter{padding:0 10px}.mission-hud-words small [data-mission-level],.mission-hud-words small .mission-level-sep{display:none}}
 @media(max-width:1320px){.studio-home{max-width:200px}}
 @media(max-width:1100px){body.playground .hero{grid-template-columns:1fr;gap:28px}}
 

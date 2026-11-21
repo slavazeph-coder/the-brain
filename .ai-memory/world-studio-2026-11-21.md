@@ -49,3 +49,16 @@ to stop duplicating the inspector's "Make it yours"). Map now starts 1,164 px
 below the workspace top on desktop. `studio_browser_smoke.py::verify_flow`
 pins the order and the zero gap between tabs and editor. Phone command bar
 keeps its tested 44 px buttons (not collapsed: phone smokes press Undo/Save).
+
+## Missions (game layer, third pass)
+
+Owner asked to make the playground more fun, like a game/tool. Added
+`public/world/missions.mjs` (pure scoring + UI) on the existing loop, fed by
+`world:event` from `app.mjs` `event()`. 7 missions / 11 stars / 5 levels; a map
+score card (coverage runs show m² + path, spot routes show shortest so far,
+what-if shows "x m shorter!"), gold toast, confetti (reduced-motion off), optional
+sound, breathing Let it try button. Missions button sits beside Your world so it
+is visible on phones without swiping. `tests/world/missions.test.mjs` pins the
+rules; `studio_browser_smoke.py::verify_missions` plays the real loop on the
+what-if fixture (10.8 → 7.6 m earns two Shortcut stars, 4/11, Level 2) and checks
+persistence across reload. Offline shell `world-shell-missions-v49`.
