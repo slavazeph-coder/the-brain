@@ -34,6 +34,24 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   drawingButton.tabIndex = -1;
   tabs.insertBefore(drawingButton, $('tab-test'));
   tabs.append($('tab-understand'));
+  // One header for the space, in reading order: the heading, the map's own commands (title, world choice, undo,
+  // save), the next step, then the robot setup, and last the tool tabs, so the tabs sit directly above the editor
+  // they switch instead of a screen and a half away. Elements move; their IDs and handlers stay as they are.
+  const heading = host.querySelector('.unified-heading');
+  const journey = host.querySelector('.workspace-journey');
+  const next = host.querySelector('.workspace-next');
+  const command = document.createElement('div');
+  command.className = 'workspace-command-bar';
+  command.id = 'workspace-command-bar';
+  for (const part of [$('world-title')?.closest('.workspace-header'), $('sandbox-scene')?.closest('.sandbox-toolbar'), $('sandbox-context')]) {
+    if (part) command.append(part);
+  }
+  if (command.children.length) heading.after(command);
+  (command.isConnected ? command : heading).after(next);
+  const setup = $('robot-setup');
+  if (setup) next.after(setup);
+  (setup || next).after(journey);
+  host.dataset.flow = 'header-setup-tools';
   const message = text => { $('workspace-view-message').textContent = text; };
   function snapshot() { return getSnapshot(); }
   function chosenJob(s) { return s.jobs.find(j => j.key === selectedJob) || null; }

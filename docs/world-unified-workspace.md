@@ -28,6 +28,27 @@ where each one opens.
 - Closing the workbench unloads the page (`about:blank`) so its media, workers
   and animation loops stop, then returns focus to the control that opened it.
 
+### Workspace order
+
+Inside the workspace everything reads in the order it is used, and the tool tabs
+sit directly above the editor they switch (previously they were about 1,300 px
+above it, beyond the layer tools, the map commands and the robot setup):
+
+1. The heading (`#workspace-project-name`, summary, basis badge).
+2. `#workspace-command-bar`: the map's own title, provenance, undo/redo, before
+   copy, save and share (`.workspace-header`), the world choice
+   (`.sandbox-toolbar`) and the context line.
+3. The next step (`.workspace-next`).
+4. The robot setup (`#robot-setup`): choose a robot, build its world, let it try.
+5. "Your tools" (`.workspace-journey` with the `#tab-*` tabs and Make drawings).
+6. The editor, then the status line.
+7. "More ways to use your world" (`#world-layer-tools`).
+
+`unified-workspace-ui.mjs` moves the existing elements into this order at mount,
+so IDs, handlers and test hooks are unchanged and keyboard order follows the
+visual order. `#unified-workspace` carries `data-flow="header-setup-tools"`.
+On desktop the robot setup is shorter; phone layouts keep their tested sizes.
+
 `studio.mjs` and `studio.css` are part of the offline shell. Checks:
 `tests/world/studio.test.mjs` (registry coverage, safe workbench targets,
 search, markup order, 13 px floor) and `tests/world/studio_browser_smoke.py`
