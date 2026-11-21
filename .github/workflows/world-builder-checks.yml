@@ -183,6 +183,9 @@ jobs:
           python tests/world/splat_lamp_browser_smoke.py
       - name: Feature showcase navigation and video playback
         run: python tests/world/world_showcase_browser_smoke.py
+      # One studio bar for every tool; separate tool pages open in the workbench beside the world.
+      - name: Studio bar, search and in-place workbench
+        run: python tests/world/studio_browser_smoke.py
       # This flow starts its own frontend/worker and uses no earlier browser outputs.
       # Check retained-source review before the longer reconstruction regressions.
       - name: Unified source, model, drawings and retained job browser flow
