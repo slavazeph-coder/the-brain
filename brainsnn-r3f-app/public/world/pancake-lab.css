@@ -1,0 +1,141 @@
+.pancake-lab {
+  --pan-ink: #eff5fa;
+  --pan-muted: #c0d0dc;
+  --pan-line: #566e80;
+  --pan-surface: #142330;
+  --pan-accent: #8ce9ed;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  color: var(--pan-ink);
+  font: max(1rem, var(--reading-ui, 1rem))/1.5 var(--font, system-ui, sans-serif);
+  overflow-wrap: anywhere;
+  padding: 0.2em 0 0.8em;
+}
+
+.pancake-lab *, .pancake-lab *::before, .pancake-lab *::after { box-sizing: border-box; }
+.pancake-lab .pancake-intro { font-size: 1em; margin: 0 0 0.8em; color: var(--pan-ink); }
+.pancake-workbench {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18em), 1fr));
+  align-items: start;
+  gap: 1em;
+}
+
+.pancake-lab .pancake-pan {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--pan-line);
+  border-radius: 0.8em;
+  overflow: hidden;
+  background: #152532;
+}
+
+.pancake-lab .pancake-pan canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+.pancake-pan figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.16em 0.8em;
+  border-top: 1px solid var(--pan-line);
+  padding: 0.5em 0.8em;
+  font-size: 1em;
+  color: var(--pan-ink);
+}
+.pancake-pan [data-count] { color: var(--pan-muted); font-variant-numeric: tabular-nums; }
+
+.pancake-controls { display: grid; gap: 0.7em; min-width: 0; container-type: inline-size; }
+.pancake-lab .pancake-feedback {
+  color: var(--pan-ink);
+  border-inline-start: 0.23em solid var(--pan-accent);
+  margin: 0;
+  padding: 0.15em 0 0.15em 0.85em;
+}
+.pancake-feedback strong { font-size: 1.06em; }
+.pancake-lab .pancake-feedback p { font-size: 1em; line-height: 1.5; margin: 0.2em 0 0; color: var(--pan-muted); }
+.pancake-moves {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.38em;
+}
+.pancake-lab button {
+  appearance: none;
+  min-width: 0;
+  min-height: 44px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.55em 0.7em;
+  font: inherit;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  background: var(--pan-surface);
+  border: 1px solid var(--pan-line);
+  border-radius: 0.5em;
+  color: var(--pan-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.pancake-lab button[data-suggested] {
+  background: var(--pan-accent);
+  border-color: var(--pan-accent);
+  color: #102c36;
+  font-weight: 700;
+}
+.pancake-lab button:hover:enabled { border-color: var(--pan-accent); }
+.pancake-lab button:disabled { opacity: 0.62; cursor: default; }
+.pancake-lab :is(button, summary):focus-visible { outline: 3px solid var(--pan-accent); outline-offset: 2px; }
+
+.pancake-lab .pancake-readings {
+  margin: 0.85em 0 0.55em;
+  padding: 0;
+  border: 0;
+  border-block: 1px solid var(--pan-line);
+  border-radius: 0;
+  background: transparent;
+}
+.pancake-lab .pancake-readings summary {
+  min-height: 44px;
+  margin: 0;
+  padding: 0.55em 0.13em;
+  color: var(--pan-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pancake-readings dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10em), 1fr));
+  gap: 0.6em;
+  margin: 0 0 0.8em;
+}
+.pancake-readings dl div { padding: 0.4em 0.6em; background: var(--pan-surface); border-radius: 0.4em; }
+.pancake-readings dt { color: var(--pan-muted); }
+.pancake-readings dd { margin: 0; font-weight: 650; font-variant-numeric: tabular-nums; }
+.pancake-tools { display: flex; flex-wrap: wrap; gap: 0.4em; }
+.pancake-tools button { background: transparent; }
+html[data-contrast="more"] .pancake-lab {
+  --pan-ink: white;
+  --pan-muted: #edf8ff;
+  --pan-line: #a4bcc8;
+  --pan-surface: #0b1520;
+}
+@media (forced-colors: active) {
+  .pancake-lab button[data-suggested] { border: 3px solid Highlight; }
+}
+
+@container (max-width: 23em) {
+  .pancake-moves { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 12em) {
+  .pancake-moves { grid-template-columns: minmax(0, 1fr); }
+}

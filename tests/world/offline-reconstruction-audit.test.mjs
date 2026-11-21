@@ -9,7 +9,7 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-showroom-run-v46/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-kitchen-materials-v47/,'Changes to precache need a new cache version');
   for (const name of ['recorded-views.mjs', 'recorded-views-ui.mjs', 'sense-trial.html', 'sense-trial-ui.mjs', 'sense-trial-worker.mjs',
     ...['amber','teal','purple','white'].map(color => `assets/sense-cart-${color}.jpg`),
     'sense-room.mjs', 'sense-policy.mjs', 'sense-trial.css', 'reviewed-map-run-ui.mjs', 'reviewed-map-episode.mjs', 'showroom-episode-policy.mjs', 'assets/showroom-driver.mjs', 'kitchen-pin-physics.mjs', 'kitchen-pin-ui.mjs', 'showroom-run-ui.mjs', 'showroom-episode-physics.mjs', 'showroom-episode-worker.mjs', 'showroom-episode-usd.mjs', 'showroom-walk.mjs', 'showroom-walk-ui.mjs', 'showroom-walk-appearance.mjs', 'assets/showroom-depth.mjs', 'showroom-entry.mjs', 'showroom-page.mjs', 'showroom-model.mjs', 'showroom-view.mjs',
@@ -17,7 +17,7 @@ test('the installed World Builder shell precaches every reconstruction audit imp
     assert.ok(sw.includes(`'./${name}'`), `${name} is part of the showroom shell`);
     assert.ok(readFileSync(new URL(name,root)).length > 0);
   }
-  for (const name of ['robot-task-panel.mjs', 'robot-task-authoring.mjs', 'robot-task-physics.mjs', 'robot-task-worker.mjs', 'robot-task.css']) {
+  for (const name of ['robot-task-panel.mjs', 'robot-task-authoring.mjs', 'robot-task-physics.mjs', 'robot-task-worker.mjs', 'robot-task.css', 'pancake-material.mjs', 'pancake-lab-ui.mjs', 'pancake-lab.css']) {
     assert.ok(sw.includes("'./" + name + "'"), name);
   }
   for (const name of ['stereo-export.mjs', 'stereo-export-data.mjs', 'stereo-depth-data.mjs', 'stereo-depth-tool.mjs',

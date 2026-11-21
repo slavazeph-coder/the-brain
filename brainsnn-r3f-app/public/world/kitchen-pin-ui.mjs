@@ -1,5 +1,5 @@
 export function kitchenPinMarkup() {
-  return `<details data-kitchen-pin>
+  return `<details id="rolling-pin" data-kitchen-pin>
     <summary>Put a rolling pin on a tray</summary>
     <p>Try a kitchen job with a robot gripper. Watch what happens when its fingers close around the pin or stay open.</p>
     <div class="robot-task-settings"><label>Fingers

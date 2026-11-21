@@ -75,6 +75,13 @@ export const chapters = [
         focus: '[data-robot-task-run]',
       },
       {
+        label: 'Cook a pancake',
+        detail: 'Stir the batter, heat it and flip it. Press the pancake to see how firm it gets.',
+        access: 'Preview · on this device',
+        target: 'layer:robottask',
+        focus: '[data-pancake-station]',
+      },
+      {
         label: 'Move blocks with a robot arm',
         detail: 'Try the tabletop task in Robot Arena. Watch the simulated arm reach, grasp and place a block.',
         access: 'Has an example',
