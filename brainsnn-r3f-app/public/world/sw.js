@@ -1,10 +1,10 @@
 // World Builder shell worker. Network first, cache as an offline fallback for the app shell only.
 // Remote models, worker-API calls, uploads and cross-origin requests are never cached: fresh code and
 // fresh evidence always win; the cache only stores the app shell and its bundled authored example.
-const CACHE = 'world-shell-studio-v45';
+const CACHE = 'world-shell-studio-showroom-v46';
 const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', './sandbox-session.mjs', './core.mjs', './catalog.mjs', './renderer.mjs', './hero-demo.mjs', './playground-help.mjs', './playground-icons.mjs', './playground-controls.mjs', './robot-setup.mjs', './unified-workspace-ui.mjs', './scene-workspace.mjs', './workspace-results.mjs', './drawing-review-ui.mjs', './drawing-review.css', './world-layer-tools.mjs', './world-layer-tools.css', './layer-preview.mjs', './layer-job-client.mjs', './biomechanics-tool.mjs', './biomechanics-preview.mjs', './camera-calibration-tool.mjs', './camera-calibration-data.mjs', './examples/camera-calibration/camera-setup.toml', './examples/camera-calibration/example-walk.trc', './examples/biomechanics/authored-pendulum.osim', './examples/biomechanics/authored-motion.mot', './examples/biomechanics/kinematics-options.json', './photo-locator.mjs', './share-video.mjs', './demo-replay-ui.mjs', './review-questions.mjs', './visual-viewer.mjs',
   './recorded-views.mjs', './recorded-views-ui.mjs', './sense-trial.html', './sense-trial-ui.mjs', './sense-trial.css', './sense-trial-worker.mjs', './sense-room.mjs', './sense-policy.mjs',
-  './showroom-entry.mjs', './showroom-page.mjs', './showroom-view.mjs', './showroom-model.mjs', './showroom-view.css', './showroom-host.css',
+  './showroom-walk.mjs', './showroom-walk-ui.mjs', './showroom-walk-appearance.mjs', './assets/showroom-depth.mjs', './showroom-entry.mjs', './showroom-page.mjs', './showroom-view.mjs', './showroom-model.mjs', './showroom-view.css', './showroom-host.css',
   './assets/sense-cart-amber.jpg', './assets/sense-cart-teal.jpg', './assets/sense-cart-purple.jpg', './assets/sense-cart-white.jpg',
   './assets/showroom-views.mjs', './assets/showroom-camera-1.jpg', './assets/showroom-camera-2.jpg', './assets/showroom-camera-3.jpg',
   './robot-task-panel.mjs', './robot-task-authoring.mjs', './robot-task-physics.mjs', './robot-task-worker.mjs', './robot-task.css',

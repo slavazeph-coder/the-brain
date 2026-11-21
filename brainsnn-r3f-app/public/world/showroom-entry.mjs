@@ -3,21 +3,30 @@ let page;
 let opening;
 
 async function openFromLink() {
-  if (location.hash !== '#showroom' || !host) return;
+  if (!host || !['#showroom', '#showroom-walk'].includes(location.hash)) return;
   host.hidden = false;
   host.focus({preventScroll: true});
   host.scrollIntoView({block: 'start'});
-  if (page || opening) return;
-  const status = host.querySelector('[data-room-status]');
-  status.textContent = 'Opening the showroom…';
-  try {
-    opening = import('./showroom-page.mjs');
-    const {mountShowroomPage} = await opening;
-    page = mountShowroomPage(host);
-  } catch {
-    status.textContent = 'The showroom could not open. Refresh the page to try again.';
-  } finally {
-    opening = undefined;
+  if (!page) {
+    const status = host.querySelector('[data-room-status]');
+    status.textContent = 'Opening the showroom…';
+    try {
+      opening ??= import('./showroom-page.mjs').then(({mountShowroomPage}) => mountShowroomPage(host));
+      page = await opening;
+    } catch {
+      status.textContent = 'The showroom could not open. Refresh the page to try again.';
+      return;
+    } finally {
+      opening = undefined;
+    }
+  }
+  if (location.hash === '#showroom-walk' && !host.hidden) {
+    const walk = host.querySelector('[data-el="walk"]');
+    if (walk) {
+      walk.open = true;
+      walk.querySelector('summary').focus({preventScroll:true});
+      walk.scrollIntoView({block:'start'});
+    }
   }
 }
 

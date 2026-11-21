@@ -96,7 +96,7 @@ export const chapters = [
     features: [
       {
         label: 'Explore the showroom',
-        detail: 'Choose a cart in the example room. See it in the camera pictures and move it to try a new robot route.',
+        detail: 'Walk between two pictures. Pick a cart to see it on the map, or move it to try a new robot route.',
         access: 'Has an example',
         target: '#showroom',
       },
