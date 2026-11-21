@@ -16,19 +16,20 @@ from playwright.sync_api import expect, sync_playwright
 from stereo_depth_browser_smoke import PUBLIC, QuietHandler, StaticServer
 
 CHAPTERS = ('robot', 'capture', 'scan', 'building', 'motion', 'share')
-MINIMUM_FEATURES = dict(zip(CHAPTERS, (11, 8, 6, 5, 6, 10)))
+MINIMUM_FEATURES = dict(zip(CHAPTERS, (12, 9, 6, 5, 6, 11)))
 REQUIRED_TOOLS = {
     'tab:capture', 'tab:world', 'tab:test', 'tab:understand', 'tab:evidence',
     'layer:repair', 'layer:localization', 'layer:motion', 'layer:biomechanics',
     'layer:open4dgs', 'layer:stereo', 'layer:scanedit', 'layer:robottask',
     'section:robot-setup', 'section:unified-workspace', 'section:systems',
-    'project:review', 'studio:processing',
+    'project:review', 'studio:processing', '#showroom',
 }
 REQUIRED_STANDALONE = {
     '/arena/index.html',
     '/world/autonomy.html', '/world/fleet-learning.html', '/world/fleet-evaluation.html',
     '/world/splat.html', '/world/movement.html', '/world/facility.html',
     '/world/asbuilt.html', '/world/twin.html', '/world/api.html',
+    '/world/sense-trial.html', '/world/projects.html',
 }
 FOCUS_CHECKS = {
     'Build 3D from overlapping views': '.processing-options [data-action="connection"]',
@@ -287,6 +288,12 @@ def verify_tool_actions(page):
                         expect(popup.locator('#page-title')).to_have_text('Robot arcade')
                     else:
                         expect(popup.locator('h1').first).to_be_visible()
+                    if path == '/world/sense-trial.html':
+                        popup.locator('#step').click()
+                        expect(popup.locator('#journal li')).to_have_count(1)
+                    elif path == '/world/projects.html':
+                        expect(popup.locator('#project-api-key')).to_be_editable()
+                        expect(popup.locator('#connection-heading')).to_be_visible()
                     assert popup.title() != 'Error response', target
                     if fragment:
                         assert actual.fragment == fragment, (target, popup.url)
@@ -300,6 +307,24 @@ def verify_tool_actions(page):
             tools.add(target)
             card.focus()
             card.press('Enter')
+            if target == '#showroom':
+                # The showroom link uses normal fragment navigation in the existing workspace.
+                expect(card).to_have_attribute('href', '#showroom')
+                expect(page).to_have_url(re.compile(r'#showroom$'))
+                showroom = page.locator('#showroom')
+                expect(showroom).to_be_focused()
+                change = showroom.locator('[data-el="change"]')
+                expect(change).to_be_visible()
+                if change.inner_text().startswith('Find '):
+                    change.click()
+                expect(change).to_have_text(re.compile(r'^Remove '))
+                change.click()
+                expect(change).to_have_text(re.compile(r'^Restore '))
+                showroom.locator('[data-close-showroom]').click()
+                expect(showroom).to_be_hidden()
+                expect(page).to_have_url(re.compile(r'#robot-setup$'))
+                assert_chapter(page, key)
+                continue
             verify_in_page_destination(page, target)
             label = card.locator('strong').inner_text()
             selector = FOCUS_CHECKS.get(label)
