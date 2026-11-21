@@ -4,7 +4,7 @@ let physicsPromise;
 let busy = false;
 
 self.addEventListener('message', async ({data}) => {
-  if (!data || data.type !== 'run' || !Number.isSafeInteger(data.id) || data.id < 0) return;
+  if (!data || !['run','kitchen-run'].includes(data.type) || !Number.isSafeInteger(data.id) || data.id < 0) return;
   const {id} = data;
   if (busy) {
     self.postMessage({type: 'error', id, message: 'A tabletop trial is already running.'});
@@ -12,13 +12,14 @@ self.addEventListener('message', async ({data}) => {
   }
   busy = true;
   try {
-    const config = normalizeRobotTask(data.config);
+    const kitchen = data.type==='kitchen-run';
+    const config = kitchen ? null : normalizeRobotTask(data.config);
     physicsPromise ??= loadRobotTaskPhysics().catch(error => {
       physicsPromise = undefined;
       throw error;
     });
     const physics = await physicsPromise;
-    const episode = runRobotTask(physics, config);
+    const episode = kitchen ? (await import('./kitchen-pin-physics.mjs')).runKitchenPin(physics,data.controller) : runRobotTask(physics,config);
     self.postMessage({type: 'result', id, episode});
   } catch (error) {
     self.postMessage({type: 'error', id, message: error.message || 'The tabletop trial could not run.'});

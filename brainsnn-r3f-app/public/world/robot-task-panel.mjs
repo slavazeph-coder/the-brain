@@ -1,6 +1,8 @@
 import {normalizeRobotTask, ROBOT_TASK_DEFAULTS, ROBOT_TASK_LIMITS} from './robot-task-physics.mjs';
 import {exportTaskWorkspace, parseTaskInstruction, referencePath} from './robot-task-authoring.mjs';
 
+import {kitchenPinMarkup, mountKitchenPin} from './kitchen-pin-ui.mjs';
+
 const TASKS = {
   reach: {label: 'Reach a target', description: 'Move the blue pusher into the marked circle.'},
   push: {label: 'Push a puck', description: 'Use the blue pusher to move the amber puck into the marked circle.'},
@@ -27,6 +29,7 @@ export function robotTaskMarkup() {
       <video data-robot-task-film controls playsinline preload="none" aria-label="Two robot runs with the same 30 centimetre goal" aria-describedby="robot-task-film-result"></video>
       <p id="robot-task-film-result">The first robot pushes the puck to the goal. With a shorter reach, the second stops 17.4 cm away.</p>
     </details>
+    ${kitchenPinMarkup()}
     <form data-robot-task-form novalidate>
       <div class="robot-task-settings">
         <label>Practice task
@@ -225,6 +228,7 @@ const centimetres = value => `${(value * 100).toFixed(1)} cm`;
 export function mountRobotTask({root, signal, draftWithGemini}) {
   const panel = root.matches('[data-robot-task]') ? root : root.querySelector('[data-robot-task]');
   const own = new AbortController();
+  const kitchen = mountKitchenPin(panel, {signal:own.signal});
   const $ = key => panel.querySelector(`[data-robot-task-${key}]`);
   const on = (key, event, handler) => $(key).addEventListener(event, handler, {signal: own.signal});
   const form = $('form');
@@ -627,6 +631,7 @@ export function mountRobotTask({root, signal, draftWithGemini}) {
     switchTo2D();
     referenceVideo.pause();
     film.pause();
+    kitchen.suspend();
     if (draft) cancelDraft('Draft cancelled when you left this tool.');
     if (worker) {
       stopWorker();
@@ -638,6 +643,7 @@ export function mountRobotTask({root, signal, draftWithGemini}) {
     if (disposed) return;
     suspend();
     example.open = false;
+    kitchen.clear();
     if (film.readyState) film.currentTime = 0;
     form.reset();
     removeReference();
