@@ -1,3 +1,5 @@
+import {requestRobotTaskDraft} from './robot-task-authoring.mjs';
+import {mountRobotTask, robotTaskMarkup} from './robot-task-panel.mjs';
 import {mountScanWorkspace, scanPanel} from './scan-workspace.mjs';
 import {mountOpen4DGSTool,open4dgsPanel} from './open4dgs-tool.mjs';
 import {mountStereoDepth,stereoDepthPanel} from './stereo-depth-tool.mjs';
@@ -19,10 +21,11 @@ const titles = {
   open4dgs: ['Watch a moving scene', 'Play and look around in 3D'],
   stereo: ['See depth with two photos', 'Compare two camera views'],
   scanedit: ['Arrange a room', 'Pick up, move and light objects'],
+  robottask: ['Make a robot task', 'Give a robot a goal to try'],
 };
 
 /** Native tools inside the shared workspace. Remote files use their original private client. */
-export function mountWorldLayerTools({root,getConnection,getResults,getResult,rememberResult,connect,onChange=()=>{}}) {
+export function mountWorldLayerTools({root,getConnection,getResults,getResult,rememberResult,connect,getDraftToken,onChange=()=>{}}) {
   const abort=new AbortController(),signal=abort.signal;
   let disposed=false,epoch=0,active=null,busy=false,repair=null,selection=new Set(),selecting=false,drag=null,repairViewer=null;
   let map=null,mapRaw=null,mapBinding=null,mapPoints=null,recording=null,motion=null,motionViewer=null,mapViewer=null,live=null,lastResults='';
@@ -67,6 +70,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     ${open4dgsPanel}
     ${stereoDepthPanel}
     ${scanPanel}
+    <section id="layer-panel-robottask" role="tabpanel" aria-labelledby="layer-tab-robottask" hidden>${robotTaskMarkup()}</section>
     <div class="layer-result-footer" hidden><p data-layer-status role="status"></p><button type="button" data-layer-cancel hidden>Cancel processing</button><div data-layer-downloads class="layer-toolbar"></div></div>`;
   const $=s=>root.querySelector(s),on=(selector,event,fn)=>$(selector).addEventListener(event,fn,{signal});
   const status=(message,error=false)=>{$('.layer-result-footer').hidden=false;$('[data-layer-status]').textContent=message;$('[data-layer-status]').classList.toggle('error',error);};
@@ -77,6 +81,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     active=name;motionViewer?.pause();mapViewer?.pause();biomechanics?.pause();if(name!=='localization')stopLive();
     if(name!=='open4dgs')movingScene.pause();
     if(name!=='stereo')stereo.suspend();
+    if(name!=='robottask')robotTask.suspend();
     for(const button of root.querySelectorAll('[data-layer-tab]')){const selected=button.dataset.layerTab===name;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}
     for(const id of Object.keys(titles))$(`#layer-panel-${id}`).hidden=id!==name;
     if(name==='scanedit')scanWorkspace.open();else scanWorkspace.suspend();
@@ -176,6 +181,10 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     const original = new File([file], file.name, {type:file.type, lastModified:file.lastModified});
     return loadRepair(original, ++epoch, reviewed, isCurrent);
   });
+  const robotTask = mountRobotTask({
+    root, signal,
+    draftWithGemini: options => requestRobotTaskDraft({...options, token: getDraftToken?.()}),
+  });
   const stereo=mountStereoDepth({root,signal});
   const biomechanics=mountBiomechanicsTool({root,signal,run,status,intent:()=>{epoch++;},version:()=>epoch,isCurrent:token=>token===epoch&&!disposed,show:()=>open('biomechanics'),read});
   function stopLive(){if(live){clearTimeout(live.timer);clearInterval(live.watchdog);live.controller.abort();live=null;mapViewer?.markStale();$('[data-localization-info]').textContent='Position stream disconnected.';} $('[data-live-token]').value='';}
@@ -236,8 +245,8 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   root.addEventListener('change',event=>{if(event.target.matches('[data-repair-mode],[data-repair-density],[data-repair-seed],[data-localization-file],[data-localization-axis],[data-localization-voxel],[data-layer-scene],[data-localization-transform],[data-motion-file],[data-motion-units],[data-motion-facing]')){epoch++;for(const input of root.querySelectorAll('[data-repair-consent],[data-localization-consent],[data-motion-consent]'))input.checked=false;}},{signal});
   function followPreviewLink() {
     const target = location.hash;
-    const linked = {'#layer-tab-open4dgs':'open4dgs','#layer-tab-stereo':'stereo','#layer-tab-scanedit':'scanedit'}[target];
-    if (!linked) return;
+    const linked = target.replace(/^#layer-tab-/, '');
+    if (!target.startsWith('#layer-tab-') || !Object.hasOwn(titles, linked)) return;
     epoch++;
     open(linked);
     // The tab is built here, so scroll after the anchor has been mounted.
@@ -250,5 +259,5 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   window.addEventListener('hashchange',followPreviewLink,{signal});
   followPreviewLink();
   refresh();
-  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;scanWorkspace.suspend();stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();movingScene.pause();stereo.suspend();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();movingScene.clearSession();stereo.clear();scanWorkspace.clear();if(active==='scanedit')scanWorkspace.open();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;scanWorkspace.clear();stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
+  return {refresh,isActive:runner.isActive,openResult,open,suspend(){epoch++;scanWorkspace.suspend();stopLive();mapViewer?.pause();motionViewer?.pause();biomechanics.pause();movingScene.pause();stereo.suspend();robotTask.suspend();},async clear(){epoch++;stopLive();await runner.cancel();repair=null;selection.clear();setSelecting(false);drag=null;$("[data-repair-box]").hidden=true;map=null;mapRaw=null;mapBinding=null;mapPoints=null;recording=null;motion=null;biomechanics.clear();movingScene.clearSession();stereo.clear();robotTask.clear();scanWorkspace.clear();if(active==='scanedit')scanWorkspace.open();repairViewer?.clear();mapViewer?.clear();motionViewer?.clear();for(const input of root.querySelectorAll('input')){if(input.type==='checkbox')input.checked=false;else if(['file','password'].includes(input.type))input.value='';}$('[data-layer-downloads]').replaceChildren();status('Tool session cleared.');},dispose(){disposed=true;epoch++;robotTask.dispose();scanWorkspace.clear();stopLive();runner.dispose();abort.abort();biomechanics.dispose();repairViewer?.destroy();motionViewer?.dispose();mapViewer?.dispose();}};
 }

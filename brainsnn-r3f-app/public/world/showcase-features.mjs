@@ -62,6 +62,13 @@ export const chapters = [
         target: '/world/fleet-learning.html#record',
       },
       {
+        label: 'Make a robot task',
+        detail: 'Tell the robot to reach a spot or push a puck. Watch the test from above or in 3D, then save your task.',
+        access: 'Preview · on this device',
+        target: 'layer:robottask',
+        focus: '[data-robot-task-run]',
+      },
+      {
         label: 'Move blocks with a robot arm',
         detail: 'Try the tabletop task in Robot Arena. Watch the simulated arm reach, grasp and place a block.',
         access: 'Has an example',

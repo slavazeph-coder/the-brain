@@ -393,7 +393,7 @@ async function connectSite(){
     const r=await fetch('/api/world/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(passcode?{passcode}:{}),cache:'no-store',credentials:'same-origin',signal:controller.signal});
     const data=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(typeof data.detail==='string'?data.detail.slice(0,300):'BrainSNN processing is unavailable.');
-    const next=new WorkerClient(location.origin+'/api/world/worker',data.token);next.site=true;
+    const next=new WorkerClient(location.origin+'/api/world/worker',data.token);next.site=true;next.siteRole=data.kind;
     const nextCaps=await next.capabilities(controller.signal);
     if(controller.signal.aborted||connectionAbort!==controller)return;
     adoptWorker(next,nextCaps,'BrainSNN processing');$('site-passcode').value='';
@@ -959,6 +959,11 @@ robotSetup=mountRobotSetup({host:$('robot-setup'),robots:ROBOTS,getState:robotSe
 cameraDock=mountCameraDock({getCanvas:activeCanvas,getPreviewViewer:()=>activeCanvas()===$('visual-canvas')?visualViewer:null,setNames:on=>renderer?.setLabels(on)});
 updateUndo();
 layerTools=mountWorldLayerTools({root:$('world-layer-tools'),
+  getDraftToken:()=>{
+    if(client?.site && client.siteRole==='owner')return client.token;
+    if(siteProcessing?.passcode)$('connection').showModal();
+    return null;
+  },
   getConnection:()=>{if(isMainRemoteActive())throw Error('Wait for the current capture job or cancel it first.');if(!client){$('connection').showModal();throw Error('Connect processing, then start this tool.');}return {client,caps};},
   getResults:()=>workspaceResults.list(),getResult:requireResultContext,
   rememberResult:(result,originalClient,metadata)=>{const context=workspaceResults.remember(result,originalClient,{...metadata,sourceIds:[]});unifiedWorkspace.refresh();layerTools?.refresh();return context;},

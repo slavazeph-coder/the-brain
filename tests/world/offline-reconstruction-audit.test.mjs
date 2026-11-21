@@ -9,11 +9,14 @@ test('the installed World Builder shell precaches every reconstruction audit imp
   const imported=[...app.matchAll(/from ['"]\.\/((?:reconstruction-|surface-review)[^'"]*\.mjs)['"]/g)].map(match=>match[1]);
   assert.ok(imported.includes('reconstruction-frame-audit.mjs'),'Expected frame audit in app import graph');
   for(const name of imported)assert.ok(sw.includes(`'./${name}'`),`Missing offline shell asset: ${name}`);
-  assert.match(sw,/world-shell-showroom-v41/,'Changes to precache need a new cache version');
+  assert.match(sw,/world-shell-robot-tasks-v44/,'Changes to precache need a new cache version');
   for (const name of ['showroom-entry.mjs', 'showroom-page.mjs', 'showroom-model.mjs', 'showroom-view.mjs',
     'showroom-host.css', 'showroom-view.css', 'assets/showroom-views.mjs', ...[1,2,3].map(i => `assets/showroom-camera-${i}.jpg`)]) {
     assert.ok(sw.includes(`'./${name}'`), `${name} is part of the showroom shell`);
     assert.ok(readFileSync(new URL(name,root)).length > 0);
+  }
+  for (const name of ['robot-task-panel.mjs', 'robot-task-authoring.mjs', 'robot-task-physics.mjs', 'robot-task-worker.mjs', 'robot-task.css']) {
+    assert.ok(sw.includes("'./" + name + "'"), name);
   }
   for (const name of ['stereo-export.mjs', 'stereo-export-data.mjs', 'stereo-depth-data.mjs', 'stereo-depth-tool.mjs',
     'stereo-photo.mjs', 'examples/stereo/left.png', 'examples/stereo/right.png', 'examples/stereo/calibration.json']) {

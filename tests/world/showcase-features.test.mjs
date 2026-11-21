@@ -17,7 +17,7 @@ test('the showcase has six ordered chapters and unique, readable feature entries
   for (const { label, detail, access, target, focus } of features) {
     assert.ok(label && detail && access && target);
     assert.ok(access.length <= 28, access);
-    if (['layer:scanedit', 'layer:stereo'].includes(target)) assert.match(access, /^Preview · /u);
+    if (['layer:scanedit', 'layer:stereo', 'layer:robottask'].includes(target)) assert.match(access, /^Preview · /u);
     if (focus !== undefined) {
       assert.equal(typeof focus, 'string', label);
       assert.ok(focus.trim() && !target.startsWith('/'), label);
