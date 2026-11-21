@@ -2,6 +2,7 @@ import {normalizeRobotTask, ROBOT_TASK_DEFAULTS, ROBOT_TASK_LIMITS} from './robo
 import {exportTaskWorkspace, parseTaskInstruction, referencePath} from './robot-task-authoring.mjs';
 
 import {kitchenPinMarkup, mountKitchenPin} from './kitchen-pin-ui.mjs';
+import {mountPancakeLab} from './pancake-lab-ui.mjs';
 
 const TASKS = {
   reach: {label: 'Reach a target', description: 'Move the blue pusher into the marked circle.'},
@@ -30,6 +31,10 @@ export function robotTaskMarkup() {
       <p id="robot-task-film-result">The first robot pushes the puck to the goal. With a shorter reach, the second stops 17.4 cm away.</p>
     </details>
     ${kitchenPinMarkup()}
+    <details id="pancake-lab">
+      <summary>Cook a pancake</summary>
+      <div data-pancake-station role="region" aria-label="Pancake kitchen" tabindex="-1"></div>
+    </details>
     <form data-robot-task-form novalidate>
       <div class="robot-task-settings">
         <label>Practice task
@@ -229,6 +234,13 @@ export function mountRobotTask({root, signal, draftWithGemini}) {
   const panel = root.matches('[data-robot-task]') ? root : root.querySelector('[data-robot-task]');
   const own = new AbortController();
   const kitchen = mountKitchenPin(panel, {signal:own.signal});
+  const pancakePanel = panel.querySelector('#pancake-lab');
+  let closePancakeLab;
+  pancakePanel.addEventListener('toggle', () => {
+    if (pancakePanel.open && !closePancakeLab) {
+      closePancakeLab = mountPancakeLab(pancakePanel.querySelector('[data-pancake-station]'));
+    }
+  }, {signal: own.signal});
   const $ = key => panel.querySelector(`[data-robot-task-${key}]`);
   const on = (key, event, handler) => $(key).addEventListener(event, handler, {signal: own.signal});
   const form = $('form');
@@ -644,6 +656,9 @@ export function mountRobotTask({root, signal, draftWithGemini}) {
     suspend();
     example.open = false;
     kitchen.clear();
+    pancakePanel.open = false;
+    closePancakeLab?.();
+    closePancakeLab = undefined;
     if (film.readyState) film.currentTime = 0;
     form.reset();
     removeReference();

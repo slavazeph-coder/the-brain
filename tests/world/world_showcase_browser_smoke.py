@@ -34,6 +34,7 @@ REQUIRED_STANDALONE = {
 FOCUS_CHECKS = {
     'Build 3D from overlapping views': '.processing-options [data-action="connection"]',
     'Make a robot task': '[data-robot-task-run]',
+    'Cook a pancake': '[data-pancake-station]',
     'See depth with two photos': '[data-stereo-example]',
     'Open a StereoSplat export': '[data-stereosplat-import] details > summary',
     'Watch a moving 3D scene': '[data-open4dgs-example]',

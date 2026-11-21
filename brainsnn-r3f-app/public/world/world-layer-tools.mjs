@@ -245,7 +245,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   root.addEventListener('change',event=>{if(event.target.matches('[data-repair-mode],[data-repair-density],[data-repair-seed],[data-localization-file],[data-localization-axis],[data-localization-voxel],[data-layer-scene],[data-localization-transform],[data-motion-file],[data-motion-units],[data-motion-facing]')){epoch++;for(const input of root.querySelectorAll('[data-repair-consent],[data-localization-consent],[data-motion-consent]'))input.checked=false;}},{signal});
   function followPreviewLink() {
     const target = location.hash;
-    const kitchen = target === '#rolling-pin';
+    const kitchen = target === '#rolling-pin' || target === '#pancake-lab';
     const linked = kitchen ? 'robottask' : target.replace(/^#layer-tab-/, '');
     if ((!kitchen && !target.startsWith('#layer-tab-')) || !Object.hasOwn(titles, linked)) return;
     epoch++;
@@ -253,7 +253,7 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     // The tab is built here, so scroll after the anchor has been mounted.
     requestAnimationFrame(() => {
       if (!signal.aborted && active === linked && location.hash === target) {
-        const panel = kitchen ? $('[data-kitchen-pin]') : $(target);
+        const panel = $(target);
         if (kitchen) {
           panel.open = true;
           panel.querySelector('summary').focus({preventScroll:true});
