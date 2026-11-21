@@ -6,6 +6,8 @@ import {WorkerClient} from './worker-client.mjs';
 import {automaticReviewArtifact} from './artifact-review.mjs';
 import {SYSTEMS} from './catalog.mjs';
 import {mountShowcase} from './showcase.mjs';
+import {chapters as studioChapters} from './showcase-features.mjs';
+import {createWorkbench,isWorkbenchPage,mountStudioBar} from './studio.mjs';
 import {createVisualViewer} from './visual-viewer.mjs';
 import {fromDepth,parseVisualAsset,toPLY,toArenaCloud,STRIDE} from './visual-geometry.mjs';
 import {decodePhoto,inferDepth} from './depth-client.mjs';
@@ -969,8 +971,11 @@ layerTools=mountWorldLayerTools({root:$('world-layer-tools'),
   rememberResult:(result,originalClient,metadata)=>{const context=workspaceResults.remember(result,originalClient,{...metadata,sourceIds:[]});unifiedWorkspace.refresh();layerTools?.refresh();return context;},
   connect:()=>$('connection').showModal(),onChange:()=>{renderPanel();update();},
 });
-mountShowcase({
+// One studio: the bar reaches every tool, and separate tool pages open in the workbench beside the world.
+const workbench=createWorkbench({root:$('studio-workbench')});
+const showcaseNavigator=mountShowcase({
   root:$('showcase'), showTab:showWorkspaceTab, showProcessing:showProcessingOptions,
+  openPage:(feature,chapter,origin)=>workbench.show(feature,chapter,origin),
   leaveLayer:() => layerTools.suspend(),
   showProject:() => {
     if (projectReview.hasSource) {
@@ -981,6 +986,16 @@ mountShowcase({
     return openProjectReview(sceneContext?.jobKey);
   },
 });
+function studioStatus(message){const node=$('studio-status');node.textContent=message;node.hidden=!message;}
+mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
+  onHome:()=>{studioStatus('');workbench.hide({restoreFocus:false});$('workspace').scrollIntoView({block:'start'});$('workspace').focus?.({preventScroll:true});},
+  openFeature:async(feature,chapter,origin)=>{
+    studioStatus('');
+    if(isWorkbenchPage(feature.target))return workbench.show(feature,chapter,origin);
+    workbench.hide({restoreFocus:false});
+    if(feature.target==='#showroom'){if(location.hash==='#showroom')window.dispatchEvent(new HashChangeEvent('hashchange'));else location.hash='showroom';return;}
+    try{await showcaseNavigator.openInPlace(feature);}catch(error){studioStatus(error?.message||'That tool could not open. Try it again.');}
+  }});
 // A local handoff opens Capture even when a shared Street route is also present.
 // Do not start a competing lazy Street activation before the file is received.
 if(handoffId)void receiveCaptureHandoff(handoffId);else void sandbox.start();

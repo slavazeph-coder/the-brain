@@ -380,33 +380,45 @@ def verify_tool_actions(page):
             if target.startswith('/'):
                 page_before = page.url
                 path, fragment = urldefrag(target)
+                # The card stays a real link that can open its own tab; a plain click opens the page in the studio
+                # workbench beside the world, so the map, its edits and the showcase state stay in place.
                 expect(card).to_have_attribute('target', '_blank')
                 href = card.get_attribute('href')
                 assert href and urljoin(page_before, href) == urljoin(page_before, target), (target, href)
                 standalone.add(path)
-                with page.context.expect_page() as opened:
-                    card.click()
-                popup = opened.value
-                try:
-                    popup.wait_for_load_state('domcontentloaded')
-                    actual = urlsplit(popup.url)
-                    assert actual.path == path, (target, popup.url)
-                    if path == '/arena/index.html':
-                        expect(popup.locator('#page-title')).to_have_text('Robot arcade')
-                    else:
-                        expect(popup.locator('h1').first).to_be_visible()
-                    if path == '/world/sense-trial.html':
-                        popup.locator('#step').click()
-                        expect(popup.locator('#journal li')).to_have_count(1)
-                    elif path == '/world/projects.html':
-                        expect(popup.locator('#project-api-key')).to_be_editable()
-                        expect(popup.locator('#connection-heading')).to_be_visible()
-                    assert popup.title() != 'Error response', target
-                    if fragment:
-                        assert actual.fragment == fragment, (target, popup.url)
-                        expect(popup.locator(f'[id="{fragment}"]')).to_be_attached()
-                finally:
-                    popup.close()
+                label = card.locator('strong').inner_text()
+                card.click()
+                workbench = page.locator('#studio-workbench')
+                expect(workbench).to_be_visible()
+                expect(page.locator('#studio-workbench-title')).to_have_text(label)
+                expect(page.locator('#studio-workbench-tab')).to_have_attribute('target', '_blank')
+                page.wait_for_function("""path => { try {
+                  const frame = document.getElementById('studio-workbench-frame');
+                  return frame.contentWindow.location.pathname === path && frame.contentDocument.readyState === 'complete';
+                } catch { return false; } }""", arg=path)
+                frame = page.frame_locator('#studio-workbench-frame')
+                if path == '/arena/index.html':
+                    expect(frame.locator('#page-title')).to_have_text('Robot arcade')
+                else:
+                    expect(frame.locator('h1').first).to_be_visible()
+                if path == '/world/sense-trial.html':
+                    frame.locator('#step').click()
+                    expect(frame.locator('#journal li')).to_have_count(1)
+                elif path == '/world/projects.html':
+                    expect(frame.locator('#project-api-key')).to_be_editable()
+                    expect(frame.locator('#connection-heading')).to_be_visible()
+                actual = page.locator('#studio-workbench-frame').evaluate("""frame => ({
+                  hash: frame.contentWindow.location.hash.slice(1), title: frame.contentDocument.title,
+                  header: (frame.contentDocument.querySelector('[data-studio-hidden=site-header]') || {}).hidden ?? null })""")
+                assert actual['title'] != 'Error response', target
+                if path.startswith('/world/'):
+                    assert actual['header'] is True, (target, 'duplicate site header should be hidden in the workbench')
+                if fragment:
+                    assert actual['hash'] == fragment, (target, actual)
+                    expect(frame.locator(f'[id="{fragment}"]')).to_be_attached()
+                page.locator('#studio-workbench-close').click()
+                expect(workbench).to_be_hidden()
+                expect(card).to_be_focused()
                 assert page.url == page_before
                 assert_chapter(page, key)
                 continue

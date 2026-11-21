@@ -259,3 +259,26 @@ it('world processing: only the site flow is routable', () => {
   assert.equal(route('GET', '/v1/jobs/../../etc', ''), null);
   assert.equal(route('POST', `/v1/jobs/${id(2)}/delete`, ''), null);
 });
+
+it('world processing: an unresponsive worker fails control calls fast, while slow upload chunks keep the transfer allowance', async () => {
+  // Accepts the connection and never answers control calls, like a worker that is mid-redeploy. Upload chunks answer
+  // after a delay that is longer than the control limit but shorter than the transfer limit.
+  const silent = await serve((req, res) => {
+    if (req.method === 'PUT') { req.resume(); return setTimeout(() => { res.setHeader('Content-Type', 'application/json'); res.end('{"offset":5}'); }, 150); }
+    if (req.method === 'POST' && req.url === '/v1/uploads') { req.resume(); res.statusCode = 201; res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify({ id: id(1) })); }
+    req.resume();  // never respond
+  });
+  const web = await site(env(silent), { controlTimeoutMs: 60, transferTimeoutMs: 2000 });
+  try {
+    const owner = (await web.call('/api/world/session', { method: 'POST', body: { passcode: PASSCODE } })).data.token;
+    const started = Date.now();
+    const caps = await web.call('/api/world/worker/v1/capabilities', { token: owner });
+    assert.equal(caps.status, 504);
+    assert.match(caps.data.detail, /did not answer in time/);
+    assert.ok(Date.now() - started < 1500, 'a capabilities check must not wait for the two-minute transfer limit');
+    assert.equal((await web.call('/api/world/worker/v1/uploads', { method: 'POST', token: owner, body: { kind: 'image', name: 'a.png', size: 5 } })).status, 201);
+    const chunk = await web.call(`/api/world/worker/v1/uploads/${id(1)}?offset=0`, { method: 'PUT', token: owner, raw: true,
+      body: Buffer.from('BYTES'), headers: { 'Content-Type': 'application/octet-stream' } });
+    assert.equal(chunk.status, 200, 'a 150 ms chunk is a transfer, not a control call');
+  } finally { await web.close(); await silent.close(); }
+});

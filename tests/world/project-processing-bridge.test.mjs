@@ -10,7 +10,7 @@ const id = 'a'.repeat(32);
 const caps = { api_version: 'brainsnn.worker.v1', access_mode: 'tenant', owner_id: tenant, idempotency: { supported: true } };
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json', ...headers } });
 
-async function fixture(t, { capabilities = caps, env = {}, respond = () => json({ id }), authenticate } = {}) {
+async function fixture(t, { capabilities = caps, env = {}, respond = () => json({ id }), authenticate, timeouts, fetchOverride } = {}) {
   const upstreamCalls = [], authCalls = [];
   const service = createProjectProcessingBridge({
     env: { WORLD_WORKER_INTERNAL_URL: 'http://worker.internal/', WORLD_PROJECT_WORKER_TOKENS_JSON: JSON.stringify({ [tenant]: token }), ...env },
@@ -19,8 +19,10 @@ async function fixture(t, { capabilities = caps, env = {}, respond = () => json(
       if (req.headers.authorization !== 'Bearer fixture-site-key') throw Object.assign(new Error('Unauthorized.'), { status: 401, code: 'unauthorized' });
       return { tenant_id: tenant, actor_id: 'actor_fixture' };
     }) },
+    timeouts,
     fetchImpl: async (url, options) => {
       upstreamCalls.push({ url: String(url), options });
+      if (fetchOverride) return fetchOverride(url, options);
       return String(url).endsWith('/v1/capabilities') ? json(typeof capabilities === 'function' ? capabilities(options) : capabilities) : respond(url, options);
     },
   });
@@ -148,4 +150,58 @@ test('global admission bounds live processing requests across independent tenant
     await allAdmitted;
     assert.equal((await call('/jobs', { headers: { Authorization: 'Bearer fixture-4' } })).status, 429);
   } finally { for (const release of releases) release(); await Promise.all(pending); }
+});
+
+// A fetch that only settles when its signal aborts, like a worker that accepted
+// the connection during a redeploy and never answered.
+const hang = (options) => new Promise((_, reject) => {
+  options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+});
+
+test('an unresponsive worker fails the preflight fast with a retryable 504 and frees the slot', async t => {
+  const { call } = await fixture(t, { timeouts: { preflightMs: 60 }, fetchOverride: (_url, options) => hang(options) });
+  const started = Date.now();
+  const response = await call('/jobs/' + id);
+  const body = await response.json();
+  assert.equal(response.status, 504);
+  assert.equal(body.error.code, 'worker_timeout');
+  assert.equal(response.headers.get('Retry-After'), '30');
+  assert.equal(body.error.request_id, response.headers.get('X-Request-Id'));
+  assert.ok(Date.now() - started < 2000, 'preflight deadline must not fall back to the two-minute transfer limit');
+  // The tenant's admission slot is released: four more calls are still admitted rather than refused with 429.
+  const statuses = await Promise.all(Array.from({ length: 4 }, () => call('/jobs/' + id).then(r => r.status)));
+  assert.deepEqual(statuses, [504, 504, 504, 504]);
+});
+
+test('control calls get their own deadline after a healthy preflight', async t => {
+  const { call } = await fixture(t, { timeouts: { requestMs: 60 }, respond: (_url, options) => hang(options) });
+  const response = await call('/jobs/' + id);
+  assert.equal(response.status, 504);
+  assert.equal((await response.json()).error.code, 'worker_timeout');
+});
+
+test('downloads are bounded by stalls between chunks, not total wall time', async t => {
+  const ticket = Buffer.from(JSON.stringify({ owner: tenant, job: id })).toString('base64url') + '.' + 'b'.repeat(64);
+  const slowStream = (chunks, gapMs, { stallAfter = Infinity } = {}) => (_url, options) => {
+    let sent = 0;
+    const body = new ReadableStream({ async pull(controller) {
+      if (sent >= chunks) return controller.close();
+      await new Promise((resolve, reject) => {
+        const wait = setTimeout(resolve, sent >= stallAfter ? 60_000 : gapMs);
+        options.signal.addEventListener('abort', () => { clearTimeout(wait); reject(new Error('aborted')); }, { once: true });
+      });
+      sent++; controller.enqueue(new Uint8Array([65]));
+    } });
+    return new Response(body, { headers: { 'Content-Length': String(chunks), 'Content-Type': 'application/octet-stream' } });
+  };
+  // Eight chunks 40 ms apart take ~320 ms in total: longer than the 150 ms transfer limit, yet never stalled for 100 ms.
+  const steady = await fixture(t, { timeouts: { transferMs: 150, stallMs: 100 }, respond: slowStream(8, 40) });
+  const ok = await steady.call('/download/' + ticket);
+  assert.equal(ok.status, 200);
+  assert.equal(await ok.text(), 'AAAAAAAA');
+  // A stream that stops after two chunks is cut off, so the client never mistakes it for a complete artifact.
+  const stalled = await fixture(t, { timeouts: { transferMs: 5000, stallMs: 80 }, respond: slowStream(8, 10, { stallAfter: 2 }) });
+  const started = Date.now();
+  await assert.rejects(async () => { const value = await stalled.call('/download/' + ticket); await value.arrayBuffer(); });
+  assert.ok(Date.now() - started < 3000);
 });

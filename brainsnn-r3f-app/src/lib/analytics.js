@@ -127,7 +127,11 @@ export const DEFAULT_SINK_URL = '/api/events';
 function sinkUrl() {
   let configured;
   try {
-    configured = import.meta.env?.VITE_ANALYTICS_URL;
+    // Static member access only. Optional chaining or indexing on import.meta.env
+    // makes Vite inline the whole env object, including every VITE_* variable
+    // present at build time (scripts/check-env-exposure.mjs enforces this). Outside
+    // Vite, import.meta.env is undefined and this throws into the catch below.
+    configured = import.meta.env.VITE_ANALYTICS_URL;
   } catch {
     configured = undefined;
   }
