@@ -200,6 +200,9 @@ def verify_missions(page):
     expect(page.locator('[data-mission-stars]')).to_have_text('1/11', timeout=15_000)
     toast = page.locator('.mission-toast')
     expect(toast).to_contain_text('First run')
+    expect(toast).to_contain_text('Next: Find a route with different robots.')
+    # This context asks for reduced motion, so Let it try does not start the replay by itself.
+    expect(page.locator('#replay')).to_have_text('Replay')
     card = page.locator('#viewport .mission-run-card')
     expect(card).to_contain_text('Floor covered!')
     expect(card).to_contain_text('Simulated route')
@@ -232,6 +235,7 @@ def verify_missions(page):
     expect(page.locator('.mission-card')).to_have_count(7)
     expect(page.locator('.mission-card[data-mission="shortcut"] .mission-stars')).to_have_attribute('aria-label', '2 of 3 stars')
     expect(page.locator('.mission-card[data-mission="spot"]')).to_have_attribute('data-done', 'true')
+    expect(page.locator('.mission-card[data-next="true"]')).to_have_attribute('data-mission', 'garage')
     page.keyboard.press('Escape')
     expect(page.locator('#studio-missions-open')).to_be_focused()
     page.locator('#studio-missions-open').click()

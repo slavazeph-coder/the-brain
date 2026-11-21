@@ -121,6 +121,11 @@ export function levelFor(stars) {
   return { number: index + 1, name: level.name, next, toNext: next ? next.at - stars : 0 };
 }
 
+/** The first mission with stars still to earn, in board order (null when every star is earned). */
+export function nextMission(progress) {
+  return MISSIONS.find(mission => missionStars(mission.id, progress) < mission.stars) || null;
+}
+
 /** Which missions gained stars between two progress states, with the new count. */
 export function newlyEarned(before, after) {
   return MISSIONS.map(mission => ({ mission, from: missionStars(mission.id, before), to: missionStars(mission.id, after) }))
@@ -162,7 +167,7 @@ export function mountMissions({ button, studio, viewport, show = () => {}, stora
     const nodes = lines.map(([cls, text]) => { const p = document.createElement('p'); p.className = cls; p.textContent = text; return p; });
     // One route can finish two missions (a new robot and a shortcut): keep both lines in one toast.
     if (!toast.hidden && performance.now() - toastShown < 400) {
-      toast.querySelectorAll('.mission-toast-sub,.mission-toast-level').forEach(node => node.remove());
+      toast.querySelectorAll('.mission-toast-sub,.mission-toast-level,.mission-toast-next').forEach(node => node.remove());
       toast.append(...nodes);
     } else toast.replaceChildren(...nodes);
     toastShown = performance.now();
@@ -262,6 +267,9 @@ export function mountMissions({ button, studio, viewport, show = () => {}, stora
       const lines = earned.map(({ mission, to }) => ['mission-toast-title', `${starText(to, mission.stars)}  ${mission.title}`]);
       if (level.number > previousLevel.number) lines.push(['mission-toast-level', `Level ${level.number}: ${level.name}!`]);
       else lines.push(['mission-toast-sub', `${stars} of ${TOTAL_STARS} stars`]);
+      // Always say what to try next, so the loop keeps going without opening the board.
+      const upNext = nextMission(after);
+      if (upNext) lines.push(['mission-toast-next', `Next: ${upNext.goal}`]);
       celebrate(lines, true);
       if (studio?.open === 'missions') renderPanel();
     } else if (outcome.cut) {
@@ -294,6 +302,7 @@ export function mountMissions({ button, studio, viewport, show = () => {}, stora
       item.className = 'mission-card';
       item.dataset.mission = mission.id;
       item.dataset.done = String(earned === mission.stars);
+      if (nextMission(progress)?.id === mission.id) item.dataset.next = 'true';
       item.innerHTML = '<div class="mission-card-head"><span class="mission-icon" aria-hidden="true"></span><strong></strong><span class="mission-stars"></span></div><p class="mission-goal"></p><p class="mission-how"></p><button type="button" class="mission-go"></button>';
       item.querySelector('.mission-icon').textContent = mission.icon;
       item.querySelector('strong').textContent = mission.title;

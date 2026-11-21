@@ -179,6 +179,34 @@ export function createWorldProjectStore({ pool, now = Date.now }) {
     await client.query('INSERT INTO brainsnn_world_events(tenant_id,project_id,id,payload,created_at) VALUES($1,$2,$3,$4::jsonb,$5)', [principal.tenant_id,projectId,event.id,JSON.stringify(event),event.at]);
     return event;
   }
+  /**
+   * Operator bootstrap without a database shell: create a workspace, a named principal and a key from the key's
+   * SHA-256 digest only. The plaintext key never reaches the server, its logs or its configuration. Idempotent:
+   * a digest that already exists is left as it is, so restarts change nothing.
+   */
+  async function bootstrapKey(spec) {
+    const { tenant_id, tenant_name, actor_name, role, key_sha256, expires_at } = spec || {};
+    if (!/^[a-f0-9]{64}$/.test(String(key_sha256)) || !Object.hasOwn(ROLE_SCOPES, role)) bad('Bootstrap needs a key_sha256 digest and a supported role.');
+    const expiry = new Date(expires_at);
+    if (!Number.isFinite(expiry.getTime()) || expiry.getTime() > now() + 366 * 86400000) bad('Bootstrap key expiry must be a timestamp within 366 days.');
+    return transaction(async client => {
+      const existing = (await client.query('SELECT tenant_id,id FROM brainsnn_world_keys WHERE digest=$1', [key_sha256])).rows[0];
+      if (existing) return { created: false, tenant_id: existing.tenant_id, key_id: existing.id };
+      if (expiry.getTime() <= now()) bad('Bootstrap key expiry has passed; provision a new digest.');
+      const tenant = await provisionTenant({ id: tenant_id, name: tenant_name }, client);
+      if (typeof actor_name !== 'string' || !actor_name.trim() || actor_name.length > 120) bad('Bootstrap needs a named principal.');
+      let actor = (await client.query('SELECT id FROM brainsnn_world_actors WHERE tenant_id=$1 AND name=$2 AND role=$3', [tenant.id, actor_name.trim(), role])).rows[0];
+      if (!actor) {
+        actor = { id: newId('actor') };
+        await client.query('INSERT INTO brainsnn_world_actors(tenant_id,id,name,role,created_at) VALUES($1,$2,$3,$4,$5)', [tenant.id, actor.id, actor_name.trim(), role, time()]);
+      }
+      const keyId = newId('key');
+      await client.query('INSERT INTO brainsnn_world_keys(tenant_id,id,actor_id,digest,scopes,expires_at,created_at,created_by) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7,$8)',
+        [tenant.id, keyId, actor.id, key_sha256, JSON.stringify(ROLE_SCOPES[role]), expiry.toISOString(), time(), 'operator-bootstrap']);
+      await securityEvent(client, tenant.id, actor.id, 'key.bootstrapped', { key_id: keyId, principal_id: actor.id, role });
+      return { created: true, tenant_id: tenant.id, key_id: keyId };
+    });
+  }
   async function addUsage(client, tenantId, metric, quantity = 1) {
     if (!USAGE_METRICS.includes(metric)) throw new Error('Unknown usage metric.');
     const amount = Math.floor(Number(quantity));
@@ -204,5 +232,5 @@ export function createWorldProjectStore({ pool, now = Date.now }) {
     }
     return [...byTenant.values()];
   }
-  return { pool, time, transaction, initialize, tenant, provisionTenant, provisionKey, securityEvent, project, record, addRecord, updateRecord, addEvent, addUsage, monthUsage, usageReport };
+  return { pool, time, transaction, initialize, tenant, provisionTenant, provisionKey, securityEvent, project, record, addRecord, updateRecord, addEvent, addUsage, monthUsage, usageReport, bootstrapKey };
 }

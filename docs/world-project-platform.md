@@ -405,3 +405,22 @@ artifacts). A failed meter write never fails the customer's request.
 Export one month for invoicing with `npm run world:projects:usage -- --month YYYY-MM`
 (CSV: tenant, name, month, metrics). Counts start when the meter is deployed. This
 is metering for manual invoicing, not a payment system or entitlement.
+
+## Bootstrap a workspace without a database shell
+
+Production PostgreSQL is only reachable on the hosting network. To create a pilot
+or first-customer workspace without running the admin script there, generate a
+`bsk_` key privately (43 base64url characters after the prefix), keep it, and
+set only its SHA-256 on the website service:
+
+```
+WORLD_PROJECT_BOOTSTRAP_JSON={"tenant_id":"pilot-owner","tenant_name":"BrainSNN pilot",
+  "actor_name":"Owner pilot","role":"admin","key_sha256":"<64 hex>","expires_at":"<ISO, within 366 days>"}
+```
+
+On first use of the API the service creates the workspace, the named principal
+and the key (`created_by: operator-bootstrap`, audit event `key.bootstrapped`).
+A digest that already exists is left alone, so restarts change nothing; an
+existing workspace is never renamed. Invalid or expired values are skipped with a
+bounded warning and never stop the API. Pair it with a dedicated worker tenant
+(`world-project-worker-tenant.mjs`) under the same `tenant_id` to enable processing.

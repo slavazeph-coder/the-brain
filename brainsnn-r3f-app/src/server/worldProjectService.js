@@ -85,9 +85,22 @@ export function createWorldProjectService({ pool: suppliedPool, objectStore: sup
   }
   let ready = null;
   let activeRequests = 0, activeAuthentications = 0;
+  // WORLD_PROJECT_BOOTSTRAP_JSON: {tenant_id, tenant_name, actor_name, role, key_sha256, expires_at}. A bad value is
+  // reported by a bounded warning and never stops the API for other workspaces.
+  async function bootstrap() {
+    const raw = env.WORLD_PROJECT_BOOTSTRAP_JSON;
+    if (!raw) return;
+    try {
+      if (String(raw).length > 4096) throw new ProjectError(422, 'invalid-input', 'Bootstrap configuration is too large.');
+      const result = await store.bootstrapKey(JSON.parse(raw));
+      if (result.created) console.log(`World projects: bootstrapped a key for ${result.tenant_id}.`);
+    } catch (error) {
+      console.warn(`World projects: bootstrap skipped (${error instanceof ProjectError ? error.message : 'invalid configuration'}).`);
+    }
+  }
   async function initialize() {
     if (!enabled || !store) throw new ProjectError(503,'storage-unavailable','Project storage is not configured.');
-    if (!ready) ready = store.initialize().catch(error => { ready = null; throw error; });
+    if (!ready) ready = store.initialize().then(bootstrap).catch(error => { ready = null; throw error; });
     await ready;
   }
   async function authenticate(req, options = {}) {

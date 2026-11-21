@@ -288,3 +288,38 @@ test('project ledger: monthly usage meter counts each workspace separately and e
     await assert.rejects(()=>a.service.usageReport('2026-13'),/YYYY-MM/);
   } finally { await a.close(); await b.close(); await pool.end(); }
 });
+
+test('project ledger: operator bootstrap from a key digest is idempotent and never needs the plaintext key',async()=>{
+  const pool=await createProjectTestPool();
+  const token=`bsk_${'A'.repeat(20)}${'b'.repeat(23)}`;
+  const spec={tenant_id:'pilot-owner',tenant_name:'BrainSNN pilot',actor_name:'Owner pilot',role:'admin',
+    key_sha256:sha(token),expires_at:new Date(stamp+30*86400000).toISOString()};
+  const warnings=[],logs=[];const warn=console.warn,log=console.log;
+  console.warn=message=>warnings.push(String(message));console.log=message=>logs.push(String(message));
+  const start=async env=>{const service=createWorldProjectService({pool,env,now:()=>stamp});await service.initialize();return service;};
+  try {
+    const first=await start({WORLD_PROJECT_BOOTSTRAP_JSON:JSON.stringify(spec)});
+    const web=await host(first);
+    const me=await fetch(web.base+'/me',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+    assert.equal(me.tenant.id,'pilot-owner');assert.equal(me.actor.name,'Owner pilot');assert.equal(me.actor.role,'admin');
+    assert.ok(me.scopes.includes('processing:write'));
+    await web.close();await first.close();
+    // A restart with the same configuration changes nothing.
+    const again=await start({WORLD_PROJECT_BOOTSTRAP_JSON:JSON.stringify(spec)});await again.close();
+    const keys=(await pool.query("SELECT count(*) AS n FROM brainsnn_world_keys WHERE tenant_id='pilot-owner'")).rows[0];
+    assert.equal(Number(keys.n),1);
+    assert.equal(logs.filter(line=>line.includes('bootstrapped')).length,1);
+    // The plaintext never reaches the database.
+    const stored=(await pool.query("SELECT digest,created_by FROM brainsnn_world_keys WHERE tenant_id='pilot-owner'")).rows[0];
+    assert.equal(stored.digest,sha(token));assert.equal(stored.created_by,'operator-bootstrap');
+    // Bad values warn and skip; the API still starts for everyone else.
+    for(const bad of ['{not json',JSON.stringify({...spec,key_sha256:sha('other'),expires_at:new Date(stamp-1000).toISOString()}),
+      JSON.stringify({...spec,key_sha256:'short'}),JSON.stringify({...spec,key_sha256:sha('another'),tenant_name:'Renamed workspace'})]){
+      const service=await start({WORLD_PROJECT_BOOTSTRAP_JSON:bad});
+      assert.equal((await service.store.tenant(pool,'pilot-owner')).name,'BrainSNN pilot','an existing workspace is never renamed');
+      await service.close();
+    }
+    assert.equal(warnings.filter(line=>line.includes('bootstrap skipped')).length,4,warnings.join('\n'));
+    assert.ok(warnings.every(line=>!line.includes(token)));
+  } finally { console.warn=warn;console.log=log;await pool.end(); }
+});

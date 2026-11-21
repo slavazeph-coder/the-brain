@@ -350,7 +350,7 @@ async function addFiles(list,{nativeCapture=false}={}){
 async function run(){if(planning){invalidate();status('Planning cancelled.');return;}const gate=planningGate(world);if(gate){status(gate,true);setTab('world');return;}
   invalidate();planning=true;update();const id=epoch;try{planner=new Worker('./planner-worker.mjs',{type:'module'});}catch(e){planning=false;update();status('A browser planning worker could not start. Check your browser settings.',true);return;}
   const timeout=setTimeout(()=>{if(id===epoch){invalidate();status('Planning timed out. Try a smaller map.',true);}},15000);
-  planner.onmessage=({data})=>{clearTimeout(timeout);if(data.id!==epoch)return;planner?.terminate();planner=null;planning=false;if(data.error){runIssue={message:data.error,advice:data.advice||null};status(data.error,true);update();return;}result=data.result;renderer?.setResult(result);renderer?.setCursor(.015);event('plan_completed',{algorithm:result.algorithm,metres:result.distance,policyExecuted:false});setTab('test');update();status('Planning preview complete. No learned policy or physical robot executed.');};
+  planner.onmessage=({data})=>{clearTimeout(timeout);if(data.id!==epoch)return;planner?.terminate();planner=null;planning=false;if(data.error){replayOnPlan=false;runIssue={message:data.error,advice:data.advice||null};status(data.error,true);update();return;}result=data.result;renderer?.setResult(result);renderer?.setCursor(.015);event('plan_completed',{algorithm:result.algorithm,metres:result.distance,policyExecuted:false});setTab('test');update();status('Planning preview complete. No learned policy or physical robot executed.');if(replayOnPlan){replayOnPlan=false;replay();}};
   planner.onerror=()=>{clearTimeout(timeout);if(id===epoch){invalidate();status('Planning worker failed.',true);}};planner.postMessage({id,world:clone(world),robot:clone(robot)});
 }
 function replay(){if(!result)return;if(replayFrame){stopReplay();return;}replayStart=performance.now()-Number($('scrub').value)/1000*12000;$('replay').textContent='Pause';function tick(t){const c=Math.min(1,(t-replayStart)/12000);$('scrub').value=Math.round(c*1000);renderer?.setCursor(c);if(c<1)replayFrame=requestAnimationFrame(tick);else stopReplay();}replayFrame=requestAnimationFrame(tick);}
@@ -965,7 +965,9 @@ async function chooseWorld(kind){const street=!!sandbox?.isStreet(),inCapture=sa
     else if(kind==='empty'){if(worldOrigin!=='empty'||editHistory.undo.length)await action('new-map');}
     else if(kind==='saved')await action('restore');}
   robotSetup?.refresh();revealWorld(kind);}
-async function letItTry(){if(sandbox?.isStreet()){$('tab-test').click();$('street-workspace').scrollIntoView({block:'start'});return;}if(!world)return;$('viewport').scrollIntoView({block:'center'});await run();robotSetup?.refresh();}
+// Let it try means watch it: play the route as soon as the plan arrives (not with reduced motion, and never for the transport's own Run).
+let replayOnPlan=false;
+async function letItTry(){if(sandbox?.isStreet()){$('tab-test').click();$('street-workspace').scrollIntoView({block:'start'});return;}if(!world)return;$('viewport').scrollIntoView({block:'center'});replayOnPlan=!matchMedia('(prefers-reduced-motion: reduce)').matches;await run();if(!planning)replayOnPlan=false;robotSetup?.refresh();}
 robotSetup=mountRobotSetup({host:$('robot-setup'),robots:ROBOTS,getState:robotSetupState,actions:{chooseRobot,chooseWorld,run:letItTry,moveStart,showCheck,showRobotSettings}});
 cameraDock=mountCameraDock({getCanvas:activeCanvas,getPreviewViewer:()=>activeCanvas()===$('visual-canvas')?visualViewer:null,setNames:on=>renderer?.setLabels(on)});
 updateUndo();

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
-  LEVELS, MISSIONS, TOTAL_STARS, applyEvent, emptyProgress, levelFor, missionStars, newlyEarned, readProgress, totalStars,
+  LEVELS, MISSIONS, TOTAL_STARS, applyEvent, emptyProgress, levelFor, missionStars, newlyEarned, nextMission, readProgress, totalStars,
 } from '../../brainsnn-r3f-app/public/world/missions.mjs';
 
 const run = (progress, type, detail, extra = {}) => applyEvent(progress, { type, detail, robotId: 'cleaner', map: 'Studio 01', ...extra });
@@ -106,4 +106,14 @@ test('the playground wires missions to its own event log and keeps them in the o
     assert.match(css, new RegExp(selector.replace('.', '\\.') + '\\{[^}]*pointer-events:none'), selector);
   }
   assert.match(css, /@media\(prefers-reduced-motion:no-preference\)\{\s*#robot-setup-run/u);
+});
+
+test('the next mission is always the first one with stars left, until every star is earned', () => {
+  let p = emptyProgress();
+  assert.equal(nextMission(p).id, 'first');
+  p = run(p, 'plan_completed', { metres: 40 }).progress;
+  assert.equal(nextMission(p).id, 'garage');
+  const all = { ...emptyProgress(), firstRun: true, robots: ['a', 'b', 'c', 'd', 'e'], bestCut: 5, spot: true, street: true, before: true, own: true };
+  assert.equal(totalStars(all), TOTAL_STARS);
+  assert.equal(nextMission(all), null);
 });

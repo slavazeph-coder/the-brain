@@ -187,6 +187,9 @@ body.playground :is(.mission-sound,.mission-reset){min-height:44px;padding:0 14p
 .mission-toast-title+.mission-toast-title{margin-top:4px}
 .mission-toast-sub,.mission-toast-level{margin-top:4px!important;font-size:15px;color:#e9d6a0}
 .mission-toast-level{font-weight:700;color:var(--gold)}
+.mission-toast-next{margin-top:8px!important;padding-top:8px;border-top:1px solid #ffd16633;font-size:15px;color:#fff3cf}
+.mission-card[data-next=true]{border-color:#00f5ff80;box-shadow:0 0 0 1px #00f5ff40,0 0 26px #00f5ff1f}
+.mission-card[data-next=true] .mission-card-head strong::after{content:" · Up next";font:600 13px var(--font);color:var(--cyan)}
 @keyframes mission-pop{0%{opacity:0;transform:translate(-50%,24px) scale(.92)}100%{opacity:1;transform:translate(-50%,0) scale(1)}}
 .mission-confetti{position:fixed;inset:0;width:100vw;height:100vh;z-index:94;pointer-events:none}
 
