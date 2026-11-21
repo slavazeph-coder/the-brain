@@ -171,3 +171,30 @@ html[data-reading-size="large"] :is(.showroom-host, .showroom-view) {
 @container showroom (max-width: 20rem) {
   .showroom-walk .walk-controls { grid-template-columns: minmax(0,1fr); }
 }
+
+.showroom-run { margin: .6rem 0; padding: .5rem 1rem; border: 1px solid var(--sr-line); border-radius: 10px; background: var(--sr-bg); }
+.showroom-run [hidden] { display: none !important; }
+.showroom-run summary { padding: .55rem 0; min-height: 44px; font-weight: 650; cursor: pointer; }
+.showroom-run .run-setup, .showroom-run .run-replay, .showroom-run .run-files { display: flex; align-items: end; gap: .6rem 1rem; flex-wrap: wrap; }
+.showroom-run .run-setup { margin: .8rem 0; }
+.showroom-run .run-setup label, .showroom-run .run-replay label { display: grid; min-width: 0; max-width: 100%; gap: .25rem; font-weight: 600; }
+.showroom-run select { max-width: 100%; }
+.showroom-run figure { margin: .6rem 0; padding: 0; }
+.showroom-run figcaption, .showroom-run .run-evidence p { color: var(--sr-muted); font-size: .94em; }
+.showroom-run svg { display: block; width: min(100%, 32rem); background: #101e29; border: 1px solid var(--sr-line); border-radius: 8px; }
+.showroom-run .run-floor { fill: #162b32; stroke: #8299a2; }
+.showroom-run .run-obstacle { fill: #456675; stroke: #afc1c8; }
+.showroom-run .run-unknown { fill: #574529; stroke: #d1ad66; }
+.showroom-run .run-plan { fill: none; stroke: #f7ce75; stroke-width: 2.5; stroke-dasharray: 5 4; }
+.showroom-run .run-trail { fill: none; stroke: #7fe2c8; stroke-width: 2; }
+.showroom-run .run-goal { fill: #fbd891; stroke: #15221e; }
+.showroom-run .run-cart { fill: #f7f8fd; stroke: #276d67; stroke-width: 2; }
+.showroom-run .run-replay { align-items: center; margin: .6rem 0; }
+.showroom-run .run-replay label { flex: 1 1 10rem; max-width: 27rem; }
+.showroom-run .run-evidence { margin: .5rem 0; }
+.showroom-run .run-files a { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; color: var(--sr-mint); text-decoration: underline; }
+.showroom-run .run-files a:focus-visible, .showroom-run summary:focus-visible { outline: 3px solid var(--sr-mint); outline-offset: 2px; }
+@container showroom (max-width: 32rem) {
+  .showroom-run { padding-inline: .7rem; }
+  .showroom-run .run-setup { align-items: stretch; flex-direction: column; }
+}
