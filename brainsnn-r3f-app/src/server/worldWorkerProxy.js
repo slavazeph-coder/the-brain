@@ -36,6 +36,11 @@ const VISITOR_UPLOADS_PER_JOB = 13;
 // The worker counts a created but unstarted job as active, and allows one per tenant. The page starts a job straight
 // after creating it, so one still unstarted after this long was abandoned (a closed tab, a lost connection): cancel it.
 const PREPARED_LEASE_MS = 120_000;
+// Socket inactivity limits. Control calls (capabilities, job status, create, start, ticket, cancel) are quick database
+// work on the worker, so an unreachable or restarting worker fails them in seconds instead of holding the caller for two
+// minutes (seen in production during worker redeploys). Upload chunks and downloads keep the long allowance.
+const CONTROL_TIMEOUT_MS = 15_000;
+const TRANSFER_TIMEOUT_MS = 120_000;
 
 const digest = (value) => createHash('sha256').update(String(value)).digest();
 const day = (now) => new Date(now).toISOString().slice(0, 10);
@@ -95,7 +100,7 @@ export function route(method, path, query) {
 }
 
 export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () => randomBytes(32).toString('base64url'),
-  preparedLeaseMs = PREPARED_LEASE_MS } = {}) {
+  preparedLeaseMs = PREPARED_LEASE_MS, controlTimeoutMs = CONTROL_TIMEOUT_MS, transferTimeoutMs = TRANSFER_TIMEOUT_MS } = {}) {
   let upstream = null;
   try {
     const url = new URL(String(env.WORLD_WORKER_INTERNAL_URL || ''));
@@ -180,13 +185,15 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     leases.set(job, timer);
   }
 
-  function forward(req, res, path, { credential, body, inspect }) {
+  function forward(req, res, path, { credential, body, inspect, transfer = false }) {
     const headers = {};
+    let timedOut = false;
     if (credential) headers.authorization = `Bearer ${credential}`;
     if (req.headers['content-type']) headers['content-type'] = req.headers['content-type'];
     if (body) headers['content-length'] = String(body.length);
     else if (req.headers['content-length']) headers['content-length'] = req.headers['content-length'];
-    const outgoing = client.request(new URL(path, upstream), { method: req.method, headers, timeout: 120_000 }, (answer) => {
+    const outgoing = client.request(new URL(path, upstream), { method: req.method, headers,
+      timeout: transfer ? transferTimeoutMs : controlTimeoutMs }, (answer) => {
       const status = answer.statusCode || 502;
       if (inspect && status < 300) {
         const chunks = []; let size = 0;
@@ -205,8 +212,14 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
       res.writeHead(status, pass);
       answer.pipe(res);
     });
-    outgoing.on('timeout', () => outgoing.destroy(new Error('timeout')));
-    outgoing.on('error', () => reply(res, 502, { detail: 'BrainSNN processing is unavailable right now. Try again in a few minutes.' }));
+    outgoing.on('timeout', () => { timedOut = true; outgoing.destroy(new Error('timeout')); });
+    outgoing.on('error', () => {
+      if (res.headersSent) { if (!res.writableEnded) res.destroy(); return; }
+      if (timedOut) res.setHeader('Retry-After', '30');
+      reply(res, timedOut ? 504 : 502, { detail: timedOut
+        ? 'BrainSNN processing did not answer in time. Try again in a minute.'
+        : 'BrainSNN processing is unavailable right now. Try again in a few minutes.' });
+    });
     if (body) outgoing.end(body);
     else if (req.method === 'PUT') req.pipe(outgoing);
     else outgoing.end();
@@ -216,7 +229,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
     const call = route(req.method, path, query);
     if (!call) return reply(res, 404, { detail: 'Not a BrainSNN processing call.' });
     const target = path + (query ? `?${query}` : '');
-    if (call.name === 'download') return forward(req, res, target, {});  // the signed, 60-second ticket is the credential
+    if (call.name === 'download') return forward(req, res, target, { transfer: true });  // the signed, 60-second ticket is the credential
     const current = session(req);
     if (!current) return reply(res, 401, { detail: 'Your processing session ended. Reconnect to BrainSNN processing.' });
     const credential = current.kind === 'owner' ? ownerToken : visitorToken;
@@ -226,7 +239,7 @@ export function createWorldWorkerProxy(env = {}, { now = Date.now, token = () =>
       const declared = req.headers['content-length'];
       if (declared === undefined || !/^\d+$/.test(declared)) return reply(res, 411, { detail: 'Content-Length is required.' });
       if (Number(declared) > CHUNK_BYTES) return reply(res, 413, { detail: 'Request exceeds the body limit.' });
-      return forward(req, res, target, { credential });
+      return forward(req, res, target, { credential, transfer: true });
     }
     let body;
     if (req.method === 'POST') {

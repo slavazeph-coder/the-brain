@@ -24,6 +24,7 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [API sell-readiness audit](api-sell-readiness-2026-11-21.md) — Nov 21: World API works end to end with operator keys; processing tenants, S3 and billing still block paid customers; processing timeout and VITE env-leak fixes.
 → [Five-sense cart trial and recorded views](brainsnn-five-senses-2026-11-20.md) — PR328, the continuation on the same evidence, two paired evaluations and simulated sensing.
 → [Linked showroom](world-linked-showroom-2026-11-20.md) — shared object selection, recovered video times and editable route comparisons.
 
