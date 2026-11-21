@@ -69,13 +69,19 @@ test('the tour offers the showroom, simulated senses, robot task and saved proje
   const places = new Map([
     ['#showroom', 'capture'],
     ['/world/sense-trial.html', 'robot'],
-    ['layer:robottask', 'robot'],
     ['/world/projects.html', 'share'],
   ]);
   for (const [target, expected] of places) {
     const entries = chapters.flatMap(chapter => chapter.features.filter(f => f.target === target).map(() => chapter.id));
     assert.deepEqual(entries, [expected], target);
   }
+  const robotActivities = chapters.flatMap(chapter => chapter.features
+    .filter(f => f.target === 'layer:robottask')
+    .map(f => [chapter.id, f.label, f.focus]));
+  assert.deepEqual(robotActivities, [
+    ['robot', 'Make a robot task', '[data-robot-task-run]'],
+    ['robot', 'Cook a pancake', '[data-pancake-station]'],
+  ]);
 });
 
 test('each film cue has the same time in the transcript and exactly one playable tool', async () => {

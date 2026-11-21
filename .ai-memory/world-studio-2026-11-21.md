@@ -61,4 +61,4 @@ sound, breathing Let it try button. Missions button sits beside Your world so it
 is visible on phones without swiping. `tests/world/missions.test.mjs` pins the
 rules; `studio_browser_smoke.py::verify_missions` plays the real loop on the
 what-if fixture (10.8 → 7.6 m earns two Shortcut stars, 4/11, Level 2) and checks
-persistence across reload. Offline shell `world-shell-missions-v49`.
+persistence across reload. Offline shell `world-shell-missions-kitchen-v50`.
