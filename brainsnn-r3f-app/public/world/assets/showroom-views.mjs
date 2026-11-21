@@ -2,6 +2,7 @@
 export const frames = [
   {
     "id": "view-1",
+    "heading": 48.3434,
     "timeSeconds": 0.0,
     "image": "./assets/showroom-camera-1.jpg",
     "width": 768,
@@ -42,6 +43,7 @@ export const frames = [
   },
   {
     "id": "view-2",
+    "heading": 25.6186,
     "timeSeconds": 1.5,
     "image": "./assets/showroom-camera-2.jpg",
     "width": 768,
@@ -82,6 +84,7 @@ export const frames = [
   },
   {
     "id": "view-3",
+    "heading": -36.1932,
     "timeSeconds": 3.0,
     "image": "./assets/showroom-camera-3.jpg",
     "width": 768,

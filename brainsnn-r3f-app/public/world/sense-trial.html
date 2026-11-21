@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0c171c">
+  <meta name="description" content="Follow a simulated robot as it uses five kinds of clues to find a matching cart in a new room.">
+  <title>Find the matching cart | BrainSNN World Builder</title>
+  <link rel="stylesheet" href="./sense-trial.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to trial</a>
+  <header class="nav"><a class="brand" href="./index.html"><span aria-hidden="true">B</span> BrainSNN</a><nav aria-label="World Builder"><a href="./index.html">World Builder</a><a href="./index.html#showroom">Showroom</a></nav></header>
+  <main id="main">
+    <header class="intro"><h1 id="task-title">Find the matching cart</h1><p id="intro-copy">Follow a robot into a new room. Watch it compare clues, ask for help, or stop when it can’t tell two carts apart.</p></header>
+    <noscript>This activity needs JavaScript to run the simulation on your device.</noscript>
+    <section class="trial" aria-label="Cart search">
+      <div class="trial-bar">
+        <div><p class="small-heading">Simulated room</p><h2 id="room-name">Opening the room…</h2></div>
+        <div class="controls"><button type="button" id="step" class="primary" disabled>Next step</button><button type="button" id="play" disabled>Play trial</button><button type="button" id="restart" disabled>Start over</button><button type="button" id="new-room" disabled>New room</button></div>
+      </div>
+      <p class="status" id="trial-status" role="status">Preparing the first room.</p>
+      <button type="button" class="primary" id="keep-checking" hidden>Keep checking</button>
+      <div class="board">
+        <section class="map-card" aria-labelledby="map-title">
+          <div class="card-head"><h3 id="map-title">Room map</h3><span id="robot-type"></span></div>
+          <svg id="room-map" viewBox="0 0 640 380" role="img" aria-labelledby="map-name map-description">
+            <title id="map-name">Room map</title><desc id="map-description">Use the cart buttons below the map to inspect the clues gathered so far.</desc>
+          </svg>
+          <ul class="map-key" aria-label="Map key"><li><i class="key-robot"></i>Robot</li><li><i class="key-cart"></i><span id="map-object">Cart</span></li><li><i class="key-station"></i>Sample station</li><li><i class="key-block"></i>Blocked space</li></ul>
+          <div class="inspect"><label for="inspect-cart" id="inspect-label">Inspect a cart</label><select id="inspect-cart"></select></div>
+          <p id="observed" class="observed"></p>
+        </section>
+        <div class="side">
+          <section class="reference-card" aria-labelledby="ref-title"><div class="card-head"><h3 id="ref-title">Cart to find</h3></div><img id="reference-picture" width="512" height="230" alt="" hidden><p id="ref-prompt">Look for these clues together.</p><dl id="reference" class="reference"></dl><p class="sample-note">All five senses are simulated. Taste uses a known food sample at the room’s make-believe taste station.</p></section>
+          <section class="decision-card" aria-labelledby="decision-title"><div class="card-head"><h3 id="decision-title">Robot’s decision</h3></div><p id="decision">Waiting for the first move.</p><p id="score" class="score" hidden></p><p id="budget" class="budget"></p></section>
+        </div>
+      </div>
+      <details class="settings" id="options"><summary>Change how the robot searches</summary>
+        <div class="settings-grid">
+          <label>Task <select id="task"><option value="find">Find a matching cart</option><option value="delivery">Choose a delivery bay</option></select></label>
+          <label>Search strategy <select id="strategy"><option value="memory">Use lessons from practice rooms</option><option value="active">Choose clues without memory</option><option value="baseline">Use the sight-only baseline</option></select></label>
+          <label>Robot <select id="robot"><option value="rover">Small rover</option><option value="forklift">Forklift</option></select></label>
+          <label>Room challenge <select id="mode"><option value="mixed">Surprise me</option><option value="present">A matching cart is here</option><option value="absent">The matching cart is missing</option><option value="ambiguous">Clues overlap</option></select></label>
+          <label>Clue budget <select id="limit"><option value="8">8 points</option><option value="14" selected>14 points</option><option value="20">20 points</option></select></label>
+        </div>
+        <fieldset><legend>Senses available</legend><div id="sense-choices" class="sense-choices"></div></fieldset>
+        <p id="settings-note" class="muted">Changing a setting restarts this room. Each clue uses part of the budget.</p>
+      </details>
+      <details class="journal" open><summary>What the robot did</summary><ol id="journal"></ol><p id="empty-journal">Choose Next step to see the first decision.</p></details>
+    </section>
+    <section class="benchmark" aria-labelledby="compare-title">
+      <div><h2 id="compare-title">Which search works best?</h2><p>Try all three strategies on the same set of unseen rooms. Each gets the same budget. The judge checks the decision against the room. An uncertain stop earns no decision credit.</p></div>
+      <button type="button" id="compare" disabled>Compare strategies</button>
+      <p id="compare-status" role="status"></p>
+      <div id="compare-results" hidden></div><button type="button" id="download" hidden>Save results (JSON)</button>
+    </section>
+  </main>
+  <script type="module" src="./sense-trial-ui.mjs"></script>
+</body>
+</html>

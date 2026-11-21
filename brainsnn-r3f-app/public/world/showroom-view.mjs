@@ -1,3 +1,5 @@
+import {mountRecordedViews} from './recorded-views-ui.mjs';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const WIDTH = 500;
 const HEIGHT = 290;
@@ -97,6 +99,7 @@ export function mountShowroom(root, bundle) {
       <label>Source view <input data-el="timeline" type="range" min="0" step="1"></label>
       <output data-el="viewNumber"></output>
     </div>
+    <details class="recorded-views" data-el="memory"></details>
     <div class="showroom-tabs" role="group" aria-label="Choose a view">
       <button type="button" data-tab="source">Source</button><button type="button" data-tab="boxes">Objects</button>
       <button type="button" data-tab="cloud">Points</button><button type="button" data-tab="floor">Map</button>
@@ -266,6 +269,7 @@ export function mountShowroom(root, bundle) {
   }
 
   function renderFrame() {
+    updateMemory();
     const frame = frames[frameIndex];
     const time = sourceTime(frame?.timeSeconds);
     const view = frame ? (frameIndex + 1) + ' of ' + frames.length : 'No views';
@@ -441,6 +445,15 @@ export function mountShowroom(root, bundle) {
   el.pair.onchange = () => choose(el.pair.value);
   el.left.onclick = () => { rotation--; buildCloud(); };
   el.right.onclick = () => { rotation++; buildCloud(); };
+  const updateMemory = mountRecordedViews(el.memory, {
+    frames, objects, current: () => frameIndex, selected: () => selected,
+    open: index => {
+      stopViews();
+      if (index === frameIndex) root.dispatchEvent(new CustomEvent('showroom-frame-change', {bubbles: true, detail: {index}}));
+      else setFrame(index, true);
+      switchPanel('source');
+    },
+  });
   buildCloud();
   renderFrame();
   renderFloor();
