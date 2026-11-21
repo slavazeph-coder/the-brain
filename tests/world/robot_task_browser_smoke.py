@@ -361,6 +361,51 @@ def verify_cancel(page, context, field):
         context.unroute(pattern, hold)
 
 
+def verify_kitchen(page, output, engine):
+    kitchen = page.locator('[data-kitchen-pin]')
+    field = lambda key: kitchen.locator(f'[data-kitchen-{key}]')
+    kitchen.locator('summary').click()
+    scores = {}
+    for mode in ('grip', 'open'):
+        field('controller').select_option(mode)
+        field('run').click()
+        expect(field('result')).to_be_visible(timeout=30000)
+        record = json.loads(download(page, field('json'), f'rolling-pin-{mode}.json'))
+        assert record['schema'] == 'brainsnn.kitchen-pin.v1'
+        assert download(page, field('xml'), f'rolling-pin-{mode}.xml').decode() == record['modelXML']
+        scores[mode] = record['score']
+        assert record['score']['success'] == (mode == 'grip')
+        assert record['frames'][-1]['action'] is None and len(record['frames']) == 121
+        field('time').press('Home')
+        field('time').press('ArrowRight')
+        expect(field('frame')).to_contain_text('0.05 s')
+        if mode == 'grip':
+            still = field('canvas').evaluate('c => c.toDataURL()')
+            field('time').evaluate("e => {e.value='60'; e.dispatchEvent(new Event('input'));}")
+            expect(field('frame')).to_contain_text('Held by both fingers')
+            assert field('canvas').evaluate('c => c.toDataURL()') != still
+            field('canvas').screenshot(path=str(output/f'{engine}-kitchen.png'))
+            field('play').click()
+            page.wait_for_function("Number(document.querySelector('[data-kitchen-time]').value) > 62")
+            field('play').click()
+            expect(field('play')).to_have_text('Play the run')
+    assert scores['grip']['liftMeters'] > .1 and scores['grip']['settledTraySeconds'] > 1
+    assert scores['open']['liftMeters'] == 0
+    assert kitchen.evaluate('e => e.scrollWidth <= e.clientWidth + 1')
+    kitchen.locator('summary').click()
+    direct = page.context.new_page()
+    try:
+        direct.set_viewport_size({'width': 320, 'height': 850})
+        direct.goto(page.url.split('#')[0] + '#rolling-pin', wait_until='domcontentloaded')
+        panel = direct.locator('[data-kitchen-pin]')
+        expect(panel).to_have_js_property('open', True)
+        expect(panel.locator('summary')).to_be_focused()
+        expect(panel.locator('[data-kitchen-result]')).to_be_hidden()
+    finally:
+        direct.close()
+    return scores
+
+
 def verify_browser(engine, url, output, axe_path):
     args = {'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']} if engine.name == 'chromium' else {}
     browser = engine.launch(headless=True, **args)
@@ -454,6 +499,7 @@ def verify_browser(engine, url, output, axe_path):
         page.set_viewport_size({'width': 320, 'height': 850})
         page.locator('#playground-text-size').tap()
         expect(page.locator('html')).to_have_attribute('data-reading-size', 'large')
+        kitchen_scores = verify_kitchen(page, output, engine.name)
         sizes = panel.evaluate("""el => ({
           viewport:innerWidth, page:document.documentElement.scrollWidth,
           panel:Math.ceil(el.getBoundingClientRect().width), contents:el.scrollWidth,
@@ -480,7 +526,7 @@ def verify_browser(engine, url, output, axe_path):
         verify_draft_lifecycle(context, url, reference)
         verify_session_gating(browser, url, output, engine.name, reference)
         assert not errors and not writes, (errors, writes)
-        report = {'engine': engine.name, 'version': reach['engine']['version'], 'reach': reach['score'],
+        report = {'engine': engine.name, 'kitchen': kitchen_scores, 'version': reach['engine']['version'], 'reach': reach['score'],
                   'push': push['score'], 'limitedPush': miss['score'], 'episodeSha256': sha256(push_bytes).hexdigest(),
                   'referenceSha256': sha256(reference).hexdigest(), 'repeatable': True,
                   'writes': writes, 'errors': errors, 'axeViolations': violations, 'replay3D':replay_3d, 'exampleFilmSeconds':film_seconds}

@@ -27,7 +27,7 @@ opened in new tabs. The fix is structural first, visual second.
   showcase cards and the workspace frame. Contrast-mode rules stay authoritative
   (`html:not([data-contrast=more])` guards). No studio text under 13 px; all bar
   targets ≥ 44 px.
-- Offline shell `world-shell-studio-flow-v47`.
+- Offline shell `world-shell-studio-run-v48`.
 - Checks: `studio.test.mjs`, `studio_browser_smoke.py` (CI step after the
   showcase), updated `world_showcase_browser_smoke.py` (standalone cards open the
   workbench). Local Chromium: studio, showcase, browser, playground help, robot

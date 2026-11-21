@@ -477,6 +477,105 @@ def verify_tool_actions(page):
     return {'tools': sorted(tools), 'standalone': sorted(standalone), 'features': feature_counts}
 
 
+def verify_current_map_recording(page):
+    page.locator('[data-tab=test]').click()
+    page.locator('.goal-spot > summary').click()
+    page.locator('#goal-x').fill('10')
+    page.locator('#goal-z').fill('9')
+    opener = page.locator('[data-action=record-map-route]')
+    opener.click()
+    dialog = page.locator('dialog.map-run-dialog')
+    expect(dialog).to_be_visible()
+    expect(dialog.locator('[data-run-object]')).to_be_hidden()
+    expect(dialog.locator('[data-run-variant]')).to_be_hidden()
+    dialog.locator('[data-run-driver]').select_option('imitation')
+    dialog.locator('[data-run-start]').click()
+    expect(dialog.locator('[data-run-result]')).to_be_visible(timeout=90000)
+    with page.expect_download() as promise:
+        dialog.locator('[data-run-json]').click()
+    recording = json.loads(Path(promise.value.path()).read_text())
+    source = recording['scene']['sourceMap']
+    assert source['kind'] == 'authored' and source['goal'] == {'x':10, 'z':9}
+    assert source['mapReviewed'] and source['scaleReviewed'] and source['blocked']
+    assert recording['score']['success'] and recording['provenance']['controllerKind'] == 'imitation'
+    dialog.locator('[data-close]').click()
+    expect(dialog).to_have_count(0)
+    expect(opener).to_be_focused()
+    expect(page.locator('#goal-x')).to_have_value('10')
+    expect(page.locator('#goal-z')).to_have_value('9')
+    opener.click()
+    expect(dialog.locator('[data-run-result]')).to_be_hidden()
+    dialog.locator('[data-close]').click()
+    return {'sceneSha256':recording['sceneSha256'], 'outcome':recording['score']['reason'],
+            'trainingId':recording['provenance']['trainingId'], 'goal':source['goal']}
+
+
+def verify_showroom_recording(page, base_url, output, engine_name):
+    page.goto(base_url + '#showroom-run', wait_until='domcontentloaded')
+    panel = page.locator('#showroom [data-el="run"]')
+    field = lambda key: panel.locator(f'[data-run-{key}]')
+    expect(panel).to_have_attribute('open', '')
+    expect(panel.locator('summary').first).to_be_focused()
+    expect(field('start')).to_be_enabled()
+    field('start').click()
+    expect(field('result')).to_be_visible(timeout=90000)
+
+    recordings = []
+    for variant in ('before', 'after'):
+        if variant == 'after':
+            field('variant').select_option(variant)
+            expect(field('result')).to_be_hidden()
+            field('start').click()
+            expect(field('result')).to_be_visible(timeout=90000)
+        files = {}
+        for key in ('json', 'xml', 'usd'):
+            with page.expect_download() as promise:
+                field(key).click()
+            download = promise.value
+            assert download.failure() is None, download.failure()
+            files[key] = Path(download.path()).read_text()
+        recording = json.loads(files['json'])
+        assert recording['scene']['variant'] == variant
+        assert len(recording['frames']) > 1 and recording['frames'][-1]['action'] is None
+        assert recording['modelXML'] == files['xml'] and '<mujoco' in files['xml']
+        assert files['usd'].startswith('#usda 1.0')
+        recordings.append({'variant':variant, 'sceneSha256':recording['sceneSha256'], 'samples':len(recording['frames']),
+                           'outcome':recording['score']['reason'], 'engine':recording['engine']})
+    assert recordings[0]['sceneSha256'] != recordings[1]['sceneSha256']
+    field('driver').select_option('imitation')
+    expect(field('result')).to_be_hidden()
+    field('start').click()
+    expect(field('result')).to_be_visible(timeout=90000)
+    with page.expect_download() as promise:
+        field('json').click()
+    learned_run = json.loads(Path(promise.value.path()).read_text())
+    assert learned_run['provenance']['controllerKind'] == 'imitation'
+    assert learned_run['provenance']['trainingId']
+    assert learned_run['sceneSha256'] == recordings[1]['sceneSha256']
+
+    field('play').click()
+    expect(field('play')).to_have_text('Pause recording')
+    page.wait_for_function("Number(document.querySelector('[data-run-step]').value) > 0")
+    field('play').click()
+    field('step').focus()
+    field('step').press('End')
+    field('step').press('ArrowLeft')
+    assert int(field('step').input_value()) == int(field('step').get_attribute('max')) - 1
+    panel.locator('.run-evidence summary').click()
+    expect(field('sample')).to_contain_text('requested')
+    viewport = page.viewport_size
+    panel.screenshot(path=output/f'{engine_name}-room-run.png')
+    page.set_viewport_size({'width':320, 'height':850})
+    page.locator('#playground-text-size').tap()
+    no_overflow(panel)
+    panel.screenshot(path=output/f'{engine_name}-room-run-large.png')
+    page.locator('#playground-text-size').tap()
+    page.set_viewport_size(viewport)
+    page.locator('[data-close-showroom]').click()
+    expect(page.locator('#showroom')).to_be_hidden()
+    return recordings
+
+
 def verify_browser(engine, url, output, axe_script):
     flags = {'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']} if engine.name == 'chromium' else {}
     browser = engine.launch(headless=True, **flags)
@@ -496,8 +595,9 @@ def verify_browser(engine, url, output, axe_script):
 
         context.route('**/*', safe_route)
         base_url = urldefrag(url)[0]
+        recorded_runs = verify_showroom_recording(page, base_url, output, engine.name)
         response = page.goto(base_url + '#showroom-walk', wait_until='domcontentloaded')
-        assert response and response.ok, url
+        assert response is None or response.ok, url
         walk = page.locator('#showroom [data-el="walk"]')
         expect(walk).to_have_attribute('open', '')
         expect(walk.locator('summary')).to_be_focused()
@@ -513,6 +613,7 @@ def verify_browser(engine, url, output, axe_script):
         response = page.goto(base_url, wait_until='domcontentloaded')
         assert response is None or response.ok, url
         expect(page.locator('#objects option').first).to_be_attached()
+        current_map_run = verify_current_map_recording(page)
         draft = make_map_edit(page)
         hero_link = page.locator('.hero a[href="#showcase"]')
         hero_link.focus()
@@ -548,7 +649,7 @@ def verify_browser(engine, url, output, axe_script):
             }""")
             assert not violations, violations
         assert not errors and not writes, (errors, writes)
-        report = {'engine': engine.name, 'chapters': CHAPTERS, 'media': media, 'routes': routes,
+        report = {'engine': engine.name, 'chapters': CHAPTERS, 'media': media, 'routes': routes, 'recordedRuns':recorded_runs, 'currentMapRun':current_map_run,
                   'mobileWidths': [390, 320], 'axeViolations320px': violations, 'writes': writes, 'pageErrors': errors}
         (output/f'{engine.name}.json').write_text(json.dumps(report, indent=2) + '\n')
         print(f'{engine.name}: {len(routes["tools"])} in-page tools, {len(routes["standalone"])} standalone pages, '

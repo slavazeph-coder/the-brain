@@ -69,7 +69,7 @@ export const chapters = [
       },
       {
         label: 'Make a robot task',
-        detail: 'Tell the robot to reach a spot or push a puck. Watch the test from above or in 3D, then save your task.',
+        detail: 'Have a robot reach a spot, push a puck or pick up a rolling pin. Watch the run and save it.',
         access: 'Preview · on this device',
         target: 'layer:robottask',
         focus: '[data-robot-task-run]',
@@ -96,7 +96,7 @@ export const chapters = [
     features: [
       {
         label: 'Explore the showroom',
-        detail: 'Walk between two pictures. Pick a cart to see it on the map, or move it to try a new robot route.',
+        detail: 'Walk between pictures, move a cart and record a robot trying the route.',
         access: 'Has an example',
         target: '#showroom',
       },

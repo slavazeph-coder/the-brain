@@ -42,3 +42,24 @@ python3 scripts/world-demo/prepare_showroom_depth.py \
 ```
 
 The walkthrough is a camera preview. Robot fit, room edits and clearance still use the reviewed map. ViewNeXt can be evaluated through the external prediction format when its authors release runnable inference code and weights. [ViewNeXt release](https://github.com/phai-lab/ViewNext)
+
+## Record a robot run
+
+Open **Record a robot run** in the showroom, or visit `/world/index.html#showroom-run`. Choose an object and try the original room or the copy with that object removed. **Follow the route** runs the fixed controller. **Learned from examples** runs a small steering policy fitted to simulator observations. Both receive the next waypoint from the same planner. Play or scrub the result to see where the cart actually went and check where it stopped.
+
+For your own scan, use the playground's existing reconstruction workflow to propose a floor map from the cloud and camera poses. Review scale, obstacles and the start position. In **Try a robot → Route to a spot**, enter a destination and choose **Record a delivery cart going here**. This uses the current reviewed map, including unknown and no-go areas. The simulator uses a 35 cm-wide, 24 cm-tall planar cart. The recording uses that cart even if another robot is selected for the adjacent planning preview. Imported polygonal floors retain their boundary edges. Supplied obstacle footprints become convex, fixed-height collision shapes. The raw splat colors and the phone pictures remain visual evidence.
+
+- **Save recording (.json)** includes timestamped cart position, velocity, next waypoint, target velocity, contacts and final outcome, plus the room and model needed to repeat the run. The final sample has no subsequent action.
+- **Save MuJoCo scene (.xml)** gives the same model the browser compiled and stepped.
+- **Save 3D replay (.usda)** gives a self-contained metric OpenUSD stage. Its static colliders use the same prisms as MuJoCo. The virtual cart follows the recorded poses as a kinematic body on the timeline. OpenUSD can read the stage independently. Isaac Sim can import USD and MJCF. This release measured the motion using MuJoCo. [Isaac Sim stage and physics documentation](https://docs.isaacsim.omniverse.nvidia.com/latest/physics/simulation_fundamentals.html)
+
+To reproduce all paired runs locally, install the app's locked npm dependencies and run the following from the repository root. Omit `--room` to use the practice room. Each output directory must be new.
+
+```sh
+node scripts/world-demo/record_showroom_runs.mjs --room showroom.json --out showroom-runs
+node scripts/world-demo/fit_showroom_driver.mjs --room showroom.json --report driver-evaluation.json
+```
+
+The steering baseline was fitted to 7,649 action examples from 21 authored routes, using waypoint displacement as its input. In 14 additional trials, the fixed and fitted controllers each completed all 12 passable routes and stopped on contact in both deliberately blocked rooms. A stationary control reached zero goals. The set includes four routes from the private v23 showroom. These results describe a simulated cart given known waypoints. The optional LeRobot converter can also replay the native model to supply a synchronized overhead image at every action. [Dataset export and readback](world-showroom-episode-dataset.md)
+
+A separate tabletop activity at `/world/index.html#rolling-pin` in **Make a robot task** uses a virtual gripper to pick up a free rolling pin and put it on a baking tray. Try the open-jaw control to compare lift, contact and placement. The kitchen is an authored simulation inspired by the demonstration. [Original workshop demonstration](https://www.linkedin.com/posts/david-finsterwalder_digitalhubsbw-ugcPost-7529449805736087552-VifK)

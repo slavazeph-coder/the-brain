@@ -3,7 +3,7 @@ let page;
 let opening;
 
 async function openFromLink() {
-  if (!host || !['#showroom', '#showroom-walk'].includes(location.hash)) return;
+  if (!host || !['#showroom', '#showroom-walk', '#showroom-run'].includes(location.hash)) return;
   host.hidden = false;
   host.focus({preventScroll: true});
   host.scrollIntoView({block: 'start'});
@@ -20,13 +20,12 @@ async function openFromLink() {
       opening = undefined;
     }
   }
-  if (location.hash === '#showroom-walk' && !host.hidden) {
-    const walk = host.querySelector('[data-el="walk"]');
-    if (walk) {
-      walk.open = true;
-      walk.querySelector('summary').focus({preventScroll:true});
-      walk.scrollIntoView({block:'start'});
-    }
+  const panelKey = {'#showroom-walk':'walk', '#showroom-run':'run'}[location.hash];
+  const panel = panelKey && host.querySelector('[data-el="' + panelKey + '"]');
+  if (panel && !host.hidden) {
+    panel.open = true;
+    panel.querySelector('summary').focus({preventScroll:true});
+    panel.scrollIntoView({block:'start'});
   }
 }
 
