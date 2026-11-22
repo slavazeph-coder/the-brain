@@ -276,7 +276,7 @@ def check_metric(pw, name, origin, worker_url, token, phone=False):
         page.wait_for_function("!document.querySelector('#scene-dialog').open")
         assert page.locator('#status').inner_text() == ('Map built from the simulation scene: 1 wall and 0 objects as obstacles, 1 unobserved area, '
                                                         '4 × 3 m floor bounding extent. Review scale and obstacles, then plan.'), page.locator('#status').inner_text()
-        assert page.locator('#provenance').inner_text() == 'REVIEW REQUIRED'
+        assert page.locator('#provenance').text_content() == 'REVIEW REQUIRED'
         page.locator('#run').click()
         page.wait_for_timeout(200)
         assert 'Confirm independently measured scale' in page.locator('#status').inner_text()
