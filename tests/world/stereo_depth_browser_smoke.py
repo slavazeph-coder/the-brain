@@ -115,7 +115,8 @@ def verify_browser(engine, origin, output):
     expect(status).to_contain_text(f'Depth estimate ready. {accepted:,}')
     page.get_by_text('Photos and calibration used', exact=True).click()
     expect(page.locator('[data-stereo-source]')).to_contain_text('baseline 0.1 m')
-    page.get_by_role('button', name='Larger text', exact=True).click()
+    page.locator('#playground-text-size').click()
+    expect(page.locator('html')).to_have_attribute('data-reading-size', 'large')
     for width in [390, 320]:
         page.set_viewport_size({'width':width, 'height':850})
         assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')

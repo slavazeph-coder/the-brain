@@ -26,6 +26,12 @@ test('every separate tool page opens in the workbench; nothing else does', () =>
   for (const { target } of features.filter(({ target }) => !target.startsWith('/'))) {
     assert.equal(isWorkbenchPage(target), false, target);
   }
+  for (const goal of ['', '?goal=play', '?goal=room', '?goal=bim', '?goal=robot']) {
+    assert.equal(isWorkbenchPage('/scan' + goal), true);
+  }
+  for (const other of ['/scan?token=private', '/scan?goal=play&token=private', '/scan?goal=unknown', '/scan#handoff=private']) {
+    assert.equal(isWorkbenchPage(other), false);
+  }
   // The playground itself, other sites and unsafe shapes never load in the workbench.
   for (const target of ['/world/index.html', '/world/index.html#workspace', 'https://example.com/world/a.html', '//evil.test/world/a.html',
     '/world/../server.ts', '/world/a.html?x=1', 'javascript:alert(1)', '/arena/other.html']) {
