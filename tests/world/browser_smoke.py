@@ -38,6 +38,11 @@ def open_world(view, url, *, require_response=False):
     page.wait_for_function("document.querySelectorAll('.system-card').length===25")
     return page
 
+def open_map_options(page):
+    if not page.locator('#workspace-command-bar').evaluate('el => el.open'):
+        page.locator('a[href="#workspace-command-bar"]').click()
+
+
 def check(browser, mobile=False):
     ctx=browser.new_context(viewport={'width':390,'height':844} if mobile else {'width':1440,'height':1000},device_scale_factor=1,has_touch=mobile)
     page=ctx.new_page();view=page;errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
@@ -47,8 +52,7 @@ def check(browser, mobile=False):
     assert page.locator('.system-card').filter(has_text='MetricTrail long-video trial').get_attribute('data-state')=='gated'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     view.screenshot(path=str(OUTPUT/(browser.browser_type.name+('-mobile.png' if mobile else '-desktop.png'))),full_page=True)
-    if not page.locator('#workspace-command-bar').evaluate('el => el.open'):
-        page.locator('a[href="#workspace-command-bar"]').click()
+    open_map_options(page)
     assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
     page.locator('#run').click();page.wait_for_timeout(300);print('RUN STATUS',page.locator('#status').inner_text(),errors,flush=True);page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')",timeout=5000)
     assert page.locator('#metric-cost').inner_text()=='Enter rates'
@@ -195,6 +199,7 @@ def check_measurements(browser):
         page.locator('#files').set_input_files({'name':'measurement-fixture.json','mimeType':'application/json','buffer':json.dumps(value).encode()})
         page.wait_for_function("document.querySelector('#world-title').textContent==='Measurement contract fixture'")
     def proof(tag):
+        open_map_options(page)
         with view.expect_download() as event:page.locator('#export').click()
         path=OUTPUT/(browser.browser_type.name+'-measurement-'+tag+'.json');event.value.save_as(path)
         return json.loads(path.read_text())
