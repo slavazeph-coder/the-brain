@@ -45,9 +45,11 @@ def check(browser, mobile=False):
     assert page.locator('.system-card').count()==25
     assert page.locator('.system-card').filter(has_text='Surface inspection').get_attribute('data-state')=='local'
     assert page.locator('.system-card').filter(has_text='MetricTrail long-video trial').get_attribute('data-state')=='gated'
-    assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     view.screenshot(path=str(OUTPUT/(browser.browser_type.name+('-mobile.png' if mobile else '-desktop.png'))),full_page=True)
+    if not page.locator('#workspace-command-bar').evaluate('el => el.open'):
+        page.locator('a[href="#workspace-command-bar"]').click()
+    assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
     page.locator('#run').click();page.wait_for_timeout(300);print('RUN STATUS',page.locator('#status').inner_text(),errors,flush=True);page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')",timeout=5000)
     assert page.locator('#metric-cost').inner_text()=='Enter rates'
     page.locator('#robotRate').fill('12');page.locator('#robotRate').press('Tab')

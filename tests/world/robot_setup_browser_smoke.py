@@ -262,6 +262,26 @@ def check_no_fitting_start(page):
     page.locator('[data-world=sample]').click()
 
 
+def check_mobile_map_options(page):
+    options = page.locator('#workspace-command-bar')
+    summary = options.locator('summary')
+    assert not options.evaluate('el => el.open'), 'Map options should start closed on a phone.'
+    expect(page.locator('#fork')).to_be_hidden()
+    page.locator('a[href="#workspace-command-bar"]').click()
+    expect(summary).to_be_focused()
+    expect(page.locator('#fork')).to_be_visible()
+    # A real object edit enables Undo. Open settings, undo the change and close settings again.
+    field = page.locator('#object-x')
+    before = field.input_value()
+    field.fill(str(float(before) + 0.25))
+    field.press('Tab')
+    page.locator('#undo-edit').click()
+    expect(field).to_have_value(before)
+    summary.press('Space')
+    expect(page.locator('#fork')).to_be_hidden()
+    assert not options.evaluate('el => el.open'), 'Refresh must respect a closed disclosure.'
+
+
 def check_mobile_map_first(page):
     def map_precedes_controls():
         return page.evaluate("""() => Boolean(document.getElementById('viewport').compareDocumentPosition(
@@ -356,6 +376,7 @@ def run_browser(playwright, name):
                 if large:
                     page.add_init_script("localStorage.setItem('brainsnn-world-reading-size','large')")
                 open_world(page)
+                check_mobile_map_options(page)
                 check_mobile_map_first(page)
                 page.locator('#robot-setup').scroll_into_view_if_needed()
                 open_picker(page, 'robots')

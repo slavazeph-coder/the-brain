@@ -69,6 +69,9 @@ def check(pw, name, origin, worker, token, tmp):
         page.locator('#tab-world').click()
         page.locator('#object-name').fill('Preserve my building edit')
         page.locator('#object-name').press('Tab')
+        picker = page.locator('[data-layer-picker]')
+        if picker.get_attribute('open') is None:
+            picker.locator('summary').click()
         page.locator('[data-layer-connect]').click()
         page.locator('#worker-url').fill(worker)
         page.locator('#worker-token').fill(token)

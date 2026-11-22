@@ -55,11 +55,11 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
     }
     if (restoreFocus) active.focus({preventScroll:true});
   }
-  const command = document.createElement('section');
+  const command = document.createElement('details');
   command.className = 'workspace-command-bar';
   command.id = 'workspace-command-bar';
-  command.tabIndex = -1;
-  const commandTitle = document.createElement('h3');
+  command.open = !narrow.matches;
+  const commandTitle = document.createElement('summary');
   commandTitle.id = 'workspace-command-title';
   commandTitle.textContent = 'Map options';
   command.setAttribute('aria-labelledby', commandTitle.id);
@@ -68,6 +68,24 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
     if (part) command.append(part);
   }
   $('status').after(command);
+  // A capture can be a detour from the street; its return button stays in sight.
+  heading.querySelector('.workspace-heading-actions').prepend($('sandbox-return'));
+  function revealMapOptions() {
+    command.open = true;
+    requestAnimationFrame(() => {
+      if (disposed || !command.open || location.hash !== '#workspace-command-bar') return;
+      commandTitle.focus({preventScroll:true});
+      commandTitle.scrollIntoView({block:'start'});
+    });
+  }
+  const mapOptionsLink = heading.querySelector('a[href="#workspace-command-bar"]');
+  mapOptionsLink.addEventListener('click', event => {
+    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) revealMapOptions();
+  }, {signal:abort.signal});
+  window.addEventListener('hashchange', () => {
+    if (location.hash === '#workspace-command-bar') revealMapOptions();
+  }, {signal:abort.signal});
+  if (location.hash === '#workspace-command-bar') revealMapOptions();
   const setup = $('robot-setup');
   heading.after(setup);
   setup.after(journey);
@@ -209,7 +227,14 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
     closeModel(); void Promise.resolve().then(()=>actions.selectSource(sourceId,'source')).then(()=>{const s=snapshot();selectedJob=source(s)?.jobKey||selectedJob;refresh();message('');}).catch(error=>message(error.message));
   }, {signal:abort.signal});
   $('workspace-job-select').addEventListener('change', event => { selectedJob=event.target.value; refresh(); message('Selected result kept with its original source. Choose a view or open its files below.'); }, {signal:abort.signal});
-  narrow.addEventListener('change', refresh, {signal:abort.signal});
+  const optionsBySize = new Map();
+  let previousNarrow = narrow.matches;
+  narrow.addEventListener('change', () => {
+    optionsBySize.set(previousNarrow, command.open);
+    previousNarrow = narrow.matches;
+    command.open = optionsBySize.get(narrow.matches) ?? !narrow.matches;
+    refresh();
+  }, {signal:abort.signal});
   $('scene-dialog').addEventListener('close', refresh, {signal:abort.signal});
   document.addEventListener('click', event => {
     const a=event.target.closest('a[data-workspace-goal]');

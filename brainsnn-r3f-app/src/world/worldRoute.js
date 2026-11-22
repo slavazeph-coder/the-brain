@@ -2,7 +2,7 @@
 // are handled solely by the native document's explicit import flows.
 const publicPlaces = new Set([
   '#workspace', '#studio', '#world-examples', '#robot-setup', '#what-to-create', '#systems',
-  '#source-notes', '#site-resources',
+  '#source-notes', '#site-resources', '#workspace-command-bar',
   '#showroom', '#showroom-walk', '#showroom-run', '#pancake-lab', '#rolling-pin',
   '#showcase', '#showcase-robot', '#showcase-capture', '#showcase-scan',
   '#showcase-building', '#showcase-motion', '#showcase-share',

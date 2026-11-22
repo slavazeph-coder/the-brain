@@ -139,3 +139,25 @@ html[data-contrast=more] .playground-reference :is(p,span) {color:#f1f5fa}
   .playground-header .reading-tools button {padding-inline:4px}
   body.playground .playground-header {padding-inline:10px}
 }
+
+/* The picker can fold without unmounting a tool, pausing a run or hiding its result. */
+#world-layer-tools > .layer-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+#world-layer-tools .layer-picker > summary {
+  display: list-item;
+  min-height: 48px;
+  padding: 10px 4px;
+  color: var(--text, #e7f0f6);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.layer-picker > summary::marker { color: currentColor; font-size: .85em; }
+#world-layer-tools .layer-picker h3 { display:inline; margin:0; font-size:max(1.05rem,var(--reading-ui)); letter-spacing:0; }
+#world-layer-tools .layer-picker button[data-layer-connect] { margin-block: 8px 2px; }
+@media (max-width:760px) {
+  .studio-main #workspace > #world-layer-tools:has(> .layer-picker:not([open])) { padding-block: 4px; }
+}

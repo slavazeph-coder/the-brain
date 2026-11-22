@@ -67,8 +67,10 @@
 #unified-workspace[data-flow] .workspace-journey .step-icon svg { width: 20px; height: 20px; }
 #unified-workspace[data-flow] .workspace-journey [aria-current=step] .step-icon { color: var(--cyan); background: none; }
 #map-workspace .stage > .camera-dock { padding: 8px; border-block: 1px solid var(--border); background: var(--surface); }
-#workspace-command-bar { margin: 0; padding: 14px var(--flow-pad, 16px); border: 0; border-block: 1px solid var(--border); border-radius: 0; }
-#workspace-command-title { margin: 0 0 6px; font-size: 1.12em; }
+#workspace-command-bar { margin: 0; padding: 0 var(--flow-pad, 16px); border: 0; border-block: 1px solid var(--border); border-radius: 0; }
+#workspace-command-title { min-height: 48px; padding: 12px 0; font-size: 1.08em; font-weight: 650; cursor: pointer; }
+#workspace-command-title:focus-visible { outline: 3px solid var(--cyan); outline-offset: -3px; }
+#workspace-command-bar[open] { padding-bottom: 12px; }
 #workspace-command-bar :is(.workspace-header, .sandbox-toolbar, .sandbox-context) { padding-inline: 0; }
 #workspace-command-bar .workspace-next { margin: 8px 0 0; }
 html[data-contrast=more] #robot-setup details { background: #000; border-color: #d7e5f2; }
