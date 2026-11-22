@@ -1245,6 +1245,14 @@ export async function startServer() {
       const html = readFileSync(path.join(distPath, 'index.html'), 'utf8');
       res.type('html').send(applyRouteMeta(html, pathname, search, APP_URL.replace(/\/$/, '')));
     });
+    // BrainSNN Walk is a standalone installable page. Its modules load by
+    // relative URL, so /walk must become /walk/ before the page is served.
+    app.get(['/walk', '/walk/'], (req, res) => {
+      const [pathname, search = ''] = req.originalUrl.split('?');
+      if (!pathname.endsWith('/')) return res.redirect(301, `/walk/${search ? `?${search}` : ''}`);
+      res.set('Cache-Control', 'no-cache');
+      res.sendFile(path.join(distPath, 'walk', 'index.html'));
+    });
     app.use(express.static(distPath, { index: false, setHeaders: setStaticCacheHeaders }));
 
     // Every route used to be served the identical index.html, so a shared
