@@ -42,6 +42,9 @@ def check(pw,name,origin,worker,token,tmp):
         page.goto(origin+'/world/index.html?nosw=1',wait_until='domcontentloaded')
         page.locator('#tab-world').click()
         page.locator('#object-name').fill('Keep my edited map');page.locator('#object-name').press('Tab')
+        picker = page.locator('[data-layer-picker]')
+        if picker.get_attribute('open') is None:
+            picker.locator('summary').click()
         page.locator('[data-layer-connect]').click()
         page.locator('#worker-url').fill(worker);page.locator('#worker-token').fill(token);page.locator('#connect').click()
         expect(page.locator('#connection-status')).to_contain_text('Connected.')

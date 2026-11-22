@@ -13,3 +13,14 @@ test('public scene routes never forward worker credentials or source URLs', () =
   assert.equal(path, '/world/index.html?sandbox=street&install=1');
   assert.equal(worldDocumentSource('?sandbox=street&sandbox=map&tool=delete&scene=https://evil.example'), '/world/index.html');
 });
+
+test('the public wrapper opens named playground activities without forwarding private fragments', () => {
+  for (const hash of ['#workspace', '#world-examples', '#showroom', '#showroom-run', '#showroom-walk', '#rolling-pin',
+    '#pancake-lab', '#showcase-motion', '#layer-tab-robottask']) {
+    assert.equal(worldDocumentSource('?nosw=1&token=private', hash), '/world/index.html?nosw=1' + hash);
+  }
+  for (const hash of ['#handoff=secret', '#token=private', '#https://example.org', '#showroom?token=secret',
+    '#showcase-unknown', '#layer-tab-unknown', '#pancake-lab%3Fpasscode%3Dsecret']) {
+    assert.equal(worldDocumentSource('?token=private', hash), '/world/index.html');
+  }
+});

@@ -1,9 +1,48 @@
 # One World Builder workspace
 
-The primary playground follows the owner's v23 demonstration: bring a capture,
-explore the results, inspect the model and drawings, try robot routes, and save
-the work. The existing controls form that journey; the model review opens inside
-the same workspace. Advanced destinations remain in All tools.
+The homepage opens the editable World Builder playground. Use the practice
+room, add your own files, or follow the captioned v23 walkthrough. Capture,
+model review, drawings, robot routes and saved results share the project.
+
+## The tool library and workbench
+
+The **My workspace** button returns to the current room. **Find a tool** searches
+the 50 activities in `showcase-features.mjs` and the additional site resources.
+On a phone the finder also reveals the six topic buttons. Each result identifies
+whether it can run locally, needs files or requires processing.
+
+- In-page tools (tabs, layer tools, sections, Project Review, processing
+  settings) open through the showcase's own navigator. Fields are centred so
+  their labels stay visible below the bar.
+- Separate tool pages (`/world/*.html` and the Arena) open in the **workbench**,
+  a same-origin frame above the workspace. The map, its edits, running jobs and
+  retained results stay in place. World pages hide their duplicate site header
+  (marked `data-studio-hidden="site-header"`); the Arena keeps its own section
+  navigation. Links back to the playground close the workbench; links that leave
+  World Builder open a new tab. "Open in its own tab" is always offered, and a
+  modified click on a showcase card still opens a tab.
+- Closing the workbench unloads the page (`about:blank`) so its media, workers
+  and animation loops stop, then returns focus to the control that opened it.
+
+### Workspace order
+
+The real room is the first activity. On a phone its map appears immediately
+after the scene heading. On larger screens the robot picker, world picker and
+**Run a route** sit above the map. Changing the active tool brings its existing
+controls into view. Camera controls are beside the scene. **Map options** reaches
+undo, redo, save, export and scene settings. The practice worlds, guided film,
+capture guide and model catalog expand when selected.
+
+Shared links such as `https://www.brainsnn.com/world/#pancake-lab` and
+`https://www.brainsnn.com/#showroom` open inside the public playground.
+The outer shell forwards its recognized public fragments. Changes to the
+fragment navigate within the initialized editor so edits in the scene survive.
+
+`studio.mjs` and `studio.css` are part of the offline shell. Checks:
+`tests/world/studio.test.mjs` (registry coverage, safe workbench targets,
+search, markup order, 13 px floor) and `tests/world/studio_browser_smoke.py`
+(every chapter, search, in-page tools, workbench pages, retained map edit,
+390/320 px and larger text).
 
 ## Sources and results
 

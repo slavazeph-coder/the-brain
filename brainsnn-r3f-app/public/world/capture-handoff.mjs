@@ -17,6 +17,20 @@ export function parseHandoffHash(hash = '') {
   return VALID_ID.test(id) ? id : null;
 }
 
+// The embedded scanner and its host share an origin. A cancelable event lets
+// the mounted workbench take the one-time ID before the scanner navigates away.
+export const WORKBENCH_CAPTURE_EVENT = 'brainsnn-scan-capture';
+export function offerCaptureToWorkbench(id) {
+  const frame = window.frameElement;
+  if (frame?.id !== 'studio-workbench-frame') return false;
+  const received = !frame.dispatchEvent(new CustomEvent(WORKBENCH_CAPTURE_EVENT, {
+    cancelable: true,
+    detail: { sender: document, hash: '#handoff=' + id },
+  }));
+  if (!received) throw new Error('Reopen the photo studio from Find a tool and try again.');
+  return true;
+}
+
 export function validateCaptureFiles(input) {
   const files = Array.from(input ?? []);
   if (!files.length || files.length > 8) throw new Error('Choose one video or up to eight photos first.');

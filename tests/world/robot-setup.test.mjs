@@ -39,7 +39,7 @@ function blockedStart(world) {
 // Minimal host controls exercise the mounted UI's note, button and delegated click
 // using actual planner errors, without adding a DOM library to the contract suite.
 function setupWithIssue(issue) {
-  const elements = new Map(['#robot-setup-run','#robot-setup-note','#robot-setup-world','#robot-setup-fix','.run-icon','.run-label'].map(selector => [selector,{textContent:'',hidden:false}]));
+  const elements = new Map(['#robot-setup-run','#robot-setup-note','#robot-setup-world','[data-picked-robot]','[data-picked-world]','#robot-setup-fix','.run-icon','.run-label'].map(selector => [selector,{textContent:'',hidden:false}]));
   elements.get('#robot-setup-run').querySelector = selector => elements.get(selector);
   let click;
   const host = {dataset:{},querySelector:selector => elements.get(selector),querySelectorAll:() => [],

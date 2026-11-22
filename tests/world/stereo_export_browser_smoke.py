@@ -64,7 +64,8 @@ def check_browser(pw, name, origin, dest):
     assert x0 and x1 and abs((x0-x1)-31.5)<1, (x0,x1)
     view.select_option("image-0")
     expect(root.locator("[data-stx-description]")).to_contain_text("Depth colours")
-    page.get_by_role("button", name="Larger text", exact=True).click()
+    page.locator('#playground-text-size').click()
+    expect(page.locator('html')).to_have_attribute('data-reading-size', 'large')
     for width in [390,320]:
         page.set_viewport_size({"width":width,"height":850})
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth+1")

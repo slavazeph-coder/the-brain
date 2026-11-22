@@ -51,10 +51,10 @@ const CLASSIC_HOME = {
 const WORLD = {
   positioning: 'world-builder-v1',
   title: 'BrainSNN | World Builder',
-  description: 'Start with a photo or phone walkthrough. Explore a visual 3D preview, review measured geometry and test a robot route with BrainSNN World Builder.',
-  heading: 'Turn any photo into a world. Turn any world into a robot simulation.',
+  description: 'Explore a practice room in the BrainSNN World Builder Playground. Move objects, try a robot route or bring your own photos and phone walkthrough.',
+  heading: 'World Builder Playground',
   body: [
-    'Upload a photo or capture a space. Explore a visual preview, inspect source evidence, and prepare a reviewed map for robot planning.',
+    'Open the practice room to move objects and try a robot. Find a tool brings together scans, drawings, robot activities and saved projects.',
     'Single-photo depth and generative previews do not establish metric scale or hidden geometry. Review independent measurements, obstacles and unknown areas before planning.',
     'Robot routes and operating-cost estimates use the reviewed map and your assumptions. They are planning previews, not physical robot execution or safety certification.',
   ],
@@ -297,11 +297,16 @@ export function renderContentBlock(meta, currentPath = '/') {
     .filter((link) => link.path !== currentPath)
     .map((link) => `<li style="margin:0 0 .5rem"><a href="${escapeAttribute(link.path)}" style="color:#7dd3fc">${escapeAttribute(link.label)}</a></li>`)
     .join('');
-  const links = renderLinks(CRAWL_LINKS);
+  const playground = meta.positioning === WORLD.positioning;
+  const links = renderLinks(playground ? [
+    { path: '/world/index.html', label: 'Open the playground' },
+    { path: '/world/index.html#showcase', label: 'Watch the walkthrough' },
+  ] : CRAWL_LINKS);
   const experiments = meta.links
     ? `<section aria-label="Lab experiments"><ul>${renderLinks(meta.links)}</ul></section>`
     : '';
   const overflow = '<details><summary>More</summary><ul>' + renderLinks([
+    ...(playground ? CRAWL_LINKS : []),
     { path: '/office', label: 'Review' },
     { path: '/evidence', label: 'Evidence' },
     { path: '/lab', label: 'Lab' },

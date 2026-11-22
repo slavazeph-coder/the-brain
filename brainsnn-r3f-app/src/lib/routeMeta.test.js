@@ -59,7 +59,7 @@ describe('per-route social previews', () => {
     for (const path of ['/', '/world', '/world/']) {
       const world = resolveRouteMeta(path);
       expect(world.title).toBe('BrainSNN | World Builder');
-      expect(world.heading).toBe('Turn any photo into a world. Turn any world into a robot simulation.');
+      expect(world.heading).toBe('World Builder Playground');
       expect(world.description).toContain('phone walkthrough');
       expect(world.body.join(' ')).toContain('do not establish metric scale');
       expect(world.body.join(' ')).toContain('not physical robot execution');
@@ -246,6 +246,8 @@ describe('content a crawler can read without running JavaScript', () => {
     for (const path of ['/arena/', '/office', '/evidence', '/lab']) expect(home).toContain(`href="${path}"`);
     for (const path of ['/play', '/arcade', '/app', '/engine', '/missions', '/reconstruct', '/pricing']) expect(home).not.toContain(`href="${path}"`);
     expect(home).toContain('<details><summary>More</summary>');
+    expect(home).toContain('href="/world/index.html"');
+    expect(home).toContain('href="/world/index.html#showcase"');
   });
 
   it('escapes prose rather than trusting it to be tag-free', () => {

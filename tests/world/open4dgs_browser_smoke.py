@@ -111,7 +111,8 @@ def verify_browser(pw, name, origin, files, output, native, ply):
     for cam, file in zip(saved["cameras"], files):
         data = file.read_bytes()
         assert cam["edge_sha256"] == hashlib.sha256(data[:65536] + data[max(min(65536,len(data)),len(data)-65536):]).hexdigest()
-    page.get_by_role("button", name="Larger text", exact=True).click()
+    page.locator('#playground-text-size').click()
+    expect(page.locator('html')).to_have_attribute('data-reading-size', 'large')
     for width in [390, 320]:
         page.set_viewport_size({"width":width,"height":850})
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth+1")

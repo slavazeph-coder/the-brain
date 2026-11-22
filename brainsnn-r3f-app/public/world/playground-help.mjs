@@ -16,7 +16,7 @@ export function mountPlaygroundHelp({ onTool } = {}) {
     if (large) document.documentElement.dataset.readingSize = 'large';
     else delete document.documentElement.dataset.readingSize;
     if (textSizeButton) {
-      textSizeButton.textContent = large ? 'Standard text' : 'Larger text';
+      textSizeButton.querySelector('.reading-label').textContent = large ? 'Standard text' : 'Larger text';
       textSizeButton.setAttribute('aria-pressed', String(large));
     }
   }
@@ -46,7 +46,7 @@ export function mountPlaygroundHelp({ onTool } = {}) {
     if (more) document.documentElement.dataset.contrast = 'more';
     else delete document.documentElement.dataset.contrast;
     if (contrastButton) {
-      contrastButton.textContent = more ? 'Standard contrast' : 'More contrast';
+      contrastButton.querySelector('.reading-label').textContent = more ? 'Standard contrast' : 'More contrast';
       contrastButton.setAttribute('aria-pressed', String(more));
     }
   }

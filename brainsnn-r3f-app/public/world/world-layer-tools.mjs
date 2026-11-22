@@ -30,8 +30,9 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
   let disposed=false,epoch=0,active=null,busy=false,repair=null,selection=new Set(),selecting=false,drag=null,repairViewer=null;
   let map=null,mapRaw=null,mapBinding=null,mapPoints=null,recording=null,motion=null,motionViewer=null,mapViewer=null,live=null,lastResults='';
   root.className='world-layer-tools';
-  root.innerHTML=`<div class="layer-tools-heading"><div><p class="eyebrow">MORE WAYS TO USE YOUR WORLD</p><h3>Make it yours.</h3></div><button type="button" data-layer-connect>Connect processing</button></div>
+  root.innerHTML=`<details class="layer-picker" data-layer-picker><summary><h3>More tools for your world</h3></summary>
     <div class="layer-tool-choices" role="tablist" aria-label="World tools">${Object.entries(titles).map(([id,[label,description]],i)=>`<button type="button" id="layer-tab-${id}" role="tab" aria-selected="false" aria-controls="layer-panel-${id}" tabindex="${i?'-1':'0'}" data-layer-tab="${id}"><strong>${label}</strong><span>${description}</span></button>`).join('')}</div>
+    <button type="button" data-layer-connect>Connect processing</button></details>
     <section id="layer-panel-repair" role="tabpanel" aria-labelledby="layer-tab-repair" hidden>
       <p>Open a Gaussian capture, select the area to repair, then compare the result. Your original stays unchanged.</p>
       <div class="layer-input-row"><label>Open Gaussian PLY<input data-repair-file type="file" accept=".ply"></label><label>Or use a result from this workspace<select data-layer-result="repair"><option value="">Choose a result</option></select></label><button type="button" data-layer-use="repair">Open selected result</button></div>
@@ -73,11 +74,19 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
     <section id="layer-panel-robottask" role="tabpanel" aria-labelledby="layer-tab-robottask" hidden>${robotTaskMarkup()}</section>
     <div class="layer-result-footer" hidden><p data-layer-status role="status"></p><button type="button" data-layer-cancel hidden>Cancel processing</button><div data-layer-downloads class="layer-toolbar"></div></div>`;
   const $=s=>root.querySelector(s),on=(selector,event,fn)=>$(selector).addEventListener(event,fn,{signal});
+  const picker = $('[data-layer-picker]');
+  const narrow = matchMedia('(max-width: 760px)');
+  picker.open = !narrow.matches;
+  narrow.addEventListener('change', () => {
+    if (!narrow.matches || active || picker.contains(document.activeElement)) picker.open = true;
+    else picker.open = false;
+  }, {signal});
   const status=(message,error=false)=>{$('.layer-result-footer').hidden=false;$('[data-layer-status]').textContent=message;$('[data-layer-status]').classList.toggle('error',error);};
   const attempt=fn=>Promise.resolve().then(fn).catch(error=>{if(!disposed&&error.name!=='AbortError')status(error.message,true);});
   const runner=createLayerJobRunner({getConnection,onComplete:rememberResult,onStatus:status,onBusy(value){busy=value;$('[data-layer-cancel]').hidden=!value;for(const button of root.querySelectorAll('[data-repair-run],[data-localization-run],[data-motion-run],[data-biomech-run]'))button.disabled=value;onChange();}});
   function open(name) {
     if(!Object.hasOwn(titles,name))return;
+    picker.open = true;
     active=name;motionViewer?.pause();mapViewer?.pause();biomechanics?.pause();if(name!=='localization')stopLive();
     if(name!=='open4dgs')movingScene.pause();
     if(name!=='stereo')stereo.suspend();
@@ -257,6 +266,8 @@ export function mountWorldLayerTools({root,getConnection,getResults,getResult,re
         if (kitchen) {
           panel.open = true;
           panel.querySelector('summary').focus({preventScroll:true});
+        } else {
+          panel.focus({preventScroll:true});
         }
         panel.scrollIntoView({block:'start',behavior:'instant'});
       }

@@ -535,6 +535,8 @@ def check_browser(pw, name, origin, worker_url, token, photos, release):
         # Explicitly browsing an estimated-scale reconstruction must not create
         # a robot map as a side effect, even for an untouched authored example.
         # Job2's points have never been opened, so this exercises its first load.
+        if not page.locator('#world-examples').evaluate('el => el.open'):
+            page.locator('#world-examples > summary').click()
         page.locator('#hero-sample').click()
         untouched_name = page.locator('#map-name').input_value()
         untouched_objects = page.locator('#objects option').count()
