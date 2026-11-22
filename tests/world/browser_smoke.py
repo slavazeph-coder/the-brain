@@ -75,6 +75,8 @@ def check(browser, mobile=False):
     assert not page.locator('#scale-reviewed').is_checked()
     assert page.evaluate('window.injected') is None
     # A fresh capture must never inherit the sample's geometry or metrics.
+    if not page.locator('#world-examples').evaluate('el => el.open'):
+        page.locator('#world-examples > summary').click()
     page.locator('#hero-sample').click()
     from PIL import Image
     import io
@@ -129,10 +131,13 @@ def check(browser, mobile=False):
     page.locator('#scale-reviewed').uncheck()
     assert 'REVIEW REQUIRED' in page.locator('#scene-basis').inner_text()
     # Hero demo: the sample and reviewed states draw the real sample and planner; generated invents nothing and links to the photo flow.
+    if not page.locator('#world-examples').evaluate('el => el.open'):
+        page.locator('#world-examples > summary').click()
     assert 'AUTHORED SAMPLE' in page.locator('#hero-demo-badge').inner_text()
     page.locator('[data-demo=generated]').click();assert page.locator('#hero-demo-canvas').is_hidden() and page.locator('#hero-demo-link').get_attribute('href')=='/scan?goal=play'
     page.locator('[data-demo=reviewed]').click();assert 'm² reached' in page.locator('#hero-demo-text').inner_text() and page.locator('#hero-demo-canvas').is_visible()
     page.locator('[data-demo=sample]').click()
+    page.locator('#systems > summary').click()
     page.locator('#system-search').fill('Lyra');assert page.locator('.system-card').count()==1
     page.locator('#system-search').fill('');local_count=page.locator('.system-card[data-state=local]').count()
     assert local_count>0
@@ -155,29 +160,26 @@ def check_routes(browser, base):
     page.set_viewport_size({'width':844,'height':390})
     assert page.evaluate('document.documentElement.scrollHeight <= innerHeight+1'),'Landscape must not add a second outer scrollbar'
     page.set_viewport_size({'width':390,'height':844})
-    # target=_top is essential: otherwise old pages appear nested in World Builder.
-    frame.locator('a[href="/?classic=1"]').last.click()
-    page.wait_for_url(base+'/?classic=1')
-    page.locator('#lobby-title').wait_for()
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
-    page.set_viewport_size({'width':1440,'height':1000})
-    frame=open_world(page,base+'/')
-    # Lab sits in the header's More menu, as it does in the site-wide header.
-    frame.locator('.nav-more summary').click()
-    frame.locator('.nav-more a[href="/lab"]').click()
-    try:
-        page.wait_for_url(base+'/lab')
-    except Exception:
-        print('Lab navigation failure:',page.url,flush=True)
-        print(page.locator('body').inner_text()[:2000],flush=True)
-        raise
-    page.get_by_role('heading',name='Lab',exact=True).wait_for()
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
-    frame=open_world(page,base+'/')
-    frame.locator('a[href="/arena/"]').last.click()
-    page.wait_for_url(base+'/arena/')
-    page.locator('#page-title').wait_for(state='attached')
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
+    # Site pages keep their own navigation; opening them leaves the current playground intact.
+    for query, path, selector in [('classic', '/?classic=1', '#lobby-title'), ('research lab', '/lab', 'h1')]:
+        frame.locator('#studio-search-open').click()
+        frame.locator('#studio-search').fill(query)
+        with ctx.expect_page() as opened:
+            frame.locator(f'#studio-panel a[href="{path}"]').click()
+        destination = opened.value
+        destination.wait_for_url(base + path)
+        destination.locator(selector).first.wait_for(state='attached')
+        assert destination.locator('iframe[src="/world/index.html"]').count() == 0
+        destination.close()
+        frame.locator('#studio-search').press('Escape')
+    frame.locator('#studio-search-open').click()
+    frame.locator('#studio-search').fill('move blocks')
+    frame.locator('#studio-panel [data-studio-target="/arena/index.html"]').click()
+    arena = frame.locator('#studio-workbench-frame').element_handle().content_frame()
+    arena.locator('#page-title').wait_for(state='attached')
+    assert '/arena/index.html' in arena.url
+    frame.locator('#studio-workbench-close').click()
+    assert frame.locator('#workspace').is_visible()
     assert errors==[],errors
     ctx.close()
 
@@ -370,6 +372,8 @@ def check_capture_keeps_user_map(browser):
     page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
     page.locator('[data-tab=world]').click()
     assert page.locator('#map-name').input_value()=='My measured gym','edited authored map was discarded'
+    if not page.locator('#world-examples').evaluate('el => el.open'):
+        page.locator('#world-examples > summary').click()
     page.locator('#hero-sample').click()
     page.locator('#files').set_input_files({'name':'camera-2.png','mimeType':'image/png','buffer':b.getvalue()})
     assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'

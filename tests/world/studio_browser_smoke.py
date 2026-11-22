@@ -48,6 +48,8 @@ def verify_map_edit(page, draft):
 
 def open_chapter(page, key):
     button = page.locator(f'#studio-chapter-{key}')
+    if not button.is_visible():
+        page.locator('#studio-search-open').click()
     button.click()
     expect(button).to_have_attribute('aria-expanded', 'true')
     expect(page.locator('#studio-panel')).to_be_visible()
@@ -66,7 +68,7 @@ def verify_chapters(page, sizes):
         page.keyboard.press('Escape')
         expect(page.locator('#studio-panel')).to_be_hidden()
         expect(button).to_have_attribute('aria-expanded', 'false')
-        expect(button).to_be_focused()
+        expect(button if button.is_visible() else page.locator('#studio-search-open')).to_be_focused()
     expect(page.locator('[data-studio-chapter][aria-expanded="true"]')).to_have_count(0)
 
 
@@ -131,7 +133,8 @@ def verify_workbench(page, target):
     expect(page.locator('#studio-workbench-tab')).to_have_attribute('target', '_blank')
     page.locator('#studio-workbench-close').click()
     expect(workbench).to_be_hidden()
-    expect(page.locator(f'#studio-chapter-{chapter}')).to_be_focused()
+    topic = page.locator(f'#studio-chapter-{chapter}')
+    expect(topic if topic.is_visible() else page.locator('#studio-search-open')).to_be_focused()
     assert page.locator('#studio-workbench-frame').get_attribute('src') == 'about:blank'
 
 
@@ -146,30 +149,30 @@ def verify_home(page):
 
 
 def verify_flow(page):
-    """The workspace reads in one order: heading, map commands, next step, robot setup, tool tabs, editor, more tools."""
+    """The current room, pickers and editing tools come before its map; file commands follow it."""
     flow = page.evaluate("""() => {
       const host = document.getElementById('unified-workspace');
-      const parts = ['.unified-heading', '#workspace-command-bar', '.workspace-next', '#robot-setup', '.workspace-journey']
-        .map(selector => host.querySelector(selector));
-      const top = el => el.getBoundingClientRect().top + scrollY;
-      const journey = parts[4].getBoundingClientRect(), editor = document.getElementById('map-workspace').getBoundingClientRect();
-      const command = parts[1];
+      const workspace = document.getElementById('workspace');
+      const selectors = ['.unified-heading', '#robot-setup', '.workspace-journey',
+        '#map-workspace', '#workspace-command-bar'];
+      const parts = selectors.map(s => workspace.querySelector(s));
+      const journey = parts[2].getBoundingClientRect(), editor = parts[3].getBoundingClientRect();
+      const command = parts[4];
       return {
-        present: parts.map(Boolean),
-        ordered: parts.every((el, i) => i === 0 || (parts[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)),
-        increasing: parts.map(top).every((y, i, all) => i === 0 || y > all[i - 1]),
-        tabsInJourney: !!parts[4].querySelector('#tab-world') && !!parts[4].querySelector('#workspace-step-drawings'),
+        ordered: parts.every((el, i) => el && (i === 0 || (parts[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING))),
+        tabsInJourney: !!parts[2].querySelector('#tab-world') && !!parts[2].querySelector('#workspace-step-drawings'),
         gapToEditor: Math.round(editor.top - journey.bottom),
+        mapOffset: Math.round(document.getElementById('viewport').getBoundingClientRect().top - workspace.getBoundingClientRect().top),
         command: ['world-title', 'provenance', 'undo-edit', 'redo-edit', 'fork', 'save-map-to-project', 'export', 'sandbox-scene', 'sandbox-share', 'sandbox-context']
           .every(id => command.contains(document.getElementById(id))),
         moreAfterStatus: !!(document.getElementById('status').compareDocumentPosition(document.getElementById('world-layer-tools')) & Node.DOCUMENT_POSITION_FOLLOWING),
         flow: host.dataset.flow,
       };
     }""")
-    assert all(flow['present']) and flow['ordered'] and flow['increasing'], flow
-    assert flow['tabsInJourney'] and flow['command'] and flow['moreAfterStatus'], flow
+    assert flow['ordered'] and flow['tabsInJourney'] and flow['command'] and flow['moreAfterStatus'], flow
     assert 0 <= flow['gapToEditor'] <= 2, flow
-    assert flow['flow'] == 'header-setup-tools', flow
+    assert 0 < flow['mapOffset'] <= 700, flow
+    assert flow['flow'] == 'editor-first', flow
     # A tool tab switches the editor directly below it.
     page.locator('#tab-test').click()
     expect(page.locator('#tab-test')).to_have_attribute('aria-selected', 'true')

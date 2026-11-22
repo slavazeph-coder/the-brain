@@ -1,19 +1,15 @@
 # One World Builder workspace
 
-The primary playground follows the owner's v23 demonstration: bring a capture,
-explore the results, inspect the model and drawings, try robot routes, and save
-the work. The existing controls form that journey; the model review opens inside
-the same workspace. Every tool is one step away in the studio bar; separate tool
-pages open beside the world in the workbench. All tools remains as the catalogue.
+The homepage opens the editable World Builder playground. Use the practice
+room, add your own files, or follow the captioned v23 walkthrough. Capture,
+model review, drawings, robot routes and saved results share the project.
 
-## The studio bar and workbench
+## The tool library and workbench
 
-Under the hero, one sticky studio bar reaches every tool: **Your world**, six
-chapters (Robots, Captures, 3D scenes, Buildings, Movement, Save & share) and
-**Find a tool**. The list is `showcase-features.mjs`, the same registry the
-showcase uses, so a tool added there appears in both. A chapter opens a panel of
-its tools with plain access notes (example, preview, needs setup, ready) and
-where each one opens.
+The **My workspace** button returns to the current room. **Find a tool** searches
+the 50 activities in `showcase-features.mjs` and the additional site resources.
+On a phone the finder also reveals the six topic buttons. Each result identifies
+whether it can run locally, needs files or requires processing.
 
 - In-page tools (tabs, layer tools, sections, Project Review, processing
   settings) open through the showcase's own navigator. Fields are centred so
@@ -30,24 +26,17 @@ where each one opens.
 
 ### Workspace order
 
-Inside the workspace everything reads in the order it is used, and the tool tabs
-sit directly above the editor they switch (previously they were about 1,300 px
-above it, beyond the layer tools, the map commands and the robot setup):
+The real room is the first activity. On a phone its map appears immediately
+after the scene heading. On larger screens the robot picker, world picker and
+**Run a route** sit above the map. Changing the active tool brings its existing
+controls into view. Camera controls are beside the scene. **Map options** reaches
+undo, redo, save, export and scene settings. The practice worlds, guided film,
+capture guide and model catalog expand when selected.
 
-1. The heading (`#workspace-project-name`, summary, basis badge).
-2. `#workspace-command-bar`: the map's own title, provenance, undo/redo, before
-   copy, save and share (`.workspace-header`), the world choice
-   (`.sandbox-toolbar`) and the context line.
-3. The next step (`.workspace-next`).
-4. The robot setup (`#robot-setup`): choose a robot, build its world, let it try.
-5. "Your tools" (`.workspace-journey` with the `#tab-*` tabs and Make drawings).
-6. The editor, then the status line.
-7. "More ways to use your world" (`#world-layer-tools`).
-
-`unified-workspace-ui.mjs` moves the existing elements into this order at mount,
-so IDs, handlers and test hooks are unchanged and keyboard order follows the
-visual order. `#unified-workspace` carries `data-flow="header-setup-tools"`.
-On desktop the robot setup is shorter; phone layouts keep their tested sizes.
+Shared links such as `https://www.brainsnn.com/world/#pancake-lab` and
+`https://www.brainsnn.com/#showroom` open inside the public playground.
+The outer shell forwards its recognized public fragments. Changes to the
+fragment navigate within the initialized editor so edits in the scene survive.
 
 `studio.mjs` and `studio.css` are part of the offline shell. Checks:
 `tests/world/studio.test.mjs` (registry coverage, safe workbench targets,

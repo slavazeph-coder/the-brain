@@ -256,6 +256,7 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
 
   back.addEventListener('click', () => {
     back.hidden = true;
+    root.closest('details').open = true;
     if (back.dataset.fromLayer === 'true') leaveLayer();
     updateAddress('showcase-' + current.id);
     const target = originButton?.isConnected ? originButton : chapterButtons.get(current.id);
@@ -263,8 +264,13 @@ export function mountShowcase({root, showTab, showProject, showProcessing, leave
     target.scrollIntoView({block:'center', behavior:'instant'});
   });
 
+  root.closest('details').addEventListener('toggle', event => {
+    if (!event.target.open) video.pause();
+  });
+
   function followAddress() {
     const match = chapters.find(chapter => location.hash === '#showcase-' + chapter.id);
+    if (match || location.hash === '#showcase') root.closest('details').open = true;
     if (match) {
       select(match);
       chapterButtons.get(match.id).scrollIntoView({block:'start', behavior:'instant'});

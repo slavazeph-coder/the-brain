@@ -126,6 +126,8 @@ def check_integrated(browser, mobile=False):
     try:
         page = open_world(view, ORIGIN.rstrip("/") + "/", require_response=True)
         assert page is not view, "The street entry must work inside the existing home shell"
+        if not page.locator('#world-examples').evaluate('el => el.open'):
+            page.locator('#world-examples > summary').click()
         page.locator("#hero-street").click()
         street = wait_street(page)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth+1")

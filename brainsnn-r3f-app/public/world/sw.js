@@ -8,7 +8,7 @@ const SHELL = ['./index.html', './world.css', './app.mjs', './sandbox-ui.mjs', '
   './assets/sense-cart-amber.jpg', './assets/sense-cart-teal.jpg', './assets/sense-cart-purple.jpg', './assets/sense-cart-white.jpg',
   './assets/showroom-views.mjs', './assets/showroom-camera-1.jpg', './assets/showroom-camera-2.jpg', './assets/showroom-camera-3.jpg',
   './robot-task-panel.mjs', './robot-task-authoring.mjs', './robot-task-physics.mjs', './robot-task-worker.mjs', './robot-task.css', './pancake-material.mjs', './pancake-lab-ui.mjs', './pancake-lab.css',
-  './showcase.mjs', './showcase.css', './showcase-features.mjs', './studio.mjs', './studio.css', './media/showcase-poster.jpg', './media/showcase-captions.vtt',
+  './showcase.mjs', './showcase.css', './showcase-features.mjs', './studio.mjs', './studio.css', './workspace-surface.css', './playground-library.css', './media/showcase-poster.jpg', './media/showcase-captions.vtt',
   './splat.html', './splat.mjs', './mesh-viewer.mjs', './scan-workspace.mjs', './scan-workshop.css', './scan-examples.mjs',
   './objectify-region.mjs', './portable-object.mjs', './portable-object-ui.mjs', './splat-lamp.mjs', './splat-lamp.css',
   './stereo-export.mjs', './stereo-export-data.mjs', './stereo-depth-data.mjs', './stereo-depth-tool.mjs', './stereo-photo.mjs',

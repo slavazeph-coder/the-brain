@@ -63,7 +63,7 @@ test('the playground page carries the studio, its workbench and the offline shel
   }
   assert.match(page, /<link rel="stylesheet" href="\.\/studio\.css">/u);
   // The studio wraps the world and everything after it, and the bar comes before the workspace in reading order.
-  const order = ['<section class="hero">', 'id="studio-bar"', 'id="studio-workbench"', 'id="showroom"', 'id="workspace"', 'id="showcase"', 'id="systems"', '<section class="closing">'];
+  const order = ['<section class="hero">', 'id="studio-bar"', 'id="studio-workbench"', 'id="showroom"', 'id="workspace"', 'id="showcase"', 'id="systems"', 'data-site-footer'];
   const positions = order.map(marker => page.indexOf(marker));
   assert.ok(positions.every(position => position >= 0), JSON.stringify(positions));
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);

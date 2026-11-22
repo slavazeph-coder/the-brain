@@ -12,12 +12,85 @@ body.playground{
 html:has(body.playground){scroll-padding-top:calc(var(--studio-bar-height,70px) + 26px)}
 .visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* Compact hero: the playground is the product, so the introduction gets out of its way. */
-body.playground .hero{padding:36px 0 26px;gap:56px;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);background:radial-gradient(ellipse at 85% 40%,#a855f712,transparent 55%),radial-gradient(ellipse at 5% 0%,#00f5ff0c,transparent 45%)}
-body.playground .hero h1{font-size:clamp(34px,3.7vw,54px);margin:16px 0 14px;letter-spacing:-.045em}
-body.playground .hero .intro{margin:0;max-width:600px}
-body.playground .hero-actions{margin-top:22px}
-body.playground .hero .micro{margin-top:14px}
+body.playground .hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding: clamp(10px, 1.4vw, 20px) 0 clamp(12px, 1.5vw, 22px);
+  background: transparent;
+}
+.playground-heading { min-width: 0; }
+body.playground .hero h1 {
+  margin: 0;
+  color: #f2f5fa;
+  font-size: clamp(27px, 3.2vw, 46px);
+  font-weight: 640;
+  letter-spacing: -.052em;
+  line-height: 1.06;
+}
+body.playground .hero h1 em {
+  display: inline;
+  color: #a2e9ed;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  font: inherit;
+}
+body.playground .hero .intro {
+  margin: .55em 0 0;
+  max-width: 44em;
+  color: #c0cad7;
+  font-size: var(--reading-ui, 16px);
+  line-height: 1.45;
+}
+.playground-shortcuts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; }
+.playground-shortcuts > :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--reading-ui, 16px);
+  white-space: nowrap;
+}
+.playground-shortcuts .ghost {
+  padding: 8px 15px;
+  color: #f4f4fa;
+  border: 1px solid #596273;
+  border-radius: 9px;
+  background: #161b26;
+}
+.playground-tour { gap: 8px; color: #c8d4e3; text-underline-offset: 4px; }
+.playground-tour::before {
+  content: "";
+  border-block: 5px solid transparent;
+  border-left: 8px solid currentColor;
+}
+.playground-examples {
+  margin: 18px 0;
+  color: #e1ecf4;
+  border-block: 1px solid #384456;
+}
+.playground-examples > summary {
+  padding: 12px 6px;
+  min-height: 46px;
+  font-size: var(--reading-ui, 16px);
+  font-weight: 620;
+  cursor: pointer;
+}
+.practice-examples { display: grid; grid-template-columns: 1fr minmax(0, 1.25fr); gap: 24px; padding: 6px 0 20px; }
+.practice-places { display: flex; flex-direction: column; align-items: flex-start; }
+.practice-places h2 { font-size: 1.25rem; margin: 0 0 .5em; }
+.practice-places :is(a,button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: #a2e9ed;
+  font-size: var(--reading-ui, 16px);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* The studio wrapper. Everything after the hero lives here, under one bar. */
 .studio{position:relative;padding-bottom:8px}
@@ -31,6 +104,8 @@ body.playground .hero .micro{margin-top:14px}
 .studio-home-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;color:#04161a;background:linear-gradient(135deg,var(--cyan),#7cc7ff 60%,var(--purple));box-shadow:0 0 22px #00f5ff33;flex:none}
 .studio-home-icon svg{width:20px;height:20px;stroke-width:2}
 .studio-home-words{display:grid;min-width:0;line-height:1.2}
+html:not([data-workbench]) .studio-home-words small{display:block;font:650 var(--reading-ui,16px) var(--font);color:var(--text);text-transform:none;letter-spacing:0}
+html:not([data-workbench]) .studio-home-words strong{display:none}
 .studio-home-words small{font:600 13px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
 .studio-home-words strong{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
@@ -170,22 +245,23 @@ html[data-contrast=more] #unified-workspace[data-flow] .workspace-journey::befor
 /* Tablet: the bar keeps one row; the chapter strip scrolls. */
 @media(max-width:1600px){.studio-chapter-count{display:none}}
 @media(max-width:1320px){.studio-home{max-width:200px}}
-@media(max-width:1100px){body.playground .hero{grid-template-columns:1fr;gap:28px}}
+@media(max-width:900px){body.playground .hero{align-items:flex-start;flex-direction:column;gap:8px}}
 
-/* Phone: a compact one-row strip that scrolls sideways, and a panel that fills the screen width. */
+/* On small screens the tool finder expands its topic list in place. */
 @media(max-width:760px){
-  body.playground{--studio-bar-height:60px}
-  .studio-sticky{top:6px;margin:0 -2px 16px}
-  .studio-bar{gap:4px;padding:5px;border-radius:15px;overflow-x:auto;scrollbar-width:none}
-  .studio-bar::-webkit-scrollbar{display:none}
-  .studio-chapters{flex:none;min-width:auto;overflow:visible;mask-image:none;-webkit-mask-image:none;border-left:0;padding-left:0;margin-left:0}
-  .studio-home{max-width:none;padding:4px 10px 4px 4px;min-height:48px}
-  .studio-home-icon{width:34px;height:34px}
+  body.playground{--studio-bar-height:58px}
+  .studio-sticky{top:0;margin:0 0 8px}
+  .studio-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 4px;padding:4px 6px;border-radius:10px}
+  .studio-chapters{display:none;grid-column:1/-1;grid-row:2;min-width:0;border:0;margin:0;padding:4px 0 0;mask-image:none;-webkit-mask-image:none}
+  .studio-sticky[data-panel] .studio-chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
+  .studio-home{min-width:0;max-width:none;min-height:46px;padding:3px;gap:6px}
+  .studio-home-icon{width:30px;height:30px;border-radius:7px}
   .studio-home-words small{display:none}
-  .studio-home-words strong{max-width:120px;font-size:14px}
-  body.playground .studio-chapter{min-height:48px;padding:0 11px;gap:7px;font-size:14px}
-  body.playground .studio-search-button{min-height:48px;padding:0 13px;margin-left:0;font-size:14px}
-  .studio-panel{top:calc(100% + 8px);max-height:calc(100dvh - var(--studio-bar-height) - 30px);padding:16px;border-radius:18px}
+  .studio-home-words strong{max-width:100%;font-size:var(--reading-small,15px)}
+  body.playground .studio-chapter{justify-content:center;white-space:normal;line-height:1.2;min-height:44px;padding:3px;font-size:var(--reading-small,15px)}
+  .studio-chapter-icon{display:none}
+  body.playground .studio-search-button{min-height:46px;padding:0 10px;margin:0;font-size:var(--reading-small,15px)}
+  .studio-panel{top:calc(100% + 4px);max-height:calc(100dvh - 100% - 12px);padding:12px;border-radius:10px}
   .studio-panel-head{flex-wrap:wrap;gap:12px}
   .studio-panel-head h2{font-size:22px}
   .studio-panel-count{margin-left:0}
@@ -194,7 +270,7 @@ html[data-contrast=more] #unified-workspace[data-flow] .workspace-journey::befor
   .workbench-head{flex-direction:column;align-items:stretch;padding:16px}
   .workbench-actions :is(a,button){flex:1;justify-content:center;text-align:center}
   .workbench-frame{height:max(520px,calc(100dvh - var(--studio-bar-height) - 120px))}
-  body.playground .hero{padding:30px 0 22px}
+  body.playground .hero{padding:14px 0}
 }
-@media(max-width:760px){html[data-reading-size=large] body.playground .studio-home-words strong{max-width:150px}}
+@media(max-width:760px){.practice-examples{grid-template-columns:1fr}.playground-shortcuts{gap:4px 12px}}
 @media(prefers-reduced-motion:reduce){.studio-panel,.workbench-loading{animation:none}body.playground .studio-tool:hover{transform:none}}

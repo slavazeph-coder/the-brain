@@ -26,6 +26,12 @@ def open_world(page):
     expect(page.locator('#robot-setup [data-robot]')).to_have_count(len(ROBOTS))
 
 
+def open_picker(page, kind):
+    picker = page.locator(f'#robot-setup .setup-{kind}')
+    if not picker.evaluate('el => el.open'):
+        picker.locator('summary').click()
+
+
 def pressed(page, selector):
     return page.locator(selector).get_attribute('aria-pressed') == 'true'
 
@@ -41,7 +47,12 @@ def canvas_png(page):
 def check_robots(page):
     assert pressed(page, '[data-robot=cleaner]'), 'The cleaning robot starts chosen'
     before = canvas_png(page)
+    expect(page.locator('#setup-robots-label')).to_contain_text('Cleaning robot')
+    expect(page.locator('[data-robot=forklift]')).to_be_hidden()
+    open_picker(page, 'robots')
     page.locator('[data-robot=forklift]').click()
+    expect(page.locator('#setup-robots-label')).to_be_focused()
+    expect(page.locator('#setup-robots-label')).to_contain_text('Compact forklift')
     assert pressed(page, '[data-robot=forklift]') and not pressed(page, '[data-robot=cleaner]')
     assert canvas_png(page) != before, 'The chosen robot body is drawn on the map'
     # The card and the existing robot list are the same choice, both ways.
@@ -51,6 +62,7 @@ def check_robots(page):
     expect(page.locator('[data-robot=vacuum]')).to_have_attribute('aria-pressed', 'true')
     page.locator('#tab-world').click()
     # Keyboard: a focused card is chosen with Space.
+    open_picker(page, 'robots')
     page.locator('[data-robot=cleaner]').focus()
     page.keyboard.press('Space')
     expect(page.locator('[data-robot=cleaner]')).to_have_attribute('aria-pressed', 'true')
@@ -170,18 +182,22 @@ def check_undo(page):
 
 def check_worlds(page):
     page.on('dialog', lambda dialog: dialog.accept())
+    open_picker(page, 'worlds')
     page.locator('[data-world=empty]').click()
     expect(page.locator('[data-world=empty]')).to_have_attribute('aria-pressed', 'true')
     expect(page.locator('#world-title')).to_have_text('My measured space')
     expect(page.locator('#object-chooser')).to_be_hidden()
+    open_picker(page, 'worlds')
     page.locator('[data-world=sample]').click()
     expect(page.locator('[data-world=sample]')).to_have_attribute('aria-pressed', 'true')
     expect(page.locator('#world-title')).to_have_text('Studio 01 / training floor')
+    open_picker(page, 'worlds')
     page.locator('[data-world=street]').click()
     expect(page.locator('#street-workspace')).to_be_visible(timeout=45000)
     expect(page.locator('[data-world=street]')).to_have_attribute('aria-pressed', 'true')
     expect(page.locator('#robot-setup-run')).to_contain_text('Open street routes')
     expect(page.locator('#undo-edit')).to_be_hidden()
+    open_picker(page, 'worlds')
     page.locator('[data-world=sample]').click()
     expect(page.locator('#map-workspace')).to_be_visible()
     expect(page.locator('[data-world=sample]')).to_have_attribute('aria-pressed', 'true')
@@ -201,6 +217,7 @@ def check_contrast(page):
 def check_big_robot(page):
     # The forklift does not fit the sample's corner start. The setup says so, offers the planner's nearest
     # fitting spot, and then sends the person to the map check that the moved start requires.
+    open_picker(page, 'robots')
     page.locator('[data-robot=forklift]').click()
     page.locator('#robot-setup-run').click()
     expect(page.locator('#robot-setup-note')).to_contain_text('too big for its starting spot', timeout=30000)
@@ -226,6 +243,7 @@ def check_no_fitting_start(page):
     expect(page.locator('#world-title')).to_have_text(room['name'])
     page.locator('#scale-reviewed').check()
     page.locator('#map-reviewed').check()
+    open_picker(page, 'robots')
     page.locator('[data-robot=forklift]').click()
     page.locator('#robot-setup-run').click()
     expect(page.locator('#robot-setup-note')).to_contain_text('No starting spot fits', timeout=30000)
@@ -240,7 +258,23 @@ def check_no_fitting_start(page):
     expect(page.locator('#start-x')).to_have_value('1')
     expect(page.locator('#start-z')).to_have_value('1')
     expect(page.locator('#map-reviewed')).to_be_checked()
-    page.locator('#hero-sample').click()
+    open_picker(page, 'worlds')
+    page.locator('[data-world=sample]').click()
+
+
+def check_mobile_map_first(page):
+    def map_precedes_controls():
+        return page.evaluate("""() => Boolean(document.getElementById('viewport').compareDocumentPosition(
+          document.getElementById('unified-workspace')) & Node.DOCUMENT_POSITION_FOLLOWING)""")
+    assert map_precedes_controls(), 'The initial map must come before the robot and editing controls on phones.'
+    offset = page.locator('#viewport').evaluate("el => el.getBoundingClientRect().top - el.closest('#workspace').getBoundingClientRect().top")
+    assert 0 <= offset < 220, f'The map starts {offset}px into the phone workspace.'
+    page.locator('#tab-capture').click()
+    expect(page.locator('#panel')).to_have_attribute('aria-labelledby', 'tab-capture')
+    assert not map_precedes_controls(), 'File tools must come first when adding a capture.'
+    page.locator('#tab-world').click()
+    expect(page.locator('#panel')).to_have_attribute('aria-labelledby', 'tab-world')
+    assert map_precedes_controls()
 
 
 def check_readable(page, label):
@@ -268,6 +302,7 @@ def check_readable(page, label):
         return [...range.getClientRects()];
       };
       for (const card of setup.querySelectorAll('.robot-card, .world-card')) {
+        if (!card.getClientRects().length) continue;
         const rect = card.getBoundingClientRect();
         const name = card.dataset.robot || card.dataset.world;
         if (rect.left < left - 1 || rect.right > right + 1) issues.push(`${name}: card outside setup`);
@@ -321,7 +356,11 @@ def run_browser(playwright, name):
                 if large:
                     page.add_init_script("localStorage.setItem('brainsnn-world-reading-size','large')")
                 open_world(page)
+                check_mobile_map_first(page)
                 page.locator('#robot-setup').scroll_into_view_if_needed()
+                open_picker(page, 'robots')
+                check_readable(page, f'{name} {width}px robot choices')
+                open_picker(page, 'worlds')
                 check_readable(page, f'{name} {width}px {"large" if large else "standard"}')
                 page.screenshot(path=str(OUTPUT / f'robot-setup-{name}-{width}{"-large" if large else ""}.png'), full_page=False)
                 context.close()

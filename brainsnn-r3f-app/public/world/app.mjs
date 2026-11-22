@@ -264,7 +264,7 @@ function renderMedia(){
     return;
   }
   if(!capture){
-    $('scene-basis').textContent=world?.provenance==='authored'?'AUTHORED SAMPLE / NOT A RECONSTRUCTION':world?.provenance==='generated'?'GENERATED / UNVERIFIED':world?.scaleReviewed&&world?.mapReviewed?'USER-REVIEWED GEOMETRY / PLANNING ONLY':'GEOMETRY REVIEW REQUIRED / NOT VERIFIED';
+    $('scene-basis').textContent=world?.provenance==='authored'?(worldOrigin==='sample'?'Practice room':'Authored map'):world?.provenance==='generated'?'GENERATED / UNVERIFIED':world?.scaleReviewed&&world?.mapReviewed?'USER-REVIEWED GEOMETRY / PLANNING ONLY':'GEOMETRY REVIEW REQUIRED / NOT VERIFIED';
     $('scene-help').textContent='Turn and zoom with the buttons, or drag · Tap a box to choose it';
     return;
   }
@@ -870,9 +870,28 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(
   if(id==='start-x'||id==='start-z'){mutate(w=>{w.start[id.slice(-1)]=Number(v);});return;}
   if(id.startsWith('object-')){const key=id.slice(7);mutate(w=>{const o=w.objects.find(o=>o.id===selected);if(o)o[key]=['name','kind'].includes(key)?v:Number(v);},['x','z'].includes(key)?'moved':['w','d','h'].includes(key)?'resized':'edited');}
 });
-$('hero-capture').onclick=()=>{if(sandbox)void sandbox.select('capture');else setTab('capture');$('workspace').scrollIntoView();};$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
-// The hero demo opens the same training floor as the hero link; its reviewed state lands on Simulate, where the route runs.
-createHeroDemo($('hero-demo'),{onOpen:state=>{$('hero-sample').click();if(state==='reviewed'&&world?.provenance==='authored'){if(sandbox)void sandbox.select('map','simulate');else setTab('test');}}});
+$('hero-capture').onclick = async () => {
+  workbench.hide({restoreFocus:false});
+  await showWorkspaceTab('capture');
+  const upload = document.querySelector('#panel [data-action="files"]') || $('tab-capture');
+  const disclosure = upload.closest('details');
+  if (disclosure) disclosure.open = true;
+  upload.scrollIntoView({block:'center'});
+  upload.focus({preventScroll:true});
+};
+$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
+// The optional examples create their preview renderer only when first opened.
+$('world-examples').addEventListener('toggle', function startExample() {
+  if (!this.open) return;
+  this.removeEventListener('toggle', startExample);
+  createHeroDemo($('hero-demo'), {onOpen: state => {
+    $('hero-sample').click();
+    if (state === 'reviewed' && world?.provenance === 'authored') {
+      if (sandbox) void sandbox.select('map','simulate');
+      else setTab('test');
+    }
+  }});
+});
 $('undo-edit').onclick=()=>stepEdit(true);$('redo-edit').onclick=()=>stepEdit(false);
 // Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z (or Ctrl+Y) undo map edits, but never take over typing in a field or an open dialog.
 document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey)return;const k=e.key.toLowerCase();if(k!=='z'&&k!=='y')return;if(e.target?.closest?.('input,textarea,select,[contenteditable]')||document.querySelector('dialog[open]')||sandbox?.isStreet())return;const back=k==='z'&&!e.shiftKey;if(!(back?editHistory.undo:editHistory.redo).length)return;e.preventDefault();stepEdit(back);});
@@ -891,8 +910,6 @@ $('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopRepl
     c.picks.push(index);visualViewer.setMarkers(c.picks);if(c.picks.length===2)c.picking=false;
     renderPanel();status(c.picks.length===2?'Both points picked. Enter the distance you measured between them.':'Now tap the other end of the distance you measured.');
     if(c.picks.length===2)revealMeasurement('measured-distance');});}
-// The header's More menu closes like a menu: on a tap elsewhere, or on Escape.
-const navMore=document.querySelector('.nav-more');document.addEventListener('pointerdown',e=>{if(navMore?.open&&!navMore.contains(e.target))navMore.open=false;});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&navMore?.open){navMore.open=false;navMore.querySelector('summary').focus();}});
 document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const buttons=Array.from(e.currentTarget.querySelectorAll('[role=tab]')),current=e.target.closest('[role=tab]')||e.currentTarget.querySelector('[aria-selected=true]'),i=Math.max(0,buttons.indexOf(current)),n=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(['ArrowRight','ArrowDown'].includes(e.key)?1:buttons.length-1))%buttons.length;buttons[n].focus();buttons[n].click();});
 $('workspace').addEventListener('dragover',e=>{e.preventDefault();});$('workspace').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files.length){void sandbox?.select('capture');void addFiles(e.dataTransfer.files);}});
 $('connection').addEventListener('close',cancelConnection);
@@ -979,6 +996,11 @@ layerTools=mountWorldLayerTools({root:$('world-layer-tools'),
 });
 // One studio: the bar reaches every tool, and separate tool pages open in the workbench beside the world.
 const workbench=createWorkbench({root:$('studio-workbench')});
+document.querySelector('.playground-tour').addEventListener('click', event => {
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  workbench.hide({restoreFocus:false});
+  $('showcase').closest('details').open = true;
+});
 const showcaseNavigator=mountShowcase({
   root:$('showcase'), showTab:showWorkspaceTab, showProcessing:showProcessingOptions,
   openPage:(feature,chapter,origin)=>workbench.show(feature,chapter,origin),

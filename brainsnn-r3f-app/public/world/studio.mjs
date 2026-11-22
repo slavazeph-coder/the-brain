@@ -98,7 +98,14 @@ export function createWorkbench({ root, onClose = () => {} }) {
   let origin = null, current = null, settleUntil = 0, settleTimer = 0;
   // While a tool page loads, its own anchor navigation can scroll this page too. For a short time after
   // opening, keep the workbench header in view unless the person scrolls or types themselves.
-  const settle = () => { if (Date.now() < settleUntil) requestAnimationFrame(() => root.scrollIntoView({ block: 'start', behavior: 'instant' })); };
+  let settleFrame = 0;
+  const settle = () => {
+    if (settleFrame || Date.now() >= settleUntil) return;
+    settleFrame = requestAnimationFrame(() => {
+      settleFrame = 0;
+      if (!root.hidden && Date.now() < settleUntil) root.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
+  };
   const stopSettling = () => { settleUntil = 0; };
   for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) window.addEventListener(type, stopSettling, { passive: true, capture: true });
   window.addEventListener('scroll', settle, { passive: true });
@@ -214,6 +221,19 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
   const home = root.querySelector('#studio-home');
   const worldName = root.querySelector('#studio-world-name');
   const buttons = new Map();
+  const resourceLinks = [...document.querySelectorAll('#site-resources [data-library-resource]')];
+  const resources = {
+    id: 'resources', label: 'More from BrainSNN', title: 'Tools and guides',
+    features: resourceLinks.map(link => ({
+      label: link.querySelector('strong').textContent,
+      detail: link.querySelector('span').textContent,
+      target: link.getAttribute('href'),
+      link,
+      access: link.target === '_blank' ? 'Separate page' : link.getAttribute('href').startsWith('#') ? 'Guide' : 'BrainSNN page',
+    })),
+  };
+  const searchableChapters = [...chapters, resources];
+  const totalEntries = searchableChapters.reduce((sum, group) => sum + group.features.length, 0);
   let openId = null, query = '';
 
   searchButton.insertAdjacentHTML('afterbegin', SEARCH_ICON);
@@ -239,8 +259,17 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
 
   function card({ chapter, feature }, index) {
     const place = featurePlace(feature.target);
-    const button = document.createElement('button');
-    button.type = 'button';
+    const nativeLink = feature.link && !isWorkbenchPage(feature.target);
+    const button = document.createElement(nativeLink ? 'a' : 'button');
+    if (nativeLink) {
+      button.href = feature.target;
+      if (feature.link.target) {
+        button.target = feature.link.target;
+        button.rel = 'noopener';
+      }
+    } else {
+      button.type = 'button';
+    }
     button.className = 'studio-tool';
     button.dataset.studioTarget = feature.target;
     button.dataset.studioIndex = String(index);
@@ -262,7 +291,7 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
     access.textContent = feature.access;
     const where = document.createElement('small');
     where.className = 'studio-where';
-    where.textContent = openId === 'search' ? `${chapter.label} · ${PLACE_WORDS[place]}` : PLACE_WORDS[place];
+    where.textContent = nativeLink && button.target === '_blank' ? 'Opens in a new tab' : PLACE_WORDS[place];
     foot.append(access, where);
     button.append(head, text, foot);
     return button;
@@ -272,7 +301,7 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
   function render() {
     const searching = openId === 'search';
     const chapter = chapters.find(entry => entry.id === openId);
-    listed = searching ? searchFeatures(chapters, query) : chapter.features.map(feature => ({ chapter, feature }));
+    listed = searching ? searchFeatures(searchableChapters, query) : chapter.features.map(feature => ({ chapter, feature }));
     const header = document.createElement('div');
     header.className = 'studio-panel-head';
     if (searching) {
@@ -284,15 +313,12 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
       header.querySelector('div p').textContent = chapter.description;
     }
     header.querySelector('.studio-panel-count').textContent = searching
-      ? (listed.length ? `${listed.length} of ${chapters.reduce((n, c) => n + c.features.length, 0)} tools` : 'No tool matches yet. Try another word.')
+      ? (listed.length ? `${listed.length} of ${totalEntries} tools and guides` : 'No tool matches yet. Try another word.')
       : `${listed.length} tools`;
     const grid = document.createElement('div');
     grid.className = 'studio-tools';
     grid.append(...listed.map(card));
-    const foot = document.createElement('p');
-    foot.className = 'studio-panel-foot';
-    foot.textContent = 'Tools open beside your world. Your map, edits and results stay where they are.';
-    panel.replaceChildren(header, grid, foot);
+    panel.replaceChildren(header, grid);
     panel.setAttribute('aria-label', searching ? 'Find a tool' : chapter.label + ' tools');
     if (searching) {
       const input = panel.querySelector('#studio-search');
@@ -339,18 +365,22 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
       entry.setAttribute('aria-expanded', 'false');
       entry.classList.remove('active');
     }
-    if (restore) button?.focus({ preventScroll: true });
+    if (restore) (button?.getClientRects().length ? button : searchButton).focus({ preventScroll: true });
   }
 
   searchButton.addEventListener('click', () => (openId === 'search' ? closePanel() : openPanel('search')));
   panel.addEventListener('click', event => {
     const tool = event.target.closest('[data-studio-target]');
     if (!tool) return;
+    if (tool.tagName === 'A') {
+      if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !tool.target) closePanel();
+      return;
+    }
     const entry = listed[Number(tool.dataset.studioIndex)];
     const origin = buttons.get(entry.chapter.id);
     closePanel();
     for (const button of buttons.values()) button.classList.toggle('current', button === origin);
-    void openFeature(entry.feature, entry.chapter, origin);
+    void openFeature(entry.feature, entry.chapter, origin?.getClientRects().length ? origin : searchButton);
   });
   panel.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); closePanel({ restore: true }); return; }
@@ -373,6 +403,27 @@ export function mountStudioBar({ root, chapters, openFeature, onHome = () => {} 
     closePanel();
     for (const button of buttons.values()) button.classList.remove('current');
     onHome();
+  });
+
+  // Public fragment links and keyboard navigation both open their disclosure.
+  function revealResource(hash) {
+    const section = document.getElementById(hash.slice(1));
+    if (!section?.matches('details.playground-disclosure')) return;
+    section.open = true;
+    section.querySelector(':scope > summary').focus({ preventScroll:true });
+  }
+  window.addEventListener('hashchange', () => revealResource(location.hash));
+  revealResource(location.hash);
+  document.addEventListener('click', event => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest('a[href]');
+    if (!link) return;
+    const target = link.getAttribute('href');
+    if (target.startsWith('#')) revealResource(target);
+    if (!link.matches('[data-library-resource]') || !isWorkbenchPage(target)) return;
+    event.preventDefault();
+    const feature = resources.features.find(item => item.link === link);
+    if (feature) void openFeature(feature, resources, link);
   });
 
   // Keep "Your world" in step with the workspace heading without coupling to the editor.
