@@ -13,7 +13,7 @@ export const SOUND_KEY = 'brainsnn-world-missions-sound';
 /** Each mission: plain goal, a short how-to, star tiers, and where "Show me" takes you. */
 export const MISSIONS = [
   { id: 'first', icon: '▶', title: 'First run', goal: 'Pick any robot and press Let it try.',
-    how: 'Choose a robot card, then the big Let it try button.', stars: 1, show: 'run' },
+    how: 'Pick a robot under Robot, then press Let it try.', stars: 1, show: 'run' },
   { id: 'garage', icon: '🤖', title: 'Robot garage', goal: 'Find a route with different robots.',
     how: 'Two robots earn one star, three earn two, all five earn three.', stars: 3, show: 'robots' },
   { id: 'shortcut', icon: '✂', title: 'Shortcut', goal: 'Change the room so the same route gets shorter.',
@@ -22,7 +22,7 @@ export const MISSIONS = [
   { id: 'spot', icon: '📍', title: 'Pick the spot', goal: 'Send the robot to a spot you choose.',
     how: 'In Try robots, enter a spot in metres and route to it.', stars: 1, show: 'spot' },
   { id: 'street', icon: '🏙', title: 'Street explorer', goal: 'Open the Street world.',
-    how: 'Choose Street under Build its world.', stars: 1, show: 'street' },
+    how: 'Open World and choose Street.', stars: 1, show: 'street' },
   { id: 'before', icon: '⧉', title: 'Before and after', goal: 'Keep a before copy of your map.',
     how: 'Press Keep a before copy, then change the room and compare.', stars: 1, show: 'before' },
   { id: 'own', icon: '📷', title: 'Your own space', goal: 'Add your own photo or video.',

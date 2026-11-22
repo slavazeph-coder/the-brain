@@ -1,0 +1,96 @@
+/* Keep the editable world close to its controls. Expanded pickers stay in document flow. */
+#unified-workspace[data-flow="editor-first"] {
+  --flow-pad: clamp(12px, 2vw, 24px);
+  padding: var(--flow-pad) var(--flow-pad) 0;
+  background: var(--surface);
+}
+#workspace .unified-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
+#workspace .unified-heading h2 { font-size: clamp(1.35em, 2vw, 1.75em); line-height: 1.2; margin: 0; }
+#unified-workspace[data-has-content="false"] #workspace-project-summary { display: none; }
+.workspace-heading-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.workspace-heading-actions a { display: inline-flex; align-items: center; min-height: 44px; color: var(--cyan); text-underline-offset: 4px; font-size: var(--reading-small); }
+.workspace-heading-actions .badge { white-space: normal; }
+.workspace-heading-actions [hidden], .unified-heading [hidden] { display: none; }
+
+#unified-workspace[data-flow] #robot-setup { margin: 0; padding: 12px 0; background: none; border: 0; }
+#robot-setup .setup-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas: "robots worlds try"; align-items: start; gap: 10px;
+}
+#robot-setup[data-origin="capture"] .setup-grid { grid-template-areas: "worlds"; grid-template-columns: minmax(0, 1fr); }
+#robot-setup .setup-step { margin: 0; min-width: 0; max-width: none; }
+#robot-setup details {
+  padding: 0; border: 1px solid #465366; border-radius: 10px; background: #131b26; color: var(--text);
+}
+#robot-setup summary {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 10px;
+  align-items: center; gap: 8px; min-height: 48px; padding: 8px 12px;
+  cursor: pointer; border-radius: inherit; color: var(--text); line-height: 1.3;
+}
+#robot-setup summary::-webkit-details-marker { display: none; }
+#robot-setup summary span { font-size: var(--reading-small); color: #c3ccda; }
+#robot-setup summary strong { font-size: var(--reading-ui); overflow-wrap: anywhere; }
+#robot-setup summary::after {
+  content: ""; height: 7px; width: 7px; border: solid currentColor; border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg); justify-self: end;
+}
+#robot-setup details[open] > summary::after { transform: rotate(225deg); }
+#robot-setup .robot-cards, #robot-setup .world-cards { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 0 8px; }
+#robot-setup .robot-card, #robot-setup .world-card {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-auto-rows: auto;
+  gap: 3px 9px; min-height: 48px; padding: 9px; border-radius: 7px;
+}
+#robot-setup :is(.robot-art-wrap, .world-art-wrap) { grid-column: 1; grid-row: 1 / span 3; width: 44px; height: auto; align-self: center; margin: 0; }
+#robot-setup :is(.robot-art, .world-art) { width: 100%; height: auto; }
+#robot-setup .robot-card > :not(.robot-art-wrap),
+#robot-setup .world-card > :not(.world-art-wrap) { grid-column: 2; }
+#robot-setup :is(.robot-chosen, .world-chosen) { position: static; justify-self: start; border-radius: 5px; }
+#robot-setup .robot-facts { font-size: var(--reading-small); }
+#robot-setup details .setup-note { padding: 8px 10px; margin: 0; font-size: var(--reading-small); }
+#robot-setup .setup-run { min-height: 50px; padding: 10px 12px; border-radius: 10px; font-size: var(--reading-ui); }
+#robot-setup .setup-run-note { margin: 6px 0 0; font-size: var(--reading-small); line-height: 1.35; }
+#robot-setup summary:focus-visible, .workspace-heading-actions a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+
+#unified-workspace[data-flow] .workspace-journey {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px;
+  margin: 0 calc(-1 * var(--flow-pad)); padding: 7px var(--flow-pad); border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+#unified-workspace[data-flow] .workspace-journey::before { content: none; }
+#unified-workspace[data-flow] .workspace-journey button {
+  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  gap: 6px; min-height: 44px; padding: 6px 8px; border-radius: 8px;
+  text-align: center; white-space: normal; font-size: var(--reading-ui); line-height: 1.25;
+}
+#unified-workspace[data-flow] .workspace-journey strong { font: inherit; font-weight: 600; margin: 0; }
+#unified-workspace[data-flow] .workspace-journey .step-icon { height: 24px; width: 24px; flex-shrink: 0; background: none; }
+#unified-workspace[data-flow] .workspace-journey .step-icon svg { width: 20px; height: 20px; }
+#unified-workspace[data-flow] .workspace-journey [aria-current=step] .step-icon { color: var(--cyan); background: none; }
+#map-workspace .stage > .camera-dock { padding: 8px; border-block: 1px solid var(--border); background: var(--surface); }
+#workspace-command-bar { margin: 0; padding: 0 var(--flow-pad, 16px); border: 0; border-block: 1px solid var(--border); border-radius: 0; }
+#workspace-command-title { min-height: 48px; padding: 12px 0; font-size: 1.08em; font-weight: 650; cursor: pointer; }
+#workspace-command-title:focus-visible { outline: 3px solid var(--cyan); outline-offset: -3px; }
+#workspace-command-bar[open] { padding-bottom: 12px; }
+#workspace-command-bar :is(.workspace-header, .sandbox-toolbar, .sandbox-context) { padding-inline: 0; }
+#workspace-command-bar .workspace-next { margin: 8px 0 0; }
+html[data-contrast=more] #robot-setup details { background: #000; border-color: #d7e5f2; }
+
+@media (max-width: 840px) {
+  #unified-workspace[data-flow] .workspace-journey { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #robot-setup .setup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "robots worlds" "try try"; }
+  #robot-setup .setup-try { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
+  #robot-setup .setup-run-note { margin: 0; }
+  #robot-setup .setup-fix { grid-column: 1 / -1; margin: 0; }
+}
+@media (max-width: 520px) {
+  #robot-setup .setup-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "robots" "worlds" "try"; gap: 6px; }
+  #robot-setup summary { min-height: 44px; }
+  #unified-workspace[data-flow] .workspace-journey button { padding: 6px 4px; }
+  #unified-workspace[data-flow] .workspace-journey .step-icon { display: none; }
+}
+
+@media (max-width: 700px) {
+  .workspace > .unified-heading { padding: 8px 14px; margin: 0; background: var(--surface); }
+  .stage > #unified-workspace[data-flow] { padding-top: 0; }
+  .workspace[data-editing-map="false"] #map-workspace > .stage { order: 0; }
+}

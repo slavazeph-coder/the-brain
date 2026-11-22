@@ -113,11 +113,16 @@ export function WorldScan() {
     setError('');
     try {
       const moduleUrl = new URL('/world/capture-handoff.mjs', window.location.origin).href;
-      const { stageLocalCapture, clearLocalCapture } = await import(/* @vite-ignore */ moduleUrl);
+      const { stageLocalCapture, clearLocalCapture, offerCaptureToWorkbench } = await import(/* @vite-ignore */ moduleUrl);
       const id = await stageLocalCapture(files, { goal });
       if (chosen !== selection.current) { await clearLocalCapture(id); return; }
       track('world_capture_local_handoff', { goal, count: files.length, kind: files.some(isVideo) ? 'video' : 'photos' });
-      window.location.assign('/world/index.html#handoff=' + id);
+      try {
+        if (!offerCaptureToWorkbench(id)) window.location.assign('/world/index.html#handoff=' + id);
+      } catch (reason) {
+        await clearLocalCapture(id);
+        throw reason;
+      }
     } catch (reason) {
       setError('This browser could not move the selected capture privately to World Builder. Your original file is unchanged. Open World Builder below and choose the file again. ' + (reason?.message || 'Local storage failed.'));
     } finally { setHandoffBusy(false); }

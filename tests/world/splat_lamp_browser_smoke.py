@@ -299,7 +299,8 @@ def verify_embedded(page, origin, output, engine):
     toggle.tap()
     expect(toggle).to_be_checked()
     expect(lamp.locator('[data-lamp-reset]')).to_be_enabled()
-    page.get_by_role('button', name='Larger text', exact=True).tap()
+    page.locator('#playground-text-size').tap()
+    expect(page.locator('html')).to_have_attribute('data-reading-size', 'large')
     for width in (390, 320):
         page.set_viewport_size({'width': width, 'height': 850})
         assert lamp.evaluate('el => el.scrollWidth <= Math.ceil(el.getBoundingClientRect().width) + 1')

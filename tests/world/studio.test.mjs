@@ -26,6 +26,12 @@ test('every separate tool page opens in the workbench; nothing else does', () =>
   for (const { target } of features.filter(({ target }) => !target.startsWith('/'))) {
     assert.equal(isWorkbenchPage(target), false, target);
   }
+  for (const goal of ['', '?goal=play', '?goal=room', '?goal=bim', '?goal=robot']) {
+    assert.equal(isWorkbenchPage('/scan' + goal), true);
+  }
+  for (const other of ['/scan?token=private', '/scan?goal=play&token=private', '/scan?goal=unknown', '/scan#handoff=private']) {
+    assert.equal(isWorkbenchPage(other), false);
+  }
   // The playground itself, other sites and unsafe shapes never load in the workbench.
   for (const target of ['/world/index.html', '/world/index.html#workspace', 'https://example.com/world/a.html', '//evil.test/world/a.html',
     '/world/../server.ts', '/world/a.html?x=1', 'javascript:alert(1)', '/arena/other.html']) {
@@ -63,7 +69,7 @@ test('the playground page carries the studio, its workbench and the offline shel
   }
   assert.match(page, /<link rel="stylesheet" href="\.\/studio\.css">/u);
   // The studio wraps the world and everything after it, and the bar comes before the workspace in reading order.
-  const order = ['<section class="hero">', 'id="studio-bar"', 'id="studio-workbench"', 'id="showroom"', 'id="workspace"', 'id="showcase"', 'id="systems"', '<section class="closing">'];
+  const order = ['<section class="hero">', 'id="studio-bar"', 'id="studio-workbench"', 'id="showroom"', 'id="workspace"', 'id="showcase"', 'id="systems"', 'data-site-footer'];
   const positions = order.map(marker => page.indexOf(marker));
   assert.ok(positions.every(position => position >= 0), JSON.stringify(positions));
   assert.deepEqual([...positions].sort((a, b) => a - b), positions);

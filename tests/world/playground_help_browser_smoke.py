@@ -54,24 +54,30 @@ def help_open(page):
 
 
 def check_menu(page):
-    menu = page.locator('.nav-more')
-    menu.locator('summary').click()
-    expect(menu).to_have_attribute('open', '')
-    links = menu.locator('a')
-    hrefs = links.evaluate_all('(nodes) => nodes.map(node => node.getAttribute("href"))')
-    for href in ('/scan', '/arena/', '/world/facility.html', '/world/movement.html',
-                 '/world/api.html', '/world/fleet-learning.html', '/?classic=1'):
-        assert href in hrefs, f'Missing tool link: {href}'
-    for link in links.all():
-        # Trial clicks scroll each link into view and verify it is reachable without navigating.
-        link.click(trial=True)
-        box = link.bounding_box()
+    opener = page.locator('#studio-search-open')
+    opener.click()
+    search = page.locator('#studio-search')
+    expect(search).to_be_focused()
+    expected = (
+        ('photo and video studio', '/scan'),
+        ('move blocks', '/arena/index.html'),
+        ('compare a model', '/world/facility.html#facility-example'),
+        ('review human movement', '/world/movement.html#trial-demo'),
+        ('processing api', '/world/api.html'),
+        ('compare routes between robots', '/world/fleet-learning.html#record'),
+        ('classic', '/?classic=1'),
+    )
+    for query, target in expected:
+        search.fill(query)
+        result = page.locator(f'#studio-panel [data-studio-target="{target}"]')
+        result.click(trial=True)
+        box = result.bounding_box()
         assert box and box['x'] >= -1 and box['x'] + box['width'] <= page.viewport_size['width'] + 1
-    no_overflow(page, 'open all-tools menu')
-    menu.locator('summary').focus()
+    no_overflow(page, 'open tool library')
+    search.focus()
     page.keyboard.press('Escape')
-    expect(menu).not_to_have_attribute('open', '')
-    expect(menu.locator('summary')).to_be_focused()
+    expect(page.locator('#studio-panel')).to_be_hidden()
+    expect(opener).to_be_focused()
 
 
 def check_browser(playwright, name):

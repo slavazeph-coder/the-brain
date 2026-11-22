@@ -200,7 +200,7 @@ const bimWorkflow=createBimWorkflow({status,event,onRender:()=>{renderPanel();up
   getContext:()=>({source:activeSource,scale:activeSource?.visual?measuredScale(activeSource.visual):null,calibration,entry:sceneEngine()}),download,
   onRecompile:async(cloud,source,entry,previousSceneJob)=>{if(!client||isRemoteActive())throw Error('Wait for the current worker job or reconnect your worker.');const previous=workspaceResults.get(sceneContext?.jobKey);if(!previous||previous.sourceClient!==client||previous.job.id!==previousSceneJob)throw Error('This scene belongs to an earlier worker session. Open its source and compile it in the connected session before rebuilding.');delete cloud.nameObjects;const file=new File([JSON.stringify(cloud)],'brainsnn-point-cloud.json',{type:'application/json'});$('scene-dialog').close();event('bim_recompile_requested',{source:source.name,openings:cloud.bimReview?.openings.length??0,points:cloud.points.length,sourceJob:previousSceneJob});await runJob(entry.id,[{file,kind:'cloud',name:file.name}],{source_job:previousSceneJob},[source]);}});
 function metricSceneCard(source){if(!multiView(source))return '';const entry=sceneEngine();
-  if(entry&&(!entry.dimension_checks||!entry.bim_review))return '<p class="note">Update this worker with dimensional checks and BIM review, then reconnect before compiling your demo. See the <a href="./api.html" target="_blank" rel="noopener">worker guide ↗</a>.</p>';
+  if(entry&&(!entry.dimension_checks||!entry.bim_review))return '<p class="note">Update this worker with dimensional checks and BIM review, then reconnect before compiling your demo. See the <a href="./api.html" data-workbench-link>worker guide</a>.</p>';
   // Naming reads this worker's own reconstruction job (its frames and camera poses), so it is offered only for those.
   const naming=entry?.object_naming&&sourceJobOptions(sourceBindings.get(source),client).source_job?`<label class="check"><input id="scene-naming" type="checkbox">Also send crops of each separated object from your walkthrough frames to ${esc(entry.object_naming.provider||'the naming model')} (${esc(entry.object_naming.model||'')}) to suggest its name. Names are suggestions for you to review.</label>`:'';
   return entry?`<label class="check"><input id="scene-consent" type="checkbox">Upload this measured point cloud to your worker to compile a simulation scene.</label>${naming}<button class="wide" data-action="metric-scene" ${isRemoteActive()?'disabled':''}>Build metric simulation scene (GLB, USD, IFC) →</button><p class="micro">${esc(entry.label)}. The scene uses your measured distance, so it is in metres but self-reported, not verified.</p>`
@@ -267,7 +267,7 @@ function renderMedia(){
     return;
   }
   if(!capture){
-    $('scene-basis').textContent=world?.provenance==='authored'?'AUTHORED SAMPLE / NOT A RECONSTRUCTION':world?.provenance==='generated'?'GENERATED / UNVERIFIED':world?.scaleReviewed&&world?.mapReviewed?'USER-REVIEWED GEOMETRY / PLANNING ONLY':'GEOMETRY REVIEW REQUIRED / NOT VERIFIED';
+    $('scene-basis').textContent=world?.provenance==='authored'?(worldOrigin==='sample'?'Practice room':'Authored map'):world?.provenance==='generated'?'GENERATED / UNVERIFIED':world?.scaleReviewed&&world?.mapReviewed?'USER-REVIEWED GEOMETRY / PLANNING ONLY':'GEOMETRY REVIEW REQUIRED / NOT VERIFIED';
     $('scene-help').textContent='Turn and zoom with the buttons, or drag · Tap a box to choose it';
     return;
   }
@@ -287,7 +287,7 @@ function renderPanel(){
   if(tab==='capture'){
     // A photo has one job here, a 3D preview: its steps come first, and the other ways in fold away while it is open.
     const photo=activeSource?.kind==='image',ways=`<button class="upload-drop wide" data-action="video"><span>↑</span>Choose walkthrough video</button><button class="wide" data-action="files">Choose photos, video or map</button><details class="native-capture-options"><summary>More: calibrated capture files</summary><p class="micro">Choose its capture JSON and 3–11 unchanged JPEG/PNG photos together. JSON up to 1 MiB; each photo up to 64 MiB. Keep the original filenames. Ordinary phone photos and browser recordings do not contain this calibration.</p><button class="wide" data-action="native-capture">Import calibrated capture</button></details><button class="wide" data-action="phone">Use iPhone camera ↗</button><button class="wide" data-action="record">${capture.state==='requesting'?'Cancel camera request':capture.state==='stopping'?'Finishing recording…':capture.state==='recording'?'Stop recording':'Record walkthrough'}</button><p class="micro">Up to 12 files · photos 200 MiB · videos 5 min, 2 GiB<br>On iPhone, Photo Library converts a video before this page gets it, which can take minutes for a long 4K video. Faster: in Photos, Share → Save to Files, then pick it here with Choose File.<br>Browser recording: 90 seconds, no audio.</p>${installable()?'<button class="wide" data-action="install">Add to Home Screen</button>':''}`;
-    p.innerHTML=`${photo?`<h3>Your photo is ready.</h3><p>${activeSource.visual?'Drag the preview to look around. You can also find and review objects in the photo.':`Make a 3D preview you can look around. Your photo stays on this device. The first use downloads a 50 MB model.${siteProcessing||caps?.engines?.some(e=>e.available&&e.id==='photo-metric')?' For a preview in estimated metres, open “Process capture” below and approve an upload.':''}`}</p>`:`<h3>Add a photo or video.</h3><p>Use a photo for a 3D preview, or a slow walkthrough video to build a space. Files stay on your device until you approve an upload.</p>${ways}`}<div>${sources.map((s,i)=>`<div class="source-row"><button data-source="${i}">${esc(s.name)}${s.kind==='video'&&s.width&&s.height?` · ${s.width}×${s.height}`:''}${s.kind==='capture'?` · calibration for ${s.capture.frames.length} photos`:''}</button><button data-remove="${i}" aria-label="Remove ${esc(s.name)}">×</button></div>`).join('')}</div>${recoveryCard(activeSource?.reconstruction)}${captureReportCard(activeSource?.captureReport)}${activeSource?.kind==='image'?`<button class="${activeSource.visual?'':'primary '}wide" data-action="depth" ${depthAbort?'disabled':''}>${activeSource.visual?'Rebuild':'Create'} 3D preview</button><p class="micro">Runs on this device. Relative depth only; hidden surfaces are unknown.</p><button class="${activeSource.visual&&!detectAbort?'primary ':''}wide" data-action="${detectAbort?'cancel-detect':'detect'}">${detectAbort?'Cancel object detection':activeSource.visual?'Find objects in this photo':'Find objects in this photo'}</button><p class="micro" id="detect-status" role="status">Suggests names from 80 common object categories. You review them; the map is not changed.</p>`:''}${activeSource?.visual?'<button class="wide" data-action="visual-export">Download visible points (PLY) ↗</button><button class="wide" data-action="arena-cloud">Download point cloud (JSON) ↗</button>':''}${activeSource?.visual&&activeSource.reconstruction?`${proposalCard(activeSource)}`:activeSource?.visual&&activeSource.visual.origin!=='depth'?`<p class="micro">Import the matching reconstruction.json to propose a planning map from these points.</p>${calibrationCard(activeSource.visual)}`:activeSource?.visual?calibrationCard(activeSource.visual):''}${depthAbort?'<button class="wide" data-action="cancel-depth">Cancel 3D preview</button>':''}<p id="depth-status" role="status">${esc(depthStatus)}</p><details class="processing-options"><summary>Process capture · more 3D options</summary><p><a href="./api.html" target="_blank" rel="noopener">Developer guide: processing API ↗</a></p><p>A processing service can combine overlapping views into a 3D space. Check its scale and obstacles before planning a route.</p><button class="wide${!client&&siteProcessing?.available?' primary':''}" data-action="connection">${client?'Worker connection':siteProcessing?.available?'Process on BrainSNN':'Connect processing worker'}</button>${caps?`<label>Choose what to create<select id="engine"><option value="">Choose an available option</option>${caps.engines.filter(e=>e.available&&!['locate-photo','demo-replay','omniverse-pack','asbuilt-update','asbuilt-evidence','splat-repair','localization-map','motion-retarget'].includes(e.id)).map(e=>`<option value="${esc(e.id)}"${e.id===preferredEngine()?' selected':''}>${esc(e.label||e.id)}</option>`).join('')}</select></label><p class="micro">Building a space needs overlapping views. Object suggestions can use one photo or video. ${sources.some(s=>s.kind==='capture')?'The capture JSON and its matching original photos are sent together. Their hashes are checked locally first; the worker validates calibration and poses.':'All photo/video files in this session are sent.'}</p><label class="check"><input id="consent" type="checkbox"><span>I approve sending the selected source files to ${esc(new URL(client.base).host)} for this job.</span></label><button class="primary wide" data-action="process" ${isRemoteActive()?'disabled':''}>Process these files</button>`:''}${isMainRemoteActive()?'<button class="wide" data-action="cancel-job">Cancel upload / job</button>':''}<p id="job-status">${esc(jobStatus)}</p></details>${photo?`<details class="more-sources"><summary>Add a walkthrough video or more photos</summary>${ways}</details>`:''}<p class="note">Walk slowly around the floor, return to your start, and revisit narrow or occluded passages. Keep bystanders out of frame.</p>`;
+    p.innerHTML=`${photo?`<h3>Your photo is ready.</h3><p>${activeSource.visual?'Drag the preview to look around. You can also find and review objects in the photo.':`Make a 3D preview you can look around. Your photo stays on this device. The first use downloads a 50 MB model.${siteProcessing||caps?.engines?.some(e=>e.available&&e.id==='photo-metric')?' For a preview in estimated metres, open “Process capture” below and approve an upload.':''}`}</p>`:`<h3>Add a photo or video.</h3><p>Use a photo for a 3D preview, or a slow walkthrough video to build a space. Files stay on your device until you approve an upload.</p>${ways}`}<div>${sources.map((s,i)=>`<div class="source-row"><button data-source="${i}">${esc(s.name)}${s.kind==='video'&&s.width&&s.height?` · ${s.width}×${s.height}`:''}${s.kind==='capture'?` · calibration for ${s.capture.frames.length} photos`:''}</button><button data-remove="${i}" aria-label="Remove ${esc(s.name)}">×</button></div>`).join('')}</div>${recoveryCard(activeSource?.reconstruction)}${captureReportCard(activeSource?.captureReport)}${activeSource?.kind==='image'?`<button class="${activeSource.visual?'':'primary '}wide" data-action="depth" ${depthAbort?'disabled':''}>${activeSource.visual?'Rebuild':'Create'} 3D preview</button><p class="micro">Runs on this device. Relative depth only; hidden surfaces are unknown.</p><button class="${activeSource.visual&&!detectAbort?'primary ':''}wide" data-action="${detectAbort?'cancel-detect':'detect'}">${detectAbort?'Cancel object detection':activeSource.visual?'Find objects in this photo':'Find objects in this photo'}</button><p class="micro" id="detect-status" role="status">Suggests names from 80 common object categories. You review them; the map is not changed.</p>`:''}${activeSource?.visual?'<button class="wide" data-action="visual-export">Download visible points (PLY) ↗</button><button class="wide" data-action="arena-cloud">Download point cloud (JSON) ↗</button>':''}${activeSource?.visual&&activeSource.reconstruction?`${proposalCard(activeSource)}`:activeSource?.visual&&activeSource.visual.origin!=='depth'?`<p class="micro">Import the matching reconstruction.json to propose a planning map from these points.</p>${calibrationCard(activeSource.visual)}`:activeSource?.visual?calibrationCard(activeSource.visual):''}${depthAbort?'<button class="wide" data-action="cancel-depth">Cancel 3D preview</button>':''}<p id="depth-status" role="status">${esc(depthStatus)}</p><details class="processing-options"><summary>Process capture · more 3D options</summary><p><a href="./api.html" data-workbench-link>processing API guide</a></p><p>A processing service can combine overlapping views into a 3D space. Check its scale and obstacles before planning a route.</p><button class="wide${!client&&siteProcessing?.available?' primary':''}" data-action="connection">${client?'Worker connection':siteProcessing?.available?'Process on BrainSNN':'Connect processing worker'}</button>${caps?`<label>Choose what to create<select id="engine"><option value="">Choose an available option</option>${caps.engines.filter(e=>e.available&&!['locate-photo','demo-replay','omniverse-pack','asbuilt-update','asbuilt-evidence','splat-repair','localization-map','motion-retarget'].includes(e.id)).map(e=>`<option value="${esc(e.id)}"${e.id===preferredEngine()?' selected':''}>${esc(e.label||e.id)}</option>`).join('')}</select></label><p class="micro">Building a space needs overlapping views. Object suggestions can use one photo or video. ${sources.some(s=>s.kind==='capture')?'The capture JSON and its matching original photos are sent together. Their hashes are checked locally first; the worker validates calibration and poses.':'All photo/video files in this session are sent.'}</p><label class="check"><input id="consent" type="checkbox"><span>I approve sending the selected source files to ${esc(new URL(client.base).host)} for this job.</span></label><button class="primary wide" data-action="process" ${isRemoteActive()?'disabled':''}>Process these files</button>`:''}${isMainRemoteActive()?'<button class="wide" data-action="cancel-job">Cancel upload / job</button>':''}<p id="job-status">${esc(jobStatus)}</p></details>${photo?`<details class="more-sources"><summary>Add a walkthrough video or more photos</summary>${ways}</details>`:''}<p class="note">Walk slowly around the floor, return to your start, and revisit narrow or occluded passages. Keep bystanders out of frame.</p>`;
   }else if(tab==='world'){
     p.innerHTML=`<h3>Change your space.</h3><p>Name the map, set its size, then add or select objects. Sizes and positions are in metres.</p>${world?`<label>Map name<input id="map-name" value="${esc(world.name)}" maxlength="160"></label><div class="field-row">${numericField('Width · m','floor-width',world.width,1,80,.1,!!world.floor)}${numericField('Depth · m','floor-depth',world.depth,1,80,.1,!!world.floor)}</div>${world.geometrySource?`<p class="note">Imported ${esc(world.geometrySource.kind)} geometry. The original floor polygon is preserved.</p>${world.geometrySource.warnings.map(w=>`<p class="micro">${esc(w)}</p>`).join('')}`:''}<div class="field-row">${numericField('Robot start X · m','start-x',world.start.x,0,world.width)}${numericField('Robot start Z · m','start-z',world.start.z,0,world.depth)}</div>${checkFirst(world)}<label class="check"><input id="scale-reviewed" type="checkbox" ${world.scaleReviewed?'checked':''} ${world.provenance==='generated'?'disabled':''}><span>I checked scale and critical clearances against independent measurements.</span></label><label class="check"><input id="map-reviewed" type="checkbox" ${world.mapReviewed?'checked':''} ${world.provenance==='generated'?'disabled':''}><span>I reviewed obstacles, unknown areas and the start position.</span></label><button class="wide" data-action="add-object">Add an obstacle or unknown area</button><button class="wide" data-action="save-map">Save map in this browser</button><button class="wide" data-action="map-export">Download map (JSON) ↗</button>`:'<p>Import RoomPlan or a BrainSNN floor map, or create a measured map. Visual depth alone does not establish collision geometry.</p>'}<button class="wide" data-action="new-map">Start a blank measured map</button><button class="wide" data-action="restore">Open saved map</button><p class="note">Sample dimensions are authored, not captured. Imported and changed maps must be reviewed again.</p><div id="geometry-evidence"></div>`;measurements.render($('geometry-evidence'));
   }else if(tab==='understand'){
@@ -324,6 +324,12 @@ function updateWorkflow(){
   const walkthrough=sources.some(s=>s.kind==='video')||!!job||hasScene;
   $('capture-progress').classList.toggle('off-path',!walkthrough&&(tab!=='capture'||activeSource?.kind==='image'));
 }
+function checkSourceCapacity(files) {
+  const count = sources.filter(source => source.file).length + files.length;
+  const bytes = sources.reduce((sum, source) => sum + source.size, 0) + files.reduce((sum, file) => sum + file.size, 0);
+  if (count > LIMITS.sources || bytes > LIMITS.session) throw new Error('This local session is limited to 12 sources and 4 GiB total.');
+}
+
 async function addFiles(list,{nativeCapture=false}={}){
   if(nativeCheckAbort){nativeCheckAbort.abort();nativeCheckAbort=null;jobStatus='';}
   capture.stop();
@@ -339,7 +345,7 @@ async function addFiles(list,{nativeCapture=false}={}){
       if(json?.schema==='brainsnn.reconstruction.v1'){const target=[...sources].reverse().find(s=>s.visual&&s.visual.origin!=='depth');if(!target)throw new Error('Import the reconstruction point cloud (PLY) first, then its reconstruction.json.');
         target.reconstruction=json;activeSource=target;display='visual';event('reconstruction_evidence_attached',{source:target.name,file:file.name,cameras:Array.isArray(json.cameras)?json.cameras.length:0});setTab('capture');update();status('Reconstruction evidence attached. Propose a planning map from the Capture panel.');continue;}
       const map=importWorld(json,file.name);map.scaleReviewed=false;map.mapReviewed=false;apply(map,'Map imported. Confirm scale and geometry before planning.');setTab('world');event('map_import',file.name);continue;}}
-      if(sources.filter(s=>s.file).length>=LIMITS.sources||sources.reduce((s,x)=>s+x.size,0)+file.size>LIMITS.session)throw new Error('This local session is limited to 12 sources and 4 GiB total.');
+      checkSourceCapacity([file]);
       const metadata=kind==='video'?await readVideoMetadata(file):null,seconds=metadata?.seconds??null;if(seconds!==null&&seconds>LIMITS.videoSeconds+1)throw new Error(`This video is ${(seconds/60).toFixed(1)} minutes long. Walkthroughs can be up to five minutes; trim it, then add it again.`);
       if(/\.(spz|ksplat)$/i.test(file.name))throw new Error('Convert SPZ or KSPLAT to PLY / SPLAT before opening it in this viewer.');
       const source={file,name:file.name,size:file.size,kind,url:null,seconds,width:metadata?.width??null,height:metadata?.height??null,...(nativeMetadata?{capture:nativeMetadata}:{})};let nextDisplay='source';if(kind==='visual'&&/\.(ply|splat)$/i.test(file.name)){if(file.size>64*1024**2)throw new Error('Preview limit is 64 MiB. Open larger files in a desktop viewer.');const parsed=parseVisualAsset(await file.arrayBuffer(),file.name);source.visual={...parsed,origin:'import',photo:false};nextDisplay='visual';}if(world?.provenance==='authored'&&untouchedSample(world)){world=null;renderer?.setWorld(null);}display=nextDisplay;source.url=URL.createObjectURL(file);sources.push(source);bimWorkflow.reset();resetProjectReview();activeSource=source;invalidate();event('source_added',`${file.name} (${kind}), local only`);setTab('capture');renderInspector();update();status(videoResolutionIssue(source)??(kind==='capture'?`Capture metadata ready for ${nativeMetadata.frames.length} photos. Add the unchanged originals, connect a compatible worker and approve processing.`:kind==='image'?'Photo ready. Create a 3D preview on this device.':kind==='visual'?'Visual asset loaded. Scale and collision geometry remain unverified.':'Walkthrough ready. Connect a reconstruction worker to process overlapping views.'));
@@ -873,9 +879,28 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;if(
   if(id==='start-x'||id==='start-z'){mutate(w=>{w.start[id.slice(-1)]=Number(v);});return;}
   if(id.startsWith('object-')){const key=id.slice(7);mutate(w=>{const o=w.objects.find(o=>o.id===selected);if(o)o[key]=['name','kind'].includes(key)?v:Number(v);},['x','z'].includes(key)?'moved':['w','d','h'].includes(key)?'resized':'edited');}
 });
-$('hero-capture').onclick=()=>{if(sandbox)void sandbox.select('capture');else setTab('capture');$('workspace').scrollIntoView();};$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
-// The hero demo opens the same training floor as the hero link; its reviewed state lands on Simulate, where the route runs.
-createHeroDemo($('hero-demo'),{onOpen:state=>{$('hero-sample').click();if(state==='reviewed'&&world?.provenance==='authored'){if(sandbox)void sandbox.select('map','simulate');else setTab('test');}}});
+$('hero-capture').onclick = async () => {
+  workbench.hide({restoreFocus:false});
+  await showWorkspaceTab('capture');
+  const upload = document.querySelector('#panel [data-action="files"]') || $('tab-capture');
+  const disclosure = upload.closest('details');
+  if (disclosure) disclosure.open = true;
+  upload.scrollIntoView({block:'center'});
+  upload.focus({preventScroll:true});
+};
+$('hero-sample').onclick=()=>{if(world&&world.provenance!=='authored'&&!confirm('Replace the current map with the authored sample?'))return;apply(sampleWorld(),'Authored sample loaded, not a reconstruction of your media.');if(sandbox)void sandbox.select('map','edit');else setTab('world');$('workspace').scrollIntoView();};
+// The optional examples create their preview renderer only when first opened.
+$('world-examples').addEventListener('toggle', function startExample() {
+  if (!this.open) return;
+  this.removeEventListener('toggle', startExample);
+  createHeroDemo($('hero-demo'), {onOpen: state => {
+    $('hero-sample').click();
+    if (state === 'reviewed' && world?.provenance === 'authored') {
+      if (sandbox) void sandbox.select('map','simulate');
+      else setTab('test');
+    }
+  }});
+});
 $('undo-edit').onclick=()=>stepEdit(true);$('redo-edit').onclick=()=>stepEdit(false);
 // Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z (or Ctrl+Y) undo map edits, but never take over typing in a field or an open dialog.
 document.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.altKey)return;const k=e.key.toLowerCase();if(k!=='z'&&k!=='y')return;if(e.target?.closest?.('input,textarea,select,[contenteditable]')||document.querySelector('dialog[open]')||sandbox?.isStreet())return;const back=k==='z'&&!e.shiftKey;if(!(back?editHistory.undo:editHistory.redo).length)return;e.preventDefault();stepEdit(back);});
@@ -894,8 +919,6 @@ $('run').onclick=run;$('replay').onclick=replay;$('scrub').oninput=()=>{stopRepl
     c.picks.push(index);visualViewer.setMarkers(c.picks);if(c.picks.length===2)c.picking=false;
     renderPanel();status(c.picks.length===2?'Both points picked. Enter the distance you measured between them.':'Now tap the other end of the distance you measured.');
     if(c.picks.length===2)revealMeasurement('measured-distance');});}
-// The header's More menu closes like a menu: on a tap elsewhere, or on Escape.
-const navMore=document.querySelector('.nav-more');document.addEventListener('pointerdown',e=>{if(navMore?.open&&!navMore.contains(e.target))navMore.open=false;});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&navMore?.open){navMore.open=false;navMore.querySelector('summary').focus();}});
 document.querySelector('.tabs').addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const buttons=Array.from(e.currentTarget.querySelectorAll('[role=tab]')),current=e.target.closest('[role=tab]')||e.currentTarget.querySelector('[aria-selected=true]'),i=Math.max(0,buttons.indexOf(current)),n=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(['ArrowRight','ArrowDown'].includes(e.key)?1:buttons.length-1))%buttons.length;buttons[n].focus();buttons[n].click();});
 $('workspace').addEventListener('dragover',e=>{e.preventDefault();});$('workspace').addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer?.files.length){void sandbox?.select('capture');void addFiles(e.dataTransfer.files);}});
 $('connection').addEventListener('close',cancelConnection);
@@ -921,6 +944,8 @@ async function receiveCaptureHandoff(id) {
   try {
     const record=await readLocalCapture(id);
     if (!record) throw new Error('The local transfer expired, was cleared, or belongs to another browser.');
+    // A studio transfer is one selection. Check it as a group before adding any source.
+    checkSourceCapacity(record.files);
     const previous=sources.length;
     await addFiles(record.files);
     const imported=sources.length-previous;
@@ -983,7 +1008,31 @@ layerTools=mountWorldLayerTools({root:$('world-layer-tools'),
   connect:()=>$('connection').showModal(),onChange:()=>{renderPanel();update();},
 });
 // One studio: the bar reaches every tool, and separate tool pages open in the workbench beside the world.
-const workbench=createWorkbench({root:$('studio-workbench')});
+const workbench=createWorkbench({
+  root:$('studio-workbench'),
+  onCapture:id => id ? receiveCaptureHandoff(id) : showWorkspaceTab('capture'),
+});
+// Links inside a running activity can visit another registered tool and return to the same control.
+$('studio-main').addEventListener('click', event => {
+  const link = event.target.closest('a[data-workbench-link]');
+  if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey ||
+      event.metaKey || event.shiftKey || event.altKey) return;
+  const destination = new URL(link.href);
+  if (destination.origin !== location.origin || destination.search || destination.hash) return;
+  for (const chapter of studioChapters) {
+    const feature = chapter.features.find(entry => entry.target === destination.pathname);
+    if (feature && isWorkbenchPage(feature.target)) {
+      event.preventDefault();
+      workbench.show(feature, chapter, link);
+      return;
+    }
+  }
+});
+document.querySelector('.playground-tour').addEventListener('click', event => {
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  workbench.hide({restoreFocus:false});
+  $('showcase').closest('details').open = true;
+});
 const showcaseNavigator=mountShowcase({
   root:$('showcase'), showTab:showWorkspaceTab, showProcessing:showProcessingOptions,
   openPage:(feature,chapter,origin)=>workbench.show(feature,chapter,origin),
@@ -1008,7 +1057,8 @@ const studioBar=mountStudioBar({root:$('studio-sticky'),chapters:studioChapters,
     try{await showcaseNavigator.openInPlace(feature);}catch(error){studioStatus(error?.message||'That tool could not open. Try it again.');}
   }});
 // Missions: stars for real simulated runs and actions. "Show me" uses controls the playground already has.
-function missionFocus(control,block='center'){if(!control)return;control.scrollIntoView({block,behavior:'instant'});control.focus({preventScroll:true});}
+// Pickers live in collapsed <details>; open every closed ancestor so Show me lands on a visible control.
+function missionFocus(control,block='center'){if(!control)return;for(let box=control.closest('details:not([open])');box;box=box.parentElement?.closest('details:not([open])'))box.open=true;control.scrollIntoView({block,behavior:'instant'});control.focus({preventScroll:true});}
 mountMissions({button:$('studio-missions-open'),studio:studioBar,viewport:$('viewport'),show:async place=>{
   workbench.hide({restoreFocus:false});
   if(place==='run')return missionFocus($('robot-setup-run'));

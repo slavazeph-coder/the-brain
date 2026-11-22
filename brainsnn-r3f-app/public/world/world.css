@@ -447,4 +447,3 @@ body.playground :is(.goal-entry-index,.system-top span,.closing .eyebrow,.workfl
 body.playground .integrity-strip b{font-size:var(--reading-ui)}
 body.playground .closing a.ghost{font-size:var(--reading-ui)}
 body.playground :is(.panel .event,.panel .event b){font-size:var(--reading-small)}
-.hero-walk{margin-bottom:6px}.hero-walk a{font-weight:700}

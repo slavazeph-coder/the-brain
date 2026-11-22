@@ -126,6 +126,8 @@ def check_integrated(browser, mobile=False):
     try:
         page = open_world(view, ORIGIN.rstrip("/") + "/", require_response=True)
         assert page is not view, "The street entry must work inside the existing home shell"
+        if not page.locator('#world-examples').evaluate('el => el.open'):
+            page.locator('#world-examples > summary').click()
         page.locator("#hero-street").click()
         street = wait_street(page)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth+1")
@@ -157,6 +159,8 @@ def check_integrated(browser, mobile=False):
         page.locator("#files").set_input_files({"name": "street-handoff-fixture.png", "mimeType": "image/png", "buffer": image.getvalue()})
         expect(page.locator("#sandbox-source-count")).to_have_text("1 local source")
         expect(page.locator("#media-preview img")).to_have_count(1)
+        # Returning from capture stays available in the scene heading even with the options closed.
+        expect(page.locator('.workspace-heading-actions #sandbox-return')).to_be_visible()
         page.locator("#sandbox-return").click()
         street = wait_street(page)
         assert page.evaluate("window.__streetCanvasUnderTest === document.getElementById('street-mount').shadowRoot.querySelector('#scene-canvas canvas')"), "Capture return remounted the editor"
@@ -224,6 +228,8 @@ def check_pending_switch_and_link(browser):
         wait_street(page, visible=False)
         expect(page.locator("#workspace")).to_have_attribute("data-sandbox", "capture")
         expect(page.locator("#street-workspace")).to_be_hidden()
+        # Returning from capture stays available in the scene heading even with the options closed.
+        expect(page.locator('.workspace-heading-actions #sandbox-return')).to_be_visible()
         page.locator("#sandbox-return").click()
         wait_street(page)
         page.locator("#sandbox-scene").select_option("map")

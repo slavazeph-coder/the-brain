@@ -3,12 +3,9 @@ type: project
 description: World Builder studio — one sticky bar for every tool and an in-place workbench for the separate tool pages
 ---
 
-# World Builder studio — 2026-11-21
+# Unified World Builder playground
 
-Owner asked for heavy visual improvement so the playground World Builder is all in
-one place. Audit first: the playground was section 5 of a ~7,600 px page with five
-overlapping menus, and 12 tools (10 World pages, the API guide and the Arena)
-opened in new tabs. The fix is structural first, visual second.
+The UI from PR333's studio and workspace-flow commits was selectively integrated on top of the live pancake release. The change uses the original authorship and includes no billing or external worker changes.
 
 - `public/world/studio.mjs` + `studio.css`. A sticky studio bar under the hero:
   Your world (mirrors `#workspace-project-name`), six chapters with short plain
@@ -62,3 +59,9 @@ is visible on phones without swiping. `tests/world/missions.test.mjs` pins the
 rules; `studio_browser_smoke.py::verify_missions` plays the real loop on the
 what-if fixture (10.8 → 7.6 m earns two Shortcut stars, 4/11, Level 2) and checks
 persistence across reload. Offline shell `world-shell-missions-kitchen-v50`.
+
+## Unified playground (merged from main, PR #337)
+
+BrainSNN.com opens the real editable world. My workspace and Find a tool share a catalog of 50 playground activities and 10 related destinations. On phones the editable practice map sits just below the scene heading. Local child tools use the in-page workbench while the main room stays mounted. Closing the child unloads its page. Showroom, kitchen, layer and showcase links at `/` and `/world/` now reach the actual station and support browser Back. The demo film, capture guide, model catalog and advanced destinations remain accessible on demand.
+
+Regression coverage includes asset precaching, registered routes, the complete feature showcase, robot choices and real routes, keyboard and touch flows, native file intake, focused return and retained map edits.

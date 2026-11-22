@@ -1,0 +1,163 @@
+/* Keep reading controls close to the wordmark. Activity navigation belongs to the studio bar. */
+body.playground .playground-header {
+  max-width: 1536px;
+  min-height: 58px;
+  margin-inline: auto;
+  padding: 6px clamp(12px, 4.2vw, 64px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.playground-header .brand {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+}
+.playground-header .brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font: 700 16px/1 system-ui, sans-serif;
+  color: #12202a;
+  background: #b3f2ea;
+}
+.playground-header .brand strong {font-size: max(16px, var(--reading-ui));letter-spacing: -.035em}
+body.playground .playground-header .reading-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 0 auto;
+}
+.playground-header .reading-tools button {
+  min-height: 44px;
+  padding: 6px 10px;
+  color: #d9e6ee;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: var(--reading-ui);
+}
+.playground-header .reading-short {display:none}
+.playground-header .reading-tools button:is(:hover,:focus-visible) {background:#172631}
+.playground-header .reading-tools button[aria-pressed=true] {border-color: currentColor;color:#a2ede7}
+.playground-header #playground-help-open {border-color:#455564}
+
+.playground-reference {
+  margin-block: clamp(2rem, 5vw, 4rem) 2rem;
+  font-size: var(--reading-ui);
+  overflow-wrap: anywhere;
+}
+.playground-reference > h2 {
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  margin: 0 0 .75em;
+}
+.playground-disclosure {
+  border-top: 1px solid var(--border);
+  scroll-margin-block-start: 8rem;
+  min-width: 0;
+}
+.playground-disclosure:last-child {border-bottom:1px solid var(--border)}
+.playground-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75em;
+  min-height: 52px;
+  padding: .7em .15em;
+  color: #e7f0f6;
+  font-weight: 650;
+  list-style: none;
+  cursor: pointer;
+}
+.playground-disclosure > summary::-webkit-details-marker {display:none}
+.playground-disclosure > summary::after {
+  content: '';
+  width: .5em;
+  height: .5em;
+  margin-right: .5em;
+  border: solid currentColor;
+  border-width: 0 1.6px 1.6px 0;
+  transform: rotate(45deg);
+}
+.playground-disclosure[open] > summary::after {transform: rotate(225deg)}
+.playground-disclosure[open] {padding-bottom: 1.3rem}
+.playground-disclosure > p {color: var(--muted);max-width: 75ch;margin:.4em 0 1em;line-height:1.6}
+.playground-disclosure .goal-entry-grid,
+.playground-resource-links {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:8px;margin:0}
+.playground-reference :is(.goal-entry-card,.playground-resource-links a) {
+  display: grid;
+  align-content: start;
+  gap: .35em;
+  min-height: 48px;
+  padding: .85em 1em;
+  border: 1px solid #344653;
+  border-radius: 8px;
+  background: #111b26;
+  color: #edf6fa;
+  line-height: 1.35;
+  text-decoration: none;
+}
+.playground-resource-links a[target="_blank"] strong::after {content:" ↗"}
+.playground-reference :is(.goal-entry-card,.playground-resource-links a):is(:hover,:focus-visible) {border-color:#a2ede7}
+.playground-reference :is(.goal-entry-card h3,.playground-resource-links strong) {font-size:var(--reading-ui);letter-spacing:0;font-weight:650}
+.playground-reference :is(.goal-entry-card p,.playground-resource-links span) {font-size:var(--reading-ui);line-height:1.45;color:#b8c8d3}
+.playground-disclosure#systems > .search-label {max-width:36rem}
+.playground-disclosure#systems .filters {flex-wrap:wrap}
+body.playground .playground-footer {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:.5em 1em;
+  padding-block:10px;
+  font-size:var(--reading-ui);
+}
+.playground-footer a {display:inline-flex;align-items:center;min-height:44px;color:#c0eee9}
+html[data-contrast=more] .playground-disclosure,
+html[data-contrast=more] .playground-reference :is(.goal-entry-card,.playground-resource-links a) {border-color:#bbcdd6}
+html[data-contrast=more] .playground-reference :is(p,span) {color:#f1f5fa}
+
+@media (max-width: 540px) {
+  body.playground .playground-header {display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:6px}
+  body.playground .playground-header .reading-tools {flex-wrap:nowrap;justify-content:flex-end;gap:2px}
+  .playground-header .reading-tools .reading-label {display:none}
+  .playground-header .reading-tools .reading-short {display:inline}
+  .playground-header .brand {gap:5px}
+  .playground-header .reading-tools button {min-width:44px;padding-inline:5px;font:600 max(14px, var(--reading-small))/1.25 system-ui,sans-serif}
+  .playground-header .brand-mark {width:22px;height:22px;border-radius:6px;font-size:14px}
+}
+@media (max-width: 355px) {
+  .playground-header .brand-mark {display:none}
+  .playground-header .brand strong {font-size:16px}
+  .playground-header .reading-tools button {padding-inline:4px}
+  body.playground .playground-header {padding-inline:10px}
+}
+
+/* The picker can fold without unmounting a tool, pausing a run or hiding its result. */
+#world-layer-tools > .layer-picker {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+#world-layer-tools .layer-picker > summary {
+  display: list-item;
+  min-height: 48px;
+  padding: 10px 4px;
+  color: var(--text, #e7f0f6);
+  line-height: 1.4;
+  cursor: pointer;
+}
+.layer-picker > summary::marker { color: currentColor; font-size: .85em; }
+#world-layer-tools .layer-picker h3 { display:inline; margin:0; font-size:max(1.05rem,var(--reading-ui)); letter-spacing:0; }
+#world-layer-tools .layer-picker button[data-layer-connect] { margin-block: 8px 2px; }
+@media (max-width:760px) {
+  .studio-main #workspace > #world-layer-tools:has(> .layer-picker:not([open])) { padding-block: 4px; }
+}
