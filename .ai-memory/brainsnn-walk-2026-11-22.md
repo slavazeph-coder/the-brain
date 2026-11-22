@@ -26,8 +26,8 @@ and make it into an app like this".
   - Exports: ZIP bundle, GeoJSON, GPX and CSV.
   - "Build the 3D world" hands the video to World Builder through capture-handoff.
 - `server.ts` routes `/walk` → `/walk/`.
-- The World Builder hero links to Walk with `target="_top"`, because the homepage renders World Builder in an iframe.
-- World SW cache bumped to `world-shell-playflow-v53`.
+- The World Builder playground shortcuts link to Walk with `target="_top"`, because the homepage renders World Builder in an iframe.
+- World SW cache is `world-shell-walk-studio-v54` (after merging main's unified playground).
 - Tests: `walk-core.test.mjs` (13) and `walk_browser_smoke.py`. The smoke passed in Chromium locally. WebKit
   runs in CI on the camera-refused path. Docs are in `docs/brainsnn-walk.md`.
 
