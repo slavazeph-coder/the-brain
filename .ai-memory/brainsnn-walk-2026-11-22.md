@@ -65,3 +65,29 @@ and make it into an app like this".
 - **Local verification**:
   - `tests/world/requirements-ci.txt` installs fine in the scratch venv.
   - native capture, real-to-sim, site processing and scene smokes pass locally.
+
+## Production, Nov 23 (owner said "All")
+
+- **Deploy**: PR #333 merged as `faacb8e` and deployed to brainsnn.com at 04:03 UTC.
+  - #337 had never deployed: its "BrainSNN app release checks" failed and Railway skipped it. It shipped with this deploy.
+  - Railway waits for those checks on `main`.
+- **Live checks**, all passing:
+  - `/walk` redirects 301 to `/walk/` (BrainSNN Walk).
+  - The World shell is `world-shell-walk-studio-v55`.
+  - `/api/world/v1/status` reports object storage as configured.
+  - The pilot key returns `pilot-owner` (admin) from `/me`.
+  - `/usage` returns billing.
+  - `/processing/capabilities` reaches the worker in tenant mode, with owner `pilot-owner` and its limits.
+- **Storage**: the site's `WORLD_PROJECT_S3_*` variables reference the `world-sources` bucket (`${{world-sources.*}}`).
+  - A 6 MiB two-part upload round-trips with a matching SHA-256.
+  - The test project `proj_3958e68ee6e31c20b0944a59` ("Storage check (pilot, safe to delete)") remains, because the API has no delete.
+- **Pilot account**:
+  - Site: `WORLD_PROJECT_BOOTSTRAP_JSON` (key digest only) and `WORLD_PROJECT_WORKER_TOKENS_JSON`.
+  - Worker: `WORLD_PROJECT_WORKER_TENANTS_JSON` (token digest and limits), redeployed. The worker's deploy branch has
+    `robotics/world_worker/deploy/railway/tenants.py`.
+- **Do NOT delete `VITE_GEMINI_API_KEY` as-is.** `GEMINI_API_KEY` on the-brain is `${{VITE_GEMINI_API_KEY}}`, and
+  server.ts and robotTaskDraft read `GEMINI_API_KEY`.
+  - The earlier "unused" audit was wrong.
+  - The staged deletion was discarded.
+  - No Google API key appears in any of the 53 live JS chunks.
+  - The clean fix is in the Railway dashboard: copy the value into `GEMINI_API_KEY`, then remove the VITE variable.
