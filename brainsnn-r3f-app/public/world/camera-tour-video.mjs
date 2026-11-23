@@ -2,7 +2,7 @@
 import { validateCameraPath, sampleCameraPath, cameraPathReceipt } from './camera-path.mjs';
 import { pickMime } from './share-video.mjs';
 
-export const CAMERA_TOUR_VIDEO = Object.freeze({width:1280,height:720,fps:30,maxBytes:64*1024**2,bitrate:6_000_000});
+export const CAMERA_TOUR_VIDEO = Object.freeze({width:1280,height:720,fps:30,maxBytes:64*1024**2,bitrate:6_000_000,maxFrameStep:.25,minSteps:12});
 
 const labels = Object.freeze({
   unknown:'Origin unknown',
@@ -30,7 +30,30 @@ function fittedText(g,text,x,y,maxWidth) {
  * Real-time local recording. seconds is the requested path length, not a measured container
  * duration. The receipt records elapsed time and rendered frame count; it never asserts30fps.
  */
-export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
+export async function recordCameraTour(options={}) {
+  const initialView=options.viewer?.getView?.();
+  try { return await recordWithType(options); }
+  catch(error) {
+    // Some browsers advertise MP4 (H.264) recording and then emit no bytes for a
+    // canvas stream. Retry once in a different container rather than fail the tour.
+    const fallback=error instanceof EmptyRecordingError?webmFallback(error.type):'';
+    if(!fallback) throw error;
+    options.viewer.setView(initialView);
+    return await recordWithType({...options,type:fallback});
+  }
+}
+
+/** The browser advertised a recorder for this type but produced no bytes. */
+export class EmptyRecordingError extends Error {
+  constructor(type){super('The browser produced an empty video. No completed video was exported.');this.type=type;}
+}
+
+function webmFallback(failedType) {
+  if(!String(failedType).startsWith('video/mp4')) return '';
+  return ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(type=>MediaRecorder.isTypeSupported(type))||'';
+}
+
+async function recordWithType({path,viewer,onProgress,signal,type:preferredType}={}) {
   const recordedPath=validateCameraPath(path);
   const duration=recordedPath.duration;
   if(recordedPath.keyframes.length<2||duration<.25) throw Error('Record at least two views with a path lasting at least 0.25 seconds.');
@@ -38,9 +61,10 @@ export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
   if(typeof MediaRecorder==='undefined'||typeof document==='undefined') throw Error('Video recording is unavailable. Try a current Chrome or Safari.');
   if(signal?.aborted) throw abortError('Recording cancelled.');
   if(document.hidden) throw Error('Keep this tab visible while recording the camera tour.');
-  const type=pickMime(value=>MediaRecorder.isTypeSupported(value));
+  const type=preferredType||pickMime(value=>MediaRecorder.isTypeSupported(value));
   if(!type) throw Error('No supported MP4 or WebM recorder was found on this device.');
-  const source=viewer.getCanvas();
+  const captureCanvas = () => viewer.getCaptureCanvas ? viewer.getCaptureCanvas() : viewer.getCanvas();
+  const source = captureCanvas();
   if(!source?.width||!source?.height) throw Error('The appearance canvas has no drawable pixels.');
   const sourceWidth=source.width,sourceHeight=source.height;
   const initialView=viewer.getView();
@@ -66,7 +90,7 @@ export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
 
   function paint(t) {
     viewer.setView(sampleCameraPath(recordedPath,t));
-    if(viewer.getCanvas()!==source)throw Error('The appearance source changed during recording.');
+    if(captureCanvas()!==source)throw Error('The appearance source changed during recording.');
     if(source.width!==sourceWidth||source.height!==sourceHeight)throw Error('The appearance canvas was resized during recording. Keep the view size fixed and try again.');
     const box=cameraTourLayout(source.width,source.height);
     g.fillStyle='#05070b';g.fillRect(0,0,1280,720);
@@ -114,12 +138,17 @@ export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
       rejectFrames=reject;
       try{
         paint(0);recorder.start(250);started=true;start=performance.now();
-        watchdog=setTimeout(()=>fail(Error('Recording timed out. Keep this tab visible and try a shorter tour.')),Math.min(90_000,(duration+10)*1000));
+        watchdog=setTimeout(()=>fail(Error('Recording timed out. Keep this tab visible and try a shorter tour.')),Math.min(120_000,(duration*2+20)*1000));
+        // A stalled main thread (a page still loading, a slow phone) must slow the tour, not skip it:
+        // jumping from the first view to the last in one frame leaves the encoder almost nothing to
+        // encode, and some browsers then emit an empty file. Each frame advances real time, capped.
+        const maxStep=Math.max(CAMERA_TOUR_VIDEO.maxFrameStep,duration/CAMERA_TOUR_VIDEO.minSteps);
+        let t=0,last=start;
         const frame=now=>{
           if(finished)return;
           try{
             if(signal?.aborted){abort();return;}
-            const t=Math.min(duration,Math.max(0,(now-start)/1000));
+            t=Math.min(duration,t+Math.min(maxStep,Math.max(0,(now-last)/1000)));last=now;
             paint(t);onProgress?.(t/duration);
             if(t>=duration){elapsed=(performance.now()-start)/1000;resolve();}
             else raf=requestAnimationFrame(frame);
@@ -134,7 +163,7 @@ export async function recordCameraTour({path,viewer,onProgress,signal}={}) {
     if(totalBytes>CAMERA_TOUR_VIDEO.maxBytes)throw Error('Recording exceeded the 64 MiB limit.');
     const outputType=recorder.mimeType||type;
     const blob=new Blob(chunks,{type:outputType});
-    if(!blob.size)throw Error('The browser produced an empty video. No completed video was exported.');
+    if(!blob.size)throw new EmptyRecordingError(type);
     viewer.setView(initialView);
     finished=true;
     return {blob,type:outputType,seconds:duration,receipt:{

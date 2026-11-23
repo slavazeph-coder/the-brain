@@ -8,6 +8,12 @@ const CREDENTIAL = /^[A-Za-z0-9_-]{43,128}$/;
 const OWNER = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const JSON_LIMIT = 1024 * 1024;
 const DOWNLOAD_LIMIT = 1024 ** 3;
+// A worker that is restarting or unreachable must not hold a customer request
+// (and one of the 16 shared slots) for two minutes. The preflight and control
+// calls are small database operations on the worker; transfers get longer, and
+// a download is bounded by stalls between chunks rather than total wall time,
+// so a full 1 GiB artifact can finish on a slow client connection.
+export const PROCESSING_TIMEOUTS = Object.freeze({ preflightMs: 10_000, requestMs: 30_000, transferMs: 120_000, stallMs: 30_000 });
 
 function problem(status, code, message) { return Object.assign(new Error(message), { status, code }); }
 
@@ -40,7 +46,8 @@ async function readJSON(response) {
  * Never forward a site-owner/visitor credential or accept a client worker URL.
  * The worker's SQLite ledger owns idempotent compute admission and job state.
  */
-export function createProjectProcessingBridge({ env = {}, projects = null, fetchImpl = fetch } = {}) {
+export function createProjectProcessingBridge({ env = {}, projects = null, fetchImpl = fetch, timeouts = {} } = {}) {
+  const limits = { ...PROCESSING_TIMEOUTS, ...timeouts };
   let upstream, tokens = new Map(), configurationError = false;
   try {
     if (env.WORLD_WORKER_INTERNAL_URL && env.WORLD_PROJECT_WORKER_TOKENS_JSON) {
@@ -69,12 +76,15 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    let gate, controller, timer;
+    let gate, controller, timer, timedOut = false;
     const send = (status, data) => {
       if (res.destroyed || res.headersSent) return;
       res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data));
     };
     const abort = () => controller?.abort();
+    const expire = () => { timedOut = true; abort(); };
+    // One active deadline at a time; re-arming replaces the previous one.
+    const arm = (ms) => { clearTimeout(timer); timer = setTimeout(expire, ms); timer.unref?.(); };
     try {
       const parsed = new URL(req.url, 'http://localhost');
       const path = '/v1' + parsed.pathname;
@@ -109,7 +119,7 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
       }
       const token = tokens.get(principal.tenant_id);
       controller = new AbortController();
-      timer = setTimeout(abort, 120000); timer.unref?.();
+      arm(limits.preflightMs);
       req.once('aborted', abort); res.once('close', abort);
       const headers = { Authorization: `Bearer ${token}` };
       const options = { redirect: 'error', signal: controller.signal, cache: 'no-store' };
@@ -133,7 +143,11 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
         headers['Content-Length'] = String(body.length);
       }
       if (keyed) headers['Idempotency-Key'] = key;
+      arm(req.method === 'PUT' || call.name === 'download' ? limits.transferMs : limits.requestMs);
       const response = await fetchImpl(new URL(path + parsed.search, upstream), { ...options, headers, method: req.method, body });
+      const replayed = response.headers.get('idempotency-replayed') === 'true';
+      // Billing meter: count work the worker accepted, once. A failed meter write never fails the customer's request.
+      const meter = (metric, quantity) => Promise.resolve(projects.meterUsage?.(principal.tenant_id, metric, quantity)).catch(() => {});
       if (call.name === 'download' && response.ok) {
         const declared = response.headers.get('content-length');
         if (declared === null || !/^\d+$/.test(declared))
@@ -142,7 +156,9 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
         if (!Number.isSafeInteger(length) || length < 0 || length > DOWNLOAD_LIMIT)
           throw problem(413, 'artifact_limit', 'API artifact downloads are limited to 1 GiB.');
         let bytes = 0;
+        arm(limits.stallMs);
         const limiter = new Transform({ transform(chunk, encoding, callback) {
+          arm(limits.stallMs);
           bytes += chunk.length;
           callback(bytes > length || bytes > DOWNLOAD_LIMIT ? new Error('artifact limit') : null, chunk);
         }, flush(callback) { callback(bytes !== length ? new Error('incomplete artifact') : null); } });
@@ -152,6 +168,7 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
         res.writeHead(200, pass);
         if (req.method === 'HEAD') return res.end();
         await pipeline(Readable.fromWeb(response.body), limiter, res);
+        if (req.method === 'GET') await meter('processing_artifact_bytes', length);
         return;
       }
       const data = await readJSON(response);
@@ -165,11 +182,20 @@ export function createProjectProcessingBridge({ env = {}, projects = null, fetch
         data.url = '/api/world/v1/processing' + data.url.slice(3);
         data.authorization_required = true;
       }
-      if (response.headers.get('idempotency-replayed') === 'true') res.setHeader('Idempotency-Replayed', 'true');
+      if (replayed) res.setHeader('Idempotency-Replayed', 'true');
+      if (!replayed && req.method === 'PUT' && call.name === 'upload') await meter('processing_upload_bytes', body.length);
+      if (!replayed && req.method === 'POST' && path.endsWith('/start')) await meter('processing_jobs_started', 1);
       send(response.status, data);
     } catch (error) {
       if (res.headersSent) { if (!res.writableEnded) res.destroy(); }
-      else send(error.status || 502, { error: {
+      else if (timedOut && !error.status) {
+        res.setHeader('Retry-After', '30');
+        send(504, { error: {
+          code: 'worker_timeout',
+          message: 'The processing worker did not answer in time. Retry with the same Idempotency-Key or read job status.',
+          request_id: requestId,
+        } });
+      } else send(error.status || 502, { error: {
         code: error.code || 'processing_unavailable',
         message: error.status ? error.message : 'Processing is unavailable. Retry with the same Idempotency-Key or read job status.',
         request_id: requestId,

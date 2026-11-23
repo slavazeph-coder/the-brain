@@ -305,7 +305,7 @@ def _triangulate(landmark, views):
                    'maxParallaxDegrees': parallax, 'maxReprojectionErrorPreparedPixels': worst, 'reprojectionErrors': errors}
 
 
-def score(cameras, annotations, frames_receipt):
+def score(cameras, annotations, frames_receipt, *, model_estimated_metres=False):
     """Triangulate fixed observations, calibrate one span and score every withheld span.
 
     Missing/invalid geometry remains in the denominator with an unavailable reason.
@@ -335,18 +335,25 @@ def score(cameras, annotations, frames_receipt):
     for span in annotations['spans']:
         row = copy.deepcopy(span)
         a, b = span['landmarks']
-        if a not in positions or b not in positions:
+        units = float(np.linalg.norm(positions[a] - positions[b])) if a in positions and b in positions else None
+        tolerance = max(.05, .02 * span['distanceMeters'])
+        row['toleranceMeters'] = tolerance
+        if model_estimated_metres:
+            row['nativeEstimatedMeters'] = units
+            row['nativeAbsoluteErrorMeters'] = abs(units - span['distanceMeters']) if units is not None else None
+        if units is None:
             row.update(status='unavailable', reason='One or both annotated landmarks could not be triangulated.')
         elif scale is None:
             row.update(status='unavailable', reason='The sole calibration span could not establish a positive finite scale.')
         else:
-            distance = float(np.linalg.norm(positions[a] - positions[b])) * scale
+            distance = units * scale
             absolute = abs(distance - span['distanceMeters'])
             row.update(status='available', triangulatedDistanceMeters=distance, signedErrorMeters=distance - span['distanceMeters'],
                        absoluteErrorMeters=absolute, relativeError=absolute / span['distanceMeters'])
         rows.append(row)
     held_out = [row for row in rows if row['role'] == 'held-out']
     valid = [row for row in held_out if row['status'] == 'available']
+    raw = [r for r in held_out if r.get('nativeAbsoluteErrorMeters') is not None]
     floor = {'status': 'not-annotated', 'gravityTiltDegrees': None, 'independentGravityValidated': False}
     if annotations.get('floorLandmarks'):
         floor_ids = annotations['floorLandmarks']
@@ -377,8 +384,14 @@ def score(cameras, annotations, frames_receipt):
             'scale': {'metresPerReconstructionUnit': scale, 'calibrationSpan': calibration['id'], 'calibrationDistanceMeters': calibration['distanceMeters'],
                       'calibrationDistanceReconstructionUnits': calibration_units, 'basis': 'single-self-reported-measured-span' if annotations['referenceBasis'] == 'physical-readings' else 'synthetic-fixture-span',
                       'independentlyMeasuredScale': False},
+            'nativeScale': {'basis': 'model-estimated' if model_estimated_metres else 'arbitrary-units',
+                            'scaleFitted': False, 'metricVerified': False,
+                            'validHeldOutCount': len(raw), 'requestedHeldOutCount': len(held_out),
+                            'heldOutMedianAbsoluteErrorMeters': float(np.median([r['nativeAbsoluteErrorMeters'] for r in raw])) if raw else None,
+                            'heldOutWithinToleranceCount': sum(r['nativeAbsoluteErrorMeters'] <= r['toleranceMeters'] for r in raw)},
             'registeredFrames': len(views), 'sharedFrames': len(frames_receipt['frames']), 'landmarks': landmarks, 'spans': rows, 'floor': floor,
             'summary': {'calibrationCount': 1, 'requestedHeldOutCount': len(held_out), 'validHeldOutCount': len(valid), 'unavailableHeldOutCount': len(held_out) - len(valid),
+                        'heldOutWithinToleranceCount': sum(r['absoluteErrorMeters'] <= r['toleranceMeters'] for r in valid),
                         'heldOutMedianAbsoluteErrorMeters': float(np.median([r['absoluteErrorMeters'] for r in valid])) if valid else None,
                         'heldOutMaxAbsoluteErrorMeters': max((r['absoluteErrorMeters'] for r in valid), default=None),
                         'heldOutMedianRelativeError': float(np.median([r['relativeError'] for r in valid])) if valid else None,

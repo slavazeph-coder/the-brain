@@ -1,0 +1,123 @@
+#splat-appearance-lamp {
+  background: #0e1622;
+  border: 1px solid #34465b;
+  border-radius: 12px;
+  color: #e7eef7;
+  font-size: var(--scan-type, 1rem);
+  margin: 18px 0;
+  padding: 16px;
+  min-width: 0;
+}
+
+#splat-appearance-lamp summary {
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1.5;
+  min-height: 44px;
+}
+
+#splat-appearance-lamp [data-lamp-summary] {
+  color: #9ee9d9;
+  margin-inline-start: 6px;
+}
+
+#splat-appearance-lamp p {
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+#splat-appearance-lamp .lamp-note {
+  color: #bbcbe0;
+}
+
+#splat-appearance-lamp .lamp-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+#splat-appearance-lamp label {
+  font-size: inherit;
+  color: #d6e3ee;
+}
+
+#splat-appearance-lamp input[type=checkbox] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+#splat-appearance-lamp fieldset {
+  min-width: 0;
+  border: 1px solid #34465b;
+  border-radius: 10px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+#splat-appearance-lamp fieldset:disabled {
+  opacity: .6;
+}
+
+#splat-appearance-lamp .lamp-grid {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 8px 12px;
+}
+
+#splat-appearance-lamp .lamp-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+
+#splat-appearance-lamp output {
+  color: #b7cfe4;
+  font-variant-numeric: tabular-nums;
+}
+
+#splat-appearance-lamp input[type=range], #splat-appearance-lamp select {
+  width: 100%;
+  min-height: 44px;
+  min-width: 0;
+  margin: 0;
+  box-sizing: border-box;
+  accent-color: #55dfeb;
+}
+
+#splat-appearance-lamp .lamp-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+#splat-appearance-lamp .lamp-actions button {
+  min-height: 44px;
+  white-space: normal;
+}
+
+#splat-appearance-lamp [aria-pressed=true] {
+  background: #134852;
+  border-color: #55dfeb;
+}
+
+#splat-appearance-lamp :is(summary, input, select, button):focus-visible {
+  outline: 2px solid #55dfeb;
+  outline-offset: 2px;
+}
+
+#asset-canvas[data-lamp-picking] {
+  cursor: crosshair;
+}
+
+@media (max-width: 720px) {
+  #splat-appearance-lamp .lamp-grid {grid-template-columns: repeat(2,minmax(0,1fr));}
+}
+
+@media (max-width: 420px) {
+  #splat-appearance-lamp .lamp-actions button {width: 100%;}
+}

@@ -1,9 +1,74 @@
 # One World Builder workspace
 
-The primary playground follows the owner's v23 demonstration: bring a capture,
-explore the results, inspect the model and drawings, try robot routes, and save
-the work. The existing controls form that journey; the model review opens inside
-the same workspace. Advanced destinations remain in All tools.
+The homepage opens the editable World Builder playground. Use the practice
+room, add your own files, or follow the captioned v23 walkthrough. Capture,
+model review, drawings, robot routes and saved results share the project.
+
+## The tool library and workbench
+
+The **My workspace** button returns to the current room. **Find a tool** searches
+the 50 activities in `showcase-features.mjs` and the additional site resources.
+On a phone the finder also reveals the six topic buttons. Each result identifies
+whether it can run locally, needs files or requires processing.
+
+- In-page tools (tabs, layer tools, sections, Project Review, processing
+  settings) open through the showcase's own navigator. Fields are centred so
+  their labels stay visible below the bar.
+- Separate tool pages (`/world/*.html` and the Arena) open in the **workbench**,
+  a same-origin frame above the workspace. The map, its edits, running jobs and
+  retained results stay in place. World pages hide their duplicate site header
+  (marked `data-studio-hidden="site-header"`); the Arena keeps its own section
+  navigation. Links back to the playground close the workbench; links that leave
+  World Builder open a new tab. "Open in its own tab" is always offered, and a
+  modified click on a showcase card still opens a tab.
+- Closing the workbench unloads the page (`about:blank`) so its media, workers
+  and animation loops stop, then returns focus to the control that opened it.
+
+### Workspace order
+
+The real room is the first activity. On a phone its map appears immediately
+after the scene heading. On larger screens the robot picker, world picker and
+**Run a route** sit above the map. Changing the active tool brings its existing
+controls into view. Camera controls are beside the scene. **Map options** reaches
+undo, redo, save, export and scene settings. The practice worlds, guided film,
+capture guide and model catalog expand when selected.
+
+Shared links such as `https://www.brainsnn.com/world/#pancake-lab` and
+`https://www.brainsnn.com/#showroom` open inside the public playground.
+The outer shell forwards its recognized public fragments. Changes to the
+fragment navigate within the initialized editor so edits in the scene survive.
+
+### Missions
+
+The robot loop is also a game. **Missions** sits beside Your world in the studio
+bar: a star ring, the level and the star count. Seven missions (11 stars) are
+scored only from what happened in this browser, through the playground's own
+event log (`event()` in `app.mjs` now also dispatches `world:event`):
+
+| Mission | Trigger | Stars |
+|---|---|---|
+| First run | `plan_completed` | 1 |
+| Robot garage | routes with 2 / 3 / 5 robots | 1–3 |
+| Shortcut | `what_if_rerouted`: 0.5 / 2 / 4 m shorter after a reviewed edit | 1–3 |
+| Pick the spot | `goal_routed` | 1 |
+| Street explorer | `sandbox_selected` with the street | 1 |
+| Before and after | `scenario_forked` | 1 |
+| Your own space | `source_added` | 1 |
+
+Each route shows a score card on the map. "Let it try" is a coverage pass, so it
+reports floor covered (m²) and the path length, not a "shortest" score. Spot
+routes keep the shortest so far per robot and map. Stars and levels (Rookie,
+Explorer, Builder, Expert, Master) earn a toast and, with motion allowed, a short
+confetti burst. Sound is optional and off by default. The toast, confetti and
+card never take pointer events. Every route stays labelled as simulated.
+Progress is a per-browser convenience in `localStorage`
+(`brainsnn-world-missions-v1`), validated on read and resettable from the board.
+
+`studio.mjs`, `studio.css` and `missions.mjs` are part of the offline shell. Checks:
+`tests/world/studio.test.mjs` (registry coverage, safe workbench targets,
+search, markup order, 13 px floor) and `tests/world/studio_browser_smoke.py`
+(every chapter, search, in-page tools, workbench pages, retained map edit,
+390/320 px and larger text).
 
 ## Sources and results
 

@@ -1,6 +1,6 @@
 import { Bot, Camera, Code2, FileSearch, FlaskConical, Microscope, Layers, ScanLine, Building2 } from 'lucide-react';
 export const NAV_ITEMS = [
-  { id: 'world', label: 'World Builder', mobileLabel: 'World', href: '/', icon: ScanLine, description: 'Turn any photo into a world. Turn any world into a robot simulation.' },
+  { id: 'world', label: 'World Builder', mobileLabel: 'World', href: '/', icon: ScanLine, description: 'Explore the practice room, try a robot, or bring your own space.' },
   { id: 'create', label: 'Create a world', mobileLabel: 'Create', href: '/world/index.html#workspace', icon: Building2, description: 'Start from a photo, a phone walkthrough or an existing scan.' },
   { id: 'arena', label: 'Robot Arena', mobileLabel: 'Arena', href: '/arena/', icon: Bot, description: 'Explore robot challenges and site planning previews.' },
   { id: 'developers', label: 'Developers', mobileLabel: 'API', href: '/world/api.html', icon: Code2, description: 'Private worker API for captures, jobs and artifacts.' },

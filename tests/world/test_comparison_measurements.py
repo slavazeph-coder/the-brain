@@ -87,6 +87,24 @@ def test_same_shared_pixels_recover_authored_span_scale_and_distances(model, hal
     np.testing.assert_allclose([r['positionReconstructionUnits'] for r in result['landmarks']], points, atol=1e-10)
 
 
+def test_predicted_metres_are_scored_before_calibration_even_without_a_usable_anchor():
+    cameras, annotations, manifest, _ = scene(basis='synthetic-fixture')
+    arbitrary = cm.score(cameras, annotations, manifest)
+    assert arbitrary['nativeScale']['heldOutMedianAbsoluteErrorMeters'] is None
+    predicted = cm.score(cameras, annotations, manifest, model_estimated_metres=True)
+    assert predicted['nativeScale']['scaleFitted'] is False
+    assert predicted['nativeScale']['heldOutMedianAbsoluteErrorMeters'] > .5
+    assert predicted['summary']['heldOutWithinToleranceCount'] == 7
+    assert predicted['summary']['heldOutMaxAbsoluteErrorMeters'] < 1e-10
+    # The second calibration endpoint is unique to that span.
+    for obs in annotations['landmarks'][1]['observations']:
+        obs['xy'] = [400., 300.]
+    no_anchor = cm.score(cameras, annotations, manifest, model_estimated_metres=True)
+    assert no_anchor['scale']['metresPerReconstructionUnit'] is None
+    assert no_anchor['summary']['validHeldOutCount'] == 0
+    assert no_anchor['nativeScale'] == predicted['nativeScale']
+
+
 def test_withheld_values_never_change_landmarks_or_scale():
     cameras, annotations, manifest, _ = scene()
     original = cm.score(cameras, annotations, manifest)

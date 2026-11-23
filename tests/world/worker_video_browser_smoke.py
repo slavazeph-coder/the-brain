@@ -95,7 +95,7 @@ def main():
                 timings['upload_to_viewer_seconds'] = round(time.monotonic() - started, 2)
                 assert page.locator('#visual-canvas').is_visible()
                 assert page.locator('#run').is_disabled()
-                assert page.locator('#provenance').inner_text() == 'VISUAL / SCALE UNVERIFIED'
+                assert page.locator('#provenance').text_content() == 'VISUAL / SCALE UNVERIFIED'
                 page.locator('#viewport').screenshot(path=str(output / 'browser-video-reconstruction.png'))
                 with page.expect_download() as event:
                     page.locator('[data-action=visual-export]').click()

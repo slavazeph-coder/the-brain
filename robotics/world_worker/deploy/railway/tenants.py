@@ -50,7 +50,7 @@ def registry(env, storage_bytes, engines):
         # storage is half the volume, but never less than one job; on a small volume they and the owner take turns.
         # Match the site's visitor allowlist at the worker too. Private replay,
         # naming/location and packaging engines stay with owner sessions.
-        visitor_engines = [engine for engine in engines if engine in ('colmap-sparse', 'photo-metric', 'scene-usd')]
+        visitor_engines = [engine for engine in engines if engine in ('colmap-sparse', 'photo-metric', 'metric-depth-sequence', 'scene-usd')]
         tenants.append({'id': 'site-visitors', 'token_sha256': hashlib.sha256(visitor.encode()).hexdigest(), 'engines': visitor_engines,
                         'limits': {**limits, 'upload_count': 20, 'upload_bytes': 2 * GIB, 'job_count': 20,
                                    'storage_bytes': min(storage_bytes, max(int(ONE_JOB), storage_bytes // 2))}})

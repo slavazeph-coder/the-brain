@@ -63,7 +63,7 @@ def rigid(matrix):
     m=np.asarray(matrix,dtype=float)
     return m.shape==(3,3) and np.isfinite(m).all() and np.allclose(m.T@m,np.eye(3),atol=1e-5,rtol=0) and np.isclose(np.linalg.det(m),1,atol=1e-5)
 
-def poses(path):
+def poses(path, *, check_indices=False):
     """Read bounded numeric NPZ only. Never unpickle the upstream _info.pkl."""
     rc.regular_source(path,16*1024**2)
     with zipfile.ZipFile(path) as archive:
@@ -71,6 +71,8 @@ def poses(path):
     with np.load(path,allow_pickle=False) as data:
         matrices=np.asarray(data['data'],float)
         frame_ids=np.asarray(data['source_frame_ids'])
+        if check_indices:
+            validate_indices(data, len(matrices))
     if (matrices.ndim!=3 or matrices.shape[1:]!=(4,4) or not 16<=len(matrices)<=MAX_FRAMES
             or frame_ids.shape!=(len(matrices),) or not np.issubdtype(frame_ids.dtype,np.integer)
             or np.any(frame_ids<0) or np.any(frame_ids[1:]<=frame_ids[:-1]) or not np.isfinite(matrices).all()
@@ -79,28 +81,26 @@ def poses(path):
         raise ValueError('Expected bounded proper camera-to-world poses and ordered source frame IDs.')
     return matrices,frame_ids
 
-def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
-    if evaluation_only is not True:raise ValueError('Explicit --evaluation-only required; no commercial engine is enabled.')
-    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}',name):raise ValueError('Use a plain run name.')
-    video=rc.regular_source(video);root=Path(run_root);out=Path(out)
-    if root.is_symlink() or not root.is_dir() or out.exists() or out.is_symlink():raise ValueError('Use a regular run directory and fresh output directory.')
-    record_path=root/'vipe'/f'{name}_metrictrail.json';pose_path=root/'pose'/f'{name}.npz'
-    cloud_path=root/'pointcloud'/f'{name}.ply';intrinsics=root/'intrinsics'/f'{name}.npz'
-    run=rc.read_json(record_path);fused=rc.read_json(fusion)
+def validate_indices(archive, count):
+    indices = archive['inds']
+    if not np.issubdtype(indices.dtype, np.integer) or not np.array_equal(indices, np.arange(count)):
+        raise ValueError('Artifact row indices must match the pinned ViPE output order.')
+
+
+def read_tracking(root, name, *, check_indices=False):
+    run=rc.read_json(root/'vipe'/f'{name}_metrictrail.json')
     if (run.get('schema')!='metrictrail_vipe_run_v1' or run.get('status')!='success' or run.get('name')!=name
             or run.get('tracking_status')!='tracked' or run.get('tracking',{}).get('metric_prior_status')!='applied'):
         raise ValueError('Successful initialized tracking with an applied metric prior is required, not a partial/static result.')
-    if fused.get('frame')!='z_up' or not rigid(fused.get('world_to_output_rotation')):
-        raise ValueError('Use the z-up upstream point-cloud export with its proper recorded rotation.')
-    settings=fused.get('settings',{})
-    if (type(settings.get('min_consistent')) is not int or settings['min_consistent']<2
-            or type(fused.get('frames')) is not int or not 1<=fused['frames']<=MAX_FRAMES):
-        raise ValueError('Multi-view point filtering must be enabled and reported.')
-    camera,frame_ids=poses(pose_path)
+    camera,frame_ids=poses(root/'pose'/f'{name}.npz', check_indices=check_indices)
+    intrinsics=root/'intrinsics'/f'{name}.npz'
     rc.regular_source(intrinsics,16*1024**2)
     with zipfile.ZipFile(intrinsics) as archive:
         if sum(x.file_size for x in archive.infolist())>32*1024**2:raise ValueError('Expanded intrinsics exceed limit.')
-    with np.load(intrinsics,allow_pickle=False) as data:calibration=np.asarray(data['data'],float)
+    with np.load(intrinsics,allow_pickle=False) as data:
+        calibration=np.asarray(data['data'],float)
+        if check_indices:
+            validate_indices(data, len(camera))
     if calibration.shape!=(len(camera),4) or not np.isfinite(calibration).all() or np.any(calibration[:,:2]<=0):
         raise ValueError('Expected finite positive pinhole calibration for every pose.')
     recorded_ids=run.get('tracking_stride',{}).get('source_frame_ids')
@@ -111,8 +111,16 @@ def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
         raise ValueError('Original video frame count/rate is required for source timing.')
     if not isinstance(hw,list) or len(hw)!=2 or any(type(v) is not int or not 16<=v<=8192 for v in hw):
         raise ValueError('Tracked raster dimensions are required for camera intrinsics.')
-    snapshots={k:file_record(p) for k,p in {'video':video,'run':record_path,'fusion':fusion,'poses':pose_path,
-                                          'intrinsics':intrinsics,'pointcloud':cloud_path}.items()}
+    return run, camera, frame_ids, calibration
+
+
+def estimated_cloud(cloud_path, fused):
+    if fused.get('frame')!='z_up' or not rigid(fused.get('world_to_output_rotation')):
+        raise ValueError('Use the z-up upstream point-cloud export with its proper recorded rotation.')
+    settings=fused.get('settings',{})
+    if (type(settings.get('min_consistent')) is not int or settings['min_consistent']<2
+            or type(fused.get('frames')) is not int or not 1<=fused['frames']<=MAX_FRAMES):
+        raise ValueError('Multi-view point filtering must be enabled and reported.')
     xyz,rgb,facts=survey_cloud.read_thinned(cloud_path)
     if (fused.get('voxels')!=facts['points_in_file'] or facts['non_finite_dropped']
             or not np.isfinite(xyz).all() or np.abs(xyz).max()>100000):
@@ -126,6 +134,22 @@ def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
     cloud['provenance'].update(voxelMetres=facts['voxel_metres'],learnedMetricPrior=True,metricVerified=False)
     # Do not claim per-point view membership or enable a production scene engine from a supplied PLY/report.
     cloud['multiView']=False
+    return cloud, facts
+
+
+def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
+    if evaluation_only is not True:raise ValueError('Explicit --evaluation-only required; no commercial engine is enabled.')
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}',name):raise ValueError('Use a plain run name.')
+    video=rc.regular_source(video);root=Path(run_root);out=Path(out)
+    if root.is_symlink() or not root.is_dir() or out.exists() or out.is_symlink():raise ValueError('Use a regular run directory and fresh output directory.')
+    record_path=root/'vipe'/f'{name}_metrictrail.json';pose_path=root/'pose'/f'{name}.npz'
+    cloud_path=root/'pointcloud'/f'{name}.ply';intrinsics=root/'intrinsics'/f'{name}.npz'
+    snapshots={k:file_record(p) for k,p in {'video':video,'run':record_path,'fusion':fusion,'poses':pose_path,
+                                          'intrinsics':intrinsics,'pointcloud':cloud_path}.items()}
+    run, camera, frame_ids, calibration = read_tracking(root, name)
+    hw=run['input_raster']['target_hw']; fps=run['input_raster']['source_fps']
+    fused=rc.read_json(fusion)
+    cloud, facts = estimated_cloud(cloud_path, fused)
     browser=copy.deepcopy(cloud);browser.update(units='arbitrary',scale=None)
     if browser.get('floorEstimate'):browser['floorEstimate']['units']='arbitrary'
     axis=np.array([[1,0,0],[0,0,1],[0,-1,0]],float)
@@ -157,6 +181,16 @@ def ingest(*, video, run_root, name, fusion, out, evaluation_only=False):
         rc.write_json(stage/'metrictrail-receipt.json',receipt);_publish_directory(stage,out)
     return receipt
 
+def tracking_environment(source, weights):
+    return {**os.environ,'PYTHONPATH':str(source),'VIPE_MOGE2_CHECKPOINT':str(Path(weights['moge']).resolve()),
+            'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1','HF_DATASETS_OFFLINE':'1','PYTHONUNBUFFERED':'1'}
+
+
+def tracking_command(python, source, input_path, raw, weights):
+    return [str(python),str(Path(source)/'run.py'),'pipeline=metrictrail',f'streams.base_path={input_path}',
+            f'pipeline.output.path={raw}',f'pipeline.slam.weights={Path(weights["dpvo"]).resolve()}',
+            f'pipeline.slam.dinov3_weights={Path(weights["dino"]).resolve()}','pipeline.init.input_raster.max_frames=1500']
+
 def execute(*,source,video,python,weights,out,timeout=1800,evaluation_only=False):
     if evaluation_only is not True:raise ValueError('Explicit --evaluation-only required.')
     if type(timeout) is not int or not 30<=timeout<=7200:raise ValueError('Trial timeout must be 30 to 7200 seconds.')
@@ -167,11 +201,8 @@ def execute(*,source,video,python,weights,out,timeout=1800,evaluation_only=False
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}',video.stem):raise ValueError('Use a plain video basename.')
     out=Path(out);out.mkdir(parents=True,exist_ok=False);out=out.resolve();raw=out/'raw'
     before=file_record(video)
-    env={**os.environ,'PYTHONPATH':str(source),'VIPE_MOGE2_CHECKPOINT':str(Path(weights['moge']).resolve()),
-         'HF_HUB_OFFLINE':'1','TRANSFORMERS_OFFLINE':'1','HF_DATASETS_OFFLINE':'1','PYTHONUNBUFFERED':'1'}
-    command=[str(python),str(Path(source)/'run.py'),'pipeline=metrictrail',f'streams.base_path={video}',
-             f'pipeline.output.path={raw}',f'pipeline.slam.weights={Path(weights["dpvo"]).resolve()}',
-             f'pipeline.slam.dinov3_weights={Path(weights["dino"]).resolve()}','pipeline.init.input_raster.max_frames=1500']
+    env=tracking_environment(source, weights)
+    command=tracking_command(python, source, video, raw, weights)
     report={'schema':'brainsnn.metrictrail-execution.v1','status':'started','source':before,'installation':pins,
             'metricVerified':False,'physicalRobotValidated':False,'evaluationOnly':True}
     rc.write_json(out/'execution.json',report)

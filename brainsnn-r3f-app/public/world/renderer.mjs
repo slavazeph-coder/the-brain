@@ -38,15 +38,15 @@ export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
   function line(a, b, color, thickness = 1) { const p = project(...a), q = project(...b); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.strokeStyle = color; ctx.lineWidth = thickness; ctx.stroke(); }
   function drawObject(o, y0 = 0){
       const {x,z,w,d}=o, h=mode==='top'?0:o.h, top=y0+h, active=o.id===selected, unknown=o.kind==='unknown', nogo=o.kind==='no-go';
-      const stroke=active?'#00f5ff':unknown?'#817393':nogo?'#e879f977':'#a855f788';
+      const stroke=active?'#00f5ff':unknown?'#aca4b8':nogo?'#efb07c':'#b39bd3';
       const corners=[[x,top,z],[x+w,top,z],[x+w,top,z+d],[x,top,z+d]];
       if(mode!=='top') {
         const faces=[[[x,y0,z],[x+w,y0,z],[x+w,top,z],[x,top,z]],[[x+w,y0,z],[x+w,y0,z+d],[x+w,top,z+d],[x+w,top,z]],[[x+w,y0,z+d],[x,y0,z+d],[x,top,z+d],[x+w,top,z+d]],[[x,y0,z+d],[x,y0,z],[x,top,z],[x,top,z+d]]];
         faces.sort((a,b)=>a.reduce((s,p)=>s+project(...p)[2],0)-b.reduce((s,p)=>s+project(...p)[2],0));
-        faces.forEach((f,i)=>polygon(f,unknown?'#2b263d':['#302044','#241a36','#3c2754','#281b3a'][i],stroke,active?2:.7));
+        faces.forEach((f,i)=>polygon(f,unknown?'#3d3d4f':['#544068','#4c3d61','#67537d','#413653'][i],stroke,active?2:.7));
       }
-      polygon(corners,unknown?'#29273a':active?'#274957':'#4a3163',stroke,active?3:.8);
-      if(unknown){ for(let k=.15;k<w;k+=.38) line([x+k,top+.02,z],[Math.min(x+w,x+k+.6),top+.02,z+d],'#a895c544'); }
+      polygon(corners,unknown?'#505060':nogo?'#764929':active?'#31616a':'#816798',stroke,active?3:.8);
+      if(unknown){ for(let k=.15;k<w;k+=.38) line([x+k,top+.02,z],[Math.min(x+w,x+k+.6),top+.02,z+d],'#dfd6ed88'); }
       if((active && !y0) || showNames){const p=project(x+w/2,top+.18,z+d/2);tags.push([o.name.slice(0,28),p[0],p[1]-4,active]);}
       else if(mode==='top'){const p=project(x+w/2,top+.18,z+d/2);ctx.fillStyle='#e4d9f4';ctx.textAlign='center';ctx.font='11px system-ui';ctx.fillText(o.name.slice(0,23),p[0],p[1]-6);}
   }
@@ -71,11 +71,11 @@ export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
     if (!world) return;
     const W = world.width, D = world.depth;
     const floor=(world.floor||[[0,0],[W,0],[W,D],[0,D]]).map(([x,z])=>[x,0,z]);
-    polygon(floor, '#0d1821', '#00f5ff66');
+    polygon(floor, '#203746', '#77bfc9', 1.3);
     // Clip the grid to the observed polygon so missing floor never looks traversable.
     ctx.save();polygon(floor,null);ctx.clip();
-    for(let x = 0; x <= W; x += Math.max(1, Math.ceil(W / 40))) line([x,0,0],[x,0,D], '#00f5ff16');
-    for(let z = 0; z <= D; z += Math.max(1, Math.ceil(D / 40))) line([0,0,z],[W,0,z], '#00f5ff16');
+    for(let x = 0; x <= W; x += Math.max(1, Math.ceil(W / 40))) line([x,0,0],[x,0,D], '#7cb3c138');
+    for(let z = 0; z <= D; z += Math.max(1, Math.ceil(D / 40))) line([0,0,z],[W,0,z], '#7cb3c138');
     ctx.restore();
     if (ghost?.length) {
       // The route before an edit, kept for comparison: dimmed and dashed under the current one.
@@ -103,6 +103,7 @@ export function createRenderer(canvas, {wheelZoom = true, fixed = null} = {}) {
       const body=[at(hd,hw),at(hd,-hw),at(-hd,-hw),at(-hd,hw)];polygon(body,'#00f5ff30','#9ffcff',2);line(body[0],body[1],'#ffffff',3);}
     for(const t of tags) tag(...t);
     const p=project(pos.x,.18,pos.z); ctx.beginPath();ctx.arc(p[0],p[1],8,0,Math.PI*2);ctx.fillStyle='#00f5ff22';ctx.fill();ctx.strokeStyle='#00f5ff88';ctx.lineWidth=1;ctx.stroke();ctx.beginPath();ctx.arc(p[0],p[1],3.5,0,Math.PI*2);ctx.fillStyle='#b1ffff';ctx.fill();
+    if (robotBody) tag('Robot', p[0], p[1] - 10, true);
     ctx.font='12px ui-monospace,monospace';ctx.fillStyle='#9cc9d8';ctx.textAlign='center'; const wp=project(W/2,0,D+.6);ctx.fillText(`${W.toFixed(1)} m`,wp[0],wp[1]+10); const dp=project(W+.8,0,D/2);ctx.fillText(`${D.toFixed(1)} m`,dp[0]+17,dp[1]);
   }
   function hull(points){const pts=points.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]),cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];

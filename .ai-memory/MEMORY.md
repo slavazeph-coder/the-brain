@@ -24,6 +24,22 @@ Central AI workspace — OpenClaw hub, agent library, and UI. Claude + Codex col
 
 ## Current BrainSNN direction
 
+→ [Photo and video depth review](world-depth-workbench-2026-11-23.md) — native frame/pixel/point review, pinned MoGe worker baseline, source identity checks and disabled separately licensed Depth Pro 2 connector; coordinated robot/scan release approved.
+
+→ [Robot capability and scan projects](world-robot-capability-2026-11-22.md) — shared robot profile, native drivetrain/MPPI, arm and telemetry checks, batch scan queue and shared project evidence.
+
+→ [Unified World Builder playground](world-studio-2026-11-21.md) — map-first phone and desktop workspace, shared tool library, in-page workbench and direct activity links.
+→ [API sell-readiness audit](api-sell-readiness-2026-11-21.md) — Nov 21: World API works end to end with operator keys; monthly usage meter + CSV export added; compression/caching cut first load 65%; processing tenants, S3 and backups remain ops steps.
+→ [BrainSNN Walk](brainsnn-walk-2026-11-22.md) — Nov 22: phone-first /walk/ PWA after myDAR (walk → tap features → honest GPS figure → export ZIP/GeoJSON/GPX/CSV → video to World Builder); LiDAR needs a native iOS app.
+→ [Five-sense cart trial and recorded views](brainsnn-five-senses-2026-11-20.md) — PR328, the continuation on the same evidence, two paired evaluations and simulated sensing.
+→ [Linked showroom](world-linked-showroom-2026-11-20.md) — object selection, recovered video times, route comparisons, the camera walkthrough and recorded cart and gripper simulations.
+
+→ [World Builder in action](world-feature-showcase-2026-11-19.md) — a shareable walkthrough and a six-chapter showcase with direct access to 45 playground activities.
+
+→ [Arrange a room](world-scan-workshop-2026-11-19.md) — reviewed scan selections, reusable objects, a preview lamp and a source-bound handoff to repair.
+
+→ [Stereo depth prototype](world-stereo-depth-2026-11-19.md) — estimated depth from rectified pairs and an independent viewer for StereoSplat exports.
+
 → [Open4DGS moving scenes](world-open4dgs-2026-11-19.md) — native export playback, local camera timing and the operator-run reconstruction workflow.
 
 → [One World Builder experience](world-unified-experience-2026-11-17.md) — owner’s v23 demo flow in one workspace; retained source/job results, native drawings, safe view switching and separate website/worker rollout.
@@ -872,3 +888,9 @@ canon: /HACKATHON.md.
 - See [world-project-review.md](world-project-review.md) for the source-bound
   finish-scope review workflow, owner-only bounded AI team, deterministic rates
   and quantities, preliminary approval receipts, and qualification boundaries.
+
+### API access waitlist — 2026-11-19
+
+- See [api-waitlist-2026-11-19.md](api-waitlist-2026-11-19.md) for the
+  `/world/api.html` waitlist form, its PostgreSQL storage, rate limits,
+  owner-only export and what it promises visitors.

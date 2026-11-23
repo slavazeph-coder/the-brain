@@ -9,6 +9,11 @@ layout(location=2) in vec4 color;
 layout(location=3) in vec4 quat;
 layout(location=4) in float selected;
 uniform mat4 view; uniform mat4 projection; uniform vec2 viewport; uniform float focal; uniform float size; uniform int mode; uniform bool cloud;
+uniform bool lampEnabled;
+uniform vec3 lampPosition;
+uniform vec3 lampTint;
+uniform float lampRadius;
+uniform float lampStrength;
 out vec2 local; out vec4 tint;
 void main(){
  vec2 corners[6]=vec2[6](vec2(-1.,-1.),vec2(1.,-1.),vec2(1.,1.),vec2(-1.,-1.),vec2(1.,1.),vec2(-1.,1.));
@@ -28,6 +33,11 @@ void main(){
  vec2 offset=extent*size*(corner.x*sqrt(clamp(mid+delta,.2,4096.))*v1+corner.y*sqrt(clamp(mid-delta,.2,4096.))*v2);
  clip.xy+=offset*2./viewport*clip.w; gl_Position=clip; local=corner*extent;
  tint=color;
+ // A view-only colour lift around Gaussian centres; there is no material or lighting model.
+ if(lampEnabled){
+   float falloff=1.-smoothstep(0.,1.,length((pos-lampPosition)/lampRadius));
+   tint.rgb+=(1.-tint.rgb)*lampTint*(.82*lampStrength*falloff);
+ }
  if(mode==1){float t=clamp((-p.z-1.)/14.,0.,1.);tint.rgb=mix(vec3(.408,.918,1.),vec3(.58,.486,1.),t);}
  if(mode==2){tint.rgb=mix(tint.rgb,vec3(.408,.918,1.),.5);}
  if(selected>.5){tint.rgb=mix(tint.rgb,vec3(1.,.78,.15),.8);}
@@ -45,6 +55,16 @@ function checkedView(value) {
   const vector=v=>Array.isArray(v)&&v.length===3&&v.every(n=>Number.isFinite(n)&&Math.abs(n)<=1e6);
   if(!vector(value?.eye)||!vector(value?.target)||!Number.isFinite(value?.fov)||value.fov<15||value.fov>100||Math.hypot(...value.eye.map((n,i)=>n-value.target[i]))<=1e-6)throw Error('Use a finite camera position and distinct target, with a field of view from 15° to 100°.');
   return {eye:value.eye.slice(),target:value.target.slice(),fov:value.fov};
+}
+function checkedAppearanceLamp(value) {
+  const {position, tint, radius, strength} = value ?? {};
+  const vector = (v, valid) => Array.isArray(v) && v.length === 3 && v.every(n => Number.isFinite(n) && valid(n));
+  if (!vector(position, n => Math.abs(n) <= 5e7) || !vector(tint, n => n >= 0 && n <= 1) ||
+      !Number.isFinite(radius) || radius < 1e-6 || radius > 5e7 ||
+      !Number.isFinite(strength) || strength < 0 || strength > 1) {
+    throw Error('Use a finite lamp position, colour, size and brightness.');
+  }
+  return {position:position.slice(), tint:tint.slice(), radius, strength};
 }
 /** Screen rectangle selection of retained sample centres, through all depths. This is not object segmentation. */
 export function selectVisualRectangle(points, view, projection, rectangle, viewport, {minY=-Infinity,maxY=Infinity}={}) {
@@ -78,10 +98,11 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   const buffer=gl.createBuffer(), vao=gl.createVertexArray();gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
   [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
   const selectionBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,selectionBuffer);gl.enableVertexAttribArray(4);gl.vertexAttribPointer(4,1,gl.FLOAT,false,4,0);gl.vertexAttribDivisor(4,1);
-  const uniforms=Object.fromEntries(['view','projection','viewport','focal','size','mode','cloud'].map(n=>[n,gl.getUniformLocation(program,n)]));
+  const uniforms=Object.fromEntries(['view','projection','viewport','focal','size','mode','cloud','lampEnabled','lampPosition','lampTint','lampRadius','lampStrength'].map(n=>[n,gl.getUniformLocation(program,n)]));
   let points=new Float32Array(), sorted=new Float32Array(), order=[], yaw=.65, pitch=.5, distance=13, target=[0,1,0], fov=60, mode=0, pointSize=1, disposed=false, frame=0, auto=false, last=0, sway=null;
   let walking=false, sortDirty=true, visible=true, gesture=null, cloud=true, radius=1, sourcePhoto=false, lost=false, markers=[], markerCount=0, uploaded=false, lastSort=0, settle=0;
   let selectionMask=new Uint8Array(),selectionSorted=new Float32Array(),selectionDirty=true;
+  let appearanceLamp = null, renderedLamp = false, appearanceFrame = null;
   // Picked reference points for scale calibration: drawn larger, in cyan, after the scene.
   const markerBuffer=gl.createBuffer(), markerVao=gl.createVertexArray();gl.bindVertexArray(markerVao);gl.bindBuffer(gl.ARRAY_BUFFER,markerBuffer);
   [[0,3,0],[1,3,3],[2,4,6],[3,4,10]].forEach(([i,n,o])=>{gl.enableVertexAttribArray(i);gl.vertexAttribPointer(i,n,gl.FLOAT,false,STRIDE*4,o*4);gl.vertexAttribDivisor(i,1);});
@@ -107,8 +128,18 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     else if(sortDirty&&points.length){lastSort=at;uploaded=true;order.sort((a,b)=>{const ai=a*STRIDE,bi=b*STRIDE;return (points[ai]-points[bi])*view[2]+(points[ai+1]-points[bi+1])*view[6]+(points[ai+2]-points[bi+2])*view[10];});for(let i=0;i<order.length;i++)sorted.set(points.subarray(order[i]*STRIDE,order[i]*STRIDE+STRIDE),i*STRIDE);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,sorted,gl.DYNAMIC_DRAW);sortDirty=false;selectionDirty=true;}
     if(selectionDirty){for(let i=0;i<order.length;i++)selectionSorted[i]=selectionMask[order[i]];gl.bindBuffer(gl.ARRAY_BUFFER,selectionBuffer);gl.bufferData(gl.ARRAY_BUFFER,selectionSorted,gl.DYNAMIC_DRAW);selectionDirty=false;}
     gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.02,.029,.047,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.disable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(program);gl.bindVertexArray(vao);
-    gl.uniformMatrix4fv(uniforms.view,false,view);gl.uniformMatrix4fv(uniforms.projection,false,projection);gl.uniform2f(uniforms.viewport,canvas.width,canvas.height);gl.uniform1f(uniforms.focal,canvas.height/(2*Math.tan(fov*Math.PI/360)));gl.uniform1f(uniforms.size,mode===2?pointSize*.5:pointSize);gl.uniform1i(uniforms.mode,mode);gl.uniform1i(uniforms.cloud,cloud?1:0);gl.drawArraysInstanced(gl.TRIANGLES,0,6,points.length/STRIDE);
-    if(markerCount){gl.bindVertexArray(markerVao);gl.uniform1f(uniforms.size,pointSize*3);gl.uniform1i(uniforms.mode,0);gl.uniform1i(uniforms.cloud,1);gl.drawArraysInstanced(gl.TRIANGLES,0,6,markerCount);}
+    gl.uniformMatrix4fv(uniforms.view,false,view);gl.uniformMatrix4fv(uniforms.projection,false,projection);gl.uniform2f(uniforms.viewport,canvas.width,canvas.height);gl.uniform1f(uniforms.focal,canvas.height/(2*Math.tan(fov*Math.PI/360)));gl.uniform1f(uniforms.size,mode===2?pointSize*.5:pointSize);gl.uniform1i(uniforms.mode,mode);gl.uniform1i(uniforms.cloud,cloud?1:0);
+    const lamp = !cloud && mode === 0 ? appearanceLamp : null;
+    gl.uniform1i(uniforms.lampEnabled, lamp ? 1 : 0);
+    if (lamp) {
+      gl.uniform3fv(uniforms.lampPosition, lamp.position);
+      gl.uniform3fv(uniforms.lampTint, lamp.tint);
+      gl.uniform1f(uniforms.lampRadius, lamp.radius);
+      gl.uniform1f(uniforms.lampStrength, lamp.strength);
+    }
+    gl.drawArraysInstanced(gl.TRIANGLES,0,6,points.length/STRIDE);
+    if(markerCount){gl.bindVertexArray(markerVao);gl.uniform1f(uniforms.size,pointSize*3);gl.uniform1i(uniforms.mode,0);gl.uniform1i(uniforms.cloud,1);gl.uniform1i(uniforms.lampEnabled,0);gl.drawArraysInstanced(gl.TRIANGLES,0,6,markerCount);}
+    renderedLamp = Boolean(lamp);
     if(auto)schedule();
   }
   function zoom(value){distance=Math.max(radius*.01,Math.min(radius*50,value));}
@@ -125,10 +156,11 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
   listen(document,'visibilitychange',()=>{if(!document.hidden)schedule();});
   const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas);
   const observer=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting??true;if(visible)schedule();});observer.observe(canvas);resize();
-  function fit(photo=false){if(!points.length)return;fov=60;const b=frameBounds(points);radius=b.radius;target=b.center;const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*(b.trimmed?.9:1.15);yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
+  const framing = () => appearanceFrame ??= frameBounds(points);
+  function fit(photo=false){if(!points.length)return;fov=60;const b=framing();radius=b.radius;target=b.center.slice();const aspect=Math.max(.1,canvas.width/canvas.height);distance=b.radius/Math.sin(Math.atan(Math.tan(Math.PI/6)*Math.min(1,aspect)))*(b.trimmed?.9:1.15);yaw=.35;pitch=.18;if(photo){target=[0,0,-2.6];distance=2.6;yaw=0;pitch=0;}sortDirty=true;schedule();}
   return {
-    setPoints(p,{photo=false,kind='point-cloud',orbit=false,preserveView=false}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);selectionMask=new Uint8Array(order.length);selectionSorted=new Float32Array(order.length);selectionDirty=true;uploaded=false;markers=[];updateMarkers();if(!preserveView)fit(photo);sortDirty=true;sway=null;auto=orbit&&!matchMedia('(prefers-reduced-motion: reduce)').matches;schedule();},
-    clear(){points=new Float32Array();sorted=new Float32Array();order=[];selectionMask=new Uint8Array();selectionSorted=new Float32Array();selectionDirty=true;markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
+    setPoints(p,{photo=false,kind='point-cloud',orbit=false,preserveView=false}={}){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');bounds(p);if(!['point-cloud','gaussian-splat'].includes(kind))throw Error('Unknown visual representation.');appearanceLamp=appearanceFrame=null;points=p.slice();cloud=kind==='point-cloud';sourcePhoto=photo;walking=false;sorted=new Float32Array(p.length);order=Array.from({length:p.length/STRIDE},(_,i)=>i);selectionMask=new Uint8Array(order.length);selectionSorted=new Float32Array(order.length);selectionDirty=true;uploaded=false;markers=[];updateMarkers();if(!preserveView)fit(photo);sortDirty=true;sway=null;auto=orbit&&!matchMedia('(prefers-reduced-motion: reduce)').matches;schedule();},
+    clear(){appearanceLamp=appearanceFrame=null;points=new Float32Array();sorted=new Float32Array();order=[];selectionMask=new Uint8Array();selectionSorted=new Float32Array();selectionDirty=true;markers=[];updateMarkers();auto=false;sortDirty=true;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,0,gl.DYNAMIC_DRAW);schedule();},
     setMode(m){mode=Number.isInteger(m)?Math.max(0,Math.min(2,m)):0;schedule();},
     setSize(n){if(Number.isFinite(n))pointSize=Math.max(.25,Math.min(3,n));schedule();},
     reset(){fit(sourcePhoto);},photoCamera(){fit(true);},
@@ -139,6 +171,30 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
     rotatePitch(radians){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');if(!Number.isFinite(radians))throw Error('Use a finite camera rotation.');auto=false;sway=null;pitch=Math.max(-1.4,Math.min(1.4,pitch+radians));sortDirty=true;schedule();},
     setView(value){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');const view=checkedView(value),offset=view.eye.map((v,i)=>v-view.target[i]);distance=Math.hypot(...offset);target=view.target;fov=view.fov;yaw=Math.atan2(offset[0],offset[2]);pitch=Math.asin(Math.max(-1,Math.min(1,offset[1]/distance)));auto=false;sway=null;walking=false;pointers.clear();gesture=null;sortDirty=true;lastSort=-Infinity;clearTimeout(settle);cancelAnimationFrame(frame);frame=0;render(performance.now(),true);},
     getCanvas(){return disposed?null:canvas;},
+    getCaptureCanvas(){return disposed||lost||appearanceLamp||renderedLamp?null:canvas;},
+    getAppearanceLampFrame(){
+      if (disposed || lost || cloud || !points.length) return null;
+      const {center, radius: extent} = framing();
+      return {center:center.slice(), radius:extent};
+    },
+    getAppearancePoint(index){
+      if (disposed || lost || cloud || !Number.isInteger(index) || index < 0 || index >= points.length / STRIDE) return null;
+      return Array.from(points.subarray(index * STRIDE, index * STRIDE + 3));
+    },
+    setAppearanceLamp(value){
+      if (value === null) {
+        const restore = appearanceLamp || renderedLamp;
+        appearanceLamp = null;
+        if (restore && !disposed && !lost) {
+          cancelAnimationFrame(frame); frame = 0;
+          render(performance.now(), true);
+        }
+        return;
+      }
+      if (disposed || lost || cloud || !points.length) throw Error('Open a Gaussian splat to use the preview lamp.');
+      appearanceLamp = checkedAppearanceLamp(value);
+      schedule();
+    },
     getBounds(){return points.length?bounds(points):null;},
     selectRectangle(rectangle,options){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');const {view,projection}=camera(),r=canvas.getBoundingClientRect();return selectVisualRectangle(points,view,projection,rectangle,{left:r.left,top:r.top,width:r.width,height:r.height},options);},
     selectPointsRectangle(source,rectangle,options){
@@ -149,14 +205,14 @@ export function createVisualViewer(canvas, onInfo = () => {}) {
       return selected;
     },
     setSelection(indices=[]){if(disposed||lost)throw Error('Reload the page to restore the visual viewer.');if(!(Array.isArray(indices)||indices instanceof Uint32Array)||indices.length>order.length)throw Error('Use at most one selection index per retained sample.');const mask=new Uint8Array(order.length);for(const index of indices){if(!Number.isInteger(index)||index<0||index>=order.length)throw Error('Selection index is outside the retained preview.');mask[index]=1;}selectionMask=mask;selectionDirty=true;schedule();},
-    flip(){for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
+    flip(){appearanceLamp=appearanceFrame=null;for(let i=0;i<points.length;i+=STRIDE){points[i+1]*=-1;points[i+2]*=-1;const x=points[i+10],y=points[i+11],z=points[i+12],w=points[i+13];points[i+10]=w;points[i+11]=-z;points[i+12]=y;points[i+13]=-x;}sourcePhoto=false;updateMarkers();fit();},
     orbit(on=!auto){auto=!!on;sway=null;schedule();return auto;},
     sway(degrees=25,ms=4000){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return false;sway={start:performance.now(),base:yaw,amp:degrees*Math.PI/180,ms};auto=true;schedule();return true;},
     walk(){walking=!walking;if(walking){pitch=0;distance=Math.min(distance,radius*.5);sortDirty=true;schedule();}else fit();return walking;},
     /** Look from a point along a direction (a capture camera): the eye lands exactly there, orbit controls keep working around a target just ahead. */
     lookFrom(eye,forward,{ahead=null}={}){if(!points.length||!Array.isArray(eye)||!Array.isArray(forward))return false;const n=Math.hypot(...forward);if(!(n>1e-6)||eye.some(v=>!Number.isFinite(v)))return false;const f=forward.map(v=>v/n),d=Number.isFinite(ahead)&&ahead>0?ahead:Math.max(radius*.02,.05);
       walking=true;sway=null;auto=false;distance=d;target=[eye[0]+f[0]*d,eye[1]+f[1]*d,eye[2]+f[2]*d];yaw=Math.atan2(-f[0],-f[2]);pitch=Math.asin(Math.max(-1,Math.min(1,-f[1])));sortDirty=true;schedule();return true;},
-    snapshot(){return canvas.toDataURL('image/png');},
+    snapshot(){if(appearanceLamp||renderedLamp)throw Error('Turn off the preview lamp before taking a source snapshot.');return canvas.toDataURL('image/png');},
     /** Index (in setPoints order) of the point under a client position, or -1 if none is within `tolerance` CSS pixels.
      * Of the points within 4 px of the nearest one, the closest to the camera wins: the surface you see, not one behind it. */
     pick(clientX,clientY,tolerance=14){if(!points.length)return -1;const r=canvas.getBoundingClientRect(),{view,projection}=camera(),m=new Float32Array(16),hits=[];

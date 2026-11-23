@@ -1,0 +1,349 @@
+/* World Builder studio: one bar for every tool, one workbench for separate tool pages, and a compact
+   hero so the world itself leads the page. Same near-black / cyan / violet identity as world.css. */
+
+body.playground{
+  --studio-line:#24243a;
+  --studio-panel:#0c0c16;
+  --studio-card:#10101b;
+  --studio-card-hover:#151526;
+  --studio-glow:0 22px 60px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);
+  --studio-bar-height:70px;
+}
+html:has(body.playground){scroll-padding-top:calc(var(--studio-bar-height,70px) + 26px)}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+body.playground .hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  padding: clamp(10px, 1.4vw, 20px) 0 clamp(12px, 1.5vw, 22px);
+  background: transparent;
+}
+.playground-heading { min-width: 0; }
+body.playground .hero h1 {
+  margin: 0;
+  color: #f2f5fa;
+  font-size: clamp(27px, 3.2vw, 46px);
+  font-weight: 640;
+  letter-spacing: -.052em;
+  line-height: 1.06;
+}
+body.playground .hero h1 em {
+  display: inline;
+  color: #a2e9ed;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  font: inherit;
+}
+body.playground .hero .intro {
+  margin: .55em 0 0;
+  max-width: 44em;
+  color: #c0cad7;
+  font-size: var(--reading-ui, 16px);
+  line-height: 1.45;
+}
+.playground-shortcuts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px; }
+.playground-shortcuts > :is(button, a) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--reading-ui, 16px);
+  white-space: nowrap;
+}
+.playground-shortcuts .ghost {
+  padding: 8px 15px;
+  color: #f4f4fa;
+  border: 1px solid #596273;
+  border-radius: 9px;
+  background: #161b26;
+}
+.playground-tour { gap: 8px; color: #c8d4e3; text-underline-offset: 4px; }
+.playground-tour::before {
+  content: "";
+  border-block: 5px solid transparent;
+  border-left: 8px solid currentColor;
+}
+.playground-examples {
+  margin: 18px 0;
+  color: #e1ecf4;
+  border-block: 1px solid #384456;
+}
+.playground-examples > summary {
+  padding: 12px 6px;
+  min-height: 46px;
+  font-size: var(--reading-ui, 16px);
+  font-weight: 620;
+  cursor: pointer;
+}
+.practice-examples { display: grid; grid-template-columns: 1fr minmax(0, 1.25fr); gap: 24px; padding: 6px 0 20px; }
+.practice-places { display: flex; flex-direction: column; align-items: flex-start; }
+.practice-places h2 { font-size: 1.25rem; margin: 0 0 .5em; }
+.practice-places :is(a,button) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: #a2e9ed;
+  font-size: var(--reading-ui, 16px);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The studio wrapper. Everything after the hero lives here, under one bar. */
+.studio{position:relative;padding-bottom:8px}
+.studio-main>*:first-child{margin-top:0}
+.studio-sticky{position:sticky;top:10px;z-index:60;margin:0 0 22px}
+.studio-bar{display:flex;align-items:center;gap:8px;min-height:var(--studio-bar-height);padding:9px;border:1px solid var(--studio-line);border-radius:18px;background:linear-gradient(180deg,rgba(17,17,29,.9),rgba(10,10,18,.9));box-shadow:var(--studio-glow);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%)}
+.studio-bar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+.studio-home{display:flex;align-items:center;gap:11px;min-height:50px;padding:6px 14px 6px 7px;border-radius:13px;color:var(--text);text-decoration:none;max-width:250px;flex:none;border:1px solid transparent}
+.studio-home:hover{background:#ffffff08;border-color:var(--studio-line)}
+.studio-home-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;color:#04161a;background:linear-gradient(135deg,var(--cyan),#7cc7ff 60%,var(--purple));box-shadow:0 0 22px #00f5ff33;flex:none}
+.studio-home-icon svg{width:20px;height:20px;stroke-width:2}
+.studio-home-words{display:grid;min-width:0;line-height:1.2}
+html:not([data-workbench]) .studio-home-words small{display:block;font:650 var(--reading-ui,16px) var(--font);color:var(--text);text-transform:none;letter-spacing:0}
+html:not([data-workbench]) .studio-home-words strong{display:none}
+.studio-home-words small{font:600 13px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.studio-home-words strong{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.studio-chapters{display:flex;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px;border-left:1px solid var(--studio-line);padding-left:10px;margin-left:2px;mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent)}
+.studio-chapters::-webkit-scrollbar{display:none}
+body.playground .studio-chapter{display:inline-flex;align-items:center;gap:9px;min-height:50px;padding:0 14px;border:1px solid transparent;border-radius:13px;color:#d6d9e4;background:none;font:600 15px var(--font);white-space:nowrap;flex:none;position:relative;transition:background .15s,border-color .15s,color .15s}
+body.playground .studio-chapter:hover{background:#ffffff09;color:#fff}
+body.playground .studio-chapter.active{background:linear-gradient(180deg,#00f5ff1a,#00f5ff0d);border-color:#00f5ff66;color:#bffcff}
+body.playground .studio-chapter.current:not(.active)::after{content:"";position:absolute;left:16px;right:16px;bottom:5px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),var(--purple))}
+.studio-chapter-icon{display:grid;place-items:center;color:var(--cyan)}
+.studio-chapter.active .studio-chapter-icon{color:#fff}
+.studio-chapter-count{min-width:26px;height:24px;padding:0 7px;border-radius:999px;display:inline-grid;place-items:center;font:600 13px var(--mono);color:#cfd3e1;background:#ffffff0d;border:1px solid #ffffff12}
+.studio-chapter.active .studio-chapter-count{background:#00f5ff26;color:#e8feff;border-color:#00f5ff4d}
+
+body.playground .studio-search-button{display:inline-flex;align-items:center;gap:9px;min-height:50px;padding:0 18px;margin-left:auto;border-radius:13px;border:1px solid #33334d;background:#0a0a12;color:var(--text);font:600 15px var(--font);flex:none}
+body.playground .studio-search-button:hover,body.playground .studio-search-button[aria-expanded=true]{border-color:#a855f799;background:#a855f714;color:#f1e6ff}
+.studio-search-button svg{color:#c99bff}
+
+/* Chapter and search panel. */
+.studio-panel{position:absolute;left:0;right:0;top:calc(100% + 10px);max-height:min(72vh,680px);overflow:auto;overscroll-behavior:contain;padding:22px;border:1px solid #2c2c46;border-radius:20px;background:radial-gradient(ellipse at 100% 0%,#a855f714,transparent 45%),radial-gradient(ellipse at 0% 0%,#00f5ff10,transparent 40%),var(--studio-panel);box-shadow:0 34px 90px rgba(0,0,0,.75),inset 0 1px 0 rgba(255,255,255,.05);animation:studio-in .16s ease-out}
+@keyframes studio-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.studio-panel-head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.studio-panel-head h2{margin:0;font-size:26px;letter-spacing:-.03em;line-height:1.15}
+.studio-panel-head div p{margin:4px 0 0;color:var(--muted);font-size:var(--reading-small,15px)}
+.studio-panel-icon{display:grid;place-items:center;width:52px;height:52px;border-radius:15px;color:var(--cyan);background:linear-gradient(145deg,#00f5ff1f,#a855f71f);border:1px solid #00f5ff40;flex:none}
+.studio-panel-icon svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.studio-panel-count{margin:0 0 0 auto;flex:none;padding:6px 12px;border-radius:999px;border:1px solid var(--studio-line);font:600 13px var(--mono);color:#cfd3e1}
+.studio-search{display:flex;align-items:center;gap:10px;flex:1;min-height:54px;padding:0 16px;border:1px solid #3a3a5a;border-radius:14px;background:#08080f}
+.studio-search:focus-within{border-color:#a855f7;box-shadow:0 0 0 3px #a855f733}
+.studio-search svg{width:22px;height:22px;fill:none;stroke:#c99bff;stroke-width:1.8;stroke-linecap:round}
+.studio-search input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--text);font:500 17px var(--font);padding:12px 0}
+.studio-search input::placeholder{color:#8a8fa5}
+.studio-tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+body.playground .studio-tool{display:flex;flex-direction:column;gap:8px;min-height:132px;padding:16px 16px 14px;border:1px solid var(--studio-line);border-radius:15px;background:var(--studio-card);color:var(--text);font:inherit;text-align:left;transition:border-color .15s,background .15s,transform .15s}
+body.playground .studio-tool:hover{border-color:#00f5ff59;background:var(--studio-card-hover);transform:translateY(-1px)}
+body.playground .studio-tool[data-place=workbench]:hover{border-color:#a855f780}
+.studio-tool-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.studio-tool-head strong{font-size:17px;line-height:1.3;font-weight:650}
+.studio-tool-window svg{width:20px;height:20px;fill:none;stroke:#c99bff;stroke-width:1.7;flex:none}
+.studio-tool-detail{color:var(--muted);font-size:var(--reading-small,15px);line-height:1.5;flex:1}
+.studio-tool-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.studio-access{padding:3px 9px;border-radius:999px;font:600 13px/1.4 var(--font);letter-spacing:0;border:1px solid transparent}
+.studio-access[data-tone=example]{color:#8ffaff;background:#00f5ff14;border-color:#00f5ff33}
+.studio-access[data-tone=preview]{color:#dcbcff;background:#a855f71f;border-color:#a855f74d}
+.studio-access[data-tone=needs]{color:#ffd58a;background:#f5b5441a;border-color:#f5b54440}
+.studio-access[data-tone=ready]{color:#8ef0c3;background:#34d39914;border-color:#34d39933}
+.studio-where{color:#a4a9bd;font:500 13px/1.4 var(--font);letter-spacing:0}
+.studio-panel-foot{margin:16px 2px 0;color:#9aa0b4;font-size:14px}
+.studio-status{margin:8px 4px 0;padding:10px 14px;border-radius:12px;border:1px solid #f5b54466;background:#1d1608;color:#ffd58a;font-size:15px}
+
+/* Workbench: a separate tool page, opened beside the world. */
+.studio-workbench{scroll-margin-top:calc(var(--studio-bar-height) + 26px);margin:0 0 28px;border:1px solid #2c2c46;border-radius:20px;overflow:hidden;background:linear-gradient(180deg,#0f0f1b,#09090f);box-shadow:0 30px 90px rgba(0,0,0,.55),0 0 0 1px #a855f71a}
+.workbench-head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:20px 22px;border-bottom:1px solid var(--studio-line);background:radial-gradient(ellipse at 0% 0%,#a855f71a,transparent 55%)}
+.workbench-words{min-width:0}
+.workbench-words .eyebrow{margin:0 0 6px;color:#c99bff;font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.workbench-words h2{margin:0;font-size:clamp(24px,2.4vw,32px);letter-spacing:-.035em;line-height:1.1;outline:0}
+.workbench-words p:last-child{margin:6px 0 0;color:var(--muted);max-width:720px;font-size:var(--reading-small,15px)}
+.workbench-actions{display:flex;flex-wrap:wrap;gap:10px;flex:none}
+.workbench-actions :is(a,button){min-height:48px;font:600 15px var(--font);border-radius:12px;text-decoration:none}
+.workbench-actions a.ghost{color:var(--text)}
+.workbench-frame{position:relative;height:max(560px,calc(100dvh - var(--studio-bar-height) - 190px));background:var(--bg)}
+.workbench-frame iframe{display:block;width:100%;height:100%;border:0;background:var(--bg)}
+.workbench-loading{position:absolute;inset:0;display:grid;place-items:center;margin:0;color:var(--muted);font:500 16px var(--font);background:linear-gradient(100deg,transparent 30%,#ffffff07 50%,transparent 70%) 0 0/200% 100%,var(--bg);animation:studio-shimmer 1.4s linear infinite;pointer-events:none}
+@keyframes studio-shimmer{to{background-position:-200% 0,0 0}}
+
+/* One visual system for the sections under the bar. */
+.studio-main .workspace{border-color:var(--studio-line);border-radius:20px;box-shadow:0 30px 90px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04)}
+.studio-main #unified-workspace{background:radial-gradient(ellipse at 100% 0%,#a855f712,transparent 50%),linear-gradient(135deg,#0a1921,#11101e)}
+.studio-main .world-showcase,.studio-main .goal-entry{border-radius:20px}
+.studio-main .goal-entry{border-color:var(--studio-line)}
+
+/* Make it yours: an even 4 × 2 grid in the studio card language (no orphaned last card). */
+html:not([data-contrast=more]) .studio-main .world-layer-tools{border-color:var(--studio-line);border-radius:18px;background:radial-gradient(ellipse at 0% 0%,#00f5ff0d,transparent 45%),linear-gradient(130deg,#0a1820,#11101d)}
+@media(min-width:1101px){.studio-main .layer-tool-choices{grid-template-columns:repeat(4,minmax(0,1fr))}}
+html:not([data-contrast=more]) .studio-main .layer-tool-choices button{border-color:var(--studio-line);border-radius:14px;background:var(--studio-card);transition:border-color .15s,background .15s}
+html:not([data-contrast=more]) .studio-main .layer-tool-choices button:hover{border-color:#00f5ff59;background:var(--studio-card-hover)}
+html:not([data-contrast=more]) .studio-main .layer-tool-choices [aria-selected=true]{border-color:var(--cyan);background:linear-gradient(180deg,#00f5ff1c,#00f5ff08);box-shadow:inset 0 0 0 1px #00f5ff33}
+
+/* Showcase: same cards and selected state as the studio panel. */
+html:not([data-contrast=more]) .studio-main .showcase-chapters button{border-color:var(--studio-line);border-radius:12px;background:var(--studio-card)}
+html:not([data-contrast=more]) .studio-main .showcase-chapters [aria-selected=true]{background:linear-gradient(180deg,#00f5ff2b,#00f5ff12);border-color:#00f5ff8c;color:#effeff}
+html:not([data-contrast=more]) .studio-main .showcase-list [data-showcase-target]{border-color:var(--studio-line);border-radius:14px;background:var(--studio-card);padding:16px;transition:border-color .15s,background .15s}
+html:not([data-contrast=more]) .studio-main .showcase-list [data-showcase-target]:hover{border-color:#00f5ff59;background:var(--studio-card-hover)}
+html:not([data-contrast=more]) .studio-main .showcase-list a[data-showcase-target]:hover{border-color:#a855f780}
+
+/* A slightly smaller hero preview so the bar reaches the first screen on laptops. */
+@media(min-width:1101px){body.playground .hero-demo-stage{height:214px}}
+
+/* One flowing workspace (unified-workspace-ui.mjs): heading, the map's commands, the next step, the robot
+   setup, then the tool tabs directly above the editor, with "more ways" after it. One card, one rhythm. */
+body.playground{--flow-pad:22px}
+#unified-workspace[data-flow]{padding:22px var(--flow-pad) 0}
+#unified-workspace[data-flow] .unified-heading{margin-bottom:0}
+.workspace-command-bar{margin:16px 0 0;border:1px solid var(--studio-line);border-radius:14px;background:rgba(7,9,16,.72);overflow:hidden}
+.workspace-command-bar .workspace-header{min-height:0;padding:10px 12px 10px 16px;border-bottom:1px solid var(--studio-line)}
+.workspace-command-bar .sandbox-toolbar{padding:10px 12px 10px 16px;background:none;border-bottom:1px solid var(--studio-line)}
+.workspace-command-bar .sandbox-context{padding:9px 16px;border:0;background:#ffffff04}
+#unified-workspace[data-flow] .workspace-next{margin-top:14px}
+#unified-workspace[data-flow] .robot-setup{margin:18px calc(-1 * var(--flow-pad)) 0;padding:20px var(--flow-pad) 22px;border-top:1px solid var(--studio-line);border-bottom:0;background:radial-gradient(ellipse at 8% 0%,#00f5ff0e,transparent 50%),linear-gradient(180deg,#0a0e18,#090a12)}
+#unified-workspace[data-flow] .workspace-journey{margin:0 calc(-1 * var(--flow-pad));padding:16px var(--flow-pad);border-top:1px solid var(--studio-line);background:linear-gradient(180deg,#0c101b,#0a0b14)}
+#unified-workspace[data-flow] .workspace-journey::before{content:"Your tools";display:block;grid-column:1/-1;flex:1 0 100%;width:100%;margin:0 0 2px;font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#9cb4c8}
+.workspace-command-bar .workspace-header>div:first-child::before{content:"Map";font:600 13px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#9cb4c8;margin-right:2px}
+#unified-workspace[data-flow] :is(.workspace-view-switch,.workspace-view-message,.workspace-library){margin-left:0;margin-right:0}
+#unified-workspace[data-flow] .workspace-library{margin-bottom:16px}
+.studio-main #workspace>#world-layer-tools{margin:0;border:0;border-top:1px solid var(--studio-line);border-radius:0}
+
+/* Desktop: a shorter robot setup, so the map is reached in one short scroll. */
+@media(min-width:1101px){
+  #unified-workspace[data-flow] .robot-setup-head{margin-bottom:12px}
+  #unified-workspace[data-flow] .robot-setup-head h2{font-size:clamp(22px,1.9vw,28px)}
+  #unified-workspace[data-flow] .setup-grid{gap:16px 24px}
+  #unified-workspace[data-flow] .setup-label{margin-bottom:10px}
+  #unified-workspace[data-flow] .robot-card{min-height:0;padding:10px 12px 12px}
+  #unified-workspace[data-flow] .robot-art{max-width:104px}
+}
+@media(max-width:760px){
+  body.playground{--flow-pad:14px}
+  #unified-workspace[data-flow]{padding-top:18px}
+}
+
+/* Missions: a game layer on the robot loop. Gold is reserved for stars. */
+body.playground{--gold:#ffd166}
+body.playground .studio-missions-button{display:inline-flex;align-items:center;gap:10px;min-height:50px;padding:0 14px 0 8px;margin-left:0;border-radius:13px;border:1px solid #5a4a1f;background:linear-gradient(180deg,#1a1608,#100e07);color:var(--text);font:600 15px var(--font);flex:none}
+body.playground .studio-missions-button:hover,body.playground .studio-missions-button[aria-expanded=true]{border-color:var(--gold);background:#231c08}
+.mission-hud-ring{--p:var(--mission-progress,0);display:grid;place-items:center;width:36px;height:36px;border-radius:50%;color:var(--gold);font-size:17px;background:radial-gradient(circle,#120f06 56%,transparent 58%),conic-gradient(var(--gold) calc(var(--p) * 360deg),#ffd16626 0)}
+.studio-missions-button .mission-hud-ring{--p:var(--mission-progress,0)}
+.mission-hud-words{display:grid;line-height:1.15;text-align:left}
+.mission-hud-words small{font:600 13px var(--font);color:#e9d6a0}
+.mission-hud-words strong{font:700 16px var(--mono);color:var(--gold);letter-spacing:.02em}
+
+.mission-board .mission-trophy{color:var(--gold);border-color:#ffd16659;background:linear-gradient(145deg,#ffd1661f,#a855f71a);font-size:26px}
+.mission-progress{height:12px;margin:0 0 18px;border-radius:999px;background:#ffffff0d;border:1px solid #ffffff14;overflow:hidden}
+.mission-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--cyan),var(--gold));box-shadow:0 0 18px #ffd16655;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.mission-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.mission-card{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--studio-line);border-radius:15px;background:var(--studio-card)}
+.mission-card[data-done=true]{border-color:#ffd16659;background:linear-gradient(180deg,#1a1709,#11101a)}
+.mission-card-head{display:flex;align-items:center;gap:10px}
+.mission-card-head strong{font-size:18px;line-height:1.25;flex:1}
+.mission-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#ffffff0a;border:1px solid #ffffff14;font-size:19px;flex:none}
+.mission-stars{color:var(--gold);font-size:20px;letter-spacing:2px;white-space:nowrap}
+.mission-goal{margin:0;font-size:16px;color:var(--text)}
+.mission-how{margin:0;font-size:var(--reading-small,15px);color:var(--muted);flex:1}
+body.playground .mission-go{align-self:flex-start;min-height:44px;padding:0 16px;border-radius:11px;border:1px solid #00f5ff80;background:#00f5ff14;color:#c8fdff;font:600 15px var(--font)}
+body.playground .mission-go:hover{background:#00f5ff26}
+.mission-card[data-done=true] .mission-go{border-color:#ffd16680;background:#ffd16614;color:#ffe6a6}
+.mission-foot{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:16px}
+.mission-foot p{margin:0;flex:1 1 260px;color:#a4a9bd;font-size:14px}
+body.playground :is(.mission-sound,.mission-reset){min-height:44px;padding:0 14px;border-radius:11px;border:1px solid var(--studio-line);background:#0a0a12;color:var(--text);font:500 15px var(--font)}
+
+.mission-toast{position:fixed;left:50%;bottom:24px;z-index:95;min-width:min(420px,calc(100vw - 32px));max-width:calc(100vw - 32px);padding:14px 20px;border:1px solid #ffd16680;border-radius:16px;background:linear-gradient(180deg,#1d1808f2,#110f08f2);box-shadow:0 24px 70px #000b,0 0 0 1px #ffd16626,0 0 40px #ffd16622;pointer-events:none;text-align:center;transform:translate(-50%,20px);opacity:0}
+.mission-toast.show{animation:mission-pop .5s cubic-bezier(.2,1.4,.4,1) forwards}
+.mission-toast p{margin:0}
+.mission-toast-title{font:700 18px var(--font);color:#fff3cf}
+.mission-toast-title+.mission-toast-title{margin-top:4px}
+.mission-toast-sub,.mission-toast-level{margin-top:4px!important;font-size:15px;color:#e9d6a0}
+.mission-toast-level{font-weight:700;color:var(--gold)}
+.mission-toast-next{margin-top:8px!important;padding-top:8px;border-top:1px solid #ffd16633;font-size:15px;color:#fff3cf}
+.mission-card[data-next=true]{border-color:#00f5ff80;box-shadow:0 0 0 1px #00f5ff40,0 0 26px #00f5ff1f}
+.mission-card[data-next=true] .mission-card-head strong::after{content:" · Up next";font:600 13px var(--font);color:var(--cyan)}
+@keyframes mission-pop{0%{opacity:0;transform:translate(-50%,24px) scale(.92)}100%{opacity:1;transform:translate(-50%,0) scale(1)}}
+.mission-confetti{position:fixed;inset:0;width:100vw;height:100vh;z-index:94;pointer-events:none}
+
+.mission-run-card{position:absolute;top:14px;left:14px;z-index:6;min-width:190px;padding:12px 16px;border:1px solid #00f5ff59;border-radius:14px;background:rgba(6,10,18,.86);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:none;opacity:0;transform:translateY(-8px);transition:opacity .25s,transform .25s}
+.mission-run-card.show{opacity:1;transform:none}
+.mission-run-card[data-tone=win]{border-color:#ffd166;box-shadow:0 0 30px #ffd16633}
+.mission-run-card p{margin:0}
+.mission-run-head{font:700 14px var(--font);color:#bffcff;letter-spacing:.02em}
+.mission-run-card[data-tone=win] .mission-run-head{color:var(--gold)}
+.mission-run-metres{font:700 34px/1.1 var(--mono);color:#fff;letter-spacing:-.02em;margin:2px 0!important}
+.mission-run-best{font-size:14px;color:#c9cfdf}
+.mission-run-note{margin-top:4px!important;font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#9cb4c8}
+
+/* Game feel on the robot loop: a ready Let it try button breathes; cards lift. */
+@media(prefers-reduced-motion:no-preference){
+  #robot-setup-run:not(:disabled){animation:mission-ready 2.4s ease-in-out infinite}
+  #unified-workspace[data-flow] :is(.robot-card,.world-card){transition:transform .15s ease,border-color .15s,background .15s}
+  #unified-workspace[data-flow] :is(.robot-card,.world-card):hover{transform:translateY(-3px)}
+  #unified-workspace[data-flow] :is(.robot-card,.world-card)[aria-pressed=true]{animation:mission-chosen .35s cubic-bezier(.2,1.4,.4,1)}
+}
+@keyframes mission-ready{0%,100%{box-shadow:0 0 0 0 #00f5ff00}50%{box-shadow:0 0 0 6px #00f5ff26,0 0 34px #00f5ff40}}
+@keyframes mission-chosen{0%{transform:scale(.96)}100%{transform:scale(1)}}
+html[data-contrast=more] body.playground .studio-missions-button{background:#000;border-color:var(--gold)}
+html[data-contrast=more] .mission-card,html[data-contrast=more] .mission-run-card,html[data-contrast=more] .mission-toast{background:#000;border-color:#e3e6ee;backdrop-filter:none}
+@media(max-width:760px){
+  body.playground .studio-missions-button{min-height:48px;padding:0 10px 0 6px}
+  .mission-hud-words small{display:none}
+  .mission-hud-ring{width:32px;height:32px}
+  .mission-run-card{top:8px;left:8px;min-width:0;padding:8px 12px}
+  .mission-run-metres{font-size:24px}
+  .mission-toast{bottom:14px}
+}
+
+/* Large text and more contrast. */
+html[data-reading-size=large] body.playground{--studio-bar-height:78px}
+html[data-reading-size=large] :is(.studio-chapter,.studio-search-button){font-size:18px}
+html[data-reading-size=large] .studio-home-words strong{font-size:17px}
+html[data-reading-size=large] .studio-tool-head strong{font-size:20px}
+html[data-reading-size=large] .studio-search input{font-size:20px}
+html[data-reading-size=large] .studio-tools{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+html[data-contrast=more] .studio-bar,html[data-contrast=more] .studio-panel{background:#000;border-color:#c3c8d6;backdrop-filter:none}
+html[data-contrast=more] .studio-tool{background:#000;border-color:#c3c8d6}
+html[data-contrast=more] .studio-chapter.active{background:#00262c;border:2px solid var(--cyan)}
+html[data-contrast=more] .studio-where{color:#e3e6ee}
+html[data-contrast=more] .studio-workbench{border-color:#c3c8d6}
+html[data-contrast=more] .workspace-command-bar{background:#000;border-color:#c3c8d6}
+html[data-contrast=more] #unified-workspace[data-flow] :is(.robot-setup,.workspace-journey){background:#000}
+html[data-contrast=more] #unified-workspace[data-flow] .workspace-journey::before{color:#e3e6ee}
+
+/* Tablet: the bar keeps one row; the chapter strip scrolls. */
+@media(max-width:1600px){.studio-chapter-count{display:none}}
+@media(min-width:761px) and (max-width:1600px){.studio-home{max-width:210px}body.playground .studio-chapter{padding:0 10px}.mission-hud-words small [data-mission-level],.mission-hud-words small .mission-level-sep{display:none}}
+@media(max-width:1320px){.studio-home{max-width:200px}}
+@media(max-width:900px){body.playground .hero{align-items:flex-start;flex-direction:column;gap:8px}}
+
+/* On small screens the tool finder expands its topic list in place. */
+@media(max-width:760px){
+  body.playground{--studio-bar-height:58px}
+  .studio-sticky{top:0;margin:0 0 8px}
+  .studio-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 4px;padding:4px 6px;border-radius:10px}
+  .studio-chapters{display:none;grid-column:1/-1;grid-row:2;min-width:0;border:0;margin:0;padding:4px 0 0;mask-image:none;-webkit-mask-image:none}
+  .studio-sticky[data-panel] .studio-chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
+  .studio-home{min-width:0;max-width:none;min-height:46px;padding:3px;gap:6px}
+  .studio-home-icon{width:30px;height:30px;border-radius:7px}
+  .studio-home-words small{display:none}
+  .studio-home-words strong{max-width:100%;font-size:var(--reading-small,15px)}
+  body.playground .studio-chapter{justify-content:center;white-space:normal;line-height:1.2;min-height:44px;padding:3px;font-size:var(--reading-small,15px)}
+  .studio-chapter-icon{display:none}
+  body.playground .studio-search-button{min-height:46px;padding:0 10px;margin:0;font-size:var(--reading-small,15px)}
+  .studio-panel{top:calc(100% + 4px);max-height:calc(100dvh - 100% - 12px);padding:12px;border-radius:10px}
+  .studio-panel-head{flex-wrap:wrap;gap:12px}
+  .studio-panel-head h2{font-size:22px}
+  .studio-panel-count{margin-left:0}
+  .studio-tools{grid-template-columns:1fr}
+  body.playground .studio-tool{min-height:0}
+  .workbench-head{flex-direction:column;align-items:stretch;padding:16px}
+  .workbench-actions :is(a,button){flex:1;justify-content:center;text-align:center}
+  .workbench-frame{height:max(520px,calc(100dvh - var(--studio-bar-height) - 120px))}
+  body.playground .hero{padding:14px 0}
+}
+@media(max-width:760px){.practice-examples{grid-template-columns:1fr}.playground-shortcuts{gap:4px 12px}}
+@media(prefers-reduced-motion:reduce){.studio-panel,.workbench-loading{animation:none}body.playground .studio-tool:hover{transform:none}}

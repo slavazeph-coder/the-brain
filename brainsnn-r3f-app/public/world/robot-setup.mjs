@@ -24,19 +24,16 @@ const trim = n => Number(n.toFixed(2)).toString();
 export const bodySize = r => r.width >= 1 || r.depth >= 1 ? `${trim(r.width)} × ${trim(r.depth)} m` : `${Math.round(r.width * 100)} × ${Math.round(r.depth * 100)} cm`;
 
 /**
- * Arena-style setup above the world: 01 choose a robot, 02 build its world, 03 let it try.
+ * The robot and room pickers sit beside the route action and share the simulation state.
  * It owns no state. `getState()` reads the playground and `actions` call the playground's existing paths.
  */
 export function mountRobotSetup({host, robots, getState, actions}) {
   if (!host) return {refresh() {}, dispose() {}};
   const ids = Object.keys(robots);
-  host.innerHTML = `<div class="robot-setup-head">
-      <p class="eyebrow"><span class="dot"></span> ROBOT PLAYGROUND</p>
-      <h2 id="robot-setup-title">Pick a robot. Build its world. <em>Let it try.</em></h2>
-    </div>
+  host.innerHTML = `<h2 id="robot-setup-title" class="visually-hidden">Set up a robot route</h2>
     <div class="setup-grid">
-      <div class="setup-step setup-robots">
-        <h3 class="setup-label" id="setup-robots-label"><span class="setup-num" aria-hidden="true">01</span>Choose your robot</h3>
+      <details name="playground-route-picker" class="setup-step setup-robots">
+        <summary id="setup-robots-label"><span>Robot</span><strong data-picked-robot></strong></summary>
         <div class="robot-cards" role="group" aria-labelledby="setup-robots-label">${ids.map(id => {
           const r = robots[id], [title, plain] = ROBOT_WORDS[id] || [r.name, ''];
           return `<button type="button" class="robot-card" data-robot="${esc(id)}" aria-pressed="false">
@@ -45,17 +42,16 @@ export function mountRobotSetup({host, robots, getState, actions}) {
             <span class="robot-facts"><span>${esc(bodySize(r))}</span><span>${esc(pace(r.speed))} · ${esc(trim(r.speed))} m/s</span></span>
             <span class="robot-chosen" aria-hidden="true">✓ Chosen</span></button>`;
         }).join('')}</div>
-        <p class="setup-note">Each robot is a simple body with its own size and speed. Wheels, legs and arms are not simulated.</p>
-      </div>
-      <div class="setup-step setup-worlds">
-        <h3 class="setup-label" id="setup-worlds-label"><span class="setup-num" aria-hidden="true">02</span>Build its world</h3>
+        <p class="setup-note">Each robot has its own size and speed. The simulation uses its body shape to check where it fits.</p>
+      </details>
+      <details name="playground-route-picker" class="setup-step setup-worlds">
+        <summary id="setup-worlds-label"><span>World</span><strong data-picked-world></strong></summary>
         <div class="world-cards" role="group" aria-labelledby="setup-worlds-label">${WORLD_CHOICES.map(w => `<button type="button" class="world-card" data-world="${w.kind}" aria-pressed="false">
             <span class="world-art-wrap">${WORLD_ICONS[w.kind]}</span><span class="world-words"><strong>${esc(w.title)}</strong><span>${esc(w.plain)}</span></span>
             <span class="world-chosen" aria-hidden="true">✓ Here now</span></button>`).join('')}</div>
         <p class="setup-note" id="robot-setup-world">Now: the example room.</p>
-      </div>
+      </details>
       <div class="setup-step setup-try">
-        <h3 class="setup-label"><span class="setup-num" aria-hidden="true">03</span>Let it try</h3>
         <button type="button" class="primary setup-run" id="robot-setup-run"><span class="run-icon"></span><span class="run-label">Let it try</span></button>
         <p class="setup-run-note" id="robot-setup-note" aria-live="polite"></p>
         <button type="button" class="setup-fix" id="robot-setup-fix" hidden></button>
@@ -65,13 +61,20 @@ export function mountRobotSetup({host, robots, getState, actions}) {
   const note = host.querySelector('#robot-setup-note');
   const worldNote = host.querySelector('#robot-setup-world');
   const fix = host.querySelector('#robot-setup-fix');
+  const pickedRobot = host.querySelector('[data-picked-robot]');
+  const pickedWorld = host.querySelector('[data-picked-world]');
   let fixAction = null;
   const abort = new AbortController();
   host.addEventListener('click', event => {
-    const robot = event.target.closest('[data-robot]');
-    if (robot) { actions.chooseRobot(robot.dataset.robot); return; }
-    const world = event.target.closest('[data-world]');
-    if (world) { void actions.chooseWorld(world.dataset.world); return; }
+    const choice = event.target.closest('[data-robot], [data-world]');
+    if (choice) {
+      const picker = choice.closest('details');
+      picker.open = false;
+      picker.querySelector('summary').focus({preventScroll:true});
+      if (choice.dataset.robot) actions.chooseRobot(choice.dataset.robot);
+      else void actions.chooseWorld(choice.dataset.world);
+      return;
+    }
     if (event.target.closest('#robot-setup-run')) void actions.run();
     if (event.target.closest('#robot-setup-fix') && fixAction) fixAction();
   }, {signal: abort.signal});
@@ -84,10 +87,12 @@ export function mountRobotSetup({host, robots, getState, actions}) {
     for (const card of host.querySelectorAll('[data-robot]')) card.setAttribute('aria-pressed', String(card.dataset.robot === s.robotId));
     for (const card of host.querySelectorAll('[data-world]')) card.setAttribute('aria-pressed', String(card.dataset.world === s.origin));
     host.dataset.origin = s.origin || '';
+    put(pickedRobot, s.robotId==='custom'?s.robotName:ROBOT_WORDS[s.robotId]?.[0] || robots[s.robotId]?.name || 'Choose a robot');
+    put(pickedWorld, WORLD_CHOICES.find(world => world.kind === s.origin)?.title || s.worldName || 'Choose a world');
     put(worldNote, s.origin === 'street' ? 'Now: the street block.' : s.origin === 'capture' ? 'Now: adding your photo or video.' : `Now: ${s.worldName || 'no map yet'}.`);
     const stopping = !!s.planning && s.origin !== 'street';
     if (icon !== (stopping ? 'stop' : 'play')) { icon = stopping ? 'stop' : 'play'; run.querySelector('.run-icon').innerHTML = ICONS[icon]; }
-    put(run.querySelector('.run-label'), stopping ? 'Stop' : s.origin === 'street' ? 'Open street routes' : 'Let it try');
+    put(run.querySelector('.run-label'), stopping ? 'Stop' : s.origin === 'street' ? 'Open street routes' : 'Run a route');
     run.disabled = s.origin !== 'street' && !!s.runDisabled;
     // When size is supplied, the advised start fits that smaller envelope only.
     const needsSmallerEnvelope = s.issue?.advice?.size !== undefined;
@@ -100,7 +105,7 @@ export function mountRobotSetup({host, robots, getState, actions}) {
       : s.issue ? `It could not finish: ${s.issue.message}`
       : s.gate ? `Before it can try: ${s.gate}`
       : stopping ? 'Planning the route…'
-      : 'It finds a path around things. This is a simulation, not a real robot.');
+      : 'Watch a simulation of your robot finding a path.');
     // Moving the current robot is only useful when the planner found room for its current envelope.
     const inMap = s.origin !== 'street' && s.origin !== 'capture';
     const canChangeEnvelope = inMap && needsSmallerEnvelope && typeof actions.showRobotSettings === 'function';

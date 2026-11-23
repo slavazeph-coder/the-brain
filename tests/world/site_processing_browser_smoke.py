@@ -97,7 +97,7 @@ def check(pw, name, site, passcode, video, edit_first=False, small_video=None):
         proposed = page.locator('#status').inner_text()
         assert 'at the estimated scale, 1 unit ≈ 2.919 m (not measured)' in proposed, proposed
         page.locator('[data-tab=capture]').click()
-        assert page.locator('#provenance').inner_text() == 'VISUAL / SCALE UNVERIFIED'
+        assert page.locator('#provenance').text_content() == 'VISUAL / SCALE UNVERIFIED'
         chip = page.locator('.scale-chip').inner_text()
         assert 'Scale estimated' in chip and '2.919 m' in chip, chip
         stored = page.evaluate("JSON.stringify([Object.entries(localStorage), Object.entries(sessionStorage)])")

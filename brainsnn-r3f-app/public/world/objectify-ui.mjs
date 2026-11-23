@@ -1,8 +1,10 @@
 import {
-  createObjectifyContext, createObjectDocument, addObject, updateObject, duplicateObject, removeObject,
+  createObjectifyContext, getObjectifyBase, createObjectDocument, addObject, updateObject, duplicateObject, removeObject,
   composeObjectDocument, resetObjectDocument, serializeObjectDocument, parseObjectDocument,
   seededObjectVariants, exportObjectVariant,
 } from './objectify-core.mjs';
+import { suggestObjectRegion } from './objectify-region.mjs';
+import { STRIDE } from './visual-geometry.mjs';
 
 const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -11,22 +13,22 @@ const dimensions = box => box ? box.size.map(number).join(' × ') + ' local unit
 const extent = box => box ? `min [${box.min.map(number).join(', ')}] · max [${box.max.map(number).join(', ')}]` : '';
 
 /** Authored appearance edits only. The original asset, metric evidence and collision maps are never rewritten. */
-export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onInteraction, onStatus } = {}) {
+export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onInteraction, onStatus, onPortable, onRepair, onSelectionStart } = {}) {
   if (!root) throw Error('An object workshop container is required.');
   root.classList.add('objectify');
   root.innerHTML = `
-    <div class="objectify-heading"><div><p class="eyebrow">OBJECT WORKSHOP / LOCAL APPEARANCE</p><h3>Turn selected points into things you can move.</h3></div><span class="objectify-chip">Operator reviewed</span></div>
-    <p class="objectify-intro">Select an object’s visible samples, check its boundaries, then explore another layout. This edits the actual displayed points or Gaussians. Your source file stays unchanged.</p>
+    <div class="objectify-heading"><h3>Object workshop</h3></div>
+    <p class="objectify-intro">Choose something in the room. Then you can move it, turn it or make a copy.</p>
     <p class="objectify-source" data-objectify-source></p>
     <div class="objectify-workspace">
       <section class="objectify-selection" aria-labelledby="objectify-select-title">
-        <p class="objectify-step">01 / SELECT AND REVIEW</p><h4 id="objectify-select-title">Separate a visual object</h4>
-        <div class="objectify-toolbar"><button type="button" data-objectify-select aria-pressed="false">Select in the view</button><label>Selection action<select data-objectify-mode><option value="replace">Replace selection</option><option value="add">Add samples</option><option value="subtract">Subtract samples</option></select></label><button type="button" data-objectify-clear-selection>Clear selection</button></div>
-        <p class="objectify-help">Drag a rectangle across the view. It selects through all depths. Orbit and refine from another angle to exclude floor, walls and neighbouring objects. This is manual selection, not automatic segmentation.</p>
+        <h4 id="objectify-select-title">Pick an object</h4>
+        <div class="objectify-toolbar"><button type="button" class="primary" data-objectify-suggest aria-pressed="false">Tap an object</button><button type="button" data-objectify-select aria-pressed="false">Draw a box</button><label>Selection action<select data-objectify-mode><option value="replace">Start a new selection</option><option value="add">Add points</option><option value="subtract">Remove points</option></select></label><button type="button" data-objectify-clear-selection>Clear selection</button></div>
+        <p class="objectify-help">Tap a visible part and see what turns yellow. Turn the view to check the edges. A box adds or removes points through all depths.</p>
         <div class="objectify-fields objectify-height"><label>Lowest Y · local units<input type="number" step="any" data-objectify-min-y></label><label>Highest Y · local units<input type="number" step="any" data-objectify-max-y></label></div>
         <p class="objectify-selection-count" data-objectify-selection>No samples selected.</p>
         <label>Object name<input type="text" maxlength="120" placeholder="Chair 01" data-objectify-name></label>
-        <label class="objectify-check"><input type="checkbox" data-objectify-reviewed><span>I reviewed these visible boundaries as a movable-object selection. Completeness and physical accuracy remain unverified.</span></label>
+        <label class="objectify-check"><input type="checkbox" data-objectify-reviewed><span>I checked which parts are highlighted.</span></label>
         <button type="button" class="primary" data-objectify-create>Keep object selection</button>
       </section>
       <section class="objectify-editor" aria-labelledby="objectify-edit-title">
@@ -41,6 +43,10 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
           <div class="objectify-fields objectify-pose"><label>Move X<input type="number" step="any" value="0" data-objectify-tx></label><label>Move Y<input type="number" step="any" value="0" data-objectify-ty></label><label>Move Z<input type="number" step="any" value="0" data-objectify-tz></label><label>Turn · degrees<input type="number" step="any" value="0" data-objectify-yaw></label></div>
           <label class="objectify-check"><input type="checkbox" data-objectify-hidden><span>Hide this instance</span></label>
           <div class="objectify-toolbar"><button type="button" class="primary" data-objectify-apply>Apply pose</button><button type="button" data-objectify-duplicate>Make a copy</button><button type="button" data-objectify-revert>Reset this pose</button><button type="button" data-objectify-remove>Remove object group</button></div>
+          <div class="objectify-toolbar" ${onPortable || onRepair ? '' : 'hidden'}>
+            ${typeof onPortable === 'function' ? '<button type="button" data-objectify-keep-portable>Keep for another room</button><button type="button" data-objectify-portable>Download this object</button>' : ''}
+            ${typeof onRepair === 'function' ? '<button type="button" data-objectify-repair>Use selection in scan repair</button>' : ''}
+          </div>
           <p class="objectify-help">Moves use local asset units. Review the selection before transforming it. Copied objects are authored additions. Exposed background remains unknown; no missing surfaces are generated.</p>
         </div>
       </section>
@@ -59,35 +65,54 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
 
   const $ = name => root.querySelector(`[data-objectify-${name}]`);
   let ctx = null, document = null, composition = null, source = null, basePoints = null;
-  let selection = new Set(), selectedId = null, selecting = false, busy = false, destroyed = false, suppressHighlight = false;
+  let selection = new Set(), selectedId = null, selectionTool = null, busy = false, destroyed = false, suppressHighlight = false;
   let sourceEpoch = 0, operation = 0, prepared = null, variants = [], baseline = null, variantIndex = -1;
   let canvas = null, detach = null, drag = null, box = null, badge = null;
 
   const status = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('is-error', error); if (error) onStatus?.(message); };
   const row = () => composition?.objects.find(item => item.id === selectedId) || null;
   const group = () => { const selected = row(); return selected ? document.objects.find(item => item.id === selected.objectId) : null; };
+  function getReviewedSelection() {
+    const selected = group();
+    if (!selected?.reviewed) return null;
+    return { name: selected.name, sourceSha256: ctx.source.sha256,
+      sourceIndices: selected.indices.map(index => source.sourceIndices[index]) };
+  }
+  const canRepair = () => source?.kind === 'gaussian-splat' && /\.ply$/i.test(ctx?.source.name || '');
   const activeHighlight = () => !suppressHighlight && (selection.size > 0 || !!selectedId);
-  function interaction() { onInteraction?.({ active: selecting || activeHighlight() }); }
+  function interaction() { onInteraction?.({ active: !!selectionTool || activeHighlight() }); }
   function invalidate() { operation++; prepared = null; $('prepared').textContent = 'Edits changed. Prepare a new derived asset before recording.'; }
   function download(blob, name) {
     const url = URL.createObjectURL(blob), link = window.document.createElement('a');
     link.href = url; link.download = name; link.hidden = true;
     window.document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function setSelecting(value) {
-    selecting = !!value && !!ctx && !busy && !!composition?.points.length;
-    $('select').setAttribute('aria-pressed', String(selecting));
-    $('select').textContent = selecting ? 'Finish selecting' : 'Select in the view';
-    canvas?.classList.toggle('objectify-selecting', selecting);
-    if (badge) badge.hidden = !selecting;
-    if (!selecting) endDrag();
-    interaction();
+  function setSelecting(tool) {
+    endDrag();
+    selectionTool = ctx && !busy && composition?.points.length ? tool || null : null;
+    if (selectionTool) onSelectionStart?.();
+    const rectangle = selectionTool === 'rectangle', suggest = selectionTool === 'suggest';
+    $('select').setAttribute('aria-pressed', String(rectangle));
+    $('suggest').setAttribute('aria-pressed', String(suggest));
+    $('select').textContent = rectangle ? 'Finish selecting' : 'Draw a box';
+    $('suggest').textContent = suggest ? 'Cancel tap selection' : 'Tap an object';
+    canvas?.classList.toggle('objectify-selecting', !!selectionTool);
+    if (badge) {
+      badge.hidden = !selectionTool;
+      badge.textContent = suggest ? 'Tap a visible part or press Enter to use the center.' : 'Selection mode · drag a rectangle · Escape to finish';
+    }
+    if (ctx) interaction();
+  }
+  function cancelSelectionTool() {
+    if (!selectionTool) return;
+    setSelecting(null);
+    status('Selection mode finished. Orbit to inspect the boundaries.');
   }
   function selectionBounds() {
     if (!selection.size || !basePoints) return null;
     const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
     for (const index of selection) for (let axis = 0; axis < 3; axis++) {
-      const value = basePoints[index * 14 + axis]; min[axis] = Math.min(min[axis], value); max[axis] = Math.max(max[axis], value);
+      const value = basePoints[index * STRIDE + axis]; min[axis] = Math.min(min[axis], value); max[axis] = Math.max(max[axis], value);
     }
     return { min, max, size: max.map((value, axis) => value - min[axis]) };
   }
@@ -103,6 +128,7 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
     const ready = !!ctx && !busy, selected = row(), reviewed = !!selected?.reviewed;
     for (const control of root.querySelectorAll('button,input,select')) control.disabled = !ready;
     $('select').disabled = !ready || !composition?.points.length;
+    $('suggest').disabled = !ready || !composition?.stats.backgroundPoints;
     $('clear-selection').disabled = !ready || !selection.size;
     $('create').disabled = !ready || !selection.size || !$('name').value.trim();
     for (const name of ['save-ply', 'save-receipt', 'stage']) $(name).disabled = !ready || !prepared;
@@ -111,6 +137,8 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
     $('variant').disabled = !ready || !variants.length;
     for (const name of ['edit-name', 'edit-reviewed', 'save-review', 'remove']) $(name).disabled = !ready || !selected;
     for (const name of ['tx', 'ty', 'tz', 'yaw', 'hidden', 'apply', 'duplicate', 'revert']) $(name).disabled = !ready || !selected || !reviewed;
+    if ($('portable')) $('portable').disabled = $('keep-portable').disabled = !ready || !reviewed || selected.hidden;
+    if ($('repair')) $('repair').disabled = !ready || !reviewed || !canRepair();
     $('prepare').disabled = !ready || !composition?.points.length;
     const box = selectionBounds();
     $('selection').textContent = selection.size ? `${selection.size.toLocaleString()} retained samples selected · ${dimensions(box)} · ${extent(box)}` : 'No samples selected.';
@@ -148,7 +176,48 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
     if (!$(name).value.trim() || !Number.isFinite(value) || value < min || value > max || integer && !Number.isInteger(value)) throw Error(`Choose a finite value for ${$(name).closest('label')?.firstChild.textContent.trim() || name}${integer ? ', using a whole number' : ''}.`);
     return value;
   }
-  function endDrag() { drag = null; if (box) box.hidden = true; }
+  function selectionHeight() {
+    const minY = fieldNumber('min-y', { min: -1e7, max: 1e7 }), maxY = fieldNumber('max-y', { min: -1e7, max: 1e7 });
+    if (minY > maxY) throw Error('Lowest Y must not exceed highest Y.');
+    return { minY, maxY };
+  }
+  const ownedIndices = () => new Set(document.objects.flatMap(item => item.indices));
+  function applySelection(indices) {
+    invalidate(); selectedId = null; suppressHighlight = false;
+    const mode = $('mode').value;
+    if (mode === 'replace') selection = new Set(indices);
+    else if (mode === 'add') for (const index of indices) selection.add(index);
+    else for (const index of indices) selection.delete(index);
+    $('reviewed').checked = false;
+    renderEditor(); highlight();
+  }
+  function suggestAt(x, y) {
+    const height = selectionHeight();
+    const picked = getViewer().pick(x, y);
+    if (picked < 0 || picked >= composition.previewIndices.length) {
+      status('No retained sample at that spot. Tap a visible part, or drag a rectangle.');
+      return;
+    }
+    if (composition.instanceIds[picked] !== 0) {
+      status('That part belongs to a saved object. Tap an ungrouped part or choose the object from the list.');
+      return;
+    }
+    const seed = composition.previewIndices[picked];
+    const { indices, limited } = suggestObjectRegion(basePoints, seed, { ...height, excluded: ownedIndices() });
+    if (!indices.length) {
+      status('That part is outside the current height range or too faint. Try another point.');
+      return;
+    }
+    applySelection(indices);
+    setSelecting(null);
+    status(`${selection.size.toLocaleString()} points highlighted. ${limited ? 'This suggestion reached its limit. ' : ''}Turn the view to check what was picked before keeping it.`);
+  }
+  function endDrag() {
+    const pointerId = drag?.pointerId;
+    drag = null;
+    if (box) box.hidden = true;
+    if (pointerId !== undefined && canvas?.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+  }
   function detachCanvas() {
     detach?.(); detach = null; endDrag(); box?.remove(); badge?.remove(); box = null; badge = null;
     canvas?.classList.remove('objectify-selecting'); canvas = null;
@@ -157,7 +226,7 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
     detachCanvas(); canvas = getViewer()?.getCanvas(); if (!canvas) return;
     const stage = canvas.parentElement;
     box = window.document.createElement('div'); box.className = 'objectify-dragbox'; box.hidden = true; stage.appendChild(box);
-    badge = window.document.createElement('div'); badge.className = 'objectify-selection-badge'; badge.textContent = 'Selection mode · drag a rectangle · Escape to finish'; badge.hidden = true; stage.appendChild(badge);
+    badge = window.document.createElement('div'); badge.className = 'objectify-selection-badge'; badge.hidden = true; stage.appendChild(badge);
     function drawBox(event) {
       const rect = canvas.getBoundingClientRect(), parent = stage.getBoundingClientRect();
       const x = Math.max(rect.left, Math.min(rect.right, event.clientX)), y = Math.max(rect.top, Math.min(rect.bottom, event.clientY));
@@ -167,40 +236,78 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
     }
     const consume = event => { event.preventDefault(); event.stopImmediatePropagation(); };
     const down = event => {
-      if (!selecting || busy || event.button !== 0) return;
-      consume(event); canvas.focus({ preventScroll: true }); canvas.setPointerCapture(event.pointerId);
-      drag = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }; drawBox(event);
+      if (!selectionTool || busy || event.button !== 0) return;
+      consume(event);
+      if (drag) { drag.moved = true; return; }
+      canvas.focus({ preventScroll: true }); canvas.setPointerCapture(event.pointerId);
+      drag = { x: event.clientX, y: event.clientY, pointerId: event.pointerId, moved: false };
+      if (selectionTool === 'rectangle') drawBox(event);
     };
-    const move = event => { if (drag && event.pointerId === drag.pointerId) { consume(event); drawBox(event); } };
+    const move = event => {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      consume(event);
+      if (selectionTool === 'rectangle') drawBox(event);
+      else if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 8) drag.moved = true;
+    };
     const up = event => {
       if (!drag || event.pointerId !== drag.pointerId) return;
-      consume(event); const rect = drawBox(event), pointerId = drag.pointerId; endDrag();
-      if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+      consume(event);
+      const { moved } = drag;
+      const rectangle = selectionTool === 'rectangle', rect = rectangle ? drawBox(event) : null;
+      endDrag();
       attempt(() => {
-        const minY = fieldNumber('min-y', { min: -1e7, max: 1e7 }), maxY = fieldNumber('max-y', { min: -1e7, max: 1e7 });
-        if (minY > maxY) throw Error('Lowest Y must not exceed highest Y.');
+        if (!rectangle) {
+          if (!moved) suggestAt(event.clientX, event.clientY);
+          else status('Tap without dragging to suggest nearby samples. Finish tap selection to orbit.');
+          return;
+        }
+        const height = selectionHeight();
         if (rect.right - rect.left < 3 || rect.bottom - rect.top < 3) { status('Drag a rectangle at least 3 pixels wide and high.'); return; }
-        const owned = new Set(document.objects.flatMap(item => item.indices));
-        const hits = getViewer().selectRectangle(rect, { minY, maxY });
-        const indices = new Set(hits.map(index => composition.previewIndices[index]).filter(index => !owned.has(index)));
-        invalidate(); selectedId = null; suppressHighlight = false;
-        const mode = $('mode').value;
-        if (mode === 'replace') selection = indices;
-        else if (mode === 'add') indices.forEach(index => selection.add(index));
-        else indices.forEach(index => selection.delete(index));
-        $('reviewed').checked = false;
-        renderEditor(); highlight();
+        const owned = ownedIndices();
+        const hits = getViewer().selectRectangle(rect, height);
+        applySelection(hits.map(index => composition.previewIndices[index]).filter(index => index !== undefined && !owned.has(index)));
         status(`${selection.size.toLocaleString()} samples selected. Existing object groups are excluded. Review from another angle before keeping this selection.`);
       });
     };
     const cancelled = event => { if (drag && event.pointerId === drag.pointerId) { consume(event); endDrag(); } };
-    const key = event => { if (selecting && event.key === 'Escape') { consume(event); setSelecting(false); status('Selection mode finished. Orbit to inspect the boundaries.'); } };
+    const escape = event => {
+      if (selectionTool && event.key === 'Escape') {
+        consume(event);
+        const button = selectionTool === 'suggest' ? $('suggest') : $('select');
+        cancelSelectionTool();
+        if (event.target === canvas) button.focus();
+      }
+    };
+    const key = event => {
+      if (selectionTool === 'suggest' && (event.key === 'Enter' || event.key === ' ')) {
+        consume(event);
+        const rect = canvas.getBoundingClientRect();
+        attempt(() => suggestAt(rect.left + rect.width / 2, rect.top + rect.height / 2));
+      }
+    };
     const events = [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', cancelled], ['lostpointercapture', cancelled], ['keydown', key]];
     events.forEach(([name, handler]) => canvas.addEventListener(name, handler, true));
-    detach = () => events.forEach(([name, handler]) => canvas?.removeEventListener(name, handler, true));
+    window.document.addEventListener('keydown', escape);
+    detach = () => {
+      events.forEach(([name, handler]) => canvas?.removeEventListener(name, handler, true));
+      window.document.removeEventListener('keydown', escape);
+    };
   }
 
-  $('select').onclick = () => { invalidate(); suppressHighlight = false; setSelecting(!selecting); controls(); if (selecting) canvas?.scrollIntoView({ block: 'center', behavior: 'instant' }); };
+  $('select').onclick = () => {
+    invalidate(); suppressHighlight = false;
+    setSelecting(selectionTool === 'rectangle' ? null : 'rectangle');
+    controls(); if (selectionTool) canvas?.scrollIntoView({ block: 'center', behavior: 'instant' });
+  };
+  $('suggest').onclick = () => {
+    invalidate(); suppressHighlight = false;
+    setSelecting(selectionTool === 'suggest' ? null : 'suggest');
+    if (selectionTool) {
+      canvas?.scrollIntoView({ block: 'center', behavior: 'instant' });
+      canvas?.focus({ preventScroll: true });
+      status('Tap a visible part to suggest nearby samples. With the canvas focused, press Enter to use the center or Escape to finish.');
+    }
+  };
   $('clear-selection').onclick = () => { invalidate(); selection.clear(); selectedId = null; suppressHighlight = false; renderEditor(); highlight(); status('Selection cleared.'); };
   $('name').oninput = () => { invalidate(); controls(); interaction(); };
   $('create').onclick = () => attempt(() => {
@@ -226,6 +333,36 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
   $('remove').onclick = () => attempt(() => {
     const selected = row(); commit(removeObject(ctx, document, selected.primary ? selected.objectId : selected.id), selected.primary ? 'Object group removed; its original samples return to the background.' : 'Authored copy removed.');
   });
+  if ($('repair')) $('repair').onclick = async () => {
+    const value = getReviewedSelection();
+    if (busy || !value || !canRepair()) return;
+    const generation = sourceEpoch, token = operation;
+    const isCurrent = () => !destroyed && generation === sourceEpoch && token === operation;
+    try { await onRepair(value, isCurrent); }
+    catch (error) { if (isCurrent()) status(error.message, true); }
+  };
+  async function transferObject(download) {
+    const selected = row();
+    if (busy || !selected?.reviewed || selected.hidden) return;
+    const generation = sourceEpoch, token = operation;
+    busy = true;
+    if (selectionTool) setSelecting(null);
+    controls();
+    try {
+      await onPortable({ context: ctx, document, instanceId: selectedId, download });
+      if (generation === sourceEpoch && token === operation) {
+        status(download ? 'Object downloaded for use in another room.' : 'Object kept for another room. Open a second scan to place it.');
+      }
+    } catch (error) {
+      if (generation === sourceEpoch && token === operation) status(error.message || 'Could not save this object.', true);
+    } finally {
+      if (generation === sourceEpoch && token === operation) { busy = false; controls(); }
+    }
+  }
+  if ($('portable')) {
+    $('portable').onclick = () => void transferObject(true);
+    $('keep-portable').onclick = () => void transferObject(false);
+  }
   $('reset').onclick = () => attempt(() => {
     selectedId = null; selection.clear(); setSelecting(false); commit(resetObjectDocument(ctx), 'Original preview restored exactly. The source file was never changed.');
   });
@@ -274,8 +411,9 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
   for (const control of root.querySelectorAll('[data-objectify-edit-name],[data-objectify-edit-reviewed],[data-objectify-tx],[data-objectify-ty],[data-objectify-tz],[data-objectify-yaw],[data-objectify-hidden],[data-objectify-seed],[data-objectify-count],[data-objectify-range-x],[data-objectify-range-y],[data-objectify-range-z],[data-objectify-range-yaw]')) control.addEventListener('input', () => { invalidate(); suppressHighlight = false; highlight(); controls(); });
 
   function clearState() {
-    sourceEpoch++; operation++; busy = false; selecting = false; prepared = null; ctx = null; document = null; composition = null; source = null; basePoints = null;
+    sourceEpoch++; operation++; busy = false; prepared = null; ctx = null; document = null; composition = null; source = null; basePoints = null;
     selection = new Set(); selectedId = null; suppressHighlight = false; variants = []; baseline = null; variantIndex = -1;
+    setSelecting(null);
     getViewer()?.setSelection([]); detachCanvas(); root.hidden = true; controls();
   }
   clearState();
@@ -286,8 +424,10 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
       try {
         const context = await createObjectifyContext(value);
         if (generation !== sourceEpoch || destroyed) return;
-        ctx = context; source = { ...value }; basePoints = value.points.slice(); document = createObjectDocument(ctx); composition = composeObjectDocument(ctx, document);
-        const count = basePoints.length / 14, total = value.total ?? count;
+        const retained = getObjectifyBase(context);
+        ctx = context; source = { ...value, sourceIndices: retained.sourceIndices }; basePoints = retained.points;
+        document = createObjectDocument(ctx); composition = composeObjectDocument(ctx, document);
+        const count = basePoints.length / STRIDE, total = value.total ?? count;
         $('source').textContent = `${value.source.name} · ${value.kind === 'gaussian-splat' ? 'Gaussian DC preview' : 'Point cloud, not a trained splat'} · ${count.toLocaleString()} retained samples${value.sampled ? ` from ${total.toLocaleString()} source vertices` : ''}${value.skipped ? ` · ${value.skipped} invalid sampled rows omitted` : ''} · SHA-256 ${value.source.sha256}`;
         const box = getViewer()?.getBounds() || ctx.bounds;
         $('min-y').value = String(box.min[1]); $('max-y').value = String(box.max[1]);
@@ -295,6 +435,8 @@ export function mountObjectify({ root, getViewer, onDisplayChange, onStage, onIn
         busy = false; attachCanvas(); renderEditor(); refreshVariants(); controls(); status('Select the visible samples of one movable object. Review floor and background contamination before keeping it.');
       } catch (error) { if (generation === sourceEpoch && !destroyed) { busy = false; controls(); status(`Object workshop unavailable: ${error.message}`, true); } }
     },
+    getReviewedSelection,
+    cancelSelectionTool,
     clear() { clearState(); },
     destroy() { destroyed = true; clearState(); root.innerHTML = ''; },
   };

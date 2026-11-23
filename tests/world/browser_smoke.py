@@ -38,6 +38,11 @@ def open_world(view, url, *, require_response=False):
     page.wait_for_function("document.querySelectorAll('.system-card').length===25")
     return page
 
+def open_map_options(page):
+    if not page.locator('#workspace-command-bar').evaluate('el => el.open'):
+        page.locator('a[href="#workspace-command-bar"]').click()
+
+
 def check(browser, mobile=False):
     ctx=browser.new_context(viewport={'width':390,'height':844} if mobile else {'width':1440,'height':1000},device_scale_factor=1,has_touch=mobile)
     page=ctx.new_page();view=page;errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
@@ -45,9 +50,10 @@ def check(browser, mobile=False):
     assert page.locator('.system-card').count()==25
     assert page.locator('.system-card').filter(has_text='Surface inspection').get_attribute('data-state')=='local'
     assert page.locator('.system-card').filter(has_text='MetricTrail long-video trial').get_attribute('data-state')=='gated'
-    assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth+1')
     view.screenshot(path=str(OUTPUT/(browser.browser_type.name+('-mobile.png' if mobile else '-desktop.png'))),full_page=True)
+    open_map_options(page)
+    assert page.locator('#provenance').text_content()=='AUTHORED SAMPLE'
     page.locator('#run').click();page.wait_for_timeout(300);print('RUN STATUS',page.locator('#status').inner_text(),errors,flush=True);page.wait_for_function("document.querySelector('#metric-distance').textContent.includes('m')",timeout=5000)
     assert page.locator('#metric-cost').inner_text()=='Enter rates'
     page.locator('#robotRate').fill('12');page.locator('#robotRate').press('Tab')
@@ -71,16 +77,18 @@ def check(browser, mobile=False):
     # Crafted labels remain text, never executable HTML.
     w=proof['world'];w['name']='<img src=x onerror="window.injected=true">';w['objects'][0]['name']='<svg onload="window.injected=true">'
     page.locator('#files').set_input_files({'name':'safe-map.json','mimeType':'application/json','buffer':json.dumps(w).encode()})
-    assert page.locator('#provenance').inner_text()=='AUTHORED SAMPLE'
+    assert page.locator('#provenance').text_content()=='AUTHORED SAMPLE'
     assert not page.locator('#scale-reviewed').is_checked()
     assert page.evaluate('window.injected') is None
     # A fresh capture must never inherit the sample's geometry or metrics.
+    if not page.locator('#world-examples').evaluate('el => el.open'):
+        page.locator('#world-examples > summary').click()
     page.locator('#hero-sample').click()
     from PIL import Image
     import io
     b=io.BytesIO();Image.new('RGB',(20,20)).save(b,format='PNG')
     page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
-    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE'
+    assert page.locator('#provenance').text_content()=='LOCAL SOURCE'
     assert page.locator('#run').is_disabled()
     assert page.locator('#media-preview img').count()==1
     assert 'Source preview' in page.locator('#media-preview').inner_text()
@@ -113,7 +121,7 @@ def check(browser, mobile=False):
     room={'name':'Phone scan / L floor','floors':[{'transform':[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],'polygonCorners':[[x,0,z] for x,z in floor]}],'objects':[],'walls':[]}
     page.locator('#files').set_input_files({'name':'roomplan.json','mimeType':'application/json','buffer':json.dumps(room).encode()})
     page.wait_for_function("document.querySelector('#world-title').textContent==='Phone scan / L floor'")
-    assert page.locator('#provenance').inner_text()=='REVIEW REQUIRED'
+    assert page.locator('#provenance').text_content()=='REVIEW REQUIRED'
     assert 'REVIEW REQUIRED' in page.locator('#scene-basis').inner_text()
     assert not page.locator('#scale-reviewed').is_checked()
     assert page.locator('#floor-width').is_disabled() and page.locator('#floor-depth').is_disabled()
@@ -129,10 +137,13 @@ def check(browser, mobile=False):
     page.locator('#scale-reviewed').uncheck()
     assert 'REVIEW REQUIRED' in page.locator('#scene-basis').inner_text()
     # Hero demo: the sample and reviewed states draw the real sample and planner; generated invents nothing and links to the photo flow.
+    if not page.locator('#world-examples').evaluate('el => el.open'):
+        page.locator('#world-examples > summary').click()
     assert 'AUTHORED SAMPLE' in page.locator('#hero-demo-badge').inner_text()
     page.locator('[data-demo=generated]').click();assert page.locator('#hero-demo-canvas').is_hidden() and page.locator('#hero-demo-link').get_attribute('href')=='/scan?goal=play'
     page.locator('[data-demo=reviewed]').click();assert 'm² reached' in page.locator('#hero-demo-text').inner_text() and page.locator('#hero-demo-canvas').is_visible()
     page.locator('[data-demo=sample]').click()
+    page.locator('#systems > summary').click()
     page.locator('#system-search').fill('Lyra');assert page.locator('.system-card').count()==1
     page.locator('#system-search').fill('');local_count=page.locator('.system-card[data-state=local]').count()
     assert local_count>0
@@ -155,29 +166,26 @@ def check_routes(browser, base):
     page.set_viewport_size({'width':844,'height':390})
     assert page.evaluate('document.documentElement.scrollHeight <= innerHeight+1'),'Landscape must not add a second outer scrollbar'
     page.set_viewport_size({'width':390,'height':844})
-    # target=_top is essential: otherwise old pages appear nested in World Builder.
-    frame.locator('a[href="/?classic=1"]').last.click()
-    page.wait_for_url(base+'/?classic=1')
-    page.locator('#lobby-title').wait_for()
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
-    page.set_viewport_size({'width':1440,'height':1000})
-    frame=open_world(page,base+'/')
-    # Lab sits in the header's More menu, as it does in the site-wide header.
-    frame.locator('.nav-more summary').click()
-    frame.locator('.nav-more a[href="/lab"]').click()
-    try:
-        page.wait_for_url(base+'/lab')
-    except Exception:
-        print('Lab navigation failure:',page.url,flush=True)
-        print(page.locator('body').inner_text()[:2000],flush=True)
-        raise
-    page.get_by_role('heading',name='Lab',exact=True).wait_for()
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
-    frame=open_world(page,base+'/')
-    frame.locator('a[href="/arena/"]').last.click()
-    page.wait_for_url(base+'/arena/')
-    page.locator('#page-title').wait_for(state='attached')
-    assert page.locator('iframe[src="/world/index.html"]').count()==0
+    # Site pages keep their own navigation; opening them leaves the current playground intact.
+    for query, path, selector in [('classic', '/?classic=1', '#lobby-title'), ('research lab', '/lab', 'h1')]:
+        frame.locator('#studio-search-open').click()
+        frame.locator('#studio-search').fill(query)
+        with ctx.expect_page() as opened:
+            frame.locator(f'#studio-panel a[href="{path}"]').click()
+        destination = opened.value
+        destination.wait_for_url(base + path)
+        destination.locator(selector).first.wait_for(state='attached')
+        assert destination.locator('iframe[src="/world/index.html"]').count() == 0
+        destination.close()
+        frame.locator('#studio-search').press('Escape')
+    frame.locator('#studio-search-open').click()
+    frame.locator('#studio-search').fill('move blocks')
+    frame.locator('#studio-panel [data-studio-target="/arena/index.html"]').click()
+    arena = frame.locator('#studio-workbench-frame').element_handle().content_frame()
+    arena.locator('#page-title').wait_for(state='attached')
+    assert '/arena/index.html' in arena.url
+    frame.locator('#studio-workbench-close').click()
+    assert frame.locator('#workspace').is_visible()
     assert errors==[],errors
     ctx.close()
 
@@ -191,6 +199,7 @@ def check_measurements(browser):
         page.locator('#files').set_input_files({'name':'measurement-fixture.json','mimeType':'application/json','buffer':json.dumps(value).encode()})
         page.wait_for_function("document.querySelector('#world-title').textContent==='Measurement contract fixture'")
     def proof(tag):
+        open_map_options(page)
         with view.expect_download() as event:page.locator('#export').click()
         path=OUTPUT/(browser.browser_type.name+'-measurement-'+tag+'.json');event.value.save_as(path)
         return json.loads(path.read_text())
@@ -284,7 +293,7 @@ def check_inference(browser, photo):
     page.wait_for_function("document.querySelector('#status').textContent.startsWith('3D preview ready') || document.querySelector('#depth-status').textContent.startsWith('Could not')",timeout=300000)
     assert page.locator('#status').inner_text().startswith('3D preview ready'),page.locator('#depth-status').inner_text()
     assert page.locator('#visual-canvas').is_visible()
-    assert 'SCALE UNVERIFIED' in page.locator('#provenance').inner_text()
+    assert 'SCALE UNVERIFIED' in page.locator('#provenance').text_content()
     assert page.locator('#run').is_disabled()
     page.locator('#show-source').click();page.locator('#media-preview img').wait_for(state='visible')
     page.locator('#show-visual').click();assert page.locator('#visual-canvas').is_visible()
@@ -370,9 +379,11 @@ def check_capture_keeps_user_map(browser):
     page.locator('#files').set_input_files({'name':'camera.png','mimeType':'image/png','buffer':b.getvalue()})
     page.locator('[data-tab=world]').click()
     assert page.locator('#map-name').input_value()=='My measured gym','edited authored map was discarded'
+    if not page.locator('#world-examples').evaluate('el => el.open'):
+        page.locator('#world-examples > summary').click()
     page.locator('#hero-sample').click()
     page.locator('#files').set_input_files({'name':'camera-2.png','mimeType':'image/png','buffer':b.getvalue()})
-    assert page.locator('#provenance').inner_text()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
+    assert page.locator('#provenance').text_content()=='LOCAL SOURCE','the untouched sample is still replaced by a capture'
     assert not errors,errors;ctx.close()
 
 def check_share_video(browser):

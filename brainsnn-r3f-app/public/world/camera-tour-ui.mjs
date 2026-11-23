@@ -5,6 +5,8 @@ import { recordCameraTour } from './camera-tour-video.mjs';
 export function mountCameraTour({ root, getViewer }) {
   const $ = id => root.querySelector(`[data-tour-${id}]`);
   let source = null, transform = 'identity', placement = 'identity', translation = [0, 0, 0], frames = [], generation = 0, task = null, clip = null, lockedOrigin = null;
+  let previewBlocked = false;
+  const blockedHint = 'Turn off the preview lamp to preview or record a source-bound camera path.';
   const status = message => { $('status').textContent = message; };
   const provenance = () => lockedOrigin || $('provenance').value;
   const path = () => createCameraPath({ source, displayTransform: transform, sourcePlacement: placement, sourceTranslation: translation, provenance: provenance(), keyframes: frames });
@@ -16,6 +18,8 @@ export function mountCameraTour({ root, getViewer }) {
     $('undo').disabled ||= !frames.length;
     $('clear').disabled ||= !frames.length;
     for (const id of ['play', 'export', 'video']) $(id).disabled = !ready || frames.length < 2 || busy;
+    $('play').disabled ||= previewBlocked;
+    $('video').disabled ||= previewBlocked;
     for (const id of ['save-video', 'save-receipt']) $(id).disabled = !clip || busy;
     $('stop').disabled = !busy;
     $('frames').textContent = frames.length ? frames.map((f, i) => `${i + 1}: ${f.time.toFixed(1)} s`).join(' · ') : 'No camera views saved.';
@@ -31,7 +35,6 @@ export function mountCameraTour({ root, getViewer }) {
   }
   function begin() {
     stop();
-    clip = null;
     task = new AbortController();
     const canvas = getViewer()?.getCanvas();
     if (canvas) { canvas.style.pointerEvents = 'none'; canvas.setAttribute('aria-busy', 'true'); canvas.blur(); }
@@ -75,6 +78,7 @@ export function mountCameraTour({ root, getViewer }) {
     } catch (error) { if (token === generation) status(`Path rejected: ${error.message}`); }
   };
   $('play').onclick = () => {
+    if (previewBlocked) { status(blockedHint); return; }
     let checked;
     try { checked = path(); } catch (error) { status(error.message); return; }
     const { controller, token } = begin(), start = performance.now(), duration = checked.keyframes.at(-1).time;
@@ -93,6 +97,7 @@ export function mountCameraTour({ root, getViewer }) {
     raf = requestAnimationFrame(frame);
   };
   $('video').onclick = async () => {
+    if (previewBlocked) { status(blockedHint); return; }
     let checked;
     try { checked = path(); } catch (error) { status(error.message); return; }
     const { controller, token } = begin();
@@ -113,10 +118,31 @@ export function mountCameraTour({ root, getViewer }) {
   $('save-video').onclick = () => { if (clip) download(clip.blob, `appearance-tour.${clip.type.includes('mp4') ? 'mp4' : 'webm'}`); };
   $('save-receipt').onclick = () => { if (clip) download(new Blob([JSON.stringify(clip.receipt, null, 2) + '\n'], { type: 'application/json' }), 'appearance-tour-receipt.json'); };
   $('stop').onclick = () => { stop(); status('Preview or recording cancelled. No partial video exported.'); };
-  function hidden() { if (document.hidden && task) { stop(); status('Paused by leaving the tab. Preview or record again.'); } }
+  function suspend() {
+    if (!task) return;
+    stop();
+    status(clip ? 'Tour stopped. Your completed video and receipt are ready to download.' : 'Tour stopped. Preview or record again when ready.');
+  }
+  function hidden() { if (document.hidden) suspend(); }
   document.addEventListener('visibilitychange', hidden);
   controls();
   return {
+    suspend,
+    setPreviewBlocked(value) {
+      const blocked = Boolean(value);
+      if (blocked === previewBlocked) return;
+      previewBlocked = blocked;
+      if (blocked) {
+        if (task) stop();
+        else controls();
+        if (source) status(blockedHint);
+      } else {
+        controls();
+        if ($('status').textContent === blockedHint) {
+          status(clip ? 'Preview lamp off. Your completed video and receipt are ready to download.' : 'Preview lamp off. Your saved camera views are available.');
+        }
+      }
+    },
     setSource(value, displayTransform = 'identity', sourcePlacement = 'identity', sourceTranslation = [0, 0, 0], declaredOrigin = 'unknown') {
       stop(); source = value ? { ...value } : null; transform = displayTransform; placement = sourcePlacement; translation = sourceTranslation.slice();
       lockedOrigin = source && declaredOrigin === 'authored' ? 'authored' : null;

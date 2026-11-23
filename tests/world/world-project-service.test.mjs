@@ -251,3 +251,75 @@ test('project ledger: unconfigured storage is unavailable, explicit limits rejec
     assert.equal((await f.call('/projects')).data.projects.length,1);
   }finally{await f.close();}
 });
+
+test('project ledger: monthly usage meter counts each workspace separately and exports one row per workspace',async()=>{
+  const pool=await createProjectTestPool();
+  const a=await fixture({pool}),b=await fixture({pool});
+  try {
+    for(let i=0;i<3;i++)assert.equal((await a.call('/projects',{token:a.reader.token})).status,200);
+    assert.equal((await b.call('/projects',{token:b.reader.token})).status,200);
+    // Bridge-reported processing usage.
+    await a.service.meterUsage(a.tenant.id,'processing_jobs_started',1);
+    await a.service.meterUsage(a.tenant.id,'processing_upload_bytes',4096);
+    await a.service.meterUsage(a.tenant.id,'processing_upload_bytes',1024);
+    await a.service.meterUsage(a.tenant.id,'processing_artifact_bytes',0);  // nothing to count
+    await assert.rejects(()=>a.service.meterUsage(a.tenant.id,'free_lunches',1),/Unknown usage metric/);
+    const own=await a.call('/usage',{token:a.reader.token});
+    assert.equal(own.status,200);
+    assert.equal(own.data.billing.month,'2026-11');
+    assert.equal(own.data.billing.period,'calendar month, UTC');
+    assert.equal(own.data.billing.api_requests,4,'three list calls and this usage call');
+    assert.equal(own.data.billing.processing_jobs_started,1);
+    assert.equal(own.data.billing.processing_upload_bytes,5120);
+    assert.equal(own.data.billing.processing_artifact_bytes,0);
+    const other=await b.call('/usage',{token:b.reader.token});
+    assert.equal(other.data.billing.api_requests,2,'workspaces never see each other\'s usage');
+    assert.equal(other.data.billing.processing_jobs_started,0);
+    const report=await a.service.usageReport('2026-11');
+    const row=report.find(r=>r.tenant_id===a.tenant.id);
+    assert.deepEqual({...row,tenant_name:undefined},{tenant_id:a.tenant.id,tenant_name:undefined,month:'2026-11',api_requests:4,
+      processing_jobs_started:1,processing_upload_bytes:5120,processing_artifact_bytes:0});
+    assert.equal(report.find(r=>r.tenant_id===b.tenant.id).api_requests,2);
+    assert.deepEqual(await a.service.usageReport('2026-10'),[],'months are kept apart');
+    // A new month starts again; the previous month stays exportable.
+    a.setTime(Date.parse('2026-12-01T00:00:01Z'));
+    assert.equal((await a.call('/usage',{token:a.reader.token})).data.billing.api_requests,1);
+    assert.equal((await a.service.usageReport('2026-11')).find(r=>r.tenant_id===a.tenant.id).api_requests,4);
+    await assert.rejects(()=>a.service.usageReport('2026-13'),/YYYY-MM/);
+  } finally { await a.close(); await b.close(); await pool.end(); }
+});
+
+test('project ledger: operator bootstrap from a key digest is idempotent and never needs the plaintext key',async()=>{
+  const pool=await createProjectTestPool();
+  const token=`bsk_${'A'.repeat(20)}${'b'.repeat(23)}`;
+  const spec={tenant_id:'pilot-owner',tenant_name:'BrainSNN pilot',actor_name:'Owner pilot',role:'admin',
+    key_sha256:sha(token),expires_at:new Date(stamp+30*86400000).toISOString()};
+  const warnings=[],logs=[];const warn=console.warn,log=console.log;
+  console.warn=message=>warnings.push(String(message));console.log=message=>logs.push(String(message));
+  const start=async env=>{const service=createWorldProjectService({pool,env,now:()=>stamp});await service.initialize();return service;};
+  try {
+    const first=await start({WORLD_PROJECT_BOOTSTRAP_JSON:JSON.stringify(spec)});
+    const web=await host(first);
+    const me=await fetch(web.base+'/me',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json());
+    assert.equal(me.tenant.id,'pilot-owner');assert.equal(me.actor.name,'Owner pilot');assert.equal(me.actor.role,'admin');
+    assert.ok(me.scopes.includes('processing:write'));
+    await web.close();await first.close();
+    // A restart with the same configuration changes nothing.
+    const again=await start({WORLD_PROJECT_BOOTSTRAP_JSON:JSON.stringify(spec)});await again.close();
+    const keys=(await pool.query("SELECT count(*) AS n FROM brainsnn_world_keys WHERE tenant_id='pilot-owner'")).rows[0];
+    assert.equal(Number(keys.n),1);
+    assert.equal(logs.filter(line=>line.includes('bootstrapped')).length,1);
+    // The plaintext never reaches the database.
+    const stored=(await pool.query("SELECT digest,created_by FROM brainsnn_world_keys WHERE tenant_id='pilot-owner'")).rows[0];
+    assert.equal(stored.digest,sha(token));assert.equal(stored.created_by,'operator-bootstrap');
+    // Bad values warn and skip; the API still starts for everyone else.
+    for(const bad of ['{not json',JSON.stringify({...spec,key_sha256:sha('other'),expires_at:new Date(stamp-1000).toISOString()}),
+      JSON.stringify({...spec,key_sha256:'short'}),JSON.stringify({...spec,key_sha256:sha('another'),tenant_name:'Renamed workspace'})]){
+      const service=await start({WORLD_PROJECT_BOOTSTRAP_JSON:bad});
+      assert.equal((await service.store.tenant(pool,'pilot-owner')).name,'BrainSNN pilot','an existing workspace is never renamed');
+      await service.close();
+    }
+    assert.equal(warnings.filter(line=>line.includes('bootstrap skipped')).length,4,warnings.join('\n'));
+    assert.ok(warnings.every(line=>!line.includes(token)));
+  } finally { console.warn=warn;console.log=log;await pool.end(); }
+});

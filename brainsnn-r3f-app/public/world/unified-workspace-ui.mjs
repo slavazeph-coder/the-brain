@@ -2,7 +2,7 @@ import {ICONS} from './playground-icons.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bytes = n => n >= 1048576 ? `${(n/1048576).toFixed(1)} MB` : `${Math.ceil(n/1024)} KB`;
-const label = engine => ({'scene-usd':'Building model','colmap-sparse':'Room reconstruction','colmap-dense-cpu':'Detailed reconstruction','photo-metric':'Photo preview','observations':'Object observations','locate-photo':'Photo location','splat-repair':'Appearance repair','localization-map':'Measured robot map','motion-retarget':'G1 motion reference','biomechanics':'Movement analysis'}[engine] || engine || 'Processed result');
+const label = engine => ({'scene-usd':'Building model','colmap-sparse':'Room reconstruction','colmap-dense-cpu':'Detailed reconstruction','photo-metric':'Photo preview','metric-depth-sequence':'Photo and video depth','depth-pro-2':'Depth Pro 2 review','observations':'Object observations','locate-photo':'Photo location','splat-repair':'Appearance repair','localization-map':'Measured robot map','motion-retarget':'G1 motion reference','biomechanics':'Movement analysis'}[engine] || engine || 'Processed result');
 
 /** A single, stable front door to existing source, review, planning and export actions. */
 export function mountUnifiedWorkspace({getSnapshot, actions}) {
@@ -10,8 +10,8 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   if (!host) throw new Error('The shared workspace is unavailable.');
   let selectedJob = '', lastSourceId = null, lastSceneKey = null, lastLibrary = '', disposed = false;
   const abort = new AbortController();
-  host.innerHTML = `<div class="unified-heading"><div><p class="eyebrow">ONE SPACE · EVERY STEP</p><h2 id="workspace-project-name"></h2><p id="workspace-project-summary"></p></div><span class="badge" id="workspace-project-basis"></span></div>
-    <nav class="workspace-journey" aria-label="Build your world"><div id="workspace-tool-tabs"></div><button type="button" id="workspace-step-drawings" data-step="drawings"><span class="step-icon" aria-hidden="true">${ICONS.drawings}</span><strong>Make drawings</strong><small>Model and checks</small></button></nav>
+  host.innerHTML = `<div class="unified-heading"><div><h2 id="workspace-project-name"></h2><p id="workspace-project-summary"></p></div><div class="workspace-heading-actions"><span class="badge" id="workspace-project-basis"></span><a href="#workspace-command-bar">Map options</a></div></div>
+    <nav class="workspace-journey" aria-label="Build your world"><div id="workspace-tool-tabs"></div><button type="button" id="workspace-step-drawings" data-step="drawings"><span class="step-icon" aria-hidden="true">${ICONS.drawings}</span><strong>Drawings</strong></button></nav>
     <div class="workspace-next"><p id="workspace-next-step" role="status"></p><button type="button" id="workspace-next-action" class="small" data-next></button><button type="button" id="workspace-project-review" class="small workspace-review-action" data-project-review>Review this project</button></div>
     
     <div class="workspace-view-switch" role="group" aria-label="Views of your space"><button id="workspace-source-view" data-space-view="source">Photo / video</button><button id="workspace-points-view" data-space-view="points">3D points</button><button id="workspace-model-view" data-space-view="model">Building model</button><button id="workspace-drawings-view" data-space-view="drawings">Drawings</button><button id="workspace-map-view" data-space-view="map">Robot map</button></div>
@@ -20,11 +20,10 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   const $ = id => document.getElementById(id);
   // One toolbar: keep the existing control IDs and handlers, and bring model review alongside them.
   const tabs = document.querySelector('.sandbox-tools');
-  const labels = {capture:['1','Add your space','Photo or video','capture'],world:['2','Look around','Explore and change','explore'],test:['4','Try robots','Routes and changes','robots'],evidence:['5','Save your work','Files and results','save'],understand:['+','Check details','Notes and evidence','checks']};
+  const labels = {capture:['Add files','capture'],world:['Edit world','explore'],test:['Robot routes','robots'],evidence:['Save & share','save'],understand:['Details','checks']};
   for (const button of tabs.querySelectorAll('[data-tab]')) {
-    const [number,title,subtitle,alias] = labels[button.dataset.tab];
-    // A picture and a word for each tool. The numbered path is the robot setup above; these are places to go, in any order.
-    button.innerHTML = `<span class="step-icon" aria-hidden="true">${ICONS[alias] || number}</span><strong id="workspace-step-${alias}">${title}</strong><small>${subtitle}</small>`;
+    const [title, alias] = labels[button.dataset.tab];
+    button.innerHTML = `<span class="step-icon" aria-hidden="true">${ICONS[alias]}</span><strong id="workspace-step-${alias}">${title}</strong>`;
   }
   $('workspace-tool-tabs').append(tabs);
   const drawingButton = $('workspace-step-drawings');
@@ -34,6 +33,68 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   drawingButton.tabIndex = -1;
   tabs.insertBefore(drawingButton, $('tab-test'));
   tabs.append($('tab-understand'));
+  // Keep the live editor mounted. Move its existing commands together below the world.
+  const heading = host.querySelector('.unified-heading');
+  const journey = host.querySelector('.workspace-journey');
+  const next = host.querySelector('.workspace-next');
+  const workspace = $('workspace');
+  const viewport = $('viewport');
+  const narrow = matchMedia('(max-width: 700px)');
+  const controlsSlot = document.createComment('World controls');
+  host.before(controlsSlot);
+  function placeControls(byMap) {
+    if (byMap === (host.parentElement === viewport.parentElement)) return;
+    const active = document.activeElement;
+    const restoreFocus = active && (host.contains(active) || heading.contains(active));
+    if (byMap) {
+      controlsSlot.after(heading);
+      viewport.after(host);
+    } else {
+      controlsSlot.after(host);
+      host.prepend(heading);
+    }
+    if (restoreFocus) active.focus({preventScroll:true});
+  }
+  const command = document.createElement('details');
+  command.className = 'workspace-command-bar';
+  command.id = 'workspace-command-bar';
+  command.open = !narrow.matches;
+  const commandTitle = document.createElement('summary');
+  commandTitle.id = 'workspace-command-title';
+  commandTitle.textContent = 'Map options';
+  command.setAttribute('aria-labelledby', commandTitle.id);
+  command.append(commandTitle);
+  for (const part of [$('world-title')?.closest('.workspace-header'), $('sandbox-scene')?.closest('.sandbox-toolbar'), $('sandbox-context')]) {
+    if (part) command.append(part);
+  }
+  $('status').after(command);
+  // A capture can be a detour from the street; its return button stays in sight.
+  heading.querySelector('.workspace-heading-actions').prepend($('sandbox-return'));
+  function revealMapOptions() {
+    command.open = true;
+    requestAnimationFrame(() => {
+      if (disposed || !command.open || location.hash !== '#workspace-command-bar') return;
+      commandTitle.focus({preventScroll:true});
+      commandTitle.scrollIntoView({block:'start'});
+    });
+  }
+  const mapOptionsLink = heading.querySelector('a[href="#workspace-command-bar"]');
+  mapOptionsLink.addEventListener('click', event => {
+    if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) revealMapOptions();
+  }, {signal:abort.signal});
+  window.addEventListener('hashchange', () => {
+    if (location.hash === '#workspace-command-bar') revealMapOptions();
+  }, {signal:abort.signal});
+  if (location.hash === '#workspace-command-bar') revealMapOptions();
+  const setup = $('robot-setup');
+  heading.after(setup);
+  setup.after(journey);
+  // Source-specific guidance belongs with the active files; the practice room already has a run action.
+  const showNext = hasContent => {
+    const parent = hasContent ? host : command;
+    if (next.parentElement !== parent) parent.append(next);
+  };
+  host.dataset.flow = 'editor-first';
   const message = text => { $('workspace-view-message').textContent = text; };
   function snapshot() { return getSnapshot(); }
   function chosenJob(s) { return s.jobs.find(j => j.key === selectedJob) || null; }
@@ -55,18 +116,24 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
   function refresh() {
     if (disposed) return;
     const s = snapshot(), active = source(s);
-    host.dataset.hasContent = String(!!(s.sources.length || s.jobs.length));
+    const hasContent = Boolean(s.sources.length || s.jobs.length);
+    host.dataset.hasContent = String(hasContent);
+    showNext(hasContent);
     const relatedJobs = active ? s.jobs.filter(j => j.key === active.jobKey || j.sourceIds.includes(active.id)) : s.jobs;
     if (lastSourceId !== s.activeSourceId) { if (!relatedJobs.some(j => j.key === selectedJob)) selectedJob = s.jobs.find(j => j.key === active?.jobKey)?.key || relatedJobs.at(-1)?.key || ''; lastSourceId = s.activeSourceId; }
     if (!s.jobs.some(j => j.key === selectedJob)) selectedJob = relatedJobs.at(-1)?.key || '';
     if (s.scene?.jobKey && s.scene.jobKey !== lastSceneKey) { selectedJob = s.scene.jobKey; lastSceneKey = s.scene.jobKey; }
     const job = chosenJob(s), model = job?.artifacts.some(a => /\.glb$/i.test(a.name));
     const modelOpen = document.getElementById('scene-dialog').open;
+    placeControls(narrow.matches && s.workspace?.kind === 'map' && s.tab === 'world' && s.view === 'map' && !modelOpen);
+    $('workspace-project-summary').hidden = !hasContent;
+    workspace.dataset.editingMap = String(s.workspace?.kind === 'map' && s.tab === 'world' && !modelOpen);
     const openJob = modelOpen && s.jobs.find(j => j.key === s.scene?.jobKey);
     const street = !modelOpen && s.workspace?.kind === 'street';
     const sourceNames = j => (j?.sourceNames || s.sources.filter(v => j?.sourceIds.includes(v.id)).map(v => v.name)).join(', ');
     $('workspace-project-name').textContent = openJob ? sourceNames(openJob) || label(openJob.engine) : street ? s.workspace.name : active?.name || s.world?.name || 'Your new space';
-    $('workspace-project-summary').textContent = `${s.sources.length ? `${s.sources.length} source${s.sources.length===1?'':'s'}` : 'Example ready to explore'} · ${s.jobs.length} processing result${s.jobs.length===1?'':'s'}`;
+    $('workspace-project-summary').textContent = `${s.sources.length ? `${s.sources.length} source${s.sources.length===1?'':'s'}` : 'Example room'} · ${s.jobs.length} processing result${s.jobs.length===1?'':'s'}`;
+    $('workspace-project-basis').hidden = !openJob && !street && !active && s.world?.provenance === 'authored';
     $('workspace-project-basis').textContent = openJob ? (s.scene?.ready?'MODEL RESULT':'LOADING RESULT') : street ? 'STREET WORLD' : active ? 'YOUR SOURCE' : s.world?.provenance === 'authored' ? 'PRACTICE EXAMPLE' : 'YOUR MAP';
     options($('workspace-source-select'), [{value:'',text:s.sources.length?'Choose a source':'Add a photo or video to begin'}, ...s.sources.map(v=>({value:v.id,text:v.name}))], s.activeSourceId);
     options($('workspace-job-select'), [{value:'',text:'No result selected'}, ...s.jobs.map((j,i)=>({value:j.key,text:`${i+1}. ${label(j.engine)}${sourceNames(j)?' · '+sourceNames(j):''}`}))], selectedJob);
@@ -88,7 +155,7 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
       if (current) button.setAttribute('aria-current','step'); else button.removeAttribute('aria-current');
       if (button.getAttribute('role')==='tab') { button.setAttribute('aria-selected',String(current)); button.tabIndex=current?0:-1; }
     }
-    const html = `<div class="workspace-source-list">${s.sources.map(v=>`<button type="button" data-library-source="${esc(v.id)}"><strong>${esc(v.name)}</strong><small>${esc(v.kind)}${v.hasVisual?' · 3D view ready':''}</small></button>`).join('') || '<p>Add your own photo or video, or keep playing with the example.</p>'}</div>${s.jobs.map(j=>`<section class="workspace-result-group"><h4>${esc(label(j.engine))}</h4><p class="micro">${esc(sourceNames(j) || 'Original source')} · ${j.artifacts.length} files · result ${esc(j.id.slice(0,12))}</p><div>${j.artifacts.map(a=>`<div class="workspace-result-file"><span><strong>${esc(a.name)}</strong><small>${bytes(a.size || 0)}</small></span>${/\.(glb|ply|splat)$/i.test(a.name)||['observations.json','motion-preview.json','localization-map.json','repair-receipt.json','biomechanics-preview.json'].includes(a.name)?`<button type="button" data-result-open="${esc(j.key)}" data-index="${a.index}">Open</button>`:''}<button type="button" data-result-download="${esc(j.key)}" data-index="${a.index}" aria-label="Download ${esc(a.name)}">Save</button></div>`).join('')}</div></section>`).join('')}`;
+    const html = `<div class="workspace-source-list">${s.sources.map(v=>`<button type="button" data-library-source="${esc(v.id)}"><strong>${esc(v.name)}</strong><small>${esc(v.kind)}${v.hasVisual?' · 3D view ready':''}</small></button>`).join('') || '<p>Add your own photo or video, or keep playing with the example.</p>'}</div>${s.jobs.map(j=>`<section class="workspace-result-group"><h4>${esc(label(j.engine))}</h4><p class="micro">${esc(sourceNames(j) || 'Original source')} · ${j.artifacts.length} files · result ${esc(j.id.slice(0,12))}</p><div>${j.artifacts.map(a=>`<div class="workspace-result-file"><span><strong>${esc(a.name)}</strong><small>${bytes(a.size || 0)}</small></span>${/\.(glb|ply|splat)$/i.test(a.name)||['observations.json','motion-preview.json','localization-map.json','repair-receipt.json','biomechanics-preview.json','depth-sequence.json'].includes(a.name)?`<button type="button" data-result-open="${esc(j.key)}" data-index="${a.index}">Open</button>`:''}<button type="button" data-result-download="${esc(j.key)}" data-index="${a.index}" aria-label="Download ${esc(a.name)}">Save</button></div>`).join('')}</div></section>`).join('')}`;
     if (lastLibrary !== html) { $('workspace-library-content').innerHTML = html; lastLibrary = html; }
     $('workspace-library-title').textContent = `Your files and results (${s.sources.length + s.jobs.reduce((n,j)=>n+j.artifacts.length,0)})`;
   }
@@ -131,14 +198,17 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
     else if (name==='save') { closeModel(); await actions.showTab('evidence'); $('workspace-library').open=true; }
     refresh();
   }
-  host.addEventListener('click', event => {
-    const button=event.target.closest('button'); if(!button)return;
+  $('workspace').addEventListener('click', event => {
+    const button=event.target.closest('button');
+    if(!button || (!host.contains(button) && !next.contains(button))) return;
     const run=async()=>{
       if(button.dataset.tab) {
         const tool = button.dataset.tab;
         requestAnimationFrame(()=>{
-          if (innerWidth > 600 || document.querySelector('dialog:modal') || document.getElementById('scene-dialog').open || snapshot().tab !== tool) return;
-          const target = ['world','test'].includes(tool) ? $('viewport') : $('panel');
+          const state = snapshot();
+          if (!narrow.matches || document.querySelector('dialog:modal') || $('scene-dialog').open || state.tab !== tool) return;
+          if (!event.isTrusted && document.activeElement !== button) return;
+          const target = state.workspace?.kind === 'street' ? $('street-workspace') : $('panel');
           target.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
         });
       } else if(button.hasAttribute('data-project-review')) await actions.reviewProject?.(selectedJob);
@@ -157,6 +227,14 @@ export function mountUnifiedWorkspace({getSnapshot, actions}) {
     closeModel(); void Promise.resolve().then(()=>actions.selectSource(sourceId,'source')).then(()=>{const s=snapshot();selectedJob=source(s)?.jobKey||selectedJob;refresh();message('');}).catch(error=>message(error.message));
   }, {signal:abort.signal});
   $('workspace-job-select').addEventListener('change', event => { selectedJob=event.target.value; refresh(); message('Selected result kept with its original source. Choose a view or open its files below.'); }, {signal:abort.signal});
+  const optionsBySize = new Map();
+  let previousNarrow = narrow.matches;
+  narrow.addEventListener('change', () => {
+    optionsBySize.set(previousNarrow, command.open);
+    previousNarrow = narrow.matches;
+    command.open = optionsBySize.get(narrow.matches) ?? !narrow.matches;
+    refresh();
+  }, {signal:abort.signal});
   $('scene-dialog').addEventListener('close', refresh, {signal:abort.signal});
   document.addEventListener('click', event => {
     const a=event.target.closest('a[data-workspace-goal]');

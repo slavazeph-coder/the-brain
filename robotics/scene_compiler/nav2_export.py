@@ -30,12 +30,12 @@ import uuid
 
 try:
     from .opening_geometry import wall_parts, door_parts
-    from ..world_worker.measurement_check import points_sha256
+    from ..world_worker.measurement_check import comparison_evidence, points_sha256
 except ImportError:  # direct CLI from the scene_compiler directory
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from robotics.scene_compiler.opening_geometry import wall_parts, door_parts
-    from robotics.world_worker.measurement_check import points_sha256
+    from robotics.world_worker.measurement_check import comparison_evidence, points_sha256
 
 SCHEMA = 'brainsnn.nav2-map.v1'
 FILES = ('nav2-map.pgm', 'nav2-map.yaml', 'nav2-map.json')
@@ -313,6 +313,7 @@ def export(scene, out_dir, *, cloud=None, scene_bytes=None, cloud_bytes=None,
     _number(minimum_headroom, .1, 5, 'Minimum headroom')
     raw_scene, scene_basis = _source(scene, scene_bytes, MAX_SCENE_BYTES, 'Scene')
     floor_y, bounds, walls, objects, unknown, holes = _scene(scene)
+    evidence = comparison_evidence(scene.get('comparisonEvidence'))
     raw_cloud, cloud_basis, point_hash, points = None, None, None, []
     if cloud is not None:
         raw_cloud, cloud_basis = _source(cloud, cloud_bytes, MAX_CLOUD_BYTES, 'Cloud')
@@ -323,6 +324,10 @@ def export(scene, out_dir, *, cloud=None, scene_bytes=None, cloud_bytes=None,
             raise ValueError('Floor samples need an exact scene cloudPointsSha256 binding to this cloud.')
         if _canonical(scene.get('scale')) != _canonical(cloud.get('scale')):
             raise ValueError('Scene and floor-cloud scale must match exactly.')
+        provenance = cloud.get('provenance')
+        bound = comparison_evidence(provenance.get('comparisonEvidence')) if isinstance(provenance, dict) else None
+        if bound != evidence:
+            raise ValueError('Scene and floor-cloud comparison evidence must match exactly.')
         points = cloud['points']
     elif cloud_bytes is not None:
         raise ValueError('Cloud source bytes require a supplied cloud.')
@@ -376,6 +381,8 @@ def export(scene, out_dir, *, cloud=None, scene_bytes=None, cloud_bytes=None,
     provenance = cloud.get('provenance') if isinstance(cloud, dict) else None
     aligned = provenance.get('floorAligned') if isinstance(provenance, dict) else None
     source['reportedFloorAligned'] = aligned if isinstance(aligned, bool) else None
+    if evidence is not None:
+        source['comparisonEvidence'] = evidence
     component_graph = scene.get('componentGraph')
     if component_graph is not None:
         source['componentGraph'] = {key: component_graph[key] for key in

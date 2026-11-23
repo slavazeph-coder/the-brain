@@ -8,6 +8,13 @@ const id='a'.repeat(32);
 const makeClient=()=>new WorkerClient('https://worker.example/prefix','s'.repeat(40));
 const file=new File(['a real capture'],'capture.png',{type:'image/png'});
 
+test('worker request failures expose the actual HTTP status without changing the bounded error message',async(t)=>{
+  const client=makeClient();
+  t.mock.method(globalThis,'fetch',async()=>new Response(JSON.stringify({detail:'Active job quota reached.'}),{status:429}));
+  await assert.rejects(client.request('/v1/jobs',{method:'POST',body:{engine:'scene-usd',upload_ids:[id],consent:true}}),
+    error=>error.status===429&&error.message==='Active job quota reached.');
+});
+
 test('upload rejects invalid remote offsets, sizes and chunk limits before sending source bytes',async()=>{
   for(const entry of [
     {offset:-1,size:file.size}, {offset:.5,size:file.size},

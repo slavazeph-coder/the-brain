@@ -10,17 +10,19 @@ const id = 'a'.repeat(32);
 const caps = { api_version: 'brainsnn.worker.v1', access_mode: 'tenant', owner_id: tenant, idempotency: { supported: true } };
 const json = (value, status = 200, headers = {}) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json', ...headers } });
 
-async function fixture(t, { capabilities = caps, env = {}, respond = () => json({ id }), authenticate } = {}) {
-  const upstreamCalls = [], authCalls = [];
+async function fixture(t, { capabilities = caps, env = {}, respond = () => json({ id }), authenticate, timeouts, fetchOverride } = {}) {
+  const upstreamCalls = [], authCalls = [], metered = [];
   const service = createProjectProcessingBridge({
     env: { WORLD_WORKER_INTERNAL_URL: 'http://worker.internal/', WORLD_PROJECT_WORKER_TOKENS_JSON: JSON.stringify({ [tenant]: token }), ...env },
     projects: { authenticate: authenticate || (async (req, options) => {
       authCalls.push(options);
       if (req.headers.authorization !== 'Bearer fixture-site-key') throw Object.assign(new Error('Unauthorized.'), { status: 401, code: 'unauthorized' });
       return { tenant_id: tenant, actor_id: 'actor_fixture' };
-    }) },
+    }), meterUsage: async (owner, metric, quantity) => { metered.push([owner, metric, quantity]); } },
+    timeouts,
     fetchImpl: async (url, options) => {
       upstreamCalls.push({ url: String(url), options });
+      if (fetchOverride) return fetchOverride(url, options);
       return String(url).endsWith('/v1/capabilities') ? json(typeof capabilities === 'function' ? capabilities(options) : capabilities) : respond(url, options);
     },
   });
@@ -32,7 +34,7 @@ async function fixture(t, { capabilities = caps, env = {}, respond = () => json(
     method, headers: { Authorization: 'Bearer fixture-site-key', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return { call, upstreamCalls, authCalls };
+  return { call, base, upstreamCalls, authCalls, metered };
 }
 
 test('dedicated bridge requires project identity and refuses tenant mismatches before resource access', async t => {
@@ -148,4 +150,94 @@ test('global admission bounds live processing requests across independent tenant
     await allAdmitted;
     assert.equal((await call('/jobs', { headers: { Authorization: 'Bearer fixture-4' } })).status, 429);
   } finally { for (const release of releases) release(); await Promise.all(pending); }
+});
+
+// A fetch that only settles when its signal aborts, like a worker that accepted
+// the connection during a redeploy and never answered.
+const hang = (options) => new Promise((_, reject) => {
+  options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+});
+
+test('an unresponsive worker fails the preflight fast with a retryable 504 and frees the slot', async t => {
+  const { call } = await fixture(t, { timeouts: { preflightMs: 60 }, fetchOverride: (_url, options) => hang(options) });
+  const started = Date.now();
+  const response = await call('/jobs/' + id);
+  const body = await response.json();
+  assert.equal(response.status, 504);
+  assert.equal(body.error.code, 'worker_timeout');
+  assert.equal(response.headers.get('Retry-After'), '30');
+  assert.equal(body.error.request_id, response.headers.get('X-Request-Id'));
+  assert.ok(Date.now() - started < 2000, 'preflight deadline must not fall back to the two-minute transfer limit');
+  // The tenant's admission slot is released: four more calls are still admitted rather than refused with 429.
+  const statuses = await Promise.all(Array.from({ length: 4 }, () => call('/jobs/' + id).then(r => r.status)));
+  assert.deepEqual(statuses, [504, 504, 504, 504]);
+});
+
+test('control calls get their own deadline after a healthy preflight', async t => {
+  const { call } = await fixture(t, { timeouts: { requestMs: 60 }, respond: (_url, options) => hang(options) });
+  const response = await call('/jobs/' + id);
+  assert.equal(response.status, 504);
+  assert.equal((await response.json()).error.code, 'worker_timeout');
+});
+
+test('downloads are bounded by stalls between chunks, not total wall time', async t => {
+  const ticket = Buffer.from(JSON.stringify({ owner: tenant, job: id })).toString('base64url') + '.' + 'b'.repeat(64);
+  const slowStream = (chunks, gapMs, { stallAfter = Infinity } = {}) => (_url, options) => {
+    let sent = 0;
+    const body = new ReadableStream({ async pull(controller) {
+      if (sent >= chunks) return controller.close();
+      await new Promise((resolve, reject) => {
+        const wait = setTimeout(resolve, sent >= stallAfter ? 60_000 : gapMs);
+        options.signal.addEventListener('abort', () => { clearTimeout(wait); reject(new Error('aborted')); }, { once: true });
+      });
+      sent++; controller.enqueue(new Uint8Array([65]));
+    } });
+    return new Response(body, { headers: { 'Content-Length': String(chunks), 'Content-Type': 'application/octet-stream' } });
+  };
+  // Eight chunks 40 ms apart take ~320 ms in total: longer than the 150 ms transfer limit, yet never stalled for 100 ms.
+  const steady = await fixture(t, { timeouts: { transferMs: 150, stallMs: 100 }, respond: slowStream(8, 40) });
+  const ok = await steady.call('/download/' + ticket);
+  assert.equal(ok.status, 200);
+  assert.equal(await ok.text(), 'AAAAAAAA');
+  // A stream that stops after two chunks is cut off, so the client never mistakes it for a complete artifact.
+  const stalled = await fixture(t, { timeouts: { transferMs: 5000, stallMs: 80 }, respond: slowStream(8, 10, { stallAfter: 2 }) });
+  const started = Date.now();
+  await assert.rejects(async () => { const value = await stalled.call('/download/' + ticket); await value.arrayBuffer(); });
+  assert.ok(Date.now() - started < 3000);
+});
+
+test('billing meter counts accepted work once: started jobs, uploaded chunks and downloaded artifacts', async t => {
+  const ticket = Buffer.from(JSON.stringify({ owner: tenant, job: id })).toString('base64url') + '.' + 'b'.repeat(64);
+  let replay = false;
+  const { call, base, metered } = await fixture(t, { respond: (url, options) => {
+    if (String(url).includes('/download/')) return new Response(Buffer.from('artifact!'), { headers: { 'Content-Length': '9' } });
+    if (options.method === 'PUT') return json({ offset: 5 });
+    return json({ id, status: 'queued' }, 200, replay ? { 'Idempotency-Replayed': 'true' } : {});
+  } });
+  assert.equal((await call('/jobs/' + id + '/start', { method: 'POST', body: {}, headers: { 'Idempotency-Key': 'fixture-start-000001' } })).status, 200);
+  replay = true;  // the same start retried: the worker replays it, so it is not counted again
+  assert.equal((await call('/jobs/' + id + '/start', { method: 'POST', body: {}, headers: { 'Idempotency-Key': 'fixture-start-000001' } })).status, 200);
+  const chunk = await fetch(base + '/uploads/' + id + '?offset=0', {
+    method: 'PUT', headers: { Authorization: 'Bearer fixture-site-key', 'Content-Type': 'application/octet-stream' }, body: Buffer.from('bytes') });
+  assert.equal(chunk.status, 200);
+  const download = await call('/download/' + ticket);
+  assert.equal(await download.text(), 'artifact!');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(metered, [[tenant, 'processing_jobs_started', 1], [tenant, 'processing_upload_bytes', 5], [tenant, 'processing_artifact_bytes', 9]]);
+});
+
+test('a failing meter never fails the customer request', async t => {
+  // A meter that throws, as if the project database went away mid-request.
+  const broken = createProjectProcessingBridge({
+    env: { WORLD_WORKER_INTERNAL_URL: 'http://worker.internal/', WORLD_PROJECT_WORKER_TOKENS_JSON: JSON.stringify({ [tenant]: token }) },
+    projects: { authenticate: async () => ({ tenant_id: tenant }), meterUsage: async () => { throw new Error('database away'); } },
+    fetchImpl: async url => String(url).endsWith('/v1/capabilities') ? json(caps) : json({ id, status: 'queued' }),
+  });
+  const server = http.createServer(broken.handle);
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/jobs/${id}/start`, { method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'fixture-start-000002' }, body: '{}' });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).status, 'queued');
 });

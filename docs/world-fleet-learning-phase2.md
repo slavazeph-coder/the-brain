@@ -45,6 +45,34 @@ python -m robotics.world_worker.fleet_campaign \
   --out /private/new-fleet-evaluation-001
 ```
 
+## Compare a frozen map plan with every scheduled attempt
+
+`fleet_field_trial` records route outcomes independently of the success-only learning importer. It freezes the exact Nav2 map, source scene and cloud digests, scale basis, robot profile, start, goal, endpoint tolerance and attempt count. Keep the original `plan.json` with the pilot record before collecting outcomes. Planning uses goal-only A* on a static 2D map. An unavailable plan is retained as an outcome of planning.
+
+Run this executable example from the repository root with fresh output directories. It uses an authored map and poses.
+
+```sh
+python -m robotics.world_worker.fleet_campaign --sample /tmp/brainsnn-route-example
+python -m robotics.world_worker.fleet_field_trial prepare \
+  --map /tmp/brainsnn-route-example/candidate-map --out /tmp/brainsnn-route-trial \
+  --basis authored-synthetic --start-cell 3 10 --goal-cell 22 10 \
+  --robot-id compact --radius-m 0.20 --max-speed-m-s 0.45 --tolerance-m 0.25 --attempts 3
+python -m robotics.world_worker.fleet_field_trial record \
+  --trial /tmp/brainsnn-route-trial --attempt 1 --outcome reached-unassisted \
+  --poses /tmp/brainsnn-route-example/robot-poses.csv
+python -m robotics.world_worker.fleet_field_trial record \
+  --trial /tmp/brainsnn-route-trial --attempt 2 --outcome intervention --reason 'Authored operator stop'
+python -m robotics.world_worker.fleet_field_trial report \
+  --trial /tmp/brainsnn-route-trial --map /tmp/brainsnn-route-example/candidate-map \
+  --out /tmp/brainsnn-route-report
+```
+
+Open `field-trial-report.json` in the World Builder Fleet Evaluation page. The example shows one log-supported reach, one intervention, and one pending attempt out of three. For an actual pilot, prepare with `--basis operator-reported-recording`, the map revision used during recording, actual measured robot profile and operator-chosen cells. Supply the reviewed map-frame pose CSV from the real trial. Columns and units are documented above. Use a different attempt number for each trial and record stops, contact, timeouts or localization loss even if logging failed. Notes are copied into the local report. Each recorded attempt is write-once.
+
+For a reported recording, pass the original `--recording-manifest /private/telemetry-manifest.json` alongside `--poses`. The evaluator uses the existing telemetry manifest's map and PGM hashes, CSV hash, frame convention, robot profile and source type. It does not use its learning-consent or success fields. A missing or mismatched manifest leaves the reported outcome visible but cannot support a reach.
+
+A log-supported reach also requires the reported unassisted outcome, matching start and goal, usable timing and localization, and clearance on the static map. Identical pose-file hashes disqualify every copy from that count. Map conflicts describe a 2D geometric check. They do not prove contact. Source type is supplied by the operator. The evaluator issues no robot commands and makes no claim of verified hardware execution.
+
 ## Release gates and outstanding dependencies
 
 - `map.sha256` and CSV source SHA must match exact recorded data; scene map revisions invalidate all old episodes.

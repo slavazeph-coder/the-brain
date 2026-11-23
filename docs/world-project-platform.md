@@ -373,6 +373,17 @@ The export now uses `brainsnn.project-export.v2`. Inline sources include exact b
 
 The export's unsigned canonical hash covers the JSON manifest, including declared external hashes, but it does not package or establish the availability of external media. It can reveal a changed manifest. It does not prove the original actor's identity, the truth of a claim, or survey accuracy. Consumers of the previous v1 export must explicitly support the v2 storage distinction.
 
+## API access waitlist
+
+Public self-service signup does not exist yet. `/world/api.html#waitlist` collects requests for access instead, using the same PostgreSQL database (`WORLD_PROJECT_DATABASE_URL` or `DATABASE_URL`). Its table, `brainsnn_api_waitlist`, is created on first use. With no database, or with `API_WAITLIST_ENABLED=0`, the form reports that the waitlist is unavailable and never keeps sign-ups in memory.
+
+- `POST /api/world/waitlist` takes `email`, `use_case` and `consent:true`, plus optional `name`, `company`, `monthly_volume`, `details` and `source`. It answers `202` with the same message whether or not the address was already listed. Submitting again updates that row and counts the repeat.
+- Each address may submit 5 times an hour, and the process accepts at most 300 sign-ups an hour and 50,000 rows in total. A full list still lets people who are already listed correct their details. A filled hidden `website` field is accepted and discarded.
+- `GET /api/world/waitlist/entries` returns the list to the site owner's World passcode session only.
+- `node scripts/api-waitlist-admin.mjs count|csv|remove --email ADDRESS` reads, exports or deletes entries. Run it with the site database URL, for example through `railway run` on the site service. The CSV holds personal contact details. It neutralizes spreadsheet formulas, but keep it out of the repository and shared drives.
+
+The form promises one thing only: an email about API access. Use the list for that, and delete an entry when its owner asks.
+
 ## Next product milestones
 
 The release needs a paid field pilot using a real capture, independently checked dimensions, a specific robot, and observed deployment outcomes. Track analyst minutes, failed captures, prediction errors, repeated customer use, and per-assessment operating cost. A complete record is useful evidence for that pilot; it is not its result.
@@ -380,3 +391,36 @@ The release needs a paid field pilot using a real capture, independently checked
 The storage extension supplies owner-scoped large originals, resumable transfers, hash checks, private retrieval, and source-to-revision links. Remaining operational work includes a selected-provider rollout, monitored cleanup and backup/restore exercises, an explicit policy for erasing retained evidence, and measured transfer/verification cost. Range downloads, a fully packaged streaming archive, and direct large-worker-output handoff remain future work; the processing worker retains its separate temporary storage policy.
 
 The next developer improvements should follow actual partner use: a pinned example with a supported engine, schema compatibility tests, controlled job cancellation/recovery, reliable webhook or polling behavior, and one downstream integration that the chosen OEM supports. Scope a public self-service account/billing system after the private workflow produces repeat usage.
+
+## Monthly usage meter
+
+`/api/world/v1/usage` now includes `billing`: this workspace's metered usage for
+the current calendar month (UTC), stored in `brainsnn_world_usage_monthly`
+(kept, unlike the 24-hour rate buckets). Metrics: `api_requests` (every
+authenticated, rate-counted request), `processing_jobs_started` (worker accepted a
+start; idempotent replays are not counted again), `processing_upload_bytes`
+(accepted upload chunks) and `processing_artifact_bytes` (fully downloaded
+artifacts). A failed meter write never fails the customer's request.
+
+Export one month for invoicing with `npm run world:projects:usage -- --month YYYY-MM`
+(CSV: tenant, name, month, metrics). Counts start when the meter is deployed. This
+is metering for manual invoicing, not a payment system or entitlement.
+
+## Bootstrap a workspace without a database shell
+
+Production PostgreSQL is only reachable on the hosting network. To create a pilot
+or first-customer workspace without running the admin script there, generate a
+`bsk_` key privately (43 base64url characters after the prefix), keep it, and
+set only its SHA-256 on the website service:
+
+```
+WORLD_PROJECT_BOOTSTRAP_JSON={"tenant_id":"pilot-owner","tenant_name":"BrainSNN pilot",
+  "actor_name":"Owner pilot","role":"admin","key_sha256":"<64 hex>","expires_at":"<ISO, within 366 days>"}
+```
+
+On first use of the API the service creates the workspace, the named principal
+and the key (`created_by: operator-bootstrap`, audit event `key.bootstrapped`).
+A digest that already exists is left alone, so restarts change nothing; an
+existing workspace is never renamed. Invalid or expired values are skipped with a
+bounded warning and never stop the API. Pair it with a dedicated worker tenant
+(`world-project-worker-tenant.mjs`) under the same `tenant_id` to enable processing.

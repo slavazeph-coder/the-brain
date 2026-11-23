@@ -50,7 +50,10 @@ def sha(raw):
 
 
 def check(pw, name, origin, worker, token, tmp):
-    browser = getattr(pw, name).launch(headless=True)
+    launch = {'headless': True}
+    if name == 'chromium' and os.environ.get('BROWSER_EXECUTABLE'):
+        launch['executable_path'] = os.environ['BROWSER_EXECUTABLE']
+    browser = getattr(pw, name).launch(**launch)
     context = browser.new_context(viewport={'width': 1360, 'height': 1000}, reduced_motion='reduce', accept_downloads=True)
     page = context.new_page()
     page.set_default_timeout(20000)
@@ -69,6 +72,9 @@ def check(pw, name, origin, worker, token, tmp):
         page.locator('#tab-world').click()
         page.locator('#object-name').fill('Preserve my building edit')
         page.locator('#object-name').press('Tab')
+        picker = page.locator('[data-layer-picker]')
+        if picker.get_attribute('open') is None:
+            picker.locator('summary').click()
         page.locator('[data-layer-connect]').click()
         page.locator('#worker-url').fill(worker)
         page.locator('#worker-token').fill(token)
@@ -183,6 +189,18 @@ def check(pw, name, origin, worker, token, tmp):
         expect(page.locator('[data-layer-tab=biomechanics]')).to_be_focused()
         page.keyboard.press('ArrowRight')
         expect(page.locator('[data-layer-tab=open4dgs]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=stereo]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=scanedit]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=robottask]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=robotcapability]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=bimworkbench]')).to_be_focused()
+        page.keyboard.press('ArrowRight')
+        expect(page.locator('[data-layer-tab=depth]')).to_be_focused()
         page.keyboard.press('ArrowRight')
         expect(page.locator('[data-layer-tab=repair]')).to_be_focused()
         assert not errors, errors

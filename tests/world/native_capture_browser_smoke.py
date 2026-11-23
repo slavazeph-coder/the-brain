@@ -90,7 +90,7 @@ def check(browser, origin, worker, token, files, root):
     page.locator('[data-action=process]').click()
     page.wait_for_function("document.querySelector('#status').textContent.startsWith('Reconstruction loaded.')", timeout=180000)
     assert len(uploads) == 6
-    assert page.locator('#provenance').inner_text() == 'VISUAL / SCALE UNVERIFIED'
+    assert page.locator('#provenance').text_content() == 'VISUAL / SCALE UNVERIFIED'
     assert page.locator('#run').is_disabled()
     assert page.locator('#visual-canvas').is_visible()
     page.screenshot(path=str(OUTPUT / f'{browser.browser_type.name}-mobile.png'), full_page=True)

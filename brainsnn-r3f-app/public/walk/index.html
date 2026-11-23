@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BrainSNN Walk</title>
+<meta name="description" content="Walk a space with your phone, tap things as you pass them, and get a map with honest accuracy figures. Nothing leaves your phone until you export it.">
+<meta name="theme-color" content="#06060a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Walk">
+<meta property="og:title" content="BrainSNN Walk">
+<meta property="og:description" content="Walk a space, tap features, get a map with honest accuracy. Processed on your phone.">
+<meta property="og:image" content="https://www.brainsnn.com/og-image.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="/world/icons/mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/world/icons/apple-touch-icon.png">
+<link rel="stylesheet" href="./walk.css">
+</head>
+<body data-screen="list">
+<a class="skip" href="#main">Skip to content</a>
+<main id="main">
+
+<section id="screen-list" class="screen" aria-labelledby="list-title">
+  <header class="topbar">
+    <span class="brand"><img src="/world/icons/mark.svg" alt="" width="28" height="28"> BrainSNN <b>Walk</b></span>
+    <a class="toplink" href="/world/index.html">World Builder</a>
+  </header>
+  <div class="hero">
+    <h1 id="list-title" tabindex="-1">Walk a space.<br>Get a map you can trust.</h1>
+    <p class="lede">Hold your phone, walk, and tap things as you pass them. Every walk states how far off its map position can be. Walks stay on this phone until you export them.</p>
+    <button id="new-walk" class="btn primary huge" type="button">Start a walk</button>
+    <label class="btn secondary file-button">Open a shared walk<small>.gpkg or .zip from BrainSNN Walk</small><input id="open-shared" type="file" accept=".gpkg,.zip,application/zip,application/geopackage+sqlite3"></label>
+    <button id="install" class="btn ghost" type="button" hidden>Install the app</button>
+  </div>
+  <p id="list-status" class="status" role="status" aria-live="polite"></p>
+  <h2 class="section-title">Your walks</h2>
+  <ul id="walk-list" class="walk-list"></ul>
+  <p id="list-empty" class="empty" hidden>No walks yet. Your first one takes a minute.</p>
+  <details class="facts">
+    <summary>What a walk gives you, and what it doesn't</summary>
+    <dl>
+      <dt>Map position</dt><dd>From the phone's GPS. Each walk states the radius that 95% of its fixes were within. Outdoors that is usually a few metres; indoors there is often no fix at all, and the walk says so.</dd>
+      <dt>Features</dt><dd>Each tap drops a feature with the type you chose, the time, a photo, and the nearest GPS fix. A feature without a fix gets no invented position.</dd>
+      <dt>Shape accuracy</dt><dd>Not measured. A phone camera walk does not measure shapes or distances. Build the 3D world from the walk's video, then check one known length before trusting dimensions.</dd>
+      <dt>Exports</dt><dd>A GeoPackage (QGIS, ArcGIS Pro) with the track and every feature and its photo, plus GeoJSON, GPX, a spreadsheet and the video in a bundle. A shared .gpkg opens here, read-only.</dd>
+      <dt>Surveyed marks</dt><dd>Drop a feature on a monument, PK nail or benchmark and enter its surveyed position. The walk moves onto your marks, and with two or more, each mark is checked against the others: that leave-one-out miss becomes the map-position figure.</dd>
+      <dt>Install</dt><dd>On iPhone: Share, then Add to Home Screen. On Android: the browser menu, then Install app.</dd>
+    </dl>
+  </details>
+</section>
+
+<section id="screen-capture" class="screen capture" aria-labelledby="capture-title" hidden>
+  <h1 id="capture-title" class="visually-hidden" tabindex="-1">Walking</h1>
+  <div class="camera">
+    <video id="cam" playsinline muted autoplay></video>
+    <p id="cam-off" class="cam-off" hidden>Camera off</p>
+    <span id="rec" class="rec" hidden>REC</span>
+  </div>
+  <div class="hud" aria-label="Walk so far">
+    <div><span class="hud-label">Time</span><span id="hud-time" class="hud-value">00:00</span></div>
+    <div><span class="hud-label">Walked</span><span id="hud-dist" class="hud-value">0 m</span></div>
+    <div><span class="hud-label">GPS</span><span id="hud-gps" class="hud-value gps-none">Waiting</span></div>
+    <div><span class="hud-label">Features</span><span id="hud-count" class="hud-value">0</span></div>
+  </div>
+  <p id="cap-status" class="status" role="status" aria-live="polite"></p>
+  <p id="drop-toast" class="toast" role="status" aria-live="assertive"></p>
+  <div id="drops" class="drops" role="group" aria-label="Drop a feature here"></div>
+  <button id="finish-walk" class="btn finish huge" type="button">Finish walk</button>
+</section>
+
+<section id="screen-results" class="screen" aria-labelledby="walk-title" hidden>
+  <header class="topbar results-bar">
+    <button id="back" class="round" type="button" aria-label="Back to your walks">‹</button>
+    <h1 id="walk-title" tabindex="-1">Walk</h1>
+    <button id="rename" class="round" type="button" aria-label="Rename this walk">✎</button>
+  </header>
+  <form id="rename-form" class="rename" hidden>
+    <label for="rename-input" class="visually-hidden">Walk name</label>
+    <input id="rename-input" maxlength="80" autocomplete="off">
+    <button class="btn primary" type="submit">Save</button>
+  </form>
+  <p id="shared-badge" class="badge" hidden>Shared walk · read only</p>
+  <div class="viewer">
+    <canvas id="map" role="img" aria-label="Map of the walk"></canvas>
+    <p id="map-hint" class="map-hint">Pinch or scroll to zoom · double-tap to fit</p>
+  </div>
+  <div class="chips" role="group" aria-label="Show on the map">
+    <button class="chip" type="button" data-layer="showTrack" aria-pressed="true">Track</button>
+    <button class="chip" type="button" data-layer="showFeatures" aria-pressed="true">Features</button>
+    <button class="chip" type="button" data-layer="showError" aria-pressed="false">GPS error</button>
+    <button id="measure" class="chip" type="button" aria-pressed="false">Measure</button>
+    <button id="map-fit" class="chip" type="button" hidden>Fit walk</button>
+  </div>
+  <p id="measure-out" class="measure-out" role="status" aria-live="polite"></p>
+  <div class="cards">
+    <article class="card">
+      <h2>Shape accuracy</h2>
+      <p id="shape-value" class="figure muted">Not measured</p>
+      <p class="card-note">A camera walk does not measure shapes. Build the 3D world, then check one known length.</p>
+    </article>
+    <article class="card">
+      <h2>Map position</h2>
+      <p id="map-value" class="figure">—</p>
+      <p id="map-note" class="card-note"></p>
+    </article>
+  </div>
+  <p id="stats" class="stats"></p>
+  <p id="result-status" class="status" role="status" aria-live="polite"></p>
+  <div class="actions">
+    <button id="export" class="btn primary huge" type="button">Export</button>
+    <button id="build-3d" class="btn secondary" type="button">Build the 3D world</button>
+    <button id="keep-copy" class="btn secondary" type="button" hidden>Keep a copy on this phone</button>
+  </div>
+  <h2 class="section-title">Features</h2>
+  <ol id="feature-list" class="feature-list"></ol>
+  <p id="features-empty" class="empty" hidden>No features in this walk.</p>
+  <button id="delete-walk" class="btn danger" type="button">Delete this walk</button>
+</section>
+
+</main>
+
+<dialog id="export-sheet" class="sheet" aria-labelledby="export-title">
+  <form method="dialog">
+    <h2 id="export-title">Export this walk</h2>
+    <button class="btn primary" type="button" data-export="gpkg">GeoPackage (.gpkg)<small>Track and features with photos · QGIS, ArcGIS Pro</small></button>
+    <button class="btn secondary" type="button" data-export="bundle">Walk bundle (.zip)<small>Everything: GeoPackage, GeoJSON, GPX, spreadsheet, photos</small></button>
+    <label id="include-video-row" class="check"><input id="include-video" type="checkbox"> <span id="include-video-label">Include the video</span></label>
+    <button class="btn secondary" type="button" data-export="geojson">GeoJSON<small>QGIS, ArcGIS, geojson.io</small></button>
+    <button class="btn secondary" type="button" data-export="gpx">GPX<small>Google Earth, hiking and GPS apps</small></button>
+    <button class="btn secondary" type="button" data-export="csv">Spreadsheet (.csv)<small>One row per feature</small></button>
+    <button class="btn ghost" value="cancel">Close</button>
+  </form>
+</dialog>
+
+<script type="module" src="./walk.mjs"></script>
+</body>
+</html>

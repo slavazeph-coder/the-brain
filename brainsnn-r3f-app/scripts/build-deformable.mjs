@@ -1,4 +1,4 @@
-// The physics runtime is requested only by the rope-strike workspace. Keep it
+// Arena and World Builder robot tasks share the same on-demand physics runtime. Keep it
 // outside the homepage/Arcade bundle, self-hosted, pinned and reproducible.
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -16,6 +16,33 @@ for (const filename of ['mujoco.js', 'mujoco.wasm']) {
   await copyFile(resolve(engine, filename), resolve(output, 'vendor', filename));
 }
 await copyFile(resolve(root, 'vendor-licenses/mujoco-LICENSE.txt'), resolve(output, 'vendor/LICENSE.txt'));
+
+// Task exports use the store-only ZIP path for the original reference media.
+const taskVendor = resolve(root, 'public/world/vendor');
+await mkdir(taskVendor, { recursive: true });
+await build({
+  absWorkingDir: root,
+  stdin: { contents: "export { zipSync } from 'fflate';", resolveDir: root },
+  outfile: resolve(taskVendor, 'robot-task-zip.mjs'),
+  platform: 'browser',
+  format: 'esm',
+  target: 'es2020',
+  bundle: true,
+  minify: true,
+  banner: { js: '/*! fflate\n' + await readFile(resolve(root, 'node_modules/fflate/LICENSE'), 'utf8') + '*/' },
+});
+
+await build({
+  absWorkingDir: root,
+  entryPoints: ['src/world/robot-task-3d.js'],
+  outfile: resolve(taskVendor, 'robot-task-3d.mjs'),
+  platform: 'browser',
+  format: 'esm',
+  target: 'es2020',
+  bundle: true,
+  minify: true,
+  banner: { js: '/*! Three.js\n' + await readFile(resolve(root, 'node_modules/three/LICENSE'), 'utf8') + '*/' },
+});
 
 if (!process.argv.includes('--engine-only')) {
   await build({

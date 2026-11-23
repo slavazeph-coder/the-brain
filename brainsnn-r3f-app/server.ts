@@ -1,4 +1,5 @@
 import express from "express";
+import { createCompression, setStaticCacheHeaders } from "./src/server/staticDelivery.js";
 import path from "path";
 import { readFileSync } from "node:fs";
 import crypto from "crypto";
@@ -40,8 +41,10 @@ import { legacyRedirect } from "./src/app/legacyRoutes.js";
 import { createArenaRouter } from "./src/server/arenaStatic.js";
 import { createWorldWorkerProxy } from "./src/server/worldWorkerProxy.js";
 import { createProjectReviewService } from "./src/server/projectReview.js";
+import { createApiWaitlist } from "./src/server/apiWaitlist.js";
 import { createWorldProjectService } from "./src/server/worldProjectService.js";
 import { createProjectProcessingBridge } from "./src/server/projectProcessingBridge.js";
+import { createRobotTaskDraftService } from "./src/server/robotTaskDraft.js";
 import { createPaidAnalysisRouter } from "./arena-analysis/server.cjs";
 
 
@@ -50,6 +53,8 @@ const gpuBridge = createGpuBridge(process.env);
 const gpuInference = createGpuInferenceClient(process.env, { transport: gpuBridge });
 
 export const app = express();
+// Compressed text and long-lived hashed assets: see src/server/staticDelivery.js.
+app.use(createCompression());
 // The arena is a standalone application with relative assets. Keep both its
 // documents and its missing-file responses ahead of Vite/the SPA catch-all.
 app.use((req, res, next) => {
@@ -86,6 +91,7 @@ app.use('/api/world/v1', worldProjects.handle);
 // Authenticate and bound review bodies before the general parser. The service
 // is initialized below with the existing server-only model and spend ceiling.
 app.use('/api/world/project-review', (req, res, next) => projectReview.handle(req, res, next));
+app.post('/api/world/robot-task-draft', (req, res) => robotTaskDraft.handle(req, res));
 app.use('/api/world', worldProcessing.handle);
 const readAgentLabFeed = createAgentLabFeed();
 app.get('/api/agent-lab/summary', async (_req, res) => {
@@ -119,6 +125,8 @@ app.use("/api/engine/compare", (_req, res, next) => {
 }, express.json({ limit: '64kb' }));
 
 app.use("/api/events", express.json({ limit: BODY_LIMITS.events }));
+// A waitlist sign-up is a handful of short fields.
+app.use("/api/world/waitlist", express.json({ limit: '8kb' }));
 app.use(express.json({ limit: BODY_LIMITS.general }));
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -279,11 +287,17 @@ const limiters = {
   magicLink: new RateLimiter(LIMITS.magicLink),
   general: new RateLimiter(LIMITS.general),
   events: new RateLimiter(LIMITS.events),
+  waitlist: new RateLimiter(LIMITS.waitlist),
 };
 
 /** Bounds what the process can spend on Gemini however many callers ask.
  *  Tune with GEMINI_HOURLY_CEILING; 0 stops paid calls without removing the key. */
 const geminiCeiling = new SpendCeiling(resolveGeminiCeiling(process.env));
+const robotTaskDraft = createRobotTaskDraftService({
+  authorize: req => worldProcessing.ownerSession(req),
+  tryConsume: () => geminiCeiling.tryConsume(),
+  apiKey,
+});
 
 /** Marks the one error the analyze handler must answer with the local engine. */
 class GeminiCeilingReached extends Error {}
@@ -378,6 +392,12 @@ app.use("/api", (req, res, next) => {
   if (routeTier(req.originalUrl.split("?")[0]) !== "general") return next();
   return generalLimit(req, res, next);
 });
+
+// API access waitlist. Shares the World Projects database; the owner reads it
+// with the existing World passcode session, never with a public route.
+const apiWaitlist = createApiWaitlist({ env: process.env });
+app.post("/api/world/waitlist", limit("waitlist"), apiWaitlist.submit);
+app.get("/api/world/waitlist/entries", apiWaitlist.exporter((req: express.Request) => worldProcessing.ownerSession(req)));
 
 app.get("/api/layers", (_req, res) => {
   const status = getEngineStatusSnapshot(process.env);
@@ -1225,7 +1245,15 @@ export async function startServer() {
       const html = readFileSync(path.join(distPath, 'index.html'), 'utf8');
       res.type('html').send(applyRouteMeta(html, pathname, search, APP_URL.replace(/\/$/, '')));
     });
-    app.use(express.static(distPath, { index: false }));
+    // BrainSNN Walk is a standalone installable page. Its modules load by
+    // relative URL, so /walk must become /walk/ before the page is served.
+    app.get(['/walk', '/walk/'], (req, res) => {
+      const [pathname, search = ''] = req.originalUrl.split('?');
+      if (!pathname.endsWith('/')) return res.redirect(301, `/walk/${search ? `?${search}` : ''}`);
+      res.set('Cache-Control', 'no-cache');
+      res.sendFile(path.join(distPath, 'walk', 'index.html'));
+    });
+    app.use(express.static(distPath, { index: false, setHeaders: setStaticCacheHeaders }));
 
     // Every route used to be served the identical index.html, so a shared
     // /lab?grid=... link, a challenge link and the homepage all previewed as
